@@ -16,7 +16,7 @@
 import type { AgentSession, AgentSessionEvent } from "@mariozechner/pi-coding-agent";
 import type { Api, Model } from "@mariozechner/pi-ai";
 import { existsSync } from "fs";
-import { PICLAW_CONFIG_PATH } from "../core/config.js";
+import { PICLAW_CONFIG_PATH, WORKSPACE_DIR } from "../core/config.js";
 import { readJsonConfig, writeJsonConfig } from "../core/config-store.js";
 
 /** Ordered list of supported thinking levels from off to xhigh. */
@@ -24,8 +24,9 @@ export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhig
 
 /** Return the preferred working directory for shell commands (/workspace or cwd). */
 export function resolveShellCwd(): string {
-  const preferred = "/workspace";
-  if (existsSync(preferred)) return preferred;
+  if (existsSync(WORKSPACE_DIR)) return WORKSPACE_DIR;
+  const legacyPreferred = "/workspace";
+  if (existsSync(legacyPreferred)) return legacyPreferred;
   return process.cwd();
 }
 
