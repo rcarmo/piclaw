@@ -23,6 +23,24 @@ type PasskeyAction = Extract<AgentControlCommand, { type: "passkey" }>["action"]
 type TotpAction = Extract<AgentControlCommand, { type: "totp" }>["action"];
 type SearchScope = Extract<AgentControlCommand, { type: "search_workspace" }>["scope"];
 
+function sanitizeShellArgs(args: string): string {
+  let cleaned = (args || "").replace(/\r\n/g, "\n").trim();
+  if (!cleaned) return "";
+
+  const lines = cleaned.split("\n");
+  const blockIndex = lines.findIndex((line, index) => index > 0 && /^(files|attachments):\s*$/i.test(line.trim()));
+  if (blockIndex !== -1) {
+    const tail = lines.slice(blockIndex + 1).map((line) => line.trim()).filter(Boolean);
+    const looksLikeAttachmentList = tail.length === 0 || tail.every((line) => /^-\s+/.test(line));
+    if (looksLikeAttachmentList) {
+      cleaned = lines.slice(0, blockIndex).join("\n").trim();
+    }
+  }
+
+  cleaned = cleaned.replace(/\s+(?:Files|Attachments):\s*(?:-\s+.*)?$/i, "").trim();
+  return cleaned;
+}
+
 function parsePasskeyAction(action: string | undefined): PasskeyAction {
   if (!action) return undefined;
   return ["enrol", "enroll", "list", "delete", "remove"].includes(action) ? (action as PasskeyAction) : undefined;
@@ -88,9 +106,10 @@ export function parseThinking(args: string, raw: string): AgentControlCommand {
 
 /** Parse /shell arguments: optional command string. */
 export function parseShell(args: string, raw: string): AgentControlCommand {
+  const command = sanitizeShellArgs(args);
   return {
     type: "shell",
-    command: args || undefined,
+    command: command || undefined,
     raw,
   };
 }
@@ -272,9 +291,10 @@ export function parseQr(args: string, raw: string): AgentControlCommand {
 
 /** Parse /bash arguments: optional command string. */
 export function parseBash(args: string, raw: string): AgentControlCommand {
+  const command = sanitizeShellArgs(args);
   return {
     type: "bash",
-    command: args || undefined,
+    command: command || undefined,
     raw,
   };
 }

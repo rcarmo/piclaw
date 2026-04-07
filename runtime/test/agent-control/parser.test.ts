@@ -137,9 +137,21 @@ describe("parseControlCommand", () => {
     expect(cmd).toEqual({ type: "shell", command: undefined, raw: "/shell" });
   });
 
+  test("/shell strips appended Files footer", () => {
+    const raw = "/shell ls\n\nFiles:\n- tmp/doc-log.txt";
+    const cmd = parseControlCommand(raw);
+    expect(cmd).toEqual({ type: "shell", command: "ls", raw });
+  });
+
   test("/bash with command", () => {
     const cmd = parseControlCommand("/bash echo hello");
     expect(cmd).toEqual({ type: "bash", command: "echo hello", raw: "/bash echo hello" });
+  });
+
+  test("/bash strips inline attachment footer after whitespace normalization", () => {
+    const raw = "/bash pwd\n\nAttachments:\n- notes/today.md";
+    const cmd = parseControlCommand(raw);
+    expect(cmd).toEqual({ type: "bash", command: "pwd", raw });
   });
 
   // /queue
