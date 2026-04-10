@@ -237,6 +237,7 @@ class TerminalPaneInstance implements PaneInstance {
     private dockResizeListener = null;
     private windowResizeListener = null;
     private resizeFrame = 0;
+    private resizeRetryTimers = new Set<number>();
     private lastAppliedThemeSignature = null;
     private lastResizeSignature: string | null = null;
     private pendingHandoffToken: string | null = null;
@@ -311,11 +312,36 @@ class TerminalPaneInstance implements PaneInstance {
         }
     }
 
-    private scheduleResize(): void {
+    private queueResizeRetries(delays: number[] = [32, 96, 180, 320, 520, 900]): void {
+        if (this.disposed || !this.ownerWindow) return;
+        this.clearResizeRetries();
+        for (const delay of delays) {
+            const timer = this.ownerWindow.setTimeout(() => {
+                this.resizeRetryTimers.delete(timer);
+                if (this.disposed) return;
+                this.scheduleResize(true);
+            }, delay);
+            this.resizeRetryTimers.add(timer);
+        }
+    }
+
+    private clearResizeRetries(): void {
+        if (!this.ownerWindow || this.resizeRetryTimers.size === 0) return;
+        for (const timer of Array.from(this.resizeRetryTimers)) {
+            try {
+                this.ownerWindow.clearTimeout(timer);
+            } catch {
+                /* expected: timeout may already be cleared while a resize retry is draining. */
+            }
+        }
+        this.resizeRetryTimers.clear();
+    }
+
+    private scheduleResize(force = false): void {
         if (this.disposed) return;
 
         const signature = this.getResizeSignature();
-        if (this.lastResizeSignature === signature) {
+        if (!force && this.lastResizeSignature === signature) {
             return;
         }
 
@@ -364,7 +390,8 @@ class TerminalPaneInstance implements PaneInstance {
             this.fitAddon = fitAddon;
             this.installThemeSync();
             this.installResizeSync();
-            this.scheduleResize();
+            this.scheduleResize(true);
+            this.queueResizeRetries([32, 96, 180, 320, 520, 900, 1400, 2000]);
 
             await this.connectBackend();
         } catch (error) {
@@ -502,6 +529,8 @@ class TerminalPaneInstance implements PaneInstance {
                 this.scheduleResize();
             });
             observer.observe(this.container);
+            observer.observe(this.termEl);
+            observer.observe(this.bodyEl);
             this.resizeObserver = observer;
         }
     }
@@ -544,7 +573,8 @@ class TerminalPaneInstance implements PaneInstance {
                     this.transferHandoffToken = handoffToken;
                 }
                 this.setStatus('Connected');
-                this.scheduleResize();
+                this.scheduleResize(true);
+                this.queueResizeRetries([24, 72, 160, 320, 640, 1200]);
             });
 
             socket.addEventListener('message', (event) => {
@@ -649,7 +679,8 @@ class TerminalPaneInstance implements PaneInstance {
         } else if (this.socket?.readyState === WebSocket.CONNECTING) {
             this.setStatus('Connecting…');
         }
-        this.scheduleResize();
+        this.scheduleResize(true);
+        this.queueResizeRetries([32, 96, 180, 320, 520, 900, 1400]);
         requestAnimationFrame(() => this.focus());
     }
 
@@ -730,6 +761,7 @@ class TerminalPaneInstance implements PaneInstance {
         } catch {
             /* expected: resize frame may already be cancelled during teardown. */
         }
+        this.clearResizeRetries();
         this.detachHostListeners();
         try {
             this.socket?.close?.();
