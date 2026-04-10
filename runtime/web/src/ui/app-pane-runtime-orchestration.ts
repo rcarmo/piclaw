@@ -1202,23 +1202,74 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
       return;
     }
 
-    const instance = ext.mount(container, { mode: 'view' });
-    dockInstanceRef.current = instance;
-    void invokePaneAfterAttachToHost(instance, {
-      path: terminalTabPath,
-      hostMode: panePopoutMode ? 'popout' : 'main',
-      transferState: pendingPaneHostTransferRef.current?.path === terminalTabPath
-        ? (pendingPaneHostTransferRef.current.payload || null)
-        : null,
-    }).catch((error) => {
-      console.warn('[pane-attach] afterAttachToHost failed:', error);
-    });
-    if (pendingPaneHostTransferRef.current?.path === terminalTabPath) {
-      pendingPaneHostTransferRef.current = null;
-    }
-    requestAnimationFrame(() => instance.focus?.());
+    const pendingPopoutHostTransfer = pendingPaneHostTransferRef.current?.path === terminalTabPath
+      ? pendingPaneHostTransferRef.current
+      : null;
+    const pendingReattachHostTransfer = pendingReattachPaneHostTransfersRef.current.get(terminalTabPath) || null;
+    const pendingHostTransfer = pendingPopoutHostTransfer || pendingReattachHostTransfer;
+    const resolvedTransferState = pendingHostTransfer?.payload || null;
+    const liveTransferClaim = pendingReattachPaneClaimsRef.current.get(terminalTabPath) || null;
+    const liveTransferSourceWindow = pendingReattachPaneSourceWindowsRef.current.get(terminalTabPath) || null;
+    const hostMode = panePopoutMode ? 'popout' : 'main';
+
+    let instance: any = null;
+    let disposed = false;
+
+    const bindInstance = (nextInstance: any) => {
+      instance = nextInstance;
+      dockInstanceRef.current = nextInstance;
+      void invokePaneAfterAttachToHost(nextInstance, {
+        path: terminalTabPath,
+        hostMode,
+        transferState: resolvedTransferState,
+      }).catch((error) => {
+        console.warn('[pane-attach] afterAttachToHost failed:', error);
+      });
+      requestAnimationFrame(() => nextInstance.focus?.());
+    };
+
+    void (async () => {
+      if (pendingHostTransfer && liveTransferClaim && liveTransferSourceWindow) {
+        try {
+          const claimedInstance = await claimPaneLiveTransfer(liveTransferSourceWindow, liveTransferClaim, container, {
+            path: terminalTabPath,
+            hostMode,
+            transferState: resolvedTransferState,
+          });
+          if (!disposed && claimedInstance) {
+            bindInstance(claimedInstance);
+            if (pendingPopoutHostTransfer) {
+              pendingPaneHostTransferRef.current = null;
+            }
+            if (pendingReattachHostTransfer) {
+              pendingReattachPaneHostTransfersRef.current.delete(terminalTabPath);
+            }
+            pendingReattachPaneSourceWindowsRef.current.delete(terminalTabPath);
+            pendingReattachPaneClaimsRef.current.delete(terminalTabPath);
+            return;
+          }
+        } catch (error) {
+          console.warn('[pane-live-transfer] Failed to claim live dock pane instance:', error);
+        }
+      }
+
+      if (disposed) return;
+      bindInstance(ext.mount(container, {
+        mode: 'view',
+        ...(resolvedTransferState ? { transferState: resolvedTransferState } : {}),
+      }));
+      if (pendingPopoutHostTransfer) {
+        pendingPaneHostTransferRef.current = null;
+      }
+      if (pendingReattachHostTransfer) {
+        pendingReattachPaneHostTransfersRef.current.delete(terminalTabPath);
+      }
+      pendingReattachPaneSourceWindowsRef.current.delete(terminalTabPath);
+      pendingReattachPaneClaimsRef.current.delete(terminalTabPath);
+    })();
 
     return () => {
+      disposed = true;
       if (dockInstanceRef.current === instance) {
         instance.dispose();
         dockInstanceRef.current = null;
