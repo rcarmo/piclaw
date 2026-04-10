@@ -263,6 +263,9 @@ class TerminalPaneInstance implements PaneInstance {
 
         this.bodyEl = this.ownerDocument.createElement('div');
         this.bodyEl.className = 'terminal-pane-body';
+        this.bodyEl.style.display = 'flex';
+        this.bodyEl.style.flex = '1 1 auto';
+        this.bodyEl.style.minHeight = '0';
         this.bodyEl.innerHTML = '<div class="terminal-placeholder">Bootstrapping ghostty-web…</div>';
 
         this.termEl.append(this.bodyEl);
@@ -295,12 +298,22 @@ class TerminalPaneInstance implements PaneInstance {
         const host = this.bodyEl.querySelector('.terminal-live-host');
         if (!(host instanceof HTMLElement)) return;
 
+        host.style.display = 'flex';
+        host.style.flex = '1 1 auto';
+        host.style.width = '100%';
+        host.style.height = '100%';
+        host.style.minWidth = '0';
+        host.style.minHeight = '0';
+        host.style.overflow = 'hidden';
+
         const primaryChild = host.firstElementChild;
         if (primaryChild instanceof HTMLElement) {
             primaryChild.style.width = '100%';
             primaryChild.style.height = '100%';
             primaryChild.style.maxWidth = '100%';
             primaryChild.style.minWidth = '0';
+            primaryChild.style.minHeight = '0';
+            primaryChild.style.flex = '1 1 auto';
             primaryChild.style.display = 'block';
         }
 
@@ -308,6 +321,7 @@ class TerminalPaneInstance implements PaneInstance {
         if (canvas instanceof HTMLElement) {
             canvas.style.display = 'block';
             canvas.style.maxWidth = 'none';
+            canvas.style.maxHeight = 'none';
         }
     }
 
@@ -336,8 +350,14 @@ class TerminalPaneInstance implements PaneInstance {
             if (this.disposed) return;
 
             this.bodyEl.innerHTML = '';
-            const terminalHost = document.createElement('div');
+            const terminalHost = this.ownerDocument.createElement('div');
             terminalHost.className = 'terminal-live-host';
+            terminalHost.style.display = 'flex';
+            terminalHost.style.flex = '1 1 auto';
+            terminalHost.style.width = '100%';
+            terminalHost.style.height = '100%';
+            terminalHost.style.minWidth = '0';
+            terminalHost.style.minHeight = '0';
             this.bodyEl.appendChild(terminalHost);
 
             const terminal = new mod.Terminal({
