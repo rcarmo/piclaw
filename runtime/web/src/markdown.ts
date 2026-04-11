@@ -180,8 +180,14 @@ function sanitizeHtml(html, options = {}) {
                         el.removeAttribute(attr.name);
                     } else {
                         el.setAttribute(attr.name, safe);
-                        if (tag === 'a' && !el.getAttribute('rel')) {
-                            el.setAttribute('rel', 'noopener noreferrer');
+                        if (tag === 'a') {
+                            if (!el.getAttribute('rel')) {
+                                el.setAttribute('rel', 'noopener noreferrer');
+                            }
+                            // Open external links in a new tab
+                            if (/^https?:\/\//i.test(safe)) {
+                                el.setAttribute('target', '_blank');
+                            }
                         }
                     }
                 } else if (name === 'src') {
