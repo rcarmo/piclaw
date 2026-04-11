@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { openSync, closeSync, readlinkSync, readdirSync, readFileSync } from "node:fs";
+import { openSync, closeSync, readlinkSync, readdirSync, readFileSync, accessSync, constants } from "node:fs";
 import { FFIType, dlopen } from "bun:ffi";
 import type { ServerWebSocket } from "bun";
 
@@ -188,8 +188,22 @@ function normalizeChunk(chunk: string | Uint8Array): string {
   return Buffer.from(chunk).toString("utf8");
 }
 
+const EXTRA_BIN_DIRS = ["/run/current-system/sw/bin", "/usr/local/bin", "/usr/bin", "/bin"];
+
+function findExecutable(name: string): string {
+  const dirs = (process.env.PATH || "").split(":").concat(EXTRA_BIN_DIRS);
+  for (const dir of dirs) {
+    const candidate = `${dir}/${name}`;
+    try { accessSync(candidate, constants.X_OK); return candidate; } catch { /* next */ }
+  }
+  return name;
+}
+
+const SCRIPT_BIN = findExecutable("script");
+const BASH_BIN = findExecutable("bash");
+
 function defaultSpawnProcess(cwd: string): TerminalProcessLike {
-  return spawn("/usr/bin/script", ["-qf", "-c", "/usr/bin/bash -i", "/dev/null"], {
+  return spawn(SCRIPT_BIN, ["-qf", "-c", `${BASH_BIN} -i`, "/dev/null"], {
     cwd,
     env: {
       ...process.env,
