@@ -262,11 +262,23 @@ export async function runScheduledTask(task: ScheduledTask, deps: SchedulerDeps)
       : "agent";
 
   if (kind === "internal") {
-    const out = await runInternalTask(task, deps);
-    if (out.error) {
-      error = out.error;
-    } else {
-      result = out.result;
+    // Switch model if the internal task specifies one (e.g. Dream).
+    const savedModel = task.model ? await deps.agentPool.getCurrentModelLabel(task.chat_jid) : null;
+    if (task.model && (!savedModel || savedModel !== task.model)) {
+      const switchErr = await switchTaskModel(task, deps);
+      if (switchErr) { error = switchErr; }
+    }
+    if (!error) {
+      const out = await runInternalTask(task, deps);
+      if (out.error) {
+        error = out.error;
+      } else {
+        result = out.result;
+      }
+    }
+    // Restore original model after internal task completes.
+    if (task.model) {
+      await restoreOriginalModel(task, deps, savedModel);
     }
   } else if (kind === "shell") {
     const out = await runShellTask(task);

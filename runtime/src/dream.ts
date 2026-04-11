@@ -51,6 +51,7 @@ const DREAM_CURRENT_STATE_PATH = resolve(DREAM_MEMORY_DIR, "current-state.md");
 const DREAM_RECENT_CONTEXT_PATH = resolve(DREAM_MEMORY_DIR, "recent-context.md");
 const DREAM_MEMORY_PATH = resolve(DREAM_MEMORY_DIR, "MEMORY.md");
 const DREAM_BACKUP_KEEP = Math.max(1, Number.parseInt(process.env.PICLAW_DREAM_BACKUP_KEEP || "10", 10) || 10);
+const DREAM_MODEL = process.env.PICLAW_DREAM_MODEL?.trim() || null;
 
 export interface DreamAgentTurnResult {
   mode: "manual" | "auto";
@@ -468,7 +469,7 @@ export function ensureDreamTask(chatJid = "web:default") {
       id: DREAM_TASK_ID,
       chat_jid: chatJid,
       prompt: DREAM_TASK_PROMPT,
-      model: null,
+      model: DREAM_MODEL,
       task_kind: DREAM_TASK_KIND,
       command: null,
       cwd: null,
@@ -488,7 +489,7 @@ export function ensureDreamTask(chatJid = "web:default") {
 
   updateTask(DREAM_TASK_ID, {
     prompt: DREAM_TASK_PROMPT,
-    model: null,
+    model: DREAM_MODEL,
     task_kind: DREAM_TASK_KIND,
     command: null,
     cwd: null,
