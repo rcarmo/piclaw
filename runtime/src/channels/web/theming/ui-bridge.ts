@@ -106,21 +106,11 @@ export class UiBridge {
         reload: () => session.reload(),
       },
       onError: (error) => {
-        const formattedError = error instanceof Error
-          ? error.message
-          : error && typeof error === "object"
-            ? [
-                typeof (error as Record<string, unknown>).error === "string"
-                  ? (error as Record<string, unknown>).error
-                  : null,
-                typeof (error as Record<string, unknown>).event === "string"
-                  ? `during ${(error as Record<string, unknown>).event}`
-                  : null,
-                typeof (error as Record<string, unknown>).extensionPath === "string"
-                  ? `in ${(error as Record<string, unknown>).extensionPath}`
-                  : null,
-              ].filter(Boolean).join(" ") || String(error)
-            : String(error);
+        const formattedError = [
+          error.error || null,
+          error.event ? `during ${error.event}` : null,
+          error.extensionPath ? `in ${error.extensionPath}` : null,
+        ].filter(Boolean).join(" ") || String(error);
         log.error("Extension UI error", {
           chatJid,
           err: error,
