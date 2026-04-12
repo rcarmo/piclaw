@@ -55,7 +55,7 @@ export async function handleAgentDebugRequest(req: Request, ctx: AgentDebugConte
         sourceInfo: serializeSourceInfo(ext.sourceInfo),
         commandCount: ext.commands?.size ?? 0,
         toolCount: ext.tools?.size ?? 0,
-        handlerCount: Array.from(ext.handlers?.values?.() ?? []).reduce((sum: number, h: unknown[]) => sum + (h?.length ?? 0), 0),
+        handlerCount: Array.from(ext.handlers?.values?.() ?? []).reduce<number>((sum, h) => sum + (Array.isArray(h) ? h.length : 0), 0),
       });
     }
   }
