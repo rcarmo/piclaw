@@ -345,6 +345,43 @@ const COPY_ERROR_SVG = `
         <circle cx="12" cy="12" r="9"></circle>
         <path d="M9 9l6 6M15 9l-6 6"></path>
     </svg>`;
+const CLIPBOARD_STYLE = `
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #1a1a1a;
+  }
+  h1 { font-size: 1.6em; font-weight: 700; margin: 0.6em 0 0.4em; }
+  h2 { font-size: 1.35em; font-weight: 700; margin: 0.6em 0 0.4em; }
+  h3 { font-size: 1.15em; font-weight: 700; margin: 0.5em 0 0.3em; }
+  h4, h5, h6 { font-size: 1em; font-weight: 700; margin: 0.5em 0 0.3em; }
+  p { margin: 0.5em 0; }
+  pre {
+    background: #f6f8fa;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    padding: 12px 16px;
+    overflow-x: auto;
+    margin: 0.5em 0;
+  }
+  code {
+    font-family: "Fira Code", "Cascadia Code", Consolas, "Courier New", monospace;
+    font-size: 0.9em;
+  }
+  pre code { background: none; padding: 0; border: none; }
+  :not(pre) > code { background: #f0f2f5; padding: 2px 5px; border-radius: 3px; }
+  blockquote { border-left: 3px solid #d0d7de; margin: 0.5em 0; padding-left: 12px; color: #57606a; }
+  table { border-collapse: collapse; margin: 0.5em 0; }
+  th, td { border: 1px solid #d0d7de; padding: 6px 12px; text-align: left; }
+  th { background: #f6f8fa; font-weight: 600; }
+  ul, ol { margin: 0.4em 0; padding-left: 1.8em; }
+  li { margin: 0.15em 0; }
+  a { color: #0969da; text-decoration: none; }
+  hr { border: none; border-top: 1px solid #d0d7de; margin: 1em 0; }
+  img { max-width: 100%; }
+</style>`;
 
 async function copyTextToClipboard(text) {
     const value = typeof text === 'string' ? text : '';
@@ -370,6 +407,28 @@ async function copyTextToClipboard(text) {
     } catch {
         return false;
     }
+}
+
+async function copyMessageToClipboard(markdown) {
+    const value = typeof markdown === 'string' ? markdown : '';
+    if (!value) return false;
+
+    if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+        try {
+            const bodyHtml = renderMarkdown(value, null);
+            const htmlDoc = `<html><head>${CLIPBOARD_STYLE}</head><body>${bodyHtml}</body></html>`;
+            const item = new ClipboardItem({
+                'text/plain': new Blob([value], { type: 'text/plain' }),
+                'text/html': new Blob([htmlDoc], { type: 'text/html' }),
+            });
+            await navigator.clipboard.write([item]);
+            return true;
+        } catch {
+            // Fallback to plain-text copy for unsupported clipboard implementations.
+        }
+    }
+
+    return copyTextToClipboard(value);
 }
 
 function enhanceCodeBlocks(container) {
@@ -701,7 +760,7 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
 
     const handleCopyMarkdownClick = async (e) => {
         e.stopPropagation();
-        const ok = await copyTextToClipboard(markdownCopyPayload);
+        const ok = await copyMessageToClipboard(markdownCopyPayload);
         setCopyState(ok ? 'success' : 'error');
         if (copyResetTimerRef.current) clearTimeout(copyResetTimerRef.current);
         copyResetTimerRef.current = setTimeout(() => {
@@ -888,8 +947,8 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
                     <button
                         class=${`post-action-btn post-copy-btn${copyState === 'success' ? ' is-success' : copyState === 'error' ? ' is-error' : ''}`}
                         type="button"
-                        title=${copyState === 'success' ? 'Copied' : copyState === 'error' ? 'Copy failed' : 'Copy as Markdown'}
-                        aria-label=${copyState === 'success' ? 'Copied' : copyState === 'error' ? 'Copy failed' : 'Copy as Markdown'}
+                        title=${copyState === 'success' ? 'Copied' : copyState === 'error' ? 'Copy failed' : 'Copy message'}
+                        aria-label=${copyState === 'success' ? 'Copied' : copyState === 'error' ? 'Copy failed' : 'Copy message'}
                         onClick=${handleCopyMarkdownClick}
                         disabled=${!markdownCopyPayload}
                     >
