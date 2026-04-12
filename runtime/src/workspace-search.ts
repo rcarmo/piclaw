@@ -284,17 +284,16 @@ async function indexWorkspace(roots: string[], maxBytes: number): Promise<void> 
     const files = await walkFiles(absRoot);
     for (const file of files) {
       if (!isTextFile(file)) continue;
+      const rel = toRelative(file);
       try {
         const stat = await fs.stat(file);
         if (stat.size > maxBytes) {
           // aggressive cleanup: drop oversized entries
-          const rel = toRelative(file);
           db.prepare("DELETE FROM workspace_fts WHERE path = ?").run(rel);
           db.prepare("DELETE FROM workspace_files WHERE path = ?").run(rel);
           continue;
         }
 
-        const rel = toRelative(file);
         seen.add(rel);
         const existing = db.prepare("SELECT mtime_ms, size_bytes FROM workspace_files WHERE path = ?").get(rel) as { mtime_ms: number; size_bytes: number } | undefined;
         const mtimeMs = Math.round(stat.mtimeMs);
