@@ -423,8 +423,8 @@ async function copyMessageToClipboard(markdown) {
             });
             await navigator.clipboard.write([item]);
             return true;
-        } catch {
-            // Fallback to plain-text copy for unsupported clipboard implementations.
+        } catch (error) {
+            console.warn('[post] Rich clipboard write failed, falling back to plain text copy.', error);
         }
     }
 
