@@ -381,7 +381,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
             />
           `}
           ${hasDockPanes && dockVisible && html`<div class="dock-splitter" onMouseDown=${handleDockSplitterMouseDown} onTouchStart=${handleDockSplitterTouchStart}></div>`}
-          ${hasDockPanes && html`<div class=${`dock-panel${dockVisible ? '' : ' hidden'}`}>
+          ${hasDockPanes && html`<div class=${`dock-panel${dockVisible ? '' : ' hidden'}${editorOpen ? '' : ' standalone'}`}>
             <div class="dock-panel-header">
               <span class="dock-panel-title">Terminal</span>
               <div class="dock-panel-actions">

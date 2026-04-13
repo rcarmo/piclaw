@@ -366,6 +366,7 @@ export async function popOutPaneAction(options: PopOutPaneActionOptions): Promis
         detachTransfer?.paneInstanceId
         && detachTransfer?.paneWindowId
         && sourceInstance
+        && panePath !== terminalTabPath
         && exportedHostTransfer?.kind !== 'terminal'
       ) {
         registerPaneLiveTransfer({

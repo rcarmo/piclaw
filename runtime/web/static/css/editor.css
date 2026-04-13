@@ -767,6 +767,14 @@
     overflow: hidden;
 }
 
+.dock-panel.standalone {
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    flex: 1 1 auto;
+    border-top: none;
+}
+
 .dock-panel.hidden {
     display: none;
 }
@@ -834,7 +842,14 @@
 .dock-panel-body {
     flex: 1;
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.dock-panel-body > * {
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .dock-panel-body-detached {

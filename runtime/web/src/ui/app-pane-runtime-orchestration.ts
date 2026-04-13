@@ -191,12 +191,22 @@ export function shouldDisableTerminalReattach(options: {
   return isLikelySafariBrowser(options?.runtimeNavigator);
 }
 
+function shouldUseLivePaneTransfer(options: {
+  panePath: string;
+  terminalTabPath: string;
+}): boolean {
+  const panePath = typeof options?.panePath === 'string' ? options.panePath.trim() : '';
+  if (!panePath) return false;
+  return panePath !== options?.terminalTabPath;
+}
+
 export interface PanePopoutReattachRequestMessage {
   type: 'piclaw-pane-reattach-request';
   panePath: string;
   paneInstanceId?: string;
   editorPopoutToken?: string;
   paneTransferToken?: string;
+  paneTransferPayload?: Record<string, unknown>;
   allowLiveTransfer?: boolean;
 }
 
@@ -228,7 +238,8 @@ export function buildPanePopoutReattachRequestMessage(options: {
   const exportedHostTransfer = typeof instance?.exportHostTransferState === 'function'
     ? instance.exportHostTransferState()
     : null;
-  const paneTransfer = exportedHostTransfer
+  const useInlineHostTransfer = panePath === terminalTabPath;
+  const paneTransfer = exportedHostTransfer && !useInlineHostTransfer
     ? createPaneHostTransferPayload({
       path: panePath,
       payload: exportedHostTransfer,
@@ -259,6 +270,7 @@ export function buildPanePopoutReattachRequestMessage(options: {
     ...(paneInstanceId ? { paneInstanceId } : {}),
     ...(editorTransfer?.editor_popout ? { editorPopoutToken: editorTransfer.editor_popout } : {}),
     ...(paneTransfer?.pane_transfer ? { paneTransferToken: paneTransfer.pane_transfer } : {}),
+    ...(useInlineHostTransfer && exportedHostTransfer ? { paneTransferPayload: exportedHostTransfer } : {}),
     ...(allowLiveTransfer ? {} : { allowLiveTransfer: false }),
   };
 }
@@ -283,13 +295,18 @@ export function consumePanePopoutReattachRequestMessage(options: {
     : null;
   const editorPopoutToken = typeof options?.payload?.editorPopoutToken === 'string' ? options.payload.editorPopoutToken.trim() : '';
   const paneTransferToken = typeof options?.payload?.paneTransferToken === 'string' ? options.payload.paneTransferToken.trim() : '';
+  const inlineHostTransferPayload = options?.payload?.paneTransferPayload && typeof options.payload.paneTransferPayload === 'object' && !Array.isArray(options.payload.paneTransferPayload)
+    ? options.payload.paneTransferPayload as Record<string, unknown>
+    : null;
 
   const editorTransfer = editorPopoutToken
     ? consumeEditorPopoutState(editorPopoutToken, runtime, nowMs)
     : null;
-  const hostTransfer = paneTransferToken
-    ? consumePaneHostTransferState(paneTransferToken, runtime, nowMs)
-    : null;
+  const hostTransfer = inlineHostTransferPayload
+    ? { panePath, path: panePath, payload: inlineHostTransferPayload, capturedAt: nowMs }
+    : (paneTransferToken
+      ? consumePaneHostTransferState(paneTransferToken, runtime, nowMs)
+      : null);
 
   return {
     panePath,
@@ -545,7 +562,8 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
     const pendingTab = pendingDetachedTabsRef.current.get(panePath) || null;
     if (matchesPaneDetachClaim(pendingTab, claim)) {
       const preservedInstance = editorInstanceRef.current;
-      if (preservedInstance && typeof preservedInstance.moveHost === 'function') {
+      const useLiveTransfer = shouldUseLivePaneTransfer({ panePath, terminalTabPath });
+      if (useLiveTransfer && preservedInstance && typeof preservedInstance.moveHost === 'function') {
         registerPaneLiveTransfer({
           panePath,
           paneInstanceId: pendingTab.paneInstanceId,
@@ -558,7 +576,7 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
           },
         });
       }
-      if (editorInstanceRef.current) {
+      if (useLiveTransfer && editorInstanceRef.current) {
         editorInstanceRef.current = null;
       }
       const nextState = finalizePendingPaneOwnership(pendingTab);
@@ -587,7 +605,8 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
 
     const pendingDock = pendingDetachedDockPaneRef.current;
     const preservedDockInstance = dockInstanceRef.current;
-    if (pendingDock && preservedDockInstance && typeof preservedDockInstance.moveHost === 'function') {
+    const useLiveTransfer = shouldUseLivePaneTransfer({ panePath, terminalTabPath });
+    if (useLiveTransfer && pendingDock && preservedDockInstance && typeof preservedDockInstance.moveHost === 'function') {
       registerPaneLiveTransfer({
         panePath,
         paneInstanceId: pendingDock.paneInstanceId,
@@ -600,7 +619,7 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
         },
       });
     }
-    if (dockInstanceRef.current) {
+    if (useLiveTransfer && dockInstanceRef.current) {
       dockInstanceRef.current = null;
     }
     if (!matchesPaneDetachClaim(pendingDock, claim)) return false;
@@ -633,6 +652,7 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
     const instance = panePath === terminalTabPath
       ? (dockInstanceRef.current || editorInstanceRef.current)
       : editorInstanceRef.current;
+    const effectiveAllowLiveTransfer = allowLiveTransfer && shouldUseLivePaneTransfer({ panePath, terminalTabPath });
     const payload = buildPanePopoutReattachRequestMessage({
       panePath,
       paneInstanceId: detachState.paneInstanceId,
@@ -641,12 +661,12 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
         : (typeof (tabPaneOverrides as any)?.get === 'function' ? ((tabPaneOverrides as any).get(panePath) || null) : null),
       terminalTabPath,
       viewState: panePath === terminalTabPath ? null : (tabStore.getViewState(panePath) || null),
-      allowLiveTransfer,
+      allowLiveTransfer: effectiveAllowLiveTransfer,
       instance,
     });
     if (!payload) return false;
 
-    if (allowLiveTransfer && payload.paneTransferToken && typeof instance?.moveHost === 'function') {
+    if (effectiveAllowLiveTransfer && payload.paneTransferToken && typeof instance?.moveHost === 'function') {
       if (dockInstanceRef.current === instance) {
         dockInstanceRef.current = null;
       }
@@ -828,6 +848,7 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
 
       const detachedTab = detachedTabsRef.current.get(panePath) || null;
       const detachedDock = panePath === terminalTabPath ? detachedDockPaneRef.current : null;
+      const useLiveTransfer = shouldUseLivePaneTransfer({ panePath, terminalTabPath });
       const detached = detachedTab || detachedDock;
       if (!detached) return;
       if (transfer?.paneInstanceId && transfer.paneInstanceId !== detached.paneInstanceId) return;
@@ -838,7 +859,7 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
         pendingReattachEditorTransfersRef.current.delete(panePath);
         return;
       }
-      if (transfer?.hostTransfer && transfer.allowLiveTransfer) {
+      if (transfer?.hostTransfer && transfer.allowLiveTransfer && useLiveTransfer) {
         pendingReattachPaneClaimsRef.current.set(panePath, {
           panePath,
           paneInstanceId: detached.paneInstanceId,
@@ -1038,6 +1059,7 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
         panePopoutMode
         && hasPaneDetachTransferState(detachState)
         && typeof nextInstance?.moveHost === 'function'
+        && shouldUseLivePaneTransfer({ panePath: activeId, terminalTabPath })
       ) {
         registerPaneLiveTransfer({
           panePath: activeId,
@@ -1076,7 +1098,9 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
         }
         : null;
       const reattachClaim = pendingReattachPaneClaimsRef.current.get(activeId) || null;
-      const liveTransferClaim = popoutClaim || reattachClaim;
+      const liveTransferClaim = shouldUseLivePaneTransfer({ panePath: activeId, terminalTabPath })
+        ? (popoutClaim || reattachClaim)
+        : null;
       const liveTransferSourceWindow = panePopoutMode
         ? (typeof window !== 'undefined' && window.opener && !window.opener.closed ? window.opener : null)
         : (pendingReattachPaneSourceWindowsRef.current.get(activeId) || null);
@@ -1185,19 +1209,29 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
       return;
     }
 
-    const instance = ext.mount(container, { mode: 'view' });
+    const pendingPopoutHostTransfer = pendingPaneHostTransferRef.current?.path === terminalTabPath
+      ? pendingPaneHostTransferRef.current
+      : null;
+    const pendingReattachHostTransfer = pendingReattachPaneHostTransfersRef.current.get(terminalTabPath) || null;
+    const pendingHostTransfer = pendingPopoutHostTransfer || pendingReattachHostTransfer;
+
+    const instance = ext.mount(container, {
+      mode: 'view',
+      ...(pendingHostTransfer?.payload ? { transferState: pendingHostTransfer.payload } : {}),
+    });
     dockInstanceRef.current = instance;
     void invokePaneAfterAttachToHost(instance, {
       path: terminalTabPath,
       hostMode: panePopoutMode ? 'popout' : 'main',
-      transferState: pendingPaneHostTransferRef.current?.path === terminalTabPath
-        ? (pendingPaneHostTransferRef.current.payload || null)
-        : null,
+      transferState: pendingHostTransfer?.payload || null,
     }).catch((error) => {
       console.warn('[pane-attach] afterAttachToHost failed:', error);
     });
-    if (pendingPaneHostTransferRef.current?.path === terminalTabPath) {
+    if (pendingPopoutHostTransfer) {
       pendingPaneHostTransferRef.current = null;
+    }
+    if (pendingReattachHostTransfer) {
+      pendingReattachPaneHostTransfersRef.current.delete(terminalTabPath);
     }
     requestAnimationFrame(() => instance.focus?.());
 
