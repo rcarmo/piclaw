@@ -59,6 +59,7 @@
     "test:coverage": "cd runtime && rm -rf generated/coverage && PICLAW_DB_IN_MEMORY=1 bun test --max-concurrency=1 --coverage --coverage-dir=generated/coverage --coverage-reporter=text --coverage-reporter=lcov",
     "test:optional:browser-isolation": "cd runtime && PICLAW_DB_IN_MEMORY=1 PICLAW_RUN_OPTIONAL_BROWSER_TESTS=1 bun test --max-concurrency=1 --timeout=30000 test/channels/web/browser-chat-isolation.optional.test.ts",
     "test:oobe:local-container": "./scripts/ensure-playwright-browser-isolation.sh && bun run runtime/scripts/playwright/oobe-local-container.ts",
+    "test:e2e:terminal-reopen": "bun run runtime/scripts/playwright/terminal-reopen.ts",
     "check:pack-hygiene": "bun run runtime/scripts/pack-hygiene.ts",
     "check:stale-dist": "cd runtime && bun run scripts/check-stale-dist.ts",
     "check:import-boundaries": "cd runtime && bun run scripts/check-import-boundaries.ts",
