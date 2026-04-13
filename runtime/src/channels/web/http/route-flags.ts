@@ -18,6 +18,8 @@ export type RouteFlags = {
   isLoginPage: boolean;
   /** True when the request targets `/auth/verify`. */
   isAuthVerify: boolean;
+  /** True when the request targets the local E2E auth bootstrap endpoint. */
+  isE2eBootstrap: boolean;
   /** True when the request targets WebAuthn login start. */
   isWebauthnLoginStart: boolean;
   /** True when the request targets WebAuthn login finish. */
@@ -81,6 +83,7 @@ export function isPublicStaticPath(pathname: string): boolean {
 export function getRouteFlags(req: Request, pathname: string): RouteFlags {
   const isGetOrHead = req.method === "GET" || req.method === "HEAD";
   const isAuthVerify = req.method === "POST" && pathname === "/auth/verify";
+  const isE2eBootstrap = req.method === "POST" && pathname === "/auth/e2e/bootstrap";
   const isWebauthnLoginStart = req.method === "POST" && pathname === "/auth/webauthn/login/start";
   const isWebauthnLoginFinish = req.method === "POST" && pathname === "/auth/webauthn/login/finish";
   const isWebauthnRegisterStart = req.method === "POST" && pathname === "/auth/webauthn/register/start";
@@ -90,6 +93,7 @@ export function getRouteFlags(req: Request, pathname: string): RouteFlags {
 
   const isAuthEndpoint =
     isAuthVerify ||
+    isE2eBootstrap ||
     isWebauthnLoginStart ||
     isWebauthnLoginFinish ||
     isWebauthnRegisterStart ||
@@ -99,6 +103,7 @@ export function getRouteFlags(req: Request, pathname: string): RouteFlags {
     isGetOrHead,
     isLoginPage: isGetOrHead && (pathname === "/login" || pathname === "/login.html"),
     isAuthVerify,
+    isE2eBootstrap,
     isWebauthnLoginStart,
     isWebauthnLoginFinish,
     isWebauthnRegisterStart,
@@ -130,6 +135,7 @@ export function shouldSkipAuthCheck(flags: RouteFlags, hasInternalAccess: boolea
     hasInternalAccess ||
     flags.isLoginPage ||
     flags.isAuthVerify ||
+    flags.isE2eBootstrap ||
     flags.isWebauthnLoginStart ||
     flags.isWebauthnLoginFinish ||
     flags.isWebauthnRegisterStart ||
