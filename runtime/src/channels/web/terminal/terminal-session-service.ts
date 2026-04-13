@@ -16,6 +16,7 @@ export interface TerminalSessionOwner {
 
 export interface TerminalSocketData extends TerminalSessionOwner {
   kind: "terminal";
+  attachedSessionId?: string | null;
 }
 
 export interface TerminalClientMessageInput {
@@ -43,9 +44,11 @@ interface TerminalProcessLike {
 export interface TerminalSessionServiceOptions {
   spawnProcess?: (cwd: string) => TerminalProcessLike;
   handoffTtlMs?: number;
+  reconnectGraceMs?: number;
 }
 
 interface TerminalSessionRecord {
+  id: string;
   owner: TerminalSessionOwner;
   process: TerminalProcessLike;
   clients: Set<ServerWebSocket<TerminalSocketData>>;
@@ -54,6 +57,10 @@ interface TerminalSessionRecord {
   cols: number;
   rows: number;
   ptsPath: string | null;
+  reconnectGraceDeadlineAt: number | null;
+  reconnectGraceTimer: ReturnType<typeof setTimeout> | null;
+  outputHistory: string[];
+  outputHistoryBytes: number;
 }
 
 const DEFAULT_COLS = 120;
@@ -66,6 +73,8 @@ const FALLBACK_TERMINAL_OWNER: TerminalSessionOwner = {
 
 const IS_LINUX = process.platform === "linux";
 const DEFAULT_TERMINAL_HANDOFF_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_TERMINAL_RECONNECT_GRACE_MS = 3_000;
+const DEFAULT_TERMINAL_OUTPUT_HISTORY_LIMIT_BYTES = 2 * 1024 * 1024;
 const log = createLogger("web.terminal-session-service");
 
 interface TerminalHandoffRecord {
@@ -79,6 +88,15 @@ function createTerminalHandoffToken(): string {
   } catch (error) {
     debugSuppressedError(log, "crypto.randomUUID unavailable for terminal handoff token", error);
     return `terminal-handoff-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
+
+function createTerminalSessionId(): string {
+  try {
+    return crypto.randomUUID();
+  } catch (error) {
+    debugSuppressedError(log, "crypto.randomUUID unavailable for terminal session id", error);
+    return `terminal-session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   }
 }
 
@@ -232,12 +250,16 @@ export class TerminalSessionService {
   private readonly handoffs = new Map<string, TerminalHandoffRecord>();
   private readonly spawnProcess: (cwd: string) => TerminalProcessLike;
   private readonly handoffTtlMs: number;
+  private readonly reconnectGraceMs: number;
 
   constructor(options: TerminalSessionServiceOptions = {}) {
     this.spawnProcess = options.spawnProcess ?? defaultSpawnProcess;
     this.handoffTtlMs = Number.isFinite(options.handoffTtlMs)
       ? Math.max(1, Number(options.handoffTtlMs))
       : DEFAULT_TERMINAL_HANDOFF_TTL_MS;
+    this.reconnectGraceMs = Number.isFinite(options.reconnectGraceMs)
+      ? Math.max(0, Number(options.reconnectGraceMs))
+      : DEFAULT_TERMINAL_RECONNECT_GRACE_MS;
   }
 
   resolveOwnerFromRequest(req: Request, allowUnauthenticated = false): TerminalSocketData | null {
@@ -267,8 +289,14 @@ export class TerminalSessionService {
 
   attachClient(ws: ServerWebSocket<TerminalSocketData>): void {
     const owner = ws.data;
+    const isHandoff = this.validateHandoff(owner);
+    const canResumeDetachedSession = !isHandoff && this.canResumeDetachedSession(owner);
+    if (!isHandoff && !canResumeDetachedSession) {
+      this.resetSession(owner, "fresh attach");
+    }
     const session = this.ensureSession(owner);
-    if (this.validateHandoff(owner)) {
+    this.clearReconnectGrace(session);
+    if (isHandoff) {
       for (const client of Array.from(session.clients)) {
         if (client === ws) continue;
         try {
@@ -282,14 +310,25 @@ export class TerminalSessionService {
         session.clients.delete(client);
       }
     }
+    const replayOutput = this.getReplayOutput(session);
+    ws.data.attachedSessionId = session.id;
     session.clients.add(ws);
     this.send(ws, {
       type: "session",
+      session_id: session.id,
+      created_at: session.createdAt,
+      process_pid: session.process.pid ?? null,
       cwd: session.cwd,
       cols: session.cols,
       rows: session.rows,
       font_family: TERMINAL_FONT_FAMILY,
     });
+    if (replayOutput) {
+      this.send(ws, {
+        type: "output",
+        data: replayOutput,
+      });
+    }
   }
 
   handleMessage(ws: ServerWebSocket<TerminalSocketData>, rawMessage: string | Buffer | Uint8Array): void {
@@ -301,7 +340,17 @@ export class TerminalSessionService {
 
     if (payload.type === "input") {
       if (typeof payload.data === "string" && payload.data.length > 0) {
-        session.process.stdin.write(payload.data);
+        try {
+          session.process.stdin.write(payload.data);
+        } catch (error) {
+          debugSuppressedError(log, "failed to write terminal input to process stdin", error, {
+            token: ws.data.token,
+            userId: ws.data.userId,
+            sessionId: session.id,
+            processPid: session.process.pid ?? null,
+            ptsPath: session.ptsPath,
+          });
+        }
       }
       return;
     }
@@ -319,9 +368,22 @@ export class TerminalSessionService {
   }
 
   detachClient(ws: ServerWebSocket<TerminalSocketData>): void {
-    const session = this.sessions.get(ws.data.token);
+    const attachedSessionId = String(ws.data.attachedSessionId || "").trim();
+    if (!attachedSessionId) return;
+    const session = Array.from(this.sessions.values()).find(
+      (candidate) => candidate.id === attachedSessionId && candidate.owner.token === ws.data.token,
+    );
     if (!session) return;
     session.clients.delete(ws);
+    if (session.clients.size > 0) {
+      this.clearReconnectGrace(session);
+      return;
+    }
+    if (this.hasPendingHandoff(ws.data)) {
+      this.clearReconnectGrace(session);
+      return;
+    }
+    this.scheduleReconnectGrace(session);
   }
 
   private parseClientMessage(messageText: string): TerminalClientMessage {
@@ -353,6 +415,7 @@ export class TerminalSessionService {
 
   shutdown(): void {
     for (const session of this.sessions.values()) {
+      this.clearReconnectGrace(session);
       try {
         session.process.kill("SIGHUP");
       } catch (error) {
@@ -405,7 +468,18 @@ export class TerminalSessionService {
     const record = this.handoffs.get(handoffToken);
     if (!record) return false;
     if (record.owner.token !== owner.token || record.owner.userId !== owner.userId) return false;
+    this.handoffs.delete(handoffToken);
     return true;
+  }
+
+  private hasPendingHandoff(owner: TerminalSessionOwner): boolean {
+    this.sweepExpiredHandoffs();
+    for (const record of this.handoffs.values()) {
+      if (record.owner.token === owner.token && record.owner.userId === owner.userId) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private ensureSession(owner: TerminalSessionOwner): TerminalSessionRecord {
@@ -414,6 +488,7 @@ export class TerminalSessionService {
 
     const proc = this.spawnProcess(WORKSPACE_DIR);
     const session: TerminalSessionRecord = {
+      id: createTerminalSessionId(),
       owner,
       process: proc,
       clients: new Set(),
@@ -422,17 +497,29 @@ export class TerminalSessionService {
       cols: DEFAULT_COLS,
       rows: DEFAULT_ROWS,
       ptsPath: null,
+      reconnectGraceDeadlineAt: null,
+      reconnectGraceTimer: null,
+      outputHistory: [],
+      outputHistoryBytes: 0,
     };
 
     proc.stdout.on("data", (chunk) => {
-      this.broadcast(session, { type: "output", data: normalizeChunk(chunk) });
+      const data = normalizeChunk(chunk);
+      this.appendOutputHistory(session, data);
+      this.broadcast(session, { type: "output", data });
     });
     proc.stderr.on("data", (chunk) => {
-      this.broadcast(session, { type: "output", data: normalizeChunk(chunk) });
+      const data = normalizeChunk(chunk);
+      this.appendOutputHistory(session, data);
+      this.broadcast(session, { type: "output", data });
     });
     proc.on("exit", (code, signal) => {
       this.broadcast(session, { type: "exit", code: code ?? null, signal: signal ?? null });
-      this.sessions.delete(owner.token);
+      const current = this.sessions.get(owner.token);
+      if (current?.id === session.id) {
+        this.clearReconnectGrace(session);
+        this.sessions.delete(owner.token);
+      }
     });
 
     // Discover PTS device path after a short delay to let `script` allocate the PTY,
@@ -453,6 +540,112 @@ export class TerminalSessionService {
 
     this.sessions.set(owner.token, session);
     return session;
+  }
+
+  private resetSession(owner: TerminalSessionOwner, reason: string): void {
+    const session = this.sessions.get(owner.token);
+    if (!session) return;
+    this.clearReconnectGrace(session);
+    for (const client of Array.from(session.clients)) {
+      try {
+        client.close(1000, reason);
+      } catch (error) {
+        debugSuppressedError(log, "terminal websocket already closing during session reset", error, {
+          token: owner.token,
+          userId: owner.userId,
+          reason,
+        });
+      }
+    }
+    session.clients.clear();
+    try {
+      session.process.kill("SIGHUP");
+    } catch (error) {
+      debugSuppressedError(log, "terminal process already exited during session reset", error, {
+        pid: session.process.pid ?? null,
+        token: owner.token,
+        userId: owner.userId,
+        reason,
+      });
+    }
+    this.sessions.delete(owner.token);
+  }
+
+  private appendOutputHistory(session: TerminalSessionRecord, chunk: string): void {
+    if (!chunk) return;
+    session.outputHistory.push(chunk);
+    session.outputHistoryBytes += Buffer.byteLength(chunk, "utf8");
+    while (session.outputHistoryBytes > DEFAULT_TERMINAL_OUTPUT_HISTORY_LIMIT_BYTES && session.outputHistory.length > 1) {
+      const removed = session.outputHistory.shift() || "";
+      session.outputHistoryBytes -= Buffer.byteLength(removed, "utf8");
+    }
+    if (session.outputHistoryBytes < 0) {
+      session.outputHistoryBytes = 0;
+    }
+  }
+
+  private getReplayOutput(session: TerminalSessionRecord): string {
+    return session.outputHistory.length > 0 ? session.outputHistory.join("") : "";
+  }
+
+  private clearReconnectGrace(session: TerminalSessionRecord | null | undefined): void {
+    if (!session) return;
+    session.reconnectGraceDeadlineAt = null;
+    if (!session.reconnectGraceTimer) return;
+    clearTimeout(session.reconnectGraceTimer);
+    session.reconnectGraceTimer = null;
+  }
+
+  private canResumeDetachedSession(owner: TerminalSessionOwner, nowMs = Date.now()): boolean {
+    const session = this.sessions.get(owner.token);
+    if (!session) return false;
+    if (session.clients.size > 0) return false;
+    const deadline = Number.isFinite(session.reconnectGraceDeadlineAt)
+      ? Number(session.reconnectGraceDeadlineAt)
+      : null;
+    return deadline !== null && deadline >= nowMs;
+  }
+
+  private scheduleReconnectGrace(session: TerminalSessionRecord, nowMs = Date.now()): void {
+    this.clearReconnectGrace(session);
+    if (!(this.reconnectGraceMs > 0)) {
+      this.terminateDetachedSession(session, "last-client detach");
+      return;
+    }
+    session.reconnectGraceDeadlineAt = nowMs + this.reconnectGraceMs;
+    session.reconnectGraceTimer = setTimeout(() => {
+      session.reconnectGraceTimer = null;
+      const current = this.sessions.get(session.owner.token);
+      if (current?.id !== session.id) return;
+      if (session.clients.size > 0) {
+        this.clearReconnectGrace(session);
+        return;
+      }
+      if (this.hasPendingHandoff(session.owner)) {
+        this.clearReconnectGrace(session);
+        return;
+      }
+      this.terminateDetachedSession(session, "last-client detach");
+    }, this.reconnectGraceMs);
+  }
+
+  private terminateDetachedSession(session: TerminalSessionRecord, reason: string): void {
+    this.clearReconnectGrace(session);
+    try {
+      session.process.kill("SIGHUP");
+    } catch (error) {
+      debugSuppressedError(log, "terminal process already exited during detached session cleanup", error, {
+        pid: session.process.pid ?? null,
+        token: session.owner.token,
+        userId: session.owner.userId,
+        sessionId: session.id,
+        reason,
+      });
+    }
+    const current = this.sessions.get(session.owner.token);
+    if (current?.id === session.id) {
+      this.sessions.delete(session.owner.token);
+    }
   }
 
   private broadcast(session: TerminalSessionRecord, payload: Record<string, unknown>): void {
