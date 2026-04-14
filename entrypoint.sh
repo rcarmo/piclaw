@@ -174,7 +174,16 @@ alias la='ls -A'
 [ -x /home/linuxbrew/.linuxbrew/bin/brew ] && eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)"
 export BUN_INSTALL="/usr/local/lib/bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
+# Workspace-level env customizations (persisted on volume)
+[ -f /workspace/.env.sh ] && . /workspace/.env.sh
 BASHRC
+    fi
+
+    if ! grep -Fq '/workspace/.env.sh' "$HOME_DIR/.bashrc" 2>/dev/null; then
+        cat >> "$HOME_DIR/.bashrc" <<'BASHRC_ENV_HOOK'
+# Workspace-level env customizations (persisted on volume)
+[ -f /workspace/.env.sh ] && . /workspace/.env.sh
+BASHRC_ENV_HOOK
     fi
 
     if [ ! -f "$HOME_DIR/.profile" ]; then

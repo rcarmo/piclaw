@@ -16,6 +16,11 @@ if [ -f "$HOME/.bashrc" ]; then
   source "$HOME/.bashrc" >/dev/null 2>&1 || true
 fi
 
+if [ -f "/workspace/.env.sh" ]; then
+  # shellcheck source=/dev/null
+  source "/workspace/.env.sh" >/dev/null 2>&1 || true
+fi
+
 if [ "${PICLAW_AUTOSTART:-1}" != "1" ]; then
   echo "[run-piclaw] PICLAW_AUTOSTART=0; supervisor service is idle."
   tail -f /dev/null & wait $!
