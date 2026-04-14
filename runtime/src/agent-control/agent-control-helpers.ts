@@ -26,13 +26,16 @@ export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhig
  * Provider-native aliases for thinking levels.
  * Anthropic uses "effort" terminology: "max" maps to internal "xhigh".
  */
-export const THINKING_LEVEL_ALIASES: Record<string, string> = {
+export const EFFORT_PROVIDER_THINKING_LEVEL_ALIASES: Record<string, string> = {
   max: "xhigh",
 };
 
-/** Resolve a user-provided level name through provider-native aliases. */
-export function resolveThinkingAlias(level: string): string {
-  return THINKING_LEVEL_ALIASES[level] ?? level;
+/** Resolve a user-provided level name through provider-native aliases for the active provider. */
+export function resolveThinkingAlias(level: string, provider: string | undefined | null): string {
+  if (isEffortProvider(provider)) {
+    return EFFORT_PROVIDER_THINKING_LEVEL_ALIASES[level] ?? level;
+  }
+  return level;
 }
 
 /** Check if a provider uses "effort" terminology (e.g. Anthropic). */

@@ -103,7 +103,6 @@ export async function handleModel(session: AgentSession, modelRegistry: ModelReg
     selected = matches[0];
   }
 
-  const _previousModel = session.model;
   try {
     await session.setModel(selected);
   } catch (err) {
@@ -167,7 +166,7 @@ export async function handleThinking(session: AgentSession, _modelRegistry: Mode
     };
   }
 
-  const resolved = resolveThinkingAlias(requestedRaw);
+  const resolved = resolveThinkingAlias(requestedRaw, session.model?.provider);
 
   if (!THINKING_LEVELS.includes(resolved as ThinkingLevel)) {
     const available = formatAvailableLevels(session.getAvailableThinkingLevels(), session.model?.provider);
@@ -177,7 +176,6 @@ export async function handleThinking(session: AgentSession, _modelRegistry: Mode
     };
   }
 
-  const _previousLevel = session.thinkingLevel;
   session.setThinkingLevel(resolved as ThinkingLevel);
   const applied = session.thinkingLevel;
 
@@ -213,11 +211,13 @@ export async function handleCycleModel(session: AgentSession, _modelRegistry: Mo
     const label = `${result.model.provider}/${result.model.id}`;
     const scope = result.isScoped ? "scoped" : "available";
     const thinkingLevel = result.thinkingLevel ?? null;
+    const thinkingLevelLabel = thinkingLevel ? formatThinkingLevelForDisplay(thinkingLevel, result.model.provider) : null;
     return {
       status: "success",
-      message: `Model set to ${label} (cycle: ${scope}). Thinking level: ${result.thinkingLevel}.`,
+      message: `Model set to ${label} (cycle: ${scope}). Thinking level: ${thinkingLevelLabel ?? thinkingLevel}.`,
       model_label: label,
       thinking_level: thinkingLevel,
+      thinking_level_label: thinkingLevelLabel,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -231,5 +231,11 @@ export async function handleCycleThinking(session: AgentSession, _modelRegistry:
   if (!level) {
     return { status: "error", message: "Current model does not support thinking levels.", thinking_level: session.thinkingLevel ?? null };
   }
-  return { status: "success", message: `Thinking level set to ${level}.`, thinking_level: level };
+  const displayLevel = formatThinkingLevelForDisplay(level, session.model?.provider);
+  return {
+    status: "success",
+    message: `Thinking level set to ${displayLevel}.`,
+    thinking_level: level,
+    thinking_level_label: displayLevel,
+  };
 }

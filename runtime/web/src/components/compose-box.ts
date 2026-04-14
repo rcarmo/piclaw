@@ -92,6 +92,24 @@ export function getComposeHistoryStorageKey(chatJid = 'web:default') {
     return `${COMPOSE_HISTORY_STORAGE_KEY}:${encodeURIComponent(normalized)}`;
 }
 
+export function resolveUiOnlyCommandNotice(commandText, response) {
+    const message = typeof response?.command?.message === 'string' ? response.command.message.trim() : '';
+    if (!response?.ui_only || !message) return null;
+
+    const trimmed = typeof commandText === 'string' ? commandText.trim() : '';
+    if (!trimmed.startsWith('/')) return null;
+
+    const parts = trimmed.split(/\s+/).filter(Boolean);
+    const slashName = parts[0]?.toLowerCase() || '';
+    const hasArgs = parts.length > 1;
+
+    if (!hasArgs && (slashName === '/model' || slashName === '/thinking' || slashName === '/effort')) {
+        return message;
+    }
+
+    return null;
+}
+
 /**
  * Tiny SVG pie chart showing context window usage.
  * Green when <75%, amber 75–90%, red >90%. Tooltip shows exact numbers.
@@ -550,6 +568,7 @@ export function ComposeBox({
     const [loadingModels, setLoadingModels] = useState(false);
     const [footerWidth, setFooterWidth] = useState(0);
     const [submitError, setSubmitError] = useState(null);
+    const [submitNotice, setSubmitNotice] = useState(null);
     const [statusNoticeNowMs, setStatusNoticeNowMs] = useState(() => Date.now());
     const textareaRef = useRef(null);
     const slashRef = useRef(null);
@@ -969,6 +988,8 @@ export function ComposeBox({
     const runModelCommand = async (commandText) => {
         if (searchMode || switchingModel) return;
 
+        setSubmitError(null);
+        setSubmitNotice(null);
         setSwitchingModel(true);
         try {
             const response = await sendAgentMessage('default', commandText, null, [], null, currentChatJid);
@@ -980,6 +1001,7 @@ export function ComposeBox({
                 supports_thinking: response?.command?.supports_thinking,
             });
             await refreshAgentModelStateBestEffort(getAgentModels, currentChatJid, emitModelState);
+            setSubmitNotice(resolveUiOnlyCommandNotice(commandText, response));
             onPost?.(response);
             return true;
         } catch (error) {
@@ -1085,6 +1107,7 @@ export function ComposeBox({
         setMentionMatches([]);
         setShowSessionPopup(false);
         setSubmitError(null);
+        setSubmitNotice(null);
 
         // Capture media/refs before clearing so the async send can use them
         const capturedMediaFiles = includeMedia ? [...mediaFiles] : [];
@@ -1171,6 +1194,7 @@ export function ComposeBox({
                     await refreshAgentModelStateBestEffort(getAgentModels, currentChatJid, emitModelState);
                 }
 
+                setSubmitNotice(resolveUiOnlyCommandNotice(baseContent, response));
                 onPost?.(response);
             } catch (error) {
                 if (clearAfterSubmit) {
@@ -1696,6 +1720,7 @@ export function ComposeBox({
     const handleInput = (e) => {
         const value = e.target.value;
         setSubmitError(null);
+        setSubmitNotice(null);
         if (showSessionPopup) setShowSessionPopup(false);
         resizeTextarea(e.target);
         updateValue(value);
@@ -1744,6 +1769,11 @@ export function ComposeBox({
             `}
             ${submitError && html`
                 <div class="compose-submit-error compose-submit-error-top" role="status" aria-live="polite">${submitError}</div>
+            `}
+            ${submitNotice && html`
+                <div class="compose-inline-status compose-command-notice" role="status" aria-live="polite">
+                    <div class="compose-inline-status-detail compose-command-notice-text">${submitNotice}</div>
+                </div>
             `}
             <div
                 class=${`compose-input-wrapper${isDragActive ? ' drag-active' : ''}`}

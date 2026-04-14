@@ -298,6 +298,15 @@
     color: var(--text-secondary);
 }
 
+.compose-command-notice {
+    margin: 2px var(--spacing-xs) 0 var(--spacing-xs);
+}
+
+.compose-command-notice-text {
+    margin-top: 0;
+    white-space: pre-wrap;
+}
+
 .compose-clear-attachments-btn {
     display: inline-flex;
     align-items: center;
