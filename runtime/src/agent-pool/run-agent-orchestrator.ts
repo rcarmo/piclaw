@@ -217,6 +217,11 @@ export async function runAgentPrompt(
         return { status: "error", result: null, error: `Timed out after ${formatTimeoutDuration(timeoutMs)}` };
       }
 
+      const turnError = tracker.getError();
+      if (turnError) {
+        return { status: "error", result: null, error: turnError.errorMessage };
+      }
+
       options.onInfo?.("Agent run completed", {
         operation: "run_agent.complete",
         chatJid,

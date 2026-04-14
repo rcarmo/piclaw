@@ -209,6 +209,59 @@ test("runAgentPrompt skips pre-prompt auto-compaction when it is disabled", asyn
   expect(calls).toEqual(["prompt"]);
 });
 
+test("runAgentPrompt surfaces provider error instead of returning null result", async () => {
+  class StubSession {
+    private listeners: Array<(event: any) => void> = [];
+    sessionManager = { getLeafId: () => "leaf-1" };
+    isStreaming = false;
+    isCompacting = false;
+    isRetrying = false;
+    subscribe(listener: (event: any) => void) {
+      this.listeners.push(listener);
+      return () => {
+        this.listeners = this.listeners.filter((entry) => entry !== listener);
+      };
+    }
+    async prompt() {
+      for (const listener of this.listeners) {
+        listener({
+          type: "message_end",
+          message: {
+            role: "assistant",
+            stopReason: "error",
+            errorMessage:
+              'Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"You\'re out of extra usage."},"request_id":"req_abc123"}',
+            content: [],
+          },
+        });
+      }
+    }
+    async abort() {}
+  }
+
+  const session = new StubSession();
+  const turnCoordinator = new AgentTurnCoordinator({
+    takeAttachments: () => [],
+    touchSession: () => {},
+    recordMessageUsage: () => {},
+  });
+
+  const result = await runAgentPrompt("hello", "web:default", { timeoutMs: 0 }, {
+    getOrCreateRuntime: async () => createRuntime(session) as any,
+    turnCoordinator,
+    clearAttachments: () => {},
+    takeAttachments: () => [],
+    logsDir: process.env.PICLAW_WORKSPACE || "/workspace",
+    setActiveForkBaseLeaf: () => {},
+    clearActiveForkBaseLeaf: () => {},
+  });
+
+  expect(result.status).toBe("error");
+  expect(result.error).toContain("invalid_request_error");
+  expect(result.error).toContain("extra usage");
+  expect(result.result).toBeNull();
+});
+
 test("runAgentPrompt ignores commentary-only aborted output", async () => {
   class StubSession {
     private listeners: Array<(event: any) => void> = [];

@@ -24,11 +24,18 @@ export interface AgentTurnOutput {
   attachments: AttachmentInfo[];
 }
 
+/** Error state captured from an assistant message with stopReason "error". */
+export interface AgentTurnError {
+  stopReason: "error";
+  errorMessage: string;
+}
+
 /** Aggregated assistant-turn tracking state for a single prompt run. */
 export interface AgentTurnTracker {
   handleMessageUpdate: (event: AgentSessionEvent) => void;
   getFinalText: () => string;
   getTurnCount: () => number;
+  getError: () => AgentTurnError | null;
 }
 
 /**
@@ -63,6 +70,7 @@ export class AgentTurnCoordinator {
     let currentTurnPhase: AssistantTextPhase = null;
     let turnCount = 0;
     let messageHasDelta = false;
+    let lastError: AgentTurnError | null = null;
 
     const parseTextPhase = (signature: unknown): AssistantTextPhase => {
       if (typeof signature !== "string" || !signature.trim()) return null;
@@ -162,8 +170,16 @@ export class AgentTurnCoordinator {
       }
 
       if (event.type === "message_end") {
-        const message = event.message as { role?: string; content?: unknown } | undefined;
+        const message = event.message as {
+          role?: string;
+          content?: unknown;
+          stopReason?: string;
+          errorMessage?: string;
+        } | undefined;
         if (message?.role === "assistant") {
+          if (message.stopReason === "error" && message.errorMessage) {
+            lastError = { stopReason: "error", errorMessage: message.errorMessage };
+          }
           const extracted = extractAssistantTextFromContent(message.content);
           if (!messageHasDelta) {
             currentTurnText = extracted.text;
@@ -181,6 +197,7 @@ export class AgentTurnCoordinator {
       handleMessageUpdate,
       getFinalText: () => currentTurnPhase === "commentary" ? "" : currentTurnText.trim(),
       getTurnCount: () => turnCount,
+      getError: () => lastError,
     };
   }
 
