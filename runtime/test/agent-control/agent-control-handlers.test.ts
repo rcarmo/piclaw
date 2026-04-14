@@ -393,6 +393,17 @@ test("agent control cycle and agent identity commands", async () => {
   const cycleThinking = await applyControlCommand(runtime as any, registry, { type: "cycle_thinking", raw: "/cycle-thinking" });
   expect(cycleThinking.message).toContain("Thinking level set");
 
+  const maxOnOpenAi = await applyControlCommand(runtime as any, registry, { type: "thinking", level: "max", raw: "/thinking max" });
+  expect(maxOnOpenAi.status).toBe("error");
+  expect(maxOnOpenAi.message).toContain("Unknown thinking level: max");
+
+  session.model = { provider: "anthropic", id: "claude-opus-4-6", reasoning: true } as any;
+  const maxOnAnthropic = await applyControlCommand(runtime as any, registry, { type: "thinking", level: "max", raw: "/thinking max" });
+  expect(maxOnAnthropic.status).toBe("success");
+  expect(maxOnAnthropic.thinking_level).toBe("xhigh");
+  expect(maxOnAnthropic.thinking_level_label).toBe("max");
+  expect(maxOnAnthropic.message).toContain("Thinking level set to max");
+
   const agentName = await applyControlCommand(runtime as any, registry, { type: "agent_name", name: "Pi", raw: "/agent-name Pi" });
   expect(agentName.message).toContain("Agent name set");
 

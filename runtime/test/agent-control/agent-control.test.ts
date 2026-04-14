@@ -207,6 +207,42 @@ test("applyControlCommand reports unsupported thinking", async () => {
   expect(session.thinkingLevel).toBe("off");
 });
 
+test("applyControlCommand resolves /effort max alias through thinking handler", async () => {
+  const session = new StubSession();
+  const runtime = createRuntime(session);
+  // max alias only resolves on Anthropic (effort provider)
+  session.model = { provider: "anthropic", id: "claude-test", reasoning: true } as any;
+  session.thinkingLevel = "low";
+
+  const result = await applyControlCommand(runtime as any, registry, {
+    type: "thinking",
+    level: "max",
+    raw: "/effort max",
+  });
+
+  expect(result.status).toBe("success");
+  // max→xhigh via alias, StubSession clamps to "off" (xhigh not in available list)
+  expect(result.message).toContain("requested max");
+  expect(result.thinking_level).toBe("off");
+  expect(result.thinking_level_label).toBeDefined();
+});
+
+test("applyControlCommand includes thinking_level_label in response", async () => {
+  const session = new StubSession();
+  const runtime = createRuntime(session);
+  session.model = modelReasoning;
+
+  const result = await applyControlCommand(runtime as any, registry, {
+    type: "thinking",
+    level: "high",
+    raw: "/thinking high",
+  });
+
+  expect(result.status).toBe("success");
+  expect(result.thinking_level).toBe("high");
+  expect(result.thinking_level_label).toBe("high");
+});
+
 test("applyControlCommand sends immediate steering when stream active", async () => {
   const session = new StubSession();
   const runtime = createRuntime(session);

@@ -337,6 +337,9 @@ export async function httpPut(url: string, timeoutMs = 5000): Promise<any> {
 	try { return JSON.parse(text); } catch { return text; }
 }
 
+const EXISTING_CDP_DISCOVERY_TIMEOUT_MS = 750;
+const EXISTING_CDP_REUSE_TAB_TIMEOUT_MS = 1200;
+
 export function sleep(ms: number) {
 	return new Promise((r) => setTimeout(r, ms));
 }
@@ -499,15 +502,25 @@ export async function launchEdge(url: string, options?: { forceNewInstance?: boo
 	// compatible browser in our priority order: Edge → Chrome → Chromium.
 	const forceNew = options?.forceNewInstance ?? false;
 
-	// If a healthy compatible-browser CDP session already exists and we don't need a new instance, reuse it.
-	// This is intentionally stricter than before: stale CDP endpoints are a common cause of
-	// auth/transcript weirdness, and killing Edge manually was observed to unblock the tools.
+	// If a compatible-browser CDP session already exists and we don't need a new
+	// instance, prefer reconnecting to it. Discovery is intentionally
+	// lightweight/non-destructive: findExistingCdpPort() only checks that the
+	// CDP endpoint responds and never kills processes. Reuse remains strict,
+	// though — we only return success if we can open the requested URL in a new
+	// tab. Otherwise we log and fall back to launching a fresh browser instance.
 	if (!forceNew) {
 		const existingCdp = await findExistingCdpPort();
 		if (existingCdp && !USE_TEMP_EDGE_PROFILE) {
-			await httpPut(`http://localhost:${existingCdp}/json/new?${encodeURIComponent(url)}`, 5000);
-			const dummyProc = { pid: 0, kill: () => {}, unref: () => {} } as any;
-			return { proc: dummyProc, port: existingCdp };
+			try {
+				await httpPut(`http://localhost:${existingCdp}/json/new?${encodeURIComponent(url)}`, EXISTING_CDP_REUSE_TAB_TIMEOUT_MS);
+				const dummyProc = { pid: 0, kill: () => {}, unref: () => {} } as any;
+				return { proc: dummyProc, port: existingCdp };
+			} catch (error) {
+				logSuppressedM365("Failed to open the requested URL in an existing CDP browser session; falling back to a fresh browser launch.", error, {
+					existingCdp,
+					url,
+				});
+			}
 		}
 	}
 
@@ -1519,17 +1532,23 @@ export async function getDocumentLinkMetadata(inputUrl: string): Promise<any> {
 	};
 }
 
+/**
+ * Lightweight CDP discovery used when reconnecting to an existing browser.
+ *
+ * This helper intentionally does not create probe tabs or kill any browser
+ * processes. If the localhost CDP endpoint responds with version metadata, the
+ * caller can decide whether reuse is appropriate. Destructive health checks and
+ * process cleanup stay in recycleUnhealthyEdgeCdp(), which is only used right
+ * before launching a fresh browser instance.
+ */
 export async function findExistingCdpPort(): Promise<number | null> {
-	let sawUnhealthy = false;
 	for (let p = CDP_PORT_START; p < CDP_PORT_START + 10; p++) {
-		const state = await inspectCdpPort(p);
-		if (state === "healthy") return p;
-		if (state === "unhealthy") sawUnhealthy = true;
-	}
-	if (sawUnhealthy) {
-		if (USE_TEMP_EDGE_PROFILE) killStaleEdge();
-		else killEdgeCdpProcesses();
-		await sleep(1500);
+		try {
+			const version = await httpGet(`http://localhost:${p}/json/version`, EXISTING_CDP_DISCOVERY_TIMEOUT_MS);
+			if (version && typeof version === "object") return p;
+		} catch {
+			// Port not reachable or not serving CDP; try the next candidate.
+		}
 	}
 	return null;
 }

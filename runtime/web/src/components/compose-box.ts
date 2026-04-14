@@ -18,7 +18,8 @@ import { refreshAgentModelStateBestEffort } from './compose-model-refresh.js';
 export const SLASH_COMMANDS = [
   { name: "/model", description: "Select model or list available models" },
   { name: "/cycle-model", description: "Cycle to the next available model" },
-  { name: "/thinking", description: "Show or set thinking level" },
+  { name: "/thinking", description: "Show or set thinking/effort level" },
+  { name: "/effort", description: "Show or set thinking/effort level (alias for /thinking)" },
   { name: "/cycle-thinking", description: "Cycle thinking level" },
   { name: "/theme", description: "Set UI theme (no name to show available themes)" },
   { name: "/meters", description: "Toggle the top-right CPU/RAM HUD (/meters on|off|toggle)" },
@@ -89,6 +90,24 @@ export function getComposeHistoryStorageKey(chatJid = 'web:default') {
     const normalized = typeof chatJid === 'string' && chatJid.trim() ? chatJid.trim() : 'web:default';
     if (normalized === 'web:default') return COMPOSE_HISTORY_STORAGE_KEY;
     return `${COMPOSE_HISTORY_STORAGE_KEY}:${encodeURIComponent(normalized)}`;
+}
+
+export function resolveUiOnlyCommandNotice(commandText, response) {
+    const message = typeof response?.command?.message === 'string' ? response.command.message.trim() : '';
+    if (!response?.ui_only || !message) return null;
+
+    const trimmed = typeof commandText === 'string' ? commandText.trim() : '';
+    if (!trimmed.startsWith('/')) return null;
+
+    const parts = trimmed.split(/\s+/).filter(Boolean);
+    const slashName = parts[0]?.toLowerCase() || '';
+    const hasArgs = parts.length > 1;
+
+    if (!hasArgs && (slashName === '/model' || slashName === '/thinking' || slashName === '/effort')) {
+        return message;
+    }
+
+    return null;
 }
 
 /**
@@ -549,6 +568,7 @@ export function ComposeBox({
     const [loadingModels, setLoadingModels] = useState(false);
     const [footerWidth, setFooterWidth] = useState(0);
     const [submitError, setSubmitError] = useState(null);
+    const [submitNotice, setSubmitNotice] = useState(null);
     const [statusNoticeNowMs, setStatusNoticeNowMs] = useState(() => Date.now());
     const textareaRef = useRef(null);
     const slashRef = useRef(null);
@@ -710,6 +730,7 @@ export function ComposeBox({
             onModelStateChange({
                 model: modelLabel ?? null,
                 thinking_level: payload.thinking_level ?? null,
+                thinking_level_label: payload.thinking_level_label ?? null,
                 supports_thinking: payload.supports_thinking,
                 provider_usage: payload.provider_usage ?? null,
             });
@@ -967,6 +988,8 @@ export function ComposeBox({
     const runModelCommand = async (commandText) => {
         if (searchMode || switchingModel) return;
 
+        setSubmitError(null);
+        setSubmitNotice(null);
         setSwitchingModel(true);
         try {
             const response = await sendAgentMessage('default', commandText, null, [], null, currentChatJid);
@@ -974,9 +997,11 @@ export function ComposeBox({
             emitModelState({
                 model: nextModel ?? activeModel ?? null,
                 thinking_level: response?.command?.thinking_level,
+                thinking_level_label: response?.command?.thinking_level_label,
                 supports_thinking: response?.command?.supports_thinking,
             });
             await refreshAgentModelStateBestEffort(getAgentModels, currentChatJid, emitModelState);
+            setSubmitNotice(resolveUiOnlyCommandNotice(commandText, response));
             onPost?.(response);
             return true;
         } catch (error) {
@@ -1082,6 +1107,7 @@ export function ComposeBox({
         setMentionMatches([]);
         setShowSessionPopup(false);
         setSubmitError(null);
+        setSubmitNotice(null);
 
         // Capture media/refs before clearing so the async send can use them
         const capturedMediaFiles = includeMedia ? [...mediaFiles] : [];
@@ -1162,11 +1188,13 @@ export function ComposeBox({
                     emitModelState({
                         model: response.command.model_label ?? activeModel ?? null,
                         thinking_level: response.command.thinking_level,
+                        thinking_level_label: response.command.thinking_level_label,
                         supports_thinking: response.command.supports_thinking,
                     });
                     await refreshAgentModelStateBestEffort(getAgentModels, currentChatJid, emitModelState);
                 }
 
+                setSubmitNotice(resolveUiOnlyCommandNotice(baseContent, response));
                 onPost?.(response);
             } catch (error) {
                 if (clearAfterSubmit) {
@@ -1692,6 +1720,7 @@ export function ComposeBox({
     const handleInput = (e) => {
         const value = e.target.value;
         setSubmitError(null);
+        setSubmitNotice(null);
         if (showSessionPopup) setShowSessionPopup(false);
         resizeTextarea(e.target);
         updateValue(value);
@@ -1740,6 +1769,11 @@ export function ComposeBox({
             `}
             ${submitError && html`
                 <div class="compose-submit-error compose-submit-error-top" role="status" aria-live="polite">${submitError}</div>
+            `}
+            ${submitNotice && html`
+                <div class="compose-inline-status compose-command-notice" role="status" aria-live="polite">
+                    <div class="compose-inline-status-detail compose-command-notice-text">${submitNotice}</div>
+                </div>
             `}
             <div
                 class=${`compose-input-wrapper${isDragActive ? ' drag-active' : ''}`}

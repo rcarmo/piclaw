@@ -51,6 +51,11 @@ import { checkPendingShutdown } from "../../../runtime/shutdown-registry.js";
 
 const log = createLogger("web.handlers.agent");
 
+function isRateLimitError(errorText: string | null | undefined): boolean {
+  if (!errorText) return false;
+  return /\b429\b|rate[ -]?limit|too many requests|retry-after/i.test(errorText);
+}
+
 export function withResolvedToolStatusHints(chatJid: string, payload: Record<string, unknown>): Record<string, unknown> {
   const isToolStatus = payload?.type === "tool_call" || payload?.type === "tool_status";
   const toolName = typeof payload?.tool_name === "string" ? payload.tool_name.trim() : "";
@@ -69,6 +74,21 @@ export function withResolvedToolStatusHints(chatJid: string, payload: Record<str
   });
   if (statusHints.length === 0) return payload;
   return { ...payload, status_hints: statusHints };
+}
+
+export function stripMarkdownCodeFenceMarkers(value: string): string {
+  return value
+    .replace(/^```[a-zA-Z0-9_-]*\s*\n?/, "")
+    .replace(/\n?```\s*$/, "")
+    .trim();
+}
+
+export function summarizeCommandStatusTitle(message: unknown, fallback = "Command failed"): string {
+  const raw = typeof message === "string" ? message.trim() : "";
+  if (!raw) return fallback;
+  const unfenced = stripMarkdownCodeFenceMarkers(raw);
+  const collapsed = unfenced.replace(/\s*\n\s*/g, " ").trim();
+  return collapsed || fallback;
 }
 
 function parseLeadingAgentMention(content: string): { agentName: string; remainder: string } | null {
@@ -330,11 +350,13 @@ export async function handleAgentMessage(
     // Broadcast model state so the UI hint updates immediately
     let nextModel = result.model_label ?? null;
     let thinkingLevel = result.thinking_level ?? null;
+    let thinkingLevelLabel = result.thinking_level_label ?? null;
     let supportsThinking: boolean | undefined = undefined;
     try {
       const modelState = await channel.agentPool.getAvailableModels(chatJid);
       if (!nextModel) nextModel = modelState.current ?? null;
       if (thinkingLevel == null) thinkingLevel = modelState.thinking_level ?? null;
+      if (!thinkingLevelLabel) thinkingLevelLabel = modelState.thinking_level_label ?? thinkingLevel;
       supportsThinking = modelState.supports_thinking;
     } catch {
       if (typeof channel.agentPool.getCurrentModelLabel === "function") {
@@ -347,6 +369,7 @@ export async function handleAgentMessage(
         chat_jid: chatJid,
         model: nextModel ?? null,
         thinking_level: thinkingLevel ?? null,
+        thinking_level_label: thinkingLevelLabel ?? thinkingLevel ?? null,
         supports_thinking: supportsThinking,
       });
       if (command.type === "model" || command.type === "cycle_model") {
@@ -357,7 +380,7 @@ export async function handleAgentMessage(
     return channel.json(
       {
         thread_id: null,
-        command: { ...result, model_label: nextModel, thinking_level: thinkingLevel, supports_thinking: supportsThinking },
+        command: { ...result, model_label: nextModel, thinking_level: thinkingLevel, thinking_level_label: thinkingLevelLabel ?? thinkingLevel, supports_thinking: supportsThinking },
         ui_only: true,
       },
       200,
@@ -580,12 +603,14 @@ export async function handleAgentMessage(
     if (result.status === "success" && modelCommands.includes(command.type)) {
       let nextModel = result.model_label ?? null;
       let thinkingLevel = result.thinking_level ?? null;
+      let thinkingLevelLabel = result.thinking_level_label ?? null;
       let supportsThinking: boolean | undefined = undefined;
 
       try {
         const modelState = await channel.agentPool.getAvailableModels(chatJid);
         if (!nextModel) nextModel = modelState.current ?? null;
         if (thinkingLevel == null) thinkingLevel = modelState.thinking_level ?? null;
+        if (!thinkingLevelLabel) thinkingLevelLabel = modelState.thinking_level_label ?? thinkingLevel;
         supportsThinking = modelState.supports_thinking;
       } catch {
         if (typeof channel.agentPool.getCurrentModelLabel === "function") {
@@ -597,6 +622,7 @@ export async function handleAgentMessage(
         chat_jid: chatJid,
         model: nextModel ?? null,
         thinking_level: thinkingLevel ?? null,
+        thinking_level_label: thinkingLevelLabel ?? thinkingLevel ?? null,
         supports_thinking: supportsThinking,
       });
     }
@@ -610,7 +636,9 @@ export async function handleAgentMessage(
       agent_id: agentId,
       turn_id: commandTurnId,
       type: result.status === "success" ? "done" : "error",
-      title: result.status === "success" ? "Completed " + commandTitle : (result.message || "Command failed"),
+      title: result.status === "success"
+        ? "Completed " + commandTitle
+        : summarizeCommandStatusTitle(result.message, "Command failed"),
     });
 
     if (isSteerCommand && (result as { queued_steer?: boolean }).queued_steer) {
@@ -669,7 +697,9 @@ export async function handleAgentMessage(
         agent_id: agentId,
         turn_id: commandTurnId,
         type: cmdResult.status === "success" ? "done" : "error",
-        title: cmdResult.status === "success" ? "Completed " + slashName : (cmdResult.message || "Command failed"),
+        title: cmdResult.status === "success"
+          ? "Completed " + slashName
+          : summarizeCommandStatusTitle(cmdResult.message, "Command failed"),
       });
     }
 
@@ -1079,6 +1109,7 @@ export async function processChat(
     }
 
     const errorText = output.error || "Agent error";
+    const rateLimited = isRateLimitError(errorText);
     const fallbackPublished = errorText.toLowerCase().includes("timed out")
       ? publishDraftFallback("timeout")
       : publishDraftFallback("error");
@@ -1106,9 +1137,11 @@ export async function processChat(
     // what went wrong. Previously errors were only shown as transient status
     // events which are invisible in timeline history.
     const isApiError = /invalid_request_error|400|media_type|image.*source/i.test(errorText);
-    const userVisibleError = isApiError
-      ? `⚠️ API error — the session may be corrupted:\n\n\`${errorText.slice(0, 500)}\`\n\nThis error will repeat on every message. Try \`/new-session\` to start fresh, or manually repair the session JSONL.`
-      : `⚠️ Agent error: ${errorText.slice(0, 300)}`;
+    const userVisibleError = rateLimited
+      ? `⚠️ AI provider rate limit after automatic retries:\n\n\`${errorText.slice(0, 500)}\`\n\nPiclaw now retries 429/rate-limit failures with exponential backoff up to 5 times before surfacing the error.`
+      : isApiError
+        ? `⚠️ API error — the session may be corrupted:\n\n\`${errorText.slice(0, 500)}\`\n\nThis error will repeat on every message. Try \`/new-session\` to start fresh, or manually repair the session JSONL.`
+        : `⚠️ Agent error: ${errorText.slice(0, 300)}`;
     const errorNotice = channel.storeMessage(chatJid, userVisibleError, true, [], {
       threadId: resolvedThreadRootId ?? undefined,
       isTerminalAgentReply: true,
@@ -1121,7 +1154,8 @@ export async function processChat(
       thread_id: threadId,
       agent_id: agentId,
       type: "error",
-      title: errorText,
+      title: rateLimited ? "AI provider rate limit" : errorText,
+      detail: rateLimited ? errorText : undefined,
       turn_id: turnId,
     });
     return;

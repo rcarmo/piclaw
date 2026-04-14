@@ -3,6 +3,7 @@ export interface ModelStateUpdate {
   model: unknown;
   hasThinkingLevel: boolean;
   thinkingLevel: unknown;
+  thinkingLevelLabel: unknown;
   hasSupportsThinking: boolean;
   supportsThinking: boolean;
   hasProviderUsage: boolean;
@@ -14,6 +15,7 @@ const EMPTY_MODEL_STATE_UPDATE: ModelStateUpdate = {
   model: undefined,
   hasThinkingLevel: false,
   thinkingLevel: null,
+  thinkingLevelLabel: null,
   hasSupportsThinking: false,
   supportsThinking: false,
   hasProviderUsage: false,
@@ -32,6 +34,7 @@ export function resolveModelStateUpdate(payload: Record<string, unknown> | null 
     model: nextModel,
     hasThinkingLevel: payload.thinking_level !== undefined,
     thinkingLevel: payload.thinking_level ?? null,
+    thinkingLevelLabel: payload.thinking_level_label ?? payload.thinking_level ?? null,
     hasSupportsThinking: payload.supports_thinking !== undefined,
     supportsThinking: Boolean(payload.supports_thinking),
     hasProviderUsage: payload.provider_usage !== undefined,

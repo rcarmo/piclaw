@@ -110,7 +110,7 @@ function buildInjectedBashEnvHint(): string {
   if (entries.length === 0) {
     return [
       "## Bash secret env",
-      "Keychain entries whose names are valid shell identifiers are automatically injected as environment variables into bash and SSH commands \u2014 do NOT fetch secrets and inline them into shell commands; just reference $ENTRY_NAME directly.",
+      "Keychain entries are automatically injected as environment variables into bash and SSH commands. Names with `/`, `-`, or `.` are sanitized (replaced with `_` and uppercased), e.g. `github/piclaw-bot-pat` becomes `$GITHUB_PICLAW_BOT_PAT`. Do NOT fetch secrets and inline them into shell commands; just reference $ENTRY_NAME directly.",
     ].join("\n");
   }
 
@@ -120,7 +120,7 @@ function buildInjectedBashEnvHint(): string {
   const more = entries.length > 20 ? `\n- … ${entries.length - 20} more` : "";
   return [
     "## Bash secret env",
-    "Keychain entries whose names are valid shell identifiers are automatically injected as environment variables into bash and SSH commands \u2014 do NOT fetch secrets and inline them into shell commands; just reference $ENTRY_NAME directly.",
+    "Keychain entries are automatically injected as environment variables into bash and SSH commands. Names with `/`, `-`, or `.` are sanitized (replaced with `_` and uppercased), e.g. `github/piclaw-bot-pat` becomes `$GITHUB_PICLAW_BOT_PAT`. Do NOT fetch secrets and inline them into shell commands; just reference $ENTRY_NAME directly.",
     "",
     `${preview}${more}`,
     "",
@@ -152,7 +152,7 @@ export const keychainTools: ExtensionFactory = (pi: ExtensionAPI) => {
   pi.registerTool({
     name: "keychain",
     label: "keychain",
-    description: "List keychain entries, retrieve values, store/update entries, or delete entries. Entries whose names are valid shell identifiers are automatically injected as environment variables into bash and SSH commands — do NOT fetch secrets and inline them into shell commands; just reference $ENTRY_NAME directly.",
+    description: "List keychain entries, retrieve values, store/update entries, or delete entries. Entries are automatically injected as environment variables (names with `/`, `-`, `.` are sanitized to `_` and uppercased) into bash and SSH commands — do NOT fetch secrets and inline them into shell commands; just reference $ENTRY_NAME directly.",
     promptSnippet: "keychain: list/get/set/delete secure keychain entries by name. Secrets are auto-injected as env vars into bash — never inline them into commands.",
     parameters: KeychainToolSchema,
     async execute(_toolCallId, params) {

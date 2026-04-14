@@ -40,12 +40,14 @@ describe("agent-control operations", () => {
     expect(result.message).toContain("$ printf 'hello'");
     expect(result.message).toContain("hello");
     expect(result.message).toContain("(exit code 0)");
+    expect(result.message).toContain("```");
   });
 
   test("handleShell marks non-zero exit code as error", async () => {
     const result = await handleShell({} as any, makeShellCommand("exit 2"));
     expect(result.status).toBe("error");
     expect(result.message).toContain("(exit code 2)");
+    expect(result.message).toContain("```");
   });
 
   test("handleShell truncates long output", async () => {
@@ -68,6 +70,7 @@ describe("agent-control operations", () => {
     expect(result.status).toBe("success");
     expect(result.message).toContain("$ echo hi");
     expect(result.message).toContain("hi");
+    expect(result.message).toContain("```");
   });
 
   test("handleBash marks cancelled output", async () => {

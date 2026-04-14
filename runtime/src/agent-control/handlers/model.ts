@@ -11,7 +11,7 @@ import type { AgentSession, ModelRegistry } from "@mariozechner/pi-coding-agent"
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { Api, Model } from "@mariozechner/pi-ai";
 import type { AgentControlCommand, AgentControlResult } from "../agent-control-types.js";
-import { THINKING_LEVELS, normalizeModelMatch } from "../agent-control-helpers.js";
+import { THINKING_LEVELS, normalizeModelMatch, resolveThinkingAlias, isEffortProvider, formatThinkingLevelForDisplay } from "../agent-control-helpers.js";
 
 type ModelCommand = Extract<AgentControlCommand, { type: "model" }>;
 type ThinkingCommand = Extract<AgentControlCommand, { type: "thinking" }>;
@@ -103,7 +103,6 @@ export async function handleModel(session: AgentSession, modelRegistry: ModelReg
     selected = matches[0];
   }
 
-  const _previousModel = session.model;
   try {
     await session.setModel(selected);
   } catch (err) {
@@ -111,21 +110,32 @@ export async function handleModel(session: AgentSession, modelRegistry: ModelReg
     return { status: "error", message };
   }
 
-  const thinkingNote = session.supportsThinking()
-    ? ` Thinking level: ${session.thinkingLevel}.`
-    : " Thinking is off for this model.";
-  const modelLabel = `${selected.provider}/${selected.id}`;
+  const provider = selected.provider;
   const thinkingLevel = session.thinkingLevel ?? null;
+  const thinkingLevelDisplay = thinkingLevel ? formatThinkingLevelForDisplay(thinkingLevel, provider) : null;
+  const thinkingNote = session.supportsThinking()
+    ? ` Thinking level: ${thinkingLevelDisplay ?? thinkingLevel}.`
+    : " Thinking is off for this model.";
+  const modelLabel = `${provider}/${selected.id}`;
 
   return {
     status: "success",
     message: `Model set to ${modelLabel}.${thinkingNote}`,
     model_label: modelLabel,
     thinking_level: thinkingLevel,
+    thinking_level_label: thinkingLevelDisplay,
   };
 }
 
-/** Handle /thinking: set or query the thinking level. */
+/** Format the available levels list, adding provider-native aliases in parentheses. */
+function formatAvailableLevels(levels: readonly string[], provider: string | undefined | null): string {
+  return levels.map((l) => {
+    if (isEffortProvider(provider) && l === "xhigh") return `${l} (max)`;
+    return l;
+  }).join(", ");
+}
+
+/** Handle /thinking (alias /effort): set or query the thinking level. */
 export async function handleThinking(session: AgentSession, _modelRegistry: ModelRegistry, command: ThinkingCommand): Promise<AgentControlResult> {
   if (!session.model) {
     return {
@@ -138,10 +148,12 @@ export async function handleThinking(session: AgentSession, _modelRegistry: Mode
   if (!requestedRaw) {
     const available = session.getAvailableThinkingLevels();
     const modelLabel = session.model ? `${session.model.provider}/${session.model.id}` : "unknown";
+    const provider = session.model?.provider;
+    const effortNote = isEffortProvider(provider) ? " (effort)" : "";
     const lines = [
       `Current model: ${modelLabel}.`,
-      `Current thinking level: ${session.thinkingLevel}.`,
-      `Available thinking levels: ${available.join(", ")}.`,
+      `Current thinking${effortNote} level: ${formatThinkingLevelForDisplay(session.thinkingLevel, provider)}.`,
+      `Available levels: ${formatAvailableLevels(available, provider)}.`,
     ];
     if (!session.supportsThinking()) {
       lines.push("Thinking is off for this model.");
@@ -150,34 +162,39 @@ export async function handleThinking(session: AgentSession, _modelRegistry: Mode
       status: "success",
       message: lines.join("\n"),
       thinking_level: session.thinkingLevel ?? null,
+      thinking_level_label: formatThinkingLevelForDisplay(session.thinkingLevel, session.model?.provider),
     };
   }
 
-  if (!THINKING_LEVELS.includes(requestedRaw as ThinkingLevel)) {
-    const available = session.getAvailableThinkingLevels().join(", ");
+  const resolved = resolveThinkingAlias(requestedRaw, session.model?.provider);
+
+  if (!THINKING_LEVELS.includes(resolved as ThinkingLevel)) {
+    const available = formatAvailableLevels(session.getAvailableThinkingLevels(), session.model?.provider);
     return {
       status: "error",
       message: `Unknown thinking level: ${command.level}. Available: ${available}.`,
     };
   }
 
-  const _previousLevel = session.thinkingLevel;
-  session.setThinkingLevel(requestedRaw as ThinkingLevel);
+  session.setThinkingLevel(resolved as ThinkingLevel);
   const applied = session.thinkingLevel;
 
   if (!session.supportsThinking()) {
     return {
-      status: requestedRaw === "off" ? "success" : "error",
+      status: resolved === "off" ? "success" : "error",
       message: "Current model does not support thinking levels. Thinking is off.",
       thinking_level: session.thinkingLevel ?? null,
+      thinking_level_label: formatThinkingLevelForDisplay(session.thinkingLevel, session.model?.provider),
     };
   }
 
-  const note = applied !== requestedRaw ? ` (requested ${requestedRaw})` : "";
+  const displayApplied = formatThinkingLevelForDisplay(applied, session.model?.provider);
+  const note = applied !== resolved ? ` (requested ${requestedRaw})` : "";
   return {
     status: "success",
-    message: `Thinking level set to ${applied}${note}.`,
+    message: `Thinking level set to ${displayApplied}${note}.`,
     thinking_level: applied ?? session.thinkingLevel ?? null,
+    thinking_level_label: displayApplied,
   };
 }
 
@@ -194,11 +211,13 @@ export async function handleCycleModel(session: AgentSession, _modelRegistry: Mo
     const label = `${result.model.provider}/${result.model.id}`;
     const scope = result.isScoped ? "scoped" : "available";
     const thinkingLevel = result.thinkingLevel ?? null;
+    const thinkingLevelLabel = thinkingLevel ? formatThinkingLevelForDisplay(thinkingLevel, result.model.provider) : null;
     return {
       status: "success",
-      message: `Model set to ${label} (cycle: ${scope}). Thinking level: ${result.thinkingLevel}.`,
+      message: `Model set to ${label} (cycle: ${scope}). Thinking level: ${thinkingLevelLabel ?? thinkingLevel}.`,
       model_label: label,
       thinking_level: thinkingLevel,
+      thinking_level_label: thinkingLevelLabel,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -212,5 +231,11 @@ export async function handleCycleThinking(session: AgentSession, _modelRegistry:
   if (!level) {
     return { status: "error", message: "Current model does not support thinking levels.", thinking_level: session.thinkingLevel ?? null };
   }
-  return { status: "success", message: `Thinking level set to ${level}.`, thinking_level: level };
+  const displayLevel = formatThinkingLevelForDisplay(level, session.model?.provider);
+  return {
+    status: "success",
+    message: `Thinking level set to ${displayLevel}.`,
+    thinking_level: level,
+    thinking_level_label: displayLevel,
+  };
 }

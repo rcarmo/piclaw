@@ -214,6 +214,7 @@ const groupDefinitions: GroupDefinition[] = [
         "web-response-service.test.ts",
         "web-sse-client.test.ts",
         "tool-status-hints.test.ts",
+        "agent-command-status-title.test.ts",
       ]),
   },
   {
@@ -373,6 +374,8 @@ const groupDefinitions: GroupDefinition[] = [
           "status-panel-shortcuts.test.ts",
           "tool-git-context.test.ts",
           "status-duration.test.ts",
+          "status-git-label.test.ts",
+          "status-meta-order.test.ts",
           "tab-source-editor.test.ts",
           "tab-store.test.ts",
           "storage.test.ts",

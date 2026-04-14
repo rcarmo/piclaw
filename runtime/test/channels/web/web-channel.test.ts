@@ -1952,6 +1952,47 @@ test("processChat records an explicit failed run when draft fallback persistence
   expect(contents).toEqual(["hello"]);
 });
 
+test("processChat surfaces provider rate limits as an explicit error notice", async () => {
+  const ws = createTempWorkspace("piclaw-web-channel-");
+  cleanupWorkspace = ws.cleanup;
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await import("../../../src/db.js");
+  db.initDatabase();
+  db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors; DELETE FROM chat_cursors;");
+  db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
+
+  db.storeMessage({
+    id: `msg-${Math.random()}`,
+    chat_jid: "web:default",
+    sender: "user",
+    sender_name: "User",
+    content: "hello",
+    timestamp: new Date().toISOString(),
+    is_from_me: false,
+    is_bot_message: false,
+  });
+
+  const webMod = await import("../../../src/channels/web.js");
+  const web = new (webMod.WebChannel as any)({
+    queue: { enqueue: () => {} },
+    agentPool: {
+      setSessionBinder: () => {},
+      runAgent: async () => ({ status: "error", error: "Error: HTTP 429 Too Many Requests (rate limit exceeded)", result: null, attachments: [] }),
+      getContextUsageForChat: async () => null,
+    },
+  });
+
+  await web.processChat("web:default", "default");
+
+  const timeline = db.getTimeline("web:default", 10);
+  const botMessages = timeline.filter((item: any) => item.data.type === "agent_response");
+  expect(botMessages.length).toBe(1);
+  expect(botMessages[0].data.content).toContain("AI provider rate limit after automatic retries");
+  expect(botMessages[0].data.content).toContain("429");
+  expect(botMessages[0].data.content).not.toContain("produced no response");
+});
+
 test("processChat finalizes as no-op when no terminal output can be persisted", async () => {
   const ws = createTempWorkspace("piclaw-web-channel-");
   cleanupWorkspace = ws.cleanup;

@@ -93,7 +93,8 @@ test('applyModelStatePayload only applies present model fields', () => {
   applyModelStatePayload({
     payload: {
       current: 'gpt-5',
-      thinking_level: 'high',
+      thinking_level: 'xhigh',
+      thinking_level_label: 'max',
       supports_thinking: true,
       provider_usage: { prompt: 100 },
     },
@@ -105,7 +106,7 @@ test('applyModelStatePayload only applies present model fields', () => {
 
   expect(updates).toEqual({
     model: 'gpt-5',
-    thinkingLevel: 'high',
+    thinkingLevel: 'max',
     supportsThinking: true,
     providerUsage: { prompt: 100 },
   });

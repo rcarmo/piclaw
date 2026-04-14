@@ -9,6 +9,7 @@ import {
   normalizeModelPickerOptions,
   parseQueuedContent,
   resolveComposePrefillRequest,
+  resolveUiOnlyCommandNotice,
 } from '../../web/src/components/compose-box.ts';
 import { CONTROL_COMMAND_DEFINITIONS } from '../../src/agent-control/command-registry.ts';
 
@@ -147,4 +148,31 @@ test('model picker helpers expose searchable names and formatted context windows
   expect(getModelPickerOptionSearchLabel(option)).toContain('anthropic/claude-sonnet-4');
   expect(getModelPickerOptionSearchLabel(option)).toContain('Claude Sonnet 4');
   expect(getModelPickerOptionSearchLabel(option)).toContain('200K ctx');
+});
+
+test('resolveUiOnlyCommandNotice only surfaces read-only model and thinking queries', () => {
+  expect(resolveUiOnlyCommandNotice('/thinking', {
+    ui_only: true,
+    command: { message: 'Current thinking (effort) level: max.' },
+  })).toBe('Current thinking (effort) level: max.');
+
+  expect(resolveUiOnlyCommandNotice('/effort', {
+    ui_only: true,
+    command: { message: 'Current thinking (effort) level: max.' },
+  })).toBe('Current thinking (effort) level: max.');
+
+  expect(resolveUiOnlyCommandNotice('/model', {
+    ui_only: true,
+    command: { message: 'Available models:\n• anthropic/claude-opus-4-6 (current)' },
+  })).toContain('Available models:');
+
+  expect(resolveUiOnlyCommandNotice('/thinking high', {
+    ui_only: true,
+    command: { message: 'Thinking level set to high.' },
+  })).toBeNull();
+
+  expect(resolveUiOnlyCommandNotice('/cycle-model', {
+    ui_only: true,
+    command: { message: 'Model set to openai/gpt-5.' },
+  })).toBeNull();
 });

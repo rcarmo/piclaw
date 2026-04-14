@@ -200,6 +200,58 @@ test("AgentTurnCoordinator subscribes, records usage, and downgrades handler fai
   expect(listener).toBeNull();
 });
 
+test("AgentTurnCoordinator captures provider error from assistant message_end", () => {
+  const coordinator = new AgentTurnCoordinator({
+    takeAttachments: () => [],
+    touchSession: () => {},
+    recordMessageUsage: () => {},
+  });
+
+  const tracker = coordinator.createTracker("web:default");
+
+  tracker.handleMessageUpdate({
+    type: "message_end",
+    message: {
+      role: "assistant",
+      stopReason: "error",
+      errorMessage:
+        'Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"You\'re out of extra usage. Add more at claude.ai/settings/usage and keep going."},"request_id":"req_011Ca3hFFk6E3FKGv1Hv52K9"}',
+      content: [],
+    },
+  } as any);
+
+  expect(tracker.getFinalText()).toBe("");
+  expect(tracker.getError()).not.toBeNull();
+  expect(tracker.getError()?.stopReason).toBe("error");
+  expect(tracker.getError()?.errorMessage).toContain("invalid_request_error");
+  expect(tracker.getError()?.errorMessage).toContain("extra usage");
+});
+
+test("AgentTurnCoordinator does not set error for normal assistant messages", () => {
+  const coordinator = new AgentTurnCoordinator({
+    takeAttachments: () => [],
+    touchSession: () => {},
+    recordMessageUsage: () => {},
+  });
+
+  const tracker = coordinator.createTracker("web:default");
+
+  tracker.handleMessageUpdate({
+    type: "message_update",
+    assistantMessageEvent: { type: "text_delta", delta: "hello" },
+  } as any);
+  tracker.handleMessageUpdate({
+    type: "message_end",
+    message: {
+      role: "assistant",
+      content: [{ type: "text", text: "hello" }],
+    },
+  } as any);
+
+  expect(tracker.getFinalText()).toBe("hello");
+  expect(tracker.getError()).toBeNull();
+});
+
 test("AgentTurnCoordinator aborts timed-out prompts", async () => {
   let abortCalls = 0;
   const errors: string[] = [];

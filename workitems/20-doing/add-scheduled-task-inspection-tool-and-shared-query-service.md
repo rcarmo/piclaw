@@ -1,10 +1,10 @@
 ---
 id: add-scheduled-task-inspection-tool-and-shared-query-service
 title: Add scheduled-task inspection tool and shared query service
-status: next
-priority: medium
+status: doing
+priority: high
 created: 2026-04-13
-updated: 2026-04-13
+updated: 2026-04-14
 target_release: later
 estimate: M
 risk: medium
@@ -111,6 +111,10 @@ This is the first implementation slice from
 - [ ] Ticket front matter updated
 
 ## Updates
+
+### 2026-04-14
+- Promoted from `10-next` to `20-doing` and marked `high` priority by user direction.
+- This remains the recommended first implementation slice for the scheduling/tooling gap because it replaces the most common unsupported workflow: routine task inspection via raw DB queries.
 
 ### 2026-04-13
 - Split out as the first executable slice from `assess-first-class-scheduled-task-inspection-surface`.

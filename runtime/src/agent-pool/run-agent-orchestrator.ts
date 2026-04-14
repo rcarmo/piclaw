@@ -128,6 +128,13 @@ function getModelContextWindow(session: AgentSession): number | null {
   return contextWindow;
 }
 
+function getSessionStateErrorMessage(session: AgentSession): string | null {
+  const errorMessage = (session as AgentSession & {
+    agent?: { state?: { errorMessage?: unknown } };
+  }).agent?.state?.errorMessage;
+  return typeof errorMessage === "string" && errorMessage.trim() ? errorMessage.trim() : null;
+}
+
 async function maybeAutoCompactSessionBeforePrompt(
   session: AgentSession,
   chatJid: string,
@@ -211,10 +218,20 @@ export async function runAgentPrompt(
       const finalText = tracker.getFinalText();
       const finalAttachments = options.takeAttachments(chatJid);
       const timedOut = timedOutRef.value;
-      writeAgentLog(options.logsDir, chatJid, duration, timedOut, finalText, null);
+      const latentStateError = !finalText ? getSessionStateErrorMessage(session) : null;
+      writeAgentLog(options.logsDir, chatJid, duration, timedOut, finalText, latentStateError);
 
       if (timedOut) {
         return { status: "error", result: null, error: `Timed out after ${formatTimeoutDuration(timeoutMs)}` };
+      }
+
+      const turnError = tracker.getError();
+      if (turnError) {
+        return { status: "error", result: null, error: turnError.errorMessage };
+      }
+
+      if (latentStateError) {
+        return { status: "error", result: null, error: latentStateError };
       }
 
       options.onInfo?.("Agent run completed", {

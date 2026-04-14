@@ -99,6 +99,20 @@ test("agent pool aggregates streamed text and writes logs", async () => {
   expect(content).toContain("Hello world");
 });
 
+test("agent pool raises provider retry defaults for shared session settings", async () => {
+  const ws = getTestWorkspace();
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
+  const pool = new AgentPool({
+    createSession: async () => createRuntime({ subscribe: () => () => {}, prompt: async () => {}, abort: async () => {} }) as any,
+  });
+
+  const retrySettings = (pool as any).settingsManager.getRetrySettings();
+  expect(retrySettings.maxRetries).toBeGreaterThanOrEqual(5);
+  expect(retrySettings.baseDelayMs).toBeGreaterThanOrEqual(5000);
+});
+
 test("agent pool honors timeout overrides", async () => {
   const ws = getTestWorkspace();
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });

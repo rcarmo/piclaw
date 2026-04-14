@@ -6,8 +6,40 @@
  */
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { createBashToolDefinition } from "@mariozechner/pi-coding-agent";
+import { registerToolStatusHintProvider } from "../../../../src/tool-status-hints.js";
+import { getSshStatusHintTarget } from "../../../../src/extensions/ssh.js";
 import { createTrackedPowerShellOperations } from "../../../../src/tools/tracked-bash.js";
 import { buildSubprocessExecutionHint } from "../../../../src/utils/process-spawn.js";
+
+const POWERSHELL_STATUS_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7.4 5.5H18.8c.9 0 1.5.9 1.3 1.8l-2.3 10.2c-.2.9-1 1.5-1.9 1.5H4.8c-.9 0-1.5-.9-1.3-1.8L5.8 7c.2-.9 1-1.5 1.6-1.5Z"></path><path d="M8.1 10.1l3 2.3-4.1 2.9"></path><path d="M12.8 15.6h3.6"></path></svg>`;
+
+function readTrimmedString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function resolvePowerShellExecutionPath(args: unknown): string {
+  const record = args && typeof args === "object" ? args as Record<string, unknown> : null;
+  return readTrimmedString(record?.cwd, record?.working_directory, record?.workingDirectory) || process.cwd();
+}
+
+registerToolStatusHintProvider({
+  id: "powershell",
+  buildHints: ({ chatJid, toolName, args, payload }) => {
+    if (toolName !== "powershell") return null;
+    if (getSshStatusHintTarget(chatJid, payload)) return null;
+    const label = resolvePowerShellExecutionPath(args);
+    return {
+      key: "powershell",
+      icon_svg: POWERSHELL_STATUS_ICON_SVG,
+      label,
+      title: `PowerShell • ${label}`,
+      kind: "service",
+    };
+  },
+});
 
 function replaceBashWithPowerShell(activeToolNames: string[]): string[] {
   const next = new Set<string>();

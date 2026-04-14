@@ -14,7 +14,9 @@ import {
   formatCompactNumber,
   formatCurrency,
   formatShellBlock,
+  formatThinkingLevelForDisplay,
   normalizeModelMatch,
+  resolveThinkingAlias,
   runPromptAndCapture,
   truncateText,
 } from "../../src/agent-control/agent-control-helpers.js";
@@ -100,6 +102,14 @@ test("normalizeModelMatch finds provider/id case-insensitively", () => {
   ] as any;
   const match = normalizeModelMatch(models, "openai", "GPT-TEST");
   expect(match?.provider).toBe("OpenAI");
+});
+
+test("thinking aliases and labels are provider-aware", () => {
+  expect(resolveThinkingAlias("max", "anthropic")).toBe("xhigh");
+  expect(resolveThinkingAlias("max", "openai")).toBe("max");
+  expect(resolveThinkingAlias("high", "anthropic")).toBe("high");
+  expect(formatThinkingLevelForDisplay("xhigh", "anthropic")).toBe("max");
+  expect(formatThinkingLevelForDisplay("xhigh", "openai")).toBe("xhigh");
 });
 
 test("runPromptAndCapture captures assistant output", async () => {

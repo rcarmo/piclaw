@@ -222,6 +222,26 @@ async function main() {
 		}
 	});
 
+	await test("existing CDP discovery stays lightweight while launchEdge reuse remains strict", async () => {
+		const findExistingMatch = sharedSource.match(/export async function findExistingCdpPort\(\): Promise<number \| null> \{([\s\S]*?)\n\}/);
+		assert(Boolean(findExistingMatch), "Could not locate findExistingCdpPort implementation");
+		const findExistingBody = findExistingMatch?.[1] ?? "";
+		assert(sharedSource.includes('const EXISTING_CDP_DISCOVERY_TIMEOUT_MS = 750;'), 'Missing short existing-CDP discovery timeout');
+		assert(sharedSource.includes('const EXISTING_CDP_REUSE_TAB_TIMEOUT_MS = 1200;'), 'Missing short existing-CDP tab-open timeout');
+		assert(findExistingBody.includes('/json/version'), "findExistingCdpPort should probe /json/version");
+		assert(findExistingBody.includes('EXISTING_CDP_DISCOVERY_TIMEOUT_MS'), 'findExistingCdpPort should use the short discovery timeout');
+		assert(!findExistingBody.includes('/json/new?'), "findExistingCdpPort should not open probe tabs");
+		assert(!findExistingBody.includes('killStaleEdge()'), "findExistingCdpPort should not kill browsers");
+		assert(!findExistingBody.includes('killEdgeCdpProcesses()'), "findExistingCdpPort should not kill browser CDP processes");
+
+		const launchEdgeMatch = sharedSource.match(/export async function launchEdge\([\s\S]*?if \(!forceNew\) \{([\s\S]*?)\n\t\}/);
+		assert(Boolean(launchEdgeMatch), "Could not locate launchEdge reuse block");
+		const launchEdgeBlock = launchEdgeMatch?.[1] ?? "";
+		assert(launchEdgeBlock.includes('/json/new?'), "launchEdge reconnect path should still open the requested URL in a new tab");
+		assert(launchEdgeBlock.includes('EXISTING_CDP_REUSE_TAB_TIMEOUT_MS'), 'launchEdge reconnect path should use the short reuse timeout');
+		assert(launchEdgeBlock.includes('falling back to a fresh browser launch'), "launchEdge should log and fall back when reconnect tab creation fails");
+	});
+
 	const passed = results.filter((r) => r.passed).length;
 	const failed = results.filter((r) => !r.passed).length;
 	const total = results.length;

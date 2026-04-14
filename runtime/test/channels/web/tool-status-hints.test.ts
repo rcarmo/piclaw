@@ -13,6 +13,7 @@ import '../../../extensions/integrations/office-tools/index.ts';
 import '../../../extensions/viewers/office-viewer/index.ts';
 import '../../../extensions/viewers/drawio-editor/index.ts';
 import '../../../extensions/platform/windows/win-ui/index.ts';
+import '../../../extensions/platform/windows/powershell/index.ts';
 import {
   buildMcpStatusHintLabel,
   buildMcpToolServerIndex,
@@ -147,7 +148,7 @@ test('resolveToolStatusHints recognizes SharePoint sync-specific M365 URL fields
   ]);
 });
 
-test('resolveToolStatusHints covers local core tools, keychain, bun_run, browser, windows UI, and office-file extensions', () => {
+test('resolveToolStatusHints covers local core tools, powershell, keychain, bun_run, browser, windows UI, and office-file extensions', () => {
   const readHints = resolveToolStatusHints({
     chatJid: 'web:local',
     toolName: 'read',
@@ -194,6 +195,24 @@ test('resolveToolStatusHints covers local core tools, keychain, bun_run, browser
     chatJid: 'web:ssh',
     toolName: 'read',
     args: { path: 'notes/plan.md' },
+    payload: {},
+  })).toEqual([
+    expect.objectContaining({ key: 'ssh', label: 'agent@example.com', title: 'SSH target', kind: 'remote' }),
+  ]);
+
+  expect(resolveToolStatusHints({
+    chatJid: 'web:win',
+    toolName: 'powershell',
+    args: { command: 'Get-ChildItem', cwd: 'C:/src/demo' },
+    payload: {},
+  })).toEqual([
+    expect.objectContaining({ key: 'powershell', label: 'C:/src/demo', title: 'PowerShell • C:/src/demo', kind: 'service' }),
+  ]);
+
+  expect(resolveToolStatusHints({
+    chatJid: 'web:ssh',
+    toolName: 'powershell',
+    args: { command: 'Get-ChildItem', cwd: 'C:/src/demo' },
     payload: {},
   })).toEqual([
     expect.objectContaining({ key: 'ssh', label: 'agent@example.com', title: 'SSH target', kind: 'remote' }),
