@@ -18,7 +18,8 @@ import { refreshAgentModelStateBestEffort } from './compose-model-refresh.js';
 export const SLASH_COMMANDS = [
   { name: "/model", description: "Select model or list available models" },
   { name: "/cycle-model", description: "Cycle to the next available model" },
-  { name: "/thinking", description: "Show or set thinking level" },
+  { name: "/thinking", description: "Show or set thinking/effort level" },
+  { name: "/effort", description: "Show or set thinking/effort level (alias for /thinking)" },
   { name: "/cycle-thinking", description: "Cycle thinking level" },
   { name: "/theme", description: "Set UI theme (no name to show available themes)" },
   { name: "/meters", description: "Toggle the top-right CPU/RAM HUD (/meters on|off|toggle)" },
@@ -710,6 +711,7 @@ export function ComposeBox({
             onModelStateChange({
                 model: modelLabel ?? null,
                 thinking_level: payload.thinking_level ?? null,
+                thinking_level_label: payload.thinking_level_label ?? null,
                 supports_thinking: payload.supports_thinking,
                 provider_usage: payload.provider_usage ?? null,
             });
@@ -974,6 +976,7 @@ export function ComposeBox({
             emitModelState({
                 model: nextModel ?? activeModel ?? null,
                 thinking_level: response?.command?.thinking_level,
+                thinking_level_label: response?.command?.thinking_level_label,
                 supports_thinking: response?.command?.supports_thinking,
             });
             await refreshAgentModelStateBestEffort(getAgentModels, currentChatJid, emitModelState);
@@ -1162,6 +1165,7 @@ export function ComposeBox({
                     emitModelState({
                         model: response.command.model_label ?? activeModel ?? null,
                         thinking_level: response.command.thinking_level,
+                        thinking_level_label: response.command.thinking_level_label,
                         supports_thinking: response.command.supports_thinking,
                     });
                     await refreshAgentModelStateBestEffort(getAgentModels, currentChatJid, emitModelState);

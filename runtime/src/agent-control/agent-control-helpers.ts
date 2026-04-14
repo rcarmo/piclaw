@@ -22,6 +22,33 @@ import { readJsonConfig, writeJsonConfig } from "../core/config-store.js";
 /** Ordered list of supported thinking levels from off to xhigh. */
 export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
 
+/**
+ * Provider-native aliases for thinking levels.
+ * Anthropic uses "effort" terminology: "max" maps to internal "xhigh".
+ */
+export const THINKING_LEVEL_ALIASES: Record<string, string> = {
+  max: "xhigh",
+};
+
+/** Resolve a user-provided level name through provider-native aliases. */
+export function resolveThinkingAlias(level: string): string {
+  return THINKING_LEVEL_ALIASES[level] ?? level;
+}
+
+/** Check if a provider uses "effort" terminology (e.g. Anthropic). */
+export function isEffortProvider(provider: string | undefined | null): boolean {
+  return provider?.toLowerCase() === "anthropic";
+}
+
+/**
+ * Format a thinking level for display, using provider-native terms when appropriate.
+ * For Anthropic: "xhigh" displays as "max".
+ */
+export function formatThinkingLevelForDisplay(level: string, provider: string | undefined | null): string {
+  if (isEffortProvider(provider) && level === "xhigh") return "max";
+  return level;
+}
+
 /** Return the preferred working directory for shell commands (configured workspace or cwd). */
 export function resolveShellCwd(): string {
   if (existsSync(WORKSPACE_DIR)) return WORKSPACE_DIR;

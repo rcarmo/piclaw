@@ -118,7 +118,7 @@ export function applyModelStatePayload(options: ApplyModelStateOptions): void {
 
   const modelUpdate = resolveModelStateUpdate(payload);
   if (modelUpdate.hasModel) setActiveModel(modelUpdate.model);
-  if (modelUpdate.hasThinkingLevel) setActiveThinkingLevel(modelUpdate.thinkingLevel);
+  if (modelUpdate.hasThinkingLevel) setActiveThinkingLevel(modelUpdate.thinkingLevelLabel ?? modelUpdate.thinkingLevel);
   if (modelUpdate.hasSupportsThinking) setSupportsThinking(modelUpdate.supportsThinking);
   if (modelUpdate.hasProviderUsage) setActiveModelUsage(modelUpdate.providerUsage);
 }

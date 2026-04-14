@@ -474,6 +474,7 @@ export function parseSearch(args: string, raw: string): AgentControlCommand {
 export const COMMAND_PARSERS: Record<string, CommandParser> = {
   "/model": parseModel,
   "/thinking": parseThinking,
+  "/effort": parseThinking,
   "/commands": simple("commands"),
   "/restart": simple("restart"),
   "/exit": simple("exit"),
