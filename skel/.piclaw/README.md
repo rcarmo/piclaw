@@ -6,6 +6,8 @@ This directory holds local Piclaw runtime configuration for the workspace.
 
 PiClaw also supports a workspace shell hook at `/workspace/.env.sh`.
 
+This is a power-user feature. Use it when you intentionally want to customize the environment seen by the embedded terminal and the PiClaw runtime.
+
 Use it for workspace-scoped environment variables that should persist across container recreation, for example:
 
 ```bash
@@ -15,6 +17,22 @@ mkdir -p /workspace/.config/gh
 ```
 
 The file is sourced for interactive shells and on PiClaw startup. The default workspace `.gitignore` ignores `.env.sh` so local secrets and machine-specific paths do not get committed by accident.
+
+### Embedded terminal use case: GitHub CLI
+
+One practical use case is making `gh auth login` persist from the embedded terminal inside PiClaw.
+
+```bash
+export PATH="/workspace/.local/bin:$PATH"
+export GH_CONFIG_DIR=/workspace/.config/gh
+mkdir -p /workspace/.config/gh
+```
+
+With that in `/workspace/.env.sh`, you can install `gh` into `/workspace/.local/bin`, open the embedded terminal, run `gh auth login`, and keep the GitHub CLI auth state in the mounted workspace across container recreation.
+
+### Responsibility boundary
+
+`/workspace/.env.sh` runs as part of the user-controlled workspace environment. If you put incompatible exports, shell logic, or PATH overrides in this file and PiClaw stops working correctly, that breakage is the user's responsibility.
 
 ## FTS / workspace search
 
