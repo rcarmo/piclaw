@@ -90,7 +90,7 @@ export type {
 } from "./agent-pool/contracts.js";
 
 /** How long (ms) an idle session stays cached before being disposed. */
-const DEFAULT_IDLE_TTL = 2 * 60 * 1000; // 2 minutes
+const DEFAULT_IDLE_TTL = 15 * 60 * 1000; // 15 minutes
 const DEFAULT_CLEANUP_INTERVAL = 30 * 1000; // check every 30 seconds
 
 function parsePositiveMs(value: string | undefined, fallback: number): number {

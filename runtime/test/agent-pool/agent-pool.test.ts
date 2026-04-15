@@ -278,7 +278,7 @@ test("agent pool evicts idle sessions and recreates them", async () => {
   expect(createCalls).toBe(1);
 
   const entry = (pool as any).pool.get("web:default");
-  entry.lastUsed = Date.now() - 11 * 60 * 1000;
+  entry.lastUsed = Date.now() - 16 * 60 * 1000;
   (pool as any).evictIdle();
 
   expect(disposed).toBe(1);
