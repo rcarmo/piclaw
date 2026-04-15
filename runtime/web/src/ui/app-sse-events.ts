@@ -39,6 +39,7 @@ import {
   isNoisyAgentSseEvent,
   resolveSseEventRoutingContext,
 } from './app-sse-event-routing.js';
+import { isAppChatActivationRecent } from './app-refresh-coordination.js';
 
 type StateSetter<T> = (next: T | ((prev: T) => T)) => void;
 
@@ -213,6 +214,9 @@ export function handleAppSseEvent(
 
   if (eventType === 'connected') {
     if (handleUiVersionDrift(data?.app_asset_version)) {
+      return;
+    }
+    if (isAppChatActivationRecent(currentChatJid)) {
       return;
     }
     setAgentStatus(null);

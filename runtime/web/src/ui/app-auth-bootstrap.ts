@@ -130,7 +130,7 @@ export interface RefreshModelStateOptions {
   applyModelState: (payload: Record<string, unknown> | null | undefined) => void;
 }
 
-export function refreshModelState(options: RefreshModelStateOptions): void {
+export async function refreshModelState(options: RefreshModelStateOptions): Promise<void> {
   const {
     currentChatJid,
     getAgentModels,
@@ -139,15 +139,14 @@ export function refreshModelState(options: RefreshModelStateOptions): void {
   } = options;
 
   const targetChatJid = currentChatJid;
-  getAgentModels(targetChatJid)
-    .then((payload) => {
-      if (activeChatJidRef.current && activeChatJidRef.current !== targetChatJid) return;
-      if (payload) applyModelState(payload);
-    })
-    .catch(() => {
-      if (activeChatJidRef.current && activeChatJidRef.current !== targetChatJid) return;
-      applyModelState(null);
-    });
+  try {
+    const payload = await getAgentModels(targetChatJid);
+    if (activeChatJidRef.current && activeChatJidRef.current !== targetChatJid) return;
+    if (payload) applyModelState(payload);
+  } catch {
+    if (activeChatJidRef.current && activeChatJidRef.current !== targetChatJid) return;
+    applyModelState(null);
+  }
 }
 
 export interface RefreshActiveChatAgentsOptions {
@@ -158,7 +157,7 @@ export interface RefreshActiveChatAgentsOptions {
   setActiveChatAgents: StateSetter<any[]>;
 }
 
-export function refreshActiveChatAgents(options: RefreshActiveChatAgentsOptions): void {
+export async function refreshActiveChatAgents(options: RefreshActiveChatAgentsOptions): Promise<any[]> {
   const {
     currentChatJid,
     getActiveChatAgents,
@@ -169,21 +168,24 @@ export function refreshActiveChatAgents(options: RefreshActiveChatAgentsOptions)
 
   const targetChatJid = currentChatJid;
 
-  Promise.all([
-    getActiveChatAgents().catch(() => ({ chats: [] /* expected: active-agent refresh is best-effort. */ })),
-    getChatBranches(null, { includeArchived: true }).catch(() => ({ chats: [] /* expected: archived-branch refresh is best-effort. */ })),
-  ])
-    .then(([activePayload, branchPayload]) => {
-      if (activeChatJidRef.current !== targetChatJid) return;
+  try {
+    const [activePayload, branchPayload] = await Promise.all([
+      getActiveChatAgents().catch(() => ({ chats: [] /* expected: active-agent refresh is best-effort. */ })),
+      getChatBranches(null, { includeArchived: true }).catch(() => ({ chats: [] /* expected: archived-branch refresh is best-effort. */ })),
+    ]);
 
-      const activeChats = normalizeActiveChatRows(activePayload?.chats);
-      const branchChats = normalizeActiveChatRows(branchPayload?.chats);
-      setActiveChatAgents(mergeActiveAndBranchChats(activeChats, branchChats, targetChatJid));
-    })
-    .catch(() => {
-      if (activeChatJidRef.current !== targetChatJid) return;
-      setActiveChatAgents([]);
-    });
+    if (activeChatJidRef.current !== targetChatJid) return [];
+
+    const activeChats = normalizeActiveChatRows(activePayload?.chats);
+    const branchChats = normalizeActiveChatRows(branchPayload?.chats);
+    const mergedChats = mergeActiveAndBranchChats(activeChats, branchChats, targetChatJid);
+    setActiveChatAgents(mergedChats);
+    return mergedChats;
+  } catch {
+    if (activeChatJidRef.current !== targetChatJid) return [];
+    setActiveChatAgents([]);
+    return [];
+  }
 }
 
 export interface RefreshCurrentChatBranchesOptions {
@@ -192,20 +194,19 @@ export interface RefreshCurrentChatBranchesOptions {
   setCurrentChatBranches: StateSetter<any[]>;
 }
 
-export function refreshCurrentChatBranches(options: RefreshCurrentChatBranchesOptions): void {
+export async function refreshCurrentChatBranches(options: RefreshCurrentChatBranchesOptions): Promise<void> {
   const {
     currentRootChatJid,
     getChatBranches,
     setCurrentChatBranches,
   } = options;
 
-  getChatBranches(currentRootChatJid)
-    .then((payload) => {
-      setCurrentChatBranches(normalizeCurrentRootBranchRows(payload?.chats));
-    })
-    .catch(() => {
-      setCurrentChatBranches([]);
-    });
+  try {
+    const payload = await getChatBranches(currentRootChatJid);
+    setCurrentChatBranches(normalizeCurrentRootBranchRows(payload?.chats));
+  } catch {
+    setCurrentChatBranches([]);
+  }
 }
 
 export interface HandleMessageResponseOptions {

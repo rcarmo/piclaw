@@ -1,10 +1,18 @@
-import { expect, test } from 'bun:test';
+import { afterEach, expect, test } from 'bun:test';
 
 import {
   handleConnectionStatusChangeEvent,
   handleUiVersionDriftEvent,
   runBackstopRefreshTick,
 } from '../../web/src/ui/app-connection-lifecycle.js';
+import {
+  noteAppChatActivation,
+  resetAppRefreshCoordination,
+} from '../../web/src/ui/app-refresh-coordination.js';
+
+afterEach(() => {
+  resetAppRefreshCoordination();
+});
 
 test('handleUiVersionDriftEvent ignores missing/unchanged versions', () => {
   const staleUiVersionRef = { current: null as string | null };
@@ -52,6 +60,7 @@ test('handleConnectionStatusChangeEvent clears active agent state on disconnect'
   const pendingRequestRef = { current: { id: 1 } as unknown };
 
   handleConnectionStatusChangeEvent({
+    currentChatJid: 'chat:alpha',
     status: 'disconnected',
     setConnectionStatus: (status) => { calls.push(`conn:${status}`); },
     setAgentStatus: (status) => { calls.push(`status:${status === null ? 'null' : 'set'}`); },
@@ -79,6 +88,32 @@ test('handleConnectionStatusChangeEvent clears active agent state on disconnect'
     'clear',
   ]);
   expect(pendingRequestRef.current).toBeNull();
+});
+
+test('handleConnectionStatusChangeEvent skips the initial reconnect bundle during a fresh cold-open activation', () => {
+  noteAppChatActivation({ chatJid: 'chat:alpha' });
+  const calls: string[] = [];
+
+  handleConnectionStatusChangeEvent({
+    currentChatJid: 'chat:alpha',
+    status: 'connected',
+    setConnectionStatus: (status) => { calls.push(`conn:${status}`); },
+    setAgentStatus: () => { calls.push('status'); },
+    setAgentDraft: () => { calls.push('draft'); },
+    setAgentPlan: () => { calls.push('plan'); },
+    setAgentThought: () => { calls.push('thought'); },
+    setPendingRequest: () => { calls.push('pending'); },
+    pendingRequestRef: { current: null },
+    clearAgentRunState: () => { calls.push('clear'); },
+    hasConnectedOnceRef: { current: false },
+    viewStateRef: { current: { currentHashtag: null, searchQuery: null, searchOpen: false } },
+    refreshTimeline: () => { calls.push('timeline'); },
+    refreshAgentStatus: () => { calls.push('refresh-status'); },
+    refreshQueueState: () => { calls.push('refresh-queue'); },
+    refreshContextUsage: () => { calls.push('refresh-context'); },
+  });
+
+  expect(calls).toEqual(['conn:connected']);
 });
 
 test('runBackstopRefreshTick refreshes queue only when agent is active', () => {

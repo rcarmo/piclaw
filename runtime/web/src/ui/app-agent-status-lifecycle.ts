@@ -13,6 +13,7 @@ import {
   handleConnectionStatusChangeEvent,
   handleUiVersionDriftEvent,
 } from './app-connection-lifecycle.js';
+import { runCoalescedAppRefresh } from './app-refresh-coordination.js';
 
 interface RefBox<T> {
   current: T;
@@ -129,57 +130,84 @@ export function useAgentStatusLifecycle(options: UseAgentStatusLifecycleOptions)
   } = options;
 
   const refreshQueueState = useCallback(() => {
-    refreshQueueStateForChat({
-      currentChatJid,
-      queueRefreshGenRef,
-      activeChatJidRef,
-      dismissedQueueRowIdsRef,
-      getAgentQueueState,
-      setFollowupQueueItems,
-      clearQueuedSteerStateIfStale,
+    return runCoalescedAppRefresh({
+      kind: 'queue-state',
+      chatJid: currentChatJid,
+      run: async () => {
+        await refreshQueueStateForChat({
+          currentChatJid,
+          queueRefreshGenRef,
+          activeChatJidRef,
+          dismissedQueueRowIdsRef,
+          getAgentQueueState,
+          setFollowupQueueItems,
+          clearQueuedSteerStateIfStale,
+        });
+        return null;
+      },
     });
   }, [activeChatJidRef, clearQueuedSteerStateIfStale, currentChatJid, dismissedQueueRowIdsRef, getAgentQueueState, queueRefreshGenRef, setFollowupQueueItems]);
 
   const refreshContextUsage = useCallback(async () => {
-    await refreshContextUsageForChat({
-      currentChatJid,
-      activeChatJidRef,
-      getAgentContext,
-      setContextUsage,
+    await runCoalescedAppRefresh({
+      kind: 'context-usage',
+      chatJid: currentChatJid,
+      run: async () => {
+        await refreshContextUsageForChat({
+          currentChatJid,
+          activeChatJidRef,
+          getAgentContext,
+          setContextUsage,
+        });
+        return null;
+      },
     });
   }, [activeChatJidRef, currentChatJid, getAgentContext, setContextUsage]);
 
   const refreshAutoresearchStatus = useCallback(async () => {
-    await refreshAutoresearchStatusForChat({
-      currentChatJid,
-      activeChatJidRef,
-      getAutoresearchStatus,
-      setExtensionStatusPanels,
-      setPendingExtensionPanelActions,
+    await runCoalescedAppRefresh({
+      kind: 'autoresearch-status',
+      chatJid: currentChatJid,
+      run: async () => {
+        await refreshAutoresearchStatusForChat({
+          currentChatJid,
+          activeChatJidRef,
+          getAutoresearchStatus,
+          setExtensionStatusPanels,
+          setPendingExtensionPanelActions,
+        });
+        return null;
+      },
     });
   }, [activeChatJidRef, currentChatJid, getAutoresearchStatus, setExtensionStatusPanels, setPendingExtensionPanelActions]);
 
   const refreshAgentStatus = useCallback(async () => {
-    return await refreshAgentStatusForChat({
-      currentChatJid,
-      getAgentStatus,
-      activeChatJidRef,
-      wasAgentActiveRef,
-      viewStateRef,
-      refreshTimeline,
-      clearAgentRunState,
-      agentStatusRef,
-      pendingRequestRef,
-      thoughtBufferRef,
-      draftBufferRef,
-      setAgentStatus,
-      setAgentDraft,
-      setAgentPlan,
-      setAgentThought,
-      setPendingRequest,
-      setActiveTurn,
-      noteAgentActivity,
-      clearLastActivityFlag,
+    return await runCoalescedAppRefresh({
+      kind: 'agent-status',
+      chatJid: currentChatJid,
+      run: async () => {
+        return await refreshAgentStatusForChat({
+          currentChatJid,
+          getAgentStatus,
+          activeChatJidRef,
+          wasAgentActiveRef,
+          viewStateRef,
+          refreshTimeline,
+          clearAgentRunState,
+          agentStatusRef,
+          pendingRequestRef,
+          thoughtBufferRef,
+          draftBufferRef,
+          setAgentStatus,
+          setAgentDraft,
+          setAgentPlan,
+          setAgentThought,
+          setPendingRequest,
+          setActiveTurn,
+          noteAgentActivity,
+          clearLastActivityFlag,
+        });
+      },
     });
   }, [activeChatJidRef, agentStatusRef, clearAgentRunState, clearLastActivityFlag, currentChatJid, draftBufferRef, getAgentStatus, noteAgentActivity, pendingRequestRef, refreshTimeline, setActiveTurn, setAgentDraft, setAgentPlan, setAgentStatus, setAgentThought, setPendingRequest, thoughtBufferRef, viewStateRef, wasAgentActiveRef]);
 
@@ -227,6 +255,7 @@ export function useAgentStatusLifecycle(options: UseAgentStatusLifecycleOptions)
 
   const handleConnectionStatusChange = useCallback((status: string) => {
     handleConnectionStatusChangeEvent({
+      currentChatJid,
       status,
       setConnectionStatus,
       setAgentStatus,
@@ -243,7 +272,7 @@ export function useAgentStatusLifecycle(options: UseAgentStatusLifecycleOptions)
       refreshQueueState,
       refreshContextUsage,
     });
-  }, [clearAgentRunState, hasConnectedOnceRef, pendingRequestRef, refreshAgentStatus, refreshContextUsage, refreshQueueState, refreshTimeline, setAgentDraft, setAgentPlan, setAgentStatus, setAgentThought, setConnectionStatus, setPendingRequestForConnection, viewStateRef]);
+  }, [clearAgentRunState, currentChatJid, hasConnectedOnceRef, pendingRequestRef, refreshAgentStatus, refreshContextUsage, refreshQueueState, refreshTimeline, setAgentDraft, setAgentPlan, setAgentStatus, setAgentThought, setConnectionStatus, setPendingRequestForConnection, viewStateRef]);
 
   return {
     refreshQueueState,

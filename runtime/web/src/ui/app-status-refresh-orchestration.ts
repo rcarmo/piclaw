@@ -28,9 +28,9 @@ export interface RefreshQueueStateForChatOptions<TItem extends FollowupQueueItem
 /**
  * Refresh follow-up queue state for the active chat, dropping stale responses.
  */
-export function refreshQueueStateForChat<TItem extends FollowupQueueItemLike = FollowupQueueItemLike>(
+export async function refreshQueueStateForChat<TItem extends FollowupQueueItemLike = FollowupQueueItemLike>(
   options: RefreshQueueStateForChatOptions<TItem>,
-): void {
+): Promise<void> {
   const {
     currentChatJid,
     queueRefreshGenRef,
@@ -44,32 +44,31 @@ export function refreshQueueStateForChat<TItem extends FollowupQueueItemLike = F
   const gen = ++queueRefreshGenRef.current;
   const targetChatJid = currentChatJid;
 
-  getAgentQueueState(targetChatJid)
-    .then((payload) => {
-      if (gen !== queueRefreshGenRef.current) return;
-      if (activeChatJidRef.current !== targetChatJid) return;
+  try {
+    const payload = await getAgentQueueState(targetChatJid);
+    if (gen !== queueRefreshGenRef.current) return;
+    if (activeChatJidRef.current !== targetChatJid) return;
 
-      const dismissed = dismissedQueueRowIdsRef.current;
-      const rawItems = Array.isArray(payload?.items) ? payload.items : [];
-      const items = normalizeFollowupQueueItems(rawItems, dismissed);
-      if (items.length) {
-        setFollowupQueueItems((prev) => (haveSameFollowupQueueRows(prev, items) ? prev : items));
-        return;
-      }
+    const dismissed = dismissedQueueRowIdsRef.current;
+    const rawItems = Array.isArray(payload?.items) ? payload.items : [];
+    const items = normalizeFollowupQueueItems(rawItems, dismissed);
+    if (items.length) {
+      setFollowupQueueItems((prev) => (haveSameFollowupQueueRows(prev, items) ? prev : items));
+      return;
+    }
 
-      if (rawItems.length > 0) {
-        return;
-      }
+    if (rawItems.length > 0) {
+      return;
+    }
 
-      dismissed.clear();
-      clearQueuedSteerStateIfStale(0);
-      setFollowupQueueItems((prev) => (prev.length === 0 ? prev : []));
-    })
-    .catch(() => {
-      if (gen !== queueRefreshGenRef.current) return;
-      if (activeChatJidRef.current !== targetChatJid) return;
-      setFollowupQueueItems((prev) => (prev.length === 0 ? prev : []));
-    });
+    dismissed.clear();
+    clearQueuedSteerStateIfStale(0);
+    setFollowupQueueItems((prev) => (prev.length === 0 ? prev : []));
+  } catch {
+    if (gen !== queueRefreshGenRef.current) return;
+    if (activeChatJidRef.current !== targetChatJid) return;
+    setFollowupQueueItems((prev) => (prev.length === 0 ? prev : []));
+  }
 }
 
 export interface RefreshContextUsageForChatOptions {

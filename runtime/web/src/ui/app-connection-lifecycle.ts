@@ -1,3 +1,5 @@
+import { isAppChatActivationRecent } from './app-refresh-coordination.js';
+
 type ViewStateLike = {
   currentHashtag?: unknown;
   searchQuery?: unknown;
@@ -64,6 +66,7 @@ export function handleUiVersionDriftEvent(options: HandleUiVersionDriftOptions):
 }
 
 export interface HandleConnectionStatusChangeOptions {
+  currentChatJid: string;
   status: string;
   setConnectionStatus: (status: string) => void;
   setAgentStatus: (status: Record<string, unknown> | null) => void;
@@ -92,6 +95,7 @@ function shouldRefreshMainTimeline(viewState: ViewStateLike | null | undefined):
 
 export function handleConnectionStatusChangeEvent(options: HandleConnectionStatusChangeOptions): void {
   const {
+    currentChatJid,
     status,
     setConnectionStatus,
     setAgentStatus,
@@ -123,6 +127,9 @@ export function handleConnectionStatusChangeEvent(options: HandleConnectionStatu
 
   if (!hasConnectedOnceRef.current) {
     hasConnectedOnceRef.current = true;
+    if (isAppChatActivationRecent(currentChatJid)) {
+      return;
+    }
     if (shouldRefreshMainTimeline(viewStateRef.current)) {
       refreshTimeline();
     }
