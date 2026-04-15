@@ -1,7 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
 
 import type { AgentSessionRuntime } from "@mariozechner/pi-coding-agent";
+import { SessionManager } from "@mariozechner/pi-coding-agent";
+import { join } from "path";
 import { AgentBranchManager } from "../../src/agent-pool/branch-manager.js";
+import { readDeferredBranchSeed } from "../../src/agent-pool/branch-seeding.js";
 import { createTempWorkspace, importFresh, setEnv } from "../helpers.js";
 
 let restoreEnv: (() => void) | null = null;
@@ -44,6 +47,7 @@ function createManager(overrides: Partial<ConstructorParameters<typeof AgentBran
       const session = pool.get(chatJid)?.runtime.session;
       return Boolean(session?.isStreaming || session?.isCompacting || session?.isRetrying || session?.isBashRunning);
     },
+    scheduleSessionWarmup: () => {},
     onWarn: (message) => warns.push(message),
     ...overrides,
   });
@@ -85,6 +89,74 @@ test("AgentBranchManager registers active chats and resolves agent handles", asy
     agent_name: "research-bot",
   });
   expect(fixture.manager.getAgentHandleForChat("web:topic")).toBe("research-bot");
+
+  ws.cleanup();
+});
+
+test("AgentBranchManager writes a deferred fork seed and schedules branch warmup without hydrating the target runtime", async () => {
+  const ws = createTempWorkspace("piclaw-branch-seed-");
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
+  db.initDatabase();
+
+  const sourceManager = SessionManager.create(ws.workspace, join(ws.workspace, "source-session"));
+  sourceManager.appendSessionInfo("Research");
+  sourceManager.appendModelChange("openai", "gpt-test");
+  sourceManager.appendMessage({ role: "user", content: "stable user", timestamp: Date.now() } as const);
+  sourceManager.appendMessage({
+    role: "assistant",
+    content: [{ type: "text", text: "stable assistant" }],
+    provider: "openai",
+    model: "gpt-test",
+    usage: {
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 2,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: "stop",
+    timestamp: Date.now(),
+  } as const);
+
+  const scheduled: string[] = [];
+  let getOrCreateCalls = 0;
+  const sourceSession = {
+    sessionManager: sourceManager,
+    sessionFile: sourceManager.getSessionFile(),
+    sessionName: "Research",
+    model: { provider: "openai", id: "gpt-test", reasoning: true },
+    thinkingLevel: "high",
+    isStreaming: false,
+    isCompacting: false,
+    isRetrying: false,
+    isBashRunning: false,
+  };
+
+  const fixture = createManager({
+    getOrCreateRuntime: async (chatJid) => {
+      getOrCreateCalls += 1;
+      if (chatJid !== "web:default") throw new Error(`unexpected runtime hydration for ${chatJid}`);
+      return fixture.pool.get(chatJid)?.runtime;
+    },
+    scheduleSessionWarmup: (chatJid) => {
+      scheduled.push(chatJid);
+    },
+  });
+  fixture.pool.set("web:default", { runtime: createRuntime(sourceSession), lastUsed: Date.now() });
+
+  const branch = await fixture.manager.createForkedChatBranch("web:default");
+  expect(branch.chat_jid).not.toBe("web:default");
+  expect(getOrCreateCalls).toBe(1);
+  expect(scheduled).toEqual([branch.chat_jid]);
+
+  const seed = readDeferredBranchSeed(branch.chat_jid);
+  expect(seed?.version).toBe(1);
+  expect(seed?.sessionName).toBe(branch.agent_name);
+  expect(seed?.model).toEqual({ provider: "openai", modelId: "gpt-test" });
+  expect(seed?.mode).toBe("rotated_context");
 
   ws.cleanup();
 });

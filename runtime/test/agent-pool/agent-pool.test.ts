@@ -535,6 +535,7 @@ test("agent pool forks active chats from the previous stable turn boundary", asy
 
   const branch = await (pool as any).createForkedChatBranch(sourceChatJid);
   expect(branch.chat_jid).not.toBe(sourceChatJid);
+  await (pool as any).getSessionForIntrospection(branch.chat_jid);
   const forkedSession = created[branch.chat_jid];
   const forkedMessages = forkedSession.sessionManager.buildSessionContext().messages;
   const serialized = JSON.stringify(forkedMessages);

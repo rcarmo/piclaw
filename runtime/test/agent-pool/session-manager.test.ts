@@ -1,7 +1,21 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
+import { writeFileSync } from "fs";
+import { join } from "path";
 
 import type { AgentSessionRuntime } from "@mariozechner/pi-coding-agent";
+import { ensureSessionDir } from "../../src/agent-pool/session.js";
 import { AgentSessionManager } from "../../src/agent-pool/session-manager.js";
+import { createTempWorkspace, setEnv } from "../helpers.js";
+
+let restoreEnv: (() => void) | null = null;
+let cleanupWorkspace: (() => void) | null = null;
+
+afterEach(() => {
+  restoreEnv?.();
+  cleanupWorkspace?.();
+  restoreEnv = null;
+  cleanupWorkspace = null;
+});
 
 function createRuntime(session: any): AgentSessionRuntime {
   return {
@@ -142,4 +156,34 @@ test("AgentSessionManager evicts idle sessions and shuts down remaining sessions
   expect(fixture.pool.size).toBe(0);
   expect(fixture.sidePool.size).toBe(0);
   expect(disposed).toBe(2);
+});
+
+test("AgentSessionManager fails loudly and clears the cache when a deferred branch seed is invalid", async () => {
+  const ws = createTempWorkspace("piclaw-session-manager-invalid-seed-");
+  cleanupWorkspace = ws.cleanup;
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  let createCalls = 0;
+  let disposed = 0;
+  const fixture = createManager({
+    createSession: async () => {
+      createCalls += 1;
+      return createRuntime({
+        dispose() {
+          disposed += 1;
+        },
+      });
+    },
+  });
+
+  const chatJid = "web:broken-branch";
+  writeFileSync(join(ensureSessionDir(chatJid), ".branch-seed.json"), "{not-json", "utf8");
+
+  await expect(fixture.manager.getOrCreate(chatJid)).rejects.toThrow("Invalid deferred branch seed");
+  await expect(fixture.manager.getOrCreate(chatJid)).rejects.toThrow("Invalid deferred branch seed");
+  expect(fixture.pool.has(chatJid)).toBe(false);
+  expect(createCalls).toBe(1);
+  expect(disposed).toBe(1);
+  fixture.manager.prewarm(chatJid);
+  expect(createCalls).toBe(1);
 });
