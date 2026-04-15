@@ -33,6 +33,23 @@ export function createBranchLoaderState(branchLoaderMode: boolean) {
   };
 }
 
+export function resolveStableRootChatJid(currentChatJid: string, currentBranchRecord?: { root_chat_jid?: string | null } | null): string {
+  const recordRoot = typeof currentBranchRecord?.root_chat_jid === 'string'
+    ? currentBranchRecord.root_chat_jid.trim()
+    : '';
+  if (recordRoot) return recordRoot;
+
+  const normalizedChatJid = typeof currentChatJid === 'string' ? currentChatJid.trim() : '';
+  if (!normalizedChatJid) return 'web:default';
+
+  const branchMarkerIndex = normalizedChatJid.indexOf(':branch:');
+  if (branchMarkerIndex <= 0) {
+    return normalizedChatJid;
+  }
+
+  return normalizedChatJid.slice(0, branchMarkerIndex) || normalizedChatJid;
+}
+
 export function useMainAppSurfaceState(options: {
   currentChatJid: string;
   branchLoaderMode: boolean;
@@ -74,7 +91,10 @@ export function useMainAppSurfaceState(options: {
     currentChatBranches,
     currentChatJid,
   }), [activeChatAgents, currentChatBranches, currentChatJid]);
-  const currentRootChatJid = currentBranchRecord?.root_chat_jid || currentChatJid;
+  const currentRootChatJid = useMemo(
+    () => resolveStableRootChatJid(currentChatJid, currentBranchRecord),
+    [currentBranchRecord, currentChatJid],
+  );
   const activeSearchScopeLabel = describeSearchScope(searchScope);
   const [branchLoaderState, setBranchLoaderState] = useState(() => createBranchLoaderState(branchLoaderMode));
   const followupQueueCount = followupQueueItems.length;
@@ -91,7 +111,8 @@ export function useMainAppSurfaceState(options: {
     notificationPermission,
     toggleNotifications: handleToggleNotifications,
     notify,
-  } = useNotifications();
+    shouldNotifyLocallyForChat,
+  } = useNotifications({ chatJid: currentChatJid });
 
   const [removingPostIds, setRemovingPostIds] = useState(() => new Set<string | number>());
   const [workspaceOpen, setWorkspaceOpen] = useState(() => readStoredWorkspaceOpenPreference({
@@ -204,6 +225,7 @@ export function useMainAppSurfaceState(options: {
     notificationPermission,
     handleToggleNotifications,
     notify,
+    shouldNotifyLocallyForChat,
     removingPostIds,
     setRemovingPostIds,
     workspaceOpen,

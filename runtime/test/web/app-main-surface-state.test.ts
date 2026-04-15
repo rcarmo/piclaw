@@ -3,37 +3,35 @@ import { expect, test } from 'bun:test';
 import {
   createBranchLoaderState,
   resolveCurrentBranchRecord,
+  resolveStableRootChatJid,
 } from '../../web/src/ui/app-main-surface-state.js';
 
-test('resolveCurrentBranchRecord prefers current branch records over active chat fallbacks', () => {
-  expect(resolveCurrentBranchRecord({
-    activeChatAgents: [{ chat_jid: 'chat-1', source: 'active' }],
-    currentChatBranches: [{ chat_jid: 'chat-1', source: 'branch' }],
-    currentChatJid: 'chat-1',
-  })).toEqual({ chat_jid: 'chat-1', source: 'branch' });
+test('createBranchLoaderState reflects branch-loader mode', () => {
+  expect(createBranchLoaderState(false)).toEqual({ status: 'idle', message: '' });
+  expect(createBranchLoaderState(true)).toEqual({ status: 'running', message: 'Preparing a new chat branch…' });
 });
 
-test('resolveCurrentBranchRecord falls back to active chat records or null', () => {
-  expect(resolveCurrentBranchRecord({
-    activeChatAgents: [{ chat_jid: 'chat-2', source: 'active' }],
-    currentChatBranches: [],
-    currentChatJid: 'chat-2',
-  })).toEqual({ chat_jid: 'chat-2', source: 'active' });
+test('resolveCurrentBranchRecord prefers current root branch rows before active chat rows', () => {
+  const currentBranch = { chat_jid: 'web:default:branch:abc', root_chat_jid: 'web:default', source: 'branches' };
+  const activeBranch = { chat_jid: 'web:default:branch:abc', root_chat_jid: 'wrong-root', source: 'active' };
 
   expect(resolveCurrentBranchRecord({
-    activeChatAgents: [],
-    currentChatBranches: [],
-    currentChatJid: 'missing',
-  })).toBeNull();
+    currentChatJid: 'web:default:branch:abc',
+    currentChatBranches: [currentBranch],
+    activeChatAgents: [activeBranch],
+  })).toEqual(currentBranch);
 });
 
-test('createBranchLoaderState preserves running and idle defaults', () => {
-  expect(createBranchLoaderState(true)).toEqual({
-    status: 'running',
-    message: 'Preparing a new chat branch…',
-  });
-  expect(createBranchLoaderState(false)).toEqual({
-    status: 'idle',
-    message: '',
-  });
+test('resolveStableRootChatJid uses branch metadata when available', () => {
+  expect(resolveStableRootChatJid('web:default:branch:abc', { root_chat_jid: 'web:default' })).toBe('web:default');
+});
+
+test('resolveStableRootChatJid derives the root chat from nested branch ids before metadata arrives', () => {
+  expect(resolveStableRootChatJid('web:default:branch:abc')).toBe('web:default');
+  expect(resolveStableRootChatJid('web:default:branch:abc:branch:def')).toBe('web:default');
+});
+
+test('resolveStableRootChatJid leaves root chats unchanged and falls back sanely for blanks', () => {
+  expect(resolveStableRootChatJid('web:default')).toBe('web:default');
+  expect(resolveStableRootChatJid('')).toBe('web:default');
 });
