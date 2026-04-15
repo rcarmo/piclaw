@@ -10,6 +10,10 @@ import {
 } from './app-auth-bootstrap.js';
 import { refreshModelAndQueueState as refreshModelAndQueueStateBundle } from './app-status-refresh-orchestration.js';
 import { applyStoredSidebarWidth } from './app-boot-load-orchestration.js';
+import {
+  noteAppChatActivation,
+  runCoalescedAppRefresh,
+} from './app-refresh-coordination.js';
 
 type StateSetter<T> = (next: T | ((prev: T) => T)) => void;
 
@@ -126,6 +130,10 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
     });
   }, [appShellRef, loadAgents, readStoredNumber, sidebarWidthRef]);
 
+  useEffect(() => {
+    noteAppChatActivation({ chatJid: currentChatJid });
+  }, [currentChatJid]);
+
   const updateAgentProfile = useCallback((payload: any) => {
     updateAgentProfileFromEvent({
       payload,
@@ -155,31 +163,52 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
   }, [setActiveModel, setActiveModelUsage, setActiveThinkingLevel, setAgentModelsPayload, setHasLoadedAgentModels, setSupportsThinking]);
 
   const refreshModelState = useCallback(() => {
-    refreshModelStateForChat({
-      currentChatJid,
-      getAgentModels,
-      activeChatJidRef,
-      applyModelState,
+    return runCoalescedAppRefresh({
+      kind: 'model-state',
+      chatJid: currentChatJid,
+      run: async () => {
+        await refreshModelStateForChat({
+          currentChatJid,
+          getAgentModels,
+          activeChatJidRef,
+          applyModelState,
+        });
+        return null;
+      },
     });
   }, [activeChatJidRef, applyModelState, currentChatJid, getAgentModels]);
 
   const refreshActiveChatAgents = useCallback(() => {
-    refreshActiveChatAgentsState({
-      currentChatJid,
-      getActiveChatAgents,
-      getChatBranches,
-      activeChatJidRef,
-      setActiveChatAgents,
+    return runCoalescedAppRefresh({
+      kind: 'active-chat-agents',
+      chatJid: currentChatJid,
+      run: async () => {
+        await refreshActiveChatAgentsState({
+          currentChatJid,
+          getActiveChatAgents,
+          getChatBranches,
+          activeChatJidRef,
+          setActiveChatAgents,
+        });
+        return null;
+      },
     });
   }, [activeChatJidRef, currentChatJid, getActiveChatAgents, getChatBranches, setActiveChatAgents]);
 
   const refreshCurrentChatBranches = useCallback(() => {
-    refreshCurrentChatBranchesState({
-      currentRootChatJid,
-      getChatBranches,
-      setCurrentChatBranches,
+    return runCoalescedAppRefresh({
+      kind: 'current-chat-branches',
+      chatJid: currentChatJid,
+      run: async () => {
+        await refreshCurrentChatBranchesState({
+          currentRootChatJid,
+          getChatBranches,
+          setCurrentChatBranches,
+        });
+        return null;
+      },
     });
-  }, [currentRootChatJid, getChatBranches, setCurrentChatBranches]);
+  }, [currentChatJid, currentRootChatJid, getChatBranches, setCurrentChatBranches]);
 
   const refreshModelAndQueueState = useCallback(() => {
     refreshModelAndQueueStateBundle({
