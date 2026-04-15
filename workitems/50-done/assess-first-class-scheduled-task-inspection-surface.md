@@ -1,9 +1,9 @@
 ---
 id: assess-first-class-scheduled-task-inspection-surface
 title: Assess a first-class scheduled-task inspection surface for agents
-status: doing
+status: done
 created: 2026-04-12
-updated: 2026-04-13
+updated: 2026-04-14
 tags:
   - work-item
   - kanban
@@ -160,8 +160,8 @@ Useful filters in v1:
   - [ ] Restore / reconnect matrix test
   - [ ] Pane / viewer contract test
   - [ ] Real-browser smoke test
-- [ ] Existing tests to rerun are listed
-- [ ] New regression coverage to add is listed
+- [x] Existing tests to rerun are listed
+- [x] New regression coverage to add is listed
 - [ ] Real-browser smoke pass required? If yes, record the surface
 
 ### Existing tests to rerun
@@ -170,16 +170,16 @@ Useful filters in v1:
 - `bun run typecheck`
 
 ### New regression coverage to add
-- [ ] structured task-inspection service tests
-- [ ] tool/command contract tests for scheduled-task inspection
+- [x] structured task-inspection service tests
+- [x] tool/command contract tests for scheduled-task inspection
 - [ ] channel-formatting tests for task summaries where applicable
 - [ ] permission/visibility tests if sensitive command/task data is exposed
 
 ## Definition of Done
 
 - [x] All acceptance criteria satisfied and verified
-- [ ] Tests added or updated — passing locally
-- [ ] Type check clean
+- [x] Tests added or updated — passing locally
+- [x] Type check clean
 - [x] Docs and notes updated with links to ticket
 - [x] Operational impact assessed
 - [x] Follow-up tickets created for deferred scope
@@ -187,6 +187,14 @@ Useful filters in v1:
 - [x] Ticket front matter updated
 
 ## Updates
+
+### 2026-04-14 — implementation slice landed and assessment closed
+- The recommended architecture from this assessment is now implemented in the first concrete slice:
+  - `runtime/src/scheduled-task-query-service.ts`
+  - `scheduled_tasks` internal tool in `runtime/src/extensions/scheduled-tasks.ts`
+  - `/tasks` and `/scheduled` migrated to the shared query service
+- Focused validation passed on the service/tool contract plus typecheck.
+- Moved to `50-done` because the design/assessment goal is complete and the implementation follow-up exists as its own reviewed ticket.
 
 ### 2026-04-13 — assessment conclusion and split
 - Code-path review confirmed the current state:
@@ -198,7 +206,7 @@ Useful filters in v1:
   - first-class internal inspection tool over that service
   - mutation/update as a separate follow-up slice
 - Split concrete implementation tickets:
-  - `workitems/10-next/add-scheduled-task-inspection-tool-and-shared-query-service.md`
+  - `workitems/40-review/add-scheduled-task-inspection-tool-and-shared-query-service.md`
   - `workitems/10-next/add-scheduled-task-update-and-reschedule-tool.md`
 - This assessment is now refined enough to drive implementation without reopening the product question.
 - Quality: ★★★★☆ 8/10 (problem: 2, scope: 2, test: 1, deps: 2, risk: 1)

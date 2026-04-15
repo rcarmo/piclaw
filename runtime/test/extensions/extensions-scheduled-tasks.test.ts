@@ -9,7 +9,7 @@ import { describe, expect, test, beforeEach, afterEach } from "bun:test";
 import "../helpers.js";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { scheduledTasks } from "../../src/extensions/scheduled-tasks.js";
-import { createTask, getDb, initDatabase } from "../../src/db.js";
+import { createTask, getDb, initDatabase, logTaskRun } from "../../src/db.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -98,8 +98,9 @@ describe("scheduled-tasks extension", () => {
     expect(fake.commands.has("scheduled")).toBe(true);
   });
 
-  test("registers schedule_task tool", () => {
+  test("registers schedule_task and scheduled_tasks tools", () => {
     expect(fake.tools.has("schedule_task")).toBe(true);
+    expect(fake.tools.has("scheduled_tasks")).toBe(true);
   });
 
   test("/tasks lists all tasks when empty", async () => {
@@ -156,6 +157,46 @@ describe("scheduled-tasks extension", () => {
     // Should be truncated (default 140 chars + ellipsis)
     expect(fake.messages[0].content).not.toContain(longPrompt);
     expect(fake.messages[0].content).toContain("…");
+  });
+
+  test("scheduled_tasks tool lists structured task records", async () => {
+    insertTask({ id: "t-inspect", status: "active", prompt: "Inspect me", chat_jid: "web:test" });
+    const tool = fake.tools.get("scheduled_tasks");
+    expect(tool).toBeTruthy();
+
+    const res = await tool.execute("call-list", { action: "list", chat_jid: "web:test", limit: 10 });
+    expect(res.details.action).toBe("list");
+    expect(res.details.count).toBe(1);
+    expect(res.details.tasks[0]).toMatchObject({
+      id: "t-inspect",
+      chat_jid: "web:test",
+      task_kind: "agent",
+      status: "active",
+      schedule_type: "cron",
+    });
+    expect(res.content?.[0]?.text).toContain("t-inspect");
+  });
+
+  test("scheduled_tasks tool gets latest run summary", async () => {
+    insertTask({ id: "t-run", status: "active", prompt: "Run me" });
+    logTaskRun({
+      task_id: "t-run",
+      run_at: "2026-04-14T17:00:00.000Z",
+      duration_ms: 1234,
+      status: "success",
+      result: "Task finished successfully with a long body that should be summarized",
+      error: null,
+    });
+
+    const tool = fake.tools.get("scheduled_tasks");
+    const res = await tool.execute("call-get", { action: "get", id: "t-run", include_latest_run_log: true });
+    expect(res.details.found).toBe(true);
+    expect(res.details.task.latest_run_log).toMatchObject({
+      task_id: "t-run",
+      status: "success",
+      duration_ms: 1234,
+    });
+    expect(res.content?.[0]?.text).toContain("latest_run: success");
   });
 
   test("schedule_task tool creates shell task", async () => {

@@ -56,10 +56,18 @@ if [ -d "$DEST_REAL/runtime/extensions" ] && [ -d "$DEST_REAL/node_modules" ]; t
 fi
 
 printf '[build-piclaw-package] chmod-runtime-paths\n'
-sudo chmod -R a+rX "$BUN_INSTALL/bin" "$BUN_INSTALL/install/global"
+# Bun's global installer already writes readable package contents in normal
+# cases; the expensive recursive chmod across the full global tree can stall
+# Docker builds on larger installs. Keep this step minimal and only normalize
+# the entrypoints we rely on directly.
+sudo chmod a+rx "$BUN_INSTALL/bin" 2>/dev/null || true
 if [ -f "$BUN_INSTALL/bin/piclaw" ]; then
+  sudo chmod a+rx "$BUN_INSTALL/bin/piclaw"
   printf '[build-piclaw-package] link-piclaw-bin\n'
   sudo ln -sf "$BUN_INSTALL/bin/piclaw" /usr/local/bin/piclaw
+fi
+if [ -f "$BUN_INSTALL/bin/pi" ]; then
+  sudo chmod a+rx "$BUN_INSTALL/bin/pi"
 fi
 
 printf '[build-piclaw-package] drop-caches\n'

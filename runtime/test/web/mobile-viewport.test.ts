@@ -40,13 +40,6 @@ test('readViewportHeight prefers visualViewport height when available', () => {
 
   expect(readViewportHeight({
     window: {
-      visualViewport: { height: 500.2, offsetTop: 188.1 },
-      innerHeight: 900,
-    },
-  }, { includeOffsetTop: true })).toBe(688);
-
-  expect(readViewportHeight({
-    window: {
       innerHeight: 844,
     },
   })).toBe(844);
@@ -136,65 +129,4 @@ test('syncStandaloneMobileViewport can reset page scroll when explicitly request
   expect(documentElement.scrollLeft).toBe(0);
   expect(body.scrollTop).toBe(0);
   expect(body.scrollLeft).toBe(0);
-});
-
-test('syncStandaloneMobileViewport tolerates rejected scroll resets', () => {
-  const cssVars = new Map<string, string>();
-  const documentElement = {
-    style: {
-      setProperty: (name: string, value: string) => cssVars.set(name, value),
-    },
-  };
-  const body = {};
-
-  expect(() => syncStandaloneMobileViewport({
-    navigator: {
-      standalone: true,
-      userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)',
-      maxTouchPoints: 5,
-    },
-    window: {
-      matchMedia: () => ({ matches: true }),
-      visualViewport: { height: 701.9 },
-      innerHeight: 900,
-      scrollTo: () => { throw new Error('blocked'); },
-    },
-    document: {
-      documentElement,
-      body,
-      get scrollingElement() {
-        throw new Error('readonly root');
-      },
-    },
-  }, { resetScroll: true })).not.toThrow();
-  expect(cssVars.get('--app-height')).toBe('702px');
-});
-
-test('syncStandaloneMobileViewport includes offsetTop while text entry is focused', () => {
-  const cssVars = new Map<string, string>();
-  const documentElement = {
-    style: {
-      setProperty: (name: string, value: string) => cssVars.set(name, value),
-    },
-  };
-
-  const height = syncStandaloneMobileViewport({
-    navigator: {
-      standalone: true,
-      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
-      maxTouchPoints: 5,
-    },
-    window: {
-      matchMedia: () => ({ matches: true }),
-      visualViewport: { height: 512.2, offsetTop: 146.4 },
-      innerHeight: 844,
-    },
-    document: {
-      documentElement,
-      activeElement: { tagName: 'TEXTAREA' },
-    },
-  });
-
-  expect(height).toBe(659);
-  expect(cssVars.get('--app-height')).toBe('659px');
 });

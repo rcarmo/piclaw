@@ -195,6 +195,41 @@ describe("messages tool extension", () => {
     expect(result.details.results[0].content_full_length).toBeGreaterThan(50);
   });
 
+  test("search supports row bounds and sender filtering", async () => {
+    const row1 = insertMessage("checkpoint alpha", { sender: "web-user", sender_name: "Alice" });
+    const row2 = insertMessage("checkpoint beta", { sender: "assistant", sender_name: "Pi", is_bot_message: true });
+    const row3 = insertMessage("checkpoint gamma", { sender: "web-user", sender_name: "Alice" });
+
+    const { tool } = await getTool();
+    const result = await runWithContext(tool, {
+      action: "search",
+      query: "checkpoint",
+      after_row: row1,
+      before_row: row3,
+      sender: "Pi",
+    });
+
+    expect(result.details.count).toBe(1);
+    expect(result.details.results[0].rowid).toBe(row2);
+    expect(result.details.results[0].sender_name).toBe("Pi");
+  });
+
+  test("search returns highlighted excerpts when requested", async () => {
+    insertMessage("prefix text before unique-token-123 and then a lot more trailing content for excerpt coverage");
+
+    const { tool } = await getTool();
+    const result = await runWithContext(tool, {
+      action: "search",
+      query: "unique-token-123",
+      excerpt_chars: 30,
+      details_max_chars: 200,
+    });
+
+    expect(result.details.count).toBe(1);
+    expect(result.details.results[0].content_excerpt).toContain("[[unique-token-123]]");
+    expect(result.content[0].text).toContain("[[unique-token-123]]");
+  });
+
   test("get supports context_before/context_after", async () => {
     insertMessage("before message one");
     insertMessage("before message two");
@@ -221,6 +256,131 @@ describe("messages tool extension", () => {
     expect(result.content[0].text).toContain("target message body");
     expect(result.content[0].text).toContain("before message two");
     expect(result.content[0].text).toContain("after message one");
+  });
+
+  test("get supports content_lines and content_grep", async () => {
+    insertMessage("line one\nerror: first issue\nline three\nerror: second issue\nline five");
+
+    const { tool } = await getTool();
+    const search = await runWithContext(tool, { action: "search", query: "first issue" });
+    const rowId = search.details.results[0].rowid;
+    const result = await runWithContext(tool, {
+      action: "get",
+      row_ids: [rowId],
+      content_lines: "2-4",
+      content_grep: "error",
+      details_max_chars: 200,
+    });
+
+    expect(result.details.count).toBe(1);
+    expect(result.details.messages[0].line_view).toEqual({
+      total_lines: 5,
+      selected_start: 2,
+      selected_end: 4,
+      grep: "error",
+      match_count: 2,
+      lines: [
+        { line_number: 2, content: "error: first issue" },
+        { line_number: 4, content: "error: second issue" },
+      ],
+    });
+    expect(result.content[0].text).toContain("2| error: first issue");
+    expect(result.content[0].text).toContain("4| error: second issue");
+    expect(result.content[0].text).not.toContain("3| line three");
+  });
+
+  test("grep returns matching lines with bounded context", async () => {
+    insertMessage("alpha\nerror: first issue\nbeta\nerror: second issue\ngamma");
+    insertMessage("totally unrelated");
+
+    const { tool } = await getTool();
+    const result = await runWithContext(tool, {
+      action: "grep",
+      pattern: "error",
+      context_lines: 1,
+      max_matches: 10,
+      details_max_chars: 200,
+    });
+
+    expect(result.details.action).toBe("grep");
+    expect(result.details.count).toBe(1);
+    expect(result.details.matching_lines).toBe(2);
+    expect(result.details.results[0].line_view).toEqual({
+      total_lines: 5,
+      context_lines: 1,
+      match_count: 2,
+      lines: [
+        { line_number: 1, content: "alpha", matched: false },
+        { line_number: 2, content: "error: first issue", matched: true },
+        { line_number: 3, content: "beta", matched: false },
+        { line_number: 4, content: "error: second issue", matched: true },
+        { line_number: 5, content: "gamma", matched: false },
+      ],
+    });
+    expect(result.content[0].text).toContain("> 2| error: first issue");
+    expect(result.content[0].text).toContain("> 4| error: second issue");
+  });
+
+  test("extract supports regex capture groups, dedupe, and sorting", async () => {
+    const firstRow = insertMessage("pc=0x1234 and pc=0x9999");
+    insertMessage("pc=0x5678");
+    insertMessage("pc=0x1234 again");
+
+    const { tool } = await getTool();
+    const result = await runWithContext(tool, {
+      action: "extract",
+      pattern: "pc=(0x[0-9a-f]+)",
+      regex: true,
+      capture_group: 1,
+      dedupe: true,
+      sort: "asc",
+      max_matches: 10,
+    });
+
+    expect(result.details.action).toBe("extract");
+    expect(result.details.count).toBe(3);
+    expect(result.details.values.map((item: any) => item.value)).toEqual(["0x1234", "0x5678", "0x9999"]);
+    expect(result.details.values[0]).toMatchObject({
+      value: "0x1234",
+      count: 2,
+      first_seen_rowid: firstRow,
+    });
+    expect(result.content[0].text).toContain("0x1234 (2)");
+  });
+
+  test("diff summarizes changes since a checkpoint row", async () => {
+    const checkpoint = insertMessage("checkpoint baseline", { sender: "web-user", sender_name: "Alice" });
+    const userRow = insertMessage("follow-up from user", { sender: "web-user", sender_name: "Alice" });
+    const assistantRow = insertMessage("assistant reply", { sender: "assistant", sender_name: "Pi", is_bot_message: true });
+    insertMessage("later ignored by before_row", { sender: "web-user", sender_name: "Alice" });
+
+    const { tool } = await getTool();
+    const result = await runWithContext(tool, {
+      action: "diff",
+      after_row: checkpoint,
+      before_row: assistantRow + 1,
+      details_max_chars: 200,
+    });
+
+    expect(result.details.action).toBe("diff");
+    expect(result.details.count).toBe(2);
+    expect(result.details.summary).toEqual({
+      checkpoint_after_row: checkpoint,
+      checkpoint_before_row: assistantRow + 1,
+      checkpoint_after: null,
+      checkpoint_before: null,
+      first_rowid: userRow,
+      last_rowid: assistantRow,
+      user_count: 1,
+      assistant_count: 1,
+      sender_counts: [
+        { sender: "Alice", count: 1 },
+        { sender: "Pi", count: 1 },
+      ],
+    });
+    expect(result.details.messages.map((row: any) => row.rowid)).toEqual([userRow, assistantRow]);
+    expect(result.content[0].text).toContain(`Rows ${userRow}–${assistantRow}`);
+    expect(result.content[0].text).toContain("User 1, assistant 1");
   });
 
   test("get missing row_ids are reported", async () => {

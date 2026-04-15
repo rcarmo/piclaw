@@ -986,7 +986,7 @@
     width: 100%;
     box-sizing: border-box;
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
-    max-height: calc(var(--app-height, 100dvh) - 32px);
+    max-height: calc(var(--app-height, 100vh) - 32px);
     display: flex;
     flex-direction: column;
 }

@@ -1,10 +1,10 @@
 ---
 id: oobe-provider-readiness-and-first-use-panel
 title: Add provider-readiness and first-use OOBE panel in the web app
-status: review
+status: done
 priority: medium
 created: 2026-04-08
-updated: 2026-04-12
+updated: 2026-04-14
 parent: improve-first-run-oobe-and-new-user-guidance
 estimate: M
 risk: medium
@@ -85,19 +85,19 @@ For the first implementation slice, lock scope to:
 
 ## Acceptance Criteria
 
-- [ ] A native OOBE panel renders in the main web shell, not in the timeline.
-- [ ] When no AI providers/models are available, the panel explains that the
+- [x] A native OOBE panel renders in the main web shell, not in the timeline.
+- [x] When no AI providers/models are available, the panel explains that the
       next step is `/login` provider setup.
-- [ ] The panel copy explicitly distinguishes AI-provider setup from app access
+- [x] The panel copy explicitly distinguishes AI-provider setup from app access
       control/sign-in.
-- [ ] The primary provider CTA prefills the compose box with `/login`.
-- [ ] When providers/models become available, the panel switches to a compact
+- [x] The primary provider CTA prefills the compose box with `/login`.
+- [x] When providers/models become available, the panel switches to a compact
       “you’re ready / what next?” state.
-- [ ] The panel can be dismissed.
-- [ ] Dismiss/completion state persists locally for the web user.
-- [ ] The panel does not appear as a fake/tutorial chat message.
-- [ ] The panel does not show in pane-popout mode.
-- [ ] Minimal regression coverage exists for provider-missing, ready, dismiss,
+- [x] The panel can be dismissed.
+- [x] Dismiss/completion state persists locally for the web user.
+- [x] The panel does not appear as a fake/tutorial chat message.
+- [x] The panel does not show in pane-popout mode.
+- [x] Minimal regression coverage exists for provider-missing, ready, dismiss,
       and `/login` prefill behavior.
 
 ## Implementation Paths
@@ -170,16 +170,38 @@ Path A — native shell panel with provider-driven state.
 
 ## Definition of Done
 
-- [ ] All acceptance criteria satisfied and verified
-- [ ] Tests added or updated — passing locally
-- [ ] Type check clean
-- [ ] Docs and notes updated with links to ticket
-- [ ] Operational impact assessed
-- [ ] Follow-up tickets created for deferred scope
-- [ ] Update history complete with evidence
-- [ ] Ticket front matter updated
+- [x] All acceptance criteria satisfied and verified
+- [x] Tests added or updated — passing locally
+- [x] Type check clean
+- [x] Docs and notes updated with links to ticket
+- [x] Operational impact assessed
+- [x] Follow-up tickets created for deferred scope
+- [x] Update history complete with evidence
+- [x] Ticket front matter updated
 
 ## Updates
+
+### 2026-04-14
+- Browser-validated the full first-slice panel behavior through the local-container Playwright harness:
+  - provider-missing visible
+  - `/login` prefill works
+  - dismiss persistence holds across reload
+  - provider-ready visible
+  - `/model` prefill works
+  - ready-state completion persists across reload
+- The browser run also caught a product-copy gap: the provider-missing panel did not explicitly say that `/login` configures AI providers rather than acting as app sign-in. Fixed in `runtime/web/src/components/oobe-panel.ts` and revalidated.
+- Fresh evidence:
+  - `artifacts/oobe-local-container/oobe-provider-missing-2026-04-14T22-07-37-904Z.png`
+  - `artifacts/oobe-local-container/oobe-provider-ready-2026-04-14T22-07-37-904Z.png`
+- Moved to `50-done` after source-level regressions, typecheck, and local-container browser validation all passed.
+
+### 2026-04-14
+- Fixed a follow-up state-resolution regression in `runtime/web/src/ui/oobe-state.ts`: configured installs with available models were being forced back to `hidden`, which prevented the intended provider-ready / first-use guidance panel from appearing.
+- Updated both source-level and runtime-side OOBE state tests to require `provider-ready` when models are available and the ready-state has not been completed.
+- Focused validation passed:
+  - `bun test web/src/ui/oobe-state.test.ts test/web/oobe-state.test.ts test/web/oobe-panel.test.ts test/web/app-main-render-composition.test.ts test/web/app-main-shell-composition.test.ts`
+  - `bun run typecheck`
+- The child ticket remains in `40-review` pending final browser evidence / closeout rather than source-level correctness.
 
 ### 2026-04-09
 - Diagnosed and fixed a lifecycle wiring bug in `runtime/web/src/ui/app-main-orchestration-composition.ts`: `/agent/models` responses were arriving, but `setAgentModelsPayload` and `setHasLoadedAgentModels` were not being forwarded into lifecycle composition, so the OOBE panel stayed hidden even after model readiness had loaded.
@@ -225,7 +247,7 @@ Path A — native shell panel with provider-driven state.
 
 ## Links
 
-- `workitems/10-next/improve-first-run-oobe-and-new-user-guidance.md`
+- `workitems/20-doing/improve-first-run-oobe-and-new-user-guidance.md`
 - `runtime/web/src/app.ts`
 - `runtime/web/src/ui/app-main-shell-render.ts`
 - `runtime/web/src/components/compose-box.ts`

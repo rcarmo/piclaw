@@ -3,11 +3,16 @@
  * the SQLite scheduled_tasks table.
  */
 import { Type } from "@sinclair/typebox";
-import type { ExtensionAPI, ExtensionFactory } from "@mariozechner/pi-coding-agent";
-import { createTask, getDb } from "../db.js";
+import type { AgentToolResult, ExtensionAPI, ExtensionFactory } from "@mariozechner/pi-coding-agent";
+import { createTask } from "../db.js";
 import { computeNextRun } from "../task-scheduler-utils.js";
 import { validateShellCommand, validateShellCwd } from "../utils/task-validation.js";
 import { createUuid } from "../utils/ids.js";
+import {
+  getScheduledTaskInspection,
+  listScheduledTasks,
+  type ScheduledTaskInspectionRecord,
+} from "../scheduled-task-query-service.js";
 
 function computeInitialRun(scheduleType: string, scheduleValue: string): string | null {
   if (scheduleType === "once") {
@@ -18,46 +23,9 @@ function computeInitialRun(scheduleType: string, scheduleValue: string): string 
   return computeNextRun(scheduleType, scheduleValue);
 }
 
-interface ScheduledTaskRow {
-  id: string;
-  chat_jid: string;
-  prompt: string;
-  model: string | null;
-  task_kind?: string | null;
-  command?: string | null;
-  cwd?: string | null;
-  timeout_sec?: number | null;
-  schedule_type: string;
-  schedule_value: string;
-  next_run: string | null;
-  status: string;
-  created_at: string;
-}
-
 const STATUS_VALUES = new Set(["active", "paused", "completed"]);
 
-function summarizePrompt(prompt: string, maxLen = 140): string {
-  if (!prompt) return "(no prompt)";
-  const firstLine = prompt.replace(/\r\n/g, "\n").split("\n")[0].trim();
-  if (firstLine.length <= maxLen) return firstLine;
-  return `${firstLine.slice(0, maxLen - 1)}…`;
-}
-
-function summarizeCommand(command: string | null | undefined, maxLen = 140): string {
-  const cmd = (command || "").trim();
-  if (!cmd) return "(no command)";
-  if (cmd.length <= maxLen) return cmd;
-  return `${cmd.slice(0, maxLen - 1)}…`;
-}
-
-function summarizeInternalTask(prompt: string | null | undefined): string {
-  const token = (prompt || "").trim().toLowerCase();
-  if (!token) return "(internal task)";
-  if (token === "dream" || token === "/dream") return "dream maintenance";
-  return token;
-}
-
-function formatTask(row: ScheduledTaskRow): string {
+function formatTask(row: ScheduledTaskInspectionRecord): string {
   const next = row.next_run ? `next ${row.next_run}` : "next n/a";
   const model = row.model ? ` model ${row.model}` : "";
   const kind = row.task_kind === "shell"
@@ -65,45 +33,20 @@ function formatTask(row: ScheduledTaskRow): string {
     : row.task_kind === "internal"
       ? "internal"
       : "agent";
-  const summary = kind === "shell"
-    ? summarizeCommand(row.command)
-    : kind === "internal"
-      ? summarizeInternalTask(row.prompt)
-      : summarizePrompt(row.prompt);
-  return `• ${row.id} (${row.status}) — ${kind} ${row.schedule_type} ${row.schedule_value}, ${next}${model} — ${summary}`;
+  return `• ${row.id} (${row.status}) — ${kind} ${row.schedule_type} ${row.schedule_value}, ${next}${model} — ${row.summary}`;
 }
 
 function listTasks(filter: string | null): { summary: string; lines: string[] } {
-  const db = getDb();
-  const counts = db
-    .query("SELECT status, COUNT(*) as count FROM scheduled_tasks GROUP BY status")
-    .all() as Array<{ status: string; count: number }>;
-  const countMap = new Map(counts.map((row) => [row.status, row.count]));
-
-  let rows: ScheduledTaskRow[];
-  if (filter && STATUS_VALUES.has(filter)) {
-    rows = db
-      .query(
-        "SELECT id, chat_jid, prompt, model, task_kind, command, cwd, timeout_sec, schedule_type, schedule_value, next_run, status, created_at FROM scheduled_tasks WHERE status = ? ORDER BY next_run"
-      )
-      .all(filter) as ScheduledTaskRow[];
-  } else {
-    rows = db
-      .query(
-        "SELECT id, chat_jid, prompt, model, task_kind, command, cwd, timeout_sec, schedule_type, schedule_value, next_run, status, created_at FROM scheduled_tasks ORDER BY created_at"
-      )
-      .all() as ScheduledTaskRow[];
-  }
-
+  const result = listScheduledTasks({ status: filter && STATUS_VALUES.has(filter) ? filter as "active" | "paused" | "completed" : null, limit: 50 });
   const header =
     filter && STATUS_VALUES.has(filter)
       ? `Scheduled tasks (${filter})`
       : "Scheduled tasks";
-  const summary = `Active ${countMap.get("active") ?? 0} • Paused ${countMap.get("paused") ?? 0} • Completed ${countMap.get("completed") ?? 0}`;
+  const summary = `Active ${result.counts.active} • Paused ${result.counts.paused} • Completed ${result.counts.completed}`;
 
   return {
     summary: `${header}\n${summary}`,
-    lines: rows.map(formatTask),
+    lines: result.tasks.map(formatTask),
   };
 }
 
@@ -141,6 +84,46 @@ const failureDetails: ScheduleTaskDetails = {
   next_run: null,
 };
 
+const ScheduledTaskInspectionSchema = Type.Object({
+  action: Type.Optional(Type.Union([
+    Type.Literal("list"),
+    Type.Literal("get"),
+  ])),
+  id: Type.Optional(Type.String({ description: "Specific task ID for action=get or list filtering." })),
+  chat_jid: Type.Optional(Type.String({ description: "Optional chat JID filter." })),
+  status: Type.Optional(Type.Union([
+    Type.Literal("active"),
+    Type.Literal("paused"),
+    Type.Literal("completed"),
+  ], { description: "Optional task status filter." })),
+  limit: Type.Optional(Type.Integer({ description: "Max tasks to return for action=list (1-50).", minimum: 1, maximum: 50 })),
+  include_latest_run_log: Type.Optional(Type.Boolean({ description: "Include the most recent task run log summary when available." })),
+});
+
+function formatTaskDetail(row: ScheduledTaskInspectionRecord): string {
+  const lines = [
+    `Task ${row.id}`,
+    `chat: ${row.chat_jid}`,
+    `kind: ${row.task_kind}`,
+    `status: ${row.status}`,
+    `schedule: ${row.schedule_type} ${row.schedule_value}`,
+    `next_run: ${row.next_run ?? "n/a"}`,
+    `last_run: ${row.last_run ?? "n/a"}`,
+    `last_result: ${row.last_result ?? "n/a"}`,
+    `created_at: ${row.created_at}`,
+    `model: ${row.model ?? "n/a"}`,
+    `summary: ${row.summary}`,
+  ];
+  if (row.latest_run_log) {
+    lines.push(
+      `latest_run: ${row.latest_run_log.status} at ${row.latest_run_log.run_at} (${row.latest_run_log.duration_ms} ms)`,
+    );
+    if (row.latest_run_log.result_summary) lines.push(`latest_result: ${row.latest_run_log.result_summary}`);
+    if (row.latest_run_log.error_summary) lines.push(`latest_error: ${row.latest_run_log.error_summary}`);
+  }
+  return lines.join("\n");
+}
+
 /** Extension factory that registers /tasks and /scheduled slash commands. */
 export const scheduledTasks: ExtensionFactory = (pi: ExtensionAPI) => {
   const handler = async (args: string) => {
@@ -167,6 +150,68 @@ export const scheduledTasks: ExtensionFactory = (pi: ExtensionAPI) => {
   pi.registerCommand("scheduled", {
     description: "Alias for /tasks",
     handler,
+  });
+
+  pi.registerTool({
+    name: "scheduled_tasks",
+    label: "scheduled_tasks",
+    description: "List or inspect scheduled tasks via the shared scheduled-task query service.",
+    promptSnippet: "scheduled_tasks: list/get structured scheduled task records and latest run summaries.",
+    parameters: ScheduledTaskInspectionSchema,
+    async execute(_toolCallId, params): Promise<AgentToolResult<Record<string, unknown>>> {
+      const action = params.action || "list";
+      const includeLatestRunLog = params.include_latest_run_log === true;
+      if (action === "get") {
+        const id = typeof params.id === "string" ? params.id.trim() : "";
+        if (!id) {
+          return {
+            content: [{ type: "text", text: "Provide id for action=get." }],
+            details: { action: "get", found: false, task: null },
+          };
+        }
+        const task = getScheduledTaskInspection(id, {
+          chat_jid: typeof params.chat_jid === "string" ? params.chat_jid.trim() : null,
+          status: typeof params.status === "string" ? params.status as "active" | "paused" | "completed" : null,
+          include_latest_run_log: includeLatestRunLog,
+        });
+        if (!task) {
+          return {
+            content: [{ type: "text", text: `No scheduled task found for ${id}.` }],
+            details: { action: "get", found: false, task: null, id },
+          };
+        }
+        return {
+          content: [{ type: "text", text: formatTaskDetail(task) }],
+          details: { action: "get", found: true, task },
+        };
+      }
+
+      const result = listScheduledTasks({
+        id: typeof params.id === "string" ? params.id.trim() : undefined,
+        chat_jid: typeof params.chat_jid === "string" ? params.chat_jid.trim() : null,
+        status: typeof params.status === "string" ? params.status as "active" | "paused" | "completed" : null,
+        limit: typeof params.limit === "number" ? params.limit : undefined,
+        include_latest_run_log: includeLatestRunLog,
+      });
+      const header = `Scheduled tasks\nActive ${result.counts.active} • Paused ${result.counts.paused} • Completed ${result.counts.completed}`;
+      const body = result.tasks.length > 0 ? result.tasks.map(formatTask).join("\n") : "(no tasks found)";
+      return {
+        content: [{ type: "text", text: `${header}\n${body}` }],
+        details: {
+          action: "list",
+          count: result.tasks.length,
+          counts: result.counts,
+          tasks: result.tasks,
+          filters: {
+            id: typeof params.id === "string" ? params.id.trim() || null : null,
+            chat_jid: typeof params.chat_jid === "string" ? params.chat_jid.trim() || null : null,
+            status: typeof params.status === "string" ? params.status : null,
+            limit: typeof params.limit === "number" ? params.limit : null,
+            include_latest_run_log: includeLatestRunLog,
+          },
+        },
+      };
+    },
   });
 
   pi.registerTool({

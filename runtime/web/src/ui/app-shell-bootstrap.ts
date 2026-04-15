@@ -39,7 +39,13 @@ export function installBrowserNoiseFilters(runtimeWindow: (Window & typeof globa
   if (!runtimeWindow || browserNoiseFilterInstalled) return;
   const handler = (event: ErrorEvent) => {
     const message = String(event?.message || event?.error?.message || '').trim();
-    if (!/ResizeObserver loop (completed with undelivered notifications|limit exceeded)/i.test(message)) return;
+    if (!/ResizeObserver loop (completed with undelivered notifications|limit exceeded)/i.test(message)) {
+      // iOS fires opaque "Script error." at line 0 when the share sheet opens,
+      // the app is backgrounded, or a cross-origin script triggers an exception.
+      // These are not actionable and should be suppressed.
+      const isOpaqueScriptError = message === 'Script error.' && (event?.lineno === 0 || !event?.filename);
+      if (!isOpaqueScriptError) return;
+    }
     event.preventDefault?.();
     event.stopImmediatePropagation?.();
   };

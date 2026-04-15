@@ -1,10 +1,10 @@
 ---
 id: test-oobe-in-local-container-with-playwright
 title: Test OOBE in a local container with Playwright
-status: review
+status: done
 priority: medium
 created: 2026-04-09
-updated: 2026-04-12
+updated: 2026-04-14
 target_release: later
 estimate: M
 risk: low
@@ -85,8 +85,8 @@ Without a local container + real browser pass, it is easy to miss issues in:
 
 - [x] A repeatable local container workflow exists for OOBE browser testing.
 - [x] A Playwright test or small Playwright suite covers at least the provider-missing OOBE path.
-- [ ] Dismiss persistence is validated in the browser.
-- [ ] At least one provider-ready path is validated in the browser.
+- [x] Dismiss persistence is validated in the browser.
+- [x] At least one provider-ready path is validated in the browser.
 - [x] Test setup and rerun instructions are documented in the ticket updates or linked docs.
 - [x] The test approach is narrow enough to stay reliable in local development.
 
@@ -120,24 +120,40 @@ Without a local container + real browser pass, it is easy to miss issues in:
 - [x] Existing tests to rerun are listed.
 - [x] New regression coverage to add is listed:
   - [x] fresh OOBE provider-missing browser path
-  - [ ] dismiss persistence after reload
-  - [ ] provider-ready OOBE browser path
+  - [x] dismiss persistence after reload
+  - [x] provider-ready OOBE browser path
   - [ ] optional popout suppression path
 - [x] Real-browser smoke pass required? If yes, record the surface:
   - [x] local container startup → first web load → OOBE CTA/dismiss/reload behavior
 
 ## Definition of Done
 
-- [ ] All acceptance criteria satisfied and verified
-- [ ] Tests added or updated — passing locally
-- [ ] Type check clean
-- [ ] Docs and notes updated with links to ticket
-- [ ] Operational impact assessed
-- [ ] Follow-up tickets created for deferred scope
-- [ ] Update history complete with evidence
-- [ ] Ticket front matter updated
+- [x] All acceptance criteria satisfied and verified
+- [x] Tests added or updated — passing locally
+- [x] Type check clean
+- [x] Docs and notes updated with links to ticket
+- [x] Operational impact assessed
+- [x] Follow-up tickets created for deferred scope
+- [x] Update history complete with evidence
+- [x] Ticket front matter updated
 
 ## Updates
+
+### 2026-04-14
+- Re-ran the local-container Playwright smoke successfully against current source using the mounted web-dist harness path.
+- Browser-validated scenarios now covered end to end:
+  - provider-missing panel visible
+  - `/login` CTA prefill
+  - dismiss persistence after reload
+  - provider-ready panel visible
+  - `/model` CTA prefill
+  - ready-state completion persistence after reload
+- Fresh evidence captured under `artifacts/oobe-local-container/`:
+  - `oobe-provider-missing-2026-04-14T22-07-37-904Z.png`
+  - `oobe-provider-ready-2026-04-14T22-07-37-904Z.png`
+- Improved the harness to mount the repo's current `runtime/web/static/dist` into the container image so UI-only OOBE fixes can be validated quickly with `PICLAW_OOBE_TEST_SKIP_BUILD=1` after `bun run build:web`.
+- While revalidating, the smoke exposed a real copy gap: the provider-missing panel did not explicitly distinguish AI-provider setup from app sign-in. Fixed in `runtime/web/src/components/oobe-panel.ts` and revalidated.
+- Moved to `50-done` after the browser-validation slice fully passed.
 
 ### 2026-04-09
 - Added `runtime/scripts/playwright/oobe-local-container.ts`, the `bun run test:oobe:local-container` entry point, and `docs/development.md` rerun notes for the local-container OOBE smoke path.
@@ -181,7 +197,7 @@ Without a local container + real browser pass, it is easy to miss issues in:
 
 ## Links
 
-- `workitems/20-doing/oobe-provider-readiness-and-first-use-panel.md`
+- `workitems/50-done/oobe-provider-readiness-and-first-use-panel.md`
 - `workitems/10-next/improve-first-run-oobe-and-new-user-guidance.md`
 - `docs/development.md`
 - `Makefile`

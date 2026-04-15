@@ -447,10 +447,10 @@ function decodeTextEntities(html) {
 
 
 /**
- * Render LaTeX math expressions using KaTeX
- * Handles $$...$$ for display math and $...$ for inline math
+ * Render LaTeX math expressions using KaTeX.
+ * Web only supports block math ($$...$$ or fenced math blocks); inline $...$ is disabled.
  */
-function renderMath(html_content) {
+export function renderMath(html_content) {
     if (!window.katex) return html_content;
 
     const decodeMath = (value) => decodeEntities(value)
@@ -492,17 +492,6 @@ function renderMath(html_content) {
             return `${leading}${rendered}`;
         } catch (e) {
             return `<span class="math-error" title="${escapeHtmlAttr(e.message)}">${match}</span>`;
-        }
-    });
-
-    // Process inline math ($...$) with simple guardrails to avoid $$ and whitespace edges.
-    processed = processed.replace(/(^|[^\\$])\$(?!\s)([^\n$]+?)\$/g, (match, leading, tex) => {
-        if (/\s$/.test(tex)) return match;
-        try {
-            const rendered = katex.renderToString(decodeMath(tex), { displayMode: false, throwOnError: false });
-            return `${leading}${rendered}`;
-        } catch (e) {
-            return `${leading}<span class="math-error" title="${escapeHtmlAttr(e.message)}">$${tex}$</span>`;
         }
     });
 

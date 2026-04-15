@@ -69,6 +69,7 @@ describe("builtin extension factories", () => {
     expect(fake.tools.has("send_adaptive_card")).toBe(true);
     expect(fake.tools.has("send_dashboard_widget")).toBe(true);
     expect(fake.tools.has("exit_process")).toBe(true);
+    expect(fake.tools.has("scheduled_tasks")).toBe(true);
     expect(fake.tools.has("open_workspace_file")).toBe(true);
     expect(fake.tools.has("start_autoresearch")).toBe(true);
     expect(fake.tools.has("stop_autoresearch")).toBe(true);

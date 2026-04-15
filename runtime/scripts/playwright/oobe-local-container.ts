@@ -24,6 +24,11 @@ function fail(message: string): never {
   throw new Error(message);
 }
 
+function isClosedTargetError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /Target page, context or browser has been closed/i.test(message);
+}
+
 function parseArgs(argv: string[]) {
   const args = {
     image: DEFAULT_IMAGE,
@@ -212,6 +217,8 @@ async function main() {
   const harness = createTempHarnessRoot();
   const artifactDir = resolve(repoRoot, 'artifacts', 'oobe-local-container');
   mkdirSync(artifactDir, { recursive: true });
+  const currentWebDistDir = resolve(repoRoot, 'runtime', 'web', 'static', 'dist');
+  const containerWebDistDir = '/usr/local/lib/bun/install/global/node_modules/piclaw/runtime/web/static/dist';
   const stamp = new Date().toISOString().replace(/[.:]/g, '-');
   const hostPort = await getFreePort();
   const baseUrl = `http://127.0.0.1:${hostPort}`;
@@ -260,6 +267,7 @@ async function main() {
       '-e', 'PICLAW_AUTOSTART=1',
       '-v', `${harness.configDir}:/config`,
       '-v', `${harness.workspaceDir}:/workspace`,
+      '-v', `${currentWebDistDir}:${containerWebDistDir}:ro`,
       args.image,
     ], { quiet: true });
 
@@ -294,7 +302,9 @@ async function main() {
         try {
           body = await response.text();
         } catch (error) {
-          log(`Failed to read intercepted /agent/models response body for ${response.url()}`, error);
+          if (!isClosedTargetError(error)) {
+            log(`Failed to read intercepted /agent/models response body for ${response.url()}`, error);
+          }
         }
         modelResponses.push({ url: response.url(), status: response.status(), body });
       });
@@ -374,7 +384,9 @@ async function main() {
         try {
           body = await response.text();
         } catch (error) {
-          log(`Failed to read intercepted /agent/models response body for ${response.url()}`, error);
+          if (!isClosedTargetError(error)) {
+            log(`Failed to read intercepted /agent/models response body for ${response.url()}`, error);
+          }
         }
         modelResponses.push({ url: response.url(), status: response.status(), body });
       });

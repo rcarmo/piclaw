@@ -25,7 +25,7 @@
     width: var(--sidebar-width, 280px);
     min-width: var(--sidebar-width, 280px);
     background-color: var(--bg-primary);
-    height: var(--app-height, 100dvh);
+    height: var(--app-height, 100vh);
     overflow: hidden;
     opacity: 1;
     transform: translateX(0);
@@ -265,7 +265,7 @@
     left: 0;
     min-width: 230px;
     max-width: min(320px, 90vw);
-    max-height: min(420px, calc(100dvh - 88px));
+    max-height: min(420px, calc(100vh - 88px));
     overflow-y: auto;
     overscroll-behavior: contain;
     background: var(--bg-primary);

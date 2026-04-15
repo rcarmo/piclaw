@@ -196,9 +196,7 @@ html, body {
 
 html {
     background-color: var(--bg-primary);
-    --app-height: 100dvh;
-    text-size-adjust: 100%;
-    -webkit-text-size-adjust: 100%;
+    --app-height: 100vh;
 }
 
 body {

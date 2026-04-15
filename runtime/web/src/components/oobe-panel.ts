@@ -13,7 +13,7 @@ export function OobePanel({
   const isProviderMissing = kind === 'provider-missing';
   const title = isProviderMissing ? 'Connect an AI provider' : 'You’re ready to chat';
   const body = isProviderMissing
-    ? 'The workspace is running, but it needs an AI provider before it can answer requests. Use /login to connect a provider or add an API key.'
+    ? 'The workspace is running, but it needs an AI provider before it can answer requests. Use /login to connect a provider or add an API key — it configures AI access, not web-app sign-in.'
     : 'An AI provider is available. You can use /model to select a model to use or explore the workspace to decide what you want to work on.';
 
   return html`

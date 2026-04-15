@@ -6,59 +6,9 @@ export function shouldUseStandaloneMobileViewportFix(runtime = {}) {
   return isStandaloneWebAppMode(runtime) && isMobileBrowserMode(runtime);
 }
 
-function isTextEntryFocused(doc) {
-  const active = doc?.activeElement;
-  if (!active) return false;
-  if (active.isContentEditable) return true;
-  const tagName = String(active.tagName || '').toLowerCase();
-  if (tagName === 'textarea') return true;
-  if (tagName !== 'input') return false;
-  const type = String(active.type || 'text').toLowerCase();
-  return !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(type);
-}
-
-function scrollWindowToTopBestEffort(win) {
-  try {
-    if (typeof win?.scrollTo === 'function') {
-      win.scrollTo(0, 0);
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function resetDocumentScrollRootsBestEffort(doc) {
-  try {
-    if (doc?.scrollingElement) {
-      doc.scrollingElement.scrollTop = 0;
-      doc.scrollingElement.scrollLeft = 0;
-    }
-    if (doc?.documentElement) {
-      doc.documentElement.scrollTop = 0;
-      doc.documentElement.scrollLeft = 0;
-    }
-    if (doc?.body) {
-      doc.body.scrollTop = 0;
-      doc.body.scrollLeft = 0;
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function readViewportHeight(runtime = {}, options = {}) {
+export function readViewportHeight(runtime = {}) {
   const win = runtime.window ?? (typeof window !== 'undefined' ? window : null);
   const viewportHeight = Number(win?.visualViewport?.height || 0);
-  const viewportOffsetTop = Number(win?.visualViewport?.offsetTop || 0);
-  const includeOffsetTop = options.includeOffsetTop === true;
-  if (includeOffsetTop) {
-    const viewportBottom = viewportHeight + Math.max(0, viewportOffsetTop);
-    if (Number.isFinite(viewportBottom) && viewportBottom > 0) {
-      return Math.round(viewportBottom);
-    }
-  }
   if (Number.isFinite(viewportHeight) && viewportHeight > 0) {
     return Math.round(viewportHeight);
   }
@@ -80,10 +30,7 @@ export function syncStandaloneMobileViewport(runtime = {}, options = {}) {
     return null;
   }
 
-  const height = readViewportHeight(
-    { window: win },
-    { includeOffsetTop: isTextEntryFocused(doc) },
-  );
+  const height = readViewportHeight({ window: win });
   if (height && height > 0) {
     doc.documentElement.style.setProperty('--app-height', `${height}px`);
   }
@@ -94,8 +41,26 @@ export function syncStandaloneMobileViewport(runtime = {}, options = {}) {
   // chat to jump on every keystroke. Keep scroll resets opt-in for any
   // future call sites that explicitly need a top reset.
   if (options.resetScroll === true) {
-    scrollWindowToTopBestEffort(win);
-    resetDocumentScrollRootsBestEffort(doc);
+    try {
+      if (typeof win.scrollTo === 'function') {
+        win.scrollTo(0, 0);
+      }
+    } catch {}
+
+    try {
+      if (doc.scrollingElement) {
+        doc.scrollingElement.scrollTop = 0;
+        doc.scrollingElement.scrollLeft = 0;
+      }
+      if (doc.documentElement) {
+        doc.documentElement.scrollTop = 0;
+        doc.documentElement.scrollLeft = 0;
+      }
+      if (doc.body) {
+        doc.body.scrollTop = 0;
+        doc.body.scrollLeft = 0;
+      }
+    } catch {}
   }
 
   return height;

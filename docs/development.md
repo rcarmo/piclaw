@@ -127,6 +127,7 @@ What it does:
 
 - ensures Playwright Chromium is available
 - builds a local image (`piclaw-oobe-test:local`) unless skipped
+- mounts the repo's current `runtime/web/static/dist` into the container so web-bundle changes can be validated against the latest local build without requiring a fresh image for every UI-only tweak
 - starts a temporary local Piclaw container on a random localhost port
 - runs Playwright against the live web UI
 - writes screenshots, DOM dumps, state captures, and container logs under `artifacts/oobe-local-container/`
@@ -141,6 +142,9 @@ What it does:
 Useful flags/env:
 
 ```bash
+# Skip the image rebuild when only the web bundle changed locally.
+# Rebuild the local web assets first so the mounted dist is current.
+cd runtime && bun run build:web && cd ..
 PICLAW_OOBE_TEST_SKIP_BUILD=1 bun run test:oobe:local-container
 PICLAW_OOBE_TEST_IMAGE=pibox:latest bun run test:oobe:local-container
 PICLAW_OOBE_TEST_HEADLESS=0 bun run test:oobe:local-container

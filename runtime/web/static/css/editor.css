@@ -11,7 +11,7 @@
     width: var(--editor-width, 40vw);
     min-width: 280px;
     max-width: 70vw;
-    height: var(--app-height, 100dvh);
+    height: var(--app-height, 100vh);
     overflow: hidden;
     flex-shrink: 0;
 }
@@ -1230,8 +1230,9 @@
     max-width: 800px;
     margin: 0 auto;
     height: 100%;
-    height: var(--app-height, 100dvh);
+    height: var(--app-height, 100vh);
     min-height: 0;
+    padding-top: env(safe-area-inset-top, 0px);
     background-color: var(--bg-primary);
     display: flex;
     flex-direction: column;

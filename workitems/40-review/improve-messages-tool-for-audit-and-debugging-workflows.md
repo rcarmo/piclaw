@@ -1,7 +1,7 @@
 ---
 id: improve-messages-tool-for-audit-and-debugging-workflows
 title: Improve messages tool for audit and debugging workflows
-status: doing
+status: review
 priority: high
 created: 2026-04-14
 updated: 2026-04-14
@@ -86,19 +86,19 @@ portable and less agent-friendly.
 
 ## Acceptance Criteria
 
-- [ ] `search` supports `after_row` / `before_row` bounds.
-- [ ] `search` supports sender-level filtering or an explicitly documented
+- [x] `search` supports `after_row` / `before_row` bounds.
+- [x] `search` supports sender-level filtering or an explicitly documented
       equivalent beyond the current role filter.
-- [ ] `search` can return bounded highlighted/excerpted matches.
-- [ ] `get` supports `content_lines` range selection.
-- [ ] `get` supports `content_grep` line filtering.
-- [ ] A new `grep` action exists for content-pattern matching with bounded
+- [x] `search` can return bounded highlighted/excerpted matches.
+- [x] `get` supports `content_lines` range selection.
+- [x] `get` supports `content_grep` line filtering.
+- [x] A new `grep` action exists for content-pattern matching with bounded
       context output.
-- [ ] A new `extract` action exists for pulling structured repeated values from
+- [x] A new `extract` action exists for pulling structured repeated values from
       a row-bounded message window.
-- [ ] Any new actions/params respect bounded limits and avoid unbounded content
+- [x] Any new actions/params respect bounded limits and avoid unbounded content
       dumps.
-- [ ] Focused regression coverage exists for the new action/parameter contracts.
+- [x] Focused regression coverage exists for the new action/parameter contracts.
 
 ## Open refinement decisions
 
@@ -137,8 +137,8 @@ portable and less agent-friendly.
   - [ ] Restore / reconnect matrix test
   - [ ] Pane / viewer contract test
   - [ ] Real-browser smoke test
-- [ ] Existing tests to rerun are listed
-- [ ] New regression coverage to add is listed
+- [x] Existing tests to rerun are listed
+- [x] New regression coverage to add is listed
 - [ ] Real-browser smoke pass required? If yes, record the surface
 
 ### Likely validation
@@ -148,16 +148,31 @@ portable and less agent-friendly.
 
 ## Definition of Done
 
-- [ ] All acceptance criteria satisfied and verified
-- [ ] Tests added or updated — passing locally
-- [ ] Type check clean
-- [ ] Docs and notes updated with links to ticket
-- [ ] Operational impact assessed
-- [ ] Follow-up tickets created for deferred scope
-- [ ] Update history complete with evidence
-- [ ] Ticket front matter updated
+- [x] All acceptance criteria satisfied and verified
+- [x] Tests added or updated — passing locally
+- [x] Type check clean
+- [x] Docs and notes updated with links to ticket
+- [x] Operational impact assessed
+- [x] Follow-up tickets created for deferred scope
+- [x] Update history complete with evidence
+- [x] Ticket front matter updated
 
 ## Updates
+
+### 2026-04-14
+- Moved to `40-review` after landing the full planned audit/debug surface and revalidating focused tests + typecheck.
+
+### 2026-04-14
+- Completed the planned message-audit surface in `runtime/src/extensions/messages-crud.ts`:
+  - Slice 1: `search` now supports `after_row` / `before_row`, sender filtering via `sender`, highlighted excerpts via `excerpt_chars`, and `get` now supports `content_lines` / `content_grep`
+  - Slice 2: added `grep` action for bounded content-pattern matching with optional regex mode and context lines
+  - Slice 3: added `extract` action for repeated structured-value extraction with regex capture groups, dedupe, sorting, and first-seen metadata
+  - Slice 4: added lightweight `diff` action for checkpoint-delta review (`what changed since row X?`) with bounded row windows, role counts, sender counts, and ordered changed-message output
+- Added focused regression coverage in `runtime/test/extensions/messages-crud.test.ts` and revalidated `runtime/test/extensions/messages-delete-all-chats.test.ts`.
+- Focused validation passed:
+  - `bun test test/extensions/messages-crud.test.ts test/extensions/messages-delete-all-chats.test.ts`
+  - `bun run typecheck`
+- The planned scope from this ticket is now effectively implemented; remaining work is closeout/board hygiene rather than feature gaps.
 
 ### 2026-04-14
 - Created from an external improvement spec captured at `http://orangepi6plus.local:8080/media/634`.
