@@ -202,6 +202,7 @@ interface ComposeViewRefreshLifecycleOptionsInput {
   viewStateRef: RefBox<Record<string, unknown> | null | undefined>;
   refreshTimeline: () => Promise<void>;
   refreshModelAndQueueState: () => void;
+  refreshPostPaintThreadState: () => void;
   setFloatingWidget: StateSetter<any>;
   dismissedLiveWidgetKeysRef: RefBox<Set<string>>;
 }
@@ -231,6 +232,7 @@ export function composeViewRefreshLifecycleOptions(input: ComposeViewRefreshLife
     viewStateRef: input.viewStateRef,
     refreshTimeline: input.refreshTimeline,
     refreshModelAndQueueState: input.refreshModelAndQueueState,
+    refreshPostPaintThreadState: input.refreshPostPaintThreadState,
     setFloatingWidget: input.setFloatingWidget,
     dismissedLiveWidgetKeysRef: input.dismissedLiveWidgetKeysRef,
   };
@@ -404,6 +406,7 @@ export function useMainAppLifecycleComposition(options: UseMainAppLifecycleCompo
     refreshAgentStatus: agentStatusLifecycle.refreshAgentStatus,
     refreshContextUsage: agentStatusLifecycle.refreshContextUsage,
     refreshModelAndQueueState: chatRefreshLifecycle.refreshModelAndQueueState,
+    refreshPostPaintThreadState: chatRefreshLifecycle.refreshPostPaintThreadState,
   }));
 
   useRealtimeLifecycleOrchestration(composeRealtimeLifecycleOptions({

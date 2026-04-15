@@ -11,6 +11,11 @@ import {
 import { refreshModelAndQueueState as refreshModelAndQueueStateBundle } from './app-status-refresh-orchestration.js';
 import { applyStoredSidebarWidth } from './app-boot-load-orchestration.js';
 import {
+  completeAppPerfTraceIfReady,
+  getActiveAppPerfTraceId,
+  markAppPerfTrace,
+} from './app-perf-tracing.js';
+import {
   noteAppChatActivation,
   runCoalescedAppRefresh,
 } from './app-refresh-coordination.js';
@@ -55,6 +60,7 @@ export function startModelAndQueueRefreshEffect(options: {
   refreshActiveChatAgents: () => void;
   refreshCurrentChatBranches: () => void;
   refreshQueueState: () => void;
+  runImmediately?: boolean;
   intervalMs?: number;
   scheduleInterval?: (handler: () => void, intervalMs: number) => unknown;
   clearScheduledInterval?: (handle: unknown) => void;
@@ -65,12 +71,15 @@ export function startModelAndQueueRefreshEffect(options: {
     refreshActiveChatAgents,
     refreshCurrentChatBranches,
     refreshQueueState,
+    runImmediately = true,
     intervalMs = 60_000,
     scheduleInterval = (handler, delay) => setInterval(handler, delay),
     clearScheduledInterval = (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
   } = options;
 
-  refreshModelAndQueueState();
+  if (runImmediately) {
+    refreshModelAndQueueState();
+  }
   const intervalHandle = scheduleInterval(() => {
     refreshModelState();
     refreshActiveChatAgents();
@@ -81,6 +90,31 @@ export function startModelAndQueueRefreshEffect(options: {
   return () => {
     clearScheduledInterval(intervalHandle);
   };
+}
+
+export function refreshPostPaintThreadHydration(options: {
+  refreshModelState: () => void;
+  refreshActiveChatAgents: () => void;
+  refreshCurrentChatBranches: () => void;
+  refreshQueueState: () => void;
+  refreshContextUsage: () => Promise<void>;
+  refreshAutoresearchStatus: () => Promise<void>;
+}): void {
+  const {
+    refreshModelState,
+    refreshActiveChatAgents,
+    refreshCurrentChatBranches,
+    refreshQueueState,
+    refreshContextUsage,
+    refreshAutoresearchStatus,
+  } = options;
+
+  refreshModelState();
+  refreshActiveChatAgents();
+  refreshCurrentChatBranches();
+  refreshQueueState();
+  void refreshContextUsage();
+  void refreshAutoresearchStatus();
 }
 
 export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions) {
@@ -162,56 +196,140 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
     });
   }, [setActiveModel, setActiveModelUsage, setActiveThinkingLevel, setAgentModelsPayload, setHasLoadedAgentModels, setSupportsThinking]);
 
+  const getThreadSwitchTraceId = useCallback(() => getActiveAppPerfTraceId('thread-switch', currentChatJid), [currentChatJid]);
+
   const refreshModelState = useCallback(() => {
     return runCoalescedAppRefresh({
       kind: 'model-state',
       chatJid: currentChatJid,
       run: async () => {
+        const traceId = getThreadSwitchTraceId();
+        if (traceId) {
+          markAppPerfTrace(traceId, 'runtime-hydration-start', {
+            phase: 'model-state',
+          });
+        }
         await refreshModelStateForChat({
           currentChatJid,
-          getAgentModels,
+          getAgentModels: async (chatJid: string) => {
+            const activeTraceId = traceId || getThreadSwitchTraceId();
+            if (activeTraceId) {
+              markAppPerfTrace(activeTraceId, 'model-request-start', {
+                chatJid,
+              });
+            }
+            const payload = await getAgentModels(chatJid);
+            if (activeTraceId) {
+              markAppPerfTrace(activeTraceId, 'model-request-ready', {
+                chatJid,
+                hasCurrent: Boolean(payload?.current),
+                modelCount: Array.isArray(payload?.models) ? payload.models.length : 0,
+              });
+              markAppPerfTrace(activeTraceId, 'runtime-hydration-ready', {
+                chatJid,
+              });
+              completeAppPerfTraceIfReady(activeTraceId, ['runtime-hydration-ready', 'timeline-first-paint'], 'settled', {
+                chatJid,
+              });
+            }
+            return payload;
+          },
           activeChatJidRef,
           applyModelState,
         });
         return null;
       },
     });
-  }, [activeChatJidRef, applyModelState, currentChatJid, getAgentModels]);
+  }, [activeChatJidRef, applyModelState, currentChatJid, getAgentModels, getThreadSwitchTraceId]);
 
   const refreshActiveChatAgents = useCallback(() => {
     return runCoalescedAppRefresh({
       kind: 'active-chat-agents',
       chatJid: currentChatJid,
       run: async () => {
+        const traceId = getThreadSwitchTraceId();
         await refreshActiveChatAgentsState({
           currentChatJid,
-          getActiveChatAgents,
-          getChatBranches,
+          getActiveChatAgents: async () => {
+            if (traceId) {
+              markAppPerfTrace(traceId, 'active-chat-list-request-start', {
+                chatJid: currentChatJid,
+              });
+            }
+            const payload = await getActiveChatAgents(currentChatJid);
+            if (traceId) {
+              markAppPerfTrace(traceId, 'active-chat-list-request-ready', {
+                rowCount: Array.isArray(payload?.chats) ? payload.chats.length : 0,
+              });
+            }
+            return payload;
+          },
+          getChatBranches: async (rootChatJid: string | null, branchOptions?: Record<string, unknown>) => {
+            if (traceId) {
+              markAppPerfTrace(traceId, 'branch-list-request-start', {
+                rootChatJid,
+              });
+            }
+            const payload = await getChatBranches(rootChatJid, branchOptions);
+            if (traceId) {
+              markAppPerfTrace(traceId, 'branch-list-request-ready', {
+                rootChatJid,
+                rowCount: Array.isArray(payload?.chats) ? payload.chats.length : 0,
+              });
+            }
+            return payload;
+          },
           activeChatJidRef,
           setActiveChatAgents,
         });
         return null;
       },
     });
-  }, [activeChatJidRef, currentChatJid, getActiveChatAgents, getChatBranches, setActiveChatAgents]);
+  }, [activeChatJidRef, currentChatJid, getActiveChatAgents, getChatBranches, getThreadSwitchTraceId, setActiveChatAgents]);
 
   const refreshCurrentChatBranches = useCallback(() => {
     return runCoalescedAppRefresh({
       kind: 'current-chat-branches',
       chatJid: currentChatJid,
       run: async () => {
+        const traceId = getThreadSwitchTraceId();
         await refreshCurrentChatBranchesState({
           currentRootChatJid,
-          getChatBranches,
+          getChatBranches: async (rootChatJid: string | null, branchOptions?: Record<string, unknown>) => {
+            if (traceId) {
+              markAppPerfTrace(traceId, 'root-branch-request-start', {
+                rootChatJid,
+              });
+            }
+            const payload = await getChatBranches(rootChatJid, branchOptions);
+            if (traceId) {
+              markAppPerfTrace(traceId, 'root-branch-request-ready', {
+                rootChatJid,
+                rowCount: Array.isArray(payload?.chats) ? payload.chats.length : 0,
+              });
+            }
+            return payload;
+          },
           setCurrentChatBranches,
         });
         return null;
       },
     });
-  }, [currentChatJid, currentRootChatJid, getChatBranches, setCurrentChatBranches]);
+  }, [currentChatJid, currentRootChatJid, getChatBranches, getThreadSwitchTraceId, setCurrentChatBranches]);
 
   const refreshModelAndQueueState = useCallback(() => {
     refreshModelAndQueueStateBundle({
+      refreshModelState,
+      refreshActiveChatAgents,
+      refreshCurrentChatBranches,
+      refreshQueueState,
+      refreshContextUsage,
+      refreshAutoresearchStatus,
+    });
+  }, [refreshActiveChatAgents, refreshAutoresearchStatus, refreshContextUsage, refreshCurrentChatBranches, refreshModelState, refreshQueueState]);
+
+  const refreshPostPaintThreadState = useCallback(() => {
+    refreshPostPaintThreadHydration({
       refreshModelState,
       refreshActiveChatAgents,
       refreshCurrentChatBranches,
@@ -227,6 +345,7 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
     refreshActiveChatAgents,
     refreshCurrentChatBranches,
     refreshQueueState,
+    runImmediately: false,
   }), [refreshActiveChatAgents, refreshCurrentChatBranches, refreshModelAndQueueState, refreshModelState, refreshQueueState]);
 
   return {
@@ -237,5 +356,6 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
     refreshActiveChatAgents,
     refreshCurrentChatBranches,
     refreshModelAndQueueState,
+    refreshPostPaintThreadState,
   };
 }

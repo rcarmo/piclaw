@@ -2,6 +2,13 @@ import { useCallback, useEffect } from '../vendor/preact-htm.js';
 import { runTimelineLoadFlow } from './app-boot-load-orchestration.js';
 import { refreshCurrentView as refreshCurrentViewState } from './app-status-refresh-orchestration.js';
 import { applyLiveFloatingWidgetUpdate } from './app-floating-widget.js';
+import {
+  cancelAppPerfTrace,
+  completeAppPerfTraceIfReady,
+  ensureAppPerfTrace,
+  failAppPerfTrace,
+  markAppPerfTrace,
+} from './app-perf-tracing.js';
 
 type StateSetter<T> = (next: T | ((prev: T) => T)) => void;
 
@@ -20,6 +27,19 @@ export function resetExtensionPanelStateForChat(options: {
 
   setExtensionStatusPanels(new Map());
   setPendingExtensionPanelActions(new Set());
+}
+
+export function hydrateThreadStateAfterTimelineLoad(options: {
+  refreshAgentStatus: () => Promise<any>;
+  refreshPostPaintThreadState: () => void;
+}): void {
+  const {
+    refreshAgentStatus,
+    refreshPostPaintThreadState,
+  } = options;
+
+  refreshPostPaintThreadState();
+  void refreshAgentStatus();
 }
 
 interface UseViewRefreshLifecycleOptions {
@@ -53,6 +73,7 @@ interface UseViewRefreshLifecycleOptions {
   viewStateRef: RefBox<Record<string, unknown> | null | undefined>;
   refreshTimeline: () => Promise<void>;
   refreshModelAndQueueState: () => void;
+  refreshPostPaintThreadState: () => void;
   setFloatingWidget: StateSetter<any>;
   dismissedLiveWidgetKeysRef: RefBox<Set<string>>;
 }
@@ -76,12 +97,11 @@ export function useViewRefreshLifecycle(options: UseViewRefreshLifecycleOptions)
     snapshotCurrentChatPaneState,
     restoreChatPaneState,
     dismissedQueueRowIdsRef,
-    refreshQueueState,
     refreshAgentStatus,
-    refreshContextUsage,
     viewStateRef,
     refreshTimeline,
     refreshModelAndQueueState,
+    refreshPostPaintThreadState,
     setFloatingWidget,
     dismissedLiveWidgetKeysRef,
   } = options;
@@ -95,6 +115,16 @@ export function useViewRefreshLifecycle(options: UseViewRefreshLifecycleOptions)
 
   useEffect(() => {
     let cancelled = false;
+    const traceId = ensureAppPerfTrace('thread-switch', currentChatJid, {
+      currentRootChatJid,
+      currentHashtag: currentHashtag || null,
+      searchQuery: searchQuery || null,
+      searchScope,
+    });
+    markAppPerfTrace(traceId, 'route-effect-start', {
+      currentChatJid,
+      currentRootChatJid,
+    });
 
     void runTimelineLoadFlow({
       currentHashtag,
@@ -108,10 +138,34 @@ export function useViewRefreshLifecycle(options: UseViewRefreshLifecycleOptions)
       setHasMore,
       scrollToBottom,
       isCancelled: () => cancelled,
+      onTimelineLoadStart: (detail) => {
+        markAppPerfTrace(traceId, 'timeline-load-start', detail || null);
+      },
+      onTimelineDataReady: (detail) => {
+        markAppPerfTrace(traceId, 'timeline-data-ready', detail || null);
+      },
+      onTimelineFirstPaint: (detail) => {
+        markAppPerfTrace(traceId, 'timeline-first-paint', detail || null);
+        completeAppPerfTraceIfReady(traceId, ['runtime-hydration-ready', 'timeline-first-paint'], 'settled', detail || null);
+        hydrateThreadStateAfterTimelineLoad({
+          refreshAgentStatus,
+          refreshPostPaintThreadState,
+        });
+      },
+      onTimelineError: (error, detail) => {
+        failAppPerfTrace(traceId, error, 'timeline-load-failed', detail || null);
+        hydrateThreadStateAfterTimelineLoad({
+          refreshAgentStatus,
+          refreshPostPaintThreadState,
+        });
+      },
     });
 
     return () => {
       cancelled = true;
+      cancelAppPerfTrace(traceId, 'route-effect-cancelled', {
+        currentChatJid,
+      });
     };
   }, [
     currentChatJid,
@@ -124,6 +178,8 @@ export function useViewRefreshLifecycle(options: UseViewRefreshLifecycleOptions)
     searchPosts,
     setHasMore,
     setPosts,
+    refreshAgentStatus,
+    refreshPostPaintThreadState,
   ]);
 
   useEffect(() => {
@@ -139,17 +195,11 @@ export function useViewRefreshLifecycle(options: UseViewRefreshLifecycleOptions)
     paneStateOwnerChatJidRef.current = currentChatJid;
     dismissedQueueRowIdsRef.current.clear();
     restoreChatPaneState(chatPaneStateByChatRef.current.get(currentChatJid) || null);
-    void refreshQueueState();
-    void refreshAgentStatus();
-    void refreshContextUsage();
   }, [
     chatPaneStateByChatRef,
     currentChatJid,
     dismissedQueueRowIdsRef,
     paneStateOwnerChatJidRef,
-    refreshAgentStatus,
-    refreshContextUsage,
-    refreshQueueState,
     restoreChatPaneState,
     snapshotCurrentChatPaneState,
   ]);
