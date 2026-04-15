@@ -118,6 +118,42 @@ Once enabled:
 3. Choose **Open terminal in tab** or **Show terminal dock**.
 4. Run `pi /login` to configure providers if needed.
 
+## Workspace environment hook (`/workspace/.env.sh`)
+
+PiClaw supports a workspace-scoped shell hook at `/workspace/.env.sh`.
+
+This is a **power-user feature** for intentionally customizing the environment seen by:
+
+- the embedded web terminal
+- interactive shells in the container/workspace
+- the supervisor-managed PiClaw runtime startup path
+
+Typical uses include:
+
+- extending `PATH` for workspace-local binaries
+- redirecting tool config into the mounted workspace
+- persisting GitHub CLI auth/config across container recreation
+
+Example:
+
+```bash
+export PATH="/workspace/.local/bin:$PATH"
+export GH_CONFIG_DIR=/workspace/.config/gh
+mkdir -p /workspace/.config/gh
+```
+
+With that in place, you can install `gh` into `/workspace/.local/bin`, open the embedded terminal, run `gh auth login`, and keep the GitHub CLI auth state under the mounted workspace instead of ephemeral container-local config.
+
+### Behavior
+
+- missing `/workspace/.env.sh` is a no-op
+- new containers pick it up automatically on startup
+- existing containers may need a one-time `.bashrc` regeneration if they were initialized before this feature existed
+- the default workspace skeleton ignores `.env.sh` so local secrets and machine-specific paths are less likely to be committed accidentally
+
+### Responsibility boundary
+
+`/workspace/.env.sh` is user-controlled. If you put incompatible shell logic, exports, or PATH overrides in that file and PiClaw stops working correctly, that breakage is considered the user's responsibility rather than a PiClaw bug.
 
 ## Runtime and agent
 
@@ -138,6 +174,7 @@ Once enabled:
 | `PICLAW_TOOL_OUTPUT_CLEANUP_INTERVAL_MS` | `43200000` | Cleanup interval (ms) |
 
 Notes:
+
 - Interactive web turns now use `PICLAW_AGENT_TIMEOUT` directly.
 - Background/scheduled turns use `PICLAW_BACKGROUND_AGENT_TIMEOUT` when set, otherwise they fall back to `PICLAW_AGENT_TIMEOUT`.
 - On `systemd --user` installs, keep `PICLAW_WORKSPACE`, `PICLAW_STORE`, and `PICLAW_DATA` stable across restarts. Startup recovery relies on the persisted SQLite state plus writable IPC files under `PICLAW_DATA/ipc/tasks`.
@@ -156,6 +193,7 @@ Deprecated env names (still supported): `ASSISTANT_NAME`, `ASSISTANT_AVATAR`, `A
 | `M365_CHATSVC_REGION` | _(auto-discover)_ | Force the Teams chatsvc region instead of inferring it from Teams token claims |
 
 Notes:
+
 - Graph-backed consumer-account support now exists when an Outlook Live session is visible in the browser.
 - Teams chat tools still require a work/school M365 account.
 - For operational details, platform notes, and account-scope guidance, see [m365-experimental-extension.md](m365-experimental-extension.md).
@@ -173,7 +211,7 @@ There are two ways to enable it:
 | `PICLAW_SSH_TARGET` | _(empty)_ | SSH target as `user@host` or `user@host:/remote/path` |
 | `PICLAW_SSH_PORT` | `22` | SSH port for startup/default remote sessions |
 
-2. **Per-chat live config** via the agent-only `ssh` tool:
+1. **Per-chat live config** via the agent-only `ssh` tool:
    - `ssh { action: "set", ssh_target, private_key_keychain, ... }`
    - `ssh { action: "get" }`
    - `ssh { action: "clear" }`
@@ -255,6 +293,7 @@ In the container image that Pi home is typically bind-mounted under:
 ```
 
 Notes:
+
 - prefer the project-local file when MCP servers are part of the current workspace
 - config is merged from Pi-home config, optional imported tool configs, then project-local `.pi/mcp.json` overrides
 - start a new chat/session or restart PiClaw after changing MCP config

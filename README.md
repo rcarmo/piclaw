@@ -46,6 +46,9 @@ Open `http://localhost:8080` and type `/login` to configure your LLM provider.
 > [!IMPORTANT]
 > You do **not** need to set provider API keys in piclaw environment variables. PiClaw reuses provider credentials configured in Pi Agent settings.
 
+> [!NOTE]
+> Power users can place workspace-scoped shell environment overrides in `/workspace/.env.sh`. PiClaw sources that file for the embedded terminal and on runtime startup, which is useful for things like `PATH` tweaks or persisting `gh auth login` with `GH_CONFIG_DIR=/workspace/.config/gh`. This hook is user-controlled: if its contents break PiClaw startup, shell behavior, or tool resolution, that breakage is the user's responsibility.
+
 ## Web UI
 
 PiClaw is single-user, mobile-friendly, and streams updates over SSE.
@@ -72,7 +75,6 @@ PiClaw is single-user, mobile-friendly, and streams updates over SSE.
 - CodeMirror 6 with syntax highlighting for JS/TS, Python, Go, JSON, CSS, HTML, YAML, SQL, XML/SVG, Markdown, and Shell
 - Search and replace, dirty-state tracking, line wrapping
 - Lazy-loaded local bundle — no CDN dependency
-
 
 ### Terminal
 
@@ -138,11 +140,13 @@ See [docs/development.md](docs/development.md).
 ## Documentation
 
 **Setup & operations**
+
 - [Configuration](docs/configuration.md) — environment variables, auth, reverse proxy, SSHFS
 - [Install from repo](docs/install-from-repo.md) — Bun-based Docker-free install
 - [Release process](docs/release.md) — versioning, tagging, publishing
 
 **Architecture & internals**
+
 - [Architecture](docs/architecture.md)
 - [Runtime flows](docs/runtime-flows.md)
 - [Storage model](docs/storage.md)
@@ -150,6 +154,7 @@ See [docs/development.md](docs/development.md).
 - [Extension UI contract](docs/extension-ui-contract.md)
 
 **Reference**
+
 - [Tools and skills](docs/tools-and-skills.md) — includes the uniform `ssh` / `proxmox` / `portainer` control surface (`discover`, `capabilities`, `recommend`, `request`, `workflow`) and the context-conserving discovery flow
 - [Keychain](docs/keychain.md)
 - [WhatsApp](docs/whatsapp.md)
