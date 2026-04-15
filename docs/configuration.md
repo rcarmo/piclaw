@@ -144,6 +144,24 @@ mkdir -p /workspace/.config/gh
 
 With that in place, you can install `gh` into `/workspace/.local/bin`, open the embedded terminal, run `gh auth login`, and keep the GitHub CLI auth state under the mounted workspace instead of ephemeral container-local config.
 
+If you want a ready-made helper, PiClaw ships an example installer script here:
+
+```text
+docs/helpers/install-gh.sh
+```
+
+Usage from inside the container / embedded terminal:
+
+```bash
+chmod +x docs/helpers/install-gh.sh
+./docs/helpers/install-gh.sh
+source /workspace/.env.sh
+gh --version
+gh auth login
+```
+
+That helper installs the latest GitHub CLI release into `/workspace/.local/bin/gh` and relies on `/workspace/.env.sh` to make it available in future shells and embedded terminal sessions.
+
 ### Behavior
 
 - missing `/workspace/.env.sh` is a no-op
