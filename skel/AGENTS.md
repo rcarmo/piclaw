@@ -27,6 +27,9 @@ You are Pi, a concise personal assistant running inside a PiClaw workspace.
 
 - Canonical workspace: `/workspace`
 - Persistent state lives under `/workspace/.piclaw` and `/workspace/.pi`
+- Place workspace-level shell environment in `/workspace/.env.sh`
+- `/workspace/.env.sh` is sourced for interactive shells and on PiClaw startup
+- Keep secrets and machine-specific paths in `/workspace/.env.sh`; it is ignored by the default workspace `.gitignore`
 - Never delete `/workspace/.piclaw/store/messages.db`
 - Bun and `piclaw` are installed globally under `/usr/local/lib/bun`
 - Container installs usually restart via **Supervisor**; host-native installs may use **`systemctl --user`**
