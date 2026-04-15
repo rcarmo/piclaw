@@ -44,6 +44,7 @@ import { handleExtensionRoutes } from "./http/extension-routes.js";
 import { enforceRequestGuards } from "./http/request-guards.js";
 import { getRouteFlags } from "./http/route-flags.js";
 import { withSecurityHeaders } from "./http/security.js";
+import { appendServerTiming, measureAsync } from "./http/server-timing.js";
 
 const STATIC_DIR = resolve(import.meta.dir, "..", "..", "..", "..", "web", "static");
 const STATIC_MIME_TYPES: Record<string, string> = {
@@ -90,11 +91,15 @@ export class RequestRouterService {
    */
   async handle(req: Request): Promise<Response> {
     const requestId = createUuid("req");
-    const response = await this.route(req);
+    const { result: response, durationMs } = await measureAsync(() => this.route(req));
     // Determine TLS from the request URL scheme to conditionally add HSTS
     const isTls = req.url.startsWith("https://");
     const secured = withSecurityHeaders(response, isTls);
     secured.headers.set("x-request-id", requestId);
+    appendServerTiming(secured, {
+      name: "app",
+      durationMs,
+    });
     return secured;
   }
 

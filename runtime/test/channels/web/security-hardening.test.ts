@@ -746,6 +746,7 @@ describe("security headers", () => {
     expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
     expect(res.headers.get("Permissions-Policy")).toContain("camera=");
     expect(res.headers.get("x-request-id")).toMatch(/^req-/);
+    expect(res.headers.get("Server-Timing")).toContain("app;dur=");
     expect(res.headers.get("Strict-Transport-Security")).toBe(null);
   });
 

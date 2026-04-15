@@ -28,6 +28,7 @@ import {
   handleThoughtVisibilityRequest,
   handleWorkspaceVisibilityRequest,
 } from "./ui-endpoints.js";
+import { appendServerTiming, measureSync } from "../http/server-timing.js";
 import type {
   WebChannelEndpointContexts,
   WebChannelIdentitySnapshot,
@@ -177,21 +178,31 @@ export class WebChannelEndpointFacadeService {
   }
 
   handleAgentActiveChats(): Response {
-    return this.options.json({ chats: this.options.listActiveChats() }, 200);
+    const { result, durationMs } = measureSync(() => this.options.json({ chats: this.options.listActiveChats() }, 200));
+    return appendServerTiming(result, {
+      name: "agent_active_chats",
+      durationMs,
+    });
   }
 
   handleAgentBranches(req: Request): Response {
-    const url = new URL(req.url);
-    const rootChatJid = typeof url.searchParams.get("root_chat_jid") === "string"
-      ? url.searchParams.get("root_chat_jid")!.trim()
-      : "";
-    const includeArchived = ["1", "true", "yes", "on"].includes(
-      String(url.searchParams.get("include_archived") || "").trim().toLowerCase(),
-    );
-    const chats = typeof this.options.listKnownChats === "function"
-      ? this.options.listKnownChats(rootChatJid || null, { includeArchived })
-      : this.options.listActiveChats();
-    return this.options.json({ chats }, 200);
+    const { result, durationMs } = measureSync(() => {
+      const url = new URL(req.url);
+      const rootChatJid = typeof url.searchParams.get("root_chat_jid") === "string"
+        ? url.searchParams.get("root_chat_jid")!.trim()
+        : "";
+      const includeArchived = ["1", "true", "yes", "on"].includes(
+        String(url.searchParams.get("include_archived") || "").trim().toLowerCase(),
+      );
+      const chats = typeof this.options.listKnownChats === "function"
+        ? this.options.listKnownChats(rootChatJid || null, { includeArchived })
+        : this.options.listActiveChats();
+      return this.options.json({ chats }, 200);
+    });
+    return appendServerTiming(result, {
+      name: "agent_branches",
+      durationMs,
+    });
   }
 
   async handleAgentRespond(req: Request): Promise<Response> {

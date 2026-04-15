@@ -25,6 +25,7 @@ describe("web agent status helpers", () => {
     const res = handleAgentStatusRequest(req, createContext());
 
     expect(res.status).toBe(200);
+    expect(res.headers.get("Server-Timing")).toContain("agent_status;dur=");
     expect(await res.json()).toEqual({ status: "idle", data: null });
   });
 
@@ -41,6 +42,7 @@ describe("web agent status helpers", () => {
       })
     );
 
+    expect(res.headers.get("Server-Timing")).toContain("agent_status;dur=");
     const body = await res.json();
     expect(body.status).toBe("active");
     expect(body.data.chatJid).toBe("web:custom");
@@ -53,6 +55,7 @@ describe("web agent status helpers", () => {
     const res = await handleAgentContextRequest(req, createContext());
 
     expect(res.status).toBe(200);
+    expect(res.headers.get("Server-Timing")).toContain("agent_context;dur=");
     expect(await res.json()).toEqual({ tokens: null, contextWindow: null, percent: null });
   });
 
@@ -67,6 +70,7 @@ describe("web agent status helpers", () => {
     );
 
     expect(res.status).toBe(200);
+    expect(res.headers.get("Server-Timing")).toContain("agent_models;dur=");
     expect(await res.json()).toEqual(payload);
   });
 });

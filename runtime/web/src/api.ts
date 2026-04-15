@@ -3,18 +3,48 @@
  * API client for Vibes backend
  */
 
+import { recordAppPerfRequest } from './ui/app-perf-tracing.js';
+
 const API_BASE = '';
 
 /**
  * Fetch wrapper with error handling
  */
 async function request(url, options = {}) {
-    const response = await fetch(API_BASE + url, {
-        ...options,
-        headers: {
-            'Content-Type': 'application/json',
-            ...options.headers,
-        },
+    const startedAt = typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+    let response;
+    try {
+        response = await fetch(API_BASE + url, {
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers,
+            },
+        });
+    } catch (error) {
+        recordAppPerfRequest({
+            method: String(options.method || 'GET').toUpperCase(),
+            url,
+            startedAt,
+            durationMs: (typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now()) - startedAt,
+            ok: false,
+            detail: { failedBeforeResponse: true },
+        });
+        throw error;
+    }
+
+    const durationMs = (typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now()) - startedAt;
+    recordAppPerfRequest({
+        method: String(options.method || 'GET').toUpperCase(),
+        url,
+        startedAt,
+        durationMs,
+        status: response.status,
+        ok: response.ok,
+        requestId: response.headers?.get?.('x-request-id') || null,
+        serverTiming: response.headers?.get?.('Server-Timing') || null,
     });
     
     if (!response.ok) {
