@@ -79,6 +79,32 @@ test("AgentSessionManager creates, caches, and binds main sessions", async () =>
   expect(fixture.pool.get("web:default")?.runtime.session).toBe(session);
 });
 
+test("AgentSessionManager singleflights concurrent main-session creation for the same chat", async () => {
+  let createCalls = 0;
+  let releaseCreate!: () => void;
+  const waitForCreate = new Promise<void>((resolve) => {
+    releaseCreate = resolve;
+  });
+  const session = {
+    dispose() {},
+  };
+  const fixture = createManager({
+    createSession: async () => {
+      createCalls += 1;
+      await waitForCreate;
+      return createRuntime(session) as any;
+    },
+  });
+
+  const first = fixture.manager.getOrCreate("web:default");
+  const second = fixture.manager.getOrCreate("web:default");
+  releaseCreate();
+
+  expect(await first).toBe(await second);
+  expect(createCalls).toBe(1);
+  expect(fixture.state.bound).toEqual(["web:default"]);
+});
+
 test("AgentSessionManager recreates cached main and side sessions", async () => {
   let disposed = 0;
   const mainSession = {

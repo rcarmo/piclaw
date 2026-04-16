@@ -39,6 +39,7 @@ export interface AgentSessionManagerOptions {
  * Handles lifecycle operations for main and auxiliary AgentSession instances.
  */
 export class AgentSessionManager {
+  private readonly createInFlight = new Map<string, Promise<AgentSessionRuntime>>();
   private readonly prewarmInFlight = new Set<string>();
   private readonly queuedPrewarms = new Set<string>();
   private readonly prewarmQueue: string[] = [];
@@ -56,39 +57,56 @@ export class AgentSessionManager {
   }
 
   async getOrCreate(chatJid: string): Promise<AgentSessionRuntime> {
+    const pendingCreate = this.createInFlight.get(chatJid);
+    if (pendingCreate) {
+      return await pendingCreate;
+    }
+
     const existing = this.options.pool.get(chatJid);
     if (existing) {
       existing.lastUsed = Date.now();
       return existing.runtime;
     }
 
-    this.options.onInfo?.("Creating new session", {
-      operation: "get_or_create.create_main_session",
-      chatJid,
-    });
+    const task = (async () => {
+      this.options.onInfo?.("Creating new session", {
+        operation: "get_or_create.create_main_session",
+        chatJid,
+      });
 
-    const chatSessionDir = ensureSessionDir(chatJid);
+      const chatSessionDir = ensureSessionDir(chatJid);
 
-    const extensionFactories = await this.options.getSessionExtensionFactories?.(chatJid) ?? [];
-    const runtime = this.options.createSession
-      ? await this.options.createSession(chatJid, chatSessionDir)
-      : await createDefaultSession(chatJid, {
-          authStorage: this.options.authStorage,
-          modelRegistry: this.options.modelRegistry,
-          settingsManager: this.options.settingsManager,
-          tools: this.options.createDefaultTools(),
-          extensionFactories,
+      const extensionFactories = await this.options.getSessionExtensionFactories?.(chatJid) ?? [];
+      const runtime = this.options.createSession
+        ? await this.options.createSession(chatJid, chatSessionDir)
+        : await createDefaultSession(chatJid, {
+            authStorage: this.options.authStorage,
+            modelRegistry: this.options.modelRegistry,
+            settingsManager: this.options.settingsManager,
+            tools: this.options.createDefaultTools(),
+            extensionFactories,
+          });
+
+      this.options.pool.set(chatJid, { runtime, lastUsed: Date.now() });
+      try {
+        await this.applyDefaultModel(runtime.session);
+        await this.refreshRuntime(chatJid, runtime);
+        this.options.onInfo?.("Session ready", {
+          operation: this.options.createSession ? "get_or_create.create_main_session" : "get_or_create.create_default_session",
+          chatJid,
+          poolSize: this.options.pool.size,
         });
-
-    this.options.pool.set(chatJid, { runtime, lastUsed: Date.now() });
-    await this.applyDefaultModel(runtime.session);
-    await this.refreshRuntime(chatJid, runtime);
-    this.options.onInfo?.("Session ready", {
-      operation: this.options.createSession ? "get_or_create.create_main_session" : "get_or_create.create_default_session",
-      chatJid,
-      poolSize: this.options.pool.size,
+        return runtime;
+      } catch (err) {
+        await this.disposeMainRuntimeAfterError(chatJid, runtime, "get_or_create.dispose_after_error");
+        throw err;
+      }
+    })().finally(() => {
+      this.createInFlight.delete(chatJid);
     });
-    return runtime;
+
+    this.createInFlight.set(chatJid, task);
+    return await task;
   }
 
   async getOrCreateSide(chatJid: string): Promise<AgentSessionRuntime> {
@@ -336,5 +354,20 @@ export class AgentSessionManager {
         }
       }
     })();
+  }
+
+  private async disposeMainRuntimeAfterError(chatJid: string, runtime: AgentSessionRuntime, operation: string): Promise<void> {
+    if (this.options.pool.get(chatJid)?.runtime === runtime) {
+      this.options.pool.delete(chatJid);
+    }
+    try {
+      await runtime.dispose();
+    } catch (disposeErr) {
+      this.options.onWarn?.("Failed to dispose session after initialization error", {
+        operation,
+        chatJid,
+        err: disposeErr,
+      });
+    }
   }
 }
