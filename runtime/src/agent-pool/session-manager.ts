@@ -13,6 +13,7 @@ import {
   hasDeferredBranchSeed,
   readDeferredBranchSeed,
   seedSessionManagerFromDeferredBranchSeed,
+  writeDeferredBranchSeed,
 } from "./branch-seeding.js";
 import { createDefaultSession, createSessionInDir, ensureNamedSessionDir, ensureSessionDir } from "./session.js";
 import { forcePersistSessionFile, seedRotatedSession } from "../session-rotation.js";
@@ -46,6 +47,7 @@ export interface AgentSessionManagerOptions {
  */
 export class AgentSessionManager {
   private readonly branchSeedRealizationInFlight = new Map<string, Promise<boolean>>();
+  private readonly createInFlight = new Map<string, Promise<AgentSessionRuntime>>();
   private readonly invalidDeferredBranchSeedErrors = new Map<string, Error>();
   private readonly prewarmInFlight = new Set<string>();
 
@@ -66,57 +68,65 @@ export class AgentSessionManager {
       throw knownInvalidSeedError;
     }
 
+    const pendingCreate = this.createInFlight.get(chatJid);
+    if (pendingCreate) {
+      return await pendingCreate;
+    }
+
     const existing = this.options.pool.get(chatJid);
     if (existing) {
       existing.lastUsed = Date.now();
-      await this.realizeDeferredBranchSeed(chatJid, existing.runtime);
-      return existing.runtime;
+      try {
+        await this.realizeDeferredBranchSeed(chatJid, existing.runtime);
+        return existing.runtime;
+      } catch (error) {
+        await this.disposeMainRuntimeAfterError(chatJid, existing.runtime, "get_or_create.realize_existing_after_error");
+        throw error;
+      }
     }
 
-    this.options.onInfo?.("Creating new session", {
-      operation: "get_or_create.create_main_session",
-      chatJid,
+    const task = (async () => {
+      this.options.onInfo?.("Creating new session", {
+        operation: "get_or_create.create_main_session",
+        chatJid,
+      });
+
+      const chatSessionDir = ensureSessionDir(chatJid);
+
+      const extensionFactories = await this.options.getSessionExtensionFactories?.(chatJid) ?? [];
+      const runtime = this.options.createSession
+        ? await this.options.createSession(chatJid, chatSessionDir)
+        : await createDefaultSession(chatJid, {
+            authStorage: this.options.authStorage,
+            modelRegistry: this.options.modelRegistry,
+            settingsManager: this.options.settingsManager,
+            tools: this.options.createDefaultTools(),
+            extensionFactories,
+          });
+
+      this.options.pool.set(chatJid, { runtime, lastUsed: Date.now() });
+      try {
+        const realizedDeferredSeed = await this.realizeDeferredBranchSeed(chatJid, runtime);
+        if (!realizedDeferredSeed) {
+          await this.applyDefaultModel(runtime.session);
+        }
+        await this.refreshRuntime(chatJid, runtime);
+        this.options.onInfo?.("Session ready", {
+          operation: this.options.createSession ? "get_or_create.create_main_session" : "get_or_create.create_default_session",
+          chatJid,
+          poolSize: this.options.pool.size,
+        });
+        return runtime;
+      } catch (err) {
+        await this.disposeMainRuntimeAfterError(chatJid, runtime, "get_or_create.dispose_after_error");
+        throw err;
+      }
+    })().finally(() => {
+      this.createInFlight.delete(chatJid);
     });
 
-    const chatSessionDir = ensureSessionDir(chatJid);
-
-    const extensionFactories = await this.options.getSessionExtensionFactories?.(chatJid) ?? [];
-    const runtime = this.options.createSession
-      ? await this.options.createSession(chatJid, chatSessionDir)
-      : await createDefaultSession(chatJid, {
-          authStorage: this.options.authStorage,
-          modelRegistry: this.options.modelRegistry,
-          settingsManager: this.options.settingsManager,
-          tools: this.options.createDefaultTools(),
-          extensionFactories,
-        });
-
-    this.options.pool.set(chatJid, { runtime, lastUsed: Date.now() });
-    try {
-      const realizedDeferredSeed = await this.realizeDeferredBranchSeed(chatJid, runtime);
-      if (!realizedDeferredSeed) {
-        await this.applyDefaultModel(runtime.session);
-      }
-      await this.refreshRuntime(chatJid, runtime);
-      this.options.onInfo?.("Session ready", {
-        operation: this.options.createSession ? "get_or_create.create_main_session" : "get_or_create.create_default_session",
-        chatJid,
-        poolSize: this.options.pool.size,
-      });
-      return runtime;
-    } catch (err) {
-      this.options.pool.delete(chatJid);
-      try {
-        await runtime.dispose();
-      } catch (disposeErr) {
-        this.options.onWarn?.("Failed to dispose session after initialization error", {
-          operation: "get_or_create.dispose_after_error",
-          chatJid,
-          err: disposeErr,
-        });
-      }
-      throw err;
-    }
+    this.createInFlight.set(chatJid, task);
+    return await task;
   }
 
   async getOrCreateSide(chatJid: string): Promise<AgentSessionRuntime> {
@@ -335,45 +345,51 @@ export class AgentSessionManager {
       }
       if (!seed) return false;
 
-      const result = await runtime.newSession({
-        ...(seed.parentSession ? { parentSession: seed.parentSession } : {}),
-        setup: async (sessionManager) => {
-          seedSessionManagerFromDeferredBranchSeed(sessionManager, seed);
-        },
-      });
-      if (result.cancelled) {
-        throw new Error("Deferred branch seed was cancelled.");
-      }
-
-      const session = runtime.session;
-      await this.applyResolvedModel(session, seed.model, "realize_deferred_branch_seed");
       try {
-        if (seed.thinkingLevel) {
-          session.setThinkingLevel(seed.thinkingLevel);
-        }
-      } catch (err) {
-        this.options.onWarn?.("Failed to restore deferred branch thinking level", {
-          operation: "realize_deferred_branch_seed.thinking_level",
-          chatJid,
-          err,
-        });
-      }
-      try {
-        if (seed.sessionName?.trim()) {
-          session.setSessionName(seed.sessionName.trim());
-        }
-      } catch (err) {
-        this.options.onWarn?.("Failed to restore deferred branch session name", {
-          operation: "realize_deferred_branch_seed.session_name",
-          chatJid,
-          err,
-        });
-      }
+        clearDeferredBranchSeed(chatJid);
 
-      forcePersistSessionFile(session);
-      clearDeferredBranchSeed(chatJid);
-      this.invalidDeferredBranchSeedErrors.delete(chatJid);
-      return true;
+        const result = await runtime.newSession({
+          ...(seed.parentSession ? { parentSession: seed.parentSession } : {}),
+          setup: async (sessionManager) => {
+            seedSessionManagerFromDeferredBranchSeed(sessionManager, seed);
+          },
+        });
+        if (result.cancelled) {
+          throw new Error("Deferred branch seed was cancelled.");
+        }
+
+        const session = runtime.session;
+        await this.applyResolvedModel(session, seed.model, "realize_deferred_branch_seed");
+        try {
+          if (seed.thinkingLevel) {
+            session.setThinkingLevel(seed.thinkingLevel);
+          }
+        } catch (err) {
+          this.options.onWarn?.("Failed to restore deferred branch thinking level", {
+            operation: "realize_deferred_branch_seed.thinking_level",
+            chatJid,
+            err,
+          });
+        }
+        try {
+          if (seed.sessionName?.trim()) {
+            session.setSessionName(seed.sessionName.trim());
+          }
+        } catch (err) {
+          this.options.onWarn?.("Failed to restore deferred branch session name", {
+            operation: "realize_deferred_branch_seed.session_name",
+            chatJid,
+            err,
+          });
+        }
+
+        forcePersistSessionFile(session);
+        this.invalidDeferredBranchSeedErrors.delete(chatJid);
+        return true;
+      } catch (error) {
+        writeDeferredBranchSeed(chatJid, seed);
+        throw error;
+      }
     })().finally(() => {
       this.branchSeedRealizationInFlight.delete(chatJid);
     });
@@ -406,6 +422,21 @@ export class AgentSessionManager {
         operation,
         model: `${model.provider}/${model.modelId}`,
         err,
+      });
+    }
+  }
+
+  private async disposeMainRuntimeAfterError(chatJid: string, runtime: AgentSessionRuntime, operation: string): Promise<void> {
+    if (this.options.pool.get(chatJid)?.runtime === runtime) {
+      this.options.pool.delete(chatJid);
+    }
+    try {
+      await runtime.dispose();
+    } catch (disposeErr) {
+      this.options.onWarn?.("Failed to dispose session after initialization error", {
+        operation,
+        chatJid,
+        err: disposeErr,
       });
     }
   }

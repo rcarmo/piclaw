@@ -3,6 +3,7 @@ import { writeFileSync } from "fs";
 import { join } from "path";
 
 import type { AgentSessionRuntime } from "@mariozechner/pi-coding-agent";
+import { readDeferredBranchSeed } from "../../src/agent-pool/branch-seeding.js";
 import { ensureSessionDir } from "../../src/agent-pool/session.js";
 import { AgentSessionManager } from "../../src/agent-pool/session-manager.js";
 import { createTempWorkspace, setEnv } from "../helpers.js";
@@ -91,6 +92,32 @@ test("AgentSessionManager creates, caches, and binds main sessions", async () =>
   expect(fixture.state.bound).toEqual(["web:default"]);
   expect(fixture.state.registered).toEqual(["web:default"]);
   expect(fixture.pool.get("web:default")?.runtime.session).toBe(session);
+});
+
+test("AgentSessionManager singleflights concurrent main-session creation for the same chat", async () => {
+  let createCalls = 0;
+  let releaseCreate!: () => void;
+  const waitForCreate = new Promise<void>((resolve) => {
+    releaseCreate = resolve;
+  });
+  const session = {
+    dispose() {},
+  };
+  const fixture = createManager({
+    createSession: async () => {
+      createCalls += 1;
+      await waitForCreate;
+      return createRuntime(session) as any;
+    },
+  });
+
+  const first = fixture.manager.getOrCreate("web:default");
+  const second = fixture.manager.getOrCreate("web:default");
+  releaseCreate();
+
+  expect(await first).toBe(await second);
+  expect(createCalls).toBe(1);
+  expect(fixture.state.bound).toEqual(["web:default"]);
 });
 
 test("AgentSessionManager recreates cached main and side sessions", async () => {
@@ -186,4 +213,37 @@ test("AgentSessionManager fails loudly and clears the cache when a deferred bran
   expect(disposed).toBe(1);
   fixture.manager.prewarm(chatJid);
   expect(createCalls).toBe(1);
+});
+
+test("AgentSessionManager disposes an existing runtime and restores its deferred seed when realization fails", async () => {
+  const ws = createTempWorkspace("piclaw-session-manager-broken-realize-");
+  cleanupWorkspace = ws.cleanup;
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  let disposed = 0;
+  const runtime = createRuntime({
+    dispose() {
+      disposed += 1;
+    },
+  });
+  runtime.newSession = async () => {
+    throw new Error("seed replay failed");
+  };
+
+  const fixture = createManager();
+  const chatJid = "web:seeded-branch";
+  fixture.pool.set(chatJid, { runtime, lastUsed: Date.now() });
+  writeFileSync(join(ensureSessionDir(chatJid), ".branch-seed.json"), JSON.stringify({
+    version: 1,
+    parentSession: null,
+    sessionName: "Seeded",
+    model: null,
+    thinkingLevel: null,
+    mode: "rotated_context",
+  }), "utf8");
+
+  await expect(fixture.manager.getOrCreate(chatJid)).rejects.toThrow("seed replay failed");
+  expect(fixture.pool.has(chatJid)).toBe(false);
+  expect(disposed).toBe(1);
+  expect(readDeferredBranchSeed(chatJid)?.sessionName).toBe("Seeded");
 });

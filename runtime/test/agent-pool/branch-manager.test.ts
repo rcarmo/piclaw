@@ -1,10 +1,12 @@
 import { afterEach, expect, test } from "bun:test";
+import { writeFileSync } from "fs";
 
 import type { AgentSessionRuntime } from "@mariozechner/pi-coding-agent";
 import { SessionManager } from "@mariozechner/pi-coding-agent";
 import { join } from "path";
+import { ensureSessionDir } from "../../src/agent-pool/session.js";
 import { AgentBranchManager } from "../../src/agent-pool/branch-manager.js";
-import { readDeferredBranchSeed } from "../../src/agent-pool/branch-seeding.js";
+import { hasDeferredBranchSeed, readDeferredBranchSeed } from "../../src/agent-pool/branch-seeding.js";
 import { createTempWorkspace, importFresh, setEnv } from "../helpers.js";
 
 let restoreEnv: (() => void) | null = null;
@@ -193,12 +195,21 @@ test("AgentBranchManager prunes inactive branches and disposes cached sessions",
   fixture.pool.set("web:default:branch:prune", { runtime: createRuntime(session), lastUsed: Date.now() });
   fixture.sidePool.set("web:default:branch:prune", { runtime: createRuntime(session), lastUsed: Date.now() });
   fixture.activeForkBaseLeafByChat.set("web:default:branch:prune", "leaf-1");
+  writeFileSync(join(ensureSessionDir("web:default:branch:prune"), ".branch-seed.json"), JSON.stringify({
+    version: 1,
+    parentSession: null,
+    sessionName: "Prune Me",
+    model: null,
+    thinkingLevel: null,
+    mode: "rotated_context",
+  }), "utf8");
 
   const archived = await fixture.manager.pruneChatBranch("web:default:branch:prune");
   expect(archived.archived_at).toBeTruthy();
   expect(fixture.pool.has("web:default:branch:prune")).toBe(false);
   expect(fixture.sidePool.has("web:default:branch:prune")).toBe(false);
   expect(fixture.activeForkBaseLeafByChat.has("web:default:branch:prune")).toBe(false);
+  expect(hasDeferredBranchSeed("web:default:branch:prune")).toBe(false);
   expect(disposed).toBe(2);
 
   ws.cleanup();

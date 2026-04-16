@@ -20,7 +20,7 @@ import {
   type ChatBranchRecord,
 } from "../db.js";
 import { createUuid } from "../utils/ids.js";
-import { createDeferredBranchSeed, writeDeferredBranchSeed } from "./branch-seeding.js";
+import { clearDeferredBranchSeed, createDeferredBranchSeed, writeDeferredBranchSeed } from "./branch-seeding.js";
 import type { PoolEntry } from "./session-manager.js";
 
 /** Active/known chat metadata surfaced by AgentPool. */
@@ -189,6 +189,7 @@ export class AgentBranchManager {
       this.options.sidePool.delete(chatJid);
     }
     this.options.activeForkBaseLeafByChat.delete(chatJid);
+    clearDeferredBranchSeed(chatJid);
 
     return archived;
   }

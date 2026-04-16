@@ -115,6 +115,11 @@ function getStableForkSeed(sourceSession: AgentSession, stableLeafId: string | n
   return { branchEntries, model, thinkingLevel };
 }
 
+function cloneSeedValue<T>(value: T): T {
+  if (value === null || value === undefined) return value;
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 export function createDeferredBranchSeed(
   sourceSession: AgentSession,
   options: { stableLeafId: string | null; sessionName?: string | null; sourceIsActive: boolean },
@@ -139,7 +144,7 @@ export function createDeferredBranchSeed(
     model,
     thinkingLevel,
     mode: stableSeed ? "stable_branch" : "rotated_context",
-    ...(stableSeed ? { branchEntries: stableSeed.branchEntries } : { context: sourceContext ?? undefined }),
+    ...(stableSeed ? { branchEntries: cloneSeedValue(stableSeed.branchEntries) } : { context: cloneSeedValue(sourceContext ?? undefined) }),
   };
 }
 
