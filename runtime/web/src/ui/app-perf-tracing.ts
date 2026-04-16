@@ -110,7 +110,7 @@ function clearPerformanceMarks(traceId: string): void {
       performance.clearMarks(`piclaw:${traceId}:${phase.phase}`);
     }
   } catch (error) {
-    debugSuppressedError(log, 'Ignoring performance.clearMarks failure.', error, { traceId });
+    console.debug('[app-perf] Ignoring performance.clearMarks failure.', error, { traceId });
   }
 }
 
