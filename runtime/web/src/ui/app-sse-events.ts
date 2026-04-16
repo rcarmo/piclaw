@@ -222,6 +222,9 @@ export function handleAppSseEvent(
     setPendingRequest(null);
     pendingRequestRef.current = null;
     clearAgentRunState();
+    if (isAppChatActivationRecent(currentChatJid)) {
+      return;
+    }
 
     const targetChatJid = currentChatJid;
     getAgentStatus(targetChatJid)

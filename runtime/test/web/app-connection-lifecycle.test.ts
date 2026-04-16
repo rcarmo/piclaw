@@ -52,6 +52,7 @@ test('handleConnectionStatusChangeEvent clears active agent state on disconnect'
   const pendingRequestRef = { current: { id: 1 } as unknown };
 
   handleConnectionStatusChangeEvent({
+    currentChatJid: 'chat:alpha',
     status: 'disconnected',
     setConnectionStatus: (status) => { calls.push(`conn:${status}`); },
     setAgentStatus: (status) => { calls.push(`status:${status === null ? 'null' : 'set'}`); },
@@ -81,6 +82,39 @@ test('handleConnectionStatusChangeEvent clears active agent state on disconnect'
   expect(pendingRequestRef.current).toBeNull();
 });
 
+test('handleConnectionStatusChangeEvent skips the initial reconnect bundle during a fresh cold-open activation', () => {
+  noteAppChatActivation({ chatJid: 'chat:alpha' });
+  const calls: string[] = [];
+
+  handleConnectionStatusChangeEvent({
+    currentChatJid: 'chat:alpha',
+    status: 'connected',
+    setConnectionStatus: (status) => { calls.push(`conn:${status}`); },
+    setAgentStatus: () => { calls.push('status'); },
+    setAgentDraft: () => { calls.push('draft'); },
+    setAgentPlan: () => { calls.push('plan'); },
+    setAgentThought: () => { calls.push('thought'); },
+    setPendingRequest: () => { calls.push('pending'); },
+    pendingRequestRef: { current: null },
+    clearAgentRunState: () => { calls.push('clear'); },
+    hasConnectedOnceRef: { current: false },
+    viewStateRef: { current: { currentHashtag: null, searchQuery: null, searchOpen: false } },
+    refreshTimeline: () => { calls.push('timeline'); },
+    refreshAgentStatus: () => { calls.push('refresh-status'); },
+    refreshQueueState: () => { calls.push('refresh-queue'); },
+    refreshContextUsage: () => { calls.push('refresh-context'); },
+  });
+
+  expect(calls).toEqual([
+    'conn:connected',
+    'status',
+    'draft',
+    'plan',
+    'thought',
+    'pending',
+    'clear',
+  ]);
+});
 test('runBackstopRefreshTick refreshes queue only when agent is active', () => {
   const calls: string[] = [];
   const run = (isAgentActive: boolean) => {

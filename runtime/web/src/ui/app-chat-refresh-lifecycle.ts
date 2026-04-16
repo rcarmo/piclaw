@@ -11,6 +11,11 @@ import {
 import { refreshModelAndQueueState as refreshModelAndQueueStateBundle } from './app-status-refresh-orchestration.js';
 import { applyStoredSidebarWidth } from './app-boot-load-orchestration.js';
 import {
+  completeAppPerfTraceIfReady,
+  getActiveAppPerfTraceId,
+  markAppPerfTrace,
+} from './app-perf-tracing.js';
+import {
   noteAppChatActivation,
   runCoalescedAppRefresh,
 } from './app-refresh-coordination.js';
@@ -162,21 +167,54 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
     });
   }, [setActiveModel, setActiveModelUsage, setActiveThinkingLevel, setAgentModelsPayload, setHasLoadedAgentModels, setSupportsThinking]);
 
+  const getThreadSwitchTraceId = useCallback(() => getActiveAppPerfTraceId('thread-switch', currentChatJid), [currentChatJid]);
+
   const refreshModelState = useCallback(() => {
     return runCoalescedAppRefresh({
       kind: 'model-state',
       chatJid: currentChatJid,
       run: async () => {
+        const traceId = getThreadSwitchTraceId();
+        if (traceId) {
+          markAppPerfTrace(traceId, 'runtime-hydration-start', {
+            phase: 'model-state',
+          });
+        }
         await refreshModelStateForChat({
           currentChatJid,
-          getAgentModels,
+          getAgentModels: async (chatJid: string) => {
+            const activeTraceId = traceId || getThreadSwitchTraceId();
+            if (activeTraceId) {
+              markAppPerfTrace(activeTraceId, 'model-request-start', {
+                chatJid,
+              });
+            }
+            const payload = await getAgentModels(chatJid);
+            if (activeTraceId) {
+              markAppPerfTrace(activeTraceId, 'model-request-ready', {
+                chatJid,
+                hasCurrent: Boolean(payload?.current),
+                modelCount: Array.isArray(payload?.models) ? payload.models.length : 0,
+              });
+            }
+            return payload;
+          },
           activeChatJidRef,
           applyModelState,
         });
+        const activeTraceId = traceId || getThreadSwitchTraceId();
+        if (activeTraceId) {
+          markAppPerfTrace(activeTraceId, 'runtime-hydration-ready', {
+            chatJid: currentChatJid,
+          });
+          completeAppPerfTraceIfReady(activeTraceId, ['runtime-hydration-ready', 'timeline-first-paint'], 'settled', {
+            chatJid: currentChatJid,
+          });
+        }
         return null;
       },
     });
-  }, [activeChatJidRef, applyModelState, currentChatJid, getAgentModels]);
+  }, [activeChatJidRef, applyModelState, currentChatJid, getAgentModels, getThreadSwitchTraceId]);
 
   const refreshActiveChatAgents = useCallback(() => {
     return runCoalescedAppRefresh({

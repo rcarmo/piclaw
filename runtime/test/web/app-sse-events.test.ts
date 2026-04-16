@@ -162,6 +162,50 @@ test('handleAppSseEvent restores active agent status on reconnect', async () => 
   });
 });
 
+test('handleAppSseEvent skips duplicate reconnect recovery during a fresh cold-open activation', async () => {
+  noteAppChatActivation({ chatJid: 'chat:alpha' });
+  const state = createDeps();
+  let agentStatusCalls = 0;
+  let timelineCalls = 0;
+  let bundleCalls = 0;
+  const resetCalls: string[] = [];
+  state.deps.getAgentStatus = async () => {
+    agentStatusCalls += 1;
+    return null;
+  };
+  state.deps.setAgentStatus = () => {
+    resetCalls.push('status');
+  };
+  state.deps.setAgentDraft = () => {
+    resetCalls.push('draft');
+  };
+  state.deps.setAgentPlan = () => {
+    resetCalls.push('plan');
+  };
+  state.deps.setAgentThought = () => {
+    resetCalls.push('thought');
+  };
+  state.deps.setPendingRequest = () => {
+    resetCalls.push('pending');
+  };
+  state.deps.clearAgentRunState = () => {
+    resetCalls.push('clear');
+  };
+  state.deps.refreshTimeline = () => {
+    timelineCalls += 1;
+  };
+  state.deps.refreshModelAndQueueState = () => {
+    bundleCalls += 1;
+  };
+
+  handleAppSseEvent('connected', { app_asset_version: 'test' }, state.deps);
+  await Promise.resolve();
+
+  expect(agentStatusCalls).toBe(0);
+  expect(timelineCalls).toBe(0);
+  expect(bundleCalls).toBe(0);
+  expect(resetCalls).toEqual(['status', 'draft', 'plan', 'thought', 'pending', 'clear']);
+});
 test('handleAppSseEvent refreshes compaction status metadata even when title stays the same', () => {
   const state = createDeps();
 
