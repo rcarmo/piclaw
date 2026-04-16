@@ -290,6 +290,97 @@ test("agent pool evicts idle sessions and recreates them", async () => {
   await pool.shutdown();
 });
 
+test("agent pool schedules warmup for the most recent inactive chats", async () => {
+  const ws = getTestWorkspace();
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
+  db.initDatabase();
+  db.storeChatMetadata("web:older", "2026-04-14T10:00:00.000Z", "Older");
+  db.storeChatMetadata("web:newer", "2026-04-14T11:00:00.000Z", "Newer");
+  db.storeChatMetadata("web:newest", "2026-04-14T12:00:00.000Z", "Newest");
+
+  const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
+
+  const created: string[] = [];
+  class StubSession {
+    subscribe(_listener: (event: any) => void) {
+      return () => {};
+    }
+    async prompt(_prompt: string) {}
+    async abort() {}
+    dispose() {}
+  }
+
+  const pool = new AgentPool({
+    createSession: async (chatJid: string) => {
+      created.push(chatJid);
+      return createRuntime(new StubSession()) as any;
+    },
+  });
+
+  const scheduled = (pool as any).scheduleRecentChatWarmup({
+    limit: 2,
+    excludeChatJids: ["web:default", "web:newest"],
+  });
+  expect(scheduled).toEqual(["web:newer", "web:older"]);
+
+  await Bun.sleep(20);
+  expect(created).toEqual(["web:newer", "web:older"]);
+
+  await pool.shutdown();
+});
+
+test("agent pool keeps expanding recent-chat warmup past already-warm top rows", async () => {
+  const ws = getTestWorkspace();
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
+  db.initDatabase();
+  const baseTimeMs = Date.parse("2026-04-14T23:59:00.000Z");
+  for (let index = 0; index < 101; index += 1) {
+    const chatJid = `web:chat-${String(index).padStart(3, "0")}`;
+    db.storeChatMetadata(chatJid, new Date(baseTimeMs - index * 60_000).toISOString(), `Chat ${index}`);
+  }
+
+  const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
+  const pool = new AgentPool({
+    createSession: async () => createRuntime({ subscribe: () => () => {}, prompt: async () => {}, abort: async () => {}, dispose() {} }) as any,
+  });
+
+  for (let index = 0; index < 100; index += 1) {
+    const chatJid = `web:chat-${String(index).padStart(3, "0")}`;
+    (pool as any).pool.set(chatJid, { runtime: createRuntime({ dispose() {} }), lastUsed: Date.now() });
+  }
+
+  const scheduled = (pool as any).scheduleRecentChatWarmup({ limit: 1, excludeChatJids: ["web:default"] });
+  expect(scheduled).toEqual(["web:chat-100"]);
+
+  await pool.shutdown();
+});
+
+test("agent pool rate-limits repeated recent-chat warmup for the same chat", async () => {
+  const ws = createTempWorkspace("piclaw-recent-warmup-cooldown-");
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
+  db.initDatabase();
+  db.storeChatMetadata("web:only", "2026-04-14T12:00:00.000Z", "Only");
+
+  const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
+  const pool = new AgentPool({
+    createSession: async () => createRuntime({ subscribe: () => () => {}, prompt: async () => {}, abort: async () => {}, dispose() {} }) as any,
+  });
+
+  const first = (pool as any).scheduleRecentChatWarmup({ limit: 1, excludeChatJids: ["web:default"] });
+  const second = (pool as any).scheduleRecentChatWarmup({ limit: 1, excludeChatJids: ["web:default"] });
+
+  expect(first).toEqual(["web:only"]);
+  expect(second).toEqual([]);
+
+  await pool.shutdown();
+});
+
 test("agent pool can run a side prompt with the current model and thinking level", async () => {
   const ws = getTestWorkspace();
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
