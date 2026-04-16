@@ -61,6 +61,22 @@ test('app perf tracing only auto-completes once required phases are present', ()
   ]);
 });
 
+test('app perf tracing cancels the previous active trace when a new trace starts for the same type/chat', () => {
+  const firstTraceId = startAppPerfTrace('thread-switch', 'web:branch');
+  markAppPerfTrace(firstTraceId, 'intent');
+
+  const secondTraceId = startAppPerfTrace('thread-switch', 'web:branch');
+
+  const traces = getAppPerfTracing().getTraces();
+  expect(traces).toHaveLength(2);
+  expect(traces[0]?.id).toBe(firstTraceId);
+  expect(traces[0]?.status).toBe('cancelled');
+  expect(traces[0]?.phases.map((phase) => phase.phase)).toEqual(['intent', 'superseded']);
+  expect(traces[1]?.id).toBe(secondTraceId);
+  expect(traces[1]?.status).toBe('active');
+  expect(getActiveAppPerfTraceId('thread-switch', 'web:branch')).toBe(secondTraceId);
+});
+
 test('app perf tracing stores bounded request samples', () => {
   const requestId = recordAppPerfRequest({
     method: 'GET',
