@@ -1,10 +1,18 @@
-import { expect, test } from 'bun:test';
+import { afterEach, expect, test } from 'bun:test';
 
 import {
   handleConnectionStatusChangeEvent,
   handleUiVersionDriftEvent,
   runBackstopRefreshTick,
 } from '../../web/src/ui/app-connection-lifecycle.js';
+import {
+  noteAppChatActivation,
+  resetAppRefreshCoordination,
+} from '../../web/src/ui/app-refresh-coordination.js';
+
+afterEach(() => {
+  resetAppRefreshCoordination();
+});
 
 test('handleUiVersionDriftEvent ignores missing/unchanged versions', () => {
   const staleUiVersionRef = { current: null as string | null };

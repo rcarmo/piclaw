@@ -1,6 +1,14 @@
-import { expect, test } from 'bun:test';
+import { afterEach, expect, test } from 'bun:test';
 
 import { handleAppSseEvent, type HandleAppSseEventDependencies } from '../../web/src/ui/app-sse-events.js';
+import {
+  noteAppChatActivation,
+  resetAppRefreshCoordination,
+} from '../../web/src/ui/app-refresh-coordination.js';
+
+afterEach(() => {
+  resetAppRefreshCoordination();
+});
 
 function applyUpdate<T>(current: T, next: T | ((prev: T) => T)): T {
   return typeof next === 'function' ? (next as (prev: T) => T)(current) : next;
