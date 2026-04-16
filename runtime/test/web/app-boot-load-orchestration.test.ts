@@ -99,3 +99,31 @@ test('runTimelineLoadFlow loads main timeline and triggers deferred scroll', asy
 
   expect(calls).toEqual(['load', 'scroll']);
 });
+
+test('runTimelineLoadFlow forwards timeline load failures to the error callback', async () => {
+  const calls: string[] = [];
+
+  await runTimelineLoadFlow({
+    currentHashtag: null,
+    searchQuery: null,
+    searchScope: 'current',
+    currentChatJid: 'web:default',
+    currentRootChatJid: 'web:default',
+    loadPosts: async () => {
+      calls.push('load');
+      throw new Error('boom');
+    },
+    searchPosts: async () => ({ results: [] }),
+    setPosts: () => undefined,
+    setHasMore: () => undefined,
+    scrollToBottom: () => {
+      calls.push('scroll');
+    },
+    isCancelled: () => false,
+    onTimelineError: (_error, detail) => {
+      calls.push(`error:${detail?.mode}`);
+    },
+  });
+
+  expect(calls).toEqual(['load', 'error:timeline']);
+});

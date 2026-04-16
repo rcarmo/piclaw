@@ -113,7 +113,15 @@ test('handleConnectionStatusChangeEvent skips the initial reconnect bundle durin
     refreshContextUsage: () => { calls.push('refresh-context'); },
   });
 
-  expect(calls).toEqual(['conn:connected']);
+  expect(calls).toEqual([
+    'conn:connected',
+    'status',
+    'draft',
+    'plan',
+    'thought',
+    'pending',
+    'clear',
+  ]);
 });
 
 test('runBackstopRefreshTick refreshes queue only when agent is active', () => {

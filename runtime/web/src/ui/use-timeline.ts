@@ -49,6 +49,7 @@ export function useTimeline({ preserveTimelineScroll, preserveTimelineScrollTop,
     } catch (error) {
       if (token !== chatTokenRef.current) return;
       console.error('Failed to load posts:', error);
+      throw error;
     }
   }, [chatJid]);
 

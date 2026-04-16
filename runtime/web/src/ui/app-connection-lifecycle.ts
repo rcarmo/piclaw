@@ -127,9 +127,14 @@ export function handleConnectionStatusChangeEvent(options: HandleConnectionStatu
 
   if (!hasConnectedOnceRef.current) {
     hasConnectedOnceRef.current = true;
-    if (isAppChatActivationRecent(currentChatJid)) {
-      return;
-    }
+    setAgentStatus(null);
+    setAgentDraft({ text: '', totalLines: 0 });
+    setAgentPlan('');
+    setAgentThought({ text: '', totalLines: 0 });
+    setPendingRequest(null);
+    pendingRequestRef.current = null;
+    clearAgentRunState();
+    if (isAppChatActivationRecent(currentChatJid)) return;
     if (shouldRefreshMainTimeline(viewStateRef.current)) {
       refreshTimeline();
     }

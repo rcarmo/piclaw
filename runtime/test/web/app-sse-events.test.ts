@@ -176,9 +176,28 @@ test('handleAppSseEvent skips duplicate reconnect recovery during a fresh cold-o
   let agentStatusCalls = 0;
   let timelineCalls = 0;
   let bundleCalls = 0;
+  const resetCalls: string[] = [];
   state.deps.getAgentStatus = async () => {
     agentStatusCalls += 1;
     return null;
+  };
+  state.deps.setAgentStatus = () => {
+    resetCalls.push('status');
+  };
+  state.deps.setAgentDraft = () => {
+    resetCalls.push('draft');
+  };
+  state.deps.setAgentPlan = () => {
+    resetCalls.push('plan');
+  };
+  state.deps.setAgentThought = () => {
+    resetCalls.push('thought');
+  };
+  state.deps.setPendingRequest = () => {
+    resetCalls.push('pending');
+  };
+  state.deps.clearAgentRunState = () => {
+    resetCalls.push('clear');
   };
   state.deps.refreshTimeline = () => {
     timelineCalls += 1;
@@ -193,6 +212,7 @@ test('handleAppSseEvent skips duplicate reconnect recovery during a fresh cold-o
   expect(agentStatusCalls).toBe(0);
   expect(timelineCalls).toBe(0);
   expect(bundleCalls).toBe(0);
+  expect(resetCalls).toEqual(['status', 'draft', 'plan', 'thought', 'pending', 'clear']);
 });
 
 test('handleAppSseEvent refreshes compaction status metadata even when title stays the same', () => {

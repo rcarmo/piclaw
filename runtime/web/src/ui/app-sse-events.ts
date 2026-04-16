@@ -216,9 +216,6 @@ export function handleAppSseEvent(
     if (handleUiVersionDrift(data?.app_asset_version)) {
       return;
     }
-    if (isAppChatActivationRecent(currentChatJid)) {
-      return;
-    }
     setAgentStatus(null);
     setAgentDraft({ text: '', totalLines: 0 });
     setAgentPlan('');
@@ -226,6 +223,9 @@ export function handleAppSseEvent(
     setPendingRequest(null);
     pendingRequestRef.current = null;
     clearAgentRunState();
+    if (isAppChatActivationRecent(currentChatJid)) {
+      return;
+    }
 
     const targetChatJid = currentChatJid;
     getAgentStatus(targetChatJid)
