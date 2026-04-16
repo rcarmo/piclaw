@@ -5,10 +5,12 @@ import {
   popOutChat,
   popOutPane,
 } from '../../web/src/ui/app-window-actions.js';
+import { getAppPerfTracing } from '../../web/src/ui/app-perf-tracing.js';
 
 const originalWindow = globalThis.window;
 
 afterEach(() => {
+  getAppPerfTracing().clear();
   if (originalWindow === undefined) {
     delete globalThis.window;
   } else {
@@ -38,6 +40,17 @@ test('createSessionFromCompose refreshes branch state and navigates to the new c
   expect(refreshes.sort()).toEqual(['active', 'branches']);
   expect(toasts).toContainEqual(['New branch created', 'Switched to @feature.', 'info', 2500]);
   expect(navigateCalls[0]).toContain('chat_jid=web%3Anew');
+
+  const traces = getAppPerfTracing().getTraces();
+  expect(traces).toHaveLength(1);
+  expect(traces[0]?.type).toBe('branch-create');
+  expect(traces[0]?.chatJid).toBe('web:root');
+  expect(traces[0]?.phases.map((phase) => phase.phase)).toEqual([
+    'intent',
+    'fork-request-start',
+    'fork-request-ready',
+    'navigation-dispatched',
+  ]);
 });
 
 test('popOutPane transfers pane state and closes the source tab after navigation', async () => {

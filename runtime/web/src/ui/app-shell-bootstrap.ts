@@ -18,6 +18,7 @@ import {
   mindmapPaneExtension,
   kanbanPaneExtension,
 } from '../panes/index.js';
+import { installAppPerfTracing } from './app-perf-tracing.js';
 import { resolveOptionalApi } from './optional-api.js';
 
 interface AppApiSurface {
@@ -80,6 +81,7 @@ export function initializeAppShellRuntime(): void {
   configureMarked(markedInstance);
   installBrowserNoiseFilters(typeof window !== 'undefined' ? window : null);
   registerAppPaneExtensions();
+  installAppPerfTracing(typeof window !== 'undefined' ? window as any : null);
   initialized = true;
 }
 

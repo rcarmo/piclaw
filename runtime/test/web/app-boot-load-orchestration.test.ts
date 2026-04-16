@@ -95,7 +95,10 @@ test('runTimelineLoadFlow loads main timeline and triggers deferred scroll', asy
     isCancelled: () => false,
     scheduleRaf: (callback) => callback(),
     scheduleTimeout: (callback) => callback(),
+    onTimelineLoadStart: () => calls.push('load-start'),
+    onTimelineDataReady: () => calls.push('data-ready'),
+    onTimelineFirstPaint: () => calls.push('first-paint'),
   });
 
-  expect(calls).toEqual(['load', 'scroll']);
+  expect(calls).toEqual(['load-start', 'load', 'data-ready', 'first-paint', 'scroll']);
 });

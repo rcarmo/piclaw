@@ -1,3 +1,5 @@
+import { createLogger, debugSuppressedError } from '../../../src/utils/logger.js';
+
 type TraceStatus = 'active' | 'completed' | 'cancelled' | 'failed';
 
 type TracePhase = {
@@ -52,6 +54,7 @@ type PerfWindow = Window & typeof globalThis & Record<string, unknown>;
 const PERF_GLOBAL_KEY = '__PICLAW_PERF__';
 const TRACE_LIMIT = 100;
 const REQUEST_LIMIT = 300;
+const log = createLogger('web.app-perf-tracing');
 
 const traces: TraceEntry[] = [];
 const requests: RequestEntry[] = [];
@@ -96,7 +99,7 @@ function markPerformance(traceId: string, phase: string): void {
   try {
     performance.mark(`piclaw:${traceId}:${phase}`);
   } catch (error) {
-    console.debug('[app-perf] Ignoring performance.mark failure.', error, { traceId, phase });
+    debugSuppressedError(log, 'Ignoring performance.mark failure.', error, { traceId, phase });
   }
 }
 

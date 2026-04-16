@@ -10,6 +10,7 @@ import {
   openProvisionalChatWindow,
   primeProvisionalChatWindow,
 } from './chat-window.js';
+import { failAppPerfTrace, markAppPerfTrace, startAppPerfTrace } from './app-perf-tracing.js';
 
 type ToastKind = 'info' | 'warning' | 'error' | 'success';
 type ToastFn = (title: string, message: string, kind: ToastKind, timeout: number) => void;
@@ -53,13 +54,26 @@ export async function createSessionFromCompose(options: CreateSessionFromCompose
     baseHref,
   } = options;
 
+  const traceId = startAppPerfTrace('branch-create', currentChatJid, {
+    trigger: 'compose',
+    chatOnlyMode: Boolean(chatOnlyMode),
+  });
+  markAppPerfTrace(traceId, 'intent', {
+    currentChatJid,
+  });
+
   try {
+    markAppPerfTrace(traceId, 'fork-request-start');
     const response = await forkChatBranch(currentChatJid);
     const branch = response?.branch;
     const nextChatJid = typeof branch?.chat_jid === 'string' && branch.chat_jid.trim() ? branch.chat_jid.trim() : null;
     if (!nextChatJid) {
       throw new Error('Branch fork did not return a chat id.');
     }
+
+    markAppPerfTrace(traceId, 'fork-request-ready', {
+      nextChatJid,
+    });
 
     await Promise.allSettled([
       refreshActiveChatAgents?.(),
@@ -70,8 +84,14 @@ export async function createSessionFromCompose(options: CreateSessionFromCompose
     showIntentToast?.('New branch created', `Switched to ${label}.`, 'info', 2500);
     const url = buildChatWindowUrl(baseHref, nextChatJid, { chatOnly: chatOnlyMode });
     navigate?.(url);
+    markAppPerfTrace(traceId, 'navigation-dispatched', {
+      mode: 'direct',
+      nextChatJid,
+      url,
+    });
     return true;
   } catch (error) {
+    failAppPerfTrace(traceId, error, 'fork-failed');
     showIntentToast?.('Could not create branch', describeBranchOpenError(error), 'warning', 5000);
     return false;
   }

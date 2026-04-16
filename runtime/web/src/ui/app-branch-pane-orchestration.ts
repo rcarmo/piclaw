@@ -1,4 +1,5 @@
 import { buildChatWindowUrl } from './chat-window.js';
+import { markAppPerfTrace, startAppPerfTrace } from './app-perf-tracing.js';
 
 interface RefBox<T> {
   current: T;
@@ -36,8 +37,18 @@ export function navigateToSelectedBranch(options: NavigateToSelectedBranchOption
   if (!hasWindow) return false;
   const normalized = typeof nextChatJid === 'string' ? nextChatJid.trim() : '';
   if (!normalized || normalized === currentChatJid) return false;
+  const traceId = startAppPerfTrace('thread-switch', normalized, {
+    sourceChatJid: currentChatJid,
+    trigger: 'branch-picker',
+  });
+  markAppPerfTrace(traceId, 'intent', {
+    sourceChatJid: currentChatJid,
+  });
   const url = buildChatWindowUrl(currentHref, normalized, { chatOnly: chatOnlyMode });
   navigate?.(url);
+  markAppPerfTrace(traceId, 'navigation-dispatched', {
+    url,
+  });
   return true;
 }
 

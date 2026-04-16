@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { afterEach, expect, test } from 'bun:test';
 
 import {
   applyStoredPaneLayout,
@@ -7,6 +7,11 @@ import {
   navigateToSelectedBranch,
   resolvePanePopoutTransfer,
 } from '../../web/src/ui/app-branch-pane-orchestration.js';
+import { getAppPerfTracing } from '../../web/src/ui/app-perf-tracing.js';
+
+afterEach(() => {
+  getAppPerfTracing().clear();
+});
 
 test('navigateToSelectedBranch ignores same/blank chats and navigates when selection changes', () => {
   const calls: string[] = [];
@@ -31,6 +36,12 @@ test('navigateToSelectedBranch ignores same/blank chats and navigates when selec
 
   expect(calls).toHaveLength(1);
   expect(calls[0]).toContain('chat_jid=web%3Abranch');
+
+  const traces = getAppPerfTracing().getTraces();
+  expect(traces).toHaveLength(1);
+  expect(traces[0]?.type).toBe('thread-switch');
+  expect(traces[0]?.chatJid).toBe('web:branch');
+  expect(traces[0]?.phases.map((phase) => phase.phase)).toEqual(['intent', 'navigation-dispatched']);
 });
 
 test('invokePaneBeforeDetachFromHost calls the pane detach lifecycle hook when present', async () => {
