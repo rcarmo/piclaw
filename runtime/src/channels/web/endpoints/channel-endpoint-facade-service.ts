@@ -194,6 +194,23 @@ export class WebChannelEndpointFacadeService {
       const includeArchived = ["1", "true", "yes", "on"].includes(
         String(url.searchParams.get("include_archived") || "").trim().toLowerCase(),
       );
+      const prewarmRecent = ["1", "true", "yes", "on"].includes(
+        String(url.searchParams.get("prewarm_recent") || "").trim().toLowerCase(),
+      );
+      const prewarmLimitRaw = Number.parseInt(String(url.searchParams.get("prewarm_limit") || "").trim(), 10);
+      const prewarmLimit = Number.isFinite(prewarmLimitRaw)
+        ? Math.max(1, Math.min(8, prewarmLimitRaw))
+        : 3;
+      const excludeChatJid = typeof url.searchParams.get("exclude_chat_jid") === "string"
+        ? url.searchParams.get("exclude_chat_jid")!.trim()
+        : "";
+
+      if (!rootChatJid && prewarmRecent) {
+        this.options.agentPool.scheduleRecentChatWarmup({
+          limit: prewarmLimit,
+          excludeChatJids: excludeChatJid ? [excludeChatJid] : [],
+        });
+      }
       const chats = typeof this.options.listKnownChats === "function"
         ? this.options.listKnownChats(rootChatJid || null, { includeArchived })
         : this.options.listActiveChats();

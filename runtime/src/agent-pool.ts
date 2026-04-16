@@ -56,6 +56,7 @@ import {
   type SshConfigSetResult,
   deleteSshConfig,
   getSshConfig,
+  listRecentChatJids,
   upsertSshConfig,
 } from "./db.js";
 import { setSshToolHandlers } from "./extensions/ssh.js";
@@ -256,6 +257,32 @@ export class AgentPool {
     percent: number | null;
   } | null> {
     return this.runtimeFacade.getContextUsageForChat(chatJid);
+  }
+
+  scheduleRecentChatWarmup(options: { limit?: number; excludeChatJids?: string[] } = {}): string[] {
+    const targetCount = Math.max(1, Math.min(8, Math.trunc(options.limit ?? 3) || 3));
+    const excluded = new Set(
+      Array.isArray(options.excludeChatJids)
+        ? options.excludeChatJids.map((jid) => String(jid || "").trim()).filter(Boolean)
+        : [],
+    );
+
+    const scheduled: string[] = [];
+    const candidates = listRecentChatJids(targetCount * 4, {
+      excludeChatJids: [...excluded],
+    });
+    for (const chatJid of candidates) {
+      if (excluded.has(chatJid)) continue;
+      if (this.pool.has(chatJid)) continue;
+      scheduled.push(chatJid);
+      if (scheduled.length >= targetCount) break;
+    }
+
+    for (const chatJid of scheduled) {
+      this.sessionManager.prewarm(chatJid);
+    }
+
+    return scheduled;
   }
 
   getSessionTreeForChat(chatJid: string): { leafId: string | null; nodes: unknown[]; flat?: boolean; total?: number; capped?: boolean } | null {

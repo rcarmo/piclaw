@@ -21,6 +21,7 @@ export {
 } from "./db/chat-branches.js";
 export {
   storeChatMetadata,
+  listRecentChatJids,
   storeMessage,
   getMessageByRowId,
   getMessageByAnyRowId,

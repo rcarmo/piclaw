@@ -197,6 +197,7 @@ test('handleMessageResponseRefresh triggers queue refresh only for queued respon
 
 test('refreshActiveChatAgents merges active + archived branch rows for target chat', async () => {
   let rows: any[] = [];
+  const branchOptions: any[] = [];
 
   refreshActiveChatAgents({
     currentChatJid: 'chat-a',
@@ -205,19 +206,25 @@ test('refreshActiveChatAgents merges active + archived branch rows for target ch
         { chat_jid: 'chat-a', root_chat_jid: 'chat-a', agent_name: 'Primary', is_active: true },
       ],
     }),
-    getChatBranches: async () => ({
-      chats: [
-        { chat_jid: 'chat-a', root_chat_jid: 'chat-a', agent_name: 'Primary branch' },
-        { chat_jid: 'chat-b', root_chat_jid: 'chat-a', agent_name: 'Branch', archived_at: '2026-01-01T00:00:00.000Z' },
-      ],
-    }),
+    getChatBranches: async (_rootChatJid, options) => {
+      branchOptions.push(options || null);
+      return {
+        chats: [
+          { chat_jid: 'chat-a', root_chat_jid: 'chat-a', agent_name: 'Primary branch' },
+          { chat_jid: 'chat-b', root_chat_jid: 'chat-a', agent_name: 'Branch', archived_at: '2026-01-01T00:00:00.000Z' },
+        ],
+      };
+    },
     activeChatJidRef: { current: 'chat-a' },
     setActiveChatAgents: (next) => {
       rows = typeof next === 'function' ? next(rows) : next;
     },
+    prewarmRecent: true,
+    prewarmLimit: 4,
   });
 
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   expect(rows.map((row) => row.chat_jid).sort()).toEqual(['chat-a', 'chat-b']);
+  expect(branchOptions).toEqual([{ includeArchived: true, prewarmRecent: true, prewarmLimit: 4, excludeChatJid: 'chat-a' }]);
 });

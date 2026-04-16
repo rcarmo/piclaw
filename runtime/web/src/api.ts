@@ -202,6 +202,9 @@ export async function getChatBranches(rootChatJid = null, options = {}) {
     const params = new URLSearchParams();
     if (rootChatJid) params.set('root_chat_jid', String(rootChatJid));
     if (options?.includeArchived) params.set('include_archived', '1');
+    if (options?.prewarmRecent) params.set('prewarm_recent', '1');
+    if (Number.isFinite(options?.prewarmLimit)) params.set('prewarm_limit', String(options.prewarmLimit));
+    if (options?.excludeChatJid) params.set('exclude_chat_jid', String(options.excludeChatJid));
     const query = params.toString() ? `?${params.toString()}` : '';
     return request(`/agent/branches${query}`);
 }

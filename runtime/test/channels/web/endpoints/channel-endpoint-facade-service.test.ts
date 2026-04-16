@@ -71,11 +71,18 @@ function createFacade(getIdentitySnapshot: () => WebChannelIdentitySnapshot) {
 
   const ensureCalls: string[] = [];
   const postCalls: Array<{ isReply: boolean; chatJid: string }> = [];
+  const scheduledWarmups: Array<{ limit?: number; excludeChatJids?: string[] }> = [];
   const activeChats = [{ chat_jid: "web:default", agent_name: "Pi" }];
   const knownChats = [{ chat_jid: "web:branch", agent_name: "Branch" }];
   const options: WebChannelEndpointFacadeOptions = {
     endpointContexts: contexts,
     defaultChatJid: "web:default",
+    agentPool: {
+      scheduleRecentChatWarmup: (input: { limit?: number; excludeChatJids?: string[] }) => {
+        scheduledWarmups.push(input);
+        return [];
+      },
+    } as unknown as AgentPool,
     getIdentitySnapshot,
     ensureAvatarCache: async (_kind, source) => {
       ensureCalls.push(source);
@@ -95,6 +102,7 @@ function createFacade(getIdentitySnapshot: () => WebChannelIdentitySnapshot) {
     facade: new WebChannelEndpointFacadeService(options),
     ensureCalls,
     postCalls,
+    scheduledWarmups,
     activeChats,
     knownChats,
   };
@@ -178,5 +186,16 @@ describe("web channel endpoint facade service", () => {
     );
     expect(branchesResponse.status).toBe(200);
     expect(await branchesResponse.json()).toEqual({ chats: knownChats });
+  });
+
+  test("can schedule recent-chat warmup from the branches endpoint without changing payload shape", async () => {
+    const { facade, knownChats, scheduledWarmups } = createFacade(() => createIdentitySnapshot());
+
+    const branchesResponse = facade.handleAgentBranches(
+      new Request("https://example.com/agent/branches?include_archived=1&prewarm_recent=1&prewarm_limit=4&exclude_chat_jid=web%3Adefault")
+    );
+    expect(branchesResponse.status).toBe(200);
+    expect(await branchesResponse.json()).toEqual({ chats: knownChats });
+    expect(scheduledWarmups).toEqual([{ limit: 4, excludeChatJids: ["web:default"] }]);
   });
 });

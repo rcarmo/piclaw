@@ -290,6 +290,47 @@ test("agent pool evicts idle sessions and recreates them", async () => {
   await pool.shutdown();
 });
 
+test("agent pool schedules warmup for the most recent inactive chats", async () => {
+  const ws = getTestWorkspace();
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
+  db.initDatabase();
+  db.storeChatMetadata("web:older", "2026-04-14T10:00:00.000Z", "Older");
+  db.storeChatMetadata("web:newer", "2026-04-14T11:00:00.000Z", "Newer");
+  db.storeChatMetadata("web:newest", "2026-04-14T12:00:00.000Z", "Newest");
+
+  const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
+
+  const created: string[] = [];
+  class StubSession {
+    subscribe(_listener: (event: any) => void) {
+      return () => {};
+    }
+    async prompt(_prompt: string) {}
+    async abort() {}
+    dispose() {}
+  }
+
+  const pool = new AgentPool({
+    createSession: async (chatJid: string) => {
+      created.push(chatJid);
+      return createRuntime(new StubSession()) as any;
+    },
+  });
+
+  const scheduled = (pool as any).scheduleRecentChatWarmup({
+    limit: 2,
+    excludeChatJids: ["web:default", "web:newest"],
+  });
+  expect(scheduled).toEqual(["web:newer", "web:older"]);
+
+  await Bun.sleep(20);
+  expect(created).toEqual(["web:newer", "web:older"]);
+
+  await pool.shutdown();
+});
+
 test("agent pool can run a side prompt with the current model and thinking level", async () => {
   const ws = getTestWorkspace();
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });

@@ -156,34 +156,43 @@ export interface RefreshActiveChatAgentsOptions {
   getChatBranches: (rootChatJid: string | null, options?: Record<string, unknown>) => Promise<{ chats?: unknown[] }>;
   activeChatJidRef: { current: string };
   setActiveChatAgents: StateSetter<any[]>;
+  prewarmRecent?: boolean;
+  prewarmLimit?: number;
 }
 
-export function refreshActiveChatAgents(options: RefreshActiveChatAgentsOptions): void {
+export async function refreshActiveChatAgents(options: RefreshActiveChatAgentsOptions): Promise<any[]> {
   const {
     currentChatJid,
     getActiveChatAgents,
     getChatBranches,
     activeChatJidRef,
     setActiveChatAgents,
+    prewarmRecent = false,
+    prewarmLimit = 3,
   } = options;
 
   const targetChatJid = currentChatJid;
+  try {
+    const [activePayload, branchPayload] = await Promise.all([
+      getActiveChatAgents().catch(() => ({ chats: [] /* expected: active-agent refresh is best-effort. */ })),
+      getChatBranches(null, {
+        includeArchived: true,
+        ...(prewarmRecent ? { prewarmRecent: true, prewarmLimit, excludeChatJid: targetChatJid } : {}),
+      }).catch(() => ({ chats: [] /* expected: archived-branch refresh is best-effort. */ })),
+    ]);
 
-  Promise.all([
-    getActiveChatAgents().catch(() => ({ chats: [] /* expected: active-agent refresh is best-effort. */ })),
-    getChatBranches(null, { includeArchived: true }).catch(() => ({ chats: [] /* expected: archived-branch refresh is best-effort. */ })),
-  ])
-    .then(([activePayload, branchPayload]) => {
-      if (activeChatJidRef.current !== targetChatJid) return;
+    if (activeChatJidRef.current !== targetChatJid) return [];
 
-      const activeChats = normalizeActiveChatRows(activePayload?.chats);
-      const branchChats = normalizeActiveChatRows(branchPayload?.chats);
-      setActiveChatAgents(mergeActiveAndBranchChats(activeChats, branchChats, targetChatJid));
-    })
-    .catch(() => {
-      if (activeChatJidRef.current !== targetChatJid) return;
-      setActiveChatAgents([]);
-    });
+    const activeChats = normalizeActiveChatRows(activePayload?.chats);
+    const branchChats = normalizeActiveChatRows(branchPayload?.chats);
+    const mergedChats = mergeActiveAndBranchChats(activeChats, branchChats, targetChatJid);
+    setActiveChatAgents(mergedChats);
+    return mergedChats;
+  } catch {
+    if (activeChatJidRef.current !== targetChatJid) return [];
+    setActiveChatAgents([]);
+    return [];
+  }
 }
 
 export interface RefreshCurrentChatBranchesOptions {

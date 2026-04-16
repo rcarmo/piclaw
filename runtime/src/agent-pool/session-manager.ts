@@ -171,6 +171,27 @@ export class AgentSessionManager {
     await this.disposeEntry(this.options.sidePool, chatJid, "recreate.dispose_side_session", true);
   }
 
+  prewarm(chatJid: string): void {
+    if (!chatJid) return;
+    if (this.options.pool.has(chatJid)) return;
+
+    void (async () => {
+      try {
+        await this.getOrCreate(chatJid);
+        this.options.onInfo?.("Prewarmed chat session", {
+          operation: "prewarm_session",
+          chatJid,
+        });
+      } catch (err) {
+        this.options.onWarn?.("Failed to prewarm chat session", {
+          operation: "prewarm_session",
+          chatJid,
+          err,
+        });
+      }
+    })();
+  }
+
   async shutdown(): Promise<void> {
     for (const jid of [...this.options.pool.keys()]) {
       await this.disposeEntry(this.options.pool, jid, "shutdown.dispose_main_session");
