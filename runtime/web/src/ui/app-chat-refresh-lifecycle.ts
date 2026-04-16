@@ -225,18 +225,21 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
                 hasCurrent: Boolean(payload?.current),
                 modelCount: Array.isArray(payload?.models) ? payload.models.length : 0,
               });
-              markAppPerfTrace(activeTraceId, 'runtime-hydration-ready', {
-                chatJid,
-              });
-              completeAppPerfTraceIfReady(activeTraceId, ['runtime-hydration-ready', 'timeline-first-paint'], 'settled', {
-                chatJid,
-              });
             }
             return payload;
           },
           activeChatJidRef,
           applyModelState,
         });
+        const activeTraceId = traceId || getThreadSwitchTraceId();
+        if (activeTraceId) {
+          markAppPerfTrace(activeTraceId, 'runtime-hydration-ready', {
+            chatJid: currentChatJid,
+          });
+          completeAppPerfTraceIfReady(activeTraceId, ['runtime-hydration-ready', 'timeline-first-paint'], 'settled', {
+            chatJid: currentChatJid,
+          });
+        }
         return null;
       },
     });

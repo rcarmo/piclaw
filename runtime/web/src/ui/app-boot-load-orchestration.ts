@@ -58,6 +58,10 @@ export interface RunTimelineLoadFlowOptions {
   isCancelled: () => boolean;
   scheduleRaf?: RafLike;
   scheduleTimeout?: (callback: () => void, delayMs: number) => void;
+  onTimelineLoadStart?: (detail?: Record<string, unknown>) => void;
+  onTimelineDataReady?: (detail?: Record<string, unknown>) => void;
+  onTimelineFirstPaint?: (detail?: Record<string, unknown>) => void;
+  onTimelineError?: (error: unknown, detail?: Record<string, unknown>) => void;
 }
 
 /**
@@ -77,11 +81,32 @@ export async function runTimelineLoadFlow(options: RunTimelineLoadFlowOptions): 
     setHasMore,
     scrollToBottom,
     isCancelled,
-    scheduleRaf = (callback) => requestAnimationFrame(callback),
+    scheduleRaf = (callback) => {
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(callback);
+        return;
+      }
+      setTimeout(callback, 0);
+    },
     scheduleTimeout = (callback, delayMs) => {
       setTimeout(callback, delayMs);
     },
+    onTimelineLoadStart,
+    onTimelineDataReady,
+    onTimelineFirstPaint,
+    onTimelineError,
   } = options;
+
+  const noteFirstPaint = (detail?: Record<string, unknown>) => {
+    if (isCancelled()) return;
+    scheduleRaf(() => {
+      if (isCancelled()) return;
+      scheduleRaf(() => {
+        if (isCancelled()) return;
+        onTimelineFirstPaint?.(detail);
+      });
+    });
+  };
 
   const safeScrollToBottom = () => {
     if (isCancelled()) return;
@@ -95,18 +120,32 @@ export async function runTimelineLoadFlow(options: RunTimelineLoadFlowOptions): 
   };
 
   if (currentHashtag) {
-    await loadPosts(currentHashtag);
+    onTimelineLoadStart?.({ mode: 'hashtag', hashtag: currentHashtag });
+    try {
+      await loadPosts(currentHashtag);
+      if (isCancelled()) return;
+      onTimelineDataReady?.({ mode: 'hashtag', hashtag: currentHashtag });
+      noteFirstPaint({ mode: 'hashtag' });
+    } catch (error) {
+      if (isCancelled()) return;
+      onTimelineError?.(error, { mode: 'hashtag', hashtag: currentHashtag });
+      throw error;
+    }
     return;
   }
 
   if (searchQuery) {
+    onTimelineLoadStart?.({ mode: 'search', searchQuery, searchScope });
     try {
       const result = await searchPosts(searchQuery, 50, 0, currentChatJid, searchScope, currentRootChatJid);
       if (isCancelled()) return;
       setPosts(Array.isArray(result?.results) ? result.results : []);
       setHasMore(false);
+      onTimelineDataReady?.({ mode: 'search', resultCount: Array.isArray(result?.results) ? result.results.length : 0 });
+      noteFirstPaint({ mode: 'search' });
     } catch (error) {
       if (isCancelled()) return;
+      onTimelineError?.(error, { mode: 'search', searchQuery, searchScope });
       console.error('Failed to search:', error);
       setPosts([]);
       setHasMore(false);
@@ -114,11 +153,16 @@ export async function runTimelineLoadFlow(options: RunTimelineLoadFlowOptions): 
     return;
   }
 
+  onTimelineLoadStart?.({ mode: 'timeline' });
   try {
     await loadPosts();
+    if (isCancelled()) return;
+    onTimelineDataReady?.({ mode: 'timeline' });
+    noteFirstPaint({ mode: 'timeline' });
     safeScrollToBottom();
   } catch (error) {
     if (isCancelled()) return;
+    onTimelineError?.(error, { mode: 'timeline' });
     console.error('Failed to load timeline:', error);
   }
 }
