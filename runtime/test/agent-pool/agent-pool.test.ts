@@ -331,6 +331,58 @@ test("agent pool schedules warmup for the most recent inactive chats", async () 
   await pool.shutdown();
 });
 
+test("agent pool widens recent-chat warmup search when top candidates are already warm", async () => {
+  const ws = getTestWorkspace();
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
+  db.initDatabase();
+  for (const [index, chatJid] of [
+    "web:hot-1",
+    "web:hot-2",
+    "web:hot-3",
+    "web:hot-4",
+    "web:warm-1",
+    "web:warm-2",
+  ].entries()) {
+    db.storeChatMetadata(chatJid, `2026-04-14T1${index}:00:00.000Z`, chatJid);
+  }
+
+  const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
+
+  const created: string[] = [];
+  class StubSession {
+    subscribe(_listener: (event: any) => void) {
+      return () => {};
+    }
+    async prompt(_prompt: string) {}
+    async abort() {}
+    dispose() {}
+  }
+
+  const pool = new AgentPool({
+    createSession: async (chatJid: string) => {
+      created.push(chatJid);
+      return createRuntime(new StubSession()) as any;
+    },
+  });
+
+  for (const chatJid of ["web:hot-1", "web:hot-2", "web:hot-3", "web:hot-4"]) {
+    (pool as any).pool.set(chatJid, { runtime: createRuntime(new StubSession()), lastUsed: Date.now() });
+  }
+
+  const scheduled = (pool as any).scheduleRecentChatWarmup({
+    limit: 2,
+    excludeChatJids: ["web:default"],
+  });
+  expect(scheduled).toEqual(["web:warm-2", "web:warm-1"]);
+
+  await Bun.sleep(20);
+  expect(created).toEqual(["web:warm-2", "web:warm-1"]);
+
+  await pool.shutdown();
+});
+
 test("agent pool can run a side prompt with the current model and thinking level", async () => {
   const ws = getTestWorkspace();
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
@@ -576,6 +628,10 @@ test("agent pool forks active chats from the previous stable turn boundary", asy
 
   const branch = await (pool as any).createForkedChatBranch(sourceChatJid);
   expect(branch.chat_jid).not.toBe(sourceChatJid);
+  await Bun.sleep(20);
+  if (!created[branch.chat_jid]) {
+    await (pool as any).getOrCreateRuntime(branch.chat_jid);
+  }
   const forkedSession = created[branch.chat_jid];
   const forkedMessages = forkedSession.sessionManager.buildSessionContext().messages;
   const serialized = JSON.stringify(forkedMessages);

@@ -268,14 +268,31 @@ export class AgentPool {
     );
 
     const scheduled: string[] = [];
-    const candidates = listRecentChatJids(targetCount * 4, {
-      excludeChatJids: [...excluded],
-    });
-    for (const chatJid of candidates) {
-      if (excluded.has(chatJid)) continue;
-      if (this.pool.has(chatJid)) continue;
-      scheduled.push(chatJid);
-      if (scheduled.length >= targetCount) break;
+    const seen = new Set<string>();
+    let fetchLimit = Math.min(100, Math.max(targetCount * 4, targetCount));
+
+    while (scheduled.length < targetCount) {
+      const candidates = listRecentChatJids(fetchLimit, {
+        excludeChatJids: [...excluded],
+      });
+      for (const chatJid of candidates) {
+        if (seen.has(chatJid)) continue;
+        seen.add(chatJid);
+        if (excluded.has(chatJid)) continue;
+        if (this.pool.has(chatJid)) continue;
+        scheduled.push(chatJid);
+        if (scheduled.length >= targetCount) break;
+      }
+
+      if (scheduled.length >= targetCount || fetchLimit >= 100) {
+        break;
+      }
+
+      const nextFetchLimit = Math.min(100, fetchLimit * 2);
+      if (nextFetchLimit === fetchLimit) {
+        break;
+      }
+      fetchLimit = nextFetchLimit;
     }
 
     for (const chatJid of scheduled) {

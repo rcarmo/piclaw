@@ -107,6 +107,7 @@ export function createAgentPoolServices(options: AgentPoolServiceFactoryOptions)
     getOrCreateRuntime: (chatJid) => sessionManager.getOrCreate(chatJid),
     refreshRuntime: (chatJid, runtime) => sessionManager.refreshRuntime(chatJid, runtime),
     isActive: (chatJid) => runtimeFacade.isActive(chatJid),
+    scheduleSessionWarmup: (chatJid) => sessionManager.prewarm(chatJid),
     onWarn: options.onWarn,
   });
   sessionManager = new AgentSessionManager({

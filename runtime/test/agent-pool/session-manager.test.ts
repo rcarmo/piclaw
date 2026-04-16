@@ -1,7 +1,22 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
+import { writeFileSync } from "fs";
+import { join } from "path";
 
 import type { AgentSessionRuntime } from "@mariozechner/pi-coding-agent";
+import { readDeferredBranchSeed } from "../../src/agent-pool/branch-seeding.js";
+import { ensureSessionDir } from "../../src/agent-pool/session.js";
 import { AgentSessionManager } from "../../src/agent-pool/session-manager.js";
+import { createTempWorkspace, setEnv } from "../helpers.js";
+
+let restoreEnv: (() => void) | null = null;
+let cleanupWorkspace: (() => void) | null = null;
+
+afterEach(() => {
+  restoreEnv?.();
+  cleanupWorkspace?.();
+  restoreEnv = null;
+  cleanupWorkspace = null;
+});
 
 function createRuntime(session: any): AgentSessionRuntime {
   return {
@@ -79,6 +94,32 @@ test("AgentSessionManager creates, caches, and binds main sessions", async () =>
   expect(fixture.pool.get("web:default")?.runtime.session).toBe(session);
 });
 
+test("AgentSessionManager singleflights concurrent main-session creation for the same chat", async () => {
+  let createCalls = 0;
+  let releaseCreate!: () => void;
+  const waitForCreate = new Promise<void>((resolve) => {
+    releaseCreate = resolve;
+  });
+  const session = {
+    dispose() {},
+  };
+  const fixture = createManager({
+    createSession: async () => {
+      createCalls += 1;
+      await waitForCreate;
+      return createRuntime(session) as any;
+    },
+  });
+
+  const first = fixture.manager.getOrCreate("web:default");
+  const second = fixture.manager.getOrCreate("web:default");
+  releaseCreate();
+
+  expect(await first).toBe(await second);
+  expect(createCalls).toBe(1);
+  expect(fixture.state.bound).toEqual(["web:default"]);
+});
+
 test("AgentSessionManager recreates cached main and side sessions", async () => {
   let disposed = 0;
   const mainSession = {
@@ -142,4 +183,67 @@ test("AgentSessionManager evicts idle sessions and shuts down remaining sessions
   expect(fixture.pool.size).toBe(0);
   expect(fixture.sidePool.size).toBe(0);
   expect(disposed).toBe(2);
+});
+
+test("AgentSessionManager fails loudly and clears the cache when a deferred branch seed is invalid", async () => {
+  const ws = createTempWorkspace("piclaw-session-manager-invalid-seed-");
+  cleanupWorkspace = ws.cleanup;
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  let createCalls = 0;
+  let disposed = 0;
+  const fixture = createManager({
+    createSession: async () => {
+      createCalls += 1;
+      return createRuntime({
+        dispose() {
+          disposed += 1;
+        },
+      });
+    },
+  });
+
+  const chatJid = "web:broken-branch";
+  writeFileSync(join(ensureSessionDir(chatJid), ".branch-seed.json"), "{not-json", "utf8");
+
+  await expect(fixture.manager.getOrCreate(chatJid)).rejects.toThrow("Invalid deferred branch seed");
+  await expect(fixture.manager.getOrCreate(chatJid)).rejects.toThrow("Invalid deferred branch seed");
+  expect(fixture.pool.has(chatJid)).toBe(false);
+  expect(createCalls).toBe(1);
+  expect(disposed).toBe(1);
+  fixture.manager.prewarm(chatJid);
+  expect(createCalls).toBe(1);
+});
+
+test("AgentSessionManager disposes an existing runtime and restores its deferred seed when realization fails", async () => {
+  const ws = createTempWorkspace("piclaw-session-manager-broken-realize-");
+  cleanupWorkspace = ws.cleanup;
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  let disposed = 0;
+  const runtime = createRuntime({
+    dispose() {
+      disposed += 1;
+    },
+  });
+  runtime.newSession = async () => {
+    throw new Error("seed replay failed");
+  };
+
+  const fixture = createManager();
+  const chatJid = "web:seeded-branch";
+  fixture.pool.set(chatJid, { runtime, lastUsed: Date.now() });
+  writeFileSync(join(ensureSessionDir(chatJid), ".branch-seed.json"), JSON.stringify({
+    version: 1,
+    parentSession: null,
+    sessionName: "Seeded",
+    model: null,
+    thinkingLevel: null,
+    mode: "rotated_context",
+  }), "utf8");
+
+  await expect(fixture.manager.getOrCreate(chatJid)).rejects.toThrow("seed replay failed");
+  expect(fixture.pool.has(chatJid)).toBe(false);
+  expect(disposed).toBe(1);
+  expect(readDeferredBranchSeed(chatJid)?.sessionName).toBe("Seeded");
 });
