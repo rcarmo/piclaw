@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -52,6 +52,7 @@ describe("web push store", () => {
     expect(created.publicKeyPem).toContain("BEGIN PUBLIC KEY");
     expect(reread.publicKey).toBe(created.publicKey);
     expect(getStoredVapidPublicKey(baseDir)).toBe(created.publicKey);
+    expect(statSync(join(baseDir, "vapid-keys.json")).mode & 0o777).toBe(0o600);
   });
 
   test("normalizes valid subscriptions and rejects malformed ones", () => {
@@ -91,6 +92,7 @@ describe("web push store", () => {
     expect(updated.updatedAt).toBe("2026-04-14T18:55:00.000Z");
     expect(updated.userAgent).toBe("PiClaw Test 2");
     expect(listStoredWebPushSubscriptions(baseDir)).toHaveLength(1);
+    expect(statSync(join(baseDir, "subscriptions.json")).mode & 0o777).toBe(0o600);
 
     expect(removeStoredWebPushSubscription(created.endpoint, baseDir)).toBe(true);
     expect(removeStoredWebPushSubscription(created.endpoint, baseDir)).toBe(false);

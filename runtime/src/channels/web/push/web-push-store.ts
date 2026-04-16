@@ -3,7 +3,7 @@
  */
 
 import { createPublicKey, generateKeyPairSync } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 import { WORKSPACE_DIR } from "../../../core/config.js";
@@ -58,7 +58,14 @@ function readJsonFile<T>(path: string): T | null {
 
 function writeJsonFile(path: string, value: unknown): void {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
+  const tempPath = `${path}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    writeFileSync(tempPath, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf-8", mode: 0o600 });
+    renameSync(tempPath, path);
+  } catch (error) {
+    rmSync(tempPath, { force: true });
+    throw error;
+  }
 }
 
 function decodeBase64Url(value: string): Buffer {
