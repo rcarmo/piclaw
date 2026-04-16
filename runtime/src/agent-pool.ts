@@ -258,6 +258,10 @@ export class AgentPool {
     return this.runtimeFacade.getContextUsageForChat(chatJid);
   }
 
+  scheduleChatWarmup(chatJid: string, options: { priority?: boolean } = {}): boolean {
+    return this.sessionManager.prewarm(chatJid, options);
+  }
+
   getSessionTreeForChat(chatJid: string): { leafId: string | null; nodes: unknown[]; flat?: boolean; total?: number; capped?: boolean } | null {
     return this.runtimeFacade.getSessionTreeForChat(chatJid);
   }

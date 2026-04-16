@@ -143,3 +143,32 @@ test("AgentSessionManager evicts idle sessions and shuts down remaining sessions
   expect(fixture.sidePool.size).toBe(0);
   expect(disposed).toBe(2);
 });
+
+test("AgentSessionManager serializes queued prewarms and honors priority ordering", async () => {
+  const created: string[] = [];
+  let activeCreates = 0;
+  let maxConcurrentCreates = 0;
+
+  const fixture = createManager({
+    createSession: async (chatJid: string) => {
+      created.push(chatJid);
+      activeCreates += 1;
+      maxConcurrentCreates = Math.max(maxConcurrentCreates, activeCreates);
+      await Bun.sleep(10);
+      activeCreates -= 1;
+      return createRuntime({ dispose() {} }) as any;
+    },
+  });
+
+  expect(fixture.manager.prewarm("web:older")).toBe(true);
+  expect(fixture.manager.prewarm("web:newer")).toBe(true);
+  expect(fixture.manager.prewarm("web:priority", { priority: true })).toBe(true);
+  expect(fixture.manager.prewarm("web:older")).toBe(false);
+
+  await Bun.sleep(50);
+
+  expect(created).toEqual(["web:older", "web:priority", "web:newer"]);
+  expect(maxConcurrentCreates).toBe(1);
+
+  await fixture.manager.shutdown();
+});

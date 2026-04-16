@@ -39,6 +39,11 @@ export interface AgentSessionManagerOptions {
  * Handles lifecycle operations for main and auxiliary AgentSession instances.
  */
 export class AgentSessionManager {
+  private readonly prewarmInFlight = new Set<string>();
+  private readonly queuedPrewarms = new Set<string>();
+  private readonly prewarmQueue: string[] = [];
+  private prewarmLoopActive = false;
+
   constructor(private readonly options: AgentSessionManagerOptions) {}
 
   async refreshRuntime(chatJid: string, runtime: AgentSessionRuntime): Promise<void> {
@@ -171,6 +176,22 @@ export class AgentSessionManager {
     await this.disposeEntry(this.options.sidePool, chatJid, "recreate.dispose_side_session", true);
   }
 
+  prewarm(chatJid: string, options: { priority?: boolean } = {}): boolean {
+    const normalizedChatJid = String(chatJid || "").trim();
+    if (!normalizedChatJid) return false;
+    if (this.options.pool.has(normalizedChatJid)) return false;
+    if (this.prewarmInFlight.has(normalizedChatJid) || this.queuedPrewarms.has(normalizedChatJid)) return false;
+
+    this.queuedPrewarms.add(normalizedChatJid);
+    if (options.priority) {
+      this.prewarmQueue.unshift(normalizedChatJid);
+    } else {
+      this.prewarmQueue.push(normalizedChatJid);
+    }
+    this.drainPrewarmQueue();
+    return true;
+  }
+
   async shutdown(): Promise<void> {
     for (const jid of [...this.options.pool.keys()]) {
       await this.disposeEntry(this.options.pool, jid, "shutdown.dispose_main_session");
@@ -277,5 +298,43 @@ export class AgentSessionManager {
         err,
       });
     }
+  }
+
+  private drainPrewarmQueue(): void {
+    if (this.prewarmLoopActive) return;
+    this.prewarmLoopActive = true;
+
+    void (async () => {
+      try {
+        while (this.prewarmQueue.length > 0) {
+          const chatJid = this.prewarmQueue.shift();
+          if (!chatJid) continue;
+          this.queuedPrewarms.delete(chatJid);
+          if (this.prewarmInFlight.has(chatJid) || this.options.pool.has(chatJid)) continue;
+
+          this.prewarmInFlight.add(chatJid);
+          try {
+            await this.getOrCreate(chatJid);
+            this.options.onInfo?.("Prewarmed chat session", {
+              operation: "prewarm_session",
+              chatJid,
+            });
+          } catch (err) {
+            this.options.onWarn?.("Failed to prewarm chat session", {
+              operation: "prewarm_session",
+              chatJid,
+              err,
+            });
+          } finally {
+            this.prewarmInFlight.delete(chatJid);
+          }
+        }
+      } finally {
+        this.prewarmLoopActive = false;
+        if (this.prewarmQueue.length > 0) {
+          this.drainPrewarmQueue();
+        }
+      }
+    })();
   }
 }
