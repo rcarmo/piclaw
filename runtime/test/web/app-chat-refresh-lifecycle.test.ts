@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import {
+  prewarmRecentTimelineChats,
   refreshPostPaintThreadHydration,
   startModelAndQueueRefreshEffect,
 } from '../../web/src/ui/app-chat-refresh-lifecycle.js';
@@ -63,20 +64,44 @@ test('refreshPostPaintThreadHydration refreshes the current chat after timeline 
 
   refreshPostPaintThreadHydration({
     refreshModelState: () => calls.push('model'),
-    refreshActiveChatAgents: () => calls.push('agents'),
+    refreshActiveChatAgents: (options) => calls.push(`agents:${options?.prewarmRecent ? 'warm' : 'plain'}:${options?.prewarmLimit ?? 0}`),
     refreshCurrentChatBranches: () => calls.push('branches'),
     refreshQueueState: () => calls.push('queue'),
     refreshContextUsage: async () => { calls.push('context'); },
     refreshAutoresearchStatus: async () => { calls.push('autoresearch'); },
+    prewarmLimit: 7,
   });
 
   await Promise.resolve();
   expect(calls).toEqual([
     'model',
-    'agents',
+    'agents:warm:7',
     'branches',
     'queue',
     'context',
     'autoresearch',
   ]);
+});
+
+test('prewarmRecentTimelineChats prewarms distinct nearby chats and skips the current chat', async () => {
+  const calls: string[] = [];
+
+  prewarmRecentTimelineChats({
+    chats: [
+      { chat_jid: 'web:current' },
+      { chat_jid: 'web:branch:1' },
+      { chat_jid: 'web:branch:1' },
+      { chat_jid: 'web:branch:2' },
+    ],
+    currentChatJid: 'web:current',
+    prewarmLimit: 2,
+    fetchTimeline: async (chatJid) => {
+      calls.push(chatJid);
+      return { posts: [], has_more: false };
+    },
+  });
+
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(calls).toEqual(['web:branch:1', 'web:branch:2']);
 });

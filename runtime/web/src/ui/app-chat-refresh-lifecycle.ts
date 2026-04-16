@@ -15,6 +15,8 @@ import {
   getActiveAppPerfTraceId,
   markAppPerfTrace,
 } from './app-perf-tracing.js';
+import { prewarmTimelineSnapshots, resolveRecentTimelinePrewarmChatJids } from './app-timeline-cache.js';
+import { getTimeline } from '../api.js';
 import {
   noteAppChatActivation,
   runCoalescedAppRefresh,
@@ -94,11 +96,12 @@ export function startModelAndQueueRefreshEffect(options: {
 
 export function refreshPostPaintThreadHydration(options: {
   refreshModelState: () => void;
-  refreshActiveChatAgents: () => void;
+  refreshActiveChatAgents: (options?: { prewarmRecent?: boolean; prewarmLimit?: number }) => void;
   refreshCurrentChatBranches: () => void;
   refreshQueueState: () => void;
   refreshContextUsage: () => Promise<void>;
   refreshAutoresearchStatus: () => Promise<void>;
+  prewarmLimit?: number;
 }): void {
   const {
     refreshModelState,
@@ -107,14 +110,32 @@ export function refreshPostPaintThreadHydration(options: {
     refreshQueueState,
     refreshContextUsage,
     refreshAutoresearchStatus,
+    prewarmLimit = 5,
   } = options;
 
   refreshModelState();
-  refreshActiveChatAgents();
+  refreshActiveChatAgents({
+    prewarmRecent: true,
+    prewarmLimit,
+  });
   refreshCurrentChatBranches();
   refreshQueueState();
   void refreshContextUsage();
   void refreshAutoresearchStatus();
+}
+
+export function prewarmRecentTimelineChats(options: {
+  chats: unknown;
+  currentChatJid: string;
+  prewarmLimit?: number;
+  fetchTimeline?: (chatJid: string) => Promise<{ posts?: any[]; has_more?: boolean }>;
+}): void {
+  const chatJids = resolveRecentTimelinePrewarmChatJids(options.chats, options.currentChatJid, options.prewarmLimit ?? 5);
+  if (chatJids.length === 0) return;
+  void prewarmTimelineSnapshots({
+    chatJids,
+    fetchTimeline: options.fetchTimeline ?? ((chatJid) => getTimeline(10, null, chatJid)),
+  });
 }
 
 export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions) {
@@ -245,13 +266,18 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
     });
   }, [activeChatJidRef, applyModelState, currentChatJid, getAgentModels, getThreadSwitchTraceId]);
 
-  const refreshActiveChatAgents = useCallback(() => {
+  const refreshActiveChatAgents = useCallback((options?: {
+    prewarmRecent?: boolean;
+    prewarmLimit?: number;
+  }) => {
+    const prewarmRecent = Boolean(options?.prewarmRecent);
+    const prewarmLimit = Number.isFinite(options?.prewarmLimit) ? Number(options?.prewarmLimit) : 5;
     return runCoalescedAppRefresh({
       kind: 'active-chat-agents',
       chatJid: currentChatJid,
       run: async () => {
         const traceId = getThreadSwitchTraceId();
-        await refreshActiveChatAgentsState({
+        const mergedChats = await refreshActiveChatAgentsState({
           currentChatJid,
           getActiveChatAgents: async () => {
             if (traceId) {
@@ -285,6 +311,13 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
           activeChatJidRef,
           setActiveChatAgents,
         });
+        if (prewarmRecent) {
+          prewarmRecentTimelineChats({
+            chats: mergedChats,
+            currentChatJid,
+            prewarmLimit,
+          });
+        }
         return null;
       },
     });
@@ -339,6 +372,7 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
       refreshQueueState,
       refreshContextUsage,
       refreshAutoresearchStatus,
+      prewarmLimit: 5,
     });
   }, [refreshActiveChatAgents, refreshAutoresearchStatus, refreshContextUsage, refreshCurrentChatBranches, refreshModelState, refreshQueueState]);
 
