@@ -21,6 +21,7 @@ export function buildRouteFlags(overrides: Partial<RouteFlags> = {}): RouteFlags
     isManifest: false,
     isFavicon: false,
     isAppleIcon: false,
+    isServiceWorker: false,
     isStaticAsset: false,
     isPublicStatic: false,
     isDocsAsset: false,

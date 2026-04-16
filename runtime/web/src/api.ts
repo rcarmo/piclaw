@@ -274,6 +274,32 @@ export async function sendPeerAgentMessage(sourceChatJid, targetChatOrName, cont
     });
 }
 
+export async function getWebPushPublicKey() {
+    return request('/agent/push/vapid-public-key');
+}
+
+export async function saveWebPushSubscription(subscription, options = {}) {
+    const payload = {
+        subscription,
+        ...(options?.deviceId ? { device_id: options.deviceId } : {}),
+    };
+    return request('/agent/push/subscription', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    });
+}
+
+export async function deleteWebPushSubscription(subscription, options = {}) {
+    const payload = {
+        subscription,
+        ...(options?.deviceId ? { device_id: options.deviceId } : {}),
+    };
+    return request('/agent/push/subscription', {
+        method: 'DELETE',
+        body: JSON.stringify(payload),
+    });
+}
+
 /**
  * Get available agents / current agent roster.
  */

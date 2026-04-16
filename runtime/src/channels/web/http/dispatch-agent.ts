@@ -2,7 +2,15 @@
  * web/http/dispatch-agent.ts – Agent route dispatch helpers.
  */
 
+import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
+import {
+  handleWebPushSubscriptionDelete,
+  handleWebPushSubscriptionUpsert,
+  handleWebPushVapidPublicKey,
+} from "../push/web-push-routes.js";
+
+const log = createLogger("web.dispatch-agent");
 
 interface ExactAgentRoute {
   method: string;
@@ -59,6 +67,110 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
     method: "POST",
     path: "/agent/autoresearch/dismiss",
     handle: (channel, req) => channel.handleAutoresearchDismiss(req),
+  },
+  {
+    method: "POST" as const,
+    path: "/agent/codex/dismiss",
+    handle: async (_channel: any, req: Request) => {
+      try {
+        let taskId = "";
+        let chatJid = "web:default";
+        try {
+          const body = await req.json();
+          if (typeof body?.key === "string") taskId = body.key.replace("codex.dismiss.", "");
+          if (typeof body?.chat_jid === "string" && body.chat_jid.trim()) chatJid = body.chat_jid.trim();
+        } catch (error) {
+          debugSuppressedError(log, "Failed to parse codex dismiss payload; using default values.", error);
+        }
+        if (taskId) {
+          try {
+            const { existsSync, readFileSync } = await import("node:fs");
+            const { join } = await import("node:path");
+            const metaPath = join("/workspace/.piclaw/data/extensions/codex-delegate/tasks", taskId, "task.json");
+            if (existsSync(metaPath)) {
+              const meta = JSON.parse(readFileSync(metaPath, "utf8"));
+              if (typeof meta?.chat_jid === "string" && meta.chat_jid.trim()) chatJid = meta.chat_jid.trim();
+            }
+          } catch (error) {
+            debugSuppressedError(log, "Failed to read codex task metadata while dismissing the widget.", error, { taskId });
+          }
+        }
+        const broadcast = (globalThis as any).__PICLAW_BROADCAST_EVENT__;
+        if (typeof broadcast === "function") {
+          const wkey = taskId ? `codex-${taskId}` : "codex-delegate";
+          broadcast("extension_ui_widget", { chat_jid: chatJid, key: wkey, content: [], options: { surface: "status-panel", remove: true } });
+        }
+        return Response.json({ ok: true });
+      } catch (err) {
+        return Response.json({ error: String(err) }, { status: 500 });
+      }
+    },
+  },
+  {
+    method: "POST" as const,
+    path: "/agent/codex/stop",
+    handle: async (_channel: any, req: Request) => {
+      try {
+        let taskId = "";
+        let chatJid = "web:default";
+        try {
+          const body = await req.json();
+          if (typeof body?.key === "string") taskId = body.key.replace("codex.stop.", "");
+          if (typeof body?.chat_jid === "string" && body.chat_jid.trim()) chatJid = body.chat_jid.trim();
+        } catch (error) {
+          debugSuppressedError(log, "Failed to parse codex stop payload; using default values.", error);
+        }
+        const { spawnSync } = await import("node:child_process");
+        const { accessSync, constants, existsSync, readFileSync } = await import("node:fs");
+        const { join } = await import("node:path");
+        const searchPath = [
+          ...(process.env.PATH || "").split(":"),
+          "/run/current-system/sw/bin",
+          "/etc/profiles/per-user/agent/bin",
+          "/home/agent/.nix-profile/bin",
+          "/nix/profile/bin",
+          "/home/agent/.local/bin",
+          "/home/agent/.bun/bin",
+        ].filter(Boolean);
+        let tmuxBin = "tmux";
+        for (const dir of searchPath) {
+          const candidate = `${dir}/tmux`;
+          try {
+            accessSync(candidate, constants.X_OK);
+            tmuxBin = candidate;
+            break;
+          } catch (error) {
+            debugSuppressedError(log, "Candidate tmux binary unavailable while stopping codex session; trying next path.", error, {
+              candidate,
+              taskId,
+            });
+          }
+        }
+        const env = { ...process.env, PATH: Array.from(new Set(searchPath)).join(":") };
+        const tmuxSession = "codex-" + taskId;
+        spawnSync(tmuxBin, ["send-keys", "-t", tmuxSession, "C-c", ""], { stdio: "ignore", env });
+        setTimeout(() => spawnSync(tmuxBin, ["kill-session", "-t", tmuxSession], { stdio: "ignore", env }), 2000);
+        if (taskId) {
+          try {
+            const metaPath = join("/workspace/.piclaw/data/extensions/codex-delegate/tasks", taskId, "task.json");
+            if (existsSync(metaPath)) {
+              const meta = JSON.parse(readFileSync(metaPath, "utf8"));
+              if (typeof meta?.chat_jid === "string" && meta.chat_jid.trim()) chatJid = meta.chat_jid.trim();
+            }
+          } catch (error) {
+            debugSuppressedError(log, "Failed to read codex task metadata while stopping the widget.", error, { taskId });
+          }
+        }
+        const broadcast = (globalThis as any).__PICLAW_BROADCAST_EVENT__;
+        if (typeof broadcast === "function") {
+          const wkey = "codex-" + taskId;
+          broadcast("extension_ui_widget", { chat_jid: chatJid, key: wkey, content: [], options: { surface: "status-panel", remove: true } });
+        }
+        return Response.json({ ok: true });
+      } catch (err) {
+        return Response.json({ error: String(err) }, { status: 500 });
+      }
+    },
   },
   {
     method: "GET",
@@ -134,6 +246,21 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
     method: "POST",
     path: "/agent/card-action",
     handle: (channel, req) => channel.handleAdaptiveCardAction(req),
+  },
+  {
+    method: "GET",
+    path: "/agent/push/vapid-public-key",
+    handle: () => handleWebPushVapidPublicKey(),
+  },
+  {
+    method: "POST",
+    path: "/agent/push/subscription",
+    handle: (_channel, req) => handleWebPushSubscriptionUpsert(req),
+  },
+  {
+    method: "DELETE",
+    path: "/agent/push/subscription",
+    handle: (_channel, req) => handleWebPushSubscriptionDelete(req),
   },
   {
     method: "POST",

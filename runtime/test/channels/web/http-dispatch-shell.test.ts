@@ -10,7 +10,7 @@ describe("web http shell dispatch", () => {
     expect(response).toBeNull();
   });
 
-  test("dispatches index/manifest/static/docs/sse/terminal-session/vnc routes", async () => {
+  test("dispatches index/manifest/service-worker/static/docs/sse/terminal-session/vnc routes", async () => {
     const channel = {
       serveStatic: (rel: string) => new Response(`static:${rel}`),
       handleManifest: () => new Response("manifest"),
@@ -28,6 +28,9 @@ describe("web http shell dispatch", () => {
 
     const manifestFlags = buildRouteFlags({ isManifest: true });
     expect(await (await handleShellRoutes(channel, new Request("https://e/manifest.json", { method: "GET" }), "/manifest.json", manifestFlags, async () => new Response()))?.text()).toBe("manifest");
+
+    const serviceWorkerFlags = buildRouteFlags({ isServiceWorker: true });
+    expect(await (await handleShellRoutes(channel, new Request("https://e/sw.js", { method: "GET" }), "/sw.js", serviceWorkerFlags, async () => new Response()))?.text()).toBe("static:sw.js");
 
     expect(await (await handleShellRoutes(channel, new Request("https://e/ghostty-vt.wasm", { method: "GET" }), "/ghostty-vt.wasm", buildRouteFlags(), async () => new Response()))?.text()).toBe("static:js/vendor/ghostty-vt.wasm");
 

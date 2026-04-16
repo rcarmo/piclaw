@@ -128,6 +128,9 @@ describe("web http agent dispatch", () => {
     const cardReq = new Request("https://example.com/agent/card-action", { method: "POST" });
     expect((await handleAgentRoutes(channel, cardReq, "/agent/card-action", new URL(cardReq.url)))?.status).toBe(205);
 
+    const vapidReq = new Request("https://example.com/agent/push/vapid-public-key", { method: "GET" });
+    expect((await handleAgentRoutes(channel, vapidReq, "/agent/push/vapid-public-key", new URL(vapidReq.url)))?.status).toBe(200);
+
     const sidePromptReq = new Request("https://example.com/agent/side-prompt", { method: "POST" });
     expect((await handleAgentRoutes(channel, sidePromptReq, "/agent/side-prompt", new URL(sidePromptReq.url)))?.status).toBe(206);
 

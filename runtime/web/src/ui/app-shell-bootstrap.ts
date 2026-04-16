@@ -26,6 +26,7 @@ interface AppApiSurface {
 
 let initialized = false;
 let browserNoiseFilterInstalled = false;
+let serviceWorkerRegistrationStarted = false;
 
 export function configureMarked(markedInstance: { setOptions?: (options: Record<string, unknown>) => void } | null | undefined): void {
   if (!markedInstance || typeof markedInstance.setOptions !== 'function') return;
@@ -72,6 +73,16 @@ export function registerAppPaneExtensions(): void {
   paneRegistry.register(terminalTabPaneExtension);
 }
 
+export function registerAppServiceWorker(runtimeWindow: (Window & typeof globalThis) | null = typeof window !== 'undefined' ? window : null): void {
+  if (!runtimeWindow || serviceWorkerRegistrationStarted) return;
+  if (!runtimeWindow.isSecureContext) return;
+  if (!("serviceWorker" in runtimeWindow.navigator)) return;
+  serviceWorkerRegistrationStarted = true;
+  void runtimeWindow.navigator.serviceWorker.register('/sw.js').catch((error) => {
+    console.warn('Failed to register app service worker:', error);
+  });
+}
+
 export function initializeAppShellRuntime(): void {
   if (initialized) return;
   const markedInstance = typeof window !== 'undefined'
@@ -80,6 +91,7 @@ export function initializeAppShellRuntime(): void {
   configureMarked(markedInstance);
   installBrowserNoiseFilters(typeof window !== 'undefined' ? window : null);
   registerAppPaneExtensions();
+  registerAppServiceWorker(typeof window !== 'undefined' ? window : null);
   initialized = true;
 }
 

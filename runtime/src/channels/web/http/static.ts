@@ -99,9 +99,11 @@ export async function serveStatic(relPath: string, notFound: () => Response): Pr
   const cacheControl =
     ext === ".html"
       ? "no-cache, no-store, must-revalidate"
-      : (relPath === "dist" || relPath.startsWith("dist/") || relPath.includes("/dist/"))
+      : relPath === "sw.js"
         ? "no-cache, no-store, must-revalidate"
-        : "public, max-age=3600";
+        : (relPath === "dist" || relPath.startsWith("dist/") || relPath.includes("/dist/"))
+          ? "no-cache, no-store, must-revalidate"
+          : "public, max-age=3600";
 
   if (ext === ".html") {
     const rendered = renderHtmlTemplate(relPath, await file.text());
@@ -113,11 +115,17 @@ export async function serveStatic(relPath: string, notFound: () => Response): Pr
     });
   }
 
+  const responseHeaders: Record<string, string> = {
+    "Content-Type": contentType,
+    "Cache-Control": cacheControl,
+  };
+
+  if (relPath === "sw.js") {
+    responseHeaders["Service-Worker-Allowed"] = "/";
+  }
+
   return new Response(file, {
-    headers: {
-      "Content-Type": contentType,
-      "Cache-Control": cacheControl,
-    },
+    headers: responseHeaders,
   });
 }
 

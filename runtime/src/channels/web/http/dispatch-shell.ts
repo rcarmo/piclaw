@@ -49,6 +49,10 @@ export async function handleShellRoutes(
     return await serveStaticAsset(req, pathname.slice(1));
   }
 
+  if (flags.isServiceWorker) {
+    return channel.serveStatic("sw.js");
+  }
+
   if (req.method === "GET" && pathname === "/ghostty-vt.wasm") {
     return channel.serveStatic("js/vendor/ghostty-vt.wasm");
   }
