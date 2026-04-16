@@ -100,7 +100,29 @@ function markPerformance(traceId: string, phase: string): void {
   }
 }
 
+function clearPerformanceMarks(traceId: string): void {
+  if (typeof performance === 'undefined' || typeof performance.clearMarks !== 'function') return;
+  try {
+    performance.clearMarks(`piclaw:${traceId}:start`);
+    const trace = findTrace(traceId);
+    if (!trace) return;
+    for (const phase of trace.phases) {
+      performance.clearMarks(`piclaw:${traceId}:${phase.phase}`);
+    }
+  } catch (error) {
+    debugSuppressedError(log, 'Ignoring performance.clearMarks failure.', error, { traceId });
+  }
+}
+
 function createTrace(type: string, chatJid: string, detail?: Record<string, unknown> | null): string {
+  const existingTraceId = activeTraceIds.get(buildTraceKey(type, chatJid));
+  if (existingTraceId && findTrace(existingTraceId)?.status === 'active') {
+    endTrace(existingTraceId, 'cancelled', 'superseded', {
+      replacementType: type,
+      replacementChatJid: chatJid,
+    });
+  }
+
   const traceId = nextId(type);
   const entry: TraceEntry = {
     id: traceId,
@@ -135,6 +157,7 @@ function endTrace(traceId: string | null | undefined, status: TraceStatus, phase
   if (activeTraceIds.get(key) === trace.id) {
     activeTraceIds.delete(key);
   }
+  clearPerformanceMarks(trace.id);
 }
 
 const perfApi: PerfApi = {
@@ -184,6 +207,7 @@ const perfApi: PerfApi = {
     return requests.map((entry) => ({ ...entry, detail: cloneDetail(entry.detail) }));
   },
   'clear'() {
+    traces.forEach((entry) => clearPerformanceMarks(entry.id));
     traces.splice(0, traces.length);
     requests.splice(0, requests.length);
     activeTraceIds.clear();
