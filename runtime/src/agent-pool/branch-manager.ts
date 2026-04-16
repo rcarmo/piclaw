@@ -5,9 +5,7 @@
  * top-level AgentPool coordinator while preserving the existing branch semantics.
  */
 
-import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
-import type { ImageContent, Message, TextContent } from "@mariozechner/pi-ai";
-import type { AgentSession, AgentSessionRuntime, SessionEntry, SessionManager } from "@mariozechner/pi-coding-agent";
+import type { AgentSession, AgentSessionRuntime } from "@mariozechner/pi-coding-agent";
 
 import { getIdentityConfig } from "../core/config.js";
 import {
@@ -22,7 +20,7 @@ import {
   type ChatBranchRecord,
 } from "../db.js";
 import { createUuid } from "../utils/ids.js";
-import { forcePersistSessionFile, seedRotatedSession } from "../session-rotation.js";
+import { createDeferredBranchSeed, writeDeferredBranchSeed } from "./branch-seeding.js";
 import type { PoolEntry } from "./session-manager.js";
 
 /** Active/known chat metadata surfaced by AgentPool. */
@@ -48,6 +46,8 @@ export interface AgentBranchManagerOptions {
   getOrCreateRuntime: (chatJid: string) => Promise<AgentSessionRuntime>;
   refreshRuntime: (chatJid: string, runtime: AgentSessionRuntime) => Promise<void>;
   isActive: (chatJid: string) => boolean;
+  scheduleSessionWarmup?: (chatJid: string) => void;
+  cancelSessionWarmup?: (chatJid: string) => void;
   onWarn?: (message: string, details: Record<string, unknown>) => void;
 }
 
@@ -93,132 +93,6 @@ function createVolatileBranchRecord(chatJid: string, session?: AgentSession | nu
     updated_at: new Date(0).toISOString(),
     archived_at: null,
   };
-}
-
-type LegacyCustomEntry = {
-  type: "custom_entry";
-  id?: string;
-  customType: string;
-  data?: unknown;
-};
-
-type SeedBranchEntry = SessionEntry | LegacyCustomEntry;
-
-type AppendableAgentMessage = Message | {
-  role: "bashExecution";
-  command: string;
-  output: string;
-  exitCode: number | undefined;
-  cancelled: boolean;
-  truncated: boolean;
-  fullOutputPath?: string;
-  timestamp: number;
-  excludeFromContext?: boolean;
-} | {
-  role: "custom";
-  customType: string;
-  content: string | (TextContent | ImageContent)[];
-  display: boolean;
-  details?: unknown;
-  timestamp: number;
-};
-
-type SeedSessionManager = Pick<
-  SessionManager,
-  | "appendMessage"
-  | "appendThinkingLevelChange"
-  | "appendModelChange"
-  | "appendCompaction"
-  | "appendSessionInfo"
-  | "appendCustomMessageEntry"
-  | "appendCustomEntry"
->;
-
-function normalizeThinkingLevel(value: string | null | undefined): ThinkingLevel | null {
-  return value === "off" || value === "minimal" || value === "low" || value === "medium" || value === "high" || value === "xhigh"
-    ? value
-    : null;
-}
-
-function isAppendableAgentMessage(message: unknown): message is AppendableAgentMessage {
-  if (!message || typeof message !== "object") return false;
-  const role = (message as { role?: unknown }).role;
-  return role === "user"
-    || role === "assistant"
-    || role === "system"
-    || role === "tool"
-    || role === "bashExecution"
-    || role === "custom";
-}
-
-function getStableForkSeed(sourceSession: AgentSession, stableLeafId: string | null): {
-  branchEntries: SeedBranchEntry[];
-  model: { provider: string; modelId: string } | null;
-  thinkingLevel: ThinkingLevel | null;
-} {
-  const branchEntries = stableLeafId === null
-    ? []
-    : (typeof sourceSession.sessionManager?.getBranch === "function"
-        ? sourceSession.sessionManager.getBranch(stableLeafId)
-        : []);
-
-  let model: { provider: string; modelId: string } | null = null;
-  let thinkingLevel: ThinkingLevel | null = null;
-
-  for (const entry of branchEntries) {
-    if (entry?.type === "model_change" && typeof entry.provider === "string" && typeof entry.modelId === "string") {
-      model = { provider: entry.provider, modelId: entry.modelId };
-    } else if (entry?.type === "thinking_level_change" && typeof entry.thinkingLevel === "string") {
-      thinkingLevel = normalizeThinkingLevel(entry.thinkingLevel);
-    } else if (entry?.type === "message" && entry.message?.role === "assistant" && typeof entry.message?.provider === "string" && typeof entry.message?.model === "string") {
-      model = { provider: entry.message.provider, modelId: entry.message.model };
-    }
-  }
-
-  return { branchEntries, model, thinkingLevel };
-}
-
-function seedSessionManagerFromBranchEntries(
-  sessionManager: SeedSessionManager,
-  branchEntries: SeedBranchEntry[],
-  fallback: { sessionName?: string | null; model?: { provider: string; modelId: string } | null },
-): void {
-  if (!Array.isArray(branchEntries) || branchEntries.length === 0) {
-    if (fallback.sessionName?.trim()) {
-      sessionManager.appendSessionInfo(fallback.sessionName.trim());
-    }
-    if (fallback.model) {
-      sessionManager.appendModelChange(fallback.model.provider, fallback.model.modelId);
-    }
-    return;
-  }
-
-  const sourceToNewId = new Map<string, string>();
-  for (const entry of branchEntries) {
-    let newId: string | null = null;
-    if (entry?.type === "message" && isAppendableAgentMessage(entry.message)) {
-      newId = sessionManager.appendMessage(entry.message);
-    } else if (entry?.type === "thinking_level_change" && typeof entry.thinkingLevel === "string") {
-      newId = sessionManager.appendThinkingLevelChange(entry.thinkingLevel);
-    } else if (entry?.type === "model_change" && typeof entry.provider === "string" && typeof entry.modelId === "string") {
-      newId = sessionManager.appendModelChange(entry.provider, entry.modelId);
-    } else if (entry?.type === "compaction" && typeof entry.summary === "string") {
-      const firstKeptEntryId = sourceToNewId.get(entry.firstKeptEntryId)
-        ?? sourceToNewId.get(branchEntries[0]?.id ?? "")
-        ?? "rotated-context";
-      newId = sessionManager.appendCompaction(entry.summary, firstKeptEntryId, entry.tokensBefore ?? 0, entry.details, entry.fromHook);
-    } else if (entry?.type === "session_info" && typeof entry.name === "string" && entry.name.trim()) {
-      newId = sessionManager.appendSessionInfo(entry.name.trim());
-    } else if (entry?.type === "custom_message" && typeof entry.customType === "string") {
-      newId = sessionManager.appendCustomMessageEntry(entry.customType, entry.content, entry.display, entry.details);
-    } else if (entry?.type === "custom_entry" && typeof entry.customType === "string") {
-      newId = sessionManager.appendCustomEntry(entry.customType, entry.data);
-    }
-
-    if (entry?.id && newId) {
-      sourceToNewId.set(entry.id, newId);
-    }
-  }
 }
 
 function isSessionActive(session: AgentSession): boolean {
@@ -316,6 +190,13 @@ export class AgentBranchManager {
       this.options.sidePool.delete(chatJid);
     }
     this.options.activeForkBaseLeafByChat.delete(chatJid);
+    // Cancel any queued prewarm so a background realization does not
+    // materialize a blank runtime (or realize the deferred seed) for an
+    // archived chat between prune and restore.
+    this.options.cancelSessionWarmup?.(chatJid);
+    // NOTE: do not clearDeferredBranchSeed here — .branch-seed.json is the
+    // only persisted copy of the forked context until the session is realized,
+    // and a subsequent restoreChatBranch() must be able to pick it back up.
 
     return archived;
   }
@@ -368,75 +249,12 @@ export class AgentBranchManager {
       agent_name: requestedAgentName,
     });
 
-    const targetRuntime = await this.options.getOrCreateRuntime(nextChatJid);
-    const stableSeed = sourceIsActive
-      ? getStableForkSeed(sourceSession, stableForkLeafId)
-      : null;
-    const sourceContext = sourceSession.sessionManager.buildSessionContext();
-    const parentSession = sourceSession.sessionFile?.trim() || undefined;
-    const setupName = nextBranch.agent_name;
-    const sourceModel = stableSeed?.model || sourceContext.model || (sourceSession.model
-      ? { provider: sourceSession.model.provider, modelId: sourceSession.model.id }
-      : null);
-
-    const result = await targetRuntime.newSession({
-      ...(parentSession ? { parentSession } : {}),
-      setup: async (sessionManager) => {
-        if (stableSeed) {
-          seedSessionManagerFromBranchEntries(sessionManager, stableSeed.branchEntries, {
-            sessionName: setupName,
-            model: sourceModel,
-          });
-          return;
-        }
-        seedRotatedSession(sessionManager, sourceContext, {
-          sessionName: setupName,
-          model: sourceModel,
-        });
-      },
-    });
-    if (result.cancelled) {
-      throw new Error("Branch fork was cancelled.");
-    }
-
-    await this.options.refreshRuntime(nextChatJid, targetRuntime);
-    const activeTargetSession = targetRuntime.session;
-
-    if (sourceSession.model) {
-      try {
-        await activeTargetSession.setModel(sourceSession.model);
-      } catch (err) {
-        this.options.onWarn?.("Failed to copy model to forked branch", {
-          operation: "create_forked_chat_branch.copy_model",
-          chatJid: nextChatJid,
-          err,
-        });
-      }
-    }
-    try {
-      const nextThinkingLevel = normalizeThinkingLevel(
-        stableSeed?.thinkingLevel || sourceContext.thinkingLevel || sourceSession.thinkingLevel,
-      );
-      if (nextThinkingLevel) {
-        activeTargetSession.setThinkingLevel(nextThinkingLevel);
-      }
-    } catch (err) {
-      this.options.onWarn?.("Failed to copy thinking level to forked branch", {
-        operation: "create_forked_chat_branch.copy_thinking_level",
-        chatJid: nextChatJid,
-        err,
-      });
-    }
-    try {
-      activeTargetSession.setSessionName(setupName);
-    } catch (err) {
-      this.options.onWarn?.("Failed to copy session name to forked branch", {
-        operation: "create_forked_chat_branch.copy_session_name",
-        chatJid: nextChatJid,
-        err,
-      });
-    }
-    forcePersistSessionFile(activeTargetSession);
+    writeDeferredBranchSeed(nextChatJid, createDeferredBranchSeed(sourceSession, {
+      stableLeafId: stableForkLeafId,
+      sessionName: nextBranch.agent_name,
+      sourceIsActive,
+    }));
+    this.options.scheduleSessionWarmup?.(nextChatJid);
 
     return ensureChatBranch({
       chat_jid: nextChatJid,

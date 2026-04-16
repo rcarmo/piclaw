@@ -8,8 +8,17 @@
 
 import type { AgentSession, AgentSessionRuntime, ExtensionFactory, ModelRegistry, SettingsManager, AuthStorage } from "@mariozechner/pi-coding-agent";
 
+import {
+  claimDeferredBranchSeed,
+  finalizeClaimedDeferredBranchSeed,
+  getDeferredBranchSeedFingerprint,
+  hasDeferredBranchSeed,
+  restoreClaimedDeferredBranchSeed,
+  seedSessionManagerFromDeferredBranchSeed,
+} from "./branch-seeding.js";
+import { getChatBranchByChatJid } from "../db.js";
 import { createDefaultSession, createSessionInDir, ensureNamedSessionDir, ensureSessionDir } from "./session.js";
-import { seedRotatedSession } from "../session-rotation.js";
+import { forcePersistSessionFile, seedRotatedSession } from "../session-rotation.js";
 
 /** Cached session entry stored for each chat JID. */
 export interface PoolEntry {
@@ -39,13 +48,35 @@ export interface AgentSessionManagerOptions {
  * Handles lifecycle operations for main and auxiliary AgentSession instances.
  */
 export class AgentSessionManager {
+  private readonly branchSeedRealizationInFlight = new Map<string, Promise<boolean>>();
   private readonly createInFlight = new Map<string, Promise<AgentSessionRuntime>>();
+  private readonly invalidDeferredBranchSeedErrors = new Map<string, { error: Error; fingerprint: string | null }>();
+  private readonly runtimeDisposeInFlight = new WeakMap<AgentSessionRuntime, Promise<void>>();
   private readonly prewarmInFlight = new Set<string>();
   private readonly queuedPrewarms = new Set<string>();
   private readonly prewarmQueue: string[] = [];
+  private readonly prewarmCooldownByChat = new Map<string, number>();
   private prewarmLoopActive = false;
 
   constructor(private readonly options: AgentSessionManagerOptions) {}
+
+  private getBlockingInvalidSeedError(chatJid: string): Error | null {
+    const knownInvalidSeedState = this.invalidDeferredBranchSeedErrors.get(chatJid);
+    if (!knownInvalidSeedState) return null;
+    if (knownInvalidSeedState.fingerprint === getDeferredBranchSeedFingerprint(chatJid)) {
+      return knownInvalidSeedState.error;
+    }
+    this.invalidDeferredBranchSeedErrors.delete(chatJid);
+    return null;
+  }
+
+  private prunePrewarmCooldownEntries(now: number): void {
+    for (const [chatJid, lastQueuedAt] of this.prewarmCooldownByChat) {
+      if (now - lastQueuedAt >= 30_000) {
+        this.prewarmCooldownByChat.delete(chatJid);
+      }
+    }
+  }
 
   async refreshRuntime(chatJid: string, runtime: AgentSessionRuntime): Promise<void> {
     const entry = this.options.pool.get(chatJid);
@@ -57,6 +88,11 @@ export class AgentSessionManager {
   }
 
   async getOrCreate(chatJid: string): Promise<AgentSessionRuntime> {
+    const knownInvalidSeedError = this.getBlockingInvalidSeedError(chatJid);
+    if (knownInvalidSeedError) {
+      throw knownInvalidSeedError;
+    }
+
     const pendingCreate = this.createInFlight.get(chatJid);
     if (pendingCreate) {
       return await pendingCreate;
@@ -65,7 +101,13 @@ export class AgentSessionManager {
     const existing = this.options.pool.get(chatJid);
     if (existing) {
       existing.lastUsed = Date.now();
-      return existing.runtime;
+      try {
+        await this.realizeDeferredBranchSeed(chatJid, existing.runtime);
+        return existing.runtime;
+      } catch (error) {
+        await this.disposeMainRuntimeAfterError(chatJid, existing.runtime, "get_or_create.realize_existing_after_error");
+        throw error;
+      }
     }
 
     const task = (async () => {
@@ -89,7 +131,10 @@ export class AgentSessionManager {
 
       this.options.pool.set(chatJid, { runtime, lastUsed: Date.now() });
       try {
-        await this.applyDefaultModel(runtime.session);
+        const realizedDeferredSeed = await this.realizeDeferredBranchSeed(chatJid, runtime);
+        if (!realizedDeferredSeed) {
+          await this.applyDefaultModel(runtime.session);
+        }
         await this.refreshRuntime(chatJid, runtime);
         this.options.onInfo?.("Session ready", {
           operation: this.options.createSession ? "get_or_create.create_main_session" : "get_or_create.create_default_session",
@@ -194,13 +239,32 @@ export class AgentSessionManager {
     await this.disposeEntry(this.options.sidePool, chatJid, "recreate.dispose_side_session", true);
   }
 
+  /**
+   * Remove any pending (not-yet-realized) prewarm for a chat. Used by
+   * branch prune so a queued warmup cannot materialize a blank runtime
+   * (or realize the deferred seed) for an archived chat.
+   */
+  cancelPrewarm(chatJid: string): void {
+    const normalized = String(chatJid || "").trim();
+    if (!normalized) return;
+    this.queuedPrewarms.delete(normalized);
+    const idx = this.prewarmQueue.indexOf(normalized);
+    if (idx >= 0) this.prewarmQueue.splice(idx, 1);
+  }
+
   prewarm(chatJid: string, options: { priority?: boolean } = {}): boolean {
     const normalizedChatJid = String(chatJid || "").trim();
     if (!normalizedChatJid) return false;
-    if (this.options.pool.has(normalizedChatJid)) return false;
+    if (this.getBlockingInvalidSeedError(normalizedChatJid)) return false;
+    if (this.options.pool.has(normalizedChatJid) && !hasDeferredBranchSeed(normalizedChatJid)) return false;
     if (this.prewarmInFlight.has(normalizedChatJid) || this.queuedPrewarms.has(normalizedChatJid)) return false;
+    const now = Date.now();
+    this.prunePrewarmCooldownEntries(now);
+    const lastQueuedAt = this.prewarmCooldownByChat.get(normalizedChatJid) ?? 0;
+    if (!options.priority && now - lastQueuedAt < 30_000) return false;
 
     this.queuedPrewarms.add(normalizedChatJid);
+    this.prewarmCooldownByChat.set(normalizedChatJid, now);
     if (options.priority) {
       this.prewarmQueue.unshift(normalizedChatJid);
     } else {
@@ -297,11 +361,98 @@ export class AgentSessionManager {
     const modelId = this.options.settingsManager.getDefaultModel();
     if (!provider || !modelId) return;
 
+    await this.applyResolvedModel(session, { provider, modelId }, "apply_default_model");
+  }
+
+  private async realizeDeferredBranchSeed(chatJid: string, runtime: AgentSessionRuntime): Promise<boolean> {
+    const pending = this.branchSeedRealizationInFlight.get(chatJid);
+    if (pending) return await pending;
+
+    const task = (async () => {
+      let seed;
+      try {
+        seed = claimDeferredBranchSeed(chatJid);
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith("Invalid deferred branch seed for ")) {
+          this.invalidDeferredBranchSeedErrors.set(chatJid, {
+            error,
+            fingerprint: getDeferredBranchSeedFingerprint(chatJid),
+          });
+        }
+        throw error;
+      }
+      if (!seed) return false;
+
+      try {
+        const result = await runtime.newSession({
+          ...(seed.parentSession ? { parentSession: seed.parentSession } : {}),
+          setup: async (sessionManager) => {
+            seedSessionManagerFromDeferredBranchSeed(sessionManager, seed);
+          },
+        });
+        if (result.cancelled) {
+          throw new Error("Deferred branch seed was cancelled.");
+        }
+
+        const session = runtime.session;
+        await this.applyResolvedModel(session, seed.model, "realize_deferred_branch_seed");
+        try {
+          if (seed.thinkingLevel) {
+            session.setThinkingLevel(seed.thinkingLevel);
+          }
+        } catch (err) {
+          this.options.onWarn?.("Failed to restore deferred branch thinking level", {
+            operation: "realize_deferred_branch_seed.thinking_level",
+            chatJid,
+            err,
+          });
+        }
+        try {
+          // Prefer the current branch record's agent_name over the seed's
+          // captured sessionName: if the user renamed the branch between fork
+          // and realization, the DB has the new name and applying the stale
+          // seed value would overwrite the rename on first warmup.
+          const liveAgentName = getChatBranchByChatJid(chatJid)?.agent_name?.trim() || "";
+          const sessionNameToApply = liveAgentName || seed.sessionName?.trim() || "";
+          if (sessionNameToApply) {
+            session.setSessionName(sessionNameToApply);
+          }
+        } catch (err) {
+          this.options.onWarn?.("Failed to restore deferred branch session name", {
+            operation: "realize_deferred_branch_seed.session_name",
+            chatJid,
+            err,
+          });
+        }
+
+        forcePersistSessionFile(session);
+        finalizeClaimedDeferredBranchSeed(chatJid);
+        this.invalidDeferredBranchSeedErrors.delete(chatJid);
+        return true;
+      } catch (error) {
+        restoreClaimedDeferredBranchSeed(chatJid);
+        throw error;
+      }
+    })().finally(() => {
+      this.branchSeedRealizationInFlight.delete(chatJid);
+    });
+
+    this.branchSeedRealizationInFlight.set(chatJid, task);
+    return await task;
+  }
+
+  private async applyResolvedModel(
+    session: AgentSession,
+    model: { provider: string; modelId: string } | null,
+    operation: string,
+  ): Promise<void> {
+    if (!model) return;
+
     const current = session.model;
-    if (current) return;
+    if (current && current.provider === model.provider && current.id === model.modelId) return;
 
     const sessionRegistry = (session as AgentSession & { modelRegistry?: ModelRegistry }).modelRegistry ?? this.options.modelRegistry;
-    const resolved = sessionRegistry.find(provider, modelId);
+    const resolved = sessionRegistry.find(model.provider, model.modelId);
     if (!resolved) return;
 
     const setModel = (session as { setModel?: (model: typeof resolved) => Promise<void> }).setModel;
@@ -311,8 +462,8 @@ export class AgentSessionManager {
       await setModel.call(session, resolved);
     } catch (err) {
       this.options.onWarn?.("Failed to restore model", {
-        operation: "apply_default_model",
-        model: `${provider}/${modelId}`,
+        operation,
+        model: `${model.provider}/${model.modelId}`,
         err,
       });
     }
@@ -328,7 +479,8 @@ export class AgentSessionManager {
           const chatJid = this.prewarmQueue.shift();
           if (!chatJid) continue;
           this.queuedPrewarms.delete(chatJid);
-          if (this.prewarmInFlight.has(chatJid) || this.options.pool.has(chatJid)) continue;
+          if (this.prewarmInFlight.has(chatJid)) continue;
+          if (this.options.pool.has(chatJid) && !hasDeferredBranchSeed(chatJid)) continue;
 
           this.prewarmInFlight.add(chatJid);
           try {
@@ -360,14 +512,24 @@ export class AgentSessionManager {
     if (this.options.pool.get(chatJid)?.runtime === runtime) {
       this.options.pool.delete(chatJid);
     }
-    try {
-      await runtime.dispose();
-    } catch (disposeErr) {
-      this.options.onWarn?.("Failed to dispose session after initialization error", {
-        operation,
-        chatJid,
-        err: disposeErr,
-      });
+    const pendingDispose = this.runtimeDisposeInFlight.get(runtime);
+    if (pendingDispose) {
+      await pendingDispose;
+      return;
     }
+
+    const task = (async () => {
+      try {
+        await runtime.dispose();
+      } catch (disposeErr) {
+        this.options.onWarn?.("Failed to dispose session after initialization error", {
+          operation,
+          chatJid,
+          err: disposeErr,
+        });
+      }
+    })();
+    this.runtimeDisposeInFlight.set(runtime, task);
+    await task;
   }
 }
