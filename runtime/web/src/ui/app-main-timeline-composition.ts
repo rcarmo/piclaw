@@ -29,6 +29,8 @@ export function useMainAppTimelineComposition(options: {
   viewStateRef: RefBox<any>;
   followupQueueRowIdsRef: RefBox<Set<string | number>>;
   currentChatJid: string;
+  currentHashtag: string | null;
+  searchQuery: string | null;
   followupQueueItems: any[];
 }) {
   const {
@@ -36,6 +38,8 @@ export function useMainAppTimelineComposition(options: {
     viewStateRef,
     followupQueueRowIdsRef,
     currentChatJid,
+    currentHashtag,
+    searchQuery,
     followupQueueItems,
   } = options;
 
@@ -65,7 +69,13 @@ export function useMainAppTimelineComposition(options: {
     refreshTimeline,
     loadMore,
     loadMoreRef,
-  } = useTimeline({ preserveTimelineScroll, preserveTimelineScrollTop, chatJid: currentChatJid });
+  } = useTimeline({
+    preserveTimelineScroll,
+    preserveTimelineScrollTop,
+    chatJid: currentChatJid,
+    currentHashtag,
+    searchQuery,
+  });
 
   const posts = useMemo(() => deriveVisibleTimelinePosts({
     rawPosts,

@@ -1,11 +1,20 @@
 // @ts-nocheck
 import { useCallback, useEffect, useRef, useState } from '../vendor/preact-htm.js';
 import { getTimeline, getPostsByHashtag } from '../api.js';
+import { cacheTimelineSnapshot, getCachedTimelineSnapshot } from './app-timeline-cache.js';
 import { dedupePosts } from './timeline-utils.js';
 
-export function useTimeline({ preserveTimelineScroll, preserveTimelineScrollTop, chatJid = null }) {
-  const [posts, setPosts] = useState(null);
-  const [hasMore, setHasMore] = useState(false);
+export function mergeFreshTimelinePosts(currentPosts, freshPosts) {
+  const normalizedFreshPosts = Array.isArray(freshPosts) ? freshPosts : [];
+  if (!Array.isArray(currentPosts) || currentPosts.length === 0) {
+    return normalizedFreshPosts;
+  }
+  return dedupePosts([...normalizedFreshPosts, ...currentPosts]);
+}
+
+export function useTimeline({ preserveTimelineScroll, preserveTimelineScrollTop, chatJid = null, currentHashtag = null, searchQuery = null }) {
+  const [posts, setPostsState] = useState(null);
+  const [hasMore, setHasMoreState] = useState(false);
   const hasMoreRef = useRef(false);
   const loadMoreRef = useRef(null);
   const loadingMoreRef = useRef(false);
@@ -21,6 +30,8 @@ export function useTimeline({ preserveTimelineScroll, preserveTimelineScrollTop,
     postsRef.current = posts;
   }, [posts]);
 
+  const shouldCacheCurrentView = !currentHashtag && !searchQuery;
+
   useEffect(() => {
     chatTokenRef.current += 1;
     // Preserve currently visible posts while the next chat loads so session
@@ -28,9 +39,44 @@ export function useTimeline({ preserveTimelineScroll, preserveTimelineScrollTop,
     // Stale fetches are ignored via chatTokenRef.
     lastBeforeIdRef.current = null;
     loadingMoreRef.current = false;
-    hasMoreRef.current = false;
-    setHasMore(false);
-  }, [chatJid]);
+    const cached = shouldCacheCurrentView ? getCachedTimelineSnapshot(chatJid) : null;
+    const cachedPosts = cached?.posts ?? null;
+    const cachedHasMore = Boolean(cached?.has_more);
+    hasMoreRef.current = cachedHasMore;
+    setPostsState(cachedPosts);
+    setHasMoreState(cachedHasMore);
+  }, [chatJid, shouldCacheCurrentView]);
+
+  const cacheCurrentSnapshot = useCallback((nextPosts, nextHasMore) => {
+    if (!shouldCacheCurrentView) return;
+    cacheTimelineSnapshot(chatJid, {
+      posts: Array.isArray(nextPosts) ? nextPosts : [],
+      has_more: Boolean(nextHasMore),
+    });
+  }, [chatJid, shouldCacheCurrentView]);
+
+  const setPosts = useCallback((next) => {
+    let resolvedPosts = null;
+    setPostsState((prev) => {
+      resolvedPosts = typeof next === 'function' ? next(prev) : next;
+      return resolvedPosts;
+    });
+    if (Array.isArray(resolvedPosts)) {
+      cacheCurrentSnapshot(resolvedPosts, hasMoreRef.current);
+    }
+  }, [cacheCurrentSnapshot]);
+
+  const setHasMore = useCallback((next) => {
+    let resolvedHasMore = false;
+    setHasMoreState((prev) => {
+      resolvedHasMore = typeof next === 'function' ? next(prev) : next;
+      return resolvedHasMore;
+    });
+    hasMoreRef.current = Boolean(resolvedHasMore);
+    if (Array.isArray(postsRef.current)) {
+      cacheCurrentSnapshot(postsRef.current, resolvedHasMore);
+    }
+  }, [cacheCurrentSnapshot]);
 
   const loadPosts = useCallback(async (hashtag = null) => {
     const token = chatTokenRef.current;
@@ -38,35 +84,32 @@ export function useTimeline({ preserveTimelineScroll, preserveTimelineScrollTop,
       if (hashtag) {
         const result = await getPostsByHashtag(hashtag, 50, 0, chatJid);
         if (token !== chatTokenRef.current) return;
-        setPosts(result.posts);
+        setPosts(Array.isArray(result.posts) ? result.posts : []);
         setHasMore(false);
       } else {
         const result = await getTimeline(10, null, chatJid);
         if (token !== chatTokenRef.current) return;
-        setPosts(result.posts);
+        setPosts(Array.isArray(result.posts) ? result.posts : []);
         setHasMore(result.has_more);
       }
     } catch (error) {
       if (token !== chatTokenRef.current) return;
       console.error('Failed to load posts:', error);
     }
-  }, [chatJid]);
+  }, [chatJid, setHasMore, setPosts]);
 
   const refreshTimeline = useCallback(async () => {
     const token = chatTokenRef.current;
     try {
       const result = await getTimeline(10, null, chatJid);
       if (token !== chatTokenRef.current) return;
-      setPosts((prev) => {
-        if (!prev || prev.length === 0) return result.posts;
-        return dedupePosts([...result.posts, ...prev]);
-      });
+      setPosts((prev) => mergeFreshTimelinePosts(prev, result.posts));
       setHasMore((prev) => prev || result.has_more);
     } catch (error) {
       if (token !== chatTokenRef.current) return;
       console.error('Failed to refresh timeline:', error);
     }
-  }, [chatJid]);
+  }, [chatJid, setHasMore, setPosts]);
 
   // loadMore reads posts from ref to avoid re-creating on every posts change.
   const loadMore = useCallback(async (options = {}) => {
@@ -109,7 +152,7 @@ export function useTimeline({ preserveTimelineScroll, preserveTimelineScrollTop,
         loadingMoreRef.current = false;
       }
     }
-  }, [chatJid, preserveTimelineScroll, preserveTimelineScrollTop]);
+  }, [chatJid, preserveTimelineScroll, preserveTimelineScrollTop, setHasMore, setPosts]);
 
   useEffect(() => {
     loadMoreRef.current = loadMore;

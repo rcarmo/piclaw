@@ -153,6 +153,8 @@ function MainApp({ locationParams, navigate }) {
         viewStateRef: surface.viewStateRef,
         followupQueueRowIdsRef: surface.followupQueueRowIdsRef,
         currentChatJid,
+        currentHashtag: surface.currentHashtag,
+        searchQuery: surface.searchQuery,
         followupQueueItems: surface.followupQueueItems,
     });
 
