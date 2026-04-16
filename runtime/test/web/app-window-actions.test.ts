@@ -16,15 +16,19 @@ afterEach(() => {
   }
 });
 
-test('createSessionFromCompose refreshes branch state and navigates to the new chat', async () => {
+test('createSessionFromCompose navigates immediately to the branch-loader route', async () => {
   const toasts: Array<[string, string, string, number]> = [];
   const navigateCalls: string[] = [];
   const refreshes: string[] = [];
+  let forkCalls = 0;
 
   const created = await createSessionFromCompose({
     currentChatJid: 'web:root',
     chatOnlyMode: true,
-    forkChatBranch: async () => ({ branch: { chat_jid: 'web:new', agent_name: 'feature' } }),
+    forkChatBranch: async () => {
+      forkCalls += 1;
+      return { branch: { chat_jid: 'web:new', agent_name: 'feature' } };
+    },
     refreshActiveChatAgents: async () => { refreshes.push('active'); },
     refreshCurrentChatBranches: async () => { refreshes.push('branches'); },
     showIntentToast: (title: string, message: string, kind: string, timeout: number) => {
@@ -35,9 +39,11 @@ test('createSessionFromCompose refreshes branch state and navigates to the new c
   });
 
   expect(created).toBe(true);
-  expect(refreshes.sort()).toEqual(['active', 'branches']);
-  expect(toasts).toContainEqual(['New branch created', 'Switched to @feature.', 'info', 2500]);
-  expect(navigateCalls[0]).toContain('chat_jid=web%3Anew');
+  expect(forkCalls).toBe(0);
+  expect(refreshes).toEqual([]);
+  expect(toasts).toEqual([]);
+  expect(navigateCalls[0]).toContain('branch_loader=1');
+  expect(navigateCalls[0]).toContain('branch_source_chat_jid=web%3Aroot');
 });
 
 test('popOutPane transfers pane state and closes the source tab after navigation', async () => {

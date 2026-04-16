@@ -53,6 +53,17 @@ export async function createSessionFromCompose(options: CreateSessionFromCompose
     baseHref,
   } = options;
 
+  if (typeof navigate === 'function') {
+    try {
+      const loaderUrl = buildBranchLoaderUrl(baseHref, currentChatJid, { chatOnly: chatOnlyMode });
+      navigate(loaderUrl);
+      return true;
+    } catch (error) {
+      showIntentToast?.('Could not create branch', describeBranchOpenError(error), 'warning', 5000);
+      return false;
+    }
+  }
+
   try {
     const response = await forkChatBranch(currentChatJid);
     const branch = response?.branch;
