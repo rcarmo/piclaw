@@ -182,6 +182,26 @@ function ensureBundledExtensionNodeModulesLink(nodeModulesDir: string | null): v
   ensuredExtensionNodeModulesLinkTarget = nodeModulesDir;
 }
 
+/**
+ * Ensure workspace .pi/extensions/ has a node_modules symlink so that jiti can
+ * resolve framework-provided packages (e.g. @sinclair/typebox) on cold boot.
+ *
+ * In non-binary mode, jiti uses `alias` + `tryNative: true` which fails to
+ * resolve aliased packages from the workspace extensions directory.  A symlink
+ * to the nearest node_modules containing the pi runtime packages is enough to
+ * let standard Node module resolution succeed.
+ */
+let ensuredWorkspaceExtensionLink = false;
+function ensureWorkspaceExtensionNodeModulesLink(nodeModulesDir: string | null): void {
+  if (!nodeModulesDir) return;
+  if (ensuredWorkspaceExtensionLink) return;
+  const workspaceExtensionsDir = join(getWorkspaceDir(), ".pi", "extensions");
+  if (existsSync(workspaceExtensionsDir)) {
+    ensureExtensionNodeModulesLink(workspaceExtensionsDir, nodeModulesDir);
+  }
+  ensuredWorkspaceExtensionLink = true;
+}
+
 function getBundledExtensionPaths(chatJid?: string): string[] {
   const cacheKey = getBundledExtensionEnvSignature(chatJid);
   const cached = BUNDLED_EXTENSION_PATHS_CACHE.get(cacheKey);
@@ -203,6 +223,7 @@ function getBundledExtensionPaths(chatJid?: string): string[] {
   // Ensure a node_modules symlink exists next to the extensions dir
   // so jiti can resolve deep package imports.
   ensureBundledExtensionNodeModulesLink(nodeModulesDir);
+  ensureWorkspaceExtensionNodeModulesLink(nodeModulesDir);
   BUNDLED_EXTENSION_PATHS_CACHE.set(cacheKey, paths);
   return paths;
 }
