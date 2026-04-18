@@ -55,7 +55,7 @@ import {
     githubLight,
     githubDark,
     MergeView,
-} from './vendor/codemirror.js';
+} from '/editor-vendor/codemirror.js';
 import { getWorkspaceBranch, getWorkspaceFile, updateWorkspaceFile } from '../../../web/src/api.js';
 import type { WebPaneExtension, PaneContext, PaneInstance, PaneCapability, PaneHostAttachContext, PaneHostDetachContext } from '../../../web/src/panes/pane-types.js';
 import { frontmatterExtension } from './markdown/frontmatter.js';

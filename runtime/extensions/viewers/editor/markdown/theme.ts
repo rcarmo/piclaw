@@ -7,7 +7,7 @@
  * Code blocks and tables use Decoration.line() which adds classes
  * directly to .cm-line elements for continuous styling.
  */
-import { EditorView } from '../vendor/codemirror.js';
+import { EditorView } from '/editor-vendor/codemirror.js';
 
 export const markdownPreviewTheme = EditorView.theme({
     /* ── Base: switch to reading font ── */

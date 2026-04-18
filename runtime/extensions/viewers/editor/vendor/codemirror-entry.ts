@@ -70,3 +70,33 @@ export const minimalSetup = [
     ...historyKeymap,
   ]),
 ];
+
+// ── Additional exports for shared vendor usage ──
+// Language objects needed by code-highlighting.ts (syntax highlighting in messages)
+export { javascriptLanguage, jsxLanguage, tsxLanguage, typescriptLanguage } from "@codemirror/lang-javascript";
+export { pythonLanguage } from "@codemirror/lang-python";
+export { goLanguage } from "@codemirror/lang-go";
+export { jsonLanguage } from "@codemirror/lang-json";
+export { cssLanguage } from "@codemirror/lang-css";
+export { htmlLanguage } from "@codemirror/lang-html";
+export { yamlLanguage } from "@codemirror/lang-yaml";
+export { xmlLanguage } from "@codemirror/lang-xml";
+export { StandardSQL } from "@codemirror/lang-sql";
+export { highlightTree } from "@lezer/highlight";
+export { dockerFile } from "@codemirror/legacy-modes/mode/dockerfile";
+export { powerShell } from "@codemirror/legacy-modes/mode/powershell";
+export { ruby } from "@codemirror/legacy-modes/mode/ruby";
+export { rust } from "@codemirror/legacy-modes/mode/rust";
+export { swift } from "@codemirror/legacy-modes/mode/swift";
+export { toml } from "@codemirror/legacy-modes/mode/toml";
+
+// Symbols needed by third-party editor deps when externalized
+export { EditorSelection, MapMode, StateEffect, StateField, countColumn } from "@codemirror/state";
+export { LRLanguage, Language, LanguageDescription, LanguageSupport, ParseContext,
+  bracketMatchingHandle, continuedIndent, defineLanguageFacet, delimitedIndent,
+  flatIndent, foldInside, foldNodeProp, foldService, indentNodeProp,
+  languageDataProp, sublanguageProp } from "@codemirror/language";
+export { CompletionContext, completeFromList, ifNotIn, snippetCompletion } from "@codemirror/autocomplete";
+export { IterMode, NodeProp, NodeSet, NodeType, NodeWeakMap, Parser, Tree, parseMixed } from "@lezer/common";
+export { styleTags, Tag } from "@lezer/highlight";
+export { ContextTracker, ExternalTokenizer, LRParser, LocalTokenGroup } from "@lezer/lr";

@@ -17,7 +17,7 @@ import {
     WidgetType,
     RangeSet,
     syntaxTree,
-} from '../vendor/codemirror.js';
+} from '/editor-vendor/codemirror.js';
 import type { DecorationSet, ViewUpdate } from '@codemirror/view';
 import type { Range } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';

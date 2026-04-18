@@ -1,4 +1,4 @@
-import { keymap, Prec } from '../vendor/codemirror.js';
+import { keymap, Prec } from '/editor-vendor/codemirror.js';
 import type { EditorView } from './live-preview.js';
 import { isPositionInCollapsedHeadingBody } from './heading.js';
 
