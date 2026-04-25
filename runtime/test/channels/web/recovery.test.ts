@@ -10,7 +10,7 @@ import { AgentQueue } from "../../../src/queue.js";
 import { waitFor } from "../../helpers.js";
 
 describe("web recovery helpers", () => {
-  test("recoverInflightRuns preserves terminal/partial output and replays interrupted no-output runs", async () => {
+  test("recoverInflightRuns preserves terminal/partial output and marks no-output runs as interrupted without replay", async () => {
     const now = new Date("2026-01-01T00:05:00Z");
     const inflights = [
       { chatJid: "web:1", prevTs: "t1", messageId: "m1", startedAt: "2026-01-01T00:04:00Z" },
@@ -64,14 +64,46 @@ describe("web recovery helpers", () => {
       { chatJid: "web:2", afterTs: "2026-01-01T00:04:15Z" },
       { chatJid: "web:3", afterTs: "2026-01-01T00:04:30Z" },
     ]);
-    expect(cleared).toEqual(["web:1", "web:2"]);
-    expect(rolledBack).toEqual([{ chatJid: "web:3", prevTs: "t3" }]);
-    expect(enqueued.map(({ key, laneKey }) => ({ key, laneKey }))).toEqual([
-      { key: "resume:web:3", laneKey: "chat:web:3" },
-    ]);
+    expect(cleared).toEqual(["web:1", "web:2", "web:3"]);
+    expect(rolledBack).toEqual([]);
+    expect(enqueued.map(({ key, laneKey }) => ({ key, laneKey }))).toEqual([]);
   });
 
-  test("recoverInflightRuns rolls back stale inflight markers to preserve pending turns", () => {
+  test("recoverInflightRuns persists a buffered draft instead of an interrupted marker when restart recovery has visible text", () => {
+    const cleared: string[] = [];
+
+    const ctx: WebRecoveryContext = {
+      assistantName: "Pi",
+      defaultAgentId: "default",
+      enqueue: async () => {},
+      processChat: async () => {},
+      getDraftRecovery: (chatJid) => chatJid === "web:draft"
+        ? { turnId: "turn-draft", text: "Recovered draft after restart", totalLines: 1, updatedAt: Date.now() }
+        : null,
+      clearDraftRecovery: (chatJid) => {
+        cleared.push(chatJid);
+      },
+      now: () => new Date("2026-01-01T00:05:00Z").getTime(),
+    };
+
+    const store: WebRecoveryStore = {
+      getInflightRuns: () => [{ chatJid: "web:draft", prevTs: "t0", messageId: "m1", startedAt: "2026-01-01T00:04:00Z" }],
+      transaction: (run) => run(),
+      getAgentReplyStateAfter: () => "none",
+      clearInflightMarker: () => {},
+      rollbackInflightRun: () => {},
+      getAllChatCursors: () => ({}),
+      getKnownChatJids: () => [],
+      getDeferredQueuedFollowups: () => [],
+      getMessagesSince: () => [],
+    };
+
+    recoverInflightRuns(ctx, store);
+
+    expect(cleared).toEqual(["web:draft"]);
+  });
+
+  test("recoverInflightRuns clears stale inflight markers without replay", () => {
     const staleStartedAt = "2026-01-01T00:00:00Z";
     const now = new Date("2026-01-01T01:00:00Z").getTime();
 
@@ -105,14 +137,14 @@ describe("web recovery helpers", () => {
 
     recoverInflightRuns(ctx, store);
 
-    expect(cleared).toEqual([]);
-    expect(rolledBack).toEqual([{ chatJid: "web:stale", prevTs: "t0" }]);
-    expect(enqueued).toEqual(["resume:web:stale"]);
+    expect(cleared).toEqual(["web:stale"]);
+    expect(rolledBack).toEqual([]);
+    expect(enqueued).toEqual([]);
   });
 
-  test("recoverStaleInflightRun rolls back and re-enqueues an old no-output inflight chat", () => {
+  test("recoverStaleInflightRun clears and marks an old no-output inflight chat without replay", () => {
     const enqueued: string[] = [];
-    const rolledBack: Array<{ chatJid: string; prevTs: string }> = [];
+    const cleared: string[] = [];
 
     const ctx: WebRecoveryContext = {
       assistantName: "Pi",
@@ -126,8 +158,8 @@ describe("web recovery helpers", () => {
       getInflightRuns: () => [{ chatJid: "web:ux", prevTs: "t-prev", messageId: "m1", startedAt: "2026-01-01T00:00:00Z" }],
       transaction: (run) => run(),
       getAgentReplyStateAfter: () => "none",
-      clearInflightMarker: () => {},
-      rollbackInflightRun: (chatJid, prevTs) => { rolledBack.push({ chatJid, prevTs }); },
+      clearInflightMarker: (chatJid) => { cleared.push(chatJid); },
+      rollbackInflightRun: () => {},
       getAllChatCursors: () => ({}),
       getKnownChatJids: () => [],
       getDeferredQueuedFollowups: () => [],
@@ -136,8 +168,8 @@ describe("web recovery helpers", () => {
 
     const recovered = recoverStaleInflightRun(ctx, "web:ux", { hasActiveStatus: false, minAgeMs: 15_000 }, store);
     expect(recovered).toBe(true);
-    expect(rolledBack).toEqual([{ chatJid: "web:ux", prevTs: "t-prev" }]);
-    expect(enqueued).toEqual(["resume:web:ux"]);
+    expect(cleared).toEqual(["web:ux"]);
+    expect(enqueued).toEqual([]);
   });
 
   test("recoverStaleInflightRun does nothing while a live status exists or the grace period has not elapsed", () => {
@@ -165,9 +197,9 @@ describe("web recovery helpers", () => {
     expect(recoverStaleInflightRun(ctx, "web:ux", { hasActiveStatus: false, minAgeMs: 15_000 }, store)).toBe(false);
   });
 
-  test("recoverStaleInflightRun skips replay for branch chats", () => {
+  test("recoverStaleInflightRun also clears interrupted branch chats without replay", () => {
     const enqueued: string[] = [];
-    const rolledBack: Array<{ chatJid: string; prevTs: string }> = [];
+    const cleared: string[] = [];
 
     const ctx: WebRecoveryContext = {
       assistantName: "Pi",
@@ -181,8 +213,8 @@ describe("web recovery helpers", () => {
       getInflightRuns: () => [{ chatJid: "web:default:branch:abc123", prevTs: "t-prev", messageId: "m1", startedAt: "2026-01-01T00:00:00Z" }],
       transaction: (run) => run(),
       getAgentReplyStateAfter: () => "none",
-      clearInflightMarker: () => {},
-      rollbackInflightRun: (chatJid, prevTs) => { rolledBack.push({ chatJid, prevTs }); },
+      clearInflightMarker: (chatJid) => { cleared.push(chatJid); },
+      rollbackInflightRun: () => {},
       getAllChatCursors: () => ({}),
       getKnownChatJids: () => [],
       getDeferredQueuedFollowups: () => [],
@@ -191,11 +223,11 @@ describe("web recovery helpers", () => {
 
     const recovered = recoverStaleInflightRun(ctx, "web:default:branch:abc123", { hasActiveStatus: false, minAgeMs: 15_000 }, store);
     expect(recovered).toBe(true);
-    expect(rolledBack).toEqual([{ chatJid: "web:default:branch:abc123", prevTs: "t-prev" }]);
-    expect(enqueued).toEqual([]);  // no replay for branch
+    expect(cleared).toEqual(["web:default:branch:abc123"]);
+    expect(enqueued).toEqual([]);
   });
 
-  test("recoverInflightRuns skips replay for branch chats", () => {
+  test("recoverInflightRuns clears root and branch interrupted runs without replay", () => {
     const enqueued: string[] = [];
     const cleared: string[] = [];
 
@@ -226,9 +258,8 @@ describe("web recovery helpers", () => {
 
     recoverInflightRuns(ctx, store);
 
-    // Root chat gets replayed, branch chat gets cleared without replay
-    expect(enqueued).toEqual(["resume:web:default"]);
-    expect(cleared).toEqual(["web:default:branch:abc123"]);
+    expect(enqueued).toEqual([]);
+    expect(cleared).toEqual(["web:default", "web:default:branch:abc123"]);
   });
 
   test("recoverInflightRuns stops when transaction fails", () => {

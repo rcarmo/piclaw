@@ -131,6 +131,7 @@ interface ComposeChatRefreshLifecycleOptionsInput {
   currentChatJid: string;
   currentRootChatJid: string;
   getAgentModels: (chatJid: string) => Promise<any>;
+  getAgentContext: (chatJid: string) => Promise<any>;
   getActiveChatAgents: (chatJid: string) => Promise<any>;
   getChatBranches: (chatJid: string | null, options?: Record<string, unknown>) => Promise<any>;
   activeChatJidRef: RefBox<string>;
@@ -162,6 +163,7 @@ export function composeChatRefreshLifecycleOptions(input: ComposeChatRefreshLife
     currentChatJid: input.currentChatJid,
     currentRootChatJid: input.currentRootChatJid,
     getAgentModels: input.getAgentModels,
+    getAgentContext: input.getAgentContext,
     getActiveChatAgents: input.getActiveChatAgents,
     getChatBranches: input.getChatBranches,
     activeChatJidRef: input.activeChatJidRef,

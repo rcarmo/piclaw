@@ -29,8 +29,8 @@ describe('workspace auto-open gating', () => {
   });
 
   test('auto-opens viewer-supported files even without a preview', () => {
-    const resolvePane = ({ path }: any) => String(path).endsWith('.drawio') ? { id: 'drawio-pane' } : { id: 'editor' };
-    expect(shouldAutoOpenWorkspaceFile('diagrams/flow.drawio', null, { resolvePane })).toBe(true);
+    const resolvePane = ({ path }: any) => String(path).endsWith('.widget') ? { id: 'custom-widget' } : { id: 'editor' };
+    expect(shouldAutoOpenWorkspaceFile('widgets/sample.widget', null, { resolvePane })).toBe(true);
   });
 
   test('auto-opens generic files only when the loaded preview is editable text', () => {

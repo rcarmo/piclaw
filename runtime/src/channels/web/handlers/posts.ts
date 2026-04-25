@@ -8,6 +8,7 @@
  * Consumers: web/request-router.ts routes post paths here.
  */
 
+import type { InteractionRow } from "../../../db.js";
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
 import { parsePostPayload, storePost } from "../posts-service.js";
 
@@ -31,5 +32,14 @@ export async function handlePost(channel: WebChannelLike, req: Request, isReply:
   if (!parsed.ok || !parsed.data) return channel.json({ error: parsed.error }, 400);
 
   const result = storePost(channel, chatJid, parsed.data, { isReply });
+
+  if (result.status === 201) {
+    const interaction = result.body as InteractionRow | null;
+    const threadRootId = typeof interaction?.data?.thread_id === "number"
+      ? interaction.data.thread_id
+      : (typeof interaction?.id === "number" ? interaction.id : null);
+    channel.resumeChat(chatJid, threadRootId);
+  }
+
   return channel.json(result.body, result.status);
 }

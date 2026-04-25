@@ -100,6 +100,15 @@ export interface ApplyModelStateOptions {
   setHasLoadedAgentModels?: StateSetter<boolean>;
 }
 
+function haveSameJsonValue(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
+
 export function applyModelStatePayload(options: ApplyModelStateOptions): void {
   const {
     payload,
@@ -112,15 +121,18 @@ export function applyModelStatePayload(options: ApplyModelStateOptions): void {
   } = options;
 
   if (payload && typeof payload === 'object') {
-    setAgentModelsPayload?.(payload as Record<string, unknown>);
+    setAgentModelsPayload?.((prev) => haveSameJsonValue(prev, payload) ? prev : (payload as Record<string, unknown>));
     setHasLoadedAgentModels?.(true);
   }
 
   const modelUpdate = resolveModelStateUpdate(payload);
-  if (modelUpdate.hasModel) setActiveModel(modelUpdate.model);
-  if (modelUpdate.hasThinkingLevel) setActiveThinkingLevel(modelUpdate.thinkingLevelLabel ?? modelUpdate.thinkingLevel);
-  if (modelUpdate.hasSupportsThinking) setSupportsThinking(modelUpdate.supportsThinking);
-  if (modelUpdate.hasProviderUsage) setActiveModelUsage(modelUpdate.providerUsage);
+  if (modelUpdate.hasModel) setActiveModel((prev) => Object.is(prev, modelUpdate.model) ? prev : modelUpdate.model);
+  if (modelUpdate.hasThinkingLevel) {
+    const nextThinkingLevel = modelUpdate.thinkingLevelLabel ?? modelUpdate.thinkingLevel;
+    setActiveThinkingLevel((prev) => Object.is(prev, nextThinkingLevel) ? prev : nextThinkingLevel);
+  }
+  if (modelUpdate.hasSupportsThinking) setSupportsThinking((prev) => prev === modelUpdate.supportsThinking ? prev : modelUpdate.supportsThinking);
+  if (modelUpdate.hasProviderUsage) setActiveModelUsage((prev) => haveSameJsonValue(prev, modelUpdate.providerUsage) ? prev : modelUpdate.providerUsage);
 }
 
 export interface RefreshModelStateOptions {

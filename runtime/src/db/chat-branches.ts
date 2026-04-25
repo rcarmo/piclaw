@@ -6,6 +6,7 @@
  */
 
 import { getDb } from "./connection.js";
+import { deleteUnreferencedMedia } from "./media.js";
 import type { ChatBranchRecord } from "./types.js";
 import { createUuid } from "../utils/ids.js";
 
@@ -229,8 +230,23 @@ export function archiveChatBranch(chatJid: string): ChatBranchRecord {
 
   const existing = getChatBranchByChatJid(normalizedChatJid);
   if (!existing) throw new Error(`Unknown chat branch: ${normalizedChatJid}`);
-  if (existing.chat_jid === existing.root_chat_jid) {
-    throw new Error("Cannot prune the root chat branch.");
+
+  const isRootChat = existing.chat_jid === existing.root_chat_jid;
+  if (isRootChat && existing.chat_jid === "web:default") {
+    throw new Error("Cannot archive the default chat session.");
+  }
+  if (isRootChat) {
+    const db = getDb();
+    const row = db.prepare(
+      `SELECT COUNT(*) AS count
+         FROM chat_branches
+        WHERE root_chat_jid = ?
+          AND chat_jid != ?
+          AND archived_at IS NULL`
+    ).get(existing.chat_jid, existing.chat_jid) as { count?: number } | undefined;
+    if (Number(row?.count || 0) > 0) {
+      throw new Error("Cannot archive a root chat session while it still has active branch sessions.");
+    }
   }
   if (existing.archived_at) {
     return existing;
@@ -246,6 +262,157 @@ export function archiveChatBranch(chatJid: string): ChatBranchRecord {
   ).run(now, now, existing.branch_id);
 
   return getChatBranchByChatJid(normalizedChatJid)!;
+}
+
+export interface ArchivedBranchPurgePreview {
+  branch: ChatBranchRecord;
+  counts: {
+    chat_branches: number;
+    chats: number;
+    messages: number;
+    message_media: number;
+    chat_cursors: number;
+    token_usage: number;
+    scheduled_tasks: number;
+    task_run_logs: number;
+    ssh_configs: number;
+    proxmox_configs: number;
+    portainer_configs: number;
+    extension_kv: number;
+    media_candidates: number;
+  };
+}
+
+export interface PermanentDeleteArchivedBranchResult {
+  branch: ChatBranchRecord;
+  counts: ArchivedBranchPurgePreview["counts"] & {
+    media_deleted: number;
+  };
+}
+
+function requireArchivedNonRootBranch(chatJid: string): ChatBranchRecord {
+  const normalizedChatJid = String(chatJid || "").trim();
+  if (!normalizedChatJid) throw new Error("chat_jid is required");
+
+  const branch = getChatBranchByChatJid(normalizedChatJid);
+  if (!branch) throw new Error(`Unknown chat branch: ${normalizedChatJid}`);
+  if (!branch.archived_at) {
+    throw new Error(`Cannot permanently delete a branch that is not archived: ${normalizedChatJid}`);
+  }
+  if (branch.chat_jid === branch.root_chat_jid) {
+    throw new Error(`Cannot permanently delete a root chat session: ${normalizedChatJid}`);
+  }
+
+  return branch;
+}
+
+function getArchivedBranchTaskIds(chatJid: string): string[] {
+  const db = getDb();
+  const rows = db.prepare(
+    `SELECT id
+       FROM scheduled_tasks
+      WHERE chat_jid = ?
+      ORDER BY id ASC`
+  ).all(chatJid) as Array<{ id: string }>;
+  return rows.map((row) => row.id);
+}
+
+function getArchivedBranchMediaIds(chatJid: string): number[] {
+  const db = getDb();
+  const rows = db.prepare(
+    `SELECT DISTINCT mm.media_id AS media_id
+       FROM message_media mm
+       JOIN messages m ON m.rowid = mm.message_rowid
+      WHERE m.chat_jid = ?
+      ORDER BY mm.media_id ASC`
+  ).all(chatJid) as Array<{ media_id: number }>;
+  return rows.map((row) => Number(row.media_id)).filter((value) => Number.isFinite(value));
+}
+
+function countRows(sql: string, ...params: Array<string | number>): number {
+  const db = getDb();
+  const row = db.prepare(sql).get(...params) as { count?: number } | undefined;
+  return Number(row?.count || 0);
+}
+
+export function previewPermanentDeleteArchivedBranch(chatJid: string): ArchivedBranchPurgePreview {
+  const branch = requireArchivedNonRootBranch(chatJid);
+  const taskIds = getArchivedBranchTaskIds(branch.chat_jid);
+  const mediaIds = getArchivedBranchMediaIds(branch.chat_jid);
+  const taskPlaceholders = taskIds.map(() => "?").join(",");
+
+  return {
+    branch,
+    counts: {
+      chat_branches: countRows(`SELECT COUNT(*) AS count FROM chat_branches WHERE chat_jid = ?`, branch.chat_jid),
+      chats: countRows(`SELECT COUNT(*) AS count FROM chats WHERE jid = ?`, branch.chat_jid),
+      messages: countRows(`SELECT COUNT(*) AS count FROM messages WHERE chat_jid = ?`, branch.chat_jid),
+      message_media: countRows(
+        `SELECT COUNT(*) AS count
+           FROM message_media
+          WHERE message_rowid IN (SELECT rowid FROM messages WHERE chat_jid = ?)`,
+        branch.chat_jid,
+      ),
+      chat_cursors: countRows(`SELECT COUNT(*) AS count FROM chat_cursors WHERE chat_jid = ?`, branch.chat_jid),
+      token_usage: countRows(`SELECT COUNT(*) AS count FROM token_usage WHERE chat_jid = ?`, branch.chat_jid),
+      scheduled_tasks: taskIds.length,
+      task_run_logs: taskIds.length > 0
+        ? countRows(`SELECT COUNT(*) AS count FROM task_run_logs WHERE task_id IN (${taskPlaceholders})`, ...taskIds)
+        : 0,
+      ssh_configs: countRows(`SELECT COUNT(*) AS count FROM ssh_configs WHERE chat_jid = ?`, branch.chat_jid),
+      proxmox_configs: countRows(`SELECT COUNT(*) AS count FROM proxmox_configs WHERE chat_jid = ?`, branch.chat_jid),
+      portainer_configs: countRows(`SELECT COUNT(*) AS count FROM portainer_configs WHERE chat_jid = ?`, branch.chat_jid),
+      extension_kv: countRows(`SELECT COUNT(*) AS count FROM extension_kv WHERE scope = 'chat' AND scope_key = ?`, branch.chat_jid),
+      media_candidates: mediaIds.length,
+    },
+  };
+}
+
+export function permanentDeleteArchivedBranch(chatJid: string): PermanentDeleteArchivedBranchResult {
+  const preview = previewPermanentDeleteArchivedBranch(chatJid);
+  const branch = preview.branch;
+  const mediaIds = getArchivedBranchMediaIds(branch.chat_jid);
+  const taskIds = getArchivedBranchTaskIds(branch.chat_jid);
+  const db = getDb();
+
+  const deleted = {
+    ...preview.counts,
+    media_deleted: 0,
+  };
+
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (taskIds.length > 0) {
+      const taskPlaceholders = taskIds.map(() => "?").join(",");
+      db.prepare(`DELETE FROM task_run_logs WHERE task_id IN (${taskPlaceholders})`).run(...taskIds);
+      db.prepare(`DELETE FROM scheduled_tasks WHERE id IN (${taskPlaceholders})`).run(...taskIds);
+    }
+
+    db.prepare(
+      `DELETE FROM message_media
+        WHERE message_rowid IN (SELECT rowid FROM messages WHERE chat_jid = ?)`
+    ).run(branch.chat_jid);
+    db.prepare(`DELETE FROM messages WHERE chat_jid = ?`).run(branch.chat_jid);
+    db.prepare(`DELETE FROM chat_cursors WHERE chat_jid = ?`).run(branch.chat_jid);
+    db.prepare(`DELETE FROM token_usage WHERE chat_jid = ?`).run(branch.chat_jid);
+    db.prepare(`DELETE FROM ssh_configs WHERE chat_jid = ?`).run(branch.chat_jid);
+    db.prepare(`DELETE FROM proxmox_configs WHERE chat_jid = ?`).run(branch.chat_jid);
+    db.prepare(`DELETE FROM portainer_configs WHERE chat_jid = ?`).run(branch.chat_jid);
+    db.prepare(`DELETE FROM extension_kv WHERE scope = 'chat' AND scope_key = ?`).run(branch.chat_jid);
+    db.prepare(`DELETE FROM chat_branches WHERE chat_jid = ?`).run(branch.chat_jid);
+    db.prepare(`DELETE FROM chats WHERE jid = ?`).run(branch.chat_jid);
+    deleted.media_deleted = deleteUnreferencedMedia(mediaIds);
+
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+
+  return {
+    branch,
+    counts: deleted,
+  };
 }
 
 // ---------------------------------------------------------------------------

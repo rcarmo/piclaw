@@ -59,23 +59,17 @@ import {
   listRecentChatJids,
   upsertSshConfig,
 } from "./db.js";
+import {
+  extensionKvGet,
+  extensionKvSet,
+  extensionKvDelete,
+  extensionKvList,
+  extensionKvQuery,
+  extensionKvClear,
+  migrateProxmoxPortainerToKv,
+} from "./db.js";
+import { registerExtensionKvStore } from "./extension-kv-registry.js";
 import { setSshToolHandlers } from "./extensions/ssh.js";
-import { setProxmoxToolHandlers } from "./extensions/proxmox.js";
-import { setPortainerToolHandlers } from "./extensions/portainer.js";
-import {
-  clearStoredProxmoxConfig,
-  getStoredProxmoxConfig,
-  requestStoredProxmoxApi,
-  runStoredProxmoxWorkflow,
-  setStoredProxmoxConfig,
-} from "./proxmox/handlers.js";
-import {
-  clearStoredPortainerConfig,
-  getStoredPortainerConfig,
-  requestStoredPortainerApi,
-  runStoredPortainerWorkflow,
-  setStoredPortainerConfig,
-} from "./portainer/handlers.js";
 import { applyLiveSshConfig, clearLiveSshConfig, hasLiveChatSshSession, resolveSshCoreConfigFromChatConfig } from "./extensions/ssh-core.js";
 import { createLogger } from "./utils/logger.js";
 
@@ -231,20 +225,15 @@ export class AgentPool {
       set: (chatJid, config) => this.setSshConfig(chatJid, config),
       clear: (chatJid) => this.clearSshConfig(chatJid),
     });
-    setProxmoxToolHandlers({
-      get: (chatJid) => getStoredProxmoxConfig(chatJid),
-      set: (chatJid, config) => setStoredProxmoxConfig(chatJid, config),
-      clear: (chatJid) => clearStoredProxmoxConfig(chatJid),
-      request: (chatJid, input) => requestStoredProxmoxApi(chatJid, input),
-      workflow: (chatJid, input) => runStoredProxmoxWorkflow(chatJid, input),
+    registerExtensionKvStore({
+      get: extensionKvGet,
+      set: extensionKvSet,
+      delete: extensionKvDelete,
+      list: extensionKvList,
+      query: extensionKvQuery,
+      clear: extensionKvClear,
     });
-    setPortainerToolHandlers({
-      get: (chatJid) => getStoredPortainerConfig(chatJid),
-      set: (chatJid, config) => setStoredPortainerConfig(chatJid, config),
-      clear: (chatJid) => clearStoredPortainerConfig(chatJid),
-      request: (chatJid, input) => requestStoredPortainerApi(chatJid, input),
-      workflow: (chatJid, input) => runStoredPortainerWorkflow(chatJid, input),
-    });
+    try { migrateProxmoxPortainerToKv(); } catch { /* migration is best-effort */ }
     mkdirSync(SESSIONS_DIR, { recursive: true });
     mkdirSync(this.logsDir, { recursive: true });
     this.cleanupTimer = setInterval(
@@ -471,6 +460,12 @@ export class AgentPool {
     options: { agentName?: string | null } = {},
   ): Promise<ChatBranchRecord> {
     return this.branchManager.restoreChatBranch(chatJid, options);
+  }
+
+  async permanentPurgeChatBranch(
+    chatJid: string,
+  ): Promise<{ branch: ChatBranchRecord; removedSessionArtifacts: string[] }> {
+    return this.branchManager.permanentPurgeChatBranch(chatJid);
   }
 
   async createForkedChatBranch(

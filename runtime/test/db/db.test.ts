@@ -152,7 +152,7 @@ test("chat branch registry always writes null display_name", () => {
   expect(restored.display_name).toBeNull();
 });
 
-test("chat branch registry supports pruning non-root branches", () => {
+test("chat branch registry supports pruning non-root branches and archiving non-default roots", () => {
   const rootChatJid = `web:test-prune-${Date.now()}`;
   db.storeChatMetadata(rootChatJid, new Date().toISOString(), "Root");
   const root = db.getChatBranchByChatJid(rootChatJid);
@@ -167,7 +167,9 @@ test("chat branch registry supports pruning non-root branches", () => {
   expect(archived.archived_at).toBeTruthy();
   expect(db.getChatBranchByAgentName(branch.agent_name)).toBeNull();
   expect(db.listChatBranches(rootChatJid).map((item) => item.chat_jid)).toEqual([rootChatJid]);
-  expect(() => db.archiveChatBranch(rootChatJid)).toThrow("Cannot prune the root chat branch.");
+
+  const archivedRoot = db.archiveChatBranch(rootChatJid);
+  expect(archivedRoot.archived_at).toBeTruthy();
 });
 
 test("chat branch registry lets pruned agent handles be reused", () => {

@@ -130,3 +130,7 @@ export function getRegisteredRoutes(): Array<{ prefix: string; extensionPath: st
 ): "created" | "updated" => {
   return registerExtensionRoute(prefix, handler, extensionPath || "unknown");
 };
+
+// Also expose registerToolStatusHintProvider for addon extensions
+import { registerToolStatusHintProvider } from "../../../tool-status-hints.js";
+(globalThis as any).__piclaw_registerToolStatusHintProvider = registerToolStatusHintProvider;

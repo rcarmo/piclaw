@@ -15,6 +15,7 @@ export function buildDreamPrompt(options?: { mode?: "manual" | "auto"; days?: nu
     "- Only modify `notes/daily/` and `notes/memory/` files.",
     "- Do not modify project code, tests, runtime sources, or unrelated config.",
     "- Load memory at session start from `notes/memory/MEMORY.md` and `notes/index.md`, then open deeper files only as needed.",
+    "- Your tool access is intentionally constrained for Dream reliability; prefer the smallest number of reads/searches needed to finish the pass.",
     "",
     "You are the evaluator for what is relevant. Do not use fixed message-length heuristics; use judgment based on the recent evidence you inspect.",
     "",

@@ -2024,7 +2024,7 @@ test("processChat records an explicit failed run when draft fallback persistence
   expect(contents).toEqual(["hello"]);
 });
 
-test("processChat surfaces provider rate limits as an explicit error notice", async () => {
+test("processChat surfaces provider rate limits as a visible outcome bubble", async () => {
   const ws = createTempWorkspace("piclaw-web-channel-");
   cleanupWorkspace = ws.cleanup;
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
@@ -2060,12 +2060,16 @@ test("processChat surfaces provider rate limits as an explicit error notice", as
   const timeline = db.getTimeline("web:default", 10);
   const botMessages = timeline.filter((item: any) => item.data.type === "agent_response");
   expect(botMessages.length).toBe(1);
-  expect(botMessages[0].data.content).toContain("AI provider rate limit after automatic retries");
-  expect(botMessages[0].data.content).toContain("429");
-  expect(botMessages[0].data.content).not.toContain("produced no response");
+  expect(String(botMessages[0].data.content || "")).toBe("");
+  expect(botMessages[0].data.content_blocks).toContainEqual(expect.objectContaining({
+    type: "turn_outcome_marker",
+    kind: "provider",
+    label: "rate limit",
+    title: "Provider retry budget exhausted",
+  }));
 });
 
-test("processChat keeps the rate-limit notice when a draft fallback is published", async () => {
+test("processChat keeps partial draft text and adds a rate-limit bubble when fallback is published", async () => {
   const ws = createTempWorkspace("piclaw-web-channel-");
   cleanupWorkspace = ws.cleanup;
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
@@ -2106,11 +2110,99 @@ test("processChat keeps the rate-limit notice when a draft fallback is published
   const botMessages = timeline.filter((item: any) => item.data.type === "agent_response");
   expect(botMessages.length).toBe(1);
   expect(botMessages[0].data.content).toContain("Partial draft already visible");
-  expect(botMessages[0].data.content).toContain("AI provider rate limit after automatic retries");
-  expect(botMessages[0].data.content).not.toContain("Response ended with an error before finalization");
+  expect(botMessages[0].data.content_blocks).toContainEqual(expect.objectContaining({
+    type: "turn_outcome_marker",
+    kind: "provider",
+    draft_recovered: true,
+  }));
 });
 
-test("processChat persists a recovery-needed notice instead of the generic no-response warning when compaction/recovery stalls", async () => {
+test("processChat includes the last action summary in visible failure fallbacks", async () => {
+  const ws = createTempWorkspace("piclaw-web-channel-");
+  cleanupWorkspace = ws.cleanup;
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await import("../../../src/db.js");
+  db.initDatabase();
+  db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors; DELETE FROM chat_cursors;");
+  db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
+
+  db.storeMessage({
+    id: `msg-${Math.random()}`,
+    chat_jid: "web:default",
+    sender: "user",
+    sender_name: "User",
+    content: "hello",
+    timestamp: new Date().toISOString(),
+    is_from_me: false,
+    is_bot_message: false,
+  });
+
+  const webMod = await import("../../../src/channels/web.js");
+  const web = new (webMod.WebChannel as any)({
+    queue: { enqueue: () => {} },
+    agentPool: {
+      setSessionBinder: () => {},
+      runAgent: async (_prompt: string, _chatJid: string, options: any) => {
+        options.onEvent?.({ type: "tool_execution_start", toolCallId: "tool-1", toolName: "bash", args: { command: "echo hi" } });
+        options.onEvent?.({ type: "tool_execution_update", toolCallId: "tool-1", toolName: "bash", args: { command: "echo hi" } });
+        return { status: "error", error: "Prompt completed without emitting an assistant reply before finalization (session delta: 0 appended entries).", result: null, attachments: [] };
+      },
+      getContextUsageForChat: async () => null,
+    },
+  });
+
+  await web.processChat("web:default", "default");
+
+  const timeline = db.getTimeline("web:default", 10);
+  const last = timeline[timeline.length - 1];
+  expect(String(last.data.content || "")).toBe("");
+  expect(last.data.content_blocks).toContainEqual(expect.objectContaining({
+    type: "turn_outcome_marker",
+    kind: "error",
+    tool_action_summary: expect.stringContaining("bash"),
+  }));
+});
+
+test("processChat suppresses a redundant failure bubble when a turn is aborted", async () => {
+  const ws = createTempWorkspace("piclaw-web-channel-");
+  cleanupWorkspace = ws.cleanup;
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await import("../../../src/db.js");
+  db.initDatabase();
+  db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors; DELETE FROM chat_cursors;");
+  db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
+
+  db.storeMessage({
+    id: `msg-${Math.random()}`,
+    chat_jid: "web:default",
+    sender: "user",
+    sender_name: "User",
+    content: "hello",
+    timestamp: new Date().toISOString(),
+    is_from_me: false,
+    is_bot_message: false,
+  });
+
+  const webMod = await import("../../../src/channels/web.js");
+  const web = new (webMod.WebChannel as any)({
+    queue: { enqueue: () => {} },
+    agentPool: {
+      setSessionBinder: () => {},
+      runAgent: async () => ({ status: "error", error: "The operation was aborted.", result: null, attachments: [] }),
+      getContextUsageForChat: async () => null,
+    },
+  });
+
+  await web.processChat("web:default", "default");
+
+  const timeline = db.getTimeline("web:default", 10);
+  expect(timeline).toHaveLength(1);
+  expect(String(timeline[0]?.data?.content || "")).toBe("hello");
+});
+
+test("processChat persists a compact recovery bubble instead of a generic no-response warning when compaction/recovery stalls", async () => {
   const ws = createTempWorkspace("piclaw-web-channel-");
   cleanupWorkspace = ws.cleanup;
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
@@ -2162,21 +2254,16 @@ test("processChat persists a recovery-needed notice instead of the generic no-re
 
   await web.processChat("web:default", "default");
 
-  const failedRun = db.getFailedRun("web:default");
-  expect(failedRun).toBeTruthy();
+  expect(db.getFailedRun("web:default")).toBeUndefined();
 
   const timeline = db.getTimeline("web:default", 20);
   const botMessages = timeline.filter((item: any) => item.data.type === "agent_response");
-  expect(botMessages.some((item: any) => String(item.data.content || "").includes("Automatic recovery exhausted — this turn ended without a persisted reply."))).toBe(true);
-  expect(botMessages.some((item: any) => String(item.data.content || "").includes("orphaned tool-result blocks"))).toBe(true);
+  expect(botMessages.some((item: any) => Array.isArray(item.data.content_blocks)
+    && item.data.content_blocks.some((block: any) => block?.type === "turn_outcome_marker" && (block?.label === "recovery" || block?.label === "context") && String(block?.detail || "").includes("orphaned tool-result blocks")))).toBe(true);
   expect(botMessages.some((item: any) => String(item.data.content || "").includes("produced no response"))).toBe(false);
-
-  const cardMessage = timeline.find((entry: any) => Array.isArray(entry.data?.content_blocks)
-    && entry.data.content_blocks.some((block: any) => block?.type === "adaptive_card" && String(block.card_id || "").startsWith("recovery-exhausted-")));
-  expect(cardMessage).toBeDefined();
 });
 
-test("processChat records a failed run when the agent returns empty successful output", async () => {
+test("processChat consumes an empty successful output with a compact no-reply bubble", async () => {
   const ws = createTempWorkspace("piclaw-web-channel-");
   cleanupWorkspace = ws.cleanup;
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
@@ -2186,13 +2273,14 @@ test("processChat records a failed run when the agent returns empty successful o
   db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors; DELETE FROM chat_cursors;");
   db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
 
+  const userTs = new Date().toISOString();
   db.storeMessage({
     id: `msg-${Math.random()}`,
     chat_jid: "web:default",
     sender: "user",
     sender_name: "User",
     content: "hello",
-    timestamp: new Date().toISOString(),
+    timestamp: userTs,
     is_from_me: false,
     is_bot_message: false,
   });
@@ -2209,18 +2297,17 @@ test("processChat records a failed run when the agent returns empty successful o
 
   await web.processChat("web:default", "default");
 
-  const failedRun = db.getFailedRun("web:default");
-  expect(failedRun).toBeTruthy();
-  expect(db.getChatCursor("web:default")).toBe("");
+  expect(db.getFailedRun("web:default")).toBeUndefined();
+  expect(db.getChatCursor("web:default")).toBe(userTs);
 
   const timeline = db.getTimeline("web:default", 10);
   const botMessages = timeline.filter((item: any) => item.data.type === "agent_response");
-  expect(botMessages.some((item: any) => String(item.data.content || "").includes("⚠️ Agent produced no response."))).toBe(true);
-  expect(botMessages.some((item: any) => String(item.data.content || "").includes("The turn was not committed as success."))).toBe(true);
-  expect(botMessages.some((item: any) => String(item.data.content || "").includes("Choose how to continue."))).toBe(false);
+  expect(botMessages.some((item: any) => Array.isArray(item.data.content_blocks)
+    && item.data.content_blocks.some((block: any) => block?.type === "turn_outcome_marker" && block?.label === "no reply"))).toBe(true);
+  expect(botMessages.some((item: any) => String(item.data.content || "") === "")).toBe(true);
 });
 
-test("processChat holds an unresolved failed run until it is explicitly retried or skipped", async () => {
+test("processChat does not replay empty-output turns on subsequent passes", async () => {
   const ws = createTempWorkspace("piclaw-web-channel-");
   cleanupWorkspace = ws.cleanup;
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
@@ -2259,21 +2346,16 @@ test("processChat holds an unresolved failed run until it is explicitly retried 
 
   await web.processChat("web:default", "default");
   expect(runCount).toBe(1);
-  expect(db.getFailedRun("web:default")?.messageId).toBe("msg-held-failure");
-  expect(db.getChatCursor("web:default")).toBe("");
+  expect(db.getFailedRun("web:default")).toBeUndefined();
+  expect(db.getChatCursor("web:default")).toBe(userTs);
 
   await web.processChat("web:default", "default");
   expect(runCount).toBe(1);
-  expect(db.getFailedRun("web:default")?.messageId).toBe("msg-held-failure");
-
-  expect(web.retryFailedOnModelSwitch("web:default")).toBe(true);
-  await web.processChat("web:default", "default");
-
-  expect(runCount).toBe(2);
   expect(db.getFailedRun("web:default")).toBeUndefined();
-  expect(db.getChatCursor("web:default")).toBe(userTs);
-  const timeline = db.getTimeline("web:default", 20).map((item: any) => item.data.content);
-  expect(timeline).toContain("fixed");
+
+  const timeline = db.getTimeline("web:default", 20);
+  expect(timeline.some((item: any) => Array.isArray(item.data?.content_blocks)
+    && item.data.content_blocks.some((block: any) => block?.type === "turn_outcome_marker" && block?.label === "no reply"))).toBe(true);
 });
 
 test("processChat does not emit no-response notice when an earlier turn was already persisted", async () => {
@@ -2428,7 +2510,11 @@ test("processChat treats a persisted timeout fallback as a terminal completion",
   const timeline = db.getTimeline("web:default", 10);
   const last = timeline[timeline.length - 1];
   expect(last.data.content).toContain("draft only");
-  expect(last.data.content).toContain("timed out before finalization");
+  expect(last.data.content_blocks).toContainEqual(expect.objectContaining({
+    type: "timeout_marker",
+    timed_out: true,
+    draft_recovered: true,
+  }));
 });
 
 test("processChat stores a recovery marker on a successfully recovered final turn", async () => {
@@ -2487,7 +2573,7 @@ test("processChat stores a recovery marker on a successfully recovered final tur
   }));
 });
 
-test("processChat emits an exhausted-recovery card when automatic recovery gives up", async () => {
+test("processChat emits an exhausted-recovery bubble when automatic recovery gives up", async () => {
   const ws = createTempWorkspace("piclaw-web-channel-");
   cleanupWorkspace = ws.cleanup;
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
@@ -2537,10 +2623,10 @@ test("processChat emits an exhausted-recovery card when automatic recovery gives
   await web.processChat("web:default", "default");
 
   const timeline = db.getTimeline("web:default", 20);
-  const cardMessage = timeline.find((entry: any) => Array.isArray(entry.data?.content_blocks)
-    && entry.data.content_blocks.some((block: any) => block?.type === "adaptive_card" && String(block.card_id || "").startsWith("recovery-exhausted-")));
-  expect(cardMessage).toBeDefined();
-  expect(cardMessage?.data?.content).toContain("Automatic recovery exhausted");
+  const bubbleMessage = timeline.find((entry: any) => Array.isArray(entry.data?.content_blocks)
+    && entry.data.content_blocks.some((block: any) => block?.type === "timeout_marker" && block?.draft_recovered === true));
+  expect(bubbleMessage).toBeDefined();
+  expect(String(bubbleMessage?.data?.content || "")).toContain("partial draft");
 });
 
 test("processChat keeps a recovered compaction timeout as one clean final answer", async () => {
@@ -2659,8 +2745,11 @@ test("processChat annotates draft fallback when compaction intent is active", as
   const timeline = db.getTimeline("web:default", 10);
   const last = timeline[timeline.length - 1];
   expect(last.data.content).toContain("draft during compaction");
-  expect(last.data.content).toContain("timed out before finalization");
-  expect(last.data.content).toContain("Context compaction was in progress");
+  expect(last.data.content_blocks).toContainEqual(expect.objectContaining({
+    type: "timeout_marker",
+    timed_out: true,
+    draft_recovered: true,
+  }));
 });
 
 test("processChat publishes final draft fallback even after an intermediate turn", async () => {
@@ -2716,9 +2805,12 @@ test("processChat publishes final draft fallback even after an intermediate turn
   await web.processChat("web:default", "default");
 
   const timeline = db.getTimeline("web:default", 10);
-  const contents = timeline.map((item: any) => item.data.content);
+  const contents = timeline.map((item: any) => String(item.data.content || ""));
   expect(contents).toContain("first reply");
-  expect(contents).toContain("second draft");
+  expect(contents.some((content) => content.includes("second draft"))).toBe(true);
+  // "No final reply" marker is now in content_blocks, not the message text
+  const blocks = timeline.flatMap((item: any) => item.data.content_blocks || []);
+  expect(blocks.some((b: any) => b?.type === "turn_outcome_marker" && b?.label === "no reply")).toBe(true);
 });
 
 test("processChat publishes queued follow-up only after current turn completes", async () => {

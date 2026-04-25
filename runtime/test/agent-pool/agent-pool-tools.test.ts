@@ -98,7 +98,7 @@ describe("builtin extension factories", () => {
   });
 
   test("factories array has expected length", () => {
-    expect(builtinExtensionFactories.length).toBe(20);
+    expect(builtinExtensionFactories.length).toBe(21);
   });
 
   test("scheduled_tasks unifies create pause resume and delete", async () => {

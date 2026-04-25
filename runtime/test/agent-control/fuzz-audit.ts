@@ -54,9 +54,11 @@ const ROUTING_SAMPLES: Record<string, string> = {
   "/totp": "/totp",
   "/qr": "/qr https://example.com/qr",
   "/search": "/search audit",
+  "/ask": "/ask relay-1 audit this request",
   "/restart": "/restart",
   "/exit": "/exit",
   "/login": "/login",
+  "/settings": "/settings",
   "/logout": "/logout",
   "/commands": "/commands",
 };

@@ -225,3 +225,32 @@ test("AgentBranchManager prunes inactive branches and disposes cached sessions",
 
   ws.cleanup();
 });
+
+test("AgentBranchManager archives a non-default root session and blocks roots with child branches", async () => {
+  const ws = createTempWorkspace("piclaw-root-session-archive-");
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
+  db.initDatabase();
+  db.storeChatMetadata("web:custom", new Date().toISOString(), "Custom Root");
+
+  const fixture = createManager();
+  const archivedRoot = await fixture.manager.pruneChatBranch("web:custom");
+  expect(archivedRoot.archived_at).toBeTruthy();
+
+  db.storeChatMetadata("web:family", new Date().toISOString(), "Family Root");
+  const familyRoot = db.getChatBranchByChatJid("web:family");
+  db.storeChatMetadata("web:family:branch:child", new Date().toISOString(), "Child");
+  db.ensureChatBranch({
+    chat_jid: "web:family:branch:child",
+    root_chat_jid: "web:family",
+    parent_branch_id: familyRoot?.branch_id ?? null,
+    agent_name: "child",
+  });
+
+  await expect(fixture.manager.pruneChatBranch("web:family")).rejects.toThrow(
+    "Cannot archive a root chat session while it still has active branch sessions.",
+  );
+
+  ws.cleanup();
+});

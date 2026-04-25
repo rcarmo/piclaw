@@ -357,22 +357,24 @@ Set via environment variables (see above) or in `.piclaw/config.json`:
 
 PiClaw ships the `pi-mcp-adapter` extension for token-efficient MCP access.
 
-Preferred project-local config:
+Preferred shared project config:
 
 ```text
-/workspace/.pi/mcp.json
+/workspace/.mcp.json
 ```
 
-Starter example seeded on first startup:
+Starter examples seeded on first startup:
 
 ```text
+/workspace/.mcp.json.example
 /workspace/.pi/mcp.json.example
 ```
 
-Global Pi-home config also works:
+Pi-specific override layers also work:
 
 ```text
 ~/.pi/agent/mcp.json
+/workspace/.pi/mcp.json
 ```
 
 In the container image that Pi home is typically bind-mounted under:
@@ -392,7 +394,7 @@ The same `/config/.pi/agent/` path also holds Pi-managed provider auth/model met
 Notes:
 
 - prefer the project-local file when MCP servers are part of the current workspace
-- config is merged from Pi-home config, optional imported tool configs, then project-local `.pi/mcp.json` overrides
+- config now prefers shared MCP files first (`~/.config/mcp/mcp.json`, then project `.mcp.json`), with Pi-owned config layers used for Pi-specific imports/overrides and project-local `.pi/mcp.json` as the final override
 - start a new chat/session or restart PiClaw after changing MCP config
 - the adapter exposes the `mcp` tool plus `/mcp`, `/mcp status`, `/mcp tools`, `/mcp reconnect [server]`, and `/mcp-auth` commands
 - `/mcp` opens the MCP management panel in the web UI and falls back to text status elsewhere
@@ -400,10 +402,28 @@ Notes:
 
 ### Default active tools
 
-Piclaw now keeps the agent's always-active tool list intentionally small and uses
+Piclaw keeps the agent's always-active baseline intentionally small and uses
 `list_tools` and `activate_tools` to enable extra capabilities on demand (`list_internal_tools` remains as a deprecated compatibility alias during migration).
 
-Built-in default baseline:
+#### How tool activation affects token usage
+
+- **Default-active tools** are injected as full schemas (all fields and constraints)
+  into the system prompt.
+- **On-demand tools** are represented by compact catalog entries (name +
+  short summary/metadata) until explicitly activated.
+
+Because the system prompt is sent on every model request, active tool schemas
+always contribute extra token cost. Typical magnitudes in this setup are:
+
+| Tool tier | Typical prompt impact |
+| --- | --- |
+| Default-active | `~50-200` tokens each |
+| On-demand catalog entry | `~10-15` tokens each |
+
+With all bundled tools present, this staged setup keeps context spend predictable
+and avoids full-schema bloat for rarely used tools.
+
+#### Built-in default baseline
 
 - `read`
 - `edit`
@@ -416,6 +436,25 @@ Built-in default baseline:
 - `messages`
 - `keychain`
 - `exit_process`
+
+At session start, piclaw also auto-promotes available tools to the effective
+default set when they are already safe/cheap:
+
+- read-only + lightweight tools (for example `grep`, `find`, `ls`, `get_model_state`),
+- message/scheduling/attachment helpers when present (`messages`, `schedule_task`,
+  `scheduled_tasks`, `read_attachment`, `export_attachment`),
+- `attach_file` and `keychain` when available.
+
+This keeps common read/inspect workflows fast while leaving more expensive tools
+opt-in via activation.
+
+#### How to unlock additional tools
+
+Follow the existing path:
+
+1. `list_tools` with `query` or `intent` for compact discovery.
+2. Activate only the needed tool(s) via `activate_tools`.
+3. Use them in the same turn or next turn; activation updates apply within-session.
 
 Add more always-active tools in `.piclaw/config.json` under `tools.additionalDefaultTools`:
 
@@ -440,12 +479,17 @@ A comma-separated string is also accepted:
 }
 ```
 
+The environment variable `PICLAW_ADDITIONAL_DEFAULT_TOOLS` is equivalent.
+
 Notes:
 
 - `reset_active_tools` restores this configured default set, not just the built-in baseline.
-- Unknown tool names are ignored when the active tool list is applied.
+- Unknown tool names are silently ignored when applying the default set.
 - On Windows, `bash` is replaced by the `powershell` tool in the default active set.
-- Newly activated tools become available immediately to subsequent tool/model steps in the same turn; keep critical control tools in the default baseline or config-defined defaults.
+- Newly activated tools become available immediately to subsequent tool/model steps
+  in the same turn; keep critical control tools in defaults.
+- Tool activation is session-scoped and resets on session rotation or restart.
+- On-demand tools still carry a small catalog cost in prompts even before activation.
 
 ### Workspace search / FTS roots
 
@@ -715,6 +759,8 @@ Optional settings for multi-instance communication. See [cross-instance-ipc.md](
 |----------|---------|---------|
 | `PICLAW_REMOTE_INTEROP_ENABLED` | `0` | Enable cross-instance interop endpoints |
 | `PICLAW_REMOTE_INTEROP_ALLOW_HTTP` | `0` | Allow `http://` callback URLs (not just `https://`) |
+| `PICLAW_REMOTE_INTEROP_ALLOW_PRIVATE_NETWORK` | `0` | Skip **all** SSRF protections on callback URLs — private/loopback IP checks, blocked-hostname checks, and DNS re-resolution. Only for Docker/LAN dev environments. |
 | `PICLAW_REMOTE_SHORT_CIRCUIT_ENABLED` | `0` | Enable short-circuit execution mode |
 | `PICLAW_REMOTE_INSTANCE_NAME` | _(empty)_ | Display name for this instance in interop metadata |
 | `PICLAW_REMOTE_INTEROP_DECISION_MODEL` | _(empty)_ | Model label for interop mediation (metadata only) |
+| `PICLAW_WEB_EXTERNAL_URL` | _(empty)_ | Public base URL used as callback origin during pairing (e.g. `https://mybox.example.com`). Falls back to `http://localhost:<port>` if unset — real deployments should always set this. |

@@ -13,12 +13,11 @@ describe("lazy viewer route registration", () => {
     clearExtensionRoutes();
   });
 
-  test("registers draw.io and office viewer routes without loading them through session bootstrap", async () => {
+  test("registers the office viewer route without loading it through session bootstrap", async () => {
     registerLazyViewerRoutes();
 
     expect(getRegisteredRoutes()).toEqual([
       expect.objectContaining({ prefix: "/office-viewer" }),
-      expect.objectContaining({ prefix: "/drawio" }),
     ]);
 
     const officeResponse = await handleExtensionRoutes(
@@ -28,13 +27,5 @@ describe("lazy viewer route registration", () => {
     expect(officeResponse).not.toBeNull();
     expect(officeResponse?.status).toBe(200);
     expect(officeResponse?.headers.get("Content-Type")).toContain("text/html");
-
-    const drawioResponse = await handleExtensionRoutes(
-      new Request("http://localhost/drawio/edit", { method: "GET" }),
-      "/drawio/edit",
-    );
-    expect(drawioResponse).not.toBeNull();
-    expect(drawioResponse?.status).toBe(200);
-    expect(drawioResponse?.headers.get("Content-Type")).toContain("text/html");
   });
 });

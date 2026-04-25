@@ -14,10 +14,13 @@ import {
   imageViewerPaneExtension,
   htmlViewerPaneExtension,
   videoViewerPaneExtension,
-  drawioPaneExtension,
   mindmapPaneExtension,
   kanbanPaneExtension,
 } from '../panes/index.js';
+import {
+  installAddonWebApi,
+  loadInstalledAddonWebEntries,
+} from './addon-web-extensions.js';
 import { resolveOptionalApi } from './optional-api.js';
 
 interface AppApiSurface {
@@ -64,7 +67,6 @@ export function registerAppPaneExtensions(): void {
   paneRegistry.register(imageViewerPaneExtension);
   paneRegistry.register(htmlViewerPaneExtension);
   paneRegistry.register(videoViewerPaneExtension);
-  paneRegistry.register(drawioPaneExtension);
   paneRegistry.register(mindmapPaneExtension);
   paneRegistry.register(kanbanPaneExtension);
   paneRegistry.register(vncPaneExtension);
@@ -83,15 +85,18 @@ export function registerAppServiceWorker(runtimeWindow: (Window & typeof globalT
   });
 }
 
-export function initializeAppShellRuntime(): void {
+export async function initializeAppShellRuntime(): Promise<void> {
   if (initialized) return;
-  const markedInstance = typeof window !== 'undefined'
-    ? (window as any)?.marked
+  const runtimeWindow = typeof window !== 'undefined' ? window : null;
+  const markedInstance = runtimeWindow
+    ? (runtimeWindow as any)?.marked
     : null;
   configureMarked(markedInstance);
-  installBrowserNoiseFilters(typeof window !== 'undefined' ? window : null);
+  installBrowserNoiseFilters(runtimeWindow);
+  installAddonWebApi(runtimeWindow);
   registerAppPaneExtensions();
-  registerAppServiceWorker(typeof window !== 'undefined' ? window : null);
+  await loadInstalledAddonWebEntries(runtimeWindow);
+  registerAppServiceWorker(runtimeWindow);
   initialized = true;
 }
 

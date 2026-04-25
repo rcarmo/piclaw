@@ -9,7 +9,7 @@ test("dream token defaults and auto gate follow nightly cadence", async () => {
 
   expect(dream.parseDreamPromptToken("dream")).toEqual({ matched: true, mode: "manual", days: 7 });
   expect(dream.parseDreamPromptToken("dream 0")).toEqual({ matched: true, mode: "manual", days: 1 });
-  expect(dream.parseDreamPromptToken("auto dream")).toEqual({ matched: true, mode: "auto", days: 2 });
+  expect(dream.parseDreamPromptToken("auto dream")).toEqual({ matched: true, mode: "auto", days: 1 });
   expect(dream.parseDreamPromptToken("auto dream 0")).toEqual({ matched: true, mode: "auto", days: 1 });
   expect(dream.parseDreamPromptToken("auto dream 5")).toEqual({ matched: true, mode: "auto", days: 5 });
 

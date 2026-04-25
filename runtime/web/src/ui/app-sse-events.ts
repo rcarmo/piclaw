@@ -42,7 +42,11 @@ import {
   resolveSseEventRoutingContext,
 } from './app-sse-event-routing.js';
 import { isAppChatActivationRecent } from './app-refresh-coordination.js';
-import { persistContextUsage } from './app-status-refresh-orchestration.js';
+import {
+  haveSameContextUsage,
+  normalizeContextUsage,
+  persistContextUsage,
+} from './app-status-refresh-orchestration.js';
 
 type StateSetter<T> = (next: T | ((prev: T) => T)) => void;
 
@@ -111,6 +115,7 @@ export interface HandleAppSseEventDependencies {
   removeStalledPost: () => void;
   setPosts: StateSetter<any[] | null>;
   preserveTimelineScrollTop: (mutate: () => void) => void;
+  openEditor?: (path: string, options?: { label?: string }) => void;
 }
 
 /**
@@ -182,6 +187,7 @@ export function handleAppSseEvent(
     removeStalledPost,
     setPosts,
     preserveTimelineScrollTop,
+    openEditor,
   } = deps;
 
   const { turnId, isCurrentChatEvent } = resolveSseEventRoutingContext(eventType, data, currentChatJid);
@@ -198,6 +204,19 @@ export function handleAppSseEvent(
 
   if (eventType === 'ui_meters') {
     applyMetersFromEvent(data);
+    return;
+  }
+
+  if (eventType === 'ui_open_tab') {
+    const path = typeof data?.path === 'string' ? data.path.trim() : '';
+    const label = typeof data?.label === 'string' ? data.label.trim() : undefined;
+    if (path === 'piclaw://settings') {
+      window.dispatchEvent(new CustomEvent('piclaw:open-settings'));
+      return;
+    }
+    if (path && typeof openEditor === 'function') {
+      openEditor(path, label ? { label } : undefined);
+    }
     return;
   }
 
@@ -306,9 +325,10 @@ export function handleAppSseEvent(
         if (isMainTimelineView(viewStateRef.current)) {
           void refreshTimeline();
         }
-        if (data.context_usage) {
-          setContextUsage(data.context_usage);
-          persistContextUsage(currentChatJid, data.context_usage);
+        const contextUsage = normalizeContextUsage(data.context_usage);
+        if (contextUsage && contextUsage.percent != null) {
+          setContextUsage((prev) => haveSameContextUsage(prev, contextUsage) ? prev : contextUsage);
+          persistContextUsage(currentChatJid, contextUsage);
         }
       }
       void refreshContextUsage();
@@ -483,11 +503,14 @@ export function handleAppSseEvent(
     getAgentContext(targetChatJid)
       .then((contextPayload) => {
         if (activeChatJidRef.current !== targetChatJid) return;
-        if (contextPayload) setContextUsage(contextPayload);
+        const nextContextUsage = normalizeContextUsage(contextPayload);
+        if (nextContextUsage && nextContextUsage.percent != null) {
+          setContextUsage((prev) => haveSameContextUsage(prev, nextContextUsage) ? prev : nextContextUsage);
+          persistContextUsage(targetChatJid, nextContextUsage);
+        }
       })
       .catch(() => {
         if (activeChatJidRef.current !== targetChatJid) return;
-        setContextUsage(null);
       });
     return;
   }

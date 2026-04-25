@@ -115,7 +115,14 @@ export class RequestRouterService {
     const pathname = url.pathname;
 
     if (pathname.startsWith("/api/remote/")) {
-      return await this.channel.handleRemote(req);
+      try {
+        return await this.channel.handleRemote(req);
+      } catch {
+        return new Response(JSON.stringify({ error: "Internal server error." }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
     }
 
     const flags = getRouteFlags(req, pathname);

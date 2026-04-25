@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-22T10:01:34.364Z",
+  "generated_at": "2026-04-22T22:00:49.839Z",
   "state": "open",
   "include_archived": false,
   "include_forks": false,
@@ -8,9 +8,9 @@
   "totals": {
     "repos_scanned": 16,
     "repos_with_items": 1,
-    "total_items": 2,
-    "total_issues": 0,
-    "total_pull_requests": 2
+    "total_items": 1,
+    "total_issues": 1,
+    "total_pull_requests": 0
   },
   "repos": [
     {
@@ -20,9 +20,9 @@
       "archived": false,
       "fork": false,
       "default_branch": "main",
-      "issues": 0,
-      "pull_requests": 2,
-      "total": 2
+      "issues": 1,
+      "pull_requests": 0,
+      "total": 1
     }
   ],
   "items": [
@@ -31,40 +31,18 @@
       "repo_url": "https://github.com/rcarmo/piclaw",
       "repo_private": false,
       "repo_archived": false,
-      "type": "pull_request",
-      "number": 140,
-      "title": "feat: cross-instance IPC — pairing, proposals, and remote execution",
+      "type": "issue",
+      "number": 146,
+      "title": "How can i delete a session?",
       "state": "open",
       "draft": false,
-      "url": "https://github.com/rcarmo/piclaw/pull/140",
-      "author": "CelsoSantos",
-      "created_at": "2026-04-20T10:16:03Z",
-      "updated_at": "2026-04-22T09:39:14Z",
+      "url": "https://github.com/rcarmo/piclaw/issues/146",
+      "author": "egomarker",
+      "created_at": "2026-04-22T11:18:51Z",
+      "updated_at": "2026-04-22T20:00:55Z",
       "labels": [],
       "assignees": [],
-      "body_preview": "## Summary Implements cross-instance IPC for piclaw, enabling paired agents to exchange signed prompts with cryptographic authentication, operator-mediated app…",
-      "head_ref": "ipc",
-      "base_ref": "main"
-    },
-    {
-      "repo": "rcarmo/piclaw",
-      "repo_url": "https://github.com/rcarmo/piclaw",
-      "repo_private": false,
-      "repo_archived": false,
-      "type": "pull_request",
-      "number": 145,
-      "title": "Add CodeMirror Rust and C++ highlighting",
-      "state": "open",
-      "draft": false,
-      "url": "https://github.com/rcarmo/piclaw/pull/145",
-      "author": "tidux",
-      "created_at": "2026-04-22T08:12:49Z",
-      "updated_at": "2026-04-22T08:12:49Z",
-      "labels": [],
-      "assignees": [],
-      "body_preview": "🦀",
-      "head_ref": "rust-highlight",
-      "base_ref": "main"
+      "body_preview": "When I open \"Manage sessions & agents\", the \"Delete current\" button appears only for session **branches**, not for the sessions themselves. Am I missing the co…"
     }
   ]
 }

@@ -5,6 +5,11 @@ import { getMediaBlob, getMediaUrl } from '../api.js';
 import { renderMarkdown, renderMermaidDiagrams } from '../markdown.js';
 import { formatFileSize, formatTimestamp } from '../utils/format.js';
 import { highlightCodeToHtml, normalizeCodeLanguageLabel } from '../utils/code-highlighting.js';
+import {
+    buildAddonAttachmentPreviewFrameUrl,
+    getAddonAttachmentPreviewNote,
+    resolveAddonAttachmentPreview,
+} from '../ui/addon-web-extensions.js';
 import { getAttachmentPreviewKind, getAttachmentPreviewLabel, isMarkdownAttachmentPreview } from '../ui/attachment-preview.js';
 import { formatCompressionRatio, getCompressionMethodLabel, parseZipPreview } from '../ui/zip-preview.js';
 
@@ -89,6 +94,20 @@ function previewLanguageFromAttachment(info, filename) {
     if (normalizedName.endsWith('.go') || normalizedType === 'text/x-go') {
         return 'go';
     }
+    if (
+        normalizedName.endsWith('.c++')
+        || normalizedName.endsWith('.cc')
+        || normalizedName.endsWith('.cp')
+        || normalizedName.endsWith('.cpp')
+        || normalizedName.endsWith('.cxx')
+        || normalizedName.endsWith('.hh')
+        || normalizedName.endsWith('.hpp')
+        || normalizedName.endsWith('.hxx')
+        || normalizedType === 'text/x-c++src'
+        || normalizedType === 'text/x-c++hdr'
+    ) {
+        return 'cpp';
+    }
     if (normalizedName.endsWith('.rb') || normalizedType === 'text/x-ruby') {
         return 'ruby';
     }
@@ -149,8 +168,8 @@ function buildFrameUrl(mediaId, filename, previewKind) {
         return `/office-viewer/?url=${encodeURIComponent(mediaUrl)}&name=${safeName}`;
     }
 
-    if (previewKind === 'drawio') {
-        return `/drawio/edit.html?media=${safeMediaId}&name=${safeName}&readonly=1#media=${safeMediaId}&name=${safeName}&readonly=1`;
+    if (previewKind === 'eml') {
+        return `/eml-viewer/?media=${safeMediaId}&name=${safeName}`;
     }
 
     return null;
@@ -158,8 +177,9 @@ function buildFrameUrl(mediaId, filename, previewKind) {
 
 export function AttachmentPreviewModal({ mediaId, info, onClose }) {
     const filename = info?.filename || `attachment-${mediaId}`;
+    const addonPreview = useMemo(() => resolveAddonAttachmentPreview(info?.content_type, filename), [info?.content_type, filename]);
     const previewKind = useMemo(() => getAttachmentPreviewKind(info?.content_type, filename), [info?.content_type, filename]);
-    const previewLabel = getAttachmentPreviewLabel(previewKind);
+    const previewLabel = addonPreview?.label || getAttachmentPreviewLabel(previewKind);
     const isMarkdown = useMemo(() => isMarkdownAttachmentPreview(info?.content_type), [info?.content_type]);
     const [loading, setLoading] = useState(previewKind === 'text' || previewKind === 'html' || previewKind === 'archive');
     const [textContent, setTextContent] = useState('');
@@ -169,7 +189,10 @@ export function AttachmentPreviewModal({ mediaId, info, onClose }) {
     const previewLanguage = useMemo(() => previewLanguageFromAttachment(info, filename), [info, filename]);
     const previewLanguageLabel = useMemo(() => previewLanguage ? normalizeCodeLanguageLabel(previewLanguage) : null, [previewLanguage]);
     const metadata = useMemo(() => buildMetadata(info, !isMarkdown ? previewLanguageLabel : null, archivePreview), [info, isMarkdown, previewLanguageLabel, archivePreview]);
-    const frameUrl = useMemo(() => buildFrameUrl(mediaId, filename, previewKind), [mediaId, filename, previewKind]);
+    const frameUrl = useMemo(() => addonPreview
+        ? buildAddonAttachmentPreviewFrameUrl(addonPreview.id, mediaId, filename)
+        : buildFrameUrl(mediaId, filename, previewKind), [addonPreview, mediaId, filename, previewKind]);
+    const addonPreviewNote = useMemo(() => getAddonAttachmentPreviewNote(addonPreview?.id || previewKind), [addonPreview?.id, previewKind]);
     const renderedMarkdown = useMemo(() => {
         if (!isMarkdown || !textContent) return '';
         return renderMarkdown(textContent);
@@ -285,11 +308,11 @@ export function AttachmentPreviewModal({ mediaId, info, onClose }) {
                         ${!loading && !error && previewKind === 'html' && html`
                             <iframe class="attachment-preview-frame" srcdoc=${textContent || ''} sandbox=${HTML_ATTACHMENT_PREVIEW_SANDBOX} title=${filename}></iframe>
                         `}
-                        ${!loading && !error && (previewKind === 'pdf' || previewKind === 'office' || previewKind === 'drawio') && frameUrl && html`
+                        ${!loading && !error && (previewKind === 'pdf' || previewKind === 'office' || previewKind === 'eml' || Boolean(addonPreview)) && frameUrl && html`
                             <iframe class="attachment-preview-frame" src=${frameUrl} title=${filename}></iframe>
                         `}
-                        ${!loading && !error && previewKind === 'drawio' && html`
-                            <div class="attachment-preview-readonly-note">Draw.io preview is read-only. Editing tools are disabled in this preview.</div>
+                        ${!loading && !error && addonPreviewNote && html`
+                            <div class="attachment-preview-readonly-note">${addonPreviewNote}</div>
                         `}
                         ${!loading && !error && previewKind === 'archive' && archivePreview && html`
                             <div class="attachment-preview-archive">

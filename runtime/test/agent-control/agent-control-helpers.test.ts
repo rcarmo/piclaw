@@ -6,6 +6,7 @@
  * and runPromptAndCapture().
  */
 
+import { resolve } from "path";
 import { expect, test } from "bun:test";
 
 import { createTempWorkspace } from "../helpers.js";
@@ -71,7 +72,7 @@ test("resolveShellCwd prefers configured WORKSPACE_DIR over legacy /workspace", 
         "-e",
         'import { resolveShellCwd } from "./src/agent-control/agent-control-helpers.js"; console.log(resolveShellCwd());',
       ],
-      cwd: "/workspace/piclaw/runtime",
+      cwd: resolve(import.meta.dir, "../.."),
       env: {
         ...process.env,
         PICLAW_WORKSPACE: ws.workspace,

@@ -9,18 +9,82 @@ import {
   getDb,
   getDeferredQueuedFollowups,
   getInflightRuns,
+  getMessageThreadRootIdById,
   getMessagesSince,
   rollbackInflightRun,
+  storeMessage,
   type AgentReplyState,
   type DeferredQueuedFollowupRecord,
   type InflightRun,
 } from "../../../db.js";
+import { createUuid } from "../../../utils/ids.js";
 import { createLogger } from "../../../utils/logger.js";
 
 const log = createLogger("web.recovery");
 
-function isBranchChat(chatJid: string): boolean {
-  return chatJid.includes(":branch:");
+export interface PersistedDraftRecoveryEntry {
+  turnId?: string;
+  text: string;
+  totalLines: number;
+  updatedAt: number;
+}
+
+function persistInterruptedTurnOutcome(chatJid: string, inflight: InflightRun, assistantName: string): void {
+  try {
+    storeMessage({
+      id: createUuid("web"),
+      chat_jid: chatJid,
+      sender: "web-agent",
+      sender_name: assistantName,
+      content: "",
+      content_blocks: [{
+        type: "turn_outcome_marker",
+        kind: "interrupted",
+        label: "interrupted",
+        title: "Turn interrupted",
+        detail: "The service restarted before the reply finished.",
+        severity: "warning",
+      }],
+      thread_id: getMessageThreadRootIdById(chatJid, inflight.messageId) ?? undefined,
+      timestamp: new Date().toISOString(),
+      is_from_me: true,
+      is_bot_message: true,
+      is_terminal_agent_reply: true,
+    });
+  } catch (error) {
+    log.warn("Failed to persist interrupted-turn outcome", {
+      operation: "recover_inflight_runs.persist_interrupted_outcome",
+      chatJid,
+      inflightMessageId: inflight.messageId,
+      err: error,
+    });
+  }
+}
+
+function persistRecoveredDraft(chatJid: string, inflight: InflightRun, assistantName: string, draft: PersistedDraftRecoveryEntry): void {
+  const text = typeof draft?.text === "string" ? draft.text.trim() : "";
+  if (!text) return;
+  try {
+    storeMessage({
+      id: createUuid("web"),
+      chat_jid: chatJid,
+      sender: "web-agent",
+      sender_name: assistantName,
+      content: text,
+      thread_id: getMessageThreadRootIdById(chatJid, inflight.messageId) ?? undefined,
+      timestamp: new Date().toISOString(),
+      is_from_me: true,
+      is_bot_message: true,
+      is_terminal_agent_reply: true,
+    });
+  } catch (error) {
+    log.warn("Failed to persist recovered draft after restart", {
+      operation: "recover_inflight_runs.persist_recovered_draft",
+      chatJid,
+      inflightMessageId: inflight.messageId,
+      err: error,
+    });
+  }
 }
 
 function recoveryLaneKey(chatJid: string): string {
@@ -33,6 +97,8 @@ export interface WebRecoveryContext {
   defaultAgentId: string;
   enqueue(task: () => Promise<void>, key: string, laneKey?: string): void;
   processChat(chatJid: string, agentId: string, threadRootId?: number): Promise<void>;
+  getDraftRecovery?: (chatJid: string) => PersistedDraftRecoveryEntry | null;
+  clearDraftRecovery?: (chatJid: string) => void;
   now?: () => number;
   recoveryDelayMs?: number;
   sleep?: (ms: number) => Promise<unknown>;
@@ -137,13 +203,13 @@ export function recoverStaleInflightRun(
         return;
       }
 
-      log.warn("Runtime stale-inflight recovery rolled back chat", {
-        operation: "recover_stale_inflight_run.rollback",
+      log.warn("Runtime stale-inflight recovery marked turn as interrupted", {
+        operation: "recover_stale_inflight_run.clear_interrupted",
         chatJid: inflight.chatJid,
         startedAt: inflight.startedAt,
         inflightAgeSeconds: Math.round(inflightAge / 1000),
       });
-      store.rollbackInflightRun(inflight.chatJid, inflight.prevTs);
+      store.clearInflightMarker(inflight.chatJid);
     });
   } catch (error) {
     log.error("Runtime stale-inflight recovery failed", {
@@ -155,25 +221,23 @@ export function recoverStaleInflightRun(
   }
 
   if (replyState === "none" && inflightAge >= minAgeMs) {
-    // Branch chats lose session context on restart; replaying into a blank
-    // session just produces zero output. Skip the replay for branches.
-    if (isBranchChat(chatJid)) {
-      log.info("Runtime stale-inflight recovery skipped replay for branch chat", {
-        operation: "recover_stale_inflight_run.branch_skip_replay",
-        chatJid,
-      });
+    const draft = ctx.getDraftRecovery?.(inflight.chatJid) ?? null;
+    if (draft?.text?.trim()) {
+      persistRecoveredDraft(inflight.chatJid, inflight, ctx.assistantName, draft);
+      ctx.clearDraftRecovery?.(inflight.chatJid);
       return true;
     }
-    ctx.enqueue(async () => {
-      if ((ctx.recoveryDelayMs ?? 0) > 0) {
-        await (ctx.sleep ? ctx.sleep(ctx.recoveryDelayMs!) : Bun.sleep(ctx.recoveryDelayMs!));
-      }
-      await ctx.processChat(inflight.chatJid, ctx.defaultAgentId);
-    }, `resume:${inflight.chatJid}`, recoveryLaneKey(inflight.chatJid));
+    persistInterruptedTurnOutcome(inflight.chatJid, inflight, ctx.assistantName);
+    ctx.clearDraftRecovery?.(inflight.chatJid);
     return true;
   }
 
-  return replyState === "partial" || replyState === "terminal";
+  if (replyState === "partial" || replyState === "terminal") {
+    ctx.clearDraftRecovery?.(inflight.chatJid);
+    return true;
+  }
+
+  return false;
 }
 
 /** Recover interrupted runs left inflight after a restart. */
@@ -219,35 +283,15 @@ export function recoverInflightRuns(
         }
 
         const inflightAge = now - new Date(inflight.startedAt).getTime();
-        if (inflightAge > MAX_INFLIGHT_AGE_MS) {
-          log.warn("Inflight run is stale; rolling back and replaying", {
-            operation: "recover_inflight_runs.rollback_stale",
-            chatJid: inflight.chatJid,
-            startedAt: inflight.startedAt,
-            inflightAgeSeconds: Math.round(inflightAge / 1000),
-          });
-          store.rollbackInflightRun(inflight.chatJid, inflight.prevTs);
-          continue;
-        }
-
-        log.info("Inflight run has no agent output yet; rolling back and replaying", {
-          operation: "recover_inflight_runs.rollback_pending",
+        log.info("Inflight run has no agent output yet; marking turn as interrupted", {
+          operation: inflightAge > MAX_INFLIGHT_AGE_MS
+            ? "recover_inflight_runs.clear_interrupted_stale"
+            : "recover_inflight_runs.clear_interrupted_pending",
           chatJid: inflight.chatJid,
           startedAt: inflight.startedAt,
           inflightAgeSeconds: Math.round(inflightAge / 1000),
         });
-        store.rollbackInflightRun(inflight.chatJid, inflight.prevTs);
-
-        // Branch chats lose their in-memory session on restart. Replaying
-        // into a fresh contextless session produces zero output reliably,
-        // so skip the replay and just clear the marker for branches.
-        if (isBranchChat(inflight.chatJid)) {
-          log.info("Branch inflight run cleared without replay (session context lost on restart)", {
-            operation: "recover_inflight_runs.branch_skip_replay",
-            chatJid: inflight.chatJid,
-          });
-          store.clearInflightMarker(inflight.chatJid);
-        }
+        store.clearInflightMarker(inflight.chatJid);
       }
     });
   } catch (error) {
@@ -258,36 +302,21 @@ export function recoverInflightRuns(
     return;
   }
 
-  // Collect the set of chats that were actually rolled back (all no-output
-  // inflight runs). Only these need a recovery processChat enqueue.
-  const rolledBack = new Set<string>();
   for (const { inflight, replyState } of decisions) {
-    if (replyState === "none") {
-      rolledBack.add(inflight.chatJid);
+    if (replyState !== "none") {
+      ctx.clearDraftRecovery?.(inflight.chatJid);
+      continue;
     }
-  }
 
-  for (const { inflight, replyState } of decisions) {
-    if (replyState === "none" && rolledBack.has(inflight.chatJid)) {
-      // Branch chats were already cleared without rollback above;
-      // skip the replay enqueue for them.
-      if (isBranchChat(inflight.chatJid)) continue;
-
-      log.info("Recovering interrupted run", {
-        operation: "recover_inflight_runs.enqueue_recovery",
-        chatJid: inflight.chatJid,
-        startedAt: inflight.startedAt,
-      });
-      // Reuse the same stable resume key used by resume_pending IPC so
-      // immediate startup recovery and later IPC-driven recovery collapse to a
-      // single queued task for the chat instead of racing duplicate replays.
-      ctx.enqueue(async () => {
-        if ((ctx.recoveryDelayMs ?? 0) > 0) {
-          await (ctx.sleep ? ctx.sleep(ctx.recoveryDelayMs!) : Bun.sleep(ctx.recoveryDelayMs!));
-        }
-        await ctx.processChat(inflight.chatJid, ctx.defaultAgentId);
-      }, `resume:${inflight.chatJid}`, recoveryLaneKey(inflight.chatJid));
+    const draft = ctx.getDraftRecovery?.(inflight.chatJid) ?? null;
+    if (draft?.text?.trim()) {
+      persistRecoveredDraft(inflight.chatJid, inflight, ctx.assistantName, draft);
+      ctx.clearDraftRecovery?.(inflight.chatJid);
+      continue;
     }
+
+    persistInterruptedTurnOutcome(inflight.chatJid, inflight, ctx.assistantName);
+    ctx.clearDraftRecovery?.(inflight.chatJid);
   }
 }
 

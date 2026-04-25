@@ -1,0 +1,26 @@
+{
+  "name": "piclaw-addon-eml-viewer",
+  "version": "0.1.0",
+  "description": "Attachment preview route for email message (.eml) files in the web timeline",
+  "type": "module",
+  "main": "index.ts",
+  "piclaw": {
+    "type": "extension",
+    "compatibleVersions": ">=2.0.0",
+    "tags": [
+      "viewer",
+      "email",
+      "eml"
+    ]
+  },
+  "agents": {},
+  "license": "MIT",
+  "keywords": [
+    "pi-package"
+  ],
+  "pi": {
+    "extensions": [
+      "index.ts"
+    ]
+  }
+}

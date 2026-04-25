@@ -50,6 +50,8 @@ type RuntimeFollowupRuntimeState = Pick<
   | "updateThoughtBuffer"
   | "updateDraftBuffer"
   | "getBuffer"
+  | "setContextUsage"
+  | "getContextUsage"
 >;
 
 export interface WebChannelRuntimeFollowupFacadeServiceDeps {
@@ -137,6 +139,14 @@ export class WebChannelRuntimeFollowupFacadeService {
 
   getAgentStatus(chatJid: string): Record<string, unknown> | null {
     return this.deps.getRuntimeState().getAgentStatus(chatJid);
+  }
+
+  setContextUsage(chatJid: string, usage: Record<string, unknown> | null): void {
+    this.deps.getRuntimeState().setContextUsage(chatJid, usage);
+  }
+
+  getContextUsage(chatJid: string): Record<string, unknown> | null {
+    return this.deps.getRuntimeState().getContextUsage(chatJid);
   }
 
   replaceQueuedFollowupPlaceholder(

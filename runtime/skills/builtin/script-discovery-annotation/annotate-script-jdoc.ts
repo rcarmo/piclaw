@@ -86,7 +86,7 @@ const verbWords = new Set([
   "attach", "audit", "bootstrap", "build", "chart", "check", "cleanup", "compare", "compute", "create", "delete", "digest", "download", "export", "fetch", "generate", "harness", "inspect", "list", "move", "post", "proxy", "query", "render", "report", "resume", "run", "search", "send", "set", "share", "stamp", "start", "status", "stop", "summarize", "sync", "test", "update", "upsert", "validate", "vendor",
 ]);
 const domainHints = [
-  "azure", "openai", "m365", "teams", "mail", "onedrive", "sharepoint", "proxmox", "portainer", "playwright", "graphite", "token", "twitter", "search", "timeline", "kanban", "totp", "qr", "feed", "digest", "vnc", "web", "auth", "terminal", "drawio", "office", "mermaid", "pdf", "container", "vm", "lxc", "usb", "storage", "notes",
+  "azure", "openai", "m365", "teams", "mail", "onedrive", "sharepoint", "proxmox", "portainer", "playwright", "graphite", "token", "twitter", "search", "timeline", "kanban", "totp", "qr", "feed", "digest", "vnc", "web", "auth", "terminal", "office", "mermaid", "pdf", "container", "vm", "lxc", "usb", "storage", "notes",
 ];
 
 function printUsage(): void {

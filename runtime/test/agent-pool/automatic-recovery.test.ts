@@ -45,13 +45,14 @@ test("treats timeout-before-finalization during compaction intent as compact-the
   expect(decision.strategy).toBe("compact_then_retry");
 });
 
-test("classifies auth and invalid-request failures as non-recoverable", () => {
+test("classifies auth, invalid-request, and aborted failures as non-recoverable", () => {
   expect(isNonRecoverableFailure("Unauthorized: token expired")).toBe(true);
   expect(isNonRecoverableFailure("invalid_request_error: malformed schema")).toBe(true);
+  expect(isNonRecoverableFailure("Request was aborted")).toBe(true);
 
   const decision = decideAutomaticRecovery({
     config: DEFAULT_AUTOMATIC_RECOVERY_CONFIG,
-    errorText: "Unauthorized: token expired",
+    errorText: "Request was aborted",
     recoveryAttemptsUsed: 0,
     elapsedMs: 1000,
     snapshot: {

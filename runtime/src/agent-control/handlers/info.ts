@@ -45,32 +45,35 @@ export async function handleState(session: AgentSession, _command: StateCommand)
 
   const sessionStorageConfig = getSessionStorageConfig();
   const isOversizedSession = sessionFileSize !== null && sessionFileSize >= sessionStorageConfig.maxSizeBytes;
+  const sessionLineCount = getSessionFileLineCount(session.sessionFile);
+
   const lines = [
-    `Model: ${modelLabel}`,
-    `Thinking level: ${session.thinkingLevel}${session.supportsThinking() ? "" : " (thinking off)"}`,
-    `Streaming: ${session.isStreaming ? "yes" : "no"}`,
-    `Compacting: ${session.isCompacting ? "yes" : "no"}`,
-    `Retrying: ${session.isRetrying ? "yes" : "no"}`,
-    `Auto-compaction: ${session.autoCompactionEnabled ? "on" : "off"}`,
-    `Auto-retry: ${session.autoRetryEnabled ? "on" : "off"}`,
-    `Steering mode: ${session.steeringMode}`,
-    `Follow-up mode: ${session.followUpMode}`,
-    `Pending messages: ${session.pendingMessageCount} (steer ${steeringCount}, follow-up ${followUpCount})`,
-    `Session id: ${session.sessionId}`,
-    `Session name: ${session.sessionName || "none"}`,
-    `Session file: ${session.sessionFile || "none"}`,
-    `Session file size: ${sessionFileSize === null ? "unknown" : formatBytes(sessionFileSize)}`,
+    "**Session state**",
+    "",
+    "| Setting | Value |",
+    "|---|---|",
+    `| **Model** | ${modelLabel} |`,
+    `| **Thinking** | ${session.thinkingLevel}${session.supportsThinking() ? "" : " (off)"} |`,
+    `| **Streaming** | ${session.isStreaming ? "yes" : "no"} |`,
+    `| **Compacting** | ${session.isCompacting ? "yes" : "no"} |`,
+    `| **Retrying** | ${session.isRetrying ? "yes" : "no"} |`,
+    `| **Auto-compaction** | ${session.autoCompactionEnabled ? "on" : "off"} |`,
+    `| **Auto-retry** | ${session.autoRetryEnabled ? "on" : "off"} |`,
+    `| **Steering mode** | ${session.steeringMode} |`,
+    `| **Follow-up mode** | ${session.followUpMode} |`,
+    `| **Pending** | ${session.pendingMessageCount} (steer ${steeringCount}, follow-up ${followUpCount}) |`,
+    `| **Session id** | ${session.sessionId} |`,
+    `| **Session name** | ${session.sessionName || "none"} |`,
+    `| **Session file** | ${session.sessionFile || "none"} |`,
+    `| **File size** | ${sessionFileSize === null ? "unknown" : formatBytes(sessionFileSize)} |`,
   ];
 
-  const sessionLineCount = getSessionFileLineCount(session.sessionFile);
   if (sessionLineCount !== null) {
-    lines.push(`Session file lines: ${sessionLineCount}${sessionStorageConfig.maxLines > 0 ? ` / ${sessionStorageConfig.maxLines} max` : ""}`);
+    lines.push(`| **File lines** | ${sessionLineCount}${sessionStorageConfig.maxLines > 0 ? ` / ${sessionStorageConfig.maxLines} max` : ""} |`);
   }
 
   if (isOversizedSession && sessionFileSize !== null) {
-    lines.push(
-      `Session file warning: exceeds configured threshold (${formatBytes(sessionFileSize)} >= ${sessionStorageConfig.maxSizeMb} MB). Consider /session-rotate.`
-    );
+    lines.push("", `> [!WARNING]\n> Session file exceeds threshold (${formatBytes(sessionFileSize)} >= ${sessionStorageConfig.maxSizeMb} MB). Consider \`/session-rotate\`.`);
   }
   return { status: "success", message: lines.join("\n") };
 }
@@ -80,11 +83,14 @@ export async function handleStats(session: AgentSession, _command: StatsCommand)
   const stats = session.getSessionStats();
   const tokens = stats.tokens;
   const lines = [
-    "Session stats:",
-    `• Messages: ${stats.userMessages} user, ${stats.assistantMessages} assistant, ${stats.toolResults} tool results (${stats.totalMessages} total)`,
-    `• Tool calls: ${stats.toolCalls}`,
-    `• Tokens: input ${formatCompactNumber(tokens.input)}, output ${formatCompactNumber(tokens.output)}, cache read ${formatCompactNumber(tokens.cacheRead)}, cache write ${formatCompactNumber(tokens.cacheWrite)}, total ${formatCompactNumber(tokens.total)}`,
-    `• Cost: ${formatCurrency(stats.cost)}`,
+    "**Session stats**",
+    "",
+    "| Metric | Value |",
+    "|---|---|",
+    `| Messages | ${stats.userMessages} user, ${stats.assistantMessages} assistant, ${stats.toolResults} tool (${stats.totalMessages} total) |`,
+    `| Tool calls | ${stats.toolCalls} |`,
+    `| Tokens | in ${formatCompactNumber(tokens.input)}, out ${formatCompactNumber(tokens.output)}, cache-r ${formatCompactNumber(tokens.cacheRead)}, cache-w ${formatCompactNumber(tokens.cacheWrite)}, total ${formatCompactNumber(tokens.total)} |`,
+    `| Cost | ${formatCurrency(stats.cost)} |`,
   ];
 
   const chatJid = getChatJid();
@@ -96,27 +102,38 @@ export async function handleStats(session: AgentSession, _command: StatsCommand)
 
       lines.push(
         "",
-        "Tracked usage (persisted):",
-        `• Overall: input ${formatCompactNumber(totals.input_tokens)}, output ${formatCompactNumber(totals.output_tokens)}, cache read ${formatCompactNumber(totals.cache_read_tokens)}, cache write ${formatCompactNumber(totals.cache_write_tokens)}, total ${formatCompactNumber(totals.total_tokens)}, cost ${formatCurrency(totals.cost_total)} (${formatCompactNumber(totals.runs)} run${totals.runs === 1 ? "" : "s"})`
+        "**Tracked usage (persisted)**",
+        "",
+        "| Metric | Value |",
+        "|---|---|",
+        `| Tokens | in ${formatCompactNumber(totals.input_tokens)}, out ${formatCompactNumber(totals.output_tokens)}, cache-r ${formatCompactNumber(totals.cache_read_tokens)}, cache-w ${formatCompactNumber(totals.cache_write_tokens)}, total ${formatCompactNumber(totals.total_tokens)} |`,
+        `| Cost | ${formatCurrency(totals.cost_total)} |`,
+        `| Runs | ${formatCompactNumber(totals.runs)} |`,
       );
 
       if (providerRows.length > 0) {
-        lines.push("• Per provider:");
+        lines.push(
+          "",
+          "**Per provider**",
+          "",
+          "| Provider | Tokens | Cost | Runs |",
+          "|---|---|---|---|",
+        );
         for (const row of providerRows) {
-          const provider = row.provider || "(unknown provider)";
-          lines.push(
-            `  - ${provider}: total ${formatCompactNumber(row.total_tokens)}, cost ${formatCurrency(row.cost_total)} (${formatCompactNumber(row.runs)} run${row.runs === 1 ? "" : "s"})`
-          );
+          lines.push(`| ${row.provider || "unknown"} | ${formatCompactNumber(row.total_tokens)} | ${formatCurrency(row.cost_total)} | ${formatCompactNumber(row.runs)} |`);
         }
       }
 
       if (modelRows.length > 0) {
-        lines.push("• Per model:");
+        lines.push(
+          "",
+          "**Per model**",
+          "",
+          "| Model | Tokens | Cost | Runs |",
+          "|---|---|---|---|",
+        );
         for (const row of modelRows) {
-          const model = row.model || "(unknown model)";
-          lines.push(
-            `  - ${model}: total ${formatCompactNumber(row.total_tokens)}, cost ${formatCurrency(row.cost_total)} (${formatCompactNumber(row.runs)} run${row.runs === 1 ? "" : "s"})`
-          );
+          lines.push(`| ${row.model || "unknown"} | ${formatCompactNumber(row.total_tokens)} | ${formatCurrency(row.cost_total)} | ${formatCompactNumber(row.runs)} |`);
         }
       }
     }
@@ -139,13 +156,21 @@ export async function handleContext(session: AgentSession, _command: ContextComm
   if (usage.tokens === null) {
     return {
       status: "success",
-      message: `Context usage: unknown. Context window: ${formatCompactNumber(usage.contextWindow)}.`,
+      message: `Context window: ${formatCompactNumber(usage.contextWindow)} tokens. Usage unknown.`,
     };
   }
   const percent = usage.percent ?? (usage.tokens / usage.contextWindow) * 100;
+  const bar = percent > 90 ? "🟥" : percent > 75 ? "🟧" : "🟩";
   return {
     status: "success",
-    message: `Context usage: ${formatCompactNumber(usage.tokens)} / ${formatCompactNumber(usage.contextWindow)} (${percent.toFixed(1)}%).`,
+    message: [
+      "**Context usage**",
+      "",
+      "| Metric | Value |",
+      "|---|---|",
+      `| **Used** | ${formatCompactNumber(usage.tokens)} / ${formatCompactNumber(usage.contextWindow)} tokens |`,
+      `| **Fill** | ${bar} ${percent.toFixed(1)}% |`,
+    ].join("\n"),
   };
 }
 
@@ -291,9 +316,9 @@ export async function handleCommands(session: AgentSession, _command: CommandsCo
   }
 
   const sorted = Array.from(entries.values()).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-  const lines: string[] = ["Available commands:"];
+  const rows: string[] = [];
   for (const entry of sorted) {
-    const suffix = entry.description ? ` - ${entry.description}` : "";
+    const desc = entry.description || "";
     const notes: string[] = [];
     if (entry.source !== "core") {
       notes.push(describeSource(entry.source, entry.detail, entry.scope));
@@ -302,12 +327,18 @@ export async function handleCommands(session: AgentSession, _command: CommandsCo
       const extNotes = entry.extensions.map((ext) => describeSource(ext.source, ext.detail));
       notes.push(`extended by ${extNotes.join(", ")}`);
     }
-    const noteText = notes.length ? ` [${notes.join("; ")}]` : "";
-    lines.push(`• ${entry.name}${suffix}${noteText}`);
+    const noteText = notes.length ? ` _[${notes.join("; ")}]_` : "";
+    rows.push(`| \`${entry.name}\` | ${desc}${noteText} |`);
   }
 
   return {
     status: "success",
-    message: lines.join("\n"),
+    message: [
+      "**Available commands**",
+      "",
+      "| Command | Description |",
+      "|---|---|",
+      ...rows,
+    ].join("\n"),
   };
 }

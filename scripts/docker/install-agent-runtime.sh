@@ -241,6 +241,9 @@ if [ -f "$PI_CLI" ] && head -n1 "$PI_CLI" | grep -q 'env node'; then
 fi
 sudo chmod +x "$PI_CLI"
 
+# Install GitHub CLI via Homebrew.
+brew install gh
+
 rm -rf "$HOME/.cache" "$HOME/.bun"
 rm -rf "$HOMEBREW_CACHE" /home/linuxbrew/.cache 2>/dev/null || true
 sudo rm -rf "$BUN_INSTALL_CACHE_DIR" "$BUN_INSTALL/install/cache"

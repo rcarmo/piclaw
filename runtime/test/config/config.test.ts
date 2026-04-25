@@ -654,6 +654,7 @@ test("remote interop env flags and metadata load into the typed remote config ob
     expect(snapshot.REMOTE_INTEROP_CONFIG).toEqual({
       enabled: true,
       allowHttp: true,
+      allowPrivateNetwork: false,
       shortCircuitEnabled: true,
       instanceName: "remote-a",
       decisionModel: "decision-model-a",
@@ -669,6 +670,7 @@ test("typed remote interop config getter returns the frozen shared object", asyn
     {
       PICLAW_REMOTE_INTEROP_ENABLED: "1",
       PICLAW_REMOTE_INTEROP_ALLOW_HTTP: "0",
+      PICLAW_REMOTE_INTEROP_ALLOW_PRIVATE_NETWORK: undefined,
       PICLAW_REMOTE_SHORT_CIRCUIT_ENABLED: "1",
       PICLAW_REMOTE_INSTANCE_NAME: "remote-b",
       PICLAW_REMOTE_INTEROP_DECISION_MODEL: "decision-model-b",
@@ -681,6 +683,7 @@ test("typed remote interop config getter returns the frozen shared object", asyn
       expect(cfg.REMOTE_INTEROP_CONFIG).toEqual({
         enabled: true,
         allowHttp: false,
+        allowPrivateNetwork: false,
         shortCircuitEnabled: true,
         instanceName: "remote-b",
         decisionModel: "decision-model-b",

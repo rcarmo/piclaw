@@ -6,7 +6,7 @@
  */
 
 import { mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync } from "fs";
-import { join } from "path";
+import { join, resolve } from "path";
 import { createHash, generateKeyPairSync, createPrivateKey, createPublicKey, sign, verify } from "crypto";
 import { DATA_DIR, getRemoteInteropConfig } from "../core/config.js";
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
@@ -25,7 +25,11 @@ export interface InteropIdentity {
 
 let cachedIdentity: InteropIdentity | null = null;
 
-const IDENTITY_PATH = join(DATA_DIR, "interop", "identity.json");
+/** Compute the identity file path from the current environment at call time. */
+function getIdentityPath(): string {
+  const dataDir = resolve(process.env.PICLAW_DATA || join(resolve(process.env.PICLAW_WORKSPACE || "/workspace"), ".piclaw", "data"));
+  return join(dataDir, "interop", "identity.json");
+}
 
 function base64UrlEncode(buffer: Uint8Array): string {
   return Buffer.from(buffer)
@@ -53,14 +57,16 @@ function computeFingerprint(instanceId: string): string {
 export function loadOrCreateIdentity(): InteropIdentity {
   if (cachedIdentity) return cachedIdentity;
 
-  if (existsSync(IDENTITY_PATH)) {
-    const raw = readFileSync(IDENTITY_PATH, "utf8");
+  const identityPath = getIdentityPath();
+
+  if (existsSync(identityPath)) {
+    const raw = readFileSync(identityPath, "utf8");
     const parsed = JSON.parse(raw) as InteropIdentity;
     cachedIdentity = parsed;
     return parsed;
   }
 
-  mkdirSync(join(DATA_DIR, "interop"), { recursive: true });
+  mkdirSync(join(identityPath, ".."), { recursive: true });
 
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
   const publicDer = publicKey.export({ format: "der", type: "spki" }) as Buffer;
@@ -76,13 +82,13 @@ export function loadOrCreateIdentity(): InteropIdentity {
     created_at: new Date().toISOString(),
   };
 
-  writeFileSync(IDENTITY_PATH, JSON.stringify(identity, null, 2), "utf8");
+  writeFileSync(identityPath, JSON.stringify(identity, null, 2), "utf8");
   try {
-    chmodSync(IDENTITY_PATH, 0o600);
+    chmodSync(identityPath, 0o600);
   } catch (err) {
     debugSuppressedError(log, "Failed to chmod remote interop identity file to 0600.", err, {
       operation: "remote_identity.ensure_identity.chmod",
-      path: IDENTITY_PATH,
+      path: identityPath,
     });
   }
 

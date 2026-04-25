@@ -100,9 +100,9 @@ function buildIntegrationProfileHints(): string {
   return [
     "## Integration profiles",
     buildProfileHint("### SSH keychain profiles", sshProfiles, "Use the ssh tool with private_key_keychain/known_hosts_keychain references instead of fetching key material."),
-    buildProfileHint("### Proxmox token profiles", proxmoxProfiles, "Use the proxmox tool with api_token_keychain references instead of fetching token material."),
-    buildProfileHint("### Portainer token profiles", portainerProfiles, "Use the portainer tool with api_token_keychain references instead of fetching token material."),
-  ].join("\n\n");
+    proxmoxProfiles.length ? buildProfileHint("### Proxmox token profiles", proxmoxProfiles, "Use the proxmox tool (addon) with api_token_keychain references instead of fetching token material.") : "",
+    portainerProfiles.length ? buildProfileHint("### Portainer token profiles", portainerProfiles, "Use the portainer tool (addon) with api_token_keychain references instead of fetching token material.") : "",
+  ].filter(Boolean).join("\n\n");
 }
 
 function buildInjectedBashEnvHint(): string {

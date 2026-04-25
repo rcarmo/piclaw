@@ -10,6 +10,11 @@ describe("attachment preview kind", () => {
     expect(getAttachmentPreviewKind("application/octet-stream", "bundle.zip")).toBe("archive");
   });
 
+  test("classifies .eml attachments as email previews", () => {
+    expect(getAttachmentPreviewKind("message/rfc822", "message.eml")).toBe("eml");
+    expect(getAttachmentPreviewKind("application/octet-stream", "message.eml")).toBe("eml");
+  });
+
   test("classifies shell scripts and .sb files as text previews by filename", () => {
     expect(getAttachmentPreviewKind("application/octet-stream", "script.sh")).toBe("text");
     expect(getAttachmentPreviewKind("application/octet-stream", "workflow.sb")).toBe("text");
@@ -17,6 +22,7 @@ describe("attachment preview kind", () => {
 
   test("returns the ZIP archive preview label", () => {
     expect(getAttachmentPreviewLabel("archive")).toBe("ZIP archive preview");
+    expect(getAttachmentPreviewLabel("eml")).toBe("Email preview");
   });
 
   test("HTML attachment previews do not run with same-origin iframe privileges", () => {

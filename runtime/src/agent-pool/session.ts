@@ -13,7 +13,7 @@
  *   - ensureSessionDir() is also used by agent-control/handlers/session.ts.
  */
 
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from "fs";
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from "fs";
 import { join, resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { createInterface } from "readline";
@@ -112,15 +112,12 @@ const OPTIONAL_EXTENSIONS: OptionalBundledExtension[] = [
   { path: resolve(EXTENSIONS_DIR, "integrations", "bun-runner", "index.ts") },
   { path: resolve(EXTENSIONS_DIR, "integrations", "keychain", "index.ts") },
   { path: resolve(EXTENSIONS_DIR, "integrations", "ssh", "index.ts") },
-  { path: resolve(EXTENSIONS_DIR, "integrations", "proxmox", "index.ts") },
-  { path: resolve(EXTENSIONS_DIR, "integrations", "portainer", "index.ts") },
   { path: resolve(EXTENSIONS_DIR, "integrations", "mcp-status-hints", "index.ts") },
   { path: resolve(EXTENSIONS_DIR, "browser", "cdp-browser-tool", "index.ts") },
   { path: resolve(EXTENSIONS_DIR, "platform", "windows", "powershell", "index.ts"), platforms: ["win32"] },
   { path: resolve(EXTENSIONS_DIR, "platform", "windows", "win-ui", "index.ts"), platforms: ["win32"] },
   { path: resolve(EXTENSIONS_DIR, "viewers", "office-viewer-tool", "index.ts"), channels: ["web"] },
   { path: resolve(EXTENSIONS_DIR, "integrations", "office-tools-tool", "index.ts") },
-  { path: resolve(EXTENSIONS_DIR, "viewers", "drawio-editor-tool", "index.ts"), channels: ["web"] },
   { path: resolve(EXTENSIONS_DIR, "experimental", "m365", "index.ts"), envGate: "PICLAW_ENABLE_M365_EXPERIMENTAL" },
 ];
 
@@ -130,9 +127,11 @@ const PACKAGED_EXTENSION_ENTRIES = [
 
 function getBundledExtensionEnvSignature(chatJid?: string): string {
   const channel = chatJid ? detectChannel(chatJid) ?? "" : "";
+  const workspaceDir = getWorkspaceDir();
   return [
     `platform=${process.platform}`,
     `channel=${channel}`,
+    `workspace=${workspaceDir}`,
     ...OPTIONAL_EXTENSIONS.map(({ envGate, platforms, channels }) => {
       const envPart = envGate ? `${envGate}=${process.env[envGate] ? "1" : "0"}` : "always=1";
       const platformPart = platforms?.length ? `platforms=${platforms.join(",")}` : "platforms=all";
@@ -203,6 +202,52 @@ function ensureWorkspaceExtensionNodeModulesLink(nodeModulesDir: string | null):
   ensuredWorkspaceExtensionLink = true;
 }
 
+type AddonPackageManifest = {
+  main?: string;
+  pi?: {
+    extensions?: string[];
+  };
+};
+
+function listAddonPackageDirs(addonsNodeModulesDir: string): string[] {
+  if (!existsSync(addonsNodeModulesDir)) return EMPTY_STRING_ARRAY;
+  const results: string[] = [];
+  for (const entry of readdirSync(addonsNodeModulesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const entryPath = join(addonsNodeModulesDir, entry.name);
+    if (entry.name.startsWith("@")) {
+      for (const scoped of readdirSync(entryPath, { withFileTypes: true })) {
+        if (scoped.isDirectory()) results.push(join(entryPath, scoped.name));
+      }
+      continue;
+    }
+    results.push(entryPath);
+  }
+  return results;
+}
+
+export function getInstalledAddonExtensionPaths(workspaceDir = getWorkspaceDir()): string[] {
+  const addonsNodeModulesDir = join(workspaceDir, ".pi", "addons", "node_modules");
+  const extensionPaths: string[] = [];
+  for (const packageDir of listAddonPackageDirs(addonsNodeModulesDir)) {
+    const packageJsonPath = join(packageDir, "package.json");
+    if (!existsSync(packageJsonPath)) continue;
+    try {
+      const manifest = JSON.parse(readFileSync(packageJsonPath, "utf8")) as AddonPackageManifest;
+      const declared = Array.isArray(manifest?.pi?.extensions) && manifest.pi?.extensions?.length
+        ? manifest.pi.extensions
+        : (typeof manifest?.main === "string" && manifest.main.trim() ? [manifest.main.trim()] : []);
+      for (const relativePath of declared) {
+        const fullPath = join(packageDir, relativePath);
+        if (existsSync(fullPath) && statSync(fullPath).isFile()) extensionPaths.push(fullPath);
+      }
+    } catch {
+      continue;
+    }
+  }
+  return extensionPaths;
+}
+
 function getBundledExtensionPaths(chatJid?: string): string[] {
   const cacheKey = getBundledExtensionEnvSignature(chatJid);
   const cached = BUNDLED_EXTENSION_PATHS_CACHE.get(cacheKey);
@@ -216,6 +261,8 @@ function getBundledExtensionPaths(chatJid?: string): string[] {
     .filter(({ channels }) => !channels || !!channel && channels.includes(channel))
     .map(({ path }) => path);
   paths.push(...resolvePackagedExtensionEntries(nodeModulesDir));
+  paths.push(...getInstalledAddonExtensionPaths(getWorkspaceDir()));
+
   if (paths.length === 0) {
     BUNDLED_EXTENSION_PATHS_CACHE.set(cacheKey, EMPTY_STRING_ARRAY);
     return EMPTY_STRING_ARRAY;
@@ -502,7 +549,10 @@ export async function createSessionInDir(
       services,
       sessionManager,
       sessionStartEvent,
-      tools: options.tools?.length ? options.tools : undefined,
+      // Do not pass `tools` here — pi-coding-agent ≥0.68 treats it as an
+      // allowlist that silently blocks every extension tool not listed.
+      // The tool-activation extension sets the correct default-active set
+      // via its session_start handler instead.
       customTools: options.customTools as any,
     });
 

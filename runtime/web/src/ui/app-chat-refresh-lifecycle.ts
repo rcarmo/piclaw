@@ -4,11 +4,15 @@ import {
   loadAgentsBootstrap,
   refreshActiveChatAgents as refreshActiveChatAgentsState,
   refreshCurrentChatBranches as refreshCurrentChatBranchesState,
-  refreshModelState as refreshModelStateForChat,
   updateAgentProfileFromEvent,
   updateUserProfileFromEvent,
 } from './app-auth-bootstrap.js';
-import { restoreContextUsage } from './app-status-refresh-orchestration.js';
+import {
+  haveSameContextUsage,
+  normalizeContextUsage,
+  persistContextUsage,
+  restoreContextUsage,
+} from './app-status-refresh-orchestration.js';
 import { refreshModelAndQueueState as refreshModelAndQueueStateBundle } from './app-status-refresh-orchestration.js';
 import { applyStoredSidebarWidth } from './app-boot-load-orchestration.js';
 import {
@@ -40,6 +44,7 @@ interface UseChatRefreshLifecycleOptions {
   currentChatJid: string;
   currentRootChatJid: string;
   getAgentModels: (chatJid: string) => Promise<any>;
+  getAgentContext: (chatJid: string) => Promise<any>;
   getActiveChatAgents: (chatJid: string) => Promise<any>;
   getChatBranches: (chatJid: string | null, options?: Record<string, unknown>) => Promise<any>;
   activeChatJidRef: RefBox<string>;
@@ -153,6 +158,7 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
     currentChatJid,
     currentRootChatJid,
     getAgentModels,
+    getAgentContext,
     getActiveChatAgents,
     getChatBranches,
     activeChatJidRef,
@@ -190,46 +196,6 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
     });
   }, [appShellRef, loadAgents, readStoredNumber, sidebarWidthRef]);
 
-  useEffect(() => {
-    noteAppChatActivation({ chatJid: currentChatJid });
-
-    // Reset model/context state immediately so stale values from the
-    // previous chat don't linger while async refreshes are in flight.
-    setActiveModel(null);
-    setActiveThinkingLevel(null);
-    setSupportsThinking(false);
-    setActiveModelUsage(null);
-    setHasLoadedAgentModels(false);
-    setAgentModelsPayload(null);
-    setExtensionWorkingState({ message: null, indicator: null });
-
-    // Restore the last known context usage for this chat from localStorage
-    // so the context indicator shows immediately without waiting for the API.
-    const stored = restoreContextUsage(currentChatJid);
-    if (stored) {
-      setContextUsage(stored);
-    } else {
-      setContextUsage(null);
-    }
-    void refreshContextUsage();
-  }, [currentChatJid, refreshContextUsage, setActiveModel, setActiveModelUsage, setActiveThinkingLevel, setAgentModelsPayload, setContextUsage, setExtensionWorkingState, setHasLoadedAgentModels, setSupportsThinking]);
-
-  const updateAgentProfile = useCallback((payload: any) => {
-    updateAgentProfileFromEvent({
-      payload,
-      agentsRef,
-      setAgents,
-      applyBranding,
-    });
-  }, [agentsRef, applyBranding, setAgents]);
-
-  const updateUserProfile = useCallback((payload: any) => {
-    updateUserProfileFromEvent({
-      payload,
-      setUserProfile,
-    });
-  }, [setUserProfile]);
-
   const applyModelState = useCallback((payload: any) => {
     applyModelStatePayload({
       payload,
@@ -255,28 +221,41 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
             phase: 'model-state',
           });
         }
-        await refreshModelStateForChat({
-          currentChatJid,
-          getAgentModels: async (chatJid: string) => {
-            const activeTraceId = traceId || getThreadSwitchTraceId();
-            if (activeTraceId) {
-              markAppPerfTrace(activeTraceId, 'model-request-start', {
-                chatJid,
-              });
-            }
-            const payload = await getAgentModels(chatJid);
-            if (activeTraceId) {
-              markAppPerfTrace(activeTraceId, 'model-request-ready', {
-                chatJid,
-                hasCurrent: Boolean(payload?.current),
-                modelCount: Array.isArray(payload?.models) ? payload.models.length : 0,
-              });
-            }
-            return payload;
-          },
-          activeChatJidRef,
-          applyModelState,
-        });
+
+        const targetChatJid = currentChatJid;
+        try {
+          const [modelPayload, contextPayloadRaw] = await Promise.all([
+            (async () => {
+              const activeTraceId = traceId || getThreadSwitchTraceId();
+              if (activeTraceId) {
+                markAppPerfTrace(activeTraceId, 'model-request-start', { chatJid: targetChatJid });
+              }
+              const payload = await getAgentModels(targetChatJid);
+              if (activeTraceId) {
+                markAppPerfTrace(activeTraceId, 'model-request-ready', {
+                  chatJid: targetChatJid,
+                  hasCurrent: Boolean(payload?.current),
+                  modelCount: Array.isArray(payload?.models) ? payload.models.length : 0,
+                });
+              }
+              return payload;
+            })(),
+            getAgentContext(targetChatJid).catch(() => null),
+          ]);
+
+          if (activeChatJidRef.current && activeChatJidRef.current !== targetChatJid) return null;
+          applyModelState(modelPayload);
+
+          const contextPayload = normalizeContextUsage(contextPayloadRaw);
+          if (contextPayload && contextPayload.percent != null) {
+            setContextUsage((prev) => haveSameContextUsage(prev, contextPayload) ? prev : contextPayload);
+            persistContextUsage(targetChatJid, contextPayload);
+          }
+        } catch {
+          if (activeChatJidRef.current && activeChatJidRef.current !== targetChatJid) return null;
+          applyModelState(null);
+        }
+
         const activeTraceId = traceId || getThreadSwitchTraceId();
         if (activeTraceId) {
           markAppPerfTrace(activeTraceId, 'runtime-hydration-ready', {
@@ -289,7 +268,47 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
         return null;
       },
     });
-  }, [activeChatJidRef, applyModelState, currentChatJid, getAgentModels, getThreadSwitchTraceId]);
+  }, [activeChatJidRef, applyModelState, currentChatJid, getAgentContext, getAgentModels, getThreadSwitchTraceId, setContextUsage]);
+
+  useEffect(() => {
+    noteAppChatActivation({ chatJid: currentChatJid });
+
+    // Reset model/context state immediately so stale values from the
+    // previous chat don't linger while async refreshes are in flight.
+    setActiveModel(null);
+    setActiveThinkingLevel(null);
+    setSupportsThinking(false);
+    setActiveModelUsage(null);
+    setHasLoadedAgentModels(false);
+    setAgentModelsPayload(null);
+    setExtensionWorkingState({ message: null, indicator: null });
+
+    // Restore the last known context usage for this chat from localStorage
+    // so the context indicator shows immediately without waiting for the API.
+    const stored = restoreContextUsage(currentChatJid);
+    if (stored) {
+      setContextUsage(stored);
+    } else {
+      setContextUsage(null);
+    }
+    void refreshModelState();
+  }, [currentChatJid, refreshModelState, setActiveModel, setActiveModelUsage, setActiveThinkingLevel, setAgentModelsPayload, setContextUsage, setExtensionWorkingState, setHasLoadedAgentModels, setSupportsThinking]);
+
+  const updateAgentProfile = useCallback((payload: any) => {
+    updateAgentProfileFromEvent({
+      payload,
+      agentsRef,
+      setAgents,
+      applyBranding,
+    });
+  }, [agentsRef, applyBranding, setAgents]);
+
+  const updateUserProfile = useCallback((payload: any) => {
+    updateUserProfileFromEvent({
+      payload,
+      setUserProfile,
+    });
+  }, [setUserProfile]);
 
   const refreshActiveChatAgents = useCallback((options?: {
     prewarmRecent?: boolean;
@@ -409,6 +428,13 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
     refreshQueueState,
     runImmediately: false,
   }), [refreshActiveChatAgents, refreshCurrentChatBranches, refreshModelAndQueueState, refreshModelState, refreshQueueState]);
+
+  useEffect(() => {
+    const handle = setInterval(() => {
+      void refreshModelState();
+    }, 5_000);
+    return () => clearInterval(handle);
+  }, [refreshModelState]);
 
   return {
     updateAgentProfile,

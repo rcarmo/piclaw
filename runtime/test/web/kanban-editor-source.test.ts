@@ -25,3 +25,12 @@ test('kanban editor source supports intra-lane card reordering drop targets', ()
   expect(source).toContain("onMoveCard(draggedCard.card, draggedCard.fromLaneId, laneId, cardIndex + (insertAfter ? 1 : 0));");
   expect(source).toContain('class="kanban-plugin__item-wrapper ${dropPosition ? `is-drop-${dropPosition}` : \'\'}"');
 });
+
+test('kanban editor source renders a floating card preview while dragging', () => {
+  const source = readFileSync(KANBAN_EDITOR_SOURCE, 'utf8');
+
+  expect(source).toContain("function showCardDragPreview(card: CardData");
+  expect(source).toContain("e.dataTransfer.setDragImage(transparentDragImage, 0, 0);");
+  expect(source).toContain("document.addEventListener('dragover', handleDragOver);");
+  expect(source).toContain("kanban-plugin__drag-preview");
+});

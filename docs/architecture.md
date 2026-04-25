@@ -183,13 +183,10 @@ In addition to the inline factories, piclaw ships **packaged runtime extensions*
 | `integrations/mcp-status-hints/` | Always loaded | Status-hint providers for MCP/proxy and prefixed-tool surfaces when registry metadata is incomplete |
 | `integrations/keychain/` | Always loaded | `keychain` tool for list/get/set/delete of secure entries |
 | `integrations/ssh/` | Always loaded | `ssh` agent-only tool for session-scoped SSH profile `get`/`set`/`clear` |
-| `integrations/proxmox/` | Always loaded | `proxmox` agent-only tool for session-scoped Proxmox profile actions plus `discover`, `capabilities`, `workflow_help`, `recommend`, raw `request`, named `workflow` actions, and colocated packaged skill discovery for Proxmox comparison/reporting flows |
-| `integrations/portainer/` | Always loaded | `portainer` agent-only tool for session-scoped Portainer profile actions plus `discover`, `capabilities`, `workflow_help`, `recommend`, raw `request`, named `workflow` actions, and colocated packaged skill discovery for Portainer comparison/reporting flows |
-| `node_modules/pi-mcp-adapter/index.ts` | Always loaded | Bundled Pi package extension that exposes the token-efficient `mcp` proxy tool plus `/mcp` and `/mcp-auth` commands for external MCP servers configured through `.pi/mcp.json` or the Pi home config |
+| `node_modules/pi-mcp-adapter/index.ts` | Always loaded | Bundled Pi package extension that exposes the token-efficient `mcp` proxy tool plus `/mcp`, `/mcp setup`, and `/mcp-auth` commands for external MCP servers configured through shared `.mcp.json` / `~/.config/mcp/mcp.json` with optional Pi-specific override layers |
 | per-session `ssh-core` session extension | Created per session by `AgentPool` | Wraps `read`/`write`/`edit`/`bash` with session-scoped local-or-remote SSH execution |
 | `browser/cdp-browser/` | Always loaded | Cross-platform Chromium CDP browser control tool (`cdp_browser`) |
 | `platform/windows/win-ui/` | Always loaded (runtime no-op off Windows) | Windows desktop automation via bun:ffi + IAccessible (`win_*` tools) |
-| `viewers/drawio-editor/` | Always loaded | Self-hosted draw.io editor with extension route, save endpoint, and workspace export |
 | `viewers/office-viewer/` | Always loaded | Lightweight JS Office document viewer with extension route |
 
 These packaged runtime extensions use relative imports into `runtime/src/...` where needed. Piclaw also loads selected bundled Pi-package extensions from `node_modules/` (currently `pi-mcp-adapter`). A `node_modules` symlink next to the `extensions/` directory is created automatically at startup so jiti can resolve deep package imports for both the local packaged extension tree and bundled npm/Pi-package extensions. `runtime/src/extensions/` remains a separate built-in factory surface and should not be confused with the filesystem-backed packaged extension tree.
@@ -229,7 +226,7 @@ For infrastructure integrations, the intended uniform contract is:
 - raw transport surface: `request`
 - reusable higher-level orchestration: `workflow`
 
-`proxmox` and `portainer` now both follow that model directly, and future infrastructure integrations should mirror the same contract rather than introducing separate control shapes.
+`ssh` follows that model directly, and infrastructure integrations like `proxmox` and `portainer` (now maintained in the [piclaw-addons](https://github.com/rcarmo/piclaw-addons) repository) mirror the same contract.
 
 This contract is also a context-conservation strategy: compact family summaries come first, recommendations stay short, workflow examples are opt-in, and raw `request` is reserved for the cases where curated workflows are not enough.
 
@@ -240,7 +237,6 @@ The web UI uses a separate **pane extension** system for content-area components
 | Extension | Placement | Location |
 |-----------|-----------|----------|
 | `editor` | tabs | `runtime/extensions/viewers/editor/editor-extension.ts` |
-| `drawio` | tabs | `runtime/web/src/panes/drawio-pane.ts` |
 | `office-viewer` | tabs | `runtime/web/src/panes/office-viewer-pane.ts` |
 | `csv-viewer` | tabs | `runtime/web/src/panes/csv-viewer-pane.ts` |
 | `pdf-viewer` | tabs | `runtime/web/src/panes/pdf-viewer-pane.ts` |
@@ -250,7 +246,7 @@ The web UI uses a separate **pane extension** system for content-area components
 | `terminal-tab` | tabs | `runtime/web/src/panes/terminal-pane.ts` |
 | `vnc-viewer` | tabs | `runtime/web/src/panes/vnc-pane.ts` |
 
-The editor extension is lazy-loaded as a separate bundle (`editor.bundle.js`, ~1.57 MB) on first file open. Specialized viewers (draw.io, office, CSV, PDF, image) use route-backed iframes served through the extension route system, and their workspace-preview affordances now normalize around explicit “Edit/Open in Tab” promotion actions. See [web-pane-extensions.md](web-pane-extensions.md) for the pane contract and [extension-ui-contract.md](extension-ui-contract.md) for how pane extensions fit alongside timeline-native UI and the lower-level `extension_ui_*` bridge.
+The editor extension is lazy-loaded as a separate bundle (`editor.bundle.js`, ~1.57 MB) on first file open. Specialized viewers (office, CSV, PDF, image) use route-backed iframes served through the extension route system, and their workspace-preview affordances now normalize around explicit “Edit/Open in Tab” promotion actions. See [web-pane-extensions.md](web-pane-extensions.md) for the pane contract and [extension-ui-contract.md](extension-ui-contract.md) for how pane extensions fit alongside timeline-native UI and the lower-level `extension_ui_*` bridge.
 
 ## Web UI loading sequence
 
@@ -355,7 +351,8 @@ There is no longer a supported path where an empty terminal turn both:
 - Core utilities (config/env/chat context) live in `runtime/src/core`; shared helpers live in `runtime/src/utils`.
 - Chat context (chat JID + channel) is tracked in AsyncLocalStorage; tools/extensions read from the scoped context (defaults to `web:default` / `web`) rather than env variables.
 - SSH-backed core-tool state is session-scoped and persisted in SQLite (`ssh_configs`). `AgentPool` injects a per-session `ssh-core` extension and can hot-swap the live SSH backend for an existing warm session.
-- Proxmox and Portainer API profiles are also session-scoped and persisted in SQLite (`proxmox_configs`, `portainer_configs`). Their native tools share the same low-context discovery pattern: `discover` → `capabilities` / `recommend` → `workflow_help` → `workflow` or `request`.
+- Proxmox and Portainer API profiles were previously persisted in dedicated SQLite tables (`proxmox_configs`, `portainer_configs`). These tools have been moved to the [piclaw-addons](https://github.com/rcarmo/piclaw-addons) repository and now use the `extension_kv` table for session-scoped config persistence. The legacy tables remain in the schema for backward compatibility.
+- **Extension KV store**: the `extension_kv` table provides a scoped key-value store for addon extensions. Each extension is isolated by `extension_id` (runtime-assigned). Supports `chat`-scoped entries (keyed by chat JID) and `global` entries. Values are JSON-serialized and queryable via `json_extract()`. The store is registered as a global singleton during runtime init (`extension-kv-registry.ts`) and accessed by addons through the compat layer.
 - Workspace tree responses are cached briefly (1s) and rate-limited to prevent bursty UI reloads (HTTP 429 when exceeded).
 - The **workspace explorer** is a responsive sidebar (visible on desktop/tablet ≥1024px landscape) that shows a file tree of `/workspace`, supports file previews, drag-and-drop upload with progress reporting, a client-side 256 MB upload guard, inline file creation, inline rename, drag-and-drop move, file reference pills for prompts, and a live workspace-index status chip with one-click reindex.
 - The **code editor** is a standalone pane extension (`runtime/extensions/viewers/editor/`) using CodeMirror 6 directly (no Preact wrapper). It opens in the tabbed content area when a file is clicked in the explorer. Supports syntax highlighting for 12 languages, search/replace, line wrapping, dirty tracking, Cmd+S save, vim mode, whitespace toggle, and accent-aware theming. The editor bundle is lazy-loaded on first file open. Backend endpoints: `GET /workspace/file?mode=edit` (full content up to 256 KB) and `PUT /workspace/file` (save).
@@ -376,7 +373,7 @@ There is no longer a supported path where an empty terminal turn both:
 - **Model switch retry behavior**: successful model-switch commands now retry a held failed run by rewinding to `prevTs` and resuming the chat. Recovery-card actions (`Continue`, `Retry cleanly`) first skip the held failed turn so the follow-up prompt is not blocked behind the unresolved failure marker.
 - **Crash recovery split**: startup/runtime inflight recovery is still automatic for interrupted no-output turns, but exhausted no-terminal-output turns now live in the simpler held-failure path (`failed_*`) until explicitly retried or skipped.
 - **OOBE auto-complete**: on established installs with existing conversation history, the provider-ready OOBE panel auto-completes without requiring manual dismissal.
-- **Extension progress UI**: long-running operations in proxmox, portainer, azure-openai, SSH, and the azure harness now emit working-indicator state via `ctx.ui.setWorkingIndicator` / `setWorkingMessage` so the compose area shows spinner feedback during multi-step tool chains.
+- **Extension progress UI**: long-running operations in SSH, azure-openai, and the azure harness emit working-indicator state via `ctx.ui.setWorkingIndicator` / `setWorkingMessage` so the compose area shows spinner feedback during multi-step tool chains. Addon extensions (proxmox, portainer) in piclaw-addons also use this API.
 - **Debug / introspection endpoint**: `GET /agent/debug[?chat_jid=...]` returns a full provenance snapshot of the active session — loaded extensions (with command/tool/handler counts), tools, commands, prompt templates, and skills. Each resource includes its `SourceInfo` (`path`, `source`, `scope`, `origin`, optional `baseDir`) from pi-coding-agent ≥0.62.0.
 - **Commands endpoint**: `GET /agent/commands[?chat_jid=...]` returns the current session's registered command set as JSON, combining core control commands, extension commands, prompt templates, and skills. The compose-box fetches this on mount to populate the slash-command autocomplete dropdown dynamically rather than using a hardcoded list.
 - **Standalone mobile/PWA recovery**: the web shell keeps a synced `--app-height` from `visualViewport` on standalone mobile runtimes and re-syncs it on focus / pageshow / visibility return to reduce whole-page jumps when resuming the app and focusing the compose textarea.
@@ -384,6 +381,32 @@ There is no longer a supported path where an empty terminal turn both:
 - Scheduled tasks validate the requested model at creation time; invalid or ambiguous model names are rejected before the task is persisted.
 
 For the message‑level flow, see [runtime-flows.md](runtime-flows.md).
+
+## Remote interop
+
+Cross-instance communication is handled by `RemoteInteropService`
+(`src/remote/service.ts`), which routes all `/api/remote/*` endpoints.
+Peer identity uses Ed25519 key pairs derived at first run; every request
+is signed and verified against stored public keys.
+
+Key modules:
+
+| Module | Responsibility |
+|--------|---------------|
+| `remote/service.ts` | Request router, nonce cache, rate limiters |
+| `remote/service-pairing.ts` | Pair-request, pair-confirm, pair-callback handlers |
+| `remote/service-operations.ts` | Ping, proposal, execute, revoke, result-callback |
+| `remote/service-security.ts` | Callback proof verification (SSRF-safe) |
+| `remote/auth.ts` | Ed25519 signature build/verify |
+| `remote/policy.ts` | Profile-based tool ceiling filters (`read-only` → `non-mutating` → `restricted` → `full`) |
+| `remote/ssrf.ts` | Callback URL validation (hostname, DNS, private-IP) |
+| `extensions/remote-pair.ts` | `/pair` slash command (accept/deny/block/revoke/list) |
+| `skills/remote-peer/` | Agent skill for sending prompts to paired peers |
+| `db/remote-interop.ts` | SQLite schema and queries for peers, requests, proposals |
+
+Pairing follows a five-step consent protocol (request → review → URL
+proof → accept/deny → confirm). See [cross-instance-ipc.md](cross-instance-ipc.md)
+for the full protocol and configuration reference.
 
 ## Additional documentation
 

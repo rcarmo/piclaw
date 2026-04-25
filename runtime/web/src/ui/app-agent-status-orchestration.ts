@@ -382,9 +382,7 @@ export function finalizeStalledResponse(options: FinalizeStalledResponseOptions)
     fullText: partial,
   });
 
-  const hintPrefix = timedOutToolAction?.summary ? `> ${timedOutToolAction.summary}\n\n` : '';
-  const warning = '\n\n⚠️ Response may be incomplete - the model stopped responding';
-  const content = `${hintPrefix}${partial}${warning}`;
+  const content = partial;
   const id = now();
   const timestamp = nowIso();
   const localPost = {
@@ -402,6 +400,7 @@ export function finalizeStalledResponse(options: FinalizeStalledResponseOptions)
           tool_title: timedOutToolAction?.title || '',
           tool_name: timedOutToolAction?.toolName || '',
           tool_status: timedOutToolAction?.statusText || '',
+          draft_recovered: true,
         },
       ],
       agent_id: 'default',

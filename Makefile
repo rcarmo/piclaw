@@ -39,7 +39,7 @@ PI_AGENT_VERSION ?= $(shell jq -r '.dependencies["@mariozechner/pi-coding-agent"
 WEB_BUILD_TEST_TIMEOUT_MS ?= 20000
 
 .PHONY: help up down enter build build-piclaw build-web build-ts vendor update-mermaid-vendor pack \
-        local-install restart lint test test-coverage ci-fast publish-smoke \
+        local-install restart lint test test-coverage ci-fast ci-integration publish-smoke \
         dual-tag tag-ghcr sync-version bump-minor bump-patch push
 
 help: ## Show this help
@@ -108,11 +108,11 @@ build-web: ## Build web JS/CSS bundles (+ sourcemaps) into static/dist/ (include
 		runtime/web/static/dist/login.bundle.js.map \
 		runtime/web/static/dist/login.bundle.css
 
-build-ts: ## Type-check TypeScript (generated/dist is build output only; bun runs .ts directly)
+build-ts: ## Type-check TypeScript / validate emit (generated/dist is cleaned up after the run)
 	cd runtime && bun run build
-# NOTE: generated/dist/ is produced by tsc for validation/inspection, but the
-# entry and main field both point to src/index.ts. Consider switching to
-# `tsc --noEmit` (typecheck only) and excluding generated/dist/ from release artifacts.
+# NOTE: generated/dist/ is produced transiently by tsc for validation, then
+# removed immediately because Bun runs runtime/src/*.ts directly and release
+# artifacts only need runtime/web/static/dist/ bundles plus packaged sources.
 
 build-piclaw: build-web build-ts ## Full build: vendor + web + ts
 
@@ -131,71 +131,13 @@ pack: build-piclaw ## Pack piclaw into a .tgz (outside the repo)
 		bun pm pack --destination $(PACK_DIR); \
 	ls -lh $(PACK_DIR)/piclaw-*.tgz || true
 
-restart: ## Restart piclaw (auto-detects supervisor or systemd)
-	@set -e; \
-	resolve_supervisor_conf() { \
-		if [ -n "$${PICLAW_SUPERVISORCTL_CONFIG:-}" ] && [ -f "$$PICLAW_SUPERVISORCTL_CONFIG" ]; then \
-			printf '%s\n' "$$PICLAW_SUPERVISORCTL_CONFIG"; \
-			return; \
-		fi; \
-		if command -v pidof >/dev/null 2>&1; then \
-			pid="$$(pidof supervisord 2>/dev/null | awk '{print $$1}')"; \
-			if [ -n "$$pid" ] && [ -r "/proc/$$pid/cmdline" ]; then \
-				conf="$$(tr '\000' '\n' <"/proc/$$pid/cmdline" | awk 'prev == "-c" { print; exit } { prev = $$0 }')"; \
-				if [ -n "$$conf" ] && [ -f "$$conf" ]; then \
-					printf '%s\n' "$$conf"; \
-					return; \
-				fi; \
-			fi; \
-		fi; \
-		for conf in /workspace/.piclaw/supervisor/supervisord.conf /etc/supervisor/supervisord.conf; do \
-			if [ -f "$$conf" ]; then \
-				printf '%s\n' "$$conf"; \
-				return; \
-			fi; \
-		done; \
-	}; \
-	supervisor_status_exists() { \
-		conf="$$1"; \
-		exit_code=0; \
-		if [ -n "$$conf" ]; then \
-			supervisorctl -c "$$conf" status piclaw >/dev/null 2>&1 || exit_code=$$?; \
-		else \
-			supervisorctl status piclaw >/dev/null 2>&1 || exit_code=$$?; \
-		fi; \
-		[ "$$exit_code" -le 3 ]; \
-	}; \
-	supervisor_restart() { \
-		conf="$$1"; \
-		if [ -n "$$conf" ]; then \
-			supervisorctl -c "$$conf" restart piclaw; \
-			sleep 2; \
-			supervisorctl -c "$$conf" status piclaw; \
-		else \
-			supervisorctl restart piclaw; \
-			sleep 2; \
-			supervisorctl status piclaw; \
-		fi; \
-	}; \
-	supervisor_conf="$$(resolve_supervisor_conf)"; \
-	if command -v supervisorctl >/dev/null 2>&1 && \
-		[ -n "$$supervisor_conf" ] && \
-		supervisor_status_exists "$$supervisor_conf"; then \
-		echo "[restart] Using supervisorctl (-c $$supervisor_conf)"; \
-		supervisor_restart "$$supervisor_conf"; \
-	elif command -v supervisorctl >/dev/null 2>&1 && \
-		supervisor_status_exists ""; then \
-		echo "[restart] Using supervisorctl"; \
-		supervisor_restart ""; \
-	elif command -v systemctl >/dev/null 2>&1 && \
-		systemctl --user list-unit-files piclaw.service 2>/dev/null | grep -q piclaw; then \
-		echo "[restart] Using systemctl --user"; \
-		systemctl --user restart piclaw.service; \
-		sleep 2; \
-		systemctl --user status piclaw.service --no-pager -l | head -5; \
-	else \
-		echo "[restart] No service manager found; try: make local-install"; \
-	fi
+restart: ## No-op safety guard: use exit_process from the agent instead of restarting inline
+	@printf '%s\n' "[restart] No-op by design." \
+		"[restart] Do not restart piclaw inline from an active agent turn." \
+		"[restart] Agent-driven reload flow: make local-install, send the final reply, then call exit_process as the last action." \
+		"[restart] Manual shell restart (outside the agent turn) should use the native service manager directly if truly needed." \
+		"[restart] This target intentionally does nothing to avoid truncating in-flight replies." \
+		1>&2
 
 local-install: pack ## Pack and install piclaw globally (no restart)
 	@set -e; \
@@ -236,6 +178,9 @@ test-coverage: ## Run piclaw tests with coverage
 
 ci-fast: ## Run the canonical fast CI contract used by GitHub Actions
 	bun run ci:fast
+
+ci-integration: ## Run the full integration gate (lint + all tests + static analysis + build + Playwright)
+	bun run ci:integration
 
 publish-smoke: ## Smoke-test a published piclaw image (requires IMAGE_REF, PLATFORM, EXPECTED_BUN_VERSION, EXPECTED_RESTIC_VERSION)
 	@: "$${IMAGE_REF:?set IMAGE_REF}" "$${PLATFORM:?set PLATFORM}" "$${EXPECTED_BUN_VERSION:?set EXPECTED_BUN_VERSION}" "$${EXPECTED_RESTIC_VERSION:?set EXPECTED_RESTIC_VERSION}"

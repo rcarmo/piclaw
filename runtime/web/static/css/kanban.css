@@ -233,9 +233,32 @@
   transition: border-color 0.15s, box-shadow 0.15s, opacity 0.3s;
 }
 .kanban-plugin__item:hover { border-color: var(--kb-text-muted); }
-.kanban-plugin__item.is-dragging { opacity: 0.5; cursor: grabbing; }
+.kanban-plugin__item.is-dragging { opacity: 0.2; cursor: grabbing; }
 .kanban-plugin__item.is-complete .kanban-plugin__item-title,
 .kanban-plugin__item.is-complete .kanban-plugin__item-title :is(p, li, blockquote) { text-decoration: line-through; color: var(--kb-text-muted); }
+
+.kanban-plugin__drag-preview {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  width: min(320px, calc(var(--lane-width) - 8px));
+  pointer-events: none;
+  opacity: 0;
+  transform: translate3d(0, 0, 0) scale(0.98);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.kanban-plugin__drag-preview.is-visible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+.kanban-plugin__item--drag-preview {
+  cursor: grabbing;
+  border-color: color-mix(in srgb, var(--kb-border-focus) 55%, var(--kb-border));
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+}
 
 .kanban-plugin__item-content-wrapper, .kanban-plugin__item-title-wrapper { background: var(--kb-bg); }
 .kanban-plugin__item-title-wrapper { display: flex; padding: 6px 8px; align-items: flex-start; gap: 6px; }

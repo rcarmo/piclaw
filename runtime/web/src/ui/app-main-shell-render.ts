@@ -4,6 +4,8 @@ import { OobePanel } from '../components/oobe-panel.js';
 import { BtwPanel } from '../components/btw-panel.js';
 import { FloatingWidgetPane } from '../components/floating-widget-pane.js';
 import { AttachmentPreviewModal } from '../components/attachment-preview-modal.js';
+import { SettingsDialog } from '../components/settings-dialog.js';
+import { TimelineMenu } from '../components/timeline-menu.js';
 import { AgentRequestModal, AgentStatus } from '../components/status.js';
 import { Timeline } from '../components/timeline.js';
 import { WorkspaceExplorer } from '../components/workspace-explorer.js';
@@ -236,7 +238,6 @@ export function renderMainShell(options: MainShellRenderOptions): any {
     handleBtwIntercept,
     handleMessageResponse,
     handleComposeSubmitError,
-    handlePopOutChat,
     isComposeBoxAgentActive,
     activeChatAgents,
     connectionStatus,
@@ -431,60 +432,17 @@ export function renderMainShell(options: MainShellRenderOptions): any {
         </div>
         <div class="editor-splitter" onMouseDown=${handleEditorSplitterMouseDown} onTouchStart=${handleEditorSplitterTouchStart}></div>
       `}
+      <${TimelineMenu}
+        workspaceOpen=${workspaceOpen}
+        toggleWorkspace=${toggleWorkspace}
+        chatOnlyMode=${chatOnlyMode}
+        onOpenTerminalTab=${openTerminalTab}
+        onOpenVncTab=${openVncTab}
+        onToggleTerminal=${hasDockPanes ? toggleDock : undefined}
+        terminalVisible=${Boolean(hasDockPanes && dockVisible)}
+      />
       <div class="container">
         ${searchQuery && isIOSDevice() && html`<div class="search-results-spacer"></div>`}
-        ${chatOnlyMode && html`
-          <div class="chat-window-header">
-            <div class="chat-window-header-main">
-              <span class="chat-window-header-title">
-                ${currentBranchRecord?.agent_name ? `@${currentBranchRecord.agent_name}` : currentChatJid}
-              </span>
-              <span class="chat-window-header-subtitle">${currentBranchRecord?.chat_jid || currentChatJid}</span>
-            </div>
-            <div class="chat-window-header-actions">
-              ${currentChatBranches.length > 1 && html`
-                <label class="chat-window-branch-picker-wrap">
-                  <span class="chat-window-branch-picker-label">Branch</span>
-                  <select
-                    class="chat-window-branch-picker"
-                    value=${currentChatJid}
-                    onChange=${(event: any) => handleBranchPickerChange(event.currentTarget.value)}
-                  >
-                    ${currentChatBranches.map((branch: any) => html`
-                      <option key=${branch.chat_jid} value=${branch.chat_jid}>
-                        ${formatBranchPickerLabel(branch, { currentChatJid })}
-                      </option>
-                    `)}
-                  </select>
-                </label>
-              `}
-              ${currentBranchRecord?.chat_jid && html`
-                <button
-                  class="chat-window-header-button"
-                  type="button"
-                  onClick=${openRenameCurrentBranchForm}
-                  title=${isRenamingBranch ? 'Renaming branch…' : 'Rename this branch'}
-                  aria-label="Rename this branch"
-                  disabled=${isRenamingBranch}
-                >
-                  ${isRenamingBranch ? 'Renaming…' : 'Rename'}
-                </button>
-              `}
-              ${currentBranchRecord?.chat_jid && currentBranchRecord.chat_jid !== (currentBranchRecord.root_chat_jid || currentBranchRecord.chat_jid) && html`
-                <button
-                  class="chat-window-header-button"
-                  type="button"
-                  onClick=${handlePruneCurrentBranch}
-                  title="Prune this branch agent"
-                  aria-label="Prune this branch agent"
-                >
-                  Prune
-                </button>
-              `}
-              <span class="chat-window-header-badge">Chat only</span>
-            </div>
-          </div>
-        `}
         ${(currentHashtag || searchQuery) && html`
           <div class="hashtag-header">
             <button class="back-btn" onClick=${handleBackToTimeline}>
@@ -552,6 +510,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
             onClose=${() => setAttachmentPreview(null)}
           />
         `}
+        <${SettingsDialog} />
         <${AgentStatus}
           extensionPanels=${Array.from(extensionStatusPanels.values())}
           pendingPanelActions=${pendingExtensionPanelActions}
@@ -609,7 +568,6 @@ export function renderMainShell(options: MainShellRenderOptions): any {
           onSubmitIntercept=${handleBtwIntercept}
           onMessageResponse=${handleMessageResponse}
           onSubmitError=${handleComposeSubmitError}
-          onPopOutChat=${isWebAppMode ? undefined : handlePopOutChat}
           isAgentActive=${isComposeBoxAgentActive}
           activeChatAgents=${activeChatAgents}
           currentChatJid=${currentChatJid}

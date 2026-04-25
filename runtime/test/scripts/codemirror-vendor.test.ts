@@ -76,7 +76,7 @@ test("codemirror package overrides pin the singleton command/state/view/language
   expect(pkg.overrides).toMatchObject({
     "@codemirror/commands": "6.10.3",
     "@codemirror/state": "6.6.0",
-    "@codemirror/view": "6.41.0",
+    "@codemirror/view": "6.41.1",
     "@codemirror/language": "6.12.3",
   });
 });

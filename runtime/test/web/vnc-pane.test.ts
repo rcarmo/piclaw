@@ -1,10 +1,16 @@
 import { expect, test } from 'bun:test';
 
-import { buildVncTabPath, consumeVncPopoutPassword, createVncPopoutTransferPayload, getVncTargetsEmptyStateCopy, relocateVncPaneRoot, shouldRetryVncPopoutWithoutHandoff, stashVncPopoutPassword } from '../../web/src/panes/vnc-pane.js';
+import { buildDirectVncTargetReference, buildVncTabPath, consumeVncPopoutPassword, createVncPopoutTransferPayload, getVncTargetsEmptyStateCopy, normalizeDirectVncHost, relocateVncPaneRoot, shouldRetryVncPopoutWithoutHandoff, stashVncPopoutPassword } from '../../web/src/panes/vnc-pane.js';
 
 test('buildVncTabPath encodes target ids when present', () => {
   expect(buildVncTabPath()).toBe('piclaw://vnc');
   expect(buildVncTabPath('host:5901')).toBe('piclaw://vnc/host%3A5901');
+});
+
+test('direct VNC host defaults to localhost when omitted', () => {
+  expect(normalizeDirectVncHost('')).toBe('localhost');
+  expect(normalizeDirectVncHost(' lab-host ')).toBe('lab-host');
+  expect(buildDirectVncTargetReference('', 5900)).toBe('localhost:5900');
 });
 
 function createMemoryStorage() {

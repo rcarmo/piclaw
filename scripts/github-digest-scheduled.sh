@@ -55,6 +55,7 @@ fi
 
 bun "$COLLATE_SCRIPT" \
   --state open \
+  --active-within-hours 24 \
   --include-private \
   --output-json "$tmp_json" \
   --output-markdown "$tmp_md" \

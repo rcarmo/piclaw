@@ -4,13 +4,14 @@ import { findPopupTypeaheadMatch, isPopupTypeaheadKey, resolvePopupTypeaheadMatc
 import { getAgentModels, sendAgentMessage, uploadMedia } from '../api.js';
 import { getLocalStorageItem, setLocalStorageItem } from '../utils/storage.js';
 import { buildMentionValue, filterMentionAgents, parseMentionAutocompleteQuery } from '../ui/agent-mentions.js';
-import { shouldOpenSessionSwitcherFromBlankCompose } from '../ui/compose-session-switcher.js';
+import { shouldOpenSessionSwitcherFromBlankCompose, shouldRouteComposeValueToSessionSwitcher } from '../ui/compose-session-switcher.js';
 import { formatBranchPickerLabel, formatCurrentBranchLabel } from '../ui/branch-lifecycle.js';
 import { buildComposeStatusDotClass } from '../ui/status-dot.js';
 import { getStatusElapsedLabel, isCompactionStatus, resolveStatusPanelTitle } from '../ui/status-duration.js';
 import { useConnectionStatusPresentation } from '../ui/connection-status.js';
 import { FilePill } from './file-pill.js';
 import { refreshAgentModelStateBestEffort } from './compose-model-refresh.js';
+import { renderMarkdown } from '../markdown.js';
 
 /**
  * Slash command definitions for autocomplete.
@@ -66,10 +67,13 @@ export const SLASH_COMMANDS = [
   { name: "/dream", description: "Run Dream memory maintenance over recent days (default 7)" },
   { name: "/tasks", description: "List scheduled tasks" },
   { name: "/scheduled", description: "List scheduled tasks" },
+  { name: "/pair", description: "Manage remote peer connections (/pair request <url> | /pair list)" },
+  { name: "/ask", description: "Send a prompt to a paired remote instance (/ask <instance_id|fingerprint> <prompt>)" },
   { name: "/restart", description: "Restart the agent and stop subprocesses" },
   { name: "/exit", description: "Exit the current piclaw process immediately (Supervisor will restart it)" },
   { name: "/login", description: "Login to an AI model provider (OAuth or API key)" },
   { name: "/logout", description: "Logout from an AI model provider" },
+  { name: "/settings", description: "Open the settings pane" },
   { name: "/commands", description: "List available commands" },
   { name: "/skill:", description: "Run a workspace skill (e.g. /skill:visual-artifact-generator, /skill:web-search)" },
 ];
@@ -113,24 +117,14 @@ export function resolveUiOnlyCommandNotice(commandText, response) {
     return null;
 }
 
-export function resolveComposeSubmitButtonState(isAgentActive, canSend, isCompacting = false) {
-    if (isAgentActive && isCompacting) {
-        return {
-            mode: 'compacting',
-            className: 'icon-btn send-btn abort-mode compacting-mode',
-            title: 'Compacting context — Stop response',
-            ariaLabel: 'Compacting context — Stop response',
-            disabled: false,
-        };
-    }
-
+export function resolveComposeSubmitButtonState(isAgentActive, canSend, _isCompacting = false) {
     if (isAgentActive) {
         return {
-            mode: 'abort',
-            className: 'icon-btn send-btn abort-mode',
-            title: 'Stop response',
-            ariaLabel: 'Stop response',
-            disabled: false,
+            mode: 'queue',
+            className: 'icon-btn send-btn queue-mode',
+            title: 'Queue follow-up (Enter)',
+            ariaLabel: 'Queue follow-up message',
+            disabled: !canSend,
         };
     }
 
@@ -140,6 +134,26 @@ export function resolveComposeSubmitButtonState(isAgentActive, canSend, isCompac
         title: 'Send (Enter)',
         ariaLabel: 'Send message',
         disabled: !canSend,
+    };
+}
+
+export function resolveComposeAbortButtonState(isAgentActive, isCompacting = false) {
+    if (!isAgentActive) return null;
+    if (isCompacting) {
+        return {
+            mode: 'compacting',
+            className: 'icon-btn send-btn abort-mode compacting-mode',
+            title: 'Compacting context — Stop response',
+            ariaLabel: 'Compacting context — Stop response',
+            disabled: false,
+        };
+    }
+    return {
+        mode: 'abort',
+        className: 'icon-btn send-btn abort-mode',
+        title: 'Stop response',
+        ariaLabel: 'Stop response',
+        disabled: false,
     };
 }
 
@@ -196,7 +210,7 @@ export function resolveComposeExtensionWorkingDisplay(workingState, frameIndex =
  * Tiny SVG pie chart showing context window usage.
  * Green when <75%, amber 75–90%, red >90%. Tooltip shows exact numbers.
  */
-function ContextPie({ usage, onCompact }) {
+function ContextPie({ usage, onCompact, compactionLabel = '', compactionTitle = '' }) {
     const pct = Math.min(100, Math.max(0, usage.percent || 0));
     const tokens = usage.tokens;
     const window = usage.contextWindow;
@@ -204,7 +218,11 @@ function ContextPie({ usage, onCompact }) {
     const label = tokens != null
         ? `Context: ${formatK(tokens)} / ${formatK(window)} tokens (${pct.toFixed(0)}%)`
         : `Context: ${pct.toFixed(0)}%`;
-    const title = `${label} — ${compactLabel}`;
+    const activeCompactionLabel = typeof compactionLabel === 'string' ? compactionLabel.trim() : '';
+    const activeCompactionTitle = typeof compactionTitle === 'string' ? compactionTitle.trim() : '';
+    const title = activeCompactionLabel
+        ? `${label} — ${activeCompactionTitle || 'Smart compaction'} · ${activeCompactionLabel}`
+        : `${label} — ${compactLabel}`;
 
     // Pie arc: SVG circle with stroke-dasharray trick.
     // Circle circumference = 2πr = 2π×9 ≈ 56.55
@@ -218,10 +236,10 @@ function ContextPie({ usage, onCompact }) {
 
     return html`
         <button
-            class="compose-context-pie icon-btn"
+            class=${`compose-context-pie icon-btn${activeCompactionLabel ? ' is-compacting' : ''}`}
             type="button"
             title=${title}
-            aria-label="Compact context"
+            aria-label=${activeCompactionLabel ? `Smart compaction ${activeCompactionLabel}` : 'Compact context'}
             onClick=${(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -241,6 +259,7 @@ function ContextPie({ usage, onCompact }) {
                     stroke-linecap="round"
                     transform="rotate(-90 12 12)" />
             </svg>
+            ${activeCompactionLabel && html`<span class="compose-context-pie-timer">${activeCompactionLabel}</span>`}
         </button>
     `;
 }
@@ -509,11 +528,26 @@ export function parseQueuedContent(value) {
     };
 }
 
+export function buildReturnedQueuedDraft(value) {
+    const parsed = parseQueuedContent(value);
+    const attachmentBlock = parsed.attachmentRefs.length > 0
+        ? `Attachments:\n${parsed.attachmentRefs.map((attachment) => `- ${attachment.raw}`).join('\n')}`
+        : '';
+    const text = String(parsed.text || '').trim();
+    return {
+        content: [text, attachmentBlock].filter(Boolean).join('\n\n').trim(),
+        fileRefs: [...parsed.fileRefs],
+        messageRefs: [...parsed.messageRefs],
+        attachmentRefs: [...parsed.attachmentRefs],
+    };
+}
+
 export function QueuedFollowupStack({
     items = [],
     onInjectQueuedFollowup,
     onRemoveQueuedFollowup,
     onMoveQueuedFollowup,
+    onReturnQueuedFollowup,
     onOpenFilePill,
 }) {
     if (!Array.isArray(items) || items.length === 0) return null;
@@ -525,6 +559,7 @@ export function QueuedFollowupStack({
                 if (!parsed.text.trim() && parsed.fileRefs.length === 0 && parsed.messageRefs.length === 0 && parsed.attachmentRefs.length === 0) return null;
                 const canMoveUp = index > 0;
                 const canMoveDown = index < items.length - 1;
+                const canReturnToEditor = index === items.length - 1;
                 return html`
                     <div class="compose-queue-stack-item" role="listitem">
                         <div class="compose-queue-stack-content" title=${rowText}>
@@ -580,10 +615,18 @@ export function QueuedFollowupStack({
                                 <button
                                     class="compose-queue-stack-move-btn"
                                     type="button"
-                                    title="Move down"
-                                    aria-label="Move down in queue"
-                                    disabled=${!canMoveDown}
-                                    onClick=${() => canMoveDown && onMoveQueuedFollowup?.(index, index + 1)}
+                                    title=${canReturnToEditor ? 'Return to editor' : 'Move down'}
+                                    aria-label=${canReturnToEditor ? 'Return queued message to editor' : 'Move down in queue'}
+                                    disabled=${!canMoveDown && !canReturnToEditor}
+                                    onClick=${() => {
+                                        if (canMoveDown) {
+                                            onMoveQueuedFollowup?.(index, index + 1);
+                                            return;
+                                        }
+                                        if (canReturnToEditor) {
+                                            onReturnQueuedFollowup?.(item);
+                                        }
+                                    }}
                                 >
                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                         <polyline points="6 9 12 15 18 9"></polyline>
@@ -662,7 +705,6 @@ export function ComposeBox({
     onMoveQueuedFollowup,
     onSubmitIntercept,
     onMessageResponse,
-    onPopOutChat,
     isAgentActive = false,
     activeChatAgents = [],
     currentChatJid = 'web:default',
@@ -675,6 +717,7 @@ export function ComposeBox({
     isRenameSessionInProgress = false,
     onCreateSession,
     onDeleteSession,
+    onPurgeArchivedSession,
     onRestoreSession,
     showQueueStack = true,
     statusNotice = null,
@@ -823,6 +866,7 @@ export function ComposeBox({
     const connectionStatusLabel = connectionStatusPresentation.label;
     const connectionStatusTitle = connectionStatusPresentation.title;
     const submitButtonState = resolveComposeSubmitButtonState(isAgentActive, canSend, statusNoticeIsCompaction);
+    const abortButtonState = resolveComposeAbortButtonState(isAgentActive, statusNoticeIsCompaction);
 
     const mentionAgents = (Array.isArray(activeChatAgents) ? activeChatAgents : [])
         .filter((chat) => !chat?.archived_at);
@@ -837,6 +881,7 @@ export function ComposeBox({
         currentSessionAgent
         && currentSessionAgent.chat_jid === (currentSessionAgent.root_chat_jid || currentSessionAgent.chat_jid)
     );
+    const isCurrentDefaultRootSession = Boolean(isCurrentRootSession && (currentSessionAgent?.chat_jid || currentChatJid) === 'web:default');
     const switchableChatAgents = useMemo(() => {
         const seen = new Set();
         const chats = [];
@@ -856,8 +901,9 @@ export function ComposeBox({
     const renameInProgress = Boolean(isRenameSessionInProgress || renameSessionInProgressRef.current);
     const canRenameSession = !searchMode && typeof onRenameSession === 'function' && !renameInProgress;
     const canCreateSession = !searchMode && typeof onCreateSession === 'function';
-    const canDeleteSession = !searchMode && typeof onDeleteSession === 'function' && !isCurrentRootSession;
-    const showSessionSwitcherButton = !searchMode && (canSwitchSession || canRestoreSession || canRenameSession || canCreateSession || canDeleteSession);
+    const canDeleteSession = !searchMode && typeof onDeleteSession === 'function' && !isCurrentDefaultRootSession;
+    const canPurgeArchivedSession = !searchMode && typeof onPurgeArchivedSession === 'function';
+    const showSessionSwitcherButton = !searchMode && (canSwitchSession || canRestoreSession || canRenameSession || canCreateSession || canDeleteSession || canPurgeArchivedSession);
     const modelPickerState = resolveComposeModelPickerState(activeModel, agentModelsPayload);
     const showModelPickerHint = modelPickerState.showPicker;
     const modelHintLabel = modelPickerState.label;
@@ -960,6 +1006,14 @@ export function ComposeBox({
     };
 
     const updateMentionAutocomplete = (value) => {
+        if (shouldRouteComposeValueToSessionSwitcher(value, {
+            searchMode,
+            showSessionSwitcherButton,
+        })) {
+            setShowMention(false);
+            setMentionMatches([]);
+            return;
+        }
         if (parseMentionAutocompleteQuery(value) == null) {
             setShowMention(false);
             setMentionMatches([]);
@@ -1240,6 +1294,15 @@ export function ComposeBox({
     };
 
     const handleSubmit = async (overrideContent, submitMode, submitOptions = {}) => {
+        // Client-side interception for /settings — open dialog immediately
+        const rawInput = typeof overrideContent === 'string' ? overrideContent : content;
+        if (/^\/settings\s*$/i.test(rawInput.trim())) {
+            setContent('');
+            requestAnimationFrame(() => resizeTextarea());
+            window.dispatchEvent(new CustomEvent('piclaw:open-settings'));
+            return;
+        }
+
         const {
             includeMedia = true,
             includeFileRefs = true,
@@ -1374,6 +1437,27 @@ export function ComposeBox({
         // it if the active stream already ended. Avoid a second client-side
         // submit here so removal + steering stay atomic.
         onInjectQueuedFollowup?.(queuedItem);
+    };
+
+    const handleReturnQueuedFollowup = (queuedItem) => {
+        if (!queuedItem) return;
+        const restored = buildReturnedQueuedDraft(queuedItem?.content || '');
+        setSubmitError(null);
+        setSubmitNotice(null);
+        setMediaFiles([]);
+        onSetFileRefs?.(restored.fileRefs);
+        onSetMessageRefs?.(restored.messageRefs);
+        setContent(restored.content);
+        onRemoveQueuedFollowup?.(queuedItem);
+        requestAnimationFrame(() => {
+            resizeTextarea();
+            const textarea = textareaRef.current;
+            if (!textarea) return;
+            const len = restored.content.length;
+            textarea.selectionStart = len;
+            textarea.selectionEnd = len;
+            textarea.focus();
+        });
     };
 
     const handlePopupKeyboardEvent = useCallback((e) => {
@@ -1883,6 +1967,22 @@ export function ComposeBox({
         setSubmitNotice(null);
         if (showSessionPopup) setShowSessionPopup(false);
         resizeTextarea(e.target);
+        if (shouldRouteComposeValueToSessionSwitcher(value, {
+            searchMode,
+            showSessionSwitcherButton,
+        })) {
+            updateValue('');
+            requestAnimationFrame(() => {
+                const textarea = textareaRef.current;
+                if (!textarea) return;
+                textarea.value = '';
+                textarea.selectionStart = 0;
+                textarea.selectionEnd = 0;
+                textarea.focus();
+            });
+            openSessionPopup();
+            return;
+        }
         updateValue(value);
     };
 
@@ -1924,6 +2024,7 @@ export function ComposeBox({
                     onInjectQueuedFollowup=${handleInjectQueuedFollowup}
                     onRemoveQueuedFollowup=${onRemoveQueuedFollowup}
                     onMoveQueuedFollowup=${onMoveQueuedFollowup}
+                    onReturnQueuedFollowup=${handleReturnQueuedFollowup}
                     onOpenFilePill=${onOpenFilePill}
                 />
             `}
@@ -1939,15 +2040,15 @@ export function ComposeBox({
                     </div>
                 </div>
             `}
-            ${statusNotice && html`
+            ${statusNotice && !statusNoticeIsCompaction && html`
                 <div
-                    class=${`compose-inline-status${statusNoticeIsCompaction ? ' compaction' : ''}`}
+                    class="compose-inline-status"
                     role="status"
                     aria-live="polite"
                     title=${statusNoticeDetail || ''}
                 >
                     <div class="compose-inline-status-row">
-                        <span class=${buildComposeStatusDotClass({ pulsing: statusNoticeIsCompaction })} aria-hidden="true"></span>
+                        <span class=${buildComposeStatusDotClass({ pulsing: false })} aria-hidden="true"></span>
                         <span class="compose-inline-status-title">${statusNoticeTitle}</span>
                         ${statusNoticeElapsedLabel && html`<span class="compose-inline-status-elapsed">${statusNoticeElapsedLabel}</span>`}
                     </div>
@@ -1956,7 +2057,7 @@ export function ComposeBox({
             `}
             ${submitNotice && html`
                 <div class="compose-inline-status compose-command-notice" role="status" aria-live="polite">
-                    <div class="compose-inline-status-detail compose-command-notice-text">${submitNotice}</div>
+                    <div class="compose-inline-status-detail compose-command-notice-text" dangerouslySetInnerHTML=${{ __html: renderMarkdown(submitNotice) }}></div>
                 </div>
             `}
             <div
@@ -2018,24 +2119,6 @@ export function ComposeBox({
                                 Clear all
                             </button>
                         </div>
-                    `}
-                    ${!searchMode && typeof onPopOutChat === 'function' && html`
-                        <button
-                            type="button"
-                            class="compose-popout-btn"
-                            onClick=${() => onPopOutChat?.()}
-                            title="Open this chat in a new chat-only window"
-                            aria-label="Open this chat in a new chat-only window"
-                        >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M14 5h5v5" />
-                                <path d="M10 14 19 5" />
-                                <path d="M19 14v5h-5" />
-                                <path d="M5 10V5h5" opacity="0" />
-                                <path d="M5 19h5" />
-                                <path d="M5 19v-5" />
-                            </svg>
-                        </button>
                     `}
                     <textarea
                         ref=${textareaRef}
@@ -2136,6 +2219,7 @@ export function ComposeBox({
                                     const archived = Boolean(chat.archived_at);
                                     const isRoot = chat.chat_jid === (chat.root_chat_jid || chat.chat_jid);
                                     const canPrune = !isRoot && !chat.is_active && !archived && typeof onDeleteSession === 'function';
+                                    const canPurgeArchived = archived && !isRoot && canPurgeArchivedSession;
                                     const label = formatBranchPickerLabel(chat, { currentChatJid });
                                     return html`
                                         <div key=${chat.chat_jid} class=${`compose-model-popup-item-row${archived ? ' archived' : ''}`}>
@@ -2155,15 +2239,19 @@ export function ComposeBox({
                                             >
                                                 ${label}
                                             </button>
-                                            ${canPrune && html`
+                                            ${(canPrune || canPurgeArchived) && html`
                                                 <button
                                                     type="button"
                                                     class="compose-model-popup-item-delete"
-                                                    title="Delete this branch"
-                                                    aria-label=${`Delete @${chat.agent_name}`}
+                                                    title=${canPurgeArchived ? 'Permanently delete this archived branch' : 'Delete this branch'}
+                                                    aria-label=${canPurgeArchived ? `Permanently delete @${chat.agent_name}` : `Delete @${chat.agent_name}`}
                                                     onClick=${(e) => {
                                                         e.stopPropagation();
                                                         setShowSessionPopup(false);
+                                                        if (canPurgeArchived) {
+                                                            void onPurgeArchivedSession?.(chat.chat_jid);
+                                                            return;
+                                                        }
                                                         void onDeleteSession(chat.chat_jid);
                                                     }}
                                                 >
@@ -2241,7 +2329,12 @@ export function ComposeBox({
                             </div>
                         `}
                         ${!searchMode && contextUsage && contextUsage.percent != null && html`
-                            <${ContextPie} usage=${contextUsage} onCompact=${handleContextCompact} />
+                            <${ContextPie}
+                                usage=${contextUsage}
+                                onCompact=${handleContextCompact}
+                                compactionLabel=${statusNoticeIsCompaction ? statusNoticeElapsedLabel || '0:00' : ''}
+                                compactionTitle=${statusNoticeIsCompaction ? (statusNoticeTitle || 'Smart compaction') : ''}
+                            />
                         `}
                     </div>
                     `}
@@ -2369,29 +2462,39 @@ export function ComposeBox({
                                     class=${submitButtonState.className}
                                     type="button"
                                     onClick=${() => {
-                                        if (isComposeSubmitAbortMode(submitButtonState.mode)) {
-                                            void handleSubmit('/abort', 'steer');
-                                            return;
-                                        }
                                         void handleSubmit();
                                     }}
                                     disabled=${submitButtonState.disabled}
                                     title=${submitButtonState.title}
                                     aria-label=${submitButtonState.ariaLabel}
                                 >
-                                    ${submitButtonState.mode === 'compacting'
-                                        ? html`
-                                            <span class="compose-submit-spinner" aria-hidden="true">
-                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                                    <circle class="compose-submit-spinner-ring" cx="12" cy="12" r="10.5" stroke-width="2.25" stroke-linecap="round"></circle>
-                                                    <rect class="compose-submit-spinner-stop" x="6" y="6" width="12" height="12" rx="0" fill="currentColor"></rect>
-                                                </svg>
-                                            </span>
-                                        `
-                                        : submitButtonState.mode === 'abort'
-                                            ? html`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2.5"/></svg>`
-                                            : html`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`}
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
                                 </button>
+                                ${abortButtonState && html`
+                                    <button 
+                                        class=${abortButtonState.className}
+                                        type="button"
+                                        onClick=${() => {
+                                            if (isComposeSubmitAbortMode(abortButtonState.mode)) {
+                                                void handleSubmit('/abort', 'steer');
+                                            }
+                                        }}
+                                        disabled=${abortButtonState.disabled}
+                                        title=${abortButtonState.title}
+                                        aria-label=${abortButtonState.ariaLabel}
+                                    >
+                                        ${abortButtonState.mode === 'compacting'
+                                            ? html`
+                                                <span class="compose-submit-spinner" aria-hidden="true">
+                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                                        <circle class="compose-submit-spinner-ring" cx="12" cy="12" r="10.5" stroke-width="2.25" stroke-linecap="round"></circle>
+                                                        <rect class="compose-submit-spinner-stop" x="6" y="6" width="12" height="12" rx="0" fill="currentColor"></rect>
+                                                    </svg>
+                                                </span>
+                                            `
+                                            : html`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2.5"/></svg>`}
+                                    </button>
+                                `}
                             `}
                         </div>
                     `}

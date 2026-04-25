@@ -14,7 +14,7 @@ import {
   type RecoveryClassifier,
   type RecoveryStrategy,
 } from "./automatic-recovery.js";
-import { getAgentRuntimeConfig, getSessionStorageConfig } from "../core/config.js";
+import { getAgentRuntimeConfig, getSessionStorageConfig, getToolUseMessageBudget } from "../core/config.js";
 import { detectChannel } from "../router.js";
 import { pruneOrphanToolResults } from "./orphan-tool-results.js";
 import { writeAgentLog } from "./logging.js";
@@ -193,7 +193,7 @@ function getSessionStateErrorMessage(session: AgentSession): string | null {
   return typeof errorMessage === "string" && errorMessage.trim() ? errorMessage.trim() : null;
 }
 
-const DEFAULT_COMPACTION_TIMEOUT_MS = 90_000;
+const DEFAULT_COMPACTION_TIMEOUT_MS = 180_000;
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(String(value || "").trim(), 10);
@@ -468,7 +468,12 @@ async function runPromptAttempt(
   let sawCompactionIntent = false;
   let sawAssistantToolCallMessage = false;
   let onlyReadOnlyToolActivity = true;
+  let hadToolFailure = false;
+  let failedToolName: string | null = null;
+  let assistantToolUseMessageCount = 0;
+  let toolUseBudgetExceeded = false;
   const sessionEntryBaseline = snapshotSessionEntryCount(session);
+  const toolUseMessageBudget = getToolUseMessageBudget();
 
   const originalOnTurnComplete = runOptions.onTurnComplete;
   const onTurnComplete = originalOnTurnComplete
@@ -504,12 +509,34 @@ async function runPromptAttempt(
       if (!isRetrySafeToolName(toolName)) {
         onlyReadOnlyToolActivity = false;
       }
+      // Track failed tool executions so recovery can make smarter decisions.
+      if (event.type === "tool_execution_end" && (event as { isError?: unknown }).isError) {
+        hadToolFailure = true;
+        if (!failedToolName && typeof toolName === "string") {
+          failedToolName = toolName;
+        }
+      }
     }
     if (event.type === "message_end") {
-      const message = (event as { message?: { role?: unknown; content?: unknown } }).message;
+      const message = (event as { message?: { role?: unknown; content?: unknown; stopReason?: unknown } }).message;
       if (message?.role === "assistant" && Array.isArray(message.content)) {
-        sawAssistantToolCallMessage = sawAssistantToolCallMessage
-          || message.content.some((block) => block && typeof block === "object" && (block as { type?: unknown }).type === "toolCall");
+        const hasToolCall = message.content.some((block) => block && typeof block === "object" && (block as { type?: unknown }).type === "toolCall");
+        sawAssistantToolCallMessage = sawAssistantToolCallMessage || hasToolCall;
+        if (hasToolCall && message.stopReason === "toolUse") {
+          assistantToolUseMessageCount += 1;
+          if (!toolUseBudgetExceeded && assistantToolUseMessageCount > toolUseMessageBudget) {
+            toolUseBudgetExceeded = true;
+            void session.abort().catch((err) => {
+              options.onWarn?.("Failed to abort tool-loop budget overflow", {
+                operation: "run_agent.tool_use_budget_abort",
+                chatJid,
+                assistantToolUseMessageCount,
+                toolUseMessageBudget,
+                err,
+              });
+            });
+          }
+        }
       }
     }
     if (event.type === "compaction_start") {
@@ -569,6 +596,15 @@ async function runPromptAttempt(
   let output: AgentOutput;
   if (timedOut) {
     output = { status: "error", result: null, error: `Timed out after ${formatTimeoutDuration(timeoutMs)}` };
+  } else if (toolUseBudgetExceeded && !finalText && finalAttachments.length === 0) {
+    output = {
+      status: "error",
+      result: null,
+      error: `Tool-use budget exceeded before finalization (${assistantToolUseMessageCount}/${toolUseMessageBudget} tool steps).`,
+      toolBudgetExceeded: true,
+      toolStepsUsed: assistantToolUseMessageCount,
+      toolStepsBudget: toolUseMessageBudget,
+    } as any;
   } else if (promptThrownError) {
     output = { status: "error", result: null, error: promptThrownError };
   } else {
@@ -615,11 +651,23 @@ async function runPromptAttempt(
             blankTurnDelta,
           });
         }
-        output = {
-          status: "error",
-          result: null,
-          error: `Prompt completed without emitting an assistant reply before finalization (${detail}).`,
-        };
+        // When the provider stopped cleanly after tool use with no other failure
+        // signal, this is a tool-only completion — not an error worth alarming about.
+        const isToolOnlyCompletion = hadToolActivity
+          && !hadPartialOutput
+          && !blankTurnDelta
+          && detail.includes("provider stopped after tool use");
+        output = isToolOnlyCompletion
+          ? {
+            status: "tool_complete" as const,
+            result: null,
+            error: `Prompt completed without emitting an assistant reply before finalization (${detail}).`,
+          }
+          : {
+            status: "error",
+            result: null,
+            error: `Prompt completed without emitting an assistant reply before finalization (${detail}).`,
+          };
 
         // When context usage is above 60% of the model's window, flag
         // context pressure on the snapshot so recovery compacts first
@@ -665,6 +713,18 @@ export async function runAgentPrompt(
   const startTime = Date.now();
   options.clearAttachments(chatJid);
 
+  // Tool-cap and tool-ceiling state – declared outside try so cleanup
+  // can run in finally regardless of how the try exits.
+  const toolCallCapRef = { exceeded: false };
+  let toolCallUnsub: (() => void) | undefined;
+  type SessionWithToolControl = {
+    setActiveToolsByName?: (toolNames: string[]) => void;
+    getActiveToolNames?: () => string[];
+  };
+  let sessionCtrl: SessionWithToolControl | null = null;
+  let savedToolNames: string[] | null = null;
+  let originalSetActiveToolsByName: ((names: string[]) => void) | null = null;
+
   try {
     const runtime = await options.getOrCreateRuntime(chatJid);
     let session = runtime.session;
@@ -682,6 +742,49 @@ export async function runAgentPrompt(
     });
 
     const timeoutMs = typeof runOptions.timeoutMs === "number" ? runOptions.timeoutMs : getAgentRuntimeConfig().timeoutMs;
+
+    if (typeof runOptions.maxToolCalls === "number" && runOptions.maxToolCalls > 0) {
+      let toolCallCount = 0;
+      const cap = runOptions.maxToolCalls;
+      toolCallUnsub = session.subscribe((event) => {
+        if (event.type === "tool_execution_end") {
+          toolCallCount += 1;
+          if (toolCallCount >= cap) {
+            toolCallCapRef.exceeded = true;
+            session.abort().catch((err) => { debugSuppressedError(log, "Failed to abort session after tool-call cap exceeded.", err, {}); });
+          }
+        }
+      });
+    }
+
+    // Tool ceiling enforcement – clamp active tools and prevent LLM self-escalation.
+    sessionCtrl = session as unknown as SessionWithToolControl;
+
+    if (runOptions.toolCeilingFilter) {
+      const ceilingFilter = runOptions.toolCeilingFilter;
+      if (typeof sessionCtrl.getActiveToolNames === "function") {
+        savedToolNames = sessionCtrl.getActiveToolNames();
+        originalSetActiveToolsByName =
+          typeof sessionCtrl.setActiveToolsByName === "function"
+            ? sessionCtrl.setActiveToolsByName.bind(session)
+            : null;
+
+        if (originalSetActiveToolsByName) {
+          // Apply ceiling to the initial active set.
+          originalSetActiveToolsByName(savedToolNames.filter(ceilingFilter));
+          // Patch to block the LLM from re-escalating via activate_tools.
+          sessionCtrl.setActiveToolsByName = (names: string[]) => {
+            originalSetActiveToolsByName!(names.filter(ceilingFilter));
+          };
+        }
+      } else {
+        options.onWarn?.("Tool ceiling requested but session lacks getActiveToolNames; ceiling not enforced", {
+          operation: "run_agent.tool_ceiling",
+          chatJid,
+        });
+      }
+    }
+
     const channel = detectChannel(chatJid);
     const retrySettings = ((runtime.services?.settingsManager as RetrySettingsProvider | undefined)?.getRetrySettings?.()) || undefined;
     const baseRecoveryConfig = getAutomaticRecoveryConfig(retrySettings);
@@ -712,6 +815,13 @@ export async function runAgentPrompt(
           options,
           startTime,
         );
+
+        // If the tool-call cap was hit, abort immediately without recovery.
+        if (toolCallCapRef.exceeded) {
+          const duration = Date.now() - startTime;
+          writeAgentLog(options.logsDir, chatJid, duration, false, null, "Tool call limit exceeded.");
+          return { status: "error", result: null, error: "Tool call limit exceeded." };
+        }
 
         if (attempt.output.status === "success") {
           const duration = Date.now() - startTime;
@@ -917,6 +1027,11 @@ export async function runAgentPrompt(
     });
     return { status: "error", result: null, error: errorMsg };
   } finally {
+    toolCallUnsub?.();
+    if (sessionCtrl && savedToolNames !== null && originalSetActiveToolsByName) {
+      sessionCtrl.setActiveToolsByName = originalSetActiveToolsByName;
+      originalSetActiveToolsByName(savedToolNames);
+    }
     options.clearActiveForkBaseLeaf(chatJid);
   }
 }

@@ -71,7 +71,7 @@ describe("runtime wiring", () => {
     expect(whatsappCalls).toEqual([{ jid: "12345@s.whatsapp.net", text: "hi" }]);
   });
 
-  test("workspaceNeedsDreamBootstrap returns true until Dream memory files exist and recent daily notes are consolidated", async () => {
+  test("workspaceNeedsDreamBootstrap only requires the core Dream memory files", async () => {
     const ws = createTempWorkspace("piclaw-runtime-wiring-");
     restoreEnv = setEnv({
       PICLAW_WORKSPACE: ws.workspace,
@@ -107,7 +107,7 @@ describe("runtime wiring", () => {
     );
 
     wiringFresh = await importFresh<typeof import("../src/runtime/wiring.js")>("../src/runtime/wiring.js");
-    expect(wiringFresh.workspaceNeedsDreamBootstrap()).toBe(true);
+    expect(wiringFresh.workspaceNeedsDreamBootstrap()).toBe(false);
 
     writeFileSync(
       dayPath,

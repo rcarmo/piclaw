@@ -79,6 +79,27 @@ export function shouldReleaseVncTouchContact(event) {
     return false;
 }
 
+export function isVncDeferredTouchPointerType(pointerType) {
+    return String(pointerType || '').toLowerCase() === 'touch';
+}
+
+export function getVncContactTravelDistance(startX, startY, clientX, clientY) {
+    const dx = Number(clientX || 0) - Number(startX || 0);
+    const dy = Number(clientY || 0) - Number(startY || 0);
+    return Math.hypot(dx, dy);
+}
+
+export function hasVncTouchTapSlopBeenExceeded(options) {
+    const maxDistancePx = Number.isFinite(options?.maxDistancePx) ? Number(options.maxDistancePx) : 14;
+    return getVncContactTravelDistance(options?.startX, options?.startY, options?.clientX, options?.clientY) > maxDistancePx;
+}
+
+export function shouldTriggerVncTouchTap(options) {
+    const maxElapsedMs = Number.isFinite(options?.maxElapsedMs) ? Number(options.maxElapsedMs) : 300;
+    if (Number(options?.elapsedMs || 0) > maxElapsedMs) return false;
+    return !hasVncTouchTapSlopBeenExceeded(options);
+}
+
 export function shouldArmVncImplicitReleaseTimer(pointerType) {
     const normalized = String(pointerType || '').toLowerCase();
     // Safari/iPad can report touch/pen inconsistently; anything that is not an
@@ -118,6 +139,11 @@ export function encodeVncKeyEvent(down, keysym) {
     buffer[6] = (safeKeysym >>> 8) & 0xff;
     buffer[7] = safeKeysym & 0xff;
     return buffer;
+}
+
+export function shouldSkipDuplicateVncKeydown(existingKeysym, nextKeysym, repeat = false) {
+    if (existingKeysym == null || nextKeysym == null) return false;
+    return Boolean(repeat) || Number(existingKeysym) === Number(nextKeysym);
 }
 
 export function normalizeVncPassword(value) {

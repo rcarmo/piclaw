@@ -87,7 +87,8 @@ function isPrivateOrLoopbackAddress(address: string): boolean {
 /** Validate callback URL input and ensure it resolves to public-routable hosts only. */
 export async function validateCallbackUrl(
   raw: string | undefined,
-  resolveHost: ResolveHost = defaultResolveHost
+  resolveHost: ResolveHost = defaultResolveHost,
+  configOverride?: Readonly<Pick<import("../core/config.js").RemoteInteropConfig, "allowHttp" | "allowPrivateNetwork">>,
 ): Promise<{ ok: boolean; url?: URL; error?: string }> {
   if (!raw || typeof raw !== "string") {
     return { ok: false, error: "Missing callback_url." };
@@ -100,8 +101,15 @@ export async function validateCallbackUrl(
     return { ok: false, error: "Invalid callback_url." };
   }
 
-  if (url.protocol !== "https:" && !(getRemoteInteropConfig().allowHttp && url.protocol === "http:")) {
+  const cfg = configOverride ?? getRemoteInteropConfig();
+
+  if (url.protocol !== "https:" && !(cfg.allowHttp && url.protocol === "http:")) {
     return { ok: false, error: "callback_url must use https." };
+  }
+
+  // Dev/internal mode: skip private-IP checks for Docker-internal callback URLs.
+  if (cfg.allowPrivateNetwork) {
+    return { ok: true, url };
   }
 
   if (isBlockedHostname(url.hostname)) {

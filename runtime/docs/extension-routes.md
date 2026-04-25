@@ -8,7 +8,6 @@ assets or APIs from the piclaw process.
 This is the mechanism used by:
 
 - `office-viewer` to serve the lightweight JS Office viewer
-- `drawio-editor` to serve the vendored draw.io app and save endpoint
 - `editor-vendor` to serve CodeMirror directly from the editor extension vendor dir
 - `csv-viewer` to serve a lightweight same-origin CSV/TSV table viewer
 
@@ -24,8 +23,8 @@ Use an extension route when an extension needs one of these:
 Good examples:
 
 - `/office-viewer/*` for self-hosted JS Office viewer assets and wrapper HTML
-- `/drawio/*` for embedded editor assets and save/export helpers
 - `/editor-vendor/*` for lazily loaded browser-side vendor code
+- `/example-assets/*` for extension-owned browser bundles
 
 ## Registration API
 
@@ -41,7 +40,7 @@ registerRoute(prefix, handler, extensionDir);
 ### Parameters
 
 - `prefix: string`
-  - route prefix, for example `"/drawio"`
+  - route prefix, for example `"/example-assets"`
   - leading `/` is recommended
 - `handler: (req: Request, pathname: string) => Response | Promise<Response> | null`
   - receives the original request and the request pathname
@@ -63,9 +62,9 @@ A route handles requests when the pathname is:
 
 Examples:
 
-- `/drawio`
-- `/drawio/index.html`
-- `/drawio/edit?path=foo.drawio`
+- `/example-assets`
+- `/example-assets/index.html`
+- `/example-assets/view?path=foo.example`
 
 ## Security model
 
@@ -169,8 +168,8 @@ Response shape:
 ```json
 [
   {
-    "prefix": "/drawio",
-    "extensionPath": "/workspace/.pi/extensions/viewers/drawio-editor"
+    "prefix": "/example-assets",
+    "extensionPath": "/workspace/.pi/extensions/example-addon"
   }
 ]
 ```
@@ -184,7 +183,6 @@ This is useful for:
 ## Current reference implementations
 
 - `extensions/viewers/office-viewer/index.ts`
-- `extensions/viewers/drawio-editor/index.ts`
 - `src/channels/web/http/editor-vendor-route.ts`
 - `src/channels/web/http/csv-viewer-route.ts`
 - `src/channels/web/http/extension-routes.ts`

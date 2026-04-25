@@ -118,6 +118,7 @@ type Report = {
   include_forks: boolean;
   include_private: boolean;
   owner_filters: string[];
+  recent_activity_hours: number | null;
   totals: {
     repos_scanned: number;
     repos_with_items: number;
@@ -139,6 +140,7 @@ type Options = {
   includePrivate: boolean;
   ownerFilters: string[];
   maxRepos?: number;
+  activeWithinHours?: number;
 };
 
 function readOption(argv: string[], name: string): string | undefined {
@@ -165,6 +167,8 @@ function readOptions(argv: string[]): Options {
     .filter(Boolean);
   const maxReposRaw = readOption(argv, "--max-repos");
   const maxRepos = maxReposRaw ? Number.parseInt(maxReposRaw, 10) : undefined;
+  const activeWithinHoursRaw = readOption(argv, "--active-within-hours");
+  const activeWithinHours = activeWithinHoursRaw ? Number.parseInt(activeWithinHoursRaw, 10) : undefined;
   return {
     state,
     outputDir,
@@ -175,6 +179,9 @@ function readOptions(argv: string[]): Options {
     includePrivate,
     ownerFilters,
     maxRepos: Number.isFinite(maxRepos) && Number(maxRepos) > 0 ? Number(maxRepos) : undefined,
+    activeWithinHours: Number.isFinite(activeWithinHours) && Number(activeWithinHours) > 0
+      ? Number(activeWithinHours)
+      : undefined,
   };
 }
 
@@ -343,6 +350,9 @@ function renderMarkdown(report: Report): string {
   lines.push("## Summary");
   lines.push("");
   lines.push(`- State filter: \`${report.state}\``);
+  if (report.recent_activity_hours) {
+    lines.push(`- Activity window: **last ${report.recent_activity_hours}h** by created/updated time`);
+  }
   lines.push(`- Repos scanned: **${report.totals.repos_scanned}**`);
   lines.push(`- Included private repos: **${report.include_private ? "yes" : "no"}**`);
   lines.push(`- Repos with items: **${report.totals.repos_with_items}**`);
@@ -442,7 +452,21 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-async function collectRepoItems(token: string, repo: RepoRecord, state: Options["state"]): Promise<{ repo: RepoSummary; items: CollatedItem[] }> {
+function isRecentlyActive(item: CollatedItem, nowMs: number, activeWithinHours?: number): boolean {
+  if (!activeWithinHours || activeWithinHours <= 0) return true;
+  const cutoff = nowMs - (activeWithinHours * 60 * 60 * 1000);
+  const createdMs = Date.parse(item.created_at) || 0;
+  const updatedMs = Date.parse(item.updated_at) || 0;
+  return createdMs >= cutoff || updatedMs >= cutoff;
+}
+
+async function collectRepoItems(
+  token: string,
+  repo: RepoRecord,
+  state: Options["state"],
+  activeWithinHours?: number,
+  nowMs = Date.now(),
+): Promise<{ repo: RepoSummary; items: CollatedItem[] }> {
   const [owner = "", name = ""] = String(repo.full_name || "").split("/");
   if (!owner || !name) {
     throw new Error(`Invalid GitHub repo full_name: ${repo.full_name}`);
@@ -458,7 +482,9 @@ async function collectRepoItems(token: string, repo: RepoRecord, state: Options[
   const items = [
     ...issueRecords.map((record) => normalizeIssue(repo, record)).filter((record): record is CollatedItem => Boolean(record)),
     ...pullRecords.map((record) => normalizePull(repo, record)),
-  ].sort((left, right) => {
+  ]
+    .filter((item) => isRecentlyActive(item, nowMs, activeWithinHours))
+    .sort((left, right) => {
     const leftTs = Date.parse(left.updated_at) || 0;
     const rightTs = Date.parse(right.updated_at) || 0;
     if (rightTs !== leftTs) return rightTs - leftTs;
@@ -515,7 +541,12 @@ async function main(): Promise<void> {
     filteredRepos = filteredRepos.slice(0, options.maxRepos);
   }
 
-  const perRepo = await mapWithConcurrency(filteredRepos, 6, async (repo) => collectRepoItems(token, repo, options.state));
+  const nowMs = Date.now();
+  const perRepo = await mapWithConcurrency(
+    filteredRepos,
+    6,
+    async (repo) => collectRepoItems(token, repo, options.state, options.activeWithinHours, nowMs),
+  );
   const repoSummaries = perRepo
     .map((entry) => entry.repo)
     .filter((repo) => repo.total > 0)
@@ -538,6 +569,7 @@ async function main(): Promise<void> {
     include_forks: options.includeForks,
     include_private: options.includePrivate,
     owner_filters: options.ownerFilters,
+    recent_activity_hours: options.activeWithinHours ?? null,
     totals: {
       repos_scanned: filteredRepos.length,
       repos_with_items: repoSummaries.length,

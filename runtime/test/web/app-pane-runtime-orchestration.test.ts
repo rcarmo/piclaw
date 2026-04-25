@@ -299,10 +299,10 @@ test('isWorkspaceUpdateRelevantForPath ignores unrelated updates', () => {
 
 test('shouldRetainPaneDetachState keeps detached ownership even after the source tab is removed', () => {
   expect(shouldRetainPaneDetachState({
-    panePath: '/workspace/foo.drawio',
+    panePath: '/workspace/foo.widget',
     openTabIds: new Set<string>(),
     pendingDetachedTabPaths: new Set<string>(),
-    detachedTabPaths: new Set<string>(['/workspace/foo.drawio']),
+    detachedTabPaths: new Set<string>(['/workspace/foo.widget']),
     terminalTabPath: 'piclaw://terminal',
     hasPendingDetachedDockPane: false,
     hasDetachedDockPane: false,
@@ -324,7 +324,7 @@ test('removeSourcePaneAfterDetachClaim closes terminal tabs but hides detached d
   const dockStates: boolean[] = [];
 
   removeSourcePaneAfterDetachClaim({
-    panePath: '/workspace/foo.drawio',
+    panePath: '/workspace/foo.widget',
     terminalTabPath: 'piclaw://terminal',
     closeTab: (panePath: string) => closed.push(panePath),
     setDockVisible: (visible: boolean) => dockStates.push(visible),
@@ -344,6 +344,6 @@ test('removeSourcePaneAfterDetachClaim closes terminal tabs but hides detached d
     sourceHost: 'dock',
   });
 
-  expect(closed).toEqual(['/workspace/foo.drawio', 'piclaw://terminal']);
+  expect(closed).toEqual(['/workspace/foo.widget', 'piclaw://terminal']);
   expect(dockStates).toEqual([false]);
 });

@@ -38,6 +38,7 @@ test('watchPaneOpenEvents routes supported tab, edit-source, and popout custom e
     popOutPane: (path: string, label?: string) => events.push(`pop:${path}:${label || ''}`),
   }, { document: doc as any });
 
+  doc.dispatch('pane:open-tab', { detail: { path: '/widgets/system.widget', label: 'Widget' } });
   doc.dispatch('office-viewer:open-tab', { detail: { path: '/docs/report.docx', label: 'Report' } });
   doc.dispatch('html-viewer:open-tab', { detail: { path: '/site/index.html', label: 'Home' } });
   doc.dispatch('html-viewer:edit-source', { detail: { path: '/site/index.html', label: 'Home' } });
@@ -45,6 +46,7 @@ test('watchPaneOpenEvents routes supported tab, edit-source, and popout custom e
   doc.dispatch('kanban:open-tab', { detail: { path: '/boards/work.kanban.md', label: 'Board' } });
   doc.dispatch('pane:popout', { detail: { path: '/tabs/terminal', label: 'Terminal' } });
   expect(events).toEqual([
+    'tab:/widgets/system.widget:Widget',
     'tab:/docs/report.docx:Report',
     'tab:/site/index.html:Home',
     'edit:/site/index.html:Home',
@@ -54,6 +56,7 @@ test('watchPaneOpenEvents routes supported tab, edit-source, and popout custom e
   ]);
 
   dispose();
+  expect(doc.count('pane:open-tab')).toBe(0);
   expect(doc.count('office-viewer:open-tab')).toBe(0);
   expect(doc.count('html-viewer:open-tab')).toBe(0);
   expect(doc.count('html-viewer:edit-source')).toBe(0);

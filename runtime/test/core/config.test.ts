@@ -66,6 +66,13 @@ describe("core config", () => {
           PICLAW_WEB_VNC_TARGETS: undefined,
           PICLAW_VNC_TARGETS: undefined,
           PICLAW_TRUST_PROXY: "0",
+          // Unset remote interop env vars so the config file values are authoritative
+          PICLAW_REMOTE_INTEROP_ENABLED: undefined,
+          PICLAW_REMOTE_INTEROP_ALLOW_HTTP: undefined,
+          PICLAW_REMOTE_INTEROP_ALLOW_PRIVATE_NETWORK: undefined,
+          PICLAW_REMOTE_SHORT_CIRCUIT_ENABLED: undefined,
+          PICLAW_REMOTE_INSTANCE_NAME: undefined,
+          PICLAW_REMOTE_INTEROP_DECISION_MODEL: undefined,
         },
         dotEnv: [
           "PICLAW_LOG_LEVEL=debug",
@@ -137,6 +144,7 @@ describe("core config", () => {
         expect(config.getRemoteInteropConfig()).toEqual({
           enabled: true,
           allowHttp: true,
+          allowPrivateNetwork: false,
           shortCircuitEnabled: true,
           instanceName: "relay",
           decisionModel: "openai/gpt-4o",
@@ -200,6 +208,36 @@ describe("core config", () => {
       });
       expect(config.getRoutingConfig().triggerPattern.test("hello @Smith")).toBe(true);
       expect(config.getRoutingConfig().triggerPattern.test("hello @PiClaw")).toBe(false);
+    });
+  });
+
+  test("mutable general-setting setters persist and apply immediately", async () => {
+    await withFreshConfig({}, async ({ workspace, config }) => {
+      config.setSessionStorageConfig({ maxSizeMb: 48, autoRotate: false });
+      config.setWebTerminalEnabled(false);
+      config.setToolUseMessageBudget(21);
+
+      expect(config.getSessionStorageConfig()).toMatchObject({
+        maxSizeMb: 48,
+        maxSizeBytes: 48 * 1024 * 1024,
+        autoRotate: false,
+      });
+      expect(config.getWebRuntimeConfig().terminalEnabled).toBe(false);
+      expect(config.getToolUseMessageBudget()).toBe(21);
+      expect(process.env.PICLAW_SESSION_MAX_SIZE_MB).toBe("48");
+      expect(process.env.PICLAW_SESSION_AUTO_ROTATE).toBe("0");
+      expect(process.env.PICLAW_WEB_TERMINAL_ENABLED).toBe("0");
+      expect(process.env.PICLAW_TURN_MAX_TOOL_USE_MESSAGES).toBe("21");
+
+      const persisted = JSON.parse(readFileSync(join(workspace.workspace, ".piclaw", "config.json"), "utf8"));
+      expect(persisted).toMatchObject({
+        sessionMaxSizeMb: 48,
+        sessionAutoRotate: false,
+        turnMaxToolUseMessages: 21,
+        web: {
+          terminalEnabled: false,
+        },
+      });
     });
   });
 

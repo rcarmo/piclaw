@@ -13,6 +13,7 @@
 
 import { html, useCallback, useEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
 import { paneRegistry } from '../panes/index.js';
+import { resolveAddonStandaloneTabUrl } from '../ui/addon-web-extensions.js';
 import { canTabCompareToSaved } from '../ui/tab-compare-saved.js';
 import { canTabEditSource, getTabEditSourceLabel } from '../ui/tab-source-editor.js';
 
@@ -43,11 +44,12 @@ const OFFICE_EXTENSIONS = /\.(docx?|xlsx?|pptx?|odt|ods|odp|rtf)$/i;
 const CSV_EXTENSIONS = /\.(csv|tsv)$/i;
 const PDF_EXTENSIONS = /\.pdf$/i;
 const IMAGE_EXTENSIONS = /\.(png|jpe?g|gif|webp|bmp|ico|svg)$/i;
-const DRAWIO_EXTENSIONS = /\.drawio(\.xml|\.svg|\.png)?$/i;
 
 export function getStandaloneTabUrl(path, { hasPopOutTab = false } = {}) {
     const normalizedPath = typeof path === 'string' ? path.trim() : '';
     if (!normalizedPath) return null;
+    const addonResolvedUrl = resolveAddonStandaloneTabUrl(normalizedPath, { hasPopOutTab });
+    if (addonResolvedUrl) return addonResolvedUrl;
     if (OFFICE_EXTENSIONS.test(normalizedPath)) {
         const rawUrl = '/workspace/raw?path=' + encodeURIComponent(normalizedPath);
         const name = normalizedPath.split('/').pop() || 'document';
@@ -59,11 +61,8 @@ export function getStandaloneTabUrl(path, { hasPopOutTab = false } = {}) {
     if (PDF_EXTENSIONS.test(normalizedPath)) {
         return '/workspace/raw?path=' + encodeURIComponent(normalizedPath);
     }
-    if (IMAGE_EXTENSIONS.test(normalizedPath) && !DRAWIO_EXTENSIONS.test(normalizedPath)) {
+    if (IMAGE_EXTENSIONS.test(normalizedPath)) {
         return '/image-viewer/?path=' + encodeURIComponent(normalizedPath);
-    }
-    if (DRAWIO_EXTENSIONS.test(normalizedPath) && !hasPopOutTab) {
-        return '/drawio/edit?path=' + encodeURIComponent(normalizedPath);
     }
     return null;
 }

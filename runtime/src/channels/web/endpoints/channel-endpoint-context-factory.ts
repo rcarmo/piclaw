@@ -106,7 +106,7 @@ export function createWebChannelEndpointContexts(
           getAgentStatus: (chatJid) => channel.getAgentStatus(chatJid),
           recoverStaleInflightRun: (chatJid, recoveryOptions) => channel.recoverStaleInflightRun(chatJid, recoveryOptions),
           getBuffer: (turnId, panel) => channel.getBuffer(turnId, panel),
-          getContextUsageForChat: (chatJid) => channel.agentPool.getContextUsageForChat(chatJid),
+          getContextUsageForChat: (chatJid) => channel.agentPool.getContextUsageForChat(chatJid) ?? channel.getContextUsage(chatJid),
           getAvailableModels: (chatJid) => channel.agentPool.getAvailableModels(chatJid),
           getProviderReadyCompletedForInstance: () => isProviderReadyOobeCompletedForInstance(),
         });

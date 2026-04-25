@@ -1,0 +1,39 @@
+name: Integration gate
+
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: Full integration validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: bunx playwright install chromium --only-shell
+
+      - name: Install Playwright system dependencies
+        run: sudo env PATH="$PATH" bunx playwright install-deps chromium-headless-shell
+
+      - name: Run full integration suite
+        run: make ci-integration
+        env:
+          PICLAW_DB_IN_MEMORY: "1"
+          # Playwright/Docker stages auto-detect availability;
+          # skip Docker-based tests in CI for now (no Docker-in-Docker).
+          PICLAW_INTEGRATION_SKIP_DOCKER: "1"

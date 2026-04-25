@@ -2,8 +2,12 @@ import { afterEach, expect, test } from 'bun:test';
 import {
   METERS_COLLAPSED_EVENT_NAME,
   METERS_COLLAPSED_STORAGE_KEY,
+  METERS_EVENT_NAME,
+  METERS_STORAGE_KEY,
   applyMetersCollapsed,
+  applyMetersEnabled,
   readStoredMetersCollapsed,
+  readStoredMetersEnabled,
   toggleMetersCollapsed,
 } from '../../web/src/ui/meters.ts';
 import { buildCompactMetersSummary, buildSparklinePath, formatBytesCompact, resolveCurrentRssBytes, shouldShowRss } from '../../web/src/components/system-meters-hud.ts';
@@ -30,6 +34,20 @@ function makeWindow(initial = {}) {
 
 afterEach(() => {
   globalThis.window = originalWindow;
+});
+
+test('applyMetersEnabled persists state and dispatches a meters-change event', () => {
+  const win = makeWindow();
+  globalThis.window = win;
+
+  const next = applyMetersEnabled(true);
+
+  expect(next).toBe(true);
+  expect(win.localStorage.getItem(METERS_STORAGE_KEY)).toBe('true');
+  expect(readStoredMetersEnabled(false)).toBe(true);
+  expect(win.__events).toEqual([
+    { type: METERS_EVENT_NAME, detail: { enabled: true } },
+  ]);
 });
 
 test('applyMetersCollapsed persists state and dispatches a collapsed-change event', () => {

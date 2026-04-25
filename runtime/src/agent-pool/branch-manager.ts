@@ -14,6 +14,7 @@ import {
   getChatBranchByAgentName,
   getChatBranchByChatJid,
   listChatBranches,
+  permanentDeleteArchivedBranch,
   renameChatBranchIdentity,
   renameChatJid as renameChatJidDb,
   restoreChatBranchIdentity,
@@ -22,7 +23,7 @@ import {
 } from "../db.js";
 import { SESSIONS_DIR } from "../core/config.js";
 import { sanitiseJid } from "./session.js";
-import { existsSync, renameSync } from "fs";
+import { existsSync, readdirSync, renameSync, rmSync } from "fs";
 import { join } from "path";
 import { createUuid } from "../utils/ids.js";
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
@@ -36,6 +37,8 @@ export interface ActiveChatAgent {
   root_chat_jid: string;
   parent_branch_id: string | null;
   agent_name: string;
+  created_at?: string | null;
+  updated_at?: string | null;
   archived_at?: string | null;
   session_id: string | null;
   session_name: string | null;
@@ -109,6 +112,29 @@ function isSessionActive(session: AgentSession): boolean {
  * Coordinates chat-branch registration, branch lookup, and fork/prune behavior.
  */
 const log = createLogger("agent-pool.branch-manager");
+
+export function listSessionArtifactPaths(chatJid: string): string[] {
+  const sanitizedChatJid = sanitiseJid(chatJid);
+  const directPaths = [join(SESSIONS_DIR, sanitizedChatJid)];
+  if (!existsSync(SESSIONS_DIR)) return directPaths;
+
+  const variantPrefix = `${sanitizedChatJid}__`;
+  const variantPaths = readdirSync(SESSIONS_DIR)
+    .filter((entry) => entry.startsWith(variantPrefix))
+    .map((entry) => join(SESSIONS_DIR, entry));
+
+  return [...new Set([...directPaths, ...variantPaths])];
+}
+
+export function removeSessionArtifacts(chatJid: string): string[] {
+  const removed: string[] = [];
+  for (const path of listSessionArtifactPaths(chatJid)) {
+    if (!existsSync(path)) continue;
+    rmSync(path, { recursive: true, force: true });
+    removed.push(path);
+  }
+  return removed;
+}
 
 export class AgentBranchManager {
   constructor(private readonly options: AgentBranchManagerOptions) {}
@@ -262,11 +288,12 @@ export class AgentBranchManager {
   async pruneChatBranch(chatJid: string): Promise<ChatBranchRecord> {
     const session = this.options.pool.get(chatJid)?.runtime.session ?? null;
     const existing = this.ensureBranchRegistration(chatJid, session);
-    if (existing.chat_jid === existing.root_chat_jid) {
-      throw new Error("Cannot prune the root chat branch.");
+    const isRootChat = existing.chat_jid === existing.root_chat_jid;
+    if (isRootChat && existing.chat_jid === "web:default") {
+      throw new Error("Cannot archive the default chat session.");
     }
     if (this.options.isActive(chatJid)) {
-      throw new Error("Cannot prune a branch while it is active.");
+      throw new Error(isRootChat ? "Cannot archive a session while it is active." : "Cannot prune a branch while it is active.");
     }
 
     const archived = archiveChatBranch(chatJid);
@@ -306,6 +333,68 @@ export class AgentBranchManager {
     // and a subsequent restoreChatBranch() must be able to pick it back up.
 
     return archived;
+  }
+
+  async permanentPurgeChatBranch(
+    chatJid: string,
+  ): Promise<{ branch: ChatBranchRecord; removedSessionArtifacts: string[] }> {
+    const normalizedChatJid = String(chatJid || "").trim();
+    if (!normalizedChatJid) throw new Error("chat_jid is required");
+    if (this.options.isActive(normalizedChatJid)) {
+      throw new Error("Cannot permanently delete a branch while it is active.");
+    }
+
+    const branch = getChatBranchByChatJid(normalizedChatJid);
+    if (!branch) {
+      throw new Error(`Unknown chat branch: ${normalizedChatJid}`);
+    }
+
+    const mainEntry = this.options.pool.get(normalizedChatJid);
+    if (mainEntry) {
+      try {
+        await mainEntry.runtime.dispose();
+      } catch (err) {
+        this.options.onWarn?.("Failed to dispose purged session", {
+          operation: "purge_chat_branch.dispose_main",
+          chatJid: normalizedChatJid,
+          err,
+        });
+      }
+      this.options.pool.delete(normalizedChatJid);
+    }
+    const sideEntry = this.options.sidePool.get(normalizedChatJid);
+    if (sideEntry) {
+      try {
+        await sideEntry.runtime.dispose();
+      } catch (err) {
+        this.options.onWarn?.("Failed to dispose purged side session", {
+          operation: "purge_chat_branch.dispose_side",
+          chatJid: normalizedChatJid,
+          err,
+        });
+      }
+      this.options.sidePool.delete(normalizedChatJid);
+    }
+
+    this.options.activeForkBaseLeafByChat.delete(normalizedChatJid);
+    this.options.cancelSessionWarmup?.(normalizedChatJid);
+    const result = permanentDeleteArchivedBranch(normalizedChatJid);
+
+    let removedSessionArtifacts: string[] = [];
+    try {
+      removedSessionArtifacts = removeSessionArtifacts(normalizedChatJid);
+    } catch (err) {
+      this.options.onWarn?.("Failed to remove purged session artifacts", {
+        operation: "purge_chat_branch.remove_session_artifacts",
+        chatJid: normalizedChatJid,
+        err,
+      });
+    }
+
+    return {
+      branch: result.branch,
+      removedSessionArtifacts,
+    };
   }
 
   async restoreChatBranch(
@@ -383,6 +472,8 @@ export class AgentBranchManager {
           root_chat_jid: branch.root_chat_jid,
           parent_branch_id: branch.parent_branch_id,
           agent_name: branch.agent_name,
+          created_at: branch.created_at ?? null,
+          updated_at: branch.updated_at ?? null,
           archived_at: branch.archived_at ?? null,
           session_id: session.sessionId,
           session_name: session.sessionName?.trim() || null,
@@ -412,6 +503,8 @@ export class AgentBranchManager {
             root_chat_jid: branch.root_chat_jid,
             parent_branch_id: branch.parent_branch_id,
             agent_name: branch.agent_name,
+            created_at: branch.created_at ?? null,
+            updated_at: branch.updated_at ?? null,
             archived_at: branch.archived_at ?? null,
             session_id: active?.session_id ?? null,
             session_name: active?.session_name ?? null,

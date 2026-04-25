@@ -184,10 +184,10 @@ When the keychain extension is active, the agent also gets prompt hints for:
 
 - sanitized auto-injected env-style secret names
 - likely SSH profiles from `ssh/*`
-- likely Proxmox profiles from `proxmox/*`
-- likely Portainer profiles from `portainer/*`
+- likely Proxmox profiles from `proxmox/*` (used by the proxmox addon in [piclaw-addons](https://github.com/rcarmo/piclaw-addons))
+- likely Portainer profiles from `portainer/*` (used by the portainer addon in [piclaw-addons](https://github.com/rcarmo/piclaw-addons))
 
-This is intended to steer the agent toward the `ssh`, `proxmox`, and `portainer` tools instead of fetching raw credential material.
+This is intended to steer the agent toward the `ssh` tool and addon-provided `proxmox`/`portainer` tools instead of fetching raw credential material.
 
 ## Notes
 

@@ -31,7 +31,10 @@ describe("bundled pi-mcp-adapter integration", () => {
       expect(tool.definition.description).toContain("MCP");
 
       expect(typeof session.extensionRunner?.getCommand).toBe("function");
-      expect(session.extensionRunner.getCommand("mcp")).toBeTruthy();
+      const mcpCommand = session.extensionRunner.getCommand("mcp");
+      expect(mcpCommand).toBeTruthy();
+      expect(typeof mcpCommand?.description).toBe("string");
+      expect(mcpCommand.description).toContain("MCP");
       expect(session.extensionRunner.getCommand("mcp-auth")).toBeTruthy();
 
       session.dispose?.();

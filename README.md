@@ -12,7 +12,7 @@ It is for people who want one stateful agent workspace they can run locally or i
 
 - **One workspace, one app** — chat, editor, terminal, viewers, boards, uploads, and automation in the same web UI
 - **Persistent state** — SQLite-backed messages, media, tasks, token usage, encrypted keychain, and session-scoped SSH / Proxmox / Portainer profiles
-- **Practical built-ins** — code editing, Office/PDF/CSV/image/video viewing, draw.io, VNC, browser automation, image processing, MCP, and infra tools
+- **Practical built-ins** — code editing, Office/PDF/CSV/image/video viewing, draw.io, VNC, browser automation, image processing, MCP, infra tools, and optional cross-instance IPC for paired remote peers
 - **Agent-first workflows** — steering, queued follow-ups, side prompts, autoresearch loops, scheduled tasks, and visual artifact generation
 - **Context conservation** — small always-active tool baseline with staged discovery via `list_tools` / `list_scripts`
 - **Optional auth/channels** — passkeys/TOTP for the web UI, plus optional WhatsApp integration
@@ -123,6 +123,16 @@ See [docs/development.md](docs/development.md).
 | Agent capabilities | [Tools and skills](docs/tools-and-skills.md), [Visual artifact generator](docs/visual-artifact-generator.md), [MCP via pi-mcp-adapter](docs/mcp.md), [Keychain](docs/keychain.md) |
 | Other references | [Dream memory system](docs/dream-memory.md), [Web notification delivery policy](docs/web-notification-delivery-policy.md), [iOS PWA reference](docs/PWA.md), [WhatsApp](docs/whatsapp.md), [Cross-instance interop](docs/cross-instance-ipc.md), [Experimental M365 extension](docs/m365-experimental-extension.md), [Development](docs/development.md) |
 | Platform study | [Azure Functions feasibility study](docs/azure/azure-functions-feasibility-study-2026-04-17.md) |
+
+## Contributing
+
+Work items and bug reports are tracked in **[GitHub Issues](https://github.com/rcarmo/piclaw/issues)**.
+
+- [Open a work item or bug report](https://github.com/rcarmo/piclaw/issues/new?template=workitem.md)
+- [Ask a question](https://github.com/rcarmo/piclaw/issues/new?template=question.md)
+- [View the project board](https://github.com/users/rcarmo/projects/13)
+
+See [WORKITEMS.md](WORKITEMS.md) for board lane definitions and label taxonomy.
 
 ## Credits
 

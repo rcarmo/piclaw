@@ -299,7 +299,6 @@ describe("internal-tools extension", () => {
         { name: "list_models", description: "List available models." },
         { name: "schedule_task", description: "Schedule a task." },
         { name: "read_attachment", description: "Read attachment." },
-        { name: "proxmox", description: "Proxmox API." },
       ],
       activeTools: ["bash", "read", "list_models", "schedule_task", "read_attachment"],
     });
@@ -339,12 +338,6 @@ describe("internal-tools extension", () => {
     expect(readAttachmentTool.kind).toBe("read-only");
     expect(readAttachmentTool.weight).toBe("lightweight");
     expect(readAttachmentTool.activation).toBe("default");
-
-    // proxmox: mixed, standard, on-demand
-    const proxmoxTool = tools.find((t: any) => t.name === "proxmox");
-    expect(proxmoxTool.kind).toBe("mixed");
-    expect(proxmoxTool.weight).toBe("standard");
-    expect(proxmoxTool.activation).toBe("on-demand");
   });
 
   test("list_tools hides the deprecated alias from normal discovery output", async () => {

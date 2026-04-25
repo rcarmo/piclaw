@@ -17,6 +17,8 @@ import {
     computeContainedRemoteDisplayScale,
     encodeVncKeyEvent,
     encodeVncPointerEvent,
+    hasVncTouchTapSlopBeenExceeded,
+    isVncDeferredTouchPointerType,
     mapClientToFramebufferPoint,
     normalizeVncPassword,
     resolveVncKeysymFromKeyboardEvent,
@@ -24,6 +26,8 @@ import {
     shouldArmVncImplicitReleaseTimer,
     shouldReleaseVncPointerContact,
     shouldReleaseVncTouchContact,
+    shouldSkipDuplicateVncKeydown,
+    shouldTriggerVncTouchTap,
     vncButtonMaskForPointerButton,
 } from './vnc-input.js';
 import { VncRemoteDisplayProtocol } from './remote-display-vnc.js';
@@ -193,10 +197,15 @@ function buildVncWebSocketUrl(targetId, handoffToken = null) {
     return url.toString();
 }
 
-function buildDirectVncTargetReference(host, port) {
+export function normalizeDirectVncHost(host) {
     const rawHost = String(host || '').trim();
+    return rawHost || 'localhost';
+}
+
+export function buildDirectVncTargetReference(host, port) {
+    const rawHost = normalizeDirectVncHost(host);
     const normalizedPort = Math.floor(Number(port || 0));
-    if (!rawHost || !Number.isFinite(normalizedPort) || normalizedPort <= 0 || normalizedPort > 65535) return null;
+    if (!Number.isFinite(normalizedPort) || normalizedPort <= 0 || normalizedPort > 65535) return null;
     const normalizedHost = rawHost.includes(':') && !rawHost.startsWith('[') ? `[${rawHost}]` : rawHost;
     return `${normalizedHost}:${normalizedPort}`;
 }
@@ -487,7 +496,7 @@ class VncPaneInstance implements PaneInstance {
                         <div style="display:grid;gap:10px;align-items:end;">
                             <label style="display:grid;gap:6px;min-width:0;">
                                 <span style="font-size:12px;color:var(--text-secondary);">Server</span>
-                                <input type="text" data-vnc-direct-host placeholder="server" spellcheck="false" style="width:100%;padding:10px 12px;border:1px solid var(--border-color);border-radius:8px;background:transparent;color:inherit;" />
+                                <input type="text" data-vnc-direct-host value="localhost" placeholder="localhost" spellcheck="false" style="width:100%;padding:10px 12px;border:1px solid var(--border-color);border-radius:8px;background:transparent;color:inherit;" />
                             </label>
                             <label style="display:grid;gap:6px;min-width:0;">
                                 <span style="font-size:12px;color:var(--text-secondary);">Port</span>
@@ -749,6 +758,18 @@ class VncPaneInstance implements PaneInstance {
         const pressedMaskByPointer = new Map<number, number>();
         const lastPointByPointer = new Map<number, { x: number; y: number }>();
         const idleReleaseTimerByPointer = new Map<number, ReturnType<typeof setTimeout>>();
+        const pendingTouchByPointer = new Map<number, {
+            startClientX: number;
+            startClientY: number;
+            lastClientX: number;
+            lastClientY: number;
+            startedAt: number;
+            lastPoint: { x: number; y: number };
+            holdTimer: ReturnType<typeof setTimeout> | null;
+            dragActivated: boolean;
+        }>();
+        const activeTouchPointerIds = new Set<number>();
+        let suppressTouchUntilAllReleased = false;
 
         const resolvePoint = (event) => this.getFramebufferPointFromEvent(event)
             || lastPointByPointer.get(event?.pointerId)
@@ -766,6 +787,26 @@ class VncPaneInstance implements PaneInstance {
             if (handle) {
                 ownerWindow.clearTimeout(handle);
                 idleReleaseTimerByPointer.delete(pointerId);
+            }
+        };
+
+        const clearPendingTouch = (pointerId) => {
+            const pendingTouch = pendingTouchByPointer.get(pointerId);
+            if (pendingTouch?.holdTimer) {
+                ownerWindow.clearTimeout(pendingTouch.holdTimer);
+            }
+            pendingTouchByPointer.delete(pointerId);
+        };
+
+        const clearAllPendingTouches = () => {
+            for (const pointerId of pendingTouchByPointer.keys()) {
+                clearPendingTouch(pointerId);
+            }
+        };
+
+        const maybeClearTouchSuppression = () => {
+            if (!activeTouchPointerIds.size) {
+                suppressTouchUntilAllReleased = false;
             }
         };
 
@@ -793,10 +834,13 @@ class VncPaneInstance implements PaneInstance {
         };
 
         const releaseAllPointers = (point = null) => {
-            if (!pressedMaskByPointer.size && !this.pointerButtonMask) return;
+            if (!pressedMaskByPointer.size && !this.pointerButtonMask && !pendingTouchByPointer.size) return;
             for (const pointerId of idleReleaseTimerByPointer.keys()) {
                 clearIdleReleaseTimer(pointerId);
             }
+            clearAllPendingTouches();
+            activeTouchPointerIds.clear();
+            suppressTouchUntilAllReleased = false;
             const fallbackPoint = point
                 || lastPointByPointer.values().next().value
                 || { x: 0, y: 0 };
@@ -817,6 +861,9 @@ class VncPaneInstance implements PaneInstance {
             const point = resolvePoint(event);
             const pointerId = Number(event?.pointerId);
             clearIdleReleaseTimer(pointerId);
+            clearPendingTouch(pointerId);
+            activeTouchPointerIds.delete(pointerId);
+            maybeClearTouchSuppression();
             const hadPressedMask = pressedMaskByPointer.has(pointerId);
             const pressedBit = pressedMaskByPointer.get(pointerId) ?? resolveVncPointerPressMask(event);
             if (!hadPressedMask && !pressedBit && !this.pointerButtonMask) return;
@@ -831,13 +878,113 @@ class VncPaneInstance implements PaneInstance {
             try { this.canvas?.releasePointerCapture?.(pointerId); } catch { /* expected: capture may already be gone on release/cancel. */ }
         };
 
+        const beginDeferredTouchDrag = (pointerId) => {
+            if (suppressTouchUntilAllReleased) return;
+            const pendingTouch = pendingTouchByPointer.get(pointerId);
+            if (!pendingTouch || pendingTouch.dragActivated) return;
+            pendingTouch.dragActivated = true;
+            pendingTouch.holdTimer = null;
+            const bit = vncButtonMaskForPointerButton(0);
+            if (!bit) return;
+            pressedMaskByPointer.set(pointerId, (pressedMaskByPointer.get(pointerId) ?? 0) | bit);
+            this.pointerButtonMask |= bit;
+            armIdleReleaseTimer({
+                pointerId,
+                pointerType: 'touch',
+                clientX: pendingTouch.lastClientX,
+                clientY: pendingTouch.lastClientY,
+            });
+            this.sendPointerEvent(this.pointerButtonMask, pendingTouch.lastPoint.x, pendingTouch.lastPoint.y);
+        };
+
+        const finalizeDeferredTouch = (pointerId, point, options = {}) => {
+            const pendingTouch = pendingTouchByPointer.get(pointerId);
+            if (!pendingTouch) return false;
+            const fallbackPoint = point || pendingTouch.lastPoint || { x: 0, y: 0 };
+            const fallbackClientX = Number.isFinite(options.clientX) ? Number(options.clientX) : pendingTouch.lastClientX;
+            const fallbackClientY = Number.isFinite(options.clientY) ? Number(options.clientY) : pendingTouch.lastClientY;
+            activeTouchPointerIds.delete(pointerId);
+
+            if (options.cancelled || suppressTouchUntilAllReleased) {
+                clearPendingTouch(pointerId);
+                maybeClearTouchSuppression();
+                if (pressedMaskByPointer.has(pointerId) || this.pointerButtonMask) {
+                    releaseAllPointers(fallbackPoint);
+                }
+                return true;
+            }
+
+            if (pendingTouch.dragActivated || pressedMaskByPointer.has(pointerId)) {
+                releasePointer({
+                    pointerId,
+                    pointerType: 'touch',
+                    type: 'pointerup',
+                    clientX: fallbackClientX,
+                    clientY: fallbackClientY,
+                });
+                maybeClearTouchSuppression();
+                return true;
+            }
+
+            const elapsedMs = Date.now() - pendingTouch.startedAt;
+            const shouldTap = shouldTriggerVncTouchTap({
+                startX: pendingTouch.startClientX,
+                startY: pendingTouch.startClientY,
+                clientX: fallbackClientX,
+                clientY: fallbackClientY,
+                elapsedMs,
+            });
+            clearIdleReleaseTimer(pointerId);
+            clearPendingTouch(pointerId);
+            lastPointByPointer.delete(pointerId);
+            maybeClearTouchSuppression();
+            if (shouldTap) {
+                const bit = vncButtonMaskForPointerButton(0);
+                this.sendPointerEvent(bit, fallbackPoint.x, fallbackPoint.y);
+                this.sendPointerEvent(0, fallbackPoint.x, fallbackPoint.y);
+            } else {
+                this.sendPointerEvent(this.pointerButtonMask, fallbackPoint.x, fallbackPoint.y);
+            }
+            return true;
+        };
+
         this.canvas.addEventListener('contextmenu', (event) => {
             event.preventDefault();
         }, { signal });
         this.canvas.addEventListener('pointermove', (event) => {
             const point = this.getFramebufferPointFromEvent(event);
             if (!point) return;
+            const pointerType = String(event?.pointerType || '').toLowerCase();
+            const isDeferredTouch = isVncDeferredTouchPointerType(pointerType);
             lastPointByPointer.set(event.pointerId, point);
+
+            if (isDeferredTouch) {
+                const pendingTouch = pendingTouchByPointer.get(event.pointerId);
+                if (pendingTouch) {
+                    pendingTouch.lastClientX = Number(event?.clientX || 0);
+                    pendingTouch.lastClientY = Number(event?.clientY || 0);
+                    pendingTouch.lastPoint = point;
+                    if (!pendingTouch.dragActivated && hasVncTouchTapSlopBeenExceeded({
+                        startX: pendingTouch.startClientX,
+                        startY: pendingTouch.startClientY,
+                        clientX: pendingTouch.lastClientX,
+                        clientY: pendingTouch.lastClientY,
+                    })) {
+                        clearPendingTouch(event.pointerId);
+                        pendingTouchByPointer.set(event.pointerId, {
+                            ...pendingTouch,
+                            holdTimer: null,
+                            dragActivated: false,
+                        });
+                    }
+                    if (!pendingTouch.dragActivated) {
+                        this.sendPointerEvent(this.pointerButtonMask, point.x, point.y);
+                        return;
+                    }
+                }
+                if (suppressTouchUntilAllReleased) return;
+            }
+
             if (pressedMaskByPointer.has(event.pointerId) && shouldReleaseVncPointerContact(event)) {
                 // Safari on iPad can drop pointerup for touch/pen. Treat zero-buttons,
                 // zero-pressure, and similar terminal pointer states as an implicit release.
@@ -860,12 +1007,46 @@ class VncPaneInstance implements PaneInstance {
         this.canvas.addEventListener('pointerdown', (event) => {
             const point = this.getFramebufferPointFromEvent(event);
             if (!point) return;
+            const pointerType = String(event?.pointerType || '').toLowerCase();
+            const isDeferredTouch = isVncDeferredTouchPointerType(pointerType);
             event.preventDefault();
             this.canvas?.focus?.();
             lastPointByPointer.set(event.pointerId, point);
+
+            if (isDeferredTouch) {
+                activeTouchPointerIds.add(event.pointerId);
+                if (activeTouchPointerIds.size > 1) {
+                    const touchIds = [...activeTouchPointerIds];
+                    suppressTouchUntilAllReleased = true;
+                    releaseAllPointers(point);
+                    for (const touchPointerId of touchIds) {
+                        activeTouchPointerIds.add(touchPointerId);
+                    }
+                    suppressTouchUntilAllReleased = true;
+                    return;
+                }
+                clearPendingTouch(event.pointerId);
+                const pendingTouch = {
+                    startClientX: Number(event?.clientX || 0),
+                    startClientY: Number(event?.clientY || 0),
+                    lastClientX: Number(event?.clientX || 0),
+                    lastClientY: Number(event?.clientY || 0),
+                    startedAt: Date.now(),
+                    lastPoint: point,
+                    holdTimer: null,
+                    dragActivated: false,
+                };
+                pendingTouch.holdTimer = ownerWindow.setTimeout(() => {
+                    beginDeferredTouchDrag(event.pointerId);
+                }, 260);
+                pendingTouchByPointer.set(event.pointerId, pendingTouch);
+                this.sendPointerEvent(this.pointerButtonMask, point.x, point.y);
+                return;
+            }
+
             // Only capture for mouse; touch/pen capture on iPad Safari can
             // suppress pointerup entirely (WebKit bug), leaving clicks stuck.
-            if (String(event?.pointerType || '').toLowerCase() === 'mouse') {
+            if (pointerType === 'mouse') {
                 try { this.canvas?.setPointerCapture?.(event.pointerId); } catch { /* expected: pointer capture can fail when Safari drops the stream mid-gesture. */ }
             }
             const bit = resolveVncPointerPressMask(event);
@@ -877,18 +1058,34 @@ class VncPaneInstance implements PaneInstance {
         }, { signal, passive: false });
         this.canvas.addEventListener('pointerup', (event) => {
             event.preventDefault();
+            if (isVncDeferredTouchPointerType(event?.pointerType)) {
+                const point = resolvePoint(event);
+                if (finalizeDeferredTouch(event.pointerId, point, { clientX: event?.clientX, clientY: event?.clientY })) return;
+            }
             releasePointer(event);
         }, { signal, passive: false });
         this.canvas.addEventListener('pointercancel', (event) => {
             event.preventDefault();
+            if (isVncDeferredTouchPointerType(event?.pointerType)) {
+                const point = resolvePoint(event);
+                if (finalizeDeferredTouch(event.pointerId, point, { clientX: event?.clientX, clientY: event?.clientY, cancelled: true })) return;
+            }
             releasePointer(event, { resetAll: true });
         }, { signal, passive: false });
         this.canvas.addEventListener('pointerleave', (event) => {
+            if (pendingTouchByPointer.has(event.pointerId) && isVncDeferredTouchPointerType(event?.pointerType)) {
+                finalizeDeferredTouch(event.pointerId, resolvePoint(event), { clientX: event?.clientX, clientY: event?.clientY, cancelled: true });
+                return;
+            }
             if (!pressedMaskByPointer.has(event.pointerId)) return;
             if (!shouldReleaseVncPointerContact(event)) return;
             releasePointer(event, { resetAll: true });
         }, { signal });
         this.canvas.addEventListener('pointerout', (event) => {
+            if (pendingTouchByPointer.has(event.pointerId) && isVncDeferredTouchPointerType(event?.pointerType)) {
+                finalizeDeferredTouch(event.pointerId, resolvePoint(event), { clientX: event?.clientX, clientY: event?.clientY, cancelled: true });
+                return;
+            }
             if (!pressedMaskByPointer.has(event.pointerId)) return;
             if (!shouldReleaseVncPointerContact(event)) return;
             releasePointer(event, { resetAll: true });
@@ -902,28 +1099,56 @@ class VncPaneInstance implements PaneInstance {
             releasePointer(event, { resetAll: true });
         }, { signal });
         ownerWindow.addEventListener('pointerup', (event) => {
-            if (!pressedMaskByPointer.has(event.pointerId) && !this.pointerButtonMask) return;
+            if (!pressedMaskByPointer.has(event.pointerId) && !this.pointerButtonMask && !pendingTouchByPointer.has(event.pointerId)) return;
             event.preventDefault?.();
+            if (isVncDeferredTouchPointerType(event?.pointerType)) {
+                const point = resolvePoint(event);
+                if (finalizeDeferredTouch(event.pointerId, point, { clientX: event?.clientX, clientY: event?.clientY })) return;
+            }
             releasePointer(event, { resetAll: !pressedMaskByPointer.has(event.pointerId) });
         }, { signal, passive: false });
         ownerWindow.addEventListener('pointercancel', (event) => {
-            if (!pressedMaskByPointer.has(event.pointerId) && !this.pointerButtonMask) return;
+            if (!pressedMaskByPointer.has(event.pointerId) && !this.pointerButtonMask && !pendingTouchByPointer.has(event.pointerId)) return;
             event.preventDefault?.();
+            if (isVncDeferredTouchPointerType(event?.pointerType)) {
+                const point = resolvePoint(event);
+                if (finalizeDeferredTouch(event.pointerId, point, { clientX: event?.clientX, clientY: event?.clientY, cancelled: true })) return;
+            }
             releasePointer(event, { resetAll: true });
         }, { signal, passive: false });
         const releaseFromTouchEvent = (event) => {
-            if (!pressedMaskByPointer.size && !this.pointerButtonMask) return;
+            if (!pressedMaskByPointer.size && !this.pointerButtonMask && !pendingTouchByPointer.size) return;
             if (!shouldReleaseVncTouchContact(event)) return;
             const changedTouch = event?.changedTouches?.[0] || event?.touches?.[0] || null;
             const point = resolveTouchPoint(changedTouch)
                 || lastPointByPointer.values().next().value
+                || pendingTouchByPointer.values().next().value?.lastPoint
                 || { x: 0, y: 0 };
+            if (!pressedMaskByPointer.size && !this.pointerButtonMask && pendingTouchByPointer.size === 1) {
+                const [pointerId] = pendingTouchByPointer.entries().next().value || [];
+                if (Number.isFinite(pointerId)) {
+                    finalizeDeferredTouch(pointerId, point, {
+                        clientX: changedTouch?.clientX,
+                        clientY: changedTouch?.clientY,
+                        cancelled: event?.type === 'touchcancel',
+                    });
+                    return;
+                }
+            }
             releaseAllPointers(point);
         };
         const releaseFromWindowPointerEvent = (event, options = {}) => {
-            if (!pressedMaskByPointer.size && !this.pointerButtonMask) return;
+            if (!pressedMaskByPointer.size && !this.pointerButtonMask && !pendingTouchByPointer.has(event?.pointerId)) return;
             if (!shouldReleaseVncPointerContact(event)) return;
             event?.preventDefault?.();
+            if (isVncDeferredTouchPointerType(event?.pointerType)) {
+                const point = resolvePoint(event);
+                if (finalizeDeferredTouch(event.pointerId, point, {
+                    clientX: event?.clientX,
+                    clientY: event?.clientY,
+                    cancelled: options.resetAll === true,
+                })) return;
+            }
             releasePointer(event, {
                 resetAll: options.resetAll === true || !pressedMaskByPointer.has(event?.pointerId),
             });
@@ -941,11 +1166,11 @@ class VncPaneInstance implements PaneInstance {
             releaseFromWindowPointerEvent(event, { resetAll: true });
         }, { signal, passive: false, capture: true });
         ownerWindow.addEventListener('mouseup', () => {
-            if (!pressedMaskByPointer.size && !this.pointerButtonMask) return;
+            if (!pressedMaskByPointer.size && !this.pointerButtonMask && !pendingTouchByPointer.size) return;
             releaseAllPointers();
         }, { signal });
         ownerWindow.addEventListener('blur', () => {
-            if (!pressedMaskByPointer.size && !this.pointerButtonMask) return;
+            if (!pressedMaskByPointer.size && !this.pointerButtonMask && !pendingTouchByPointer.size) return;
             releaseAllPointers();
         }, { signal });
         ownerDocument.addEventListener('visibilitychange', () => {
@@ -980,12 +1205,13 @@ class VncPaneInstance implements PaneInstance {
         this.canvas.addEventListener('keydown', (event) => {
             const keysym = resolveVncKeysymFromKeyboardEvent(event);
             if (keysym == null) return;
-            if (event.repeat && this.pressedKeysyms.has(event.code || event.key)) {
+            const keyId = event.code || event.key;
+            const existingKeysym = this.pressedKeysyms.get(keyId);
+            if (shouldSkipDuplicateVncKeydown(existingKeysym, keysym, event.repeat)) {
                 event.preventDefault();
                 return;
             }
             event.preventDefault();
-            const keyId = event.code || event.key;
             this.pressedKeysyms.set(keyId, keysym);
             this.sendKeyEvent(true, keysym);
         });

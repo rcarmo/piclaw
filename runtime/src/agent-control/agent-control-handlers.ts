@@ -56,6 +56,7 @@ import { handleLogin, handleLogout } from "./handlers/login.js";
 import { handleTotp } from "./handlers/totp.js";
 import { handleQr } from "./handlers/qr.js";
 import { handleLabel, handleLabels, handleTree } from "./handlers/tree.js";
+import { handleAsk } from "./handlers/remote.js";
 
 /** Dispatch a parsed control command to the appropriate handler and return the result. */
 export async function applyControlCommand(
@@ -156,6 +157,8 @@ export async function applyControlCommand(
       return handleCommands(session, command);
     case "thinking":
       return handleThinking(session, modelRegistry, command);
+    case "ask":
+      return handleAsk(session, command);
     default:
       return {
         status: "error",

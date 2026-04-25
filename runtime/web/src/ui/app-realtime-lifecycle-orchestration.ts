@@ -79,6 +79,7 @@ interface UseRealtimeLifecycleOrchestrationOptions {
   removeStalledPost: () => void;
   setPosts: (next: any) => void;
   preserveTimelineScrollTop: (mutate: () => void) => void;
+  openEditor?: (path: string, options?: { label?: string }) => void;
 
   // test-api + reset
   finalizeStalledResponse: () => void;
@@ -156,6 +157,7 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
     removeStalledPost,
     setPosts,
     preserveTimelineScrollTop,
+    openEditor,
     finalizeStalledResponse,
 
     connectionStatus,
@@ -224,6 +226,7 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
       removeStalledPost,
       setPosts,
       preserveTimelineScrollTop,
+      openEditor,
     });
   }, [
     activeChatJidRef,
@@ -284,6 +287,7 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
     updateUserProfile,
     viewStateRef,
     wasAgentActiveRef,
+    openEditor,
   ]);
 
   useEffect(() => {

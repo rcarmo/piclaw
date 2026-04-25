@@ -380,6 +380,27 @@ export function parseLogout(args: string, raw: string): AgentControlCommand {
   };
 }
 
+/** Parse /ask arguments: <instance_id|fingerprint> <prompt>. */
+export function parseAsk(args: string, raw: string): AgentControlCommand {
+  const spaceIndex = args.indexOf(" ");
+  if (spaceIndex === -1) {
+    return {
+      type: "ask",
+      instanceId: args.trim() || undefined,
+      raw,
+    };
+  }
+  const instanceId = args.slice(0, spaceIndex).trim();
+  const prompt = args.slice(spaceIndex + 1).trim();
+  return {
+    type: "ask",
+    instanceId: instanceId || undefined,
+    prompt: prompt || undefined,
+    raw,
+  };
+}
+
+
 /** Parse /search-workspace arguments: query, scope, limit, offset, flags. */
 export function parseSearch(args: string, raw: string): AgentControlCommand {
   const tokens = splitArgs(args);
@@ -527,4 +548,5 @@ export const COMMAND_PARSERS: Record<string, CommandParser> = {
   "/user-github": parseUserGithub,
   "/login": parseLogin,
   "/logout": parseLogout,
+  "/ask": parseAsk,
 };

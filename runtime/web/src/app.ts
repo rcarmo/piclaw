@@ -66,7 +66,7 @@ import {
 
 const CURRENT_APP_ASSET_VERSION = getCurrentAppAssetVersion();
 
-initializeAppShellRuntime();
+await initializeAppShellRuntime();
 
 const {
     searchPosts,

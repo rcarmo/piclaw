@@ -5,6 +5,9 @@ import {
   computeContainedRemoteDisplayScale,
   encodeVncKeyEvent,
   encodeVncPointerEvent,
+  getVncContactTravelDistance,
+  hasVncTouchTapSlopBeenExceeded,
+  isVncDeferredTouchPointerType,
   mapClientToFramebufferPoint,
   normalizeVncPassword,
   resolveVncKeysymFromKeyboardEvent,
@@ -12,6 +15,8 @@ import {
   shouldArmVncImplicitReleaseTimer,
   shouldReleaseVncPointerContact,
   shouldReleaseVncTouchContact,
+  shouldSkipDuplicateVncKeydown,
+  shouldTriggerVncTouchTap,
   vncButtonMaskForPointerButton,
 } from "../../web/src/panes/vnc-input.js";
 
@@ -56,6 +61,22 @@ test("shouldReleaseVncTouchContact detects touchend/touchcancel and zero-touch m
   expect(shouldReleaseVncTouchContact({ type: "touchstart", touches: [{}] })).toBe(false);
 });
 
+test("isVncDeferredTouchPointerType only defers finger touch contacts", () => {
+  expect(isVncDeferredTouchPointerType("touch")).toBe(true);
+  expect(isVncDeferredTouchPointerType("pen")).toBe(false);
+  expect(isVncDeferredTouchPointerType("mouse")).toBe(false);
+  expect(isVncDeferredTouchPointerType("")).toBe(false);
+});
+
+test("touch tap helpers distinguish taps from drags", () => {
+  expect(getVncContactTravelDistance(10, 10, 13, 14)).toBeCloseTo(5, 5);
+  expect(hasVncTouchTapSlopBeenExceeded({ startX: 10, startY: 10, clientX: 18, clientY: 18, maxDistancePx: 10 })).toBe(true);
+  expect(hasVncTouchTapSlopBeenExceeded({ startX: 10, startY: 10, clientX: 14, clientY: 13, maxDistancePx: 10 })).toBe(false);
+  expect(shouldTriggerVncTouchTap({ startX: 10, startY: 10, clientX: 14, clientY: 13, elapsedMs: 180 })).toBe(true);
+  expect(shouldTriggerVncTouchTap({ startX: 10, startY: 10, clientX: 40, clientY: 13, elapsedMs: 180 })).toBe(false);
+  expect(shouldTriggerVncTouchTap({ startX: 10, startY: 10, clientX: 14, clientY: 13, elapsedMs: 450 })).toBe(false);
+});
+
 test("shouldArmVncImplicitReleaseTimer covers touch, pen, and unknown non-mouse pointers", () => {
   expect(shouldArmVncImplicitReleaseTimer("touch")).toBe(true);
   expect(shouldArmVncImplicitReleaseTimer("pen")).toBe(true);
@@ -88,6 +109,13 @@ test("encodeVncKeyEvent writes VNC key-event bytes", () => {
     0xff,
     0x0d,
   ]);
+});
+
+test("shouldSkipDuplicateVncKeydown suppresses duplicate non-repeat hardware keydown events", () => {
+  expect(shouldSkipDuplicateVncKeydown(0x61, 0x61, false)).toBe(true);
+  expect(shouldSkipDuplicateVncKeydown(0x61, 0x61, true)).toBe(true);
+  expect(shouldSkipDuplicateVncKeydown(0x61, 0x62, false)).toBe(false);
+  expect(shouldSkipDuplicateVncKeydown(null, 0x61, false)).toBe(false);
 });
 
 test("resolveVncKeysymFromKeyboardEvent maps special keys and printable characters", () => {

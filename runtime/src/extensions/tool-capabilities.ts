@@ -284,15 +284,6 @@ const TOOL_CAPABILITIES: Record<string, ToolCapability> = {
       nouns: ["index", "workspace index", "fts"],
     }),
   },
-  open_drawio_editor: {
-    kind: "mutating",
-    weight: "standard",
-    recommend: rec({
-      domains: ["workspace", "diagrams"],
-      verbs: ["open", "edit"],
-      nouns: ["drawio", "diagram"],
-    }),
-  },
   open_office_viewer: {
     kind: "read-only",
     weight: "standard",
@@ -385,24 +376,6 @@ const TOOL_CAPABILITIES: Record<string, ToolCapability> = {
       domains: ["remote", "ssh"],
       verbs: ["connect", "inspect", "run"],
       nouns: ["ssh", "host", "remote", "server"],
-    }),
-  },
-  proxmox: {
-    kind: "mixed",
-    weight: "standard",
-    recommend: rec({
-      domains: ["infra", "virtualization"],
-      verbs: ["inspect", "manage", "start", "stop"],
-      nouns: ["proxmox", "vm", "lxc", "node", "storage"],
-    }),
-  },
-  portainer: {
-    kind: "mixed",
-    weight: "standard",
-    recommend: rec({
-      domains: ["infra", "containers"],
-      verbs: ["inspect", "manage", "upgrade", "restart"],
-      nouns: ["portainer", "container", "image", "stack", "docker"],
     }),
   },
   mcp: {

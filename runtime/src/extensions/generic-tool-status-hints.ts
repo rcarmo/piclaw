@@ -22,12 +22,9 @@ const TOOLS_WITH_SPECIFIC_PROVIDERS = new Set([
   "bun_run",
   "keychain",
   "ssh",
-  "proxmox",
-  "portainer",
   "cdp_browser",
   "office_read", "office_write",
   "open_office_viewer",
-  "open_drawio_editor",
 ]);
 
 function isWinTool(name: string): boolean {

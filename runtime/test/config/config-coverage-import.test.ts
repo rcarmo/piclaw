@@ -27,6 +27,7 @@ test("plain import covers config module init branches with isolated argv and env
       PICLAW_VNC_TARGETS: undefined,
       PICLAW_REMOTE_INTEROP_ENABLED: "1",
       PICLAW_REMOTE_INTEROP_ALLOW_HTTP: "0",
+      PICLAW_REMOTE_INTEROP_ALLOW_PRIVATE_NETWORK: undefined,
       PICLAW_REMOTE_SHORT_CIRCUIT_ENABLED: "1",
       PICLAW_REMOTE_INSTANCE_NAME: "remote-c",
       PICLAW_REMOTE_INTEROP_DECISION_MODEL: "decision-model-c",
@@ -131,6 +132,7 @@ test("plain import covers config module init branches with isolated argv and env
         expect(cfg.REMOTE_INTEROP_CONFIG).toEqual({
           enabled: true,
           allowHttp: false,
+          allowPrivateNetwork: false,
           shortCircuitEnabled: true,
           instanceName: "remote-c",
           decisionModel: "decision-model-c",

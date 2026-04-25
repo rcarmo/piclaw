@@ -245,13 +245,14 @@ test('finalizeStalledResponse appends local warning post, includes the last tool
     id: 42,
     data: {
       type: 'agent_response',
-      content: expect.stringContaining('Timed out after bash: Working...'),
+      content: 'partial output',
       is_local_stall: true,
       content_blocks: [
         expect.objectContaining({
           type: 'timeout_marker',
           timed_out: true,
           tool_action_summary: 'Timed out after bash: Working...',
+          draft_recovered: true,
         }),
       ],
     },

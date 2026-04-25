@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/rcarmo/piclaw/tree/main/docs
+    about: Read the docs before opening an issue

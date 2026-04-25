@@ -1,7 +1,0 @@
-# Vendored draw.io webapp.
-#
-# These files are intentionally committed so repo installs such as
-# `bun add -g github:rcarmo/piclaw` work without a postinstall download,
-# including on Windows.
-#
-# Keep this file as documentation only; do not add ignore patterns here.

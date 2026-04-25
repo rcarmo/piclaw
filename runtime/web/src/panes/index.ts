@@ -18,7 +18,6 @@ export { pdfViewerPaneExtension } from './pdf-viewer-pane.js';
 export { imageViewerPaneExtension } from './image-viewer-pane.js';
 export { htmlViewerPaneExtension } from './html-viewer-pane.js';
 export { videoViewerPaneExtension } from './video-viewer-pane.js';
-export { drawioPaneExtension } from './drawio-pane.js';
 export { mindmapPaneExtension } from './mindmap-pane.js';
 export { kanbanPaneExtension } from './kanban-pane.js';
 export type { TabState, TabViewState } from './tab-store.js';

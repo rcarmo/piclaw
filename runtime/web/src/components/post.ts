@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { html, useEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
+import { html, useCallback, useEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
 import { getMediaInfo, getMediaUrl, getThumbnailUrl, submitAdaptiveCardAction } from '../api.js';
 import { renderMarkdown, renderMermaidDiagrams, sanitizeUrl } from '../markdown.js';
 import { formatCount, formatFileSize, formatTime, formatTimestamp } from '../utils/format.js';
@@ -82,6 +82,11 @@ export function extractTimeoutMarkerBlocks(contentBlocks) {
     return contentBlocks.filter((block) => block && typeof block === 'object' && block.type === 'timeout_marker' && (block.timed_out ?? true));
 }
 
+export function extractOutcomeMarkerBlocks(contentBlocks) {
+    if (!Array.isArray(contentBlocks)) return [];
+    return contentBlocks.filter((block) => block && typeof block === 'object' && block.type === 'turn_outcome_marker');
+}
+
 const RECOVERY_CLASSIFIER_LABELS = {
     context_recover: 'context limit exceeded',
     rate_limit: 'rate limit hit',
@@ -103,7 +108,52 @@ export function formatRecoveryChipTooltip(marker) {
 
 export function formatTimeoutChipTooltip(marker) {
     const action = typeof marker?.tool_action_summary === 'string' ? marker.tool_action_summary.trim() : '';
-    return action ? `Turn timed out — ${action}` : 'Turn timed out before the model finished responding';
+    const recoveredDraft = marker?.draft_recovered ? ' Showing recovered draft.' : '';
+    return action
+        ? `Turn timed out — ${action}${recoveredDraft}`
+        : `Turn timed out before the model finished responding${recoveredDraft}`;
+}
+
+export function formatOutcomeChipTooltip(marker) {
+    const title = typeof marker?.title === 'string' ? marker.title.trim() : '';
+    const detail = typeof marker?.detail === 'string' ? marker.detail.trim() : '';
+    const action = typeof marker?.tool_action_summary === 'string' ? marker.tool_action_summary.trim() : '';
+    const recoveredDraft = marker?.draft_recovered ? ' Showing recovered draft.' : '';
+    const parts = [title, detail];
+    if (action) parts.push(`Last action: ${action}`);
+    return parts.filter(Boolean).join(' — ') + recoveredDraft;
+}
+
+function OutcomePill({ marker }) {
+    const [expanded, setExpanded] = useState(false);
+    const toggle = useCallback((e) => { e.stopPropagation(); setExpanded(v => !v); }, []);
+
+    const title = typeof marker?.title === 'string' ? marker.title.trim() : '';
+    const detail = typeof marker?.detail === 'string' ? marker.detail.trim() : '';
+    const action = typeof marker?.tool_action_summary === 'string' ? marker.tool_action_summary.trim() : '';
+    const draftRecovered = marker?.draft_recovered;
+    const severity = String(marker?.severity || 'warning');
+    const label = action || title || String(marker?.label || marker?.kind || 'issue');
+
+    const hasDetail = Boolean(detail || (title && action));
+
+    return html`
+        <div class=${`post-outcome-pill post-outcome-pill-${severity}`}>
+            <div class="post-outcome-pill-header" onClick=${hasDetail ? toggle : undefined}>
+                ${hasDetail && html`
+                    <span class=${`post-outcome-pill-toggle${expanded ? ' expanded' : ''}`} aria-hidden="true">▶</span>
+                `}
+                <span class="post-outcome-pill-label">${label}</span>
+                ${draftRecovered && html`<span class="post-outcome-pill-badge">draft recovered</span>`}
+            </div>
+            ${expanded && hasDetail && html`
+                <div class="post-outcome-pill-detail">
+                    ${title && html`<div><strong>${title}</strong></div>`}
+                    ${detail && detail !== title && html`<div>${detail}</div>`}
+                </div>
+            `}
+        </div>
+    `;
 }
 
 function AttachmentPill({ attachment, onPreview }) {
@@ -787,6 +837,8 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
     const recoveryMarker = recoveryMarkerBlocks[0] || null;
     const timeoutMarkerBlocks = extractTimeoutMarkerBlocks(blocks);
     const timeoutMarker = timeoutMarkerBlocks[0] || null;
+    const outcomeMarkerBlocks = extractOutcomeMarkerBlocks(blocks);
+    const outcomeMarker = outcomeMarkerBlocks[0] || null;
     const singleCardFallback = directCardBlocks.length === 1 && typeof directCardBlocks[0]?.fallback_text === 'string'
         ? directCardBlocks[0].fallback_text.trim()
         : '';
@@ -1037,6 +1089,11 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
                 <div class="post-meta">
                     <span class="post-author">${displayName}</span>
                     ${showSearchChatAgentTag && html`<span class="post-chat-agent-tag" title=${`Chat: ${searchChatAgentName}`}>@${searchChatAgentName}</span>`}
+                    <a class="post-time" href=${`#msg-${post.id}`} onClick=${(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (onMessageRef) onMessageRef(post.id);
+                    }}>${formatTime(post.timestamp)}</a>
                     ${recoveryMarker && html`
                         <span
                             class="post-recovery-chip"
@@ -1053,12 +1110,18 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
                             timeout
                         </span>
                     `}
-                    <a class="post-time" href=${`#msg-${post.id}`} onClick=${(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (onMessageRef) onMessageRef(post.id);
-                    }}>${formatTime(post.timestamp)}</a>
+                    ${outcomeMarker && html`
+                        <span
+                            class=${`post-recovery-chip post-outcome-chip post-outcome-chip-${String(outcomeMarker.severity || 'warning')}${outcomeMarker.kind === 'tool_budget' ? ' post-outcome-chip-tool-budget' : ''}`}
+                            title=${String(outcomeMarker.label || outcomeMarker.kind || 'issue')}
+                        >
+                            ${String(outcomeMarker.label || outcomeMarker.kind || 'issue')}
+                        </span>
+                    `}
                 </div>
+                ${outcomeMarker && html`
+                    <${OutcomePill} marker=${outcomeMarker} />
+                `}
                 ${isHardTruncated && truncatedInfo && html`
                     <div class="post-content truncated">
                         <div class="truncated-title">Message too large to display.</div>

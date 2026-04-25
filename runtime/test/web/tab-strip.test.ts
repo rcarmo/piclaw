@@ -1,13 +1,26 @@
-import { expect, test } from 'bun:test';
+import { afterEach, expect, test } from 'bun:test';
 
 import { getStandaloneTabUrl } from '../../web/src/components/tab-strip.js';
+import {
+  registerAddonStandaloneTabUrlResolver,
+  resetAddonWebRegistriesForTests,
+} from '../../web/src/ui/addon-web-extensions.ts';
 
-test('getStandaloneTabUrl keeps drawio tabs on the pane-popout path when window detaching is available', () => {
-  expect(getStandaloneTabUrl('/workspace/foo.drawio', { hasPopOutTab: true })).toBeNull();
-  expect(getStandaloneTabUrl('/workspace/foo.drawio', { hasPopOutTab: false })).toBe('/drawio/edit?path=%2Fworkspace%2Ffoo.drawio');
+afterEach(() => {
+  resetAddonWebRegistriesForTests();
 });
 
-test('getStandaloneTabUrl still resolves standalone viewer routes for non-drawio files', () => {
+test('getStandaloneTabUrl honors addon-provided standalone routes', () => {
+  registerAddonStandaloneTabUrlResolver((path, { hasPopOutTab } = {}) => {
+    if (!/\.example$/i.test(String(path || '')) || hasPopOutTab) return null;
+    return '/example-addon/view?path=' + encodeURIComponent(path);
+  });
+
+  expect(getStandaloneTabUrl('/workspace/foo.example', { hasPopOutTab: true })).toBeNull();
+  expect(getStandaloneTabUrl('/workspace/foo.example', { hasPopOutTab: false })).toBe('/example-addon/view?path=%2Fworkspace%2Ffoo.example');
+});
+
+test('getStandaloneTabUrl still resolves standalone viewer routes for non-addon files', () => {
   expect(getStandaloneTabUrl('/workspace/report.docx', { hasPopOutTab: true })).toBe(
     '/office-viewer/?url=' + encodeURIComponent('/workspace/raw?path=%2Fworkspace%2Freport.docx') + '&name=report.docx',
   );

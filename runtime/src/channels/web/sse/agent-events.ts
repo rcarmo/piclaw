@@ -491,7 +491,7 @@ export function createStreamingEventHandler(options: StreamingEventHandlerOption
       const title = reason === "overflow"
         ? "Compacting context"
         : reason === "threshold"
-          ? "Auto-compacting after response"
+          ? "Smart compaction"
           : "Compacting context";
       const detail = reason === "overflow"
         ? "Recovering from context pressure so the turn can continue."

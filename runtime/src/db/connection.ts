@@ -295,6 +295,19 @@ function createSchema(database: Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_portainer_configs_updated_at ON portainer_configs(updated_at);
 
+    CREATE TABLE IF NOT EXISTS extension_kv (
+      extension_id TEXT NOT NULL,
+      scope        TEXT NOT NULL DEFAULT 'chat',
+      scope_key    TEXT NOT NULL DEFAULT '',
+      key          TEXT NOT NULL,
+      value        TEXT NOT NULL,
+      created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (extension_id, scope, scope_key, key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_extension_kv_ext_scope ON extension_kv(extension_id, scope, scope_key);
+    CREATE INDEX IF NOT EXISTS idx_extension_kv_updated ON extension_kv(updated_at);
+
     CREATE TABLE IF NOT EXISTS task_run_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       task_id TEXT NOT NULL,
@@ -350,7 +363,8 @@ function createSchema(database: Database): void {
       created_at TEXT NOT NULL,
       decision TEXT,
       remote_mode TEXT,
-      error TEXT
+      error TEXT,
+      result TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_remote_requests_peer ON remote_requests(peer_instance_id, created_at);
 
@@ -365,6 +379,33 @@ function createSchema(database: Database): void {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_remote_audit_created_at ON remote_audit_logs(created_at);
+
+    -- Received result callbacks (requesting side) for mediated proposals.
+    CREATE TABLE IF NOT EXISTS remote_result_callbacks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      negotiation_id TEXT NOT NULL,
+      peer_instance_id TEXT NOT NULL,
+      decision TEXT NOT NULL,
+      result TEXT,
+      reason TEXT,
+      received_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_remote_result_callbacks_neg ON remote_result_callbacks(negotiation_id);
+
+    -- Pending outbound pairing requests (initiator side).
+    CREATE TABLE IF NOT EXISTS remote_pair_outbound_requests (
+      id TEXT PRIMARY KEY,
+      instance_id TEXT NOT NULL,
+      public_key TEXT NOT NULL,
+      fingerprint TEXT NOT NULL,
+      base_url TEXT NOT NULL,
+      nonce TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_remote_pair_outbound_instance ON remote_pair_outbound_requests(instance_id);
+    CREATE INDEX IF NOT EXISTS idx_remote_pair_outbound_status ON remote_pair_outbound_requests(status);
 
     -- Simple key-value store for the router's per-chat cursor positions.
     CREATE TABLE IF NOT EXISTS router_state (
@@ -779,6 +820,75 @@ export function initDatabase(): void {
   ensureChatCursorFailedColumns(db);
   migrateChatCursors(db);
   dropChatBranchDisplayName(db);
+  ensureRemotePeerBaseUrl(db);
+  ensureOutboundPairRequestsTable(db);
+  ensureMediaCompression(db);
+}
+
+/**
+ * Idempotent migration: ensure the outbound pair requests table exists.
+ * Needed for instances that were initialised before this table was added.
+ */
+function ensureOutboundPairRequestsTable(database: Database): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS remote_pair_outbound_requests (
+      id TEXT PRIMARY KEY,
+      instance_id TEXT NOT NULL,
+      public_key TEXT NOT NULL,
+      fingerprint TEXT NOT NULL,
+      base_url TEXT NOT NULL,
+      nonce TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`);
+  database.exec(`CREATE INDEX IF NOT EXISTS idx_remote_pair_outbound_instance ON remote_pair_outbound_requests(instance_id)`);
+  database.exec(`CREATE INDEX IF NOT EXISTS idx_remote_pair_outbound_status ON remote_pair_outbound_requests(status)`);
+}
+
+/**
+ * One-time migration: compress existing uncompressed text-based media.
+ * Uses PRAGMA user_version >= 2 as a migration marker.
+ */
+function ensureMediaCompression(database: Database): void {
+  const row = database.prepare("PRAGMA user_version").get() as { user_version?: number } | undefined;
+  const version = typeof row?.user_version === "number" ? row.user_version : 0;
+  if (version >= 2) return;
+
+  try {
+    const { recompressExistingMedia } = require("./media-recompress.js");
+    const result = recompressExistingMedia();
+    if (result.compressed > 0) {
+      log.info("Media compression migration completed", {
+        operation: "migration.media_compression",
+        scanned: result.scanned,
+        compressed: result.compressed,
+        savedBytes: result.savedBytes,
+        skipped: result.skipped,
+        errors: result.errors,
+      });
+    }
+  } catch (err) {
+    debugSuppressedError(log, "Media compression migration failed (non-fatal).", err, {
+      operation: "migration.media_compression",
+    });
+  }
+
+  database.exec("PRAGMA user_version = 2;");
+}
+
+/**
+ * Add nullable base_url column to remote_peers if it doesn't already exist.
+ * Required for bidirectional pairing and /unpair routing.
+ */
+function ensureRemotePeerBaseUrl(database: Database): void {
+  const cols = database.prepare("PRAGMA table_info(remote_peers)").all() as Array<{ name: string }>;
+  if (cols.some((c) => c.name === "base_url")) return;
+  try {
+    database.exec("ALTER TABLE remote_peers ADD COLUMN base_url TEXT");
+  } catch (err) {
+    debugSuppressedError(log, "remote_peers base_url column may already exist.", err, {});
+  }
 }
 
 /**

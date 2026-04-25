@@ -8,9 +8,7 @@ type ViewerRouteModule = {
 };
 
 const OFFICE_VIEWER_EXTENSION_PATH = resolve(import.meta.dir, "../../../../extensions/viewers/office-viewer/index.ts");
-const DRAWIO_EDITOR_EXTENSION_PATH = resolve(import.meta.dir, "../../../../extensions/viewers/drawio-editor/index.ts");
 const OFFICE_VIEWER_EXTENSION_URL = pathToFileURL(OFFICE_VIEWER_EXTENSION_PATH).href;
-const DRAWIO_EDITOR_EXTENSION_URL = pathToFileURL(DRAWIO_EDITOR_EXTENSION_PATH).href;
 
 async function loadViewerRoute(moduleUrl: string, req: Request, pathname: string): Promise<Response> {
   const mod = await import(moduleUrl) as ViewerRouteModule;
@@ -22,11 +20,5 @@ export function registerLazyViewerRoutes(): void {
     "/office-viewer",
     async (req, pathname) => await loadViewerRoute(OFFICE_VIEWER_EXTENSION_URL, req, pathname),
     OFFICE_VIEWER_EXTENSION_PATH,
-  );
-
-  registerExtensionRoute(
-    "/drawio",
-    async (req, pathname) => await loadViewerRoute(DRAWIO_EDITOR_EXTENSION_URL, req, pathname),
-    DRAWIO_EDITOR_EXTENSION_PATH,
   );
 }

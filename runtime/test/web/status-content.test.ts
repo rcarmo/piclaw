@@ -24,10 +24,10 @@ test('shouldTickStatusActivityAge opts live tool statuses into clock updates', (
   expect(shouldTickStatusActivityAge({ type: 'intent', last_event_at: '2026-04-22T06:00:00.000Z' })).toBe(false);
 });
 
-test('intent elapsed labels tick for all intents and appear only after 10 seconds', () => {
+test('intent elapsed labels tick for all intents and appear immediately', () => {
   expect(shouldTickIntentElapsed({ type: 'intent', started_at: '2026-04-22T06:00:00.000Z' })).toBe(true);
   expect(shouldTickIntentElapsed({ type: 'tool_status', started_at: '2026-04-22T06:00:00.000Z' })).toBe(false);
-  expect(resolveIntentElapsedLabel({ type: 'intent', started_at: '2026-04-22T06:00:00.000Z' }, Date.parse('2026-04-22T06:00:09.000Z'))).toBeNull();
+  expect(resolveIntentElapsedLabel({ type: 'intent', started_at: '2026-04-22T06:00:00.000Z' }, Date.parse('2026-04-22T06:00:09.000Z'))).toBe('0:09');
   expect(resolveIntentElapsedLabel({ type: 'intent', started_at: '2026-04-22T06:00:00.000Z' }, Date.parse('2026-04-22T06:00:10.000Z'))).toBe('0:10');
   expect(resolveIntentElapsedLabel({ type: 'intent', started_at: '2026-04-22T06:00:00.000Z' }, Date.parse('2026-04-22T06:02:03.000Z'))).toBe('2:03');
   expect(resolveIntentElapsedLabel({ type: 'intent', started_at: '2026-04-22T06:00:00.000Z' }, Date.parse('2026-04-22T08:03:04.000Z'))).toBe('2:03:04');

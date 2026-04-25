@@ -48,6 +48,7 @@ describe("web runtime state service", () => {
     const enqueued: Array<{ key: string; laneKey?: string; task: () => Promise<void> }> = [];
     const processed: Array<{ chatJid: string; agentId: string; threadRootId?: number | null }> = [];
     const messageChecks: Array<{ chatJid: string; since: string; assistantName: string }> = [];
+    const draftRecoveryMap = new Map<string, { turnId?: string; text: string; totalLines: number; updatedAt: number }>();
     let assistantName = "Pi stable";
 
     const callbacks: WebChannelRuntimeStateCallbacks = {
@@ -76,9 +77,28 @@ describe("web runtime state service", () => {
       },
     };
 
+    const state = {
+      load: () => {},
+      save: () => {},
+      setAgentStatus: () => {},
+      getAgentStatuses: () => ({}),
+      setContextUsage: () => {},
+      getContextUsage: () => null,
+      setDraftRecovery: (chatJid: string, entry: { turnId?: string; text: string; totalLines: number; updatedAt: number } | null) => {
+        if (!entry) {
+          draftRecoveryMap.delete(chatJid);
+          return;
+        }
+        draftRecoveryMap.set(chatJid, entry);
+      },
+      getDraftRecovery: (chatJid: string) => draftRecoveryMap.get(chatJid) ?? null,
+    };
+
     const service = new WebChannelRuntimeStateService(callbacks, {
       defaultAgentId: "default",
       stateKey: "state-key",
+    }, {
+      state,
     });
 
     service.recoverInflightRuns(store);
@@ -89,15 +109,12 @@ describe("web runtime state service", () => {
       { chatJid: "web:pending", since: "t1", assistantName: "Pi live" },
     ]);
     expect(enqueued.map(({ key, laneKey }) => ({ key, laneKey }))).toEqual([
-      { key: "resume:web:replay", laneKey: "chat:web:replay" },
       { key: "resume:web:pending", laneKey: "chat:web:pending" },
     ]);
 
     await enqueued[0].task();
-    await enqueued[1].task();
 
     expect(processed).toEqual([
-      { chatJid: "web:replay", agentId: "default", threadRootId: undefined },
       { chatJid: "web:pending", agentId: "default", threadRootId: undefined },
     ]);
   });
@@ -109,6 +126,7 @@ describe("web runtime state service", () => {
     const expandedMap = new Map<string, { thought?: boolean; draft?: boolean }>();
     const bufferMap = new Map<string, { thought?: { text: string; totalLines: number }; draft?: { text: string; totalLines: number } }>();
 
+    const draftRecoveryMap = new Map<string, { turnId?: string; text: string; totalLines: number; updatedAt: number }>();
     const state = {
       load: () => {
         calls.push("state.load");
@@ -118,6 +136,17 @@ describe("web runtime state service", () => {
       },
       setAgentStatus: () => {},
       getAgentStatuses: () => ({}),
+      setContextUsage: () => {},
+      getContextUsage: () => null,
+      setDraftRecovery: (chatJid: string, entry: { turnId?: string; text: string; totalLines: number; updatedAt: number } | null) => {
+        calls.push(`draft.set:${chatJid}:${entry?.turnId ?? ""}`);
+        if (!entry) {
+          draftRecoveryMap.delete(chatJid);
+          return;
+        }
+        draftRecoveryMap.set(chatJid, entry);
+      },
+      getDraftRecovery: (chatJid: string) => draftRecoveryMap.get(chatJid) ?? null,
     };
     const agentStatusStore = {
       load: () => {
@@ -175,17 +204,22 @@ describe("web runtime state service", () => {
 
     service.loadState();
     service.saveState();
-    service.updateAgentStatus("web:1", { type: "intent", title: "Thinking" });
+    service.updateAgentStatus("web:1", { type: "intent", title: "Thinking", turn_id: "turn-1" });
     service.queuePendingSteering("web:1", "2026-03-27T20:05:00.000Z");
     service.setPanelExpanded("turn-1", "thought", true);
     service.updateThoughtBuffer("turn-1", "line one", 1);
     service.updateDraftBuffer("turn-1", "draft one", 2);
 
-    expect(service.getAgentStatus("web:1")).toEqual({ type: "intent", title: "Thinking" });
+    expect(service.getAgentStatus("web:1")).toEqual({ type: "intent", title: "Thinking", turn_id: "turn-1" });
     expect(service.consumePendingSteering("web:1")).toEqual(["2026-03-27T20:05:00.000Z"]);
     expect(service.isPanelExpanded("turn-1", "thought")).toBe(true);
     expect(service.getBuffer("turn-1", "thought")).toEqual({ text: "line one", totalLines: 1 });
     expect(service.getBuffer("turn-1", "draft")).toEqual({ text: "draft one", totalLines: 2 });
+    expect(state.getDraftRecovery("web:1")).toEqual(expect.objectContaining({
+      turnId: "turn-1",
+      text: "draft one",
+      totalLines: 2,
+    }));
     expect(calls).toEqual([
       "status.load",
       "state.save",
@@ -194,6 +228,8 @@ describe("web runtime state service", () => {
       "panel.set:turn-1:thought:true",
       "buffer.update:turn-1:thought:1",
       "buffer.update:turn-1:draft:2",
+      "draft.set:web:1:turn-1",
+      "state.save",
       "pending.consume:web:1",
     ]);
   });

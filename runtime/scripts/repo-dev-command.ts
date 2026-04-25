@@ -15,6 +15,7 @@ export interface RepoDevCommandPlan {
   args: string[];
   requiredBinaries: string[];
   preRun?: () => void;
+  postRun?: () => void;
 }
 
 export function resolveRepoBinary(packageDir: string, binaryName: string): string {
@@ -47,6 +48,9 @@ export function createRepoDevCommandPlan(commandName: string, projectDir = proce
         args: ["-p", "tsconfig.json"],
         requiredBinaries: ["tsc"],
         preRun: () => {
+          rmSync(resolve(runtimeDir, "generated/dist"), { recursive: true, force: true });
+        },
+        postRun: () => {
           rmSync(resolve(runtimeDir, "generated/dist"), { recursive: true, force: true });
         },
       };
@@ -127,13 +131,17 @@ export function runRepoDevCommand(
   ensureRepoDevTooling(plan, env);
   plan.preRun?.();
 
-  const proc = Bun.spawnSync([plan.binaryPath, ...plan.args], {
-    cwd: plan.cwd,
-    stdout: "inherit",
-    stderr: "inherit",
-    env,
-  });
-  return proc.exitCode || 0;
+  try {
+    const proc = Bun.spawnSync([plan.binaryPath, ...plan.args], {
+      cwd: plan.cwd,
+      stdout: "inherit",
+      stderr: "inherit",
+      env,
+    });
+    return proc.exitCode || 0;
+  } finally {
+    plan.postRun?.();
+  }
 }
 
 export function runRepoDevCommandCli(argv = process.argv.slice(2)): never {

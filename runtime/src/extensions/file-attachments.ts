@@ -97,7 +97,8 @@ function formatBytes(bytes: number): string {
 
 function buildExportPath(id: number, filename: string): string {
   const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-  return resolve("/workspace/tmp", `${id}-${safeName}`);
+  const workspaceDir = resolve(process.env.PICLAW_WORKSPACE?.trim() || WORKSPACE_DIR);
+  return resolve(workspaceDir, "tmp", `${id}-${safeName}`);
 }
 
 // ── Tool execute ──────────────────────────────────────────

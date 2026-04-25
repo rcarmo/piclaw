@@ -14,6 +14,29 @@ type StateSetter<T> = (next: T | ((prev: T) => T)) => void;
 
 const CONTEXT_STORAGE_PREFIX = 'piclaw:ctx:';
 
+export function normalizeContextUsage(payload: unknown): Record<string, unknown> | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const data = payload as Record<string, unknown>;
+  const tokens = data.tokens == null ? null : Number(data.tokens);
+  const contextWindow = data.contextWindow == null ? null : Number(data.contextWindow);
+  const percent = data.percent == null ? null : Number(data.percent);
+  return {
+    tokens: Number.isFinite(tokens) ? tokens : null,
+    contextWindow: Number.isFinite(contextWindow) ? contextWindow : null,
+    percent: Number.isFinite(percent) ? percent : null,
+  };
+}
+
+export function haveSameContextUsage(a: unknown, b: unknown): boolean {
+  const left = normalizeContextUsage(a);
+  const right = normalizeContextUsage(b);
+  if (!left && !right) return true;
+  if (!left || !right) return false;
+  return left.tokens === right.tokens
+    && left.contextWindow === right.contextWindow
+    && left.percent === right.percent;
+}
+
 export function persistContextUsage(chatJid: string, payload: unknown): void {
   if (!chatJid || !payload || typeof payload !== 'object') return;
   const data = payload as Record<string, unknown>;
@@ -111,14 +134,14 @@ export async function refreshContextUsageForChat(options: RefreshContextUsageFor
 
   const targetChatJid = currentChatJid;
   try {
-    const contextPayload = await getAgentContext(targetChatJid);
+    const contextPayload = normalizeContextUsage(await getAgentContext(targetChatJid));
     if (activeChatJidRef.current !== targetChatJid) return;
     // Only update state when the server returns meaningful context data.
     // After a reload or for inactive chats, the API returns
     // { tokens: null, contextWindow: null, percent: null } which would
     // overwrite the cached localStorage value restored on chat switch.
     if (contextPayload && contextPayload.percent != null) {
-      setContextUsage(contextPayload);
+      setContextUsage((prev: unknown) => haveSameContextUsage(prev, contextPayload) ? prev : contextPayload);
       persistContextUsage(targetChatJid, contextPayload);
     }
   } catch (error) {

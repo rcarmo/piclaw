@@ -16,6 +16,7 @@
 
 import { getDb } from "./connection.js";
 import type { MediaRecord } from "./types.js";
+import { maybeCompress, maybeDecompress } from "./media-compression.js";
 
 /**
  * Link a set of media records to a message row.
@@ -86,13 +87,14 @@ export function createMedia(
   thumbnail: Uint8Array | null,
   metadata: Record<string, unknown> | null
 ): number {
+  const { data: storeData, metadata: storeMeta } = maybeCompress(data, contentType, metadata);
   const db = getDb();
   const res = db
     .prepare(
       `INSERT INTO media (filename, content_type, data, thumbnail, metadata)
        VALUES (?, ?, ?, ?, ?)`
     )
-    .run(filename, contentType, data, thumbnail, metadata ? JSON.stringify(metadata) : null);
+    .run(filename, contentType, storeData, thumbnail, storeMeta ? JSON.stringify(storeMeta) : null);
   return Number(res.lastInsertRowid || 0);
 }
 
@@ -114,13 +116,14 @@ export function getMediaById(id: number): MediaRecord | undefined {
       created_at: string;
     } | undefined;
   if (!row) return undefined;
+  const parsedMeta = row.metadata ? JSON.parse(row.metadata) : null;
   return {
     id: row.id,
     filename: row.filename,
     content_type: row.content_type,
-    data: row.data,
+    data: maybeDecompress(row.data, parsedMeta),
     thumbnail: row.thumbnail,
-    metadata: row.metadata ? JSON.parse(row.metadata) : null,
+    metadata: parsedMeta,
     created_at: row.created_at,
   };
 }
@@ -189,13 +192,17 @@ function appendMediaTextToFts(
 ): void {
   const placeholders = mediaIds.map(() => "?").join(",");
   const rows = db
-    .prepare(`SELECT content_type, data FROM media WHERE id IN (${placeholders})`)
-    .all(...mediaIds) as Array<{ content_type: string; data: Uint8Array }>;
+    .prepare(`SELECT content_type, data, metadata FROM media WHERE id IN (${placeholders})`)
+    .all(...mediaIds) as Array<{ content_type: string; data: Uint8Array; metadata: string | null }>;
 
   const textParts: string[] = [];
   for (const row of rows) {
     if (!isTextIndexable(row.content_type)) continue;
-    const raw = new TextDecoder().decode(row.data);
+    // Decompress if stored compressed
+    let rawMeta: Record<string, unknown> | null = null;
+    try { if (row.metadata) rawMeta = JSON.parse(row.metadata); } catch (e) { void e; }
+    const decompressed = maybeDecompress(row.data, rawMeta);
+    const raw = new TextDecoder().decode(decompressed);
     const text =
       row.content_type.includes("svg") ||
       row.content_type.includes("html") ||

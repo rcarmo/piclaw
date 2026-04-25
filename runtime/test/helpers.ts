@@ -11,6 +11,7 @@
 import { mkdtempSync, rmSync, mkdirSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
+import { isOverlayAvailable, createOverlayWorkspace, type OverlayWorkspace } from "./overlay-workspace";
 
 /** Shape of an isolated temp workspace: paths and cleanup callback. */
 export interface TempWorkspace {
@@ -191,5 +192,52 @@ export async function stopQuietly(stop: (() => Promise<unknown>) | null | undefi
     return true;
   } catch (_error) {
     return false;
+  }
+}
+
+// ── OverlayFS-backed workspace isolation ─────────────────────
+
+/** Whether overlayfs is usable in this environment. Cached probe. */
+export const OVERLAY_AVAILABLE = isOverlayAvailable();
+
+/**
+ * Run a test callback inside an overlayfs-isolated workspace.
+ * All filesystem changes are captured in an upper layer and discarded on cleanup.
+ * Falls back to a plain temp workspace when overlayfs is not available.
+ *
+ * Usage:
+ *   test("my destructive test", () => withOverlayIsolation("/workspace", async (ws) => {
+ *       // ws.merged is the isolated root; original /workspace is untouched
+ *   }));
+ */
+export async function withOverlayIsolation<T>(
+  baseDir: string,
+  run: (overlay: OverlayWorkspace & { store: string; data: string }) => Promise<T> | T,
+): Promise<T> {
+  const overlay = createOverlayWorkspace(baseDir, "piclaw-isolated-");
+  const store = join(overlay.merged, ".piclaw", "store");
+  const data = join(overlay.merged, ".piclaw", "data");
+  try { mkdirSync(store, { recursive: true }); } catch (e) { void e; }
+  try { mkdirSync(data, { recursive: true }); } catch (e) { void e; }
+
+  const prev = {
+    PICLAW_WORKSPACE: process.env.PICLAW_WORKSPACE,
+    PICLAW_STORE: process.env.PICLAW_STORE,
+    PICLAW_DATA: process.env.PICLAW_DATA,
+    PICLAW_DB_IN_MEMORY: process.env.PICLAW_DB_IN_MEMORY,
+  };
+  process.env.PICLAW_WORKSPACE = overlay.merged;
+  process.env.PICLAW_STORE = store;
+  process.env.PICLAW_DATA = data;
+  process.env.PICLAW_DB_IN_MEMORY = "1";
+
+  try {
+    return await run({ ...overlay, store, data });
+  } finally {
+    for (const [k, v] of Object.entries(prev)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    overlay.cleanup();
   }
 }

@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import { queueStartupSessionWarmup, resolveStartupSessionWarmupOptions } from "../../src/runtime/startup.js";
+import {
+  STARTUP_STATUS_CHAT_JID,
+  STARTUP_STATUS_TURN_ID,
+  buildStartupAgentStatus,
+  queueStartupSessionWarmup,
+  resolveStartupSessionWarmupOptions,
+  runWebStartupRecoveryBootstrap,
+} from "../../src/runtime/startup.js";
 import { closeDbQuietly, createTempWorkspace, importFresh, setEnv } from "../helpers.js";
 
 const TEST_SHELL = process.env.SHELL || "bash";
@@ -33,6 +40,7 @@ describe("runtime startup helpers", () => {
       expect(existsSync(join(ws.workspace, "AGENTS.md"))).toBe(true);
       expect(existsSync(join(ws.workspace, ".piclaw", "README.md"))).toBe(true);
       expect(existsSync(join(ws.workspace, ".piclaw", "config.json.example"))).toBe(true);
+      expect(existsSync(join(ws.workspace, ".mcp.json.example"))).toBe(true);
       expect(existsSync(join(ws.workspace, ".pi", "mcp.json.example"))).toBe(true);
       expect(existsSync(join(ws.workspace, "notes", "index.md"))).toBe(true);
       expect(existsSync(join(ws.workspace, "notes", "memory", "README.md"))).toBe(true);
@@ -202,6 +210,78 @@ describe("runtime startup helpers", () => {
     } finally {
       ws.cleanup();
     }
+  });
+
+  test("buildStartupAgentStatus emits startup intent metadata for the web UI", () => {
+    const status = buildStartupAgentStatus({
+      phase: "recovering_inflight",
+      detail: "Restoring runtime state and recovering interrupted chats.",
+      startedAt: "2026-04-24T13:40:00.000Z",
+    });
+
+    expect(status).toMatchObject({
+      type: "intent",
+      kind: "info",
+      intent_key: "startup",
+      source: "startup",
+      phase: "recovering_inflight",
+      title: "Starting up…",
+      detail: "Restoring runtime state and recovering interrupted chats.",
+      blocking: true,
+      started_at: "2026-04-24T13:40:00.000Z",
+      turn_id: STARTUP_STATUS_TURN_ID,
+    });
+    expect(typeof status.last_event_at).toBe("string");
+  });
+
+  test("runWebStartupRecoveryBootstrap exposes startup phases and clears them when ready", () => {
+    const events: Array<{ kind: string; chatJid?: string; status?: Record<string, unknown> }> = [];
+
+    runWebStartupRecoveryBootstrap({
+      updateAgentStatus: (chatJid, status) => {
+        events.push({ kind: "status", chatJid, status });
+      },
+      recoverInflightRuns: () => {
+        events.push({ kind: "recover" });
+      },
+      resumePendingChats: () => {
+        events.push({ kind: "resume" });
+      },
+    });
+
+    expect(events).toHaveLength(5);
+    expect(events[0]).toMatchObject({
+      kind: "status",
+      chatJid: STARTUP_STATUS_CHAT_JID,
+      status: {
+        type: "intent",
+        intent_key: "startup",
+        phase: "recovering_inflight",
+        turn_id: STARTUP_STATUS_TURN_ID,
+      },
+    });
+    expect(events[1]).toEqual({ kind: "recover" });
+    expect(events[2]).toMatchObject({
+      kind: "status",
+      chatJid: STARTUP_STATUS_CHAT_JID,
+      status: {
+        type: "intent",
+        intent_key: "startup",
+        phase: "resuming_pending",
+        turn_id: STARTUP_STATUS_TURN_ID,
+      },
+    });
+    expect(events[3]).toEqual({ kind: "resume" });
+    expect(events[4]).toMatchObject({
+      kind: "status",
+      chatJid: STARTUP_STATUS_CHAT_JID,
+      status: {
+        type: "done",
+        source: "startup",
+        turn_id: STARTUP_STATUS_TURN_ID,
+        title: "Startup ready",
+      },
+    });
   });
 
   test("queueStartupSessionWarmup is disabled by default", () => {

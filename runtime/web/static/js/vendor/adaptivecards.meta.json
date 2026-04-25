@@ -1,11 +1,11 @@
 {
   "manifest_id": "adaptivecards",
   "package_name": "adaptivecards",
-  "package_version": "3.0.5",
+  "package_version": "3.0.6",
   "package_license": "MIT",
   "package_repository": "git://git@github.com/microsoft/AdaptiveCards.git",
   "package_versions": {
-    "adaptivecards": "3.0.5"
+    "adaptivecards": "3.0.6"
   },
   "package_licenses": {
     "adaptivecards": "MIT"

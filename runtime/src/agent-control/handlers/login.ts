@@ -98,6 +98,7 @@ const PROVIDER_DEFS: ProviderDef[] = [
   { id: "antigravity", name: "Antigravity (Google Cloud)", hasOAuth: true, hasApiKey: false },
   { id: "openai-codex", name: "OpenAI Codex", hasOAuth: true, hasApiKey: false },
   { id: "openai", name: "OpenAI", hasOAuth: false, hasApiKey: true, apiKeyHint: "sk-proj-..." },
+  { id: "opencode", name: "OpenCode", hasOAuth: false, hasApiKey: true, apiKeyHint: "OPENCODE_API_KEY" },
   {
     id: "azure-openai", name: "Azure OpenAI", hasOAuth: false, hasApiKey: false, isCustom: true,
     customApi: "openai-responses",

@@ -41,17 +41,17 @@ test('mergeActiveAndBranchChats returns active list unchanged when no branch row
   expect(mergeActiveAndBranchChats(active, null, 'chat:1')).toBe(active);
 });
 
-test('mergeActiveAndBranchChats overlays active rows, preserves fallback is_active, and sorts by current/archived/activity', () => {
+test('mergeActiveAndBranchChats overlays active rows, preserves fallback is_active, and sorts by current/archived/activity/recency', () => {
   const active = [
     { chat_jid: 'chat:a', agent_name: '@active-a', is_active: true, provider: 'active-provider' },
     { chat_jid: 'chat:b', agent_name: '@active-b', is_active: null, source: 'active' },
     { chat_jid: 'chat:d', agent_name: '@active-d', is_active: false, source: 'active-false' },
   ];
   const branch = [
-    { chat_jid: 'chat:d', agent_name: '@branch-d', is_active: true, archived_at: null },
-    { chat_jid: 'chat:b', agent_name: '@branch-b', is_active: true, archived_at: null },
-    { chat_jid: 'chat:c', agent_name: '@branch-c', is_active: false, archived_at: '2026-01-01T00:00:00Z' },
-    { chat_jid: 'chat:a', agent_name: '@branch-a', is_active: false, archived_at: null, branchOnly: true },
+    { chat_jid: 'chat:d', agent_name: '@branch-d', is_active: true, archived_at: null, updated_at: '2026-01-04T00:00:00Z' },
+    { chat_jid: 'chat:b', agent_name: '@branch-b', is_active: true, archived_at: null, updated_at: '2026-01-02T00:00:00Z' },
+    { chat_jid: 'chat:c', agent_name: '@branch-c', is_active: false, archived_at: '2026-01-05T00:00:00Z', updated_at: '2026-01-05T00:00:00Z' },
+    { chat_jid: 'chat:a', agent_name: '@branch-a', is_active: false, archived_at: null, updated_at: '2026-01-03T00:00:00Z', branchOnly: true },
   ];
 
   const merged = mergeActiveAndBranchChats(active, branch, 'chat:c');
@@ -63,17 +63,21 @@ test('mergeActiveAndBranchChats overlays active rows, preserves fallback is_acti
     branchOnly: true,
     provider: 'active-provider',
     is_active: true,
+    updated_at: '2026-01-03T00:00:00Z',
   });
   expect(merged[2]).toMatchObject({
     chat_jid: 'chat:b',
     agent_name: '@active-b',
     source: 'active',
     is_active: true,
+    updated_at: '2026-01-02T00:00:00Z',
   });
   expect(merged[3]).toMatchObject({
     chat_jid: 'chat:d',
     agent_name: '@active-d',
+    source: 'active-false',
     is_active: false,
+    updated_at: '2026-01-04T00:00:00Z',
   });
   expect(merged[0]).toBe(branch[2]);
 });

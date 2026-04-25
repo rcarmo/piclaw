@@ -15,6 +15,56 @@ env:
   BUN_PREFER_BASELINE: "always"
 
 jobs:
+  # Full integration validation must pass before any Docker build starts.
+  # The integration-gate workflow runs on the same tag push event;
+  # this job waits for it to complete successfully.
+  wait-for-integration:
+    name: Wait for integration gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for integration-gate workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const headSha = context.sha;
+            const workflowName = 'Integration gate';
+            const maxWaitMs = 30 * 60 * 1000; // 30 minutes
+            const pollMs = 15_000;
+            const started = Date.now();
+
+            core.info(`Waiting for "${workflowName}" to complete on ${headSha}...`);
+
+            while (Date.now() - started < maxWaitMs) {
+              const runs = await github.rest.actions.listWorkflowRunsForRepo({
+                owner, repo,
+                head_sha: headSha,
+                per_page: 20,
+              });
+
+              const match = runs.data.workflow_runs.find(
+                (run) => run.name === workflowName
+              );
+
+              if (match) {
+                if (match.status === 'completed') {
+                  if (match.conclusion === 'success') {
+                    core.info(`Integration gate passed (run ${match.id}).`);
+                    return;
+                  }
+                  core.setFailed(`Integration gate failed with conclusion: ${match.conclusion} (run ${match.id}).`);
+                  return;
+                }
+                core.info(`Integration gate status: ${match.status} — polling again in ${pollMs / 1000}s...`);
+              } else {
+                core.info(`Integration gate run not found yet — polling again in ${pollMs / 1000}s...`);
+              }
+
+              await new Promise((resolve) => setTimeout(resolve, pollMs));
+            }
+
+            core.setFailed('Timed out waiting for integration gate workflow.');
+
   # Repo-owned boundary: publish smoke already routes through `make publish-smoke`.
   # Workflow-native boundary: reading pinned runtime versions from repo files stays here
   # because the values are consumed immediately as job outputs inside GitHub Actions.
@@ -52,7 +102,7 @@ jobs:
   # Build AMD64 image on native Intel runner
   build-amd64:
     name: Build AMD64 image
-    needs: resolve-runtime-versions
+    needs: [wait-for-integration, resolve-runtime-versions]
     runs-on: ubuntu-24.04
     outputs:
       digest: ${{ steps.build.outputs.digest }}
@@ -109,7 +159,7 @@ jobs:
   # Build ARM64 image on native ARM runner
   build-arm64:
     name: Build ARM64 image
-    needs: resolve-runtime-versions
+    needs: [wait-for-integration, resolve-runtime-versions]
     runs-on: ubuntu-24.04-arm
     outputs:
       digest: ${{ steps.build.outputs.digest }}

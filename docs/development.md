@@ -55,6 +55,7 @@ Relevant files when working on MCP integration:
 - `package.json` / `bun.lock`
 - `runtime/src/agent-pool/session.ts`
 - `docs/mcp.md`
+- `skel/.mcp.json.example`
 - `skel/.pi/mcp.json.example`
 - `skel/.pi/skills/mcp-adapter/SKILL.md`
 

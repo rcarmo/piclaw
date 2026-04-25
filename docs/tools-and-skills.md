@@ -18,18 +18,21 @@ Core tools (from `pi`):
 - `edit` — replace exact text
 - `write` — write files
 
-Piclaw keeps a small always-active baseline and lazily enables other tools on demand. This is one of the main context-conservation strategies: keep default tool exposure small, promote only what the current turn needs, and prefer compact discovery surfaces before expanding into detailed schemas or examples.
+Piclaw keeps the agent's always-active baseline intentionally small and uses `list_tools` plus `activate_tools` to expand capabilities on demand. The baseline helps preserve prompt context by keeping only frequent, high-value schemas in-band by default.
 
-In addition to the fixed baseline below, the effective default active set now auto-includes:
+#### Why this matters for token usage
 
-- available **read-only** tools
-- message/timeline access (`messages`)
-- scheduling helpers (`schedule_task`, `scheduled_tasks` when present)
-- attachment helpers (`attach_file`, `read_attachment`, `export_attachment` when present)
+- **Default-active tools** are sent as full tool schemas in the prompt.
+- **On-demand tools** are discoverable via compact metadata and only contribute their full schema once activated.
 
-This removes most activation friction for safe inspection/search, messaging, scheduling, and attachment flows while keeping broader mutating and remote/admin tools opt-in.
+The practical tradeoff is predictable context spend:
 
-Fixed baseline:
+| Tool tier | Typical prompt impact |
+| --- | --- |
+| Default-active | `~50-200` tokens each |
+| On-demand catalog entry | `~10-15` tokens each |
+
+Fixed baseline (always in active defaults):
 
 - `read`
 - `edit`
@@ -43,7 +46,31 @@ Fixed baseline:
 - `keychain`
 - `exit_process`
 
-Newly activated tools become available immediately to subsequent tool/model steps in the same turn. For critical actions, keep the needed tool in the default baseline or promote it with config. Read-only tools plus the message/scheduling/attachment helpers listed above are activated automatically as part of the effective default set when they exist in the current tool catalog.
+At session start, piclaw also auto-promotes additional safe tools to the effective default set:
+
+- available **read-only + lightweight** tools (for example `grep`, `find`, `ls`, `get_model_state`)
+- message/scheduling/attachment helpers when present:
+  - `messages`, `schedule_task`, `scheduled_tasks`, `read_attachment`, `export_attachment`
+- `attach_file` and `keychain` remain part of baseline tooling
+
+This preserves low-latency common inspection workflows while keeping heavier tools opt-in.
+
+Add `tools.additionalDefaultTools` to `.piclaw/config.json` for more persistent defaults:
+
+```json
+{
+  "tools": {
+    "additionalDefaultTools": [
+      "search_workspace",
+      "introspect_sql"
+    ]
+  }
+}
+```
+
+A comma-separated string is also accepted, and env var `PICLAW_ADDITIONAL_DEFAULT_TOOLS` is equivalent.
+
+`reset_active_tools` restores this configured default set (not just the fixed baseline). Unknown tool names are ignored. New activations are session-scoped and reset on restart/session rotation.
 
 ### Preferred staged internal-tool flow
 
@@ -219,7 +246,6 @@ You can extend that baseline with `.piclaw/config.json`:
 - `activate_tools` — activate one or more available tools for the current session
 - `reset_active_tools` — restore the configured default active-tool set for the current session
 - `open_office_viewer` — open an Office document (`.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`) in the built-in JS Office viewer (`/office-viewer/*`)
-- `open_drawio_editor` — open a `.drawio` diagram file in the self-hosted draw.io editor (creates the file if it doesn't exist)
 - `send_adaptive_card` — post an agent-owned Adaptive Card message in the web UI timeline
 - `send_dashboard_widget` — post an interactive widget with agent-authored HTML to the web timeline (opens in floating pane with piclawWidget bridge; vendored libs: Babylon.js, ECharts, D3). See [vendored-widget-libraries.md](vendored-widget-libraries.md) for API reference.
 
@@ -231,9 +257,9 @@ You can extend that baseline with `.piclaw/config.json`:
 - `bun_run` — run a workspace Bun script directly; kept in the default active baseline on Windows so there is still a first-party script runner alongside PowerShell
 - `exit_process` — gracefully terminate piclaw so Supervisor restarts it; kept always active because lifecycle control should not depend on same-turn lazy activation
 - `ssh` — get, set, or clear the session-scoped SSH profile used by remote-backed core tools (`read`, `write`, `edit`, `bash`)
-- `proxmox` — get, set, or clear the session-scoped Proxmox API profile, perform ad-hoc Proxmox API requests, or run common VM/task/metrics workflows with keychain-backed token auth
-- `portainer` — get, set, or clear the session-scoped Portainer API profile, perform ad-hoc Portainer API requests, or run common endpoint/stack/container workflows with keychain-backed token auth
-- `mcp` — token-efficient proxy for external MCP servers via the bundled `pi-mcp-adapter`; supports search, describe, connect, tool calls, and MCP UI message retrieval using `.pi/mcp.json` or the Pi home config
+- `mcp` — token-efficient proxy for external MCP servers via the bundled `pi-mcp-adapter`; supports search, describe, connect, tool calls, and MCP UI message retrieval using shared `.mcp.json` plus optional Pi-owned override config
+
+> **Note:** `proxmox` and `portainer` tools have been moved to the [piclaw-addons](https://github.com/rcarmo/piclaw-addons) repository. When the addons package is installed, these tools are registered automatically. They use the same session-scoped profile + `discover` → `capabilities` → `workflow` pattern as `ssh`.
 
 `messages` `search` accepts `query`, `chat_jid` (or `*`/`all`), `role`, `sender`, `after`, `before`, `since`, `after_row`, `before_row`, `limit`, `offset`, `excerpt_chars`, and `details_max_chars` for controlling detail payloads.
 `messages` `get` accepts `row_ids`, optional `chat_jid`, `role`, `context_before`, `context_after`, `details_max_chars`, `content_lines`, and `content_grep`.
@@ -254,7 +280,7 @@ Infrastructure tools follow one shared pattern:
 
 That shared shape improves tool discoverability and keeps prompt usage down: the agent can ask what exists, narrow by family or intent, inspect just one workflow, and only then expand into concrete execution parameters.
 
-`ssh` uses the profile half of that model for remote-backed core tools. `proxmox` and `portainer` implement the full pattern.
+`ssh` uses the profile half of that model for remote-backed core tools. The `proxmox` and `portainer` addon extensions (in [piclaw-addons](https://github.com/rcarmo/piclaw-addons)) implement the full pattern.
 
 `ssh` accepts:
 - `action` — `get`, `set`, or `clear`
@@ -266,6 +292,8 @@ That shared shape improves tool discoverability and keeps prompt usage down: the
 - `strict_host_key_checking` — `yes`, `accept-new`, or `no`
 
 When a live session already exists, `ssh set` and `ssh clear` apply immediately to subsequent tool/model steps in the same turn.
+
+> The `proxmox` and `portainer` tool documentation below describes the addon-provided tools from [piclaw-addons](https://github.com/rcarmo/piclaw-addons). These tools are only available when the addons package is installed.
 
 `proxmox` accepts:
 - `action` — `get`, `set`, `clear`, `discover`, `capabilities`, `workflow_help`, `recommend`, `request`, or `workflow`
@@ -496,10 +524,11 @@ Each skill keeps its script alongside its `SKILL.md` for portability. Current se
 | `twitter-summary` | Fetch a user's recent tweets via Playwright + Nitter |
 | `feed-digest` | Build a deduped Markdown digest from an RSS/Atom feed index |
 | `bootstrap-container` | Validate required tools and install missing dependencies |
-| `mcp-adapter` | Configure and use the bundled `pi-mcp-adapter` through `.pi/mcp.json` |
+| `mcp-adapter` | Configure and use the bundled `pi-mcp-adapter` through shared `.mcp.json` plus optional Pi-owned overrides |
 | `extension-design` | Design and audit Pi extensions safely |
 | `extension-troubleshoot` | Diagnose and fix extension issues (imports, DB init, watcher perms) |
-| `kanban-management` | Manage the project workitems board: ideation, triage, quality scoring, definition-of-done tracking |
+| `kanban-management` | **ARCHIVED** — legacy file-board workflow kept for history only; direct users to `github-issues` |
+| `github-issues` | Manage project work items via GitHub Issues and GitHub Projects v2 (including lane transitions via `gh project item-edit`) |
 | `adaptive-cards-authoring` | Author Adaptive Cards for structured web interactions |
 | `close-of-day` | End-of-day sweep: situate, backup, timeline cleanup, daily-notes summarisation |
 | `export-timeline-pdf` | Export a chat timeline to PDF via Playwright |
@@ -508,13 +537,18 @@ Each skill keeps its script alongside its `SKILL.md` for portability. Current se
 | `visual-artifact-generator` | Generate polished self-contained HTML pages, diagrams, data tables, diff reviews, slide decks, and draw.io files using Piclaw vendored libraries. See [visual-artifact-generator.md](visual-artifact-generator.md). |
 | `situate-daily-notes` | Situation report and Obsidian-style daily summary notes |
 | `timeline-cleanup` | Delete low-value timeline messages by keyword patterns |
-| `proxmox-management` | Manage Proxmox VM lifecycle, USB mapping passthrough, and backup-restore moves |
-| `proxmox-guest-compare-chart` | Compare two Proxmox guests using native `proxmox` data collection and render SVG/CSV outputs |
-| `portainer-container-compare-chart` | Compare two Portainer containers using native `portainer` data collection and render SVG/CSV outputs |
+| `remote-peer` | Send signed prompts to paired remote piclaw instances (see [cross-instance-ipc.md](cross-instance-ipc.md)) |
 
-`kanban-management` intentionally keeps its public name for now, but repo-local board paths in this project now live under `workitems/`. Visual/editor semantics such as `*.kanban.md` remain intentionally named.
+> **Addon-provided skills** (from [piclaw-addons](https://github.com/rcarmo/piclaw-addons), available when the addons package is installed):
+>
+> | Skill | Description |
+> |-------|-------------|
+> | `proxmox-guest-compare-chart` | Compare two Proxmox guests and render SVG/CSV outputs |
+> | `portainer-container-compare-chart` | Compare two Portainer containers and render SVG/CSV outputs |
 
-For agent-driven work, prefer the native `proxmox` / `portainer` tools first. The old packaged Proxmox/Portainer helper CLIs were removed once the chat-scoped native tools and shared workflow engines became the canonical path. For shell-oriented Proxmox lifecycle work that still belongs in the skill layer, use the remaining `proxmox-management` skill wrappers instead. Comparison/chart skills for Proxmox and Portainer are now colocated with their packaged integration extensions and surfaced via each extension's `resources_discover` hook, rather than living only in the flat packaged-skill tree.
+`kanban-management` is now archived and retains historical references only. Active project operations use GitHub Issues + GitHub Projects.
+
+For agent-driven infrastructure work, use the addon-provided `proxmox` / `portainer` tools from [piclaw-addons](https://github.com/rcarmo/piclaw-addons). These tools and their colocated skills are registered automatically when the addons package is installed.
 
 ## Web extension UI note
 
@@ -586,14 +620,14 @@ Direct commands (no LLM round-trip):
 | `/tasks [filter]` | List scheduled tasks (via extension) |
 | `/scheduled [filter]` | Alias for `/tasks` |
 | `/dream [days]` | Queue an out-of-band Dream cycle on a temporary `dream:` channel; runtime backs up notes, seeds daily notes from DB, the model follows Orient / Signal / Consolidate / Prune and Index, and runtime refreshes FTS at the end |
-| `/mcp [status\|tools\|reconnect [server]]` | Open the MCP management panel in the web UI (or text status elsewhere), list MCP tools, or reconnect bundled `pi-mcp-adapter` servers |
+| `/mcp [status\|tools\|reconnect [server]\|setup]` | Open the MCP management panel in the web UI (or text status elsewhere), list MCP tools, reconnect bundled `pi-mcp-adapter` servers, or launch guided MCP setup |
 | `/mcp-auth <server>` | Show OAuth token-setup guidance for an MCP server managed by `pi-mcp-adapter` |
 
 > [!NOTE]
 > Provider auth works via `pi /login` in the terminal or the experimental `/login` card flow in the web UI.
 > The card-based `/login` flow supports GitHub Copilot, Codex, and standard OpenAI providers. Anthropic is untested. The terminal remains the reliable fallback.
 
-The bundled `pi-mcp-adapter` reads project-local MCP config from `.pi/mcp.json` (starter example: `.pi/mcp.json.example`) and also understands the Pi home config under `~/.pi/agent/mcp.json` (inside the container image this typically maps to `/config/.pi/agent/mcp.json`). It merges Pi-home config, optional imported tool configs, then project-local `.pi/mcp.json` overrides. Prefer the project-local config when an MCP server belongs to the current workspace.
+The bundled `pi-mcp-adapter` now prefers shared MCP config first: `~/.config/mcp/mcp.json` and project-local `.mcp.json`. Pi-owned config still works under `~/.pi/agent/mcp.json` (inside the container image this typically maps to `/config/.pi/agent/mcp.json`) and project-local `.pi/mcp.json`, with `.pi/mcp.json` acting as the final Pi-specific override. Starter examples are seeded at `.mcp.json.example` and `.pi/mcp.json.example`. Use `/mcp setup` for guided onboarding.
 
 `/image` writes generated images back into the workspace and renders them as workspace-backed timeline images plus file-path listings. `/flux` follows the same output pattern, but transparent background requests are currently supported only on `/image`.
 

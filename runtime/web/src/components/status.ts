@@ -113,7 +113,7 @@ export function resolveStatusActivityAgeLabel(status, nowMs = Date.now()) {
 export function resolveIntentElapsedLabel(status, nowMs = Date.now()) {
     if (!shouldTickIntentElapsed(status)) return null;
     const startedAtMs = parseStatusStartedAt(status);
-    if (startedAtMs === null || !hasMetStatusTimeHintThreshold(startedAtMs, nowMs)) return null;
+    if (startedAtMs === null) return null;
     return getStatusElapsedLabel(status, nowMs);
 }
 
@@ -228,15 +228,15 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
         setHoveredSeriesPoint(null);
     }, [turnId]);
 
-    // Tick nowMs every second when any extension panel with timestamps is expanded
+    // Tick nowMs every second when visible extension panels expose timestamps.
     useEffect(() => {
-        const hasExpandedTimestampPanel = Array.isArray(extensionPanels) && extensionPanels.some(
-            (p) => expandedPanels.has(p?.key) && (p?.started_at || p?.last_activity_at),
+        const hasVisibleTimestampPanel = Array.isArray(extensionPanels) && extensionPanels.some(
+            (p) => p?.started_at || p?.last_activity_at,
         );
-        if (!hasExpandedTimestampPanel) return;
+        if (!hasVisibleTimestampPanel) return;
         const interval = setInterval(() => setNowMs(Date.now()), 1000);
         return () => clearInterval(interval);
-    }, [expandedPanels, extensionPanels]);
+    }, [extensionPanels]);
 
     const escapeCollapseKey = useMemo(
         () => resolveAgentStatusEscapeCollapseKey(expandedPanels),
@@ -647,9 +647,10 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
         const series = Array.isArray(panel?.series) ? panel.series : [];
         const actions = Array.isArray(panel?.actions) ? panel.actions : [];
 
-        const experimentElapsed = formatElapsed(panel?.started_at);
-        const elapsedSuffix = experimentElapsed ? ` · ${experimentElapsed}` : '';
-        const displayCollapsed = collapsedText + elapsedSuffix;
+        const experimentElapsed = panel?.started_at
+            ? getStatusElapsedLabel(panel, nowMs)
+            : null;
+        const displayCollapsed = collapsedText;
 
         const hasDetailColumn = Boolean(detailText || tmuxCommand || experimentElapsed);
         const isExpandable = Boolean(detailText || series.length > 0 || tmuxCommand);
@@ -672,6 +673,7 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
                         ${color && html`<span class=${panelDotClass} aria-hidden="true"></span>`}
                         <span class="agent-thinking-title-text">${titleText}</span>
                         ${displayCollapsed && html`<span class="agent-thinking-title-meta">${displayCollapsed}</span>`}
+                        ${experimentElapsed && html`<span class="agent-status-elapsed">${experimentElapsed}</span>`}
                     </button>
                     ${(actions.length > 0 || isExpandable) && html`
                         <div class="agent-thinking-tools-inline">
@@ -781,15 +783,6 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
                 totalLines: planInfo.totalLines,
                 panelKey: 'plan',
             })}
-            ${showCorePanels && hasThought && renderThinkingPanel({
-                panelTitle: panelTitle('Thoughts'),
-                text: thoughtInfo.text,
-                fullText: thoughtInfo.fullText,
-                totalLines: thoughtInfo.totalLines,
-                maxLines: THOUGHT_MAX_LINES,
-                titleClass: 'thought',
-                panelKey: 'thought',
-            })}
             ${showCorePanels && hasDraft && renderThinkingPanel({
                 panelTitle: panelTitle('Draft'),
                 text: draftInfo.text,
@@ -798,6 +791,15 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
                 maxLines: DRAFT_MAX_LINES,
                 titleClass: 'thought',
                 panelKey: 'draft',
+            })}
+            ${showCorePanels && hasThought && renderThinkingPanel({
+                panelTitle: panelTitle('Thoughts'),
+                text: thoughtInfo.text,
+                fullText: thoughtInfo.fullText,
+                totalLines: thoughtInfo.totalLines,
+                maxLines: THOUGHT_MAX_LINES,
+                titleClass: 'thought',
+                panelKey: 'thought',
             })}
             ${showCorePanels && status && status?.type !== 'intent' && html`
                 <div class=${`agent-status${isLastActivity ? ' agent-status-last-activity' : ''}${status?.type === 'error' ? ' agent-status-error' : ''}${toolRepoLabel || statusHints.length > 0 || statusActivityAgeLabel ? ' agent-status-multiline' : ''}`} aria-live="polite" style=${turnColor ? `--turn-color: ${turnColor};` : ''}>

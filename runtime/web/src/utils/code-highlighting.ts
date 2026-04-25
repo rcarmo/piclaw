@@ -3,6 +3,7 @@ import {
   highlightTree,
   StreamLanguage,
   cssLanguage,
+  cppLanguage,
   goLanguage,
   htmlLanguage,
   javascriptLanguage,
@@ -12,13 +13,13 @@ import {
   jsonLanguage,
   markdownLanguage,
   pythonLanguage,
+  rustLanguage,
   StandardSQL,
   xmlLanguage,
   yamlLanguage,
   dockerFile,
   powerShell,
   ruby,
-  rust,
   shell,
   swift,
   toml,
@@ -63,7 +64,17 @@ const LANGUAGE_LABEL_ALIASES: Record<string, string> = {
   css: 'CSS',
   sql: 'SQL',
   go: 'Go',
+  c: 'C',
+  cc: 'C++',
+  cpp: 'C++',
+  'c++': 'C++',
+  cxx: 'C++',
+  h: 'C/C++',
+  hh: 'C++',
+  hpp: 'C++',
+  hxx: 'C++',
   rust: 'Rust',
+  rs: 'Rust',
   ruby: 'Ruby',
   swift: 'Swift',
   toml: 'TOML',
@@ -74,7 +85,6 @@ const LEGACY_SHELL_PARSER = StreamLanguage.define(shell).parser;
 const LEGACY_POWERSHELL_PARSER = StreamLanguage.define(powerShell).parser;
 const LEGACY_DOCKERFILE_PARSER = StreamLanguage.define(dockerFile).parser;
 const LEGACY_RUBY_PARSER = StreamLanguage.define(ruby).parser;
-const LEGACY_RUST_PARSER = StreamLanguage.define(rust).parser;
 const LEGACY_SWIFT_PARSER = StreamLanguage.define(swift).parser;
 const LEGACY_TOML_PARSER = StreamLanguage.define(toml).parser;
 
@@ -118,6 +128,16 @@ export function parserForCodeFenceLanguage(lang: string): { parse: (input: strin
       return StandardSQL.language.parser;
     case 'go':
       return goLanguage.parser;
+    case 'c':
+    case 'cc':
+    case 'cpp':
+    case 'cxx':
+    case 'c++':
+    case 'h':
+    case 'hh':
+    case 'hpp':
+    case 'hxx':
+      return cppLanguage.parser;
     case 'sh':
     case 'bash':
     case 'shell':
@@ -133,7 +153,7 @@ export function parserForCodeFenceLanguage(lang: string): { parse: (input: strin
       return LEGACY_RUBY_PARSER;
     case 'rs':
     case 'rust':
-      return LEGACY_RUST_PARSER;
+      return rustLanguage.parser;
     case 'swift':
       return LEGACY_SWIFT_PARSER;
     case 'toml':

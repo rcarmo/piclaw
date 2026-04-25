@@ -210,7 +210,7 @@ function parseThemeColor(input) {
             b: int & 255,
         };
     }
-    const rgbMatch = raw.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+    const rgbMatch = raw.match(/rgba?\(\s*(\d+)[,\s]\s*(\d+)[,\s]\s*(\d+)/i);
     if (rgbMatch) {
         return {
             r: parseInt(rgbMatch[1], 10),

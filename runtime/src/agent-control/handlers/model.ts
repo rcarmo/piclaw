@@ -60,16 +60,20 @@ export async function handleModel(session: AgentSession, modelRegistry: ModelReg
 
     const modelNames = Array.from(uniqueModels.keys()).sort((a, b) => a.localeCompare(b));
     const currentKey = session.model ? `${session.model.provider}/${session.model.id}` : null;
-    const entries = modelNames.map((name) =>
-      name === currentKey ? `• ${name} (current)` : `• ${name}`
+    const rows = modelNames.map((name) =>
+      name === currentKey ? `| ${name} | ✓ current |` : `| ${name} | |`
     );
 
     return {
       status: "success",
       message: [
-        "Available models:",
-        ...entries,
-        "Use /model <provider>/<modelId> to switch.",
+        "**Available models**",
+        "",
+        "| Model | Status |",
+        "|---|---|",
+        ...rows,
+        "",
+        "Use `/model <provider>/<modelId>` to switch.",
       ].join("\n"),
     };
   }

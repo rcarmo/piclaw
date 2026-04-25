@@ -98,10 +98,20 @@ test('applyModelStatePayload only applies present model fields', () => {
       supports_thinking: true,
       provider_usage: { prompt: 100 },
     },
-    setActiveModel: (next) => { updates.model = next as unknown; },
-    setActiveThinkingLevel: (next) => { updates.thinkingLevel = next as unknown; },
-    setSupportsThinking: (next) => { updates.supportsThinking = next; },
-    setActiveModelUsage: (next) => { updates.providerUsage = next as unknown; },
+    setActiveModel: (next) => {
+      updates.model = typeof next === 'function' ? (next as (prev: unknown) => unknown)(updates.model) : next as unknown;
+    },
+    setActiveThinkingLevel: (next) => {
+      updates.thinkingLevel = typeof next === 'function' ? (next as (prev: unknown) => unknown)(updates.thinkingLevel) : next as unknown;
+    },
+    setSupportsThinking: (next) => {
+      updates.supportsThinking = typeof next === 'function'
+        ? (next as (prev: boolean | unknown) => unknown)(updates.supportsThinking as boolean)
+        : next;
+    },
+    setActiveModelUsage: (next) => {
+      updates.providerUsage = typeof next === 'function' ? (next as (prev: unknown) => unknown)(updates.providerUsage) : next as unknown;
+    },
   });
 
   expect(updates).toEqual({

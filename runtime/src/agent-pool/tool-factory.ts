@@ -8,6 +8,8 @@
 import { createBashTool, createBashToolDefinition } from "@mariozechner/pi-coding-agent";
 import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
 
+import { getDefaultActiveToolNames } from "../extensions/tool-activation.js";
+
 /** The tracked bash operations injected into the built-in bash tool. */
 export type AgentBashOperations = NonNullable<Parameters<typeof createBashTool>[1]>["operations"];
 
@@ -20,19 +22,19 @@ export interface AgentToolFactoryOptions {
 
 /**
  * Creates the default built-in tool set for agent sessions.
- * On Windows, bash is omitted so the PowerShell extension can provide the active shell tool.
+ *
+ * This must match the intended default active-tool baseline closely enough that
+ * a fresh session still has discovery/recovery primitives even if extension
+ * session_start activation is delayed or skipped. Otherwise the agent can get
+ * stranded on the raw read/bash/edit/write fallback while the prompt assumes
+ * list_tools / activate_tools / attach_file and related baseline tools exist.
  */
 export class AgentToolFactory {
   constructor(private readonly options: AgentToolFactoryOptions) {}
 
   createDefaultTools(): string[] {
     const { platform = process.platform } = this.options;
-    return [
-      "read",
-      ...(platform === "win32" ? [] : ["bash"]),
-      "edit",
-      "write",
-    ];
+    return getDefaultActiveToolNames(platform);
   }
 
   /**

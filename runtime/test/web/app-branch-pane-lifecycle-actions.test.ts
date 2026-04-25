@@ -76,7 +76,7 @@ test('watchPaneOpenEventBridge maps openTab/editSource/popOut events to shell ha
     watchPaneOpenEventsImpl: ({ openTab, editSource, popOutPane }) => {
       openTab?.('/workspace/readme.md', 'README');
       editSource?.('/workspace/site/index.html', 'Home');
-      popOutPane?.('/workspace/diagram.drawio', 'Diagram');
+      popOutPane?.('/workspace/diagram.widget', 'Diagram');
       return () => {};
     },
   });
@@ -85,7 +85,7 @@ test('watchPaneOpenEventBridge maps openTab/editSource/popOut events to shell ha
     { path: '/workspace/readme.md', label: 'README', paneOverrideId: null },
     { path: '/workspace/site/index.html', label: 'Home', paneOverrideId: 'editor' },
   ]);
-  expect(popped).toEqual([{ path: '/workspace/diagram.drawio', label: 'Diagram' }]);
+  expect(popped).toEqual([{ path: '/workspace/diagram.widget', label: 'Diagram' }]);
   expect(typeof cleanup).toBe('function');
 });
 

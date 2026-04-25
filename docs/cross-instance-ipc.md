@@ -36,6 +36,9 @@ remote interop routes.
 Optional configuration:
 
 - `PICLAW_REMOTE_INTEROP_ALLOW_HTTP=1` – allow `http://` callback URLs (testing only).
+- `PICLAW_REMOTE_INTEROP_ALLOW_PRIVATE_NETWORK=1` – skip all SSRF protections
+  on callback URLs (private IPs, blocked hostnames, DNS re-resolution).
+  Docker/LAN development only.
 - `PICLAW_REMOTE_SHORT_CIRCUIT_ENABLED=1` – allow short-circuit execution if the peer
   is configured with `mode=short-circuit` and `profile=full`.
 - `PICLAW_REMOTE_INSTANCE_NAME` – display name in metadata.
@@ -114,11 +117,15 @@ Initiator sends `POST /api/remote/pair-request` with:
 
 Receiver stores request as `pending_inbound` and prompts operator with:
 
-- full URL
-- source address
+- callback origin (protocol + host derived from `callback_url`)
+- source address (client IP, when available)
 - instance ID
 - full fingerprint
-- requested mode/permissions
+- display name (if provided)
+
+Mode and permissions are not set during pairing — they default to
+`mediated` / `restricted` and can be changed later via `/pair mode` and
+`/pair permissions`.
 
 ## Step C — URL Control Proof
 
@@ -166,6 +173,16 @@ Initiator verifies signature + challenge binding and marks peer as paired.
 - Never accept by display name alone.
 - Require explicit fingerprint/ID confirmation.
 - Optional short authentication string (SAS) strongly recommended.
+
+### Convenience routing vs identity-safe operations
+
+Commands like `/pair`, `/ask`, and the `remote-peer` skill accept
+display name, instance ID prefix, or fingerprint as shortcuts for peer
+lookup. This is a **convenience feature** — the underlying security
+model always resolves to the full `instance_id` and validates signatures
+against the stored `public_key`. Display-name lookups are
+non-authoritative; if multiple peers share a name, the command will
+report ambiguity rather than guessing.
 
 ---
 
@@ -260,6 +277,7 @@ X-Trust-Epoch
 | `GET /api/remote/ping` | health/metadata | signed |
 | `POST /api/remote/proposal` | default mediated inbound prompt | signed |
 | `POST /api/remote/execute` | optional short-circuit direct exec | signed + mode gate |
+| `POST /api/remote/result` | push execution result callback | signed |
 | `POST /api/remote/revoke` | revoke relationship | signed |
 
 All POST endpoints require `Content-Type: application/json`.
@@ -296,6 +314,30 @@ All POST endpoints require `Content-Type: application/json`.
 }
 ```
 
+### Result callback envelope (`POST /api/remote/result`)
+
+Pushed by the executing peer back to the requesting peer after a
+mediated proposal is approved and executed (or rejected).
+
+```json
+{
+  "negotiation_id": "neg_123",
+  "decision": "accept_execute",
+  "result": "The answer is 42.",
+  "usage": { "duration_ms": 1200 }
+}
+```
+
+Or for a rejection:
+
+```json
+{
+  "negotiation_id": "neg_123",
+  "decision": "deny",
+  "reason": "Rejected by operator."
+}
+```
+
 ---
 
 ## 9) Authorization and Scope
@@ -306,10 +348,18 @@ Pairing grants identity trust, not blanket execution rights.
 
 | Profile | Allowed |
 |---|---|
-| `read-only` | ping/status only |
-| `restricted` (default) | proposal channel with constrained tools |
+| `read-only` | ping/status only — no tool execution or proposals permitted |
+| `non-mutating` | all tools classified as read-only (no side-effects) |
+| `restricted` (default) | proposal channel with constrained tools (shell, file-write, keychain, and other mutating tools denied) |
 | `full` | full remote execution rights |
-| `custom` | explicit allowlist |
+| `custom` | explicit allowlist (internal only — not yet user-facing) |
+
+**`read-only`** is the most conservative profile: the peer can only ping and
+check status. Proposals and execution are rejected at the endpoint level.
+
+**`non-mutating`** allows the peer to run any tool whose capability kind is
+`read-only` in the tool-capabilities registry (e.g. `read`, `find`, `grep`,
+`ls`, `list_tools`). Mutating tools are blocked by the tool ceiling filter.
 
 ### Restricted baseline (deny by default)
 
@@ -435,7 +485,7 @@ These defaults are recommended for first implementation.
 
 ---
 
-## 15) Command UX (Proposed)
+## 15) Command UX
 
 ```text
 /pair request <url>
@@ -444,10 +494,35 @@ These defaults are recommended for first implementation.
 /pair block <instance_id|fingerprint>
 /pair revoke <instance_id|fingerprint>
 /pair list
+/pair list revoked
+/pair inbox
+/pair history [page]
+/pair approve <proposal_id>
+/pair reject <proposal_id> [reason]
 /pair permissions <instance_id> <profile>
 /pair mode <instance_id> <mediated|short-circuit>
-/ask <instance_id> <prompt>
+/ask <instance_id|fingerprint|name> <prompt>
 ```
+
+| Command | Description |
+|---|---|
+| `/pair request <url>` | Initiate pairing with a remote piclaw instance |
+| `/pair accept <id>` | Accept an inbound pair request |
+| `/pair deny <id>` | Deny an inbound pair request |
+| `/pair block <id>` | Deny and block peer |
+| `/pair revoke <id>` | Revoke a pairing (local + best-effort remote notify) |
+| `/pair list` | Show paired peers and pending inbound pair requests |
+| `/pair list revoked` | Show revoked peers |
+| `/pair inbox` | Show pending proposals awaiting review |
+| `/pair history [page]` | Show inbound mediated proposals with status and outcome (50 per page) |
+| `/pair approve <id>` | Approve and execute a pending proposal |
+| `/pair reject <id> [reason]` | Reject a proposal, optionally with reason |
+| `/pair permissions <id> <profile>` | Set capability profile (`read-only`, `non-mutating`, `restricted`, `full`) |
+| `/pair mode <id> <mode>` | Set interaction mode (`mediated`, `short-circuit`) |
+| `/ask <id> <prompt>` | Send a prompt to a paired peer (signed HTTP request) |
+
+Prompts can also be sent via the `remote-peer` skill CLI
+(`peer.ts send <fingerprint|name> <prompt>`).
 
 UX requirements:
 
@@ -477,10 +552,14 @@ UX requirements:
 
 - [x] canonical signature spec implemented and versioned
 - [x] nonce replay cache enforced per peer
-- [ ] acceptance/revocation only by immutable ID/fingerprint
+- [x] acceptance/revocation only by immutable ID/fingerprint
 - [x] URL ownership challenge implemented in pairing
+- [x] pair-callback endpoint hardened (validates nonce + request_id against outbound records)
 - [ ] strict SSRF protections for callback URLs
-- [ ] deterministic policy ceiling (LLM cannot escalate)
+- [x] deterministic policy ceiling (LLM cannot escalate): tool ceiling enforced via
+  `toolCeilingFilter` on `RunAgentOptions`; `setActiveToolsByName` patched for the
+  duration of each remote run to prevent self-escalation; `custom` profile deferred
+  (falls back to `restricted`)
 - [ ] mediated mode default with dedicated channel
 - [x] short-circuit mode explicit opt-in only
 - [ ] per-peer quotas, concurrency caps, and queue isolation
@@ -498,15 +577,24 @@ Completed:
 - Short-circuit explicit opt-in gate
 - Loop/hop limit checks
 - Trust-epoch checks on signed requests
+- Bidirectional peer storage (both sides store each other after pair-confirm)
+- **Explicit operator consent gate**: pairing is now two-stage — initiator sends
+  `pair-request` and waits; receiver operator must run `/pair accept` to drive
+  the URL proof and notify the initiator via a signed `pair-confirm` callback
+- **pair-callback hardened**: validates request_id, challenge nonce, and
+  receiver_instance_id against the pending outbound record before signing
 
 Missing (or partial):
-- Acceptance/revocation UX by immutable ID/fingerprint
-- SSRF hardening beyond baseline allow/deny rules (e.g., DNS rebinding defenses)
+- SSRF hardening beyond baseline allow/deny rules (e.g., redirect-follow cap,
+  DNS rebinding defenses)
 - Deterministic policy ceiling + scoped tool enforcement
 - Dedicated mediated channel UI + decision workflow
 - Quotas/queue isolation beyond basic concurrency limits
 - TLS-only enforcement for interop endpoints
 - Audit redaction + retention controls
+- [x] Tool-call limit enforcement in execute handler (constants defined and
+  passed to agentPool.runAgent; cap enforced via tool_execution_end subscriber)
+- [x] pair-callback endpoint rate limiter (PAIR_CALLBACK_LIMIT: 6/10 min/source)
 
 ---
 

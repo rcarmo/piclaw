@@ -1,8 +1,8 @@
 # Visual artifact generator
 
 Piclaw can generate polished self-contained HTML pages, architecture diagrams,
-data tables, diff reviews, slide decks, and draw.io files using its vendored
-JavaScript libraries and a consistent visual-design profile.
+data tables, diff reviews, and slide decks using its vendored JavaScript
+libraries and a consistent visual-design profile.
 
 This capability is delivered through the **`visual-artifact-generator` skill**
 and a set of related reference assets.
@@ -18,7 +18,6 @@ and a set of related reference assets.
 | `fact-check` | Document accuracy verification against actual code |
 | `generate-slides` | Magazine-quality slide deck with keyboard navigation |
 | `project-recap` | Mental-model snapshot for context switching |
-| `generate-drawio-diagram` | Structured `.drawio` XML for the draw.io editor pane |
 
 ## Vendored libraries
 
@@ -82,8 +81,7 @@ Piclaw's vendored library environment.
 ## Output location
 
 Artifacts are written to `/workspace/.pi/artifacts/` by default and opened
-via `open_workspace_file` or `attach_file`. The draw.io editor pane handles
-`.drawio` files natively.
+via `open_workspace_file` or `attach_file`.
 
 ## Skill location
 
@@ -99,14 +97,12 @@ The full skill specification, commands, and references live under:
 │   ├── plan-review.md
 │   ├── fact-check.md
 │   ├── generate-slides.md
-│   ├── project-recap.md
-│   └── generate-drawio-diagram.md
+│   └── project-recap.md
 ├── references/
 │   ├── libraries.md                  ← vendored library API and post-processing
 │   ├── css-patterns.md               ← theme, cards, grids, tables, animations
 │   ├── responsive-nav.md             ← sticky TOC for multi-section pages
-│   ├── slide-patterns.md             ← slide deck structure and navigation
-│   └── drawio-patterns.md            ← draw.io XML generation patterns
+│   └── slide-patterns.md             ← slide deck structure and navigation
 └── scripts/
     └── mermaid-fixup.js              ← SVG post-processing helper
 ```

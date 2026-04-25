@@ -54,7 +54,17 @@ const DREAM_RECENT_CONTEXT_PATH = resolve(DREAM_MEMORY_DIR, "recent-context.md")
 const DREAM_MEMORY_PATH = resolve(DREAM_MEMORY_DIR, "MEMORY.md");
 const DREAM_BACKUP_KEEP = Math.max(1, Number.parseInt(process.env.PICLAW_DREAM_BACKUP_KEEP || "10", 10) || 10);
 const DREAM_MODEL = process.env.PICLAW_DREAM_MODEL?.trim() || null;
-const DEFAULT_DREAM_AGENT_TIMEOUT_MS = 3 * 60 * 1000;
+const DEFAULT_DREAM_AGENT_TIMEOUT_MS = 6 * 60 * 1000;
+const DREAM_ALLOWED_TOOL_NAMES = new Set([
+  "read",
+  "edit",
+  "write",
+  "grep",
+  "find",
+  "ls",
+  "messages",
+  "search_workspace",
+]);
 const log = createLogger("dream");
 
 type FflateModule = typeof import("fflate");
@@ -74,8 +84,21 @@ export interface DreamAgentTurnResult {
   result: string;
 }
 
+function isDreamToolAllowed(toolName: string): boolean {
+  return DREAM_ALLOWED_TOOL_NAMES.has(String(toolName || "").trim());
+}
+
 function refreshDailyNotes(_chatJid: string, days: number): boolean {
-  refreshDailyNotesFromMessages({ chatJid: DREAM_ALL_CHATS_SCOPE_ANCHOR, days });
+  const backlog = inspectDailyNoteSummaryBacklog({ recentDays: days });
+  const oldestBacklogDay = backlog.dates.length > 0 ? backlog.dates.slice().sort()[0] : null;
+  const boundedDays = (() => {
+    if (!oldestBacklogDay) return 1;
+    const diffMs = Date.now() - new Date(`${oldestBacklogDay}T00:00:00Z`).getTime();
+    const spanDays = Math.max(1, Math.floor(diffMs / 86400000) + 1);
+    return Math.max(1, Math.min(days, spanDays));
+  })();
+
+  refreshDailyNotesFromMessages({ chatJid: DREAM_ALL_CHATS_SCOPE_ANCHOR, days: boundedDays });
   return true;
 }
 
@@ -484,6 +507,7 @@ export async function runDreamAgentTurn(options: { chatJid: string; days?: numbe
     const dailyNotesRefreshed = refreshDailyNotes(chatJid, days);
     const out = await options.agentPool.runAgent(buildDreamPrompt({ mode, days }), dreamChatJid, {
       timeoutMs: getDreamAgentTimeoutMs(),
+      toolCeilingFilter: isDreamToolAllowed,
     });
     const refresh = refreshAgentMemoryFromDailyNotes({ recentDays: days });
     const workspaceIndexRefreshed = await refreshWorkspaceSearchIndex();

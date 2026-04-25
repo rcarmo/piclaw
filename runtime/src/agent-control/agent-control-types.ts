@@ -248,6 +248,14 @@ export type AgentControlCommand =
       type: "user_github";
       profile?: string;
       raw: string;
+    }
+  | {
+      type: "ask";
+      /** Instance ID or fingerprint of the target paired peer. */
+      instanceId?: string;
+      /** Prompt to send to the remote peer. */
+      prompt?: string;
+      raw: string;
     };
 
 /** Result returned by command handlers: status, message, and optional side-effects. */

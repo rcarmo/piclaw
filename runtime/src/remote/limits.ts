@@ -17,6 +17,10 @@ export const DEFAULT_MAX_TOOL_CALLS_FULL = 32;
 export const DEFAULT_MAX_EXECUTION_SEC_RESTRICTED = 60;
 /** Max execution time (seconds) for full profile runs. */
 export const DEFAULT_MAX_EXECUTION_SEC_FULL = 180;
+/** Execution timeout (ms) for restricted profile. */
+export const DEFAULT_TIMEOUT_MS_RESTRICTED = DEFAULT_MAX_EXECUTION_SEC_RESTRICTED * 1000;
+/** Execution timeout (ms) for full profile. */
+export const DEFAULT_TIMEOUT_MS_FULL = DEFAULT_MAX_EXECUTION_SEC_FULL * 1000;
 /** Maximum x-request-hop depth accepted by remote endpoints. */
 export const DEFAULT_REQUEST_HOP_LIMIT = 3;
 /** Allowed timestamp drift window for signed request validation. */
@@ -50,3 +54,11 @@ export const EXECUTE_LIMIT = 6;
 export const REVOKE_WINDOW_MS = 60 * 1000;
 /** Maximum revoke requests allowed per window. */
 export const REVOKE_LIMIT = 6;
+/** Fixed window length for result callback rate limiting. */
+export const RESULT_WINDOW_MS = 60 * 1000;
+/** Maximum result callback requests allowed per window. */
+export const RESULT_LIMIT = 12;
+/** Fixed window length for pair-callback rate limiting. */
+export const PAIR_CALLBACK_WINDOW_MS = 10 * 60 * 1000;
+/** Maximum pair-callback requests allowed per window. */
+export const PAIR_CALLBACK_LIMIT = 6;

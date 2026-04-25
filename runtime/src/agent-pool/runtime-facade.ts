@@ -452,6 +452,7 @@ export interface AvailableModelsResult {
   thinking_level: string | null;
   thinking_level_label: string | null;
   supports_thinking: boolean;
+  available_thinking_levels: string[];
   provider_usage: Awaited<ReturnType<typeof warmProviderUsage>>;
 }
 
@@ -518,6 +519,9 @@ export class AgentRuntimeFacade {
     const supportsThinking = session && typeof (session as AgentSession & { supportsThinking?: () => boolean }).supportsThinking === "function"
       ? (session as AgentSession & { supportsThinking: () => boolean }).supportsThinking()
       : Boolean(session?.model?.reasoning ?? currentModelOption?.reasoning);
+    const availableThinkingLevels: string[] = session && typeof (session as AgentSession & { getAvailableThinkingLevels?: () => string[] }).getAvailableThinkingLevels === "function"
+      ? (session as AgentSession & { getAvailableThinkingLevels: () => string[] }).getAvailableThinkingLevels()
+      : supportsThinking ? ["off", "minimal", "low", "medium", "high"] : ["off"];
     const providerUsage = session?.model?.provider
       ? (peekProviderUsage(session.model.provider, { allowStale: true }) ?? null)
       : currentModelOption?.provider
@@ -538,6 +542,7 @@ export class AgentRuntimeFacade {
       thinking_level: thinkingLevel,
       thinking_level_label: thinkingLevelLabel,
       supports_thinking: supportsThinking,
+      available_thinking_levels: availableThinkingLevels,
       provider_usage: providerUsage,
     };
   }

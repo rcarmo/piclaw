@@ -44,7 +44,6 @@ export const TOOLSETS: ToolsetDefinition[] = [
     description: "Workspace search, document/diagram viewing, and image processing.",
     toolNames: [
       "search_workspace",
-      "open_drawio_editor",
       "open_office_viewer",
       "office_read",
       "office_write",
@@ -59,7 +58,7 @@ export const TOOLSETS: ToolsetDefinition[] = [
   {
     name: "remote",
     description: "Remote execution configuration and remote-capable infrastructure tools.",
-    toolNames: ["ssh", "proxmox", "portainer"],
+    toolNames: ["ssh"],
   },
   {
     name: "browser",

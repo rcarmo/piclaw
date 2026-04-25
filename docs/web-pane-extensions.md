@@ -15,7 +15,6 @@ UI, and the lower-level `extension_ui_*` bridge, see
 | ID | Placement | Description |
 |---|---|---|
 | `editor` | tabs | CodeMirror 6 editor (fallback for all text files). Lazy-loaded. |
-| `drawio` | tabs | Self-hosted draw.io editor for `.drawio` files. Workspace preview exposes an **Edit in Tab** CTA. |
 | `office-viewer` | tabs | Route-backed JS Office viewer for `.docx/.xlsx/.pptx` and OpenDocument files. Workspace preview exposes an **Open in Tab** CTA. |
 | `csv-viewer` | tabs | Table viewer for `.csv` / `.tsv` files. Workspace preview exposes an **Open in Tab** CTA. |
 | `pdf-viewer` | tabs | Inline PDF viewer. Workspace preview exposes an **Open in Tab** CTA. |
@@ -320,7 +319,6 @@ Verify no leaked listeners or DOM nodes after pane lifecycle:
 | ID | Placement | Priority | Location | Description |
 |---|---|---|---|---|
 | `editor` | tabs | 1 | `runtime/extensions/viewers/editor/editor-extension.ts` | CodeMirror 6 editor — handles all text files (fallback). Lazy-loaded as `editor.bundle.js` (~1.57 MB). |
-| `drawio` | tabs | 10 | `runtime/web/src/panes/drawio-pane.ts` | Self-hosted draw.io editor for `.drawio` files. Uses iframe + extension route; workspace preview promotes via **Edit in Tab**. |
 | `office-viewer` | tabs | 10 | `runtime/web/src/panes/office-viewer-pane.ts` | Built-in JS viewer (`/office-viewer/*`) for `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp` with zoom/fit/search and format-specific controls; workspace preview promotes via **Open in Tab**. |
 | `csv-viewer` | tabs | 10 | `runtime/web/src/panes/csv-viewer-pane.ts` | Lightweight table viewer for `.csv` and `.tsv` files; workspace preview promotes via **Open in Tab**. |
 | `pdf-viewer` | tabs | 10 | `runtime/web/src/panes/pdf-viewer-pane.ts` | Inline PDF viewer for `.pdf` files; workspace preview promotes via **Open in Tab**. |

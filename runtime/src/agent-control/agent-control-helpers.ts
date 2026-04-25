@@ -16,7 +16,7 @@
 import type { AgentSession, AgentSessionEvent } from "@mariozechner/pi-coding-agent";
 import type { Api, Model } from "@mariozechner/pi-ai";
 import { existsSync } from "fs";
-import { PICLAW_CONFIG_PATH, WORKSPACE_DIR } from "../core/config.js";
+import { getConfigPath, WORKSPACE_DIR } from "../core/config.js";
 import { readJsonConfig, writeJsonConfig } from "../core/config-store.js";
 
 /** Ordered list of supported thinking levels from off to xhigh. */
@@ -142,7 +142,7 @@ export function updateAssistantConfig(patch: { name?: string | null; avatar?: st
   name?: string;
   avatar?: string;
 } {
-  const config = readJsonConfig(PICLAW_CONFIG_PATH);
+  const config = readJsonConfig(getConfigPath());
   const assistant =
     config.assistant && typeof config.assistant === "object"
       ? { ...(config.assistant as Record<string, unknown>) }
@@ -183,7 +183,7 @@ export function updateAssistantConfig(patch: { name?: string | null; avatar?: st
     delete config.assistant;
   }
 
-  writeJsonConfig(PICLAW_CONFIG_PATH, config);
+  writeJsonConfig(getConfigPath(), config);
 
   return {
     name: typeof assistant.assistantName === "string" ? assistant.assistantName : undefined,
@@ -201,7 +201,7 @@ export function updateUserConfig(patch: {
   avatar?: string;
   avatarBackground?: string;
 } {
-  const config = readJsonConfig(PICLAW_CONFIG_PATH);
+  const config = readJsonConfig(getConfigPath());
   const user =
     config.user && typeof config.user === "object"
       ? { ...(config.user as Record<string, unknown>) }
@@ -251,7 +251,7 @@ export function updateUserConfig(patch: {
     delete config.user;
   }
 
-  writeJsonConfig(PICLAW_CONFIG_PATH, config);
+  writeJsonConfig(getConfigPath(), config);
 
   return {
     name: typeof user.userName === "string" ? user.userName : undefined,

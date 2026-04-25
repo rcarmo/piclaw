@@ -18,6 +18,8 @@ export {
   renameChatBranchIdentity,
   renameChatJid,
   archiveChatBranch,
+  previewPermanentDeleteArchivedBranch,
+  permanentDeleteArchivedBranch,
   restoreChatBranchIdentity,
 } from "./db/chat-branches.js";
 export {
@@ -72,18 +74,6 @@ export {
   listSshConfigs,
 } from "./db/ssh-configs.js";
 export {
-  getProxmoxConfig,
-  upsertProxmoxConfig,
-  deleteProxmoxConfig,
-  listProxmoxConfigs,
-} from "./db/proxmox-configs.js";
-export {
-  getPortainerConfig,
-  upsertPortainerConfig,
-  deletePortainerConfig,
-  listPortainerConfigs,
-} from "./db/portainer-configs.js";
-export {
   storeToolOutput,
   insertToolOutputChunk,
   getToolOutputById,
@@ -91,6 +81,20 @@ export {
   searchToolOutputSnippets,
 } from "./db/tool-outputs.js";
 export { getRouterState, setRouterState } from "./db/router-state.js";
+export {
+  extensionKvGet,
+  extensionKvSet,
+  extensionKvDelete,
+  extensionKvList,
+  extensionKvQuery,
+  extensionKvClear,
+  extensionKvDeleteByChatJid,
+  extensionKvPrune,
+  migrateProxmoxPortainerToKv,
+  type KvScope,
+  type KvEntry,
+  type KvQueryOptions,
+} from "./db/extension-kv.js";
 export {
   getChatCursor,
   getAllChatCursors,
@@ -146,10 +150,4 @@ export type {
   SshConfigApplyTiming,
   SshConfigClearResult,
   SshConfigSetResult,
-  ProxmoxConfig,
-  ProxmoxConfigClearResult,
-  ProxmoxConfigSetResult,
-  PortainerConfig,
-  PortainerConfigClearResult,
-  PortainerConfigSetResult,
 } from "./types.js";

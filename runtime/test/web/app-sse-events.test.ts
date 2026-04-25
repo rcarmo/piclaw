@@ -407,7 +407,7 @@ test('handleAppSseEvent refreshes compaction status metadata even when title sta
   });
 });
 
-test('handleAppSseEvent clears stale context usage when model context refresh fails', async () => {
+test('handleAppSseEvent preserves cached context usage when model context refresh fails', async () => {
   const state = createDeps();
   const updates: any[] = [];
   state.deps.setContextUsage = (next) => {
@@ -423,7 +423,7 @@ test('handleAppSseEvent clears stale context usage when model context refresh fa
   }, state.deps);
 
   await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(updates).toEqual([null]);
+  expect(updates).toEqual([]);
 });
 
 test('handleAppSseEvent maps extension notify events into intent toasts', () => {

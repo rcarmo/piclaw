@@ -14,18 +14,18 @@
     "codemirror": "https://github.com/codemirror/basic-setup.git"
   },
   "source_entry": "extensions/viewers/editor/vendor/codemirror-entry.ts",
-  "output_file": "../../.piclaw/tmp/piclaw-codemirror-vendor-runtime-1776854235694/codemirror.js",
+  "output_file": "../../.piclaw/tmp/piclaw-codemirror-vendor-runtime-1777096066507/codemirror.js",
   "output_files": [
     {
       "package_path": null,
-      "output_file": "../../.piclaw/tmp/piclaw-codemirror-vendor-runtime-1776854235694/codemirror.js",
-      "sha256": "f040d05910de234cb2963b3a96ea72a56672135747795ea4211158f696f9d96b",
-      "size_bytes": 927931
+      "output_file": "../../.piclaw/tmp/piclaw-codemirror-vendor-runtime-1777096066507/codemirror.js",
+      "sha256": "58a06b3d682fbed70015dd60a25b938904c8504fceba05126d2c40536c04cde5",
+      "size_bytes": 1097412
     }
   ],
   "metadata_file": "extensions/viewers/editor/vendor/codemirror.meta.json",
-  "sha256": "f040d05910de234cb2963b3a96ea72a56672135747795ea4211158f696f9d96b",
-  "size_bytes": 927931,
+  "sha256": "58a06b3d682fbed70015dd60a25b938904c8504fceba05126d2c40536c04cde5",
+  "size_bytes": 1097412,
   "build_command": [
     "bun",
     "build",
@@ -34,6 +34,6 @@
     "--format=esm",
     "--minify",
     "--outfile",
-    "../../.piclaw/tmp/piclaw-codemirror-vendor-runtime-1776854235694/codemirror.js"
+    "../../.piclaw/tmp/piclaw-codemirror-vendor-runtime-1777096066507/codemirror.js"
   ]
 }

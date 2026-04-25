@@ -6,8 +6,9 @@ PiClaw ships [`pi-mcp-adapter`](https://github.com/nicobailon/pi-mcp-adapter) so
 
 - bundled `pi-mcp-adapter` dependency
 - automatic extension loading in PiClaw sessions
-- project-local starter config at `.pi/mcp.json.example`
-- workspace skill guidance under `.pi/skills/mcp-adapter/`
+- shared project starter config at `.mcp.json.example`
+- Pi-specific override starter config at `.pi/mcp.json.example`
+- workspace skill guidance under `.pi/skills/mcp-adapter/` when present
 
 The adapter exposes one primary proxy tool:
 
@@ -23,6 +24,7 @@ and slash commands such as:
 /mcp tools
 /mcp reconnect
 /mcp reconnect <server>
+/mcp setup
 /mcp-auth <server>
 ```
 
@@ -30,43 +32,36 @@ In the web UI, plain `/mcp` opens the MCP management panel. In non-UI contexts i
 
 ## Config locations
 
-The adapter merges configuration in this order:
+`pi-mcp-adapter` now follows a shared-MCP-first model.
 
-1. Pi-home config at `~/.pi/agent/mcp.json` (or an override path passed via `--mcp-config`)
-2. optional `imports` pulled from other tool configs
-3. project-local `.pi/mcp.json` overrides everything for the current workspace
+Preferred shared config locations:
 
-### Preferred project-local config
+1. user/global shared MCP config: `~/.config/mcp/mcp.json`
+2. project-local shared MCP config: `/workspace/.mcp.json`
 
-```text
-/workspace/.pi/mcp.json
-```
+Pi-specific override layers still work:
 
-Create it from the starter example:
+3. Pi-home config: `~/.pi/agent/mcp.json` (or an override path passed via `--mcp-config`)
+4. project-local Pi override: `/workspace/.pi/mcp.json`
 
-```bash
-cp /workspace/.pi/mcp.json.example /workspace/.pi/mcp.json
-```
+Use the shared files when the MCP configuration should also be usable by other MCP-aware tools. Use the Pi-owned files only for PiClaw-specific overrides.
 
-### Global Pi config
-
-The adapter also supports Pi's global MCP config:
+Starter examples seeded on first startup:
 
 ```text
-~/.pi/agent/mcp.json
+/workspace/.mcp.json.example
+/workspace/.pi/mcp.json.example
 ```
 
-In the container image, that Pi home is typically bind-mounted at:
+In the container image, Pi home is typically bind-mounted at:
 
 ```text
 /config/.pi/agent/mcp.json
 ```
 
-In PiClaw, prefer the project-local file when the server configuration belongs to the current workspace.
-
 ## Imports from other tool configs
 
-`pi-mcp-adapter` can also import MCP server definitions from other tools by setting `imports` in the Pi-home config. The current supported import kinds are:
+`pi-mcp-adapter` can also import MCP server definitions from other tools through its Pi-owned config layers. Current supported import kinds include:
 
 - `cursor`
 - `claude-code`
@@ -75,9 +70,19 @@ In PiClaw, prefer the project-local file when the server configuration belongs t
 - `windsurf`
 - `vscode`
 
-Imported servers are merged in before the project-local `.pi/mcp.json`, so the workspace config can override them.
+Shared MCP config is preferred first; Pi-owned config remains the place for Pi-specific imports and overrides.
 
-## Minimal example
+## Safe starter shell
+
+The seeded examples are intentionally minimal and safe:
+
+```json
+{
+  "mcpServers": {}
+}
+```
+
+If you want a concrete starter server, for example filesystem access:
 
 ```json
 {
@@ -97,10 +102,11 @@ Imported servers are merged in before the project-local `.pi/mcp.json`, so the w
 
 ## Typical flow
 
-1. Create `.pi/mcp.json`
-2. Add one or more MCP servers
-3. Start a new PiClaw chat/session or restart PiClaw
-4. Discover tools with:
+1. Start with shared project config in `.mcp.json`
+2. Add one or more MCP servers, or run `/mcp setup`
+3. Use `.pi/mcp.json` only if you need Pi-specific overrides/imports
+4. Start a new PiClaw chat/session or let adapter-driven setup reload PiClaw
+5. Discover tools with:
    - `mcp({})`
    - `mcp({ search: "..." })`
    - `mcp({ describe: "tool_name" })`
@@ -108,7 +114,7 @@ Imported servers are merged in before the project-local `.pi/mcp.json`, so the w
    - `/mcp status`
    - `/mcp tools`
    - `/mcp reconnect [server]`
-5. Call tools through the proxy:
+6. Call tools through the proxy:
 
 ```text
 mcp({ tool: "filesystem_read_file", args: "{\"path\":\"./README.md\"}" })
@@ -120,6 +126,7 @@ mcp({ tool: "filesystem_read_file", args: "{\"path\":\"./README.md\"}" })
 
 - `pi-mcp-adapter` does not require `mcp-cli`.
 - MCP servers are lazy by default, so they do not connect until first use.
+- `/mcp setup` provides guided onboarding for shared/compatibility MCP config.
 - `/mcp-auth <server>` currently shows OAuth token-file setup guidance for HTTP/OAuth MCP servers; it is not a full interactive browser OAuth flow.
 - Global `settings.toolPrefix` controls whether proxied/direct tool names are server-prefixed (`server`, `short`, or `none`).
 - Global `settings.directTools` can expose all imported MCP tools as first-class Pi tools; per-server `directTools` can enable all tools or only a named subset.

@@ -2249,6 +2249,8 @@ export function WorkspaceExplorer({
                                 ${selectedCanDelete && html`
                                     <button class="workspace-menu-item danger" role="menuitem" onClick=${handleMenuDelete}>Delete selected file</button>
                                 `}
+                                <div class="workspace-menu-separator"></div>
+                                <button class="workspace-menu-item" role="menuitem" onClick=${() => { setHeaderMenuOpen(false); window.dispatchEvent(new CustomEvent('piclaw:open-settings')); }}>Settings</button>
                             </div>
                         `}
                     </div>

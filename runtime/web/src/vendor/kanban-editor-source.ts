@@ -64,6 +64,8 @@ let _pendingContentVersion = 0;
 let draggedCard: { card: CardData; fromLaneId: string; fromIndex: number } | null = null;
 let draggedLane: { laneId: string; fromIndex: number } | null = null;
 const _cardMarkdownCache = new Map<string, string>();
+let _dragPreviewEl: HTMLElement | null = null;
+let _transparentDragImageEl: HTMLCanvasElement | null = null;
 
 // ── Helpers ─────────────────────────────────────────────────────
 
@@ -181,6 +183,61 @@ function renderCardMarkdown(text: string): string {
   return html;
 }
 
+function getTransparentDragImage(): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null;
+  if (_transparentDragImageEl) return _transparentDragImageEl;
+  const canvas = document.createElement('canvas');
+  canvas.width = 1;
+  canvas.height = 1;
+  _transparentDragImageEl = canvas;
+  return canvas;
+}
+
+function ensureCardDragPreview(): HTMLElement | null {
+  if (typeof document === 'undefined') return null;
+  if (_dragPreviewEl?.isConnected) return _dragPreviewEl;
+  const el = document.createElement('div');
+  el.className = 'kanban-plugin__drag-preview';
+  document.body.appendChild(el);
+  _dragPreviewEl = el;
+  return el;
+}
+
+function updateCardDragPreviewPosition(clientX: number, clientY: number): void {
+  const preview = ensureCardDragPreview();
+  if (!preview) return;
+  preview.style.left = `${Math.round(Number(clientX || 0) + 18)}px`;
+  preview.style.top = `${Math.round(Number(clientY || 0) + 18)}px`;
+}
+
+function showCardDragPreview(card: CardData, point?: { clientX?: number; clientY?: number }): void {
+  const preview = ensureCardDragPreview();
+  if (!preview) return;
+  preview.innerHTML = `
+    <div class="kanban-plugin__item kanban-plugin__item--drag-preview ${card.checked ? 'is-complete' : ''}">
+      <div class="kanban-plugin__item-content-wrapper">
+        <div class="kanban-plugin__item-title-wrapper">
+          <div class="kanban-plugin__item-prefix-button-wrapper">
+            <div class="kanban-plugin__item-checkbox ${card.checked ? 'is-checked' : ''}">${card.checked ? '✓' : ''}</div>
+          </div>
+          <div class="kanban-plugin__item-title kanban-plugin__item-markdown">${renderCardMarkdown(card.title)}</div>
+        </div>
+      </div>
+    </div>`;
+  preview.classList.add('is-visible');
+  updateCardDragPreviewPosition(Number(point?.clientX || 0), Number(point?.clientY || 0));
+}
+
+function hideCardDragPreview(): void {
+  _dragPreviewEl?.classList.remove('is-visible');
+}
+
+function destroyCardDragPreview(): void {
+  hideCardDragPreview();
+  _dragPreviewEl?.remove();
+  _dragPreviewEl = null;
+}
+
 function parseMarkdown(md: string): BoardData {
   const board: BoardData = { lanes: [], archive: [], settings: {} };
   let content = stripFrontmatter(md);
@@ -296,11 +353,21 @@ function Card({ card, laneId, cardIndex, onUpdate, onDelete, onArchive, onMoveCa
     draggedCard = { card, fromLaneId: laneId, fromIndex: cardIndex };
     e.dataTransfer!.effectAllowed = 'move';
     e.dataTransfer!.setData('text/plain', card.id);
+    const transparentDragImage = getTransparentDragImage();
+    if (transparentDragImage && e.dataTransfer?.setDragImage) {
+      e.dataTransfer.setDragImage(transparentDragImage, 0, 0);
+    }
+    showCardDragPreview(card, { clientX: e.clientX, clientY: e.clientY });
     setTimeout(() => { (e.target as HTMLElement).classList.add('is-dragging'); }, 0);
+  };
+  const handleDrag = (e: DragEvent) => {
+    if (!draggedCard) return;
+    updateCardDragPreviewPosition(e.clientX, e.clientY);
   };
   const handleDragEnd = (e: DragEvent) => {
     draggedCard = null;
     setDropPosition(null);
+    hideCardDragPreview();
     (e.target as HTMLElement).classList.remove('is-dragging');
   };
   const updateDropPosition = (e: DragEvent) => {
@@ -312,6 +379,7 @@ function Card({ card, laneId, cardIndex, onUpdate, onDelete, onArchive, onMoveCa
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer!.dropEffect = 'move';
+    updateCardDragPreviewPosition(e.clientX, e.clientY);
     updateDropPosition(e);
   };
   const handleDragLeave = (e: DragEvent) => {
@@ -328,6 +396,7 @@ function Card({ card, laneId, cardIndex, onUpdate, onDelete, onArchive, onMoveCa
     const insertAfter = e.clientY >= rect.top + rect.height / 2;
     onMoveCard(draggedCard.card, draggedCard.fromLaneId, laneId, cardIndex + (insertAfter ? 1 : 0));
     setDropPosition(null);
+    hideCardDragPreview();
     draggedCard = null;
   };
   const handleCheck = () => { onUpdate({ ...card, checked: !card.checked, checkChar: card.checked ? ' ' : 'x' }); };
@@ -351,7 +420,7 @@ function Card({ card, laneId, cardIndex, onUpdate, onDelete, onArchive, onMoveCa
           if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); onDelete(card); }
           if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); onArchive(card); }
         }}
-        onDragStart=${handleDragStart} onDragEnd=${handleDragEnd}
+        onDragStart=${handleDragStart} onDrag=${handleDrag} onDragEnd=${handleDragEnd}
         onDblClick=${() => !isEditing && setIsEditing(true)} tabindex="0">
         <div class="kanban-plugin__item-content-wrapper">
           <div class="kanban-plugin__item-title-wrapper">
@@ -407,6 +476,7 @@ function Lane({ lane, laneIndex, onUpdate, onDelete, onAddCard, onUpdateCard, on
     e.preventDefault();
     if (draggedCard) {
       e.dataTransfer!.dropEffect = 'move';
+      updateCardDragPreviewPosition(e.clientX, e.clientY);
       setIsDragOver(true);
     }
     if (draggedLane) {
@@ -427,6 +497,7 @@ function Lane({ lane, laneIndex, onUpdate, onDelete, onAddCard, onUpdateCard, on
     setIsLaneDragOver(false);
     if (draggedCard) onMoveCard(draggedCard.card, draggedCard.fromLaneId, lane.id);
     if (draggedLane && draggedLane.laneId !== lane.id) onMoveLane(draggedLane.laneId, lane.id);
+    hideCardDragPreview();
     draggedCard = null;
     draggedLane = null;
   };
@@ -598,6 +669,27 @@ function Board({ initialContent }: { initialContent: string }) {
     return () => el.removeEventListener('keydown', handleKeyDown);
   }, [undo, redo]);
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const handleDragOver = (e: DragEvent) => {
+      if (!draggedCard) return;
+      updateCardDragPreviewPosition(e.clientX, e.clientY);
+    };
+    const handleDragCleanup = () => {
+      hideCardDragPreview();
+      draggedCard = null;
+    };
+    document.addEventListener('dragover', handleDragOver);
+    document.addEventListener('drop', handleDragCleanup);
+    document.addEventListener('dragend', handleDragCleanup);
+    return () => {
+      document.removeEventListener('dragover', handleDragOver);
+      document.removeEventListener('drop', handleDragCleanup);
+      document.removeEventListener('dragend', handleDragCleanup);
+      destroyCardDragPreview();
+    };
+  }, []);
+
   const addLane = (title: string) => {
     if (!board) return;
     saveBoard(
@@ -711,6 +803,7 @@ function Board({ initialContent }: { initialContent: string }) {
     _onEdit = opts.onEdit;
     draggedCard = null;
     _pendingContent = null;
+    destroyCardDragPreview();
     if (!opts.isDark) container.classList.add('light');
     preactRender(html`<${Board} initialContent=${opts.content} />`, container);
   },
@@ -735,5 +828,6 @@ function Board({ initialContent }: { initialContent: string }) {
     _onEdit = null;
     _pendingContent = null;
     draggedCard = null;
+    destroyCardDragPreview();
   },
 };
