@@ -73,7 +73,7 @@ function getWorkspaceDir(): string {
 }
 
 function getAddonsDir(workspaceDir = getWorkspaceDir()): string {
-  return join(workspaceDir, ".pi", "addons");
+  return join(workspaceDir, ".pi", "extensions");
 }
 
 function ensureAddonsDir(): string {
@@ -92,7 +92,7 @@ function ensureAddonsDir(): string {
 
 function getInstalledVersion(packageName: string): string | null {
   const workspaceDir = getWorkspaceDir();
-  for (const dir of [getAddonsDir(workspaceDir), join(workspaceDir, ".pi", "extensions")]) {
+  for (const dir of [getAddonsDir(workspaceDir)]) {
     const pkgJsonPath = join(dir, "node_modules", packageName, "package.json");
     try {
       if (!existsSync(pkgJsonPath)) continue;
@@ -122,13 +122,13 @@ function listAddonPackageDirs(addonsNodeModulesDir: string): string[] {
 }
 
 function getInstalledAddonPackageDir(packageName: string, workspaceDir = getWorkspaceDir()): string | null {
-  const addonsNodeModulesDir = join(workspaceDir, '.pi', 'addons', 'node_modules');
+  const addonsNodeModulesDir = join(workspaceDir, '.pi', 'extensions', 'node_modules');
   const packageDir = join(addonsNodeModulesDir, packageName);
   return existsSync(packageDir) ? packageDir : null;
 }
 
 export function getInstalledAddonWebEntries(workspaceDir = getWorkspaceDir()): InstalledAddonWebEntry[] {
-  const addonsNodeModulesDir = join(workspaceDir, '.pi', 'addons', 'node_modules');
+  const addonsNodeModulesDir = join(workspaceDir, '.pi', 'extensions', 'node_modules');
   const entries: InstalledAddonWebEntry[] = [];
   for (const packageDir of listAddonPackageDirs(addonsNodeModulesDir)) {
     const packageJsonPath = join(packageDir, 'package.json');

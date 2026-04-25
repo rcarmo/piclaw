@@ -21,9 +21,11 @@ export function applyTerminalThemeBestEffort(options: {
   runBestEffort(() => {
     if (termEl?.style) {
       termEl.style.backgroundColor = theme.background;
+      termEl.style.color = theme.foreground;
     }
     if (bodyEl?.style) {
       bodyEl.style.backgroundColor = theme.background;
+      bodyEl.style.color = theme.foreground;
     }
     const host = bodyEl?.querySelector?.('.terminal-live-host');
     if (host && typeof host === 'object' && 'style' in (host as any)) {

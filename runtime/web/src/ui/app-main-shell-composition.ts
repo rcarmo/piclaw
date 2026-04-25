@@ -88,6 +88,7 @@ export function composeMainAppShellOptions(input: ComposeMainAppShellOptionsInpu
     searchQuery: shellState.searchQuery,
     oobePanelState: shellState.oobePanelState,
     composePrefillRequest: shellState.composePrefillRequest,
+    requestComposePrefill: shellState.requestComposePrefill,
     handleOobeSetupProvider: shellState.handleOobeSetupProvider,
     handleOobeShowModelPicker: shellState.handleOobeShowModelPicker,
     handleOobeOpenWorkspace: shellState.handleOobeOpenWorkspace,

@@ -142,6 +142,55 @@ describe("web agent message handler", () => {
     expect(queuedFollowups).toHaveLength(0);
   });
 
+  test("handles /abort as a UI-only hard stop without writing a timeline command message", async () => {
+    const broadcasts: Array<{ event: string; payload: unknown }> = [];
+    const applyCalls: Array<{ chatJid: string; command: { type: string; raw: string } }> = [];
+    let storeMessageCalls = 0;
+
+    const channel = {
+      agentPool: {
+        isStreaming: () => true,
+        isActive: () => true,
+        applyControlCommand: async (chatJid: string, command: { type: string; raw: string }) => {
+          applyCalls.push({ chatJid, command });
+          return { status: "success", message: "Aborted current response." };
+        },
+      },
+      json: (payload: unknown, status = 200) =>
+        new Response(JSON.stringify(payload), {
+          status,
+          headers: { "Content-Type": "application/json" },
+        }),
+      enqueueQueuedFollowupItem: () => 0,
+      getQueuedFollowupCount: () => 0,
+      broadcastEvent: (event: string, payload: unknown) => {
+        broadcasts.push({ event, payload });
+      },
+      storeMessage: () => {
+        storeMessageCalls += 1;
+        return null;
+      },
+      sendMessage: async () => {},
+    } as any;
+
+    const req = new Request("https://example.com/agent/default/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "/abort" }),
+    });
+
+    const response = await handleAgentMessage(channel, req, "/agent/default/message", "web:default", "default");
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.ui_only).toBe(true);
+    expect(body.immediate).toBe(true);
+    expect(body.command?.message).toBe("Aborted current response.");
+    expect(applyCalls).toEqual([{ chatJid: "web:default", command: { type: "abort", raw: "/abort" } }]);
+    expect(storeMessageCalls).toBe(0);
+    expect(broadcasts.some((entry) => entry.event === "new_post")).toBe(false);
+  });
+
   test("does not defer /session-rotate while streaming and returns the command error immediately", async () => {
     initDatabase();
 

@@ -106,6 +106,7 @@ export function composeRenderedMainAppOptions(input: {
       searchQuery: input.surface.searchQuery,
       oobePanelState: input.surface.oobePanelState,
       composePrefillRequest: input.surface.composePrefillRequest,
+      requestComposePrefill: input.surface.requestComposePrefill,
       handleOobeSetupProvider: input.surface.handleOobeSetupProvider,
       handleOobeShowModelPicker: input.surface.handleOobeShowModelPicker,
       handleOobeOpenWorkspace: input.surface.handleOobeOpenWorkspace,

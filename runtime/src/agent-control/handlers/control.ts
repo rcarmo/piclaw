@@ -213,15 +213,20 @@ export async function handleAutoRetry(session: AgentSession, command: AutoRetryC
   };
 }
 
-/** Handle /abort: cancel the current agent response. */
+/** Handle /abort: cancel the current agent response and kill tracked tools. */
 export async function handleAbort(session: AgentSession, _command: AbortCommand): Promise<AgentControlResult> {
   try {
     if (session.isCompacting) {
       session.abortCompaction();
-      return { status: "success", message: "Compaction aborted." };
+      const killed = killTrackedProcesses();
+      const killedLabel = killed > 0 ? ` Killed ${killed} tracked tool process${killed === 1 ? "" : "es"}.` : "";
+      return { status: "success", message: `Compaction aborted.${killedLabel}` };
     }
-    await session.abort();
-    return { status: "success", message: "Aborted current response." };
+    const abortPromise = session.abort();
+    const killed = killTrackedProcesses();
+    await abortPromise;
+    const killedLabel = killed > 0 ? ` Killed ${killed} tracked tool process${killed === 1 ? "" : "es"}.` : "";
+    return { status: "success", message: `Aborted current response.${killedLabel}` };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { status: "error", message };

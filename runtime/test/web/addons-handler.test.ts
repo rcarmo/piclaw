@@ -145,7 +145,7 @@ test('handleGetAddons merges add-ons from multiple catalog URLs', async () => {
 
 test('getInstalledAddonWebEntries discovers addon browser entrypoints', async () => {
   await withTempWorkspaceEnv('piclaw-addon-web-entries-', {}, async (workspace) => {
-    const addonDir = join(workspace.workspace, '.pi', 'addons', 'node_modules', 'piclaw-addon-example');
+    const addonDir = join(workspace.workspace, '.pi', 'extensions', 'node_modules', 'piclaw-addon-example');
     mkdirSync(join(addonDir, 'web'), { recursive: true });
     writeFileSync(join(addonDir, 'package.json'), JSON.stringify({
       name: 'piclaw-addon-example',
@@ -171,7 +171,7 @@ test('getInstalledAddonWebEntries discovers addon browser entrypoints', async ()
 
 test('handleAddonAssetRequest serves transpiled addon browser modules', async () => {
   await withTempWorkspaceEnv('piclaw-addon-web-asset-', {}, async (workspace) => {
-    const addonDir = join(workspace.workspace, '.pi', 'addons', 'node_modules', 'piclaw-addon-example');
+    const addonDir = join(workspace.workspace, '.pi', 'extensions', 'node_modules', 'piclaw-addon-example');
     mkdirSync(join(addonDir, 'web'), { recursive: true });
     writeFileSync(join(addonDir, 'package.json'), JSON.stringify({
       name: 'piclaw-addon-example',

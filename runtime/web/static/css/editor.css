@@ -9,8 +9,8 @@
     display: flex;
     flex-direction: column;
     width: var(--editor-width, 40vw);
-    min-width: 280px;
-    max-width: 70vw;
+    min-width: 200px;
+    max-width: calc(100vw - var(--chat-pane-min-width, 10vw) - 8px);
     height: var(--app-height, 100dvh);
     overflow: hidden;
     flex-shrink: 0;
@@ -1353,8 +1353,9 @@
 
     .container {
         max-width: 100%;
+        min-width: var(--chat-pane-min-width, 10vw);
         margin: 0;
-        flex: 1;
+        flex: 1 1 0;
         transition: max-width var(--ui-transition-fast), min-width var(--ui-transition-fast), margin var(--ui-transition-fast);
     }
 }

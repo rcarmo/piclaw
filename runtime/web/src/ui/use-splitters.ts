@@ -1,6 +1,35 @@
 import { useRef } from '../vendor/preact-htm.js';
 import { setLocalStorageItem } from '../utils/storage.js';
 
+const MIN_CHAT_PANE_RATIO = 0.10;
+const WORKSPACE_SPLITTER_WIDTH = 4;
+const EDITOR_SPLITTER_WIDTH = 4;
+const MIN_SIDEBAR_WIDTH = 160;
+const MAX_SIDEBAR_WIDTH = 1600;
+const MIN_EDITOR_WIDTH = 200;
+const MAX_EDITOR_WIDTH = 1600;
+
+function getViewportWidth() {
+  if (typeof window === 'undefined') return 0;
+  return Number(window.innerWidth) || 0;
+}
+
+export function getMinimumChatPaneWidth(viewportWidth = getViewportWidth()) {
+  return viewportWidth > 0 ? Math.floor(viewportWidth * MIN_CHAT_PANE_RATIO) : 0;
+}
+
+export function clampSidebarWidth(width, viewportWidth = getViewportWidth(), editorWidth = 0) {
+  const reserved = getMinimumChatPaneWidth(viewportWidth) + WORKSPACE_SPLITTER_WIDTH + (editorWidth > 0 ? EDITOR_SPLITTER_WIDTH + Math.max(0, editorWidth) : 0);
+  const dynamicMax = viewportWidth > 0 ? Math.floor(viewportWidth - reserved) : MAX_SIDEBAR_WIDTH;
+  return Math.min(Math.max(Number(width) || 0, MIN_SIDEBAR_WIDTH), Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, dynamicMax)));
+}
+
+export function clampEditorWidth(width, viewportWidth = getViewportWidth(), sidebarWidth = 0) {
+  const reserved = getMinimumChatPaneWidth(viewportWidth) + EDITOR_SPLITTER_WIDTH + (sidebarWidth > 0 ? WORKSPACE_SPLITTER_WIDTH + Math.max(0, sidebarWidth) : 0);
+  const dynamicMax = viewportWidth > 0 ? Math.floor(viewportWidth - reserved) : MAX_EDITOR_WIDTH;
+  return Math.min(Math.max(Number(width) || 0, MIN_EDITOR_WIDTH), Math.max(MIN_EDITOR_WIDTH, Math.min(MAX_EDITOR_WIDTH, dynamicMax)));
+}
+
 export function useSplitters({ appShellRef, sidebarWidthRef, editorWidthRef, dockHeightRef }) {
   const handleSplitterMouseDown = useRef((e) => {
     e.preventDefault();
@@ -17,12 +46,12 @@ export function useSplitters({ appShellRef, sidebarWidthRef, editorWidthRef, doc
     let lastX = startX;
     const onMove = (me) => {
       lastX = me.clientX;
-      const w = Math.min(Math.max(startW + (me.clientX - startX), 160), 600);
+      const w = clampSidebarWidth(startW + (me.clientX - startX), getViewportWidth(), editorWidthRef?.current || 0);
       shell.style.setProperty('--sidebar-width', `${w}px`);
       sidebarWidthRef.current = w;
     };
     const onUp = () => {
-      const w = Math.min(Math.max(startW + (lastX - startX), 160), 600);
+      const w = clampSidebarWidth(startW + (lastX - startX), getViewportWidth(), editorWidthRef?.current || 0);
       sidebarWidthRef.current = w;
       splitter.classList.remove('dragging');
       shell.classList.remove('sidebar-resizing');
@@ -53,7 +82,7 @@ export function useSplitters({ appShellRef, sidebarWidthRef, editorWidthRef, doc
       const t = te.touches[0];
       if (!t) return;
       te.preventDefault();
-      const w = Math.min(Math.max(startW + (t.clientX - startX), 160), 600);
+      const w = clampSidebarWidth(startW + (t.clientX - startX), getViewportWidth(), editorWidthRef?.current || 0);
       shell.style.setProperty('--sidebar-width', `${w}px`);
       sidebarWidthRef.current = w;
     };
@@ -85,12 +114,12 @@ export function useSplitters({ appShellRef, sidebarWidthRef, editorWidthRef, doc
     let lastX = startX;
     const onMove = (me) => {
       lastX = me.clientX;
-      const w = Math.min(Math.max(startW + (me.clientX - startX), 200), 800);
+      const w = clampEditorWidth(startW + (me.clientX - startX), getViewportWidth(), sidebarWidthRef?.current || 0);
       shell.style.setProperty('--editor-width', `${w}px`);
       editorWidthRef.current = w;
     };
     const onUp = () => {
-      const w = Math.min(Math.max(startW + (lastX - startX), 200), 800);
+      const w = clampEditorWidth(startW + (lastX - startX), getViewportWidth(), sidebarWidthRef?.current || 0);
       editorWidthRef.current = w;
       splitter.classList.remove('dragging');
       document.body.style.cursor = '';
@@ -119,7 +148,7 @@ export function useSplitters({ appShellRef, sidebarWidthRef, editorWidthRef, doc
       const t = te.touches[0];
       if (!t) return;
       te.preventDefault();
-      const w = Math.min(Math.max(startW + (t.clientX - startX), 200), 800);
+      const w = clampEditorWidth(startW + (t.clientX - startX), getViewportWidth(), sidebarWidthRef?.current || 0);
       shell.style.setProperty('--editor-width', `${w}px`);
       editorWidthRef.current = w;
     };

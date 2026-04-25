@@ -15,6 +15,7 @@ import {
 } from './app-status-refresh-orchestration.js';
 import { refreshModelAndQueueState as refreshModelAndQueueStateBundle } from './app-status-refresh-orchestration.js';
 import { applyStoredSidebarWidth } from './app-boot-load-orchestration.js';
+import { clampSidebarWidth } from './use-splitters.js';
 import {
   completeAppPerfTraceIfReady,
   getActiveAppPerfTraceId,
@@ -193,6 +194,7 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
       readStoredNumber,
       sidebarWidthRef,
       shellElement: appShellRef.current,
+      maxWidth: clampSidebarWidth(Number.POSITIVE_INFINITY),
     });
   }, [appShellRef, loadAgents, readStoredNumber, sidebarWidthRef]);
 

@@ -77,6 +77,7 @@ export function createAgentStatusContext(deps: AgentStatusContextDeps): AgentSta
 export interface ContentEndpointsContextDeps extends JsonLike {
   defaultChatJid: string;
   getBuffer(turnId: string, panel: "thought" | "draft"): WebAgentBufferEntry | undefined;
+  getIdentity?(): { assistantName?: string | null; assistantAvatarUrl?: string | null; userName?: string | null; userAvatarUrl?: string | null; userAvatarBackground?: string | null } | null;
 }
 
 /** Build the content endpoint context from live channel dependencies. */
@@ -85,6 +86,7 @@ export function createContentEndpointsContext(deps: ContentEndpointsContextDeps)
     defaultChatJid: deps.defaultChatJid,
     json: deps.json,
     getBuffer: deps.getBuffer,
+    getIdentity: deps.getIdentity,
   };
 }
 

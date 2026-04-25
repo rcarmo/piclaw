@@ -24,6 +24,7 @@
     flex-direction: column;
     width: var(--sidebar-width, 280px);
     min-width: var(--sidebar-width, 280px);
+    max-width: calc(100vw - var(--chat-pane-min-width, 10vw) - 8px);
     background-color: var(--bg-primary);
     height: var(--app-height, 100dvh);
     overflow: hidden;

@@ -5,6 +5,7 @@ import { BtwPanel } from '../components/btw-panel.js';
 import { FloatingWidgetPane } from '../components/floating-widget-pane.js';
 import { AttachmentPreviewModal } from '../components/attachment-preview-modal.js';
 import { SettingsDialog } from '../components/settings-dialog.js';
+import { TimelineQuickActions } from '../components/timeline-quick-actions.js';
 import { TimelineMenu } from '../components/timeline-menu.js';
 import { AgentRequestModal, AgentStatus } from '../components/status.js';
 import { Timeline } from '../components/timeline.js';
@@ -162,11 +163,13 @@ export function renderMainShell(options: MainShellRenderOptions): any {
     formatBranchPickerLabel,
     openRenameCurrentBranchForm,
     handlePruneCurrentBranch,
+    handlePurgeArchivedBranch,
     currentHashtag,
     handleBackToTimeline,
     activeSearchScopeLabel,
     oobePanelState,
     composePrefillRequest,
+    requestComposePrefill,
     handleOobeSetupProvider,
     handleOobeShowModelPicker,
     handleOobeOpenWorkspace,
@@ -441,6 +444,19 @@ export function renderMainShell(options: MainShellRenderOptions): any {
         onToggleTerminal=${hasDockPanes ? toggleDock : undefined}
         terminalVisible=${Boolean(hasDockPanes && dockVisible)}
       />
+      <${TimelineQuickActions}
+        activeChatAgents=${activeChatAgents}
+        currentChatJid=${currentChatJid}
+        workspaceOpen=${workspaceOpen}
+        chatOnlyMode=${chatOnlyMode}
+        terminalVisible=${Boolean(hasDockPanes && dockVisible)}
+        onSwitchChat=${handleBranchPickerChange}
+        onToggleWorkspace=${toggleWorkspace}
+        onOpenTerminalTab=${openTerminalTab}
+        onOpenVncTab=${openVncTab}
+        onToggleTerminalDock=${hasDockPanes ? toggleDock : undefined}
+        onPrefillCompose=${requestComposePrefill}
+      />
       <div class="container">
         ${searchQuery && isIOSDevice() && html`<div class="search-results-spacer"></div>`}
         ${(currentHashtag || searchQuery) && html`
@@ -555,6 +571,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
           isRenameSessionInProgress=${isRenamingBranch}
           onCreateSession=${handleCreateSessionFromCompose}
           onDeleteSession=${handlePruneCurrentBranch}
+          onPurgeArchivedSession=${handlePurgeArchivedBranch}
           onRestoreSession=${handleRestoreBranch}
           activeEditorPath=${chatOnlyMode ? null : tabStripActiveId}
           onAttachEditorFile=${chatOnlyMode ? undefined : attachActiveEditorFile}

@@ -12,6 +12,7 @@ import { ProvidersSection } from './settings/providers.js';
 import { ModelsSection } from './settings/models.js';
 import { ThemeSection } from './settings/appearance.js';
 import { ToolsSection } from './settings/tools.js';
+import { QuickActionsSection } from './settings/quick-actions.js';
 import { AddonsSection } from './settings/addons.js';
 import { getRegisteredSettingsPanes } from './settings/pane-registry.js';
 
@@ -27,6 +28,7 @@ const iconProviders = html`<svg viewBox="0 0 24 24" width="16" height="16" fill=
 const iconModels = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/><path d="M9 15c.83.67 2 1 3 1s2.17-.33 3-1"/></svg>`;
 const iconAppearance = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20c-2.76 0-5-4.48-5-10S9.24 2 12 2z"/><circle cx="16.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="7.5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="16.5" cy="15.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="10" cy="7" r="1.5" fill="currentColor" stroke="none"/></svg>`;
 const iconTools = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`;
+const iconQuickActions = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h14v14H5z"/><path d="M9 9h6"/><path d="M9 12h6"/><path d="M9 15h4"/></svg>`;
 const iconAddons = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`;
 
 // Built-in sections (order 0-100)
@@ -35,6 +37,7 @@ const BUILTIN_SECTIONS = [
     { id: 'providers', label: 'Providers', icon: iconProviders, searchable: false, order: 20 },
     { id: 'models', label: 'Models', icon: iconModels, searchable: true, placeholder: 'Filter models\u2026', order: 30 },
     { id: 'theme', label: 'Appearance', icon: iconAppearance, searchable: false, order: 40 },
+    { id: 'quick-actions', label: 'Quick Actions', icon: iconQuickActions, searchable: true, placeholder: 'Filter quick actions\u2026', order: 70 },
     { id: 'tools', label: 'Tools', icon: iconTools, searchable: true, placeholder: 'Filter tools\u2026', order: 80 },
     { id: 'addons', label: 'Add-ons', icon: iconAddons, searchable: true, placeholder: 'Filter add-ons\u2026', order: 90 },
 ];
@@ -112,6 +115,7 @@ function SettingsDialogContent({ onClose }) {
             case 'providers': return html`<${ProvidersSection} providers=${settingsData?.providers} setStatus=${setStatus} />`;
             case 'models': return html`<${ModelsSection} filter=${filter} />`;
             case 'theme': return html`<${ThemeSection} themes=${settingsData?.themes} colorKeys=${settingsData?.colorKeys} />`;
+            case 'quick-actions': return html`<${QuickActionsSection} filter=${filter} setStatus=${setStatus} mergeSettingsData=${mergeSettingsData} />`;
             case 'tools': return html`<${ToolsSection} toolsets=${settingsData?.toolsets} filter=${filter} />`;
             case 'addons': return html`<${AddonsSection} setStatus=${setStatus} filter=${filter} />`;
             default: return null;

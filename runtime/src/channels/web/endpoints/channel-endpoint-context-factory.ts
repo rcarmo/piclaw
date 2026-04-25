@@ -120,6 +120,16 @@ export function createWebChannelEndpointContexts(
           defaultChatJid: options.defaultChatJid,
           json: (payload, status = 200) => channel.json(payload, status),
           getBuffer: (turnId, panel) => channel.getBuffer(turnId, panel),
+          getIdentity: () => {
+            const identity = options.getIdentitySnapshot();
+            return {
+              assistantName: identity.assistantName,
+              assistantAvatarUrl: identity.agentAvatarUrl,
+              userName: identity.userName,
+              userAvatarUrl: identity.userAvatarUrl,
+              userAvatarBackground: identity.userAvatarBackground,
+            };
+          },
         });
       }
       return contentContext;

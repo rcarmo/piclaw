@@ -43,17 +43,30 @@ function filterHiddenQueuePlaceholders<T extends QueueFilterablePost>(items: T[]
   return items.filter((post) => !isHiddenQueuePlaceholder(post));
 }
 
+export interface TimelineIdentity {
+  assistant_name?: string | null;
+  assistant_avatar_url?: string | null;
+  user_name?: string | null;
+  user_avatar_url?: string | null;
+  user_avatar_background?: string | null;
+}
+
 /** Build paginated timeline data for GET /timeline. */
 export function getTimelineResponse(
   chatJid: string,
   limit: number,
-  before?: number
+  before?: number,
+  identity?: TimelineIdentity | null,
 ): { status: number; body: unknown } {
   const rawPosts = getTimeline(chatJid, limit, before ?? undefined);
   const posts = filterHiddenQueuePlaceholders(rawPosts);
   const oldestId = rawPosts.length > 0 ? rawPosts[0].id : null;
   const hasMore = oldestId !== null && rawPosts.length === limit && hasOlderMessages(chatJid, oldestId);
-  return { status: 200, body: { posts, limit, has_more: hasMore } };
+  const body: Record<string, unknown> = { posts, limit, has_more: hasMore };
+  if (identity) {
+    body.identity = identity;
+  }
+  return { status: 200, body };
 }
 
 /** Build timeline data filtered by hashtag. */

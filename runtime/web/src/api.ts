@@ -188,6 +188,22 @@ export async function sendAgentMessage(agentId, content, threadId = null, mediaI
     });
 }
 
+export async function getAgentCommands(chatJid = 'web:default') {
+    const normalized = typeof chatJid === 'string' && chatJid.trim() ? chatJid.trim() : 'web:default';
+    return request(`/agent/commands?chat_jid=${encodeURIComponent(normalized)}`);
+}
+
+export async function getQuickActionsSettings() {
+    return request('/agent/settings/quick-actions');
+}
+
+export async function saveQuickActionsSettings(payload) {
+    return request('/agent/settings/quick-actions', {
+        method: 'POST',
+        body: JSON.stringify(payload || {}),
+    });
+}
+
 /**
  * List currently active chat agents/branches known to the backend session pool.
  */
@@ -237,6 +253,16 @@ export async function renameChatBranch(chatJid, options = {}) {
  */
 export async function pruneChatBranch(chatJid) {
     return request('/agent/branch-prune', {
+        method: 'POST',
+        body: JSON.stringify({ chat_jid: chatJid }),
+    });
+}
+
+/**
+ * Permanently delete an already archived chat branch and its durable state.
+ */
+export async function purgeChatBranch(chatJid) {
+    return request('/agent/branch-purge', {
         method: 'POST',
         body: JSON.stringify({ chat_jid: chatJid }),
     });
@@ -670,8 +696,8 @@ export async function attachWorkspaceFile(path) {
 }
 
 /** Upload a file to the workspace via multipart form data. */
-/** Maximum client-side upload size (256 MB). Larger files need chunked upload. */
-const MAX_UPLOAD_SIZE = 256 * 1024 * 1024;
+/** Maximum client-side upload size (512 MB). Larger files need chunked upload. */
+const MAX_UPLOAD_SIZE = 512 * 1024 * 1024;
 
 export async function uploadWorkspaceFile(file, targetPath = '', options = {}) {
     if (file?.size > MAX_UPLOAD_SIZE) {

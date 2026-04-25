@@ -19,6 +19,7 @@ import {
   handleUninstallAddon,
 } from "../handlers/addons.js";
 import { getGeneralSettingsData, saveGeneralSettings } from "../handlers/general-settings.js";
+import { getQuickActionsSettingsData, saveQuickActionsSettings } from "../handlers/quick-actions-settings.js";
 import {
   handleWebPushPresence,
   handleWebPushSubscriptionDelete,
@@ -159,6 +160,11 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
   },
   {
     method: "POST",
+    path: "/agent/branch-purge",
+    handle: (channel, req) => channel.handleAgentBranchPurge(req),
+  },
+  {
+    method: "POST",
     path: "/agent/branch-restore",
     handle: (channel, req) => channel.handleAgentBranchRestore(req),
   },
@@ -211,6 +217,20 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
     method: "POST",
     path: "/agent/whitelist",
     handle: (channel) => channel.json({ error: "Not found" }, 404),
+  },
+  {
+    method: "GET",
+    path: "/agent/settings/quick-actions",
+    handle: (channel) => channel.json({ ok: true, settings: getQuickActionsSettingsData() }, 200),
+  },
+  {
+    method: "POST",
+    path: "/agent/settings/quick-actions",
+    handle: async (channel, req) => {
+      const body = await req.json().catch(() => ({}));
+      const settings = saveQuickActionsSettings(body || {});
+      return channel.json({ ok: true, settings }, 200);
+    },
   },
   {
     method: "GET",
@@ -291,6 +311,7 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
 
       return channel.json({
         ...getGeneralSettingsData(),
+        quickActions: getQuickActionsSettingsData(),
         providers,
         themes,
         colorKeys: [...THEME_LIST_COLOR_KEYS],

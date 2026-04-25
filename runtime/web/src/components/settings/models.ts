@@ -120,7 +120,7 @@ export function ModelsSection({ filter = '' }) {
                         ${filtered.map(m => html`
                             <tr class=${m.label === current ? 'settings-row-active' : ''}>
                                 <td><input type="radio" name="settings-model" checked=${m.label === current} disabled=${switching} onChange=${() => switchModel(m.label)} /></td>
-                                <td>${m.label}</td><td>${m.provider}</td>
+                                <td>${m.name || m.label}</td><td>${m.provider}</td>
                                 <td>${m.context_window ? (m.context_window / 1000).toFixed(0) + 'K' : '\u2014'}</td>
                                 <td style="text-align:center">${m.reasoning ? '\ud83e\udde0' : '\u2014'}</td>
                             </tr>

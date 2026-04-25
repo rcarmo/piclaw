@@ -179,7 +179,7 @@ const terminalExt: WebPaneExtension = {
 
 // --- Tests ---
 
-test('buildTerminalTheme clamps terminal foreground to the highest-contrast variant against the background', () => {
+test('buildTerminalTheme prefers the theme foreground when it already satisfies terminal contrast', () => {
     const originalGetComputedStyle = globalThis.getComputedStyle;
     const fakeDocument: any = {
         documentElement: {
@@ -198,7 +198,7 @@ test('buildTerminalTheme clamps terminal foreground to the highest-contrast vari
         getPropertyValue(name: string) {
             const vars: Record<string, string> = {
                 '--bg-primary': '#ffe082',
-                '--text-primary': '#7a4f00',
+                '--text-primary': '#5a3900',
                 '--text-secondary': '#8a6b2f',
                 '--accent-color': '#ffb300',
                 '--danger-color': '#f4212e',
@@ -214,10 +214,11 @@ test('buildTerminalTheme clamps terminal foreground to the highest-contrast vari
     try {
         const theme = buildTerminalTheme(fakeWindow, fakeDocument);
         expect(theme.background).toBe('#ffe082');
-        expect(theme.foreground).toBe('#000000');
-        expect(theme.white).toBe('#000000');
-        expect(theme.brightWhite).toBe('#000000');
-        expect(theme.selectionForeground).toBe('#000000');
+        expect(theme.foreground).toBe('#5a3900');
+        expect(theme.white).toBe('#5a3900');
+        expect(theme.brightWhite).toBe('#5a3900');
+        expect(theme.selectionForeground).toBe('#5a3900');
+        expect(contrastRatio(theme.background, theme.foreground)).toBeGreaterThanOrEqual(7);
         expect(contrastRatio(theme.background, theme.cursor)).toBeGreaterThanOrEqual(3);
         expect(contrastRatio(theme.background, theme.blue)).toBeGreaterThanOrEqual(4.5);
         expect(contrastRatio(theme.background, theme.yellow)).toBeGreaterThanOrEqual(4.5);
@@ -226,7 +227,7 @@ test('buildTerminalTheme clamps terminal foreground to the highest-contrast vari
     }
 });
 
-test('buildTerminalTheme lifts low-contrast terminal palette entries on dark tinted themes', () => {
+test('buildTerminalTheme preserves dark theme foregrounds instead of forcing pure white', () => {
     const originalGetComputedStyle = globalThis.getComputedStyle;
     const fakeDocument: any = {
         documentElement: {
@@ -245,7 +246,7 @@ test('buildTerminalTheme lifts low-contrast terminal palette entries on dark tin
         getPropertyValue(name: string) {
             const vars: Record<string, string> = {
                 '--bg-primary': '#101418',
-                '--text-primary': '#7f8b96',
+                '--text-primary': '#c7d0d9',
                 '--text-secondary': '#69757f',
                 '--accent-color': '#355e9a',
                 '--danger-color': '#7a3038',
@@ -260,6 +261,9 @@ test('buildTerminalTheme lifts low-contrast terminal palette entries on dark tin
 
     try {
         const theme = buildTerminalTheme(fakeWindow, fakeDocument);
+        expect(theme.foreground).toBe('#c7d0d9');
+        expect(theme.white).toBe('#c7d0d9');
+        expect(theme.brightWhite).toBe('#c7d0d9');
         expect(contrastRatio(theme.background, theme.foreground)).toBeGreaterThanOrEqual(7);
         expect(contrastRatio(theme.background, theme.blue)).toBeGreaterThanOrEqual(4.5);
         expect(contrastRatio(theme.background, theme.red)).toBeGreaterThanOrEqual(4.5);

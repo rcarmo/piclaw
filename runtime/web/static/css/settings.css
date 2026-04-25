@@ -143,6 +143,15 @@
     color: var(--text-secondary);
 }
 
+.settings-row-vertical {
+    align-items: flex-start;
+    flex-direction: column;
+}
+
+.settings-row-vertical label {
+    min-width: 0;
+}
+
 .settings-row input[type="text"],
 .settings-row input[type="number"],
 .settings-row textarea,
@@ -234,6 +243,75 @@
 }
 
 .settings-hint a { color: var(--accent-color, #1d9bf0); }
+
+.settings-totp-panel {
+    margin-top: 14px;
+    padding: 14px;
+    border: 1px solid var(--border-color, rgba(128,128,128,0.2));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--bg-secondary, #f5f5f5) 35%, transparent);
+}
+
+.settings-totp-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.settings-totp-grid {
+    display: grid;
+    grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+}
+
+.settings-totp-qr {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 220px;
+    padding: 12px;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.settings-totp-qr svg {
+    width: 100%;
+    max-width: 220px;
+    height: auto;
+}
+
+.settings-totp-meta {
+    display: grid;
+    gap: 10px;
+}
+
+.settings-totp-meta .settings-row input[type="text"] {
+    max-width: none;
+    width: 100%;
+}
+
+.settings-subsection-list {
+    display: grid;
+    gap: 10px;
+}
+
+.settings-checkbox-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color, rgba(128,128,128,0.3));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--bg-secondary) 72%, transparent);
+}
+
+.settings-checkbox-row input[type="checkbox"] {
+    margin-top: 2px;
+}
 
 /* ── Tables ─────────────────────────────────────────────────────────────── */
 
@@ -531,6 +609,32 @@
 .settings-addon-btn-remove:hover {
     border-color: var(--danger-color, #ef4444);
     background: color-mix(in srgb, var(--danger-color, #ef4444) 8%, var(--bg-primary));
+}
+
+.settings-addon-btn-restart-now {
+    background: color-mix(in srgb, var(--warning-color, #f0b429) 12%, var(--bg-primary));
+    border-color: color-mix(in srgb, var(--warning-color, #f0b429) 36%, transparent);
+    color: var(--warning-color, #f0b429);
+    font-weight: 700;
+}
+
+.settings-addon-btn-restart-now:hover {
+    border-color: var(--warning-color, #f0b429);
+    background: color-mix(in srgb, var(--warning-color, #f0b429) 18%, var(--bg-primary));
+}
+
+.settings-addon-restart-notice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--warning-color, #f0b429) 28%, transparent);
+    background: color-mix(in srgb, var(--warning-color, #f0b429) 9%, transparent);
+    color: var(--warning-color, #f0b429);
+    font-size: 0.84em;
 }
 
 .settings-addon-error {

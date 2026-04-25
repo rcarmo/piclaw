@@ -38,7 +38,9 @@ test("applyTerminalThemeBestEffort updates terminal surfaces and runtime hooks",
   });
 
   expect(termEl.style.backgroundColor).toBe('#111111');
+  expect(termEl.style.color).toBe('#eeeeee');
   expect(bodyEl.style.backgroundColor).toBe('#111111');
+  expect(bodyEl.style.color).toBe('#eeeeee');
   expect(host.style.color).toBe('#eeeeee');
   expect(canvas.style.backgroundColor).toBe('#111111');
   expect((terminal.options as any).theme).toEqual({ background: '#111111', foreground: '#eeeeee' });

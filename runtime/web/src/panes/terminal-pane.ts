@@ -311,7 +311,8 @@ export function buildTerminalTheme(runtimeWindow = typeof window !== 'undefined'
     const isDark = detectDarkTheme(runtimeWindow, runtimeDocument);
     const palette = isDark ? DARK_TERMINAL_PALETTE : LIGHT_TERMINAL_PALETTE;
     const background = readThemeVar('--bg-primary', isDark ? '#000000' : '#ffffff', runtimeDocument);
-    const foreground = ensureTerminalColorContrast(background, getHighestContrastTextColor(background), 7);
+    const themeTextPrimary = readThemeVar('--text-primary', isDark ? '#e7e9ea' : '#0f1419', runtimeDocument);
+    const foreground = ensureTerminalColorContrast(background, themeTextPrimary || getHighestContrastTextColor(background), 7);
     const accent = readThemeVar('--accent-color', '#1d9bf0', runtimeDocument);
     const danger = readThemeVar('--danger-color', isDark ? '#ff7b72' : '#cf222e', runtimeDocument);
     const success = readThemeVar('--success-color', isDark ? '#7ee787' : '#1a7f37', runtimeDocument);

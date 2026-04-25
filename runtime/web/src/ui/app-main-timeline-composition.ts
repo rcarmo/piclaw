@@ -32,6 +32,7 @@ export function useMainAppTimelineComposition(options: {
   currentHashtag: string | null;
   searchQuery: string | null;
   followupQueueItems: any[];
+  onIdentity?: ((identity: any) => void) | null;
 }) {
   const {
     timelineRef,
@@ -75,6 +76,7 @@ export function useMainAppTimelineComposition(options: {
     chatJid: currentChatJid,
     currentHashtag,
     searchQuery,
+    onIdentity: options.onIdentity ?? null,
   });
 
   const posts = useMemo(() => deriveVisibleTimelinePosts({

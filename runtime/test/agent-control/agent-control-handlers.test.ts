@@ -10,6 +10,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, truncateSync, writeFileSync } from "fs";
 import { dirname, join, resolve } from "path";
 import { withChatContext } from "../../src/core/chat-context.js";
+import { listTrackedProcesses, registerProcess } from "../../src/utils/process-tracker.js";
 import { getTestWorkspace, setEnv } from "../helpers.js";
 import { DEFAULT_TEST_MODEL, TestAgentControlSession, cleanupRotatedSessionArtifacts, createTestModelRegistry, createTestSessionRuntime } from "./session-fixture.js";
 
@@ -288,9 +289,14 @@ test("agent control queue, compact, and abort commands", async () => {
   expect(autoRetry.message).toContain("on");
   expect(session.autoRetryEnabled).toBe(true);
 
+  registerProcess(999999);
+  expect(listTrackedProcesses()).toContain(999999);
+
   const abort = await applyControlCommand(runtime as any, registry, { type: "abort", raw: "/abort" });
   expect(abort.message).toContain("Aborted current response");
+  expect(abort.message).toContain("Killed 1 tracked tool process");
   expect(session.abortCalls).toBe(1);
+  expect(listTrackedProcesses()).not.toContain(999999);
 
   session.isCompacting = true;
   const abortCompaction = await applyControlCommand(runtime as any, registry, { type: "abort", raw: "/abort" });

@@ -2174,6 +2174,7 @@ export function ComposeBox({
                                 ${!loadingModels && modelOptions.map((modelOption, index) => {
                                     const modelLabel = typeof modelOption?.label === 'string' ? modelOption.label : '';
                                     const contextWindowLabel = formatModelPickerContextWindow(modelOption?.contextWindow);
+                                    const modelDisplayName = modelOption?.name || null;
                                     return html`
                                         <button
                                             key=${modelLabel}
@@ -2182,9 +2183,9 @@ export function ComposeBox({
                                             class=${`compose-model-popup-item compose-model-popup-model-item${modelPopupIndex === index ? ' active' : ''}${activeModel === modelLabel ? ' current-model' : ''}`}
                                             onClick=${() => { void handleSelectModel(modelOption); }}
                                             disabled=${switchingModel}
-                                            title=${[modelLabel, contextWindowLabel].filter(Boolean).join(' • ')}
+                                            title=${[modelLabel, modelDisplayName, contextWindowLabel].filter(Boolean).join(' • ')}
                                         >
-                                            <span class="compose-model-popup-model-label">${formatModelPickerDisplayLabel(modelLabel, modelOption?.contextWindow)}</span>
+                                            <span class="compose-model-popup-model-label">${formatModelPickerDisplayLabel(modelLabel, modelOption?.contextWindow)}${modelDisplayName ? html` <span class="compose-model-popup-model-subtitle">${modelDisplayName}</span>` : ''}</span>
                                         </button>
                                     `;
                                 })}

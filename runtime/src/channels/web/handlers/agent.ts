@@ -654,7 +654,22 @@ export async function handleAgentMessage(
     );
   }
 
-  // Model/thinking commands: execute without writing to the timeline.
+  if (command?.type === "abort" && !hasAttachments) {
+    const result = await channel.agentPool.applyControlCommand(chatJid, command);
+    return channel.json(
+      {
+        thread_id: null,
+        command: result,
+        ui_only: true,
+        immediate: isActive,
+      },
+      200,
+    );
+  }
+
+  // Model/thinking commands: execute without writing to the timeline,
+  // EXCEPT for bare /model (list) and bare /thinking (query) which should
+  // surface their table/output as a timeline message like /theme does.
   const MODEL_COMMAND_TYPES = new Set(["model", "thinking", "cycle_model", "cycle_thinking"]);
   if (command && MODEL_COMMAND_TYPES.has(command.type)) {
     const result = await channel.agentPool.applyControlCommand(chatJid, command);
@@ -687,6 +702,24 @@ export async function handleAgentMessage(
       if (command.type === "model" || command.type === "cycle_model") {
         if (channel.retryFailedOnModelSwitch(chatJid)) {
           channel.resumeChat(chatJid);
+        }
+      }
+    }
+
+    // Bare /model (list) or bare /thinking (query) — write output to the timeline
+    const isBareModelList = command.type === "model" && !(command as any).modelId && !(command as any).provider;
+    const isBareThinkingQuery = command.type === "thinking" && !(command as any).level;
+    if ((isBareModelList || isBareThinkingQuery) && result.message) {
+      const formattedMessage = formatOutbound(result.message, "web");
+      if (formattedMessage) {
+        try {
+          await channel.sendMessage(chatJid, formattedMessage, { forceRoot: true });
+        } catch (error) {
+          log.error("Failed to send model/thinking list response", {
+            operation: "handle_agent_message.model_list_response",
+            chatJid,
+            err: error,
+          });
         }
       }
     }

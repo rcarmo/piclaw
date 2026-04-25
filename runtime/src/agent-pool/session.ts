@@ -203,6 +203,7 @@ function ensureWorkspaceExtensionNodeModulesLink(nodeModulesDir: string | null):
 }
 
 type AddonPackageManifest = {
+  name?: string;
   main?: string;
   pi?: {
     extensions?: string[];
@@ -227,7 +228,7 @@ function listAddonPackageDirs(addonsNodeModulesDir: string): string[] {
 }
 
 export function getInstalledAddonExtensionPaths(workspaceDir = getWorkspaceDir()): string[] {
-  const addonsNodeModulesDir = join(workspaceDir, ".pi", "addons", "node_modules");
+  const addonsNodeModulesDir = join(workspaceDir, ".pi", "extensions", "node_modules");
   const extensionPaths: string[] = [];
   for (const packageDir of listAddonPackageDirs(addonsNodeModulesDir)) {
     const packageJsonPath = join(packageDir, "package.json");

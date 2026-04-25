@@ -14,6 +14,7 @@ import {
     isIOSDevice,
 } from './ui/app-helpers.js';
 import { isCompactionStatus } from './ui/status-duration.js';
+import { openSettingsDialog } from './components/settings-dialog.js';
 import {
     useAppLocationNavigation,
 } from './ui/app-location-navigation.js';
@@ -60,7 +61,6 @@ import {
 import { isLikelySafariBrowser } from './ui/app-pane-runtime-orchestration.js';
 import {
     OOBE_PROVIDER_MISSING_DISMISSED_KEY,
-    OOBE_PROVIDER_READY_COMPLETED_KEY,
     resolveOobePanelState,
 } from './ui/oobe-state.js';
 
@@ -80,11 +80,11 @@ const {
     stopAutoresearch,
     dismissAutoresearch,
     getAgentModels,
-    completeInstanceOobe,
     getActiveChatAgents,
     getChatBranches,
     renameChatBranch,
     pruneChatBranch,
+    purgeChatBranch,
     restoreChatBranch,
     getAgentQueueState,
     steerAgentQueueItem,
@@ -113,8 +113,16 @@ function MainApp({ locationParams, navigate }) {
         branchLoaderMode,
     });
     const [providerMissingDismissed, setProviderMissingDismissed] = useState(() => getLocalStorageBoolean(OOBE_PROVIDER_MISSING_DISMISSED_KEY, false));
-    const [providerReadyCompleted, setProviderReadyCompleted] = useState(() => getLocalStorageBoolean(OOBE_PROVIDER_READY_COMPLETED_KEY, false));
-    const [composePrefillRequest, setComposePrefillRequest] = useState<any>(null);
+    const [composePrefillRequest, setComposePrefillRequest] = useState(null);
+    const requestComposePrefill = useCallback((text) => {
+        const nextText = typeof text === 'string' ? text : '';
+        if (!nextText.trim()) return;
+        setComposePrefillRequest({
+            token: `prefill-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+            text: nextText,
+        });
+    }, []);
+
     const {
         agentStatus,
         setAgentStatus,
@@ -163,6 +171,32 @@ function MainApp({ locationParams, navigate }) {
         currentHashtag: surface.currentHashtag,
         searchQuery: surface.searchQuery,
         followupQueueItems: surface.followupQueueItems,
+        onIdentity: useCallback((identity) => {
+            if (!identity) return;
+            const name = identity.assistant_name;
+            const avatarUrl = identity.assistant_avatar_url;
+            if (name || avatarUrl) {
+                const agentId = 'default';
+                surface.setAgents((prev) => {
+                    const existing = prev[agentId] || { id: agentId };
+                    const next = { ...existing };
+                    if (name && !next.name) next.name = name;
+                    if (avatarUrl && !next.avatar_url) next.avatar_url = avatarUrl;
+                    return { ...prev, [agentId]: next };
+                });
+            }
+            const userName = identity.user_name;
+            const userAvatarUrl = identity.user_avatar_url;
+            const userAvatarBg = identity.user_avatar_background;
+            if (userName || userAvatarUrl) {
+                surface.setUserProfile((prev) => ({
+                    ...prev,
+                    ...(userName && !prev.name ? { name: userName } : {}),
+                    ...(userAvatarUrl && !prev.avatar_url ? { avatar_url: userAvatarUrl } : {}),
+                    ...(userAvatarBg && !prev.avatar_background ? { avatar_background: userAvatarBg } : {}),
+                }));
+            }
+        }, [surface.setAgents, surface.setUserProfile]),
     });
 
     const interaction = useMainAppInteractionComposition({
@@ -448,6 +482,7 @@ function MainApp({ locationParams, navigate }) {
             sendAgentMessage,
             renameChatBranch,
             pruneChatBranch,
+            purgeChatBranch,
             restoreChatBranch,
             forkChatBranch,
             steerAgentQueueItem,
@@ -493,39 +528,15 @@ function MainApp({ locationParams, navigate }) {
         modelsLoaded: surface.hasLoadedAgentModels,
         modelPayload: surface.agentModelsPayload,
         providerMissingDismissed,
-        providerReadyCompleted,
-    }), [panePopoutMode, surface.hasLoadedAgentModels, surface.agentModelsPayload, providerMissingDismissed, providerReadyCompleted]);
+    }), [panePopoutMode, surface.hasLoadedAgentModels, surface.agentModelsPayload, providerMissingDismissed]);
 
-    const requestComposePrefill = useCallback((text: string) => {
-        const nextText = typeof text === 'string' ? text.trim() : '';
-        if (!nextText) return;
-        timelineViewActions.exitSearchMode?.();
-        setComposePrefillRequest({ token: `${Date.now()}:${Math.random()}`, text: nextText });
-    }, [timelineViewActions]);
-
-    const handleOobeSetupProvider = useCallback(() => {
-        requestComposePrefill('/login');
-    }, [requestComposePrefill]);
-
-    const handleOobeShowModelPicker = useCallback(() => {
-        requestComposePrefill('/model');
-    }, [requestComposePrefill]);
-
-    const handleOobeOpenWorkspace = useCallback(() => {
-        surface.setWorkspaceOpen(true);
-    }, [surface.setWorkspaceOpen]);
+    const handleOobeOpenSettings = useCallback(() => {
+        openSettingsDialog();
+    }, []);
 
     const handleDismissProviderMissingOobe = useCallback(() => {
         setProviderMissingDismissed(true);
         setLocalStorageItem(OOBE_PROVIDER_MISSING_DISMISSED_KEY, 'true');
-    }, []);
-
-    const handleCompleteProviderReadyOobe = useCallback(() => {
-        setProviderReadyCompleted(true);
-        setLocalStorageItem(OOBE_PROVIDER_READY_COMPLETED_KEY, 'true');
-        void completeInstanceOobe('provider-ready').catch((error) => {
-            console.debug('[app] Failed to persist provider-ready OOBE dismissal; keeping local state.', error);
-        });
     }, []);
 
     useEffect(() => {
@@ -577,11 +588,11 @@ function MainApp({ locationParams, navigate }) {
             ...surface,
             oobePanelState,
             composePrefillRequest,
-            handleOobeSetupProvider,
-            handleOobeShowModelPicker,
-            handleOobeOpenWorkspace,
+            requestComposePrefill,
+            handleOobeSetupProvider: handleOobeOpenSettings,
+            handleOobeShowModelPicker: handleOobeOpenSettings,
+            handleOobeOpenWorkspace: handleOobeOpenSettings,
             handleDismissProviderMissingOobe,
-            handleCompleteProviderReadyOobe,
         },
         editorState: pane.editorState,
         agentState: {

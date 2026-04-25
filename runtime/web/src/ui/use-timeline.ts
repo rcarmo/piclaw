@@ -32,7 +32,7 @@ export function mergeFreshTimelinePosts(currentPosts, freshPosts) {
   return dedupePosts([...freshArray, ...olderCached]);
 }
 
-export function useTimeline({ preserveTimelineScroll, preserveTimelineScrollTop, chatJid = null, currentHashtag = null, searchQuery = null }) {
+export function useTimeline({ preserveTimelineScroll, preserveTimelineScrollTop, chatJid = null, currentHashtag = null, searchQuery = null, onIdentity = null }) {
   const [posts, setPostsState] = useState(null);
   const [hasMore, setHasMoreState] = useState(false);
   const hasMoreRef = useRef(false);
@@ -104,6 +104,7 @@ export function useTimeline({ preserveTimelineScroll, preserveTimelineScrollTop,
         const nextPosts = Array.isArray(result?.posts) ? result.posts : [];
         const nextHasMore = Boolean(result?.has_more);
         setTimelineState(nextPosts, nextHasMore);
+        if (result?.identity && typeof onIdentity === 'function') onIdentity(result.identity);
       };
 
       const cached = getCachedTimelineSnapshot(chatJid);

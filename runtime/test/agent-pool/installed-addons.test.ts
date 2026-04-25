@@ -11,9 +11,9 @@ afterEach(() => {
   clearExtensionRoutes();
 });
 
-test('getInstalledAddonExtensionPaths discovers package pi.extensions from .pi/addons/node_modules', async () => {
+test('getInstalledAddonExtensionPaths discovers package pi.extensions from .pi/extensions/node_modules', async () => {
   await withTempWorkspaceEnv('piclaw-installed-addon-scan-', {}, async (workspace) => {
-    const addonDir = join(workspace.workspace, '.pi', 'addons', 'node_modules', 'piclaw-addon-example');
+    const addonDir = join(workspace.workspace, '.pi', 'extensions', 'node_modules', 'piclaw-addon-example');
     mkdirSync(addonDir, { recursive: true });
     writeFileSync(join(addonDir, 'package.json'), JSON.stringify({
       name: 'piclaw-addon-example',
@@ -29,9 +29,9 @@ test('getInstalledAddonExtensionPaths discovers package pi.extensions from .pi/a
   });
 });
 
-test('web sessions load installed addon extensions from .pi/addons/node_modules', async () => {
+test('web sessions load installed addon extensions from the workspace extensions package root', async () => {
   await withTempWorkspaceEnv('piclaw-installed-addon-runtime-', {}, async (workspace) => {
-    const addonDir = join(workspace.workspace, '.pi', 'addons', 'node_modules', 'piclaw-addon-example');
+    const addonDir = join(workspace.workspace, '.pi', 'extensions', 'node_modules', 'piclaw-addon-example');
     mkdirSync(addonDir, { recursive: true });
     writeFileSync(join(addonDir, 'package.json'), JSON.stringify({
       name: 'piclaw-addon-example',
@@ -82,7 +82,7 @@ test('web sessions load installed addon extensions from .pi/addons/node_modules'
 test('installed eml addon registers the attachment preview route', async () => {
   await withTempWorkspaceEnv('piclaw-installed-addon-eml-', {}, async (workspace) => {
     const sourceDir = join(import.meta.dir, 'fixtures', 'eml-viewer');
-    const addonDir = join(workspace.workspace, '.pi', 'addons', 'node_modules', 'piclaw-addon-eml-viewer');
+    const addonDir = join(workspace.workspace, '.pi', 'extensions', 'node_modules', 'piclaw-addon-eml-viewer');
     mkdirSync(addonDir, { recursive: true });
     writeFileSync(join(addonDir, 'package.json'), readFileSync(join(sourceDir, 'package.json'), 'utf8'));
     writeFileSync(join(addonDir, 'index.ts'), readFileSync(join(sourceDir, 'index.ts'), 'utf8'));

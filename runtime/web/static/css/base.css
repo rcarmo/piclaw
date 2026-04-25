@@ -109,6 +109,7 @@
     /* Layout */
     --chat-min-width: 640px;
     --chat-max-width: 900px;
+    --chat-pane-min-width: 10vw;
     --workspace-tab-width: 20px;
 
     /* Misc */
