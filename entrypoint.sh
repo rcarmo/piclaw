@@ -419,6 +419,11 @@ if [ -d "/workspace" ] && [ ! -f "/workspace/notes/memory/README.md" ]; then
     fi
 fi
 
+if [ -d "/workspace" ] && [ ! -d "/workspace/logs" ]; then
+    mkdir -p /workspace/logs
+    chown agent:agent /workspace/logs 2>/dev/null || true
+fi
+
 if [ -d "/workspace" ]; then
     sync_workspace_supervisor_defaults \
         "$SUPERVISOR_DEFAULTS_DIR" \
