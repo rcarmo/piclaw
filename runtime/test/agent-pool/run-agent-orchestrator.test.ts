@@ -10,7 +10,7 @@ import type { AgentSessionRuntime } from "@mariozechner/pi-coding-agent";
 import { ensureSessionDir } from "../../src/agent-pool/session.js";
 import { getAttachmentRegistry } from "../../src/agent-pool/attachments.js";
 import { AgentTurnCoordinator } from "../../src/agent-pool/turn-coordinator.js";
-import { runAgentPrompt } from "../../src/agent-pool/run-agent-orchestrator.js";
+import { createToolExecutionWatchdogHeartbeatController, runAgentPrompt } from "../../src/agent-pool/run-agent-orchestrator.js";
 import { getToolUseMessageBudget, setToolUseMessageBudget } from "../../src/core/config.js";
 import { setEnv } from "../helpers.js";
 
@@ -52,6 +52,31 @@ afterEach(() => {
     if (!logsDir) continue;
     rmSync(logsDir, { recursive: true, force: true });
   }
+});
+
+test("tool-execution watchdog heartbeat controller keeps pulsing while tools remain active", async () => {
+  const beats: Array<Record<string, unknown> | undefined> = [];
+  const controller = createToolExecutionWatchdogHeartbeatController("web:test", {
+    heartbeat: (_chatJid, _phase, metadata) => {
+      beats.push(metadata);
+    },
+    getIntervalMs: () => 10,
+  });
+
+  controller.handleEvent({ type: "tool_execution_start", toolCallId: "tool-1", toolName: "bash" });
+  await Bun.sleep(35);
+  controller.handleEvent({ type: "tool_execution_end", toolCallId: "tool-1", toolName: "bash" });
+  const beatCountAfterEnd = beats.length;
+  await Bun.sleep(25);
+  controller.stop();
+
+  expect(beatCountAfterEnd).toBeGreaterThan(0);
+  expect(beats[0]).toMatchObject({
+    eventType: "tool_execution_watchdog_heartbeat",
+    activeToolCount: 1,
+    activeToolNames: ["bash"],
+  });
+  expect(beats).toHaveLength(beatCountAfterEnd);
 });
 
 function createAssistantMessage(text: string) {
