@@ -6,14 +6,16 @@ The short version:
 
 1. **Pane extensions** are the first-class host for substantial tool/file UI.
 2. **Adaptive Cards and normal timeline messages** are the preferred structured conversation UI.
-3. **`extension_ui_*` events** are a low-level browser-event bridge for lightweight web-session integrations, not a full plugin UI framework.
+3. **Add-on settings panes** are browser-side modules that should use the direct backend add-on config API.
+4. **`extension_ui_*` events** are a low-level browser-event bridge for lightweight web-session integrations, not a full plugin UI framework.
 
-## The three supported surfaces
+## The supported surfaces
 
 | UI need | Preferred surface | Why |
 |---|---|---|
 | File editors, viewers, dashboards, tool panes, persistent chrome-adjacent UI | **Web pane extension** | First-class host model with tabs/dock lifecycle |
 | Structured chat decisions, approvals, forms, receipts | **Adaptive Cards / timeline messages** | Persisted, agent-owned, reconnect-safe, visible in history |
+| Add-on settings inside **Settings** | **Add-on web settings pane + direct backend config API** | Browser-side pane with explicit local config transport |
 | Lightweight web-only signals for an already-open browser session | **`extension_ui_*` bridge** | Minimal compatibility path for browser event consumers |
 
 ## First-class host: pane extensions
@@ -44,6 +46,21 @@ This is the preferred path for:
 - approvals/choices that belong in the chat history
 - read-only receipts or structured results
 - workflows that should still make sense after reload/reconnect
+
+## Settings panes are their own surface
+
+Add-on settings panes are **not** part of the `extension_ui_*` bridge.
+
+They are browser-side modules loaded from installed add-on `pi.web.entries`, and they should communicate with the runtime through the authenticated local add-on config API:
+
+- `GET /agent/addons/api/<addon>/config`
+- `POST /agent/addons/api/<addon>/config`
+- optional add-on-specific actions like `GET /agent/addons/api/<addon>/browser-config`
+- `GET` / `POST /agent/keychain` for secrets that belong in the keychain
+
+Runtime add-on modules register those handlers via `globalThis.__piclaw_registerAddonConfigApi(...)`.
+
+Do **not** treat add-on settings panes as slash-command clients. The slash-command bridge remains only as a legacy fallback for older add-ons.
 
 ## Low-level bridge: `extension_ui_*`
 
@@ -116,9 +133,11 @@ Use this decision order:
 
 1. **Should this live in history?**
    - Yes → timeline message / Adaptive Card.
-2. **Does this need a persistent mounted UI surface?**
+2. **Is this an add-on settings surface inside Settings?**
+   - Yes → add-on web settings pane + direct backend config API.
+3. **Does this need a persistent mounted UI surface?**
    - Yes → pane extension.
-3. **Is this just a lightweight signal to an already-open browser session?**
+4. **Is this just a lightweight signal to an already-open browser session?**
    - Yes → `extension_ui_*` bridge.
 
 ## Related files
@@ -127,4 +146,7 @@ Use this decision order:
 - `runtime/src/channels/web/sse/sse.ts`
 - `runtime/web/src/ui/extension-ui-events.ts`
 - `runtime/web/src/app.ts`
+- `runtime/src/channels/web/handlers/addon-config-api.ts`
+- `runtime/src/channels/web/handlers/addons.ts`
+- `docs/settings-and-addons.md`
 - `docs/web-pane-extensions.md`

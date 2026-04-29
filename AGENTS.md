@@ -26,6 +26,8 @@
 ## Conventions
 
 - See `skel/AGENTS.md` for the agent operating context and working style
+- For add-on settings panes, prefer the **direct backend add-on config API** (`/agent/addons/api/<addon>/<action>` plus runtime registration via `__piclaw_registerAddonConfigApi`) instead of routing browser settings traffic through slash commands
+- Treat slash-command config dispatch as a legacy fallback only; new settings-pane work should register direct handlers in the add-on runtime entry and use browser fetches from the pane
 - For web visuals/SVG diagrams, prefer attached `.svg` files (via `attach_file`) over raw SVG markup in message text; use widget/artifact paths only when interactivity is needed
 - See `WORKITEMS.md` for the workitem lifecycle
 - See `workitems/` for the kanban-style issue tracker

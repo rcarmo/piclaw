@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { afterEach, expect, test } from 'bun:test';
 import { lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
@@ -20,6 +20,14 @@ import {
   setAddonInstallTestHooksForTests,
   WEB_RESTART_DELAY_MS,
 } from '../../src/channels/web/handlers/addons.js';
+import {
+  registerAddonConfigApi,
+  resetAddonConfigApiRegistryForTests,
+} from '../../src/channels/web/handlers/addon-config-api.js';
+
+afterEach(() => {
+  resetAddonConfigApiRegistryForTests();
+});
 
 function createAddonTarball(baseDir: string, fileName: string, files: Record<string, string>): string {
   const sourceDir = join(baseDir, `${fileName}-src`);
@@ -601,9 +609,14 @@ test('isAddonFsLockError matches common Windows lock errors', () => {
   expect(isAddonFsLockError(new Error('plain failure'))).toBe(false);
 });
 
-test('handleAddonConfigApiRequest maps GET config requests to addon slash commands', async () => {
-  const invocations: Array<{ chatJid: string; rawText: string }> = [];
-  const res = await handleAddonConfigApiRequest(
+test('handleAddonConfigApiRequest prefers directly registered addon config handlers', async () => {
+  registerAddonConfigApi('observability', 'config', {
+    get: async () => ({ enabled: true, source: 'direct' }),
+    set: async (body) => ({ ok: true, body, source: 'direct' }),
+  }, 'test-addon');
+
+  let slashCalls = 0;
+  const getRes = await handleAddonConfigApiRequest(
     new Request('https://example.test/agent/addons/api/observability/config'),
     '/agent/addons/api/observability/config',
     (body, status = 200) => new Response(JSON.stringify(body), {
@@ -611,54 +624,21 @@ test('handleAddonConfigApiRequest maps GET config requests to addon slash comman
       headers: { 'Content-Type': 'application/json' },
     }),
     {
-      async applySlashCommand(chatJid: string, rawText: string) {
-        invocations.push({ chatJid, rawText });
-        return {
-          status: 'success',
-          message: '{"enabled":true}',
-          messages: [{ customType: 'observability', text: '{"enabled":true}' }],
-        };
+      async applySlashCommand() {
+        slashCalls += 1;
+        return { status: 'error', message: 'slash should not be called' };
       },
     },
     'web:test',
   );
-  expect(res?.status).toBe(200);
-  expect(await res?.json()).toEqual({ enabled: true });
-  expect(invocations).toEqual([{ chatJid: 'web:test', rawText: '/observability-config-get' }]);
-});
+  expect(getRes?.status).toBe(200);
+  expect(await getRes?.json()).toEqual({ enabled: true, source: 'direct' });
 
-test('handleAddonConfigApiRequest maps arbitrary GET addon API requests to addon slash commands', async () => {
-  const invocations: Array<{ chatJid: string; rawText: string }> = [];
-  const res = await handleAddonConfigApiRequest(
-    new Request('https://example.test/agent/addons/api/observability/browser-config'),
-    '/agent/addons/api/observability/browser-config',
-    (body, status = 200) => new Response(JSON.stringify(body), {
-      status,
-      headers: { 'Content-Type': 'application/json' },
-    }),
-    {
-      async applySlashCommand(chatJid: string, rawText: string) {
-        invocations.push({ chatJid, rawText });
-        return {
-          status: 'success',
-          messages: [{ customType: 'observability', text: '{"ok":true,"enabled":true}' }],
-        };
-      },
-    },
-    'web:test',
-  );
-  expect(res?.status).toBe(200);
-  expect(await res?.json()).toEqual({ ok: true, enabled: true });
-  expect(invocations).toEqual([{ chatJid: 'web:test', rawText: '/observability-browser-config-get' }]);
-});
-
-test('handleAddonConfigApiRequest maps POST config requests to addon slash commands', async () => {
-  const invocations: Array<{ chatJid: string; rawText: string }> = [];
-  const res = await handleAddonConfigApiRequest(
+  const postRes = await handleAddonConfigApiRequest(
     new Request('https://example.test/agent/addons/api/observability/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: false, graphite_port: 2004 }),
+      body: JSON.stringify({ enabled: false }),
     }),
     '/agent/addons/api/observability/config',
     (body, status = 200) => new Response(JSON.stringify(body), {
@@ -666,19 +646,188 @@ test('handleAddonConfigApiRequest maps POST config requests to addon slash comma
       headers: { 'Content-Type': 'application/json' },
     }),
     {
-      async applySlashCommand(chatJid: string, rawText: string) {
-        invocations.push({ chatJid, rawText });
-        return {
-          status: 'success',
-          messages: [{ customType: 'observability', text: '{"ok":true,"config":{"enabled":false,"graphite_port":2004}}' }],
-        };
+      async applySlashCommand() {
+        slashCalls += 1;
+        return { status: 'error', message: 'slash should not be called' };
       },
     },
     'web:test',
   );
-  expect(res?.status).toBe(200);
-  expect(await res?.json()).toEqual({ ok: true, config: { enabled: false, graphite_port: 2004 } });
-  expect(invocations).toEqual([{ chatJid: 'web:test', rawText: '/observability-config-set {"enabled":false,"graphite_port":2004}' }]);
+  expect(postRes?.status).toBe(200);
+  expect(await postRes?.json()).toEqual({ ok: true, body: { enabled: false }, source: 'direct' });
+  expect(slashCalls).toBe(0);
+});
+
+test('handleAddonConfigApiRequest loads direct addon config handlers from installed addon extension entries', async () => {
+  await withTempWorkspaceEnv('piclaw-addon-config-direct-', {}, async (workspace) => {
+    const addonDir = join(workspace.workspace, '.pi', 'extensions', 'node_modules', 'piclaw-addon-example');
+    mkdirSync(addonDir, { recursive: true });
+    writeFileSync(join(addonDir, 'package.json'), JSON.stringify({
+      name: 'piclaw-addon-example',
+      version: '0.1.0',
+      type: 'module',
+      pi: { extensions: ['index.ts'] },
+    }, null, 2));
+    writeFileSync(join(addonDir, 'index.ts'), [
+      'const registerAddonConfigApi = globalThis.__piclaw_registerAddonConfigApi;',
+      'if (typeof registerAddonConfigApi === "function") {',
+      '  registerAddonConfigApi("example-addon", "config", {',
+      '    get: async () => ({ ok: true, source: "loaded-direct" }),',
+      '    set: async (body) => ({ ok: true, body, source: "loaded-direct" }),',
+      '  }, import.meta.dir);',
+      '}',
+      'export default function noop() {}',
+      '',
+    ].join('\n'));
+
+    let slashCalls = 0;
+    const res = await handleAddonConfigApiRequest(
+      new Request('https://example.test/agent/addons/api/example-addon/config'),
+      '/agent/addons/api/example-addon/config',
+      (body, status = 200) => new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+      {
+        async applySlashCommand() {
+          slashCalls += 1;
+          return { status: 'error', message: 'slash should not be called' };
+        },
+      },
+      'web:test',
+    );
+    expect(res?.status).toBe(200);
+    expect(await res?.json()).toEqual({ ok: true, source: 'loaded-direct' });
+    expect(slashCalls).toBe(0);
+  });
+});
+
+test('handleAddonConfigApiRequest maps GET config requests to addon slash commands', async () => {
+  await withTempWorkspaceEnv('piclaw-addon-config-slash-get-', {}, async () => {
+    const invocations: Array<{ chatJid: string; rawText: string }> = [];
+    const res = await handleAddonConfigApiRequest(
+      new Request('https://example.test/agent/addons/api/observability/config'),
+      '/agent/addons/api/observability/config',
+      (body, status = 200) => new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+      {
+        async applySlashCommand(chatJid: string, rawText: string) {
+          invocations.push({ chatJid, rawText });
+          return {
+            status: 'success',
+            message: '{"enabled":true}',
+            messages: [{ customType: 'observability', text: '{"enabled":true}' }],
+          };
+        },
+      },
+      'web:test',
+    );
+    expect(res?.status).toBe(200);
+    expect(await res?.json()).toEqual({ enabled: true });
+    expect(invocations).toEqual([{ chatJid: 'web:test', rawText: '/observability-config-get' }]);
+  });
+});
+
+test('handleAddonConfigApiRequest maps arbitrary GET addon API requests to addon slash commands', async () => {
+  await withTempWorkspaceEnv('piclaw-addon-config-slash-browser-', {}, async () => {
+    const invocations: Array<{ chatJid: string; rawText: string }> = [];
+    const res = await handleAddonConfigApiRequest(
+      new Request('https://example.test/agent/addons/api/observability/browser-config'),
+      '/agent/addons/api/observability/browser-config',
+      (body, status = 200) => new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+      {
+        async applySlashCommand(chatJid: string, rawText: string) {
+          invocations.push({ chatJid, rawText });
+          return {
+            status: 'success',
+            messages: [{ customType: 'observability', text: '{"ok":true,"enabled":true}' }],
+          };
+        },
+      },
+      'web:test',
+    );
+    expect(res?.status).toBe(200);
+    expect(await res?.json()).toEqual({ ok: true, enabled: true });
+    expect(invocations).toEqual([{ chatJid: 'web:test', rawText: '/observability-browser-config-get' }]);
+  });
+});
+
+test('handleAddonConfigApiRequest falls back to suffixed addon slash commands when duplicates exist', async () => {
+  await withTempWorkspaceEnv('piclaw-addon-config-slash-suffix-', {}, async () => {
+    const invocations: Array<{ chatJid: string; rawText: string }> = [];
+    const res = await handleAddonConfigApiRequest(
+      new Request('https://example.test/agent/addons/api/proxmox/config'),
+      '/agent/addons/api/proxmox/config',
+      (body, status = 200) => new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+      {
+        async applySlashCommand(chatJid: string, rawText: string) {
+          invocations.push({ chatJid, rawText });
+          if (rawText === '/proxmox-config-get') {
+            return {
+              status: 'error',
+              message: 'Unknown extension command: /proxmox-config-get',
+            };
+          }
+          if (rawText === '/proxmox-config-get:1') {
+            return {
+              status: 'success',
+              messages: [{ customType: 'proxmox', text: '{"host":"pve.local"}' }],
+            };
+          }
+          return {
+            status: 'error',
+            message: 'unexpected invocation',
+          };
+        },
+      },
+      'web:test',
+    );
+    expect(res?.status).toBe(200);
+    expect(await res?.json()).toEqual({ host: 'pve.local' });
+    expect(invocations).toEqual([
+      { chatJid: 'web:test', rawText: '/proxmox-config-get' },
+      { chatJid: 'web:test', rawText: '/proxmox-config-get:1' },
+    ]);
+  });
+});
+
+test('handleAddonConfigApiRequest maps POST config requests to addon slash commands', async () => {
+  await withTempWorkspaceEnv('piclaw-addon-config-slash-post-', {}, async () => {
+    const invocations: Array<{ chatJid: string; rawText: string }> = [];
+    const res = await handleAddonConfigApiRequest(
+      new Request('https://example.test/agent/addons/api/observability/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: false, graphite_port: 2004 }),
+      }),
+      '/agent/addons/api/observability/config',
+      (body, status = 200) => new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+      {
+        async applySlashCommand(chatJid: string, rawText: string) {
+          invocations.push({ chatJid, rawText });
+          return {
+            status: 'success',
+            messages: [{ customType: 'observability', text: '{"ok":true,"config":{"enabled":false,"graphite_port":2004}}' }],
+          };
+        },
+      },
+      'web:test',
+    );
+    expect(res?.status).toBe(200);
+    expect(await res?.json()).toEqual({ ok: true, config: { enabled: false, graphite_port: 2004 } });
+    expect(invocations).toEqual([{ chatJid: 'web:test', rawText: '/observability-config-set {"enabled":false,"graphite_port":2004}' }]);
+  });
 });
 
 test('handleRestartAddonRuntime returns success and schedules graceful restart', async () => {

@@ -397,6 +397,7 @@ const groupDefinitions: GroupDefinition[] = [
           "compaction-settings-handler.test.ts",
           "compose-speech.test.ts",
           "post-speech.test.ts",
+          "markdown-surface-security.test.ts",
           "use-splitters.test.ts",
           "optional-api.test.ts",
           "popup-typeahead.test.ts",

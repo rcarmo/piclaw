@@ -73,32 +73,86 @@ The hamburger menu button uses `position: fixed` and appears:
 - Shows version, description, tags, bundled skills
 - **Install** / **Upgrade** / **Remove** buttons with spinner progress in status bar
 - Fetches catalog from `rcarmo/piclaw-addons` (5-minute cache)
-- Package-first install flow: prefers `bun add <package-spec>` and falls back to direct package download only for legacy/unpublished entries
+- First-party install flow uses public GitHub tarball URLs; explicit package-spec installs remain only for third-party or legacy fallback cases
 
-## Extension Settings Pane API
+## Add-on Web Settings Pane API
 
-Extensions can register custom settings panes that appear in the dialog nav:
+Installed add-ons can contribute browser-side settings panes that appear in the dialog nav.
+
+Important constraints:
+
+- the **settings pane runs in the browser** as an installed add-on web entry (`pi.web.entries`)
+- it does **not** share module imports with the main web bundle
+- it should use the runtime-provided globals:
+  - `globalThis.__piclawPreactHtm` / `globalThis.__piclawPreact`
+  - `globalThis.__piclawSettingsPaneRegistry` or `globalThis.__piclaw_web?.registerSettingsPane`
+- for configuration, it should call the **direct backend add-on config API** at `/agent/addons/api/<addon>/<action>`
+- add-on settings panes should **not** depend on internal slash commands; slash-command dispatch is now only a legacy fallback path
+
+### Browser-side registration
 
 ```typescript
-// In your extension module (client-side):
-import { registerSettingsPane } from './settings/pane-registry.js';
-import { html, useState } from '../vendor/preact-htm.js';
+// In addons/<slug>/web/index.ts
+const ADDON_ID = "my-addon";
+const API = `/agent/addons/api/${ADDON_ID}`;
 
-function MySettingsPane({ filter }) {
-    // filter prop passed from the title bar search (if searchable: true)
-    return html`<div class="settings-section"><h3>My Extension</h3>...</div>`;
+const preactHtm = globalThis.__piclawPreactHtm || globalThis.__piclawPreact || null;
+const html = preactHtm?.html;
+const useState = preactHtm?.useState;
+const useEffect = preactHtm?.useEffect;
+
+function MySettingsPane() {
+  const [cfg, setCfg] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API}/config`).then(async (r) => {
+      if (r.ok) setCfg(await r.json());
+    });
+  }, []);
+
+  return html`<div>${cfg ? cfg.host : "Loading…"}</div>`;
 }
 
-registerSettingsPane({
-    id: 'my-extension',
-    label: 'My Extension',
-    icon: html`<svg viewBox="0 0 24 24" width="16" height="16" .../>`,
-    component: MySettingsPane,
-    order: 200,           // built-in panes use 10-90
-    searchable: false,    // show filter input in title bar?
-    searchPlaceholder: 'Filter...',
+const registry = globalThis.__piclawSettingsPaneRegistry;
+registry?.registerSettingsPane?.({
+  id: "my-addon",
+  label: "My Addon",
+  icon: html`<svg viewBox="0 0 24 24" width="16" height="16" .../>`,
+  component: MySettingsPane,
+  order: 200,
 });
+registry?.notifySettingsPanesChanged?.();
 ```
+
+### Direct backend config API
+
+The browser pane should read and write add-on config through the local authenticated backend:
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/agent/addons/api/<addon>/config` | GET | Load non-secret config for the settings pane |
+| `/agent/addons/api/<addon>/config` | POST | Save non-secret config for the settings pane |
+| `/agent/addons/api/<addon>/<action>` | GET/POST | Additional add-on-specific settings actions, e.g. `browser-config` |
+| `/agent/keychain` | GET/POST | Check/save secrets that belong in the keychain |
+
+### Runtime-side registration
+
+The add-on's runtime entry should register those handlers directly at module load time:
+
+```typescript
+// In addons/<slug>/index.ts or extension.ts
+const registerAddonConfigApi = globalThis.__piclaw_registerAddonConfigApi;
+
+registerAddonConfigApi?.("my-addon", "config", {
+  get: async () => loadConfig(),
+  set: async (payload) => {
+    const next = saveConfig(payload);
+    return { ok: true, config: next };
+  },
+}, import.meta.dir);
+```
+
+The runtime lazily loads installed add-on extension entries on first config request, so the settings API works without routing through extension slash commands.
 
 ### SettingsPaneDefinition
 
@@ -123,6 +177,9 @@ Panes self-register on import. The dialog discovers them via `getRegisteredSetti
 | `/agent/addons` | GET | Fetch catalog + installed state |
 | `/agent/addons/install` | POST | Install addon by slug |
 | `/agent/addons/uninstall` | POST | Uninstall addon by slug |
+| `/agent/addons/web-entries` | GET | List installed add-on browser entrypoints (`pi.web.entries`) |
+| `/agent/addons/assets/<package>/<path>` | GET | Serve transpiled installed add-on browser assets |
+| `/agent/addons/api/<addon>/<action>` | GET / POST | Direct add-on config/settings API for browser panes |
 | `/agent/settings-data` | GET | Full settings data (identity, providers, themes, toolsets) |
 
 ### Install Flow
@@ -155,6 +212,12 @@ Add-ons use a dual manifest pattern compatible with both piclaw and the broader 
     "tags": ["category"],
     "skills": ["skills/my-skill"]
   },
+  "pi": {
+    "extensions": ["index.ts"],
+    "web": {
+      "entries": ["web/index.ts"]
+    }
+  },
   "agents": {
     "skills": [
       { "name": "my-skill", "path": "./skills/my-skill" }
@@ -164,6 +227,8 @@ Add-ons use a dual manifest pattern compatible with both piclaw and the broader 
 ```
 
 - **`piclaw`** field: extension type, compatible versions, tags, skill paths
+- **`pi.extensions`**: runtime entry points loaded inside piclaw
+- **`pi.web.entries`**: optional browser-side add-on web modules (settings panes, lightweight web integrations)
 - **`agents`** field: [agentskills.io](https://agentskills.io) compatible, discovered by `npx skills` and 45+ coding agents
 
 ### Catalog

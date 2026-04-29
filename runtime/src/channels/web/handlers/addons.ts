@@ -20,6 +20,7 @@ import { join, dirname, extname, resolve } from "path";
 import { WORKSPACE_DIR } from "../../../core/config.js";
 import { requestGracefulShutdown } from "../../../runtime/shutdown-registry.js";
 import { createLogger } from "../../../utils/logger.js";
+import { handleRegisteredAddonConfigApiRequest } from "./addon-config-api.js";
 
 const DEFAULT_CATALOG_URL = "https://raw.githubusercontent.com/rcarmo/piclaw-addons/main/catalog.json";
 const DEFAULT_CATALOG_URLS = [DEFAULT_CATALOG_URL] as const;
@@ -741,6 +742,34 @@ function parseAddonCommandJsonPayload(
   throw new Error(`Add-on ${addonId} did not return valid JSON.`);
 }
 
+function isUnknownAddonCommandMessage(message: unknown): boolean {
+  return /unknown extension command/i.test(String(message || ''));
+}
+
+function buildAddonSlashCommand(commandName: string, payload?: string): string {
+  return payload ? `/${commandName} ${payload}` : `/${commandName}`;
+}
+
+async function applyAddonConfigSlashCommand(
+  agentPool: SlashCommandInvoker,
+  chatJid: string,
+  commandBaseName: string,
+  payload?: string,
+): Promise<{ status: string; message?: string; messages?: Array<{ text?: string; customType?: string }> }> {
+  let lastResult: { status: string; message?: string; messages?: Array<{ text?: string; customType?: string }> } | null = null;
+  const maxSuffix = 8;
+
+  for (let suffix = 0; suffix <= maxSuffix; suffix += 1) {
+    const commandName = suffix === 0 ? commandBaseName : `${commandBaseName}:${suffix}`;
+    const result = await agentPool.applySlashCommand(chatJid, buildAddonSlashCommand(commandName, payload));
+    if (result.status === 'success') return result;
+    lastResult = result;
+    if (!isUnknownAddonCommandMessage(result.message)) return result;
+  }
+
+  return lastResult ?? { status: 'error', message: 'Add-on command failed' };
+}
+
 export async function handleAddonConfigApiRequest(
   req: Request,
   pathname: string,
@@ -754,14 +783,18 @@ export async function handleAddonConfigApiRequest(
     return json({ error: 'Method not allowed' }, 405);
   }
 
-  const slashCommand = req.method === 'GET'
-    ? `/${parsed.addonId}-${parsed.action}-get`
-    : `/${parsed.addonId}-${parsed.action}-set ${JSON.stringify(await req.json().catch(() => ({})))}`;
+  const directResponse = await handleRegisteredAddonConfigApiRequest(req, parsed.addonId, parsed.action, json);
+  if (directResponse) return directResponse;
 
-  const result = await agentPool.applySlashCommand(chatJid, slashCommand);
+  const commandBaseName = `${parsed.addonId}-${parsed.action}-${req.method === 'GET' ? 'get' : 'set'}`;
+  const payload = req.method === 'POST'
+    ? JSON.stringify(await req.json().catch(() => ({})))
+    : undefined;
+
+  const result = await applyAddonConfigSlashCommand(agentPool, chatJid, commandBaseName, payload);
   if (result.status !== 'success') {
     const message = String(result.message || 'Add-on command failed');
-    return json({ error: message }, /unknown extension command/i.test(message) ? 404 : 500);
+    return json({ error: message }, isUnknownAddonCommandMessage(message) ? 404 : 500);
   }
 
   try {
