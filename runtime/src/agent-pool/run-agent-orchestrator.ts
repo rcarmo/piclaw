@@ -53,6 +53,7 @@ import {
   beginTrackedPhase,
   heartbeatTrackedPhase,
   endTrackedPhase,
+  getProgressWatchdogTimeoutMs,
 } from "../runtime/progress-watchdog.js";
 
 const log = createLogger("agent-pool.run-orchestrator");
@@ -74,6 +75,107 @@ export interface RunAgentOrchestratorOptions {
 async function sleep(ms: number): Promise<void> {
   if (ms <= 0) return;
   await Bun.sleep(ms);
+}
+
+const MIN_TOOL_EXECUTION_WATCHDOG_HEARTBEAT_MS = 1_000;
+const MAX_TOOL_EXECUTION_WATCHDOG_HEARTBEAT_MS = 15_000;
+
+type ToolExecutionWatchdogEvent = {
+  type: "tool_execution_start" | "tool_execution_update" | "tool_execution_end";
+  toolCallId?: unknown;
+  toolName?: unknown;
+};
+
+function getToolExecutionWatchdogHeartbeatIntervalMs(timeoutMs = getProgressWatchdogTimeoutMs()): number {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return 0;
+  return Math.max(
+    MIN_TOOL_EXECUTION_WATCHDOG_HEARTBEAT_MS,
+    Math.min(MAX_TOOL_EXECUTION_WATCHDOG_HEARTBEAT_MS, Math.floor(timeoutMs / 3)),
+  );
+}
+
+export function createToolExecutionWatchdogHeartbeatController(
+  chatJid: string,
+  options: {
+    heartbeat?: (chatJid: string, phase: "tool_execution", metadata?: Record<string, unknown>) => void;
+    getIntervalMs?: () => number;
+  } = {},
+): { handleEvent: (event: ToolExecutionWatchdogEvent) => void; stop: () => void } {
+  const heartbeat = options.heartbeat ?? heartbeatTrackedPhase;
+  const getIntervalMs = options.getIntervalMs ?? (() => getToolExecutionWatchdogHeartbeatIntervalMs());
+  const activeTools = new Map<string, string | null>();
+  let timer: ReturnType<typeof setInterval> | null = null;
+  let anonymousToolCounter = 0;
+
+  const stopTimerIfIdle = () => {
+    if (activeTools.size > 0 || !timer) return;
+    clearInterval(timer);
+    timer = null;
+  };
+
+  const publishHeartbeat = () => {
+    if (activeTools.size === 0) return;
+    const toolNames = Array.from(new Set(
+      Array.from(activeTools.values()).filter((value): value is string => typeof value === "string" && value.trim().length > 0),
+    )).slice(0, 3);
+    heartbeat(chatJid, "tool_execution", {
+      eventType: "tool_execution_watchdog_heartbeat",
+      activeToolCount: activeTools.size,
+      activeToolNames: toolNames,
+    });
+  };
+
+  const ensureTimer = () => {
+    if (timer || activeTools.size === 0) return;
+    const intervalMs = getIntervalMs();
+    if (!Number.isFinite(intervalMs) || intervalMs <= 0) return;
+    timer = setInterval(() => {
+      publishHeartbeat();
+    }, intervalMs);
+    if (typeof timer.unref === "function") timer.unref();
+  };
+
+  const resolveToolKey = (event: ToolExecutionWatchdogEvent): string => {
+    if (typeof event.toolCallId === "string" && event.toolCallId.trim()) return event.toolCallId;
+    anonymousToolCounter += 1;
+    return `anonymous-tool:${anonymousToolCounter}`;
+  };
+
+  const removeTool = (event: ToolExecutionWatchdogEvent) => {
+    if (typeof event.toolCallId === "string" && event.toolCallId.trim()) {
+      activeTools.delete(event.toolCallId);
+      return;
+    }
+    const targetName = typeof event.toolName === "string" && event.toolName.trim() ? event.toolName : null;
+    for (const [key, activeName] of activeTools) {
+      if (targetName === null || activeName === targetName) {
+        activeTools.delete(key);
+        return;
+      }
+    }
+  };
+
+  return {
+    handleEvent(event: ToolExecutionWatchdogEvent) {
+      if (event.type === "tool_execution_start") {
+        const toolName = typeof event.toolName === "string" && event.toolName.trim() ? event.toolName : null;
+        activeTools.set(resolveToolKey(event), toolName);
+        ensureTimer();
+        return;
+      }
+      if (event.type === "tool_execution_end") {
+        removeTool(event);
+        stopTimerIfIdle();
+      }
+    },
+    stop() {
+      activeTools.clear();
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    },
+  };
 }
 
 async function maybeAutoRotateSession(
@@ -298,6 +400,7 @@ async function runPromptAttempt(
     : undefined;
 
   const tracker = options.turnCoordinator.createTracker(chatJid, onTurnComplete);
+  const toolExecutionWatchdogHeartbeat = createToolExecutionWatchdogHeartbeatController(chatJid);
   const isRetrySafeToolName = (toolName: unknown): boolean => typeof toolName === "string" && [
     "read",
     "read_attachment",
@@ -322,6 +425,10 @@ async function runPromptAttempt(
       heartbeatTrackedPhase(chatJid, event.type === "compaction_start" ? "preprompt_compaction" : "prompt", {
         eventType: event.type,
       });
+    }
+
+    if (event.type === "tool_execution_start" || event.type === "tool_execution_end") {
+      toolExecutionWatchdogHeartbeat.handleEvent(event as ToolExecutionWatchdogEvent);
     }
 
     // Track session activity for cross-session visibility
@@ -506,6 +613,7 @@ async function runPromptAttempt(
     promptThrownError = error instanceof Error ? error.message : String(error);
   } finally {
     finishPromptTimeout();
+    toolExecutionWatchdogHeartbeat.stop();
     unsub();
   }
 
