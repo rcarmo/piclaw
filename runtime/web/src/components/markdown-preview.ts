@@ -48,7 +48,7 @@ export function MarkdownPreview({ getContent, path, onClose }) {
             if (text === prevTextRef.current) return;
             prevTextRef.current = text;
             try {
-                const h = renderMarkdown(text, null, { sanitize: false });
+                const h = renderMarkdown(text, null);
                 setRenderedHtml(h);
             } catch {
                 setRenderedHtml('<p style="color:var(--text-secondary)">Preview unavailable</p>');

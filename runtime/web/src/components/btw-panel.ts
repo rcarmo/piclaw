@@ -7,7 +7,7 @@ export function BtwPanel({ session, onClose, onInject, onRetry }) {
     const thinkingRef = useRef(null);
     const answerRef = useRef(null);
     const renderedThinking = session?.thinking ? renderThinkingMarkdown(session.thinking) : '';
-    const renderedAnswer = session?.answer ? renderMarkdown(session.answer, null, { sanitize: false }) : '';
+    const renderedAnswer = session?.answer ? renderMarkdown(session.answer, null) : '';
 
     useEffect(() => {
         if (thinkingRef.current && renderedThinking) {
