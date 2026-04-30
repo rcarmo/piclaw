@@ -112,14 +112,15 @@
     "js-yaml": "^4.1.1",
     "katex": "0.16.45",
     "marked": "18.0.2",
-    "pi-mcp-adapter": "2.4.1",
+    "pi-mcp-adapter": "2.5.2",
     "pptxviewjs": "^1.1.9",
     "preact": "10.29.1",
     "qrcode-terminal": "0.12.0",
     "sharp": "^0.34.5",
-    "typebox": "^1.1.24",
+    "swiper": "12.1.4",
+    "typebox": "1.1.35",
     "web-push": "3.6.7",
-    "xlsx": "^0.18.5"
+    "xlsx": "npm:@e965/xlsx@0.20.3"
   },
   "devDependencies": {
     "@assemblyscript/loader": "0.28.14",
@@ -162,9 +163,13 @@
   },
   "x-dependency-policy": "Pinned exact versions only (no ^/~ ranges).",
   "overrides": {
+    "@anthropic-ai/sdk": "0.91.1",
     "@codemirror/commands": "6.10.3",
+    "@codemirror/language": "6.12.3",
     "@codemirror/state": "6.6.0",
     "@codemirror/view": "6.41.1",
-    "@codemirror/language": "6.12.3"
+    "fast-xml-parser": "5.7.2",
+    "protobufjs": "7.5.5",
+    "swiper": "12.1.4"
   }
 }

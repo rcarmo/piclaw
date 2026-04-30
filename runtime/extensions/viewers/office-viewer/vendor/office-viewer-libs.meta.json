@@ -7,9 +7,9 @@
       "repository": "git+https://github.com/VolodymyrBaydalka/docxjs.git"
     },
     "xlsx": {
-      "version": "0.18.5",
+      "version": "0.20.3",
       "license": "Apache-2.0",
-      "repository": "git://github.com/SheetJS/sheetjs.git"
+      "repository": "https://github.com/e965/sheetjs-npm-publisher"
     },
     "chart.js": {
       "version": "4.5.1",
@@ -44,8 +44,8 @@
       "package_name": "xlsx",
       "package_path": "dist/xlsx.full.min.js",
       "output_file": "extensions/viewers/office-viewer/vendor/xlsx.full.min.js",
-      "sha256": "c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99",
-      "size_bytes": 881727
+      "sha256": "cc015130aa8521e7f088f88898eba949ccdcbfb38df0bd129b44b7273c3a6f41",
+      "size_bytes": 951904
     },
     {
       "package_name": "chart.js",
@@ -84,5 +84,5 @@
     }
   ],
   "metadata_file": "extensions/viewers/office-viewer/vendor/office-viewer-libs.meta.json",
-  "total_size_bytes": 2016640
+  "total_size_bytes": 2086817
 }
