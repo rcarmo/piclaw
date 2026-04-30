@@ -15,10 +15,11 @@
  * Explicit non-tarball package specs remain available for third-party catalogs.
  */
 
-import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync, mkdirSync, statSync, unlinkSync, writeFileSync, renameSync, symlinkSync } from "fs";
+import { appendFileSync, existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync, mkdirSync, statSync, unlinkSync, writeFileSync, renameSync, symlinkSync } from "fs";
 import { join, dirname, extname, resolve } from "path";
 import { WORKSPACE_DIR } from "../../../core/config.js";
 import { requestGracefulShutdown } from "../../../runtime/shutdown-registry.js";
+import { validateCallbackUrl } from "../../../remote/ssrf.js";
 import { createLogger } from "../../../utils/logger.js";
 import { isPathWithin, isRealPathWithin } from "../../../utils/path-safety.js";
 import { handleRegisteredAddonConfigApiRequest } from "./addon-config-api.js";
@@ -26,6 +27,10 @@ import { handleRegisteredAddonConfigApiRequest } from "./addon-config-api.js";
 const DEFAULT_CATALOG_URL = "https://raw.githubusercontent.com/rcarmo/piclaw-addons/main/catalog.json";
 const DEFAULT_CATALOG_URLS = [DEFAULT_CATALOG_URL] as const;
 const CATALOG_CACHE_MS = 5 * 60 * 1000;
+const MAX_CATALOG_BYTES = 1024 * 1024;
+const MAX_TARBALL_BYTES = 64 * 1024 * 1024;
+const ADDON_FETCH_TIMEOUT_MS = 30000;
+const ADDON_FETCH_MAX_REDIRECTS = 3;
 export const WEB_RESTART_DELAY_MS = 150;
 
 const catalogCache = new Map<string, { data: unknown; ts: number }>();
@@ -361,6 +366,52 @@ export function resolveRequestedCatalogUrls(url?: URL): string[] {
   return merged;
 }
 
+async function assertSafeAddonFetchUrl(rawUrl: string): Promise<URL | null> {
+  const check = await validateCallbackUrl(rawUrl, undefined, { allowHttp: true, allowPrivateNetwork: false });
+  return check.ok && check.url ? check.url : null;
+}
+
+async function fetchSafeAddonUrl(rawUrl: string, timeoutMs = ADDON_FETCH_TIMEOUT_MS): Promise<Response | null> {
+  let current = rawUrl;
+  for (let redirects = 0; redirects <= ADDON_FETCH_MAX_REDIRECTS; redirects += 1) {
+    const safeUrl = await assertSafeAddonFetchUrl(current);
+    if (!safeUrl) return null;
+    const response = await fetch(safeUrl.href, {
+      redirect: "manual",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.get("location");
+      if (!location) return null;
+      current = new URL(location, safeUrl).href;
+      continue;
+    }
+    return response;
+  }
+  return null;
+}
+
+async function readBoundedResponseBytes(response: Response, maxBytes: number): Promise<Uint8Array | null> {
+  const contentLength = Number(response.headers.get("content-length") || "0");
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) return null;
+  if (!response.body) return new Uint8Array();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for await (const rawChunk of response.body as unknown as AsyncIterable<Uint8Array | ArrayBuffer>) {
+    const chunk = rawChunk instanceof Uint8Array ? rawChunk : new Uint8Array(rawChunk);
+    total += chunk.length;
+    if (total > maxBytes) return null;
+    chunks.push(chunk);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out;
+}
+
 async function fetchCatalog(catalogUrl: string): Promise<CatalogData | null> {
   const url = String(catalogUrl || "").trim();
   if (!url) return null;
@@ -370,12 +421,19 @@ async function fetchCatalog(catalogUrl: string): Promise<CatalogData | null> {
     return cached.data as CatalogData;
   }
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!response.ok) return null;
-    const data = await response.json();
+    const response = await fetchSafeAddonUrl(url, 8000);
+    if (!response?.ok) return null;
+    const bytes = await readBoundedResponseBytes(response, MAX_CATALOG_BYTES);
+    if (!bytes) return null;
+    const data = JSON.parse(new TextDecoder().decode(bytes));
     catalogCache.set(url, { data, ts: now });
     return data as CatalogData;
-  } catch {
+  } catch (error) {
+    addonLog.warn("Failed to fetch add-on catalog", {
+      operation: "addons.catalog.fetch",
+      url,
+      err: error,
+    });
     return (catalogCache.get(url)?.data as CatalogData | undefined) ?? null;
   }
 }
@@ -612,12 +670,38 @@ function describeAddonOperationFailure(action: 'install' | 'uninstall', error: u
 }
 
 async function downloadUrlToFile(url: string, destPath: string): Promise<void> {
-  const resp = await fetch(url, { signal: AbortSignal.timeout(30000) });
+  const resp = await fetchSafeAddonUrl(url);
+  if (!resp) throw new Error(`Refused unsafe add-on download URL: ${url}`);
   if (!resp.ok) throw new Error(`Failed to download ${url}: ${resp.status}`);
-  const data = new Uint8Array(await resp.arrayBuffer());
+  const contentLength = Number(resp.headers.get("content-length") || "0");
+  if (Number.isFinite(contentLength) && contentLength > MAX_TARBALL_BYTES) {
+    throw new Error(`Add-on tarball exceeds ${MAX_TARBALL_BYTES} byte limit.`);
+  }
   const dir = dirname(destPath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(destPath, data);
+  writeFileSync(destPath, new Uint8Array());
+  let total = 0;
+  try {
+    if (resp.body) {
+      for await (const rawChunk of resp.body as unknown as AsyncIterable<Uint8Array | ArrayBuffer>) {
+        const chunk = rawChunk instanceof Uint8Array ? rawChunk : new Uint8Array(rawChunk);
+        total += chunk.length;
+        if (total > MAX_TARBALL_BYTES) {
+          throw new Error(`Add-on tarball exceeds ${MAX_TARBALL_BYTES} byte limit.`);
+        }
+        appendFileSync(destPath, chunk);
+      }
+    }
+  } catch (error) {
+    try { if (existsSync(destPath)) rmSync(destPath, { force: true }); } catch (cleanupError) {
+      addonLog.warn("Failed to remove partial add-on tarball download", {
+        operation: "addons.download.cleanup_partial",
+        destPath,
+        err: cleanupError,
+      });
+    }
+    throw error;
+  }
 }
 
 function resolveExtractedAddonRoot(stagingDir: string): string {

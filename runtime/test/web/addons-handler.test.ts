@@ -118,6 +118,37 @@ test('resolveAddonInstallSpec falls back to package spec when catalog install me
   });
 });
 
+test('handleGetAddons rejects private-network custom catalog URLs before fetch', async () => {
+  const originalFetch = globalThis.fetch;
+  const fetched: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const href = String(input);
+    fetched.push(href);
+    if (href.includes('rcarmo/piclaw-addons/main/catalog.json')) {
+      return new Response(JSON.stringify({
+        source: 'default',
+        addons: [
+          { slug: 'proxmox', name: 'piclaw-addon-proxmox', version: '0.1.3', description: 'proxmox' },
+        ],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response('unexpected', { status: 500 });
+  }) as typeof fetch;
+
+  try {
+    const response = await handleGetAddons(
+      (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }),
+      new URL('https://example.test/agent/addons?catalog_url=http://127.0.0.1:9999/catalog.json'),
+    );
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.failed_sources).toContain('http://127.0.0.1:9999/catalog.json');
+    expect(fetched.some((href) => href.includes('127.0.0.1'))).toBe(false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('handleGetAddons merges add-ons from multiple catalog URLs', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL) => {
@@ -330,6 +361,105 @@ test('handleInstallAddon installs peer-only tarball addons without bun install',
   });
 });
 
+
+test('handleInstallAddon rejects oversized tarball downloads before reading the body', async () => {
+  await withTempWorkspaceEnv('piclaw-addon-install-oversize-tarball-', {}, async () => {
+    const originalFetch = globalThis.fetch;
+    const fetched: string[] = [];
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const href = String(input);
+      fetched.push(href);
+      if (href.includes('catalog-oversize.json')) {
+        return new Response(JSON.stringify({
+          source: 'catalog-oversize',
+          addons: [{
+            slug: 'oversized',
+            name: '@rcarmo/piclaw-addon-oversized',
+            version: '1.0.0',
+            install: {
+              kind: 'tarball',
+              spec: 'https://example.com/packages/oversized.tgz',
+            },
+          }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (href.includes('rcarmo/piclaw-addons/main/catalog.json')) {
+        return new Response(JSON.stringify({ source: 'default', addons: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (href.includes('/packages/oversized.tgz')) {
+        return new Response('too large', { status: 200, headers: { 'Content-Length': String(64 * 1024 * 1024 + 1) } });
+      }
+      return new Response('not found', { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      const res = await handleInstallAddon(
+        new Request('https://example.test/agent/addons/install', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug: 'oversized' }),
+        }),
+        (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }),
+        new URL('https://example.test/agent/addons/install?catalog_url=https://example.com/catalog-oversize.json'),
+      );
+
+      expect(res.status).toBe(500);
+      expect((await res.json()).error).toContain('byte limit');
+      expect(fetched.some((href) => href.includes('/packages/oversized.tgz'))).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+test('handleInstallAddon rejects private-network tarball URLs before fetch', async () => {
+  await withTempWorkspaceEnv('piclaw-addon-install-private-tarball-', {}, async () => {
+    const originalFetch = globalThis.fetch;
+    const fetched: string[] = [];
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const href = String(input);
+      fetched.push(href);
+      if (href.includes('catalog-private-tarball.json')) {
+        return new Response(JSON.stringify({
+          source: 'catalog-private-tarball',
+          addons: [{
+            slug: 'private-tarball',
+            name: '@rcarmo/piclaw-addon-private-tarball',
+            version: '1.0.0',
+            install: {
+              kind: 'tarball',
+              spec: 'http://127.0.0.1:9999/private.tgz',
+            },
+          }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (href.includes('rcarmo/piclaw-addons/main/catalog.json')) {
+        return new Response(JSON.stringify({ source: 'default', addons: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('unexpected', { status: 500 });
+    }) as typeof fetch;
+
+    try {
+      const res = await handleInstallAddon(
+        new Request('https://example.test/agent/addons/install', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug: 'private-tarball' }),
+        }),
+        (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }),
+        new URL('https://example.test/agent/addons/install?catalog_url=https://example.com/catalog-private-tarball.json'),
+      );
+
+      expect(res.status).toBe(500);
+      expect((await res.json()).error).toContain('unsafe add-on download URL');
+      expect(fetched.some((href) => href.includes('127.0.0.1'))).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
 
 test('handleInstallAddon rejects legacy direct-download specs', async () => {
   await withTempWorkspaceEnv('piclaw-addon-install-direct-download-', {}, async () => {
