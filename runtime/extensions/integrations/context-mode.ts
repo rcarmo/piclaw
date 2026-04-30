@@ -15,25 +15,12 @@ import {
   createToolOutputSearchTool,
   readToolOutputFile,
   saveToolOutput,
-  startToolOutputCleanup,
 } from "../../src/extensions/context-mode-api.js";
 
 const STORE_THRESHOLD_BYTES = parseInt(process.env.PICLAW_TOOL_OUTPUT_STORE_BYTES || "4096", 10);
 const STORE_THRESHOLD_LINES = parseInt(process.env.PICLAW_TOOL_OUTPUT_STORE_LINES || "40", 10);
 const PREVIEW_LINES = parseInt(process.env.PICLAW_TOOL_OUTPUT_PREVIEW_LINES || "8", 10);
 const PREVIEW_LINE_CHARS = parseInt(process.env.PICLAW_TOOL_OUTPUT_PREVIEW_LINE_CHARS || "200", 10);
-const LEGACY_RETENTION_DAYS = parseInt(process.env.PICLAW_TOOL_OUTPUT_RETENTION_DAYS || "", 10);
-const RETENTION_MS = parseInt(process.env.PICLAW_TOOL_OUTPUT_RETENTION_MS || "", 10);
-const TOOL_OUTPUT_RETENTION_MS = Number.isFinite(RETENTION_MS) && RETENTION_MS > 0
-  ? RETENTION_MS
-  : Number.isFinite(LEGACY_RETENTION_DAYS) && LEGACY_RETENTION_DAYS > 0
-    ? LEGACY_RETENTION_DAYS * 24 * 60 * 60 * 1000
-    : 4 * 60 * 60 * 1000;
-const CLEANUP_INTERVAL_MS = parseInt(
-  process.env.PICLAW_TOOL_OUTPUT_CLEANUP_INTERVAL_MS || String(15 * 60 * 1000),
-  10
-);
-
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes)) return "0 B";
   if (bytes < 1024) return `${bytes} B`;
@@ -52,10 +39,9 @@ function shouldStoreOutput(text: string, lineCount: number): boolean {
 }
 
 export default function (pi: any) {
-  // Process startup already calls startToolOutputCleanup(); do not repeat that
-  // work on every session bootstrap.
-  startToolOutputCleanup(TOOL_OUTPUT_RETENTION_MS, CLEANUP_INTERVAL_MS);
-
+  // Tool-output cleanup is process-scoped and starts from runtime startup.
+  // Keep this session extension focused on registering the tools/hooks needed
+  // for the active session so cold session creation does not repeat lifecycle work.
   pi.registerTool(createToolOutputSearchTool());
   pi.registerTool(createBatchExecTool(process.cwd()));
 

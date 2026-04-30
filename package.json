@@ -91,7 +91,8 @@
     "check:repo-install": "bun pm pack --dry-run",
     "smoke:repo-install": "./scripts/smoke-install-from-repo.sh",
     "vnc:harness": "bun run runtime/scripts/vnc-harness-standalone.ts",
-    "vnc:harness:report": "bun run runtime/scripts/playwright/vnc-harness-report.ts"
+    "vnc:harness:report": "bun run runtime/scripts/playwright/vnc-harness-report.ts",
+    "benchmark:cold-session": "cd runtime && bun run scripts/benchmark-cold-session.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
