@@ -187,7 +187,8 @@ export async function handlePairConfirm(req: Request, context: RemotePairingHand
   const lengthCheck = checkContentLength(req, DEFAULT_MAX_PROMPT_BYTES);
   if (!lengthCheck.ok) return jsonResponse({ error: lengthCheck.error }, lengthCheck.status);
 
-  const bodyBytes = await readBodyBytes(req);
+  const bodyBytes = await readBodyBytes(req, DEFAULT_MAX_PROMPT_BYTES);
+  if (bodyBytes.length > DEFAULT_MAX_PROMPT_BYTES) return jsonResponse({ error: "Request too large." }, 413);
   const { data, error } = parseJsonBytes(bodyBytes, DEFAULT_MAX_PROMPT_BYTES);
   if (error) return jsonResponse({ error }, 400);
 
