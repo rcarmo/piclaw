@@ -184,7 +184,7 @@ export function isInteractiveGeneratedWidget(widget: any): boolean {
 
 export function getGeneratedWidgetIframeSandbox(widget: any): string {
   return isInteractiveGeneratedWidget(widget)
-    ? 'allow-downloads allow-scripts allow-same-origin'
+    ? 'allow-downloads allow-scripts'
     : 'allow-downloads';
 }
 

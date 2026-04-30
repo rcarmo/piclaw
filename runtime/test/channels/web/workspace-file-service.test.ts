@@ -199,6 +199,30 @@ test("uploadFile, attachFile, and downloadZip return expected outcomes", async (
   }
 });
 
+test("uploadChunk rejects dot-segment upload IDs before deriving staging paths", async () => {
+  const { prefix, base, cleanup, service } = setupWorkspaceDir();
+  try {
+    mkdirSync(join(base, "uploads"), { recursive: true });
+
+    for (const uploadId of [".", ".."] as const) {
+      const result = await service.uploadChunk({
+        pathParam: `${prefix}/uploads`,
+        uploadId,
+        chunkIndex: 0,
+        chunkTotal: 1,
+        fileName: "chunked.txt",
+        fileSize: 4,
+        overwrite: false,
+        data: new TextEncoder().encode("test"),
+      });
+      expect(result.status).toBe(400);
+      expect((result.body as any).error).toBe("Invalid upload ID");
+    }
+  } finally {
+    cleanup();
+  }
+});
+
 test("uploadChunk assembles a file atomically", async () => {
   const { prefix, base, cleanup, service } = setupWorkspaceDir();
   try {
