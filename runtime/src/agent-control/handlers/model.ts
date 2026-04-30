@@ -12,6 +12,9 @@ import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { Api, Model } from "@mariozechner/pi-ai";
 import type { AgentControlCommand, AgentControlResult } from "../agent-control-types.js";
 import { THINKING_LEVELS, normalizeModelMatch, resolveThinkingAlias, isEffortProvider, formatThinkingLevelForDisplay } from "../agent-control-helpers.js";
+import { createLogger, debugSuppressedError } from "../../utils/logger.js";
+
+const log = createLogger("agent-control.model");
 
 function formatCompactTokens(value: number | null | undefined): string {
   const numeric = Number(value);
@@ -306,8 +309,11 @@ export async function handleCycleModel(session: AgentSession, modelRegistry: Mod
   if (originalModel && getModelLabel(session.model) !== originalKey) {
     try {
       await session.setModel(originalModel);
-    } catch {
-      // Best effort: keep the current model if reverting fails.
+    } catch (error) {
+      debugSuppressedError(log, "Failed to restore original model after cycle compatibility check; keeping current model.", error, {
+        operation: "agent_control.model.cycle.restore_original",
+        originalModel: originalKey,
+      });
     }
   }
 

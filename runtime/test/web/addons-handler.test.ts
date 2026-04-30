@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
-import { lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import '../helpers.js';
@@ -508,6 +508,52 @@ test('handleAddonAssetRequest serves transpiled addon browser modules', async ()
     expect(response?.status).toBe(200);
     expect(response?.headers.get('Content-Type')).toContain('text/javascript');
     expect(await response?.text()).toContain('const answer = 42');
+  });
+});
+
+test('handleAddonAssetRequest rejects sibling-prefix and symlink escapes from the addon root', async () => {
+  await withTempWorkspaceEnv('piclaw-addon-web-asset-boundary-', {}, async (workspace) => {
+    const nodeModulesDir = join(workspace.workspace, '.pi', 'extensions', 'node_modules');
+    const addonDir = join(nodeModulesDir, 'foo');
+    const siblingDir = join(nodeModulesDir, 'foo-private');
+    mkdirSync(join(addonDir, 'web'), { recursive: true });
+    mkdirSync(siblingDir, { recursive: true });
+    writeFileSync(join(addonDir, 'package.json'), JSON.stringify({ name: 'foo', version: '0.1.0' }, null, 2));
+    writeFileSync(join(addonDir, 'web', 'index.js'), 'export const ok = true;\n');
+    writeFileSync(join(siblingDir, 'secret.js'), 'export const secret = true;\n');
+    writeFileSync(join(workspace.workspace, 'outside-addon-secret.js'), 'export const outside = true;\n');
+    symlinkSync(join(workspace.workspace, 'outside-addon-secret.js'), join(addonDir, 'web', 'secret-link.js'));
+
+    const sibling = await handleAddonAssetRequest(
+      new Request('http://localhost/agent/addons/assets/foo/../foo-private/secret.js', { method: 'GET' }),
+      '/agent/addons/assets/foo/../foo-private/secret.js',
+    );
+    expect(sibling).toBeNull();
+
+    const encodedPackageTraversal = await handleAddonAssetRequest(
+      new Request('http://localhost/agent/addons/assets/foo%2F../foo-private/secret.js', { method: 'GET' }),
+      '/agent/addons/assets/foo%2F../foo-private/secret.js',
+    );
+    expect(encodedPackageTraversal).toBeNull();
+
+    const malformedEncoding = await handleAddonAssetRequest(
+      new Request('http://localhost/agent/addons/assets/foo/%E0%A4%A.js', { method: 'GET' }),
+      '/agent/addons/assets/foo/%E0%A4%A.js',
+    );
+    expect(malformedEncoding).toBeNull();
+
+    const symlink = await handleAddonAssetRequest(
+      new Request('http://localhost/agent/addons/assets/foo/web/secret-link.js', { method: 'GET' }),
+      '/agent/addons/assets/foo/web/secret-link.js',
+    );
+    expect(symlink?.status).toBe(404);
+
+    const valid = await handleAddonAssetRequest(
+      new Request('http://localhost/agent/addons/assets/foo/web/index.js', { method: 'GET' }),
+      '/agent/addons/assets/foo/web/index.js',
+    );
+    expect(valid?.status).toBe(200);
+    expect(await valid?.text()).toContain('const ok = true');
   });
 });
 

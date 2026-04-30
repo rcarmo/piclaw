@@ -7,15 +7,17 @@
  * Consumers: web/workspace/file-service.ts, web/handlers/workspace.ts.
  */
 
+import { realpathSync } from "fs";
 import path from "path";
 
 import { WORKSPACE_DIR } from "../../../core/config.js";
+import { isRealPathWithin } from "../../../utils/path-safety.js";
 import { EXCLUDE_DIRS } from "./constants.js";
 
 const WATCH_IGNORE_DIRS = new Set(["logs"]);
 const WATCH_INTERNAL_EXCLUDE_DIRS = new Set([".piclaw", ".pi", "artifacts", "exports", "tmp", ".tmp", "rescue"]);
 
-/** Resolve a relative path against the workspace root, rejecting traversal. */
+/** Resolve a relative path against the workspace root, rejecting lexical traversal. */
 export function resolveWorkspacePath(input: string | null): string | null {
   const raw = (input || "").trim();
   const resolved = path.resolve(WORKSPACE_DIR, raw);
@@ -23,6 +25,28 @@ export function resolveWorkspacePath(input: string | null): string | null {
   if (!rel || rel === ".") return WORKSPACE_DIR;
   if (rel.startsWith("..") || path.isAbsolute(rel)) return null;
   return resolved;
+}
+
+function realpathNative(targetPath: string): string {
+  return realpathSync.native ? realpathSync.native(targetPath) : realpathSync(targetPath);
+}
+
+/** Verify an existing resolved path stays under the real workspace root after symlink resolution. */
+export function isRealWorkspacePath(absPath: string): boolean {
+  try {
+    const realWorkspace = realpathNative(WORKSPACE_DIR);
+    const realTarget = realpathNative(absPath);
+    return isRealPathWithin(realWorkspace, realTarget);
+  } catch {
+    return false;
+  }
+}
+
+/** Resolve a relative path and reject targets whose realpath escapes the workspace. */
+export function resolveExistingWorkspacePath(input: string | null): string | null {
+  const resolved = resolveWorkspacePath(input);
+  if (!resolved) return null;
+  return isRealWorkspacePath(resolved) ? resolved : null;
 }
 
 /** Convert an absolute path to a workspace-relative path. */

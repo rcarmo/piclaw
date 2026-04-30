@@ -6,14 +6,17 @@
 
 import { expect, test } from "bun:test";
 import "../../helpers.js";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "fs";
 import { join } from "path";
+import { tmpdir } from "os";
 import { gzipSync } from "zlib";
 
 import { zipSync, strToU8 } from "fflate";
 
 import { initDatabase } from "../../../src/db.js";
+import { handleWorkspaceStat, handleWorkspaceTree } from "../../../src/channels/web/handlers/workspace.js";
 import { WorkspaceFileService } from "../../../src/channels/web/workspace/file-service.js";
+import { getWorkspaceGitBranch } from "../../../src/channels/web/workspace/git-branch.js";
 import { WORKSPACE_DIR } from "../../../src/core/config.js";
 
 function createTarBuffer(entries: Array<{ name: string; content: string }>): Buffer {
@@ -218,6 +221,80 @@ test("uploadChunk rejects dot-segment upload IDs before deriving staging paths",
       expect(result.status).toBe(400);
       expect((result.body as any).error).toBe("Invalid upload ID");
     }
+  } finally {
+    cleanup();
+  }
+});
+
+test("workspace file APIs reject symlinks escaping the workspace root", async () => {
+  const { prefix, base, cleanup, service } = setupWorkspaceDir();
+  const outside = mkdtempSync(join(tmpdir(), "piclaw-workspace-outside-"));
+  try {
+    writeFileSync(join(outside, "secret.txt"), "do not read", "utf8");
+    mkdirSync(join(outside, "drop"), { recursive: true });
+    symlinkSync(join(outside, "secret.txt"), join(base, "secret-link.txt"));
+    mkdirSync(join(outside, "repo", ".git"), { recursive: true });
+    symlinkSync(join(outside, "drop"), join(base, "outside-dir"), "dir");
+    symlinkSync(join(outside, "repo"), join(base, "outside-repo"), "dir");
+    mkdirSync(join(base, "gitfile-repo"), { recursive: true });
+    writeFileSync(join(base, "gitfile-repo", ".git"), `gitdir: ${join(outside, "repo", ".git")}\n`, "utf8");
+    writeFileSync(join(base, "moveme.txt"), "move me", "utf8");
+
+    expect(service.getFile(`${prefix}/secret-link.txt`).status).toBe(400);
+    expect(service.getRaw(`${prefix}/secret-link.txt`).status).toBe(400);
+    expect(service.attachFile(`${prefix}/secret-link.txt`).status).toBe(400);
+    expect(service.updateFile(`${prefix}/secret-link.txt`, "changed").status).toBe(400);
+    expect(service.deleteFile(`${prefix}/secret-link.txt`).status).toBe(400);
+    expect(service.renameFile(`${prefix}/secret-link.txt`, "renamed.txt").status).toBe(400);
+    expect(service.moveEntry(`${prefix}/secret-link.txt`, prefix).status).toBe(400);
+    expect(service.moveEntry(`${prefix}/moveme.txt`, `${prefix}/outside-dir`).status).toBe(400);
+
+    const statResponse = handleWorkspaceStat(new Request(`http://localhost/workspace/stat?path=${encodeURIComponent(`${prefix}/secret-link.txt`)}`));
+    expect(statResponse.status).toBe(400);
+    const treeResponse = handleWorkspaceTree(new Request(`http://localhost/workspace/tree?path=${encodeURIComponent(`${prefix}/outside-dir`)}`));
+    expect(treeResponse.status).toBe(400);
+    const branch = getWorkspaceGitBranch(`${prefix}/outside-repo`, () => "main\n");
+    expect(branch).toBeNull();
+    const gitfileBranch = getWorkspaceGitBranch(`${prefix}/gitfile-repo`, () => "main\n");
+    expect(gitfileBranch).toBeNull();
+
+    const upload = await service.uploadFile(`${prefix}/outside-dir`, new File(["x"], "upload.txt"));
+    expect(upload.status).toBe(400);
+    expect(service.createFile(`${prefix}/outside-dir`, "created.txt", "x").status).toBe(400);
+    const chunk = await service.uploadChunk({
+      pathParam: `${prefix}/outside-dir`,
+      uploadId: `outside-${Date.now()}`,
+      chunkIndex: 0,
+      chunkTotal: 1,
+      fileName: "chunked.txt",
+      fileSize: 1,
+      overwrite: false,
+      data: new TextEncoder().encode("x"),
+    });
+    expect(chunk.status).toBe(400);
+    expect((await service.downloadZip(`${prefix}/outside-dir`)).status).toBe(400);
+
+    expect(readFileSync(join(outside, "secret.txt"), "utf8")).toBe("do not read");
+  } finally {
+    rmSync(outside, { recursive: true, force: true });
+    cleanup();
+  }
+});
+
+test("workspace file APIs allow symlinks whose real targets stay inside the workspace", () => {
+  const { prefix, base, cleanup, service } = setupWorkspaceDir();
+  try {
+    mkdirSync(join(base, "real"), { recursive: true });
+    writeFileSync(join(base, "real", "inside.txt"), "inside", "utf8");
+    symlinkSync(join(base, "real", "inside.txt"), join(base, "inside-link.txt"));
+
+    const preview = service.getFile(`${prefix}/inside-link.txt`);
+    expect(preview.status).toBe(200);
+    expect((preview.body as any).text).toBe("inside");
+
+    const updated = service.updateFile(`${prefix}/inside-link.txt`, "updated");
+    expect(updated.status).toBe(200);
+    expect(readFileSync(join(base, "real", "inside.txt"), "utf8")).toBe("updated");
   } finally {
     cleanup();
   }

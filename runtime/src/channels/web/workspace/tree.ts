@@ -13,7 +13,7 @@ import path from "path";
 
 import { MAX_TREE_ENTRIES } from "./constants.js";
 import { formatMtime } from "./file-utils.js";
-import { shouldExcludeDir, toRelativePath } from "./paths.js";
+import { isRealWorkspacePath, shouldExcludeDir, toRelativePath } from "./paths.js";
 import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
 
 const log = createLogger("web.workspace-tree");
@@ -58,6 +58,9 @@ export function buildTree(
   state: WorkspaceTreeState,
   options: { includeHidden: boolean }
 ): WorkspaceTreeNode {
+  if (!isRealWorkspacePath(absPath)) {
+    throw new Error("Workspace tree path escapes workspace root");
+  }
   const stats = statSync(absPath);
   const node: WorkspaceTreeNode = {
     name: path.basename(absPath) || "workspace",

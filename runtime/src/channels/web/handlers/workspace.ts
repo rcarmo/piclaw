@@ -7,12 +7,12 @@
  * Consumers: web/http/dispatch-workspace.ts routes workspace paths here.
  */
 
-import { closeSync, openSync, readSync, statSync } from "fs";
+import { closeSync, existsSync, openSync, readSync, statSync } from "fs";
 import * as path from "path";
 
 import { errorJson, jsonResponse } from "../http/http-utils.js";
 import { WorkspaceService } from "../workspace/service.js";
-import { resolveWorkspacePath, toRelativePath } from "../workspace/paths.js";
+import { isRealWorkspacePath, resolveWorkspacePath, toRelativePath } from "../workspace/paths.js";
 import { formatMtime } from "../workspace/file-utils.js";
 
 const workspaceService = new WorkspaceService();
@@ -66,6 +66,9 @@ export function handleWorkspaceStat(req: Request): Response {
   const url = new URL(req.url);
   const targetPath = resolveWorkspacePath(url.searchParams.get("path"));
   if (!targetPath) return jsonResponse({ error: "Invalid path" }, 400);
+  if (existsSync(targetPath) && !isRealWorkspacePath(targetPath)) {
+    return jsonResponse({ error: "Invalid path" }, 400);
+  }
   try {
     const stats = statSync(targetPath);
     return jsonResponse({
