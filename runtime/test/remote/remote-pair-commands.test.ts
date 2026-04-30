@@ -42,6 +42,7 @@ let createPairRequest: (req: any) => void;
 let getPendingPairRequests: () => any[];
 
 let originalFetch: typeof fetch | null = null;
+let restoreTrustProxyRuntimeConfig: (() => void) | null = null;
 const TEST_REMOTE_BASE_URL = "https://93.184.216.34";
 
 function base64UrlEncode(buffer: Uint8Array): string {
@@ -199,6 +200,13 @@ describe("remote pair commands", () => {
     const serviceMod = await importFresh("../src/remote/service.js");
     RemoteInteropService = serviceMod.RemoteInteropService;
 
+    const configMod = await import("../../src/core/config.js");
+    const previousTrustProxy = configMod.WEB_RUNTIME_CONFIG.trustProxy;
+    configMod.WEB_RUNTIME_CONFIG.trustProxy = true;
+    restoreTrustProxyRuntimeConfig = () => {
+      configMod.WEB_RUNTIME_CONFIG.trustProxy = previousTrustProxy;
+    };
+
     const pairMod = await importFresh("../src/extensions/remote-pair.js");
     getMyBaseUrl = pairMod.getMyBaseUrl;
     runPairFlow = pairMod.runPairFlow;
@@ -223,6 +231,8 @@ describe("remote pair commands", () => {
       globalThis.fetch = originalFetch;
       originalFetch = null;
     }
+    restoreTrustProxyRuntimeConfig?.();
+    restoreTrustProxyRuntimeConfig = null;
     restoreEnv?.();
     restoreEnv = null;
     cleanupWorkspace?.();

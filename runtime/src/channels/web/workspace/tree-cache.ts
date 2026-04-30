@@ -9,8 +9,9 @@
  */
 
 import { buildTree } from "./tree.js";
-import { resolveWorkspacePath } from "./paths.js";
+import { isRealWorkspacePath, resolveWorkspacePath } from "./paths.js";
 import { getWorkspaceScanSettings } from "./settings.js";
+import { existsSync } from "fs";
 
 /** Cached tree result type: array of tree nodes. */
 export type WorkspaceTreeResult = { status: number; body: unknown };
@@ -37,6 +38,9 @@ export class WorkspaceTreeCache {
   ): WorkspaceTreeResult {
     const targetPath = resolveWorkspacePath(pathParam);
     if (!targetPath) return { status: 400, body: { error: "Invalid path" } };
+    if (existsSync(targetPath) && !isRealWorkspacePath(targetPath)) {
+      return { status: 400, body: { error: "Invalid path" } };
+    }
 
     const settings = getWorkspaceScanSettings();
     const depthRaw = parseInt(depthParam || "2", 10);

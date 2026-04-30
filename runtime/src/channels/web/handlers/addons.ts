@@ -15,11 +15,12 @@
  * Explicit non-tarball package specs remain available for third-party catalogs.
  */
 
-import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, mkdirSync, unlinkSync, writeFileSync, renameSync, symlinkSync } from "fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync, mkdirSync, statSync, unlinkSync, writeFileSync, renameSync, symlinkSync } from "fs";
 import { join, dirname, extname, resolve } from "path";
 import { WORKSPACE_DIR } from "../../../core/config.js";
 import { requestGracefulShutdown } from "../../../runtime/shutdown-registry.js";
 import { createLogger } from "../../../utils/logger.js";
+import { isPathWithin, isRealPathWithin } from "../../../utils/path-safety.js";
 import { handleRegisteredAddonConfigApiRequest } from "./addon-config-api.js";
 
 const DEFAULT_CATALOG_URL = "https://raw.githubusercontent.com/rcarmo/piclaw-addons/main/catalog.json";
@@ -216,7 +217,18 @@ function listAddonPackageDirs(addonsNodeModulesDir: string): string[] {
   return results;
 }
 
+function isValidAddonPackageName(packageName: string): boolean {
+  const name = String(packageName || '').trim();
+  if (!name || name === '.' || name === '..' || name.includes('\\')) return false;
+  if (name.startsWith('@')) {
+    return /^@[A-Za-z0-9._~-]+\/[A-Za-z0-9._~-]+$/.test(name)
+      && !name.split('/').some((segment) => segment === '.' || segment === '..');
+  }
+  return /^[A-Za-z0-9._~-]+$/.test(name);
+}
+
 function getInstalledAddonPackageDir(packageName: string, workspaceDir = getWorkspaceDir()): string | null {
+  if (!isValidAddonPackageName(packageName)) return null;
   const addonsNodeModulesDir = join(workspaceDir, '.pi', 'extensions', 'node_modules');
   const packageDir = join(addonsNodeModulesDir, packageName);
   return existsSync(packageDir) ? packageDir : null;
@@ -255,7 +267,12 @@ export function getInstalledAddonWebEntries(workspaceDir = getWorkspaceDir()): I
 function parseAddonAssetRequestPath(pathname: string): { packageName: string; relativePath: string } | null {
   const prefix = '/agent/addons/assets/';
   if (!pathname.startsWith(prefix)) return null;
-  const rest = pathname.slice(prefix.length).split('/').filter(Boolean).map((segment) => decodeURIComponent(segment));
+  let rest: string[];
+  try {
+    rest = pathname.slice(prefix.length).split('/').filter(Boolean).map((segment) => decodeURIComponent(segment));
+  } catch {
+    return null;
+  }
   if (rest.length < 2) return null;
   const packageName = rest[0].startsWith('@')
     ? rest[0].includes('/')
@@ -269,8 +286,11 @@ function parseAddonAssetRequestPath(pathname: string): { packageName: string; re
       ? rest.slice(1)
       : rest.slice(2)
     : rest.slice(1);
+  if (relativeSegments.some((segment) => segment === '.' || segment === '..' || segment.includes('/') || segment.includes('\\'))) {
+    return null;
+  }
   const relativePath = relativeSegments.join('/');
-  if (!packageName || !relativePath) return null;
+  if (!packageName || !isValidAddonPackageName(packageName) || !relativePath) return null;
   return { packageName, relativePath };
 }
 
@@ -715,8 +735,14 @@ export async function handleGetAddonWebEntries(
 function parseAddonConfigApiPath(pathname: string): { addonId: string; action: string } | null {
   const match = /^\/agent\/addons\/api\/([^/]+)\/([a-z0-9-]+)$/i.exec(pathname);
   if (!match) return null;
-  const addonId = decodeURIComponent(match[1] || '').trim();
-  const action = decodeURIComponent(match[2] || '').trim();
+  let addonId: string;
+  let action: string;
+  try {
+    addonId = decodeURIComponent(match[1] || '').trim();
+    action = decodeURIComponent(match[2] || '').trim();
+  } catch {
+    return null;
+  }
   if (!addonId || !action) return null;
   return { addonId, action };
 }
@@ -816,14 +842,28 @@ export async function handleAddonAssetRequest(
 
   const resolvedPath = resolve(packageDir, parsed.relativePath);
   const packageRoot = resolve(packageDir);
-  const relativeFromRoot = resolvedPath.slice(packageRoot.length);
-  const insidePackageRoot = resolvedPath === packageRoot
-    || relativeFromRoot.startsWith('/')
-    || relativeFromRoot.startsWith('\\');
-  if (!insidePackageRoot) {
+  if (resolvedPath === packageRoot || !isPathWithin(packageRoot, resolvedPath)) {
     return new Response('Not Found', { status: 404 });
   }
-  if (!existsSync(resolvedPath)) {
+
+  let realPackageRoot: string;
+  let realAssetPath: string;
+  try {
+    realPackageRoot = realpathSync.native ? realpathSync.native(packageRoot) : realpathSync(packageRoot);
+    realAssetPath = realpathSync.native ? realpathSync.native(resolvedPath) : realpathSync(resolvedPath);
+  } catch {
+    return new Response('Not Found', { status: 404 });
+  }
+  if (!isRealPathWithin(realPackageRoot, realAssetPath)) {
+    return new Response('Not Found', { status: 404 });
+  }
+
+  try {
+    const stats = statSync(resolvedPath);
+    if (!stats.isFile()) {
+      return new Response('Not Found', { status: 404 });
+    }
+  } catch {
     return new Response('Not Found', { status: 404 });
   }
 

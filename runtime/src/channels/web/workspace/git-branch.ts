@@ -1,15 +1,31 @@
-import { existsSync, statSync } from "fs";
+import { existsSync, lstatSync, readFileSync, statSync } from "fs";
 import path from "path";
 import { execFileSync } from "child_process";
 
 import { WORKSPACE_DIR } from "../../../core/config.js";
-import { resolveWorkspacePath, toRelativePath } from "./paths.js";
+import { isRealWorkspacePath, resolveWorkspacePath, toRelativePath } from "./paths.js";
 
 type ExecFileSyncLike = (
   file: string,
   args: string[],
   options: { cwd?: string; encoding: BufferEncoding; stdio: Array<"ignore" | "pipe"> }
 ) => string;
+
+function hasSafeGitMetadata(repoRoot: string): boolean {
+  const gitPath = path.join(repoRoot, ".git");
+  if (!existsSync(gitPath) || !isRealWorkspacePath(gitPath)) return false;
+  try {
+    const stats = lstatSync(gitPath);
+    if (stats.isDirectory() || stats.isSymbolicLink()) return true;
+    if (!stats.isFile()) return false;
+    const match = /^gitdir:\s*(.+)$/im.exec(readFileSync(gitPath, "utf8"));
+    if (!match) return false;
+    const gitDir = path.resolve(repoRoot, match[1].trim());
+    return existsSync(gitDir) && isRealWorkspacePath(gitDir);
+  } catch {
+    return false;
+  }
+}
 
 function findNearestRepoRoot(absPath: string): string | null {
   let current = absPath;
@@ -23,7 +39,7 @@ function findNearestRepoRoot(absPath: string): string | null {
 
   const workspaceRoot = path.resolve(WORKSPACE_DIR);
   while (true) {
-    if (existsSync(path.join(current, ".git"))) {
+    if (hasSafeGitMetadata(current)) {
       return current;
     }
     if (current === workspaceRoot) {
@@ -43,6 +59,7 @@ export function getWorkspaceGitBranch(
 ): { branch: string; repoPath: string } | null {
   const targetPath = resolveWorkspacePath(pathParam);
   if (!targetPath) return null;
+  if (existsSync(targetPath) && !isRealWorkspacePath(targetPath)) return null;
 
   const repoRoot = findNearestRepoRoot(targetPath);
   if (!repoRoot) return null;

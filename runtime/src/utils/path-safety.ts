@@ -11,7 +11,7 @@
  *   - extensions/image-processing.ts      (display-only path stripping)
  */
 
-import { isAbsolute, relative, sep } from "node:path";
+import { isAbsolute, relative } from "node:path";
 
 /**
  * Return true when `filePath` is equal to or contained within `baseDir`.
@@ -42,6 +42,5 @@ export function stripBaseDirForDisplay(baseDir: string, absolutePath: string): s
  * guards where both sides have already been resolved via `realpathSync`.
  */
 export function isRealPathWithin(realBaseDir: string, realPath: string): boolean {
-  if (realPath === realBaseDir) return true;
-  return realPath.startsWith(realBaseDir + sep);
+  return isPathWithin(realBaseDir, realPath);
 }

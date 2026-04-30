@@ -17,9 +17,13 @@ import { DATA_DIR, getWebRuntimeConfig } from "../../../core/config.js";
 import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
 import { MAX_ATTACH_BYTES, MAX_EDIT_BYTES, MAX_PREVIEW_BYTES } from "./constants.js";
 import { contentTypeForPath, detectBinary, formatMtime, isImageFile, isTextFile } from "./file-utils.js";
-import { isHiddenPath, resolveWorkspacePath, shouldIgnorePath, toRelativePath } from "./paths.js";
+import { isHiddenPath, isRealWorkspacePath, resolveWorkspacePath, shouldIgnorePath, toRelativePath } from "./paths.js";
 
 const log = createLogger("web.workspace.file-service");
+
+function isEscapedExistingWorkspacePath(absPath: string): boolean {
+  return existsSync(absPath) && !isRealWorkspacePath(absPath);
+}
 
 function getWorkspaceUploadMaxBytes(): number {
   return Math.max(1, Math.round((getWebRuntimeConfig().workspaceUploadLimitMb || 256) * 1024 * 1024));
@@ -275,6 +279,9 @@ export class WorkspaceFileService {
   ): { status: number; body: unknown } {
     const targetPath = resolveWorkspacePath(pathParam);
     if (!targetPath) return { status: 400, body: { error: "Invalid path" } };
+    if (isEscapedExistingWorkspacePath(targetPath)) {
+      return { status: 400, body: { error: "Invalid path" } };
+    }
 
     try {
       const stats = statSync(targetPath);
@@ -407,6 +414,9 @@ export class WorkspaceFileService {
   ): { status: number; body: string | Blob; contentType?: string; filePath?: string; size?: number; filename?: string; download?: boolean } {
     const targetPath = resolveWorkspacePath(pathParam);
     if (!targetPath) return { status: 400, body: "Invalid path" };
+    if (isEscapedExistingWorkspacePath(targetPath)) {
+      return { status: 400, body: "Invalid path" };
+    }
 
     try {
       const stats = statSync(targetPath);
@@ -430,6 +440,9 @@ export class WorkspaceFileService {
   attachFile(pathParam: string | null): { status: number; body: unknown } {
     const targetPath = resolveWorkspacePath(pathParam);
     if (!targetPath) return { status: 400, body: { error: "Invalid path" } };
+    if (isEscapedExistingWorkspacePath(targetPath)) {
+      return { status: 400, body: { error: "Invalid path" } };
+    }
 
     try {
       const stats = statSync(targetPath);
@@ -467,6 +480,9 @@ export class WorkspaceFileService {
   ): Promise<{ status: number; body: unknown }> {
     const targetDir = resolveWorkspacePath(pathParam);
     if (!targetDir) return { status: 400, body: { error: "Invalid path" } };
+    if (isEscapedExistingWorkspacePath(targetDir)) {
+      return { status: 400, body: { error: "Invalid path" } };
+    }
 
     try {
       const stats = statSync(targetDir);
@@ -489,6 +505,9 @@ export class WorkspaceFileService {
 
     const destPath = path.join(targetDir, filename);
     const existed = existsSync(destPath);
+    if (existed && !isRealWorkspacePath(destPath)) {
+      return { status: 400, body: { error: "Invalid path" } };
+    }
     if (existed && !overwrite) {
       return { status: 409, body: { error: "File already exists", code: "file_exists" } };
     }
@@ -535,6 +554,9 @@ export class WorkspaceFileService {
 
     const targetDir = resolveWorkspacePath(params.pathParam);
     if (!targetDir) return { status: 400, body: { error: "Invalid path" } };
+    if (isEscapedExistingWorkspacePath(targetDir)) {
+      return { status: 400, body: { error: "Invalid path" } };
+    }
 
     try {
       const stats = statSync(targetDir);
@@ -581,6 +603,9 @@ export class WorkspaceFileService {
         return { status: 409, body: { error: "Upload state not initialized", expected_chunk_index: 0 } };
       }
       const existed = existsSync(destPath);
+      if (existed && !isRealWorkspacePath(destPath)) {
+        return { status: 400, body: { error: "Invalid path" } };
+      }
       if (existed && !overwrite) {
         return { status: 409, body: { error: "File already exists", code: "file_exists" } };
       }
@@ -657,6 +682,10 @@ export class WorkspaceFileService {
       }
 
       const existed = existsSync(destPath);
+      if (existed && !isRealWorkspacePath(destPath)) {
+        rmSync(dir, { recursive: true, force: true });
+        return { status: 400, body: { error: "Invalid path" } };
+      }
       if (existed && !overwrite) {
         rmSync(dir, { recursive: true, force: true });
         return { status: 409, body: { error: "File already exists", code: "file_exists" } };
@@ -703,6 +732,9 @@ export class WorkspaceFileService {
   ): { status: number; body: unknown } {
     const targetDir = resolveWorkspacePath(pathParam);
     if (!targetDir) return { status: 400, body: { error: "Invalid path" } };
+    if (isEscapedExistingWorkspacePath(targetDir)) {
+      return { status: 400, body: { error: "Invalid path" } };
+    }
 
     const filename = normalizeEntryName(nameParam);
     if (!filename) return { status: 400, body: { error: "Invalid filename" } };
@@ -727,6 +759,9 @@ export class WorkspaceFileService {
 
     const destPath = path.join(targetDir, filename);
     if (existsSync(destPath)) {
+      if (!isRealWorkspacePath(destPath)) {
+        return { status: 400, body: { error: "Invalid path" } };
+      }
       return { status: 409, body: { error: "File already exists", code: "file_exists" } };
     }
 
@@ -751,6 +786,9 @@ export class WorkspaceFileService {
   renameFile(pathParam: string | null, nameParam: string | null): { status: number; body: unknown } {
     const targetPath = resolveWorkspacePath(pathParam);
     if (!targetPath) return { status: 400, body: { error: "Invalid path" } };
+    if (isEscapedExistingWorkspacePath(targetPath)) {
+      return { status: 400, body: { error: "Invalid path" } };
+    }
 
     const relPath = toRelativePath(targetPath);
     if (relPath === ".") {
@@ -779,6 +817,9 @@ export class WorkspaceFileService {
     }
 
     if (existsSync(nextPath)) {
+      if (!isRealWorkspacePath(nextPath)) {
+        return { status: 400, body: { error: "Invalid path" } };
+      }
       return { status: 409, body: { error: "File already exists", code: "file_exists" } };
     }
 
@@ -801,6 +842,9 @@ export class WorkspaceFileService {
   moveEntry(pathParam: string | null, targetParam: string | null): { status: number; body: unknown } {
     const sourcePath = resolveWorkspacePath(pathParam);
     if (!sourcePath) return { status: 400, body: { error: "Invalid path" } };
+    if (isEscapedExistingWorkspacePath(sourcePath)) {
+      return { status: 400, body: { error: "Invalid path" } };
+    }
 
     const relSource = toRelativePath(sourcePath);
     if (relSource === ".") {
@@ -809,6 +853,9 @@ export class WorkspaceFileService {
 
     const targetDir = resolveWorkspacePath(targetParam);
     if (!targetDir) return { status: 400, body: { error: "Invalid target" } };
+    if (isEscapedExistingWorkspacePath(targetDir)) {
+      return { status: 400, body: { error: "Invalid target" } };
+    }
 
     try {
       const stats = statSync(targetDir);
@@ -847,6 +894,9 @@ export class WorkspaceFileService {
     }
 
     if (existsSync(nextPath)) {
+      if (!isRealWorkspacePath(nextPath)) {
+        return { status: 400, body: { error: "Invalid target" } };
+      }
       return { status: 409, body: { error: "Target already exists", code: "file_exists" } };
     }
 
@@ -870,6 +920,9 @@ export class WorkspaceFileService {
   updateFile(pathParam: string | null, content: string): { status: number; body: unknown } {
     const targetPath = resolveWorkspacePath(pathParam);
     if (!targetPath) return { status: 400, body: { error: "Invalid path" } };
+    if (isEscapedExistingWorkspacePath(targetPath)) {
+      return { status: 400, body: { error: "Invalid path" } };
+    }
 
     if (typeof content !== "string") {
       return { status: 400, body: { error: "Missing file content" } };
@@ -910,6 +963,9 @@ export class WorkspaceFileService {
   deleteFile(pathParam: string | null): { status: number; body: unknown } {
     const targetPath = resolveWorkspacePath(pathParam);
     if (!targetPath) return { status: 400, body: { error: "Invalid path" } };
+    if (isEscapedExistingWorkspacePath(targetPath)) {
+      return { status: 400, body: { error: "Invalid path" } };
+    }
 
     try {
       const stats = statSync(targetPath);
@@ -942,6 +998,9 @@ export class WorkspaceFileService {
   ): Promise<{ status: number; body: unknown; filename?: string }> {
     const targetDir = resolveWorkspacePath(pathParam);
     if (!targetDir) return { status: 400, body: { error: "Invalid path" } };
+    if (isEscapedExistingWorkspacePath(targetDir)) {
+      return { status: 400, body: { error: "Invalid path" } };
+    }
 
     try {
       const stats = statSync(targetDir);
