@@ -29,7 +29,6 @@ import type { RuntimeState } from "./state.js";
 import { launchWorkspaceIndexProcess } from "../workspace-index-process.js";
 import { SystemMetricsSampler } from "../channels/web/agent/system-metrics.js";
 import { registerLazyViewerRoutes } from "../channels/web/http/lazy-viewer-routes.js";
-import { freezeExtensionRoutes } from "../channels/web/http/extension-routes.js";
 
 const log = createLogger("runtime.startup");
 const WORKSPACE_SKEL_DIR = resolve(import.meta.dir, "../../../skel");
@@ -310,7 +309,9 @@ export async function startWebChannel(queue: AgentQueue, agentPool: AgentPool): 
   const web = new WebChannel({ queue, agentPool });
   await web.start();
   registerLazyViewerRoutes();
-  freezeExtensionRoutes();
+  // Do not freeze extension routes here: workspace/add-on extension factories
+  // register their HTTP routes during the first session resource reload.
+  // createSessionInDir() freezes the registry after that initial load pass.
   captureStartupMemorySnapshot(agentPool, { label: "post-web-start" });
   queueStartupSessionWarmup(agentPool, resolveStartupSessionWarmupOptions());
   runWebStartupRecoveryBootstrap(web);

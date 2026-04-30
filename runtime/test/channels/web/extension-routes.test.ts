@@ -5,8 +5,10 @@ import {
   freezeExtensionRoutes,
   getRegisteredRoutes,
   handleExtensionRoutes,
+  isExtensionRouteRegistryFrozen,
   registerExtensionRoute,
 } from "../../../src/channels/web/http/extension-routes.js";
+import { registerLazyViewerRoutes } from "../../../src/channels/web/http/lazy-viewer-routes.js";
 
 beforeEach(() => {
   clearExtensionRoutes();
@@ -51,5 +53,27 @@ describe("extension route registry", () => {
     expect(updated).toBe("updated");
     const response = await handleExtensionRoutes(new Request("http://localhost/example-addon"), "/example-addon");
     expect(await response?.text()).toBe("second");
+  });
+
+  test("keeps registry open after startup viewer routes so workspace extensions can register during session load", async () => {
+    registerLazyViewerRoutes();
+
+    expect(isExtensionRouteRegistryFrozen()).toBe(false);
+
+    const registered = (globalThis as any).__piclaw_registerRoute(
+      "/workspace-addon",
+      () => new Response("workspace route"),
+      "/workspace/.pi/extensions/workspace-addon/index.ts"
+    );
+
+    expect(registered).toBe("created");
+    expect(getRegisteredRoutes().map((route) => route.prefix)).toContain("/workspace-addon");
+
+    const response = await handleExtensionRoutes(new Request("http://localhost/workspace-addon"), "/workspace-addon");
+    expect(await response?.text()).toBe("workspace route");
+
+    freezeExtensionRoutes();
+    expect(isExtensionRouteRegistryFrozen()).toBe(true);
+    expect(registerExtensionRoute("/late-addon", () => new Response("late"), "/ext/late")).toBe("rejected");
   });
 });
