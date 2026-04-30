@@ -143,7 +143,7 @@ describe("generated widget helpers", () => {
 
     expect(widget).not.toBeNull();
     expect(isInteractiveGeneratedWidget(widget)).toBe(true);
-    expect(getGeneratedWidgetIframeSandbox(widget)).toBe("allow-downloads allow-scripts allow-same-origin");
+    expect(getGeneratedWidgetIframeSandbox(widget)).toBe("allow-downloads allow-scripts");
     expect(getGeneratedWidgetInitPayload(widget)).toEqual({
       title: "Interactive widget",
       widgetId: "tool-live-1",
@@ -195,7 +195,7 @@ describe("generated widget helpers", () => {
 
     expect(widget).not.toBeNull();
     expect(isInteractiveGeneratedWidget(widget)).toBe(true);
-    expect(getGeneratedWidgetIframeSandbox(widget)).toBe("allow-downloads allow-scripts allow-same-origin");
+    expect(getGeneratedWidgetIframeSandbox(widget)).toBe("allow-downloads allow-scripts");
     expect(getGeneratedWidgetInitPayload(widget)).toEqual({
       title: "Interactive timeline widget",
       widgetId: null,

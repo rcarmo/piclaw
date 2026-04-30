@@ -1,8 +1,9 @@
 # Vendored widget libraries
 
 Interactive widgets posted via `send_dashboard_widget` run in a sandboxed iframe
-with `allow-scripts allow-same-origin`. The CSP allows inline scripts and
-same-origin script loading (`script-src 'unsafe-inline' 'self'`).
+with `allow-scripts` but without `allow-same-origin`, so widget documents run in
+an opaque origin and communicate with the host through the `piclawWidget`
+postMessage bridge. The CSP allows inline scripts for the bridge/runtime.
 
 The following libraries are vendored as static assets and available to any widget
 and to generated HTML artifacts from the `visual-artifact-generator` skill:
@@ -157,10 +158,9 @@ file-type glyphs. Also serves as the terminal font.
 }
 ```
 
-> **Widget CSP note:** Widgets rendered via `send_dashboard_widget` must be
-> posted as `interactive: true` to receive `allow-same-origin` in the sandbox
-> attribute. Non-interactive widgets lack `allow-same-origin` and cannot load
-> fonts from `/static/` paths.
+> **Widget sandbox note:** Interactive widgets do not receive
+> `allow-same-origin`. Treat the iframe as an opaque-origin execution context
+> and use the `piclawWidget` bridge for host communication.
 
 ## Mermaid post-processing helper
 
