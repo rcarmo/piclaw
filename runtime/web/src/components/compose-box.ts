@@ -335,6 +335,41 @@ function formatK(n) {
     return String(n);
 }
 
+function normalizeContextUsageTokens(contextUsage) {
+    const tokens = Number(contextUsage?.tokens);
+    return Number.isFinite(tokens) && tokens > 0 ? tokens : null;
+}
+
+export function getModelPickerContextLimit(modelOption, contextUsage) {
+    const contextWindow = Number(modelOption?.contextWindow ?? modelOption?.context_window);
+    const tokens = normalizeContextUsageTokens(contextUsage);
+    if (!Number.isFinite(contextWindow) || contextWindow <= 0 || !Number.isFinite(tokens) || tokens <= 0) {
+        return {
+            blocked: false,
+            note: '',
+            title: '',
+            tokens: tokens ?? null,
+            contextWindow: Number.isFinite(contextWindow) && contextWindow > 0 ? contextWindow : null,
+        };
+    }
+    if (tokens <= contextWindow) {
+        return {
+            blocked: false,
+            note: '',
+            title: '',
+            tokens,
+            contextWindow,
+        };
+    }
+    return {
+        blocked: true,
+        note: 'Current context won’t fit — compact first',
+        title: `Current context uses ${formatK(tokens)} tokens, but this model only fits ${formatK(contextWindow)}. Compact first.`,
+        tokens,
+        contextWindow,
+    };
+}
+
 export function formatModelPickerContextWindow(contextWindow) {
     const value = Number(contextWindow);
     if (!Number.isFinite(value) || value <= 0) return '';
@@ -1550,6 +1585,12 @@ export function ComposeBox({
             ? modelOption
             : (typeof modelOption?.label === 'string' ? modelOption.label : '');
         if (!modelLabel || switchingModel) return;
+        const contextLimit = getModelPickerContextLimit(modelOption, contextUsage);
+        if (contextLimit.blocked) {
+            setSubmitError(null);
+            setSubmitNotice(contextLimit.note);
+            return;
+        }
         const ok = await runModelCommand(`/model ${modelLabel}`);
         if (ok) setShowModelPopup(false);
     };
@@ -2575,17 +2616,21 @@ export function ComposeBox({
                                     const modelLabel = typeof modelOption?.label === 'string' ? modelOption.label : '';
                                     const contextWindowLabel = formatModelPickerContextWindow(modelOption?.contextWindow);
                                     const modelDisplayName = modelOption?.name || null;
+                                    const contextLimit = getModelPickerContextLimit(modelOption, contextUsage);
                                     return html`
                                         <button
                                             key=${modelLabel}
                                             type="button"
                                             role="menuitem"
-                                            class=${`compose-model-popup-item compose-model-popup-model-item${modelPopupIndex === index ? ' active' : ''}${activeModel === modelLabel ? ' current-model' : ''}`}
+                                            class=${`compose-model-popup-item compose-model-popup-model-item${modelPopupIndex === index ? ' active' : ''}${activeModel === modelLabel ? ' current-model' : ''}${contextLimit.blocked ? ' context-blocked' : ''}`}
                                             onClick=${() => { void handleSelectModel(modelOption); }}
-                                            disabled=${switchingModel}
-                                            title=${[modelLabel, modelDisplayName, contextWindowLabel].filter(Boolean).join(' • ')}
+                                            disabled=${switchingModel || contextLimit.blocked}
+                                            title=${[modelLabel, modelDisplayName, contextWindowLabel, contextLimit.title].filter(Boolean).join(' • ')}
                                         >
-                                            <span class="compose-model-popup-model-label">${formatModelPickerDisplayLabel(modelLabel, modelOption?.contextWindow)}${modelDisplayName ? html` <span class="compose-model-popup-model-subtitle">${modelDisplayName}</span>` : ''}</span>
+                                            <span class="compose-model-popup-model-stack">
+                                                <span class="compose-model-popup-model-label">${formatModelPickerDisplayLabel(modelLabel, modelOption?.contextWindow)}${modelDisplayName ? html` <span class="compose-model-popup-model-subtitle">${modelDisplayName}</span>` : ''}</span>
+                                                ${contextLimit.blocked && html`<span class="compose-model-popup-model-note">${contextLimit.note}</span>`}
+                                            </span>
                                         </button>
                                     `;
                                 })}

@@ -426,37 +426,89 @@ test("agent control cycle and agent identity commands", async () => {
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
 
   const applyControlCommand = await getControl();
-  const session = new TestAgentControlSession(ws.workspace, registry);
+  const cycleRegistry = createTestModelRegistry([
+    { provider: "openai", id: "gpt-test", reasoning: true, contextWindow: 200000 },
+    { provider: "anthropic", id: "claude-test", reasoning: true, contextWindow: 200000 },
+  ]);
+  const session = new TestAgentControlSession(ws.workspace, cycleRegistry);
   const runtime = createTestSessionRuntime(session);
 
-  const cycleModel = await applyControlCommand(runtime as any, registry, { type: "cycle_model", direction: "forward", raw: "/cycle-model" });
+  const cycleModel = await applyControlCommand(runtime as any, cycleRegistry, { type: "cycle_model", direction: "forward", raw: "/cycle-model" });
   expect(cycleModel.message).toContain("Model set to");
 
   session.isCompacting = true;
-  const blockedCycleModel = await applyControlCommand(runtime as any, registry, { type: "cycle_model", direction: "forward", raw: "/cycle-model" });
+  const blockedCycleModel = await applyControlCommand(runtime as any, cycleRegistry, { type: "cycle_model", direction: "forward", raw: "/cycle-model" });
   expect(blockedCycleModel.status).toBe("error");
   expect(blockedCycleModel.message).toContain("Auto-compaction is still running");
   session.isCompacting = false;
 
-  const cycleThinking = await applyControlCommand(runtime as any, registry, { type: "cycle_thinking", raw: "/cycle-thinking" });
+  const cycleThinking = await applyControlCommand(runtime as any, cycleRegistry, { type: "cycle_thinking", raw: "/cycle-thinking" });
   expect(cycleThinking.message).toContain("Thinking level set");
 
-  const maxOnOpenAi = await applyControlCommand(runtime as any, registry, { type: "thinking", level: "max", raw: "/thinking max" });
+  const maxOnOpenAi = await applyControlCommand(runtime as any, cycleRegistry, { type: "thinking", level: "max", raw: "/thinking max" });
   expect(maxOnOpenAi.status).toBe("error");
   expect(maxOnOpenAi.message).toContain("Unknown thinking level: max");
 
   session.model = { provider: "anthropic", id: "claude-opus-4-6", reasoning: true } as any;
-  const maxOnAnthropic = await applyControlCommand(runtime as any, registry, { type: "thinking", level: "max", raw: "/thinking max" });
+  const maxOnAnthropic = await applyControlCommand(runtime as any, cycleRegistry, { type: "thinking", level: "max", raw: "/thinking max" });
   expect(maxOnAnthropic.status).toBe("success");
   expect(maxOnAnthropic.thinking_level).toBe("xhigh");
   expect(maxOnAnthropic.thinking_level_label).toBe("max");
   expect(maxOnAnthropic.message).toContain("Thinking level set to max");
 
-  const agentName = await applyControlCommand(runtime as any, registry, { type: "agent_name", name: "Pi", raw: "/agent-name Pi" });
+  const agentName = await applyControlCommand(runtime as any, cycleRegistry, { type: "agent_name", name: "Pi", raw: "/agent-name Pi" });
   expect(agentName.message).toContain("Agent name set");
 
-  const agentAvatar = await applyControlCommand(runtime as any, registry, { type: "agent_avatar", avatar: "https://example.com/avatar.png", raw: "/agent-avatar https://example.com/avatar.png" });
+  const agentAvatar = await applyControlCommand(runtime as any, cycleRegistry, { type: "agent_avatar", avatar: "https://example.com/avatar.png", raw: "/agent-avatar https://example.com/avatar.png" });
   expect(agentAvatar.message).toContain("Agent avatar set");
+});
+
+test("agent control blocks undersized model switches and skips them while cycling", async () => {
+  const ws = getTestWorkspace();
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const applyControlCommand = await getControl();
+  const models = [
+    { provider: "openai", id: "gpt-large", reasoning: true, contextWindow: 200000 },
+    { provider: "openai", id: "gpt-small", reasoning: true, contextWindow: 128000 },
+    { provider: "anthropic", id: "claude-large", reasoning: true, contextWindow: 256000 },
+  ] as any[];
+  const sizedRegistry = createTestModelRegistry(models);
+  const session = new TestAgentControlSession(ws.workspace, sizedRegistry);
+  const runtime = createTestSessionRuntime(session);
+
+  let currentIndex = 0;
+  session.model = models[currentIndex];
+  session.getContextUsage = () => ({ tokens: 150000, contextWindow: 200000, percent: 75 }) as any;
+  session.setModel = async (model: any) => {
+    session.model = model;
+    const nextIndex = models.findIndex((entry) => entry.provider === model.provider && entry.id === model.id);
+    if (nextIndex >= 0) currentIndex = nextIndex;
+  };
+  session.cycleModel = async () => {
+    currentIndex = (currentIndex + 1) % models.length;
+    session.model = models[currentIndex];
+    return { model: session.model, thinkingLevel: "low", isScoped: false } as any;
+  };
+
+  const blockedModel = await applyControlCommand(runtime as any, sizedRegistry, {
+    type: "model",
+    provider: "openai",
+    modelId: "gpt-small",
+    raw: "/model openai/gpt-small",
+  });
+  expect(blockedModel.status).toBe("error");
+  expect(blockedModel.message).toContain("Current context won’t fit");
+  expect(session.model?.id).toBe("gpt-large");
+
+  const cycledModel = await applyControlCommand(runtime as any, sizedRegistry, {
+    type: "cycle_model",
+    direction: "forward",
+    raw: "/cycle-model",
+  });
+  expect(cycledModel.status).toBe("success");
+  expect(cycledModel.model_label).toBe("anthropic/claude-large");
+  expect(session.model?.id).toBe("claude-large");
 });
 
 test("agent control idempotent mode commands stay stable across repeats", async () => {

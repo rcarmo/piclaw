@@ -5,6 +5,7 @@ import {
   formatModelPickerContextWindow,
   formatModelPickerDisplayLabel,
   getComposeHistoryStorageKey,
+  getModelPickerContextLimit,
   getModelPickerOptionSearchLabel,
   normalizeModelPickerOptions,
   resolveComposeExtensionWorkingDisplay,
@@ -288,7 +289,7 @@ test('returnQueuedFollowupToEditor restores compose state before removing the qu
   expect(calls.indexOf('content:Please check this later.')).toBeLessThan(calls.indexOf('remove'));
 });
 
-test('model picker helpers expose searchable names and formatted context windows', () => {
+test('model picker helpers expose searchable names, formatted context windows, and context-fit guards', () => {
   const option = {
     label: 'anthropic/claude-sonnet-4',
     provider: 'anthropic',
@@ -303,6 +304,22 @@ test('model picker helpers expose searchable names and formatted context windows
   expect(getModelPickerOptionSearchLabel(option)).toContain('anthropic/claude-sonnet-4');
   expect(getModelPickerOptionSearchLabel(option)).toContain('Claude Sonnet 4');
   expect(getModelPickerOptionSearchLabel(option)).toContain('200K ctx');
+
+  expect(getModelPickerContextLimit(option, { tokens: 150000 })).toEqual({
+    blocked: false,
+    note: '',
+    title: '',
+    tokens: 150000,
+    contextWindow: 200000,
+  });
+
+  expect(getModelPickerContextLimit({ ...option, contextWindow: 128000 }, { tokens: 150000 })).toEqual({
+    blocked: true,
+    note: 'Current context won’t fit — compact first',
+    title: 'Current context uses 150K tokens, but this model only fits 128K. Compact first.',
+    tokens: 150000,
+    contextWindow: 128000,
+  });
 });
 
 test('resolveComposeModelPickerState keeps the model picker visible for cold chats with available models', () => {

@@ -937,6 +937,13 @@
     align-items: flex-start;
 }
 
+.compose-model-popup-model-stack {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+}
+
 .compose-model-popup-model-label {
     display: block;
     width: 100%;
@@ -952,6 +959,27 @@
     margin-left: 6px;
 }
 
+.compose-model-popup-model-note {
+    margin-top: 3px;
+    font-family: var(--font-family-base);
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--text-secondary);
+    white-space: normal;
+}
+
+.compose-model-popup-item.context-blocked {
+    color: var(--text-secondary);
+    cursor: not-allowed;
+}
+
+.compose-model-popup-item.context-blocked.active {
+    color: var(--warning-color);
+}
+
+.compose-model-popup-item.context-blocked .compose-model-popup-model-note {
+    color: var(--warning-color);
+}
 
 .compose-model-popup-item:hover,
 .compose-model-popup-item:focus-visible {

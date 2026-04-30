@@ -13,6 +13,51 @@ import type { Api, Model } from "@mariozechner/pi-ai";
 import type { AgentControlCommand, AgentControlResult } from "../agent-control-types.js";
 import { THINKING_LEVELS, normalizeModelMatch, resolveThinkingAlias, isEffortProvider, formatThinkingLevelForDisplay } from "../agent-control-helpers.js";
 
+function formatCompactTokens(value: number | null | undefined): string {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return "unknown";
+  if (numeric >= 1_000_000) return `${(numeric / 1_000_000).toFixed(1)}M`;
+  if (numeric >= 1_000) return `${Math.round(numeric / 1_000)}K`;
+  return String(Math.round(numeric));
+}
+
+function getModelLabel(model: Model<Api> | null | undefined): string {
+  if (!model?.provider || !model?.id) return "model";
+  return `${model.provider}/${model.id}`;
+}
+
+function getModelContextWindow(model: Model<Api> | null | undefined): number | null {
+  const contextWindow = Number(model?.contextWindow);
+  return Number.isFinite(contextWindow) && contextWindow > 0 ? contextWindow : null;
+}
+
+function buildContextFitError(model: Model<Api>, tokens: number, contextWindow: number): string {
+  return `Current context won’t fit in ${getModelLabel(model)} (${formatCompactTokens(tokens)} used, ${formatCompactTokens(contextWindow)} max). Compact first.`;
+}
+
+function getContextFitError(session: AgentSession, model: Model<Api> | null | undefined): string | null {
+  if (!model) return null;
+  const usage = session.getContextUsage?.();
+  const tokens = Number(usage?.tokens);
+  if (!Number.isFinite(tokens) || tokens <= 0) return null;
+  const contextWindow = getModelContextWindow(model);
+  if (!contextWindow) return null;
+  if (tokens <= contextWindow) return null;
+  return buildContextFitError(model, tokens, contextWindow);
+}
+
+function listUniqueAvailableModels(registry: ModelRegistry): Model<Api>[] {
+  const seen = new Set<string>();
+  const models: Model<Api>[] = [];
+  for (const model of registry.getAvailable()) {
+    const key = getModelLabel(model);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    models.push(model);
+  }
+  return models;
+}
+
 type ModelCommand = Extract<AgentControlCommand, { type: "model" }>;
 type ThinkingCommand = Extract<AgentControlCommand, { type: "thinking" }>;
 type CycleModelCommand = Extract<AgentControlCommand, { type: "cycle_model" }>;
@@ -105,6 +150,11 @@ export async function handleModel(session: AgentSession, modelRegistry: ModelReg
       };
     }
     selected = matches[0];
+  }
+
+  const contextFitError = getContextFitError(session, selected);
+  if (contextFitError) {
+    return { status: "error", message: contextFitError };
   }
 
   try {
@@ -203,30 +253,68 @@ export async function handleThinking(session: AgentSession, _modelRegistry: Mode
 }
 
 /** Handle /cycle-model: switch to the next/previous model. */
-export async function handleCycleModel(session: AgentSession, _modelRegistry: ModelRegistry, command: CycleModelCommand): Promise<AgentControlResult> {
+export async function handleCycleModel(session: AgentSession, modelRegistry: ModelRegistry, command: CycleModelCommand): Promise<AgentControlResult> {
   const blocked = compactionGuard(session);
   if (blocked) return blocked;
 
+  const registry = ((session as AgentSession & { modelRegistry?: ModelRegistry }).modelRegistry ?? modelRegistry);
+  registry.refresh?.();
+  const availableModels = listUniqueAvailableModels(registry);
+  if (availableModels.length <= 1) {
+    return { status: "success", message: "Only one model is available to cycle." };
+  }
+
+  const originalModel = session.model ?? null;
+  const originalKey = getModelLabel(originalModel);
+  let lastContextFitError: string | null = null;
+
   try {
-    const result = await session.cycleModel(command.direction);
-    if (!result) {
-      return { status: "success", message: "Only one model is available to cycle." };
+    for (let attempts = 0; attempts < availableModels.length; attempts += 1) {
+      const result = await session.cycleModel(command.direction);
+      if (!result) {
+        return { status: "success", message: "Only one model is available to cycle." };
+      }
+
+      const contextFitError = getContextFitError(session, result.model);
+      if (contextFitError) {
+        lastContextFitError = contextFitError;
+        if (getModelLabel(result.model) === originalKey) break;
+        continue;
+      }
+
+      if (getModelLabel(result.model) === originalKey && lastContextFitError) {
+        break;
+      }
+
+      const label = `${result.model.provider}/${result.model.id}`;
+      const scope = result.isScoped ? "scoped" : "available";
+      const thinkingLevel = result.thinkingLevel ?? null;
+      const thinkingLevelLabel = thinkingLevel ? formatThinkingLevelForDisplay(thinkingLevel, result.model.provider) : null;
+      return {
+        status: "success",
+        message: `Model set to ${label} (cycle: ${scope}). Thinking level: ${thinkingLevelLabel ?? thinkingLevel}.`,
+        model_label: label,
+        thinking_level: thinkingLevel,
+        thinking_level_label: thinkingLevelLabel,
+      };
     }
-    const label = `${result.model.provider}/${result.model.id}`;
-    const scope = result.isScoped ? "scoped" : "available";
-    const thinkingLevel = result.thinkingLevel ?? null;
-    const thinkingLevelLabel = thinkingLevel ? formatThinkingLevelForDisplay(thinkingLevel, result.model.provider) : null;
-    return {
-      status: "success",
-      message: `Model set to ${label} (cycle: ${scope}). Thinking level: ${thinkingLevelLabel ?? thinkingLevel}.`,
-      model_label: label,
-      thinking_level: thinkingLevel,
-      thinking_level_label: thinkingLevelLabel,
-    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { status: "error", message };
   }
+
+  if (originalModel && getModelLabel(session.model) !== originalKey) {
+    try {
+      await session.setModel(originalModel);
+    } catch {
+      // Best effort: keep the current model if reverting fails.
+    }
+  }
+
+  return {
+    status: "error",
+    message: lastContextFitError || "No compatible model is available to cycle to right now. Compact first.",
+  };
 }
 
 /** Handle /cycle-thinking: cycle through thinking levels. */
