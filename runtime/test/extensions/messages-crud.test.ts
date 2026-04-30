@@ -435,6 +435,91 @@ describe("messages tool extension", () => {
     expect(result.content[0].text).toContain("No visible content remains");
   });
 
+  test("move supports dry_run and plans thread cascades into another session", async () => {
+    const targetChatJid = `${chatJid}:target`;
+    db.storeChatMetadata(targetChatJid, new Date().toISOString(), "Target");
+
+    const parent = insertMessage("Move parent");
+    const child = insertMessage("Move child", { thread_id: parent });
+
+    const { tool } = await getTool();
+    const dry = await runWithContext(tool, {
+      action: "move",
+      row_ids: [parent],
+      target_chat_jid: targetChatJid,
+      dry_run: true,
+    });
+
+    expect(dry.details.action).toBe("move");
+    expect(dry.details.moved_row_ids).toEqual([parent, child]);
+    expect(dry.details.target_chat_jid).toBe(targetChatJid);
+
+    const sourceTimeline = db.getTimeline(chatJid, 10);
+    const targetTimeline = db.getTimeline(targetChatJid, 10);
+    expect(sourceTimeline.map((row) => row.id)).toEqual([parent, child]);
+    expect(targetTimeline).toHaveLength(0);
+  });
+
+  test("move transfers rows to another session and rethreads orphan roots", async () => {
+    const targetChatJid = `${chatJid}:target-live`;
+    db.storeChatMetadata(targetChatJid, new Date().toISOString(), "Target live");
+
+    const threadParent = insertMessage("Thread source parent");
+    const threadChild = insertMessage("Thread source child", { thread_id: threadParent });
+    const orphanReply = insertMessage("Orphan reply only", { thread_id: threadParent });
+
+    const { tool } = await getTool();
+    const movedThread = await runWithContext(tool, {
+      action: "move",
+      row_ids: [threadParent],
+      target_chat_jid: targetChatJid,
+    });
+    expect(movedThread.details.moved_row_ids).toEqual([threadParent, threadChild, orphanReply]);
+
+    const sourceAfterThreadMove = db.getTimeline(chatJid, 10);
+    expect(sourceAfterThreadMove).toHaveLength(0);
+    const targetAfterThreadMove = db.getTimeline(targetChatJid, 10);
+    expect(targetAfterThreadMove.map((row) => row.id)).toEqual([threadParent, threadChild, orphanReply]);
+
+    const secondSourceChatJid = `${chatJid}:source-2`;
+    db.storeChatMetadata(secondSourceChatJid, new Date().toISOString(), "Source 2");
+    const parentTwo = db.storeMessage({
+      id: `msg-${Math.random().toString(36).slice(2, 10)}`,
+      chat_jid: secondSourceChatJid,
+      sender: "user",
+      sender_name: "Alice",
+      content: "Second parent",
+      timestamp: new Date().toISOString(),
+      is_from_me: false,
+      is_bot_message: false,
+      thread_id: null,
+    });
+    const orphanOnly = db.storeMessage({
+      id: `msg-${Math.random().toString(36).slice(2, 10)}`,
+      chat_jid: secondSourceChatJid,
+      sender: "user",
+      sender_name: "Alice",
+      content: "Second orphan only",
+      timestamp: new Date().toISOString(),
+      is_from_me: false,
+      is_bot_message: false,
+      thread_id: parentTwo,
+    });
+
+    const movedOrphan = await withChatContext(secondSourceChatJid, "web", () => tool.execute("x", {
+      action: "move",
+      row_ids: [orphanOnly],
+      target_chat_jid: targetChatJid,
+    }));
+
+    expect(movedOrphan.details.moved_row_ids).toEqual([orphanOnly]);
+    expect(movedOrphan.details.rethreaded_row_ids).toEqual([orphanOnly]);
+
+    const movedRow = db.getDb().prepare("SELECT chat_jid, thread_id FROM messages WHERE rowid = ?").get(orphanOnly) as { chat_jid: string; thread_id: number };
+    expect(movedRow.chat_jid).toBe(targetChatJid);
+    expect(movedRow.thread_id).toBe(orphanOnly);
+  });
+
   test("delete supports dry_run and does not delete", async () => {
     const parent = insertMessage("Parent message");
     const child = insertMessage("Child message", { thread_id: parent });

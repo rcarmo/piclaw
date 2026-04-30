@@ -9,6 +9,7 @@ import {
   deleteThreadByRowId,
   getDb,
   getMediaIdsForMessage,
+  storeChatMetadata,
   storeMessage,
 } from "../db.js";
 import { getChatJid } from "../core/chat-context.js";
@@ -28,17 +29,19 @@ const MessagesSchema = Type.Object({
       Type.Literal("add"),
       Type.Literal("post"),
       Type.Literal("delete"),
+      Type.Literal("move"),
     ]),
   ),
   query: Type.Optional(Type.String({ description: "Full-text query string (search action), or fallback pattern for grep/extract." })),
   pattern: Type.Optional(Type.String({ description: "Substring or regex pattern for grep/extract actions." })),
   row_ids: Type.Optional(
     Type.Array(Type.Integer({ minimum: 1 }), {
-      description: "Target row IDs (get/delete actions).",
+      description: "Target row IDs (get/delete/move actions).",
       maxItems: 50,
     }),
   ),
   chat_jid: Type.Optional(Type.String({ description: "Chat JID. Use '*' or 'all' for all chats." })),
+  target_chat_jid: Type.Optional(Type.String({ description: "Destination chat/session JID for move action." })),
   role: Type.Optional(
     Type.Union([Type.Literal("user"), Type.Literal("assistant")], {
       description: "Optional role filter for read/search actions.",
@@ -90,7 +93,7 @@ const MessagesSchema = Type.Object({
       description: "Structured content blocks (e.g. adaptive_card) for post action.",
     }),
   ),
-  dry_run: Type.Optional(Type.Boolean({ description: "For delete action, report planned changes without applying." })),
+  dry_run: Type.Optional(Type.Boolean({ description: "For delete/move actions, report planned changes without applying." })),
   force: Type.Optional(Type.Boolean({ description: "For delete action, ignore attachment-safety checks." })),
 });
 
@@ -1283,6 +1286,130 @@ function executePost(
   };
 }
 
+function normalizeTargetChatJid(input: string | undefined): string | null {
+  const trimmed = input?.trim();
+  if (!trimmed || trimmed === "*" || trimmed.toLowerCase() === "all") return null;
+  return trimmed;
+}
+
+function getChatDisplayName(chatJid: string): string | undefined {
+  const row = getDb()
+    .prepare("SELECT name FROM chats WHERE jid = ? LIMIT 1")
+    .get(chatJid) as { name: string | null } | undefined;
+  const name = typeof row?.name === "string" ? row.name.trim() : "";
+  return name || undefined;
+}
+
+function refreshChatLastMessageTime(chatJid: string): void {
+  const db = getDb();
+  const row = db
+    .prepare("SELECT MAX(timestamp) AS timestamp FROM messages WHERE chat_jid = ?")
+    .get(chatJid) as { timestamp: string | null } | undefined;
+  if (row?.timestamp) {
+    storeChatMetadata(chatJid, row.timestamp, getChatDisplayName(chatJid));
+    return;
+  }
+  db.prepare("UPDATE chats SET last_message_time = NULL WHERE jid = ?").run(chatJid);
+}
+
+function resolveUniqueMessageId(targetChatJid: string, currentId: string | null | undefined, rowId: number): { id: string; remapped: boolean } {
+  const db = getDb();
+  const normalized = typeof currentId === "string" && currentId.trim() ? currentId.trim() : createUuid("msg");
+  const conflict = db
+    .prepare("SELECT rowid FROM messages WHERE chat_jid = ? AND id = ? AND rowid != ? LIMIT 1")
+    .get(targetChatJid, normalized, rowId) as { rowid: number } | undefined;
+  if (!conflict) {
+    return { id: normalized, remapped: normalized !== currentId };
+  }
+
+  let nextId = createUuid("msg");
+  while (db.prepare("SELECT rowid FROM messages WHERE chat_jid = ? AND id = ? LIMIT 1").get(targetChatJid, nextId)) {
+    nextId = createUuid("msg");
+  }
+  return { id: nextId, remapped: true };
+}
+
+function moveMessageRowsToChat(rowIds: number[], targetChatJid: string): {
+  movedRowIds: number[];
+  sourceChatJids: string[];
+  rethreadedRowIds: number[];
+  remappedMessageIds: Array<{ rowid: number; old_id: string | null; new_id: string }>;
+} {
+  const ids = Array.from(new Set(rowIds.filter((id) => Number.isInteger(id) && id > 0)));
+  if (ids.length === 0) {
+    return {
+      movedRowIds: [],
+      sourceChatJids: [],
+      rethreadedRowIds: [],
+      remappedMessageIds: [],
+    };
+  }
+
+  const db = getDb();
+  const placeholders = ids.map(() => "?").join(",");
+  const rows = db.prepare(
+    `SELECT rowid, id, chat_jid, thread_id, timestamp
+       FROM messages
+      WHERE rowid IN (${placeholders})
+      ORDER BY rowid ASC`,
+  ).all(...ids) as Array<{
+    rowid: number;
+    id: string | null;
+    chat_jid: string;
+    thread_id: number | null;
+    timestamp: string;
+  }>;
+
+  if (rows.length === 0) {
+    return {
+      movedRowIds: [],
+      sourceChatJids: [],
+      rethreadedRowIds: [],
+      remappedMessageIds: [],
+    };
+  }
+
+  const rowIdSet = new Set(rows.map((row) => row.rowid));
+  const sourceChatJids = Array.from(new Set(rows.map((row) => row.chat_jid).filter((chatJid) => chatJid !== targetChatJid)));
+  const rethreadedRowIds: number[] = [];
+  const remappedMessageIds: Array<{ rowid: number; old_id: string | null; new_id: string }> = [];
+  const movedTimestamps = rows.map((row) => row.timestamp).filter(Boolean).sort();
+  const latestTargetTimestamp = movedTimestamps[movedTimestamps.length - 1] || new Date().toISOString();
+
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    storeChatMetadata(targetChatJid, latestTargetTimestamp, getChatDisplayName(targetChatJid));
+
+    const updateStmt = db.prepare("UPDATE messages SET chat_jid = ?, id = ?, thread_id = ? WHERE rowid = ?");
+    for (const row of rows) {
+      const nextThreadId = row.thread_id !== null && rowIdSet.has(row.thread_id) ? row.thread_id : row.rowid;
+      if (nextThreadId !== row.thread_id) rethreadedRowIds.push(row.rowid);
+      const nextId = resolveUniqueMessageId(targetChatJid, row.id, row.rowid);
+      if (nextId.remapped) {
+        remappedMessageIds.push({ rowid: row.rowid, old_id: row.id ?? null, new_id: nextId.id });
+      }
+      updateStmt.run(targetChatJid, nextId.id, nextThreadId, row.rowid);
+    }
+
+    refreshChatLastMessageTime(targetChatJid);
+    for (const sourceChatJid of sourceChatJids) {
+      refreshChatLastMessageTime(sourceChatJid);
+    }
+
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+
+  return {
+    movedRowIds: rows.map((row) => row.rowid),
+    sourceChatJids,
+    rethreadedRowIds: Array.from(new Set(rethreadedRowIds)).sort((a, b) => a - b),
+    remappedMessageIds,
+  };
+}
+
 function executeDelete(params: MessagesParams, defaultChat: string): AgentToolResult<Record<string, unknown>> {
   const requested = Array.from(new Set((params.row_ids ?? []).filter((id) => Number.isInteger(id) && id > 0)));
   if (requested.length === 0) {
@@ -1379,6 +1506,107 @@ function executeDelete(params: MessagesParams, defaultChat: string): AgentToolRe
   };
 }
 
+function executeMove(params: MessagesParams, defaultChat: string): AgentToolResult<Record<string, unknown>> {
+  const requested = Array.from(new Set((params.row_ids ?? []).filter((id) => Number.isInteger(id) && id > 0)));
+  if (requested.length === 0) {
+    return {
+      content: [{ type: "text", text: "Provide row_ids for action=move." }],
+      details: { action: "move", moved_row_ids: [], skipped_row_ids: [] },
+    };
+  }
+
+  const targetChatJid = normalizeTargetChatJid(params.target_chat_jid);
+  if (!targetChatJid) {
+    return {
+      content: [{ type: "text", text: "Provide target_chat_jid for action=move." }],
+      details: { action: "move", moved_row_ids: [], skipped_row_ids: [] },
+    };
+  }
+
+  const sourceChatJid = normalizeChatJid(params.chat_jid, defaultChat);
+  const roleFilter = normalizeRole(params.role);
+  const senderFilter = normalizeSender(params.sender);
+  const dryRun = params.dry_run === true;
+
+  const skipped = new Map<number, string[]>();
+  const rootMovePlan = new Map<number, { chatJid: string; rowIds: number[] }>();
+  const alreadyPlanned = new Set<number>();
+
+  for (const rootId of requested) {
+    const root = fetchByRowId(sourceChatJid, roleFilter, senderFilter, rootId);
+    if (!root) {
+      skipped.set(rootId, ["not_found"]);
+      continue;
+    }
+    if (root.chat_jid === targetChatJid) {
+      skipped.set(rootId, ["target_same_as_source"]);
+      continue;
+    }
+
+    const cascade = fetchCascadeRows(root.chat_jid, root.rowid);
+    const overlapsSkipped = cascade.some((row) => skipped.has(row.rowid));
+    if (overlapsSkipped) {
+      skipped.set(root.rowid, ["cascade_dependency_skipped"]);
+      continue;
+    }
+
+    const overlapsPlanned = cascade.some((row) => alreadyPlanned.has(row.rowid));
+    if (overlapsPlanned) {
+      skipped.set(root.rowid, ["cascade_dependency_planned"]);
+      continue;
+    }
+
+    const rowIds = cascade.map((row) => row.rowid);
+    rootMovePlan.set(root.rowid, { chatJid: root.chat_jid, rowIds });
+    for (const id of rowIds) alreadyPlanned.add(id);
+  }
+
+  const plannedRowIds = Array.from(alreadyPlanned).sort((a, b) => a - b);
+  const skippedRowIds = Array.from(skipped.keys()).sort((a, b) => a - b);
+  const skippedReasons = Object.fromEntries(Array.from(skipped.entries()).map(([id, reasons]) => [String(id), reasons]));
+  const plannedSourceChatJids = Array.from(new Set(Array.from(rootMovePlan.values()).map((plan) => plan.chatJid))).sort();
+
+  if (dryRun) {
+    return {
+      content: [{ type: "text", text: `Move plan: ${plannedRowIds.length} row(s) would be moved to ${targetChatJid}, ${skippedRowIds.length} skipped.` }],
+      details: {
+        action: "move",
+        requested_row_ids: requested,
+        moved_row_ids: plannedRowIds,
+        skipped_row_ids: skippedRowIds,
+        skipped_reasons: skippedReasons,
+        dry_run: true,
+        count: plannedRowIds.length,
+        skipped_count: skippedRowIds.length,
+        chat_jid: sourceChatJid,
+        source_chat_jids: plannedSourceChatJids,
+        target_chat_jid: targetChatJid,
+      },
+    };
+  }
+
+  const moved = moveMessageRowsToChat(plannedRowIds, targetChatJid);
+
+  return {
+    content: [{ type: "text", text: `Moved ${moved.movedRowIds.length} row(s) to ${targetChatJid}, skipped ${skippedRowIds.length}.` }],
+    details: {
+      action: "move",
+      requested_row_ids: requested,
+      moved_row_ids: moved.movedRowIds,
+      skipped_row_ids: skippedRowIds,
+      skipped_reasons: skippedReasons,
+      dry_run: false,
+      count: moved.movedRowIds.length,
+      skipped_count: skippedRowIds.length,
+      chat_jid: sourceChatJid,
+      source_chat_jids: moved.sourceChatJids,
+      target_chat_jid: targetChatJid,
+      rethreaded_row_ids: moved.rethreadedRowIds,
+      remapped_message_ids: moved.remappedMessageIds,
+    },
+  };
+}
+
 /**
  * Shared helper for external callers that want direct access to message-tool
  * semantics without an agent extension context.
@@ -1402,6 +1630,7 @@ export function runMessagesTool(
   if (action === "add") return executeAdd(params, defaultChat);
   if (action === "post") return executePost(params, defaultChat, postFn);
   if (action === "delete") return executeDelete(params, defaultChat);
+  if (action === "move") return executeMove(params, defaultChat);
 
   return {
     content: [{ type: "text", text: `Unknown action: ${action}` }],
@@ -1425,8 +1654,8 @@ export function postMessagesToolMessage(
 
 const MESSAGES_TOOL_HINT = [
   "## Messages",
-  "Use the messages tool to search, retrieve, grep, extract, diff, add, post, and delete chat messages.",
-  "Read operations are safe by default; delete requires explicit action=delete and can be dry-run with dry_run=true.",
+  "Use the messages tool to search, retrieve, grep, extract, diff, add, post, move, and delete chat messages.",
+  "Read operations are safe by default; move/delete require explicit actions and can be previewed with dry_run=true.",
   "Read/search/get results include message metadata and include parsed content_blocks when available.",
   "The post action stores a message with content_blocks and broadcasts it to connected clients.",
   "Example:",
@@ -1437,6 +1666,7 @@ const MESSAGES_TOOL_HINT = [
   "- diff: { action: \"diff\", after_row: 12345, limit: 20 }",
   "- add: { action: \"add\", type: \"agent\", content: \"Hello\" }",
   "- post: { action: \"post\", type: \"agent\", content: \"Card fallback\", content_blocks: [...] }",
+  "- move: { action: \"move\", row_ids: [123, 124], target_chat_jid: \"web:branch\", dry_run: true }",
   "- delete: { action: \"delete\", row_ids: [123, 124], dry_run: true, force: true }",
 ].join("\n");
 
@@ -1465,8 +1695,8 @@ export const messagesCrud: ExtensionFactory = (pi: ExtensionAPI) => {
   pi.registerTool({
     name: "messages",
     label: "messages",
-    description: "Search, retrieve, grep, extract, diff, add, post, or delete messages via shared store.",
-    promptSnippet: "messages: search/get/grep/extract/diff/add/post/delete rows in the shared message timeline store.",
+    description: "Search, retrieve, grep, extract, diff, add, post, move, or delete messages via shared store.",
+    promptSnippet: "messages: search/get/grep/extract/diff/add/post/move/delete rows in the shared message timeline store.",
     parameters: MessagesSchema,
     async execute(_toolCallId, params) {
       const defaultChat = getChatJid("web:default");
