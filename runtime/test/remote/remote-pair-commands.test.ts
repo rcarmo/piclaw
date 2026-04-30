@@ -30,6 +30,7 @@ let upsertRemotePeer: (peer: any) => void;
 let updateRemotePeer: (id: string, updates: any) => void;
 let initDatabase: () => void;
 let RemoteInteropService: any;
+let getMyBaseUrl: (chatJid?: string) => string;
 let runPairFlow: (targetBaseUrl: string, pi: any) => Promise<void>;
 let runUnpairFlow: (id: string, pi: any) => Promise<void>;
 let runAcceptPairFlow: (id: string, pi: any) => Promise<void>;
@@ -170,6 +171,8 @@ describe("remote pair commands", () => {
       PICLAW_STORE: ws.store,
       PICLAW_DATA: ws.data,
       PICLAW_REMOTE_INTEROP_ENABLED: "1",
+      PICLAW_TRUST_PROXY: "true",
+      PICLAW_WEB_EXTERNAL_URL: "",
     });
 
     const identityMod = await importFresh("../src/remote/identity.js");
@@ -197,6 +200,7 @@ describe("remote pair commands", () => {
     RemoteInteropService = serviceMod.RemoteInteropService;
 
     const pairMod = await importFresh("../src/extensions/remote-pair.js");
+    getMyBaseUrl = pairMod.getMyBaseUrl;
     runPairFlow = pairMod.runPairFlow;
     runUnpairFlow = pairMod.runUnpairFlow;
     runAcceptPairFlow = pairMod.runAcceptPairFlow;
@@ -226,6 +230,27 @@ describe("remote pair commands", () => {
   });
 
   // ─── runPairFlow ─────────────────────────────────────────────────────────
+
+  test("getMyBaseUrl prefers PICLAW_WEB_EXTERNAL_URL when configured", () => {
+    const restoreUrl = setEnv({ PICLAW_WEB_EXTERNAL_URL: "https://public.example.test/" });
+    expect(getMyBaseUrl("web:default")).toBe("https://public.example.test");
+    restoreUrl();
+  });
+
+  test("getMyBaseUrl falls back to remembered forwarded browser origin", async () => {
+    const { rememberWebOrigin } = await import("../../src/channels/web/auth/request-origin.js");
+    rememberWebOrigin("web:default", new Request("http://127.0.0.1:8080/", {
+      headers: {
+        "x-forwarded-proto": "https",
+        "x-forwarded-host": "piclaw-public.example.test",
+      },
+    }));
+    expect(getMyBaseUrl("web:default")).toBe("https://piclaw-public.example.test");
+  });
+
+  test("getMyBaseUrl falls back to localhost when no external or remembered origin exists", () => {
+    expect(getMyBaseUrl("web:missing")).toBe("http://localhost:8080");
+  });
 
   test("runPairFlow stores receiver peer in local DB", async () => {
     // Set an external URL so the callback URL built by runPairFlow uses a

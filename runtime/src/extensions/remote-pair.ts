@@ -41,6 +41,8 @@ import { loadOrCreateIdentity, deriveFingerprint } from "../remote/identity.js";
 import { buildCanonicalRequest, hashBody, signRequest } from "../remote/signature.js";
 import { verifyCallbackProof } from "../remote/service-security.js";
 import { WEB_SERVER_CONFIG, DATA_DIR } from "../core/config.js";
+import { getChatJid } from "../core/chat-context.js";
+import { getWebOrigin } from "../channels/web/auth/request-origin.js";
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
 
 const log = createLogger("extensions.remote-pair");
@@ -56,9 +58,16 @@ function getAllRemotePeers(): RemotePeerRecord[] {
     .all() as RemotePeerRecord[];
 }
 
-function getMyBaseUrl(): string {
+export function getMyBaseUrl(chatJid = getChatJid()): string {
   const env = (process.env.PICLAW_WEB_EXTERNAL_URL || "").trim();
   if (env) return env.replace(/\/$/, "");
+
+  // Prefer the origin the current browser actually used. This lets one Piclaw
+  // instance work both through a public authenticating proxy and directly on
+  // the LAN without pinning PICLAW_WEB_EXTERNAL_URL to either hostname.
+  const remembered = getWebOrigin(chatJid)?.trim();
+  if (remembered) return remembered.replace(/\/$/, "");
+
   return `http://localhost:${WEB_SERVER_CONFIG.port}`;
 }
 

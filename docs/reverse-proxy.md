@@ -87,9 +87,13 @@ A typical `cloudflared` setup can keep piclaw listening only on local HTTP while
 PICLAW_WEB_HOST=127.0.0.1
 PICLAW_WEB_PORT=8080
 PICLAW_TRUST_PROXY=1
+# Leave PICLAW_WEB_EXTERNAL_URL unset when the same instance must work
+# through both a public proxy hostname and direct LAN access.
 ```
 
 If you run inside the standard container, keep the container/web binding consistent with your deployment model. The key point is that the tunnel connects to piclaw over an internal hop while the browser uses the public HTTPS hostname.
+
+Piclaw remembers the browser origin from forwarded headers on authenticated web requests. That remembered origin is used for generated web links and remote-pair callback URLs when `PICLAW_WEB_EXTERNAL_URL` is unset, so public proxy access and LAN access can coexist without pinning the instance to one hostname.
 
 ### `cloudflared` config example
 
@@ -180,6 +184,7 @@ Check:
 - `X-Forwarded-Proto`
 - optional `X-Forwarded-Port`
 - whether the proxy is rewriting `Host` unexpectedly
+- whether `PICLAW_WEB_EXTERNAL_URL` is set; if set, it deliberately overrides the remembered forwarded/browser origin
 
 ### Client IPs all look wrong
 
