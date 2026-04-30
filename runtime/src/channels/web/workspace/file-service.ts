@@ -209,11 +209,19 @@ export interface WorkspaceChunkUploadParams {
 function sanitizeUploadId(raw: string | null | undefined): string | null {
   const value = (raw || "").trim();
   if (!value || value.length > 160) return null;
+  if (value === "." || value === "..") return null;
   return /^[A-Za-z0-9._-]+$/.test(value) ? value : null;
 }
 
-function getUploadStatePaths(uploadId: string): { dir: string; statePath: string; partPath: string } {
-  const dir = path.join(WORKSPACE_UPLOAD_CHUNK_ROOT, uploadId);
+function isPathInsideDirectory(candidatePath: string, rootDir: string): boolean {
+  const relative = path.relative(rootDir, candidatePath);
+  return Boolean(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+function getUploadStatePaths(uploadId: string): { dir: string; statePath: string; partPath: string } | null {
+  const root = path.resolve(WORKSPACE_UPLOAD_CHUNK_ROOT);
+  const dir = path.resolve(root, uploadId);
+  if (!isPathInsideDirectory(dir, root)) return null;
   return {
     dir,
     statePath: path.join(dir, "state.json"),
@@ -562,7 +570,9 @@ export class WorkspaceFileService {
       return { status: 400, body: { error: "File too large to upload" } };
     }
 
-    const { dir, statePath, partPath } = getUploadStatePaths(uploadId);
+    const uploadStatePaths = getUploadStatePaths(uploadId);
+    if (!uploadStatePaths) return { status: 400, body: { error: "Invalid upload ID" } };
+    const { dir, statePath, partPath } = uploadStatePaths;
     const destPath = path.join(targetDir, filename);
     let state = readUploadState(statePath);
 

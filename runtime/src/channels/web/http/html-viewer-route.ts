@@ -2,8 +2,8 @@
  * html-viewer-route.ts — Authenticated HTML preview route.
  *
  * Serves an iframe-based HTML file viewer at /html-viewer/?path=...
- * Renders workspace HTML files in a sandboxed iframe with same-origin
- * script access (so vendored libs like Babylon.js/ECharts/D3 work).
+ * Renders workspace HTML files in a sandboxed iframe without same-origin
+ * privileges. Workspace HTML is treated as untrusted preview content.
  */
 
 import { registerExtensionRoute } from "./extension-routes.js";
@@ -22,7 +22,7 @@ const VIEWER_CSP = [
   "form-action 'self'",
 ].join('; ');
 
-function generateHtmlViewerPage(): string {
+export function generateHtmlViewerPage(): string {
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -50,7 +50,7 @@ function generateHtmlViewerPage(): string {
     <button id="btnRefresh" title="Reload">↻ Refresh</button>
     <button id="btnNewTab" title="Open in new tab">↗ New Tab</button>
   </div>
-  <iframe id="frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+  <iframe id="frame" sandbox="allow-scripts allow-forms allow-popups"></iframe>
   <script>
   (function() {
     var params = new URLSearchParams(location.search);
@@ -90,7 +90,7 @@ function generateHtmlViewerPage(): string {
 </html>`;
 }
 
-function handleHtmlViewerRoute(req: Request, pathname: string): Response | null {
+export function handleRoute(req: Request, pathname: string): Response | null {
   if (req.method !== "GET" && req.method !== "HEAD") {
     return new Response("Method Not Allowed", { status: 405 });
   }
@@ -114,4 +114,4 @@ function handleHtmlViewerRoute(req: Request, pathname: string): Response | null 
   return new Response(generateHtmlViewerPage(), { status: 200, headers });
 }
 
-registerExtensionRoute(ROUTE_PREFIX, handleHtmlViewerRoute, import.meta.dir);
+registerExtensionRoute(ROUTE_PREFIX, handleRoute, import.meta.dir);
