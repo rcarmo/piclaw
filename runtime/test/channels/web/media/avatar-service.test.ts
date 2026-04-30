@@ -74,6 +74,44 @@ test('buildAvatarResponse keeps serving the cached avatar when a new source cann
   }
 });
 
+test('buildAvatarResponse rejects private-network remote avatar URLs before fetch', () => {
+  const ws = createTempWorkspace('piclaw-avatar-private-test-');
+
+  try {
+    const script = `
+      globalThis.fetch = async () => {
+        console.log(JSON.stringify({ fetched: true }));
+        return new Response('unexpected', { status: 500 });
+      };
+      const avatarService = await import('./src/channels/web/media/avatar-service.js');
+      const response = await avatarService.buildAvatarResponse(
+        'user',
+        'http://127.0.0.1:9999/avatar.png',
+        new Request('https://example.com/avatar/user'),
+      );
+      console.log(JSON.stringify({ ok: response === null }));
+    `;
+
+    const result = spawnSync(process.execPath, ['-e', script], {
+      cwd: resolve(import.meta.dir, '..', '..', '..', '..'),
+      env: {
+        ...process.env,
+        PICLAW_WORKSPACE: ws.workspace,
+        PICLAW_STORE: ws.store,
+        PICLAW_DATA: ws.data,
+        PICLAW_DB_IN_MEMORY: '1',
+      },
+      encoding: 'utf8',
+    });
+
+    expect(result.status).toBe(0);
+    const lines = result.stdout.trim().split('\n').filter(Boolean).map((line) => JSON.parse(line));
+    expect(lines).toEqual([{ ok: true }]);
+  } finally {
+    ws.cleanup();
+  }
+});
+
 test('buildAvatarResponse supports rasterized PNG size variants for install surfaces', () => {
   const ws = createTempWorkspace('piclaw-avatar-size-test-');
 

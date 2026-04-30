@@ -14,6 +14,7 @@ import { fileURLToPath } from "url";
 
 import { WORKSPACE_DIR } from "../../../core/config.js";
 import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
+import { validateCallbackUrl } from "../../../remote/ssrf.js";
 import { contentTypeForPath } from "../workspace/file-utils.js";
 
 const log = createLogger("web.avatar");
@@ -29,6 +30,9 @@ interface AvatarMeta {
 }
 
 const AVATAR_DIR = resolve(WORKSPACE_DIR, ".piclaw", "avatars");
+const MAX_REMOTE_AVATAR_BYTES = 5 * 1024 * 1024;
+const REMOTE_AVATAR_TIMEOUT_MS = 8000;
+const REMOTE_AVATAR_MAX_REDIRECTS = 3;
 
 const EXT_TO_TYPE: Record<string, string> = {
   ".png": "image/png",
@@ -115,16 +119,73 @@ function cleanupFile(pathname: string | undefined): void {
   }
 }
 
+async function readRemoteAvatarBytes(response: Response): Promise<Uint8Array | null> {
+  const contentLength = Number(response.headers.get("content-length") || "0");
+  if (Number.isFinite(contentLength) && contentLength > MAX_REMOTE_AVATAR_BYTES) return null;
+  if (!response.body) return new Uint8Array();
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = value instanceof Uint8Array ? value : new Uint8Array(value || []);
+    total += chunk.length;
+    if (total > MAX_REMOTE_AVATAR_BYTES) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(chunk);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out;
+}
+
+async function isRemoteAvatarUrlAllowed(source: string): Promise<boolean> {
+  const check = await validateCallbackUrl(source, undefined, { allowHttp: true, allowPrivateNetwork: false });
+  return Boolean(check.ok && check.url);
+}
+
 async function loadRemoteAvatar(source: string): Promise<{ data: Uint8Array; contentType: string } | null> {
-  const response = await fetch(source);
-  if (!response.ok) return null;
-  const contentType = normalizeContentType(response.headers.get("content-type"));
-  if (contentType && !contentType.startsWith("image/")) return null;
-  const buffer = new Uint8Array(await response.arrayBuffer());
-  return {
-    data: buffer,
-    contentType: contentType || "application/octet-stream",
-  };
+  try {
+    let current = source;
+    for (let redirects = 0; redirects <= REMOTE_AVATAR_MAX_REDIRECTS; redirects += 1) {
+      const urlCheck = await validateCallbackUrl(current, undefined, { allowHttp: true, allowPrivateNetwork: false });
+      if (!urlCheck.ok || !urlCheck.url) return null;
+
+      const response = await fetch(urlCheck.url.href, {
+        redirect: "manual",
+        signal: AbortSignal.timeout(REMOTE_AVATAR_TIMEOUT_MS),
+      });
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        const location = response.headers.get("location");
+        if (!location) return null;
+        current = new URL(location, urlCheck.url).href;
+        continue;
+      }
+      if (!response.ok) return null;
+      const contentType = normalizeContentType(response.headers.get("content-type"));
+      if (contentType && !contentType.startsWith("image/")) return null;
+      const buffer = await readRemoteAvatarBytes(response);
+      if (!buffer) return null;
+      return {
+        data: buffer,
+        contentType: contentType || "application/octet-stream",
+      };
+    }
+    return null;
+  } catch (error) {
+    debugSuppressedError(log, "Failed to load remote avatar source.", error, {
+      source,
+      maxBytes: MAX_REMOTE_AVATAR_BYTES,
+    });
+    return null;
+  }
 }
 
 function loadLocalAvatar(source: string): { data: Uint8Array; contentType: string } | null {
@@ -263,6 +324,7 @@ export async function buildAvatarResponse(kind: AvatarKind, source: string, req:
   const meta = await ensureAvatarCache(kind, sanitized);
   if (!meta) {
     if (sanitized.startsWith("http://") || sanitized.startsWith("https://")) {
+      if (!(await isRemoteAvatarUrlAllowed(sanitized))) return null;
       return Response.redirect(sanitized, 302);
     }
     return null;

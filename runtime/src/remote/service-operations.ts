@@ -70,7 +70,8 @@ export async function handlePing(req: Request, context: RemoteOperationHandlersC
     return jsonResponse({ error: "Ping rate limit exceeded." }, 429);
   }
 
-  const bodyBytes = await readBodyBytes(req);
+  const bodyBytes = await readBodyBytes(req, DEFAULT_MAX_PROMPT_BYTES);
+  if (bodyBytes.length > DEFAULT_MAX_PROMPT_BYTES) return jsonResponse({ error: "Request too large." }, 413);
   const sig = verifySignedRequest(req, bodyBytes, peer, context.nonceCache);
   if (!sig.ok) {
     logAudit(peer, "/api/remote/ping", "denied", undefined, sig.error);
@@ -108,7 +109,8 @@ export async function handleProposal(req: Request, context: RemoteOperationHandl
   const lengthCheck = checkContentLength(req, DEFAULT_MAX_PROMPT_BYTES);
   if (!lengthCheck.ok) return jsonResponse({ error: lengthCheck.error }, lengthCheck.status);
 
-  const bodyBytes = await readBodyBytes(req);
+  const bodyBytes = await readBodyBytes(req, DEFAULT_MAX_PROMPT_BYTES);
+  if (bodyBytes.length > DEFAULT_MAX_PROMPT_BYTES) return jsonResponse({ error: "Request too large." }, 413);
   const sig = verifySignedRequest(req, bodyBytes, peer, context.nonceCache);
   if (!sig.ok) {
     logAudit(peer, "/api/remote/proposal", "denied", undefined, sig.error);
@@ -170,7 +172,8 @@ export async function handleExecute(req: Request, context: RemoteOperationHandle
   const lengthCheck = checkContentLength(req, DEFAULT_MAX_PROMPT_BYTES);
   if (!lengthCheck.ok) return jsonResponse({ error: lengthCheck.error }, lengthCheck.status);
 
-  const bodyBytes = await readBodyBytes(req);
+  const bodyBytes = await readBodyBytes(req, DEFAULT_MAX_PROMPT_BYTES);
+  if (bodyBytes.length > DEFAULT_MAX_PROMPT_BYTES) return jsonResponse({ error: "Request too large." }, 413);
   const sig = verifySignedRequest(req, bodyBytes, peer, context.nonceCache);
   if (!sig.ok) {
     logAudit(peer, "/api/remote/execute", "denied", undefined, sig.error);
@@ -261,7 +264,8 @@ export async function handleRevoke(req: Request, context: RemoteOperationHandler
     return jsonResponse({ error: "Revoke rate limit exceeded." }, 429);
   }
 
-  const bodyBytes = await readBodyBytes(req);
+  const bodyBytes = await readBodyBytes(req, DEFAULT_MAX_PROMPT_BYTES);
+  if (bodyBytes.length > DEFAULT_MAX_PROMPT_BYTES) return jsonResponse({ error: "Request too large." }, 413);
   const sig = verifySignedRequest(req, bodyBytes, peer, context.nonceCache);
   if (!sig.ok) {
     logAudit(peer, "/api/remote/revoke", "denied", undefined, sig.error);
@@ -288,7 +292,8 @@ export async function handleResult(req: Request, context: RemoteOperationHandler
   const lengthCheck = checkContentLength(req, DEFAULT_MAX_RESPONSE_BYTES);
   if (!lengthCheck.ok) return jsonResponse({ error: lengthCheck.error }, lengthCheck.status);
 
-  const bodyBytes = await readBodyBytes(req);
+  const bodyBytes = await readBodyBytes(req, DEFAULT_MAX_RESPONSE_BYTES);
+  if (bodyBytes.length > DEFAULT_MAX_RESPONSE_BYTES) return jsonResponse({ error: "Request too large." }, 413);
   const sig = verifySignedRequest(req, bodyBytes, peer, context.nonceCache);
   if (!sig.ok) {
     logAudit(peer, "/api/remote/result", "denied", undefined, sig.error);

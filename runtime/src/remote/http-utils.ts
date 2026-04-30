@@ -97,22 +97,48 @@ export function parseJsonBytes(buffer: Uint8Array, maxBytes: number): JsonParseR
   }
 }
 
+async function readBoundedBodyBytes(req: Request, maxBytes: number): Promise<Uint8Array | null> {
+  if (!req.body) return new Uint8Array();
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = value instanceof Uint8Array ? value : new Uint8Array(value || []);
+    total += chunk.length;
+    if (total > maxBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(chunk);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out;
+}
+
 /** Read and parse JSON body content with a strict payload size limit. */
 export async function readJsonBody(req: Request, maxBytes: number): Promise<JsonParseResult> {
-  let buffer: Uint8Array;
   try {
-    const arrayBuffer = await req.arrayBuffer();
-    buffer = new Uint8Array(arrayBuffer);
+    const buffer = await readBoundedBodyBytes(req, maxBytes);
+    if (!buffer) return { error: "Request too large." };
+    return parseJsonBytes(buffer, maxBytes);
   } catch {
     return { error: "Invalid body." };
   }
-  return parseJsonBytes(buffer, maxBytes);
 }
 
-/** Read raw request body bytes, returning an empty buffer on read failure. */
-export async function readBodyBytes(req: Request): Promise<Uint8Array> {
+/** Read raw request body bytes with an optional strict byte cap. */
+export async function readBodyBytes(req: Request, maxBytes = Number.POSITIVE_INFINITY): Promise<Uint8Array> {
   try {
-    return new Uint8Array(await req.arrayBuffer());
+    if (!Number.isFinite(maxBytes)) return new Uint8Array(await req.arrayBuffer());
+    const buffer = await readBoundedBodyBytes(req, maxBytes);
+    return buffer ?? new Uint8Array(maxBytes + 1);
   } catch {
     return new Uint8Array();
   }

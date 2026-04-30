@@ -61,6 +61,32 @@ describe("export timeline endpoint", () => {
     expect(await response.json()).toEqual({ error: "Unauthorized" });
   });
 
+  test("sanitizes unsafe markdown URLs in exported HTML", async () => {
+    db.storeMessage({
+      id: "msg-export-unsafe-link",
+      chat_jid: "web:default",
+      sender: "user",
+      sender_name: "User",
+      content: "[bad](javascript:alert(1)) [ok](https://example.com/path)",
+      timestamp: "2026-04-21T10:00:00.000Z",
+      is_from_me: false,
+      is_bot_message: false,
+    });
+
+    const response = exportEndpoint.handleExportTimeline(
+      new Request("http://127.0.0.1/internal/export/timeline?chat_jid=web%3Adefault", {
+        headers: { authorization: "Bearer secret123" },
+      }),
+      { runtimeDir, internalSecret: "secret123" },
+    );
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).not.toContain("javascript:alert");
+    expect(html).toContain('data-removed-href="unsafe-url"');
+    expect(html).toContain('href="https://example.com/path"');
+  });
+
   test("renders printable HTML for the requested chat and last-N range", async () => {
     db.storeMessage({
       id: "msg-export-1",
