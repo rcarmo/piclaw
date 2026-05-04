@@ -350,7 +350,14 @@ PROFILE
              "$HOME_DIR/.pi/agent/prompts" \
              "$HOME_DIR/.pi/agent/themes"
 
-    chown -R agent:agent "$HOME_DIR"
+    # Chown the home tree to agent, but tolerate read-only mounts (k8s
+    # Secret/ConfigMap/projected volumes such as ~/.kube/config). Using find
+    # with -execdir + per-path failure suppression keeps init idempotent on
+    # platforms where parts of $HOME are mounted RO.
+    find "$HOME_DIR" -xdev \! -user agent -print0 2>/dev/null | \
+        xargs -0 -r chown agent:agent 2>/dev/null || true
+    find "$HOME_DIR" -xdev \! -group agent -print0 2>/dev/null | \
+        xargs -0 -r chgrp agent 2>/dev/null || true
     record_runtime_ids
 fi
 

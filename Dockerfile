@@ -48,7 +48,8 @@ RUN apt-get update && \
 
 RUN useradd -m -s /bin/bash -G sudo agent && \
     echo 'agent:agent' | chpasswd && \
-    echo 'agent ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+    echo 'agent ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && \
+    chown -R agent:agent /home/agent
 
 COPY scripts/docker/install-agent-runtime.sh /tmp/install-agent-runtime.sh
 COPY scripts/docker/install-restic-release.sh /tmp/install-restic-release.sh
@@ -72,7 +73,7 @@ RUN PI_CLI="$(readlink -f /usr/local/lib/bun/bin/pi)" && \
     sudo -n sed -i '1s/env node/env bun/' "$PI_CLI" && \
     sudo -n chmod +x "$PI_CLI" && \
     head -n 1 "$PI_CLI"
-RUN rm -rf /home/agent/piclaw /home/agent/.cache /home/agent/.bun && \
+RUN sudo rm -rf /home/agent/piclaw /home/agent/.cache /home/agent/.bun && \
     sudo rm -f /tmp/install-agent-runtime.sh /tmp/install-restic-release.sh /tmp/build-piclaw-package.sh
 
 FROM scratch AS installed-runtime
@@ -174,5 +175,26 @@ RUN ln -sf /usr/local/lib/bun/bin/bun /usr/local/bin/bun && \
              /home/agent/.pi/agent/extensions /home/agent/.pi/agent/prompts /home/agent/.pi/agent/themes && \
     chown -R agent:agent /home/agent /etc/skel.agent /usr/local/share/piclaw && \
     chmod +x /entrypoint.sh /usr/local/bin/run-piclaw.sh /usr/local/bin/restic
+
+# Install Node.js (npm), Go, and kubectl via Homebrew. Homebrew on Linux refuses
+# to run as root, so this runs as the agent user. Symlink binaries into
+# /usr/local/bin so they are on PATH for any user/shell.
+USER agent
+RUN /home/linuxbrew/.linuxbrew/bin/brew install node go kubernetes-cli && \
+    /home/linuxbrew/.linuxbrew/bin/brew cleanup -s
+USER root
+RUN ln -sf /home/linuxbrew/.linuxbrew/bin/node /usr/local/bin/node && \
+    ln -sf /home/linuxbrew/.linuxbrew/bin/npm /usr/local/bin/npm && \
+    ln -sf /home/linuxbrew/.linuxbrew/bin/npx /usr/local/bin/npx && \
+    ln -sf /home/linuxbrew/.linuxbrew/bin/go /usr/local/bin/go && \
+    ln -sf /home/linuxbrew/.linuxbrew/bin/gofmt /usr/local/bin/gofmt && \
+    ln -sf /home/linuxbrew/.linuxbrew/bin/kubectl /usr/local/bin/kubectl && \
+    ln -sf /home/linuxbrew/.linuxbrew/bin/rtk /usr/local/bin/rtk && \
+    ln -sf /home/linuxbrew/.linuxbrew/bin/gh /usr/local/bin/gh
+
+# Install flux CLI via the official install script (no Linux bottle in
+# fluxcd/tap and brew would require building from source).
+RUN curl -fsSL https://fluxcd.io/install.sh | bash && \
+    flux --version
 
 ENTRYPOINT ["/entrypoint.sh"]
