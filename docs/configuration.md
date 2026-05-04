@@ -255,6 +255,7 @@ That means most users should prefer `/login` over setting raw provider env vars 
 | `PICLAW_MAIN_SESSION_PRESSURE_RSS_BYTES` | `536870912` (512 MB) | RSS threshold that enables memory-pressure session eviction mode |
 | `PICLAW_MAIN_SESSION_PRESSURE_IDLE_TTL_MS` | `60000` | Main-session idle TTL while memory pressure mode is active |
 | `PICLAW_MAIN_SESSION_PRESSURE_POOL_MAX_SIZE` | `1` | Max cached main sessions while memory pressure mode is active |
+| `PICLAW_RTK_ENABLED` | `1` | Enable the bundled [`pi-rtk`](https://www.npmjs.com/package/@sherif-fanous/pi-rtk) Pi extension. When enabled, `pi` routes shell tool calls through the [`rtk`](https://www.rtk-ai.app/) CLI to reduce token usage from large command outputs. Set `0` to remove the extension at container startup; the underlying `rtk` binary stays installed and `pi-rtk` no-ops gracefully if reinstalled later. |
 
 Notes:
 

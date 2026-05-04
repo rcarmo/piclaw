@@ -232,6 +232,10 @@ fi
 PI_CODING_AGENT_VERSION="${PI_CODING_AGENT_VERSION:-0.58.3}"
 sudo BUN_INSTALL="$BUN_INSTALL" BUN_INSTALL_CACHE_DIR="$BUN_INSTALL_CACHE_DIR" "$BUN_INSTALL/bin/bun" add -g "@mariozechner/pi-coding-agent@${PI_CODING_AGENT_VERSION}"
 
+# Install pi-rtk Pi extension globally (token-saving CLI wrapper). Pinned alongside pi-coding-agent.
+PI_RTK_VERSION="${PI_RTK_VERSION:-0.3.0}"
+sudo BUN_INSTALL="$BUN_INSTALL" BUN_INSTALL_CACHE_DIR="$BUN_INSTALL_CACHE_DIR" "$BUN_INSTALL/bin/bun" add -g "@sherif-fanous/pi-rtk@${PI_RTK_VERSION}"
+
 sudo chmod -R a+rX "$BUN_INSTALL"
 sudo ln -sf "$BUN_INSTALL/bin/pi" /usr/local/bin/pi
 
@@ -241,8 +245,8 @@ if [ -f "$PI_CLI" ] && head -n1 "$PI_CLI" | grep -q 'env node'; then
 fi
 sudo chmod +x "$PI_CLI"
 
-# Install GitHub CLI via Homebrew.
-brew install gh
+# Install GitHub CLI and rtk (token-reduction CLI used by pi-rtk) via Homebrew.
+brew install gh rtk
 
 rm -rf "$HOME/.cache" "$HOME/.bun"
 rm -rf "$HOMEBREW_CACHE" /home/linuxbrew/.cache 2>/dev/null || true

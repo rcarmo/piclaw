@@ -91,6 +91,7 @@ Most users only need a few environment variables:
 | `PICLAW_WEB_PASSKEY_MODE` | `totp-fallback` | `totp-fallback`, `passkey-only`, or `totp-only` |
 | `PICLAW_ASSISTANT_NAME` | `PiClaw` | Display name in the UI |
 | `PICLAW_ENABLE_M365_EXPERIMENTAL` | `0` | Enable the experimental Microsoft 365 extension bundle |
+| `PICLAW_RTK_ENABLED` | `1` | Enable the bundled `pi-rtk` extension (token-saving wrapper backed by the `rtk` CLI). Set `0` to opt out at startup. |
 | `PICLAW_KEYCHAIN_KEY` | _(empty)_ | Master key for encrypted secret storage |
 | `PICLAW_TRUST_PROXY` | `0` | Enable when behind a reverse proxy or tunnel |
 

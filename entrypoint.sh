@@ -439,6 +439,16 @@ mkdir -p /var/log/piclaw /var/run/supervisor
 chown -R agent:agent /var/log/piclaw
 chmod 755 /usr/local/bin/run-piclaw.sh 2>/dev/null || true
 
+# Honor opt-out for the pi-rtk extension (default: enabled). When disabled, remove the
+# globally-installed pi extension so `pi` does not register the rtk-backed bash hook.
+# pi-rtk gracefully no-ops when the `rtk` CLI is missing, so we leave the brew binary in place.
+if [ "${PICLAW_RTK_ENABLED:-1}" = "0" ]; then
+    if [ -d "${BUN_INSTALL:-/usr/local/lib/bun}/install/global/node_modules/@sherif-fanous/pi-rtk" ]; then
+        log "PICLAW_RTK_ENABLED=0 — removing pre-installed @sherif-fanous/pi-rtk extension"
+        "${BUN_INSTALL:-/usr/local/lib/bun}/bin/bun" remove -g @sherif-fanous/pi-rtk >/dev/null 2>&1 || true
+    fi
+fi
+
 log "=== PiClaw - Pi Coding Agent Sandbox ==="
 
 if [ ! -x "$SUPERVISORD_BIN" ]; then
