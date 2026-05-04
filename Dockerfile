@@ -180,7 +180,7 @@ RUN ln -sf /usr/local/lib/bun/bin/bun /usr/local/bin/bun && \
 # to run as root, so this runs as the agent user. Symlink binaries into
 # /usr/local/bin so they are on PATH for any user/shell.
 USER agent
-RUN /home/linuxbrew/.linuxbrew/bin/brew install node go kubernetes-cli && \
+RUN /home/linuxbrew/.linuxbrew/bin/brew install node go kubernetes-cli gopls && \
     /home/linuxbrew/.linuxbrew/bin/brew cleanup -s
 USER root
 RUN ln -sf /home/linuxbrew/.linuxbrew/bin/node /usr/local/bin/node && \
@@ -190,7 +190,8 @@ RUN ln -sf /home/linuxbrew/.linuxbrew/bin/node /usr/local/bin/node && \
     ln -sf /home/linuxbrew/.linuxbrew/bin/gofmt /usr/local/bin/gofmt && \
     ln -sf /home/linuxbrew/.linuxbrew/bin/kubectl /usr/local/bin/kubectl && \
     ln -sf /home/linuxbrew/.linuxbrew/bin/rtk /usr/local/bin/rtk && \
-    ln -sf /home/linuxbrew/.linuxbrew/bin/gh /usr/local/bin/gh
+    ln -sf /home/linuxbrew/.linuxbrew/bin/gh /usr/local/bin/gh && \
+    ln -sf /home/linuxbrew/.linuxbrew/bin/gopls /usr/local/bin/gopls
 
 # Install flux CLI via the official install script (no Linux bottle in
 # fluxcd/tap and brew would require building from source).
