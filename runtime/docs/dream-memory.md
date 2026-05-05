@@ -137,6 +137,10 @@ Dream now treats memory as layered outputs rather than a mirrored `notes/daily/`
 - do not generate it as a required mirror of every complete daily note
 - keep `MEMORY.md` pointing at the best available artifact for that day: sparse day-memory file if it exists, otherwise the daily note
 
+### Incomplete daily-note recovery cues
+
+When runtime seeds or refreshes an unfinished daily note, it also writes a hidden `DREAM_CUES` comment. Those cues are compact transcript hints derived from the message slice described by front matter (`scope_anchor`, `first_message`, `last_message`, `messages_total`, `session_trees`, `session_chats`). Dream should use them before searching broadly, and may inspect the full bounded slice for small days (`messages_total <= 50`, `session_trees <= 2`) before declaring consolidation unsafe. If a pass still leaves unresolved notes, the run result and logs report the unresolved dates.
+
 ## Files touched
 
 Dream is allowed to modify only the Dream note surfaces. Daily-note structure stays inside Markdown front matter and sections; Dream should not create JSON sidecars.

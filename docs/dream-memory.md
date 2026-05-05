@@ -47,7 +47,9 @@ Dream must not modify project code, tests, or unrelated config.
 
 Creates a pre-Dream zip backup, refreshes in-window daily note files from the
 messages database, runs the Dream turn, and posts a summary back to chat.
-Default window: last 7 days.
+Unfinished daily notes are seeded with hidden `DREAM_CUES` based on their
+front-matter transcript slice, and unresolved backlog dates are reported after
+the run if consolidation remains incomplete. Default window: last 7 days.
 
 ### AutoDream
 

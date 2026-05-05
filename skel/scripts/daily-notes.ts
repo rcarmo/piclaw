@@ -54,6 +54,8 @@ const NOTES_DIR = "/workspace/notes/daily";
 const SUMMARY_MARKER = "<!-- NEEDS_SUMMARY -->";
 const SUMMARY_UPDATE_MARKER = "<!-- NEEDS_SUMMARY_UPDATE -->";
 const INCOMPLETE_WARNING_TITLE = "> ⚠ **Incomplete daily note**";
+const DREAM_CUES_START = "<!-- DREAM_CUES";
+const DREAM_CUES_END = "DREAM_CUES -->";
 
 mkdirSync(NOTES_DIR, { recursive: true });
 
@@ -204,6 +206,74 @@ function upsertIncompleteWarning(body: string, options: { summarisedUntil?: stri
   return `${warning}\n\n${cleaned}`;
 }
 
+function stripDreamCues(body: string): string {
+  return body
+    .replace(/\n?<!-- DREAM_CUES[\s\S]*?DREAM_CUES -->\n?/g, "\n")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+function cleanCueText(text: string, maxLen = 180): string {
+  const cleaned = String(text || "")
+    .replace(/--/g, "—")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned.length > maxLen ? `${cleaned.slice(0, maxLen - 1)}…` : cleaned;
+}
+
+function buildCueTerms(messages: Row[]): string[] {
+  const stop = new Set(["about", "after", "again", "also", "because", "before", "could", "from", "have", "into", "just", "like", "more", "need", "only", "that", "their", "then", "there", "this", "with", "would"]);
+  const counts = new Map<string, number>();
+  for (const msg of messages) {
+    for (const word of String(msg.content || "").toLowerCase().match(/[a-z0-9][a-z0-9_-]{3,}/g) || []) {
+      if (stop.has(word)) continue;
+      counts.set(word, (counts.get(word) || 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 16)
+    .map(([word]) => word);
+}
+
+function buildDreamCues(messages: Row[], options: { firstTimestamp: string; lastTimestamp: string; totalMsgs: number; sessionTrees: number; sessionChats: number }): string {
+  const includeFullSlice = options.totalMsgs <= 50 && options.sessionTrees <= 2;
+  const selected = includeFullSlice
+    ? messages
+    : [...messages.slice(0, 5), ...messages.slice(Math.max(5, messages.length - 5))];
+  const lines = [
+    DREAM_CUES_START,
+    "These cues are hidden recovery hints for Dream. Treat front matter as the transcript contract; use message IDs/timestamps with messages search only if more evidence is needed.",
+    `slice: ${options.firstTimestamp}..${options.lastTimestamp}`,
+    `messages_total: ${options.totalMsgs}`,
+    `session_trees: ${options.sessionTrees}`,
+    `session_chats: ${options.sessionChats}`,
+    `bounded_full_slice: ${includeFullSlice ? "yes" : "no"}`,
+  ];
+  const terms = buildCueTerms(messages);
+  if (terms.length > 0) lines.push(`cue_terms: ${terms.join(", ")}`);
+  lines.push("message_snippets:");
+  for (const msg of selected) {
+    const role = msg.is_bot_message ? "assistant" : "user";
+    lines.push(`- ${msg.timestamp} ${role} ${cleanCueText(msg.sender_name, 40)} [${cleanCueText(msg.chat_jid, 80)}]: ${cleanCueText(msg.content)}`);
+  }
+  if (!includeFullSlice && selected.length < messages.length) {
+    lines.push(`omitted_middle_messages: ${messages.length - selected.length}`);
+  }
+  lines.push(DREAM_CUES_END);
+  return lines.join("\n");
+}
+
+function upsertDreamCues(body: string, cues: string): string {
+  const cleaned = stripDreamCues(body).trimStart();
+  const summaryIndex = cleaned.indexOf("\n## Summary");
+  if (summaryIndex >= 0) {
+    const before = cleaned.slice(0, summaryIndex).trimEnd();
+    const after = cleaned.slice(summaryIndex + 1).trimStart();
+    return `${before}\n\n${cues}\n\n${after}`;
+  }
+  return `${cues}\n\n${cleaned}`;
+}
+
 // ── Query ───────────────────────────────────────────────────────────────
 if (!existsSync(DB_PATH)) {
   console.error(`Database not found: ${DB_PATH}`);
@@ -322,13 +392,17 @@ for (const day of sortedDays) {
       body = appendSummaryUpdate(body, lastTimestamp);
     }
 
-    body = upsertIncompleteWarning(body, !summary
+    const incompleteState = !summary
       ? { lastTimestamp }
       : needsPartialUpdate
         ? { summarisedUntil: existingWm, lastTimestamp, needsSummaryUpdate: true }
         : !hasWm
           ? { lastTimestamp }
-          : null);
+          : null;
+    body = upsertIncompleteWarning(body, incompleteState);
+    body = incompleteState
+      ? upsertDreamCues(body, buildDreamCues(messages, { firstTimestamp, lastTimestamp, totalMsgs, sessionTrees, sessionChats }))
+      : stripDreamCues(body);
 
     const nextFields: Record<string, string> = {
       ...fields,
@@ -361,6 +435,8 @@ for (const day of sortedDays) {
   lines.push("");
   lines.push(INCOMPLETE_WARNING_TITLE);
   lines.push(`> Latest message currently on file: \`${lastTimestamp}\`.`);
+  lines.push("");
+  lines.push(buildDreamCues(messages, { firstTimestamp, lastTimestamp, totalMsgs, sessionTrees, sessionChats }));
   lines.push("");
   lines.push("## Summary");
   lines.push("");

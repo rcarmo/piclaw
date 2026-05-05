@@ -174,6 +174,20 @@ export function hasOutstandingDreamConsolidation(recentDays: number): boolean {
   return backlog.unsummarised > 0 || backlog.partial > 0 || backlog.missing_watermark > 0;
 }
 
+function hasDailyNoteBacklog(backlog: ReturnType<typeof inspectDailyNoteSummaryBacklog>): boolean {
+  return backlog.unsummarised > 0 || backlog.partial > 0 || backlog.missing_watermark > 0;
+}
+
+function formatDailyNoteBacklogSummary(backlog: ReturnType<typeof inspectDailyNoteSummaryBacklog>): string {
+  if (!hasDailyNoteBacklog(backlog)) return "- Unresolved daily-note backlog: none";
+  const parts = [
+    backlog.unsummarised > 0 ? `${backlog.unsummarised} unsummarised` : null,
+    backlog.partial > 0 ? `${backlog.partial} partial` : null,
+    backlog.missing_watermark > 0 ? `${backlog.missing_watermark} missing watermark` : null,
+  ].filter(Boolean).join(", ");
+  return `- Unresolved daily-note backlog: ${parts} (${backlog.dates.join(", ")})`;
+}
+
 export function shouldRunAutoDream(
   lastConsolidatedAt: string | null,
   sessionsSinceLast: number | null,
@@ -511,10 +525,12 @@ export async function runDreamAgentTurn(options: { chatJid: string; days?: numbe
       toolCeilingFilter: isDreamToolAllowed,
     });
     const refresh = refreshAgentMemoryFromDailyNotes({ recentDays: days });
+    const postBacklog = inspectDailyNoteSummaryBacklog({ recentDays: days });
     const workspaceIndexRefreshed = await refreshWorkspaceSearchIndex();
     const recoverySummary = formatRecoverySummary(out.recovery);
     const suffix = [
       `- Daily notes refreshed before Dream: ${dailyNotesRefreshed ? "yes" : "no"}`,
+      formatDailyNoteBacklogSummary(postBacklog),
       `- Memory refreshed after Dream: yes`,
       `- Updated memory: ${refresh.memoryPath}`,
       `- Updated current state: ${refresh.currentStatePath}`,
@@ -523,6 +539,15 @@ export async function runDreamAgentTurn(options: { chatJid: string; days?: numbe
       `- Workspace index refreshed: ${workspaceIndexRefreshed ? "yes" : "no"}`,
       recoverySummary ? `- ${recoverySummary}` : null,
     ].filter(Boolean).join("\n");
+    if (hasDailyNoteBacklog(postBacklog)) {
+      log.warn("Dream pass left unresolved daily-note backlog", {
+        operation: "run_dream_agent_turn.unresolved_daily_notes",
+        chatJid,
+        mode,
+        days,
+        backlog: postBacklog,
+      });
+    }
     if (out.status === "error") {
       log.warn("Dream agent turn failed; keeping deterministic memory refresh", {
         operation: "run_dream_agent_turn.fallback_refresh",
@@ -531,6 +556,7 @@ export async function runDreamAgentTurn(options: { chatJid: string; days?: numbe
         days,
         error: out.error || "Dream agent run failed.",
         recovery: out.recovery || null,
+        unresolvedDailyNotes: postBacklog.dates,
       });
       return {
         mode,
