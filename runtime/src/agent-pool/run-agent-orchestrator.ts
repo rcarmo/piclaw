@@ -343,6 +343,7 @@ async function runRecoveryCompaction(
     chatJid,
     options,
     async () => await session.compact(),
+    "recovery",
   );
   if (!compactionResult.ok) {
     noteCompactionFailure(chatJid, compactionResult.errorMessage);

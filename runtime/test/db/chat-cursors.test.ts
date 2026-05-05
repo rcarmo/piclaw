@@ -189,6 +189,31 @@ describe("chat compaction backoff", () => {
     db.clearChatCompactionBackoff(chatJid);
     expect(db.getChatCompactionBackoff(chatJid)).toBeNull();
   });
+
+  test("active compaction markers persist and clear independently of backoff", () => {
+    const chatJid = jid("active-compaction");
+    db.markChatCompactionActive(chatJid, "2024-03-17T00:00:00.000Z", "recovery");
+
+    expect(db.getActiveChatCompactions().filter((entry) => entry.chatJid === chatJid)).toEqual([
+      {
+        chatJid,
+        startedAt: "2024-03-17T00:00:00.000Z",
+        reason: "recovery",
+      },
+    ]);
+
+    db.setChatCompactionBackoff(chatJid, {
+      failureCount: 1,
+      lastFailedAt: "2024-03-17T00:04:00.000Z",
+      backoffUntil: "2024-03-17T04:04:00.000Z",
+      lastErrorMessage: "stale recovery compaction",
+    });
+    expect(db.getActiveChatCompactions().some((entry) => entry.chatJid === chatJid)).toBe(true);
+
+    db.clearChatCompactionActive(chatJid);
+    expect(db.getActiveChatCompactions().some((entry) => entry.chatJid === chatJid)).toBe(false);
+    expect(db.getChatCompactionBackoff(chatJid)?.lastErrorMessage).toBe("stale recovery compaction");
+  });
 });
 
 // ---------------------------------------------------------------------------

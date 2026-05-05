@@ -42,6 +42,49 @@ describe("web recovery helpers", () => {
     expect(clearedInflight).toEqual(["web:inflight"]);
   });
 
+  test("recoverInflightRuns quarantines stale active recovery compactions and clears inflight", () => {
+    const clearedCompactions: string[] = [];
+    const clearedInflight: string[] = [];
+    const backoffs: Array<{ chatJid: string; failureCount: number; lastFailedAt: string; backoffUntil: string; lastErrorMessage?: string | null }> = [];
+
+    const ctx: WebRecoveryContext = {
+      assistantName: "Pi",
+      defaultAgentId: "default",
+      enqueue: async () => {},
+      processChat: async () => {},
+      now: () => new Date("2026-01-01T00:10:00Z").getTime(),
+    };
+
+    const store: WebRecoveryStore = {
+      getPreflightRuns: () => [],
+      getActiveChatCompactions: () => [{ chatJid: "web:compact", startedAt: "2026-01-01T00:00:00Z", reason: "recovery" }],
+      getInflightRuns: () => clearedInflight.length ? [] : [{ chatJid: "web:compact", prevTs: "t0", messageId: "m0", startedAt: "2026-01-01T00:01:00Z" }],
+      transaction: (run) => run(),
+      getAgentReplyStateAfter: () => "none",
+      clearChatCompactionActive: (chatJid) => { clearedCompactions.push(chatJid); },
+      getChatCompactionBackoff: () => ({ failureCount: 1 }),
+      setChatCompactionBackoff: (chatJid, backoff) => { backoffs.push({ chatJid, ...backoff }); },
+      clearInflightMarker: (chatJid) => { clearedInflight.push(chatJid); },
+      rollbackInflightRun: () => {},
+      getAllChatCursors: () => ({}),
+      getKnownChatJids: () => [],
+      getDeferredQueuedFollowups: () => [],
+      getMessagesSince: () => [],
+    };
+
+    recoverInflightRuns(ctx, store);
+
+    expect(clearedCompactions).toEqual(["web:compact"]);
+    expect(clearedInflight).toEqual(["web:compact"]);
+    expect(backoffs).toEqual([{
+      chatJid: "web:compact",
+      failureCount: 2,
+      lastFailedAt: "2026-01-01T00:10:00.000Z",
+      backoffUntil: "2026-01-01T04:10:00.000Z",
+      lastErrorMessage: "Stale recovery compaction recovered after 600s; clearing active turn and entering compaction backoff",
+    }]);
+  });
+
   test("recoverInflightRuns quarantines stale preflight markers instead of requeueing compaction", () => {
     const clearedPreflight: string[] = [];
     const quarantined: Array<{ chatJid: string; messageId: string; reason: string; backoffUntil?: string | null }> = [];

@@ -1088,7 +1088,7 @@ function resolveDefaultProgressWatchdogEnabled(): boolean {
   if (configProgressWatchdogEnabled !== undefined) return configProgressWatchdogEnabled;
   if (hasExplicitEnvProgressWatchdogTimeout) return Number(envProgressWatchdogTimeoutMs ?? 0) > 0;
   if (hasExplicitConfigProgressWatchdogTimeout) return Number(configProgressWatchdogTimeoutMs ?? 0) > 0;
-  return false;
+  return true;
 }
 
 let COMPACTION_RUNTIME_CONFIG: CompactionRuntimeConfig = Object.seal({

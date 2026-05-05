@@ -123,6 +123,9 @@ export {
   getAllChatCompactionBackoffs,
   setChatCompactionBackoff,
   clearChatCompactionBackoff,
+  markChatCompactionActive,
+  clearChatCompactionActive,
+  getActiveChatCompactions,
 } from "./db/chat-cursors.js";
 export type {
   PreflightRun,
@@ -130,6 +133,7 @@ export type {
   DeferredQueuedFollowupRecord,
   AgentReplyState,
   ChatCompactionBackoffState,
+  ActiveCompactionState,
   StalePreflightRecoveryRecord,
 } from "./db/chat-cursors.js";
 export {

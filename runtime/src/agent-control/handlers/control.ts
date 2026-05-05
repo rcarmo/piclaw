@@ -165,6 +165,7 @@ export async function handleCompact(session: AgentSession, command: CompactComma
         },
       },
       async () => await session.compact(command.instructions?.trim() || undefined),
+      "manual",
     );
     if (!compactionResult.ok) {
       noteCompactionFailure(chatJid, compactionResult.errorMessage);

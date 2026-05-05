@@ -6,8 +6,10 @@ import { type AgentSession, type AgentSessionEvent } from "@mariozechner/pi-codi
 
 import { getCompactionRuntimeConfig } from "../core/config.js";
 import {
+  clearChatCompactionActive,
   clearChatCompactionBackoff,
   getChatCompactionBackoff,
+  markChatCompactionActive,
   setChatCompactionBackoff,
   type ChatCompactionBackoffState,
 } from "../db.js";
@@ -214,6 +216,7 @@ export async function runCompactionWithTimeout<T>(
   chatJid: string,
   options: Pick<CompactionLifecycleOptions, "onWarn">,
   runCompact: () => Promise<T>,
+  reason = "manual",
 ): Promise<CompactionOutcome<T>> {
   const existing = activeCompactions.get(chatJid);
   if (existing) {
@@ -228,7 +231,7 @@ export async function runCompactionWithTimeout<T>(
   const clearActive = () => {
     if (activeCompactions.get(chatJid) === active) activeCompactions.delete(chatJid);
   };
-  const outcome = runCompactionWithTimeoutExclusive(session, chatJid, options, runCompact, clearActive);
+  const outcome = runCompactionWithTimeoutExclusive(session, chatJid, options, runCompact, clearActive, reason);
   active.outcome = outcome as Promise<CompactionOutcome<unknown>>;
   activeCompactions.set(chatJid, active);
   return await outcome;
@@ -240,9 +243,11 @@ async function runCompactionWithTimeoutExclusive<T>(
   options: Pick<CompactionLifecycleOptions, "onWarn">,
   runCompact: () => Promise<T>,
   clearActive: () => void,
+  reason: string,
 ): Promise<CompactionOutcome<T>> {
   const timeoutMs = getCompactionTimeoutMs();
   updateSessionCompacting(chatJid, true);
+  markChatCompactionActive(chatJid, new Date().toISOString(), reason);
   if (timeoutMs <= 0) {
     try {
       return { ok: true, result: await runCompact() };
@@ -250,6 +255,7 @@ async function runCompactionWithTimeoutExclusive<T>(
       return { ok: false, errorMessage: error instanceof Error ? error.message : String(error) };
     } finally {
       updateSessionCompacting(chatJid, false);
+      clearChatCompactionActive(chatJid);
       clearActive();
     }
   }
@@ -265,6 +271,7 @@ async function runCompactionWithTimeoutExclusive<T>(
     .finally(() => {
       if (timeoutId) clearTimeout(timeoutId);
       updateSessionCompacting(chatJid, false);
+      clearChatCompactionActive(chatJid);
       clearActive();
     });
 
@@ -280,6 +287,7 @@ async function runCompactionWithTimeoutExclusive<T>(
 
   await abortCompactionBestEffort(session, chatJid, options);
   updateSessionCompacting(chatJid, false);
+  clearChatCompactionActive(chatJid);
   return {
     ok: false,
     errorMessage: `Compaction timed out after ${formatTimeoutDuration(timeoutMs)}`,
@@ -391,6 +399,7 @@ async function maybeAutoCompactSession(
       chatJid,
       options,
       async () => await session.compact(),
+      reason,
     );
     if (!compactionResult.ok) {
       const failureState = noteCompactionFailure(chatJid, compactionResult.errorMessage);

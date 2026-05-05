@@ -3,10 +3,13 @@
  */
 
 import {
+  clearChatCompactionActive,
   clearChatPreflight,
   clearInflightMarker,
+  getActiveChatCompactions,
   getAgentReplyStateAfter,
   getAllChatCursors,
+  getChatCompactionBackoff,
   getDb,
   getDeferredQueuedFollowups,
   getInflightRuns,
@@ -15,7 +18,9 @@ import {
   getPreflightRuns,
   quarantineStalePreflightRun,
   rollbackInflightRun,
+  setChatCompactionBackoff,
   storeMessage,
+  type ActiveCompactionState,
   type AgentReplyState,
   type DeferredQueuedFollowupRecord,
   type InflightRun,
@@ -112,10 +117,14 @@ export interface WebRecoveryContext {
 /** Persistence contract used by web recovery helpers. */
 export interface WebRecoveryStore {
   getPreflightRuns?(): PreflightRun[];
+  getActiveChatCompactions?(): ActiveCompactionState[];
   getInflightRuns(): InflightRun[];
   transaction(run: () => void): void;
   getAgentReplyStateAfter(chatJid: string, prevTs: string): AgentReplyState;
   clearChatPreflight?(chatJid: string): void;
+  clearChatCompactionActive?(chatJid: string): void;
+  getChatCompactionBackoff?(chatJid: string): { failureCount: number } | null;
+  setChatCompactionBackoff?(chatJid: string, backoff: { failureCount: number; lastFailedAt: string; backoffUntil: string; lastErrorMessage?: string | null }): void;
   quarantineStalePreflightRun?(preflight: PreflightRun, options: { createdAt: string; reason: string; backoffUntil?: string | null }): StalePreflightRecoveryRecord | null;
   clearInflightMarker(chatJid: string): void;
   rollbackInflightRun(chatJid: string, prevTs: string): void;
@@ -141,12 +150,16 @@ function getKnownChatJids(): string[] {
 
 const defaultStore: WebRecoveryStore = {
   getPreflightRuns,
+  getActiveChatCompactions,
   getInflightRuns,
   transaction: (run) => {
     getDb().transaction(run)();
   },
   getAgentReplyStateAfter,
   clearChatPreflight,
+  clearChatCompactionActive,
+  getChatCompactionBackoff,
+  setChatCompactionBackoff,
   quarantineStalePreflightRun,
   clearInflightMarker,
   rollbackInflightRun,
@@ -167,6 +180,8 @@ const MAX_INFLIGHT_AGE_MS = 30 * 60 * 1000;
 const RUNTIME_STALE_INFLIGHT_GRACE_MS = 15_000;
 const DEFAULT_STALE_PREFLIGHT_AGE_MS = 4 * 60 * 1000;
 const DEFAULT_STALE_PREFLIGHT_BACKOFF_MS = 4 * 60 * 60 * 1000;
+const DEFAULT_STALE_ACTIVE_COMPACTION_AGE_MS = 4 * 60 * 1000;
+const DEFAULT_STALE_ACTIVE_COMPACTION_BACKOFF_MS = 4 * 60 * 60 * 1000;
 
 function parsePositiveDurationMs(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(String(value || "").trim(), 10);
@@ -179,6 +194,14 @@ function getStalePreflightAgeMs(): number {
 
 function getStalePreflightBackoffMs(): number {
   return parsePositiveDurationMs(process.env.PICLAW_STALE_PREFLIGHT_BACKOFF_MS, DEFAULT_STALE_PREFLIGHT_BACKOFF_MS);
+}
+
+function getStaleActiveCompactionAgeMs(): number {
+  return parsePositiveDurationMs(process.env.PICLAW_STALE_ACTIVE_COMPACTION_RECOVERY_MS, DEFAULT_STALE_ACTIVE_COMPACTION_AGE_MS);
+}
+
+function getStaleActiveCompactionBackoffMs(): number {
+  return parsePositiveDurationMs(process.env.PICLAW_STALE_ACTIVE_COMPACTION_BACKOFF_MS, DEFAULT_STALE_ACTIVE_COMPACTION_BACKOFF_MS);
 }
 
 function getRunAgeMs(startedAt: string, nowMs: number): number {
@@ -329,10 +352,64 @@ export function recoverInflightRuns(
     }
   }
 
+  const now = typeof ctx.now === "function" ? ctx.now() : Date.now();
+  const activeCompactions = store.getActiveChatCompactions?.() ?? [];
+  if (activeCompactions.length > 0) {
+    const staleAgeMs = getStaleActiveCompactionAgeMs();
+    const backoffMs = getStaleActiveCompactionBackoffMs();
+    const recoveredAt = new Date(now).toISOString();
+    try {
+      store.transaction(() => {
+        for (const compaction of activeCompactions) {
+          const compactionAgeMs = getRunAgeMs(compaction.startedAt, now);
+          if (compactionAgeMs < staleAgeMs) {
+            log.info("Active compaction marker recovered before stale age; clearing marker", {
+              operation: "recover_active_compactions.clear_fresh",
+              chatJid: compaction.chatJid,
+              startedAt: compaction.startedAt,
+              reason: compaction.reason,
+              compactionAgeSeconds: Math.round(compactionAgeMs / 1000),
+            });
+            store.clearChatCompactionActive?.(compaction.chatJid);
+            continue;
+          }
+
+          const previous = store.getChatCompactionBackoff?.(compaction.chatJid) ?? null;
+          const failureCount = (previous?.failureCount ?? 0) + 1;
+          const backoffUntil = new Date(now + backoffMs).toISOString();
+          const detail = `Stale ${compaction.reason || "unknown"} compaction recovered after ${Math.round(compactionAgeMs / 1000)}s; clearing active turn and entering compaction backoff`;
+          store.setChatCompactionBackoff?.(compaction.chatJid, {
+            failureCount,
+            lastFailedAt: recoveredAt,
+            backoffUntil,
+            lastErrorMessage: detail,
+          });
+          store.clearChatCompactionActive?.(compaction.chatJid);
+          store.clearInflightMarker(compaction.chatJid);
+          log.warn("Stale active compaction marker quarantined", {
+            operation: "recover_active_compactions.quarantine_stale",
+            chatJid: compaction.chatJid,
+            startedAt: compaction.startedAt,
+            reason: compaction.reason,
+            compactionAgeSeconds: Math.round(compactionAgeMs / 1000),
+            staleAgeSeconds: Math.round(staleAgeMs / 1000),
+            failureCount,
+            backoffUntil,
+          });
+        }
+      });
+    } catch (error) {
+      log.error("Failed to recover active compaction markers; will retry on next startup", {
+        operation: "recover_active_compactions",
+        err: error,
+      });
+      return;
+    }
+  }
+
   const inflights = store.getInflightRuns();
   if (inflights.length === 0) return;
 
-  const now = typeof ctx.now === "function" ? ctx.now() : Date.now();
   const decisions = inflights.map((inflight) => ({
     inflight,
     replyState: store.getAgentReplyStateAfter(inflight.chatJid, inflight.startedAt),

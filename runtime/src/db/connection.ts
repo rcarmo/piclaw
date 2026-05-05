@@ -431,6 +431,11 @@ function createSchema(database: Database): void {
     --                    clearFailedRun on model switch. Because these columns
     --                    share a row with inflight_*, every completion path is
     --                    a single UPDATE with no intermediate inconsistent state.
+    -- compaction_active_* : durable marker for an in-flight compaction phase.
+    --                    If the process is killed by the external watchdog
+    --                    during recovery compaction, startup recovery can mark
+    --                    the chat as failed/backed off instead of replaying the
+    --                    same compaction loop.
     CREATE TABLE IF NOT EXISTS chat_cursors (
       chat_jid             TEXT PRIMARY KEY,
       cursor_ts            TEXT NOT NULL DEFAULT '',
@@ -445,7 +450,9 @@ function createSchema(database: Database): void {
       failed_message_id    TEXT,
       failed_thread_root   INTEGER,
       failed_created_at    TEXT,
-      queued_followups_json TEXT
+      queued_followups_json TEXT,
+      compaction_active_started_at TEXT,
+      compaction_active_reason TEXT
     );
 
     CREATE TABLE IF NOT EXISTS token_usage (
@@ -733,6 +740,8 @@ function ensureChatCursorColumns(database: Database): void {
     ["compaction_last_failed_at", "TEXT"],
     ["compaction_backoff_until",  "TEXT"],
     ["compaction_last_error",     "TEXT"],
+    ["compaction_active_started_at", "TEXT"],
+    ["compaction_active_reason",     "TEXT"],
   ];
   for (const [col, type] of toAdd) {
     if (!cols.has(col)) {

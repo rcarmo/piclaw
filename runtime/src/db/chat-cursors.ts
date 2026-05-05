@@ -66,6 +66,12 @@ export interface ChatCompactionBackoffState {
   lastErrorMessage: string | null;
 }
 
+export interface ActiveCompactionState {
+  chatJid: string;
+  startedAt: string;
+  reason: string | null;
+}
+
 /** Possible persisted assistant-output states seen after an inflight start. */
 export type AgentReplyState = "none" | "partial" | "terminal";
 
@@ -300,6 +306,45 @@ export function clearChatCompactionBackoff(chatJid: string): void {
         compaction_last_error     = NULL
     WHERE chat_jid = ?
   `).run(chatJid);
+}
+
+export function markChatCompactionActive(chatJid: string, startedAt: string, reason: string): void {
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO chat_cursors (chat_jid, cursor_ts, compaction_active_started_at, compaction_active_reason)
+    VALUES (?, '', ?, ?)
+    ON CONFLICT(chat_jid) DO UPDATE SET
+      compaction_active_started_at = excluded.compaction_active_started_at,
+      compaction_active_reason     = excluded.compaction_active_reason
+  `).run(chatJid, startedAt, reason);
+}
+
+export function clearChatCompactionActive(chatJid: string): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE chat_cursors
+    SET compaction_active_started_at = NULL,
+        compaction_active_reason     = NULL
+    WHERE chat_jid = ?
+  `).run(chatJid);
+}
+
+export function getActiveChatCompactions(): ActiveCompactionState[] {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT chat_jid, compaction_active_started_at, compaction_active_reason
+    FROM chat_cursors
+    WHERE compaction_active_started_at IS NOT NULL
+  `).all() as Array<{
+    chat_jid: string;
+    compaction_active_started_at: string;
+    compaction_active_reason: string | null;
+  }>;
+  return rows.map((row) => ({
+    chatJid: row.chat_jid,
+    startedAt: row.compaction_active_started_at,
+    reason: row.compaction_active_reason ?? null,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -652,7 +697,9 @@ export function quarantineStalePreflightRun(
         compaction_failure_count  = COALESCE(compaction_failure_count, 0) + 1,
         compaction_last_failed_at = ?,
         compaction_backoff_until  = COALESCE(?, compaction_backoff_until),
-        compaction_last_error     = ?
+        compaction_last_error     = ?,
+        compaction_active_started_at = NULL,
+        compaction_active_reason     = NULL
     WHERE chat_jid = ?
   `).run(
     row.timestamp,
@@ -739,7 +786,9 @@ export function rollbackInflightRun(chatJid: string, prevTs: string): void {
         preflight_started_at = NULL,
         inflight_prev_ts     = NULL,
         inflight_message_id  = NULL,
-        inflight_started_at  = NULL
+        inflight_started_at  = NULL,
+        compaction_active_started_at = NULL,
+        compaction_active_reason     = NULL
     WHERE chat_jid = ?
   `).run(prevTs, chatJid);
 }
@@ -758,7 +807,9 @@ export function clearInflightMarker(chatJid: string): void {
         preflight_started_at = NULL,
         inflight_prev_ts     = NULL,
         inflight_message_id  = NULL,
-        inflight_started_at  = NULL
+        inflight_started_at  = NULL,
+        compaction_active_started_at = NULL,
+        compaction_active_reason     = NULL
     WHERE chat_jid = ?
   `).run(chatJid);
 }
