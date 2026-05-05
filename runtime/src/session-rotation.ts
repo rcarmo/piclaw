@@ -7,7 +7,7 @@
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { AgentSession, AgentSessionRuntime, SessionContext, SessionManager } from "@mariozechner/pi-coding-agent";
-import { closeOpenAICodexWebSocketSessions } from "@mariozechner/pi-ai";
+import { closeOpenAICodexWebSocketSessions } from "@mariozechner/pi-ai/openai-codex-responses";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "fs";
 import { basename, dirname, extname, join } from "path";
 import { formatBytes } from "./agent-control/agent-control-helpers.js";

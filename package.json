@@ -106,7 +106,7 @@
   "dependencies": {
     "@fontsource-variable/inter": "5.2.8",
     "@lezer/highlight": "1.2.3",
-    "@mariozechner/pi-coding-agent": "0.72.1",
+    "@mariozechner/pi-coding-agent": "0.73.0",
     "@simplewebauthn/server": "13.3.0",
     "@whiskeysockets/baileys": "7.0.0-rc.9",
     "adaptivecards": "3.0.6",
