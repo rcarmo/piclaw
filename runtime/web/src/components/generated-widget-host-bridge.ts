@@ -17,7 +17,7 @@ export function postIframeMessageBestEffort(
   message: unknown,
 ): boolean {
   try {
-    iframe?.contentWindow?.postMessage?.(message, '*');
+    iframe?.contentWindow?.postMessage?.(message, window.location.origin);
     return true;
   } catch (_error) {
     return false;
