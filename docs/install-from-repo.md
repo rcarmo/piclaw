@@ -94,3 +94,15 @@ After install, the goal is that:
 - Build, pack, and install commands should be run from the repo root; `runtime/` is not a separate package.
 - If repo-install behavior differs slightly from the published package layout, those differences should stay small and documented.
 - Dream/AutoDream details, file sequence, and outputs are documented in [`runtime/docs/dream-memory.md`](../runtime/docs/dream-memory.md).
+
+## Post-install: update AGENTS.md
+
+The seeded `AGENTS.md` in your workspace describes a Debian Linux container
+environment. On native macOS or Windows installs, update it to reflect your
+actual platform, available tools, and process management. Key lines to change:
+
+- **OS and architecture** — replace the `OS: Debian Linux (container)` line with your actual OS (e.g. `macOS (Apple Silicon, arm64)`)
+- **Available CLI tools** — list the tools actually installed on your host
+- **Package manager** — use `brew install` instead of `sudo apt install` on macOS
+- **Restart behavior** — note that there is no Supervisor on native installs; `exit_process` will terminate piclaw and it must be restarted manually
+- **Workspace path** — replace `/workspace` with your actual `--workspace` directory

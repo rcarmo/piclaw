@@ -50,7 +50,7 @@ const MANAGED_BLOCK_END = "# <<< piclaw env tool <<<";
 const ENV_TOOL_HINT = [
   "## Workspace environment tool",
   "Use env to manage persistent workspace-scoped environment variables for non-secret configuration.",
-  "env writes a managed block into /workspace/.env.sh, persists the source-of-truth under /workspace/.piclaw/env-tool.json, and updates process.env immediately so later tool calls in the same runtime see the change.",
+  `env writes a managed block into ${getWorkspaceRoot()}/.env.sh, persists the source-of-truth under ${getWorkspaceRoot()}/.piclaw/env-tool.json, and updates process.env immediately so later tool calls in the same runtime see the change.`,
   "Prefer keychain for secrets/tokens/passwords; use env for deliberate persistent config like PATH helpers, config dirs, feature flags, or non-secret API endpoints.",
   "For action=set, values like $NAME or ${NAME} copy the current process environment variable of that name.",
 ].join("\n");
@@ -196,8 +196,8 @@ export const envTools: ExtensionFactory = (pi: ExtensionAPI) => {
   pi.registerTool({
     name: "env",
     label: "env",
-    description: "Get, set, or clear persistent workspace-scoped environment variables. Writes a managed block into /workspace/.env.sh, persists state under /workspace/.piclaw/env-tool.json, updates process.env immediately for later tool calls, and supports copying existing vars via $NAME on set. Prefer keychain for secrets.",
-    promptSnippet: "env: get/set/clear persistent workspace-scoped environment variables in /workspace/.env.sh (use $NAME to copy an existing env var; prefer keychain for secrets).",
+    description: `Get, set, or clear persistent workspace-scoped environment variables. Writes a managed block into ${getWorkspaceRoot()}/.env.sh, persists state under ${getWorkspaceRoot()}/.piclaw/env-tool.json, updates process.env immediately for later tool calls, and supports copying existing vars via $NAME on set. Prefer keychain for secrets.`,
+    promptSnippet: `env: get/set/clear persistent workspace-scoped environment variables in ${getWorkspaceRoot()}/.env.sh (use $NAME to copy an existing env var; prefer keychain for secrets).`,
     parameters: ENV_TOOL_SCHEMA,
     async execute(_toolCallId, params: EnvToolParams): Promise<AgentToolResult<EnvToolDetails>> {
       const current = loadManagedEnv();

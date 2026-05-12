@@ -22,6 +22,11 @@ import { getActiveSessionCount } from "./session-status.js";
 
 const log = createLogger("extensions.exit-process");
 
+const IS_SUPERVISED = Boolean(process.env.SUPERVISOR_ENABLED);
+const RESTART_HINT = IS_SUPERVISED
+  ? "Supervisor will restart it automatically."
+  : "The process will exit; restart it manually or via your service manager.";
+
 const ExitProcessSchema = Type.Object({
   reason: Type.Optional(Type.String({ description: "Human-readable reason for the exit (logged, not required)." })),
 });
@@ -33,7 +38,7 @@ type ExitProcessParams = {
 const HINT = [
   "## Process exit",
   "Use exit_process to gracefully terminate the running piclaw process after your current turn completes.",
-  "Supervisor will restart it automatically. Call this as the LAST tool in a turn after deploying new code.",
+  `${RESTART_HINT} Call this as the LAST tool in a turn after deploying new code.`,
   "Do NOT call exit_process in the middle of a multi-step turn — only when you are done and ready to restart.",
 ].join("\n");
 
@@ -45,8 +50,8 @@ export const exitProcess: ExtensionFactory = (pi: ExtensionAPI) => {
   pi.registerTool({
     name: "exit_process",
     label: "exit_process",
-    description: "Gracefully terminate piclaw (drain queue, persist sessions, stop services) so Supervisor restarts it. Call as the LAST tool in a turn after deploying new code.",
-    promptSnippet: "exit_process: gracefully terminate piclaw so supervisor restarts it with new code. Call LAST in a turn.",
+    description: `Gracefully terminate piclaw (drain queue, persist sessions, stop services). ${RESTART_HINT} Call as the LAST tool in a turn after deploying new code.`,
+    promptSnippet: `exit_process: gracefully terminate piclaw. ${RESTART_HINT} Call LAST in a turn.`,
     parameters: ExitProcessSchema,
     async execute(_toolCallId, params: ExitProcessParams) {
       const reason = params.reason?.trim() || "Agent-initiated restart";
@@ -66,7 +71,7 @@ export const exitProcess: ExtensionFactory = (pi: ExtensionAPI) => {
       markPendingShutdown(reason);
 
       return {
-        content: [{ type: "text", text: `Graceful shutdown scheduled.${activeWarning} ${killed} subprocess${killed === 1 ? "" : 'es'} killed. Supervisor will restart piclaw. Reason: ${reason}` }],
+        content: [{ type: "text", text: `Graceful shutdown scheduled.${activeWarning} ${killed} subprocess${killed === 1 ? "" : 'es'} killed. ${RESTART_HINT} Reason: ${reason}` }],
         details: {
           tool: "exit_process",
           scheduled: true,
