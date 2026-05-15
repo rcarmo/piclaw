@@ -17,6 +17,7 @@ import {
   installAddonWebApi,
   loadInstalledAddonWebEntries,
 } from './addon-web-extensions.js';
+import { registerAppShellSurfaces } from './app-shell-builtins.js';
 import { resolveOptionalApi } from './optional-api.js';
 
 interface AppApiSurface {
@@ -86,6 +87,7 @@ export async function initializeAppShellRuntime(): Promise<void> {
   configureMarked(markedInstance);
   installBrowserNoiseFilters(runtimeWindow);
   installAddonWebApi(runtimeWindow);
+  registerAppShellSurfaces();
   // Expose preact/htm globals for addon web entries (they can't import from the bundle)
   if (runtimeWindow) {
     try {

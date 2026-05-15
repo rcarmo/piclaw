@@ -1,6 +1,22 @@
-import { expect, mock, test } from 'bun:test';
+import { beforeEach, expect, mock, test } from 'bun:test';
 
+import { html } from '../../web/src/vendor/preact-htm.js';
+import { AgentRequestModal, AgentStatus } from '../../web/src/components/status.js';
 import { ComposeBox, QueuedFollowupStack } from '../../web/src/components/compose-box.js';
+import { SettingsDialogLoader } from '../../web/src/components/settings-dialog-loader.js';
+import { SystemMetersHud } from '../../web/src/components/system-meters-hud.js';
+import { TabStrip } from '../../web/src/components/tab-strip.js';
+import { Timeline } from '../../web/src/components/timeline.js';
+import { TimelineMenu } from '../../web/src/components/timeline-menu.js';
+import { TimelineQuickActions } from '../../web/src/components/timeline-quick-actions.js';
+import { WorkspaceExplorer } from '../../web/src/components/workspace-explorer.js';
+import { registerAppShellSurfaces } from '../../web/src/ui/app-shell-builtins.js';
+import {
+  listShellSurfaces,
+  registerShellSurface,
+  resetShellSurfaceRegistryForTests,
+  setShellSurfaceVisible,
+} from '../../web/src/ui/shell-surface-registry.js';
 import {
   buildMainShellClassName,
   extractPostedUserMessageId,
@@ -8,6 +24,35 @@ import {
   renderMainShell,
   scrollToPostedTimelineMessage,
 } from '../../web/src/ui/app-main-shell-render.js';
+
+function createMemoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    clear() {
+      values.clear();
+    },
+    getItem(key: string) {
+      return values.has(key) ? values.get(key)! : null;
+    },
+    key(index: number) {
+      return Array.from(values.keys())[index] ?? null;
+    },
+    removeItem(key: string) {
+      values.delete(key);
+    },
+    setItem(key: string, value: string) {
+      values.set(key, value);
+    },
+  };
+}
+
+beforeEach(() => {
+  resetShellSurfaceRegistryForTests();
+  globalThis.localStorage = createMemoryStorage();
+});
 
 test('buildMainShellClassName composes workspace/editor/chat/zen modifiers', () => {
   expect(buildMainShellClassName({
@@ -61,17 +106,33 @@ test('handleComposePost falls back to scrolling to the bottom when there is no p
   expect(scrollPostedMessage).not.toHaveBeenCalled();
 });
 
-function walkVNodes(node: any, visit: (entry: any) => void) {
+function walkVNodes(node: any, visit: (entry: any, parent: any | null) => void, parent: any | null = null) {
   if (!node) return;
   if (Array.isArray(node)) {
-    for (const child of node) walkVNodes(child, visit);
+    for (const child of node) walkVNodes(child, visit, parent);
     return;
   }
   if (typeof node !== 'object') return;
   if (!('type' in node) || !('props' in node)) return;
 
-  visit(node);
-  walkVNodes((node as any).props?.children, visit);
+  visit(node, parent);
+  walkVNodes((node as any).props?.children, visit, node);
+}
+
+function findVNode(tree: any, type: any): { node: any; parent: any | null } | null {
+  let match: { node: any; parent: any | null } | null = null;
+  walkVNodes(tree, (node, parent) => {
+    if (!match && node.type === type) match = { node, parent };
+  });
+  return match;
+}
+
+function findVNodeByClass(tree: any, className: string): { node: any; parent: any | null } | null {
+  let match: { node: any; parent: any | null } | null = null;
+  walkVNodes(tree, (node, parent) => {
+    if (!match && node.props?.class === className) match = { node, parent };
+  });
+  return match;
 }
 
 function createMainShellRenderOptions(overrides: Record<string, unknown> = {}) {
@@ -243,6 +304,89 @@ function createMainShellRenderOptions(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+test('renderMainShell registers built-in shell surfaces idempotently', () => {
+  registerAppShellSurfaces();
+  registerAppShellSurfaces();
+
+  const ids = listShellSurfaces().map((surface) => surface.id);
+  expect(ids.filter((id) => id === 'piclaw.timeline-core')).toHaveLength(1);
+  expect(ids.filter((id) => id === 'piclaw.compose-box')).toHaveLength(1);
+  expect(ids).toContain('piclaw.system-meters-hud');
+  expect(ids).toContain('piclaw.agent-request-modal');
+});
+
+test('renderMainShell renders default built-in surfaces in the existing shell containers', () => {
+  const tree = renderMainShell(createMainShellRenderOptions({
+    chatOnlyMode: false,
+    workspaceOpen: true,
+    editorOpen: true,
+    showEditorPaneContainer: true,
+    hasDockPanes: true,
+    dockVisible: true,
+  }));
+
+  const systemMeters = findVNode(tree, SystemMetersHud);
+  const workspaceExplorer = findVNode(tree, WorkspaceExplorer);
+  const tabStrip = findVNode(tree, TabStrip);
+  const timelineMenu = findVNode(tree, TimelineMenu);
+  const timelineQuickActions = findVNode(tree, TimelineQuickActions);
+  const timeline = findVNode(tree, Timeline);
+  const agentStatus = findVNode(tree, AgentStatus);
+  const settingsLoader = findVNode(tree, SettingsDialogLoader);
+  const composeBox = findVNode(tree, ComposeBox);
+  const agentRequestModal = findVNode(tree, AgentRequestModal);
+
+  expect(systemMeters?.parent?.props.class).toBe('app-shell editor-open');
+  expect(workspaceExplorer?.parent?.props.class).toBe('app-shell editor-open');
+  expect(tabStrip?.parent?.props.class).toBe('editor-pane-container');
+  expect(timelineMenu?.parent?.props.class).toBe('app-shell editor-open');
+  expect(timelineQuickActions?.parent?.props.class).toBe('app-shell editor-open');
+  expect(timeline?.parent?.props.class).toBe('container');
+  expect(agentStatus?.parent?.props.class).toBe('container');
+  expect(settingsLoader?.parent?.props.class).toBe('container');
+  expect(composeBox?.parent?.props.class).toBe('container');
+  expect(agentRequestModal?.parent?.props.class).toBe('container');
+});
+
+test('renderMainShell renders additive shell slots inside the existing container', () => {
+  registerShellSurface({
+    id: 'addon.timeline-above',
+    slot: 'timeline.above',
+    label: 'Timeline Above',
+    owner: 'addon',
+    kind: 'additive',
+    order: 300,
+    defaultVisible: true,
+    render: () => html`<div class="addon-timeline-above">above</div>`,
+  });
+  registerShellSurface({
+    id: 'addon.compose-after',
+    slot: 'compose.after',
+    label: 'Compose After',
+    owner: 'addon',
+    kind: 'additive',
+    order: 300,
+    defaultVisible: true,
+    render: () => html`<div class="addon-compose-after">after</div>`,
+  });
+
+  const tree = renderMainShell(createMainShellRenderOptions());
+
+  expect(findVNodeByClass(tree, 'addon-timeline-above')?.parent?.props.class).toBe('container');
+  expect(findVNodeByClass(tree, 'addon-compose-after')?.parent?.props.class).toBe('container');
+});
+
+test('configurable built-in visibility can hide surfaces while required surfaces remain', () => {
+  registerAppShellSurfaces();
+  setShellSurfaceVisible('piclaw.timeline-menu', false);
+  setShellSurfaceVisible('piclaw.timeline-core', false);
+
+  const tree = renderMainShell(createMainShellRenderOptions());
+
+  expect(findVNode(tree, TimelineMenu)).toBeNull();
+  expect(findVNode(tree, Timeline)).toBeTruthy();
+});
 
 test('renderMainShell passes queue controls to ComposeBox and does not render a top-level queue stack', () => {
   const followupQueueItems = [{ row_id: 7, content: 'queued item' }];

@@ -1,5 +1,11 @@
 import { paneRegistry } from '../panes/index.js';
 import { registerSettingsPane, unregisterSettingsPane, notifySettingsPanesChanged } from '../components/settings/pane-registry.js';
+import {
+  registerShellSurface,
+  unregisterShellSurface,
+  type ShellSurfaceDefinition,
+  type ShellSurfaceSlot,
+} from './shell-surface-registry.js';
 
 export interface AddonStandaloneTabUrlContext {
   hasPopOutTab?: boolean;
@@ -13,17 +19,38 @@ export interface AddonAttachmentPreviewDefinition {
   note?: string | null;
 }
 
+export type AddonShellSurfaceDefinition = Partial<Omit<ShellSurfaceDefinition, 'owner' | 'kind' | 'order' | 'defaultVisible'>> & {
+  id?: string;
+  slot?: ShellSurfaceSlot;
+  order?: number;
+  defaultVisible?: boolean;
+  owner?: unknown;
+  kind?: unknown;
+};
+
 export interface AddonWebApiSurface {
   registerPane: (extension: any) => boolean;
   registerWorkspacePane: (extension: any) => boolean;
   registerSettingsPane: (definition: any) => () => void;
   registerStandaloneTabUrlResolver: (resolver: (path: string, context?: AddonStandaloneTabUrlContext) => string | null | undefined) => () => void;
   registerAttachmentPreview: (definition: AddonAttachmentPreviewDefinition) => () => void;
+  registerShellSurface: (definition: AddonShellSurfaceDefinition) => () => void;
   getCurrentChatJid: () => string;
 }
 
+const ADDON_SHELL_SURFACE_SLOTS = new Set<ShellSurfaceSlot>([
+  'timeline.above',
+  'timeline.below',
+  'compose.before',
+  'compose.after',
+  'app.overlay',
+  'status.extension',
+  'timeline.quick-actions',
+]);
+
 const addonPaneIds = new Set<string>();
 const addonSettingsPaneIds = new Set<string>();
+const addonShellSurfaceIds = new Set<string>();
 const standaloneTabUrlResolvers = new Set<(path: string, context?: AddonStandaloneTabUrlContext) => string | null | undefined>();
 const attachmentPreviewDefinitions = new Map<string, AddonAttachmentPreviewDefinition>();
 let addonWebApiInstalled = false;
@@ -116,6 +143,49 @@ export function registerAddonAttachmentPreview(definition: AddonAttachmentPrevie
   };
 }
 
+function assertAddonShellSurfaceDefinition(definition: AddonShellSurfaceDefinition): asserts definition is AddonShellSurfaceDefinition & { id: string; slot: ShellSurfaceSlot; render: ShellSurfaceDefinition['render'] } {
+  if (!definition || typeof definition.id !== 'string' || !definition.id.trim()) {
+    throw new Error('Add-on shell surface id must be a non-empty string');
+  }
+  if (definition.id.trim().toLowerCase().startsWith('piclaw')) {
+    throw new Error('Add-on shell surface ids must not start with piclaw');
+  }
+  if (!ADDON_SHELL_SURFACE_SLOTS.has(definition.slot as ShellSurfaceSlot)) {
+    throw new Error(`Add-on shell surface slot is not allowed: ${String(definition.slot)}`);
+  }
+  if (definition.owner === 'core') {
+    throw new Error('Add-on shell surfaces cannot use owner core');
+  }
+  if (definition.kind === 'required' || definition.kind === 'configurable') {
+    throw new Error('Add-on shell surfaces must be additive');
+  }
+  if (typeof definition.render !== 'function') {
+    throw new Error('Add-on shell surface render must be a function');
+  }
+}
+
+export function registerAddonShellSurface(definition: AddonShellSurfaceDefinition): () => void {
+  assertAddonShellSurfaceDefinition(definition);
+  const id = definition.id.trim();
+  const shellSurfaceDefinition: ShellSurfaceDefinition = {
+    ...definition,
+    id,
+    slot: definition.slot,
+    label: typeof definition.label === 'string' && definition.label.trim() ? definition.label : id,
+    owner: 'addon',
+    kind: 'additive',
+    order: typeof definition.order === 'number' && Number.isFinite(definition.order) ? definition.order : 300,
+    defaultVisible: definition.defaultVisible === false ? false : true,
+    render: definition.render,
+  };
+  const unregister = registerShellSurface(shellSurfaceDefinition);
+  addonShellSurfaceIds.add(id);
+  return () => {
+    unregister();
+    addonShellSurfaceIds.delete(id);
+  };
+}
+
 export function resolveAddonAttachmentPreview(contentType: unknown, filename?: unknown): AddonAttachmentPreviewDefinition | null {
   for (const definition of Array.from(attachmentPreviewDefinitions.values()).reverse()) {
     try {
@@ -159,6 +229,7 @@ export function createAddonWebApi(runtimeWindow: (Window & typeof globalThis) | 
     registerSettingsPane: registerAddonSettingsPane,
     registerStandaloneTabUrlResolver: registerAddonStandaloneTabUrlResolver,
     registerAttachmentPreview: registerAddonAttachmentPreview,
+    registerShellSurface: registerAddonShellSurface,
     getCurrentChatJid: () => resolveCurrentChatJid(runtimeWindow),
   };
 }
@@ -172,6 +243,7 @@ export function installAddonWebApi(runtimeWindow: (Window & typeof globalThis) |
   (runtimeWindow as any).__piclaw_registerSettingsPane = api.registerSettingsPane;
   (runtimeWindow as any).__piclaw_registerStandaloneTabUrlResolver = api.registerStandaloneTabUrlResolver;
   (runtimeWindow as any).__piclaw_registerAttachmentPreview = api.registerAttachmentPreview;
+  (runtimeWindow as any).__piclaw_registerShellSurface = api.registerShellSurface;
   // Aliases used by addons (observability, cheapskate, sample-addon)
   (runtimeWindow as any).__piclawSettingsPaneRegistry = {
     registerSettingsPane: api.registerSettingsPane,
@@ -217,8 +289,12 @@ export function resetAddonWebRegistriesForTests(): void {
   for (const paneId of addonSettingsPaneIds) {
     unregisterSettingsPane(paneId);
   }
+  for (const surfaceId of addonShellSurfaceIds) {
+    unregisterShellSurface(surfaceId);
+  }
   addonPaneIds.clear();
   addonSettingsPaneIds.clear();
+  addonShellSurfaceIds.clear();
   notifySettingsPanesChanged();
   standaloneTabUrlResolvers.clear();
   attachmentPreviewDefinitions.clear();

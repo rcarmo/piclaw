@@ -63,6 +63,7 @@ import {
     resolveOobePanelState,
 } from './ui/oobe-state.js';
 import { installPwaDisplayScaleSync } from './ui/pwa-display-scale.js';
+import { subscribeShellSurfacesChanged } from './ui/shell-surface-registry.js';
 
 const CURRENT_APP_ASSET_VERSION = getCurrentAppAssetVersion();
 
@@ -115,6 +116,11 @@ function MainApp({ locationParams, navigate }) {
         window.__piclawCurrentChatJid = currentChatJid;
         window.dispatchEvent?.(new CustomEvent('piclaw:current-chat-changed', { detail: { chatJid: currentChatJid } }));
     }, [currentChatJid]);
+
+    const [, setShellSurfacesVersion] = useState(0);
+    useEffect(() => subscribeShellSurfacesChanged(() => {
+        setShellSurfacesVersion((version) => version + 1);
+    }), []);
 
     const surface = useMainAppSurfaceState({
         currentChatJid,

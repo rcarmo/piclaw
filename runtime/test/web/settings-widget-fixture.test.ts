@@ -15,10 +15,12 @@ test("build:web includes the settings widget fixture entrypoint", () => {
   expect(packageJson).toContain('web/src/dev/settings-widget-fixture.ts');
 });
 
-test("settings dialog renders the recordings section after lazy loading", () => {
+test("settings dialog renders lazy built-in sections", () => {
   const source = readFileSync(join(repoRoot, "web/src/components/settings-dialog.ts"), "utf8");
   expect(source).toContain("recordings: () => import('./settings/recordings.js').then(mod => mod.RecordingsSection)");
   expect(source).toContain("case 'recordings': return html`<${Comp} filter=${filter} setStatus=${setStatus} />`;");
+  expect(source).toContain("shell: () => import('./settings/shell.js').then(mod => mod.ShellSection)");
+  expect(source).toContain("case 'shell': return html`<${Comp} filter=${filter} setStatus=${setStatus} />`;");
 });
 
 test("settings widget fixture HTML helper emits a dashboard-widget iframe shell", async () => {
