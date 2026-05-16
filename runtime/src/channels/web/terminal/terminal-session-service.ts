@@ -70,7 +70,7 @@ const TERMINAL_ANON_CLIENT_HEADER = "x-piclaw-terminal-client";
 
 const IS_LINUX = process.platform === "linux";
 const DEFAULT_TERMINAL_HANDOFF_TTL_MS = 5 * 60 * 1000;
-const DEFAULT_TERMINAL_RECONNECT_GRACE_MS = 3_000;
+const DEFAULT_TERMINAL_RECONNECT_GRACE_MS = 300_000;
 const DEFAULT_TERMINAL_OUTPUT_HISTORY_LIMIT_BYTES = 2 * 1024 * 1024;
 const log = createLogger("web.terminal-session-service");
 
@@ -324,8 +324,13 @@ export class TerminalSessionService {
   attachClient(ws: ServerWebSocket<TerminalSocketData>): void {
     const owner = ws.data;
     const isHandoff = this.validateHandoff(owner);
+    const existingSession = this.sessions.get(owner.token);
     const canResumeDetachedSession = !isHandoff && this.canResumeDetachedSession(owner);
-    if (!isHandoff && !canResumeDetachedSession) {
+    // Allow same-owner reconnect without resetting the session — the old client
+    // may still be closing (WebSocket close is async). This prevents a race where
+    // a tab-switch dispose + remount kills the shell because the old WS hasn't
+    // fully closed yet.
+    if (!isHandoff && !canResumeDetachedSession && !existingSession) {
       this.resetSession(owner, "fresh attach");
     }
     const session = this.ensureSession(owner);
