@@ -26,6 +26,8 @@ export interface PaneContext {
     mtime?: string;
     /** File size in bytes. */
     size?: number;
+    /** Whether the content is from an unsaved restore (editor should mark as dirty). */
+    dirty?: boolean;
     /** Optional preview payload for read-only workspace/file previews. */
     preview?: Record<string, unknown>;
     /** Optional host-transfer payload consumed by panes that support detach/reattach handoff. */

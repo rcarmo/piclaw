@@ -285,7 +285,7 @@ export class StandaloneEditorInstance implements PaneInstance {
     private dirtyChangeCb: ((dirty: boolean) => void) | null = null;
     private saveRequestCb: ((content: string) => void) | null = null;
     private closeCb: (() => void) | null = null;
-    private viewStateChangeCb: ((state: { cursorLine: number; cursorCol: number; scrollTop: number }) => void) | null = null;
+    private viewStateChangeCb: ((state: { cursorLine: number; cursorCol: number; scrollTop: number; content?: string }) => void) | null = null;
     private contentChangeCb: ((content: string) => void) | null = null;
 
     // External change detection
@@ -372,6 +372,9 @@ export class StandaloneEditorInstance implements PaneInstance {
 
         if (context.content !== undefined) {
             this.mountEditor(context.content, context.mtime);
+            if (context.dirty) {
+                this.setDirty(true);
+            }
             if (transferState) {
                 this.applyHostTransferState(transferState);
             }
@@ -1163,6 +1166,17 @@ export class StandaloneEditorInstance implements PaneInstance {
 
     dispose(): void {
         if (this.disposed) return;
+        // Flush current viewState (including content if dirty) before tearing down,
+        // so the tab store has the latest unsaved content for restore on re-mount.
+        // Skip for large documents to avoid excessive memory in the tab store.
+        try {
+            if (this.viewStateChangeCb && this.view && this.dirty && !this.largeDocumentMode) {
+                const viewState = this.captureViewState();
+                if (viewState) {
+                    this.viewStateChangeCb({ ...viewState, content: this.view.state.doc.toString() });
+                }
+            }
+        } catch { /* best-effort — don't block dispose */ }
         this.disposed = true;
         this.conflictMonitor?.dispose();
         this.clearDirtyRecheckTimer();
@@ -1239,8 +1253,8 @@ export class StandaloneEditorInstance implements PaneInstance {
 
     // ── Extended PaneInstance methods ────────────────────────────
 
-    /** Register callback for view state changes (cursor, scroll). */
-    onViewStateChange(cb: (state: { cursorLine: number; cursorCol: number; scrollTop: number }) => void): void {
+    /** Register callback for view state changes (cursor, scroll, and content when dirty). */
+    onViewStateChange(cb: (state: { cursorLine: number; cursorCol: number; scrollTop: number; content?: string }) => void): void {
         this.viewStateChangeCb = cb;
     }
 

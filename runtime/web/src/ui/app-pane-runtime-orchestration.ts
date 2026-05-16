@@ -1008,10 +1008,15 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
     } else if (resolvedTransferState && 'diffMode' in resolvedTransferState) {
       delete resolvedTransferState.diffMode;
     }
+    const savedViewState = tabStore.getViewState(activeId);
+    const savedContent = savedViewState?.content;
+    const tabIsDirty = tabStore.getTabs().find(t => t.id === activeId)?.dirty;
     const context = {
       path: activeId,
       mode: 'edit',
-      ...(pendingTransfer?.content !== undefined ? { content: pendingTransfer.content } : {}),
+      ...(pendingTransfer?.content !== undefined ? { content: pendingTransfer.content }
+        : tabIsDirty && typeof savedContent === 'string' ? { content: savedContent, dirty: true }
+        : {}),
       ...(pendingTransfer?.mtime !== undefined ? { mtime: pendingTransfer.mtime } : {}),
       ...(resolvedTransferState ? { transferState: resolvedTransferState } : {}),
     };
