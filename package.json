@@ -102,7 +102,8 @@
     "release:package-ux-reports": "bun run scripts/release/package-ux-reports.ts",
     "release:build-portable": "bun run scripts/release/build-portable-artifact.ts",
     "release:build-linux-run": "bun run scripts/release/build-linux-run-artifact.ts",
-    "release:build-experimental-shell": "bun run scripts/release/build-experimental-shell-artifact.ts"
+    "release:build-experimental-shell": "bun run scripts/release/build-experimental-shell-artifact.ts",
+    "build:web:visual": "cd runtime && bun web/static/visual/frontend/build.ts && bun build web/static/visual/frontend/styles/app.css --target=browser --minify --sourcemap --outdir web/static/visual/dist --entry-naming=\"[name].bundle.css\""
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "0.74.1",
@@ -172,7 +173,11 @@
     "globals": "17.6.0",
     "playwright": "1.59.1",
     "ts-prune": "0.10.3",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "@preact/signals": "2.9.0",
+    "dompurify": "3.4.2",
+    "@types/dompurify": "3.2.0",
+    "esbuild": "0.28.0"
   },
   "x-dependency-policy": "Pinned exact versions only (no ^/~ ranges).",
   "overrides": {
