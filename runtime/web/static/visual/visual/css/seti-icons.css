@@ -1,0 +1,170 @@
+/*
+ * seti-icons.css — VS Code Seti file-type icon font classes.
+ *
+ * Font: seti.woff (from microsoft/vscode extensions/theme-seti/icons/)
+ * License: MIT — Copyright (c) Microsoft Corporation
+ * Source: https://github.com/microsoft/vscode/tree/main/extensions/theme-seti
+ *
+ * Icon definitions extracted from:
+ * https://github.com/microsoft/vscode/blob/main/extensions/theme-seti/icons/vs-seti-icon-theme.json
+ */
+
+@font-face {
+  font-family: "seti";
+  src: url("/static/common/fonts/vendor/seti.woff") format("woff");
+  font-weight: normal;
+  font-style: normal;
+}
+
+.seti-icon {
+  font-family: "seti";
+  font-size: 16px;
+  display: inline-block;
+  width: 16px;
+  text-align: center;
+  line-height: 1;
+  speak: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Default file icon */
+.seti-icon-default::before { content: "\E023"; color: #d4d7d6; }
+
+/* TypeScript */
+.seti-icon-typescript::before { content: "\E099"; color: #519aba; }
+
+/* JavaScript */
+.seti-icon-javascript::before { content: "\E051"; color: #cbcb41; }
+
+/* React (TSX/JSX) */
+.seti-icon-react::before { content: "\E07D"; color: #519aba; }
+
+/* JSON */
+.seti-icon-json::before { content: "\E055"; color: #cbcb41; }
+
+/* Markdown */
+.seti-icon-markdown::before { content: "\E060"; color: #519aba; }
+
+/* CSS */
+.seti-icon-css::before { content: "\E01D"; color: #519aba; }
+
+/* SASS/SCSS */
+.seti-icon-sass::before { content: "\E084"; color: #f55385; }
+
+/* HTML */
+.seti-icon-html::before { content: "\E048"; color: #e37933; }
+
+/* Python */
+.seti-icon-python::before { content: "\E07B"; color: #519aba; }
+
+/* Rust */
+.seti-icon-rust::before { content: "\E082"; color: #6d8086; }
+
+/* Go */
+.seti-icon-go::before { content: "\E03A"; color: #519aba; }
+
+/* Java */
+.seti-icon-java::before { content: "\E050"; color: #cc3e44; }
+
+/* YAML */
+.seti-icon-yaml::before { content: "\E0A7"; color: #a074c4; }
+
+/* TOML / config */
+.seti-icon-toml::before { content: "\E019"; color: #6d8086; }
+
+/* Shell */
+.seti-icon-shell::before { content: "\E089"; color: #8dc149; }
+
+/* C */
+.seti-icon-c::before { content: "\E00C"; color: #519aba; }
+
+/* C++ */
+.seti-icon-cpp::before { content: "\E01A"; color: #519aba; }
+
+/* C# */
+.seti-icon-csharp::before { content: "\E00B"; color: #519aba; }
+
+/* Header (.h) */
+.seti-icon-header::before { content: "\E00C"; color: #a074c4; }
+
+/* Ruby */
+.seti-icon-ruby::before { content: "\E081"; color: #cc3e44; }
+
+/* PHP */
+.seti-icon-php::before { content: "\E070"; color: #a074c4; }
+
+/* Vue */
+.seti-icon-vue::before { content: "\E09D"; color: #8dc149; }
+
+/* Svelte */
+.seti-icon-svelte::before { content: "\E090"; color: #cc3e44; }
+
+/* Bicep */
+.seti-icon-bicep::before { content: "\E008"; color: #519aba; }
+
+/* Terraform */
+.seti-icon-terraform::before { content: "\E093"; color: #a074c4; }
+
+/* SQL */
+.seti-icon-sql::before { content: "\E022"; color: #f55385; }
+
+/* GraphQL */
+.seti-icon-graphql::before { content: "\E03E"; color: #f55385; }
+
+/* SVG */
+.seti-icon-svg::before { content: "\E091"; color: #a074c4; }
+
+/* Image (png, jpg, gif, webp) */
+.seti-icon-image::before { content: "\E04C"; color: #a074c4; }
+
+/* Archive (zip, tar, gz) */
+.seti-icon-zip::before { content: "\E0A9"; color: #6d8086; }
+
+/* Kotlin */
+.seti-icon-kotlin::before { content: "\E058"; color: #e37933; }
+
+/* Scala */
+.seti-icon-scala::before { content: "\E086"; color: #cc3e44; }
+
+/* Dart */
+.seti-icon-dart::before { content: "\E021"; color: #519aba; }
+
+/* Swift */
+.seti-icon-swift::before { content: "\E092"; color: #e37933; }
+
+/* Lua */
+.seti-icon-lua::before { content: "\E05E"; color: #519aba; }
+
+/* R */
+.seti-icon-r::before { content: "\E001"; color: #519aba; }
+
+/* PowerShell */
+.seti-icon-powershell::before { content: "\E074"; color: #519aba; }
+
+/* Windows Batch */
+.seti-icon-bat::before { content: "\E0A2"; color: #519aba; }
+
+/* XML */
+.seti-icon-xml::before { content: "\E0A5"; color: #e37933; }
+
+/* Docker */
+.seti-icon-docker::before { content: "\E025"; color: #519aba; }
+
+/* Makefile */
+.seti-icon-makefile::before { content: "\E05F"; color: #e37933; }
+
+/* Git */
+.seti-icon-git::before { content: "\E034"; color: #41535b; }
+
+/* Yarn lock */
+.seti-icon-yarn::before { content: "\E0A6"; color: #519aba; }
+
+/* TSConfig */
+.seti-icon-tsconfig::before { content: "\E097"; color: #519aba; }
+
+/* Readme / Info */
+.seti-icon-info::before { content: "\E04D"; color: #519aba; }
+
+/* License */
+.seti-icon-license::before { content: "\E05A"; color: #cbcb41; }

@@ -1,0 +1,237 @@
+/*
+ * base.css - Extracted from styles.css during the layered stylesheet split.
+ * Ownership: Theme tokens, reset, fonts, and global base primitives.
+ * Keep selector names/order stable in this first move-only tranche.
+ */
+
+/*
+ * styles.css - Main stylesheet for the PiClaw web UI.
+ *
+ * Defines CSS custom properties for theming (light/dark mode), layout
+ * for the timeline, compose box, status bar, workspace explorer, and
+ * post components. Includes responsive breakpoints and animation keyframes.
+ *
+ * Loaded by: index.html via <link> tag.
+ */
+
+@font-face {
+    font-family: "FiraCode Nerd Font Mono";
+    font-style: normal;
+    font-display: swap;
+    font-weight: 400;
+    src: url("../../common/fonts/vendor/firacode-nerd-font-mono-regular.ttf") format("truetype");
+}
+
+@font-face {
+    font-family: "FiraCode Nerd Font Mono";
+    font-style: normal;
+    font-display: swap;
+    font-weight: 700;
+    src: url("../../common/fonts/vendor/firacode-nerd-font-mono-bold.ttf") format("truetype");
+}
+
+/* CSS Variables for theming */
+:root {
+    color-scheme: light dark;
+
+    /* Colors - Light mode */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f7f9fa;
+    --bg-hover: #e8ebed;
+    --text-primary: #0f1419;
+    --text-secondary: #536471;
+    --border-color: #eff3f4;
+    --accent-color: #1d9bf0;
+    --accent-hover: #1a8cd8;
+    --accent-color-alpha: rgba(29, 155, 240, 0.25);
+    --accent-contrast-text: #0f1419;
+    --warning-color: #f0b429;
+    --danger-color: #f4212e;
+    --success-color: #00ba7c;
+
+    /* Spacing */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+    --spacing-xl: 32px;
+
+    /* Typography */
+    --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --font-family-terminal: "FiraCode Nerd Font Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --font-size-sm: 13px;
+    --font-size-md: 15px;
+    --font-size-lg: 20px;
+    --font-size-xl: 24px;
+    --line-height: 1.5;
+    --chat-content-font-size: var(--font-size-md);
+
+    /* Border radius */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 16px;
+    --radius-full: 9999px;
+
+    /* Shared chat surface sizing */
+    --chat-surface-radius: var(--radius-md);
+    --chat-surface-padding-y: 7px;
+    --chat-surface-padding-x: 10px;
+    --chat-surface-inline-gap: 6px;
+    --chat-surface-control-height: 30px;
+    --chat-surface-stack-gap: 4px;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --search-highlight-color: rgba(29, 155, 240, 0.2);
+
+    /* Syntax highlighting tokens */
+    --syntax-keyword: var(--accent-color);
+    --syntax-literal: var(--accent-color);
+    --syntax-string: var(--success-color);
+    --syntax-variable: var(--text-primary);
+    --syntax-variable-definition: var(--accent-color);
+    --syntax-variable-local: var(--accent-color);
+    --syntax-variable-special: var(--danger-color);
+    --syntax-type: var(--accent-color);
+    --syntax-macro: var(--accent-color);
+    --syntax-property: var(--danger-color);
+    --syntax-comment: var(--text-secondary);
+    --syntax-meta: var(--text-secondary);
+    --syntax-operator: var(--text-primary);
+    --syntax-punctuation: var(--text-primary);
+    --syntax-link: var(--accent-color);
+    --syntax-inserted: var(--success-color);
+    --syntax-deleted: var(--danger-color);
+    --syntax-invalid: var(--danger-color);
+
+    /* Layout */
+    --chat-min-width: 640px;
+    --chat-max-width: 900px;
+    --chat-pane-min-width: 10vw;
+    --workspace-tab-width: 20px;
+
+    /* Misc */
+    --placeholder-opacity: 0.65;
+    --model-hint-opacity: 0.85;
+    --ui-transition-fast: 0.15s ease;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-primary: #000000;
+        --bg-secondary: #16181c;
+        --bg-hover: #1d1f23;
+        --text-primary: #e7e9ea;
+        --text-secondary: #71767b;
+        --border-color: #2f3336;
+        --accent-color-alpha: rgba(29, 155, 240, 0.35);
+        --accent-contrast-text: #0f1419;
+        --warning-color: #f0b429;
+        --search-highlight-color: rgba(29, 155, 240, 0.35);
+    }
+}
+
+@supports (color: color-mix(in srgb, black 50%, white)) {
+    :root {
+        --syntax-keyword: color-mix(in srgb, var(--accent-color) 58%, var(--danger-color) 42%);
+        --syntax-literal: color-mix(in srgb, var(--accent-color) 30%, var(--success-color) 70%);
+        --syntax-string: color-mix(in srgb, var(--success-color) 80%, var(--text-primary) 20%);
+        --syntax-variable: color-mix(in srgb, var(--text-primary) 92%, var(--text-secondary) 8%);
+        --syntax-variable-definition: color-mix(in srgb, var(--accent-color) 82%, var(--text-primary) 18%);
+        --syntax-variable-local: color-mix(in srgb, var(--accent-color) 38%, var(--success-color) 62%);
+        --syntax-variable-special: color-mix(in srgb, var(--danger-color) 82%, var(--text-primary) 18%);
+        --syntax-type: color-mix(in srgb, var(--accent-color) 42%, var(--success-color) 58%);
+        --syntax-macro: color-mix(in srgb, var(--accent-color) 88%, var(--text-primary) 12%);
+        --syntax-property: color-mix(in srgb, var(--danger-color) 76%, var(--text-primary) 24%);
+        --syntax-comment: color-mix(in srgb, var(--text-secondary) 88%, var(--bg-primary) 12%);
+        --syntax-meta: color-mix(in srgb, var(--text-secondary) 78%, var(--accent-color) 22%);
+        --syntax-operator: color-mix(in srgb, var(--text-primary) 90%, var(--text-secondary) 10%);
+        --syntax-punctuation: color-mix(in srgb, var(--text-primary) 84%, var(--text-secondary) 16%);
+        --syntax-link: color-mix(in srgb, var(--accent-color) 92%, var(--text-primary) 8%);
+        --syntax-inserted: color-mix(in srgb, var(--success-color) 90%, var(--text-primary) 10%);
+        --syntax-deleted: color-mix(in srgb, var(--danger-color) 90%, var(--text-primary) 10%);
+        --syntax-invalid: color-mix(in srgb, var(--danger-color) 86%, var(--text-primary) 14%);
+    }
+}
+
+/* Dark mode class override */
+.dark {
+    color-scheme: dark;
+    --bg-primary: #000000;
+    --bg-secondary: #16181c;
+    --bg-hover: #1d1f23;
+    --text-primary: #e7e9ea;
+    --text-secondary: #71767b;
+    --border-color: #2f3336;
+    --accent-color-alpha: rgba(29, 155, 240, 0.35);
+    --accent-contrast-text: #0f1419;
+    --warning-color: #f0b429;
+    --search-highlight-color: rgba(29, 155, 240, 0.35);
+}
+
+.light {
+    color-scheme: light;
+    --bg-primary: #ffffff;
+    --bg-secondary: #f7f9fa;
+    --bg-hover: #e8ebed;
+    --text-primary: #0f1419;
+    --text-secondary: #536471;
+    --border-color: #eff3f4;
+    --accent-color-alpha: rgba(29, 155, 240, 0.25);
+    --warning-color: #f0b429;
+    --search-highlight-color: rgba(29, 155, 240, 0.2);
+}
+
+/* Reset */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+/* Base styles */
+html, body {
+    width: 100%;
+    overflow: hidden;
+}
+
+html {
+    background-color: var(--bg-primary);
+    /* Browser default is 100dvh; iOS standalone must override to 100vh before CSS loads.
+       Do not remove the early index.html bootstrap or mobile-viewport.ts override without
+       reading docs/PWA.md — 100dvh cold-starts too short in iOS standalone PWAs. */
+    --app-height: 100dvh;
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    /* Keep body in normal document flow. On current iOS standalone WebKit,
+       `position: fixed` on the root body turns the app into the viewport-sized
+       clipping box and truncates the bottom of compose/timeline. The mobile
+       viewport fix still drives height via --app-height; body just must not be
+       the fixed containing block. */
+    height: var(--app-height, 100dvh);
+    min-height: var(--app-height, 100dvh);
+    font-family: var(--font-family);
+    font-size: var(--font-size-md);
+    line-height: var(--line-height);
+    color: var(--text-primary);
+    background-color: var(--bg-primary);
+    overflow: hidden;
+    overscroll-behavior: none;
+}
+
+#app {
+    width: 100%;
+    min-width: 0;
+    height: var(--app-height, 100dvh);
+    min-height: var(--app-height, 100dvh);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+

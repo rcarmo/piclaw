@@ -1,0 +1,8 @@
+{
+  "name": "echarts",
+  "version": "6.0.0",
+  "source": "https://cdn.jsdelivr.net/npm/echarts@6.0.0/dist/echarts.min.js",
+  "license": "Apache-2.0",
+  "files": ["echarts.min.js"],
+  "notes": "Vendored UMD bundle. Exposes global echarts. Use via <script src=\"/static/js/vendor/echarts/echarts.min.js\"></script>."
+}

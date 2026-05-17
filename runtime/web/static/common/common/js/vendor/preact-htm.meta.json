@@ -1,0 +1,42 @@
+{
+  "manifest_id": "preact-htm",
+  "package_name": "preact",
+  "package_version": "10.29.1",
+  "package_license": "MIT",
+  "package_repository": "preactjs/preact",
+  "package_versions": {
+    "preact": "10.29.1",
+    "htm": "3.1.1"
+  },
+  "package_licenses": {
+    "preact": "MIT",
+    "htm": "Apache-2.0"
+  },
+  "package_repositories": {
+    "preact": "preactjs/preact",
+    "htm": "developit/htm"
+  },
+  "source_entry": "web/src/vendor/preact-htm-entry.ts",
+  "output_file": "web/static/common/js/vendor/preact-htm.js",
+  "output_files": [
+    {
+      "package_path": null,
+      "output_file": "web/static/common/js/vendor/preact-htm.js",
+      "sha256": "b8e76bf8e03d5267ceb5ff7b448d8fab7599c52ab8e70941061a36ef969b684c",
+      "size_bytes": 15772
+    }
+  ],
+  "metadata_file": "web/static/common/js/vendor/preact-htm.meta.json",
+  "sha256": "b8e76bf8e03d5267ceb5ff7b448d8fab7599c52ab8e70941061a36ef969b684c",
+  "size_bytes": 15772,
+  "build_command": [
+    "bun",
+    "build",
+    "web/src/vendor/preact-htm-entry.ts",
+    "--target=browser",
+    "--format=esm",
+    "--minify",
+    "--outfile",
+    "web/static/common/js/vendor/preact-htm.js"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "babylonjs",
+  "version": "9.5.0",
+  "source": "https://cdn.jsdelivr.net/npm/babylonjs@9.5.0/babylon.js",
+  "license": "Apache-2.0",
+  "files": ["babylon.js"],
+  "notes": "Vendored UMD core bundle. Exposes global BABYLON. Use via <script src=\"/static/js/vendor/babylon/babylon.js\"></script>."
+}

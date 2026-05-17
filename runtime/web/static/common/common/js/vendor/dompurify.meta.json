@@ -1,0 +1,39 @@
+{
+  "manifest_id": "dompurify",
+  "package_name": "dompurify",
+  "package_version": "3.4.1",
+  "package_license": "(MPL-2.0 OR Apache-2.0)",
+  "package_repository": "git://github.com/cure53/DOMPurify.git",
+  "package_versions": {
+    "dompurify": "3.4.1"
+  },
+  "package_licenses": {
+    "dompurify": "(MPL-2.0 OR Apache-2.0)"
+  },
+  "package_repositories": {
+    "dompurify": "git://github.com/cure53/DOMPurify.git"
+  },
+  "source_entry": "web/src/vendor/dompurify-entry.ts",
+  "output_file": "web/static/js/vendor/dompurify.min.js",
+  "output_files": [
+    {
+      "package_path": null,
+      "output_file": "web/static/js/vendor/dompurify.min.js",
+      "sha256": "ebe01e0f910826df7087db67f73b6881e9dc4310b4ac1c0d477593b1a4df08ea",
+      "size_bytes": 24518
+    }
+  ],
+  "metadata_file": "web/static/js/vendor/dompurify.meta.json",
+  "sha256": "ebe01e0f910826df7087db67f73b6881e9dc4310b4ac1c0d477593b1a4df08ea",
+  "size_bytes": 24518,
+  "build_command": [
+    "bun",
+    "build",
+    "web/src/vendor/dompurify-entry.ts",
+    "--target=browser",
+    "--format=iife",
+    "--minify",
+    "--outfile",
+    "web/static/js/vendor/dompurify.min.js"
+  ]
+}

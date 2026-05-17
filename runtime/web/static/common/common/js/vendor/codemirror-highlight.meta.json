@@ -1,0 +1,39 @@
+{
+  "manifest_id": "codemirror-highlight",
+  "package_name": "@lezer/highlight",
+  "package_version": "1.2.3",
+  "package_license": "MIT",
+  "package_repository": "https://github.com/lezer-parser/highlight.git",
+  "package_versions": {
+    "@lezer/highlight": "1.2.3"
+  },
+  "package_licenses": {
+    "@lezer/highlight": "MIT"
+  },
+  "package_repositories": {
+    "@lezer/highlight": "https://github.com/lezer-parser/highlight.git"
+  },
+  "source_entry": "web/src/vendor/codemirror-highlight-entry.ts",
+  "output_file": "web/static/js/vendor/codemirror-highlight.min.js",
+  "output_files": [
+    {
+      "package_path": null,
+      "output_file": "web/static/js/vendor/codemirror-highlight.min.js",
+      "sha256": "f62d1b292016ac6bf4c233a7fe738de7ade30dfe890115bf82d3a48445af85db",
+      "size_bytes": 1045346
+    }
+  ],
+  "metadata_file": "web/static/js/vendor/codemirror-highlight.meta.json",
+  "sha256": "f62d1b292016ac6bf4c233a7fe738de7ade30dfe890115bf82d3a48445af85db",
+  "size_bytes": 1045346,
+  "build_command": [
+    "bun",
+    "build",
+    "web/src/vendor/codemirror-highlight-entry.ts",
+    "--target=browser",
+    "--format=iife",
+    "--minify",
+    "--outfile",
+    "web/static/js/vendor/codemirror-highlight.min.js"
+  ]
+}

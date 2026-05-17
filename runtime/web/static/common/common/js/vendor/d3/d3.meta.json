@@ -1,0 +1,8 @@
+{
+  "name": "d3",
+  "version": "7.9.0",
+  "source": "https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js",
+  "license": "ISC",
+  "files": ["d3.min.js"],
+  "notes": "Vendored UMD bundle. Exposes global d3. Use via <script src=\"/static/js/vendor/d3/d3.min.js\"></script>."
+}

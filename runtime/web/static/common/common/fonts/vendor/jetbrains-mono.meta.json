@@ -1,0 +1,105 @@
+{
+  "manifest_id": "jetbrains-mono-terminal-fonts",
+  "package_name": "@fontsource/jetbrains-mono",
+  "package_version": "5.2.8",
+  "package_license": "OFL-1.1",
+  "package_repository": "git+https://github.com/fontsource/font-files.git",
+  "package_versions": {
+    "@fontsource/jetbrains-mono": "5.2.8"
+  },
+  "package_licenses": {
+    "@fontsource/jetbrains-mono": "OFL-1.1"
+  },
+  "package_repositories": {
+    "@fontsource/jetbrains-mono": "git+https://github.com/fontsource/font-files.git"
+  },
+  "source_entry": null,
+  "output_file": "web/static/fonts/vendor/jetbrains-mono-latin-400-normal.woff2",
+  "output_files": [
+    {
+      "package_path": "files/jetbrains-mono-latin-400-normal.woff2",
+      "output_file": "web/static/fonts/vendor/jetbrains-mono-latin-400-normal.woff2",
+      "sha256": "14425ba9c695763c1547f48a206b7aa60350a33ae23de09f0407877f3fcd89eb",
+      "size_bytes": 21168
+    },
+    {
+      "package_path": "files/jetbrains-mono-latin-ext-400-normal.woff2",
+      "output_file": "web/static/fonts/vendor/jetbrains-mono-latin-ext-400-normal.woff2",
+      "sha256": "505dfba8ecbe77e82765f36d317ed7ef4ac42719dc5f4ae68d1c483fd22d0d14",
+      "size_bytes": 7336
+    },
+    {
+      "package_path": "files/jetbrains-mono-latin-400-italic.woff2",
+      "output_file": "web/static/fonts/vendor/jetbrains-mono-latin-400-italic.woff2",
+      "sha256": "87ddac4a62229787528cf4ac3fa58137b62a9aec364c44fc0f40470bcda9efba",
+      "size_bytes": 22228
+    },
+    {
+      "package_path": "files/jetbrains-mono-latin-ext-400-italic.woff2",
+      "output_file": "web/static/fonts/vendor/jetbrains-mono-latin-ext-400-italic.woff2",
+      "sha256": "a53b6b29b1621cdf51140761869e160521fc566a4a9f312d9b92e7178d433bc7",
+      "size_bytes": 7972
+    },
+    {
+      "package_path": "files/jetbrains-mono-latin-700-normal.woff2",
+      "output_file": "web/static/fonts/vendor/jetbrains-mono-latin-700-normal.woff2",
+      "sha256": "d0d4e818808f2a0ba39b2b09d1989366f63494e295f003c7ef436697378507e8",
+      "size_bytes": 21908
+    },
+    {
+      "package_path": "files/jetbrains-mono-latin-ext-700-normal.woff2",
+      "output_file": "web/static/fonts/vendor/jetbrains-mono-latin-ext-700-normal.woff2",
+      "sha256": "45a606d88f72bc0afae4d1a6988e3dba3a5e77ee51aa3b550e37c31c728f4d2d",
+      "size_bytes": 7472
+    },
+    {
+      "package_path": "files/jetbrains-mono-latin-700-italic.woff2",
+      "output_file": "web/static/fonts/vendor/jetbrains-mono-latin-700-italic.woff2",
+      "sha256": "2cd42fe8f872ef7e06156fe04338b23fc4ec532e66450c8e931db43473c0306c",
+      "size_bytes": 23116
+    },
+    {
+      "package_path": "files/jetbrains-mono-latin-ext-700-italic.woff2",
+      "output_file": "web/static/fonts/vendor/jetbrains-mono-latin-ext-700-italic.woff2",
+      "sha256": "ebfe512fe16186a55f5576fec93d877718e25f90be5ad12223ea624498c33b1e",
+      "size_bytes": 8148
+    }
+  ],
+  "metadata_file": "web/static/fonts/vendor/jetbrains-mono.meta.json",
+  "sha256": "14425ba9c695763c1547f48a206b7aa60350a33ae23de09f0407877f3fcd89eb",
+  "size_bytes": 21168,
+  "export_files": [
+    {
+      "package_path": "files/jetbrains-mono-latin-400-normal.woff2",
+      "output_file": "web/static/fonts/vendor/jetbrains-mono-latin-400-normal.woff2"
+    },
+    {
+      "package_path": "files/jetbrains-mono-latin-ext-400-normal.woff2",
+      "output_file": "web/static/fonts/vendor/jetbrains-mono-latin-ext-400-normal.woff2"
+    },
+    {
+      "package_path": "files/jetbrains-mono-latin-400-italic.woff2",
+      "output_file": "web/static/fonts/vendor/jetbrains-mono-latin-400-italic.woff2"
+    },
+    {
+      "package_path": "files/jetbrains-mono-latin-ext-400-italic.woff2",
+      "output_file": "web/static/fonts/vendor/jetbrains-mono-latin-ext-400-italic.woff2"
+    },
+    {
+      "package_path": "files/jetbrains-mono-latin-700-normal.woff2",
+      "output_file": "web/static/fonts/vendor/jetbrains-mono-latin-700-normal.woff2"
+    },
+    {
+      "package_path": "files/jetbrains-mono-latin-ext-700-normal.woff2",
+      "output_file": "web/static/fonts/vendor/jetbrains-mono-latin-ext-700-normal.woff2"
+    },
+    {
+      "package_path": "files/jetbrains-mono-latin-700-italic.woff2",
+      "output_file": "web/static/fonts/vendor/jetbrains-mono-latin-700-italic.woff2"
+    },
+    {
+      "package_path": "files/jetbrains-mono-latin-ext-700-italic.woff2",
+      "output_file": "web/static/fonts/vendor/jetbrains-mono-latin-ext-700-italic.woff2"
+    }
+  ]
+}

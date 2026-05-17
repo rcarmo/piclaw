@@ -1,0 +1,39 @@
+{
+  "manifest_id": "marked-global",
+  "package_name": "marked",
+  "package_version": "18.0.3",
+  "package_license": "MIT",
+  "package_repository": "git://github.com/markedjs/marked.git",
+  "package_versions": {
+    "marked": "18.0.3"
+  },
+  "package_licenses": {
+    "marked": "MIT"
+  },
+  "package_repositories": {
+    "marked": "git://github.com/markedjs/marked.git"
+  },
+  "source_entry": "web/src/vendor/marked-entry.ts",
+  "output_file": "web/static/common/js/marked.min.js",
+  "output_files": [
+    {
+      "package_path": null,
+      "output_file": "web/static/common/js/marked.min.js",
+      "sha256": "97d59246821a306b3339ae17105903a0f4a4a823fce7f9a89e00dfc430601d3a",
+      "size_bytes": 41573
+    }
+  ],
+  "metadata_file": "web/static/common/js/marked.meta.json",
+  "sha256": "97d59246821a306b3339ae17105903a0f4a4a823fce7f9a89e00dfc430601d3a",
+  "size_bytes": 41573,
+  "build_command": [
+    "bun",
+    "build",
+    "web/src/vendor/marked-entry.ts",
+    "--target=browser",
+    "--format=iife",
+    "--minify",
+    "--outfile",
+    "web/static/common/js/marked.min.js"
+  ]
+}

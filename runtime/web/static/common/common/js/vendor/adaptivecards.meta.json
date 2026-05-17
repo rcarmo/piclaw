@@ -1,0 +1,39 @@
+{
+  "manifest_id": "adaptivecards",
+  "package_name": "adaptivecards",
+  "package_version": "3.0.6",
+  "package_license": "MIT",
+  "package_repository": "git://git@github.com/microsoft/AdaptiveCards.git",
+  "package_versions": {
+    "adaptivecards": "3.0.6"
+  },
+  "package_licenses": {
+    "adaptivecards": "MIT"
+  },
+  "package_repositories": {
+    "adaptivecards": "git://git@github.com/microsoft/AdaptiveCards.git"
+  },
+  "source_entry": "web/src/vendor/adaptivecards-entry.ts",
+  "output_file": "web/static/js/vendor/adaptivecards.min.js",
+  "output_files": [
+    {
+      "package_path": null,
+      "output_file": "web/static/js/vendor/adaptivecards.min.js",
+      "sha256": "c3404b6cba966546c03ab9f81b133a2b8d9185da29806457d0adb92c107f799c",
+      "size_bytes": 338474
+    }
+  ],
+  "metadata_file": "web/static/js/vendor/adaptivecards.meta.json",
+  "sha256": "c3404b6cba966546c03ab9f81b133a2b8d9185da29806457d0adb92c107f799c",
+  "size_bytes": 338474,
+  "build_command": [
+    "bun",
+    "build",
+    "web/src/vendor/adaptivecards-entry.ts",
+    "--target=browser",
+    "--format=iife",
+    "--minify",
+    "--outfile",
+    "web/static/js/vendor/adaptivecards.min.js"
+  ]
+}

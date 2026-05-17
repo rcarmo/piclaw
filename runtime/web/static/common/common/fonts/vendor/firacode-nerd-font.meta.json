@@ -1,0 +1,32 @@
+{
+  "manifest_id": "firacode-nerd-font-mono",
+  "package_name": "nerd-fonts-release",
+  "package_version": "v3.4.0",
+  "package_license": "MIT",
+  "package_repository": "https://github.com/ryanoasis/nerd-fonts",
+  "source_url": "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/FiraCode.zip",
+  "archive_file": "generated/cache/vendor/firacode-nerd-font/v3.4.0/FiraCode.zip",
+  "font_family": "FiraCode Nerd Font Mono",
+  "output_file": "web/static/common/fonts/vendor/firacode-nerd-font-mono-regular.ttf",
+  "output_files": [
+    {
+      "archive_path": "FiraCodeNerdFontMono-Regular.ttf",
+      "output_file": "web/static/common/fonts/vendor/firacode-nerd-font-mono-regular.ttf",
+      "font_family": "FiraCode Nerd Font Mono",
+      "font_weight": 400,
+      "sha256": "ad88c69cb6a497db9f2714e4b414817aabbee621484a1560bfdb3fd73abdd564",
+      "size_bytes": 2647492
+    },
+    {
+      "archive_path": "FiraCodeNerdFontMono-Bold.ttf",
+      "output_file": "web/static/common/fonts/vendor/firacode-nerd-font-mono-bold.ttf",
+      "font_family": "FiraCode Nerd Font Mono",
+      "font_weight": 700,
+      "sha256": "bd014a21f3cd64203dd0850437091d716e929a4518b0e5848d6d3ad6af12b21d",
+      "size_bytes": 2677400
+    }
+  ],
+  "metadata_file": "web/static/common/fonts/vendor/firacode-nerd-font.meta.json",
+  "sha256": "ad88c69cb6a497db9f2714e4b414817aabbee621484a1560bfdb3fd73abdd564",
+  "size_bytes": 2647492
+}

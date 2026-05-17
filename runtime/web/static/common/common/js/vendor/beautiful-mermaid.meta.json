@@ -1,0 +1,38 @@
+{
+  "manifest_id": "beautiful-mermaid",
+  "package_name": "beautiful-mermaid",
+  "package_version": "1.1.3",
+  "package_license": "MIT",
+  "package_repository": "https://github.com/lukilabs/beautiful-mermaid",
+  "package_versions": {
+    "beautiful-mermaid": "1.1.3"
+  },
+  "package_licenses": {
+    "beautiful-mermaid": "MIT"
+  },
+  "package_repositories": {
+    "beautiful-mermaid": "https://github.com/lukilabs/beautiful-mermaid"
+  },
+  "source_entry": "web/src/vendor/mermaid-entry.ts",
+  "output_file": "web/static/common/js/vendor/beautiful-mermaid.js",
+  "output_files": [
+    {
+      "package_path": null,
+      "output_file": "web/static/common/js/vendor/beautiful-mermaid.js",
+      "sha256": "15defe220bd327448bbc788b7fd17af96d025face366d34ddc77372847461f52",
+      "size_bytes": 1575471
+    }
+  ],
+  "metadata_file": "web/static/common/js/vendor/beautiful-mermaid.meta.json",
+  "sha256": "15defe220bd327448bbc788b7fd17af96d025face366d34ddc77372847461f52",
+  "size_bytes": 1575471,
+  "build_command": [
+    "bun",
+    "build",
+    "web/src/vendor/mermaid-entry.ts",
+    "--target=browser",
+    "--minify",
+    "--outfile",
+    "web/static/common/js/vendor/beautiful-mermaid.js"
+  ]
+}

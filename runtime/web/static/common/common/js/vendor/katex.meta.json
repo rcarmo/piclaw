@@ -1,0 +1,39 @@
+{
+  "manifest_id": "katex-global",
+  "package_name": "katex",
+  "package_version": "0.16.45",
+  "package_license": "MIT",
+  "package_repository": "https://github.com/KaTeX/KaTeX.git",
+  "package_versions": {
+    "katex": "0.16.45"
+  },
+  "package_licenses": {
+    "katex": "MIT"
+  },
+  "package_repositories": {
+    "katex": "https://github.com/KaTeX/KaTeX.git"
+  },
+  "source_entry": "web/src/vendor/katex-entry.ts",
+  "output_file": "web/static/common/js/vendor/katex.min.js",
+  "output_files": [
+    {
+      "package_path": null,
+      "output_file": "web/static/common/js/vendor/katex.min.js",
+      "sha256": "1ec4a1a61fbc1c80272dcf2319197afdb98125b551ff7102ec45cc8c4752b35e",
+      "size_bytes": 271958
+    }
+  ],
+  "metadata_file": "web/static/common/js/vendor/katex.meta.json",
+  "sha256": "1ec4a1a61fbc1c80272dcf2319197afdb98125b551ff7102ec45cc8c4752b35e",
+  "size_bytes": 271958,
+  "build_command": [
+    "bun",
+    "build",
+    "web/src/vendor/katex-entry.ts",
+    "--target=browser",
+    "--format=iife",
+    "--minify",
+    "--outfile",
+    "web/static/common/js/vendor/katex.min.js"
+  ]
+}
