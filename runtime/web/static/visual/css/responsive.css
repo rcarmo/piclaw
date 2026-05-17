@@ -1,0 +1,279 @@
+/*
+ * responsive.css - Extracted from styles.css during the layered stylesheet split.
+ * Ownership: Global responsive breakpoints and cross-surface viewport tuning.
+ * Keep selector names/order stable in this first move-only tranche.
+ */
+
+/* Responsive breakpoints */
+
+/* Mobile: < 640px */
+@media (max-width: 639px) {
+    :root {
+        --spacing-md: 12px;
+        --font-size-md: 14px;
+        --font-size-lg: 18px;
+        --chat-surface-padding-y: 6px;
+        --chat-surface-padding-x: 9px;
+        --chat-surface-inline-gap: 5px;
+        --chat-surface-control-height: 24px;
+        --chat-surface-stack-gap: 3px;
+    }
+
+    .container {
+        border-left: none;
+        border-right: none;
+        min-width: 0;
+    }
+
+    .header {
+        padding: var(--spacing-sm) var(--spacing-md);
+    }
+
+    .header h1 {
+        font-size: var(--font-size-lg);
+    }
+
+    .compose-box {
+        padding: var(--spacing-sm) var(--spacing-md) 2px;
+    }
+
+    .compose-box textarea {
+        min-height: 50px;
+        font-size: var(--chat-content-font-size);
+    }
+
+    .compose-queue-stack {
+        margin: var(--chat-surface-stack-gap) var(--spacing-md) 0;
+    }
+
+    .compose-box > .compose-queue-stack {
+        margin: 0;
+    }
+
+    .compose-queue-stack-content,
+    .compose-queue-stack-steer-btn {
+        font-size: 11px;
+    }
+
+    .compose-queue-stack-close-btn {
+        width: var(--chat-surface-control-height);
+        height: var(--chat-surface-control-height);
+    }
+
+    .compose-queue-stack-move-btn {
+        width: 20px;
+        height: 20px;
+    }
+
+    .agent-thinking {
+        margin: 0 var(--spacing-md);
+    }
+
+    .agent-thinking-title {
+        gap: var(--chat-surface-inline-gap);
+        margin-bottom: 4px;
+    }
+
+    .agent-thinking-title-meta,
+    .agent-status-elapsed {
+        font-size: 10px;
+    }
+
+    .agent-thinking-tools-inline,
+    .agent-thinking-actions {
+        gap: 4px;
+    }
+
+    .agent-thinking-action-btn {
+        min-height: var(--chat-surface-control-height);
+        padding: 0 8px;
+        font-size: 11px;
+    }
+
+    .agent-thinking-corner-toggle,
+    .agent-thinking-corner-toggle-inline {
+        width: var(--chat-surface-control-height);
+        height: var(--chat-surface-control-height);
+    }
+
+    .compose-footer {
+        flex-wrap: nowrap;
+        align-items: flex-end;
+        gap: 4px;
+    }
+
+    .compose-meta-row {
+        flex: 1;
+        min-width: 0;
+        gap: 2px;
+    }
+
+    .compose-model-meta {
+        min-width: 0;
+    }
+
+    .compose-model-hint,
+    .compose-model-usage-hint {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .compose-model-hint {
+        font-size: 9.2px;
+    }
+
+    .compose-model-usage-hint {
+        font-size: 8.4px;
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+
+    .compose-actions {
+        margin-left: auto;
+        flex-shrink: 0;
+    }
+
+    .post {
+        padding: var(--spacing-sm) var(--spacing-md);
+    }
+
+    .post-avatar {
+        width: 36px;
+        height: 36px;
+        font-size: var(--font-size-sm);
+        flex-shrink: 0;
+    }
+
+    .post-header {
+        gap: var(--spacing-sm);
+    }
+
+    .post-content {
+        margin-left: 0;
+        margin-top: var(--spacing-sm);
+    }
+
+    .post-content.agent {
+        padding: var(--spacing-sm);
+    }
+
+    .link-preview {
+        min-height: 100px;
+    }
+
+    .link-preview.has-image {
+        min-height: 140px;
+    }
+
+    .link-preview-title {
+        font-size: var(--font-size-md);
+    }
+
+    .post.thread-reply {
+        margin-left: calc(var(--spacing-md) + 18px);
+        padding-left: 8px;
+    }
+
+    .connection-status {
+        bottom: var(--spacing-sm);
+        right: var(--spacing-sm);
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 900px) and (orientation: portrait) {
+    .compose-footer {
+        flex-wrap: nowrap;
+        align-items: flex-end;
+        gap: 4px;
+    }
+
+    .compose-meta-row {
+        flex: 1;
+        min-width: 0;
+        gap: 2px;
+    }
+
+    .compose-model-meta {
+        min-width: 0;
+    }
+
+    .compose-model-hint,
+    .compose-model-usage-hint {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .compose-model-hint {
+        font-size: 9.2px;
+    }
+
+    .compose-model-usage-hint {
+        font-size: 8.4px;
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+
+    .compose-actions {
+        margin-left: auto;
+        flex-shrink: 0;
+    }
+}
+
+/* Tablet: 640px - 1023px */
+@media (min-width: 640px) and (max-width: 1023px) {
+    .container {
+        max-width: 90%;
+    }
+
+    .post-avatar {
+        width: 44px;
+        height: 44px;
+    }
+}
+
+/* Desktop: >= 1024px */
+@media (min-width: 1024px) {
+    .container {
+        max-width: 800px;
+    }
+
+    .app-shell > .container {
+        max-width: none;
+        margin: 0;
+        flex: 1;
+        height: 100%;
+    }
+
+    .post-avatar {
+        width: 48px;
+        height: 48px;
+    }
+
+    .compose-box textarea {
+        min-height: 70px;
+    }
+}
+
+/* Window Controls Overlay support (Chrome/Edge PWA on desktop) */
+@supports (padding-top: env(titlebar-area-height, 0)) {
+    body {
+        padding-top: env(titlebar-area-height, 0);
+    }
+}
+
+/* Math rendering */
+.math-error {
+    color: var(--error-color, #dc3545);
+    font-family: monospace;
+    font-size: var(--font-size-sm);
+}
+
+.katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: var(--spacing-xs) 0;
+}
+

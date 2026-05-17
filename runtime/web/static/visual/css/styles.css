@@ -1,0 +1,19 @@
+/*
+ * styles.css - Ordered manifest for the PiClaw web UI stylesheet layers.
+ *
+ * Entrypoint for the visual/ UI slot. All partials live in visual/css/.
+ * Imported by runtime/web/src/styles/app.css
+ */
+
+@import "./base.css";
+@import "./fonts.css";
+@import "./codicons.css";
+@import "./shell.css";
+@import "./workspace.css";
+@import "./editor.css";
+@import "./chat.css";
+@import "./content.css";
+@import "./agent.css";
+@import "./overlays.css";
+@import "./responsive.css";
+@import "./settings.css";

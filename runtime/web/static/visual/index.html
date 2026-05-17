@@ -1,33 +1,180 @@
 <!DOCTYPE html>
 <html lang="en">
+<!--
+  index.html – Main web UI shell for PiClaw.
+
+  Single-page app entry point that loads the Preact-based timeline,
+  compose box, workspace explorer, and status components. Also loads
+  vendor libraries (marked, KaTeX, Mermaid) for markdown rendering.
+
+  Served by: channels/web/http/static.ts at the root URL.
+  Auth: This page is only served to authenticated users. The login page
+        (login.html) is a separate entrypoint that loads login.bundle.js.
+
+  Bundles:
+  ────────
+  The authenticated SPA is shipped as app bundles:
+    - /static/visual/dist/app.bundle.js
+    - /static/visual/dist/app.bundle.css
+  Login is a separate minimal bundle set:
+    - /static/visual/vendor/login.bundle.js (loaded only by login.html)
+    - /static/visual/vendor/login.bundle.css (loaded only by login.html)
+
+  Vendor JS globals (marked, KaTeX, Mermaid) remain separate prebuilt files.
+  App CSS is bundled into /static/visual/dist/*.bundle.css; login CSS uses /static/visual/vendor/.
+  request-router-service.ts auth-gates /static/visual/dist/app.bundle.{js,css} and only
+  exposes /static/visual/vendor/login.bundle.{js,css} to unauthenticated visitors.
+-->
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<title>PiClaw — Visual</title>
-<style>
-  :root { color-scheme: dark; }
-  body {
-    margin: 0; padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    background: #0a0a0a; color: #e0e0e0;
-    display: flex; align-items: center; justify-content: center;
-    height: 100dvh;
-  }
-  .placeholder {
-    text-align: center; padding: 2rem;
-    border: 1px solid #333; border-radius: 12px;
-    max-width: 400px;
-  }
-  h1 { font-size: 1.4rem; font-weight: 600; margin: 0 0 0.5rem; }
-  p { font-size: 0.9rem; color: #888; margin: 0; line-height: 1.5; }
-  a { color: #3b82f6; }
-</style>
+    <meta charset="UTF-8">
+    <meta id="piclaw-viewport" name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta id="dynamic-theme-color" name="theme-color" content="#ffffff">
+    <meta id="theme-color-light" name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
+    <meta id="theme-color-dark" name="theme-color" media="(prefers-color-scheme: dark)" content="#000000">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>PiClaw</title>
+    <meta name="apple-mobile-web-app-title" content="PiClaw">
+    <script>
+        // Android standalone PWA scale guard: apply the saved display scale before CSS loads.
+        (function() {
+            try {
+                var isAndroid = /Android/i.test(navigator.userAgent || '');
+                var standalone = false;
+                if (window.matchMedia) {
+                    standalone = window.matchMedia('(display-mode: standalone)').matches ||
+                        window.matchMedia('(display-mode: fullscreen)').matches ||
+                        window.matchMedia('(display-mode: minimal-ui)').matches;
+                }
+                var raw = localStorage.getItem('piclawPwaDisplayScalePercent');
+                var parsed = raw && raw.trim().endsWith('%') ? Number(raw.trim().slice(0, -1)) : Number(raw);
+                if (parsed > 0 && parsed <= 2) parsed *= 100;
+                if (!Number.isFinite(parsed)) parsed = 100;
+                var percent = Math.min(115, Math.max(20, Math.round(parsed)));
+                if (isAndroid && standalone && percent !== 100) {
+                    var scale = (percent / 100).toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+                    var viewport = document.getElementById('piclaw-viewport') || document.querySelector('meta[name="viewport"]');
+                    if (viewport) {
+                        viewport.setAttribute('content', 'width=device-width, initial-scale=' + scale + ', minimum-scale=' + scale + ', maximum-scale=' + scale + ', user-scalable=no, viewport-fit=cover');
+                    }
+                }
+            } catch(e) {}
+        })();
+    </script>
+    <script>
+        // iOS standalone PWA guard: set --app-height before CSS loads.
+        // WebKit can cold-start 100dvh too short, leaving a bottom gap below compose.
+        // Keep this in sync with docs/PWA.md and mobile-viewport.ts.
+        (function() {
+            try {
+                var standalone = Boolean(navigator.standalone);
+                if (!standalone && window.matchMedia) {
+                    standalone = window.matchMedia('(display-mode: standalone)').matches ||
+                        window.matchMedia('(display-mode: fullscreen)').matches ||
+                        window.matchMedia('(display-mode: minimal-ui)').matches;
+                }
+                if (standalone) document.documentElement.style.setProperty('--app-height', '100vh');
+            } catch(e) {}
+        })();
+    </script>
+    <link rel="stylesheet" href="/static/visual/dist/app.bundle.css?v=__APP_ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/visual/css/seti-icons.css">
+    <link id="dynamic-manifest" rel="manifest" href="/manifest.json?v=__APP_ASSET_VERSION__">
+    <link id="dynamic-favicon" rel="icon" href="/favicon.ico">
+    <link id="dynamic-apple-touch-icon" rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link id="dynamic-apple-touch-icon-180" rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png">
+    <link id="dynamic-apple-touch-icon-167" rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167x167.png">
+    <link id="dynamic-apple-touch-icon-152" rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png">
+    <link id="dynamic-apple-touch-icon-precomposed" rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png">
+    <script>
+        window.__PICLAW_NOTIFICATION_SOURCE_LABELS_ENABLED__ = "__PICLAW_NOTIFICATION_SOURCE_LABELS_FLAG__" === "1";
+
+        // Early theme application — prevents white flash on navigation.
+        // /theme and /tint are now instance-wide settings mirrored into
+        // localStorage after server sync, so the bootstrap path reads the
+        // global values directly.
+        (function() {
+            try {
+                var theme = localStorage.getItem('piclaw_theme') || 'default';
+                var tint = localStorage.getItem('piclaw_tint') || null;
+
+                // Resolve mode: dark presets get dark, auto follows system
+                var darkPresets = ['xterm','monokai','monokai-pro','ristretto','dracula','catppuccin','nord','gruvbox','tokyo','miasma','gotham'];
+                var autoPresets = ['default','solarized','github'];
+                var mode;
+                if (darkPresets.indexOf(theme) >= 0) {
+                    mode = 'dark';
+                } else if (autoPresets.indexOf(theme) >= 0) {
+                    mode = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+                } else {
+                    mode = 'light';
+                }
+
+                var root = document.documentElement;
+                root.dataset.theme = mode;
+                root.dataset.colorTheme = theme;
+                root.style.colorScheme = mode;
+
+                // Set background immediately to prevent white flash
+                var bg = mode === 'dark' ? '#000000' : '#ffffff';
+                if (theme === 'dracula') bg = '#282a36';
+                else if (theme === 'catppuccin') bg = '#1e1e2e';
+                else if (theme === 'nord') bg = '#2e3440';
+                else if (theme === 'gruvbox') bg = '#282828';
+                else if (theme === 'tokyo') bg = '#1a1b26';
+                else if (theme === 'monokai') bg = '#272822';
+                else if (theme === 'monokai-pro') bg = '#2d2a2e';
+                else if (theme === 'ristretto') bg = '#2c2525';
+                else if (theme === 'miasma') bg = '#1f1f23';
+                else if (theme === 'gotham') bg = '#0b0f14';
+                else if (theme === 'xterm') bg = '#000000';
+                else if (theme === 'solarized' && mode === 'dark') bg = '#002b36';
+                else if (theme === 'solarized' && mode === 'light') bg = '#fdf6e3';
+                else if (theme === 'github' && mode === 'dark') bg = '#0d1117';
+                else if (theme === 'tango') bg = '#f6f5f4';
+                root.style.background = bg;
+                document.body && (document.body.style.background = bg);
+
+                // Update theme-color meta tags for the status bar
+                var meta = document.getElementById('dynamic-theme-color');
+                if (meta) meta.setAttribute('content', bg);
+                var darkMeta = document.getElementById('theme-color-dark');
+                if (darkMeta) darkMeta.setAttribute('content', bg);
+            } catch(e) {}
+        })();
+    </script>
 </head>
 <body>
-<div class="placeholder">
-  <h1>Visual UI</h1>
-  <p>This UI layer is under development.<br/>
-  Switch back to classic with <code>PICLAW_WEB_UI_MODE=classic</code>.</p>
-</div>
+    <div id="app">
+        <div style="padding: 20px; text-align: center; color: var(--text-secondary, #888);">Loading...</div>
+    </div>
+    <script>
+        window.__PICLAW_APP_BOOTED__ = false;
+        window.onerror = function(msg, url, line, col, error) {
+            var text = String((error && error.message) || msg || '');
+            if (/ResizeObserver loop (completed with undelivered notifications|limit exceeded)/i.test(text)) {
+                return true;
+            }
+            if (window.__PICLAW_APP_BOOTED__) {
+                return false;
+            }
+            var app = document.getElementById('app');
+            if (app) {
+                app.innerHTML = '<pre style="padding:20px;color:red;">Error: ' + msg + '\nLine: ' + line + '</pre>';
+            }
+            return false;
+        };
+    </script>
+    <script src="/static/visual/vendor/js/marked.min.js" defer></script>
+    <script src="/static/visual/vendor/js/katex.min.js" defer></script>
+    <script src="/static/visual/vendor/js/beautiful-mermaid.js" defer></script>
+    <script type="importmap">
+    {
+      "imports": {
+        "#editor-vendor/codemirror": "/editor-vendor/codemirror.js?v=e8add02c6610"
+      }
+    }
+    </script>
+    <script type="module" src="/static/visual/dist/app.bundle.js?v=__APP_ASSET_VERSION__"></script>
 </body>
 </html>

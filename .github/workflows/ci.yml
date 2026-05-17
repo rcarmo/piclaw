@@ -47,3 +47,14 @@ jobs:
 
       - name: Run canonical fast CI contract
         run: make ci-fast
+
+  visual-build:
+    name: Build visual UI (Preact frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - run: bun run build:web:visual

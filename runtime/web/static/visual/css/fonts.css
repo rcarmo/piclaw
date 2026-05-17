@@ -1,0 +1,68 @@
+/* JetBrains Mono Nerd Font — code, terminal */
+@font-face {
+  font-family: "JetBrains Mono NF";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../../common/fonts/jetbrains-mono-nf/JetBrainsMonoNFM-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono NF";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../../common/fonts/jetbrains-mono-nf/JetBrainsMonoNFM-Medium.woff2") format("woff2");
+}
+
+/* IBM Plex Sans — UI text */
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../../common/fonts/ibm-plex-sans/IBMPlexSans-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../../common/fonts/ibm-plex-sans/IBMPlexSans-Medium.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../../common/fonts/ibm-plex-sans/IBMPlexSans-SemiBold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../../common/fonts/ibm-plex-sans/IBMPlexSans-Bold.woff2") format("woff2");
+}
+
+/* Base font stacks */
+:root {
+  --font-ui: "IBM Plex Sans", Inter, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono NF", "JetBrains Mono", monospace;
+}
+
+body {
+  font-family: var(--font-ui);
+}
+
+code, pre, .monospace {
+  font-family: var(--font-mono);
+}
+
+/* Heavier font weight in light theme for readability */
+@media (prefers-color-scheme: light) {
+  body {
+    font-weight: 500;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
