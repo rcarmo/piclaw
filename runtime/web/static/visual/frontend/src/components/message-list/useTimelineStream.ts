@@ -7,6 +7,12 @@ import type { Interaction } from "./types";
 import { createLogger } from "../../utils/logger";
 const log = createLogger("MessageList");
 
+/** Exponential backoff config for SSE reconnection */
+const SSE_RECONNECT_BASE_MS = 1000;
+const SSE_RECONNECT_MAX_MS = 30000;
+const SSE_RECONNECT_MAX_ATTEMPTS = 10;
+const SSE_RECONNECT_COOLDOWN_MS = 60000;
+
 
 interface UseTimelineStreamParams {
   setMessages: (fn: (prev: Interaction[]) => Interaction[]) => void;
@@ -39,23 +45,74 @@ export function useTimelineStream({
 }: UseTimelineStreamParams) {
   const hasHandledFirstOpenRef = useRef(false);
 
+  // Reconnect state held in refs to avoid stale closures
+  const esRef = useRef<EventSource | null>(null);
+  const reconnectDelayRef = useRef(SSE_RECONNECT_BASE_MS);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cooldownUntilRef = useRef(0);
+  const destroyedRef = useRef(false);
+
+  // Callback refs to avoid recreating EventSource when stable dependencies change
+  const setMessagesRef = useRef(setMessages);
+  const setDraftRef = useRef(setDraft);
+  const setConnectedRef = useRef(setConnected);
+  const scrollToBottomRef = useRef(scrollToBottom);
+  const refetchRef = useRef(refetchTimelineOnReconnect);
+  const timelineErrorRef = useRef(timelineError);
+  useEffect(() => { setMessagesRef.current = setMessages; }, [setMessages]);
+  useEffect(() => { setDraftRef.current = setDraft; }, [setDraft]);
+  useEffect(() => { setConnectedRef.current = setConnected; }, [setConnected]);
+  useEffect(() => { scrollToBottomRef.current = scrollToBottom; }, [scrollToBottom]);
+  useEffect(() => { refetchRef.current = refetchTimelineOnReconnect; }, [refetchTimelineOnReconnect]);
+  useEffect(() => { timelineErrorRef.current = timelineError; }, [timelineError]);
+
   useEffect(() => {
+    destroyedRef.current = false;
+
+    function scheduleReconnect() {
+      if (destroyedRef.current) return;
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+
+      const now = Date.now();
+      if (reconnectAttemptsRef.current >= SSE_RECONNECT_MAX_ATTEMPTS) {
+        cooldownUntilRef.current = Math.max(cooldownUntilRef.current, now + SSE_RECONNECT_COOLDOWN_MS);
+        reconnectAttemptsRef.current = 0;
+        log.warn("SSE max reconnect attempts reached; cooling down");
+      }
+      const cooldownDelay = Math.max(cooldownUntilRef.current - now, 0);
+      const delay = Math.max(reconnectDelayRef.current, cooldownDelay);
+      log.warn(`SSE reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current})`);
+      reconnectTimerRef.current = setTimeout(() => {
+        if (!destroyedRef.current) connect();
+      }, delay);
+      reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, SSE_RECONNECT_MAX_MS);
+    }
+
+    function connect() {
+      if (destroyedRef.current) return;
+      if (esRef.current) {
+        esRef.current.close();
+        esRef.current = null;
+      }
+
     const es = new EventSource(buildChatUrl("/sse/stream"));
+    esRef.current = es;
 
     es.addEventListener("new_post", (e: MessageEvent) => {
       try {
         const raw = JSON.parse(e.data) as Record<string, unknown>;
         const interaction = normalizePost(raw);
-        setMessages((prev) => {
+        setMessagesRef.current((prev) => {
           // Avoid duplicates
           if (prev.some((m) => m.id === interaction.id)) return prev;
           return [...prev, interaction];
         });
         // Clear draft when a new agent post arrives
         if (interaction.type === "agent") {
-          setDraft("");
+          setDraftRef.current("");
         }
-        scrollToBottom(true);
+        scrollToBottomRef.current(true);
       } catch (err) {
         log.warn("SSE parse error", err);
       }
@@ -65,12 +122,12 @@ export function useTimelineStream({
       try {
         const parsed = JSON.parse(e.data);
         if (parsed.delta) {
-          setDraft((prev) => prev + parsed.delta);
+          setDraftRef.current((prev) => prev + parsed.delta);
         } else if (parsed.text !== undefined) {
-          setDraft(parsed.text);
+          setDraftRef.current(parsed.text);
         }
         window.dispatchEvent(new CustomEvent("piclaw:agent-draft", { detail: { delta: parsed.delta, text: parsed.text } }));
-        scrollToBottom();
+        scrollToBottomRef.current();
       } catch (err) {
         log.warn("SSE parse error:", err);
       }
@@ -80,9 +137,9 @@ export function useTimelineStream({
       try {
         const parsed = JSON.parse(e.data);
         const text = parsed.text ?? parsed.content ?? "";
-        setDraft(text);
+        setDraftRef.current(text);
         window.dispatchEvent(new CustomEvent("piclaw:agent-draft", { detail: { text } }));
-        scrollToBottom();
+        scrollToBottomRef.current();
       } catch (err) {
         log.warn("SSE parse error:", err);
       }
@@ -111,12 +168,12 @@ export function useTimelineStream({
       try {
         const raw = JSON.parse(e.data) as Record<string, unknown>;
         const interaction = normalizePost({ ...raw, type: "agent" });
-        setMessages((prev) => {
+        setMessagesRef.current((prev) => {
           if (prev.some((m) => m.id === interaction.id)) return prev;
           return [...prev, interaction];
         });
-        setDraft("");
-        scrollToBottom(true);
+        setDraftRef.current("");
+        scrollToBottomRef.current(true);
         // Notify for browser notifications
         window.dispatchEvent(new CustomEvent("piclaw:new-message", { detail: { content: interaction.content, type: "agent" } }));
         // Signal that agent turn is complete (clears compaction badge, etc.)
@@ -126,8 +183,8 @@ export function useTimelineStream({
         );
       } catch (err) {
         log.warn("SSE parse error:", err);
-        setDraft("");
-        scrollToBottom(true);
+        setDraftRef.current("");
+        scrollToBottomRef.current(true);
         window.dispatchEvent(new CustomEvent("piclaw:agent-turn-end"));
         window.dispatchEvent(
           new CustomEvent("piclaw:agent-status", { detail: { type: "done" } })
@@ -229,7 +286,12 @@ export function useTimelineStream({
     });
 
     es.onopen = () => {
-      setConnected(true);
+      // Reset backoff state on successful connection
+      reconnectDelayRef.current = SSE_RECONNECT_BASE_MS;
+      reconnectAttemptsRef.current = 0;
+      cooldownUntilRef.current = 0;
+
+      setConnectedRef.current(true);
       window.dispatchEvent(new Event("piclaw:sse-connected"));
 
       const isFirstOpen = !hasHandledFirstOpenRef.current;
@@ -239,27 +301,39 @@ export function useTimelineStream({
       if (isFirstOpen) return;
 
       // Reconnection — merge new messages
-      refetchTimelineOnReconnect().catch((err) => {
+      refetchRef.current().catch((err) => {
         log.warn("reconnect refresh failed:", err);
-        timelineError.value =
+        timelineErrorRef.current.value =
           "Timeline may be stale. Click to refresh.";
       });
     };
 
     es.onerror = () => {
-      setConnected(false);
+      setConnectedRef.current(false);
       window.dispatchEvent(new Event("piclaw:sse-disconnected"));
+
+      // If EventSource gave up (CLOSED state), schedule manual reconnect with backoff.
+      // readyState CONNECTING (0) means the browser is still retrying natively — don't
+      // double-schedule. readyState CLOSED (2) means it gave up (e.g. 4xx/5xx response).
+      if (es.readyState === EventSource.CLOSED) {
+        reconnectAttemptsRef.current += 1;
+        scheduleReconnect();
+      }
     };
+    } // end connect()
+
+    connect();
 
     return () => {
-      es.close();
+      destroyedRef.current = true;
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      if (esRef.current) {
+        esRef.current.close();
+        esRef.current = null;
+      }
     };
-  }, [
-    refetchTimelineOnReconnect,
-    scrollToBottom,
-    setConnected,
-    setDraft,
-    setMessages,
-    timelineError,
-  ]);
+  }, []); // stable: all callbacks accessed via refs
 }
