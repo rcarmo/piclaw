@@ -200,7 +200,14 @@ export function WorkspacePanel() {
             />
           </div>
         </div>
-        <FileTree key={`${treeVersion}-${refreshKey}`} onFileSelect={setSelectedNode} showHidden={showHidden} />
+        <FileTree key={`${treeVersion}-${refreshKey}`} onFileSelect={(node) => {
+            setSelectedNode(node);
+            if (node.type !== "dir") {
+              window.dispatchEvent(new CustomEvent("piclaw:file-attach", {
+                detail: { path: node.path, name: node.name, size: node.size ?? 0 },
+              }));
+            }
+          }} showHidden={showHidden} />
       </div>
       <div
         className="workspace__drag-handle"
