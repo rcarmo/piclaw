@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { openSync, closeSync, readlinkSync, readdirSync, readFileSync, accessSync, constants } from "node:fs";
-import { FFIType, dlopen } from "bun:ffi";
+import { openSync, closeSync, readlinkSync, readdirSync, readFileSync, accessSync, existsSync, statSync, constants, read as fsRead, write as fsWrite } from "node:fs";
+import { dirname, join } from "node:path";
+import { FFIType, dlopen, ptr } from "bun:ffi";
 import type { ServerWebSocket } from "bun";
 
 import { WORKSPACE_DIR } from "../../../core/config.js";
@@ -69,6 +70,7 @@ const TERMINAL_FONT_FAMILY = "FiraCode Nerd Font Mono";
 const TERMINAL_ANON_CLIENT_HEADER = "x-piclaw-terminal-client";
 
 const IS_LINUX = process.platform === "linux";
+const IS_MACOS = process.platform === "darwin";
 const DEFAULT_TERMINAL_HANDOFF_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_TERMINAL_RECONNECT_GRACE_MS = 300_000;
 const DEFAULT_TERMINAL_OUTPUT_HISTORY_LIMIT_BYTES = 2 * 1024 * 1024;
@@ -164,6 +166,147 @@ function resizePty(ptsPath: string, cols: number, rows: number): boolean {
   }
 }
 
+// ── macOS native PTY ─────────────────────────────────────────────────
+//
+// On macOS, terminal resize for setuid programs (e.g. /usr/bin/top)
+// requires fork()+setsid()+TIOCSCTTY in the fork-exec gap. Bun's
+// Bun.spawn uses posix_spawn which cannot do this. A small native
+// addon (.dylib, ~80 lines of C) provides the necessary fork+exec.
+// PTY I/O uses Node's fs.read/fs.write on the master fd.
+
+interface MacOSPtyLib {
+  pty_open(pairPtr: unknown, rows: number, cols: number): number;
+  pty_fork_exec_simple(slaveFd: number, shellPtr: unknown): number;
+  pty_resize(masterFd: number, rows: number, cols: number): number;
+}
+
+let _macPtyLib: MacOSPtyLib | null = null;
+let _macPtyLibLoaded = false;
+
+function getMacOSPtyLib(): MacOSPtyLib | null {
+  if (_macPtyLibLoaded) return _macPtyLib;
+  _macPtyLibLoaded = true;
+  try {
+    const dir = dirname(import.meta.path);
+    const dylibPath = join(dir, "pty_native.dylib");
+    const srcPath = join(dir, "pty_native.c");
+
+    const needsCompile = existsSync(srcPath) && (
+      !existsSync(dylibPath) ||
+      statSync(srcPath).mtimeMs > statSync(dylibPath).mtimeMs
+    );
+    if (needsCompile) {
+      const { execFileSync } = require("node:child_process");
+      execFileSync("cc", ["-shared", "-o", dylibPath, srcPath], { timeout: 10000, stdio: "ignore" });
+    }
+    if (!existsSync(dylibPath)) return null;
+
+    const lib = dlopen(dylibPath, {
+      pty_open: { args: [FFIType.ptr, FFIType.i32, FFIType.i32], returns: FFIType.i32 },
+      pty_fork_exec_simple: { args: [FFIType.i32, FFIType.ptr], returns: FFIType.i32 },
+      pty_resize: { args: [FFIType.i32, FFIType.i32, FFIType.i32], returns: FFIType.i32 },
+    });
+
+    _macPtyLib = {
+      pty_open: (p: any, r: number, c: number) => lib.symbols.pty_open(p, r, c) as number,
+      pty_fork_exec_simple: (sfd: number, sh: any) => lib.symbols.pty_fork_exec_simple(sfd, sh) as number,
+      pty_resize: (mfd: number, r: number, c: number) => lib.symbols.pty_resize(mfd, r, c) as number,
+    };
+    log.info("macOS native PTY loaded", { dylibPath });
+  } catch (error) {
+    debugSuppressedError(log, "macOS native PTY unavailable", error);
+    _macPtyLib = null;
+  }
+  return _macPtyLib;
+}
+
+function spawnMacOSNativePty(cwd: string, cols: number, rows: number): TerminalProcessLike | null {
+  const ptyLib = getMacOSPtyLib();
+  if (!ptyLib) return null;
+
+  const pair = new Int32Array(2);
+  if (ptyLib.pty_open(ptr(pair), rows, cols) !== 0) return null;
+  const masterFd = pair[0];
+  const slaveFd = pair[1];
+
+  const shell = USER_SHELL;
+  const shellBuf = Buffer.alloc(Buffer.byteLength(shell) + 1);
+  shellBuf.write(shell);
+  const childPid = ptyLib.pty_fork_exec_simple(slaveFd, ptr(shellBuf));
+  closeSync(slaveFd);
+
+  if (childPid <= 0) { closeSync(masterFd); return null; }
+
+  const dataListeners: Array<(chunk: string | Uint8Array) => void> = [];
+  const exitListeners: Array<(code: number | null, signal: NodeJS.Signals | null) => void> = [];
+  let closed = false;
+  const readBuf = Buffer.alloc(32768);
+  const textDecoder = new TextDecoder("utf-8", { fatal: false });
+
+  function readLoop() {
+    if (closed) return;
+    fsRead(masterFd, readBuf, 0, readBuf.length, null, (err, n) => {
+      if (closed) return;
+      if (err || !n) {
+        if (err && (err as any).code === "EIO") {
+          closed = true;
+          for (const l of exitListeners) l(null, null);
+          return;
+        }
+        setTimeout(readLoop, 10);
+        return;
+      }
+      const data = textDecoder.decode(readBuf.subarray(0, n), { stream: true });
+      for (const l of dataListeners) l(data);
+      readLoop();
+    });
+  }
+  readLoop();
+
+  const exitCheck = setInterval(() => {
+    try { process.kill(childPid, 0); } catch {
+      if (!closed) {
+        closed = true;
+        clearInterval(exitCheck);
+        for (const l of exitListeners) l(null, null);
+      }
+    }
+  }, 2000);
+
+  const proc: TerminalProcessLike & {
+    __macOSNativePty: boolean;
+    __resize(cols: number, rows: number): void;
+  } = {
+    __macOSNativePty: true,
+    __resize(newCols: number, newRows: number) {
+      if (!closed) ptyLib.pty_resize(masterFd, newRows, newCols);
+    },
+    stdin: {
+      write(chunk: string | Uint8Array) {
+        if (closed) return;
+        const data = typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk);
+        fsWrite(masterFd, data, 0, data.length, null, (err) => {
+          if (err) debugSuppressedError(log, "macOS PTY write failed", err as Error);
+        });
+      },
+    },
+    stdout: { on(event: string, listener: (chunk: string | Uint8Array) => void) { if (event === "data") dataListeners.push(listener); return this; } },
+    stderr: { on() { return this; } },
+    on(event: string, listener: (code: number | null, signal: NodeJS.Signals | null) => void) { if (event === "exit") exitListeners.push(listener); return this; },
+    kill(signal?: NodeJS.Signals | number) {
+      if (closed) return true;
+      closed = true;
+      clearInterval(exitCheck);
+      try { process.kill(childPid, typeof signal === "string" ? signal : "SIGHUP"); } catch (error) { debugSuppressedError(log, "macOS PTY kill failed", error as Error); }
+      try { closeSync(masterFd); } catch (error) { debugSuppressedError(log, "macOS PTY close failed", error as Error); }
+      return true;
+    },
+    pid: childPid,
+  };
+
+  return proc;
+}
+
 /**
  * Find child PIDs of a given parent by reading /proc.
  */
@@ -245,10 +388,14 @@ function buildShellArgs(): string[] {
 }
 
 function defaultSpawnProcess(cwd: string): TerminalProcessLike {
+  // macOS: prefer native PTY addon for proper resize (including setuid apps like top).
+  if (IS_MACOS) {
+    const proc = spawnMacOSNativePty(cwd, DEFAULT_COLS, DEFAULT_ROWS);
+    if (proc) return proc;
+  }
+
   // Linux: use `script` with GNU flags to allocate a PTY.
-  // macOS: `script` fails with piped stdio (tcgetattr error). Use `expect`
-  // to allocate a real PTY instead — it's pre-installed on macOS.
-  // Both paths spawn the user's default shell ($SHELL) instead of hardcoding bash.
+  // macOS fallback: use `expect` (no resize for setuid apps).
   const shellArgs = buildShellArgs();
   const command = IS_LINUX
     ? { bin: SCRIPT_BIN, args: ["-qf", "-c", [USER_SHELL, ...shellArgs].join(" "), "/dev/null"] }
@@ -475,6 +622,14 @@ export class TerminalSessionService {
    * kernel window size.
    */
   private resizeSession(session: TerminalSessionRecord, cols: number, rows: number): void {
+    // macOS native PTY: resize via ioctl in the addon
+    const proc = session.process as any;
+    if (proc?.__macOSNativePty && typeof proc.__resize === "function") {
+      proc.__resize(cols, rows);
+      return;
+    }
+
+    // Linux: ioctl on PTS device + SIGWINCH to children
     const pid = session.process.pid;
     if (!pid) return;
 
