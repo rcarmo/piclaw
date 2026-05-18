@@ -40,5 +40,6 @@ registerActivityBarPanel({ id: "search", icon: "search", label: "Search", order:
 registerActivityBarPanel({ id: "extensions", icon: "extensions", label: "Addons", order: 30 });
 registerActivityBarPanel({ id: "tasks", icon: "tasklist", label: "Tasks", order: 40 });
 registerActivityBarPanel({ id: "scratchpad", icon: "notebook", label: "Scratchpad", order: 50 });
-registerActivityBarPanel({ id: "agent", icon: "dashboard", label: "Dashboard", order: 60 });
+// Dashboard: scaffolding kept but hidden until content is implemented
+// registerActivityBarPanel({ id: "agent", icon: "dashboard", label: "Dashboard", order: 60 });
 registerActivityBarPanel({ id: "settings", icon: "gear", label: "Settings", order: 100, alignBottom: true });
