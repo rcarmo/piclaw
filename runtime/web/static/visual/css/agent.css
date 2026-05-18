@@ -424,8 +424,8 @@
 }
 
 .agent-thinking[data-expanded="true"] .agent-thinking-body-collapsible {
-    max-height: none;
-    overflow: visible;
+    max-height: 60vh;
+    overflow-y: auto;
     opacity: 1;
 }
 
