@@ -5615,8 +5615,6 @@ pre.frontmatter-block {
   word-break: break-word;
   overflow-wrap: anywhere;
   font-family: var(--font-mono, monospace);
-  max-height: 300px;
-  overflow-y: auto;
   margin: 0;
   border-top: 1px solid var(--border);
   line-height: 1.4;

@@ -51,7 +51,7 @@ interface PanelState {
   dismissed: boolean;
 }
 
-const COLLAPSED_MAX_LINES = 8;
+const COLLAPSED_MAX_LINES = 3;
 const STORAGE_KEY = "piclaw:agent-panel-prefs";
 
 function loadPanelPrefs(): { draftExpanded: boolean; thoughtExpanded: boolean } {
@@ -768,6 +768,7 @@ function AgentPanel({ title, type, text, expanded, elapsed = 0, onToggle, onDism
         onToggle={onToggle}
         text={stripped}
         maxLines={COLLAPSED_MAX_LINES}
+        direction="tail"
         renderContent={(visibleText) => <MarkdownContent text={visibleText} />}
       />
     </div>
@@ -778,7 +779,7 @@ function AgentPanel({ title, type, text, expanded, elapsed = 0, onToggle, onDism
 // OutputPanel — live tool output, monospace, tail-direction, green dot
 // ---------------------------------------------------------------------------
 
-const OUTPUT_MAX_LINES = 9;
+const OUTPUT_MAX_LINES = 3;
 
 interface OutputPanelProps {
   text: string;
