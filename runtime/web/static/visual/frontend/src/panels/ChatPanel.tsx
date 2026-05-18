@@ -2,12 +2,15 @@ import { AgentStatusPanel } from "../components/AgentStatusPanel";
 import { QueueStack, type QueueItem } from "../components/QueueStack";
 import { getMessageUrl } from "../api/chat-jid";
 import { useRef, useEffect, useState } from "preact/hooks";
-import { useSignal } from "@preact/signals";
+import { useSignal, signal } from "@preact/signals";
 import { MessageList } from "../components/MessageList";
 import { safeGetItem, safeSetItem } from "../utils/storage";
 
 import { createLogger } from "../utils/logger";
 const log = createLogger("ChatPanel");
+
+// Module-level signal: persists draft text across ChatPanel mounts/unmounts
+const draftText = signal("");
 
 
 
@@ -33,9 +36,15 @@ const MAX_HISTORY = 50;
 export function ChatPanel({ onOpenPalette }: ChatPanelProps = {}) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-focus chat input on mount
+  // Auto-focus chat input on mount; restore any persisted draft
   useEffect(() => {
-    const t = setTimeout(() => textareaRef.current?.focus(), 100);
+    const t = setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.value = draftText.value;
+        hasText.value = draftText.value.trim().length > 0;
+        textareaRef.current.focus();
+      }
+    }, 100);
     return () => clearTimeout(t);
   }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -101,6 +110,7 @@ export function ChatPanel({ onOpenPalette }: ChatPanelProps = {}) {
 
   const handleInput = (e: Event) => {
     const el = e.target as HTMLTextAreaElement;
+    draftText.value = el.value;
     hasText.value = el.value.trim().length > 0;
     if (el.value === "/") {
       onOpenPalette?.();
@@ -435,6 +445,7 @@ export function ChatPanel({ onOpenPalette }: ChatPanelProps = {}) {
 
 
       // Only clear draft after confirmed success
+      draftText.value = "";
       if (content) {
         const history = historyRef.current;
         if (history[history.length - 1] !== content) {
