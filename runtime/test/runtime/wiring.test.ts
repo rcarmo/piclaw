@@ -80,16 +80,22 @@ describe("runtime wiring", () => {
   });
 
   test("createRuntimeSenders routes telegram chat messages to telegram channel", async () => {
+    const webCalls: Array<{ jid: string; text: string }> = [];
+    const whatsappCalls: Array<{ jid: string; text: string }> = [];
     const telegramCalls: Array<{ jid: string; text: string }> = [];
 
     const senders = createRuntimeSenders(
       {
-        sendMessage: async () => {},
+        sendMessage: async (jid, text) => {
+          webCalls.push({ jid, text });
+        },
         resumeChat: () => {},
         resumePendingChats: () => {},
       },
       {
-        sendMessage: async () => {},
+        sendMessage: async (jid, text) => {
+          whatsappCalls.push({ jid, text });
+        },
       },
       {
         sendMessage: async (jid, text) => {
@@ -101,6 +107,9 @@ describe("runtime wiring", () => {
     );
 
     await senders.sendMessage("telegram:12345", "hi tg");
+
+    expect(webCalls).toHaveLength(0);
+    expect(whatsappCalls).toHaveLength(0);
     expect(telegramCalls).toEqual([{ jid: "telegram:12345", text: "hi tg" }]);
   });
 

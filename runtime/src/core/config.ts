@@ -74,6 +74,7 @@ const envConfig = readEnvFile([
   "TELEGRAM_BOT_TOKEN",
   "PICLAW_TELEGRAM_ENABLED",
   "TELEGRAM_ENABLED",
+  "PICLAW_TELEGRAM_POLL_TIMEOUT_SECONDS",
   "PUSHOVER_APP_TOKEN",
   "PUSHOVER_USER_KEY",
   "PUSHOVER_DEVICE",
@@ -255,6 +256,9 @@ const configTelegramBotToken =
 const configTelegramEnabled =
   pickBoolean(telegramConfig, ["enabled", "telegramEnabled", "telegram_enabled", "TELEGRAM_ENABLED", "PICLAW_TELEGRAM_ENABLED"]) ??
   pickBoolean(piclawConfig, ["telegramEnabled", "telegram_enabled", "TELEGRAM_ENABLED", "PICLAW_TELEGRAM_ENABLED"]);
+const configTelegramPollTimeoutSeconds =
+  pickNumber(telegramConfig, ["pollingTimeoutSeconds", "poll_timeout_seconds", "telegramPollTimeoutSeconds", "PICLAW_TELEGRAM_POLL_TIMEOUT_SECONDS"]) ??
+  pickNumber(piclawConfig, ["telegramPollTimeoutSeconds", "telegram_poll_timeout_seconds", "PICLAW_TELEGRAM_POLL_TIMEOUT_SECONDS"]);
 const configAssistantName = pickString(assistantConfig, [
   "assistantName",
   "assistant_name",
@@ -2036,7 +2040,18 @@ export const TELEGRAM_CONFIG = Object.freeze<TelegramConfig>({
     envConfig.TELEGRAM_BOT_TOKEN ||
     configTelegramBotToken ||
     "",
-  pollingTimeoutSeconds: Math.max(5, Math.min(40, parseInt(process.env.PICLAW_TELEGRAM_POLL_TIMEOUT_SECONDS || "30", 10) || 30)),
+  pollingTimeoutSeconds: Math.max(
+    5,
+    Math.min(
+      40,
+      parseInt(
+        process.env.PICLAW_TELEGRAM_POLL_TIMEOUT_SECONDS ||
+          envConfig.PICLAW_TELEGRAM_POLL_TIMEOUT_SECONDS ||
+          (configTelegramPollTimeoutSeconds !== undefined ? String(configTelegramPollTimeoutSeconds) : "30"),
+        10
+      ) || 30
+    )
+  ),
 });
 
 /** Return the grouped Telegram settings for startup and channel wiring. */
