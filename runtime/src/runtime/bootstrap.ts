@@ -8,6 +8,7 @@ import {
   getRuntimeTimingConfig,
 } from "../core/config.js";
 import { stopIpcWatcher } from "../ipc.js";
+import { detectChannel } from "../router.js";
 import type { SchedulerDeps } from "../task-scheduler.js";
 import { stopSchedulerLoop } from "../task-scheduler.js";
 import { createLogger } from "../utils/logger.js";
@@ -18,6 +19,7 @@ import { registerOptionalProviders } from "./provider-bootstrap.js";
 import { createShutdownHandler, type ShutdownDeps } from "./shutdown.js";
 import { registerShutdownHandler } from "./shutdown-registry.js";
 import {
+  createTelegramChannel,
   createWhatsAppChannel,
   initializeRuntimeEnvironment,
   queueStartupResumePendingIpc,
@@ -30,6 +32,7 @@ import {
   type RuntimeModelResolver,
   type RuntimePushoverWorkerChannel,
   type RuntimeSenders,
+  type RuntimeTelegramWorkerChannel,
   type RuntimeWebWorkerChannel,
   type RuntimeWhatsAppWorkerChannel,
 } from "./wiring.js";
@@ -62,6 +65,12 @@ export type RuntimeBootstrapWhatsApp =
   & ShutdownDeps["whatsapp"]
   & { connect: () => Promise<unknown> };
 
+/** Telegram channel contract required by runtime bootstrap orchestration. */
+export type RuntimeBootstrapTelegram =
+  & RuntimeTelegramWorkerChannel
+  & ShutdownDeps["telegram"]
+  & { connect: () => Promise<unknown> };
+
 /** Optional pushover channel contract required by runtime bootstrap orchestration. */
 export type RuntimeBootstrapPushover = RuntimePushoverWorkerChannel & NonNullable<ShutdownDeps["pushover"]>;
 
@@ -91,6 +100,7 @@ export interface RuntimeBootstrapDeps {
   startWebChannel(queue: RuntimeBootstrapQueue, agentPool: RuntimeBootstrapAgentPool): Promise<RuntimeBootstrapWeb>;
   startOptionalPushoverChannel(): Promise<RuntimeBootstrapPushover | null>;
   createWhatsAppChannel(state: RuntimeBootstrapState): RuntimeBootstrapWhatsApp;
+  createTelegramChannel(state: RuntimeBootstrapState): RuntimeBootstrapTelegram;
   createShutdownHandler(deps: ShutdownDeps): (signal: string) => Promise<void>;
   registerRuntimeShutdownSignals(
     registrar: RuntimeSignalRegistrar,
@@ -99,6 +109,7 @@ export interface RuntimeBootstrapDeps {
   createRuntimeSenders(
     web: RuntimeBootstrapWeb,
     whatsapp: RuntimeBootstrapWhatsApp,
+    telegram: RuntimeBootstrapTelegram,
     pushover: RuntimeBootstrapPushover | null
   ): RuntimeSenders;
   startRuntimeWorkers(
@@ -129,6 +140,7 @@ export function createDefaultRuntimeBootstrapDeps(core: RuntimeBootstrapDefaultC
     startWebChannel: () => startWebChannel(core.queue, core.agentPool),
     startOptionalPushoverChannel: () => startOptionalPushoverChannel(),
     createWhatsAppChannel: () => createWhatsAppChannel(core.state),
+    createTelegramChannel: () => createTelegramChannel(core.state),
     createShutdownHandler,
     registerRuntimeShutdownSignals,
     createRuntimeSenders,
@@ -154,11 +166,13 @@ export async function bootstrapRuntime(deps: RuntimeBootstrapDeps): Promise<void
   const web = await deps.startWebChannel(queue, agentPool);
   const pushover = await deps.startOptionalPushoverChannel();
   const whatsapp = deps.createWhatsAppChannel(state);
+  const telegram = deps.createTelegramChannel(state);
 
   const shutdown = deps.createShutdownHandler({
     queue,
     agentPool,
     whatsapp,
+    telegram,
     web,
     pushover,
     stopIpcWatcher: deps.stopIpcWatcher,
@@ -167,16 +181,36 @@ export async function bootstrapRuntime(deps: RuntimeBootstrapDeps): Promise<void
   registerShutdownHandler(shutdown);
   deps.registerRuntimeShutdownSignals(deps.signalRegistrar, shutdown);
 
-  const senders = deps.createRuntimeSenders(web, whatsapp, pushover);
+  const senders = deps.createRuntimeSenders(web, whatsapp, telegram, pushover);
   deps.startRuntimeWorkers(queue, agentPool, web, senders);
 
   await whatsapp.connect();
+  await telegram.connect();
+
+  const messaging = {
+    sendMessage: async (jid: string, text: string) => {
+      const channel = detectChannel(jid);
+      if (channel === "telegram") {
+        await telegram.sendMessage(jid, text);
+        return;
+      }
+      await whatsapp.sendMessage(jid, text);
+    },
+    setTyping: async (jid: string, isTyping: boolean) => {
+      const channel = detectChannel(jid);
+      if (channel === "telegram") {
+        await telegram.setTyping(jid, isTyping);
+        return;
+      }
+      await whatsapp.setTyping(jid, isTyping);
+    },
+  };
 
   await deps.startRuntimeLoop({
     queue,
     state,
     agentPool,
-    whatsapp,
+    whatsapp: messaging,
     assistantName: deps.assistantName,
     triggerPattern: deps.triggerPattern,
     pollIntervalMs: deps.pollIntervalMs,

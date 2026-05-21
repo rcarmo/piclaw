@@ -35,6 +35,10 @@ describe("runtime wiring", () => {
           whatsappCalls.push({ jid, text });
         },
       },
+      {
+        sendMessage: async () => {},
+        setTyping: async () => {},
+      },
       null
     );
 
@@ -62,6 +66,10 @@ describe("runtime wiring", () => {
           whatsappCalls.push({ jid, text });
         },
       },
+      {
+        sendMessage: async () => {},
+        setTyping: async () => {},
+      },
       null
     );
 
@@ -69,6 +77,31 @@ describe("runtime wiring", () => {
 
     expect(webCalls).toHaveLength(0);
     expect(whatsappCalls).toEqual([{ jid: "12345@s.whatsapp.net", text: "hi" }]);
+  });
+
+  test("createRuntimeSenders routes telegram chat messages to telegram channel", async () => {
+    const telegramCalls: Array<{ jid: string; text: string }> = [];
+
+    const senders = createRuntimeSenders(
+      {
+        sendMessage: async () => {},
+        resumeChat: () => {},
+        resumePendingChats: () => {},
+      },
+      {
+        sendMessage: async () => {},
+      },
+      {
+        sendMessage: async (jid, text) => {
+          telegramCalls.push({ jid, text });
+        },
+        setTyping: async () => {},
+      },
+      null
+    );
+
+    await senders.sendMessage("telegram:12345", "hi tg");
+    expect(telegramCalls).toEqual([{ jid: "telegram:12345", text: "hi tg" }]);
   });
 
   test("workspaceNeedsDreamBootstrap only requires the core Dream memory files", async () => {
@@ -132,6 +165,10 @@ describe("runtime wiring", () => {
       },
       {
         sendMessage: async () => {},
+      },
+      {
+        sendMessage: async () => {},
+        setTyping: async () => {},
       },
       {
         sendMessage: async (_jid, text) => {

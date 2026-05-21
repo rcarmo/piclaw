@@ -15,6 +15,7 @@
 export const CHANNEL_FORMATTING_HINTS: Record<string, string> = {
   web: "Use Markdown formatting in responses. Tables, headings, and links are allowed. To deliver files, use the attach_file tool on a workspace path; the UI will show a download card automatically. Use attachment:<filename> only if you want an inline embed.",
   whatsapp: "Use WhatsApp formatting only: *bold*, _italic_, • bullets, and ```code``` blocks. Avoid Markdown headings, tables, and links.",
+  telegram: "Use Telegram-safe formatting: *bold*, _italic_, bullet lists, and fenced code blocks. Avoid Markdown tables and heavy heading structure.",
 };
 
 /**

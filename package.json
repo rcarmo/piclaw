@@ -124,6 +124,7 @@
     "fflate": "0.8.2",
     "ghostty-web": "github:rcarmo/ghostty-web#f82a69c",
     "gifenc": "1.0.3",
+    "grammy": "1.43.0",
     "htm": "3.1.1",
     "js-yaml": "4.1.1",
     "katex": "0.16.47",

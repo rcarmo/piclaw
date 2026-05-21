@@ -70,6 +70,10 @@ const envConfig = readEnvFile([
   "AGENT_TIMEOUT_BACKGROUND",
   "PICLAW_WHATSAPP_PHONE",
   "WHATSAPP_PHONE",
+  "PICLAW_TELEGRAM_BOT_TOKEN",
+  "TELEGRAM_BOT_TOKEN",
+  "PICLAW_TELEGRAM_ENABLED",
+  "TELEGRAM_ENABLED",
   "PUSHOVER_APP_TOKEN",
   "PUSHOVER_USER_KEY",
   "PUSHOVER_DEVICE",
@@ -214,6 +218,10 @@ const whatsappConfig =
   piclawConfig.whatsapp && typeof piclawConfig.whatsapp === "object"
     ? (piclawConfig.whatsapp as Record<string, unknown>)
     : piclawConfig;
+const telegramConfig =
+  piclawConfig.telegram && typeof piclawConfig.telegram === "object"
+    ? (piclawConfig.telegram as Record<string, unknown>)
+    : piclawConfig;
 const compactionConfig =
   piclawConfig.compaction && typeof piclawConfig.compaction === "object"
     ? (piclawConfig.compaction as Record<string, unknown>)
@@ -241,6 +249,12 @@ const configWhatsappPhone =
 const configWhatsappEnabled =
   pickBoolean(whatsappConfig, ["enabled", "whatsappEnabled", "whatsapp_enabled", "WHATSAPP_ENABLED", "PICLAW_WHATSAPP_ENABLED"]) ??
   pickBoolean(piclawConfig, ["whatsappEnabled", "whatsapp_enabled", "WHATSAPP_ENABLED", "PICLAW_WHATSAPP_ENABLED"]);
+const configTelegramBotToken =
+  pickString(telegramConfig, ["botToken", "bot_token", "telegramBotToken", "telegram_bot_token", "TELEGRAM_BOT_TOKEN", "PICLAW_TELEGRAM_BOT_TOKEN"]) ||
+  pickString(piclawConfig, ["telegramBotToken", "telegram_bot_token", "TELEGRAM_BOT_TOKEN", "PICLAW_TELEGRAM_BOT_TOKEN"]);
+const configTelegramEnabled =
+  pickBoolean(telegramConfig, ["enabled", "telegramEnabled", "telegram_enabled", "TELEGRAM_ENABLED", "PICLAW_TELEGRAM_ENABLED"]) ??
+  pickBoolean(piclawConfig, ["telegramEnabled", "telegram_enabled", "TELEGRAM_ENABLED", "PICLAW_TELEGRAM_ENABLED"]);
 const configAssistantName = pickString(assistantConfig, [
   "assistantName",
   "assistant_name",
@@ -1994,6 +2008,40 @@ export const WHATSAPP_CONFIG = Object.freeze<WhatsAppConfig>({
 /** Return the grouped WhatsApp settings for startup and channel wiring. */
 export function getWhatsAppConfig(): Readonly<WhatsAppConfig> {
   return WHATSAPP_CONFIG;
+}
+
+// ---------------------------------------------------------------------------
+// Telegram channel settings.
+// ---------------------------------------------------------------------------
+
+/** Typed Telegram channel settings grouped for startup/channel wiring. */
+export interface TelegramConfig {
+  enabled: boolean;
+  botToken: string;
+  pollingTimeoutSeconds: number;
+}
+
+const envTelegramEnabled = pickBoolean({
+  PICLAW_TELEGRAM_ENABLED: process.env.PICLAW_TELEGRAM_ENABLED ?? envConfig.PICLAW_TELEGRAM_ENABLED,
+  TELEGRAM_ENABLED: process.env.TELEGRAM_ENABLED ?? envConfig.TELEGRAM_ENABLED,
+}, ["PICLAW_TELEGRAM_ENABLED", "TELEGRAM_ENABLED"]);
+
+/** Grouped Telegram channel settings. */
+export const TELEGRAM_CONFIG = Object.freeze<TelegramConfig>({
+  enabled: envTelegramEnabled ?? configTelegramEnabled ?? false,
+  botToken:
+    process.env.PICLAW_TELEGRAM_BOT_TOKEN ||
+    envConfig.PICLAW_TELEGRAM_BOT_TOKEN ||
+    process.env.TELEGRAM_BOT_TOKEN ||
+    envConfig.TELEGRAM_BOT_TOKEN ||
+    configTelegramBotToken ||
+    "",
+  pollingTimeoutSeconds: Math.max(5, Math.min(40, parseInt(process.env.PICLAW_TELEGRAM_POLL_TIMEOUT_SECONDS || "30", 10) || 30)),
+});
+
+/** Return the grouped Telegram settings for startup and channel wiring. */
+export function getTelegramConfig(): Readonly<TelegramConfig> {
+  return TELEGRAM_CONFIG;
 }
 
 // ---------------------------------------------------------------------------

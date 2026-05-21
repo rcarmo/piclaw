@@ -179,6 +179,65 @@ describe("runtime startup helpers", () => {
     }
   });
 
+  test("createTelegramChannel is a no-op by default even when token exists", () => {
+    const ws = createTempWorkspace("piclaw-startup-");
+
+    try {
+      const run = Bun.spawnSync({
+        cmd: [
+          TEST_SHELL,
+          "-lc",
+          "bun -e \"import { createTelegramChannel } from './src/runtime/startup.js'; const channel = createTelegramChannel({ chatJids: new Set(), saveChats() {} }); await channel.connect(); await channel.sendMessage('telegram:123', 'hi'); console.log(JSON.stringify({ connected: channel.isConnected() }));\"",
+        ],
+        cwd: RUNTIME_DIR,
+        env: {
+          ...process.env,
+          PICLAW_WORKSPACE: ws.workspace,
+          PICLAW_STORE: ws.store,
+          PICLAW_DATA: ws.data,
+          PICLAW_DB_IN_MEMORY: "1",
+          PICLAW_DISABLE_BACKGROUND_WORKSPACE_INDEX: "1",
+          PICLAW_TELEGRAM_BOT_TOKEN: "123:abc",
+          PICLAW_TELEGRAM_ENABLED: "0",
+        },
+      });
+      expect(run.exitCode, run.stderr.toString() || run.stdout.toString()).toBe(0);
+      expect(JSON.parse(run.stdout.toString().trim().split("\n").at(-1) || "{}")).toEqual({ connected: false });
+    } finally {
+      ws.cleanup();
+    }
+  });
+
+  test("createTelegramChannel stays no-op when explicitly enabled without token", () => {
+    const ws = createTempWorkspace("piclaw-startup-");
+
+    try {
+      const run = Bun.spawnSync({
+        cmd: [
+          TEST_SHELL,
+          "-lc",
+          "bun -e \"import { createTelegramChannel } from './src/runtime/startup.js'; const channel = createTelegramChannel({ chatJids: new Set(), saveChats() {} }); await channel.connect(); console.log(JSON.stringify({ connected: channel.isConnected() }));\"",
+        ],
+        cwd: RUNTIME_DIR,
+        env: {
+          ...process.env,
+          PICLAW_WORKSPACE: ws.workspace,
+          PICLAW_STORE: ws.store,
+          PICLAW_DATA: ws.data,
+          PICLAW_DB_IN_MEMORY: "1",
+          PICLAW_DISABLE_BACKGROUND_WORKSPACE_INDEX: "1",
+          PICLAW_TELEGRAM_BOT_TOKEN: "",
+          TELEGRAM_BOT_TOKEN: "",
+          PICLAW_TELEGRAM_ENABLED: "1",
+        },
+      });
+      expect(run.exitCode, run.stderr.toString() || run.stdout.toString()).toBe(0);
+      expect(JSON.parse(run.stdout.toString().trim().split("\n").at(-1) || "{}")).toEqual({ connected: false });
+    } finally {
+      ws.cleanup();
+    }
+  });
+
   test("queueStartupResumePendingIpc writes a resume_pending task", () => {
     const ws = createTempWorkspace("piclaw-startup-");
 

@@ -23,12 +23,13 @@ import { WORKSPACE_DIR } from "./core/config.js";
 import type { NewMessage } from "./types.js";
 
 /** Recognised channel types. */
-export type ChatChannel = "web" | "whatsapp" | "unknown";
+export type ChatChannel = "web" | "whatsapp" | "telegram" | "unknown";
 
-/** Infer the channel from a chat JID string (web: prefix → web, else whatsapp). */
+/** Infer the channel from a chat JID string. */
 export function detectChannel(chatJid: string | null | undefined): ChatChannel {
   if (!chatJid) return "unknown";
   if (chatJid.startsWith("web:")) return "web";
+  if (chatJid.startsWith("telegram:")) return "telegram";
   if (chatJid.includes("@s.whatsapp.net") || chatJid.endsWith("@g.us")) return "whatsapp";
   return "unknown";
 }

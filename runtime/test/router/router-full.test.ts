@@ -27,6 +27,11 @@ describe("router", () => {
     expect(detectChannel("group@g.us")).toBe("whatsapp");
   });
 
+  test("detectChannel identifies telegram", () => {
+    expect(detectChannel("telegram:1234")).toBe("telegram");
+    expect(detectChannel("telegram:-100123:topic:42")).toBe("telegram");
+  });
+
   test("detectChannel handles edge cases", () => {
     expect(detectChannel(null)).toBe("unknown");
     expect(detectChannel(undefined)).toBe("unknown");
@@ -130,6 +135,10 @@ describe("router", () => {
 
   test("formatOutbound passes through for whatsapp", () => {
     expect(formatOutbound("a < b", "whatsapp")).toBe("a < b");
+  });
+
+  test("formatOutbound passes through for telegram", () => {
+    expect(formatOutbound("a < b", "telegram")).toBe("a < b");
   });
 
   test("formatOutbound returns empty for all-internal content", () => {

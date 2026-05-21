@@ -5,6 +5,8 @@
 import { existsSync } from "fs";
 import { resolve } from "path";
 
+import { detectChannel } from "../router.js";
+
 import { ensureDreamTask, runDreamAgentTurn } from "../dream.js";
 import { WORKSPACE_DIR } from "../core/config.js";
 import { AUTO_DREAM_DEFAULT_DAYS } from "../dream-defaults.js";
@@ -54,6 +56,12 @@ export interface RuntimeWhatsAppWorkerChannel {
   sendMessage: (jid: string, text: string) => Promise<void>;
 }
 
+/** Telegram-channel capability required by runtime worker startup. */
+export interface RuntimeTelegramWorkerChannel {
+  sendMessage: (jid: string, text: string) => Promise<void>;
+  setTyping: (jid: string, isTyping: boolean) => Promise<void>;
+}
+
 /** Optional Pushover-channel capability required by runtime worker startup. */
 export interface RuntimePushoverWorkerChannel {
   sendMessage: (jid: string, text: string) => Promise<void>;
@@ -68,11 +76,17 @@ export interface RuntimeModelResolver {
 export function createRuntimeSenders(
   web: RuntimeWebWorkerChannel,
   whatsapp: RuntimeWhatsAppWorkerChannel,
+  telegram: RuntimeTelegramWorkerChannel,
   pushover: RuntimePushoverWorkerChannel | null
 ): RuntimeSenders {
   const sendMessage = async (jid: string, text: string, options?: RuntimeSendMessageOptions) => {
-    if (jid.startsWith("web:")) {
+    const channel = detectChannel(jid);
+    if (channel === "web") {
       await web.sendMessage(jid, text, options);
+      return;
+    }
+    if (channel === "telegram") {
+      await telegram.sendMessage(jid, text);
       return;
     }
     await whatsapp.sendMessage(jid, text);

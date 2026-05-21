@@ -14,6 +14,7 @@ import {
   STORE_DIR,
   WORKSPACE_DIR,
   getPushoverConfig,
+  getTelegramConfig,
   getToolOutputConfig,
   getWhatsAppConfig,
 } from "../core/config.js";
@@ -468,6 +469,74 @@ export function createWhatsAppChannel(state: RuntimeState): RuntimeWhatsAppChann
       },
       onMessage: (chatJid, msg) => {
         if (!state.chatJids.has(chatJid) && msg.is_from_me) {
+          state.chatJids.add(chatJid);
+          state.saveChats();
+        }
+        storeMessage(msg);
+      },
+      onChatMetadata: (chatJid, timestamp) => storeChatMetadata(chatJid, timestamp),
+    });
+    return channel;
+  };
+
+  return {
+    connect: async () => await (await load()).connect(),
+    disconnect: async () => {
+      if (channel) await channel.disconnect();
+    },
+    sendMessage: async (jid, text) => await (await load()).sendMessage(jid, text),
+    setTyping: async (jid, isTyping) => await (await load()).setTyping(jid, isTyping),
+    isConnected: () => channel?.isConnected() ?? false,
+  };
+}
+
+/** Runtime-facing Telegram channel boundary. */
+export interface RuntimeTelegramChannel {
+  connect(): Promise<unknown>;
+  disconnect(): Promise<unknown>;
+  sendMessage(jid: string, text: string): Promise<void>;
+  setTyping(jid: string, isTyping: boolean): Promise<void>;
+  isConnected(): boolean;
+}
+
+function createNoopTelegramChannel(): RuntimeTelegramChannel {
+  return {
+    connect: async () => {},
+    disconnect: async () => {},
+    sendMessage: async () => {},
+    setTyping: async () => {},
+    isConnected: () => false,
+  };
+}
+
+/** Build optional Telegram channel with runtime callbacks. */
+export function createTelegramChannel(state: RuntimeState): RuntimeTelegramChannel {
+  const telegramConfig = getTelegramConfig();
+  if (!telegramConfig.enabled) {
+    if (telegramConfig.botToken) {
+      log.info("Telegram token is configured but channel is disabled; set PICLAW_TELEGRAM_ENABLED=1 to opt in.", {
+        operation: "telegram.disabled_with_token",
+      });
+    }
+    return createNoopTelegramChannel();
+  }
+  if (!telegramConfig.botToken) {
+    log.warn("Telegram is enabled but no bot token is configured; using no-op channel.", {
+      operation: "telegram.enabled_missing_token",
+    });
+    return createNoopTelegramChannel();
+  }
+
+  let channel: RuntimeTelegramChannel | null = null;
+  const load = async (): Promise<RuntimeTelegramChannel> => {
+    if (channel) return channel;
+    const mod = await import("../channels/telegram.js");
+    channel = new mod.TelegramChannel({
+      chatJids: () => state.chatJids,
+      botToken: telegramConfig.botToken || undefined,
+      pollingTimeoutSeconds: telegramConfig.pollingTimeoutSeconds,
+      onMessage: (chatJid, msg) => {
+        if (!state.chatJids.has(chatJid)) {
           state.chatJids.add(chatJid);
           state.saveChats();
         }

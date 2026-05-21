@@ -9,6 +9,7 @@ import {
   type RuntimeBootstrapState,
   type RuntimeBootstrapWeb,
   type RuntimeBootstrapWhatsApp,
+  type RuntimeBootstrapTelegram,
   type RuntimeBootstrapDefaultCoreServices,
 } from "../../src/runtime/bootstrap.js";
 import type { RuntimeSenders } from "../../src/runtime/wiring.js";
@@ -42,6 +43,15 @@ describe("runtime bootstrap", () => {
       getMessagesSince: async () => [],
     } as RuntimeBootstrapWhatsApp;
 
+    const telegram = {
+      connect: async () => {
+        events.push("connect-telegram");
+      },
+      disconnect: async () => {},
+      sendMessage: async () => {},
+      setTyping: async () => {},
+    } as RuntimeBootstrapTelegram;
+
     const senders = {
       sendMessage: async () => {},
       sendNudge: async () => {},
@@ -68,6 +78,10 @@ describe("runtime bootstrap", () => {
       createWhatsAppChannel: () => {
         events.push("create-whatsapp");
         return whatsapp;
+      },
+      createTelegramChannel: () => {
+        events.push("create-telegram");
+        return telegram;
       },
       createShutdownHandler: (shutdownDeps) => {
         events.push("create-shutdown");
@@ -109,11 +123,13 @@ describe("runtime bootstrap", () => {
       "start-web",
       "start-pushover",
       "create-whatsapp",
+      "create-telegram",
       "create-shutdown",
       "register-shutdown-signals",
       "create-senders",
       "start-workers",
       "connect-whatsapp",
+      "connect-telegram",
       "start-runtime-loop",
     ]);
   });
