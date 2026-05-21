@@ -87,7 +87,9 @@ export class TelegramChannel {
     this.connected = false;
     const pending = this.pollingPromise;
     this.pollingPromise = null;
-    await pending?.catch(() => {});
+    await pending?.catch((error) => {
+      debugSuppressedError(log, "Ignoring Telegram poll-loop error during disconnect.", error);
+    });
   }
 
   isConnected(): boolean {

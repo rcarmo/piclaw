@@ -131,7 +131,7 @@ See [docs/development.md](docs/development.md).
 | Runtime internals | [Architecture](docs/architecture.md), [Runtime flows](docs/runtime-flows.md), [Runtime stream sessions](docs/runtime-stream-sessions.md), [Storage model](docs/storage.md), [Observability](docs/observability.md) |
 | UI extension model | [Web pane extensions](docs/web-pane-extensions.md), [Extension UI contract](docs/extension-ui-contract.md), [Vendored widget libraries](docs/vendored-widget-libraries.md) |
 | Agent capabilities | [Tools and skills](docs/tools-and-skills.md), [Visual artifact generator](docs/visual-artifact-generator.md), [MCP via pi-mcp-adapter](docs/mcp.md), [Keychain](docs/keychain.md) |
-| Other references | [Dream memory system](docs/dream-memory.md), [Web notification delivery policy](docs/web-notification-delivery-policy.md), [iOS PWA reference](docs/PWA.md), [WhatsApp](docs/whatsapp.md), [Cross-instance interop](docs/cross-instance-ipc.md), [Experimental M365 extension](docs/m365-experimental-extension.md), [Development](docs/development.md) |
+| Other references | [Dream memory system](docs/dream-memory.md), [Web notification delivery policy](docs/web-notification-delivery-policy.md), [iOS PWA reference](docs/PWA.md), [WhatsApp](docs/whatsapp.md), [Telegram](docs/telegram.md), [Cross-instance interop](docs/cross-instance-ipc.md), [Experimental M365 extension](docs/m365-experimental-extension.md), [Development](docs/development.md) |
 | Platform study | [Azure Functions feasibility study](docs/azure/azure-functions-feasibility-study-2026-04-17.md) |
 
 ## Contributing
