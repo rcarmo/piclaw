@@ -49,11 +49,11 @@ function listAddonPackageDirs(addonsNodeModulesDir: string): string[] {
   if (!existsSync(addonsNodeModulesDir)) return [];
   const results: string[] = [];
   for (const entry of readdirSync(addonsNodeModulesDir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
     const entryPath = join(addonsNodeModulesDir, entry.name);
     if (entry.name.startsWith("@")) {
       for (const scoped of readdirSync(entryPath, { withFileTypes: true })) {
-        if (scoped.isDirectory()) results.push(join(entryPath, scoped.name));
+        if (scoped.isDirectory() || scoped.isSymbolicLink()) results.push(join(entryPath, scoped.name));
       }
       continue;
     }
