@@ -1879,3 +1879,248 @@
     border-color: var(--accent-color);
 }
 
+/* ── Plannotator Panel ───────────────────────────────────────────────────── */
+
+.plannotator-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 6px var(--spacing-sm) 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.plannotator-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.plannotator-panel-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.plannotator-panel-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--accent-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.plannotator-panel-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--bg-hover);
+}
+
+.plannotator-status-streaming {
+    color: var(--accent-color);
+}
+
+.plannotator-panel-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+}
+
+.plannotator-expand-btn,
+.plannotator-close-btn {
+    flex: 0 0 auto;
+    padding: 3px;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: color 0.15s ease, background-color 0.15s ease;
+    background: none;
+    border: none;
+}
+
+.plannotator-expand-btn:hover,
+.plannotator-expand-btn:focus-visible,
+.plannotator-close-btn:hover,
+.plannotator-close-btn:focus-visible {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+    outline: none;
+}
+
+.plannotator-panel-content {
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    overflow-y: auto;
+    max-height: 320px;
+    overflow-wrap: anywhere;
+}
+
+.plannotator-panel-content > :first-child {
+    margin-top: 0;
+}
+
+.plannotator-panel-content > :last-child {
+    margin-bottom: 0;
+}
+
+.plannotator-panel-footer {
+    border-top: 1px solid var(--border-color);
+    padding: 8px 12px;
+}
+
+.plannotator-panel-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.plannotator-reject-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.plannotator-reject-textarea {
+    width: 100%;
+    resize: vertical;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 6px 8px;
+    font-size: 12px;
+    line-height: 1.4;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.plannotator-reject-textarea:focus {
+    outline: none;
+    border-color: var(--accent-color);
+}
+
+.plannotator-reject-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.plannotator-btn {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    transition: background 0.15s ease, border-color 0.15s ease;
+    font-family: inherit;
+}
+
+.plannotator-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.plannotator-btn-ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--text-secondary);
+}
+
+.plannotator-btn-ghost:hover:not(:disabled),
+.plannotator-btn-ghost:focus-visible:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    outline: none;
+}
+
+.plannotator-btn-primary {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: #fff;
+}
+
+.plannotator-btn-primary:hover:not(:disabled),
+.plannotator-btn-primary:focus-visible:not(:disabled) {
+    opacity: 0.88;
+    outline: none;
+}
+
+.plannotator-btn-danger {
+    background: var(--danger-color, #e53e3e);
+    border-color: var(--danger-color, #e53e3e);
+    color: #fff;
+}
+
+.plannotator-btn-danger:hover:not(:disabled),
+.plannotator-btn-danger:focus-visible:not(:disabled) {
+    opacity: 0.88;
+    outline: none;
+}
+
+.plannotator-btn-danger-ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--danger-color, #e53e3e);
+}
+
+.plannotator-btn-danger-ghost:hover:not(:disabled),
+.plannotator-btn-danger-ghost:focus-visible:not(:disabled) {
+    background: color-mix(in srgb, var(--danger-color, #e53e3e) 10%, transparent);
+    outline: none;
+}
+
+/* "Review" button in post actions */
+.post-review-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--accent-color);
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.post-review-btn:hover,
+.post-review-btn:focus-visible {
+    background: var(--bg-hover);
+    border-color: var(--accent-color);
+    outline: none;
+}
+
+/* Full pane host */
+.plannotator-pane-host {
+    height: 100%;
+    overflow-y: auto;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
