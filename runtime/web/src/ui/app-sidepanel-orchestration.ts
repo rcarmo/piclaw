@@ -13,6 +13,15 @@ import {
   runBtwPromptSession,
 } from './app-btw-orchestration.js';
 import {
+  approvePlannotatorSession,
+  closePlannotatorPanelSession,
+  openPlannotatorPanelSession,
+  rejectPlannotatorSession,
+  findLastReviewablePost,
+  buildPlannotatorSessionFromPost,
+} from './use-plannotator-orchestration.js';
+import type { PlannotatorSession } from './plannotator-types.js';
+import {
   buildFloatingWidgetDashboardData,
   closeFloatingWidgetFromHost,
   handleFloatingWidgetEventFromHost,
@@ -101,6 +110,12 @@ interface UseSidepanelOrchestrationOptions {
   ) => Promise<any>;
   handleMessageResponse: (response: any) => void;
 
+  // Plannotator panel actions
+  plannotatorAbortRef: RefBox<AbortController | null>;
+  plannotatorSession: PlannotatorSession | null;
+  setPlannotatorSession: StateSetter<PlannotatorSession | null>;
+  openEditor?: (path: string, options?: { label?: string; transferState?: Record<string, unknown> }) => void;
+
   // Floating widget actions
   dismissedLiveWidgetKeysRef: RefBox<Set<string>>;
   setFloatingWidget: StateSetter<any>;
@@ -140,6 +155,11 @@ export function useSidepanelOrchestration(options: UseSidepanelOrchestrationOpti
     setBtwSession,
     sendAgentMessage,
     handleMessageResponse,
+
+    plannotatorAbortRef,
+    plannotatorSession,
+    setPlannotatorSession,
+    openEditor,
 
     dismissedLiveWidgetKeysRef,
     setFloatingWidget,
@@ -240,6 +260,66 @@ export function useSidepanelOrchestration(options: UseSidepanelOrchestrationOpti
     });
   }, [btwSession, currentChatJid, handleMessageResponse, isComposeBoxAgentActive, sendAgentMessage, showIntentToast]);
 
+  // ── Plannotator ──────────────────────────────────────────────────────────
+
+  const closePlannotatorPanel = useCallback(() => {
+    closePlannotatorPanelSession({ plannotatorAbortRef, setPlannotatorSession });
+  }, [plannotatorAbortRef, setPlannotatorSession]);
+
+  const handleOpenPlannotator = useCallback((session: PlannotatorSession) => {
+    openPlannotatorPanelSession({ session, setPlannotatorSession });
+  }, [setPlannotatorSession]);
+
+  const handlePlannotatorOpenTab = useCallback(() => {
+    if (!plannotatorSession) return;
+    if (typeof openEditor === 'function') {
+      openEditor('piclaw://plannotator', {
+        label: 'Plannotator',
+        transferState: plannotatorSession as unknown as Record<string, unknown>,
+      });
+    }
+    closePlannotatorPanel();
+  }, [closePlannotatorPanel, openEditor, plannotatorSession]);
+
+  const handlePlannotatorApprove = useCallback(async (comment = '') => {
+    await approvePlannotatorSession({
+      plannotatorSession,
+      currentChatJid,
+      isComposeBoxAgentActive,
+      sendAgentMessage,
+      handleMessageResponse,
+      setPlannotatorSession,
+      showIntentToast,
+    });
+  }, [currentChatJid, handleMessageResponse, isComposeBoxAgentActive, plannotatorSession, sendAgentMessage, setPlannotatorSession, showIntentToast]);
+
+  const handlePlannotatorReject = useCallback(async (comment = '') => {
+    await rejectPlannotatorSession({
+      plannotatorSession,
+      comment,
+      currentChatJid,
+      isComposeBoxAgentActive,
+      sendAgentMessage,
+      handleMessageResponse,
+      setPlannotatorSession,
+      showIntentToast,
+    });
+  }, [currentChatJid, handleMessageResponse, isComposeBoxAgentActive, plannotatorSession, sendAgentMessage, setPlannotatorSession, showIntentToast]);
+
+  /** Called by slash commands /plannotate and /review */
+  const handlePlannotatorIntercept = useCallback(async ({ content }: { content: unknown }) => {
+    const text = typeof content === 'string' ? content.trim() : '';
+    if (text !== '/plannotate' && text !== '/review') return false;
+    const post = findLastReviewablePost(rawPosts);
+    if (!post) {
+      showIntentToast('Plannotator', 'Nenhum plano disponível nesta sessão.', 'info', 3000);
+      return true;
+    }
+    const session = buildPlannotatorSessionFromPost(post);
+    if (session) openPlannotatorPanelSession({ session, setPlannotatorSession });
+    return true;
+  }, [rawPosts, setPlannotatorSession, showIntentToast]);
+
   const buildFloatingWidgetDashboardSnapshot = useCallback(async (requestPayload: any = null) => {
     return buildFloatingWidgetDashboardData({
       requestPayload,
@@ -307,6 +387,12 @@ export function useSidepanelOrchestration(options: UseSidepanelOrchestrationOpti
     handleBtwIntercept,
     handleBtwRetry,
     handleBtwInject,
+    closePlannotatorPanel,
+    handleOpenPlannotator,
+    handlePlannotatorOpenTab,
+    handlePlannotatorApprove,
+    handlePlannotatorReject,
+    handlePlannotatorIntercept,
     handleOpenFloatingWidget,
     handleCloseFloatingWidget,
     handleFloatingWidgetEvent,

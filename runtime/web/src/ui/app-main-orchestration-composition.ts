@@ -40,6 +40,7 @@ interface UseMainAppOrchestrationCompositionOptions {
     agents: Record<string, unknown>;
     removingPostIds: Set<string | number>;
     btwSession: any;
+    plannotatorSession: any;
   };
   timeline: Record<string, any>;
   interaction: Record<string, any>;
@@ -271,6 +272,10 @@ export function useMainAppOrchestrationComposition(options: UseMainAppOrchestrat
     btwAbortRef: refs.btwAbortRef,
     btwSession: shellState.btwSession,
     setBtwSession: setters.setBtwSession,
+    plannotatorAbortRef: refs.plannotatorAbortRef,
+    plannotatorSession: shellState.plannotatorSession,
+    setPlannotatorSession: setters.setPlannotatorSession,
+    openEditor: (shellState as any).openEditor,
     sendAgentMessage: services.sendAgentMessage,
     dismissedLiveWidgetKeysRef: refs.dismissedLiveWidgetKeysRef,
     setFloatingWidget: setters.setFloatingWidget,

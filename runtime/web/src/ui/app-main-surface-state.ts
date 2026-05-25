@@ -84,6 +84,7 @@ export function useMainAppSurfaceState(options: {
   const [followupQueueItems, setFollowupQueueItems] = useState<any[]>([]);
   const [isAgentTurnActive, setIsAgentTurnActive] = useState(false);
   const [btwSession, setBtwSession] = useState(() => loadStoredBtwSession());
+  const [plannotatorSession, setPlannotatorSession] = useState<import('./plannotator-types.js').PlannotatorSession | null>(null);
   const [floatingWidget, setFloatingWidget] = useState<any>(null);
   const [attachmentPreview, setAttachmentPreview] = useState<any>(null);
   const dismissedLiveWidgetKeysRef = useRef(new Set<string>());
@@ -142,6 +143,7 @@ export function useMainAppSurfaceState(options: {
   const lastNotifiedIdRef = useRef<any>(null);
   const lastAgentResponseRef = useRef<any>(null);
   const btwAbortRef = useRef<AbortController | null>(null);
+  const plannotatorAbortRef = useRef<AbortController | null>(null);
   const lastActivityTimerRef = useRef<any>(null);
   const lastActivityTokenRef = useRef(0);
   const brandingRef = useRef({ title: null as string | null, avatarBase: null as string | null });
@@ -208,6 +210,8 @@ export function useMainAppSurfaceState(options: {
     setIsAgentTurnActive,
     btwSession,
     setBtwSession,
+    plannotatorSession,
+    setPlannotatorSession,
     floatingWidget,
     setFloatingWidget,
     attachmentPreview,
@@ -256,6 +260,7 @@ export function useMainAppSurfaceState(options: {
     lastNotifiedIdRef,
     lastAgentResponseRef,
     btwAbortRef,
+    plannotatorAbortRef,
     lastActivityTimerRef,
     lastActivityTokenRef,
     brandingRef,

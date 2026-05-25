@@ -1,0 +1,97 @@
+<h2>Plannotator — Design da Arquitetura</h2>
+<p class="subtitle">Visão geral dos dois modos e fluxo de dados</p>
+
+<div class="section">
+  <h3>Modo Painel Lateral (review rápido)</h3>
+  <div class="mockup">
+    <div class="mockup-header">App Shell — Painel lateral activo</div>
+    <div class="mockup-body" style="display:flex;gap:0;height:340px;padding:0">
+      <!-- Timeline -->
+      <div style="flex:1;border-right:1px solid #333;padding:12px;font-size:12px;overflow:auto">
+        <div style="font-weight:bold;margin-bottom:8px;color:#888;font-size:11px">TIMELINE</div>
+        <div style="background:#1a1a2e;border-radius:6px;padding:8px;margin-bottom:6px;font-size:11px">
+          <span style="color:#7c9cbf">agente</span><br/>
+          <span style="color:#aaa">Vou criar os seguintes ficheiros...</span>
+        </div>
+        <div style="background:#1a2e1a;border-radius:6px;padding:8px;margin-bottom:6px;font-size:11px;border:1px solid #2a4a2a">
+          <span style="color:#5f9f5f">📋 Plano gerado</span><br/>
+          <span style="color:#aaa">3 ficheiros · 2 funções</span><br/>
+          <button style="margin-top:4px;font-size:10px;padding:2px 6px;background:#2a4a2a;border:1px solid #3a6a3a;color:#5f9f5f;border-radius:3px;cursor:pointer">Review →</button>
+        </div>
+      </div>
+      <!-- Plannotator Panel -->
+      <div style="width:280px;background:#0f0f1a;padding:12px;font-size:11px;display:flex;flex-direction:column">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-weight:bold;color:#9b9bff;font-size:12px">📝 Plannotator</span>
+          <div style="display:flex;gap:4px">
+            <button style="font-size:10px;padding:2px 5px;background:#1a1a2e;border:1px solid #333;color:#aaa;border-radius:3px">⤢ Tab</button>
+            <button style="font-size:10px;padding:2px 5px;background:#1a1a2e;border:1px solid #333;color:#aaa;border-radius:3px">✕</button>
+          </div>
+        </div>
+        <div style="background:#1a1a2e;border-radius:4px;padding:8px;margin-bottom:8px;flex:1;overflow:auto">
+          <div style="color:#888;font-size:10px;margin-bottom:4px">PLANO DO AGENTE</div>
+          <div style="color:#ccc;line-height:1.5">1. Criar <code style="color:#9b9bff">auth.ts</code><br/>2. Adicionar middleware JWT<br/>3. Actualizar <code style="color:#9b9bff">routes.ts</code></div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button style="flex:1;padding:6px;background:#1a3a1a;border:1px solid #2a5a2a;color:#5f9f5f;border-radius:4px;font-size:11px;cursor:pointer">✓ Aprovar</button>
+          <button style="flex:1;padding:6px;background:#3a1a1a;border:1px solid #5a2a2a;color:#9f5f5f;border-radius:4px;font-size:11px;cursor:pointer">✕ Rejeitar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Modo Tab Completo (anotações + sugestões)</h3>
+  <div class="mockup">
+    <div class="mockup-header">Tab: Plannotator — auth.ts</div>
+    <div class="mockup-body" style="display:flex;gap:0;height:300px;padding:0">
+      <!-- Diff/content area -->
+      <div style="flex:1;padding:12px;font-size:11px;overflow:auto;border-right:1px solid #333">
+        <div style="color:#888;font-size:10px;margin-bottom:6px">DIFF — auth.ts</div>
+        <div style="font-family:monospace;font-size:11px;line-height:1.6">
+          <div style="color:#888">  import jwt from 'jsonwebtoken'</div>
+          <div style="background:#1a3a1a;color:#5f9f5f">+ export function verifyToken(t: string) {</div>
+          <div style="background:#1a3a1a;color:#5f9f5f">+   return jwt.verify(t, process.env.SECRET)</div>
+          <div style="background:#1a3a1a;color:#5f9f5f">+ }</div>
+          <div style="color:#888">  </div>
+          <!-- Inline annotation -->
+          <div style="background:#2a2a0a;border-left:3px solid #9b9b2f;padding:4px 8px;margin:2px 0;color:#ccc">
+            💬 <em style="color:#9b9b9f">Falta validação de erro se SECRET não estiver definido</em>
+            <span style="color:#555;font-size:10px"> — você</span>
+          </div>
+          <div style="background:#1a3a1a;color:#5f9f5f">+ export function signToken(payload: object) {</div>
+          <div style="background:#1a3a1a;color:#5f9f5f">+   return jwt.sign(payload, process.env.SECRET!)</div>
+          <div style="background:#1a3a1a;color:#5f9f5f">+ }</div>
+        </div>
+      </div>
+      <!-- Sidebar annotations -->
+      <div style="width:220px;background:#0f0f1a;padding:10px;font-size:11px;display:flex;flex-direction:column;gap:8px">
+        <div style="color:#888;font-size:10px">ANOTAÇÕES (1)</div>
+        <div style="background:#2a2a0a;border:1px solid #4a4a1a;border-radius:4px;padding:7px;font-size:10px;color:#ccc">
+          <div style="color:#9b9b2f;margin-bottom:3px">linha 4</div>
+          Falta validação de erro se SECRET não definido
+          <div style="margin-top:4px;color:#555">+ Sugestão de alteração</div>
+        </div>
+        <div style="color:#888;font-size:10px;margin-top:4px">SUGESTÕES (0)</div>
+        <div style="flex:1"></div>
+        <div style="display:flex;gap:4px">
+          <button style="flex:1;padding:5px;background:#1a3a1a;border:1px solid #2a5a2a;color:#5f9f5f;border-radius:4px;font-size:10px">✓ Aprovar</button>
+          <button style="flex:1;padding:5px;background:#3a1a1a;border:1px solid #5a2a2a;color:#9f5f5f;border-radius:4px;font-size:10px">✕ Rejeitar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Fluxo de dados</h3>
+  <div style="font-size:11px;color:#ccc;background:#0f0f1a;border-radius:6px;padding:12px;font-family:monospace;line-height:2">
+    <span style="color:#9b9bff">Trigger</span> (slash cmd / botão / agente via SSE)
+    <br/>→ <span style="color:#5f9f5f">PlannnotatorPanel</span> abre com conteúdo (plano/diff/msg/ficheiro)
+    <br/>→ Utilizador <span style="color:#9b9b2f">Aprova</span> → <code>sendAgentMessage("Aprovado")</code>
+    <br/>→ Utilizador <span style="color:#9f5f5f">Rejeita</span> → <code>sendAgentMessage("Rejeitado: " + comentários)</code>
+    <br/>→ Botão <span style="color:#aaa">"⤢ Tab"</span> → <code>openEditor('piclaw://plannotator')</code>
+    <br/>→ Tab completa com <span style="color:#7c9cbf">diff + anotações + sugestões</span>
+  </div>
+</div>

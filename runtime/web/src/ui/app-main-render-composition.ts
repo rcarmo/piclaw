@@ -164,6 +164,8 @@ export function composeRenderedMainAppOptions(input: {
     },
     composeState: {
       btwSession: input.surface.btwSession,
+      plannotatorSession: input.surface.plannotatorSession,
+      setPlannotatorSession: input.surface.setPlannotatorSession,
       floatingWidget: input.surface.floatingWidget,
       fileRefs: input.surface.fileRefs,
       messageRefs: input.surface.messageRefs,

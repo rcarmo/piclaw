@@ -1,0 +1,40 @@
+<h2>Plannotator — Como integrar no frontend?</h2>
+<p class="subtitle">Escolhe a abordagem de integração que faz mais sentido</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Novo Pane no Tab Strip</h3>
+      <p>Abre numa tab ao lado do editor, como os outros viewers. Via slash command <code>/plannotate</code> ou botão na timeline. Persiste enquanto aberto, pode ser pop-out para janela separada.</p>
+      <div class="pros-cons" style="margin-top:8px">
+        <div class="pros"><h4>Prós</h4><ul><li>Segue padrão existente</li><li>Pop-out para janela dedicada</li><li>Tab reutilizável</li></ul></div>
+        <div class="cons"><h4>Contras</h4><ul><li>Ocupa espaço do editor</li><li>Menos imediato para review rápido</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Painel Lateral (estilo BTW)</h3>
+      <p>Overlay lateral que aparece ao lado da timeline quando invocado. Não ocupa espaço do editor. Fecha com Escape ou botão. Ideal para review inline durante uma conversa.</p>
+      <div class="pros-cons" style="margin-top:8px">
+        <div class="pros"><h4>Prós</h4><ul><li>Não interrompe o fluxo</li><li>Sempre visível com o chat</li><li>Pattern já testado (BTW)</li></ul></div>
+        <div class="cons"><h4>Contras</h4><ul><li>Espaço limitado em mobile</li><li>Sem pop-out</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Híbrido: Painel + Tab</h3>
+      <p>Começa como painel lateral para review rápido. Botão "Abrir em Tab" expande para pane dedicado com funcionalidade completa (diff, anotações, exportar).</p>
+      <div class="pros-cons" style="margin-top:8px">
+        <div class="pros"><h4>Prós</h4><ul><li>Melhor dos dois mundos</li><li>Adaptável ao contexto</li><li>Escalável para funcionalidades futuras</li></ul></div>
+        <div class="cons"><h4>Contras</h4><ul><li>Mais código a implementar</li><li>Dois modos a manter</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -66,6 +66,10 @@ interface ComposeSidepanelActionOptionsInput {
   btwAbortRef: RefBox<AbortController | null>;
   btwSession: any;
   setBtwSession: StateSetter<any>;
+  plannotatorAbortRef: RefBox<AbortController | null>;
+  plannotatorSession: any;
+  setPlannotatorSession: StateSetter<any>;
+  openEditor?: (...args: any[]) => any;
   sendAgentMessage: (agentId: string, content: string, threadId: string | null, attachments: any[], queueMode: string | null, chatJid: string) => Promise<any>;
   dismissedLiveWidgetKeysRef: RefBox<Set<string>>;
   setFloatingWidget: StateSetter<any>;
@@ -103,6 +107,10 @@ export function composeSidepanelActionOptions(input: ComposeSidepanelActionOptio
     btwAbortRef: input.btwAbortRef,
     btwSession: input.btwSession,
     setBtwSession: input.setBtwSession,
+    plannotatorAbortRef: input.plannotatorAbortRef,
+    plannotatorSession: input.plannotatorSession,
+    setPlannotatorSession: input.setPlannotatorSession,
+    openEditor: input.openEditor,
     sendAgentMessage: input.sendAgentMessage,
     handleMessageResponse: input.handleMessageResponse,
     dismissedLiveWidgetKeysRef: input.dismissedLiveWidgetKeysRef,
