@@ -80,6 +80,7 @@ interface UseRealtimeLifecycleOrchestrationOptions {
   setPosts: (next: any) => void;
   preserveTimelineScrollTop: (mutate: () => void) => void;
   openEditor?: (path: string, options?: { label?: string }) => void;
+  setPlannotatorSession?: (next: any) => void;
 
   // test-api + reset
   finalizeStalledResponse: () => void;
@@ -158,6 +159,7 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
     setPosts,
     preserveTimelineScrollTop,
     openEditor,
+    setPlannotatorSession,
     finalizeStalledResponse,
 
     connectionStatus,
@@ -227,14 +229,8 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
       setPosts,
       preserveTimelineScrollTop,
       openEditor,
+      setPlannotatorSession,
     });
-  }, [
-    activeChatJidRef,
-    applyLiveGeneratedWidgetUpdate,
-    applyModelState,
-    clearAgentRunState,
-    clearLastActivityFlag,
-    clearQueuedSteerStateIfStale,
     currentChatJid,
     currentTurnIdRef,
     dismissedQueueRowIdsRef,
@@ -288,6 +284,7 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
     viewStateRef,
     wasAgentActiveRef,
     openEditor,
+    setPlannotatorSession,
   ]);
 
   useEffect(() => {

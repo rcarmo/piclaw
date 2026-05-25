@@ -38,6 +38,10 @@ import {
 import { dispatchExtensionUiBrowserEvent, isExtensionUiEventType } from './extension-ui-events.js';
 import { clearLiveFloatingWidgetState } from './app-floating-widget.js';
 import {
+  buildPlannotatorSessionFromSsePayload,
+  openPlannotatorPanelSession,
+} from './use-plannotator-orchestration.js';
+import {
   isNoisyAgentSseEvent,
   resolveSseEventRoutingContext,
 } from './app-sse-event-routing.js';
@@ -116,6 +120,7 @@ export interface HandleAppSseEventDependencies {
   setPosts: StateSetter<any[] | null>;
   preserveTimelineScrollTop: (mutate: () => void) => void;
   openEditor?: (path: string, options?: { label?: string }) => void;
+  setPlannotatorSession?: StateSetter<any>;
 }
 
 /**
@@ -188,6 +193,7 @@ export function handleAppSseEvent(
     setPosts,
     preserveTimelineScrollTop,
     openEditor,
+    setPlannotatorSession,
   } = deps;
 
   const { turnId, isCurrentChatEvent } = resolveSseEventRoutingContext(eventType, data, currentChatJid);
@@ -204,6 +210,14 @@ export function handleAppSseEvent(
 
   if (eventType === 'ui_meters') {
     applyMetersFromEvent(data);
+    return;
+  }
+
+  if (eventType === 'plannotator_review_request') {
+    if (setPlannotatorSession) {
+      const session = buildPlannotatorSessionFromSsePayload(data);
+      if (session) openPlannotatorPanelSession({ session, setPlannotatorSession });
+    }
     return;
   }
 

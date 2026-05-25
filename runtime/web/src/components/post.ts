@@ -12,6 +12,7 @@ import { buildGeneratedWidgetPayload, canRenderGeneratedWidget } from '../ui/gen
 import { ImageModal } from './image-modal.js';
 import { FilePill } from './file-pill.js';
 import { buildSpeakablePostText, getSpeechPlaybackState, isSpeechSynthesisSupported, speakPostText, stopSpeechPlayback, subscribeSpeechPlayback } from './post-speech.ts';
+import { postQualifiesForPlannotator, buildPlannotatorSessionFromPost } from '../ui/use-plannotator-orchestration.js';
 import { copyPlainTextSelectionFromElement, readSessionStorageFlagBestEffort, resolveLinkPreviewSiteName, writeClipboardDataViaExecCommand, writeClipboardTextBestEffort, writeSessionStorageFlagBestEffort } from './post-runtime-safety.js';
 
 /**
@@ -840,7 +841,7 @@ function highlightHtml(html, query) {
 /**
  * Single post component
  */
-export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMessage, agentName, agentAvatarUrl, userName, userAvatarUrl, userAvatarBackground, onDelete, isThreadReply, isThreadPrev, isThreadNext, isRemoving, highlightQuery, onFileRef, onOpenWidget, onOpenAttachmentPreview }) {
+export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMessage, agentName, agentAvatarUrl, userName, userAvatarUrl, userAvatarBackground, onDelete, isThreadReply, isThreadPrev, isThreadNext, isRemoving, highlightQuery, onFileRef, onOpenWidget, onOpenAttachmentPreview, onReview }) {
     const [zoomedImage, setZoomedImage] = useState(null);
     const [copyState, setCopyState] = useState('idle');
     const [speechPlaybackState, setSpeechPlaybackState] = useState(() => getSpeechPlaybackState());
@@ -1188,6 +1189,21 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
                             <path d="M18 6L6 18M6 6l12 12" />
                         </svg>
                     </button>
+                    ${isAgent && onReview && postQualifiesForPlannotator(post) && html`
+                        <button
+                            class="post-action-btn post-review-btn"
+                            type="button"
+                            title="Review plan"
+                            aria-label="Review plan"
+                            onClick=${(e) => { e.stopPropagation(); onReview(buildPlannotatorSessionFromPost(post)); }}
+                        >
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 11l3 3L22 4"/>
+                                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                            </svg>
+                            <span>Review</span>
+                        </button>
+                    `}
                 </div>
                 <div class="post-meta">
                     <span class="post-author">${displayName}</span>

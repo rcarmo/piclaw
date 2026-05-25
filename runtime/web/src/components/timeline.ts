@@ -6,7 +6,7 @@ import { getAgentAvatarUrl, getAgentName } from '../ui/agent-utils.js';
 /**
  * Timeline component
  */
-export function Timeline({ posts, hasMore, onLoadMore, onPostClick, onHashtagClick, onMessageRef, onScrollToMessage, onFileRef, onOpenWidget, onOpenAttachmentPreview, emptyMessage, timelineRef, agents, user, onDeletePost, reverse = true, removingPostIds, searchQuery }) {
+export function Timeline({ posts, hasMore, onLoadMore, onPostClick, onHashtagClick, onMessageRef, onScrollToMessage, onFileRef, onOpenWidget, onOpenAttachmentPreview, emptyMessage, timelineRef, agents, user, onDeletePost, onReviewPost, reverse = true, removingPostIds, searchQuery }) {
     const [loadingMore, setLoadingMore] = useState(false);
     const sentinelRef = useRef(null);
     const hasIntersectionObserver = typeof IntersectionObserver !== 'undefined';
@@ -183,6 +183,7 @@ export function Timeline({ posts, hasMore, onLoadMore, onPostClick, onHashtagCli
                         onOpenWidget=${onOpenWidget}
                         onDelete=${onDeletePost}
                         onOpenAttachmentPreview=${onOpenAttachmentPreview}
+                        onReview=${onReviewPost}
                     />
                 `})}
                 ${reverse ? null : sentinel}

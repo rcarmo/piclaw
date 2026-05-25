@@ -210,6 +210,8 @@ export function renderMainShell(options: MainShellRenderOptions): any {
     handlePlannotatorApprove,
     handlePlannotatorReject,
     handlePlannotatorOpenTab,
+    handleOpenPlannotator,
+    handlePlannotatorIntercept,
     floatingWidget,
     handleCloseFloatingWidget,
     handleFloatingWidgetEvent,
@@ -494,6 +496,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
           onFileRef=${openTimelineFileFromPill || openFileFromPill}
           onPostClick=${undefined}
           onDeletePost=${handleDeletePost}
+          onReviewPost=${handleOpenPlannotator}
           onOpenWidget=${handleOpenFloatingWidget}
           onOpenAttachmentPreview=${setAttachmentPreview}
           emptyMessage=${currentHashtag ? `No posts with #${currentHashtag}` : searchQuery ? `No results for "${searchQuery}"` : undefined}
@@ -597,7 +600,10 @@ export function renderMainShell(options: MainShellRenderOptions): any {
           onInjectQueuedFollowup=${handleInjectQueuedFollowup}
           onRemoveQueuedFollowup=${handleRemoveQueuedFollowup}
           onMoveQueuedFollowup=${handleMoveQueuedFollowup}
-          onSubmitIntercept=${handleBtwIntercept}
+          onSubmitIntercept=${async (args) => {
+            if (await handlePlannotatorIntercept?.(args)) return true;
+            return handleBtwIntercept?.(args);
+          }}
           onMessageResponse=${handleMessageResponse}
           onSubmitError=${handleComposeSubmitError}
           isAgentActive=${isComposeBoxAgentActive}

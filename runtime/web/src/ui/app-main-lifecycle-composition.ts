@@ -315,6 +315,8 @@ interface ComposeRealtimeLifecycleOptionsInput {
   agentStatus: any;
   refreshAgentStatus: () => Promise<any>;
   refreshAutoresearchStatus: () => Promise<void>;
+  openEditor?: (path: string, options?: { label?: string }) => void;
+  setPlannotatorSession?: (next: any) => void;
 }
 
 export function composeRealtimeLifecycleOptions(input: ComposeRealtimeLifecycleOptionsInput) {
@@ -387,6 +389,8 @@ export function composeRealtimeLifecycleOptions(input: ComposeRealtimeLifecycleO
     agentStatus: input.agentStatus,
     refreshAgentStatus: input.refreshAgentStatus,
     refreshAutoresearchStatus: input.refreshAutoresearchStatus,
+    openEditor: input.openEditor,
+    setPlannotatorSession: input.setPlannotatorSession,
   };
 }
 

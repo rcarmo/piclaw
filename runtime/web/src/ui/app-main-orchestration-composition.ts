@@ -201,6 +201,8 @@ export function composeMainAppLifecycleCompositionOptions(options: UseMainAppOrc
     thoughtExpandedRef: refs.thoughtExpandedRef,
     draftExpandedRef: refs.draftExpandedRef,
     steerQueuedTurnIdRef: refs.steerQueuedTurnIdRef,
+    openEditor: services.openEditor,
+    setPlannotatorSession: setters.setPlannotatorSession,
   };
 }
 
