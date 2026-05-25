@@ -2,6 +2,7 @@ import { html } from '../vendor/preact-htm.js';
 import { ComposeBox, QueuedFollowupStack } from '../components/compose-box.js';
 import { OobePanel } from '../components/oobe-panel.js';
 import { BtwPanel } from '../components/btw-panel.js';
+import { PlannotatorPanel } from '../components/plannotator-panel.js';
 import { FloatingWidgetPane } from '../components/floating-widget-pane.js';
 import { AttachmentPreviewModal } from '../components/attachment-preview-modal.js';
 import { SettingsDialogLoader } from '../components/settings-dialog-loader.js';
@@ -204,6 +205,11 @@ export function renderMainShell(options: MainShellRenderOptions): any {
     closeBtwPanel,
     handleBtwRetry,
     handleBtwInject,
+    plannotatorSession,
+    closePlannotatorPanel,
+    handlePlannotatorApprove,
+    handlePlannotatorReject,
+    handlePlannotatorOpenTab,
     floatingWidget,
     handleCloseFloatingWidget,
     handleFloatingWidgetEvent,
@@ -514,6 +520,13 @@ export function renderMainShell(options: MainShellRenderOptions): any {
           onClose=${closeBtwPanel}
           onRetry=${handleBtwRetry}
           onInject=${handleBtwInject}
+        />
+        <${PlannotatorPanel}
+          session=${plannotatorSession}
+          onClose=${closePlannotatorPanel}
+          onApprove=${handlePlannotatorApprove}
+          onReject=${handlePlannotatorReject}
+          onOpenTab=${handlePlannotatorOpenTab}
         />
         <${FloatingWidgetPane}
           widget=${floatingWidget}
