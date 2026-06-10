@@ -9,7 +9,7 @@
 //     for canvas rendering — zero-copy from WASM linear memory.
 //   - CopyRect operates entirely within WASM memory.
 //
-// Encoding support: Raw (0), CopyRect (1), RRE (2), Hextile (5), ZRLE (16).
+// Encoding support: Raw (0), CopyRect (1), RRE (2), CoRRE (4), Hextile (5), ZRLE (16).
 // Zlib decompression for ZRLE is done on the JS side; WASM receives the
 // already-decompressed tile payload.
 
@@ -209,6 +209,46 @@ export function processRreRect(
     const sh: i32 = (<i32>unchecked(src[cursor + 6]) << 8) | <i32>unchecked(src[cursor + 7]);
     cursor += 8;
 
+    fbFillRect(x + sx, y + sy, sw, sh, fgPacked);
+  }
+  return 0;
+}
+
+// ─── Encoding 4: CoRRE ───────────────────────────────────────────
+
+export function processCoRreRect(
+  dataBuffer: ArrayBuffer,
+  x: i32, y: i32, w: i32, h: i32,
+  bitsPerPixel: i32, bigEndian: bool, trueColor: bool,
+  rMax: i32, gMax: i32, bMax: i32,
+  rShift: i32, gShift: i32, bShift: i32,
+): i32 {
+  if (!trueColor) return -1;
+  let bpp = bitsPerPixel >> 3;
+  if (bpp <= 0) bpp = 1;
+
+  const src = Uint8Array.wrap(dataBuffer);
+  if (src.length < 4 + bpp) return -1;
+
+  const subrectCount: i32 = (<i32>unchecked(src[0]) << 24)
+    | (<i32>unchecked(src[1]) << 16)
+    | (<i32>unchecked(src[2]) << 8)
+    | <i32>unchecked(src[3]);
+
+  let cursor: i32 = 4;
+  const bgPacked = decodePixel(src, cursor, bpp, bigEndian, rMax, gMax, bMax, rShift, gShift, bShift);
+  cursor += bpp;
+  fbFillRect(x, y, w, h, bgPacked);
+
+  for (let i: i32 = 0; i < subrectCount; i++) {
+    if (src.length < cursor + bpp + 4) return -1;
+    const fgPacked = decodePixel(src, cursor, bpp, bigEndian, rMax, gMax, bMax, rShift, gShift, bShift);
+    cursor += bpp;
+
+    const sx: i32 = <i32>unchecked(src[cursor++]);
+    const sy: i32 = <i32>unchecked(src[cursor++]);
+    const sw: i32 = <i32>unchecked(src[cursor++]);
+    const sh: i32 = <i32>unchecked(src[cursor++]);
     fbFillRect(x + sx, y + sy, sw, sh, fgPacked);
   }
   return 0;
