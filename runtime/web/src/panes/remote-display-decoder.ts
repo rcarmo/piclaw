@@ -32,6 +32,9 @@ export interface WasmDisplayPipeline {
     /** Process an RRE rect (encoding 2). Returns 0 on success. */
     processRreRect(data: Uint8Array, x: number, y: number, w: number, h: number, pf: any): number;
 
+    /** Process a CoRRE rect (encoding 4). Returns 0 on success. */
+    processCoRreRect(data: Uint8Array, x: number, y: number, w: number, h: number, pf: any): number;
+
     /** Process a Hextile rect (encoding 5). Returns 0 on success. */
     processHextileRect(data: Uint8Array, x: number, y: number, w: number, h: number, pf: any): number;
 
@@ -69,7 +72,7 @@ export async function loadRemoteDisplayWasmDecoder(): Promise<WasmDisplayPipelin
                 'initFramebuffer', 'getFramebufferPtr', 'getFramebufferLen',
                 'getFramebufferWidth', 'getFramebufferHeight',
                 'processRawRect', 'processCopyRect', 'processRreRect',
-                'processHextileRect', 'processZrleTileData',
+                'processCoRreRect', 'processHextileRect', 'processZrleTileData',
                 'decodeRawRectToRgba',
             ]) {
                 if (typeof ex[fn] !== 'function') throw new Error(`${fn} export is missing.`);
@@ -124,6 +127,10 @@ export async function loadRemoteDisplayWasmDecoder(): Promise<WasmDisplayPipelin
 
                 processRreRect(data, x, y, w, h, pf) {
                     return callProcess('processRreRect', data, x, y, w, h, pf);
+                },
+
+                processCoRreRect(data, x, y, w, h, pf) {
+                    return callProcess('processCoRreRect', data, x, y, w, h, pf);
                 },
 
                 processHextileRect(data, x, y, w, h, pf) {

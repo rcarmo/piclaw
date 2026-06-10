@@ -1243,6 +1243,19 @@ class VncPaneInstance implements PaneInstance {
         this.hasRenderedFrame = true;
     }
 
+    private applyCursorRect(rect) {
+        if (!this.canvas || !rect?.rgba || !rect.width || !rect.height) return;
+        const cursorCanvas = document.createElement('canvas');
+        cursorCanvas.width = rect.width;
+        cursorCanvas.height = rect.height;
+        const ctx = cursorCanvas.getContext('2d');
+        if (!ctx) return;
+        ctx.putImageData(new ImageData(new Uint8ClampedArray(rect.rgba), rect.width, rect.height), 0, 0);
+        const hotX = Math.max(0, Math.min(rect.width - 1, Number(rect.x || 0)));
+        const hotY = Math.max(0, Math.min(rect.height - 1, Number(rect.y || 0)));
+        this.canvas.style.cursor = `url(${cursorCanvas.toDataURL('image/png')}) ${hotX} ${hotY}, default`;
+    }
+
     private scheduleRawFallbackTimeout() {
         if (this.frameTimeoutId) {
             clearTimeout(this.frameTimeoutId);
@@ -1308,6 +1321,10 @@ class VncPaneInstance implements PaneInstance {
                     for (const rect of event.rects || []) {
                         if (rect.kind === 'resize') {
                             this.ensureCanvasSize(rect.width, rect.height);
+                        } else if (rect.kind === 'cursor') {
+                            this.applyCursorRect(rect);
+                        } else if (rect.kind === 'desktop-name') {
+                            this.targetLabel = rect.name || this.targetLabel;
                         }
                     }
                     const ctx = this.canvas?.getContext('2d', { alpha: false });
@@ -1327,6 +1344,14 @@ class VncPaneInstance implements PaneInstance {
                             this.ensureCanvasSize(event.width, event.height, { reveal: true });
                             this.copyCanvasRect(rect);
                             painted = true;
+                            continue;
+                        }
+                        if (rect.kind === 'cursor') {
+                            this.applyCursorRect(rect);
+                            continue;
+                        }
+                        if (rect.kind === 'desktop-name') {
+                            this.targetLabel = rect.name || this.targetLabel;
                             continue;
                         }
                         if (rect.kind === 'rgba') {

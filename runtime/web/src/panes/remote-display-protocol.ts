@@ -38,6 +38,18 @@ export type RemoteDisplayRect =
         height: number;
       }
     | {
+        kind: 'cursor';
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        rgba: Uint8ClampedArray;
+      }
+    | {
+        kind: 'desktop-name';
+        name?: string;
+      }
+    | {
         kind: 'pipeline';
         x: number;
         y: number;
