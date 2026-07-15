@@ -179,6 +179,7 @@ In addition to the inline factories, piclaw ships **packaged runtime extensions*
 | Extension | Gate | Purpose |
 |-----------|------|---------|
 | `integrations/azure-openai.ts` | `AOAI_BASE_URL` must be set | Azure OpenAI + Foundry provider with managed-identity or API-key auth |
+| `integrations/minimax-video/` | `MINIMAX_VIDEO_BASE_URL` must be set | MiniMax asynchronous video generation command with workspace-backed output |
 | `integrations/context-mode.ts` | Always loaded | Tool-output storage, search handles, and `exec_batch` tool |
 | `integrations/mcp-status-hints/` | Always loaded | Status-hint providers for MCP/proxy and prefixed-tool surfaces when registry metadata is incomplete |
 | `integrations/keychain/` | Always loaded | `keychain` tool for list/get/set/delete of secure entries |

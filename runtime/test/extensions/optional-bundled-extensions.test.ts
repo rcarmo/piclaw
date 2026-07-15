@@ -86,4 +86,14 @@ describe("bundled optional extensions", () => {
     expect(fake.state.commands.has("cdp-tabs")).toBe(true);
     expect(fake.state.tools.get("cdp_browser")?.description).toContain("Chrome DevTools Protocol");
   });
+
+  test("minimax-video registers the MiniMax video command", async () => {
+    const { default: registerMiniMaxVideo } = await import("../../extensions/integrations/minimax-video/index.ts");
+    const fake = createFakeApi();
+
+    registerMiniMaxVideo(fake.api);
+
+    expect(fake.state.commands.has("minimax-video")).toBe(true);
+    expect(fake.state.commands.get("minimax-video")?.description).toContain("MiniMax video");
+  });
 });

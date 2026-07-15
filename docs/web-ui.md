@@ -99,6 +99,8 @@ Configuration details live in [configuration.md](configuration.md).
 - **`/image` and `/flux`** — workspace-backed image generation commands for
   Azure OpenAI / Foundry; `/image` supports `--transparent` when the selected
   model can generate transparent PNG output
+- **`/minimax-video`** - asynchronous MiniMax video generation with completed
+  files saved under `/workspace/exports/videos`
 - **`image_process`** — sharp-backed workspace image manipulation for resize,
   crop, convert, optimise, metadata inspection, text/SVG/composite operations,
   and animated GIF workflows

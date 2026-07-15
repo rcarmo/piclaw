@@ -622,6 +622,7 @@ Direct commands (no LLM round-trip):
 | `/logout [provider]` | Logout from an AI model provider |
 | `/image <prompt> [--size ...] [--count ...] [--quality ...] [--style ...] [--transparent]` | Generate an Azure OpenAI image into workspace-backed files; `--transparent` requests transparent PNG output |
 | `/flux <prompt> [--size ...] [--count ...] [--quality ...]` | Generate an Azure Foundry image into workspace-backed files |
+| `/minimax-video <prompt> [--duration 6\|10] [--resolution 720P\|768P\|1080P] [--no-prompt-optimizer]` | Generate a MiniMax video and save it as a workspace-backed file |
 | `/restart` | Restart the agent and stop subprocesses |
 | `/exit` | Exit the current piclaw process immediately so the service manager restarts it |
 | `/commands` | List available commands (shows sourceInfo provenance: scope, source, and origin for extension commands, templates, and skills) |
@@ -639,7 +640,7 @@ Direct commands (no LLM round-trip):
 
 The bundled `pi-mcp-adapter` now prefers shared MCP config first: `~/.config/mcp/mcp.json` and project-local `.mcp.json`. Pi-owned config still works under `~/.pi/agent/mcp.json` (inside the container image this typically maps to `/config/.pi/agent/mcp.json`) and project-local `.pi/mcp.json`, with `.pi/mcp.json` acting as the final Pi-specific override. Starter examples are seeded at `.mcp.json.example` and `.pi/mcp.json.example`. Use `/mcp setup` for guided onboarding.
 
-`/image` writes generated images back into the workspace and renders them as workspace-backed timeline images plus file-path listings. `/flux` follows the same output pattern, but transparent background requests are currently supported only on `/image`.
+`/image` writes generated images back into the workspace and renders them as workspace-backed timeline images plus file-path listings. `/flux` follows the same output pattern, but transparent background requests are currently supported only on `/image`. `/minimax-video` polls the provider's asynchronous generation task, downloads the completed video into `/workspace/exports/videos`, and posts both an open link and the workspace file path.
 
 `/search` performs a workspace full‑text search (notes + skills) without calling the LLM:
 

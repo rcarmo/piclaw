@@ -251,6 +251,26 @@ Dynamic-model cost is an estimate inherited from the closest static template (an
 
 For the packaged Azure managed-identity/static-key path and its additional token-budget controls, see [Azure OpenAI extension](azure/azure-openai-extension.md).
 
+### MiniMax video generation
+
+The packaged MiniMax video extension is enabled when `MINIMAX_VIDEO_BASE_URL` is set. It uses MiniMax's native asynchronous video API and saves completed videos under `/workspace/exports/videos`.
+
+The existing `minimax` and `minimax-cn` model providers use the Anthropic-compatible endpoints below. The generic `openai-compatible` login flow can use the corresponding OpenAI-compatible base URL, and the video extension uses that same `/v1` base for its native video requests.
+
+| Region | OpenAI-compatible / video base | Anthropic-compatible base | API key variable |
+|---|---|---|---|
+| Global | `https://api.minimax.io/v1` | `https://api.minimax.io/anthropic` | `MINIMAX_API_KEY` |
+| China | `https://api.minimaxi.com/v1` | `https://api.minimaxi.com/anthropic` | `MINIMAX_CN_API_KEY` |
+
+| Variable | Default | Purpose |
+|---|---:|---|
+| `MINIMAX_API_KEY` | _(required for global)_ | API key for the global MiniMax service |
+| `MINIMAX_CN_API_KEY` | _(required for China)_ | API key for the China MiniMax service |
+| `MINIMAX_VIDEO_BASE_URL` | _(required)_ | API base URL: `https://api.minimax.io/v1` for the global service or `https://api.minimaxi.com/v1` for the China service |
+| `MINIMAX_VIDEO_MODEL_ID` | _(required)_ | Video model ID supported by the selected MiniMax endpoint |
+
+Restart Piclaw after setting these variables, then use `/minimax-video <prompt>`. The command also accepts `--duration 6|10`, `--resolution 720P|768P|1080P`, and `--no-prompt-optimizer`.
+
 ## Runtime and agent
 
 | Variable | Default | Purpose |

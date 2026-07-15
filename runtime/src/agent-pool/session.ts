@@ -114,6 +114,7 @@ type OptionalBundledExtension = {
 
 const OPTIONAL_EXTENSIONS: OptionalBundledExtension[] = [
   { path: resolve(EXTENSIONS_DIR, "integrations", "azure-openai-session", "index.ts"), envGate: "AOAI_BASE_URL" },
+  { path: resolve(EXTENSIONS_DIR, "integrations", "minimax-video", "index.ts"), envGate: "MINIMAX_VIDEO_BASE_URL" },
   { path: resolve(EXTENSIONS_DIR, "integrations", "context-mode.ts") },
   { path: resolve(EXTENSIONS_DIR, "integrations", "bun-runner", "index.ts") },
   { path: resolve(EXTENSIONS_DIR, "integrations", "keychain", "index.ts") },
