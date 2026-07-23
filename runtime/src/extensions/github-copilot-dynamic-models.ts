@@ -419,6 +419,12 @@ export function createGitHubCopilotDynamicModelsProvider(
     // chat-capable model IDs and required Copilot IDE headers.
     headers: { ...(base.headers ?? {}), ...COPILOT_HEADERS },
     getModels: () => lastGood.map(toStoredModel),
+    filterModels: (models, credential) => {
+      const baseAvailable = base.filterModels?.(models, credential) ?? models;
+      const availableIds = new Set(baseAvailable.map((model) => model.id));
+      for (const model of lastGood) availableIds.add(model.id);
+      return models.filter((model) => availableIds.has(model.id));
+    },
     refreshModels: async (context) => {
       await base.refreshModels?.(context);
       const cached = await readStoredAndMerge(context);

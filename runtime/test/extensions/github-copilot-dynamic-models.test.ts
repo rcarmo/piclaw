@@ -243,4 +243,39 @@ describe("github-copilot dynamic models overlay", () => {
     expect(registrations[0].headers?.["Editor-Version"]).toBe("vscode/1.107.0");
     expect(typeof registrations[0].refreshModels).toBe("function");
   });
+
+  test("keeps dynamic Copilot models visible when OAuth availableModelIds is stale", async () => {
+    const fable = makeModel({
+      id: "claude-fable-5",
+      name: "Claude Fable 5",
+      api: "openai-completions" as any,
+      contextWindow: 1000000,
+      maxTokens: 128000,
+    });
+    const opus = makeModel({
+      id: "claude-opus-4.8",
+      name: "Claude Opus 4.8",
+      api: "anthropic-messages" as any,
+      contextWindow: 1000000,
+      maxTokens: 64000,
+    });
+    const baseProvider = {
+      id: "github-copilot",
+      name: "GitHub Copilot",
+      auth: { oauth: { name: "GitHub Copilot" } },
+      getModels: () => [fable, opus],
+      filterModels: (models: Model<any>[], credential: any) => {
+        const ids = new Set(credential?.availableModelIds ?? []);
+        return ids.size ? models.filter((model) => ids.has(model.id)) : models;
+      },
+      stream: () => { throw new Error("unused"); },
+      streamSimple: () => { throw new Error("unused"); },
+    };
+    const runtime = { getProvider: () => baseProvider } as any;
+    const overlay = createGitHubCopilotDynamicModelsProvider(runtime)!;
+    await overlay.refreshModels!({ credential: oauth("token", { availableModelIds: ["claude-opus-4.8"] }), store: createStore(), allowNetwork: false } as any);
+
+    expect(baseProvider.filterModels(baseProvider.getModels(), { availableModelIds: ["claude-opus-4.8"] }).map((model) => model.id)).toEqual(["claude-opus-4.8"]);
+    expect(overlay.filterModels?.(overlay.getModels(), { availableModelIds: ["claude-opus-4.8"] } as any).map((model) => model.id).sort()).toEqual(["claude-fable-5", "claude-opus-4.8"]);
+  });
 });
