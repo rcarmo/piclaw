@@ -2,19 +2,19 @@ import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process"
 import { resolve } from "node:path";
 
 import { closeDatabase, initDatabase } from "./db.js";
-import { getWorkspaceIndexStatus, refreshWorkspaceIndex, type WorkspaceSearchScope } from "./workspace-search.js";
+import {
+  AGGRESSIVE_WORKSPACE_INDEX_MEMORY_ENV,
+  getWorkspaceIndexStatus,
+  refreshWorkspaceIndex,
+  type WorkspaceIndexProcessParams,
+} from "./workspace-index-core.js";
 import { createLogger, debugSuppressedError } from "./utils/logger.js";
 
 const log = createLogger("workspace-index-process");
 const INDEXING_STALE_MS = 5 * 60 * 1000;
 const ENTRY_PATH = resolve(import.meta.dir, "./workspace-index-process.ts");
 export const DISABLE_BACKGROUND_WORKSPACE_INDEX_ENV = "PICLAW_DISABLE_BACKGROUND_WORKSPACE_INDEX";
-export const AGGRESSIVE_WORKSPACE_INDEX_MEMORY_ENV = "PICLAW_AGGRESSIVE_WORKSPACE_INDEX_MEMORY";
-
-export interface WorkspaceIndexProcessParams {
-  scope?: WorkspaceSearchScope | string;
-  max_kb?: number;
-}
+export { AGGRESSIVE_WORKSPACE_INDEX_MEMORY_ENV };
 
 type WorkspaceIndexSpawn = (command: string, args: string[], options: SpawnOptions) => ChildProcess;
 
