@@ -28,6 +28,11 @@ import {
   getMediaIdsForMessage,
   getMediaIdsForMessages,
 } from "./media.js";
+import {
+  deleteThinkingContentByChatJid,
+  deleteThinkingContentByChatJidPattern,
+  deleteThinkingContentByMessageRowIds,
+} from "./thinking-cleanup.js";
 import { getSearchMatchMode } from "../core/config.js";
 
 /**
@@ -425,72 +430,11 @@ export function getThinkingContentForChat(chatJid: string, messageId: string): {
   };
 }
 
-/**
- * Delete thinking_content rows for a set of message rowids.
- *
- * Called from every code path that deletes messages, to avoid orphan
- * thinking_content rows. Safe to call with an empty list (no-op).
- *
- * @param rowIds Array of message rowids whose thinking should be purged.
- */
-export function deleteThinkingContentByMessageRowIds(rowIds: number[]): void {
-  if (rowIds.length === 0) return;
-  const db = getDb();
-  const placeholders = rowIds.map(() => "?").join(",");
-  db.prepare(
-    `DELETE FROM thinking_content WHERE message_id IN (${placeholders})`
-  ).run(...rowIds.map((id) => String(id)));
-}
-
-/**
- * Delete all thinking_content rows whose owning message belongs to a chat.
- *
- * Must be called BEFORE the matching messages DELETE so the subquery still
- * sees the rows. Used by chat-branches.ts and dream.ts for bulk wipes.
- *
- * @param chatJid Chat JID whose thinking content should be purged.
- */
-export function deleteThinkingContentByChatJid(chatJid: string): void {
-  const db = getDb();
-  db.prepare(
-    `DELETE FROM thinking_content
-     WHERE message_id IN (
-       SELECT CAST(rowid AS TEXT) FROM messages WHERE chat_jid = ?
-     )`
-  ).run(chatJid);
-}
-
-/**
- * Delete all thinking_content rows whose owning message belongs to any chat
- * matching a JID LIKE pattern, optionally excluding one specific chat.
- *
- * Used by dream.ts which sweeps dream:% chats (all or all-except-current).
- *
- * @param jidPattern SQL LIKE pattern for chat JIDs (e.g. 'dream:%').
- * @param excludeChatJid Optional chat JID to exclude from the sweep.
- */
-export function deleteThinkingContentByChatJidPattern(
-  jidPattern: string,
-  excludeChatJid?: string,
-): void {
-  const db = getDb();
-  if (excludeChatJid) {
-    db.prepare(
-      `DELETE FROM thinking_content
-       WHERE message_id IN (
-         SELECT CAST(rowid AS TEXT) FROM messages
-         WHERE chat_jid LIKE ? AND chat_jid != ?
-       )`
-    ).run(jidPattern, excludeChatJid);
-  } else {
-    db.prepare(
-      `DELETE FROM thinking_content
-       WHERE message_id IN (
-         SELECT CAST(rowid AS TEXT) FROM messages WHERE chat_jid LIKE ?
-       )`
-    ).run(jidPattern);
-  }
-}
+export {
+  deleteThinkingContentByChatJid,
+  deleteThinkingContentByChatJidPattern,
+  deleteThinkingContentByMessageRowIds,
+};
 
 /**
  * Replace the content (and optionally content_blocks, link_previews, media)

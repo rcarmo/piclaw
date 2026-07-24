@@ -1064,7 +1064,7 @@ function ensureMediaCompression(database: Database): void {
   if (version >= 2) return;
 
   try {
-    const result = recompressExistingMedia();
+    const result = recompressExistingMedia(database);
     if (result.compressed > 0) {
       log.info("Media compression migration completed", {
         operation: "migration.media_compression",

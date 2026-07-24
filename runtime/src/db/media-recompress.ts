@@ -7,7 +7,8 @@
  * Called from the startup migration path when upgrading to 2.0.
  */
 
-import { getDb } from "./connection.js";
+import type { Database } from "bun:sqlite";
+
 import { isCompressible, maybeCompress } from "./media-compression.js";
 
 export interface RecompressResult {
@@ -18,8 +19,7 @@ export interface RecompressResult {
   errors: number;
 }
 
-export function recompressExistingMedia(): RecompressResult {
-  const db = getDb();
+export function recompressExistingMedia(db: Database): RecompressResult {
   const result: RecompressResult = { scanned: 0, compressed: 0, savedBytes: 0, skipped: 0, errors: 0 };
 
   // Fetch all media IDs and types (without loading blobs)

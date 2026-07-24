@@ -10,6 +10,8 @@ import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { beforeAll, expect, test } from "bun:test";
 import { createTempWorkspace, getTestWorkspace, setEnv } from "../helpers.js";
+import { maybeDecompress } from "../../src/db/media-compression.js";
+import { recompressExistingMedia } from "../../src/db/media-recompress.js";
 
 let db: typeof import("../../src/db.js");
 
@@ -37,6 +39,25 @@ function makeMessage(chatJid: string, content: string, timestamp: string, isBot 
     is_bot_message: isBot,
   };
 }
+
+test("media recompression migration operates on an explicit database handle", () => {
+  const raw = new TextEncoder().encode("compressible text payload\n".repeat(200));
+  const rawId = `media-raw-${Date.now()}-${Math.random()}`;
+  const database = db.getDb();
+  database.prepare(
+    "INSERT INTO media(filename, content_type, data, thumbnail, metadata) VALUES (?, ?, ?, NULL, ?)"
+  ).run(`${rawId}.txt`, "text/plain", raw, JSON.stringify({ source: rawId }));
+  const rowId = (database.prepare("SELECT id FROM media WHERE filename = ?").get(`${rawId}.txt`) as { id: number }).id;
+
+  const result = recompressExistingMedia(database);
+
+  expect(result.scanned).toBeGreaterThanOrEqual(1);
+  expect(result.compressed).toBeGreaterThanOrEqual(1);
+  const stored = database.prepare("SELECT data, metadata FROM media WHERE id = ?").get(rowId) as { data: Uint8Array; metadata: string };
+  const metadata = JSON.parse(stored.metadata) as Record<string, unknown>;
+  expect(metadata.compressed).toBe("gzip");
+  expect(new TextDecoder().decode(maybeDecompress(stored.data, metadata))).toBe(new TextDecoder().decode(raw));
+});
 
 test("chat branch registry creates first-class branch rows with unique agent handles", () => {
   const rootChatJid = `web:test-root-${Date.now()}`;
@@ -475,6 +496,9 @@ test("permanentDeleteArchivedBranch removes archived branch state without deleti
   const uniqueMediaId = db.createMedia("branch.txt", "text/plain", new TextEncoder().encode("branch"), null, null);
   const sharedMediaId = db.createMedia("shared.txt", "text/plain", new TextEncoder().encode("shared"), null, null);
   const archivedMessageRowId = db.storeMessage(makeMessage(branchChatJid, "archived message", now));
+  db.getDb().prepare(
+    "INSERT INTO thinking_content(message_id, text, lines, duration_ms, model) VALUES (?, ?, ?, ?, ?)"
+  ).run(String(archivedMessageRowId), "archived branch thought", 1, 25, "test-model");
   db.attachMediaToMessage(archivedMessageRowId, [uniqueMediaId, sharedMediaId]);
   const siblingMessageRowId = db.storeMessage(makeMessage(siblingChatJid, "sibling message", now));
   db.attachMediaToMessage(siblingMessageRowId, [sharedMediaId]);
@@ -551,6 +575,7 @@ test("permanentDeleteArchivedBranch removes archived branch state without deleti
   expect(db.getChatBranchByChatJid(branchChatJid)).toBeNull();
   expect(db.getDb().prepare("SELECT COUNT(*) AS count FROM chats WHERE jid = ?").get(branchChatJid)).toEqual({ count: 0 });
   expect(db.getDb().prepare("SELECT COUNT(*) AS count FROM messages WHERE chat_jid = ?").get(branchChatJid)).toEqual({ count: 0 });
+  expect(db.getDb().prepare("SELECT COUNT(*) AS count FROM thinking_content WHERE message_id = ?").get(String(archivedMessageRowId))).toEqual({ count: 0 });
   expect(db.getDb().prepare("SELECT COUNT(*) AS count FROM scheduled_tasks WHERE chat_jid = ?").get(branchChatJid)).toEqual({ count: 0 });
   expect(db.getMediaById(uniqueMediaId)).toBeUndefined();
   expect(db.getMediaById(sharedMediaId)?.id).toBe(sharedMediaId);

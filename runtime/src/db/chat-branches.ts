@@ -6,8 +6,8 @@
  */
 
 import { getDb } from "./connection.js";
-import { deleteThinkingContentByChatJid } from "./messages.js";
 import { attachMediaToMessage, deleteUnreferencedMedia } from "./media.js";
+import { deleteThinkingContentByChatJid } from "./thinking-cleanup.js";
 import type { ChatBranchRecord } from "./types.js";
 import { createUuid } from "../utils/ids.js";
 

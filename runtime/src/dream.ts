@@ -12,7 +12,7 @@ import { refreshAgentMemoryFromDailyNotes, type RefreshAgentMemoryResult } from 
 import { AUTO_DREAM_DEFAULT_DAYS, MANUAL_DREAM_DEFAULT_DAYS } from "./dream-defaults.js";
 import { DATA_DIR, SESSIONS_DIR, WORKSPACE_DIR, getAgentRuntimeConfig } from "./core/config.js";
 import { getTaskById, createTask, getDb, updateTask } from "./db.js";
-import { deleteThinkingContentByChatJid, deleteThinkingContentByChatJidPattern } from "./db/messages.js";
+import { deleteThinkingContentByChatJid, deleteThinkingContentByChatJidPattern } from "./db/thinking-cleanup.js";
 import { refreshWorkspaceIndex } from "./workspace-search.js";
 import { computeNextRun } from "./task-scheduler-utils.js";
 import { sanitiseJid } from "./agent-pool/session.js";

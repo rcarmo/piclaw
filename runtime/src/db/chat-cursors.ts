@@ -40,7 +40,7 @@
  */
 
 import { getDb } from "./connection.js";
-import { deleteThinkingContentByMessageRowIds } from "./messages.js";
+import { deleteThinkingContentByMessageRowIds } from "./thinking-cleanup.js";
 
 /** Shared shape for persisted preflight / inflight run markers. */
 interface PendingRunState {
