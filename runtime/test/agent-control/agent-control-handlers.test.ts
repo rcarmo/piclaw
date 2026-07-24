@@ -556,15 +556,21 @@ test("login config writes stay inside the overridden pi-agent dir", async () => 
   expect(session.model?.id).toBe("gpt-test");
   expect(loginRegistry.authStorage.get("openai")).toMatchObject({ type: "api_key", key: "new-key" });
 
-  let reloadConfigCalls = 0;
-  loginRegistry.modelRuntime.reloadConfig = async () => { reloadConfigCalls += 1; };
+  let modelRefreshCalls = 0;
+  const modelRefreshOptions: unknown[] = [];
+  loginRegistry.modelRuntime.refresh = async (options: unknown) => {
+    modelRefreshCalls += 1;
+    modelRefreshOptions.push(options);
+    return { aborted: false, errors: new Map() };
+  };
   const configureResult = await applyControlCommand(runtime as any, loginRegistry, {
     type: "login",
     provider: `__step2 ${JSON.stringify({ provider: "ollama", method: "configure", baseUrl: "http://127.0.0.1:11434/v1", modelId: "llama3:latest", modelIds: "qwen3:latest", contextWindow: "128000" })}`,
     raw: "/login __step2",
   });
   expect(configureResult.status).toBe("success");
-  expect(reloadConfigCalls).toBe(1);
+  expect(modelRefreshCalls).toBe(1);
+  expect(modelRefreshOptions).toEqual([{ allowNetwork: false }]);
 
   const modelsPath = join(piAgentDir, "models.json");
   expect(existsSync(modelsPath)).toBe(true);
@@ -578,7 +584,8 @@ test("login config writes stay inside the overridden pi-agent dir", async () => 
     raw: "/login __step2",
   });
   expect(llamaCppResult.status).toBe("success");
-  expect(reloadConfigCalls).toBe(2);
+  expect(modelRefreshCalls).toBe(2);
+  expect(modelRefreshOptions).toEqual([{ allowNetwork: false }, { allowNetwork: false }]);
 
   const updatedModelsJson = JSON.parse(readFileSync(modelsPath, "utf-8"));
   expect(updatedModelsJson.providers?.["llama-cpp"]?.baseUrl).toBe("http://127.0.0.1:8080/v1");

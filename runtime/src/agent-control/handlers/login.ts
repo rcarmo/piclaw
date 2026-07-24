@@ -649,7 +649,7 @@ async function handleStep2(
     if (!modelsJson.providers) modelsJson.providers = {};
     modelsJson.providers[providerId] = { baseUrl, api: def.customApi || "openai-completions", ...(apiKey ? { apiKey } : {}), models };
     writeJsonFile(getModelsJsonPath(), modelsJson);
-    await modelRuntime.reloadConfig();
+    await modelRuntime.refresh({ allowNetwork: false });
 
     return await showCard3OrComplete(session, modelRegistry, def, providerId, name, registry);
   }
@@ -663,7 +663,7 @@ async function handleStep2(
         backupFile(getModelsJsonPath());
         delete modelsJson.providers[providerId];
         writeJsonFile(getModelsJsonPath(), modelsJson);
-        await modelRuntime.reloadConfig();
+        await modelRuntime.refresh({ allowNetwork: false });
       }
     }
     return { status: "success", message: `✓ **${name}** removed. Backups created.` };

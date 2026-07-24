@@ -54,7 +54,7 @@ export function createTestModelRegistry(models: any[] = [DEFAULT_TEST_MODEL], au
       return credential;
     },
     logout: async (providerId: string) => { authStorage.set(providerId, undefined); },
-    reloadConfig: async () => {},
+    refresh: async () => ({ aborted: false, errors: new Map() }),
     getAuth: async (providerId: string) => {
       const credential = authStorage.get(providerId);
       if (!credential) return undefined;

@@ -18,7 +18,7 @@ export class PiclawModelRegistry extends ModelRegistry {
 
   override refresh(): Promise<void> {
     if (this.refreshInFlight) return this.refreshInFlight;
-    const refresh = this.modelRuntime.reloadConfig();
+    const refresh = this.modelRuntime.refresh({ allowNetwork: false }).then(() => undefined);
     const tracked = refresh.finally(() => {
       if (this.refreshInFlight === tracked) this.refreshInFlight = null;
     });

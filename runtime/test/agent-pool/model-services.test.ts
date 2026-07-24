@@ -28,7 +28,7 @@ describe("runtime model services", () => {
   test("creates the runtime cache-first with canonical agent paths", async () => {
     const agentDir = tempAgentDir();
     let captured: CreateModelRuntimeOptions | null = null;
-    const fakeRuntime = { reloadConfig: async () => {} } as unknown as ModelRuntime;
+    const fakeRuntime = { refresh: async () => ({ aborted: false, errors: new Map() }) } as unknown as ModelRuntime;
 
     const services = await createRuntimeModelServices({
       agentDir,
@@ -56,7 +56,7 @@ describe("runtime model services", () => {
     process.env.PICLAW_PI_AGENT_DIR = piclawAgentDir;
     process.env.PI_CODING_AGENT_DIR = join(root, "upstream-agent");
     let captured: CreateModelRuntimeOptions | null = null;
-    const fakeRuntime = { reloadConfig: async () => {} } as unknown as ModelRuntime;
+    const fakeRuntime = { refresh: async () => ({ aborted: false, errors: new Map() }) } as unknown as ModelRuntime;
 
     const services = await createRuntimeModelServices({
       createModelRuntime: async (options) => {
@@ -76,13 +76,16 @@ describe("runtime model services", () => {
 
   test("compat registry coalesces concurrent config reloads", async () => {
     tempAgentDir();
-    let reloadCalls = 0;
+    let refreshCalls = 0;
+    const refreshOptions: unknown[] = [];
     let release: (() => void) | undefined;
     const blocker = new Promise<void>((resolve) => { release = resolve; });
     const runtime = {
-      reloadConfig: async () => {
-        reloadCalls += 1;
+      refresh: async (options: unknown) => {
+        refreshCalls += 1;
+        refreshOptions.push(options);
         await blocker;
+        return { aborted: false, errors: new Map() };
       },
     } as unknown as ModelRuntime;
     const registry = new PiclawModelRegistry(runtime);
@@ -90,11 +93,12 @@ describe("runtime model services", () => {
     const first = registry.refresh();
     const second = registry.refresh();
     expect(first).toBe(second);
-    expect(reloadCalls).toBe(1);
+    expect(refreshCalls).toBe(1);
     release?.();
     await first;
 
     await registry.refresh();
-    expect(reloadCalls).toBe(2);
+    expect(refreshCalls).toBe(2);
+    expect(refreshOptions).toEqual([{ allowNetwork: false }, { allowNetwork: false }]);
   });
 });

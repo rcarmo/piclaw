@@ -112,9 +112,9 @@
   },
   "dependencies": {
     "@e965/xlsx": "0.20.3",
-    "@earendil-works/pi-agent-core": "0.81.1",
-    "@earendil-works/pi-ai": "0.81.1",
-    "@earendil-works/pi-coding-agent": "0.81.1",
+    "@earendil-works/pi-agent-core": "0.82.0",
+    "@earendil-works/pi-ai": "0.82.0",
+    "@earendil-works/pi-coding-agent": "0.82.0",
     "@fontsource-variable/inter": "5.2.8",
     "@lezer/highlight": "1.2.3",
     "@simplewebauthn/server": "13.3.1",
