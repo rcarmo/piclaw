@@ -120,6 +120,45 @@ describe("queued follow-up lifecycle service", () => {
     expect(sessionRemovals).toEqual([{ chatJid: "web:default", content: "queued placeholder" }]);
   });
 
+  test("persists deferred queued follow-ups with canonical metadata projection and mutation isolation", async () => {
+    const { db, service } = await createServiceFixture();
+    const contentBlock = { type: "text", nested: { value: 1 } };
+    const linkPreview = { href: "https://example.test" };
+    const queuedBy = { userId: " user ", sessionId: " session ", clientId: " client " };
+
+    const rowId = service.enqueueQueuedFollowupItem("web:default", 0, "deferred metadata", null, "2024-01-01T00:00:00.000Z", {
+      mediaIds: [1, 2],
+      contentBlocks: [contentBlock],
+      linkPreviews: [linkPreview],
+      screenHint: " mobile ",
+      source: " test ",
+      queuedBy,
+    });
+
+    contentBlock.nested.value = 99;
+    linkPreview.href = "https://mutated.test";
+    queuedBy.userId = "mutated";
+
+    const persisted = db.getDeferredQueuedFollowups("web:default");
+    expect(persisted).toHaveLength(1);
+    expect(persisted[0]).toMatchObject({
+      rowId,
+      queuedContent: "deferred metadata",
+      threadId: null,
+      queuedAt: "2024-01-01T00:00:00.000Z",
+      mediaIds: [1, 2],
+      screenHint: "mobile",
+      source: "test",
+      queuedBy: { userId: "user", sessionId: "session", clientId: "client" },
+      materializeRetries: 0,
+    });
+    expect((persisted[0].contentBlocks?.[0] as any).nested.value).toBe(1);
+    expect((persisted[0].linkPreviews?.[0] as any).href).toBe("https://example.test");
+
+    (persisted[0].contentBlocks?.[0] as any).nested.value = 2;
+    expect((service.getQueuedFollowupItems("web:default")[0].contentBlocks?.[0] as any).nested.value).toBe(1);
+  });
+
   test("removes deferred queued follow-ups without touching active-session placeholder cleanup", async () => {
     const { db, service } = await createServiceFixture();
 

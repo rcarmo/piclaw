@@ -14,7 +14,13 @@ import {
   setDeferredQueuedFollowups,
 } from "../../../db.js";
 import type { DeferredQueuedFollowupRecord } from "../../../db.js";
-import { FollowupPlaceholderStore, type QueuedFollowupItem } from "./followup-placeholders.js";
+import {
+  cloneQueuedFollowupItem,
+  projectPersistedQueuedFollowupItem,
+  projectQueuedFollowupItem,
+  type QueuedFollowupItem,
+} from "../../../queued-followups.js";
+import { FollowupPlaceholderStore } from "./followup-placeholders.js";
 
 export interface QueuedFollowupStateItem {
   row_id: number;
@@ -34,36 +40,8 @@ export interface RemoveQueuedFollowupForActionResult {
   source: "deferred" | "placeholder" | null;
 }
 
-function cloneQueuedFollowupItem(item: QueuedFollowupItem): QueuedFollowupItem {
-  return {
-    rowId: item.rowId,
-    queuedContent: item.queuedContent,
-    threadId: item.threadId ?? null,
-    queuedAt: item.queuedAt,
-    mediaIds: item.mediaIds ? [...item.mediaIds] : undefined,
-    contentBlocks: Array.isArray(item.contentBlocks) ? [...item.contentBlocks] : undefined,
-    linkPreviews: Array.isArray(item.linkPreviews) ? [...item.linkPreviews] : undefined,
-    screenHint: typeof item.screenHint === "string" && item.screenHint.trim() ? item.screenHint.trim() : undefined,
-    source: typeof item.source === "string" && item.source.trim() ? item.source.trim() : undefined,
-    queuedBy: item.queuedBy ? { ...item.queuedBy } : undefined,
-    materializeRetries: item.materializeRetries,
-  };
-}
-
 function toDeferredQueuedFollowupRecord(item: QueuedFollowupItem): DeferredQueuedFollowupRecord {
-  return {
-    rowId: item.rowId,
-    queuedContent: item.queuedContent,
-    threadId: item.threadId ?? null,
-    queuedAt: item.queuedAt,
-    mediaIds: item.mediaIds ? [...item.mediaIds] : undefined,
-    contentBlocks: Array.isArray(item.contentBlocks) ? [...item.contentBlocks] : undefined,
-    linkPreviews: Array.isArray(item.linkPreviews) ? [...item.linkPreviews] : undefined,
-    screenHint: typeof item.screenHint === "string" && item.screenHint.trim() ? item.screenHint.trim() : undefined,
-    source: typeof item.source === "string" && item.source.trim() ? item.source.trim() : undefined,
-    queuedBy: item.queuedBy ? { ...item.queuedBy } : undefined,
-    materializeRetries: item.materializeRetries ?? 0,
-  };
+  return projectPersistedQueuedFollowupItem(item) as DeferredQueuedFollowupRecord;
 }
 
 export class QueuedFollowupLifecycleService {
@@ -99,18 +77,13 @@ export class QueuedFollowupLifecycleService {
   ): number {
     const resolvedRowId = Number.isFinite(rowId) && rowId !== 0 ? rowId : this.allocateDeferredQueuedRowId(chatJid);
     const queued = this.getDeferredQueuedFollowupItems(chatJid);
-    queued.push({
+    queued.push(projectQueuedFollowupItem({
       rowId: resolvedRowId,
       queuedContent,
-      threadId: threadId ?? null,
+      threadId,
       queuedAt: queuedAt ?? new Date().toISOString(),
-      mediaIds: extras?.mediaIds ? [...extras.mediaIds] : undefined,
-      contentBlocks: Array.isArray(extras?.contentBlocks) ? [...extras.contentBlocks] : undefined,
-      linkPreviews: Array.isArray(extras?.linkPreviews) ? [...extras.linkPreviews] : undefined,
-      screenHint: typeof extras?.screenHint === "string" && extras.screenHint.trim() ? extras.screenHint.trim() : undefined,
-      source: typeof extras?.source === "string" && extras.source.trim() ? extras.source.trim() : undefined,
-      queuedBy: extras?.queuedBy ? { ...extras.queuedBy } : undefined,
-    });
+      ...extras,
+    }));
     this.setDeferredQueuedFollowupItems(chatJid, queued);
     return resolvedRowId;
   }
@@ -206,19 +179,7 @@ export class QueuedFollowupLifecycleService {
   }
 
   private getDeferredQueuedFollowupItems(chatJid: string): QueuedFollowupItem[] {
-    return getDeferredQueuedFollowups(chatJid).map((item) => ({
-      rowId: item.rowId,
-      queuedContent: item.queuedContent,
-      threadId: item.threadId ?? null,
-      queuedAt: item.queuedAt,
-      mediaIds: item.mediaIds ? [...item.mediaIds] : undefined,
-      contentBlocks: Array.isArray(item.contentBlocks) ? [...item.contentBlocks] : undefined,
-      linkPreviews: Array.isArray(item.linkPreviews) ? [...item.linkPreviews] : undefined,
-      screenHint: typeof item.screenHint === "string" && item.screenHint.trim() ? item.screenHint.trim() : undefined,
-      source: typeof item.source === "string" && item.source.trim() ? item.source.trim() : undefined,
-      queuedBy: item.queuedBy ? { ...item.queuedBy } : undefined,
-      materializeRetries: item.materializeRetries ?? 0,
-    }));
+    return getDeferredQueuedFollowups(chatJid).map((item) => projectPersistedQueuedFollowupItem(item));
   }
 
   private setDeferredQueuedFollowupItems(chatJid: string, items: QueuedFollowupItem[]): void {

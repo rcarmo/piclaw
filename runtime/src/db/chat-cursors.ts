@@ -40,6 +40,7 @@
  */
 
 import { getDb } from "./connection.js";
+import { projectPersistedQueuedFollowupItem, type QueuedFollowupSourceMetadata } from "../queued-followups.js";
 import { deleteThinkingContentByMessageRowIds } from "./thinking-cleanup.js";
 
 /** Shared shape for persisted preflight / inflight run markers. */
@@ -111,11 +112,7 @@ export interface DeferredQueuedFollowupRecord {
   linkPreviews?: unknown[];
   screenHint?: string;
   source?: string;
-  queuedBy?: {
-    userId?: string;
-    sessionId?: string;
-    clientId?: string;
-  };
+  queuedBy?: QueuedFollowupSourceMetadata;
   /** Number of times materializeNextDeferredFollowup has failed for this item. */
   materializeRetries?: number;
 }
@@ -156,36 +153,11 @@ export function getInflightMessageId(chatJid: string): string | null {
   return row?.inflight_message_id ?? null;
 }
 
-function sanitizeQueuedBy(value: unknown): DeferredQueuedFollowupRecord["queuedBy"] | undefined {
-  if (!value || typeof value !== "object") return undefined;
-  const record = value as Record<string, unknown>;
-  const queuedBy = {
-    ...(typeof record.userId === "string" && record.userId.trim() ? { userId: record.userId.trim() } : {}),
-    ...(typeof record.sessionId === "string" && record.sessionId.trim() ? { sessionId: record.sessionId.trim() } : {}),
-    ...(typeof record.clientId === "string" && record.clientId.trim() ? { clientId: record.clientId.trim() } : {}),
-  };
-  return Object.keys(queuedBy).length > 0 ? queuedBy : undefined;
-}
-
 function sanitizeDeferredQueuedFollowupRecord(value: unknown): DeferredQueuedFollowupRecord | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
   if (!Number.isFinite(record.rowId) || typeof record.queuedContent !== "string") return null;
-  return {
-    rowId: Number(record.rowId),
-    queuedContent: record.queuedContent,
-    threadId: Number.isFinite(record.threadId) ? Number(record.threadId) : null,
-    queuedAt: typeof record.queuedAt === "string" && record.queuedAt ? record.queuedAt : new Date(0).toISOString(),
-    mediaIds: Array.isArray(record.mediaIds)
-      ? record.mediaIds.map((id) => Number(id)).filter((id) => Number.isFinite(id))
-      : undefined,
-    contentBlocks: Array.isArray(record.contentBlocks) ? [...record.contentBlocks] : undefined,
-    linkPreviews: Array.isArray(record.linkPreviews) ? [...record.linkPreviews] : undefined,
-    screenHint: typeof record.screenHint === "string" && record.screenHint.trim() ? record.screenHint.trim() : undefined,
-    source: typeof record.source === "string" && record.source.trim() ? record.source.trim() : undefined,
-    queuedBy: sanitizeQueuedBy(record.queuedBy),
-    materializeRetries: Number.isFinite(record.materializeRetries) ? Number(record.materializeRetries) : 0,
-  };
+  return projectPersistedQueuedFollowupItem(record as any) as DeferredQueuedFollowupRecord;
 }
 
 /** Read deferred queued follow-ups for a chat from chat_cursors. */
@@ -209,19 +181,7 @@ export function getDeferredQueuedFollowups(chatJid: string): DeferredQueuedFollo
 /** Persist the full deferred queued follow-up list for a chat. */
 export function setDeferredQueuedFollowups(chatJid: string, items: DeferredQueuedFollowupRecord[]): void {
   const db = getDb();
-  const payload = JSON.stringify(items.map((item) => ({
-    rowId: item.rowId,
-    queuedContent: item.queuedContent,
-    threadId: item.threadId ?? null,
-    queuedAt: item.queuedAt,
-    mediaIds: item.mediaIds ? [...item.mediaIds] : undefined,
-    contentBlocks: Array.isArray(item.contentBlocks) ? [...item.contentBlocks] : undefined,
-    linkPreviews: Array.isArray(item.linkPreviews) ? [...item.linkPreviews] : undefined,
-    screenHint: typeof item.screenHint === "string" && item.screenHint.trim() ? item.screenHint.trim() : undefined,
-    source: typeof item.source === "string" && item.source.trim() ? item.source.trim() : undefined,
-    queuedBy: item.queuedBy ? { ...item.queuedBy } : undefined,
-    materializeRetries: item.materializeRetries || 0,
-  })));
+  const payload = JSON.stringify(items.map((item) => projectPersistedQueuedFollowupItem(item)));
   db.prepare(`
     INSERT INTO chat_cursors (chat_jid, cursor_ts, queued_followups_json)
     VALUES (?, '', ?)

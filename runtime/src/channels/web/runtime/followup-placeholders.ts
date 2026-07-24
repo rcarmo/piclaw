@@ -2,27 +2,13 @@
  * channels/web/followup-placeholders.ts – queued follow-up placeholder row ids.
  */
 
-export interface QueuedFollowupSourceMetadata {
-  source?: string;
-  userId?: string;
-  sessionId?: string;
-  clientId?: string;
-}
+import {
+  cloneQueuedFollowupItem,
+  projectQueuedFollowupItem,
+  type QueuedFollowupItem,
+} from "../../../queued-followups.js";
 
-export interface QueuedFollowupItem {
-  rowId: number;
-  queuedContent: string;
-  threadId?: number | null;
-  queuedAt: string;
-  mediaIds?: number[];
-  contentBlocks?: unknown[];
-  linkPreviews?: unknown[];
-  screenHint?: string;
-  source?: string;
-  queuedBy?: QueuedFollowupSourceMetadata;
-  /** Number of times materializeNextDeferredFollowup has failed for this item. */
-  materializeRetries?: number;
-}
+export type { QueuedFollowupItem, QueuedFollowupSourceMetadata } from "../../../queued-followups.js";
 
 /** FIFO in-memory row-id queue for deferred follow-up placeholder replacement. */
 export class FollowupPlaceholderStore {
@@ -37,35 +23,19 @@ export class FollowupPlaceholderStore {
     extras?: Pick<QueuedFollowupItem, "mediaIds" | "contentBlocks" | "linkPreviews" | "screenHint" | "source" | "queuedBy">
   ): void {
     const existing = this.queuedFollowupPlaceholders.get(chatJid) ?? [];
-    existing.push({
+    existing.push(projectQueuedFollowupItem({
       rowId,
       queuedContent,
-      threadId: threadId ?? null,
+      threadId,
       queuedAt: queuedAt ?? new Date().toISOString(),
-      mediaIds: extras?.mediaIds ? [...extras.mediaIds] : undefined,
-      contentBlocks: Array.isArray(extras?.contentBlocks) ? [...extras.contentBlocks] : undefined,
-      linkPreviews: Array.isArray(extras?.linkPreviews) ? [...extras.linkPreviews] : undefined,
-      screenHint: typeof extras?.screenHint === "string" && extras.screenHint.trim() ? extras.screenHint.trim() : undefined,
-      source: typeof extras?.source === "string" && extras.source.trim() ? extras.source.trim() : undefined,
-      queuedBy: extras?.queuedBy ? { ...extras.queuedBy } : undefined,
-    });
+      ...extras,
+    }));
     this.queuedFollowupPlaceholders.set(chatJid, existing);
   }
 
   prepend(chatJid: string, item: QueuedFollowupItem): void {
     const existing = this.queuedFollowupPlaceholders.get(chatJid) ?? [];
-    existing.unshift({
-      rowId: item.rowId,
-      queuedContent: item.queuedContent,
-      threadId: item.threadId ?? null,
-      queuedAt: item.queuedAt,
-      mediaIds: item.mediaIds ? [...item.mediaIds] : undefined,
-      contentBlocks: Array.isArray(item.contentBlocks) ? [...item.contentBlocks] : undefined,
-      linkPreviews: Array.isArray(item.linkPreviews) ? [...item.linkPreviews] : undefined,
-      screenHint: typeof item.screenHint === "string" && item.screenHint.trim() ? item.screenHint.trim() : undefined,
-      source: typeof item.source === "string" && item.source.trim() ? item.source.trim() : undefined,
-      queuedBy: item.queuedBy ? { ...item.queuedBy } : undefined,
-    });
+    existing.unshift(cloneQueuedFollowupItem(item));
     this.queuedFollowupPlaceholders.set(chatJid, existing);
   }
 
@@ -86,7 +56,7 @@ export class FollowupPlaceholderStore {
   }
 
   peek(chatJid: string): QueuedFollowupItem[] {
-    return [...(this.queuedFollowupPlaceholders.get(chatJid) ?? [])];
+    return (this.queuedFollowupPlaceholders.get(chatJid) ?? []).map((item) => cloneQueuedFollowupItem(item));
   }
 
   /** Remove a specific queued item by placeholder row id. */
@@ -100,12 +70,12 @@ export class FollowupPlaceholderStore {
     const [removed] = queue.splice(index, 1);
     if (!queue.length) this.queuedFollowupPlaceholders.delete(chatJid);
     else this.queuedFollowupPlaceholders.set(chatJid, queue);
-    return removed ?? null;
+    return removed ? cloneQueuedFollowupItem(removed) : null;
   }
 
   /** Remove all queued items for a chat. */
   drain(chatJid: string): QueuedFollowupItem[] {
-    const items = this.queuedFollowupPlaceholders.get(chatJid) ?? [];
+    const items = (this.queuedFollowupPlaceholders.get(chatJid) ?? []).map((item) => cloneQueuedFollowupItem(item));
     this.queuedFollowupPlaceholders.delete(chatJid);
     return items;
   }
