@@ -99,6 +99,48 @@ describe("bun-runner extension", () => {
     expect(result.content[0].text).toContain("stderr:\nstderr:hello");
   });
 
+  test("passes upstream-compatible PI session metadata to scripts", async () => {
+    const fake = createFakeExtensionApi();
+    bunRunnerExtension(fake.api);
+    const tool = fake.tools.get("bun_run");
+    if (!tool) throw new Error("bun_run not registered");
+
+    const { prefix, base } = makeTempDir();
+    const scriptPath = join(base, "env.ts");
+    writeFileSync(scriptPath, [
+      'console.log(JSON.stringify({',
+      '  session: process.env.PI_SESSION_ID,',
+      '  file: process.env.PI_SESSION_FILE,',
+      '  provider: process.env.PI_PROVIDER,',
+      '  model: process.env.PI_MODEL,',
+      '  reasoning: process.env.PI_REASONING_LEVEL,',
+      '}));',
+    ].join("\n"), "utf8");
+
+    const result = await tool.execute("tool-env", {
+      script: `${prefix}/env.ts`,
+      cwd: prefix,
+      timeout_sec: 30,
+      capture_stdout: true,
+    }, undefined, undefined, {
+      model: { provider: "github-copilot", id: "gpt-5.5" },
+      thinkingLevel: "high",
+      sessionManager: {
+        getSessionId: () => "session-123",
+        getPath: () => "/tmp/session-123.jsonl",
+      },
+    });
+
+    expect(result.details.ok).toBe(true);
+    expect(JSON.parse(String(result.details.stdout).trim())).toEqual({
+      session: "session-123",
+      file: "/tmp/session-123.jsonl",
+      provider: "github-copilot",
+      model: "gpt-5.5",
+      reasoning: "high",
+    });
+  });
+
   test("stores large captured stdout as searchable tool output", async () => {
     const db = await import("../../src/db.js");
     db.initDatabase();

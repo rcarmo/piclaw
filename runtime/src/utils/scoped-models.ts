@@ -131,6 +131,12 @@ export function filterModelsByEnabledPatterns(models: Model<Api>[], patterns: re
     const pattern = stripThinkingLevel(String(rawPattern || "").trim());
     if (!pattern) continue;
 
+    const exact = findExactModelReferenceMatch(pattern, models);
+    if (exact) {
+      selected.set(modelKey(exact), exact);
+      continue;
+    }
+
     if (hasGlob(pattern)) {
       const regex = globToRegex(pattern);
       for (const model of models) {

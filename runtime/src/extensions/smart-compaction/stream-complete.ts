@@ -71,8 +71,8 @@ export async function streamComplete(opts: StreamCompleteOptions): Promise<Assis
   };
 
   const streamOptions: SimpleStreamOptions = reasoning
-    ? { maxTokens, signal, apiKey, headers, env, reasoning, onPayload }
-    : { maxTokens, signal, apiKey, headers, env, onPayload };
+    ? { maxTokens, signal, apiKey, headers, env, reasoning, onPayload, cacheRetention: "none" }
+    : { maxTokens, signal, apiKey, headers, env, onPayload, cacheRetention: "none" };
 
   const normalizedContext = normalizeLlmContext(context);
 

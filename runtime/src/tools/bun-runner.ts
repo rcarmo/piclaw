@@ -16,6 +16,7 @@ import { StringDecoder } from "string_decoder";
 
 import { WORKSPACE_DIR } from "../core/config.js";
 import { buildPreview, saveToolOutput } from "../tool-output.js";
+import { mergePiSessionEnv, type PiSessionEnvInput } from "../utils/pi-session-env.js";
 import { killProcessTree, registerProcess, unregisterProcess } from "../utils/process-tracker.js";
 import { shouldDetachChildProcess } from "../utils/process-spawn.js";
 
@@ -32,6 +33,7 @@ export interface RunBunScriptParams {
   cwd?: string;
   timeoutSec?: number;
   captureStdout?: boolean;
+  sessionEnv?: PiSessionEnvInput;
 }
 
 export interface ResolvedBunScriptTarget {
@@ -287,7 +289,7 @@ export async function runBunScript(
     child = spawn(bunPath, [target.scriptPath, ...target.args], {
       cwd: target.cwd,
       detached: shouldDetachChildProcess(process.platform),
-      env: process.env,
+      env: mergePiSessionEnv(process.env, params.sessionEnv),
       stdio: ["ignore", target.captureStdout ? "pipe" : "ignore", "pipe"],
     });
 

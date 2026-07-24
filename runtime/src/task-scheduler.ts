@@ -30,6 +30,7 @@ import { detectChannel, formatOutbound } from "./router.js";
 import type { ScheduledTask } from "./types.js";
 import { createTrackedBashOperations } from "./tools/tracked-bash.js";
 import { createLogger } from "./utils/logger.js";
+import { buildPiSessionEnv } from "./utils/pi-session-env.js";
 import { validateShellCommand, validateShellCwd } from "./utils/task-validation.js";
 
 const log = createLogger("scheduler");
@@ -233,7 +234,10 @@ async function runShellTask(task: ScheduledTask): Promise<{ result: string | nul
         appendDecodedText(decoder.decode(chunk, { stream: true }));
       },
       timeout: task.timeout_sec ?? undefined,
-      env: undefined,
+      env: buildPiSessionEnv({
+        sessionId: task.id,
+        modelLabel: task.model,
+      }),
     });
     appendDecodedText(decoder.decode());
 

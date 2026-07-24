@@ -56,7 +56,7 @@ describe("provider defs", () => {
     expect(ids).not.toContain("antigravity");
   });
 
-  test("documents upstream token-plan and regional provider splits", () => {
+  test("documents upstream token-plan, OAuth, and regional provider splits", () => {
     const defs = getProviderDefs();
     expect(defs.find((entry) => entry.id === "qwen-token-plan")).toMatchObject({
       name: "Qwen Token Plan", hasApiKey: true, apiKeyHint: "sk-sp-...",
@@ -75,6 +75,12 @@ describe("provider defs", () => {
     });
     expect(defs.find((entry) => entry.id === "zai-coding-cn")).toMatchObject({
       name: "Z.AI Coding CN", hasApiKey: true, apiKeyHint: "ZAI_CODING_CN_API_KEY",
+    });
+    expect(defs.find((entry) => entry.id === "openrouter")).toMatchObject({
+      name: "OpenRouter", hasOAuth: true, hasApiKey: true,
+    });
+    expect(defs.find((entry) => entry.id === "kimi-coding")).toMatchObject({
+      name: "Kimi For Coding", hasOAuth: true, hasApiKey: true,
     });
   });
 

@@ -8,6 +8,7 @@
 
 import { Type, type Static } from "typebox";
 import type { AgentToolResult, ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import type { Api, Model } from "@earendil-works/pi-ai";
 
 import { registerToolStatusHintProvider } from "../tool-status-hints.js";
 import type { CapturedBunStreamResult } from "../tools/bun-runner.js";
@@ -19,6 +20,12 @@ const BUN_WORKING_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "�
 
 type BunRunUiContext = {
   hasUI?: boolean;
+  model?: Model<Api>;
+  thinkingLevel?: string;
+  sessionManager?: {
+    getSessionId?: () => string;
+    getPath?: () => string | null | undefined;
+  };
   ui?: {
     setWorkingIndicator: (options?: { frames?: string[]; intervalMs?: number }) => void;
     setWorkingMessage: (message?: string) => void;
@@ -175,6 +182,12 @@ export const bunRunner: ExtensionFactory = (pi: ExtensionAPI) => {
           cwd: params.cwd,
           timeoutSec: params.timeout_sec,
           captureStdout: params.capture_stdout,
+          sessionEnv: {
+            sessionId: ctx?.sessionManager?.getSessionId?.(),
+            sessionFile: ctx?.sessionManager?.getPath?.(),
+            model: ctx?.model,
+            thinkingLevel: ctx?.thinkingLevel,
+          },
         }, signal);
 
         return {

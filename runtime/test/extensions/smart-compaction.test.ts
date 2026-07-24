@@ -1208,6 +1208,7 @@ describe("smart-compaction", () => {
 
     expect(completeSimple).toHaveBeenCalledTimes(1);
     expect((completeSimple as any).mock.calls[0][2].reasoning).toBe("medium");
+    expect((completeSimple as any).mock.calls[0][2].cacheRetention).toBe("none");
     expect(result).toBeDefined();
     expect(result.compaction).toBeDefined();
     expect(result.compaction.summary).toContain("Test goal");
@@ -1549,6 +1550,7 @@ describe("smart-compaction", () => {
     expect(completeSimple).toHaveBeenCalledTimes(1);
     expect((completeSimple as any).mock.calls[0][0]).toMatchObject({ provider: "github-copilot", id: "claude-opus-4.8" });
     expect((completeSimple as any).mock.calls[0][2]).not.toHaveProperty("reasoning");
+    expect((completeSimple as any).mock.calls[0][2].cacheRetention).toBe("none");
   });
 
   it("sanitizes context-pruned tool history before building the compaction prompt", async () => {
@@ -1662,6 +1664,7 @@ describe("smart-compaction", () => {
       apiKey: undefined,
       headers: undefined,
       env: undefined,
+      cacheRetention: "none",
     });
   });
 

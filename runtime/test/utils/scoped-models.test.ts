@@ -37,4 +37,18 @@ describe("scoped model filtering", () => {
       "openai/gpt-5",
     ]);
   });
+
+  test("resolves exact model IDs containing brackets before treating patterns as globs", () => {
+    const models = [
+      model("test", "model[beta]", "Bracket Model"),
+      model("test", "modelb", "Glob-like Model"),
+    ];
+
+    expect(filterModelsByEnabledPatterns(models, ["test/model[beta]"]).map((m) => `${m.provider}/${m.id}`)).toEqual([
+      "test/model[beta]",
+    ]);
+    expect(filterModelsByEnabledPatterns(models, ["model[beta]"]).map((m) => `${m.provider}/${m.id}`)).toEqual([
+      "test/model[beta]",
+    ]);
+  });
 });

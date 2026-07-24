@@ -72,6 +72,7 @@ export const sendAdaptiveCard: ExtensionFactory = (pi: ExtensionAPI) => {
     description: "Post a PiClaw web Adaptive Card as an agent message.",
     promptSnippet: "send_adaptive_card: post an agent-owned adaptive_card content block to web timeline.",
     parameters: SendAdaptiveCardSchema,
+    constrainedSampling: { type: "json_schema", strict: "prefer" },
     async execute(_toolCallId, params: SendAdaptiveCardParams) {
       const content = params.content?.trim();
       if (!content) return buildResultError("Provide content.");

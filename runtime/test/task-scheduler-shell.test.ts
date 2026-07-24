@@ -68,6 +68,36 @@ test("runScheduledTask executes shell command and sends output", async () => {
   expect(sentNudges).toEqual([sentMessages[0].text]);
 });
 
+test("runScheduledTask injects upstream-compatible PI metadata for shell tasks", async () => {
+  const taskId = `task-shell-env-${Date.now()}`;
+  db!.createTask({
+    id: taskId,
+    chat_jid: "web:default",
+    prompt: "print env",
+    model: "openrouter/moonshotai/kimi-k2.6",
+    task_kind: "shell",
+    command: "printf '%s %s %s' \"$PI_SESSION_ID\" \"$PI_PROVIDER\" \"$PI_MODEL\"",
+    cwd: ".",
+    timeout_sec: 10,
+    schedule_type: "once",
+    schedule_value: new Date().toISOString(),
+    next_run: new Date().toISOString(),
+    status: "active",
+    created_at: new Date().toISOString(),
+  });
+
+  const task = db!.getTaskById(taskId)!;
+  await scheduler!.runScheduledTask(task, {
+    queue: {} as any,
+    agentPool: {} as any,
+    sendMessage: async (jid, text) => { sentMessages.push({ jid, text }); },
+    sendNudge: async (text) => { sentNudges.push(text); },
+  });
+
+  expect(sentMessages.length).toBe(1);
+  expect(sentMessages[0].text).toContain(`${taskId} openrouter moonshotai/kimi-k2.6`);
+});
+
 test("runScheduledTask can suppress Pushover nudges for shell output", async () => {
   const taskId = `task-shell-muted-${Date.now()}`;
   db!.createTask({
