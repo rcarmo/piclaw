@@ -8,6 +8,15 @@ import type {
   ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
 import { getToolsetsForTool, getEffectiveDefaultActiveToolNames } from "./tool-activation.js";
+import {
+  addDiscoveryExactPhraseMatches,
+  addDiscoveryTokenMatches,
+  clampDiscoveryLimit,
+  finalizeDiscoveryMatches,
+  normalizeDiscoveryText,
+  tokenizeDiscoveryText,
+  uniqueDiscoveryStrings,
+} from "./discovery-match.js";
 import { getToolCapability, type ToolActivation, type ToolCapability } from "./tool-capabilities.js";
 import type { ToolJDoc } from "./discovery-jdoc.js";
 
@@ -18,12 +27,7 @@ const InternalToolsSchema = Type.Object({
   include_parameters: Type.Optional(Type.Boolean({ description: "Include JSON schema parameters in details; in recommendation mode this only applies to shortlisted tools." })),
 });
 
-function clampLimit(value: number | undefined, fallback = 100): number {
-  if (!Number.isFinite(value)) return fallback;
-  const num = Number(value);
-  if (Number.isNaN(num)) return fallback;
-  return Math.min(Math.max(num, 1), 200);
-}
+const clampLimit = clampDiscoveryLimit;
 
 function summarizeDescription(value: string | undefined): string {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -32,35 +36,9 @@ function summarizeDescription(value: string | undefined): string {
   return `${text.slice(0, 139)}…`;
 }
 
-function normalizeText(value: string | undefined): string {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[_-]+/g, " ")
-    .replace(/[^a-z0-9+.#/\s]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-const SHORT_TOKEN_ALLOWLIST = new Set(["ai", "db", "fs", "id", "ip", "mcp", "sql", "ssh", "ui", "vm", "vnc"]);
-const STOP_TOKENS = new Set([
-  "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "get", "help", "how", "i", "if", "in", "into", "is", "it", "me", "my", "of", "on", "or", "our", "show", "something", "task", "that", "the", "this", "to", "tool", "tools", "use", "using", "want", "what", "with", "you",
-]);
-
-function tokenizeText(value: string | undefined): string[] {
-  const text = normalizeText(value);
-  if (!text) return [];
-  return [...new Set(text.split(/\s+/).filter((token) => {
-    if (!token) return false;
-    if (SHORT_TOKEN_ALLOWLIST.has(token)) return true;
-    if (token.length < 3) return false;
-    if (STOP_TOKENS.has(token)) return false;
-    return true;
-  }))];
-}
-
-function uniqueStrings(values: Iterable<string>): string[] {
-  return [...new Set(Array.from(values).map((value) => String(value || "").trim()).filter(Boolean))];
-}
+const normalizeText = normalizeDiscoveryText;
+const tokenizeText = tokenizeDiscoveryText;
+const uniqueStrings = uniqueDiscoveryStrings;
 
 function joinReasonList(values: string[]): string {
   return uniqueStrings(values).join(", ");
@@ -380,41 +358,8 @@ function filterCatalog(tools: ToolCatalogEntry[], query: string): ToolCatalogEnt
     .sort((a, b) => scoreQuery(b, query) - scoreQuery(a, query) || a.name.localeCompare(b.name));
 }
 
-function addExactPhraseMatches(
-  haystack: string,
-  phrases: string[] | undefined,
-  source: string,
-  points: number,
-  match: RecommendationMatch,
-): void {
-  if (!phrases?.length) return;
-  for (const phrase of uniqueStrings(phrases.map((value) => normalizeText(value)))) {
-    if (!phrase || phrase.includes(" ") === false) continue;
-    if (!haystack.includes(phrase)) continue;
-    match.score += points;
-    match.matchedTerms.push(phrase);
-    match.matchedSources.push(source);
-  }
-}
-
-function addTokenMatches(
-  intentTokens: Set<string>,
-  terms: string[] | undefined,
-  source: string,
-  points: number,
-  match: RecommendationMatch,
-): void {
-  if (!terms?.length) return;
-  for (const term of uniqueStrings(terms.map((value) => normalizeText(value)))) {
-    if (!term) continue;
-    for (const token of tokenizeText(term)) {
-      if (!intentTokens.has(token)) continue;
-      match.score += points;
-      match.matchedTerms.push(token);
-      match.matchedSources.push(source);
-    }
-  }
-}
+const addExactPhraseMatches = addDiscoveryExactPhraseMatches;
+const addTokenMatches = addDiscoveryTokenMatches;
 
 function scoreIntent(tool: ToolCatalogEntry, intent: string): RecommendationMatch | null {
   const normalizedIntent = normalizeText(intent);
@@ -469,8 +414,7 @@ function scoreIntent(tool: ToolCatalogEntry, intent: string): RecommendationMatc
     }
   }
 
-  match.matchedTerms = uniqueStrings(match.matchedTerms);
-  match.matchedSources = uniqueStrings(match.matchedSources);
+  finalizeDiscoveryMatches(match);
   const baseScore = match.score;
   if (baseScore <= 0 || match.matchedTerms.length === 0) return null;
 

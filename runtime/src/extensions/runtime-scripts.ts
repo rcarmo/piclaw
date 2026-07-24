@@ -4,6 +4,15 @@ import { isPathWithin } from "../utils/path-safety.js";
 import { Type } from "typebox";
 import type { AgentToolResult, ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { WORKSPACE_DIR } from "../core/config.js";
+import {
+  addDiscoveryExactPhraseMatches,
+  addDiscoveryTokenMatches,
+  clampDiscoveryLimit,
+  finalizeDiscoveryMatches,
+  normalizeDiscoveryText,
+  tokenizeDiscoveryText,
+  uniqueDiscoveryStrings,
+} from "./discovery-match.js";
 import { normalizeScriptJDoc, type ScriptDiscoveryRole, type ScriptJDoc } from "./discovery-jdoc.js";
 
 export type ScriptCollection = "packaged-skill" | "workspace-skill" | "workspace-note";
@@ -72,42 +81,10 @@ type RecommendationMatch = {
   matchedSources: string[];
 };
 
-function clampLimit(value: number | undefined, fallback = 100): number {
-  if (!Number.isFinite(value)) return fallback;
-  const num = Number(value);
-  if (Number.isNaN(num)) return fallback;
-  return Math.min(Math.max(num, 1), 200);
-}
-
-function uniqueStrings(values: Iterable<string>): string[] {
-  return [...new Set(Array.from(values).map((value) => String(value || "").trim()).filter(Boolean))];
-}
-
-function normalizeText(value: string | undefined): string {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[_-]+/g, " ")
-    .replace(/[^a-z0-9+.#/\s]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-const SHORT_TOKEN_ALLOWLIST = new Set(["ai", "db", "fs", "id", "ip", "mcp", "sql", "ssh", "ui", "vm", "vnc"]);
-const STOP_TOKENS = new Set([
-  "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "get", "help", "how", "i", "if", "in", "into", "is", "it", "me", "my", "of", "on", "or", "our", "show", "something", "task", "that", "the", "this", "to", "tool", "tools", "use", "using", "want", "what", "with", "you",
-]);
-
-function tokenizeText(value: string | undefined): string[] {
-  const text = normalizeText(value);
-  if (!text) return [];
-  return [...new Set(text.split(/\s+/).filter((token) => {
-    if (!token) return false;
-    if (SHORT_TOKEN_ALLOWLIST.has(token)) return true;
-    if (token.length < 3) return false;
-    if (STOP_TOKENS.has(token)) return false;
-    return true;
-  }))];
-}
+const clampLimit = clampDiscoveryLimit;
+const uniqueStrings = uniqueDiscoveryStrings;
+const normalizeText = normalizeDiscoveryText;
+const tokenizeText = tokenizeDiscoveryText;
 
 function summarize(value: string | undefined, fallback: string): string {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -318,29 +295,8 @@ function filterCatalog(entries: ScriptCatalogEntry[], query: string): ScriptCata
   );
 }
 
-function addTokenMatches(intentTokens: Set<string>, terms: string[] | undefined, source: string, points: number, match: RecommendationMatch): void {
-  if (!terms?.length) return;
-  for (const term of uniqueStrings(terms.map((value) => normalizeText(value)))) {
-    if (!term) continue;
-    for (const token of tokenizeText(term)) {
-      if (!intentTokens.has(token)) continue;
-      match.score += points;
-      match.matchedTerms.push(token);
-      match.matchedSources.push(source);
-    }
-  }
-}
-
-function addExactPhraseMatches(haystack: string, phrases: string[] | undefined, source: string, points: number, match: RecommendationMatch): void {
-  if (!phrases?.length) return;
-  for (const phrase of uniqueStrings(phrases.map((value) => normalizeText(value)))) {
-    if (!phrase || !phrase.includes(" ")) continue;
-    if (!haystack.includes(phrase)) continue;
-    match.score += points;
-    match.matchedTerms.push(phrase);
-    match.matchedSources.push(source);
-  }
-}
+const addTokenMatches = addDiscoveryTokenMatches;
+const addExactPhraseMatches = addDiscoveryExactPhraseMatches;
 
 function scoreIntent(entry: ScriptCatalogEntry, intent: string): RecommendationMatch | null {
   const normalizedIntent = normalizeText(intent);
@@ -368,8 +324,7 @@ function scoreIntent(entry: ScriptCatalogEntry, intent: string): RecommendationM
   addTokenMatches(intentTokens, collectExampleStrings(entry.metadata), "jdoc.examples", 1, match);
   addTokenMatches(intentTokens, entry.metadata?.guidance, "jdoc.guidance", 1, match);
 
-  match.matchedTerms = uniqueStrings(match.matchedTerms);
-  match.matchedSources = uniqueStrings(match.matchedSources);
+  finalizeDiscoveryMatches(match);
   if (match.score <= 0 || match.matchedTerms.length === 0) return null;
   if (entry.role === "entrypoint") match.score += 1;
   if (entry.role === "module") match.score -= 2;
