@@ -432,6 +432,30 @@ test("treats WebSocket 1006 provider disconnects as transient retry candidates",
   expect(decision.strategy).toBe("retry");
 });
 
+test("treats transient DNS lookup failures as retry candidates", () => {
+  for (const message of [
+    "getaddrinfo EAI_AGAIN api.openai.com",
+    "DNS lookup failed for api.githubcopilot.com",
+    "fetch failed: getaddrinfo ENOTFOUND api.example.invalid",
+  ]) {
+    const decision = decideAutomaticRecovery({
+      config: DEFAULT_AUTOMATIC_RECOVERY_CONFIG,
+      errorText: message,
+      recoveryAttemptsUsed: 0,
+      elapsedMs: 1000,
+      snapshot: {
+        hadToolActivity: false,
+        hadPartialOutput: false,
+      },
+    });
+
+    expect(isTransientFailure(message)).toBe(true);
+    expect(decision.recover).toBe(true);
+    expect(decision.classifier).toBe("transient");
+    expect(decision.strategy).toBe("retry");
+  }
+});
+
 test("retries a thinking-only stop once before escalating", () => {
   const first = decideAutomaticRecovery({
     config: DEFAULT_AUTOMATIC_RECOVERY_CONFIG,
