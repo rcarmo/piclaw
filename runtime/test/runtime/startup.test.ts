@@ -52,6 +52,42 @@ describe("runtime startup helpers", () => {
     }
   });
 
+  test("initializeRuntimeEnvironment installs the add-on runtime API before sessions are created", () => {
+    const ws = createTempWorkspace("piclaw-startup-addon-runtime-");
+
+    try {
+      const run = Bun.spawnSync({
+        cmd: [
+          TEST_SHELL,
+          "-lc",
+          [
+            "bun -e ",
+            JSON.stringify([
+              "import { resetAddonRuntimeContributionsForTests } from './src/addons/runtime-contributions.js';",
+              "import { initializeRuntimeEnvironment } from './src/runtime/startup.js';",
+              "resetAddonRuntimeContributionsForTests();",
+              "if (globalThis.__piclaw_runtime) throw new Error('runtime preinstalled');",
+              "initializeRuntimeEnvironment({ loadTimestamps() {}, loadChats() {} });",
+              "if (!globalThis.__piclaw_runtime?.registerStatusPanelProvider) throw new Error('runtime missing after startup');",
+            ].join(" ")),
+          ].join(""),
+        ],
+        cwd: RUNTIME_DIR,
+        env: {
+          ...process.env,
+          PICLAW_WORKSPACE: ws.workspace,
+          PICLAW_STORE: ws.store,
+          PICLAW_DATA: ws.data,
+          PICLAW_DB_IN_MEMORY: "1",
+          PICLAW_DISABLE_BACKGROUND_WORKSPACE_INDEX: "1",
+        },
+      });
+      expect(run.exitCode, run.stderr.toString() || run.stdout.toString()).toBe(0);
+    } finally {
+      ws.cleanup();
+    }
+  });
+
   test("initializeRuntimeEnvironment can seed workspace files from a packaged skel directory", () => {
     const ws = createTempWorkspace("piclaw-startup-");
     const skelDir = join(ws.base, "packaged-skel");

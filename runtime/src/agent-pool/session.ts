@@ -39,7 +39,6 @@ import { createBuiltinExtensionFactories } from "../extensions/index.js";
 import { freezeExtensionRoutes } from "../channels/web/http/extension-routes.js";
 import { ensureExtensionNodeModulesLink } from "./session-node-modules-link.js";
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
-import { installAddonRuntimeApi } from "../addons/runtime-contributions.js";
 import type { CompactionStreamFn } from "../extensions/smart-compaction/stream-complete.js";
 import { normalizeLlmContext } from "./llm-context-normalizer.js";
 import { writeMergedSessionArchive } from "../session-archive.js";
@@ -63,7 +62,6 @@ const SESSION_TOOL_RESULT_PREVIEW_CHARS = parsePositiveInt(
 const CHANNEL_SYSTEM_PROMPT_APPENDIX_CACHE = new Map<string, string>();
 const APPEND_SYSTEM_PROMPT_OVERRIDE_CACHE = new Map<string, (base: string[]) => string[]>();
 let cachedExtensionNodeModulesDir: string | null | undefined;
-installAddonRuntimeApi();
 let ensuredExtensionNodeModulesLinkTarget: string | null | undefined;
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {

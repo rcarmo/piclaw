@@ -31,7 +31,7 @@ import { startExternalProgressWatchdogMonitor } from "./progress-watchdog-superv
 import type { RuntimeState } from "./state.js";
 import { launchWorkspaceIndexProcess } from "../workspace-index-process.js";
 import { SystemMetricsSampler } from "../channels/web/agent/system-metrics.js";
-import { setAddonAgentMessageEnqueuer } from "../addons/runtime-contributions.js";
+import { installAddonRuntimeApi, setAddonAgentMessageEnqueuer } from "../addons/runtime-contributions.js";
 // import { registerLazyViewerRoutes } from "../channels/web/http/lazy-viewer-routes.js"; // removed: office-viewer is now @rcarmo/piclaw-addon-office-viewer
 
 const log = createLogger("runtime.startup");
@@ -158,6 +158,7 @@ export function initializeRuntimeEnvironment(state: RuntimeState): void {
   bootstrapWorkspaceFromSkel();
 
   initDatabase();
+  installAddonRuntimeApi();
   applyEnvironmentOverrides();
   const watchdogWarning = getProgressWatchdogSafetyWarning();
   if (watchdogWarning) {
