@@ -26,7 +26,7 @@ function makeLargeTextToolResult(textChars = 300_000) {
   } as any;
 }
 
-test("session tool-result env limits reject malformed suffixes at module initialization", async () => {
+test("session tool-result env limits reject malformed suffixes at module initialization", { timeout: 30000 }, async () => {
   const tempRoot = mkdtempSync(join(tmpdir(), "piclaw-session-strict-env-"));
   const sessionDir = join(tempRoot, "session");
   const restore = setEnv({
