@@ -195,6 +195,51 @@ describe("core config", () => {
     });
   });
 
+  test("retention and cleanup integer env rejects malformed suffixes without changing fallback policy", () => {
+    const workspace = createTempWorkspace("piclaw-config-");
+    try {
+      const malformed = loadConfigInSubprocess(workspace, ["call:getAgentLogConfig", "call:getToolOutputConfig"], {
+        env: {
+          PICLAW_AGENT_LOG_RETENTION_MS: "60000oops",
+          PICLAW_AGENT_LOG_RETENTION_DAYS: "2",
+          PICLAW_AGENT_LOG_CLEANUP_INTERVAL_MS: "120000oops",
+          PICLAW_TOOL_OUTPUT_RETENTION_MS: undefined,
+          PICLAW_TOOL_OUTPUT_RETENTION_DAYS: "2oops",
+          PICLAW_TOOL_OUTPUT_CLEANUP_INTERVAL_MS: "30000oops",
+        },
+      });
+      expect(malformed["call:getAgentLogConfig"]).toEqual({
+        retentionMs: 2 * 24 * 60 * 60 * 1000,
+        cleanupIntervalMs: 60 * 60 * 1000,
+      });
+      expect(malformed["call:getToolOutputConfig"]).toEqual({
+        retentionMs: 30 * 24 * 60 * 60 * 1000,
+        cleanupIntervalMs: 15 * 60 * 1000,
+      });
+
+      const precedenceAndCap = loadConfigInSubprocess(workspace, ["call:getAgentLogConfig", "call:getToolOutputConfig"], {
+        env: {
+          PICLAW_AGENT_LOG_RETENTION_MS: "60000",
+          PICLAW_AGENT_LOG_RETENTION_DAYS: "2",
+          PICLAW_AGENT_LOG_CLEANUP_INTERVAL_MS: "120000",
+          PICLAW_TOOL_OUTPUT_RETENTION_MS: undefined,
+          PICLAW_TOOL_OUTPUT_RETENTION_DAYS: "45",
+          PICLAW_TOOL_OUTPUT_CLEANUP_INTERVAL_MS: "30000",
+        },
+      });
+      expect(precedenceAndCap["call:getAgentLogConfig"]).toEqual({
+        retentionMs: 60_000,
+        cleanupIntervalMs: 120_000,
+      });
+      expect(precedenceAndCap["call:getToolOutputConfig"]).toEqual({
+        retentionMs: 30 * 24 * 60 * 60 * 1000,
+        cleanupIntervalMs: 30_000,
+      });
+    } finally {
+      workspace.cleanup();
+    }
+  });
+
   test("mid-turn tool execution hard ceiling defaults, overrides, and clamps", () => {
     const workspace = createTempWorkspace("piclaw-config-");
     try {

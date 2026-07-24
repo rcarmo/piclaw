@@ -4518,13 +4518,13 @@ test("runAgentPrompt ignores a queued late-timeout callback after prompt complet
   expect(result.result).toBe("done");
   expect(abortCalls).toBe(0);
 });
-test("runAgentPrompt suppresses repeated automatic recovery loops for the same error signature", async () => {
+test("runAgentPrompt recovery loop guard numeric env rejects malformed suffixes", async () => {
   const restoreEnv = setEnv({
     PICLAW_TURN_AUTO_RECOVERY_ENABLED: "1",
     PICLAW_TURN_AUTO_RECOVERY_MAX_ATTEMPTS: "6",
     PICLAW_RECOVERY_LOOP_GUARD_ENABLED: "1",
-    PICLAW_RECOVERY_LOOP_GUARD_MAX_FAILURES: "2",
-    PICLAW_RECOVERY_LOOP_GUARD_WINDOW_MS: String(10 * 60 * 1000),
+    PICLAW_RECOVERY_LOOP_GUARD_MAX_FAILURES: "2oops",
+    PICLAW_RECOVERY_LOOP_GUARD_WINDOW_MS: "600000oops",
   });
 
   class StubSession {
@@ -4581,8 +4581,9 @@ test("runAgentPrompt suppresses repeated automatic recovery loops for the same e
       exhausted: true,
       lastClassifier: "recovery_suppressed",
     }));
-    expect(session.promptCalls).toBe(2);
+    expect(session.promptCalls).toBe(3);
     expect(recoveryEvents).toEqual([
+      { type: "recovery_start", classifier: "transient" },
       { type: "recovery_start", classifier: "transient" },
       { type: "recovery_end", classifier: "recovery_suppressed" },
     ]);

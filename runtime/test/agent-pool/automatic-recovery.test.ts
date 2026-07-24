@@ -38,6 +38,23 @@ test("honors explicit turn auto-recovery env disable", () => {
   }
 });
 
+test("turn auto-recovery numeric env rejects malformed suffixes", () => {
+  const previousAttempts = process.env.PICLAW_TURN_AUTO_RECOVERY_MAX_ATTEMPTS;
+  const previousBudget = process.env.PICLAW_TURN_AUTO_RECOVERY_TOTAL_BUDGET_MS;
+  process.env.PICLAW_TURN_AUTO_RECOVERY_MAX_ATTEMPTS = "12abc";
+  process.env.PICLAW_TURN_AUTO_RECOVERY_TOTAL_BUDGET_MS = "4000oops";
+  try {
+    const config = getAutomaticRecoveryConfig({ enabled: true, maxRetries: 7, baseDelayMs: 1234, maxDelayMs: 5678 });
+    expect(config.maxAttempts).toBe(7);
+    expect(config.totalBudgetMs).toBe(DEFAULT_AUTOMATIC_RECOVERY_CONFIG.totalBudgetMs);
+  } finally {
+    if (previousAttempts === undefined) delete process.env.PICLAW_TURN_AUTO_RECOVERY_MAX_ATTEMPTS;
+    else process.env.PICLAW_TURN_AUTO_RECOVERY_MAX_ATTEMPTS = previousAttempts;
+    if (previousBudget === undefined) delete process.env.PICLAW_TURN_AUTO_RECOVERY_TOTAL_BUDGET_MS;
+    else process.env.PICLAW_TURN_AUTO_RECOVERY_TOTAL_BUDGET_MS = previousBudget;
+  }
+});
+
 test("classifies context-limit failures as compact-then-retry", () => {
   const decision = decideAutomaticRecovery({
     config: DEFAULT_AUTOMATIC_RECOVERY_CONFIG,

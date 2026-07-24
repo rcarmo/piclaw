@@ -2,6 +2,8 @@
  * agent-pool/prompt-utils.ts – Shared prompt/assistant text helpers.
  */
 
+import { parsePositiveIntStrict } from "../utils/strict-int.js";
+
 /** Lightweight assistant message metadata used by side-prompt helpers. */
 export interface SideAssistantMessage {
   stopReason?: string;
@@ -63,10 +65,7 @@ export const DEFAULT_SESSION_IDLE_MAX_WAIT_MS = 10_000;
 export const DEFAULT_SESSION_IDLE_COMPACTION_MAX_WAIT_MS = 300_000;
 
 function parseEnvPositiveInt(name: string, fallback: number): number {
-  const raw = process.env[name];
-  if (!raw) return fallback;
-  const parsed = parseInt(raw.trim(), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  return parsePositiveIntStrict(process.env[name], fallback);
 }
 
 export function resolveSessionIdleMaxWaitMs(

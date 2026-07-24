@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { setEnv } from "../helpers.js";
+
 import {
   DEFAULT_SESSION_IDLE_COMPACTION_MAX_WAIT_MS,
   DEFAULT_SESSION_IDLE_MAX_WAIT_MS,
@@ -43,6 +45,19 @@ test("resolveSessionIdleMaxWaitMs extends the wait budget for compaction", () =>
   expect(resolveSessionIdleMaxWaitMs({ isCompacting: false }, 120, 500)).toBe(120);
   expect(resolveSessionIdleMaxWaitMs({ isCompacting: true }, 120, 500)).toBe(500);
   expect(resolveSessionIdleMaxWaitMs({ isCompacting: true }, 800, 500)).toBe(800);
+});
+
+test("resolveSessionIdleMaxWaitMs rejects malformed numeric env suffixes", () => {
+  const restore = setEnv({
+    PICLAW_SESSION_IDLE_MAX_WAIT_MS: "1234oops",
+    PICLAW_SESSION_IDLE_COMPACTION_MAX_WAIT_MS: "4567oops",
+  });
+  try {
+    expect(resolveSessionIdleMaxWaitMs({ isCompacting: false })).toBe(DEFAULT_SESSION_IDLE_MAX_WAIT_MS);
+    expect(resolveSessionIdleMaxWaitMs({ isCompacting: true })).toBe(DEFAULT_SESSION_IDLE_COMPACTION_MAX_WAIT_MS);
+  } finally {
+    restore();
+  }
 });
 
 test("waitForSessionIdle does not settle during a 600ms mid-run idle gap", async () => {

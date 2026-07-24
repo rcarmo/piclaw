@@ -35,6 +35,7 @@ import type { Provider } from "@earendil-works/pi-ai";
 import { type AgentControlCommand, type AgentControlResult } from "./agent-control/index.js";
 import { getPiclawAgentDir } from "./core/agent-dir.js";
 import { SESSIONS_DIR, WORKSPACE_DIR, getAgentLogConfig } from "./core/config.js";
+import { parseNonNegativeIntStrict, parsePositiveIntStrict } from "./utils/strict-int.js";
 import { getChatChannel, getChatJid } from "./core/chat-context.js";
 import { registerChannelDetector } from "./router.js";
 import { createTrackedBashOperations } from "./tools/tracked-bash.js";
@@ -143,13 +144,11 @@ const DEFAULT_MEMORY_PRESSURE_MAIN_IDLE_TTL = 60 * 1000;
 const DEFAULT_MEMORY_PRESSURE_MAIN_SESSION_POOL_MAX_SIZE = 1;
 
 function parsePositiveMs(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(String(value || "").trim(), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  return parsePositiveIntStrict(value, fallback);
 }
 
 function parseNonNegativeInt(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(String(value || "").trim(), 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+  return parseNonNegativeIntStrict(value, fallback);
 }
 
 function loadAgentPoolConfig() {

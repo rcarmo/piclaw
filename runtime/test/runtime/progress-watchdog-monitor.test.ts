@@ -68,3 +68,25 @@ test('parseProgressWatchdogMonitorArgs reads explicit parent pid and timing over
     graceMs: 7000,
   });
 });
+
+test('parseProgressWatchdogMonitorArgs rejects malformed timing suffixes and preserves fallback clamp semantics', () => {
+  expect(parseProgressWatchdogMonitorArgs([
+    '--parent-pid=4321',
+    '--scan-ms=1500oops',
+    '--grace-ms', '7000oops',
+  ])).toEqual({
+    parentPid: 4321,
+    scanMs: 2000,
+    graceMs: 5000,
+  });
+
+  expect(parseProgressWatchdogMonitorArgs([
+    '--parent-pid=4321',
+    '--scan-ms=1',
+    '--grace-ms=0',
+  ])).toEqual({
+    parentPid: 4321,
+    scanMs: 250,
+    graceMs: 5000,
+  });
+});

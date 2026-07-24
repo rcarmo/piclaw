@@ -7,14 +7,15 @@
  * fit checks aligned on an effective usable window.
  */
 
+import { parsePositiveIntStrict } from "./strict-int.js";
+
 const DEFAULT_SYSTEM_PROMPT_OVERHEAD_TOKENS = 4_000;
 const DEFAULT_COMPACTION_REQUEST_OVERHEAD_TOKENS = 1_000;
 const DEFAULT_UNKNOWN_MODEL_CONTEXT_WINDOW = 64_000;
 const DEFAULT_TOKEN_ESTIMATE_SAFETY_MULTIPLIER = 1.1;
 
 function parsePositiveInt(value: unknown, fallback: number): number {
-  const parsed = Number.parseInt(String(value || "").trim(), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  return parsePositiveIntStrict(value, fallback);
 }
 
 export function getSystemPromptOverheadTokens(): number {

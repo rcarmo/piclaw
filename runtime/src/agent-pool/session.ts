@@ -39,6 +39,7 @@ import { createBuiltinExtensionFactories } from "../extensions/index.js";
 import { freezeExtensionRoutes } from "../channels/web/http/extension-routes.js";
 import { ensureExtensionNodeModulesLink } from "./session-node-modules-link.js";
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
+import { parsePositiveIntStrict } from "../utils/strict-int.js";
 import type { CompactionStreamFn } from "../extensions/smart-compaction/stream-complete.js";
 import { normalizeLlmContext } from "./llm-context-normalizer.js";
 import { writeMergedSessionArchive } from "../session-archive.js";
@@ -65,8 +66,7 @@ let cachedExtensionNodeModulesDir: string | null | undefined;
 let ensuredExtensionNodeModulesLinkTarget: string | null | undefined;
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(String(value || "").trim(), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  return parsePositiveIntStrict(value, fallback);
 }
 
 function getWorkspaceDir(): string {

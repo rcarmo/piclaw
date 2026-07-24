@@ -27,6 +27,7 @@ import { readJsonConfig, writeJsonConfig } from "./config-store.js";
 import { createLogger } from "../utils/logger.js";
 import { getConfiguredLogLevel, parseLogLevel } from "../utils/log-level.js";
 import { DAY_MS, DEFAULT_LOG_RETENTION_CAP_MS, clampLogRetentionMs } from "../utils/log-layout.js";
+import { parsePositiveIntStrict } from "../utils/strict-int.js";
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing helpers.
@@ -2281,8 +2282,8 @@ export interface RetentionCleanupConfig {
 }
 
 function parsePositiveInteger(value: string | undefined): number | undefined {
-  const parsed = Number.parseInt(String(value || "").trim(), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  const parsed = parsePositiveIntStrict(value, 0);
+  return parsed > 0 ? parsed : undefined;
 }
 
 function parseRetentionMs(msValue: string | undefined, daysValue: string | undefined): number | undefined {

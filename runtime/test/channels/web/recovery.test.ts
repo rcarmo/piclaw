@@ -8,7 +8,7 @@ import {
   type WebRecoveryStore,
 } from "../../../src/channels/web/runtime/recovery.js";
 import { AgentQueue } from "../../../src/queue.js";
-import { waitFor } from "../../helpers.js";
+import { setEnv, waitFor } from "../../helpers.js";
 
 describe("web recovery helpers", () => {
   test("buildInterruptedTurnOutcomeMarker uses cause-specific detail text", () => {
@@ -65,6 +65,10 @@ describe("web recovery helpers", () => {
     const clearedCompactions: string[] = [];
     const clearedInflight: string[] = [];
     const backoffs: Array<{ chatJid: string; failureCount: number; lastFailedAt: string; backoffUntil: string; lastErrorMessage?: string | null }> = [];
+    const restore = setEnv({
+      PICLAW_STALE_ACTIVE_COMPACTION_RECOVERY_MS: "240000oops",
+      PICLAW_STALE_ACTIVE_COMPACTION_BACKOFF_MS: "14400000oops",
+    });
 
     const ctx: WebRecoveryContext = {
       assistantName: "Pi",
@@ -91,7 +95,11 @@ describe("web recovery helpers", () => {
       getMessagesSince: () => [],
     };
 
-    recoverInflightRuns(ctx, store);
+    try {
+      recoverInflightRuns(ctx, store);
+    } finally {
+      restore();
+    }
 
     expect(clearedCompactions).toEqual(["web:compact"]);
     expect(clearedInflight).toEqual(["web:compact"]);

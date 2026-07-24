@@ -410,5 +410,21 @@ describe("runtime startup helpers", () => {
       warmDefaultChat: false,
       recentLimit: 8,
     });
+
+    expect(resolveStartupSessionWarmupOptions({
+      PICLAW_STARTUP_WARM_DEFAULT_CHAT: "yes",
+      PICLAW_STARTUP_WARMUP_RECENT_LIMIT: "3oops",
+    } as NodeJS.ProcessEnv)).toEqual({
+      warmDefaultChat: true,
+      recentLimit: 0,
+    });
+
+    expect(resolveStartupSessionWarmupOptions({
+      PICLAW_STARTUP_WARM_DEFAULT_CHAT: "yes",
+      PICLAW_STARTUP_WARMUP_RECENT_LIMIT: "0",
+    } as NodeJS.ProcessEnv)).toEqual({
+      warmDefaultChat: true,
+      recentLimit: 0,
+    });
   });
 });

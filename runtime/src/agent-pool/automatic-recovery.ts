@@ -2,6 +2,7 @@
  * automatic-recovery.ts – Shared mid-turn recovery policy for agent runs.
  */
 
+import { parsePositiveIntStrict } from "../utils/strict-int.js";
 import type { AgentRecoveryMetadata } from "./contracts.js";
 
 export interface RetryBackoffSettings {
@@ -67,11 +68,6 @@ const DEFAULT_TOTAL_BUDGET_MS = 30_000;
 const DEFAULT_RETRY_BASE_DELAY_MS = 2_000;
 const DEFAULT_RETRY_MAX_DELAY_MS = 60_000;
 
-function parsePositiveInt(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(String(value || "").trim(), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   const normalized = String(value || "").trim().toLowerCase();
   if (!normalized) return fallback;
@@ -118,8 +114,8 @@ export function getAutomaticRecoveryConfig(retrySettings?: Partial<RetryBackoffS
     // transient retries. Tool-history ceilings are terminal and require an
     // explicit continue instead of automatic compaction/replay.
     enabled: parseBoolean(process.env.PICLAW_TURN_AUTO_RECOVERY_ENABLED, DEFAULT_AUTOMATIC_RECOVERY_CONFIG.enabled),
-    maxAttempts: parsePositiveInt(process.env.PICLAW_TURN_AUTO_RECOVERY_MAX_ATTEMPTS, normalizedRetry.maxRetries),
-    totalBudgetMs: parsePositiveInt(process.env.PICLAW_TURN_AUTO_RECOVERY_TOTAL_BUDGET_MS, DEFAULT_AUTOMATIC_RECOVERY_CONFIG.totalBudgetMs),
+    maxAttempts: parsePositiveIntStrict(process.env.PICLAW_TURN_AUTO_RECOVERY_MAX_ATTEMPTS, normalizedRetry.maxRetries),
+    totalBudgetMs: parsePositiveIntStrict(process.env.PICLAW_TURN_AUTO_RECOVERY_TOTAL_BUDGET_MS, DEFAULT_AUTOMATIC_RECOVERY_CONFIG.totalBudgetMs),
     baseDelayMs: normalizedRetry.baseDelayMs,
     maxDelayMs: normalizedRetry.maxDelayMs,
   });

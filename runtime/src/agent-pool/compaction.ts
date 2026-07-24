@@ -23,6 +23,7 @@ import { buildPiclawCompactionEventFields, runWithPiclawCompactionTrigger, type 
 import { updateSessionCompacting } from "../extensions/session-status.js";
 import { applyTokenEstimateSafetyMultiplier, getContextThresholdTokens, getContextWindowFromModel, getEffectiveContextWindow, getSystemPromptOverheadTokens, getUnknownModelContextWindow } from "../utils/context-window-budget.js";
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
+import { parseNonNegativeIntStrict, parsePositiveIntStrict } from "../utils/strict-int.js";
 
 const log = createLogger("agent-pool.compaction");
 
@@ -417,8 +418,7 @@ export function getModelContextWindow(session: AgentSession): number | null {
 }
 
 function parseNonNegativeInt(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(String(value || "").trim(), 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+  return parseNonNegativeIntStrict(value, fallback);
 }
 
 function getIdleAutoCompactionDelayMs(): number {
@@ -576,8 +576,7 @@ function defaultTriggerForReason(reason: string): PiclawCompactionTrigger {
 }
 
 function getCompactionMaxWorkUnits(): number {
-  const parsed = Number.parseInt(process.env.PICLAW_COMPACTION_MAX_WORK_UNITS || "1000000", 10);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.max(1, Math.trunc(parsed)) : 1_000_000;
+  return parsePositiveIntStrict(process.env.PICLAW_COMPACTION_MAX_WORK_UNITS, 1_000_000);
 }
 
 function buildCompactionTriggerMetadata(

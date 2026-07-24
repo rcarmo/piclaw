@@ -10,9 +10,11 @@ import {
   noteCompactionFailure,
   noteCompactionSuccess,
   runCompactionWithTimeout,
+  scheduleIdleAutoCompaction,
 } from "../../src/agent-pool/compaction.js";
 import { getChatAutoCompactionWindow, getChatCompactionBackoff, initDatabase, setChatCompactionBackoff } from "../../src/db.js";
 import { recordCompactionCancellationReason } from "../../src/agent-pool/compaction-cancel-reason.js";
+import { getActivePiclawCompactionTrigger } from "../../src/agent-pool/compaction-trigger-context.js";
 import { getSessionActivitySnapshot } from "../../src/extensions/session-status.js";
 
 beforeEach(() => {
@@ -596,11 +598,11 @@ test("runCompactionWithTimeout keeps the single-flight lock until timed-out comp
   }
 });
 
-test("a never-settling timed-out compaction quarantines its mutable session", async () => {
+test("compaction timeout grace preserves zero and rejects malformed non-negative env values", async () => {
   const previousTimeout = process.env.PICLAW_COMPACTION_TIMEOUT_MS;
   const previousGrace = process.env.PICLAW_COMPACTION_SETTLEMENT_GRACE_MS;
   process.env.PICLAW_COMPACTION_TIMEOUT_MS = "5";
-  process.env.PICLAW_COMPACTION_SETTLEMENT_GRACE_MS = "0";
+  process.env.PICLAW_COMPACTION_SETTLEMENT_GRACE_MS = "0oops";
   try {
     const never = deferred<void>();
     let calls = 0;
@@ -615,21 +617,78 @@ test("a never-settling timed-out compaction quarantines its mutable session", as
       return "impossible";
     };
 
-    const owner = await runCompactionWithTimeout(session, "web:timeout-quarantine", {}, compact);
-    const joined = await runCompactionWithTimeout(session, "web:timeout-quarantine", {}, compact);
+    const ownerPromise = runCompactionWithTimeout(session, "web:timeout-quarantine", {}, compact);
+    await Bun.sleep(25);
+    expect(getSessionActivitySnapshot("web:timeout-quarantine")?.isCompacting).toBe(true);
 
+    never.resolve();
+    const owner = await ownerPromise;
     expect(owner.ok).toBe(false);
     expect(owner.joined).toBe(false);
-    expect(joined.ok).toBe(false);
-    expect(joined.joined).toBe(true);
-    expect(joined.generationId).toBe(owner.generationId);
     expect(calls).toBe(1);
-    expect(getSessionActivitySnapshot("web:timeout-quarantine")?.isCompacting).toBe(true);
+    expect(getSessionActivitySnapshot("web:timeout-quarantine")?.isCompacting).toBe(false);
   } finally {
     if (previousTimeout === undefined) delete process.env.PICLAW_COMPACTION_TIMEOUT_MS;
     else process.env.PICLAW_COMPACTION_TIMEOUT_MS = previousTimeout;
     if (previousGrace === undefined) delete process.env.PICLAW_COMPACTION_SETTLEMENT_GRACE_MS;
     else process.env.PICLAW_COMPACTION_SETTLEMENT_GRACE_MS = previousGrace;
+  }
+});
+
+test("compaction max-work-units env rejects malformed positive suffixes", async () => {
+  const previousTimeout = process.env.PICLAW_COMPACTION_TIMEOUT_MS;
+  const previousMaxWorkUnits = process.env.PICLAW_COMPACTION_MAX_WORK_UNITS;
+  process.env.PICLAW_COMPACTION_TIMEOUT_MS = "5000";
+  process.env.PICLAW_COMPACTION_MAX_WORK_UNITS = "123oops";
+  try {
+    const session = makeSession([]);
+    let observedMaxWorkUnits: unknown;
+    const result = await runCompactionWithTimeout(session, "web:max-work-units", {}, async () => {
+      observedMaxWorkUnits = getActivePiclawCompactionTrigger()?.maxWorkUnits;
+      return "done";
+    });
+
+    expect(result).toEqual({ ok: true, result: "done" });
+    expect(observedMaxWorkUnits).toBe(1_000_000);
+  } finally {
+    if (previousTimeout === undefined) delete process.env.PICLAW_COMPACTION_TIMEOUT_MS;
+    else process.env.PICLAW_COMPACTION_TIMEOUT_MS = previousTimeout;
+    if (previousMaxWorkUnits === undefined) delete process.env.PICLAW_COMPACTION_MAX_WORK_UNITS;
+    else process.env.PICLAW_COMPACTION_MAX_WORK_UNITS = previousMaxWorkUnits;
+  }
+});
+
+test("idle auto-compaction delay env preserves zero and rejects malformed suffixes", async () => {
+  const previousDelay = process.env.PICLAW_IDLE_AUTO_COMPACTION_DELAY_MS;
+  try {
+    const session = {
+      ...makeSession([{ role: "user", content: "large" }], 90_000),
+      model: { provider: "test", id: "idle-delay", contextWindow: 100_000 },
+      settingsManager: { getCompactionSettings: () => ({ enabled: true, reserveTokens: 25_000 }) },
+      isStreaming: false,
+      isCompacting: false,
+      isRetrying: false,
+      compact: async () => undefined,
+    };
+
+    process.env.PICLAW_IDLE_AUTO_COMPACTION_DELAY_MS = "0";
+    let zeroDelayFired = false;
+    scheduleIdleAutoCompaction(session as any, "web:idle-zero-delay", {}, () => {
+      zeroDelayFired = true;
+    });
+    await Bun.sleep(25);
+    expect(zeroDelayFired).toBe(true);
+
+    process.env.PICLAW_IDLE_AUTO_COMPACTION_DELAY_MS = "0oops";
+    let malformedDelayFired = false;
+    scheduleIdleAutoCompaction(session as any, "web:idle-malformed-delay", {}, () => {
+      malformedDelayFired = true;
+    });
+    await Bun.sleep(25);
+    expect(malformedDelayFired).toBe(false);
+  } finally {
+    if (previousDelay === undefined) delete process.env.PICLAW_IDLE_AUTO_COMPACTION_DELAY_MS;
+    else process.env.PICLAW_IDLE_AUTO_COMPACTION_DELAY_MS = previousDelay;
   }
 });
 

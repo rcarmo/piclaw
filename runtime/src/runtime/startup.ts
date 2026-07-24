@@ -26,6 +26,7 @@ import { startToolOutputCleanup } from "../tool-output.js";
 import { createUuid } from "../utils/ids.js";
 import { applyEnvironmentOverrides } from "../environment-overrides.js";
 import { createLogger } from "../utils/logger.js";
+import { parseNonNegativeIntStrict } from "../utils/strict-int.js";
 import { patchConsoleTimestamps } from "./console-timestamps.js";
 import { startExternalProgressWatchdogMonitor } from "./progress-watchdog-supervisor.js";
 import type { RuntimeState } from "./state.js";
@@ -49,8 +50,7 @@ function parseStartupWarmupBoolean(value: string | undefined, fallback = false):
 }
 
 function parseStartupWarmupLimit(value: string | undefined, fallback = 0): number {
-  const parsed = Number.parseInt(String(value || "").trim(), 10);
-  if (!Number.isFinite(parsed)) return fallback;
+  const parsed = parseNonNegativeIntStrict(value, fallback);
   return Math.max(0, Math.min(8, parsed));
 }
 const WORKSPACE_BOOTSTRAP_ENTRIES = [

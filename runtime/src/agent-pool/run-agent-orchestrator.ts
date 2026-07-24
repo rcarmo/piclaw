@@ -28,6 +28,7 @@ import { detectChannel } from "../router.js";
 import { pruneOrphanToolResults } from "./orphan-tool-results.js";
 import { writeAgentLog } from "./logging.js";
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
+import { parsePositiveIntStrict } from "../utils/strict-int.js";
 import { getSessionFileLineCount, getSessionFileSize, isRotationFallbackCompactionError, rotateSession } from "../session-rotation.js";
 import { getCompactionSuccessCount, resetCompactionSuccessCount } from "./compaction.js";
 import { withChatContext } from "../core/chat-context.js";
@@ -241,13 +242,11 @@ function parseRecoveryLoopGuardEnabled(): boolean {
 }
 
 function parseRecoveryLoopGuardMaxFailures(): number {
-  const raw = Number.parseInt(String(process.env.PICLAW_RECOVERY_LOOP_GUARD_MAX_FAILURES || "").trim(), 10);
-  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_RECOVERY_LOOP_GUARD_MAX_FAILURES;
+  return parsePositiveIntStrict(process.env.PICLAW_RECOVERY_LOOP_GUARD_MAX_FAILURES, DEFAULT_RECOVERY_LOOP_GUARD_MAX_FAILURES);
 }
 
 function parseRecoveryLoopGuardWindowMs(): number {
-  const raw = Number.parseInt(String(process.env.PICLAW_RECOVERY_LOOP_GUARD_WINDOW_MS || "").trim(), 10);
-  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_RECOVERY_LOOP_GUARD_WINDOW_MS;
+  return parsePositiveIntStrict(process.env.PICLAW_RECOVERY_LOOP_GUARD_WINDOW_MS, DEFAULT_RECOVERY_LOOP_GUARD_WINDOW_MS);
 }
 
 function shouldSuppressRecoveryLoop(options: {
@@ -417,8 +416,8 @@ async function maybeAutoRotateSession(
     || ["1", "true", "yes", "on"].includes((process.env.PICLAW_SESSION_AUTO_ROTATE || "").trim().toLowerCase());
   if (!autoRotateEnabled) return session;
 
-  const envThresholdMb = parseInt(process.env.PICLAW_SESSION_MAX_SIZE_MB || "", 10);
-  const thresholdBytes = Number.isFinite(envThresholdMb) && envThresholdMb > 0
+  const envThresholdMb = parsePositiveIntStrict(process.env.PICLAW_SESSION_MAX_SIZE_MB, 0);
+  const thresholdBytes = envThresholdMb > 0
     ? envThresholdMb * 1024 * 1024
     : sessionStorageConfig.maxSizeBytes;
 
