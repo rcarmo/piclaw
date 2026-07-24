@@ -178,10 +178,3 @@ export function resolveModelScope(
     enabledModels,
   };
 }
-
-export function applyScopedModelsOnly(
-  models: Model<Api>[],
-  settingsProvider?: EnabledModelsSettingsProvider | null,
-): ResolvedModelScope {
-  return resolveModelScope(models, settingsProvider);
-}

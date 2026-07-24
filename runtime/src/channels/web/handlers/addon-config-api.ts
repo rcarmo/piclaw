@@ -204,15 +204,6 @@ export async function handleRegisteredAddonConfigApiRequest(
   }
 }
 
-export function getRegisteredAddonConfigApis(): Array<{ addonId: string; action: string; extensionPath: string; registeredAt: string }> {
-  return [...registrations.values()].map((entry) => ({
-    addonId: entry.addonId,
-    action: entry.action,
-    extensionPath: entry.extensionPath,
-    registeredAt: entry.registeredAt,
-  }));
-}
-
 export function resetAddonConfigApiRegistryForTests(): void {
   registrations.clear();
   addonConfigLoadPromise = null;

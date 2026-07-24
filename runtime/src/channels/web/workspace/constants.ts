@@ -29,9 +29,6 @@ export const MAX_PREVIEW_BYTES = 64 * 1024;
 export const MAX_EDIT_BYTES = 256 * 1024;
 /** Maximum bytes for file attachment to agent context. */
 export const MAX_ATTACH_BYTES = 25 * 1024 * 1024;
-/** Maximum upload file size. */
-export const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
-
 /** Set of file extensions recognised as images. */
 export const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]);
 /** Set of file extensions recognised as text (previewable). */

@@ -42,13 +42,6 @@ export function isRealWorkspacePath(absPath: string): boolean {
   }
 }
 
-/** Resolve a relative path and reject targets whose realpath escapes the workspace. */
-export function resolveExistingWorkspacePath(input: string | null): string | null {
-  const resolved = resolveWorkspacePath(input);
-  if (!resolved) return null;
-  return isRealWorkspacePath(resolved) ? resolved : null;
-}
-
 /** Convert an absolute path to a workspace-relative path. */
 export function toRelativePath(absPath: string): string {
   const rel = path.relative(WORKSPACE_DIR, absPath) || ".";

@@ -112,8 +112,6 @@ function resolveSearchRootChatJid(chatJid: string, requestedRootChatJid?: string
   return registryRoot || requestedRoot || chatJid;
 }
 
-export type SearchFilter = "images" | "attachments" | null;
-
 /** Build timeline data filtered by search query. */
 export function getSearchResponse(
   chatJid: string,
