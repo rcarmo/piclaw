@@ -59,7 +59,7 @@ type FollowupDraft = {
   id: string;
   title: string;
   slug: string;
-  category: "flake" | "consistent_fail" | "infra_fail";
+  category: "root_gate" | "flake" | "consistent_fail" | "infra_fail";
   groupId: string;
   groupLabel: string;
   command: string;
@@ -70,6 +70,8 @@ type FollowupDraft = {
   excerpt: string[];
   fileCount: number;
   files: string[];
+  exitCode?: number;
+  timedOut?: boolean;
 };
 
 const repoRoot = path.resolve(import.meta.dir, "..");
@@ -109,7 +111,7 @@ const groupAttemptCeiling = Math.max(groupRetryLimit, groupRepeatCount);
 const gateTimeoutMs = 5 * 60 * 1000;
 const groupTimeoutMs = 10 * 60 * 1000;
 
-const rootGates: RootGate[] = [
+const defaultRootGates: RootGate[] = [
   { id: "lint", label: "lint", command: "bun run lint" },
   { id: "typecheck", label: "typecheck", command: "bun run typecheck" },
   { id: "pack-hygiene", label: "check:pack-hygiene", command: "bun run check:pack-hygiene" },
@@ -552,11 +554,41 @@ const groupDefinitions: GroupDefinition[] = [
   },
 ];
 
+const rootGates: RootGate[] = loadRootGates(process.env.PICLAW_AUDIT_ROOT_GATES_JSON, defaultRootGates);
+const skipDeterministicGroups = process.env.PICLAW_AUDIT_SKIP_GROUPS === "1";
+
 const excludedPatterns = [
   { reason: "optional browser suite", regex: /\.optional\.test\.ts$/ },
   { reason: "manual-only suite", regex: /\.manual\.test\.ts$/ },
   { reason: "fuzz suite", regex: /\.fuzz\.test\.ts$/ },
 ];
+
+function loadRootGates(raw: string | undefined, fallback: RootGate[]): RootGate[] {
+  if (!raw?.trim()) return fallback;
+  const parsed = JSON.parse(raw) as unknown;
+  if (!Array.isArray(parsed)) throw new Error("PICLAW_AUDIT_ROOT_GATES_JSON must be a JSON array.");
+  return parsed.map((entry, index) => {
+    if (!entry || typeof entry !== "object") throw new Error(`Root gate ${index} must be an object.`);
+    const record = entry as Record<string, unknown>;
+    const id = typeof record.id === "string" && record.id.trim() ? record.id.trim() : "";
+    const label = typeof record.label === "string" && record.label.trim() ? record.label.trim() : id;
+    const command = typeof record.command === "string" && record.command.trim() ? record.command.trim() : "";
+    if (!id || !command) throw new Error(`Root gate ${index} must include id and command.`);
+    return { id, label, command };
+  });
+}
+
+function uniquePathEntries(entries: Array<string | undefined>): string {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const entry of entries.flatMap((value) => String(value || "").split(path.delimiter))) {
+    const trimmed = entry.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    result.push(trimmed);
+  }
+  return result.join(path.delimiter);
+}
 
 export function buildAuditCommandEnv(baseEnv: Record<string, string | undefined>): Record<string, string> {
   const env: Record<string, string> = {};
@@ -564,6 +596,17 @@ export function buildAuditCommandEnv(baseEnv: Record<string, string | undefined>
     if (value !== undefined) env[key] = value;
   }
 
+  const bunSiblingDir = path.dirname(process.execPath);
+  env.PATH = uniquePathEntries([
+    path.join(repoRoot, "node_modules", ".bin"),
+    path.join(runtimeDir, "node_modules", ".bin"),
+    bunSiblingDir,
+    env.PATH,
+    "/usr/local/lib/bun/bin",
+    "/usr/local/bin",
+    "/usr/bin",
+    "/bin",
+  ]);
   env.TZ = env.TZ ?? "UTC";
   env.LANG = env.LANG ?? "C.UTF-8";
   env.LC_ALL = env.LC_ALL ?? "C.UTF-8";
@@ -575,6 +618,25 @@ export function buildAuditCommandEnv(baseEnv: Record<string, string | undefined>
   env.PICLAW_DB_IN_MEMORY = env.PICLAW_DB_IN_MEMORY ?? "1";
 
   return env;
+}
+
+export function computeAuditMetrics(input: {
+  failedRootGates: number;
+  failedDeterministicGroups: number;
+  flakyGroupsAfter3xRerun: number;
+  missingArtifactOutputs: number;
+  followupTicketsNeeded: number;
+}) {
+  const unresolvedFailuresWithoutFollowupTicket = Math.max(
+    input.failedRootGates + input.failedDeterministicGroups + input.flakyGroupsAfter3xRerun - input.followupTicketsNeeded,
+    0,
+  );
+  const stabilityGapCount =
+    input.failedRootGates +
+    input.failedDeterministicGroups +
+    input.flakyGroupsAfter3xRerun +
+    input.missingArtifactOutputs;
+  return { stabilityGapCount, unresolvedFailuresWithoutFollowupTicket };
 }
 
 export async function main(): Promise<void> {
@@ -601,24 +663,26 @@ export async function main(): Promise<void> {
     deterministicFiles.push(file);
   }
 
-  const groups = groupDefinitions.map((definition) => ({
+  const groups = skipDeterministicGroups ? [] : groupDefinitions.map((definition) => ({
     ...definition,
     files: deterministicFiles.filter((file) => definition.match(file)).sort(),
   }));
 
-  const assignedFiles = new Set(groups.flatMap((group) => group.files));
-  const unassignedFiles = deterministicFiles.filter((file) => !assignedFiles.has(file));
-  const duplicatedFiles = deterministicFiles.filter((file, index, array) => array.indexOf(file) !== index);
-  const duplicateAssignments = deterministicFiles.filter((file) => groups.filter((group) => group.files.includes(file)).length > 1);
+  if (!skipDeterministicGroups) {
+    const assignedFiles = new Set(groups.flatMap((group) => group.files));
+    const unassignedFiles = deterministicFiles.filter((file) => !assignedFiles.has(file));
+    const duplicatedFiles = deterministicFiles.filter((file, index, array) => array.indexOf(file) !== index);
+    const duplicateAssignments = deterministicFiles.filter((file) => groups.filter((group) => group.files.includes(file)).length > 1);
 
-  if (unassignedFiles.length > 0) {
-    throw new Error(`Unassigned deterministic tests: ${unassignedFiles.join(", ")}`);
-  }
-  if (duplicatedFiles.length > 0) {
-    throw new Error(`Duplicate deterministic test entries discovered: ${duplicatedFiles.join(", ")}`);
-  }
-  if (duplicateAssignments.length > 0) {
-    throw new Error(`Deterministic tests assigned to multiple groups: ${Array.from(new Set(duplicateAssignments)).join(", ")}`);
+    if (unassignedFiles.length > 0) {
+      throw new Error(`Unassigned deterministic tests: ${unassignedFiles.join(", ")}`);
+    }
+    if (duplicatedFiles.length > 0) {
+      throw new Error(`Duplicate deterministic test entries discovered: ${duplicatedFiles.join(", ")}`);
+    }
+    if (duplicateAssignments.length > 0) {
+      throw new Error(`Deterministic tests assigned to multiple groups: ${Array.from(new Set(duplicateAssignments)).join(", ")}`);
+    }
   }
 
   const listGroupsOnly = process.argv.includes("--list-groups");
@@ -671,7 +735,7 @@ export async function main(): Promise<void> {
     groupResults.push(await runGroup(group));
   }
 
-  const followupDrafts = await writeFollowups(groupResults);
+  const followupDrafts = await writeFollowups(gateResults, groupResults);
   const failedRootGates = gateResults.filter((result) => result.status !== "pass").length;
   const failedDeterministicGroups = groupResults.filter((result) => result.status === "consistent_fail" || result.status === "infra_fail").length;
   const flakyGroupsAfter3xRerun = groupResults.filter((result) => result.status === "flake").length;
@@ -714,14 +778,13 @@ export async function main(): Promise<void> {
 
   const requiredArtifactsPresent = requiredArtifactPaths.filter((filePath) => existsSync(filePath));
   const missingArtifactOutputs = requiredArtifactPaths.length - requiredArtifactsPresent.length;
-  const unresolvedFailuresWithoutFollowupTicket =
-    failedRootGates + failedDeterministicGroups + flakyGroupsAfter3xRerun - followupDrafts.length;
-  const stabilityGapCount =
-    failedRootGates +
-    failedDeterministicGroups +
-    flakyGroupsAfter3xRerun +
-    missingArtifactOutputs +
-    Math.max(unresolvedFailuresWithoutFollowupTicket, 0);
+  const { stabilityGapCount, unresolvedFailuresWithoutFollowupTicket } = computeAuditMetrics({
+    failedRootGates,
+    failedDeterministicGroups,
+    flakyGroupsAfter3xRerun,
+    missingArtifactOutputs,
+    followupTicketsNeeded,
+  });
 
   summary.metrics = {
     stability_gap_count: stabilityGapCount,
@@ -732,7 +795,7 @@ export async function main(): Promise<void> {
     missing_artifact_outputs: missingArtifactOutputs,
     artifact_outputs_present: requiredArtifactsPresent.length,
     followup_tickets_needed: followupTicketsNeeded,
-    unresolved_failures_without_followup_ticket: Math.max(unresolvedFailuresWithoutFollowupTicket, 0),
+    unresolved_failures_without_followup_ticket: unresolvedFailuresWithoutFollowupTicket,
   };
   summary.requiredArtifactsPresent = requiredArtifactsPresent;
 
@@ -758,6 +821,7 @@ export async function main(): Promise<void> {
   console.log(`METRIC missing_artifact_outputs=${missingArtifactOutputs}`);
   console.log(`METRIC artifact_outputs_present=${requiredArtifactsPresent.length}`);
   console.log(`METRIC followup_tickets_needed=${followupTicketsNeeded}`);
+  console.log(`METRIC unresolved_failures_without_followup_ticket=${unresolvedFailuresWithoutFollowupTicket}`);
 
   if (stabilityGapCount > 0) {
     process.exit(1);
@@ -866,7 +930,7 @@ async function runCommand(options: {
   logPath: string;
 }): Promise<AttemptResult> {
   const startedAt = new Date();
-  const proc = Bun.spawn(["bash", "-lc", options.command], {
+  const proc = Bun.spawn(["bash", "-c", options.command], {
     cwd: options.cwd,
     env: buildAuditCommandEnv(process.env),
     stdout: "pipe",
@@ -922,13 +986,46 @@ async function runCommand(options: {
   };
 }
 
-async function writeFollowups(groupResults: GroupResult[]): Promise<FollowupDraft[]> {
+async function writeFollowups(gateResults: GateResult[], groupResults: GroupResult[]): Promise<FollowupDraft[]> {
   const drafts: FollowupDraft[] = [];
   let ordinal = 1;
-  for (const result of groupResults) {
-    if (result.status === "pass") {
-      continue;
+  const addDraft = async (draft: FollowupDraft) => {
+    drafts.push(draft);
+    const markdown = buildFollowupTicketMarkdown(draft);
+    await writeFile(draft.artifactTicketPath, markdown, "utf8");
+    if (draft.boardTicketPath) {
+      await writeFile(draft.boardTicketPath, markdown, "utf8");
     }
+  };
+
+  for (const result of gateResults) {
+    if (result.status === "pass") continue;
+    const slug = `${String(ordinal).padStart(2, "0")}-root-gate-${slugify(result.id)}`;
+    const artifactTicketPath = path.join(followupDir, `${slug}.md`);
+    const boardTicketPath = boardFollowupDir ? path.join(boardFollowupDir, `${slug}.md`) : null;
+    await addDraft({
+      id: slug,
+      title: `Fix deterministic root gate ${result.label}`,
+      slug,
+      category: "root_gate",
+      groupId: result.id,
+      groupLabel: result.label,
+      command: result.command,
+      logPaths: [result.logPath],
+      artifactPath: artifactDir,
+      artifactTicketPath,
+      boardTicketPath,
+      excerpt: collectFailureExcerpt([result.logPath]),
+      fileCount: 0,
+      files: [],
+      exitCode: result.attempt.exitCode,
+      timedOut: result.attempt.timedOut,
+    });
+    ordinal += 1;
+  }
+
+  for (const result of groupResults) {
+    if (result.status === "pass") continue;
     const slug = `${String(ordinal).padStart(2, "0")}-${slugify(result.id)}`;
     const title =
       result.status === "flake"
@@ -938,7 +1035,7 @@ async function writeFollowups(groupResults: GroupResult[]): Promise<FollowupDraf
           : `Fix deterministic ${result.label} sweep failures`;
     const artifactTicketPath = path.join(followupDir, `${slug}.md`);
     const boardTicketPath = boardFollowupDir ? path.join(boardFollowupDir, `${slug}.md`) : null;
-    const draft: FollowupDraft = {
+    await addDraft({
       id: slug,
       title,
       slug,
@@ -953,13 +1050,7 @@ async function writeFollowups(groupResults: GroupResult[]): Promise<FollowupDraf
       excerpt: result.failureExcerpt,
       fileCount: result.files.length,
       files: result.files,
-    };
-    drafts.push(draft);
-    const markdown = buildFollowupTicketMarkdown(draft);
-    await writeFile(artifactTicketPath, markdown, "utf8");
-    if (boardTicketPath) {
-      await writeFile(boardTicketPath, markdown, "utf8");
-    }
+    });
     ordinal += 1;
   }
 
@@ -1055,6 +1146,8 @@ export function buildFollowupsMarkdown(drafts: FollowupDraft[]): string {
     lines.push(`- Group: \`${draft.groupId}\` — ${draft.groupLabel}`);
     lines.push(`- Repro: \`${draft.command}\``);
     lines.push(`- Logs: ${draft.logPaths.map((logPath) => `\`${logPath}\``).join(", ")}`);
+    if (draft.exitCode !== undefined) lines.push(`- Exit status: ${draft.exitCode}`);
+    if (draft.timedOut !== undefined) lines.push(`- Timed out: ${draft.timedOut}`);
     if (draft.excerpt.length > 0) {
       lines.push(`- Failure excerpt:`);
       for (const excerptLine of draft.excerpt) {
@@ -1088,7 +1181,11 @@ export function buildFollowupTicketMarkdown(draft: FollowupDraft): string {
   lines.push("");
   lines.push(`## Why`);
   lines.push("");
-  lines.push(`The deterministic sweep left the \`${draft.groupId}\` group in a \`${draft.category}\` state after the default 3-attempt rerun policy.`);
+  if (draft.category === "root_gate") {
+    lines.push(`The deterministic sweep root gate \`${draft.groupId}\` failed before or during the grouped test sweep.`);
+  } else {
+    lines.push(`The deterministic sweep left the \`${draft.groupId}\` group in a \`${draft.category}\` state after the default 3-attempt rerun policy.`);
+  }
   lines.push("");
   lines.push(`## Reproduction`);
   lines.push("");
@@ -1099,9 +1196,15 @@ export function buildFollowupTicketMarkdown(draft: FollowupDraft): string {
   }
   lines.push(`- Logs: ${draft.logPaths.map((logPath) => `\`${logPath}\``).join(", ")}`);
   lines.push(`- Command: \`${draft.command}\``);
+  if (draft.exitCode !== undefined) lines.push(`- Exit status: ${draft.exitCode}`);
+  if (draft.timedOut !== undefined) lines.push(`- Timed out: ${draft.timedOut}`);
   lines.push(`- Files in scope (${draft.fileCount}):`);
-  for (const file of draft.files) {
-    lines.push(`  - \`${file}\``);
+  if (draft.files.length === 0) {
+    lines.push(`  - n/a (root gate)`);
+  } else {
+    for (const file of draft.files) {
+      lines.push(`  - \`${file}\``);
+    }
   }
   if (draft.excerpt.length > 0) {
     lines.push("");
