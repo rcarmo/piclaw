@@ -11,7 +11,7 @@
   * Wire shapes verified against D:/oh-my-pi/packages/coding-agent/src/modes/rpc/.
   */
 import { createUuid } from "../../utils/ids.js";
-import { createLogger } from "../../utils/logger.js";
+import { createLogger, debugSuppressedError } from "../../utils/logger.js";
 
 import type { CapturedTool } from "./host-tools.js";
 import type {
@@ -88,7 +88,7 @@ export class OmpRpcClient {
       this.readyReject = reject;
     });
     // The handshake waiter (spawn) owns this promise; avoid unhandled-rejection noise on early exit.
-    void this.readyPromise.catch(() => { });
+    void this.readyPromise.catch((error) => { debugSuppressedError(log, "omp RPC ready handshake did not complete before exit.", error); });
 
     void this.readStdout();
     void this.drainStderr();
@@ -117,8 +117,8 @@ export class OmpRpcClient {
     } catch (error) {
       try {
         child.kill();
-      } catch {
-        // already dead
+      } catch (error) {
+        debugSuppressedError(log, "omp RPC child already exited during spawn failure.", error);
       }
       client.rejectAll(error instanceof Error ? error : new Error(String(error)));
       throw error;
@@ -163,7 +163,7 @@ export class OmpRpcClient {
       rejectTurn = reject;
     });
     // Guard against unhandled rejection if the send fails before we start awaiting.
-    void turnPromise.catch(() => { });
+    void turnPromise.catch((error) => { debugSuppressedError(log, "omp RPC turn promise suppressed before await.", error); });
     this.activeTurn = { resolve: resolveTurn, reject: rejectTurn };
     try {
       await this.sendCommand({ type: "prompt", message });
@@ -190,8 +190,8 @@ export class OmpRpcClient {
     this.stdinClosed = true;
     try {
       await this.child.stdin.end();
-    } catch {
-      // stdin already closed
+    } catch (error) {
+      debugSuppressedError(log, "omp RPC stdin already closed during dispose.", error);
     }
     const exited = await Promise.race([
       this.child.exited.then(() => true),
@@ -200,10 +200,10 @@ export class OmpRpcClient {
     if (!exited) {
       try {
         this.child.kill();
-      } catch {
-        // already dead
+      } catch (error) {
+        debugSuppressedError(log, "omp RPC child already dead during kill fallback.", error);
       }
-      await this.child.exited.catch(() => { });
+      await this.child.exited.catch((error) => { debugSuppressedError(log, "omp RPC child exit after kill did not settle cleanly.", error); });
     }
     this.rejectAll(new Error("omp RPC client disposed"));
   }
@@ -267,8 +267,8 @@ export class OmpRpcClient {
       if (!logged && captured.trim()) {
         log.warn("omp RPC stderr", { stderr: captured.slice(0, 4096) });
       }
-    } catch {
-      // stderr is diagnostics-only; discard failures
+    } catch (error) {
+      debugSuppressedError(log, "omp RPC stderr drain failed; stderr is diagnostics-only.", error);
     }
   }
 

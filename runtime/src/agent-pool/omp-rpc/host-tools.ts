@@ -40,6 +40,9 @@ import { mcpTimeoutPatch } from "../../extensions/mcp-timeout-patch.js";
 import { localLitePromptProfile } from "../../extensions/local-lite-prompt-profile.js";
 
 import type { RpcHostToolDefinition } from "./rpc-protocol-types.js";
+import { createLogger, debugSuppressedError } from "../../utils/logger.js";
+
+const log = createLogger("agent-pool.omp-rpc.host-tools");
 
 /** A tool captured from an extension factory for host-tool dispatch. */
 export interface CapturedTool {
@@ -115,9 +118,10 @@ export function harvestOmpHostTools(modelRuntime: ModelRuntime): {
   for (const factory of buildOmpToolFactories(modelRuntime)) {
     try {
       (factory as (api: unknown) => void)(api);
-    } catch {
+    } catch (error) {
       // A factory that needs pi session APIs at registration time contributes
       // no tools to omp; skip it rather than fail the whole harvest.
+      debugSuppressedError(log, "omp host-tool factory skipped during harvest.", error, { factory: factory.name });
     }
   }
   const definitions = [...sink.values()].map((tool) => ({

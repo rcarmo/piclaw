@@ -23,6 +23,9 @@ import { OmpRpcClient } from "./client.js";
 import { bridgeOmpFrameToAgentSessionEvent, extractFinalAssistantText } from "./event-bridge.js";
 import { harvestOmpHostTools, type CapturedTool } from "./host-tools.js";
 import type { RpcHostToolDefinition, RpcSessionEventFrame } from "./rpc-protocol-types.js";
+import { createLogger, debugSuppressedError } from "../../utils/logger.js";
+
+const log = createLogger("agent-pool.omp-rpc.pool");
 
 export class OmpRpcPool {
   private readonly ompBin: string;
@@ -184,7 +187,7 @@ export class OmpRpcPool {
         chatJid,
         idleMs: now - entry.lastUsed,
       });
-      entry.client.dispose().catch(() => { });
+      entry.client.dispose().catch((error) => { debugSuppressedError(log, "Idle omp RPC client dispose failed during eviction.", error, { chatJid }); });
     }
   }
 
@@ -197,8 +200,9 @@ export class OmpRpcPool {
     for (const entry of entries) {
       try {
         await entry.client.dispose();
-      } catch {
+      } catch (error) {
         // Best-effort per client; keep disposing the rest.
+        debugSuppressedError(log, "omp RPC client dispose failed during pool shutdown.", error);
       }
     }
   }

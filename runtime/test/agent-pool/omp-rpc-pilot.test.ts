@@ -17,6 +17,9 @@
 import { expect, test, afterEach } from "bun:test";
 import { getTestWorkspace, importFresh, setEnv } from "../helpers.js";
 import { createAgentPoolModelOptions } from "../model-services-fixture.js";
+import { createLogger, debugSuppressedError } from "../../src/utils/logger.js";
+
+const log = createLogger("test.omp-rpc-pilot");
 
 let restoreEnv: (() => void) | null = null;
 
@@ -27,8 +30,9 @@ afterEach(async () => {
     const sshCore = await import("../../src/extensions/ssh-core.js");
     sshCore.setSshConnectionResolverForTests(null);
     await sshCore.unregisterLiveChatSshSession("web:default");
-  } catch {
+  } catch (error) {
     // Ignore: cleanup is best-effort.
+    debugSuppressedError(log, "SSH cleanup hook failed; cleanup is best-effort.", error);
   }
 });
 
@@ -102,8 +106,9 @@ test("omp-rpc engine pilots a real omp subprocess end to end", { timeout: 240_00
   } finally {
     try {
       await pool.shutdown();
-    } catch {
+    } catch (error) {
       // Ignore: shutdown must still run, but its failure must not mask test results.
+      debugSuppressedError(log, "AgentPool shutdown failed in test teardown.", error);
     }
   }
 });
