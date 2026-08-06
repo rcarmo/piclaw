@@ -39,8 +39,8 @@ Releases follow a two-phase tag workflow. **No release ships without passing UX 
 ### Phase 2 — Final release
 
 1. Once the `-ux` tag is green, push the final release tag: `v<version>` (e.g. `v2.3.0`).
-2. This tag triggers **Integration gate** and **Publish Docker images**, but not the **CI** or **E2E Tests** workflows.
-3. The integration gate must pass before Docker images are built.
+2. This tag triggers **Publish Docker images**, but not the **CI** or **E2E Tests** workflows.
+3. Publish invokes the reusable **Integration gate** for that exact immutable tag SHA; it must pass before Docker images are built.
 4. Publish release notes to GitHub Releases.
 5. Download the E2E report artifact from the `-ux` workflow run and **attach it as a release asset** (PDF or HTML).
 
@@ -50,7 +50,7 @@ Releases follow a two-phase tag workflow. **No release ships without passing UX 
 |---|---|---|---|---|
 | Push to `main` | ✅ | — | — | — |
 | `v*-ux` / `v*-prerelease` | — | — | ✅ | — |
-| `v*` (no suffix) | — | ✅ | — | ✅ |
+| `v*` (no suffix) | — | ✅ (inside publish) | — | ✅ |
 
 ### Quick reference
 

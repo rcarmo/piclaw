@@ -3,6 +3,7 @@ import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-
 import { getAutoCompactionTokenStatusForSession } from "./compaction.js";
 import type { RunAgentOptions } from "./contracts.js";
 import { debugSuppressedError, type StructuredLogger } from "../utils/logger.js";
+import { recordAgentAbortCause } from "./abort-provenance.js";
 
 const MID_TURN_CONTEXT_CHECK_MIN_INTERVAL_MS = 1_000;
 const CONTEXT_USAGE_UPDATE_MIN_INTERVAL_MS = 250;
@@ -218,6 +219,7 @@ export function createAttemptContextPressureController(options: {
           toolErrored: isError === true,
           ...options.getRunObservabilityDetails(options.runOptions),
         });
+        recordAgentAbortCause(options.chatJid, "context_pressure", "run_agent.mid_turn_context_pressure");
         void options.session.abort().catch((err) => {
           options.onWarn?.("Failed to abort session after mid-turn context pressure", {
             operation: "run_agent.mid_turn_context_pressure_abort_failed",

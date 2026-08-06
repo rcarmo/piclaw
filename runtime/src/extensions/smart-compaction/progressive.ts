@@ -21,6 +21,7 @@ import {
   PROGRESSIVE_MIN_BATCH_ESTIMATE_MS,
   PROGRESSIVE_MIN_MERGE_RESERVE_MS,
   PROGRESSIVE_OBSERVED_BATCH_SAFETY_MULTIPLIER,
+  MIN_COMPACTION_OUTPUT_TOKENS,
   SMART_COMPACTION_PROGRESS_INTERVAL_MS,
   type CompactionReasoningEffort,
 } from "./config.js";
@@ -99,9 +100,13 @@ async function completeCompactionPrompt(
   onModelRequest?: () => void,
   onPayload?: SimpleStreamOptions["onPayload"],
 ): Promise<string> {
-  const runOnce = async (activePromptText: string, retryCount: number): Promise<string> => {
+  const runOnce = async (
+    activePromptText: string,
+    retryCount: number,
+    requestedMaxTokens = maxTokens,
+  ): Promise<string> => {
     if (abortSignal.aborted) throw new Error("Compaction cancelled");
-    const safeOutput = getSafeCompactionMaxTokens(model, activePromptText, maxTokens);
+    const safeOutput = getSafeCompactionMaxTokens(model, activePromptText, requestedMaxTokens);
     onModelRequest?.();
     const response = await streamComplete({
       model,
@@ -140,6 +145,7 @@ async function completeCompactionPrompt(
         validationCode?: string;
         validationPhase?: CompactionSummarySchema;
         validationRetryCount?: number;
+        validationMaxTokens?: number;
         fileTagSequence?: string[];
       };
       error.retryableOutput = validation.retryable;
@@ -147,6 +153,7 @@ async function completeCompactionPrompt(
       error.validationCode = validation.code;
       error.validationPhase = schema;
       error.validationRetryCount = retryCount;
+      error.validationMaxTokens = safeOutput.maxTokens;
       error.fileTagSequence = tagSequence;
       throw error;
     }
@@ -168,7 +175,19 @@ async function completeCompactionPrompt(
     if (inputOverflow && !retryableOutput) throw err;
 
     const repairReason = (err as { validationReason?: string })?.validationReason ?? message;
-    const repairInstruction = buildCompactionRepairInstruction(schema, repairReason);
+    // A length stop is evidence that the provider or route did not finish at
+    // the original cap. A smaller, explicitly stated retry target makes the
+    // one repair attempt materially different instead of repeating the same
+    // truncation under an advisory-only "be concise" instruction.
+    const firstAttemptMaxTokens = Number((err as { validationMaxTokens?: unknown })?.validationMaxTokens);
+    const repairMaxTokens = (err as { validationCode?: string })?.validationCode === "stop_reason"
+      && /stop reason was length/i.test(repairReason)
+      ? Math.max(
+        MIN_COMPACTION_OUTPUT_TOKENS,
+        Math.floor((Number.isFinite(firstAttemptMaxTokens) && firstAttemptMaxTokens > 0 ? firstAttemptMaxTokens : maxTokens) * 0.5),
+      )
+      : maxTokens;
+    const repairInstruction = buildCompactionRepairInstruction(schema, repairReason, repairMaxTokens);
     const appendRepairInstruction = (sourcePrompt: string): string => {
       const marker = schema === "final"
         ? "\nOutput this exact final format:"
@@ -183,14 +202,14 @@ async function completeCompactionPrompt(
     // could claim coverage for omitted history. Retry only when the complete
     // original prompt plus the bounded repair instruction still fits.
     const repairedPrompt = appendRepairInstruction(promptText);
-    if (!hasSafeCompactionOutputRoom(model, repairedPrompt, maxTokens)) throw err;
+    if (!hasSafeCompactionOutputRoom(model, repairedPrompt, repairMaxTokens)) throw err;
     log.debug("Progressive compaction retrying rejected output once", {
       operation: "smart_compaction.progressive_output_retry",
       schema,
       retryCount: 1,
       promptWasTrimmed: false,
     });
-    return await runOnce(repairedPrompt, 1);
+    return await runOnce(repairedPrompt, 1, repairMaxTokens);
   }
 }
 

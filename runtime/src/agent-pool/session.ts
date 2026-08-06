@@ -31,6 +31,8 @@ import {
   type SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 
+import { createRequire } from "node:module";
+import { getPreparedMcpConfig } from "../secure/mcp-keychain.js";
 import { getPiclawAgentDir } from "../core/agent-dir.js";
 import { SESSIONS_DIR, getRuntimeRoot, getSessionPersistenceConfig, getWorkspaceDir } from "../core/config.js";
 import { buildChannelSystemPromptAppendix } from "../channels/formatting.js";
@@ -45,6 +47,10 @@ import { normalizeLlmContext } from "./llm-context-normalizer.js";
 import { writeMergedSessionArchive } from "../session-archive.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
+const { createMcpAdapter } = require("pi-mcp-adapter") as {
+  createMcpAdapter(options: { config: unknown }): ExtensionFactory;
+};
 const AGENT_DIR = getPiclawAgentDir();
 const EMPTY_STRING_ARRAY: string[] = [];
 const BUNDLED_EXTENSION_PATHS_CACHE = new Map<string, string[]>();
@@ -106,9 +112,6 @@ const OPTIONAL_EXTENSIONS: OptionalBundledExtension[] = [
   { path: resolve(EXTENSIONS_DIR, "experimental", "m365", "index.ts"), envGate: "PICLAW_ENABLE_M365_EXPERIMENTAL" },
 ];
 
-const PACKAGED_EXTENSION_ENTRIES = [
-  { packageName: "pi-mcp-adapter", entry: "index.ts" },
-] as const;
 
 function getWorkspaceAddonNodeModulesFingerprint(workspaceDir: string): string {
   const addonNodeModulesDir = join(workspaceDir, ".pi", "extensions", "node_modules");
@@ -149,19 +152,6 @@ function findNodeModules(startDir: string): string | null {
     dir = parent;
   }
   return null;
-}
-
-function resolvePackagedExtensionEntries(nodeModulesDir: string | null): string[] {
-  if (!nodeModulesDir) return EMPTY_STRING_ARRAY;
-
-  const resolved: string[] = [];
-  for (const candidate of PACKAGED_EXTENSION_ENTRIES) {
-    const entryPath = join(nodeModulesDir, candidate.packageName, candidate.entry);
-    if (existsSync(entryPath)) {
-      resolved.push(entryPath);
-    }
-  }
-  return resolved;
 }
 
 function getExtensionNodeModulesDir(): string | null {
@@ -267,20 +257,17 @@ function getBundledExtensionPaths(chatJid?: string): string[] {
     .filter(({ platforms }) => !platforms || platforms.includes(process.platform))
     .filter(({ channels }) => !channels || !!channel && channels.includes(channel))
     .map(({ path }) => path);
-  paths.push(...resolvePackagedExtensionEntries(nodeModulesDir));
   paths.push(...getInstalledAddonExtensionPaths(getWorkspaceDir()));
 
-  if (paths.length === 0) {
-    BUNDLED_EXTENSION_PATHS_CACHE.set(cacheKey, EMPTY_STRING_ARRAY);
-    return EMPTY_STRING_ARRAY;
+  // The MCP adapter is now a programmatic built-in factory so Piclaw can
+  // supply the startup-sanitized effective config. The remaining path-loaded
+  // extensions still need normal module resolution support.
+  if (paths.length > 0) {
+    ensureBundledExtensionNodeModulesLink(nodeModulesDir);
+    ensureWorkspaceExtensionNodeModulesLink(nodeModulesDir);
   }
-
-  // Ensure a node_modules symlink exists next to the extensions dir
-  // so jiti can resolve deep package imports.
-  ensureBundledExtensionNodeModulesLink(nodeModulesDir);
-  ensureWorkspaceExtensionNodeModulesLink(nodeModulesDir);
-  BUNDLED_EXTENSION_PATHS_CACHE.set(cacheKey, paths);
-  return paths;
+  BUNDLED_EXTENSION_PATHS_CACHE.set(cacheKey, paths.length > 0 ? paths : EMPTY_STRING_ARRAY);
+  return paths.length > 0 ? paths : EMPTY_STRING_ARRAY;
 }
 
 function getChannelSystemPromptAppendix(chatJid?: string): string {
@@ -620,10 +607,13 @@ export async function createSessionInDir(
     sessionManager: SessionManager;
     sessionStartEvent?: SessionStartEvent;
   }) => {
-    const builtinExtensionFactories = createBuiltinExtensionFactories({
-      compactionStreamFn: createCompactionStreamFn(options.modelRuntime, options.settingsManager),
-      modelRuntime: options.modelRuntime,
-    });
+    const builtinExtensionFactories = [
+      ...createBuiltinExtensionFactories({
+        compactionStreamFn: createCompactionStreamFn(options.modelRuntime, options.settingsManager),
+        modelRuntime: options.modelRuntime,
+      }),
+      createMcpAdapter({ config: getPreparedMcpConfig() }),
+    ];
     const resourceLoader = new DefaultResourceLoader({
       cwd,
       agentDir,

@@ -16,6 +16,7 @@ import type { AgentControlCommand, AgentControlResult } from "../agent-control-t
 import { formatCompactNumber } from "../agent-control-helpers.js";
 import { createMedia, getChatCompactionBackoff } from "../../db.js";
 import { getChatJid } from "../../core/chat-context.js";
+import { recordAgentAbortCause } from "../../agent-pool/abort-provenance.js";
 import { requestGracefulShutdown } from "../../runtime/shutdown-registry.js";
 import { createLogger, debugSuppressedError } from "../../utils/logger.js";
 import { isOrphanFunctionCallOutputError } from "../../utils/provider-payload-errors.js";
@@ -322,6 +323,7 @@ function startManualCompactionExternalFailsafe(chatJid: string): (() => void) | 
 /** Handle /restart: reload the agent session from disk. */
 export async function handleRestart(session: AgentSession, _command: RestartCommand): Promise<AgentControlResult> {
   try {
+    recordAgentAbortCause(getChatJid("control:/restart"), "service_shutdown", "agent_control.restart");
     await session.abort();
   } catch (err) {
     debugSuppressedError(log, "Failed to abort session before restart; continuing with reload.", err, {
@@ -356,6 +358,7 @@ export async function handleRestart(session: AgentSession, _command: RestartComm
 /** Handle /exit: terminate the process so supervisor can restart piclaw. */
 export async function handleExit(session: AgentSession, _command: ExitCommand): Promise<AgentControlResult> {
   try {
+    recordAgentAbortCause(getChatJid("control:/exit"), "service_shutdown", "agent_control.exit");
     await session.abort();
   } catch (err) {
     debugSuppressedError(log, "Failed to abort session before exit; continuing with shutdown.", err, {
@@ -515,6 +518,7 @@ export async function handleAbort(session: AgentSession, _command: AbortCommand)
       return { status: "success", message: `Compaction aborted.${killedLabel}` };
     }
     const chatJid = getChatJid("control:/abort");
+    recordAgentAbortCause(chatJid, "user_command", "agent_control.abort");
     const abortPromise = Promise.resolve().then(() => session.abort());
     const sshAborted = abortLiveSshCommand(chatJid);
     const killed = killTrackedProcesses();

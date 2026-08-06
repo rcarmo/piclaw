@@ -9,6 +9,7 @@ import type {
 } from "@earendil-works/pi-ai";
 
 import type { AttachmentInfo } from "./attachments.js";
+import type { AgentAbortCause } from "./abort-provenance.js";
 import type { PiclawCredentialStore } from "./credential-store.js";
 
 export interface AgentRecoveryDiagnosticEntry {
@@ -53,6 +54,8 @@ export interface AgentOutput {
   toolStepsUsed?: number;
   toolStepsBudget?: number;
   nextAction?: string;
+  abortCause?: AgentAbortCause;
+  abortOperation?: string;
 }
 
 /** A single turn's output within a multi-turn agent run. */

@@ -31,6 +31,12 @@ on:
 permissions:
   contents: read
 
+# A newer SHA for the same PR/ref supersedes its previous CI result. Tag and
+# release workflows intentionally have no cancellation concurrency group.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   web-build:
     name: Build web UI + frontend regression checks

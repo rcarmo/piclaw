@@ -16,6 +16,8 @@ afterEach(async () => {
   try {
     const config = await import("../../../src/core/config.js");
     config.setWebTotpSecret("");
+    const { getExtensionKvStore } = await import("../../../src/extension-kv-registry.js");
+    getExtensionKvStore().clear("piclaw.tool-budget-continuation");
   } catch (_error) {
     void _error;
   }
@@ -2454,8 +2456,9 @@ test("processChat appends visible diagnostic text to recovered tool-budget draft
   db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors; DELETE FROM chat_cursors;");
   db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
 
+  const toolBudgetUserMessageId = `msg-${Math.random()}`;
   db.storeMessage({
-    id: `msg-${Math.random()}`,
+    id: toolBudgetUserMessageId,
     chat_jid: "web:default",
     sender: "user",
     sender_name: "User",
@@ -2472,14 +2475,14 @@ test("processChat appends visible diagnostic text to recovered tool-budget draft
       setSessionBinder: () => {},
       runAgent: async () => ({
         status: "error",
-        error: "Tool-use budget exceeded before finalization (65/64 tool steps). Automatic recovery compacted context and retried, but the retry still produced no terminal assistant reply. Ask me to continue.",
+        error: "Tool-use budget exceeded before finalization (65/64 tool steps). Ask me to continue.",
         result: null,
         attachments: [],
         toolBudgetExceeded: true,
         toolStepsUsed: 65,
         toolStepsBudget: 64,
         nextAction: "Ask me to continue; I will resume from the latest known partial state.",
-        recovery: { attemptsUsed: 1, totalElapsedMs: 1000, recovered: false, exhausted: true, lastClassifier: "tool_history_pressure", strategyHistory: ["compact_then_retry"], diagnostics: [] },
+        recovery: { attemptsUsed: 0, totalElapsedMs: 1000, recovered: false, exhausted: false, lastClassifier: "tool_history_pressure", strategyHistory: [], diagnostics: [] },
       }),
       getContextUsageForChat: async () => null,
     },
@@ -2506,6 +2509,158 @@ test("processChat appends visible diagnostic text to recovered tool-budget draft
     tool_steps_used: 65,
     tool_steps_budget: 64,
   }));
+  expect(web.getQueuedFollowupItems("web:default")).toHaveLength(0);
+  expect(db.getDb().prepare(`
+    SELECT content, thread_id
+    FROM messages
+    WHERE chat_jid = ? AND is_bot_message = 0 AND content LIKE ?
+  `).get("web:default", "%Continue the most recent user request%") as any).toMatchObject({
+    content: expect.stringContaining("Continue the most recent user request"),
+    thread_id: db.getMessageRowIdById("web:default", toolBudgetUserMessageId),
+  });
+});
+
+test("processChat releases the tool-budget continuation reservation when queue persistence fails", async () => {
+  const ws = createTempWorkspace("piclaw-web-channel-");
+  cleanupWorkspace = ws.cleanup;
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await import("../../../src/db.js");
+  db.initDatabase();
+  db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors;");
+  db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
+
+  const rootMessageId = `msg-${Math.random()}`;
+  const rootRowId = db.storeMessage({
+    id: rootMessageId,
+    chat_jid: "web:default",
+    sender: "user",
+    sender_name: "User",
+    content: "first tool-budget turn",
+    timestamp: new Date().toISOString(),
+    is_from_me: false,
+    is_bot_message: false,
+  });
+  db.getDb().prepare("UPDATE messages SET thread_id = ? WHERE rowid = ?").run(rootRowId, rootRowId);
+
+  const webMod = await import("../../../src/channels/web.js");
+  const web = new (webMod.WebChannel as any)({
+    queue: { enqueue: () => {} },
+    agentPool: {
+      setSessionBinder: () => {},
+      runAgent: async () => ({
+        status: "error",
+        error: "Tool-use budget exceeded before finalization (65/64 tool steps). Ask me to continue.",
+        result: null,
+        attachments: [],
+        toolBudgetExceeded: true,
+        toolStepsUsed: 65,
+        toolStepsBudget: 64,
+        recovery: { attemptsUsed: 0, totalElapsedMs: 1000, recovered: false, exhausted: false, lastClassifier: "tool_history_pressure", strategyHistory: [], diagnostics: [] },
+      }),
+      getContextUsageForChat: async () => null,
+    },
+  });
+
+  const originalEnqueue = web.enqueueQueuedFollowupItem.bind(web);
+  web.enqueueQueuedFollowupItem = () => { throw new Error("simulated queue persistence failure"); };
+  await web.processChat("web:default", "default");
+  expect(web.getQueuedFollowupItems("web:default")).toHaveLength(0);
+
+  web.enqueueQueuedFollowupItem = originalEnqueue;
+  db.storeMessage({
+    id: `msg-${Math.random()}`,
+    chat_jid: "web:default",
+    sender: "user",
+    sender_name: "User",
+    content: "second tool-budget turn",
+    timestamp: new Date().toISOString(),
+    is_from_me: false,
+    is_bot_message: false,
+    thread_id: rootRowId,
+  });
+  await web.processChat("web:default", "default");
+
+  expect(web.getQueuedFollowupItems("web:default")).toHaveLength(0);
+  expect(db.getDb().prepare(`
+    SELECT content, thread_id
+    FROM messages
+    WHERE chat_jid = ? AND is_bot_message = 0 AND content LIKE ?
+  `).get("web:default", "%Continue the most recent user request%") as any).toMatchObject({
+    content: expect.stringContaining("Continue the most recent user request"),
+    thread_id: rootRowId,
+  });
+});
+
+test("processChat queues at most one automatic tool-budget continuation per thread lineage", async () => {
+  const ws = createTempWorkspace("piclaw-web-channel-");
+  cleanupWorkspace = ws.cleanup;
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await import("../../../src/db.js");
+  db.initDatabase();
+  db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors;");
+  db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
+
+  const rootRowId = db.storeMessage({
+    id: `msg-${Math.random()}`,
+    chat_jid: "web:default",
+    sender: "user",
+    sender_name: "User",
+    content: "first tool-budget turn",
+    timestamp: new Date().toISOString(),
+    is_from_me: false,
+    is_bot_message: false,
+  });
+  db.getDb().prepare("UPDATE messages SET thread_id = ? WHERE rowid = ?").run(rootRowId, rootRowId);
+
+  const webMod = await import("../../../src/channels/web.js");
+  const web = new (webMod.WebChannel as any)({
+    queue: { enqueue: () => {} },
+    agentPool: {
+      setSessionBinder: () => {},
+      runAgent: async () => ({
+        status: "error",
+        error: "Tool-use budget exceeded before finalization (65/64 tool steps). Ask me to continue.",
+        result: null,
+        attachments: [],
+        toolBudgetExceeded: true,
+        toolStepsUsed: 65,
+        toolStepsBudget: 64,
+        recovery: { attemptsUsed: 0, totalElapsedMs: 1000, recovered: false, exhausted: false, lastClassifier: "tool_history_pressure", strategyHistory: [], diagnostics: [] },
+      }),
+      getContextUsageForChat: async () => null,
+    },
+  });
+
+  await web.processChat("web:default", "default");
+  const firstContinuation = db.getDb().prepare(`
+    SELECT rowid, content, timestamp, thread_id
+    FROM messages
+    WHERE chat_jid = ? AND is_bot_message = 0 AND content LIKE ?
+  `).get("web:default", "%Continue the most recent user request%") as any;
+  expect(firstContinuation).toMatchObject({ thread_id: rootRowId });
+  db.setChatCursor("web:default", firstContinuation.timestamp);
+
+  db.storeMessage({
+    id: `msg-${Math.random()}`,
+    chat_jid: "web:default",
+    sender: "user",
+    sender_name: "User",
+    content: "second tool-budget turn",
+    timestamp: new Date().toISOString(),
+    is_from_me: false,
+    is_bot_message: false,
+    thread_id: rootRowId,
+  });
+  await web.processChat("web:default", "default");
+
+  expect(web.getQueuedFollowupItems("web:default")).toHaveLength(0);
+  expect(db.getDb().prepare(`
+    SELECT COUNT(*) AS count
+    FROM messages
+    WHERE chat_jid = ? AND is_bot_message = 0 AND content LIKE ?
+  `).get("web:default", "%Continue the most recent user request%") as any).toMatchObject({ count: 1 });
 });
 
 test("processChat persists orphan Responses output errors with visible session-repair guidance", async () => {

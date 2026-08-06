@@ -7,6 +7,7 @@ import {
 } from "./blank-turn-detection.js";
 import { isLengthStopFailure, type RecoveryAttemptSnapshot } from "./automatic-recovery.js";
 import type { AgentOutput, RunAgentOptions } from "./contracts.js";
+import { consumeAgentAbortCause } from "./abort-provenance.js";
 import { getAutoCompactionTokenStatusForSession } from "./compaction.js";
 import { debugSuppressedError, type StructuredLogger } from "../utils/logger.js";
 
@@ -87,6 +88,11 @@ export function finalizePromptAttemptOutput(input: PromptAttemptFinalizationInpu
       && !input.lastAssistantState?.hadTextContent
       && !input.lastAssistantState?.hadToolCallContent
   );
+
+  const abortProvenance = consumeAgentAbortCause(input.chatJid);
+  const withAbortProvenance = (output: AgentOutput): AgentOutput => abortProvenance
+    ? { ...output, abortCause: abortProvenance.cause, abortOperation: abortProvenance.operation }
+    : output;
 
   let output: AgentOutput;
   if (input.staleProgressAbortFailed) {
@@ -204,7 +210,7 @@ export function finalizePromptAttemptOutput(input: PromptAttemptFinalizationInpu
   }
 
   return {
-    output,
+    output: withAbortProvenance(output),
     snapshot: {
       hadToolActivity: input.hadToolActivity,
       hadPartialOutput: input.hadPartialOutput,
@@ -220,6 +226,15 @@ export function finalizePromptAttemptOutput(input: PromptAttemptFinalizationInpu
       hasUnresolvedToolExecution: input.hasUnresolvedToolExecution,
       hadToolFailure: input.hadToolFailure,
       sawTerminalSideEffectToolActivity: input.sawTerminalSideEffectToolActivity,
+      needsToolFreeFinalization: input.hadToolActivity
+        && input.sawAssistantToolCallMessage
+        && input.lastAssistantState?.stopReason === "stop"
+        && !input.lastAssistantState?.hadTextContent
+        && !input.hasUnresolvedToolExecution
+        && !input.hadToolFailure
+        && !input.toolUseBudgetExceeded
+        && typeof (input.session as unknown as { getActiveToolNames?: unknown }).getActiveToolNames === "function"
+        && typeof (input.session as unknown as { setActiveToolsByName?: unknown }).setActiveToolsByName === "function",
       toolUseBudgetExceeded: input.toolUseBudgetExceeded,
       assistantToolUseMessageCount: input.assistantToolUseMessageCount,
       toolExecutionCount: input.toolExecutionCount,

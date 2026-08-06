@@ -1,8 +1,16 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { getKeychainEntry } from "./keychain.js";
+import { createLogger } from "../utils/logger.js";
+
+const require = createRequire(import.meta.url);
+const { loadMcpConfig } = require(join(dirname(require.resolve("pi-mcp-adapter")), "config.ts")) as {
+  loadMcpConfig(overridePath?: string, cwd?: string): McpConfigFile;
+};
+const log = createLogger("secure.mcp-keychain");
 
 interface McpServerCredentialConfig {
+  disabled?: unknown;
   bearerToken?: unknown;
   bearerTokenEnv?: unknown;
   bearerTokenKeychain?: unknown;
@@ -23,6 +31,14 @@ export interface HydratedMcpCredential {
   envName: string;
   keychainName: string;
 }
+
+export interface McpStartupDiagnostic {
+  serverName: string;
+  reason: string;
+}
+
+let preparedMcpConfig: McpConfigFile = { mcpServers: {} };
+let mcpStartupDiagnostics: McpStartupDiagnostic[] = [];
 
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const ENV_REFERENCE = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$env:([A-Za-z_][A-Za-z0-9_]*)|\{env:([A-Za-z_][A-Za-z0-9_]*)\}/g;
@@ -68,54 +84,133 @@ export function validateMcpEnvironmentReferences(config: McpConfigFile): void {
   }
 }
 
+function serverReason(definition: McpServerCredentialConfig): string | null {
+  const keychainName = definition.bearerTokenKeychain;
+  if (keychainName === undefined) return null;
+  if (typeof keychainName !== "string" || !keychainName.trim()) {
+    return "bearerTokenKeychain must be a non-empty string.";
+  }
+  if (definition.bearerToken !== undefined) {
+    return "cannot combine bearerToken and bearerTokenKeychain.";
+  }
+  const envName = definition.bearerTokenEnv;
+  if (typeof envName !== "string" || !ENV_NAME.test(envName)) {
+    return "must set a valid bearerTokenEnv with bearerTokenKeychain.";
+  }
+  if (process.env[envName] !== undefined) {
+    return `bearerTokenEnv ${envName} is already set.`;
+  }
+  return null;
+}
+
+function disabledServerDefinition(definition: McpServerCredentialConfig): McpServerCredentialConfig {
+  const { bearerTokenKeychain: _keychain, ...rest } = definition;
+  return { ...rest, disabled: true };
+}
+
+function setMcpStartupDiagnostics(diagnostics: McpStartupDiagnostic[]): void {
+  mcpStartupDiagnostics = diagnostics.map((diagnostic) => ({ ...diagnostic }));
+  for (const diagnostic of diagnostics) {
+    log.warn("Quarantined invalid optional MCP server during startup", {
+      operation: "mcp.startup_quarantined",
+      serverName: diagnostic.serverName,
+      reason: diagnostic.reason,
+    });
+  }
+}
+
+/** Return the sanitized effective MCP config prepared during runtime bootstrap. */
+export function getPreparedMcpConfig(): McpConfigFile {
+  return structuredClone(preparedMcpConfig);
+}
+
+/** Safe startup diagnostics for optional MCP servers quarantined from the adapter. */
+export function getMcpStartupDiagnostics(): McpStartupDiagnostic[] {
+  return mcpStartupDiagnostics.map((diagnostic) => ({ ...diagnostic }));
+}
+
+export function resetMcpStartupStateForTests(): void {
+  preparedMcpConfig = { mcpServers: {} };
+  mcpStartupDiagnostics = [];
+}
+
 export async function hydrateMcpKeychainCredentials(
   workspaceDir: string,
   resolveEntry: typeof getKeychainEntry = getKeychainEntry,
 ): Promise<HydratedMcpCredential[]> {
-  const configPath = join(workspaceDir, ".pi", "mcp.json");
   let config: McpConfigFile;
+  const diagnostics: McpStartupDiagnostic[] = [];
   try {
-    config = JSON.parse(readFileSync(configPath, "utf8")) as McpConfigFile;
+    config = structuredClone(loadMcpConfig(undefined, workspaceDir) as McpConfigFile);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw new Error(`Unable to read MCP credential configuration at ${configPath}`, {
-      cause: error,
-    });
+    const message = error instanceof Error ? error.message : String(error);
+    config = { mcpServers: {} };
+    diagnostics.push({ serverName: "(configuration)", reason: `could not be loaded: ${message}` });
+  }
+  const hydrated: HydratedMcpCredential[] = [];
+  const servers = config.mcpServers ?? (config.mcpServers = {});
+  const candidates: Array<[string, McpServerCredentialConfig]> = [];
+
+  for (const [serverName, rawDefinition] of Object.entries(servers)) {
+    const definition = rawDefinition && typeof rawDefinition === "object" && !Array.isArray(rawDefinition)
+      ? rawDefinition as McpServerCredentialConfig
+      : null;
+    if (!definition) {
+      servers[serverName] = { disabled: true };
+      diagnostics.push({ serverName, reason: "configuration must be an object." });
+      continue;
+    }
+    if (definition.disabled === true) continue;
+    const reason = serverReason(definition);
+    if (reason) {
+      servers[serverName] = disabledServerDefinition(definition);
+      diagnostics.push({ serverName, reason });
+      continue;
+    }
+    candidates.push([serverName, definition]);
   }
 
-  const hydrated: HydratedMcpCredential[] = [];
-  try {
-    for (const [serverName, definition] of Object.entries(config.mcpServers ?? {})) {
-      const keychainName = definition.bearerTokenKeychain;
-      if (keychainName === undefined) continue;
-      if (typeof keychainName !== "string" || !keychainName.trim()) {
-        throw new Error(`MCP server ${serverName} bearerTokenKeychain must be a non-empty string.`);
-      }
-      if (definition.bearerToken !== undefined) {
-        throw new Error(`MCP server ${serverName} cannot combine bearerToken and bearerTokenKeychain.`);
-      }
-      const envName = definition.bearerTokenEnv;
-      if (typeof envName !== "string" || !ENV_NAME.test(envName)) {
-        throw new Error(
-          `MCP server ${serverName} must set a valid bearerTokenEnv with bearerTokenKeychain.`,
-        );
-      }
-      if (process.env[envName] !== undefined) {
-        throw new Error(`MCP server ${serverName} bearerTokenEnv ${envName} is already set.`);
-      }
-      const entry = await resolveEntry(keychainName.trim());
-      if (!entry.secret) {
-        throw new Error(`MCP server ${serverName} keychain entry has no secret.`);
-      }
-      process.env[envName] = entry.secret;
-      hydrated.push({ serverName, envName, keychainName: keychainName.trim() });
+  const claimedEnvNames = new Set<string>();
+  for (const [serverName, definition] of candidates) {
+    const keychainName = definition.bearerTokenKeychain;
+    if (keychainName === undefined) continue;
+    const envName = definition.bearerTokenEnv as string;
+    if (claimedEnvNames.has(envName)) {
+      servers[serverName] = disabledServerDefinition(definition);
+      diagnostics.push({ serverName, reason: `bearerTokenEnv ${envName} is already claimed by another MCP server.` });
+      continue;
     }
-    validateMcpEnvironmentReferences(config);
-    return hydrated;
-  } catch (error) {
-    clearHydratedMcpCredentials(hydrated);
-    throw error;
+    try {
+      const entry = await resolveEntry(keychainName as string);
+      if (!entry.secret) throw new Error("missing secret");
+      process.env[envName] = entry.secret;
+      claimedEnvNames.add(envName);
+      hydrated.push({ serverName, envName, keychainName: keychainName as string });
+    } catch {
+      servers[serverName] = disabledServerDefinition(definition);
+      diagnostics.push({ serverName, reason: "keychain entry is unavailable or has no secret." });
+    }
   }
+
+  for (const [serverName, definition] of candidates) {
+    if (servers[serverName]?.disabled === true) continue;
+    try {
+      validateMcpEnvironmentReferences({ mcpServers: { [serverName]: definition } });
+    } catch (error) {
+      servers[serverName] = disabledServerDefinition(definition);
+      const message = error instanceof Error ? error.message.replace(/^MCP server [^ ]+ /, "") : "references an unavailable environment variable.";
+      diagnostics.push({ serverName, reason: message });
+      const hydratedEntry = hydrated.find((entry) => entry.serverName === serverName);
+      if (hydratedEntry) {
+        delete process.env[hydratedEntry.envName];
+        hydrated.splice(hydrated.indexOf(hydratedEntry), 1);
+      }
+    }
+  }
+
+  preparedMcpConfig = config;
+  setMcpStartupDiagnostics(diagnostics);
+  return hydrated;
 }
 
 export function clearHydratedMcpCredentials(entries: HydratedMcpCredential[]): void {

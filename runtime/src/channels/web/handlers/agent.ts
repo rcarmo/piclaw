@@ -15,6 +15,8 @@ import {
 } from "../../../core/config.js";
 import { parseControlCommand } from "../../../agent-control/index.js";
 import { isSlashCommandInvocation } from "../../../agent-pool/slash-command.js";
+import { RECOVERY_CONTINUATION_PROMPT } from "../../../agent-pool/context-pressure-retry.js";
+import { getExtensionKvStore } from "../../../extension-kv-registry.js";
 import {
   normalizeAgentMessagePayload,
   parseAgentMessageRequest,
@@ -62,6 +64,27 @@ import { formatProviderError } from "./provider-error-format.js";
 import { endTrackedPhase } from "../../../runtime/progress-watchdog.js";
 
 const log = createLogger("web.handlers.agent");
+const TOOL_BUDGET_CONTINUATION_EXTENSION_ID = "piclaw.tool-budget-continuation";
+
+function reserveToolBudgetContinuation(chatJid: string, threadKey: string): boolean {
+  const kv = getExtensionKvStore();
+  const key = `continued:${threadKey}`;
+  if (kv.get(TOOL_BUDGET_CONTINUATION_EXTENSION_ID, key, "chat", chatJid)) return false;
+  kv.set(TOOL_BUDGET_CONTINUATION_EXTENSION_ID, key, {
+    count: 1,
+    createdAt: new Date().toISOString(),
+  }, "chat", chatJid);
+  return true;
+}
+
+function releaseToolBudgetContinuation(chatJid: string, threadKey: string): void {
+  getExtensionKvStore().delete(
+    TOOL_BUDGET_CONTINUATION_EXTENSION_ID,
+    `continued:${threadKey}`,
+    "chat",
+    chatJid,
+  );
+}
 
 export type BrowserObservabilityContext = {
   userId?: string;
@@ -174,6 +197,8 @@ function buildTurnOutcomeMarker(options: {
   toolStepsUsed?: number;
   toolStepsBudget?: number;
   nextAction?: string;
+  abortCause?: string;
+  abortOperation?: string;
 }): Record<string, unknown> {
   return {
     type: "turn_outcome_marker",
@@ -189,6 +214,8 @@ function buildTurnOutcomeMarker(options: {
     tool_steps_used: Number.isFinite(options.toolStepsUsed) ? options.toolStepsUsed : undefined,
     tool_steps_budget: Number.isFinite(options.toolStepsBudget) ? options.toolStepsBudget : undefined,
     next_action: readTrimmedString(options.nextAction) || undefined,
+    abort_cause: readTrimmedString(options.abortCause) || undefined,
+    abort_operation: readTrimmedString(options.abortOperation) || undefined,
   };
 }
 
@@ -212,6 +239,8 @@ function buildErrorOutcomeMarker(
     toolStepsUsed?: number;
     toolStepsBudget?: number;
     nextAction?: string;
+    abortCause?: string;
+    abortOperation?: string;
   } = {},
 ): Record<string, unknown> {
   if (isToolBudgetExceededError(errorText)) {
@@ -228,6 +257,8 @@ function buildErrorOutcomeMarker(
       toolStepsUsed: options.toolStepsUsed,
       toolStepsBudget: options.toolStepsBudget,
       nextAction: options.nextAction || "Ask me to continue; I will resume from the latest known partial state instead of replaying the whole turn.",
+      abortCause: options.abortCause,
+      abortOperation: options.abortOperation,
     });
   }
 
@@ -306,6 +337,8 @@ function buildErrorOutcomeMarker(
       draftRecovered: options.draftRecovered,
       attemptsUsed: options.attemptsUsed,
       classifier: options.classifier,
+      abortCause: options.abortCause,
+      abortOperation: options.abortOperation,
     });
   }
 
@@ -1761,7 +1794,59 @@ export async function processChat(
       toolStepsUsed: output.toolStepsUsed,
       toolStepsBudget: output.toolStepsBudget,
       nextAction: output.nextAction,
+      abortCause: output.abortCause,
+      abortOperation: output.abortOperation,
     };
+    const queueToolBudgetContinuation = (): void => {
+      if (!output.toolBudgetExceeded || output.recovery?.exhausted) return;
+      const continuationThreadId = resolvedThreadRootId
+        ?? getMessageRowIdById(chatJid, lastMessage.id ?? "");
+      if (!continuationThreadId) {
+        log.warn("Could not resolve thread lineage for bounded tool-budget continuation", {
+          operation: "process_chat.tool_budget_auto_continue_missing_lineage",
+          chatJid,
+          messageId: lastMessage.id ?? null,
+        });
+        return;
+      }
+      const continuationThreadKey = String(continuationThreadId);
+      if (!reserveToolBudgetContinuation(chatJid, continuationThreadKey)) return;
+
+      try {
+        const queuedAt = new Date().toISOString();
+        const queuedRowId = channel.enqueueQueuedFollowupItem(
+          chatJid,
+          0,
+          RECOVERY_CONTINUATION_PROMPT,
+          continuationThreadId,
+          queuedAt,
+          { source: "auto-tool-budget-continuation" },
+        );
+        channel.broadcastEvent("agent_followup_queued", {
+          chat_jid: chatJid,
+          thread_id: continuationThreadId,
+          row_id: queuedRowId,
+          content: RECOVERY_CONTINUATION_PROMPT,
+          timestamp: queuedAt,
+          source: "auto-tool-budget-continuation",
+        });
+        log.info("Queued one bounded continuation after a healthy tool-budget stop", {
+          operation: "process_chat.tool_budget_auto_continue",
+          chatJid,
+          threadKey: continuationThreadKey,
+          queuedRowId,
+        });
+      } catch (error) {
+        releaseToolBudgetContinuation(chatJid, continuationThreadKey);
+        log.warn("Failed to queue bounded continuation after tool-budget stop", {
+          operation: "process_chat.tool_budget_auto_continue_failed",
+          chatJid,
+          threadKey: continuationThreadKey,
+          err: error,
+        });
+      }
+    };
+
     const fallbackPublished = errorText.toLowerCase().includes("timed out")
       ? publishDraftFallback("timeout", errorText, { markerOptions })
       : rateLimited
@@ -1769,6 +1854,9 @@ export async function processChat(
         : publishDraftFallback("error", errorText, { markerOptions });
 
     if (fallbackPublished) {
+      // Reserve/enqueue only after the terminal outcome is durable. A failed
+      // terminal write must not consume this lineage's sole continuation.
+      queueToolBudgetContinuation();
       await finalizeSuccessfulRun();
       return;
     }
@@ -1781,6 +1869,7 @@ export async function processChat(
     });
     const persisted = persistVisibleFailureOutcome(marker);
     if (persisted) {
+      queueToolBudgetContinuation();
       await finalizeSuccessfulRun();
     } else {
       rollbackChatRunWithError(chatJid, {

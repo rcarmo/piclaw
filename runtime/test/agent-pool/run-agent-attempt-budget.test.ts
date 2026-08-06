@@ -39,6 +39,41 @@ describe("prompt attempt tool budget", () => {
     expect(activeTools).toEqual(["read", "bash"]);
   });
 
+  test("locks the tool surface immediately after the completed execution budget is reached", async () => {
+    let activeTools = ["read", "bash"];
+    const session = {
+      agent: {},
+      getActiveToolNames: () => [...activeTools],
+      setActiveToolsByName: (names: string[]) => { activeTools = [...names]; },
+    } as any;
+    const controller = createAttemptToolBudgetController({
+      session,
+      chatJid: "web:test-completed-budget",
+      initialToolExecutionCount: 0,
+      toolUseMessageBudget: 2,
+      toolUseWarningThreshold: 1,
+      runOptions: {},
+      getRunObservabilityDetails: () => ({}),
+    });
+
+    expect(await session.agent.beforeToolCall({ toolCall: { id: "call-a", name: "read" }, args: {} })).toBeUndefined();
+    expect(await session.agent.beforeToolCall({ toolCall: { id: "call-b", name: "read" }, args: {} })).toBeUndefined();
+    controller.consumeToolExecutionEnd("call-a", false);
+    controller.consumeToolExecutionEnd("call-b", false);
+    controller.enforceCompletedExecutionBudget();
+
+    expect(controller.state.toolUseBudgetExceeded).toBe(true);
+    expect(activeTools).toEqual([]);
+    await expect(session.agent.beforeToolCall({ toolCall: { id: "call-c", name: "bash" }, args: {} })).resolves.toEqual({
+      block: true,
+      reason: "Per-turn tool execution budget exhausted (2/2). Ask the user to continue before calling more tools.",
+    });
+
+    controller.restoreToolBudgetGuard();
+    controller.restoreToolBudgetSoftStop();
+    expect(activeTools).toEqual(["read", "bash"]);
+  });
+
   test("applies a deferred soft stop after every threshold-crossing tool call finishes", () => {
     let activeTools = ["read", "bash"];
     const session = {

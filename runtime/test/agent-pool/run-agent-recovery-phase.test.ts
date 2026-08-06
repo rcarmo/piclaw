@@ -138,6 +138,62 @@ describe("runAgentRecoveryPhase", () => {
     ]));
   });
 
+  test.each([
+    ["unable-access", "I’m unable to access the execution tools in this recovery turn, so I can’t advance the task."],
+    ["production-blocked", "I’m blocked from further tool execution in this recovered turn, so I cannot safely inspect or edit the continuation ledger yet."],
+    ["blocked-using", "We are blocked from using the tools, so this task cannot continue."],
+  ])("does not report a tool-unavailable protected continuation as recovered: %s", async (caseId, protectedReply) => {
+    let activeTools = ["read", "bash"];
+    const sessionCtrl: SessionWithToolControl = {
+      getActiveToolNames: () => [...activeTools],
+      setActiveToolsByName: (names) => { activeTools = [...names]; },
+    };
+    let calls = 0;
+
+    const result = await runAgentRecoveryPhase({
+      prompt: "continue goal",
+      chatJid: `web:test-recovery-phase:${caseId}`,
+      session: {} as any,
+      sessionCtrl,
+      timeoutMs: 0,
+      startTime: Date.now(),
+      modelLabel: "test/model",
+      recoveryConfig: recoveryConfig({ transientRecoveryToolsEnabled: false }),
+      runOptions: {},
+      logsDir: "/tmp/nonexistent-piclaw-test-logs",
+      clearAttachments: () => {},
+      runPromptAttempt: async () => {
+        calls += 1;
+        if (calls === 1) {
+          return attempt({
+            output: output("error", "503 temporarily unavailable"),
+            snapshot: {
+              hadToolActivity: true,
+              hadPartialOutput: false,
+              hadCompletedTurnOutput: false,
+              hadTerminalTurnOutput: false,
+              sawCompactionIntent: false,
+              canDisableToolsForRecovery: true,
+              hasUnresolvedToolExecution: false,
+            },
+            promptWasPersisted: true,
+          });
+        }
+        expect(activeTools).toEqual([]);
+        return attempt({
+          output: output("success", undefined, protectedReply),
+        });
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: "error",
+      recovery: { recovered: false, exhausted: true, lastClassifier: "tool_activity" },
+    });
+    expect(result.error).toContain("could not advance the task");
+    expect(activeTools).toEqual(["read", "bash"]);
+  });
+
   test("disables and restores tools when transient recovery tools are opted out", async () => {
     let activeTools = ["read", "bash"];
     const activeToolSets: string[][] = [];
@@ -297,6 +353,10 @@ describe("runAgentRecoveryPhase", () => {
           });
         }
         expect(activeTools).toEqual([]);
+        // Simulate an extension before_agent_start hook trying to auto-activate
+        // a tool after recovery already disabled the tool set.
+        sessionCtrl.setActiveToolsByName?.(["delegate"]);
+        expect(activeTools).toEqual([]);
         return attempt({
           output: output("success", undefined, "recovered"),
           snapshot: {
@@ -318,7 +378,7 @@ describe("runAgentRecoveryPhase", () => {
     expect(calls[1]?.toolExecutionCountAtStart).toBe(2);
     expect(calls[1]?.timeoutMs).toBeGreaterThanOrEqual(20);
     expect(calls[1]?.timeoutMs).toBeLessThanOrEqual(25);
-    expect(activeToolSets).toEqual([[], ["read", "bash"]]);
+    expect(activeToolSets).toEqual([[], [], ["read", "bash"]]);
     expect(events).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "compaction_start", trigger: "recovery" }),
       expect.objectContaining({ type: "compaction_end", trigger: "recovery", willRetry: true }),
@@ -360,6 +420,59 @@ describe("runAgentRecoveryPhase", () => {
     expect(calls).toBe(1);
     expect(result.error).toContain("cannot control tools safely");
     expect(result.toolBudgetExceeded).toBeUndefined();
+  });
+
+  test("emergency-rotates and continues when recovery compaction fails", async () => {
+    let calls = 0;
+    let rotations = 0;
+    const oldSession = { compact: async () => { throw new Error("Progressive compaction output invalid (stop_reason): completion stop reason was length; expected stop"); } } as any;
+    const newSession = {} as any;
+    let activeTools = ["read"];
+    const sessionCtrl: SessionWithToolControl = {
+      getActiveToolNames: () => [...activeTools],
+      setActiveToolsByName: (names) => { activeTools = [...names]; },
+    };
+    const result = await runAgentRecoveryPhase({
+      prompt: "original prompt",
+      chatJid: "web:test-recovery-compact",
+      session: oldSession,
+      sessionCtrl,
+      timeoutMs: 0,
+      startTime: Date.now(),
+      modelLabel: "test/model",
+      recoveryConfig: recoveryConfig(),
+      runOptions: {},
+      logsDir: "/tmp/nonexistent-piclaw-test-logs",
+      clearAttachments: () => {},
+      rotateAfterCompactionFailure: async () => {
+        rotations += 1;
+        return { ok: true, session: newSession, sessionCtrl };
+      },
+      runPromptAttempt: async () => {
+        calls += 1;
+        if (calls === 1) {
+          return attempt({
+            output: output("error", "context length exceeded"),
+            snapshot: {
+              hadToolActivity: true,
+              hadPartialOutput: false,
+              hadCompletedTurnOutput: false,
+              hadTerminalTurnOutput: false,
+              sawCompactionIntent: true,
+              toolExecutionCount: 1,
+            },
+            promptWasPersisted: true,
+            toolExecutionCount: 1,
+          });
+        }
+        expect(activeTools).toEqual([]);
+        return attempt({ output: output("success", undefined, "rotated after compaction failure") });
+      },
+    });
+
+    expect(result.result).toBe("rotated after compaction failure");
+    expect(rotations).toBe(1);
+    expect(calls).toBe(2);
   });
 
   test("rotates when recovery compaction remains over threshold", async () => {

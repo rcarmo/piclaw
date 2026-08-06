@@ -337,9 +337,16 @@ export function validateCompactionSummaryResponse(
   return { ok: true, text, stopReason: "stop" };
 }
 
-export function buildCompactionRepairInstruction(schema: CompactionSummarySchema, reason: string): string {
+export function buildCompactionRepairInstruction(
+  schema: CompactionSummarySchema,
+  reason: string,
+  maxTokens?: number,
+): string {
   const format = schema === "final"
     ? FINAL_HEADINGS.map((heading) => `## ${heading}`).join("\n")
     : CHUNK_HEADINGS.map((heading) => `## ${heading}`).join("\n");
-  return `\n\n## Output Repair Requirement\nThe previous completion was rejected: ${reason}. Return one concise, complete summary only. End normally with stopReason=stop. Include every heading exactly once and in this order:\n${format}\nDo not include commentary before or after the summary.`;
+  const lengthCap = /stop reason was length/i.test(reason)
+    ? ` The previous response hit the provider output limit; fit the complete summary within ${Math.max(1, Math.floor(maxTokens ?? 0))} output tokens by using only compact bullets and omitting narrative repetition.`
+    : "";
+  return `\n\n## Output Repair Requirement\nThe previous completion was rejected: ${reason}.${lengthCap} Return one concise, complete summary only. End normally with stopReason=stop. Include every heading exactly once and in this order:\n${format}\nDo not include commentary before or after the summary.`;
 }

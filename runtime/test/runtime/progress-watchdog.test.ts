@@ -76,6 +76,35 @@ test("progress watchdog publishes heartbeat snapshots when phases change", () =>
   ]);
 });
 
+test("Dream initial provider response gets a bounded grace window, but streaming does not", () => {
+  restoreTimeoutOverride = setProgressWatchdogTimeoutForTests(25);
+  beginTrackedPhase("dream:auto:web-default:1", "prompt", {
+    source: "run_agent",
+    initialProviderResponseGraceMs: 75,
+    providerEventObserved: false,
+    model: "test/slow-first-token",
+  });
+  const started = getTrackedPhasesSnapshot()[0];
+  expect(started).toBeTruthy();
+
+  expect(scanForStalls((started?.lastProgressAt ?? 0) + 30)).toEqual([]);
+  const firstResponseStall = scanForStalls((started?.lastProgressAt ?? 0) + 80);
+  expect(firstResponseStall).toEqual([expect.objectContaining({
+    phase: "prompt",
+    timeoutMs: 75,
+    requestAgeMs: 80,
+    providerEventObserved: false,
+  })]);
+
+  heartbeatTrackedPhase("dream:auto:web-default:1", "streaming", { providerEventObserved: true });
+  const streaming = getTrackedPhasesSnapshot()[0];
+  expect(scanForStalls((streaming?.lastProgressAt ?? 0) + 30)).toEqual([expect.objectContaining({
+    phase: "streaming",
+    timeoutMs: 25,
+    providerEventObserved: true,
+  })]);
+});
+
 test("progress watchdog reports stalled phases without process escalation by default", () => {
   restoreTimeoutOverride = setProgressWatchdogTimeoutForTests(25);
   const terminations: any[] = [];

@@ -26,7 +26,7 @@ export interface AutomaticRecoveryConfig {
   maxDelayMs: number;
 }
 
-export type RecoveryStrategy = "retry" | "compact_then_retry";
+export type RecoveryStrategy = "retry" | "compact_then_retry" | "finalize";
 export type RecoveryClassifier =
   | "disabled"
   | "budget_exhausted"
@@ -60,6 +60,7 @@ export interface RecoveryAttemptSnapshot {
   hasUnresolvedToolExecution?: boolean;
   hadToolFailure?: boolean;
   sawTerminalSideEffectToolActivity?: boolean;
+  needsToolFreeFinalization?: boolean;
   toolUseBudgetExceeded?: boolean;
   assistantToolUseMessageCount?: number;
   toolExecutionCount?: number;
@@ -260,6 +261,20 @@ export function decideAutomaticRecovery(input: RecoveryDecisionInput): RecoveryD
   }
 
   if (input.snapshot.hadToolActivity) {
+    if (input.snapshot.needsToolFreeFinalization) {
+      if (!input.config.enabled || !input.config.transientRecoveryEnabled) {
+        return { recover: false, classifier: "disabled", strategy: null, reason: "Tools-disabled finalization is disabled." };
+      }
+      if (!input.snapshot.canDisableToolsForRecovery) {
+        return { recover: false, classifier: "tool_activity", strategy: null, reason: "Closing reply requires tool control that this session does not expose." };
+      }
+      return {
+        recover: true,
+        classifier: "transient",
+        strategy: "finalize",
+        reason: "Resolved tool work ended without a terminal assistant reply; requesting one tools-disabled closing reply.",
+      };
+    }
     // A terminal assistant reply is the only prior output that can make a
     // tool-bearing failure complete. Text emitted before a tool call is an
     // intermediate lead-in; if the provider later stops or times out, resume

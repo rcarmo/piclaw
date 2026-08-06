@@ -1,11 +1,14 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import {
   handleAgentContextRequest,
   handleAgentModelsRequest,
   handleAgentStatusRequest,
   type AgentStatusContext,
 } from "../../../../src/channels/web/agent/agent-status.js";
+import { resetMcpStartupStateForTests } from "../../../../src/secure/mcp-keychain.js";
 import { createJsonResponder } from "../helpers/http.js";
+
+afterEach(() => resetMcpStartupStateForTests());
 
 function createContext(overrides: Partial<AgentStatusContext> = {}): AgentStatusContext {
   return {
@@ -37,6 +40,29 @@ describe("web agent status helpers", () => {
       data: null,
       extension_working: null,
       addon_api: { degraded: false, entries: [] },
+      mcp_startup: { degraded: false, servers: [] },
+    });
+  });
+
+  test("handleAgentStatusRequest exposes quarantined MCP startup servers", async () => {
+    const { hydrateMcpKeychainCredentials } = await import("../../../../src/secure/mcp-keychain.js");
+    const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const root = mkdtempSync(join(tmpdir(), "piclaw-mcp-status-"));
+    mkdirSync(join(root, ".pi"), { recursive: true });
+    writeFileSync(join(root, ".pi", "mcp.json"), JSON.stringify({
+      mcpServers: { broken: { bearerTokenKeychain: "broken/token" } },
+    }));
+    await hydrateMcpKeychainCredentials(root);
+
+    const body = await handleAgentStatusRequest(
+      new Request("https://example.com/agent/status"),
+      createContext(),
+    ).json();
+    expect(body.mcp_startup).toEqual({
+      degraded: true,
+      servers: [{ server_name: "broken", reason: "must set a valid bearerTokenEnv with bearerTokenKeychain." }],
     });
   });
 
@@ -60,6 +86,7 @@ describe("web agent status helpers", () => {
       data: null,
       extension_working: null,
       addon_api: { degraded: false, entries: [] },
+      mcp_startup: { degraded: false, servers: [] },
     });
   });
 

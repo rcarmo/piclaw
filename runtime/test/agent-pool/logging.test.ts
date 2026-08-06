@@ -31,6 +31,24 @@ test("writeAgentLog writes a timestamped agent log file in a date shard", () => 
   }
 });
 
+test("writeAgentLog classifies planned restart aborts as interruptions", () => {
+  const logsDir = mkdtempSync(join(tmpdir(), "piclaw-agent-log-restart-"));
+  try {
+    writeAgentLog(logsDir, "chat:restart", 321, false, null, "Request aborted", null, {
+      cause: "service_shutdown",
+      operation: "agent_control.exit",
+      recordedAt: "2026-08-05T00:00:00.000Z",
+    });
+    const files = listLogFiles(logsDir);
+    const content = readFileSync(join(logsDir, files[0]!), "utf-8");
+    expect(content).toContain("Outcome: interrupted");
+    expect(content).toContain("AbortCause: service_shutdown");
+    expect(content).toContain("AbortOperation: agent_control.exit");
+  } finally {
+    rmSync(logsDir, { recursive: true, force: true });
+  }
+});
+
 test("pruneAgentLogs removes old flat and sharded log files", () => {
   const logsDir = mkdtempSync(join(tmpdir(), "piclaw-agent-log-prune-"));
 

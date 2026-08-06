@@ -37,7 +37,12 @@ GHCR_OWNER ?= $(shell whoami)
 GHCR_IMAGE := $(REGISTRY)/$(GHCR_OWNER)/$(IMAGE):$(TAG)
 
 BUN_BIN_REAL ?= $(shell readlink -f $(shell command -v bun 2>/dev/null) 2>/dev/null)
-BUN_ROOT ?= $(or $(BUN_INSTALL),$(patsubst %/bin/bun,%,$(BUN_BIN_REAL)),/usr/local/lib/bun)
+# Install into the canonical host-global Bun root when it exists. A running
+# portable Piclaw exports both BUN_INSTALL and a PATH rooted at
+# /opt/piclaw/current/bun; neither may redirect `make local-install` back into
+# the immutable release tree. Operators can still override BUN_ROOT explicitly.
+HOST_BUN_ROOT := $(if $(wildcard /usr/local/lib/bun/bin/bun),/usr/local/lib/bun,$(patsubst %/bin/bun,%,$(BUN_BIN_REAL)))
+BUN_ROOT ?= $(HOST_BUN_ROOT)
 GLOBAL_PKG := $(BUN_ROOT)/install/global/package.json
 GLOBAL_LOCK := $(BUN_ROOT)/install/global/bun.lock
 PI_AGENT_VERSION ?= $(shell jq -r '.dependencies["@earendil-works/pi-coding-agent"] // "0.74.0"' package.json)
@@ -181,7 +186,10 @@ local-install: pack ## Pack and install piclaw globally (no restart)
 	VERSION=$$(jq -r .version package.json); \
 	TGZ="$$(find $(PACK_DIR) -maxdepth 1 -type f -name 'piclaw-*.tgz' | sort | tail -1)"; \
 	if [ -z "$$TGZ" ]; then printf '%s\n' "[local-install] No package tarball found in $(PACK_DIR)"; exit 1; fi; \
-	printf '%s\n' "[local-install] Installing v$${VERSION} globally..."; \
+	printf '%s\n' "[local-install] Installing v$${VERSION} globally into $(BUN_ROOT)..."; \
+	case "$(BUN_ROOT)" in /opt/piclaw/current/*|/opt/piclaw/releases/*) \
+		printf '%s\n' "[local-install] Refusing portable release Bun root: $(BUN_ROOT). Override BUN_ROOT only with a writable host-global Bun installation."; exit 1;; \
+	esac; \
 	printf '{"dependencies":{"@earendil-works/pi-coding-agent":"$(PI_AGENT_VERSION)","@earendil-works/pi-agent-core":"$(PI_AGENT_VERSION)","@earendil-works/pi-ai":"$(PI_AGENT_VERSION)","@earendil-works/pi-tui":"$(PI_AGENT_VERSION)","piclaw":"%s"}}\n' \
 		"$$TGZ" | sudo tee $(GLOBAL_PKG) >/dev/null; \
 	sudo rm -f $(GLOBAL_LOCK); \

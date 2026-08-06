@@ -2,7 +2,7 @@
 
 ## Publishing
 
-Pushing a version tag triggers `.github/workflows/publish.yml` and publishes multi-arch GHCR images:
+Pushing a version tag triggers `.github/workflows/publish.yml`. Its first gate calls the reusable `.github/workflows/integration-gate.yml` against that exact immutable tag SHA; no Docker or portable-artifact build starts until that gate succeeds. It then publishes multi-arch GHCR images:
 
 - `ghcr.io/rcarmo/piclaw:<tag>`
 - `ghcr.io/rcarmo/piclaw:latest`
@@ -123,6 +123,7 @@ Ownership boundary:
 - release/tag/workflow/package pruning is GitHub-native in `.github/workflows/publish.yml`
   because it depends directly on Actions context and GitHub APIs
 - Actions workflow runs and Actions artifacts are pruned after release publishing using the oldest timestamp among the latest 5 GitHub releases as the retention cutoff
+- A staggered weekly `Actions cleanup` workflow also enforces the seven-day artifact/run and cache retention window; use its `workflow_dispatch` trigger for exceptional maintenance
 
 ## Release naming
 

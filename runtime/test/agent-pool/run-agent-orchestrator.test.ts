@@ -12,6 +12,7 @@ import { getAttachmentRegistry } from "../../src/agent-pool/attachments.js";
 import { setCompactionSettlementGraceForTests } from "../../src/agent-pool/compaction.js";
 import { AgentTurnCoordinator } from "../../src/agent-pool/turn-coordinator.js";
 import { createToolExecutionWatchdogHeartbeatController, runAgentPrompt } from "../../src/agent-pool/run-agent-orchestrator.js";
+import { getAgentAbortCause, recordAgentAbortCause, resetAgentAbortProvenanceForTests } from "../../src/agent-pool/abort-provenance.js";
 import { getRecoveryFinalizationReserveMs } from "../../src/agent-pool/run-agent-recovery-phase.js";
 import { RECOVERY_CONTINUATION_PROMPT } from "../../src/agent-pool/context-pressure-retry.js";
 import { getSshConfig, initDatabase, setChatAutoCompactionWindow, upsertSshConfig } from "../../src/db.js";
@@ -78,12 +79,51 @@ function createTestLogsDir(): string {
 
 afterEach(() => {
   resetProgressWatchdogForTests();
+  resetAgentAbortProvenanceForTests();
   setSshConnectionResolverForTests(null);
   while (tempLogsDirs.length > 0) {
     const logsDir = tempLogsDirs.pop();
     if (!logsDir) continue;
     rmSync(logsDir, { recursive: true, force: true });
   }
+});
+
+test("runAgentPrompt clears stale abort provenance before starting a new turn", async () => {
+  const chatJid = "web:stale-abort-provenance";
+  recordAgentAbortCause(chatJid, "user_command", "agent_control.abort");
+
+  const result = await runAgentPrompt("test", chatJid, { timeoutMs: 0, skipPrePromptCompaction: true }, {
+    getOrCreateRuntime: async () => { throw new Error("runtime unavailable"); },
+    turnCoordinator: new AgentTurnCoordinator({ takeAttachments: () => [], touchSession: () => {}, recordMessageUsage: () => {} }),
+    clearAttachments: () => {},
+    takeAttachments: () => [],
+    logsDir: createTestLogsDir(),
+    setActiveForkBaseLeaf: () => {},
+    clearActiveForkBaseLeaf: () => {},
+  });
+
+  expect(result).toMatchObject({ status: "error", error: "runtime unavailable" });
+  expect(getAgentAbortCause(chatJid)).toBeNull();
+});
+
+test("runAgentPrompt consumes abort provenance on exceptional orchestration exit", async () => {
+  const chatJid = "web:exceptional-abort-provenance";
+
+  const result = await runAgentPrompt("test", chatJid, { timeoutMs: 0, skipPrePromptCompaction: true }, {
+    getOrCreateRuntime: async () => {
+      recordAgentAbortCause(chatJid, "service_shutdown", "test.runtime_creation");
+      throw new Error("runtime creation interrupted");
+    },
+    turnCoordinator: new AgentTurnCoordinator({ takeAttachments: () => [], touchSession: () => {}, recordMessageUsage: () => {} }),
+    clearAttachments: () => {},
+    takeAttachments: () => [],
+    logsDir: createTestLogsDir(),
+    setActiveForkBaseLeaf: () => {},
+    clearActiveForkBaseLeaf: () => {},
+  });
+
+  expect(result).toMatchObject({ status: "error", error: "runtime creation interrupted" });
+  expect(getAgentAbortCause(chatJid)).toBeNull();
 });
 
 test("runAgentPrompt aborts and returns an interrupted result when active progress goes stale", async () => {
@@ -3864,7 +3904,7 @@ test("runAgentPrompt continues with tools after a resolved side-effecting tool",
         }
         return;
       }
-      expect(this.activeTools).toEqual(["bash", "write"]);
+      expect(this.activeTools).toEqual([]);
       for (const listener of this.listeners) {
         listener({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Wrote /tmp/x successfully." } });
         listener({ type: "message_end", message: createAssistantMessage("Wrote /tmp/x successfully.") });
@@ -4045,7 +4085,54 @@ test("runAgentPrompt does not let a terminal side-effect tool mask an earlier to
   }
 });
 
-test("runAgentPrompt continues after a committed tool-use lead-in when closing prose is missing", async () => {
+test("runAgentPrompt restores an accidentally empty active-tool set before an ordinary turn", async () => {
+  class StubSession {
+    private listeners: Array<(event: any) => void> = [];
+    private activeTools: string[] = [];
+    sessionManager = { getLeafId: () => "leaf-restored-tools" };
+    isStreaming = false;
+    isCompacting = false;
+    isRetrying = false;
+    getActiveToolNames() { return [...this.activeTools]; }
+    setActiveToolsByName(names: string[]) { this.activeTools = [...names]; }
+    subscribe(listener: (event: any) => void) {
+      this.listeners.push(listener);
+      return () => { this.listeners = this.listeners.filter((entry) => entry !== listener); };
+    }
+    async prompt() {
+      expect(this.activeTools).toContain("read");
+      expect(this.activeTools).toContain("activate_tools");
+      for (const listener of this.listeners) {
+        listener({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Tools were restored." } });
+        listener({ type: "message_end", message: createAssistantMessage("Tools were restored.") });
+      }
+    }
+    async abort() {}
+  }
+
+  const session = new StubSession();
+  const warnings: Array<{ message: string; details: Record<string, unknown> }> = [];
+  const result = await runAgentPrompt("continue ordinary work", "web:default", { timeoutMs: 0 }, {
+    getOrCreateRuntime: async () => createRuntime(session, { maxRetries: 2, baseDelayMs: 1, maxDelayMs: 60000 }) as any,
+    turnCoordinator: new AgentTurnCoordinator({ takeAttachments: () => [], touchSession: () => {}, recordMessageUsage: () => {} }),
+    clearAttachments: () => {},
+    takeAttachments: () => [],
+    logsDir: createTestLogsDir(),
+    setActiveForkBaseLeaf: () => {},
+    clearActiveForkBaseLeaf: () => {},
+    onWarn: (message, details) => warnings.push({ message, details }),
+  });
+
+  expect(result).toMatchObject({ status: "success", result: "Tools were restored." });
+  expect(warnings).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      message: "Restored default tools after an empty active-tool set leaked into an ordinary turn",
+      details: expect.objectContaining({ operation: "run_agent.restore_empty_tool_set" }),
+    }),
+  ]));
+});
+
+test("runAgentPrompt requests one tools-disabled closing reply after resolved tool work", async () => {
   const restoreEnv = setEnv({
     PICLAW_TURN_AUTO_RECOVERY_ENABLED: "1",
     PICLAW_TURN_TRANSIENT_RECOVERY_TOOLS_ENABLED: "1",
@@ -4082,7 +4169,7 @@ test("runAgentPrompt continues after a committed tool-use lead-in when closing p
       this.promptCalls += 1;
       this.promptTexts.push(text);
       if (this.promptCalls > 1) {
-        expect(this.activeTools).toEqual(["bash", "read"]);
+        expect(this.activeTools).toEqual([]);
         for (const listener of this.listeners) {
           listener({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Tests passed. The requested work is complete." } });
           listener({
@@ -4161,7 +4248,7 @@ test("runAgentPrompt continues after a committed tool-use lead-in when closing p
     expect(result.result).toBe("Tests passed. The requested work is complete.");
     expect(session.promptCalls).toBe(2);
     expect(session.promptTexts).toEqual(["run tests", RECOVERY_CONTINUATION_PROMPT]);
-    expect(session.toolSets).toEqual([]);
+    expect(session.toolSets).toEqual([[], ["bash", "read"]]);
     expect(completedTurns).toEqual([
       { text: "I will run the tests now.", followedByToolUse: true },
     ]);

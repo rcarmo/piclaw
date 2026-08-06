@@ -30,6 +30,8 @@ export interface ProgressWatchdogEntry {
 export interface ProgressWatchdogStall extends ProgressWatchdogEntry {
   ageMs: number;
   timeoutMs: number;
+  requestAgeMs: number;
+  providerEventObserved: boolean;
 }
 
 export interface ProgressWatchdogSnapshot {
@@ -224,6 +226,20 @@ export function getTrackedPhasesSnapshot(): ProgressWatchdogEntry[] {
   return Array.from(activeByChat.values()).map(({ stallReported: _stallReported, abortAttempted: _abortAttempted, ...entry }) => ({ ...entry }));
 }
 
+function getEffectiveEntryTimeoutMs(entry: ProgressWatchdogEntry, defaultTimeoutMs: number): number {
+  const initialResponseGraceMs = Number(entry.metadata?.initialProviderResponseGraceMs);
+  const providerEventObserved = entry.metadata?.providerEventObserved === true;
+  if (
+    entry.phase === "prompt"
+    && !providerEventObserved
+    && Number.isFinite(initialResponseGraceMs)
+    && initialResponseGraceMs > defaultTimeoutMs
+  ) {
+    return Math.round(initialResponseGraceMs);
+  }
+  return defaultTimeoutMs;
+}
+
 export function scanForStalls(now = Date.now()): ProgressWatchdogStall[] {
   const timeoutMs = getProgressWatchdogTimeoutMs();
   if (timeoutMs <= 0) return [];
@@ -231,7 +247,8 @@ export function scanForStalls(now = Date.now()): ProgressWatchdogStall[] {
   const stalls: ProgressWatchdogStall[] = [];
   for (const [chatJid, current] of activeByChat) {
     const ageMs = Math.max(0, now - current.lastProgressAt);
-    if (ageMs < timeoutMs) continue;
+    const effectiveTimeoutMs = getEffectiveEntryTimeoutMs(current, timeoutMs);
+    if (ageMs < effectiveTimeoutMs) continue;
 
     const stall: ProgressWatchdogStall = {
       chatJid,
@@ -240,7 +257,9 @@ export function scanForStalls(now = Date.now()): ProgressWatchdogStall[] {
       lastProgressAt: current.lastProgressAt,
       metadata: current.metadata,
       ageMs,
-      timeoutMs,
+      timeoutMs: effectiveTimeoutMs,
+      requestAgeMs: Math.max(0, now - current.startedAt),
+      providerEventObserved: current.metadata?.providerEventObserved === true,
     };
     stalls.push(stall);
 
@@ -252,7 +271,10 @@ export function scanForStalls(now = Date.now()): ProgressWatchdogStall[] {
       chatJid,
       phase: current.phase,
       ageMs,
-      timeoutMs,
+      timeoutMs: effectiveTimeoutMs,
+      configuredTimeoutMs: timeoutMs,
+      requestAgeMs: stall.requestAgeMs,
+      providerEventObserved: stall.providerEventObserved,
       startedAt: new Date(current.startedAt).toISOString(),
       lastProgressAt: new Date(current.lastProgressAt).toISOString(),
       metadata: current.metadata,

@@ -18,6 +18,11 @@ Install the workspace build, then let the active service manager start a new pro
    cd /workspace/piclaw && make local-install
    ```
 
+   A non-zero exit stops the workflow. Report the install failure and do not
+   restart. Verify the installed source artifact under
+   `/usr/local/lib/bun/install/global/node_modules/piclaw`; `piclaw --version`
+   alone is insufficient because a release and local build can share a version.
+
 2. Use `session_status` to check for other active sessions.
 3. If another session is working, report it and wait for approval. A restart interrupts that work.
 4. Finish all build, verification, and reporting work.
@@ -52,6 +57,8 @@ cd /workspace/piclaw && make vendor
 
 ## Notes
 
-- `make local-install` is install-only.
+- `make local-install` is install-only and ignores an ambient portable-runtime `BUN_INSTALL`.
+- A failed local install must never be followed by `exit_process`.
+- Compare an installed source-file checksum or resolved entrypoint with the workspace before restart.
 - `exit_process` requires a non-empty `reason`; optional `resume_message` must also be non-empty when supplied. It has no delay parameter.
 - Bun and Piclaw are installed globally under `/usr/local/lib/bun` in the container layout.

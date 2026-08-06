@@ -1,11 +1,18 @@
 name: Integration gate
 
 on:
-  push:
-    tags:
-      - '*'
-      - '!*-ux'
-      - '!*-prerelease'
+  workflow_call:
+    inputs:
+      ref:
+        description: Exact immutable Git ref/SHA to validate.
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Optional immutable Git ref/SHA to validate; defaults to the dispatch SHA.
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -19,6 +26,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0

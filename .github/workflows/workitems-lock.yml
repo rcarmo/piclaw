@@ -8,6 +8,11 @@ on:
     paths:
       - 'workitems/**'
 
+# A later commit for the same PR/ref supersedes this metadata-only guard.
+concurrency:
+  group: workitems-lock-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     name: No new workitem files

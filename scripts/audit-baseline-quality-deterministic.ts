@@ -411,6 +411,7 @@ const groupDefinitions: GroupDefinition[] = [
           "mobile-viewport.test.ts",
           "meters.test.ts",
           "number-stepper.test.ts",
+          "model-settings-chat-affinity.test.ts",
           "settings-number-autosave.test.ts",
           "notification-delivery-coordinator.test.ts",
           "notification-focus.test.ts",

@@ -10,6 +10,7 @@ import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-
 import type { Usage } from "@earendil-works/pi-ai";
 
 import type { AttachmentInfo } from "./attachments.js";
+import { recordAgentAbortCause } from "./abort-provenance.js";
 
 interface AgentContentBlock {
   type?: unknown;
@@ -413,6 +414,7 @@ export class AgentTurnCoordinator {
           chatJid,
           timeoutMs,
         });
+        recordAgentAbortCause(chatJid, "prompt_timeout", "start_prompt_timeout");
         await session.abort();
       })().catch((err) => {
         if (completedRef.value) return;

@@ -34,6 +34,7 @@ import { getRecoveryPolicyConfig } from "../core/config.js";
 import { writeAgentLog } from "./logging.js";
 import { heartbeatTrackedPhase } from "../runtime/progress-watchdog.js";
 import { isRotationFallbackCompactionError } from "../session-rotation.js";
+import { logToolStateTransition } from "./tool-state-transitions.js";
 
 const MAX_RECOVERY_LOOP_GUARD_CHATS = 512;
 const MIN_RECOVERY_FINALIZATION_RESERVE_MS = 5_000;
@@ -88,6 +89,10 @@ export interface RunAgentRecoveryPhaseOptions {
     cap: number | undefined;
   };
   rotateAfterInsufficientCompaction?: (reason: string) => Promise<
+    | { ok: true; session: AgentSession; sessionCtrl: SessionWithToolControl | null }
+    | { ok: false; errorMessage: string }
+  >;
+  rotateAfterCompactionFailure?: (reason: string) => Promise<
     | { ok: true; session: AgentSession; sessionCtrl: SessionWithToolControl | null }
     | { ok: false; errorMessage: string }
   >;
@@ -247,6 +252,11 @@ export function buildRecoveryDiagnosticEntry(
 
 function isAbortFailureText(errorText: string): boolean {
   return /\b(?:aborterror|aborted|operation was aborted|request was aborted)\b/i.test(errorText);
+}
+
+function isToolUnavailableRecoveryText(text: string | null): boolean {
+  if (!text?.trim()) return false;
+  return /(?:unable|cannot|can[’']?t).{0,120}(?:access|use).{0,80}(?:execution )?tools|(?:execution )?tools.{0,80}(?:unavailable|not (?:currently )?available|disabled)|\b(?:i(?:[’']m| am)|we(?:[’']re| are))\s+(?:currently\s+)?blocked\s+from\s+(?:further\s+)?(?:tool execution|using (?:the )?(?:execution )?tools)\b/is.test(text);
 }
 
 function findToolBudgetDiagnostic(diagnostics: AgentRecoveryDiagnosticEntry[]): AgentRecoveryDiagnosticEntry | null {
@@ -514,6 +524,8 @@ export async function runAgentRecoveryPhase(options: RunAgentRecoveryPhaseOption
       ? (timeoutMs > 0 ? Math.min(timeoutMs, remainingRecoveryBudgetMs) : remainingRecoveryBudgetMs)
       : timeoutMs;
     let recoverySavedToolNames: string[] | null = null;
+    let recoveryOriginalSetActiveToolsByName: ((names: string[]) => void) | null = null;
+    let recoveryToolReactivationAttempts = 0;
     const toolControl = activeSessionCtrl;
     const canControlTools = toolControl !== null
       && typeof toolControl.getActiveToolNames === "function"
@@ -526,7 +538,35 @@ export async function runAgentRecoveryPhase(options: RunAgentRecoveryPhaseOption
     }
     if (recoveryContinuationWithoutTools && canControlTools && toolControl) {
       recoverySavedToolNames = toolControl.getActiveToolNames!();
-      toolControl.setActiveToolsByName!([]);
+      recoveryOriginalSetActiveToolsByName = toolControl.setActiveToolsByName!.bind(toolControl);
+      recoveryOriginalSetActiveToolsByName([]);
+      logToolStateTransition({
+        chatJid,
+        turnId: runOptions.turnId,
+        phase: "recovery",
+        cause: "recovery_tools_disabled",
+        previous: recoverySavedToolNames,
+        next: [],
+      });
+      // Keep the continuation tools-disabled for the entire attempt. Extension
+      // before_agent_start hooks (notably delegate auto-activation) run inside
+      // session.prompt() and may call setActiveToolsByName after the initial
+      // clear. Without this ceiling they can re-enable long-running tools and
+      // consume the whole automatic-recovery budget.
+      toolControl.setActiveToolsByName = (names: string[]) => {
+        recoveryOriginalSetActiveToolsByName?.([]);
+        if (names.length > 0) {
+          recoveryToolReactivationAttempts += 1;
+          if (recoveryToolReactivationAttempts === 1) {
+            options.onWarn?.("Blocked tool reactivation during tools-disabled recovery continuation", {
+              operation: "run_agent.recovery_tool_reelevation_blocked",
+              chatJid,
+              requestedTools: names,
+              recoveryAttempt: recoveryAttemptsUsed,
+            });
+          }
+        }
+      };
     }
     const finalizationReserveMs = recoveryAttemptsUsed > 0 && !recoveryContinuationWithoutTools
       ? getRecoveryFinalizationReserveMs(attemptTimeoutMs)
@@ -536,8 +576,20 @@ export async function runAgentRecoveryPhase(options: RunAgentRecoveryPhaseOption
       attempt = await options.runPromptAttempt(attemptPrompt, attemptTimeoutMs, turnToolExecutionCount, finalizationReserveMs);
       turnToolExecutionCount = attempt.toolExecutionCount;
     } finally {
-      if (recoverySavedToolNames && activeSessionCtrl && typeof activeSessionCtrl.setActiveToolsByName === "function") {
-        activeSessionCtrl.setActiveToolsByName(recoverySavedToolNames);
+      if (recoveryOriginalSetActiveToolsByName && activeSessionCtrl) {
+        activeSessionCtrl.setActiveToolsByName = recoveryOriginalSetActiveToolsByName;
+      }
+      if (recoverySavedToolNames && recoveryOriginalSetActiveToolsByName) {
+        recoveryOriginalSetActiveToolsByName(recoverySavedToolNames);
+        logToolStateTransition({
+          chatJid,
+          turnId: runOptions.turnId,
+          phase: "recovery",
+          cause: "recovery_tools_restore",
+          previous: [],
+          next: recoverySavedToolNames,
+          restored: true,
+        });
       }
     }
 
@@ -568,6 +620,34 @@ export async function runAgentRecoveryPhase(options: RunAgentRecoveryPhaseOption
     if (attempt.output.status === "success") {
       const duration = Date.now() - startTime;
       const finalText = typeof attempt.output.result === "string" ? attempt.output.result : null;
+      if (recoveryAttemptsUsed > 0 && recoveryContinuationWithoutTools && isToolUnavailableRecoveryText(finalText)) {
+        const error = "Tools-disabled recovery could not advance the task. Continue in a normal turn with the restored tool baseline.";
+        lastClassifier = "tool_activity";
+        const recovery = buildRecoveryMetadata(
+          recoveryAttemptsUsed,
+          duration,
+          false,
+          true,
+          lastClassifier,
+          strategyHistory,
+          recoveryDiagnostics,
+        );
+        writeAgentLog(options.logsDir, chatJid, duration, false, finalText, error, recovery);
+        emitAgentSessionEvent(runOptions.onEvent, {
+          type: "recovery_end",
+          outcome: "exhausted",
+          attemptsUsed: recoveryAttemptsUsed,
+          classifier: lastClassifier,
+          errorMessage: error,
+        });
+        return {
+          status: "error",
+          result: null,
+          error,
+          nextAction: "Continue the task in the next ordinary turn; completed work remains persisted.",
+          recovery,
+        };
+      }
       const recoveryMeta = recoveryAttemptsUsed > 0
         ? buildRecoveryMetadata(recoveryAttemptsUsed, duration, true, false, lastClassifier, strategyHistory, recoveryDiagnostics)
         : null;
@@ -756,11 +836,12 @@ export async function runAgentRecoveryPhase(options: RunAgentRecoveryPhaseOption
     if (attempt.promptWasPersisted || attempt.snapshot.hadToolActivity) {
       attemptPrompt = RECOVERY_CONTINUATION_PROMPT;
     }
-    recoveryContinuationWithoutTools = shouldDisableToolsForRecoveryAttempt(
-      effectiveDecision,
-      attempt.snapshot,
-      recoveryConfig,
-    );
+    recoveryContinuationWithoutTools = effectiveDecision.strategy === "finalize"
+      || shouldDisableToolsForRecoveryAttempt(
+        effectiveDecision,
+        attempt.snapshot,
+        recoveryConfig,
+      );
 
     if (effectiveDecision.strategy === "compact_then_retry") {
       pauseRecoveryBudget();
@@ -789,13 +870,31 @@ export async function runAgentRecoveryPhase(options: RunAgentRecoveryPhaseOption
         });
         lastClassifier = compactDecision.classifier;
         if (!compactDecision.recover || compactDecision.strategy !== "retry") {
+          const rotationReason = `Recovery compaction failed: ${compactionResult.errorMessage}`;
+          const rotation = await options.rotateAfterCompactionFailure?.(rotationReason);
+          if (rotation?.ok) {
+            activeSession = rotation.session;
+            activeSessionCtrl = rotation.sessionCtrl;
+            recoveryContinuationWithoutTools = true;
+            options.onWarn?.("Emergency-rotated session after recovery compaction failure", {
+              operation: "run_agent.recovery_compaction_failure_emergency_rotate",
+              chatJid,
+              reason: rotationReason,
+            });
+            startRecoveryBudget();
+            options.clearAttachments(chatJid);
+            continue;
+          }
+          const terminalError = rotation && !rotation.ok
+            ? `${rotationReason} Emergency rotation failed: ${rotation.errorMessage}`
+            : compactionResult.errorMessage;
           recoveryDiagnostics.push(buildRecoveryDiagnosticEntry(
             "compaction_failure",
             recoveryAttemptsUsed,
             compactDecision.classifier,
             compactDecision.strategy,
             compactDecision.reason,
-            compactionResult.errorMessage,
+            terminalError,
             Date.now() - startTime,
             {
               hadToolActivity: false,
@@ -819,18 +918,18 @@ export async function runAgentRecoveryPhase(options: RunAgentRecoveryPhaseOption
             strategyHistory,
             recoveryDiagnostics,
           );
-          writeAgentLog(options.logsDir, chatJid, duration, false, null, compactionResult.errorMessage, recoveryMeta);
+          writeAgentLog(options.logsDir, chatJid, duration, false, null, terminalError, recoveryMeta);
           emitAgentSessionEvent(runOptions.onEvent, {
             type: "recovery_end",
             outcome: "exhausted",
             attemptsUsed: recoveryAttemptsUsed,
             classifier: compactDecision.classifier,
-            errorMessage: compactionResult.errorMessage,
+            errorMessage: terminalError,
           });
           return {
             status: "error",
             result: null,
-            error: compactionResult.errorMessage,
+            error: terminalError,
             recovery: buildRecoveryMetadata(
               recoveryAttemptsUsed,
               duration,

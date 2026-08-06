@@ -19,49 +19,35 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - stage: smoke-and-shell
+          - stage: core-compose-and-sessions
             specs: >-
               steps/favicon-branding.spec.ts
               steps/us01-morning-triage.spec.ts
               steps/us11-pwa-manifest.spec.ts
               steps/timeline-rendering.spec.ts
-          - stage: compose-queue
-            specs: >-
               steps/us02-queue-steer.spec.ts
-          - stage: message-deletion
-            specs: >-
               steps/us16-message-deletion.spec.ts
-          - stage: compose-visibility
-            specs: >-
               steps/us17-compose-instant-visibility.spec.ts
               steps/us24-btw-panel.spec.ts
-          - stage: theme-tint
-            specs: >-
               steps/theme-tint-commands.spec.ts
-          - stage: sessions-and-settings
-            specs: >-
               steps/us03-session-switching.spec.ts
               steps/us06-settings.spec.ts
               steps/us09-session-lifecycle.spec.ts
               steps/us12-system-meters.spec.ts
               steps/us12-thoughts-panel.spec.ts
-          - stage: workspace-editor
+              steps/us13-15-terminal.spec.ts
+          - stage: workspace-and-terminal
             specs: >-
               steps/us04-editor.spec.ts
               steps/us08-panes.spec.ts
               steps/us10-workspace-files.spec.ts
-          - stage: terminal-panes
-            specs: >-
-              steps/us13-15-terminal.spec.ts
-          - stage: screenshots-and-resilience
+          - stage: resilience-and-compaction
             specs: >-
               steps/us05-screenshots.spec.ts
               steps/us07-reconnection.spec.ts
               steps/us20-lightbox-dismissal.spec.ts
               steps/us21-swipe-independence.spec.ts
               steps/us22-settings-layering.spec.ts
-          - stage: compaction-model
-            specs: >-
               steps/us18-19-compaction-model.spec.ts
 
     steps:

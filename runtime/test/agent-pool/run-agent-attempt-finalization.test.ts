@@ -6,6 +6,7 @@ import {
   finalizePromptAttemptOutput,
   readSessionStateErrorMessage,
 } from "../../src/agent-pool/run-agent-attempt-finalization.js";
+import { recordAgentAbortCause, resetAgentAbortProvenanceForTests } from "../../src/agent-pool/abort-provenance.js";
 
 function baseInput(overrides: Partial<Parameters<typeof finalizePromptAttemptOutput>[0]> = {}): Parameters<typeof finalizePromptAttemptOutput>[0] {
   return {
@@ -52,6 +53,18 @@ function baseInput(overrides: Partial<Parameters<typeof finalizePromptAttemptOut
 }
 
 describe("prompt attempt finalization", () => {
+  test("persists the initiating abort provenance on a generic aborted turn", () => {
+    recordAgentAbortCause("web:test-finalize", "user_command", "agent_control.abort");
+    const { output } = finalizePromptAttemptOutput(baseInput({
+      promptThrownError: "Request aborted",
+    }));
+    expect(output).toMatchObject({
+      status: "error",
+      abortCause: "user_command",
+      abortOperation: "agent_control.abort",
+    });
+    resetAgentAbortProvenanceForTests();
+  });
   test("classifies timer expiry before blank-turn fallback", () => {
     const { output, snapshot } = finalizePromptAttemptOutput(baseInput({ timedOut: true, timeoutMs: 2500 }));
     expect(output).toEqual({ status: "error", result: null, error: "Timed out after 2500ms" });

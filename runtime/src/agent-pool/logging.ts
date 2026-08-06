@@ -13,6 +13,7 @@ import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync, writeFileSync
 import { dirname, join } from "path";
 
 import type { AgentRecoveryMetadata } from "./contracts.js";
+import type { AgentAbortProvenance } from "./abort-provenance.js";
 
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
 import {
@@ -41,14 +42,19 @@ export function writeAgentLog(
   result: string | null,
   error: string | null,
   recovery: AgentRecoveryMetadata | null = null,
+  abortProvenance: AgentAbortProvenance | null = null,
 ): void {
   try {
     const createdAt = new Date();
     const ts = formatLogTimestampForFilename(createdAt);
+    const plannedInterruption = abortProvenance?.cause === "service_shutdown";
     const content = [
       `Chat: ${chatJid}`,
       `Duration: ${duration}ms`,
       `TimedOut: ${timedOut}`,
+      plannedInterruption ? "Outcome: interrupted" : error ? "Outcome: error" : "Outcome: success",
+      abortProvenance ? `AbortCause: ${abortProvenance.cause}` : null,
+      abortProvenance ? `AbortOperation: ${abortProvenance.operation}` : null,
       error ? `Error: ${error}` : null,
       recovery ? `RecoveryAttemptsUsed: ${recovery.attemptsUsed}` : null,
       recovery ? `RecoveryRecovered: ${recovery.recovered}` : null,

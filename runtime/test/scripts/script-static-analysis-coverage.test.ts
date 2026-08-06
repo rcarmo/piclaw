@@ -72,6 +72,7 @@ describe("repository script static-analysis coverage", () => {
   test.each([
     ["root script", "scripts/audit-model-catalog-delta.ts"],
     ["runtime script", "runtime/scripts/controlled-test-runner.ts"],
+    ["Actions workflow contract", "scripts/check-actions-workflows.ts"],
   ] as const)("ESLint config does not ignore a representative %s", (_label, file) => {
     const result = runEslintProbe(file);
     const output = `${result.stdout.toString()}\n${result.stderr.toString()}`;

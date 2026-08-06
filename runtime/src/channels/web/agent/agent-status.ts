@@ -4,6 +4,7 @@
 
 import type { WebAgentBufferEntry } from "./agent-buffers.js";
 import { getAddonApiHealthSnapshot } from "../../../addons/addon-api-health.js";
+import { getMcpStartupDiagnostics } from "../../../secure/mcp-keychain.js";
 import { appendServerTiming, measureAsync, measureSync } from "../http/server-timing.js";
 
 export interface TokenUsageCounterSummary {
@@ -114,6 +115,17 @@ function formatTokenUsageContext(usage: AgentTokenUsageContext | null): Record<s
   };
 }
 
+function getMcpStartupStatus(): { degraded: boolean; servers: Array<{ server_name: string; reason: string }> } {
+  const diagnostics = getMcpStartupDiagnostics();
+  return {
+    degraded: diagnostics.length > 0,
+    servers: diagnostics.map((diagnostic) => ({
+      server_name: diagnostic.serverName,
+      reason: diagnostic.reason,
+    })),
+  };
+}
+
 function deriveAgentState(status: Record<string, unknown>): string {
   const explicit = readTrimmedString(status.state);
   if (explicit) return explicit;
@@ -143,7 +155,7 @@ export function handleAgentStatusRequest(req: Request, ctx: AgentStatusContext):
     const status = ctx.getAgentStatus(chatJid);
     if (!status) {
       ctx.recoverStaleInflightRun(chatJid, { hasActiveStatus: false });
-      return ctx.json({ status: "idle", state: "idle", chat_jid: chatJid, data: null, extension_working: ctx.getExtensionWorkingState(chatJid), addon_api: getAddonApiHealthSnapshot() });
+      return ctx.json({ status: "idle", state: "idle", chat_jid: chatJid, data: null, extension_working: ctx.getExtensionWorkingState(chatJid), addon_api: getAddonApiHealthSnapshot(), mcp_startup: getMcpStartupStatus() });
     }
     // The status store retains terminal command events briefly so polling
     // clients cannot miss completion between requests. Retained terminal
@@ -170,6 +182,7 @@ export function handleAgentStatusRequest(req: Request, ctx: AgentStatusContext):
         data: status,
         extension_working: ctx.getExtensionWorkingState(chatJid),
         addon_api: getAddonApiHealthSnapshot(),
+        mcp_startup: getMcpStartupStatus(),
       });
     }
 
@@ -206,6 +219,7 @@ export function handleAgentStatusRequest(req: Request, ctx: AgentStatusContext):
       draft,
       extension_working: ctx.getExtensionWorkingState(chatJid),
       addon_api: getAddonApiHealthSnapshot(),
+      mcp_startup: getMcpStartupStatus(),
     });
   });
   return appendServerTiming(result, {

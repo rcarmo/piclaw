@@ -53,7 +53,10 @@ import {
 } from "./run-agent-recovery-phase.js";
 import type { AgentTurnCoordinator } from "./turn-coordinator.js";
 import type { AgentOutput, RetrySettingsProvider, RunAgentOptions } from "./contracts.js";
+import { getDefaultActiveToolNames } from "../extensions/tool-activation.js";
+import { logToolStateTransition } from "./tool-state-transitions.js";
 import { isPendingShutdown } from "../runtime/shutdown-registry.js";
+import { clearAgentAbortCause, consumeAgentAbortCause, recordAgentAbortCause } from "./abort-provenance.js";
 import {
   beginTrackedPhase,
   heartbeatTrackedPhase,
@@ -349,6 +352,17 @@ function getUsageInputTokens(usage: unknown): number | null {
   return null;
 }
 
+function getInitialProviderResponseGraceMs(chatJid: string): number | null {
+  if (!chatJid.startsWith("dream:")) return null;
+  const timeoutMs = getProgressWatchdogTimeoutMs();
+  if (timeoutMs <= 0) return null;
+  // Dream is an out-of-band maintenance pass with no interactive latency
+  // contract. Give a slow initial provider response one bounded extra window;
+  // once the first provider event arrives, normal streaming/tool thresholds
+  // immediately resume.
+  return Math.max(timeoutMs, Math.min(900_000, timeoutMs * 3));
+}
+
 function getRunObservabilityDetails(
   runOptions: RunAgentOptions,
   extras: { sessionLeafId?: string | null } = {},
@@ -462,7 +476,7 @@ async function runPromptAttempt(
 
   const wrappedOnEvent = (event: AgentSessionEvent) => {
     if (event.type === "message_update") {
-      heartbeatTrackedPhase(chatJid, "streaming", { eventType: event.type });
+      heartbeatTrackedPhase(chatJid, "streaming", { eventType: event.type, providerEventObserved: true, model: modelLabel });
     } else if (
       event.type === "tool_execution_start"
       || event.type === "tool_execution_update"
@@ -546,6 +560,13 @@ async function runPromptAttempt(
     }
     if (event.type === "message_update") {
       const messageEvent = (event as { assistantMessageEvent?: { type?: string; delta?: string } }).assistantMessageEvent;
+      if (messageEvent?.type === "text_start" || messageEvent?.type === "thinking_start") {
+        heartbeatTrackedPhase(chatJid, "streaming", {
+          eventType: messageEvent.type,
+          providerEventObserved: true,
+          model: modelLabel,
+        });
+      }
       if ((messageEvent?.type === "text_start" || messageEvent?.type === "thinking_start") && !activeModelResponse) {
         modelResponseSequence += 1;
         activeModelResponse = { sequence: modelResponseSequence, startedAt: Date.now() };
@@ -572,7 +593,9 @@ async function runPromptAttempt(
         const toolCallId = (event as { toolCallId?: unknown }).toolCallId;
         const { wasBlockedByBudget } = toolBudget.consumeToolExecutionEnd(toolCallId, (event as { isError?: unknown }).isError);
         if (!wasBlockedByBudget) toolExecutionCount += 1;
-        if (!wasBlockedByBudget && toolExecutionCount >= toolUseMessageBudget) toolBudget.state.toolUseBudgetExceeded = true;
+        if (!wasBlockedByBudget && toolExecutionCount >= toolUseMessageBudget) {
+          toolBudget.enforceCompletedExecutionBudget();
+        }
         // Accumulate tool-result content size for mid-turn context projection.
         attemptContext.addToolResultContent((event as { result?: unknown }).result);
       }
@@ -642,6 +665,7 @@ async function runPromptAttempt(
           // been streamed and captured by onTurnComplete, so the agent's
           // response will be persisted to the DB by finalizeSuccessfulRun.
           if (isPendingShutdown()) {
+            recordAgentAbortCause(chatJid, "service_shutdown", "run_agent.pending_shutdown_abort");
             void session.abort().catch((err) => {
               options.onWarn?.("Failed to abort session after exit_process (deferred to message_end)", {
                 operation: "run_agent.pending_shutdown_abort",
@@ -653,18 +677,7 @@ async function runPromptAttempt(
           if (toolExecutionCount >= toolUseMessageBudget || toolBudget.state.reservedToolExecutionCount >= toolUseMessageBudget) {
             toolBudget.requestToolBudgetSoftStop(toolCallBlocks, assistantToolUseMessageCount);
           }
-          if (!toolBudget.state.toolUseBudgetExceeded && toolExecutionCount > toolUseMessageBudget) {
-            toolBudget.state.toolUseBudgetExceeded = true;
-            void session.abort().catch((err) => {
-              options.onWarn?.("Failed to abort tool-loop budget overflow", {
-                operation: "run_agent.tool_use_budget_abort",
-                chatJid,
-                assistantToolUseMessageCount,
-                toolUseMessageBudget,
-                err,
-              });
-            });
-          }
+
         }
       }
     }
@@ -691,6 +704,7 @@ async function runPromptAttempt(
   let unresolvedToolExecutionCount: number;
   const unregisterProgressAborter = registerProgressWatchdogAborter(chatJid, async (stall) => {
     staleProgressInterrupted = true;
+    recordAgentAbortCause(chatJid, "stale_progress_watchdog", "run_agent.stale_progress_abort");
     options.onWarn?.("Stale-progress watchdog aborting stalled agent run", {
       operation: "run_agent.stale_progress_abort",
       chatJid,
@@ -821,6 +835,9 @@ export async function runAgentPrompt(
   options: RunAgentOrchestratorOptions,
 ): Promise<AgentOutput> {
   const startTime = Date.now();
+  // Abort provenance belongs to one active turn. Commands issued while no
+  // prompt is running, or an earlier exceptional exit, must not label this run.
+  clearAgentAbortCause(chatJid);
   options.clearAttachments(chatJid);
   updateSessionStreaming(chatJid, true);
   let modelLabel: string | null = null;
@@ -845,10 +862,44 @@ export async function runAgentPrompt(
     const runtime = await options.getOrCreateRuntime(chatJid);
     let session = runtime.session;
     session = await maybeAutoRotateSession(session, runtime, chatJid, options);
+    // Protected recovery/finalization attempts deliberately clear tools. An
+    // ordinary subsequent turn must never inherit that empty set: it is not a
+    // user-selectable steady state and otherwise makes the agent appear broken
+    // until a human discovers reset_active_tools. Do not override explicit
+    // per-run ceilings (Dream and other restricted runners own those scopes).
+    const ordinaryToolControl = session as unknown as {
+      getActiveToolNames?: () => string[];
+      setActiveToolsByName?: (names: string[]) => void;
+    };
+    if (!runOptions.toolCeilingFilter
+      && typeof ordinaryToolControl.getActiveToolNames === "function"
+      && typeof ordinaryToolControl.setActiveToolsByName === "function"
+      && ordinaryToolControl.getActiveToolNames().length === 0) {
+      const defaults = getDefaultActiveToolNames();
+      ordinaryToolControl.setActiveToolsByName(defaults);
+      logToolStateTransition({
+        chatJid,
+        turnId: runOptions.turnId,
+        phase: "ordinary_turn",
+        cause: "restore_leaked_empty_set",
+        previous: [],
+        next: defaults,
+        restored: true,
+      });
+      options.onWarn?.("Restored default tools after an empty active-tool set leaked into an ordinary turn", {
+        operation: "run_agent.restore_empty_tool_set",
+        chatJid,
+        restoredTools: defaults,
+        ...getRunObservabilityDetails(runOptions),
+      });
+    }
     modelLabel = session.model ? `${session.model.provider}/${session.model.id}` : null;
     updateSessionModel(chatJid, modelLabel, session.thinkingLevel ?? null);
+    const initialProviderResponseGraceMs = getInitialProviderResponseGraceMs(chatJid);
     beginTrackedPhase(chatJid, runOptions.skipPrePromptCompaction ? "prompt" : "preprompt_compaction", {
       source: "run_agent",
+      model: modelLabel,
+      ...(initialProviderResponseGraceMs ? { initialProviderResponseGraceMs, providerEventObserved: false } : {}),
     });
     if (!runOptions.skipPrePromptCompaction) {
       let prePromptCompactionFailure: string | null = null;
@@ -957,7 +1008,16 @@ export async function runAgentPrompt(
 
         if (originalSetActiveToolsByName) {
           // Apply ceiling to the initial active set.
-          originalSetActiveToolsByName(savedToolNames.filter(ceilingFilter));
+          const ceilingTools = savedToolNames.filter(ceilingFilter);
+          originalSetActiveToolsByName(ceilingTools);
+          logToolStateTransition({
+            chatJid,
+            turnId: runOptions.turnId,
+            phase: "attempt",
+            cause: "tool_ceiling_apply",
+            previous: savedToolNames,
+            next: ceilingTools,
+          });
           // Patch to block the LLM from re-escalating via activate_tools.
           sessionCtrl.setActiveToolsByName = (names: string[]) => {
             originalSetActiveToolsByName!(names.filter(ceilingFilter));
@@ -1014,6 +1074,27 @@ export async function runAgentPrompt(
         updateSessionModel(chatJid, modelLabel, session.thinkingLevel ?? null);
         return { ok: true, session, sessionCtrl };
       },
+      rotateAfterCompactionFailure: async (reason) => {
+        const rotation = await rotateSession(session, runtime, {
+          reason: "automatic",
+          skipCompaction: true,
+          emergencyReason: reason,
+          chatJid,
+        });
+        if (rotation.status !== "success") return { ok: false, errorMessage: rotation.message };
+        clearCompactionFailureBackoff(chatJid);
+        resetCompactionSuccessCount(chatJid);
+        session = runtime.session;
+        sessionCtrl = session as unknown as SessionWithToolControl;
+        noteCompactionSuccess(session, chatJid, "rotation", {
+          ...options,
+          countSuccess: false,
+          clearBackoff: false,
+        });
+        modelLabel = session.model ? `${session.model.provider}/${session.model.id}` : null;
+        updateSessionModel(chatJid, modelLabel, session.thinkingLevel ?? null);
+        return { ok: true, session, sessionCtrl };
+      },
       runPromptAttempt: async (attemptPrompt, attemptTimeoutMs, turnToolExecutionCount, finalizationReserveMs = 0) => await runPromptAttempt(
         attemptPrompt,
         chatJid,
@@ -1045,7 +1126,7 @@ export async function runAgentPrompt(
     options.clearAttachments(chatJid);
     const duration = Date.now() - startTime;
     const errorMsg = err instanceof Error ? err.message : String(err);
-    writeAgentLog(options.logsDir, chatJid, duration, false, null, errorMsg, null);
+    writeAgentLog(options.logsDir, chatJid, duration, false, null, errorMsg, null, consumeAgentAbortCause(chatJid));
     options.onError?.("Agent run failed", {
       operation: "run_agent",
       chatJid,
@@ -1062,6 +1143,15 @@ export async function runAgentPrompt(
     if (sessionCtrl && savedToolNames !== null && originalSetActiveToolsByName) {
       sessionCtrl.setActiveToolsByName = originalSetActiveToolsByName;
       originalSetActiveToolsByName(savedToolNames);
+      logToolStateTransition({
+        chatJid,
+        turnId: runOptions.turnId,
+        phase: "attempt",
+        cause: "tool_ceiling_restore",
+        previous: [],
+        next: savedToolNames,
+        restored: true,
+      });
     }
     try {
       await clearLiveSshConfig(chatJid);

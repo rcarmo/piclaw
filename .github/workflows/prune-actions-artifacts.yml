@@ -1,12 +1,11 @@
 name: Actions cleanup
 
 on:
-  workflow_run:
-    workflows:
-      - "CI"
-      - "E2E Tests"
-      - "Publish Docker images"
-    types: [completed]
+  # Retention-days on individual artifacts handles short-lived handoffs; this
+  # weekly maintenance pass keeps caches and historical runs bounded without
+  # paying a rounded runner-minute after every CI/E2E/publish completion.
+  schedule:
+    - cron: '23 3 * * 0'
   workflow_dispatch:
 
 permissions:
@@ -20,9 +19,6 @@ concurrency:
 jobs:
   cleanup:
     name: Prune old Actions artifacts, caches, and runs
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion != 'skipped'
     runs-on: ubuntu-latest
     env:
       KEEP_RUNS: '5'
