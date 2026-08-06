@@ -34,7 +34,7 @@ import type { Provider } from "@earendil-works/pi-ai";
 
 import { type AgentControlCommand, type AgentControlResult } from "./agent-control/index.js";
 import { getPiclawAgentDir } from "./core/agent-dir.js";
-import { SESSIONS_DIR, WORKSPACE_DIR, getAgentLogConfig, getSessionPoolConfig } from "./core/config.js";
+import { SESSIONS_DIR, WORKSPACE_DIR, getAgentEngine, getAgentLogConfig, getSessionPoolConfig } from "./core/config.js";
 import { getChatChannel, getChatJid } from "./core/chat-context.js";
 import { registerChannelDetector } from "./router.js";
 import { createTrackedBashOperations } from "./tools/tracked-bash.js";
@@ -55,6 +55,7 @@ import { createAgentPoolServices, type AgentPoolServices } from "./agent-pool/se
 import { type AgentSessionManagerInstrumentationSnapshot, type PoolEntry } from "./agent-pool/session-manager.js";
 import type { PiclawCredentialStore } from "./agent-pool/credential-store.js";
 import { installLegacySessionAffinityCompatibility } from "./agent-pool/session-affinity-compat.js";
+import { OmpRpcPool } from "./agent-pool/omp-rpc/pool.js";
 import {
   type ChatBranchRecord,
   type MergeChatBranchIntoParentResult,
@@ -144,6 +145,7 @@ export class AgentPool {
   private sidePool = new Map<string, PoolEntry>();
   private activeForkBaseLeafByChat = new Map<string, string | null>();
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
+  private ompRpcPool!: OmpRpcPool;
   private shuttingDown = false;
   private memoryPressureActive = false;
   private recoveryStats: AgentPoolRecoveryInstrumentationSnapshot = {
@@ -181,6 +183,13 @@ export class AgentPool {
     }
     this.credentialStore = options.credentialStore;
     this.modelRuntime = options.modelRuntime;
+    this.ompRpcPool = new OmpRpcPool({
+      workspaceDir: WORKSPACE_DIR,
+      modelRuntime: this.modelRuntime,
+      onInfo: (message, details) => log.info(message, details),
+      onWarn: (message, details) => log.warn(message, details),
+      onError: (message, details) => log.error(message, details),
+    });
     this.modelRegistry = options.modelRegistry ?? new ModelRegistry(this.modelRuntime);
     installLegacySessionAffinityCompatibility(this.modelRegistry, (message, details) => log.warn(message, details));
     this.applyRateLimitRetryDefaults();
@@ -285,6 +294,9 @@ export class AgentPool {
     // returns but before AgentSession flips isStreaming at prompt start.
     const releaseEvictionProtection = this.sessionManager.acquireEvictionProtection(chatJid);
     try {
+      if (getAgentEngine() === "omp-rpc") {
+        return await this.ompRpcPool.runAgent(prompt, chatJid, options);
+      }
       const output = await runAgentPrompt(prompt, chatJid, options, {
         getOrCreateRuntime: (nextChatJid) => this.getOrCreateRuntime(nextChatJid),
         turnCoordinator: this.turnCoordinator,
@@ -650,6 +662,7 @@ export class AgentPool {
       this.cleanupTimer = null;
     }
     await this.sessionManager.shutdown();
+    await this.ompRpcPool.dispose();
   }
 
   /** Return an existing session for read-only introspection, or create one if needed. */
@@ -714,6 +727,7 @@ export class AgentPool {
       sideIdleTtlMs: this.config.sideIdleTtlMs,
       mainSessionMaxSizeOverride: pressure.mainSessionMaxSizeOverride,
     });
+    this.ompRpcPool.evictIdle(pressure.mainIdleTtlMs);
     const poolSizeAfter = this.pool.size + this.sidePool.size;
     // A3 + A4: After evicting sessions, release SQLite page-cache and force GC
     // so dead session objects (large fileEntries arrays) are reclaimed promptly.

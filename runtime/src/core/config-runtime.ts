@@ -25,6 +25,9 @@ import {
 // Agent timeout settings – how long a single agent turn may run.
 // ---------------------------------------------------------------------------
 
+/** Engine backend selector: in-process pi (default) or omp subprocess RPC pilot. */
+export type AgentEngine = "pi" | "omp-rpc";
+
 /** Typed agent turn timeout settings grouped for runtime and handler wiring. */
 export interface AgentRuntimeConfig {
   timeoutMs: number;
@@ -34,6 +37,7 @@ export interface AgentRuntimeConfig {
 interface AgentDomainConfig extends AgentRuntimeConfig {
   toolUseMessageBudget: number;
   midTurnToolExecutionHardCeiling: number;
+  engine: AgentEngine;
 }
 
 const legacyTurnMaxToolUseMessages = pickNumber(piclawConfig, [
@@ -114,10 +118,25 @@ const agentRuntimeDomainSchema = registerDomainConfig<AgentDomainConfig>({
       secretClass: "none",
       compatibilityEnv: [{ envKey: "PICLAW_MID_TURN_TOOL_EXECUTION_HARD_CEILING", replacement: "domains.agent.midTurnToolExecutionHardCeiling", removalVersion: "3.0.0", parse: (raw) => { const value = Number(raw); return Number.isFinite(value) && value > 0 ? Math.min(512, Math.max(1, Math.round(value))) : 0; }, skipInvalid: true }],
     }),
+    engine: stringField({
+      key: "engine",
+      owner: "agent-runtime",
+      defaultValue: "pi",
+      allowedValues: ["pi", "omp-rpc"],
+      persistence: "json-config",
+      precedence: ["compat-env", "persisted", "default"],
+      secretClass: "none",
+      compatibilityEnv: [{ envKey: "PICLAW_AGENT_ENGINE", replacement: "domains.agent.engine", removalVersion: "3.0.0", parse: (raw) => raw.trim().toLowerCase(), skipInvalid: true }],
+    }) as DomainConfigField<AgentEngine>,
   },
 });
 
 const AGENT_DOMAIN_CONFIG = readDomainConfig(agentRuntimeDomainSchema, getDomainConfigOptions());
+
+/** Return the configured agent engine backend (default: in-process pi). */
+export function getAgentEngine(): AgentEngine {
+  return AGENT_DOMAIN_CONFIG.engine;
+}
 
 /** Typed Dream/AutoDream scheduling and execution settings. */
 export interface DreamConfig {
