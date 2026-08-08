@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import "../helpers.js";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 
 import { WORKSPACE_DIR } from "../../src/core/config.js";
@@ -70,6 +70,44 @@ describe("bun-runner extension", () => {
     expect(result.details.capture_stdout).toBe(false);
     expect(result.details.stdout_captured).toBe(false);
     expect(readFileSync(outputPath, "utf8")).toBe("done:ok");
+  });
+
+  test("aborting bun_run kills descendant processes before the tool promise settles", async () => {
+    if (process.platform === "win32") return;
+    const fake = createFakeExtensionApi();
+    bunRunnerExtension(fake.api);
+    const tool = fake.tools.get("bun_run");
+    if (!tool) throw new Error("bun_run not registered");
+    const { prefix, base } = makeTempDir();
+    const scriptPath = join(base, "descendant.ts");
+    const pidPath = join(base, "descendant.pid");
+    writeFileSync(scriptPath, [
+      'const pidPath = process.argv[2];',
+      'const child = Bun.spawn(["sleep", "30"]);',
+      'await Bun.write(pidPath, String(child.pid));',
+      'await child.exited;',
+    ].join("\n"), "utf8");
+    const controller = new AbortController();
+    const pending = tool.execute("tool-abort-tree", {
+      script: `${prefix}/descendant.ts`, args: ["descendant.pid"], cwd: prefix, timeout_sec: 30,
+    }, controller.signal);
+    try {
+      for (let index = 0; index < 100 && !existsSync(pidPath); index += 1) await Bun.sleep(10);
+      expect(existsSync(pidPath)).toBe(true);
+      const descendantPid = Number(readFileSync(pidPath, "utf8"));
+      controller.abort();
+      const result = await pending;
+      expect(result.details).toMatchObject({ ok: false, aborted: true, error: "aborted" });
+      let alive = true;
+      for (let index = 0; index < 100 && alive; index += 1) {
+        try { process.kill(descendantPid, 0); } catch { alive = false; }
+        if (alive) await Bun.sleep(10);
+      }
+      expect(alive).toBe(false);
+    } finally {
+      controller.abort();
+      await Promise.allSettled([pending]);
+    }
   });
 
   test("captures stdout when requested", async () => {

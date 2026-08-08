@@ -757,6 +757,22 @@ test("AgentTurnCoordinator aborts timed-out prompts", async () => {
   expect(errors).toContain("Prompt timed out; aborting session");
 });
 
+test("AgentTurnCoordinator does not await a hung abort on the legacy timeout path", async () => {
+  const coordinator = new AgentTurnCoordinator({
+    takeAttachments: () => [],
+    touchSession: () => {},
+    recordMessageUsage: () => {},
+  });
+  const state = coordinator.startPromptTimeout({
+    abort: async () => await new Promise<void>(() => {}),
+  } as any, "web:default", 5);
+  await Bun.sleep(15);
+  const startedAt = Date.now();
+  expect(await state.finish()).toBeNull();
+  expect(Date.now() - startedAt).toBeLessThan(50);
+  expect(state.timedOutRef.value).toBe(true);
+});
+
 test("AgentTurnCoordinator ignores late timeout callbacks after completion", async () => {
   let abortCalls = 0;
   const errors: string[] = [];
@@ -780,6 +796,85 @@ test("AgentTurnCoordinator ignores late timeout callbacks after completion", asy
   expect(timedOutRef.value).toBe(false);
   expect(abortCalls).toBe(0);
   expect(errors).toEqual([]);
+});
+
+test("AgentTurnCoordinator latches a Goal checkpoint before abort and reports only after abort resolves", async () => {
+  const order: string[] = [];
+  let releaseAbort!: () => void;
+  const abortSettled = new Promise<void>((resolve) => { releaseAbort = resolve; });
+  const coordinator = new AgentTurnCoordinator({
+    takeAttachments: () => [],
+    touchSession: () => {},
+    recordMessageUsage: () => {},
+  });
+  const session = {
+    abort: async () => {
+      order.push("abort");
+      await abortSettled;
+      order.push("idle");
+    },
+  };
+  const state = coordinator.startPromptTimeout(session as any, "web:goal", 40, {
+    reserveMs: 20,
+    oldTurnId: "turn-old",
+    tryLatch: () => {
+      order.push("latch");
+      return true;
+    },
+  });
+
+  await Bun.sleep(25);
+  expect(order).toEqual(["latch", "abort"]);
+  let finished = false;
+  const finish = state.finish().then((evidence) => { finished = true; return evidence; });
+  await Bun.sleep(1);
+  expect(finished).toBe(false);
+  releaseAbort();
+  const evidence = await finish;
+  expect(order).toEqual(["latch", "abort", "idle"]);
+  expect(evidence?.settlement).toBe("abort_requested");
+  expect(evidence?.oldTurnId).toBe("turn-old");
+  expect(state.timedOutRef.value).toBe(false);
+});
+
+test("AgentTurnCoordinator bounds a Goal checkpoint when session.abort never resolves", async () => {
+  const coordinator = new AgentTurnCoordinator({
+    takeAttachments: () => [], touchSession: () => {}, recordMessageUsage: () => {},
+  });
+  const state = coordinator.startPromptTimeout({ abort: async () => await new Promise<void>(() => {}) } as any, "web:goal", 40, {
+    reserveMs: 20,
+    oldTurnId: "turn-hung-abort",
+    tryLatch: () => true,
+  });
+  await Bun.sleep(25);
+  const startedFinishAt = Date.now();
+  const evidence = await state.finish();
+  expect(Date.now() - startedFinishAt).toBeLessThan(100);
+  expect(evidence).toMatchObject({
+    settlement: "abort_failed",
+    oldTurnId: "turn-hung-abort",
+    abortError: expect.stringContaining("hard prompt deadline"),
+  });
+  expect(state.timedOutRef.value).toBe(true);
+});
+
+test("AgentTurnCoordinator falls through to the ordinary deadline when Goal latching is suppressed", async () => {
+  let abortCalls = 0;
+  const coordinator = new AgentTurnCoordinator({
+    takeAttachments: () => [],
+    touchSession: () => {},
+    recordMessageUsage: () => {},
+  });
+  const state = coordinator.startPromptTimeout({ abort: async () => { abortCalls += 1; } } as any, "web:goal", 30, {
+    reserveMs: 20,
+    oldTurnId: "turn-old",
+    tryLatch: () => false,
+  });
+
+  await Bun.sleep(40);
+  expect(abortCalls).toBe(1);
+  expect(state.timedOutRef.value).toBe(true);
+  expect(await state.finish()).toBeNull();
 });
 
 test("AgentTurnCoordinator reports timed-out abort failures without leaking rejections", async () => {

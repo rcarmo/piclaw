@@ -17,6 +17,20 @@ import {
   withExternalAddonRegistrationContext,
   type ExternalAddonRouteRegistration,
 } from "./external-routes.js";
+import {
+  getAddonGoalDeadlineCheckpointProvider,
+  registerAddonGoalDeadlineCheckpointProvider,
+  resetAddonGoalDeadlineCheckpointProviderForTests,
+  type AddonGoalDeadlineCheckpointProvider,
+} from "./goal-deadline-checkpoint-provider.js";
+
+export {
+  getAddonGoalDeadlineCheckpointProvider,
+  registerAddonGoalDeadlineCheckpointProvider,
+  type AddonGoalDeadlineCheckpointLease,
+  type AddonGoalDeadlineCheckpointProvider,
+  type AddonGoalDeadlineCheckpointResolution,
+} from "./goal-deadline-checkpoint-provider.js";
 
 export interface AddonStatusPanelProvider {
   key: string;
@@ -93,6 +107,7 @@ export interface PiclawRuntimeAddonApi {
   registerStatusPanelProvider: (provider: AddonStatusPanelProvider) => () => void;
   registerAdaptiveCardIntentHandler: (intent: string, handler: AddonAdaptiveCardIntentHandler) => () => void;
   enqueueAgentMessage: AddonAgentMessageEnqueuer;
+  registerGoalDeadlineCheckpointProvider: (provider: AddonGoalDeadlineCheckpointProvider) => () => void;
   messaging: PiclawRuntimeMessagingApiV1;
   externalRoutes: PiclawRuntimeExternalRoutesApiV1;
   createMedia: typeof createMedia;
@@ -291,6 +306,7 @@ export function installAddonRuntimeApi(): PiclawRuntimeAddonApi {
     registerStatusPanelProvider: registerAddonStatusPanelProvider,
     registerAdaptiveCardIntentHandler: registerAddonAdaptiveCardIntentHandler,
     enqueueAgentMessage: enqueueAgentMessageViaRuntime,
+    registerGoalDeadlineCheckpointProvider: registerAddonGoalDeadlineCheckpointProvider,
     messaging: {
       version: 1,
       registerChatTransport: registerAddonChatTransport,
@@ -397,6 +413,7 @@ export async function runAddonAdaptiveCardIntent(
 export function resetAddonRuntimeContributionsForTests(): void {
   statusPanelProviders.clear();
   adaptiveCardIntentHandlers.clear();
+  resetAddonGoalDeadlineCheckpointProviderForTests();
   for (const unregister of [...addonChatTransportUnregisters]) unregister();
   addonChatTransportUnregisters.clear();
   resetRuntimeStreamSessionsForTests();

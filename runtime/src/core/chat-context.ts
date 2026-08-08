@@ -23,6 +23,8 @@ export interface ChatContext {
   chatJid: string;
   /** Channel name, e.g. "web" or addon-registered channel types. */
   channel: string;
+  /** Exact agent turn identity when running inside a prompt lifecycle. */
+  turnId?: string;
 }
 
 /** Node.js AsyncLocalStorage instance that carries the ChatContext. */
@@ -37,9 +39,10 @@ const storage = new AsyncLocalStorage<ChatContext>();
 export async function withChatContext<T>(
   chatJid: string,
   channel: string,
-  fn: () => Promise<T>
+  fn: () => Promise<T>,
+  options?: { turnId?: string },
 ): Promise<T> {
-  return storage.run({ chatJid, channel }, fn);
+  return storage.run({ chatJid, channel, ...(options?.turnId ? { turnId: options.turnId } : {}) }, fn);
 }
 
 /**
@@ -64,4 +67,9 @@ export function getChatJid(defaultValue = "web:default"): string {
  */
 export function getChatChannel(defaultValue = "web"): string {
   return storage.getStore()?.channel ?? defaultValue;
+}
+
+/** Retrieve the exact prompt turn identity when one is active. */
+export function getChatTurnId(defaultValue = ""): string {
+  return storage.getStore()?.turnId ?? defaultValue;
 }

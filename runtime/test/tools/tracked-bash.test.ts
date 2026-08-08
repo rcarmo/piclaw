@@ -113,6 +113,36 @@ test("tracked bash rejects missing working directory", async () => {
   expect(error?.message).toContain("Working directory does not exist");
 });
 
+test("tracked bash abort kills descendant processes before the tool promise settles", async () => {
+  if (process.platform === "win32") return;
+  const ws = getTestWorkspace();
+  const dir = mkdtempSync(join(tmpdir(), "piclaw-bash-abort-"));
+  const pidPath = join(dir, "descendant.pid");
+  const controller = new AbortController();
+  const pending = createTrackedBashOperations().exec(
+    `sleep 30 & child=$!; printf '%s' "$child" > '${pidPath}'; wait "$child"`,
+    ws.workspace,
+    { onData: () => {}, signal: controller.signal, timeout: 30 },
+  );
+  try {
+    for (let index = 0; index < 100 && !existsSync(pidPath); index += 1) await Bun.sleep(10);
+    expect(existsSync(pidPath)).toBe(true);
+    const descendantPid = Number(readFileSync(pidPath, "utf8"));
+    controller.abort();
+    await expect(pending).rejects.toThrow("aborted");
+    let alive = true;
+    for (let index = 0; index < 100 && alive; index += 1) {
+      try { process.kill(descendantPid, 0); } catch { alive = false; }
+      if (alive) await Bun.sleep(10);
+    }
+    expect(alive).toBe(false);
+  } finally {
+    controller.abort();
+    await Promise.allSettled([pending]);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("tracked bash times out and cancels", async () => {
   const ws = getTestWorkspace();
   const ops = createTrackedBashOperations();

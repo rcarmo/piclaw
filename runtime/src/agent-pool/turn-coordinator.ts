@@ -11,6 +11,7 @@ import type { Usage } from "@earendil-works/pi-ai";
 
 import type { AttachmentInfo } from "./attachments.js";
 import { recordAgentAbortCause } from "./abort-provenance.js";
+import type { GoalDeadlineCheckpointEvidence, GoalDeadlineCheckpointLatch } from "./contracts.js";
 
 interface AgentContentBlock {
   type?: unknown;
@@ -63,12 +64,27 @@ export interface AgentTurnTracker {
 
 /**
  * Result of arming a prompt timeout.
- * `timedOutRef.value` flips to true once the timeout abort fires.
+ * `timedOutRef.value` flips to true only for the ordinary hard timeout. A Goal
+ * pre-deadline abort resolves `settled` with typed checkpoint evidence instead.
  */
 export interface PromptTimeoutState {
   timeoutId: ReturnType<typeof setTimeout> | null;
+  checkpointTimeoutId: ReturnType<typeof setTimeout> | null;
   timedOutRef: { value: boolean };
   completedRef: { value: boolean };
+  settled: Promise<GoalDeadlineCheckpointEvidence | null>;
+  finish: () => Promise<GoalDeadlineCheckpointEvidence | null>;
+}
+
+export function getGoalDeadlineCheckpointReserveMs(timeoutMs: number): number {
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 2) return 0;
+  return Math.min(60_000, Math.floor(timeoutMs / 2), Math.max(5_000, Math.floor(timeoutMs * 0.15)));
+}
+
+export interface PromptGoalDeadlineCheckpointOptions {
+  oldTurnId: string;
+  reserveMs: number;
+  tryLatch: (latch: GoalDeadlineCheckpointLatch) => boolean;
 }
 
 /** Dependencies injected into AgentTurnCoordinator. */
@@ -398,35 +414,143 @@ export class AgentTurnCoordinator {
     session: AgentSession,
     chatJid: string,
     timeoutMs: number,
+    goalDeadline?: PromptGoalDeadlineCheckpointOptions,
   ): PromptTimeoutState {
     const timedOutRef = { value: false };
     const completedRef = { value: false };
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let checkpointTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    let settlement: Promise<GoalDeadlineCheckpointEvidence | null> | null = null;
+    let checkpointLatch: GoalDeadlineCheckpointLatch | null = null;
+    let resolveSettled!: (value: GoalDeadlineCheckpointEvidence | null) => void;
+    const settled = new Promise<GoalDeadlineCheckpointEvidence | null>((resolve) => { resolveSettled = resolve; });
+    let settledResolved = false;
+    const resolveOnce = (value: GoalDeadlineCheckpointEvidence | null) => {
+      if (settledResolved) return;
+      settledResolved = true;
+      resolveSettled(value);
+    };
+    const clearTimers = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (checkpointTimeoutId) clearTimeout(checkpointTimeoutId);
+      timeoutId = null;
+      checkpointTimeoutId = null;
+    };
+    const finish = async (): Promise<GoalDeadlineCheckpointEvidence | null> => {
+      completedRef.value = true;
+      if (!settlement) {
+        clearTimers();
+        resolveOnce(null);
+      } else if (checkpointTimeoutId) {
+        clearTimeout(checkpointTimeoutId);
+        checkpointTimeoutId = null;
+      }
+      const evidence = await settled;
+      clearTimers();
+      return evidence;
+    };
     if (!timeoutMs || timeoutMs <= 0) {
-      return { timeoutId: null, timedOutRef, completedRef };
+      resolveOnce(null);
+      return { timeoutId: null, checkpointTimeoutId: null, timedOutRef, completedRef, settled, finish };
     }
 
-    const timeoutId = setTimeout(() => {
-      void (async () => {
-        if (completedRef.value) return;
+    const startedAtMs = Date.now();
+    const deadlineAtMs = startedAtMs + timeoutMs;
+    timeoutId = setTimeout(() => {
+      if (settlement && checkpointLatch) {
         timedOutRef.value = true;
-        this.options.onError?.("Prompt timed out; aborting session", {
-          operation: "start_prompt_timeout",
-          chatJid,
-          timeoutMs,
+        resolveOnce({
+          ...checkpointLatch,
+          settledAt: new Date().toISOString(),
+          settlement: "abort_failed",
+          abortError: "Goal deadline checkpoint did not settle before the hard prompt deadline",
+          pendingSteering: [],
+          pendingFollowUps: [],
         });
-        recordAgentAbortCause(chatJid, "prompt_timeout", "start_prompt_timeout");
-        await session.abort();
-      })().catch((err) => {
-        if (completedRef.value) return;
-        this.options.onWarn?.("Failed to abort timed-out prompt", {
-          operation: "start_prompt_timeout.abort",
-          chatJid,
-          timeoutMs,
-          err,
-        });
+        return;
+      }
+      if (completedRef.value || settlement) return;
+      timedOutRef.value = true;
+      this.options.onError?.("Prompt timed out; aborting session", {
+        operation: "start_prompt_timeout",
+        chatJid,
+        timeoutMs,
       });
+      recordAgentAbortCause(chatJid, "prompt_timeout", "start_prompt_timeout");
+      // Preserve the legacy non-checkpoint timeout path: request abort without
+      // making prompt finalization wait for the abort promise itself. Only a
+      // latched Goal checkpoint uses the bounded settlement promise above.
+      void session.abort().catch((err) => {
+        if (!completedRef.value) {
+          this.options.onWarn?.("Failed to abort timed-out prompt", {
+            operation: "start_prompt_timeout.abort",
+            chatJid,
+            timeoutMs,
+            err,
+          });
+        }
+      });
+      resolveOnce(null);
     }, timeoutMs);
 
-    return { timeoutId, timedOutRef, completedRef };
+    const reserveMs = goalDeadline
+      ? Math.max(1, Math.min(Math.floor(timeoutMs / 2), Math.floor(goalDeadline.reserveMs)))
+      : 0;
+    if (goalDeadline && reserveMs > 0 && timeoutMs > reserveMs) {
+      checkpointTimeoutId = setTimeout(() => {
+        if (completedRef.value || settlement) return;
+        const triggeredAt = new Date().toISOString();
+        const latch: GoalDeadlineCheckpointLatch = {
+          checkpointId: crypto.randomUUID(),
+          oldTurnId: goalDeadline.oldTurnId,
+          timeoutMs,
+          reserveMs,
+          deadlineAt: new Date(deadlineAtMs).toISOString(),
+          triggeredAt,
+        };
+        let latched = false;
+        try {
+          latched = goalDeadline.tryLatch(latch);
+        } catch (err) {
+          this.options.onWarn?.("Goal deadline checkpoint latch failed", {
+            operation: "start_prompt_timeout.goal_deadline_latch",
+            chatJid,
+            timeoutMs,
+            reserveMs,
+            err,
+          });
+        }
+        if (!latched) return;
+        checkpointLatch = latch;
+        settlement = (async () => {
+          recordAgentAbortCause(chatJid, "goal_deadline_checkpoint", "start_prompt_timeout.goal_deadline_checkpoint");
+          let abortError: string | null = null;
+          try {
+            await session.abort();
+          } catch (err) {
+            abortError = err instanceof Error ? err.message : String(err);
+            this.options.onWarn?.("Failed to settle Goal deadline checkpoint abort", {
+              operation: "start_prompt_timeout.goal_deadline_abort",
+              chatJid,
+              timeoutMs,
+              reserveMs,
+              err,
+            });
+          }
+          const evidence: GoalDeadlineCheckpointEvidence = {
+            ...latch,
+            settledAt: new Date().toISOString(),
+            settlement: abortError ? "abort_failed" : "abort_requested",
+            abortError,
+            pendingSteering: [],
+            pendingFollowUps: [],
+          };
+          resolveOnce(evidence);
+          return evidence;
+        })();
+      }, timeoutMs - reserveMs);
+    }
+
+    return { timeoutId, checkpointTimeoutId, timedOutRef, completedRef, settled, finish };
   }
 }

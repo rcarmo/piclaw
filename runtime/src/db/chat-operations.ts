@@ -10,7 +10,7 @@ export type ChatOperationPhase = (typeof CHAT_OPERATION_PHASES)[number];
 export const CHAT_SOURCE_CLASSES = ["prompt", "control", "intent"] as const;
 export type ChatSourceClass = (typeof CHAT_SOURCE_CLASSES)[number];
 
-export const CHAT_SOURCE_KINDS = ["message", "queued_followup", "protected_continuation", "command", "steer"] as const;
+export const CHAT_SOURCE_KINDS = ["message", "queued_followup", "protected_continuation", "goal_continuation", "command", "steer"] as const;
 export type ChatSourceKind = (typeof CHAT_SOURCE_KINDS)[number];
 
 export const CHAT_OPERATION_OUTCOMES = [
@@ -96,7 +96,11 @@ export type ChatOperationMessageBindResult =
   | { status: "rejected"; reason: ChatOperationMismatch | "message_missing" | "message_operation_mismatch" };
 
 export type ChatOperationCompletionBoundary = "artifact" | "successor" | "intents" | "disposition" | "frontier" | "release";
-export interface ChatOperationCompletionHooks { afterWrite?(boundary: ChatOperationCompletionBoundary): void }
+export interface ChatOperationCompletionHooks {
+  /** Synchronous transactional revalidation. Throwing rolls back every write. */
+  beforeWrite?(): void;
+  afterWrite?(boundary: ChatOperationCompletionBoundary): void;
+}
 
 export class ChatOperationInvariantError extends Error {
   constructor(message: string) {
@@ -333,6 +337,12 @@ export function registerChatOperationIntent(chatJid: string, expected: ChatOpera
   }).immediate();
 }
 
+export function getChatOperationIntentSources(operationId: string): AcceptedChatSource[] {
+  if (!operationId.trim()) return [];
+  return (getDb().prepare(`SELECT * FROM chat_accepted_sources
+    WHERE operation_id = ? AND selectable = 0 ORDER BY source_seq`).all(operationId) as SourceRow[]).map(sourceFromRow);
+}
+
 export function getAcceptedChatSource(sourceSeq: number): AcceptedChatSource | null {
   const row = getDb().prepare("SELECT * FROM chat_accepted_sources WHERE source_seq = ?").get(sourceSeq) as SourceRow | undefined;
   return row ? sourceFromRow(row) : null;
@@ -349,6 +359,70 @@ function protectedContinuationIdentity(rootSourceSeq: number): { sourceId: strin
     sourceId: `${PROTECTED_CONTINUATION_SOURCE_PREFIX}${rootSourceSeq}`,
     payloadRef: `${PROTECTED_CONTINUATION_PAYLOAD_PREFIX}${rootSourceSeq}`,
   };
+}
+
+const GOAL_CONTINUATION_SOURCE_PREFIX = "goal:";
+const GOAL_CONTINUATION_PAYLOAD_PREFIX = "goal-continuation:";
+
+function goalContinuationIdentity(input: GoalContinuationLineage): { sourceId: string; payloadRef: string } {
+  for (const value of [input.goalId, input.checkpointId, input.oldTurnId]) {
+    if (!value.trim()) throw new ChatOperationInvariantError("Goal continuation identity fields must be non-empty");
+  }
+  for (const value of [input.rootSourceSeq, input.parentSourceSeq, input.parentGeneration, input.generation]) {
+    if (!Number.isInteger(value) || value < 0) throw new ChatOperationInvariantError("Goal continuation lineage must use non-negative integers");
+  }
+  if (input.rootSourceSeq <= 0 || input.parentSourceSeq <= 0 || input.generation <= 0) {
+    throw new ChatOperationInvariantError("Goal continuation lineage source and generation must be positive");
+  }
+  const lineage: GoalContinuationLineage = {
+    rootSourceSeq: input.rootSourceSeq,
+    parentSourceSeq: input.parentSourceSeq,
+    parentGeneration: input.parentGeneration,
+    generation: input.generation,
+    goalId: input.goalId,
+    checkpointId: input.checkpointId,
+    oldTurnId: input.oldTurnId,
+  };
+  return {
+    sourceId: `${GOAL_CONTINUATION_SOURCE_PREFIX}${input.rootSourceSeq}:${input.generation}`,
+    payloadRef: `${GOAL_CONTINUATION_PAYLOAD_PREFIX}${JSON.stringify(lineage)}`,
+  };
+}
+
+export function getGoalContinuationLineage(source: AcceptedChatSource): GoalContinuationLineage | null {
+  if (source.sourceClass !== "prompt" || source.sourceKind !== "goal_continuation" || !source.selectable
+    || !source.payloadRef.startsWith(GOAL_CONTINUATION_PAYLOAD_PREFIX)) return null;
+  try {
+    const parsed = JSON.parse(source.payloadRef.slice(GOAL_CONTINUATION_PAYLOAD_PREFIX.length)) as GoalContinuationLineage;
+    const identity = goalContinuationIdentity(parsed);
+    if (identity.sourceId !== source.sourceId || identity.payloadRef !== source.payloadRef) return null;
+    const root = getAcceptedChatSource(parsed.rootSourceSeq);
+    const parent = getAcceptedChatSource(parsed.parentSourceSeq);
+    if (!root || !parent || root.chatJid !== source.chatJid || parent.chatJid !== source.chatJid
+      || root.sourceClass !== "prompt" || !root.selectable || root.sourceKind === "goal_continuation") return null;
+    if (parsed.parentGeneration === 0) {
+      const parentRoot = parent.sourceKind === "protected_continuation"
+        ? getProtectedContinuationRootSource(parent)?.sourceSeq
+        : parent.sourceSeq;
+      if (parentRoot !== parsed.rootSourceSeq || parsed.generation !== 1) return null;
+    } else {
+      if (parent.sourceKind !== "goal_continuation") return null;
+      const parentPayload = JSON.parse(parent.payloadRef.slice(GOAL_CONTINUATION_PAYLOAD_PREFIX.length)) as GoalContinuationLineage;
+      if (parentPayload.rootSourceSeq !== parsed.rootSourceSeq || parentPayload.generation !== parsed.parentGeneration
+        || parentPayload.goalId !== parsed.goalId || parsed.generation !== parsed.parentGeneration + 1) return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function getGoalContinuationCarriedIntentSources(sourceSeq: number): AcceptedChatSource[] {
+  const rows = getDb().prepare(`SELECT source.* FROM chat_goal_continuation_intents carried
+    JOIN chat_accepted_sources source ON source.source_seq = carried.intent_source_seq
+    WHERE carried.continuation_source_seq = ? ORDER BY carried.ordinal`)
+    .all(sourceSeq) as SourceRow[];
+  return rows.map(sourceFromRow);
 }
 
 /** Resolve and transactionally revalidate a protected continuation's immutable root lineage. */
@@ -372,13 +446,13 @@ export function getResumableDurableChatJids(): string[] {
     SELECT cursor.chat_jid FROM chat_cursors cursor
     JOIN chat_accepted_sources source ON source.source_seq = cursor.operation_source_seq
     WHERE cursor.operation_id IS NOT NULL AND cursor.operation_phase IN ('pending', 'preflight', 'running', 'waiting')
-      AND source.source_kind IN ('message', 'protected_continuation')
+      AND source.source_kind IN ('message', 'protected_continuation', 'goal_continuation')
     UNION
     SELECT source.chat_jid
     FROM chat_accepted_sources source
     LEFT JOIN chat_operation_dispositions disposition ON disposition.source_seq = source.source_seq
     LEFT JOIN chat_cursors cursor ON cursor.chat_jid = source.chat_jid
-    WHERE source.source_kind IN ('message', 'protected_continuation') AND source.selectable = 1
+    WHERE source.source_kind IN ('message', 'protected_continuation', 'goal_continuation') AND source.selectable = 1
       AND disposition.source_seq IS NULL AND cursor.operation_id IS NULL
     ORDER BY 1
   `).all() as Array<{ chat_jid: string }>;
@@ -389,7 +463,7 @@ export function getBlockedDurableChatJids(): string[] {
   const rows = getDb().prepare(`SELECT cursor.chat_jid FROM chat_cursors cursor
     JOIN chat_accepted_sources source ON source.source_seq = cursor.operation_source_seq
     WHERE cursor.operation_id IS NOT NULL AND cursor.operation_phase = 'blocked'
-      AND source.source_kind IN ('message', 'protected_continuation') ORDER BY cursor.chat_jid`)
+      AND source.source_kind IN ('message', 'protected_continuation', 'goal_continuation') ORDER BY cursor.chat_jid`)
     .all() as Array<{ chat_jid: string }>;
   return rows.map((row) => row.chat_jid);
 }
@@ -574,6 +648,30 @@ export interface ProtectedContinuationSuccessor {
   rootSourceSeq: number;
 }
 
+export interface GoalContinuationSuccessor {
+  sourceKind: "goal_continuation";
+  rootSourceSeq: number;
+  parentSourceSeq: number;
+  parentGeneration: number;
+  generation: number;
+  goalId: string;
+  checkpointId: string;
+  oldTurnId: string;
+  carriedIntentSourceSeqs: number[];
+}
+
+export type ChatOperationSuccessor = ProtectedContinuationSuccessor | GoalContinuationSuccessor;
+
+export interface GoalContinuationLineage {
+  rootSourceSeq: number;
+  parentSourceSeq: number;
+  parentGeneration: number;
+  generation: number;
+  goalId: string;
+  checkpointId: string;
+  oldTurnId: string;
+}
+
 export interface ChatOperationCompletion {
   owner: ChatOperationOwner;
   outcome: ChatOperationOutcome;
@@ -581,7 +679,7 @@ export interface ChatOperationCompletion {
   provenance: string;
   createdAt: string;
   artifact?: { messageId: string; message?: never } | { message: NewMessage; messageId?: never };
-  successor?: ProtectedContinuationSuccessor;
+  successor?: ChatOperationSuccessor;
   intentDispositions?: Array<{ sourceSeq: number; outcome: ChatOperationOutcome; cause: string; provenance: string }>;
 }
 
@@ -644,25 +742,55 @@ export function completeChatOperation(
       if (!sameDisposition(existing, source, chatJid, request)) {
         throw new ChatOperationInvariantError("Conflicting repeated completion");
       }
-      const identity = protectedContinuationIdentity(request.owner.sourceSeq);
-      const successorRow = db.prepare(`SELECT * FROM chat_accepted_sources
-        WHERE chat_jid = ? AND source_kind = 'protected_continuation' AND source_id = ?`)
-        .get(chatJid, identity.sourceId) as SourceRow | undefined;
-      if (Boolean(successorRow) !== Boolean(request.successor)) {
-        throw new ChatOperationInvariantError("Conflicting repeated protected continuation successor");
-      }
-      if (request.successor) {
-        if (request.successor.sourceKind !== "protected_continuation"
-          || request.successor.rootSourceSeq !== request.owner.sourceSeq) {
-          throw new ChatOperationInvariantError("Protected continuation lineage conflicts with completed source");
+      if (!request.successor) {
+        const unexpected = db.prepare(`SELECT source_kind FROM chat_accepted_sources
+          WHERE chat_jid = ? AND ((source_kind = 'protected_continuation' AND source_id = ?)
+            OR (source_kind = 'goal_continuation' AND payload_ref LIKE ?)) LIMIT 1`)
+          .get(chatJid, protectedContinuationIdentity(request.owner.sourceSeq).sourceId,
+            `%\"parentSourceSeq\":${request.owner.sourceSeq},%`) as { source_kind: string } | undefined;
+        if (unexpected) {
+          const label = unexpected.source_kind === "protected_continuation" ? "protected continuation" : "Goal continuation";
+          throw new ChatOperationInvariantError(`Conflicting repeated ${label} successor`);
         }
-        const successor = sourceFromRow(successorRow!);
-        if (successor.sourceClass !== "prompt" || successor.sourceKind !== "protected_continuation"
-          || !successor.selectable || successor.payloadRef !== identity.payloadRef
-          || successor.acceptedAt !== existing.createdAt || successor.operationId !== null
-          || successor.frontierMessageId !== null || successor.frontierCursorTs !== null
-          || getProtectedContinuationRootSource(successor)?.sourceSeq !== request.owner.sourceSeq) {
-          throw new ChatOperationInvariantError("Conflicting repeated protected continuation successor");
+        return { status: "repeated", disposition: existing } as const;
+      }
+      if (request.successor.sourceKind === "protected_continuation"
+        && (request.successor.rootSourceSeq !== source?.sourceSeq || source?.sourceClass !== "prompt"
+          || !source.selectable || source.sourceKind === "protected_continuation")) {
+        throw new ChatOperationInvariantError("Protected continuation lineage conflicts with the completed source");
+      }
+      if (request.successor.sourceKind === "goal_continuation") {
+        const currentLineage = source?.sourceKind === "goal_continuation" ? getGoalContinuationLineage(source) : null;
+        const protectedRoot = source?.sourceKind === "protected_continuation" ? getProtectedContinuationRootSource(source) : null;
+        const expectedRoot = currentLineage?.rootSourceSeq ?? protectedRoot?.sourceSeq ?? source?.sourceSeq;
+        const expectedParentGeneration = currentLineage?.generation ?? 0;
+        if (!source || source.sourceClass !== "prompt" || !source.selectable
+          || request.successor.rootSourceSeq !== expectedRoot
+          || request.successor.parentSourceSeq !== source.sourceSeq
+          || request.successor.parentGeneration !== expectedParentGeneration
+          || request.successor.generation !== expectedParentGeneration + 1
+          || (currentLineage && request.successor.goalId !== currentLineage.goalId)) {
+          throw new ChatOperationInvariantError("Goal continuation lineage is not the exact next generation");
+        }
+      }
+      const requestedIdentity = request.successor.sourceKind === "protected_continuation"
+        ? protectedContinuationIdentity(request.successor.rootSourceSeq)
+        : goalContinuationIdentity(request.successor);
+      const successorRow = db.prepare(`SELECT * FROM chat_accepted_sources
+        WHERE chat_jid = ? AND source_kind = ? AND source_id = ?`)
+        .get(chatJid, request.successor.sourceKind, requestedIdentity.sourceId) as SourceRow | undefined;
+      if (!successorRow) throw new ChatOperationInvariantError("Conflicting repeated completion successor");
+      const successor = sourceFromRow(successorRow);
+      if (successor.payloadRef !== requestedIdentity.payloadRef || successor.acceptedAt !== existing.createdAt
+        || successor.operationId !== null || successor.frontierMessageId !== null || successor.frontierCursorTs !== null) {
+        throw new ChatOperationInvariantError("Conflicting repeated completion successor");
+      }
+      if (request.successor.sourceKind === "goal_continuation") {
+        const requestedCarried = request.successor.carriedIntentSourceSeqs;
+        const carried = getGoalContinuationCarriedIntentSources(successor.sourceSeq).map((item) => item.sourceSeq);
+        if (carried.length !== requestedCarried.length
+          || carried.some((value, index) => value !== requestedCarried[index])) {
+          throw new ChatOperationInvariantError("Conflicting repeated Goal continuation carried intents");
         }
       }
       return { status: "repeated", disposition: existing } as const;
@@ -679,6 +807,7 @@ export function completeChatOperation(
     }
     const source = getAcceptedChatSource(active.sourceSeq);
     if (!source || source.operationId !== active.operationId) throw new ChatOperationInvariantError("Active source binding mismatch");
+    hooks.beforeWrite?.();
 
     const artifactPolicy = chatOperationTerminalArtifactPolicy(source, request.outcome);
     if (artifactPolicy === "required" && !request.artifact) throw new ChatOperationInvariantError("Terminal message is required");
@@ -706,40 +835,85 @@ export function completeChatOperation(
     hooks.afterWrite?.("artifact");
 
     if (request.successor) {
-      if (request.successor.sourceKind !== "protected_continuation") {
-        throw new ChatOperationInvariantError("Protected continuation successor kind is invalid");
-      }
-      if (request.outcome !== "interrupted"
-        || request.cause !== "protected_recovery_continuation_registered") {
-        throw new ChatOperationInvariantError("Protected continuation requires the interrupted protected handoff outcome");
+      if (request.outcome !== "interrupted") {
+        throw new ChatOperationInvariantError("Continuation successor requires an interrupted outcome");
       }
       const schedulingArtifact = artifact
         ? db.prepare("SELECT content FROM messages WHERE chat_jid = ? AND id = ?")
           .get(artifact.chatJid, artifact.messageId) as { content: string | null } | undefined
         : undefined;
       if (!schedulingArtifact || !String(schedulingArtifact.content ?? "").trim()) {
-        throw new ChatOperationInvariantError("Protected continuation requires one non-blank scheduling artifact");
+        throw new ChatOperationInvariantError("Continuation successor requires one non-blank scheduling artifact");
       }
-      if (request.successor.rootSourceSeq !== source.sourceSeq || source.sourceClass !== "prompt"
-        || !source.selectable || source.sourceKind === "protected_continuation") {
-        throw new ChatOperationInvariantError("Protected continuation requires a non-continuation selectable prompt root");
-      }
-      const identity = protectedContinuationIdentity(source.sourceSeq);
-      const inserted = db.prepare(`INSERT INTO chat_accepted_sources
-        (chat_jid, source_class, source_kind, source_id, accepted_at, selectable, payload_ref,
-         frontier_message_id, frontier_cursor_ts, operation_id)
-        VALUES (?, 'prompt', 'protected_continuation', ?, ?, 1, ?, NULL, NULL, NULL)
-        ON CONFLICT(chat_jid, source_kind, source_id) DO NOTHING`)
-        .run(chatJid, identity.sourceId, request.createdAt, identity.payloadRef);
-      const successor = sourceFromRow(db.prepare(`SELECT * FROM chat_accepted_sources
-        WHERE chat_jid = ? AND source_kind = 'protected_continuation' AND source_id = ?`)
-        .get(chatJid, identity.sourceId) as SourceRow);
-      if (inserted.changes !== 1 || successor.acceptedAt !== request.createdAt
-        || successor.sourceClass !== "prompt" || !successor.selectable
-        || successor.payloadRef !== identity.payloadRef || successor.operationId !== null
-        || successor.frontierMessageId !== null || successor.frontierCursorTs !== null
-        || getProtectedContinuationRootSource(successor)?.sourceSeq !== source.sourceSeq) {
-        throw new ChatOperationInvariantError("Protected continuation identity was reused with different immutable lineage");
+      if (request.successor.sourceKind === "protected_continuation") {
+        if (request.cause !== "protected_recovery_continuation_registered") {
+          throw new ChatOperationInvariantError("Protected continuation requires the interrupted protected handoff outcome");
+        }
+        if (request.successor.rootSourceSeq !== source.sourceSeq || source.sourceClass !== "prompt"
+          || !source.selectable || source.sourceKind === "protected_continuation") {
+          throw new ChatOperationInvariantError("Protected continuation requires a non-continuation selectable prompt root");
+        }
+        const identity = protectedContinuationIdentity(source.sourceSeq);
+        const inserted = db.prepare(`INSERT INTO chat_accepted_sources
+          (chat_jid, source_class, source_kind, source_id, accepted_at, selectable, payload_ref,
+           frontier_message_id, frontier_cursor_ts, operation_id)
+          VALUES (?, 'prompt', 'protected_continuation', ?, ?, 1, ?, NULL, NULL, NULL)
+          ON CONFLICT(chat_jid, source_kind, source_id) DO NOTHING`)
+          .run(chatJid, identity.sourceId, request.createdAt, identity.payloadRef);
+        const successor = sourceFromRow(db.prepare(`SELECT * FROM chat_accepted_sources
+          WHERE chat_jid = ? AND source_kind = 'protected_continuation' AND source_id = ?`)
+          .get(chatJid, identity.sourceId) as SourceRow);
+        if (inserted.changes !== 1 || successor.acceptedAt !== request.createdAt
+          || successor.sourceClass !== "prompt" || !successor.selectable
+          || successor.payloadRef !== identity.payloadRef || successor.operationId !== null
+          || successor.frontierMessageId !== null || successor.frontierCursorTs !== null
+          || getProtectedContinuationRootSource(successor)?.sourceSeq !== source.sourceSeq) {
+          throw new ChatOperationInvariantError("Protected continuation identity was reused with different immutable lineage");
+        }
+      } else {
+        if (request.cause !== "goal_deadline_checkpoint") {
+          throw new ChatOperationInvariantError("Goal continuation requires the Goal deadline checkpoint cause");
+        }
+        const currentLineage = source.sourceKind === "goal_continuation" ? getGoalContinuationLineage(source) : null;
+        const protectedRoot = source.sourceKind === "protected_continuation" ? getProtectedContinuationRootSource(source) : null;
+        const expectedRoot = currentLineage?.rootSourceSeq ?? protectedRoot?.sourceSeq ?? source.sourceSeq;
+        const expectedParentGeneration = currentLineage?.generation ?? 0;
+        if (source.sourceClass !== "prompt" || !source.selectable
+          || request.successor.rootSourceSeq !== expectedRoot
+          || request.successor.parentSourceSeq !== source.sourceSeq
+          || request.successor.parentGeneration !== expectedParentGeneration
+          || request.successor.generation !== expectedParentGeneration + 1
+          || (currentLineage && request.successor.goalId !== currentLineage.goalId)) {
+          throw new ChatOperationInvariantError("Goal continuation lineage is not the exact next generation");
+        }
+        const carried = request.successor.carriedIntentSourceSeqs;
+        if (new Set(carried).size !== carried.length || carried.some((value, index) => index > 0 && value <= carried[index - 1])) {
+          throw new ChatOperationInvariantError("Goal continuation carried intents must be unique source-sequence order");
+        }
+        const identity = goalContinuationIdentity(request.successor);
+        const inserted = db.prepare(`INSERT INTO chat_accepted_sources
+          (chat_jid, source_class, source_kind, source_id, accepted_at, selectable, payload_ref,
+           frontier_message_id, frontier_cursor_ts, operation_id)
+          VALUES (?, 'prompt', 'goal_continuation', ?, ?, 1, ?, NULL, NULL, NULL)`)
+          .run(chatJid, identity.sourceId, request.createdAt, identity.payloadRef);
+        if (inserted.changes !== 1) throw new ChatOperationInvariantError("Goal continuation identity already exists");
+        const successor = sourceFromRow(db.prepare(`SELECT * FROM chat_accepted_sources
+          WHERE chat_jid = ? AND source_kind = 'goal_continuation' AND source_id = ?`)
+          .get(chatJid, identity.sourceId) as SourceRow);
+        for (let ordinal = 0; ordinal < carried.length; ordinal += 1) {
+          const intentSource = getAcceptedChatSource(carried[ordinal]);
+          if (!intentSource || intentSource.chatJid !== chatJid || intentSource.sourceClass !== "intent"
+            || intentSource.sourceKind !== "steer" || intentSource.operationId !== active.operationId) {
+            throw new ChatOperationInvariantError("Carried Goal continuation steer does not belong to the completed operation");
+          }
+          const disposition = request.intentDispositions?.find((item) => item.sourceSeq === intentSource.sourceSeq);
+          if (!disposition || disposition.outcome !== "interrupted" || disposition.cause !== "goal_deadline_steer_carried") {
+            throw new ChatOperationInvariantError("Carried Goal continuation steer requires an explicit carried disposition");
+          }
+          db.prepare(`INSERT INTO chat_goal_continuation_intents
+            (continuation_source_seq, intent_source_seq, ordinal) VALUES (?, ?, ?)`)
+            .run(successor.sourceSeq, intentSource.sourceSeq, ordinal);
+        }
       }
     }
     hooks.afterWrite?.("successor");

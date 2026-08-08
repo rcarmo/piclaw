@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { getTestWorkspace, setEnv } from "../helpers.js";
 import type { ChatOperationOwner, ChatOperationState } from "../../src/db/chat-operations.js";
 
@@ -33,6 +33,25 @@ beforeAll(async () => {
   db = await import("../../src/db.js");
   op = await import("../../src/db/chat-operations.js");
   db.initDatabase();
+});
+
+afterAll(() => {
+  const database = db.getDb();
+  database.exec(`
+    DELETE FROM chat_goal_continuation_intents
+      WHERE continuation_source_seq IN (SELECT source_seq FROM chat_accepted_sources WHERE chat_jid LIKE 'operation:%')
+         OR intent_source_seq IN (SELECT source_seq FROM chat_accepted_sources WHERE chat_jid LIKE 'operation:%');
+    DELETE FROM chat_operation_dispositions WHERE chat_jid LIKE 'operation:%';
+    DELETE FROM chat_cursors WHERE chat_jid LIKE 'operation:%';
+    DELETE FROM chat_accepted_sources WHERE chat_jid LIKE 'operation:%';
+    DELETE FROM thinking_content
+      WHERE message_id IN (SELECT CAST(rowid AS TEXT) FROM messages WHERE chat_jid LIKE 'operation:%');
+    DELETE FROM message_media
+      WHERE message_rowid IN (SELECT rowid FROM messages WHERE chat_jid LIKE 'operation:%');
+    DELETE FROM messages WHERE chat_jid LIKE 'operation:%';
+    DELETE FROM chat_branches WHERE chat_jid LIKE 'operation:%';
+    DELETE FROM chats WHERE jid LIKE 'operation:%';
+  `);
 });
 
 describe("durable accepted-input operations", () => {
@@ -198,6 +217,82 @@ describe("durable accepted-input operations", () => {
     expect(() => op.completeChatOperation(chatJid, {
       ...request, successor: { sourceKind: "protected_continuation", rootSourceSeq: root.sourceSeq + 1 },
     })).toThrow("lineage conflicts");
+  });
+
+  test("Goal checkpoint atomically preserves lineage, carried steers, restart claims, and repeated generations", () => {
+    const chatJid = jid("goal-checkpoint");
+    const root = register(chatJid, "goal-root");
+    const claimed = op.claimNextChatOperation(chatJid).operation!;
+    const applied = op.registerChatOperationIntent(chatJid, owner(claimed), {
+      sourceKind: "steer", sourceId: "applied", acceptedAt: "now-1", payloadRef: "steer:applied",
+    });
+    const carried = op.registerChatOperationIntent(chatJid, owner(claimed), {
+      sourceKind: "steer", sourceId: "carried", acceptedAt: "now-2", payloadRef: "steer:carried",
+    });
+    if (applied.status !== "registered" || carried.status !== "registered") throw new Error("expected Goal steers");
+    const successorRequest = {
+      sourceKind: "goal_continuation" as const,
+      rootSourceSeq: root.sourceSeq,
+      parentSourceSeq: root.sourceSeq,
+      parentGeneration: 0,
+      generation: 1,
+      goalId: "goal-1",
+      checkpointId: "checkpoint-1",
+      oldTurnId: "turn-1",
+      carriedIntentSourceSeqs: [carried.source.sourceSeq],
+    };
+    const request = {
+      owner: owner(claimed), outcome: "interrupted" as const, cause: "goal_deadline_checkpoint", provenance: "goal:test",
+      createdAt: "2026-08-07T22:01:01.000Z", artifact: { message: terminal(chatJid, `goal-checkpoint-${serial}`) },
+      successor: successorRequest,
+      intentDispositions: [
+        { sourceSeq: applied.source.sourceSeq, outcome: "succeeded" as const, cause: "steer_applied", provenance: "goal:test" },
+        { sourceSeq: carried.source.sourceSeq, outcome: "interrupted" as const, cause: "goal_deadline_steer_carried", provenance: "goal:test" },
+      ],
+    };
+    const completed = op.completeChatOperation(chatJid, request);
+    expect(completed.status).toBe("completed");
+    const successorSeq = (db.getDb().prepare(`SELECT source_seq FROM chat_accepted_sources
+      WHERE chat_jid = ? AND source_kind = 'goal_continuation' AND source_id = ?`)
+      .get(chatJid, `goal:${root.sourceSeq}:1`) as { source_seq: number }).source_seq;
+    const successor = op.getAcceptedChatSource(successorSeq)!;
+    expect(op.getGoalContinuationLineage(successor)).toEqual({
+      rootSourceSeq: root.sourceSeq, parentSourceSeq: root.sourceSeq, parentGeneration: 0, generation: 1,
+      goalId: "goal-1", checkpointId: "checkpoint-1", oldTurnId: "turn-1",
+    });
+    expect(op.getGoalContinuationCarriedIntentSources(successor.sourceSeq).map((item) => item.sourceSeq))
+      .toEqual([carried.source.sourceSeq]);
+    expect(op.completeChatOperation(chatJid, request).status).toBe("repeated");
+
+    const restartClaim = op.claimNextChatOperation(chatJid);
+    expect(restartClaim.source?.sourceSeq).toBe(successor.sourceSeq);
+    expect(op.claimNextChatOperation(chatJid)).toMatchObject({ status: "existing", source: { sourceSeq: successor.sourceSeq } });
+    const childRequest = {
+      owner: owner(restartClaim.operation!), outcome: "interrupted" as const, cause: "goal_deadline_checkpoint", provenance: "goal:test",
+      createdAt: "2026-08-07T22:02:01.000Z", artifact: { message: terminal(chatJid, `goal-checkpoint-child-${serial}`) },
+      successor: {
+        sourceKind: "goal_continuation" as const,
+        rootSourceSeq: root.sourceSeq,
+        parentSourceSeq: successor.sourceSeq,
+        parentGeneration: 1,
+        generation: 2,
+        goalId: "goal-1",
+        checkpointId: "checkpoint-2",
+        oldTurnId: "turn-2",
+        carriedIntentSourceSeqs: [],
+      },
+    };
+    expect(op.completeChatOperation(chatJid, childRequest).status).toBe("completed");
+    const grandchildSeq = (db.getDb().prepare(`SELECT source_seq FROM chat_accepted_sources
+      WHERE chat_jid = ? AND source_kind = 'goal_continuation' AND source_id = ?`)
+      .get(chatJid, `goal:${root.sourceSeq}:2`) as { source_seq: number }).source_seq;
+    const grandchild = op.getAcceptedChatSource(grandchildSeq)!;
+    expect(op.getGoalContinuationLineage(grandchild)?.generation).toBe(2);
+    expect(op.completeChatOperation(chatJid, childRequest).status).toBe("repeated");
+    expect(() => op.completeChatOperation(chatJid, {
+      ...childRequest,
+      successor: { ...childRequest.successor, generation: 3 },
+    })).toThrow("exact next generation");
   });
 
   test("protected handoff is all-or-nothing at every write boundary and stale ownership writes nothing", () => {

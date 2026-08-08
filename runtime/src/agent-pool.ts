@@ -35,7 +35,7 @@ import type { Provider } from "@earendil-works/pi-ai";
 import { type AgentControlCommand, type AgentControlResult } from "./agent-control/index.js";
 import { getPiclawAgentDir } from "./core/agent-dir.js";
 import { SESSIONS_DIR, WORKSPACE_DIR, getAgentLogConfig, getSessionPoolConfig } from "./core/config.js";
-import { getChatChannel, getChatJid } from "./core/chat-context.js";
+import { getChatChannel, getChatJid, getChatTurnId } from "./core/chat-context.js";
 import { registerChannelDetector } from "./router.js";
 import { createTrackedBashOperations } from "./tools/tracked-bash.js";
 import { type ActiveChatAgent } from "./agent-pool/branch-manager.js";
@@ -135,6 +135,7 @@ export interface AgentPoolRecoveryInstrumentationSnapshot {
 interface RuntimeInteropBridge {
   getChatJid?: (defaultValue?: string) => string;
   getChatChannel?: (defaultValue?: string) => string;
+  getChatTurnId?: (defaultValue?: string) => string;
   registerChannelDetector?: (detector: (chatJid: string) => string | null) => () => void;
   getExtensionKvStore?: () => {
     get<T = unknown>(extensionId: string, key: string, scope?: string, scopeKey?: string): T | null;
@@ -300,6 +301,7 @@ export class AgentPool {
     const runtimeInterop = ((globalThis as { __piclawRuntimeInterop?: RuntimeInteropBridge }).__piclawRuntimeInterop ||= {});
     runtimeInterop.getChatJid = getChatJid;
     runtimeInterop.getChatChannel = getChatChannel;
+    runtimeInterop.getChatTurnId = getChatTurnId;
     runtimeInterop.registerChannelDetector = registerChannelDetector;
     runtimeInterop.getExtensionKvStore = () => ({
       get: extensionKvGet,
@@ -872,12 +874,13 @@ export class AgentPool {
     chatJid: string,
     text: string,
     behavior: "steer" | "followUp",
-    request: SessionMutationRequest = {},
+    request: SessionMutationRequest & { beforeQueue?: () => void } = {},
   ): Promise<{ queued: boolean; error?: string }> {
     try {
-      return await this.mutationGateway.run(chatJid, "queue", sessionMutationAccess(request), () => (
-        this.runtimeFacade.queueStreamingMessage(chatJid, text, behavior)
-      ));
+      return await this.mutationGateway.run(chatJid, "queue", sessionMutationAccess(request), () => {
+        request.beforeQueue?.();
+        return this.runtimeFacade.queueStreamingMessage(chatJid, text, behavior);
+      });
     } catch (error) {
       if (error instanceof SessionMutationRejectedError) return { queued: false, error: error.message };
       throw error;

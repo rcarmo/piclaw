@@ -65,6 +65,29 @@ export interface AgentRecoveryMetadata {
 }
 
 /** Output from an agent run: response text, status, and token usage. */
+export interface GoalDeadlineCheckpointEvidence {
+  checkpointId: string;
+  oldTurnId: string;
+  timeoutMs: number;
+  reserveMs: number;
+  deadlineAt: string;
+  triggeredAt: string;
+  settledAt: string;
+  settlement: "abort_requested" | "idle" | "abort_failed";
+  abortError: string | null;
+  pendingSteering: string[];
+  pendingFollowUps: string[];
+}
+
+export interface GoalDeadlineCheckpointLatch {
+  checkpointId: string;
+  oldTurnId: string;
+  timeoutMs: number;
+  reserveMs: number;
+  deadlineAt: string;
+  triggeredAt: string;
+}
+
 export interface AgentOutput {
   status: "success" | "error" | "tool_complete";
   result: string | null;
@@ -84,6 +107,8 @@ export interface AgentOutput {
   protectedRecoveryHandoff?: { afterSuccessfulCompaction: boolean };
   abortCause?: AgentAbortCause;
   abortOperation?: string;
+  /** Typed evidence that the web durable owner committed a pre-deadline Goal checkpoint. */
+  goalDeadlineCheckpoint?: GoalDeadlineCheckpointEvidence;
 }
 
 /** A single turn's output within a multi-turn agent run. */
@@ -136,6 +161,17 @@ export interface RunAgentOptions {
   onTerminalOutput?: (output: AgentOutput) => boolean | Promise<boolean>;
   /** Persist a durable protected handoff while the prompt mutation lane is still held. */
   onProtectedRecoveryHandoff?: (output: AgentOutput) => boolean | Promise<boolean>;
+  /**
+   * Optional Goal deadline ownership hook. It is absent for ordinary prompts.
+   * The synchronous latch runs before abort so the owning add-on can suppress
+   * only this turn's agent_end enqueue. AgentPool invokes the durable callback
+   * after abort/idle settlement while the prompt mutation lane is still held.
+   */
+  goalDeadlineCheckpoint?: {
+    reserveMs: number;
+    tryLatch: (latch: GoalDeadlineCheckpointLatch) => boolean;
+  };
+  onGoalDeadlineCheckpoint?: (evidence: GoalDeadlineCheckpointEvidence) => boolean | Promise<boolean>;
   /** Stable runtime turn identifier for observability/correlation. */
   turnId?: string;
   /** Optional browser/user correlation identifier supplied by the caller. */

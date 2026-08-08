@@ -753,10 +753,32 @@ async function runPromptAttempt(
   };
 
   const unsub = options.turnCoordinator.subscribe(session, chatJid, tracker, wrappedOnEvent);
-  const { timeoutId, timedOutRef, completedRef } = options.turnCoordinator.startPromptTimeout(session, chatJid, timeoutMs);
-  const finishPromptTimeout = () => {
-    if (!completedRef.value) completedRef.value = true;
-    if (timeoutId) clearTimeout(timeoutId);
+  const goalDeadlineCheckpointEnabled = Boolean(
+    runOptions.goalDeadlineCheckpoint && runOptions.onGoalDeadlineCheckpoint && runOptions.turnId,
+  );
+  const promptTimeout = options.turnCoordinator.startPromptTimeout(
+    session,
+    chatJid,
+    timeoutMs,
+    goalDeadlineCheckpointEnabled
+      ? {
+          oldTurnId: runOptions.turnId!,
+          reserveMs: runOptions.goalDeadlineCheckpoint!.reserveMs,
+          tryLatch: runOptions.goalDeadlineCheckpoint!.tryLatch,
+        }
+      : undefined,
+  );
+  const { timedOutRef } = promptTimeout;
+  let goalDeadlineCheckpointEvidence: import("./contracts.js").GoalDeadlineCheckpointEvidence | null = null;
+  let goalDeadlineCheckpointCommitted = false;
+  const finishPromptTimeout = async () => {
+    if (typeof promptTimeout.finish === "function") return await promptTimeout.finish();
+    // Compatibility for injected coordinators that still implement the
+    // pre-checkpoint timeout state shape.
+    promptTimeout.completedRef.value = true;
+    if (promptTimeout.timeoutId) clearTimeout(promptTimeout.timeoutId);
+    if (promptTimeout.checkpointTimeoutId) clearTimeout(promptTimeout.checkpointTimeoutId);
+    return null;
   };
   let staleProgressInterrupted = false;
   let staleProgressAbortFailed: string | null = null;
@@ -783,41 +805,122 @@ async function runPromptAttempt(
   });
 
   let promptThrownError: string | null = null;
+  let promptSettled = false;
   const restoreUpstreamAutoCompaction = suppressUpstreamAutoCompactionDuringPrompt(session, chatJid, options);
   try {
     heartbeatTrackedPhase(chatJid, "prompt", { eventType: "prompt_start" });
     attemptContext.publishContextUsageUpdate("prompt_start", true);
-    await session.prompt(prompt);
-    finishPromptTimeout();
-    heartbeatTrackedPhase(chatJid, "prompt", { eventType: "prompt_resolved" });
-    options.onInfo?.("session.prompt() resolved", {
-      operation: "run_agent.prompt_resolved",
-      chatJid,
-      promptDurationMs: Date.now() - totalRunStartedAt,
-      sessionIsStreaming: Boolean(session.isStreaming),
-      sessionIsCompacting: Boolean(session.isCompacting),
-      sessionIsRetrying: Boolean(session.isRetrying),
-      ...getRunObservabilityDetails(runOptions),
-    });
-    const idleMaxWaitMs = resolveSessionIdleMaxWaitMs(session);
-    await waitForSessionIdle(session, 10, (result) => {
-      options.onInfo?.("Session settled after prompt", {
-        operation: "run_agent.wait_for_session_idle",
+    const promptOutcome = session.prompt(prompt).then(
+      () => {
+        promptSettled = true;
+        return { kind: "resolved" as const };
+      },
+      (error: unknown) => {
+        promptSettled = true;
+        promptThrownError = error instanceof Error ? error.message : String(error);
+        return { kind: "rejected" as const, error };
+      },
+    );
+    const outcome = goalDeadlineCheckpointEnabled
+      ? await Promise.race([
+          promptOutcome,
+          promptTimeout.settled.then((evidence) => ({ kind: "timeout_settled" as const, evidence })),
+        ])
+      : await promptOutcome;
+    if (outcome.kind === "rejected") throw outcome.error;
+    if (outcome.kind === "resolved") {
+      heartbeatTrackedPhase(chatJid, "prompt", { eventType: "prompt_resolved" });
+      options.onInfo?.("session.prompt() resolved", {
+        operation: "run_agent.prompt_resolved",
         chatJid,
-        maxWaitMs: idleMaxWaitMs,
-        ...result,
+        promptDurationMs: Date.now() - totalRunStartedAt,
+        sessionIsStreaming: Boolean(session.isStreaming),
+        sessionIsCompacting: Boolean(session.isCompacting),
+        sessionIsRetrying: Boolean(session.isRetrying),
+        ...getRunObservabilityDetails(runOptions),
       });
-    }, idleMaxWaitMs);
+    }
   } catch (error) {
     promptThrownError = error instanceof Error ? error.message : String(error);
   } finally {
     if (finalizationReserveTimer) clearTimeout(finalizationReserveTimer);
+    goalDeadlineCheckpointEvidence ??= await finishPromptTimeout();
+    const checkpointEvidenceBeforeIdle = goalDeadlineCheckpointEvidence;
+    if (checkpointEvidenceBeforeIdle?.settlement === "abort_requested") {
+      const deadlineAtMs = Date.parse(checkpointEvidenceBeforeIdle.deadlineAt);
+      let verifiedIdleAtMs: number | null = null;
+      while (Date.now() <= deadlineAtMs) {
+        const sessionIdle = promptSettled && !session.isStreaming && !session.isCompacting && !session.isRetrying;
+        const activeToolCount = toolExecutionWatchdogHeartbeat.getActiveExecutionCount();
+        if (sessionIdle && activeToolCount === 0) {
+          verifiedIdleAtMs = Date.now();
+          break;
+        }
+        const remainingMs = deadlineAtMs - Date.now();
+        if (remainingMs <= 0) break;
+        await Bun.sleep(Math.min(10, remainingMs));
+      }
+      goalDeadlineCheckpointEvidence = {
+        ...checkpointEvidenceBeforeIdle,
+        settledAt: new Date(verifiedIdleAtMs ?? Date.now()).toISOString(),
+        settlement: verifiedIdleAtMs !== null ? "idle" : "abort_failed",
+        abortError: verifiedIdleAtMs !== null
+          ? null
+          : "Session or active tool executions did not settle before the hard prompt deadline",
+      };
+    } else if (!checkpointEvidenceBeforeIdle && !promptThrownError) {
+      const idleMaxWaitMs = resolveSessionIdleMaxWaitMs(session);
+      try {
+        await waitForSessionIdle(session, 10, (result) => {
+          options.onInfo?.("Session settled after prompt", {
+            operation: "run_agent.wait_for_session_idle",
+            chatJid,
+            maxWaitMs: idleMaxWaitMs,
+            ...result,
+          });
+        }, idleMaxWaitMs);
+      } catch (error) {
+        options.onWarn?.("Session did not settle after prompt", {
+          operation: "run_agent.wait_for_session_idle_failed",
+          chatJid,
+          maxWaitMs: idleMaxWaitMs,
+          err: error,
+          ...getRunObservabilityDetails(runOptions),
+        });
+      }
+    }
+    unregisterProgressAborter();
+    unresolvedToolExecutionCount = toolExecutionWatchdogHeartbeat.getActiveExecutionCount();
+    const checkpointEvidence = goalDeadlineCheckpointEvidence;
+    if (checkpointEvidence && runOptions.onGoalDeadlineCheckpoint) {
+      if (checkpointEvidence.settlement === "idle" && unresolvedToolExecutionCount === 0) {
+        const queueSnapshot = session as unknown as {
+          getSteeringMessages?: () => readonly string[];
+          getFollowUpMessages?: () => readonly string[];
+        };
+        goalDeadlineCheckpointEvidence = {
+          ...checkpointEvidence,
+          pendingSteering: [...(queueSnapshot.getSteeringMessages?.() ?? [])],
+          pendingFollowUps: [...(queueSnapshot.getFollowUpMessages?.() ?? [])],
+        };
+      }
+      try {
+        goalDeadlineCheckpointCommitted = await runOptions.onGoalDeadlineCheckpoint(goalDeadlineCheckpointEvidence ?? checkpointEvidence);
+        if (goalDeadlineCheckpointCommitted) {
+          (session as unknown as { clearQueue?: () => unknown }).clearQueue?.();
+        }
+      } catch (err) {
+        options.onWarn?.("Goal deadline checkpoint callback failed", {
+          operation: "run_agent.goal_deadline_checkpoint",
+          chatJid,
+          err,
+          ...getRunObservabilityDetails(runOptions),
+        });
+      }
+    }
     toolBudget.restoreToolBudgetGuard();
     toolBudget.restoreToolBudgetSoftStop();
     restoreUpstreamAutoCompaction();
-    finishPromptTimeout();
-    unregisterProgressAborter();
-    unresolvedToolExecutionCount = toolExecutionWatchdogHeartbeat.getActiveExecutionCount();
     toolExecutionWatchdogHeartbeat.stop();
     unsub();
   }
@@ -825,6 +928,37 @@ async function runPromptAttempt(
   tracker.finalizeAttempt();
   const trackedFinalText = tracker.getFinalText();
   const finalUsage = tracker.getFinalUsage();
+  if (goalDeadlineCheckpointEvidence && goalDeadlineCheckpointCommitted) {
+    return {
+      output: {
+        status: "tool_complete",
+        result: null,
+        goalDeadlineCheckpoint: goalDeadlineCheckpointEvidence,
+        abortCause: "goal_deadline_checkpoint",
+        abortOperation: "start_prompt_timeout.goal_deadline_checkpoint",
+      },
+      promptWasPersisted: didPromptAdvanceSession(session, baselineLeafId),
+      timedOut: false,
+      toolExecutionCount,
+      snapshot: {
+        hadToolActivity,
+        hadPartialOutput: hadPartialOutput || Boolean(trackedFinalText),
+        hadCompletedTurnOutput,
+        hadTerminalTurnOutput,
+        compactionErrorMessage,
+        sawCompactionIntent: attemptContext.state.sawCompactionIntent,
+        sawAssistantToolCall: sawAssistantToolCallMessage,
+        onlyReadOnlyToolActivity,
+        hasUnresolvedToolExecution: false,
+        hadToolFailure,
+        sawTerminalSideEffectToolActivity,
+        toolUseBudgetExceeded: toolBudget.state.toolUseBudgetExceeded,
+        assistantToolUseMessageCount,
+        toolExecutionCount,
+        toolUseMessageBudget,
+      },
+    };
+  }
   hadPartialOutput = hadPartialOutput || !!trackedFinalText;
   const finalAttachments = options.takeAttachments(chatJid);
   const timedOut = timedOutRef.value;
@@ -1167,7 +1301,7 @@ export async function runAgentPrompt(
         modelLabel,
         turnToolExecutionCount,
       ),
-    }));
+    }), { turnId: runOptions.turnId });
 
     return runResult;
   } catch (err) {

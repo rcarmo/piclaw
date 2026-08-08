@@ -66,7 +66,7 @@ export async function finalizeSuccessfulProcessChatRun(options: ProcessChatFinal
 
   const cursorNow = getChatCursor(chatJid);
   const remainingPersisted = getMessagesSince(chatJid, cursorNow, getIdentityConfig().assistantName);
-  const pendingDurableSource = ["message", "protected_continuation"]
+  const pendingDurableSource = ["message", "protected_continuation", "goal_continuation"]
     .includes(peekNextAcceptedChatSource(chatJid)?.sourceKind ?? "");
   log.info("finalizeSuccessfulRun advanced cursor", {
     operation: "process_chat.finalize_successful_run",

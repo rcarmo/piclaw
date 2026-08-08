@@ -43,6 +43,7 @@ import {
   setSshConnectionResolverForTests,
   unregisterLiveChatSshSession,
 } from "../../src/extensions/ssh-core.js";
+import { getChatTurnId } from "../../src/core/chat-context.js";
 import { setEnv } from "../helpers.js";
 
 function createRuntime(session: any, retrySettings?: { enabled?: boolean; maxRetries?: number; baseDelayMs?: number; maxDelayMs?: number }): AgentSessionRuntime {
@@ -5241,6 +5242,205 @@ test("runAgentPrompt ignores a queued late-timeout callback after prompt complet
   expect(result.result).toBe("done");
   expect(abortCalls).toBe(0);
 });
+test("runAgentPrompt does not checkpoint after abort throws the prompt while a tool remains active", async () => {
+  const restoreEnv = setEnv({ PICLAW_TURN_AUTO_RECOVERY_ENABLED: "0" });
+  initDatabase();
+  let rejectPrompt!: (error: Error) => void;
+  let evidence: any = null;
+  let clearQueueCalls = 0;
+  class StubSession {
+    private listeners: Array<(event: any) => void> = [];
+    sessionManager = { getLeafId: () => "leaf-goal-active-tool" };
+    getSteeringMessages() { return ["queued steer"]; }
+    getFollowUpMessages() { return []; }
+    clearQueue() { clearQueueCalls += 1; return { steering: ["queued steer"], followUp: [] }; }
+    isStreaming = false;
+    isCompacting = false;
+    isRetrying = false;
+    subscribe(listener: (event: any) => void) { this.listeners.push(listener); return () => {}; }
+    async prompt() {
+      this.isStreaming = true;
+      for (const listener of this.listeners) listener({ type: "tool_execution_start", toolCallId: "tool-1", toolName: "bash" });
+      await new Promise<void>((_resolve, reject) => { rejectPrompt = reject; });
+    }
+    async abort() {
+      this.isStreaming = false;
+      rejectPrompt(new Error("aborted"));
+    }
+  }
+  try {
+    const session = new StubSession();
+    const turnCoordinator = new AgentTurnCoordinator({ takeAttachments: () => [], touchSession: () => {}, recordMessageUsage: () => {} });
+    const result = await runAgentPrompt("checkpoint", "web:goal-active-tool", {
+      timeoutMs: 80,
+      turnId: "turn-active-tool",
+      goalDeadlineCheckpoint: { reserveMs: 50, tryLatch: () => true },
+      onGoalDeadlineCheckpoint: async (value) => { evidence = value; return false; },
+    }, {
+      getOrCreateRuntime: async () => createRuntime(session) as any,
+      turnCoordinator,
+      clearAttachments: () => {}, takeAttachments: () => [], logsDir: createTestLogsDir(),
+      setActiveForkBaseLeaf: () => {}, clearActiveForkBaseLeaf: () => {},
+    });
+    expect(evidence).toMatchObject({ settlement: "abort_failed", oldTurnId: "turn-active-tool" });
+    expect(evidence.abortError).toContain("active tool executions");
+    expect(clearQueueCalls).toBe(0);
+    expect(result.goalDeadlineCheckpoint).toBeUndefined();
+  } finally {
+    restoreEnv();
+  }
+});
+
+test("runAgentPrompt invokes the Goal checkpoint callback only after session idle and tool_execution_end", async () => {
+  const restoreEnv = setEnv({ PICLAW_TURN_AUTO_RECOVERY_ENABLED: "0" });
+  initDatabase();
+  let rejectPrompt!: (error: Error) => void;
+  let evidence: any = null;
+  let toolEndedAt = 0;
+  let callbackAt = 0;
+  let ambientTurnId = "";
+  let clearQueueCalls = 0;
+  class StubSession {
+    private listeners: Array<(event: any) => void> = [];
+    sessionManager = { getLeafId: () => "leaf-goal-settled" };
+    getSteeringMessages() { return ["queued steer"]; }
+    getFollowUpMessages() { return []; }
+    clearQueue() { clearQueueCalls += 1; return { steering: ["queued steer"], followUp: [] }; }
+    isStreaming = false;
+    isCompacting = false;
+    isRetrying = false;
+    subscribe(listener: (event: any) => void) { this.listeners.push(listener); return () => {}; }
+    async prompt() {
+      this.isStreaming = true;
+      const pending = new Promise<void>((_resolve, reject) => { rejectPrompt = reject; });
+      for (const listener of this.listeners) listener({ type: "tool_execution_start", toolCallId: "tool-1", toolName: "bash" });
+      await pending;
+    }
+    async abort() {
+      ambientTurnId = getChatTurnId("");
+      this.isStreaming = false;
+      rejectPrompt(new Error("aborted"));
+      setTimeout(() => {
+        toolEndedAt = Date.now();
+        for (const listener of this.listeners) listener({ type: "tool_execution_end", toolCallId: "tool-1", toolName: "bash", isError: true });
+      }, 10);
+    }
+  }
+  try {
+    const session = new StubSession();
+    const turnCoordinator = new AgentTurnCoordinator({ takeAttachments: () => [], touchSession: () => {}, recordMessageUsage: () => {} });
+    const result = await runAgentPrompt("checkpoint", "web:goal-settled", {
+      timeoutMs: 100,
+      turnId: "turn-settled",
+      goalDeadlineCheckpoint: { reserveMs: 60, tryLatch: () => true },
+      onGoalDeadlineCheckpoint: async (value) => { evidence = value; callbackAt = Date.now(); return true; },
+    }, {
+      getOrCreateRuntime: async () => createRuntime(session) as any,
+      turnCoordinator,
+      clearAttachments: () => {}, takeAttachments: () => [], logsDir: createTestLogsDir(),
+      setActiveForkBaseLeaf: () => {}, clearActiveForkBaseLeaf: () => {},
+    });
+    expect(toolEndedAt).toBeGreaterThan(0);
+    expect(callbackAt).toBeGreaterThanOrEqual(toolEndedAt);
+    expect(ambientTurnId).toBe("turn-settled");
+    expect(evidence).toMatchObject({
+      settlement: "idle",
+      oldTurnId: "turn-settled",
+      pendingSteering: ["queued steer"],
+      pendingFollowUps: [],
+    });
+    expect(clearQueueCalls).toBe(1);
+    expect(result).toMatchObject({ status: "tool_complete", abortCause: "goal_deadline_checkpoint" });
+  } finally {
+    restoreEnv();
+  }
+});
+
+test("runAgentPrompt does not treat abort resolution as prompt settlement", async () => {
+  const restoreEnv = setEnv({ PICLAW_TURN_AUTO_RECOVERY_ENABLED: "0" });
+  initDatabase();
+  let evidence: any = null;
+  class StubSession {
+    sessionManager = { getLeafId: () => "leaf-goal-prompt-hung" };
+    isStreaming = false;
+    isCompacting = false;
+    isRetrying = false;
+    subscribe() { return () => {}; }
+    async prompt() {
+      this.isStreaming = true;
+      await new Promise<void>(() => {});
+    }
+    async abort() { this.isStreaming = false; }
+  }
+  try {
+    const session = new StubSession();
+    const turnCoordinator = new AgentTurnCoordinator({ takeAttachments: () => [], touchSession: () => {}, recordMessageUsage: () => {} });
+    const startedAt = Date.now();
+    const result = await runAgentPrompt("checkpoint", "web:goal-prompt-hung", {
+      timeoutMs: 80, turnId: "turn-prompt-hung",
+      goalDeadlineCheckpoint: { reserveMs: 50, tryLatch: () => true },
+      onGoalDeadlineCheckpoint: async (value) => { evidence = value; return false; },
+    }, {
+      getOrCreateRuntime: async () => createRuntime(session) as any,
+      turnCoordinator,
+      clearAttachments: () => {}, takeAttachments: () => [], logsDir: createTestLogsDir(),
+      setActiveForkBaseLeaf: () => {}, clearActiveForkBaseLeaf: () => {},
+    });
+    expect(Date.now() - startedAt).toBeLessThan(500);
+    expect(evidence).toMatchObject({ settlement: "abort_failed", oldTurnId: "turn-prompt-hung" });
+    expect(evidence.abortError).toContain("did not settle");
+    expect(result.goalDeadlineCheckpoint).toBeUndefined();
+  } finally {
+    restoreEnv();
+  }
+});
+
+test("runAgentPrompt bounds an abort that never resolves and reports no idle checkpoint", async () => {
+  const restoreEnv = setEnv({ PICLAW_TURN_AUTO_RECOVERY_ENABLED: "0" });
+  initDatabase();
+  let rejectPrompt!: (error: Error) => void;
+  let evidence: any = null;
+  class StubSession {
+    private listeners: Array<(event: any) => void> = [];
+    sessionManager = { getLeafId: () => "leaf-goal-hung-abort" };
+    isStreaming = false;
+    isCompacting = false;
+    isRetrying = false;
+    subscribe(listener: (event: any) => void) { this.listeners.push(listener); return () => {}; }
+    async prompt() {
+      this.isStreaming = true;
+      await new Promise<void>((_resolve, reject) => { rejectPrompt = reject; });
+    }
+    async abort() {
+      this.isStreaming = false;
+      rejectPrompt(new Error("aborted"));
+      await new Promise<void>(() => {});
+    }
+  }
+  try {
+    const startedAt = Date.now();
+    const session = new StubSession();
+    const turnCoordinator = new AgentTurnCoordinator({ takeAttachments: () => [], touchSession: () => {}, recordMessageUsage: () => {} });
+    const result = await runAgentPrompt("checkpoint", "web:goal-hung-abort", {
+      timeoutMs: 80,
+      turnId: "turn-hung-abort",
+      goalDeadlineCheckpoint: { reserveMs: 50, tryLatch: () => true },
+      onGoalDeadlineCheckpoint: async (value) => { evidence = value; return false; },
+    }, {
+      getOrCreateRuntime: async () => createRuntime(session) as any,
+      turnCoordinator,
+      clearAttachments: () => {}, takeAttachments: () => [], logsDir: createTestLogsDir(),
+      setActiveForkBaseLeaf: () => {}, clearActiveForkBaseLeaf: () => {},
+    });
+    expect(Date.now() - startedAt).toBeLessThan(500);
+    expect(evidence).toMatchObject({ settlement: "abort_failed", oldTurnId: "turn-hung-abort" });
+    expect(evidence.abortError).toContain("hard prompt deadline");
+    expect(result.goalDeadlineCheckpoint).toBeUndefined();
+  } finally {
+    restoreEnv();
+  }
+});
+
 test("runAgentPrompt recovery loop guard numeric env rejects malformed suffixes", async () => {
   const restoreEnv = setEnv({
     PICLAW_TURN_AUTO_RECOVERY_ENABLED: "1",

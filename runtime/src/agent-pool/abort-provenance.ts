@@ -4,6 +4,7 @@ export type AgentAbortCause =
   | "user_command"
   | "service_shutdown"
   | "context_pressure"
+  | "goal_deadline_checkpoint"
   | "prompt_timeout"
   | "stale_progress_watchdog"
   | "tool_budget"

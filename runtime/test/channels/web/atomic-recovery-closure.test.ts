@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
   claimNextChatOperation,
   completeChatOperation,
@@ -69,6 +69,24 @@ function recoveryContext(overrides: Partial<WebRecoveryContext> = {}): WebRecove
 describe("atomic durable restart recovery", () => {
   beforeAll(() => {
     initDatabase();
+  });
+
+  afterAll(() => {
+    const database = getDb();
+    database.exec(`
+      DELETE FROM chat_goal_continuation_intents
+        WHERE continuation_source_seq IN (SELECT source_seq FROM chat_accepted_sources WHERE chat_jid LIKE 'web:recover-%')
+           OR intent_source_seq IN (SELECT source_seq FROM chat_accepted_sources WHERE chat_jid LIKE 'web:recover-%');
+      DELETE FROM chat_operation_dispositions WHERE chat_jid LIKE 'web:recover-%';
+      DELETE FROM chat_cursors WHERE chat_jid LIKE 'web:recover-%';
+      DELETE FROM chat_accepted_sources WHERE chat_jid LIKE 'web:recover-%';
+      DELETE FROM thinking_content
+        WHERE message_id IN (SELECT CAST(rowid AS TEXT) FROM messages WHERE chat_jid LIKE 'web:recover-%');
+      DELETE FROM message_media
+        WHERE message_rowid IN (SELECT rowid FROM messages WHERE chat_jid LIKE 'web:recover-%');
+      DELETE FROM messages WHERE chat_jid LIKE 'web:recover-%';
+      DELETE FROM chats WHERE jid LIKE 'web:recover-%';
+    `);
   });
 
   test("promotes the latest partial reply and completes its exact running operation", () => {

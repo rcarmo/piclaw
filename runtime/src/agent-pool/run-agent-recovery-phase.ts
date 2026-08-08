@@ -681,6 +681,10 @@ export async function runAgentRecoveryPhase(options: RunAgentRecoveryPhaseOption
     }
 
     if (options.isCancelled?.()) return cancelledOutput();
+    if (attempt.output.goalDeadlineCheckpoint) {
+      recentRecoveryFailuresByChat.delete(chatJid);
+      return attempt.output;
+    }
 
     // If the tool-call cap was hit, abort immediately without recovery.
     if (options.toolCallCap?.exceeded) {

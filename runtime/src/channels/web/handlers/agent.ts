@@ -34,9 +34,13 @@ import {
   blockChatOperation,
   claimNextChatOperation,
   completeChatOperation,
+  getAcceptedChatSource,
   getChatCursor,
   getChatOperation,
   getChatOperationDisposition,
+  getChatOperationIntentSources,
+  getGoalContinuationCarriedIntentSources,
+  getGoalContinuationLineage,
   getProtectedContinuationRootSource,
   getChatPreflight,
   getInflightMessageId,
@@ -47,6 +51,7 @@ import {
   rollbackInflightRun,
   rollbackInflightRunForCompactionConflict,
   peekNextAcceptedChatSource,
+  registerChatOperationIntent,
   resumeChatOperation,
   setChatCursor,
   waitChatOperation,
@@ -85,6 +90,8 @@ import { cancelScheduledIdleAutoCompaction } from "../../../agent-pool/compactio
 import { DEFAULT_BASE_RETRY_MS, getRetryAtIso } from "../../../queue/retry-policy.js";
 import { formatProviderError } from "./provider-error-format.js";
 import { endTrackedPhase } from "../../../runtime/progress-watchdog.js";
+import { getAddonGoalDeadlineCheckpointProvider, type AddonGoalDeadlineCheckpointLease } from "../../../addons/goal-deadline-checkpoint-provider.js";
+import { getGoalDeadlineCheckpointReserveMs } from "../../../agent-pool/turn-coordinator.js";
 
 const log = createLogger("web.handlers.agent");
 const TOOL_BUDGET_CONTINUATION_EXTENSION_ID = "piclaw.tool-budget-continuation";
@@ -161,6 +168,12 @@ function completeCancelledDurableOperation(
     cause: operation.cancellation.cause,
     provenance,
     createdAt: new Date().toISOString(),
+    intentDispositions: getChatOperationIntentSources(operation.operationId).map((intent) => ({
+      sourceSeq: intent.sourceSeq,
+      outcome: "cancelled" as const,
+      cause: operation.cancellation!.cause,
+      provenance,
+    })),
   });
   return completed.status === "completed" || completed.status === "repeated";
 }
@@ -1217,7 +1230,24 @@ export async function handleAgentMessage(
   };
 
   const queueSteerMessage = async (source?: string): Promise<Response | null> => {
-    const steerResult = await channel.agentPool.queueStreamingMessage(chatJid, content, "steer");
+    const activeOperation = getChatOperation(chatJid);
+    const persistedMessageId = interaction.id
+      ? (getDb().prepare("SELECT id FROM messages WHERE rowid = ?").get(interaction.id) as { id: string } | undefined)?.id ?? null
+      : null;
+    const steerResult = await channel.agentPool.queueStreamingMessage(chatJid, content, "steer", activeOperation && persistedMessageId
+      ? {
+          operationOwner: durableOperationOwner(activeOperation),
+          beforeQueue: () => {
+            const registered = registerChatOperationIntent(chatJid, durableOperationOwner(activeOperation), {
+              sourceKind: "steer",
+              sourceId: persistedMessageId,
+              acceptedAt: interaction.timestamp,
+              payloadRef: `message:${persistedMessageId}`,
+            });
+            if (registered.status === "rejected") throw new Error(`Steer intent ownership rejected: ${registered.reason}`);
+          },
+        }
+      : {});
     if (!steerResult.queued) {
       return null;
     }
@@ -1535,6 +1565,7 @@ export async function processChat(
     && messagePrecedes(selection.currentMessage, nextAcceptedMessage);
   const shouldClaimDurableSource = Boolean(existingOperation)
     || Boolean(nextAcceptedSource?.sourceKind === "protected_continuation")
+    || Boolean(nextAcceptedSource?.sourceKind === "goal_continuation")
     || Boolean(nextAcceptedSource?.sourceKind === "message" && !earlierLegacyMessage);
   const operationClaim = shouldClaimDurableSource ? claimNextChatOperation(chatJid) : null;
   let durableOperation = operationClaim?.status === "claimed" || operationClaim?.status === "existing"
@@ -1544,7 +1575,8 @@ export async function processChat(
     ? operationClaim.source
     : null;
   if (durableOperation && durableSource?.sourceKind !== "message"
-    && durableSource?.sourceKind !== "protected_continuation") {
+    && durableSource?.sourceKind !== "protected_continuation"
+    && durableSource?.sourceKind !== "goal_continuation") {
     log.warn("Durable prompt consumer refused an unsupported source", {
       operation: "process_chat.operation_source_not_supported",
       chatJid,
@@ -1606,9 +1638,15 @@ export async function processChat(
   const protectedContinuationRoot = durableSource?.sourceKind === "protected_continuation"
     ? getProtectedContinuationRootSource(durableSource)
     : null;
+  const goalContinuationLineage = durableSource?.sourceKind === "goal_continuation"
+    ? getGoalContinuationLineage(durableSource)
+    : null;
+  const goalContinuationRoot = goalContinuationLineage
+    ? getAcceptedChatSource(goalContinuationLineage.rootSourceSeq)
+    : null;
   const durableMessageId = durableSource?.sourceKind === "message"
     ? durableSource.sourceId
-    : protectedContinuationRoot?.frontierMessageId;
+    : protectedContinuationRoot?.frontierMessageId ?? goalContinuationRoot?.frontierMessageId;
   const claimedMessage = durableMessageId ? loadDurableSourceMessage(chatJid, durableMessageId) : null;
   if (durableOperation && !claimedMessage) {
     if (durableSource?.sourceKind === "protected_continuation") {
@@ -1620,6 +1658,12 @@ export async function processChat(
         cause: "protected_continuation_invalid_lineage",
         provenance: "web_process_chat_protected_refusal",
         createdAt,
+        intentDispositions: getChatOperationIntentSources(durableOperation.operationId).map((intent) => ({
+          sourceSeq: intent.sourceSeq,
+          outcome: "failed" as const,
+          cause: "protected_continuation_invalid_lineage",
+          provenance: "web_process_chat_protected_refusal",
+        })),
         artifact: { message: {
           id: artifactId,
           chat_jid: chatJid,
@@ -1705,18 +1749,74 @@ export async function processChat(
 
   const channelName = detectChannel(chatJid);
   const durableProtectedContinuation = durableSource?.sourceKind === "protected_continuation";
+  const durableGoalContinuation = durableSource?.sourceKind === "goal_continuation";
+  const goalProvider = durableGoalContinuation ? getAddonGoalDeadlineCheckpointProvider() : null;
+  const goalContinuation = durableGoalContinuation && goalContinuationLineage && goalProvider
+    ? goalProvider.resolveContinuation({
+        chatJid,
+        goalId: goalContinuationLineage.goalId,
+        checkpointId: goalContinuationLineage.checkpointId,
+        generation: goalContinuationLineage.generation,
+      })
+    : null;
+  if (durableGoalContinuation && goalContinuation?.status !== "continue") {
+    if (!goalProvider || !goalContinuationLineage) {
+      blockChatOperation(chatJid, durableOperationOwner(durableOperation!));
+    } else {
+      const completed = completeChatOperation(chatJid, {
+        owner: durableOperationOwner(durableOperation!),
+        outcome: "skipped",
+        cause: "goal_continuation_no_longer_active",
+        provenance: "web_process_chat_goal_continuation",
+        createdAt: new Date().toISOString(),
+        intentDispositions: getChatOperationIntentSources(durableOperation!.operationId).map((intent) => ({
+          sourceSeq: intent.sourceSeq,
+          outcome: "skipped" as const,
+          cause: "goal_continuation_no_longer_active",
+          provenance: "web_process_chat_goal_continuation",
+        })),
+      });
+      if (completed.status === "completed" || completed.status === "repeated") channel.resumeChat(chatJid);
+    }
+    return;
+  }
   const protectedRecoveryPrompt = durableProtectedContinuation
     ? TOOL_ENABLED_RECOVERY_CONTINUATION_PROMPT
     : resolveProtectedRecoveryPrompt(currentMessage);
-  const promptMessage = protectedRecoveryPrompt
-    ? { ...currentMessage, content: protectedRecoveryPrompt }
-    : currentMessage;
-  const prompt = formatMessages([promptMessage], channelName, chatJid);
+  const promptMessage = durableGoalContinuation && goalContinuation?.status === "continue"
+    ? { ...currentMessage, content: goalContinuation.content }
+    : protectedRecoveryPrompt
+      ? { ...currentMessage, content: protectedRecoveryPrompt }
+      : currentMessage;
+  const carriedGoalSteers = durableGoalContinuation && durableSource
+    ? getGoalContinuationCarriedIntentSources(durableSource.sourceSeq)
+      .map((intent) => intent.payloadRef.startsWith("message:")
+        ? loadDurableSourceMessage(chatJid, intent.payloadRef.slice("message:".length))
+        : null)
+      .filter((message): message is NewMessage => Boolean(message))
+    : [];
+  if (durableGoalContinuation && durableSource
+    && carriedGoalSteers.length !== getGoalContinuationCarriedIntentSources(durableSource.sourceSeq).length) {
+    blockChatOperation(chatJid, durableOperationOwner(durableOperation!));
+    return;
+  }
+  const prompt = formatMessages([promptMessage, ...carriedGoalSteers], channelName, chatJid);
   const lastMessage = currentMessage;
   const runStartedAt = new Date().toISOString();
   const threadId = lastMessage.timestamp;
 
   const turnId = createUuid("turn");
+  if (durableGoalContinuation && goalContinuationLineage) {
+    channel.broadcastEvent("goal_deadline_continuation_claimed", {
+      chat_jid: chatJid,
+      checkpoint_id: goalContinuationLineage.checkpointId,
+      old_turn_id: goalContinuationLineage.oldTurnId,
+      new_turn_id: turnId,
+      source_seq: durableSource?.sourceSeq ?? null,
+      generation: goalContinuationLineage.generation,
+      goal_id: goalContinuationLineage.goalId,
+    });
+  }
   const streamRuntime = await createProcessChatStreamingRuntime({
     channel, chatJid, agentId, threadId, turnId, runStartedAt, sourceMessageId: lastMessage.id ?? null,
     withResolvedToolStatusHints, withAgentStatusProgressMetadata,
@@ -1789,6 +1889,12 @@ export async function processChat(
         provenance,
         createdAt: new Date().toISOString(),
         artifact: { messageId: message.id },
+        intentDispositions: getChatOperationIntentSources(durableOperation.operationId).map((intent) => ({
+          sourceSeq: intent.sourceSeq,
+          outcome: "succeeded" as const,
+          cause: "steer_applied",
+          provenance,
+        })),
         ...(protectedSuccessorRootSourceSeq
           ? { successor: { sourceKind: "protected_continuation" as const, rootSourceSeq: protectedSuccessorRootSourceSeq } }
           : {}),
@@ -1996,6 +2102,7 @@ export async function processChat(
 
   let terminalOutputHandledInPromptLane = false;
   let terminalOutputPersistedInPromptLane = false;
+  let goalDeadlineSettlementUnverified = false;
   const persistSuccessfulOutputBeforeMaintenance = (terminalOutput: AgentOutput): boolean => {
     terminalOutputHandledInPromptLane = true;
     streamState.lastRecoveryMeta = terminalOutput.recovery || null;
@@ -2252,6 +2359,9 @@ export async function processChat(
     return Boolean(persisted);
   };
 
+  let goalDeadlineLease: AddonGoalDeadlineCheckpointLease | null = null;
+  const goalDeadlineProvider = durableOperation ? getAddonGoalDeadlineCheckpointProvider() : null;
+  const goalDeadlineReserveMs = goalDeadlineProvider ? getGoalDeadlineCheckpointReserveMs(timeoutMs) : 0;
   const output = await channel.agentPool.runAgent(prompt, chatJid, {
     ...(durableOperation ? { operationOwner: durableOperationOwner(durableOperation) } : {}),
     timeoutMs,
@@ -2291,6 +2401,238 @@ export async function processChat(
         return false;
       }
     },
+    ...(durableOperation && goalDeadlineProvider && goalDeadlineReserveMs > 0
+      ? {
+          goalDeadlineCheckpoint: {
+            reserveMs: goalDeadlineReserveMs,
+            tryLatch: (latch: import("../../../agent-pool/contracts.js").GoalDeadlineCheckpointLatch) => {
+              const current = getChatOperation(chatJid);
+              if (!current || current.operationId !== durableOperation?.operationId || current.cancellation) return false;
+              goalDeadlineLease = goalDeadlineProvider.tryLatch({
+                chatJid,
+                operationId: current.operationId,
+                sourceSeq: current.sourceSeq,
+                operationGeneration: current.generation,
+                oldTurnId: latch.oldTurnId,
+                checkpointId: latch.checkpointId,
+                deadlineAt: latch.deadlineAt,
+              });
+              return Boolean(goalDeadlineLease);
+            },
+          },
+          onGoalDeadlineCheckpoint: async (evidence: import("../../../agent-pool/contracts.js").GoalDeadlineCheckpointEvidence) => {
+            terminalOutputHandledInPromptLane = true;
+            clearCommittedDraft();
+            const lease = goalDeadlineLease;
+            if (!lease) return false;
+            try {
+            if (lease.checkpointId !== evidence.checkpointId) return false;
+            const operation = getChatOperation(chatJid);
+            if (!operation || operation.operationId !== lease.operationId || operation.sourceSeq !== lease.sourceSeq) return false;
+            const source = getAcceptedChatSource(operation.sourceSeq);
+            if (!source) return false;
+            const initialResolution = goalDeadlineProvider.revalidate(lease);
+            const settledBeforeDeadline = evidence.settlement === "idle"
+              && Date.parse(evidence.settledAt) <= Date.parse(evidence.deadlineAt);
+            if (!settledBeforeDeadline) {
+              goalDeadlineSettlementUnverified = true;
+              if (!operation.cancellation) {
+                blockFailedRun({
+                  prevTs: prevCursor,
+                  failedTs: lastMessage.timestamp,
+                  messageId: lastMessage.id,
+                  threadRootId: resolvedThreadRootId ?? null,
+                  createdAt: new Date().toISOString(),
+                });
+              }
+              trackedEmitter.status({
+                thread_id: threadId,
+                agent_id: agentId,
+                type: "error",
+                title: "Goal deadline checkpoint stopped",
+                detail: evidence.abortError || "The old turn did not settle safely; no continuation was scheduled.",
+                turn_id: turnId,
+              });
+              return false;
+            }
+            const intents = getChatOperationIntentSources(operation.operationId);
+            const intentMessages = intents.map((intent) => {
+              if (intent.sourceKind !== "steer" || !intent.payloadRef.startsWith("message:")) return null;
+              const messageId = intent.payloadRef.slice("message:".length);
+              return getDb().prepare(`SELECT content, is_steering_message FROM messages WHERE chat_jid = ? AND id = ?`)
+                .get(chatJid, messageId) as { content: string; is_steering_message: number } | undefined ?? null;
+            });
+            const cancellation = operation.cancellation;
+            const allIntentPayloadsValid = intentMessages.every(Boolean);
+            let appliedCount = intents.length - evidence.pendingSteering.length;
+            const pendingMatchesSuffix = allIntentPayloadsValid && appliedCount >= 0
+              && evidence.pendingFollowUps.length === 0
+              && evidence.pendingSteering.every((text, index) => {
+                const row = intentMessages[appliedCount + index];
+                return row?.is_steering_message === 1 && row.content === text;
+              });
+            const steerAccountingValid = settledBeforeDeadline && pendingMatchesSuffix
+              && !intentMessages.slice(0, Math.max(0, appliedCount)).some((row) => row?.is_steering_message !== 1);
+            if (!steerAccountingValid) appliedCount = -1;
+            const canContinue = !cancellation && initialResolution.action === "continue" && appliedCount >= 0;
+            const createdAt = new Date().toISOString();
+            const marker = buildTurnOutcomeMarker({
+              kind: "recovery",
+              label: canContinue ? "checkpoint" : "checkpoint failed",
+              title: canContinue ? "Goal progress checkpointed" : "Goal deadline checkpoint stopped",
+              detail: canContinue
+                ? "The superseded turn settled before its deadline and one ordinary tool-enabled continuation was scheduled."
+                : evidence.abortError || "The old turn or its accepted steering could not be settled safely; no continuation worker was created.",
+              severity: canContinue ? "info" : "error",
+            });
+            const visibleText = initialResolution.action === "complete" || initialResolution.action === "stop"
+              ? initialResolution.visibleText
+              : canContinue
+                ? initialResolution.visibleText
+                : "Goal deadline checkpoint could not safely schedule a continuation.";
+            const artifactId = createUuid("message");
+            const currentLineage = source.sourceKind === "goal_continuation" ? getGoalContinuationLineage(source) : null;
+            const rootSourceSeq = currentLineage?.rootSourceSeq
+              ?? (source.sourceKind === "protected_continuation" ? getProtectedContinuationRootSource(source)?.sourceSeq : null)
+              ?? source.sourceSeq;
+            const parentGeneration = currentLineage?.generation ?? 0;
+            const carriedIntentSourceSeqs = canContinue ? intents.slice(appliedCount).map((intent) => intent.sourceSeq) : [];
+            const provenance = "web_process_chat_goal_deadline_checkpoint";
+            const resolutionSignature = JSON.stringify(initialResolution);
+              const completed = completeChatOperation(chatJid, {
+                owner: durableOperationOwner(operation),
+                outcome: cancellation
+                  ? "cancelled"
+                  : canContinue
+                    ? "interrupted"
+                    : initialResolution.action === "complete" || initialResolution.action === "stop"
+                      ? "succeeded"
+                      : initialResolution.action === "suppress" ? "skipped" : "failed",
+                cause: cancellation
+                  ? cancellation.cause
+                  : canContinue
+                    ? "goal_deadline_checkpoint"
+                    : initialResolution.action === "complete" || initialResolution.action === "stop"
+                      ? `goal_deadline_goal_${initialResolution.action}`
+                      : "goal_deadline_checkpoint_not_continued",
+                provenance,
+                createdAt,
+                ...(initialResolution.action === "suppress" || cancellation ? {} : { artifact: { message: {
+                  id: artifactId,
+                  chat_jid: chatJid,
+                  sender: "web-agent",
+                  sender_name: getIdentityConfig().assistantName,
+                  content: visibleText,
+                  timestamp: createdAt,
+                  is_from_me: false,
+                  is_bot_message: true,
+                  is_terminal_agent_reply: true,
+                  content_blocks: [marker, {
+                    type: "goal_deadline_checkpoint",
+                    checkpointId: evidence.checkpointId,
+                    oldTurnId: evidence.oldTurnId,
+                    deadlineAt: evidence.deadlineAt,
+                    triggeredAt: evidence.triggeredAt,
+                    settledAt: evidence.settledAt,
+                    settlement: evidence.settlement,
+                    sourceSeq: operation.sourceSeq,
+                    operationId: operation.operationId,
+                    operationGeneration: operation.generation,
+                    goalId: lease.goalId,
+                  }],
+                } } }),
+                ...(canContinue ? { successor: {
+                  sourceKind: "goal_continuation" as const,
+                  rootSourceSeq,
+                  parentSourceSeq: source.sourceSeq,
+                  parentGeneration,
+                  generation: parentGeneration + 1,
+                  goalId: lease.goalId,
+                  checkpointId: evidence.checkpointId,
+                  oldTurnId: evidence.oldTurnId,
+                  carriedIntentSourceSeqs,
+                } } : {}),
+                intentDispositions: intents.map((intent, index) => {
+                  const wasApplied = appliedCount >= 0 && index < appliedCount;
+                  return {
+                    sourceSeq: intent.sourceSeq,
+                    outcome: wasApplied
+                      ? "succeeded" as const
+                      : canContinue
+                        ? "interrupted" as const
+                        : cancellation
+                          ? "cancelled" as const
+                          : initialResolution.action === "complete" || initialResolution.action === "stop" || initialResolution.action === "suppress"
+                            ? "skipped" as const
+                            : "failed" as const,
+                    cause: wasApplied
+                      ? "steer_applied"
+                      : canContinue
+                        ? "goal_deadline_steer_carried"
+                        : cancellation
+                          ? cancellation.cause
+                          : initialResolution.action === "complete" || initialResolution.action === "stop"
+                            ? `goal_deadline_goal_${initialResolution.action}`
+                            : "goal_deadline_checkpoint_not_continued",
+                    provenance,
+                  };
+                }),
+              }, {
+                beforeWrite: () => {
+                  if (JSON.stringify(goalDeadlineProvider.revalidate(lease)) !== resolutionSignature) {
+                    throw new Error("Goal deadline checkpoint state changed before commit");
+                  }
+                },
+                afterWrite: (boundary) => {
+                  if (boundary === "release" && canContinue) {
+                    goalDeadlineProvider.markScheduled(lease, { generation: parentGeneration + 1 });
+                  }
+                },
+              });
+              terminalOutputPersistedInPromptLane = completed.status === "completed" || completed.status === "repeated";
+              durableOperationCompleted = terminalOutputPersistedInPromptLane;
+              if (!terminalOutputPersistedInPromptLane) {
+                const latest = getChatOperation(chatJid);
+                if (latest?.operationId === lease.operationId && !latest.cancellation) {
+                  blockFailedRun({
+                    prevTs: prevCursor,
+                    failedTs: lastMessage.timestamp,
+                    messageId: lastMessage.id,
+                    threadRootId: resolvedThreadRootId ?? null,
+                    createdAt: new Date().toISOString(),
+                  });
+                }
+              }
+              if (terminalOutputPersistedInPromptLane && initialResolution.action !== "suppress") {
+                const rowId = getMessageRowIdById(chatJid, artifactId);
+                const interaction = rowId ? getMessageByRowId(chatJid, rowId) : null;
+                if (interaction) channel.broadcastEvent("new_post", interaction);
+              }
+              return terminalOutputPersistedInPromptLane;
+            } catch (error) {
+              log.error("Goal deadline checkpoint commit failed", {
+                operation: "process_chat.goal_deadline_checkpoint_failed",
+                chatJid,
+                checkpointId: evidence.checkpointId,
+                err: error,
+              });
+              const latest = getChatOperation(chatJid);
+              if (latest?.operationId === lease.operationId && !latest.cancellation) {
+                blockFailedRun({
+                  prevTs: prevCursor,
+                  failedTs: lastMessage.timestamp,
+                  messageId: lastMessage.id,
+                  threadRootId: resolvedThreadRootId ?? null,
+                  createdAt: new Date().toISOString(),
+                });
+              }
+              return false;
+            } finally {
+              goalDeadlineProvider.release(lease);
+            }
+          },
+        }
+      : {}),
     onProtectedRecoveryHandoff: (handoffOutput) => {
       terminalOutputHandledInPromptLane = true;
       streamState.lastRecoveryMeta = handoffOutput.recovery || null;
@@ -2382,6 +2724,13 @@ export async function processChat(
   });
 
   streamState.lastRecoveryMeta = output.recovery || null;
+
+  if (goalDeadlineSettlementUnverified) {
+    // Keep the exact owner occupied when cancellation raced a failed Goal abort:
+    // terminal cancellation is not safe until prompt and tool settlement is proven.
+    endTrackedPhase(chatJid);
+    return;
+  }
 
   if (durableOperation) {
     const currentOperation = getChatOperation(chatJid);
