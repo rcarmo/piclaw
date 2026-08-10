@@ -80,7 +80,12 @@ function createHarness(options: {
     async cancelOperationAndAbort(chatJid: string, expectedOperationId: string) {
       abortCalls.push({ chatJid, expectedOperationId });
       const operation = getChatOperation(chatJid);
-      return { status: "cancelled", operation, physicallyAborted: false };
+      return {
+        status: "cancelled",
+        ...(operation?.cancellation ? { reason: "already_cancelled" } : {}),
+        operation,
+        physicallyAborted: false,
+      };
     },
     resolveModelInput() {
       options.onResolveModel?.();
@@ -149,6 +154,33 @@ test("assess_stuck exposes the same operation token used by guarded controls", a
   expect(result.assessment).toBe("streaming");
   expect(result.operation_id).toBe(operation.operationId);
   expect(result.before?.operation).toMatchObject({ operation_id: operation.operationId });
+});
+
+test("repeated abort of an already-cancelled active owner does not enqueue another resume", async () => {
+  const agentName = `cancelled-${serial + 1}`;
+  const { chatJid, operation } = createOperation(agentName);
+  const cancelled = cancelChatOperation(chatJid, owner(operation), {
+    cause: "remote_abort",
+    requestedAt: "2026-08-10T08:43:00.000Z",
+  });
+  if (cancelled.status !== "applied") throw new Error("expected cancellation");
+  const harness = createHarness({ chatJid, agentName, active: true });
+
+  const result = await harness.handler({
+    action: "abort",
+    source_chat_jid: "web:source",
+    target_chat_jid: chatJid,
+    expected_operation_id: operation.operationId,
+  });
+
+  expect(result).toMatchObject({
+    ok: true,
+    message: "Operation cancellation was already persisted.",
+    cancellation_status: "cancelled",
+    physically_aborted: false,
+  });
+  expect(harness.abortCalls).toEqual([{ chatJid, expectedOperationId: operation.operationId }]);
+  expect(harness.resumes).toEqual([]);
 });
 
 test("abort is an explicit no-op when the inspected operation is absent or stale", async () => {
