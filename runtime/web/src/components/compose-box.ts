@@ -274,6 +274,10 @@ export function resolveComposeAbortAuthority(activeOperationId, operationAuthori
     return { mode: 'unavailable', operationId: null };
 }
 
+export function isSteadyMcpEnabledStatusText(value) {
+    return /^(?:🔌\s*)?MCP:\s*\d+\s+servers?\s+enabled\s*(?:\(\d+\s+connected\)\s*)?(?:\(\d+\s+disabled\)\s*)?\.?$/i.test(String(value || '').trim());
+}
+
 export function resolveComposeExtensionWorkingDisplay(workingState, frameIndex = 0) {
     // Extension can hide the entire working loader row via setWorkingVisible(false)
     if (workingState?.visible === false) {
@@ -325,12 +329,15 @@ export function resolveComposeExtensionWorkingDisplay(workingState, frameIndex =
         };
     }
 
+    const passiveSteadyStatus = isSteadyMcpEnabledStatusText(message)
+        && (!indicator || indicator.mode === 'default');
+
     return {
         visible: true,
         title: message || 'Thinking…',
         indicatorText: null,
         animateDot: false,
-        animateSpinner: true,
+        animateSpinner: !passiveSteadyStatus,
     };
 }
 
