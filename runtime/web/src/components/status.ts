@@ -329,6 +329,44 @@ function renderToolTitle(titleText, payload) {
     `;
 }
 
+const PREVIEW_MAX_CHARS_PER_LINE = 160;
+
+function countPreviewSoftLines(line) {
+    if (!line) return 1;
+    return Math.max(1, Math.ceil(line.length / PREVIEW_MAX_CHARS_PER_LINE));
+}
+
+export function truncateThinkingPanelLines(text, maxLines, totalLinesOverride, options = {}) {
+    const value = (text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    if (!value) {
+        const totalLines = Number.isFinite(totalLinesOverride) ? totalLinesOverride : 0;
+        return { text: '', omitted: 0, totalLines, visibleLines: 0 };
+    }
+    const lines = value.split('\n');
+    const fromTail = options.direction === 'tail';
+    const clipped = lines.length > maxLines
+        ? (fromTail ? lines.slice(-maxLines) : lines.slice(0, maxLines)).join('\n')
+        : value;
+    const totalLines = Number.isFinite(totalLinesOverride) ? totalLinesOverride : lines.reduce((acc, line) => acc + countPreviewSoftLines(line), 0);
+    const visibleLines = clipped
+        ? clipped.split('\n').reduce((acc, line) => acc + countPreviewSoftLines(line), 0)
+        : 0;
+    const omitted = Math.max(totalLines - visibleLines, 0);
+    return { text: clipped, omitted, totalLines, visibleLines };
+}
+
+export function resolveThinkingPanelDisplayText({ sourceText, panelKey, isExpanded, maxLines, totalLines }) {
+    const isCollapsible = typeof maxLines === 'number';
+    const collapseFromTail = panelKey === 'tool-output' || panelKey === 'thought' || panelKey === 'draft';
+    const truncated = isCollapsible
+        ? truncateThinkingPanelLines(sourceText, maxLines, totalLines, { direction: collapseFromTail ? 'tail' : 'head' })
+        : { text: sourceText || '', omitted: 0, totalLines: Number.isFinite(totalLines) ? totalLines : 0 };
+    const displayText = isCollapsible && !isExpanded
+        ? (panelKey === 'tool-output' ? truncateCollapsedToolOutputLines(truncated.text) : truncated.text)
+        : sourceText;
+    return { displayText, truncated, collapseFromTail };
+}
+
 /** Preact component: agent status bar with draft/thought/plan panels. */
 function formatElapsed(isoString, nowMs = Date.now()) {
     if (!isoString) return null;
@@ -364,34 +402,8 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
         return { text, totalLines, fullText };
     };
 
-    const PREVIEW_MAX_CHARS_PER_LINE = 160;
-
     const stripInternalTags = (value) => String(value || '').replace(/<\/?internal>/gi, '');
     const trimToolOutputForDisplay = (value) => String(value || '').replace(/[\s\u00a0]+$/u, '');
-
-    const countSoftLines = (line) => {
-        if (!line) return 1;
-        return Math.max(1, Math.ceil(line.length / PREVIEW_MAX_CHARS_PER_LINE));
-    };
-
-    const truncateLines = (text, maxLines, totalLinesOverride, options = {}) => {
-        const value = (text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-        if (!value) {
-            const totalLines = Number.isFinite(totalLinesOverride) ? totalLinesOverride : 0;
-            return { text: '', omitted: 0, totalLines, visibleLines: 0 };
-        }
-        const lines = value.split('\n');
-        const fromTail = options.direction === 'tail';
-        const clipped = lines.length > maxLines
-            ? (fromTail ? lines.slice(-maxLines) : lines.slice(0, maxLines)).join('\n')
-            : value;
-        const totalLines = Number.isFinite(totalLinesOverride) ? totalLinesOverride : lines.reduce((acc, line) => acc + countSoftLines(line), 0);
-        const visibleLines = clipped
-            ? clipped.split('\n').reduce((acc, line) => acc + countSoftLines(line), 0)
-            : 0;
-        const omitted = Math.max(totalLines - visibleLines, 0);
-        return { text: clipped, omitted, totalLines, visibleLines };
-    };
 
     const planInfo = normalizePreview(plan);
     const thoughtInfo = normalizePreview(thought);
@@ -614,13 +626,13 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
                 ? trimToolOutputForDisplay(rawSourceText)
                 : rawSourceText;
         const isCollapsible = typeof maxLines === 'number';
-        const collapseFromTail = panelKey === 'tool-output';
-        const truncated = isCollapsible
-            ? truncateLines(sourceText, maxLines, totalLines, { direction: collapseFromTail ? 'tail' : 'head' })
-            : { text: sourceText || '', omitted: 0, totalLines: Number.isFinite(totalLines) ? totalLines : 0 };
-        const displayText = collapseFromTail && !isExpanded
-            ? truncateCollapsedToolOutputLines(truncated.text)
-            : sourceText;
+        const { displayText, truncated } = resolveThinkingPanelDisplayText({
+            sourceText,
+            panelKey,
+            isExpanded,
+            maxLines,
+            totalLines,
+        });
         if (!sourceText && !(Number.isFinite(truncated.totalLines) && truncated.totalLines > 0)) return null;
         const bodyClass = `agent-thinking-body${isCollapsible ? ' agent-thinking-body-collapsible' : ''}`;
         const bodyStyle = isCollapsible ? `--agent-thinking-collapsed-lines: ${maxLines};` : '';
