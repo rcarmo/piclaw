@@ -70,7 +70,7 @@ test("computeNextRun can anchor cron schedules to a prior next_run", async () =>
   expect(cronNext).toBe("2024-01-01T00:05:00.000Z");
 });
 
-test("runScheduledTask logs run and updates task", async () => {
+test("runScheduledTask relies on runAgent persistence and records one agent response and run log", async () => {
   const ws = getTestWorkspace();
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
 
@@ -94,10 +94,27 @@ test("runScheduledTask logs run and updates task", async () => {
 
   const sent: string[] = [];
   const nudges: string[] = [];
+  let messageSerial = 0;
+  const persistAgentResponse = (source: string, text: string) => {
+    messageSerial += 1;
+    db.storeMessage({
+      id: `scheduled-agent-${source}-${messageSerial}`,
+      chat_jid: "web:default",
+      sender: "agent",
+      sender_name: "Agent",
+      content: text,
+      timestamp: new Date().toISOString(),
+      is_from_me: false,
+      is_bot_message: true,
+    });
+  };
   const deps = {
     queue: { enqueueTask: (_id: string, fn: () => Promise<void>) => fn() } as any,
     agentPool: {
-      runAgent: async () => ({ status: "success", result: "Hello" }),
+      runAgent: async () => {
+        persistAgentResponse("run-agent", "Hello");
+        return { status: "success", result: "Hello" };
+      },
       saveSessionPosition: async () => "leaf-123",
       restoreSessionPosition: async () => {},
       getCurrentModelLabel: async () => null,
@@ -105,6 +122,7 @@ test("runScheduledTask logs run and updates task", async () => {
     } as any,
     sendMessage: async (_jid: string, text: string) => {
       sent.push(text);
+      persistAgentResponse("scheduler-send", text);
     },
     sendNudge: async (text: string) => {
       nudges.push(text);
@@ -117,8 +135,13 @@ test("runScheduledTask logs run and updates task", async () => {
   const updated = db.getTaskById(taskId)!;
   expect(updated.last_run).not.toBeNull();
   expect(updated.last_result).toContain("Hello");
-  expect(sent.length).toBe(1);
+  expect(sent).toEqual([]);
   expect(nudges).toEqual(["Hello"]);
+
+  const visibleResponses = db.getDb().prepare(
+    "SELECT content FROM messages WHERE chat_jid = ? AND is_bot_message = 1 AND content = ?",
+  ).all("web:default", "Hello") as Array<{ content: string }>;
+  expect(visibleResponses).toEqual([{ content: "Hello" }]);
 
   const logs = db.getTaskRunLogs(taskId);
   expect(logs.length).toBe(1);
@@ -130,7 +153,7 @@ test("runScheduledTask logs run and updates task", async () => {
   expect(metrics.taskRunsFailed).toBe(0);
 });
 
-test("runScheduledTask can post task output without sending Pushover nudges", async () => {
+test("runScheduledTask can keep runAgent-persisted output muted from Pushover nudges", async () => {
   const ws = getTestWorkspace();
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
 
@@ -175,7 +198,7 @@ test("runScheduledTask can post task output without sending Pushover nudges", as
   const task = db.getTaskById(taskId)!;
   await scheduler.runScheduledTask(task, deps as any);
 
-  expect(sent).toEqual(["Hello"]);
+  expect(sent).toEqual([]);
   expect(nudges).toEqual([]);
 
   const updated = db.getTaskById(taskId)!;
@@ -233,7 +256,7 @@ test("runScheduledTask records recovery summaries in task logs without polluting
   const task = db.getTaskById(taskId)!;
   await scheduler.runScheduledTask(task, deps as any);
 
-  expect(sent).toEqual(["Hello"]);
+  expect(sent).toEqual([]);
 
   const updated = db.getTaskById(taskId)!;
   expect(updated.last_result).toContain("Hello");
