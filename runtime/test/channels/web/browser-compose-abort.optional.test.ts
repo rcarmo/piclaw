@@ -172,6 +172,11 @@ optionalBrowserTest("mobile Compose Abort refreshes missing authority and stops 
   instance.web.agentPool = bootstrapPool;
 
   context = await browser!.newContext({ ...devices["iPhone 14 Pro"] });
+  await context.addInitScript(() => {
+    (window as any).__PICLAW_SILENCE_WARNING_MS = 50;
+    (window as any).__PICLAW_SILENCE_REFRESH_MS = 50;
+    (window as any).__PICLAW_SILENCE_FINALIZE_MS = 120_000;
+  });
   const page = await context.newPage();
   await openMobileChat(page, chatOnlyUrl(instance.baseUrl));
 
@@ -197,16 +202,10 @@ optionalBrowserTest("mobile Compose Abort refreshes missing authority and stops 
   expect(authoritativeStatus.data?.operation_id).toBe(operation.operationId);
   expect(authoritativeStatus.data?.operation_authority).toBe("durable");
 
-  // Reproduce the mobile race without corrupting server truth: a transient
-  // client-visible status keeps Abort mode active but omits operation authority.
-  instance.web.broadcastEvent("agent_status", {
-    chat_jid: CHAT_JID,
-    agent_id: "root",
-    turn_id: "mobile-abort-race",
-    type: "thinking",
-    title: "Waiting without local operation authority",
-  });
-  await page.waitForFunction(() => document.body.innerText.includes("Waiting without local operation authority"));
+  // Drive the real silence watchdog into the deployed failure state. Its
+  // client-only waiting status keeps Abort mode active but omits authority,
+  // while the server status above remains exact and durable.
+  await page.waitForFunction(() => document.body.innerText.includes("Waiting for model… No events for"));
 
   observedRequests.length = 0;
   await page.locator('[data-testid="stop-button"]').click();
