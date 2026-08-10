@@ -2385,7 +2385,7 @@ export function ComposeBox({
         setSubmitError(null);
         setSubmitNotice(null);
         try {
-            const response = await abortAgentOperation(currentAgentId, currentChatJid, authority.operationId);
+            const response = await abortAgentOperation(currentChatJid, authority.operationId);
             onMessageResponse?.(response);
             setSubmitNotice(resolveUiOnlyCommandNotice('/abort', response));
             onPost?.(response);

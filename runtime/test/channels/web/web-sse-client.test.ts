@@ -227,7 +227,7 @@ test("SSE remount and chat switch keep Abort bound to the latest visible operati
       operation_authority: "durable",
     });
 
-    await abortAgentOperation("default", "web:branch-b", visibleStatus.operation_id);
+    await abortAgentOperation("web:branch-b", visibleStatus.operation_id);
     expect(seenUrl).toBe("/agent/default/message?chat_jid=web%3Abranch-b");
     expect(seenBody.expected_operation_id).toBe("operation-b");
     mountB.disconnect();
@@ -282,7 +282,7 @@ test("abortAgentOperation submits the exact operation owner for the active chat"
   }) as typeof fetch;
 
   try {
-    await abortAgentOperation("default", "web:branch-a", "operation-123");
+    await abortAgentOperation("web:branch-a", "operation-123");
     expect(seenUrl).toBe("/agent/default/message?chat_jid=web%3Abranch-a");
     expect(seenBody).toMatchObject({
       content: "/abort",
@@ -304,7 +304,7 @@ test("abortAgentOperation surfaces stale-owner rejection text to the compose cal
   })) as typeof fetch;
 
   try {
-    await expect(abortAgentOperation("default", "web:branch-a", "operation-stale"))
+    await expect(abortAgentOperation("web:branch-a", "operation-stale"))
       .rejects.toThrow("The active operation changed before cancellation; no action was taken.");
   } finally {
     globalThis.fetch = originalFetch;
