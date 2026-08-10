@@ -65,11 +65,13 @@ export class SessionMutationRejectedError extends Error {
 interface SessionMutationContext {
   chatJid: string;
   access: SessionMutationAccess;
+  laneId: symbol;
 }
 
 interface ActiveSessionMutation {
   access: SessionMutationAccess;
   mutation: Exclude<SessionMutationClass, "abort">;
+  laneId: symbol;
 }
 
 export interface SessionMutationGatewayOptions {
@@ -111,8 +113,7 @@ export class SessionMutationGateway {
   }
 
   currentAccess(chatJid: string): SessionMutationAccess | null {
-    const current = this.context.getStore();
-    return current?.chatJid === chatJid ? current.access : null;
+    return this.getLiveInheritedContext(chatJid)?.access ?? null;
   }
 
   hasPendingQueue(chatJid: string): boolean {
@@ -125,8 +126,8 @@ export class SessionMutationGateway {
     access: SessionMutationAccess,
     action: () => Promise<T> | T,
   ): Promise<T> {
-    const inherited = this.context.getStore();
-    if (inherited?.chatJid === chatJid) {
+    const inherited = this.getLiveInheritedContext(chatJid);
+    if (inherited) {
       if (access.scope !== inherited.access.scope
         || (access.scope === "operation"
           && inherited.access.scope === "operation"
@@ -135,7 +136,7 @@ export class SessionMutationGateway {
       }
       this.assertAccess(chatJid, mutation, access);
       const previous = this.activeMutationByChat.get(chatJid);
-      const active: ActiveSessionMutation = { access, mutation };
+      const active: ActiveSessionMutation = { access, mutation, laneId: inherited.laneId };
       this.activeMutationByChat.set(chatJid, active);
       try {
         return await action();
@@ -160,11 +161,12 @@ export class SessionMutationGateway {
     try {
       // Ownership can change while this mutation waits behind the prior one.
       this.assertAccess(chatJid, mutation, access);
-      const active: ActiveSessionMutation = { access, mutation };
+      const laneId = Symbol(chatJid);
+      const active: ActiveSessionMutation = { access, mutation, laneId };
       this.activeMutationByChat.set(chatJid, active);
       if (mutation === "prompt") this.queueAdmissionOpen.add(chatJid);
       try {
-        return await this.context.run({ chatJid, access }, action);
+        return await this.context.run({ chatJid, access, laneId }, action);
       } finally {
         if (mutation === "prompt") {
           this.queueAdmissionOpen.delete(chatJid);
@@ -197,7 +199,8 @@ export class SessionMutationGateway {
   ): Promise<T> {
     this.assertAccess(chatJid, "abort", access);
     this.assertActiveOccupant(chatJid, "abort", access);
-    return await this.context.run({ chatJid, access }, action);
+    const active = this.activeMutationByChat.get(chatJid)!;
+    return await this.context.run({ chatJid, access, laneId: active.laneId }, action);
   }
 
   /**
@@ -224,7 +227,8 @@ export class SessionMutationGateway {
       this.assertQueueAdmission(chatJid, access);
       const registration = beforeQueue();
       if (requiresQueueEffect(registration)) this.assertQueueEffect(chatJid, access);
-      return await this.context.run({ chatJid, access }, () => action(registration));
+      const active = this.activeMutationByChat.get(chatJid)!;
+      return await this.context.run({ chatJid, access, laneId: active.laneId }, () => action(registration));
     } finally {
       release();
       if (this.queueTails.get(chatJid) === tail) {
@@ -270,8 +274,14 @@ export class SessionMutationGateway {
     if (!active || !this.isSameAccess(active.access, access)) {
       return { cancellation, acted: false };
     }
-    const result = await this.context.run({ chatJid, access }, action);
+    const result = await this.context.run({ chatJid, access, laneId: active.laneId }, action);
     return { cancellation, acted: true, result };
+  }
+
+  private getLiveInheritedContext(chatJid: string): SessionMutationContext | null {
+    const inherited = this.context.getStore();
+    if (!inherited || inherited.chatJid !== chatJid) return null;
+    return this.activeMutationByChat.get(chatJid)?.laneId === inherited.laneId ? inherited : null;
   }
 
   private isSameAccess(left: SessionMutationAccess, right: SessionMutationAccess): boolean {
