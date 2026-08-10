@@ -11,6 +11,7 @@ import {
   getModelPickerOptionSearchLabel,
   normalizeModelPickerOptions,
   resolveComposeCacheHitMeta,
+  isSteadyMcpEnabledStatusText,
   resolveComposeExtensionWorkingDisplay,
   resolveComposeModelPickerState,
   resolveComposeRoutedModelStatus,
@@ -527,6 +528,48 @@ test('resolveComposeExtensionWorkingDisplay renders default working state with a
     visible: true,
     title: 'Background sync',
     indicatorText: null,
+    animateDot: false,
+    animateSpinner: false,
+  });
+});
+
+test('resolveComposeExtensionWorkingDisplay keeps steady MCP enabled status passive', () => {
+  expect(isSteadyMcpEnabledStatusText('🔌 MCP: 1 server enabled')).toBe(true);
+  expect(isSteadyMcpEnabledStatusText('🔌 MCP: 2 servers enabled')).toBe(true);
+  expect(isSteadyMcpEnabledStatusText('MCP: 2 servers enabled')).toBe(true);
+  expect(isSteadyMcpEnabledStatusText('🔌 MCP: 2 servers enabled (1 connected)')).toBe(true);
+  expect(isSteadyMcpEnabledStatusText('MCP: 2 servers enabled (1 connected) (1 disabled)')).toBe(true);
+  expect(isSteadyMcpEnabledStatusText('🔌 MCP: connecting…')).toBe(false);
+  expect(isSteadyMcpEnabledStatusText('MCP: connecting…')).toBe(false);
+
+  expect(resolveComposeExtensionWorkingDisplay({
+    message: '🔌 MCP: 2 servers enabled',
+    indicator: null,
+  })).toEqual({
+    visible: true,
+    title: '🔌 MCP: 2 servers enabled',
+    indicatorText: null,
+    animateDot: false,
+    animateSpinner: false,
+  });
+
+  expect(resolveComposeExtensionWorkingDisplay({
+    message: '🔌 MCP: 2 servers enabled',
+    indicator: { mode: 'default', frames: [], intervalMs: null },
+  }).animateSpinner).toBe(false);
+
+  expect(resolveComposeExtensionWorkingDisplay({
+    message: '🔌 MCP: connecting…',
+    indicator: { mode: 'default', frames: [], intervalMs: null },
+  }).animateSpinner).toBe(true);
+
+  expect(resolveComposeExtensionWorkingDisplay({
+    message: '🔌 MCP: 2 servers enabled',
+    indicator: { mode: 'custom', frames: ['⠋', '⠙'], intervalMs: 90 },
+  }, 1)).toEqual({
+    visible: true,
+    title: '🔌 MCP: 2 servers enabled',
+    indicatorText: '⠙',
     animateDot: false,
     animateSpinner: false,
   });
