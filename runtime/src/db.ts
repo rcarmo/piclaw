@@ -195,6 +195,7 @@ export {
   bindChatOperationMessage,
   completeChatOperation,
   getChatOperationDisposition,
+  getSettledChatOperationDisposition,
   chatOperationTerminalArtifactPolicy,
 } from "./db/chat-operations.js";
 export { deleteChatOperationLifecycleState } from "./db/chat-operation-lifecycle.js";

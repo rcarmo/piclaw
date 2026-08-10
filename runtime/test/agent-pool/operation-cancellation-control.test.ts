@@ -95,6 +95,14 @@ test("remote cancellation persists before aborting only the exact gateway occupa
   expect(cancellationSeenByAbort).toMatchObject({ cause: "remote_abort" });
   expect(db.getChatOperation(chatJid)?.cancellation).toEqual(cancellationSeenByAbort);
 
+  const repeated = await pool.cancelOperationAndAbort(chatJid, operation.operationId);
+  expect(repeated).toMatchObject({
+    status: "cancelled",
+    reason: "already_cancelled",
+    physicallyAborted: false,
+  });
+  expect(abortCalls).toBe(1);
+
   await run;
   expect(queuedToolCalls).toBe(0);
   expect(db.getChatOperation(chatJid)?.cancellation).toEqual(cancellationSeenByAbort);
@@ -195,6 +203,37 @@ test("repeated exact-owner cancellation is idempotent after the cancelled operat
     reason: "already_cancelled",
     operation: null,
     physicallyAborted: false,
+  });
+  expect(await pool.cancelOperationAndAbort(chatJid, "operation-unknown", "user_abort")).toMatchObject({
+    status: "no_op",
+    reason: "no_active_operation",
+  });
+
+  db.registerAcceptedChatSource({
+    chatJid,
+    sourceClass: "prompt",
+    sourceKind: "queued_followup",
+    sourceId: "followup-completed",
+    acceptedAt: "2026-08-10T08:44:00.000Z",
+    payloadRef: "followup:followup-completed",
+  });
+  const completedOperation = db.claimNextChatOperation(chatJid).operation;
+  if (!completedOperation) throw new Error("expected completed operation");
+  expect(db.completeChatOperation(chatJid, {
+    owner: {
+      operationId: completedOperation.operationId,
+      sourceSeq: completedOperation.sourceSeq,
+      phase: completedOperation.phase,
+      generation: completedOperation.generation,
+    },
+    outcome: "skipped",
+    cause: "test_skip",
+    provenance: "operation_cancellation_control_test",
+    createdAt: "2026-08-10T08:44:01.000Z",
+  }).status).toBe("completed");
+  expect(await pool.cancelOperationAndAbort(chatJid, completedOperation.operationId, "user_abort")).toMatchObject({
+    status: "no_op",
+    reason: "no_active_operation",
   });
 
   await pool.shutdown();

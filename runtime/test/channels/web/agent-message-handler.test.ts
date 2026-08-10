@@ -287,6 +287,50 @@ describe("web agent message handler", () => {
     });
   });
 
+  test("treats an already-cancelled exact compose abort as an idempotent success", async () => {
+    const chatJid = "web:repeated-local-abort";
+    const operationId = "operation-already-cancelled";
+    const resumes: string[] = [];
+    const channel = {
+      agentPool: {
+        isStreaming: () => false,
+        isActive: () => false,
+        cancelOperationAndAbort: async () => ({
+          status: "cancelled",
+          reason: "already_cancelled",
+          physicallyAborted: false,
+          operation: null,
+        }),
+      },
+      resumeChat: (nextChatJid: string) => { resumes.push(nextChatJid); },
+      json: (payload: unknown, status = 200) => new Response(JSON.stringify(payload), {
+        status,
+        headers: { "Content-Type": "application/json" },
+      }),
+      enqueueQueuedFollowupItem: () => 0,
+      getQueuedFollowupCount: () => 0,
+      broadcastEvent: () => {},
+      storeMessage: () => null,
+      sendMessage: async () => {},
+    } as any;
+
+    const response = await handleAgentMessage(channel, new Request("https://example.com/agent/default/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "/abort", expected_operation_id: operationId }),
+    }), "/agent/default/message", chatJid, "default");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(resumes).toEqual([]);
+    expect(body.command).toMatchObject({
+      status: "success",
+      message: "Operation cancellation was already persisted.",
+      cancellation_status: "cancelled",
+      physically_aborted: false,
+    });
+  });
+
   test("rejects a stale compose abort without cancelling the replacement operation", async () => {
     const chatJid = "web:stale-local-abort";
     const operation = { operationId: "operation-replacement" };

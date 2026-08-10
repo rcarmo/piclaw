@@ -724,6 +724,16 @@ export function getChatOperationDisposition(sourceSeq: number): ChatOperationDis
     .get(sourceSeq) as DispositionRow | undefined);
 }
 
+export function getSettledChatOperationDisposition(
+  chatJid: string,
+  operationId: string,
+): ChatOperationDisposition | null {
+  if (!chatJid.trim() || !operationId.trim()) return null;
+  return dispositionFromRow(getDb().prepare(`SELECT * FROM chat_operation_dispositions
+    WHERE chat_jid = ? AND operation_id = ? AND source_class = 'prompt'
+    ORDER BY source_seq LIMIT 1`).get(chatJid, operationId) as DispositionRow | undefined);
+}
+
 export function peekNextAcceptedChatSource(chatJid: string): AcceptedChatSource | null {
   const row = getDb().prepare(`
     SELECT s.* FROM chat_accepted_sources s
