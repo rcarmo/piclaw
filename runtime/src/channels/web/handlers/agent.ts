@@ -1003,7 +1003,7 @@ export async function handleAgentMessage(
         requestedOperationId,
         "user_abort",
       );
-      if (result.status === "cancelled") channel.resumeChat(chatJid);
+      if (result.status === "cancelled" && result.reason !== "already_cancelled") channel.resumeChat(chatJid);
       if (expectedOperationId && result.status !== "cancelled") {
         return channel.json({
           error: result.reason === "no_active_operation"
@@ -1021,7 +1021,9 @@ export async function handleAgentMessage(
           command: {
             status: result.status === "cancelled" ? "success" : "error",
             message: result.status === "cancelled"
-              ? "Operation cancellation persisted."
+              ? result.reason === "already_cancelled"
+                ? "Operation cancellation was already persisted."
+                : "Operation cancellation persisted."
               : "The active operation changed before cancellation; no action was taken.",
             cancellation_status: result.status,
             physically_aborted: result.physicallyAborted,

@@ -75,6 +75,7 @@ import {
   cancelChatOperation,
   deleteSshConfig,
   getChatOperation,
+  getSettledChatOperationDisposition,
   getSshConfig,
   listRecentChatJids,
   pruneOldTokenUsage,
@@ -545,6 +546,16 @@ export class AgentPool {
   ): Promise<OperationCancellationControlResult> {
     const operation = getChatOperation(chatJid);
     if (!operation) {
+      const settled = getSettledChatOperationDisposition(chatJid, expectedOperationId);
+      if (settled?.outcome === "cancelled") {
+        log.info("Operation abort was already durably settled as cancelled", {
+          operation: "operation_abort.idempotent",
+          chatJid,
+          expectedOperationId,
+          reason: "already_cancelled",
+        });
+        return { status: "cancelled", reason: "already_cancelled", operation: null, physicallyAborted: false };
+      }
       log.warn("Operation abort rejected because no active operation exists", {
         operation: "operation_abort.rejected",
         chatJid,
@@ -565,12 +576,12 @@ export class AgentPool {
     }
     if (operation.cancellation) {
       log.info("Operation abort was already durably accepted", {
-        operation: "operation_abort.rejected",
+        operation: "operation_abort.idempotent",
         chatJid,
         expectedOperationId,
         reason: "already_cancelled",
       });
-      return { status: "no_op", reason: "already_cancelled", operation, physicallyAborted: false };
+      return { status: "cancelled", reason: "already_cancelled", operation, physicallyAborted: false };
     }
 
     const owner = {

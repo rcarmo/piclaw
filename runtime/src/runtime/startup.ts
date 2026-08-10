@@ -500,10 +500,12 @@ export function createSessionControlHandler(agentPool: AgentPool, web: WebChanne
           message: "The target operation changed before cancellation; no action was taken.",
         };
       }
-      web.resumeChat(target.chatJid);
-      message = result.physicallyAborted
-        ? "Operation cancellation persisted and the matching active session was aborted."
-        : "Operation cancellation persisted; no matching active session required a physical abort.";
+      if (result.reason !== "already_cancelled") web.resumeChat(target.chatJid);
+      message = result.reason === "already_cancelled"
+        ? "Operation cancellation was already persisted."
+        : result.physicallyAborted
+          ? "Operation cancellation persisted and the matching active session was aborted."
+          : "Operation cancellation persisted; no matching active session required a physical abort.";
       extra = {
         control_status: result.abortResult?.status ?? "not_active",
         cancellation_status: result.status,

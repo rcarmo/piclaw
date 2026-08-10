@@ -95,6 +95,14 @@ test("remote cancellation persists before aborting only the exact gateway occupa
   expect(cancellationSeenByAbort).toMatchObject({ cause: "remote_abort" });
   expect(db.getChatOperation(chatJid)?.cancellation).toEqual(cancellationSeenByAbort);
 
+  const repeated = await pool.cancelOperationAndAbort(chatJid, operation.operationId);
+  expect(repeated).toMatchObject({
+    status: "cancelled",
+    reason: "already_cancelled",
+    physicallyAborted: false,
+  });
+  expect(abortCalls).toBe(1);
+
   await run;
   expect(queuedToolCalls).toBe(0);
   expect(db.getChatOperation(chatJid)?.cancellation).toEqual(cancellationSeenByAbort);
@@ -137,6 +145,96 @@ test("remote cancellation persists when the exact operation has no gateway occup
   expect(result).toMatchObject({ status: "cancelled", physicallyAborted: false });
   expect(abortCalls).toBe(0);
   expect(db.getChatOperation(chatJid)?.cancellation).toMatchObject({ cause: "remote_abort" });
+
+  await pool.shutdown();
+  ws.cleanup();
+});
+
+test("repeated exact-owner cancellation is idempotent after the cancelled operation settles", async () => {
+  const ws = createTempWorkspace("piclaw-operation-cancel-repeat-");
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await importFresh<typeof import("../../src/db.js")>("../src/db.js");
+  db.initDatabase();
+  const chatJid = "web:operation-cancel-repeat";
+  db.registerAcceptedChatSource({
+    chatJid,
+    sourceClass: "prompt",
+    sourceKind: "queued_followup",
+    sourceId: "followup-repeat",
+    acceptedAt: "2026-08-10T08:43:00.000Z",
+    payloadRef: "followup:followup-repeat",
+  });
+  const operation = db.claimNextChatOperation(chatJid).operation;
+  if (!operation) throw new Error("expected operation");
+
+  class IdleSession {
+    subscribe() { return () => {}; }
+    async prompt() {}
+    async abort() {}
+    dispose() {}
+  }
+  const { AgentPool } = await importFresh<typeof import("../../src/agent-pool.js")>("../src/agent-pool.js");
+  const pool = new AgentPool({
+    ...createAgentPoolModelOptions(),
+    createSession: async () => createRuntime(new IdleSession()) as any,
+  });
+
+  const accepted = await pool.cancelOperationAndAbort(chatJid, operation.operationId, "user_abort");
+  expect(accepted).toMatchObject({ status: "cancelled", physicallyAborted: false });
+  if (accepted.status !== "cancelled" || !accepted.operation) throw new Error("expected cancellation");
+  expect(db.completeChatOperation(chatJid, {
+    owner: {
+      operationId: accepted.operation.operationId,
+      sourceSeq: accepted.operation.sourceSeq,
+      phase: accepted.operation.phase,
+      generation: accepted.operation.generation,
+    },
+    outcome: "cancelled",
+    cause: "user_abort",
+    provenance: "operation_cancellation_control_test",
+    createdAt: "2026-08-10T08:43:01.000Z",
+  }).status).toBe("completed");
+  expect(db.getChatOperation(chatJid)).toBeNull();
+
+  const repeated = await pool.cancelOperationAndAbort(chatJid, operation.operationId, "user_abort");
+  expect(repeated).toMatchObject({
+    status: "cancelled",
+    reason: "already_cancelled",
+    operation: null,
+    physicallyAborted: false,
+  });
+  expect(await pool.cancelOperationAndAbort(chatJid, "operation-unknown", "user_abort")).toMatchObject({
+    status: "no_op",
+    reason: "no_active_operation",
+  });
+
+  db.registerAcceptedChatSource({
+    chatJid,
+    sourceClass: "prompt",
+    sourceKind: "queued_followup",
+    sourceId: "followup-completed",
+    acceptedAt: "2026-08-10T08:44:00.000Z",
+    payloadRef: "followup:followup-completed",
+  });
+  const completedOperation = db.claimNextChatOperation(chatJid).operation;
+  if (!completedOperation) throw new Error("expected completed operation");
+  expect(db.completeChatOperation(chatJid, {
+    owner: {
+      operationId: completedOperation.operationId,
+      sourceSeq: completedOperation.sourceSeq,
+      phase: completedOperation.phase,
+      generation: completedOperation.generation,
+    },
+    outcome: "skipped",
+    cause: "test_skip",
+    provenance: "operation_cancellation_control_test",
+    createdAt: "2026-08-10T08:44:01.000Z",
+  }).status).toBe("completed");
+  expect(await pool.cancelOperationAndAbort(chatJid, completedOperation.operationId, "user_abort")).toMatchObject({
+    status: "no_op",
+    reason: "no_active_operation",
+  });
 
   await pool.shutdown();
   ws.cleanup();
