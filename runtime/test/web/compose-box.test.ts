@@ -608,6 +608,12 @@ test('resolveComposeAbortButtonState stays coherent across idle, stop, and compa
   });
 });
 
+test('compose exact-operation Abort uses the stable default route without an undefined agent identifier', () => {
+  const source = readFileSync(join(import.meta.dir, '../../web/src/components/compose-box.ts'), 'utf8');
+  expect(source).toContain('abortAgentOperation(currentChatJid, authority.operationId)');
+  expect(source).not.toContain('currentAgentId');
+});
+
 test('resolveComposeAbortAuthority never treats a transient missing operation id as legacy ownership', () => {
   expect(resolveComposeAbortAuthority('operation-123', 'durable')).toEqual({
     mode: 'exact',

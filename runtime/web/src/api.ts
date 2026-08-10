@@ -289,12 +289,11 @@ export async function sendAgentMessage(agentId, content, threadId = null, mediaI
     });
 }
 
-export async function abortAgentOperation(agentId, chatJid, expectedOperationId) {
-    const normalizedAgentId = typeof agentId === 'string' && agentId.trim() ? agentId.trim() : 'default';
+export async function abortAgentOperation(chatJid, expectedOperationId) {
     const normalizedChatJid = typeof chatJid === 'string' && chatJid.trim() ? chatJid.trim() : 'web:default';
     const operationId = typeof expectedOperationId === 'string' ? expectedOperationId.trim() : '';
     if (!operationId) throw new Error('Missing active operation identity.');
-    return request(`/agent/${encodeURIComponent(normalizedAgentId)}/message?chat_jid=${encodeURIComponent(normalizedChatJid)}`, {
+    return request(`/agent/default/message?chat_jid=${encodeURIComponent(normalizedChatJid)}`, {
         method: 'POST',
         body: JSON.stringify({
             content: '/abort',
