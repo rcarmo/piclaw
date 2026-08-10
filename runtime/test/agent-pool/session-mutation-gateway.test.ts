@@ -102,6 +102,99 @@ describe("SessionMutationGateway", () => {
     expect(effects).toEqual(["prompt", "recovery"]);
   });
 
+  test("does not treat a child timer context as nested after its legacy lane exits", async () => {
+    let active: ChatOperationState | null = null;
+    const gateway = new SessionMutationGateway({ getOperation: () => active });
+    const releaseChild = deferred();
+    let resolveChild!: () => void;
+    let rejectChild!: (error: unknown) => void;
+    const child = new Promise<void>((resolve, reject) => {
+      resolveChild = resolve;
+      rejectChild = reject;
+    });
+    let effects = 0;
+
+    await gateway.run("web:test", "control", { scope: "legacy" }, () => {
+      setTimeout(async () => {
+        await releaseChild.promise;
+        try {
+          await gateway.run("web:test", "compaction", { scope: "operation", owner: owner(active!) }, () => {
+            effects += 1;
+          });
+          resolveChild();
+        } catch (error) {
+          rejectChild(error);
+        }
+      }, 0);
+    });
+
+    active = operation();
+    releaseChild.resolve();
+    await child;
+    expect(effects).toBe(1);
+  });
+
+  test("still rejects a genuinely live nested legacy-to-operation mismatch", async () => {
+    let active: ChatOperationState | null = null;
+    const gateway = new SessionMutationGateway({ getOperation: () => active });
+    let effects = 0;
+
+    await gateway.run("web:test", "control", { scope: "legacy" }, async () => {
+      active = operation();
+      await expect(gateway.run(
+        "web:test",
+        "compaction",
+        { scope: "operation", owner: owner(active) },
+        () => { effects += 1; },
+      )).rejects.toMatchObject({ reason: "generation_mismatch" });
+    });
+
+    expect(effects).toBe(0);
+  });
+
+  test("does not attach a stale child context to an unrelated later legacy lane", async () => {
+    const gateway = new SessionMutationGateway({ getOperation: () => null });
+    const releaseChild = deferred();
+    const childQueued = deferred();
+    let resolveChild!: () => void;
+    let rejectChild!: (error: unknown) => void;
+    const child = new Promise<void>((resolve, reject) => {
+      resolveChild = resolve;
+      rejectChild = reject;
+    });
+    const order: string[] = [];
+
+    await gateway.run("web:test", "control", { scope: "legacy" }, () => {
+      setTimeout(async () => {
+        await releaseChild.promise;
+        childQueued.resolve();
+        try {
+          await gateway.run("web:test", "session", { scope: "legacy" }, () => { order.push("child"); });
+          resolveChild();
+        } catch (error) {
+          rejectChild(error);
+        }
+      }, 0);
+    });
+
+    const laterEntered = deferred();
+    const releaseLater = deferred();
+    const later = gateway.run("web:test", "control", { scope: "legacy" }, async () => {
+      order.push("later");
+      laterEntered.resolve();
+      await releaseLater.promise;
+    });
+    await laterEntered.promise;
+
+    releaseChild.resolve();
+    await childQueued.promise;
+    expect(order).toEqual(["later"]);
+    releaseLater.resolve();
+    await later;
+    await child;
+    expect(order).toEqual(["later", "child"]);
+  });
+
   test("keeps legacy-only mutation classes closed to operation owners", async () => {
     const active = operation();
     const gateway = new SessionMutationGateway({ getOperation: () => active });
