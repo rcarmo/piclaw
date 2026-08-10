@@ -9,8 +9,8 @@
  *   1. Saves the current session tree position so the user's conversation
  *      context is not polluted.
  *   2. Optionally switches the LLM model if the task specifies one.
- *   3. Runs the agent with the task's prompt.
- *   4. Sends the response to the task's chat and triggers a nudge notification.
+ *   3. Runs the agent with the task's prompt; the normal agent path persists its response.
+ *   4. Sends shell output when needed and triggers a nudge notification.
  *   5. Restores the original session position and model.
  *   6. Logs the run result and computes the next_run timestamp.
  *
@@ -44,7 +44,7 @@ export interface SchedulerDeps {
   queue: AgentQueue;
   /** The agent pool for running agent turns. */
   agentPool: AgentPool;
-  /** Send a text message to a chat. */
+  /** Send shell-task output to a chat. */
   sendMessage: (jid: string, text: string, options?: {
     forceRoot?: boolean;
     threadId?: number | null;
@@ -257,8 +257,8 @@ async function runShellTask(task: ScheduledTask): Promise<{ result: string | nul
 }
 
 /**
- * Execute a single scheduled task: run the agent or shell command, deliver the response,
- * log the result, and update the task's next_run.
+ * Execute a single scheduled task: run the agent or shell command, deliver shell output,
+ * notify when configured, log the result, and update the task's next_run.
  */
 export async function runScheduledTask(task: ScheduledTask, deps: SchedulerDeps): Promise<void> {
   // Re-check task status (may have been paused/cancelled while queued).
@@ -347,10 +347,8 @@ export async function runScheduledTask(task: ScheduledTask, deps: SchedulerDeps)
             if (out.result) {
               result = out.result;
               const t = formatOutbound(result, detectChannel(task.chat_jid));
-              if (t) {
-                await deps.sendMessage(task.chat_jid, t, { forceRoot: true, source: "scheduled" });
-                if (notifyOnComplete) await deps.sendNudge?.(t);
-              }
+              // runAgent persists the assistant response through the normal chat path.
+              if (t && notifyOnComplete) await deps.sendNudge?.(t);
             }
           }
         }
