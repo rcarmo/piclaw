@@ -8,7 +8,7 @@
 import { expect, test } from "bun:test";
 import "../../helpers.js";
 
-import { abortAgentOperation, SSEClient, streamSidePrompt } from "../../../web/src/api.ts";
+import { abortAgentOperation, getAgentStatus, SSEClient, streamSidePrompt } from "../../../web/src/api.ts";
 
 test("SSEClient scheduleReconnect triggers cooldown", () => {
   const client = new SSEClient(() => {}, () => {});
@@ -265,6 +265,38 @@ test("SSEClient no longer registers stale agent_request listeners", () => {
     expect(seenEvents).toContain("extension_ui_error");
   } finally {
     globalThis.EventSource = OriginalEventSource;
+  }
+});
+
+test("getAgentStatus fresh requests bypass an older in-flight status read", async () => {
+  const originalFetch = globalThis.fetch;
+  let resolveOlder: ((response: Response) => void) | null = null;
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    if (calls === 1) {
+      return await new Promise<Response>((resolve) => {
+        resolveOlder = resolve;
+      });
+    }
+    return new Response(JSON.stringify({ status: "active", data: { operation_id: "operation-fresh" } }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const older = getAgentStatus("web:fresh-status-test");
+    const fresh = await getAgentStatus("web:fresh-status-test", { fresh: true });
+    expect(calls).toBe(2);
+    expect(fresh.data.operation_id).toBe("operation-fresh");
+    resolveOlder!(new Response(JSON.stringify({ status: "idle", data: null }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    await older;
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
 
