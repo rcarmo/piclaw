@@ -22,6 +22,7 @@ import {
   resolveComposeSubmitButtonState,
   resolveComposeAbortButtonState,
   resolveComposeAbortAuthority,
+  resolveComposeAbortAuthorityFromStatus,
   shouldStartSpeechPushToTalk,
   shouldStopSpeechPushToTalk,
   isComposeSubmitAbortMode,
@@ -676,6 +677,22 @@ test('resolveComposeAbortAuthority never treats a transient missing operation id
   });
 });
 
+test('resolveComposeAbortAuthorityFromStatus accepts authority only from an active status snapshot', () => {
+  expect(resolveComposeAbortAuthorityFromStatus({
+    status: 'active',
+    data: { operation_id: 'operation-refreshed', operation_authority: 'durable' },
+  })).toEqual({ mode: 'exact', operationId: 'operation-refreshed' });
+  expect(resolveComposeAbortAuthorityFromStatus({
+    status: 'active',
+    data: { operation_authority: 'legacy' },
+  })).toEqual({ mode: 'legacy', operationId: null });
+  expect(resolveComposeAbortAuthorityFromStatus({
+    status: 'idle',
+    data: { operation_id: 'operation-stale', operation_authority: 'durable' },
+  })).toEqual({ mode: 'unavailable', operationId: null });
+  expect(resolveComposeAbortAuthorityFromStatus(null)).toEqual({ mode: 'unavailable', operationId: null });
+});
+
 test('isComposeSubmitAbortMode keeps compacting on the abort path', () => {
   expect(isComposeSubmitAbortMode('abort')).toBe(true);
   expect(isComposeSubmitAbortMode('compacting')).toBe(true);
@@ -683,7 +700,7 @@ test('isComposeSubmitAbortMode keeps compacting on the abort path', () => {
   expect(isComposeSubmitAbortMode(null)).toBe(false);
 });
 
-test('resolveUiOnlyCommandNotice surfaces only read-only thinking queries and leaves /model output to the timeline', () => {
+test('resolveUiOnlyCommandNotice surfaces read-only thinking queries and Abort results while leaving /model output to the timeline', () => {
   expect(resolveUiOnlyCommandNotice('/thinking', {
     ui_only: true,
     command: { message: 'Current thinking (effort) level: max.' },
@@ -693,6 +710,11 @@ test('resolveUiOnlyCommandNotice surfaces only read-only thinking queries and le
     ui_only: true,
     command: { message: 'Current thinking (effort) level: max.' },
   })).toBe('Current thinking (effort) level: max.');
+
+  expect(resolveUiOnlyCommandNotice('/abort', {
+    ui_only: true,
+    command: { message: 'Operation cancellation persisted.' },
+  })).toBe('Operation cancellation persisted.');
 
   expect(resolveUiOnlyCommandNotice('/model', {
     ui_only: true,

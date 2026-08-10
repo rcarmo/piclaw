@@ -499,9 +499,10 @@ export async function getAgents() {
 /**
  * Get current agent status
  */
-export async function getAgentStatus(chatJid = null) {
+export async function getAgentStatus(chatJid = null, options: ApiOptions = {}) {
     const query = chatJid ? `?chat_jid=${encodeURIComponent(chatJid)}` : '';
-    return deduplicatedGet(`/agent/status${query}`);
+    const url = `/agent/status${query}`;
+    return options?.fresh === true ? request(url) : deduplicatedGet(url);
 }
 
 /**

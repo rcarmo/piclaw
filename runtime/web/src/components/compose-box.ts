@@ -1,7 +1,7 @@
 import { html, useRef, useState, useEffect, useCallback, useMemo } from '../vendor/preact-htm.js';
 import { useTranslation } from '../utils/i18n.js';
 import { findPopupTypeaheadMatch, isPopupTypeaheadKey, resolvePopupTypeaheadMatch, updatePopupTypeaheadBuffer } from '../ui/popup-typeahead.js';
-import { abortAgentOperation, getAgentModels, sendAgentMessage, uploadMedia } from '../api.js';
+import { abortAgentOperation, getAgentModels, getAgentStatus, sendAgentMessage, uploadMedia } from '../api.js';
 import { getLocalStorageItem, setLocalStorageItem } from '../utils/storage.js';
 import { buildMentionValue, filterMentionAgents, parseMentionAutocompleteQuery } from '../ui/agent-mentions.js';
 import { shouldOpenSessionSwitcherFromBlankCompose, shouldRouteComposeValueToSessionSwitcher } from '../ui/compose-session-switcher.js';
@@ -202,7 +202,7 @@ export function resolveUiOnlyCommandNotice(commandText, response) {
     const slashName = parts[0]?.toLowerCase() || '';
     const hasArgs = parts.length > 1;
 
-    if (!hasArgs && (slashName === '/thinking' || slashName === '/effort')) {
+    if (!hasArgs && (slashName === '/thinking' || slashName === '/effort' || slashName === '/abort')) {
         return message;
     }
 
@@ -272,6 +272,13 @@ export function resolveComposeAbortAuthority(activeOperationId, operationAuthori
     if (operationId) return { mode: 'exact', operationId };
     if (operationAuthority === 'legacy') return { mode: 'legacy', operationId: null };
     return { mode: 'unavailable', operationId: null };
+}
+
+export function resolveComposeAbortAuthorityFromStatus(response) {
+    if (response?.status !== 'active' || !response?.data) {
+        return { mode: 'unavailable', operationId: null };
+    }
+    return resolveComposeAbortAuthority(response.data.operation_id, response.data.operation_authority);
 }
 
 export function isSteadyMcpEnabledStatusText(value) {
@@ -2378,7 +2385,18 @@ export function ComposeBox({
     };
 
     const handleAbortActiveOperation = async () => {
-        const authority = resolveComposeAbortAuthority(activeOperationId, activeOperationAuthority);
+        let authority = resolveComposeAbortAuthority(activeOperationId, activeOperationAuthority);
+        if (authority.mode === 'unavailable') {
+            try {
+                const status = await getAgentStatus(currentChatJid, { fresh: true });
+                authority = resolveComposeAbortAuthorityFromStatus(status);
+            } catch (error) {
+                const message = error?.message || 'Failed to refresh the active operation identity; no cancellation was sent.';
+                setSubmitError(message);
+                onSubmitError?.(message);
+                return;
+            }
+        }
         if (authority.mode === 'legacy') {
             await handleSubmit('/abort', 'steer', { clearAfterSubmit: false, includeMedia: false, includeFileRefs: false, includeFolderRefs: false, includeMessageRefs: false, recordHistory: false });
             return;
