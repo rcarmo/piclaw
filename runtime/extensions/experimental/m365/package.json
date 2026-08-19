@@ -2,7 +2,7 @@
   "name": "m365-tools",
   "private": true,
   "dependencies": {
-    "@sinclair/typebox": "0.34.0",
+    "@sinclair/typebox": "0.34.52",
     "ws": "8.18.0"
   },
   "devDependencies": {
