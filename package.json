@@ -182,7 +182,7 @@
     "@uiw/codemirror-theme-github": "4.25.11",
     "assemblyscript": "0.28.20",
     "codemirror": "6.0.2",
-    "dompurify": "3.4.12",
+    "dompurify": "3.4.13",
     "esbuild": "0.28.1",
     "eslint": "10.8.0",
     "globals": "17.8.0",
