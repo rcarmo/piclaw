@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Session Tree</title>
+    <link rel="stylesheet" href="/static/session-tree.css" />
+  </head>
+  <body>
+    <header class="toolbar">
+      <button id="refresh" type="button">Refresh</button>
+      <label class="filter-label" for="filter">Filter session tree</label>
+      <input id="filter" type="search" placeholder="Filter…" autocomplete="off" />
+      <span id="count" class="muted"></span>
+    </header>
+
+    <main>
+      <p id="status" role="status">Loading session tree…</p>
+      <div id="tree" role="tree" aria-label="Session tree" hidden></div>
+    </main>
+
+    <footer id="selection" hidden>
+      <div>
+        <strong id="selection-type"></strong>
+        <span id="selection-id" class="mono muted"></span>
+      </div>
+      <p id="selection-preview"></p>
+      <div class="actions">
+        <button id="navigate" type="button">Navigate here</button>
+        <button id="summarize" type="button">Navigate + summarize</button>
+      </div>
+    </footer>
+
+    <script type="module" src="/static/session-tree.js"></script>
+  </body>
+</html>
