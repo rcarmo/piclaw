@@ -634,6 +634,12 @@ Direct commands (no LLM round-trip):
 | `/mcp [status\|tools\|reconnect [server]\|setup]` | Open the MCP management panel in the web UI (or text status elsewhere), list MCP tools, reconnect bundled `pi-mcp-adapter` servers, or launch guided MCP setup |
 | `/mcp-auth <server>` | Show OAuth token-setup guidance for an MCP server managed by `pi-mcp-adapter` |
 
+### Session-tree ownership
+
+`/tree` is a core command: Piclaw parses navigation and summarization options, builds an invocation-scoped flat snapshot, performs navigation, and supplies a useful plain-text fallback. When `@rcarmo/piclaw-addon-session-tree` is installed, core passes `{ tree, chatJid }` through the generic widget-kind renderer registry and delivers the returned markup as an ordinary HTML artifact.
+
+The add-on exclusively owns the interactive renderer. Core intentionally exposes no session-tree-specific HTTP endpoint, static viewer, frontend component, or special artifact route; the renderer must use the supplied snapshot and submit `/tree` commands through the generic widget bridge.
+
 > [!NOTE]
 > Provider auth works via `pi /login` in the terminal or the experimental `/login` card flow in the web UI.
 > The card-based `/login` flow supports GitHub Copilot, Codex, and standard OpenAI providers. Anthropic is untested. The terminal remains the reliable fallback.

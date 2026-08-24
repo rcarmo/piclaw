@@ -497,8 +497,8 @@ export class AgentPool {
     return this.sessionManager.prewarm(chatJid, options);
   }
 
-  getSessionTreeForChat(chatJid: string): { leafId: string | null; nodes: unknown[]; flat?: boolean; total?: number; capped?: boolean } | null {
-    return this.runtimeFacade.getSessionTreeForChat(chatJid);
+  getSessionTreeSummaryForChat(chatJid: string): { leafId: string | null; total: number } | null {
+    return this.runtimeFacade.getSessionTreeSummaryForChat(chatJid);
   }
 
   /**

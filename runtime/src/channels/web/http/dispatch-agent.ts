@@ -190,11 +190,6 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
   },
   {
     method: "GET",
-    path: "/agent/session-tree",
-    handle: (channel, req) => channel.handleSessionTree(req),
-  },
-  {
-    method: "GET",
     path: "/agent/system-metrics",
     handle: (channel, req) => channel.handleSystemMetrics(req),
   },

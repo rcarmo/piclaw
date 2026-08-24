@@ -266,11 +266,10 @@ test("agent control session and tree commands", async () => {
   expect(exportHtml.message).toContain("Exported session");
 
   const tree = await applyControlCommand(runtime as any, registry, { type: "tree", raw: "/tree" });
-  expect(tree.message).toBe("");
-  expect(tree.contentBlocks?.[0]).toMatchObject({
-    type: "generated_widget",
-    artifact: { kind: "session_tree" },
-  });
+  expect(tree.contentBlocks).toBeUndefined();
+  expect(tree.message).toContain("Session tree:");
+  expect(tree.message).toContain("entry-1 user: \"hello\" [milestone] ← active");
+  expect(tree.message).toContain("Use /tree <entryId> to navigate.");
 
   const treeNav = await applyControlCommand(runtime as any, registry, { type: "tree", targetId: "entry-1", raw: "/tree entry-1" });
   expect(treeNav.message).toContain("Navigation complete");
@@ -281,6 +280,44 @@ test("agent control session and tree commands", async () => {
 
   const labels = await applyControlCommand(runtime as any, registry, { type: "labels", raw: "/labels" });
   expect(labels.message).toContain("Labels:");
+});
+
+test("tree command passes an invocation snapshot and chat scope through the generic renderer", async () => {
+  const ws = getTestWorkspace();
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const applyControlCommand = await getControl();
+  const session = new TestAgentControlSession(ws.workspace, registry);
+  const runtime = createTestSessionRuntime(session);
+  let rendererArtifact: Record<string, unknown> | null = null;
+  const registerWidgetKind = (globalThis as any).__piclaw_registerWidgetKind as
+    | ((kind: string, renderer: (artifact: Record<string, unknown>) => string) => void)
+    | undefined;
+  expect(typeof registerWidgetKind).toBe("function");
+
+  registerWidgetKind!("session_tree", (artifact) => {
+    rendererArtifact = artifact;
+    return "<main>add-on-owned tree</main>";
+  });
+
+  try {
+    const result = await withChatContext("web:tree-scope", "web", () =>
+      applyControlCommand(runtime as any, registry, { type: "tree", raw: "/tree" })
+    );
+
+    expect(rendererArtifact).toMatchObject({
+      chatJid: "web:tree-scope",
+      tree: { version: 1, leafId: "entry-1", flat: true, total: 1 },
+    });
+    expect(result.message).toBe("");
+    expect(result.contentBlocks).toHaveLength(1);
+    expect(result.contentBlocks?.[0]).toMatchObject({
+      type: "generated_widget",
+      artifact: { kind: "html", html: "<main>add-on-owned tree</main>" },
+    });
+  } finally {
+    registerWidgetKind!("session_tree", () => "");
+  }
 });
 
 test("provider-native compact report surfaces the marked readable checkpoint without opaque state", async () => {

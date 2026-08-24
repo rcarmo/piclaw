@@ -178,14 +178,13 @@ import { registerToolStatusHintProvider } from "../../../tool-status-hints.js";
  * Generic widget-kind registry.
  *
  * Addons call `__piclaw_registerWidgetKind(kind, renderer)` to provide an HTML
- * renderer for a named widget kind. When a core command (e.g. /tree) builds a
- * `generated_widget` content block, it checks this registry first. If a renderer
- * is registered it receives the widget artifact and returns self-contained HTML
- * (served as `{ kind: "html" }`) — no special-casing in the core web app needed.
+ * renderer for a named widget kind. A producer can pass an invocation-scoped
+ * artifact to the registered renderer and emit its result as a generic HTML
+ * widget. The web app does not need kind-specific routing or components.
  *
  * Example:
- *   __piclaw_registerWidgetKind('session_tree', (artifact) =>
- *     `<html>...fetch /agent/session-tree...</html>`);
+ *   __piclaw_registerWidgetKind('custom_report', (artifact) =>
+ *     `<section>${artifact.title}</section>`);
  */
 type WidgetKindRenderer = (artifact: Record<string, unknown>) => string;
 const _widgetKindRegistry = new Map<string, WidgetKindRenderer>();

@@ -1,4 +1,4 @@
-export type GeneratedWidgetKind = "html" | "svg" | "session_tree";
+export type GeneratedWidgetKind = "html" | "svg";
 export type GeneratedWidgetSource = "timeline" | "live";
 export type GeneratedWidgetStatus = "loading" | "streaming" | "final" | "error";
 
@@ -6,7 +6,6 @@ export interface GeneratedWidgetArtifact {
   kind: GeneratedWidgetKind;
   html?: string;
   svg?: string;
-  tree?: any;
 }
 
 export interface GeneratedWidgetPayload {
@@ -30,7 +29,7 @@ export interface GeneratedWidgetPayload {
 function getArtifact(block: any): GeneratedWidgetArtifact | null {
   const artifact = block?.artifact || {};
   const kind = artifact.kind || block?.kind || null;
-  if (kind !== "html" && kind !== "svg" && kind !== "session_tree") return null;
+  if (kind !== "html" && kind !== "svg") return null;
 
   if (kind === "html") {
     const html = typeof artifact.html === "string" ? artifact.html : (typeof block?.html === "string" ? block.html : "");
@@ -42,10 +41,7 @@ function getArtifact(block: any): GeneratedWidgetArtifact | null {
     return svg ? { kind, svg } : null;
   }
 
-  const tree = artifact.tree && typeof artifact.tree === 'object'
-    ? artifact.tree
-    : (block?.tree && typeof block.tree === 'object' ? block.tree : null);
-  return { kind, tree };
+  return null;
 }
 
 function getLiveArtifact(block: any): GeneratedWidgetArtifact {
@@ -58,17 +54,8 @@ function getLiveArtifact(block: any): GeneratedWidgetArtifact {
       : (typeof block?.w === 'string'
         ? block.w
         : (typeof block?.content === 'string' ? block.content : '')));
-  const rawTree = artifact.tree && typeof artifact.tree === 'object'
-    ? artifact.tree
-    : (block?.tree && typeof block.tree === 'object' ? block.tree : null);
-
   const requestedKind = artifact.kind || block?.kind || null;
-  const kind = requestedKind === 'session_tree'
-    ? 'session_tree'
-    : (requestedKind === 'svg' || rawSvg ? 'svg' : 'html');
-  if (kind === 'session_tree') {
-    return { kind, tree: rawTree };
-  }
+  const kind = requestedKind === 'svg' || rawSvg ? 'svg' : 'html';
   if (kind === 'svg') {
     return rawSvg ? { kind, svg: rawSvg } : { kind };
   }
@@ -257,9 +244,6 @@ export function getGeneratedWidgetEmptyStateMessage(widget: any): string {
   }
   if (status === 'error') {
     return readOptionalString(widget?.error) || 'Widget failed to load.';
-  }
-  if ((widget?.artifact?.kind || widget?.kind) === 'session_tree') {
-    return 'Session tree widget is unavailable.';
   }
   return 'Widget artifact is missing or unsupported.';
 }

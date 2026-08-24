@@ -608,11 +608,6 @@ export function installWebChannelPrototype(
       writable: true,
       value: withHttpSurface(async (service, req: Request) => await service.handleAgentModels(req)),
     },
-    handleSessionTree: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, req: Request) => service.handleSessionTree(req)),
-    },
     handleSystemMetrics: {
       configurable: true,
       writable: true,

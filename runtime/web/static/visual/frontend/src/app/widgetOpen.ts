@@ -1,6 +1,6 @@
 import type { Tab } from "./tabTypes";
 
-export type WidgetArtifactKind = "html" | "svg" | "session_tree";
+export type WidgetArtifactKind = "html" | "svg";
 
 export interface WidgetOpenDetail {
   title?: string;
@@ -19,8 +19,6 @@ export interface WidgetOpenDetail {
   [key: string]: unknown;
 }
 
-const SESSION_TREE_WIDGET_SRC = "/static/session-tree.html";
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -32,16 +30,8 @@ function readString(value: unknown): string {
 function readArtifactKind(detail: WidgetOpenDetail): WidgetArtifactKind | null {
   const artifactKind = isRecord(detail.artifact) ? readString(detail.artifact.kind) : "";
   const kind = artifactKind || readString(detail.kind);
-  if (kind === "html" || kind === "svg" || kind === "session_tree") return kind;
+  if (kind === "html" || kind === "svg") return kind;
   return null;
-}
-
-function readChatJid(detail: WidgetOpenDetail, fallbackChatJid: string): string {
-  return readString(detail.chat_jid)
-    || readString(detail.chatJid)
-    || readString(detail.originChatJid)
-    || readString(fallbackChatJid)
-    || "web:default";
 }
 
 export function buildWidgetOpenDetail(block: Record<string, unknown> | null | undefined): WidgetOpenDetail | null {
@@ -51,7 +41,6 @@ export function buildWidgetOpenDetail(block: Record<string, unknown> | null | un
   const kind = readString(artifact.kind) || readString(block.kind);
   const html = readString(artifact.html) || readString(block.html);
   const svg = readString(artifact.svg) || readString(block.svg);
-  const tree = isRecord(artifact.tree) ? artifact.tree : (isRecord(block.tree) ? block.tree : undefined);
   const normalizedArtifact: Record<string, unknown> = {
     ...artifact,
     ...(kind ? { kind } : {}),
@@ -59,7 +48,6 @@ export function buildWidgetOpenDetail(block: Record<string, unknown> | null | un
 
   if (html) normalizedArtifact.html = html;
   if (svg) normalizedArtifact.svg = svg;
-  if (tree) normalizedArtifact.tree = tree;
 
   const title = readString(block.title) || readString(block.name) || "Widget";
   const subtitle = readString(block.subtitle);
@@ -82,18 +70,12 @@ export function buildWidgetOpenDetail(block: Record<string, unknown> | null | un
   };
 }
 
-export function buildWidgetTabFromOpenDetail(detail: WidgetOpenDetail, fallbackChatJid: string): Tab | null {
+export function buildWidgetTabFromOpenDetail(detail: WidgetOpenDetail): Tab | null {
   const artifactKind = readArtifactKind(detail);
   const title = readString(detail.title) || "Widget";
   const widgetId = readString(detail.widget_id) || readString(detail.widgetId) || `w-${Date.now()}`;
   const tabId = `widget-${widgetId}`;
-  const chatJid = readChatJid(detail, fallbackChatJid);
-  const widgetHtml = artifactKind === "session_tree"
-    ? undefined
-    : (readString(detail.artifact?.html) || readString(detail.html) || undefined);
-  const widgetSrc = artifactKind === "session_tree"
-    ? `${SESSION_TREE_WIDGET_SRC}?chat_jid=${encodeURIComponent(chatJid)}`
-    : undefined;
+  const widgetHtml = readString(detail.artifact?.html) || readString(detail.html) || undefined;
 
   return {
     id: tabId,
@@ -102,7 +84,6 @@ export function buildWidgetTabFromOpenDetail(detail: WidgetOpenDetail, fallbackC
     closable: true,
     type: "widget",
     widgetHtml,
-    widgetSrc,
     widgetKind: artifactKind || undefined,
   };
 }

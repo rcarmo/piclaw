@@ -55,7 +55,7 @@ function buildSrcDoc(html: string, title: string): string {
 </html>`;
 }
 
-export function WidgetPane({ tabMode = false, widgetHtml, widgetSrc, widgetTitle }: { tabMode?: boolean; widgetHtml?: string; widgetSrc?: string; widgetTitle?: string }) {
+export function WidgetPane({ tabMode = false, widgetHtml, widgetTitle }: { tabMode?: boolean; widgetHtml?: string; widgetTitle?: string }) {
   const [widget, setWidget] = useState<WidgetState | null>(
     widgetHtml ? { html: widgetHtml, title: widgetTitle || "Widget", subtitle: "", status: "final" } : null
   );
@@ -143,22 +143,6 @@ export function WidgetPane({ tabMode = false, widgetHtml, widgetSrc, widgetTitle
     htmlBufferRef.current = "";
     setWidget(null);
   }, []);
-
-  if (tabMode && widgetSrc) {
-    return (
-      <div className="widget-pane widget-pane--tab">
-        <div className="widget-pane__body widget-pane__body--full">
-          <iframe
-            ref={iframeRef}
-            className="widget-pane__frame"
-            src={widgetSrc}
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
-            title={widgetTitle || "Widget"}
-          />
-        </div>
-      </div>
-    );
-  }
 
   if (!widget && !tabMode) return null;
   if (!widget) {

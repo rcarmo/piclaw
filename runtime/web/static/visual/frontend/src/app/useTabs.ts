@@ -2,7 +2,6 @@ import { useSignal } from "@preact/signals";
 import { useEffect, useCallback } from "preact/hooks";
 import type { Signal } from "@preact/signals";
 import type { Tab } from "./tabTypes";
-import { getChatJid } from "../api/chat-jid";
 import { buildWidgetTabFromOpenDetail, type WidgetOpenDetail } from "./widgetOpen";
 
 const CHAT_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
@@ -82,7 +81,7 @@ export function useTabs(terminalVisible: Signal<boolean>, terminalMaximized?: Si
     const handleOpen = (e: Event) => {
       const detail = (e as CustomEvent<WidgetOpenDetail>).detail;
       if (!detail || typeof detail !== "object" || detail._redispatch) return;
-      const tab = buildWidgetTabFromOpenDetail(detail, getChatJid());
+      const tab = buildWidgetTabFromOpenDetail(detail);
       if (!tab) return;
       ensureTab(tab);
     };

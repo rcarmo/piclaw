@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import { clearProviderUsageCache, peekProviderUsage } from "../../src/agent-pool/provider-usage.js";
 import { AgentRuntimeFacade } from "../../src/agent-pool/runtime-facade.js";
+import { buildSessionTreeSnapshot } from "../../src/agent-control/session-tree-snapshot.js";
 import { SESSIONS_DIR } from "../../src/core/config.js";
 import { sanitiseJid } from "../../src/agent-pool/session.js";
 import { initDatabase } from "../../src/db.js";
@@ -717,11 +718,8 @@ test("AgentRuntimeFacade normalizes session-tree user prompts for display while 
     },
   };
 
-  const fixture = createFacade();
-  fixture.pool.set("web:default", { runtime: createRuntime(session), lastUsed: Date.now() });
-
-  const tree = fixture.facade.getSessionTreeForChat("web:default");
-  expect(tree?.nodes).toHaveLength(1);
+  const tree = buildSessionTreeSnapshot(session.sessionManager as any);
+  expect(tree.nodes).toHaveLength(1);
   expect(tree?.nodes[0]).toMatchObject({
     id: "m1",
     role: "user",
@@ -754,11 +752,8 @@ test("AgentRuntimeFacade leaves legacy XML session-tree entries unnormalized", (
     },
   };
 
-  const fixture = createFacade();
-  fixture.pool.set("web:default", { runtime: createRuntime(session), lastUsed: Date.now() });
-
-  const tree = fixture.facade.getSessionTreeForChat("web:default");
-  expect((tree?.nodes[0] as any).detail).toContain('<messages channel="web">');
+  const tree = buildSessionTreeSnapshot(session.sessionManager as any);
+  expect((tree.nodes[0] as any).detail).toContain('<messages channel="web">');
   expect((tree?.nodes[0] as any).previewText).toBeUndefined();
   expect((tree?.nodes[0] as any).rawDetail).toBeUndefined();
 });

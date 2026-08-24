@@ -10,7 +10,6 @@ import {
     getGeneratedWidgetInitPayload,
     getGeneratedWidgetSessionKey,
 } from '../ui/generated-widget.js';
-import { SessionTreeWidget } from './session-tree-widget.js';
 
 export function buildFloatingWidgetBackdropClassName(maximized = false) {
     return `floating-widget-backdrop${maximized ? ' maximized' : ''}`;
@@ -212,22 +211,20 @@ export function FloatingWidgetPane({ widget, onClose, onWidgetEvent }) {
                     </div>
                 </div>
                 <div class="floating-widget-body">
-                    ${kind === 'session_tree'
-                        ? html`<${SessionTreeWidget} widget=${widget} onWidgetEvent=${onWidgetEvent} />`
-                        : (emptyState
-                            ? html`<div class="floating-widget-empty">${emptyMessage}</div>`
-                            : html`
-                                <iframe
-                                    ref=${frameRef}
-                                    class="floating-widget-frame"
-                                    title=${title}
-                                    name=${getGeneratedWidgetHostWindowName(widget)}
-                                    sandbox=${sandbox}
-                                    allow="microphone; clipboard-read; clipboard-write"
-                                    referrerpolicy="no-referrer"
-                                    srcdoc=${srcDoc}
-                                ></iframe>
-                            `)}
+                    ${emptyState
+                        ? html`<div class="floating-widget-empty">${emptyMessage}</div>`
+                        : html`
+                            <iframe
+                                ref=${frameRef}
+                                class="floating-widget-frame"
+                                title=${title}
+                                name=${getGeneratedWidgetHostWindowName(widget)}
+                                sandbox=${sandbox}
+                                allow="microphone; clipboard-read; clipboard-write"
+                                referrerpolicy="no-referrer"
+                                srcdoc=${srcDoc}
+                            ></iframe>
+                        `}
                 </div>
             </section>
         </div>

@@ -11,6 +11,7 @@ import type { AgentSession, AgentSessionRuntime, ModelRegistry, ModelRuntime, Se
 import type { Api, Model, Provider } from "@earendil-works/pi-ai";
 
 import { applyControlCommand, type AgentControlCommand, type AgentControlResult } from "../agent-control/index.js";
+import { buildSessionTreeSnapshot } from "../agent-control/session-tree-snapshot.js";
 import { getLatestTokenUsageModel } from "../db.js";
 import { formatThinkingLevelForDisplay, getAvailableThinkingLevelsForModel } from "../agent-control/agent-control-helpers.js";
 import { SESSIONS_DIR } from "../core/config.js";
@@ -20,12 +21,10 @@ import { promptWithContextPressureRetry } from "./context-pressure-retry.js";
 import { peekProviderUsage, warmProviderUsage, type ProviderUsageSnapshot } from "./provider-usage.js";
 import { resolveModelLabel } from "../utils/model-utils.js";
 import { resolveModelScope } from "../utils/scoped-models.js";
-import { createLogger } from "../utils/logger.js";
 import { withChatContext } from "../core/chat-context.js";
 import { sanitiseJid } from "./session.js";
 import type { PoolEntry } from "./session-manager.js";
 
-const log = createLogger("agent-pool.runtime-facade");
 const MAX_PERSISTED_MODEL_STATE_CACHE_CHATS = 512;
 const persistedModelStateCache = new Map<string, {
   signature: string;
@@ -46,28 +45,6 @@ function setPersistedModelStateCache(
     if (!oldestKey) break;
     persistedModelStateCache.delete(oldestKey);
   }
-}
-
-function truncateText(text: string, maxLen: number): string {
-  if (text.length <= maxLen) return text;
-  return text.slice(0, maxLen - 1) + "\u2026";
-}
-
-function extractTextPreview(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  for (const block of content) {
-    if (!block || typeof block !== "object") continue;
-    const b = block as Record<string, unknown>;
-    if (b.type === "text" && typeof b.text === "string") return b.text;
-  }
-  return "";
-}
-
-interface PromptEnvelopeMessage {
-  sender: string;
-  time: string;
-  text: string;
 }
 
 function getMostRecentSessionFile(sessionDir: string): string | null {
@@ -243,314 +220,6 @@ function getPersistedSessionState(chatJid: string): { current: string | null; th
 
   setPersistedModelStateCache(chatJid, { signature, current, thinkingLevel });
   return { current, thinkingLevel };
-}
-
-function parseTranscriptPromptEnvelope(raw: string): PromptEnvelopeMessage[] | null {
-  const normalized = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
-  if (!normalized || (!normalized.startsWith("Channel:") && !normalized.startsWith("Chat:") && !normalized.startsWith("Messages:") && !/^.+\s@\s.+:\n/m.test(normalized))) {
-    return null;
-  }
-
-  const lines = normalized.split("\n");
-  const messages: PromptEnvelopeMessage[] = [];
-  let index = 0;
-
-  while (index < lines.length) {
-    const line = lines[index];
-    if (!line.trim()) {
-      index += 1;
-      continue;
-    }
-    if (line.startsWith("Channel:") || line.startsWith("Chat:")) {
-      index += 1;
-      continue;
-    }
-    if (line === "Messages:") {
-      index += 1;
-      continue;
-    }
-    const headerMatch = line.match(/^(.*?)\s@\s(.*?):$/);
-    if (!headerMatch) {
-      index += 1;
-      continue;
-    }
-
-    const sender = headerMatch[1].trim();
-    const time = headerMatch[2].trim();
-    index += 1;
-    const bodyLines: string[] = [];
-    while (index < lines.length) {
-      const current = lines[index];
-      if (!current.trim()) {
-        const following = lines[index + 1] || "";
-        if (/^.+\s@\s.+:$/.test(following)) {
-          index += 1;
-          break;
-        }
-        bodyLines.push("");
-        index += 1;
-        continue;
-      }
-      if (/^.+\s@\s.+:$/.test(current) && !current.startsWith("  ")) break;
-      bodyLines.push(current.startsWith("  ") ? current.slice(2) : current);
-      index += 1;
-    }
-
-    messages.push({ sender, time, text: bodyLines.join("\n").trim() });
-  }
-
-  return messages.length > 0 ? messages : null;
-}
-
-function formatPromptEnvelopePreview(raw: string): { preview: string; rowPreview: string } | null {
-  const messages = parseTranscriptPromptEnvelope(raw);
-  if (!messages || messages.length === 0) return null;
-  const lines = messages.map((message) => {
-    const sender = message.sender.trim() || "user";
-    const time = message.time.trim();
-    const text = message.text.trim();
-    const prefix = time ? `${sender} (${time})` : sender;
-    return text ? `${prefix}: ${text}` : prefix;
-  });
-  const preview = lines.join("\n\n").trim();
-  const rowPreview = messages.map((message) => message.text.trim()).filter(Boolean).join("\n\n").trim();
-  return {
-    preview,
-    rowPreview: rowPreview || preview,
-  };
-}
-
-function getToolCallName(content: unknown): string | null {
-  if (!Array.isArray(content)) return null;
-  for (const block of content) {
-    if (!block || typeof block !== "object") continue;
-    const b = block as Record<string, unknown>;
-    if (b.type === "toolCall" && typeof b.name === "string") return b.name;
-  }
-  return null;
-}
-
-function parseToolArgs(block: Record<string, unknown>): Record<string, unknown> | null {
-  // Try all known field names for tool arguments
-  for (const key of ["input", "args", "arguments"]) {
-    const val = block[key];
-    if (!val) continue;
-    if (typeof val === "object" && val !== null) return val as Record<string, unknown>;
-    if (typeof val === "string") {
-      try { const parsed = JSON.parse(val); if (parsed && typeof parsed === "object") return parsed; } catch (err) {
-        log.debug("Failed to parse tool arguments JSON.", { err, key, valuePreview: truncateText(val, 120) });
-      }
-    }
-  }
-  // Try partialJson field
-  if (typeof block.partialJson === "string") {
-    try { const parsed = JSON.parse(block.partialJson); if (parsed && typeof parsed === "object") return parsed; } catch (err) {
-      log.debug("Failed to parse partial tool JSON.", { err, valuePreview: truncateText(block.partialJson, 120) });
-    }
-  }
-  return null;
-}
-
-function formatToolInput(toolName: string, args: Record<string, unknown>): string {
-  const trunc = (s: string, max: number) => s.length > max ? s.slice(0, max - 1) + "\u2026" : s;
-
-  switch (toolName) {
-    case "bash":
-    case "bun_run": {
-      const cmd = typeof args.command === "string" ? args.command : null;
-      return cmd ? trunc(cmd, 500) : JSON.stringify(args).slice(0, 200);
-    }
-    case "read":
-    case "read_file": {
-      let s = typeof args.path === "string" ? args.path : "";
-      if (typeof args.offset === "number") s += `:${args.offset}`;
-      if (typeof args.limit === "number") s += `-${(args.offset as number || 0) + (args.limit as number)}`;
-      return s || JSON.stringify(args).slice(0, 200);
-    }
-    case "write":
-    case "write_file": {
-      const p = typeof args.path === "string" ? args.path : "";
-      const contentLen = typeof args.content === "string" ? args.content.length : 0;
-      return contentLen ? `${p} (${contentLen} chars)` : p || JSON.stringify(args).slice(0, 200);
-    }
-    case "edit":
-    case "edit_file": {
-      const p = typeof args.path === "string" ? args.path : (typeof args.file === "string" ? args.file : "");
-      const old = typeof args.oldText === "string" ? args.oldText : (typeof args.old_string === "string" ? args.old_string : "");
-      if (old) return `${p}  \u2016 ${trunc(old.split("\n")[0], 80)} \u2192 \u2026`;
-      return p || JSON.stringify(args).slice(0, 200);
-    }
-    case "search_workspace":
-    case "grep":
-    case "rg": {
-      const q = typeof args.query === "string" ? args.query : (typeof args.pattern === "string" ? args.pattern : "");
-      const p = typeof args.path === "string" ? ` in ${args.path}` : "";
-      return q ? `"${trunc(q, 80)}"${p}` : JSON.stringify(args).slice(0, 200);
-    }
-    case "messages": {
-      const action = typeof args.action === "string" ? args.action : "";
-      const q = typeof args.query === "string" ? ` "${trunc(args.query, 60)}"` : "";
-      return `${action}${q}` || JSON.stringify(args).slice(0, 200);
-    }
-    case "keychain": {
-      const action = typeof args.action === "string" ? args.action : "";
-      const name = typeof args.name === "string" ? ` ${args.name}` : "";
-      return `${action}${name}` || JSON.stringify(args).slice(0, 200);
-    }
-    default: {
-      // Generic: show key=value pairs, skip large values
-      const parts: string[] = [];
-      for (const [k, v] of Object.entries(args)) {
-        if (typeof v === "string" && v.length > 120) {
-          parts.push(`${k}: ${trunc(v.split("\n")[0], 80)}`);
-        } else if (typeof v === "string") {
-          parts.push(`${k}: ${v}`);
-        } else {
-          parts.push(`${k}: ${JSON.stringify(v).slice(0, 60)}`);
-        }
-      }
-      return trunc(parts.join(", "), 500);
-    }
-  }
-}
-
-function formatToolInputFull(toolName: string, args: Record<string, unknown>): string {
-  switch (toolName) {
-    case "bash":
-    case "bun_run":
-      return typeof args.command === "string" ? args.command : JSON.stringify(args, null, 2);
-    case "read":
-    case "read_file": {
-      let s = typeof args.path === "string" ? args.path : "";
-      if (typeof args.offset === "number") s += `:${args.offset}`;
-      if (typeof args.limit === "number") s += `-${(args.offset as number || 0) + (args.limit as number)}`;
-      return s || JSON.stringify(args, null, 2);
-    }
-    case "write":
-    case "write_file": {
-      const p = typeof args.path === "string" ? args.path : "";
-      const content = typeof args.content === "string" ? args.content : "";
-      return content ? `${p}\n\n${content}` : p || JSON.stringify(args, null, 2);
-    }
-    case "edit":
-    case "edit_file": {
-      const p = typeof args.path === "string" ? args.path : (typeof args.file === "string" ? args.file : "");
-      const old = typeof args.oldText === "string" ? args.oldText : (typeof args.old_string === "string" ? args.old_string : "");
-      const nw = typeof args.newText === "string" ? args.newText : (typeof args.new_string === "string" ? args.new_string : "");
-      const edits = Array.isArray(args.edits) ? args.edits : null;
-      if (edits) {
-        return `${p}\n\n${edits.map((e: any, i: number) => `[${i + 1}] - ${e.oldText || e.old_string || ''}\n    + ${e.newText || e.new_string || ''}`).join('\n')}`;
-      }
-      if (old || nw) return `${p}\n\n- ${old}\n+ ${nw}`;
-      return p || JSON.stringify(args, null, 2);
-    }
-    default:
-      return JSON.stringify(args, null, 2);
-  }
-}
-
-function getToolCallInput(content: unknown): string | null {
-  if (!Array.isArray(content)) return null;
-  for (const block of content) {
-    if (!block || typeof block !== "object") continue;
-    const b = block as Record<string, unknown>;
-    if (b.type !== "toolCall") continue;
-    const toolName = typeof b.name === "string" ? b.name : "";
-    const args = parseToolArgs(b);
-    if (args) return formatToolInput(toolName, args);
-  }
-  return null;
-}
-
-function getToolCallInputFull(content: unknown): string | null {
-  if (!Array.isArray(content)) return null;
-  for (const block of content) {
-    if (!block || typeof block !== "object") continue;
-    const b = block as Record<string, unknown>;
-    if (b.type !== "toolCall") continue;
-    const toolName = typeof b.name === "string" ? b.name : "";
-    const args = parseToolArgs(b);
-    if (args) return formatToolInputFull(toolName, args);
-  }
-  return null;
-}
-
-function getEntryMeta(entry: Record<string, unknown>): Record<string, unknown> {
-  const meta: Record<string, unknown> = {};
-  if (entry.type !== "message") return meta;
-  const msg = (entry.message && typeof entry.message === "object")
-    ? (entry.message as Record<string, unknown>)
-    : {};
-  const role = typeof msg.role === "string" ? msg.role : null;
-  if (role) meta.role = role;
-  if (role === "toolResult" && typeof msg.toolName === "string") meta.toolName = msg.toolName;
-  const toolCallName = getToolCallName(msg.content);
-  if (toolCallName) meta.toolName = toolCallName;
-  // Tool call input (compact for row, full for sidebar)
-  const toolInput = getToolCallInput(msg.content);
-  if (toolInput) meta.toolInput = toolInput;
-  const toolInputFull = getToolCallInputFull(msg.content);
-  if (toolInputFull) meta.toolInputFull = toolInputFull;
-  const text = extractTextPreview(msg.content);
-  if (text) {
-    const promptEnvelopePreview = role === "user" ? formatPromptEnvelopePreview(text) : null;
-    if (promptEnvelopePreview) {
-      meta.contentLength = promptEnvelopePreview.preview.length;
-      meta.detail = promptEnvelopePreview.preview;
-      meta.previewText = promptEnvelopePreview.rowPreview;
-      meta.rawDetail = text;
-      meta.rawContentLength = text.length;
-    } else {
-      meta.contentLength = text.length;
-      meta.detail = text;
-    }
-  }
-  const thinking = (msg as any).thinking;
-  if (thinking) {
-    const thinkingText = typeof thinking === "string" ? thinking : extractTextPreview(thinking);
-    if (thinkingText && thinkingText.length > 0) {
-      meta.hasThinking = true;
-      meta.thinkingLength = thinkingText.length;
-    }
-  }
-  return meta;
-}
-
-function describeTreeEntry(entry: Record<string, unknown>): string {
-  switch (entry.type) {
-    case "message": {
-      const msg = (entry.message && typeof entry.message === "object")
-        ? (entry.message as Record<string, unknown>)
-        : {};
-      const role = typeof msg.role === "string" ? msg.role : "message";
-      if (role === "toolResult") {
-        const toolName = typeof msg.toolName === "string" ? msg.toolName : "tool";
-        return `toolResult: ${toolName}`;
-      }
-      const text = extractTextPreview(msg.content);
-      if (text) {
-        const promptEnvelopePreview = role === "user" ? formatPromptEnvelopePreview(text) : null;
-        const previewText = promptEnvelopePreview?.rowPreview || text;
-        return `${role}: \"${truncateText(previewText, 80)}\"`;
-      }
-      const toolCallName = getToolCallName(msg.content);
-      if (toolCallName) return `${role}: [tool ${toolCallName}]`;
-      return role;
-    }
-    case "compaction":
-      return `[compaction]`;
-    case "branch_summary":
-      return `[branch summary]`;
-    case "thinking_level_change":
-      return `[thinking ${entry.thinkingLevel}]`;
-    case "model_change":
-      return `[model ${entry.provider}/${entry.modelId}]`;
-    case "label":
-      return `[label ${entry.label || "clear"}]`;
-    case "session_info":
-      return `[session ${entry.name || "(unnamed)"}]`;
-  }
-  return "[entry]";
 }
 
 /** Structured model option returned to the web model picker. */
@@ -750,33 +419,11 @@ export class AgentRuntimeFacade {
     return entry.runtime.session.getContextUsage() ?? null;
   }
 
-  getSessionTreeForChat(chatJid: string): { leafId: string | null; nodes: unknown[]; flat: true; total: number } | null {
+  getSessionTreeSummaryForChat(chatJid: string): { leafId: string | null; total: number } | null {
     const entry = this.options.pool.get(chatJid);
     if (!entry) return null;
-    const sm = entry.runtime.session.sessionManager;
-    const leafId = sm.getLeafId();
-    const roots = sm.getTree();
-    // Iterative DFS to avoid stack overflow on deep linear chains
-    const flatNodes: unknown[] = [];
-    const stack: any[] = [];
-    for (let i = roots.length - 1; i >= 0; i--) stack.push(roots[i]);
-    while (stack.length > 0) {
-      const node = stack.pop()!;
-      flatNodes.push({
-        id: node.entry.id,
-        parentId: node.entry.parentId ?? null,
-        type: node.entry.type,
-        timestamp: node.entry.timestamp,
-        label: node.label ?? null,
-        active: node.entry.id === leafId,
-        preview: describeTreeEntry(node.entry),
-        childCount: (node.children || []).length,
-        ...getEntryMeta(node.entry as Record<string, unknown>),
-      });
-      const children = node.children || [];
-      for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]);
-    }
-    return { leafId, nodes: flatNodes, flat: true, total: flatNodes.length };
+    const snapshot = buildSessionTreeSnapshot(entry.runtime.session.sessionManager);
+    return { leafId: snapshot.leafId, total: snapshot.total };
   }
 
   async saveSessionPosition(chatJid: string): Promise<string | null> {

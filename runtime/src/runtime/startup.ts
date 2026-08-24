@@ -319,7 +319,7 @@ async function buildSessionControlSnapshot(agentPool: AgentPool, chatJid: string
   const models = await agentPool.getAvailableModels(chatJid).catch(() => null);
   const activity = getSessionActivitySnapshot(chatJid);
   const context = await agentPool.getContextUsageForChat(chatJid).catch(() => null);
-  const tree = agentPool.getSessionTreeForChat(chatJid);
+  const tree = agentPool.getSessionTreeSummaryForChat(chatJid);
   return {
     chat_jid: chatJid,
     active: agentPool.isActive(chatJid),
@@ -335,7 +335,7 @@ async function buildSessionControlSnapshot(agentPool: AgentPool, chatJid: string
     context_usage: context,
     failed_run: summarizeFailedRun(chatJid),
     cursor: getCursorSnapshot(chatJid),
-    tree: tree ? { leaf_id: tree.leafId, total: tree.total, capped: tree.capped ?? false } : null,
+    tree: tree ? { leaf_id: tree.leafId, total: tree.total } : null,
   };
 }
 

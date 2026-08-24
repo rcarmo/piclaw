@@ -2,11 +2,15 @@ import { describe, expect, test } from "bun:test";
 import { handleAgentRoutes } from "../../../src/channels/web/http/dispatch-agent.js";
 
 describe("web http agent dispatch", () => {
-  test("returns null for non-agent routes", async () => {
+  test("returns null for non-agent routes and the removed session-tree UI endpoint", async () => {
     const channel = {} as any;
-    const req = new Request("https://example.com/timeline", { method: "GET" });
-    const response = await handleAgentRoutes(channel, req, "/timeline", new URL(req.url));
-    expect(response).toBeNull();
+    const timelineReq = new Request("https://example.com/timeline", { method: "GET" });
+    const timelineResponse = await handleAgentRoutes(channel, timelineReq, "/timeline", new URL(timelineReq.url));
+    expect(timelineResponse).toBeNull();
+
+    const treeReq = new Request("https://example.com/agent/session-tree", { method: "GET" });
+    const treeResponse = await handleAgentRoutes(channel, treeReq, "/agent/session-tree", new URL(treeReq.url));
+    expect(treeResponse).toBeNull();
   });
 
   test("dispatches thought route with query params", async () => {
