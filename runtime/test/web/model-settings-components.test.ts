@@ -21,6 +21,7 @@ test('classic and visual Settings use the shared bounded master-detail catalogue
     expect(source).toContain('Provider diagnostics');
     expect(source).toContain('Cache read / 1M');
     expect(source).toContain('enabledModels');
+    expect(source).toContain('scoped_model_filter_active');
     expect(source).toContain('formatModelCataloguePricing');
     expect(source).toContain('model-catalogue-settings__row-mobile-meta');
     expect(source).toContain('model-catalogue-settings__filter-disclosure');
@@ -89,10 +90,11 @@ test('Models Settings assigns one vertical scroll owner per layout mode', () => 
   expect(visualCss).toContain('.settings-panel__content:has(.settings-panel__section--models)');
   for (const css of [classicCss, visualCss]) {
     expect(css).toContain('overflow-y: auto');
+    expect(css).toContain('overflow: auto');
+    expect(css).toContain('overflow: hidden');
     expect(css).toContain('overflow: visible');
-    expect(css).toContain('overflow-x: hidden');
-    expect(css).toContain('order: -1');
-    expect(css).toContain('margin-bottom: 10px');
+    expect(css).toContain('display: block');
+    expect(css).toContain('margin-top: 10px');
     expect(css).toContain('position: static');
     expect(css).not.toContain('overflow-x: hidden;\n        overflow-y: visible');
     expect(css).not.toContain('overflow-x: hidden;\n    overflow-y: visible');
@@ -107,7 +109,7 @@ test('Settings layouts become single-column with 44px controls on phones', () =>
     expect(css).toContain('grid-template-columns: 1fr');
     expect(css).toContain('grid-template-columns: 20px minmax(0, 1fr)');
     expect(css).toContain('model-catalogue-settings__row-mobile-meta');
-    expect(css).toContain('@container (max-width: 1080px)');
+    expect(css).toContain('@container (max-width: 760px)');
     expect(css).toContain('min-width: 610px');
     expect(css).toContain('.model-catalogue-settings__filters:not(.expanded)');
   }

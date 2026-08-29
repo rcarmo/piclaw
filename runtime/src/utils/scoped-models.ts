@@ -159,6 +159,7 @@ export interface ResolvedModelScope {
   models: Model<Api>[];
   scopedModels: Model<Api>[];
   scoped: boolean;
+  scopedModelsOnly: boolean;
   patterns: string[];
   enabledModels: string[];
 }
@@ -168,12 +169,14 @@ export function resolveModelScope(
   settingsProvider?: EnabledModelsSettingsProvider | null,
 ): ResolvedModelScope {
   const enabledModels = getEnabledModelPatterns(settingsProvider);
-  const scoped = getScopedModelsOnly() && enabledModels.length > 0;
+  const scopedModelsOnly = getScopedModelsOnly();
+  const scoped = scopedModelsOnly && enabledModels.length > 0;
   const scopedModels = scoped ? filterModelsByEnabledPatterns(models, enabledModels) : models;
   return {
     models: scopedModels,
     scopedModels,
     scoped,
+    scopedModelsOnly,
     patterns: enabledModels,
     enabledModels,
   };

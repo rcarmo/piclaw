@@ -171,7 +171,7 @@ export const modelControl: ExtensionFactory = (pi: ExtensionAPI) => {
       if (page.length === 0) {
         const msg = query ? `No models found matching "${params.query}".` : "No available models found.";
         const refreshNote = refreshError ? ` Catalog refresh failed: ${refreshError}` : "";
-        return { content: [{ type: "text", text: `${msg}${refreshNote}` }], details: { total: entries.length, count: 0, offset, limit, current_model: current, refresh_error: refreshError, scoped_models_only: scopedModels.scoped, enabled_model_patterns: scopedModels.patterns, models: [] } };
+        return { content: [{ type: "text", text: `${msg}${refreshNote}` }], details: { total: entries.length, count: 0, offset, limit, current_model: current, refresh_error: refreshError, scoped_models_only: scopedModels.scopedModelsOnly, scoped_model_filter_active: scopedModels.scoped, enabled_model_patterns: scopedModels.patterns, models: [] } };
       }
 
       const header = query
@@ -188,7 +188,7 @@ export const modelControl: ExtensionFactory = (pi: ExtensionAPI) => {
 
       return {
         content: [{ type: "text", text: `${header}${refreshNote}\n${lines.join("\n")}` }],
-        details: { total: entries.length, count: page.length, offset, limit, current_model: current, refresh_error: refreshError, scoped_models_only: scopedModels.scoped, enabled_model_patterns: scopedModels.patterns, models: page },
+        details: { total: entries.length, count: page.length, offset, limit, current_model: current, refresh_error: refreshError, scoped_models_only: scopedModels.scopedModelsOnly, scoped_model_filter_active: scopedModels.scoped, enabled_model_patterns: scopedModels.patterns, models: page },
       };
     },
   });
