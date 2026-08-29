@@ -179,6 +179,16 @@ function resolveAuditableStatusTitle(status) {
         : '';
     if (!toolName) return '';
 
+    if (toolName.toLowerCase() === 'mcp') {
+        const args = extractMcpStatusToolArgs(status?.tool_args || status?.toolArgs) || {};
+        const server = normalizeToolTitleArgument(args.server || status?.mcp_server || status?.mcpServer);
+        const tool = normalizeToolTitleArgument(args.tool || status?.mcp_tool || status?.mcpTool);
+        const operation = normalizeToolTitleArgument(status?.mcp_operation || status?.mcpOperation || args.action);
+        if (tool) return server ? `mcp: ${server} → ${tool}` : `mcp: ${tool}`;
+        if (operation && server) return `mcp: ${operation} → ${server}`;
+        if (server) return `mcp: status → ${server}`;
+    }
+
     const [argument] = getStatusToolTitleArgumentCandidates(status);
     return argument ? `${toolName}: ${argument}` : toolName;
 }
@@ -238,6 +248,23 @@ function extractStatusToolArgs(args) {
         return nested && typeof nested === 'object' ? nested : record;
     }
     return null;
+}
+
+function extractMcpStatusToolArgs(rawArgs) {
+    if (!rawArgs) return null;
+    let record = rawArgs;
+    if (typeof rawArgs === 'string') {
+        try { record = JSON.parse(rawArgs); } catch { return null; }
+    }
+    if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+    const operationKeys = ['tool', 'server', 'connect', 'describe', 'instructions', 'search', 'action'];
+    if (operationKeys.some((key) => typeof record[key] === 'string' && record[key].trim())) return record;
+    for (const key of ['arguments', 'input', 'params', 'parameters', 'payload', 'args']) {
+        const nested = record[key];
+        if (!nested || typeof nested !== 'object' || Array.isArray(nested)) continue;
+        if (operationKeys.some((operationKey) => typeof nested[operationKey] === 'string' && nested[operationKey].trim())) return nested;
+    }
+    return record;
 }
 
 function getStatusToolTitleArgumentCandidates(payload) {

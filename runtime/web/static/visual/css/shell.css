@@ -6345,6 +6345,7 @@ pre.frontmatter-block {
 .agent-tool-kind-pill--read   { background: rgba(137, 180, 250, 0.18); color: #89b4fa; }
 .agent-tool-kind-pill--write  { background: rgba(250, 179, 135, 0.18); color: #fab387; }
 .agent-tool-kind-pill--search { background: rgba(166, 227, 161, 0.18); color: #a6e3a1; }
+.agent-tool-kind-pill--mcp    { background: rgba(203, 166, 247, 0.18); color: #cba6f7; }
 .agent-tool-kind-pill--other  { background: rgba(180, 190, 254, 0.18); color: #b4befe; }
 
 /* #371 Parsed tool title parts */

@@ -440,6 +440,22 @@ test('AgentStatus renders trailing tool status text as lowercase pills', async (
   expect(collectText(host)).toContain(`bash: ${command} failed`);
   expect(collectText(host)).not.toContain(': Failed');
 
+  render(h(AgentStatus, {
+    status: {
+      type: 'tool_call',
+      title: 'mcp: memento → memory_search',
+      tool_name: 'mcp',
+      tool_args: { server: 'memento', tool: 'memory_search' },
+      mcp_operation: 'call',
+      mcp_server: 'memento',
+      mcp_tool: 'memory_search',
+    },
+  }), host);
+
+  const mcpText = collectText(host);
+  expect(mcpText).toContain('mcp: memento → memory_search');
+  expect(mcpText).not.toBe('mcp');
+
   render(null, host);
 });
 

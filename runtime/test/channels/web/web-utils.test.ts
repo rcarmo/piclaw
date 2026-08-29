@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 
 import { clampInt, errorJson, jsonResponse, okJson, parseOptionalInt } from "../../../src/channels/web/http/http-utils.js";
-import { buildPreview, createToolTitleTracker } from "../../../src/channels/web/agent/agent-utils.js";
+import { buildPreview, createToolTitleTracker, resolveMcpToolStatusIdentity } from "../../../src/channels/web/agent/agent-utils.js";
 import { handleSse, broadcastEvent } from "../../../src/channels/web/sse/sse.js";
 import { serveDocsStatic, serveStatic } from "../../../src/channels/web/http/static.js";
 import { UiBridge } from "../../../src/channels/web/theming/ui-bridge.js";
@@ -57,6 +57,20 @@ test("agent utils preview and tool titles", () => {
   expect(title).toContain("bash: echo hi");
   expect(tracker.lookup("call-1", "bash")).toBe(title);
   tracker.forget("call-1");
+
+  expect(tracker.remember("call-mcp", "mcp", { server: "memento", tool: "memory_search" }))
+    .toBe("mcp: memento → memory_search");
+  expect(resolveMcpToolStatusIdentity("mcp", { server: "memento", tool: "memory_search" })).toEqual({
+    operation: "call",
+    server: "memento",
+    tool: "memory_search",
+    target: "memory_search",
+    label: "mcp: memento → memory_search",
+  });
+  expect(resolveMcpToolStatusIdentity("mcp", { connect: "memento" })?.label).toBe("mcp: memento → connect");
+  expect(resolveMcpToolStatusIdentity("mcp", { describe: "memory_search", server: "memento" })?.label).toBe("mcp: memento → describe memory_search");
+  expect(resolveMcpToolStatusIdentity("mcp", { search: "memory" })?.label).toBe("mcp: search → memory");
+  expect(resolveMcpToolStatusIdentity("mcp", {})?.label).toBe("mcp: status");
 });
 
 test("sse helper streams connection and broadcasts", async () => {

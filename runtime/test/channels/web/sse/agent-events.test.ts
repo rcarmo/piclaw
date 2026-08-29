@@ -218,6 +218,58 @@ describe("web SSE display update coalescing", () => {
   });
 });
 
+describe("web SSE MCP tool identity", () => {
+  it("includes the MCP server, selected tool, operation, and readable title", () => {
+    const { handler, statuses } = makeHandler();
+
+    handler({
+      type: "tool_execution_start",
+      toolCallId: "tool-mcp-1",
+      toolName: "mcp",
+      args: { server: "memento", tool: "memory_search", args: { query: "draft metadata" } },
+    } as any);
+
+    expect(statuses[0]).toMatchObject({
+      type: "tool_call",
+      title: "mcp: memento → memory_search",
+      tool_name: "mcp",
+      mcp_operation: "call",
+      mcp_server: "memento",
+      mcp_tool: "memory_search",
+      mcp_target: "memory_search",
+    });
+    expect(statuses[0].active_tools).toContainEqual(expect.objectContaining({
+      title: "mcp: memento → memory_search",
+      mcp_server: "memento",
+      mcp_tool: "memory_search",
+    }));
+
+    handler({
+      type: "tool_execution_update",
+      toolCallId: "tool-mcp-1",
+      toolName: "mcp",
+      partialResult: { content: [{ type: "text", text: "searching" }] },
+    } as any);
+    handler({ type: "tool_execution_end", toolCallId: "tool-mcp-1", toolName: "mcp", isError: false } as any);
+
+    expect(statuses[1]).toMatchObject({
+      type: "tool_status",
+      title: "mcp: memento → memory_search",
+      mcp_server: "memento",
+      mcp_tool: "memory_search",
+      output_preview: "searching",
+    });
+    expect(statuses[2]).toMatchObject({
+      type: "waiting",
+      last_completed_tool: expect.objectContaining({
+        title: "mcp: memento → memory_search",
+        mcp_server: "memento",
+        mcp_tool: "memory_search",
+      }),
+    });
+  });
+});
+
 describe("web SSE thinking level events", () => {
   it("reports legacy raw levels with their display labels", () => {
     const { handler, emitter } = makeHandler((level) => level === "xhigh" ? "max" : level);

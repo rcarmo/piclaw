@@ -11,7 +11,7 @@
 
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
-import { buildPreview, createToolTitleTracker, type AgentProfileBuilder } from "../agent/agent-utils.js";
+import { buildPreview, createToolTitleTracker, resolveMcpToolStatusIdentity, type AgentProfileBuilder } from "../agent/agent-utils.js";
 import { formatProviderError, sanitizeProviderErrorDetail } from "../handlers/provider-error-format.js";
 import { classifyOpaqueAgentFailure } from "../../../agent-pool/automatic-recovery.js";
 import { createDisplayUpdateCoalescer } from "./display-update-coalescer.js";
@@ -306,11 +306,23 @@ export function createStreamingEventHandler(options: StreamingEventHandlerOption
     ? displayUpdates.emitImmediate(payload, options.emitter.draftDelta)
     : displayUpdates.queue("draft-delta", payload, options.emitter.draftDelta, { mergeDelta: true });
 
+  const withMcpStatusIdentity = (toolName: string, args: unknown): Record<string, unknown> => {
+    const identity = resolveMcpToolStatusIdentity(toolName, args);
+    if (!identity) return {};
+    return {
+      mcp_operation: identity.operation,
+      mcp_server: identity.server,
+      mcp_tool: identity.tool,
+      mcp_target: identity.target,
+    };
+  };
+
   const toActiveToolSnapshot = (state: ActiveToolStatus): Record<string, unknown> => ({
     tool_call_id: state.toolCallId,
     tool_name: state.toolName,
     title: state.title,
     tool_args: state.args,
+    ...withMcpStatusIdentity(state.toolName, state.args),
     status: state.status,
     started_at: state.startedAt,
     last_progress_at: state.lastProgressAt,
@@ -332,6 +344,7 @@ export function createStreamingEventHandler(options: StreamingEventHandlerOption
       tool_call_id: state.toolCallId,
       tool_name: state.toolName,
       tool_args: state.args,
+      ...withMcpStatusIdentity(state.toolName, state.args),
       started_at: state.startedAt,
       last_event_at: state.heartbeatAt || state.lastProgressAt,
       last_progress_at: state.lastProgressAt,
@@ -616,6 +629,7 @@ export function createStreamingEventHandler(options: StreamingEventHandlerOption
           tool_call_id: messageEvent.toolCall.id,
           tool_name: messageEvent.toolCall.name,
           tool_args: messageEvent.toolCall.arguments,
+          ...withMcpStatusIdentity(messageEvent.toolCall.name, messageEvent.toolCall.arguments),
           active_tool_count: activeToolStatuses.size,
           active_tools: Array.from(activeToolStatuses.values()).map(toActiveToolSnapshot),
         });
@@ -699,16 +713,19 @@ export function createStreamingEventHandler(options: StreamingEventHandlerOption
 
     if (event.type === "tool_execution_update") {
       const lastEventAt = new Date().toISOString();
-      const title = lookup(event.toolCallId, event.toolName, event.args);
+      const priorContext = toolExecutionContext.get(event.toolCallId) || null;
+      const toolName = event.toolName || priorContext?.toolName || "tool";
+      const args = event.args ?? priorContext?.args ?? null;
+      const title = lookup(event.toolCallId, toolName, args);
       const startedAt = toolStartedAt.get(event.toolCallId) || lastEventAt;
       toolStartedAt.set(event.toolCallId, startedAt);
-      toolExecutionContext.set(event.toolCallId, { toolName: event.toolName, args: event.args });
+      toolExecutionContext.set(event.toolCallId, { toolName, args });
       const outputPreview = buildToolOutputStatusPreview((event as { partialResult?: unknown }).partialResult);
       const state: ActiveToolStatus = {
         toolCallId: event.toolCallId,
-        toolName: event.toolName,
+        toolName,
         title,
-        args: event.args,
+        args,
         startedAt,
         lastProgressAt: lastEventAt,
         heartbeatAt: lastEventAt,
@@ -785,6 +802,7 @@ export function createStreamingEventHandler(options: StreamingEventHandlerOption
         tool_name: toolContext?.toolName || event.toolName,
         title,
         tool_args: toolContext?.args,
+        ...withMcpStatusIdentity(toolContext?.toolName || event.toolName, toolContext?.args),
         started_at: startedAt,
         completed_at: lastEventAt,
         duration_ms: typeof reportedDurationMs === "number"

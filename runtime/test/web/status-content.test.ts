@@ -20,6 +20,8 @@ test('resolveAgentStatusContent reports concurrent active tools without hiding t
 
 test('resolveAgentStatusContent remains auditable when tool status title is missing', () => {
   expect(resolveAgentStatusContent({ type: 'tool_call', tool_name: 'bash', tool_args: { command: 'echo hi' } })).toBe('Running: bash: echo hi');
+  expect(resolveAgentStatusContent({ type: 'tool_call', tool_name: 'mcp', tool_args: { server: 'memento', tool: 'memory_search' } })).toBe('Running: mcp: memento → memory_search');
+  expect(resolveAgentStatusContent({ type: 'tool_status', title: 'mcp: memento → memory_search', status: 'Working...', tool_name: 'mcp', tool_args: { server: 'memento', tool: 'memory_search' } })).toBe('mcp: memento → memory_search: Working...');
   expect(resolveAgentStatusContent({ type: 'tool_status', status: 'Working...', tool_name: 'read', tool_args: { path: '/workspace/AGENTS.md' } })).toBe('read: /workspace/AGENTS.md: Working...');
   expect(resolveAgentStatusContent({ type: 'tool_status', status: 'Streaming output...', tool_name: 'portainer' })).toBe('portainer');
 });

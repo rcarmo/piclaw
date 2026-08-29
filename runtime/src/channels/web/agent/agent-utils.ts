@@ -76,7 +76,83 @@ function extractToolArgs(args: unknown): Record<string, unknown> | null {
   return null;
 }
 
+export interface McpToolStatusIdentity {
+  operation: "call" | "connect" | "describe" | "instructions" | "search" | "action" | "status";
+  server: string | null;
+  tool: string | null;
+  target: string | null;
+  label: string;
+}
+
+function extractMcpGatewayArgs(args: unknown): Record<string, unknown> | null {
+  if (!args) return null;
+  if (typeof args === "string") {
+    try {
+      return extractMcpGatewayArgs(JSON.parse(args));
+    } catch {
+      return null;
+    }
+  }
+  if (typeof args !== "object" || Array.isArray(args)) return null;
+  const record = args as Record<string, unknown>;
+  const operationKeys = ["tool", "server", "connect", "describe", "instructions", "search", "action"];
+  if (operationKeys.some((key) => typeof record[key] === "string" && String(record[key]).trim())) return record;
+  for (const key of ["arguments", "input", "params", "parameters", "payload", "args"]) {
+    const nested = record[key];
+    if (!nested || typeof nested !== "object" || Array.isArray(nested)) continue;
+    const nestedRecord = nested as Record<string, unknown>;
+    if (operationKeys.some((operationKey) => typeof nestedRecord[operationKey] === "string" && String(nestedRecord[operationKey]).trim())) {
+      return nestedRecord;
+    }
+  }
+  return record;
+}
+
+function readNonEmptyString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const normalized = value.replace(/\s+/g, " ").trim();
+    if (normalized) return normalized;
+  }
+  return null;
+}
+
+/** Resolve the gateway operation and target for MCP status presentation. */
+export function resolveMcpToolStatusIdentity(toolName: string, args: unknown): McpToolStatusIdentity | null {
+  if (toolName.trim().toLowerCase() !== "mcp") return null;
+  const record = extractMcpGatewayArgs(args) ?? {};
+  const server = readNonEmptyString(record.server);
+  const tool = readNonEmptyString(record.tool);
+  const connect = readNonEmptyString(record.connect);
+  const describe = readNonEmptyString(record.describe);
+  const instructions = readNonEmptyString(record.instructions);
+  const search = readNonEmptyString(record.search);
+  const action = readNonEmptyString(record.action);
+
+  if (tool) {
+    const label = server ? `mcp: ${server} → ${tool}` : `mcp: ${tool}`;
+    return { operation: "call", server, tool, target: tool, label };
+  }
+  if (connect) return { operation: "connect", server: connect, tool: null, target: connect, label: `mcp: ${connect} → connect` };
+  if (describe) {
+    const label = server ? `mcp: ${server} → describe ${describe}` : `mcp: describe → ${describe}`;
+    return { operation: "describe", server, tool: null, target: describe, label };
+  }
+  if (instructions) return { operation: "instructions", server: instructions, tool: null, target: instructions, label: `mcp: ${instructions} → instructions` };
+  if (search) {
+    const label = server ? `mcp: ${server} → search ${search}` : `mcp: search → ${search}`;
+    return { operation: "search", server, tool: null, target: search, label };
+  }
+  if (action) {
+    const target = server || action;
+    return { operation: "action", server, tool: null, target, label: server ? `mcp: ${server} → ${action}` : `mcp: ${action}` };
+  }
+  return { operation: "status", server, tool: null, target: server, label: server ? `mcp: ${server} → status` : "mcp: status" };
+}
+
 function formatToolTitle(toolName: string, args: unknown): string {
+  const mcpIdentity = resolveMcpToolStatusIdentity(toolName, args);
+  if (mcpIdentity) return mcpIdentity.label;
   const record = extractToolArgs(args);
   if (!record) return toolName;
   let detail: string | null = null;

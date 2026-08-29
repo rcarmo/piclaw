@@ -20,9 +20,26 @@ function parseToolArgs(raw: unknown): Record<string, unknown> | null {
   return null;
 }
 
+function parseMcpGatewayArgs(raw: unknown): Record<string, unknown> | null {
+  const record = parseToolArgs(raw);
+  if (!record) return null;
+  const operationKeys = ["tool", "server", "connect", "describe", "instructions", "search", "action"];
+  if (operationKeys.some((key) => typeof record[key] === "string" && String(record[key]).trim())) return record;
+  for (const key of ["arguments", "input", "params", "parameters", "payload", "args"]) {
+    const nested = record[key];
+    if (!nested || typeof nested !== "object" || Array.isArray(nested)) continue;
+    const nestedRecord = nested as Record<string, unknown>;
+    if (operationKeys.some((operationKey) => typeof nestedRecord[operationKey] === "string" && String(nestedRecord[operationKey]).trim())) {
+      return nestedRecord;
+    }
+  }
+  return record;
+}
+
 /** Determine tool kind from tool_name prefix. */
-export function resolveToolKind(toolName: string): "bash" | "read" | "write" | "search" | "other" {
+export function resolveToolKind(toolName: string): "bash" | "read" | "write" | "search" | "mcp" | "other" {
   const n = (toolName || "").toLowerCase();
+  if (n === "mcp") return "mcp";
   if (n === "bash" || n.startsWith("bash") || n.includes("shell") || n.includes("run")) return "bash";
   if (n === "read" || n.startsWith("read") || n.includes("cat") || n.includes("view")) return "read";
   if (
@@ -41,6 +58,7 @@ export const TOOL_KIND_LABELS: Record<string, { label: string; cls: string }> = 
   read:   { label: "read",   cls: "agent-tool-kind-pill--read" },
   write:  { label: "write",  cls: "agent-tool-kind-pill--write" },
   search: { label: "search", cls: "agent-tool-kind-pill--search" },
+  mcp:    { label: "MCP",    cls: "agent-tool-kind-pill--mcp" },
   other:  { label: "tool",   cls: "agent-tool-kind-pill--other" },
 };
 
@@ -62,8 +80,8 @@ export function resolveTitleFromArgs(
   rawTitle: string,
   toolArgs: unknown,
 ): ParsedTitle {
-  const args = parseToolArgs(toolArgs);
   const kind = resolveToolKind(toolName);
+  const args = kind === "mcp" ? parseMcpGatewayArgs(toolArgs) : parseToolArgs(toolArgs);
   let prefix = rawTitle || toolName || "Running tool…";
   let argument: string | null = null;
   let suffix = "";
@@ -80,6 +98,46 @@ export function resolveTitleFromArgs(
       const repoRaw = args.repo ?? args.repo_path;
       if (typeof repoRaw === "string" && repoRaw) gitBranch = null; // will rely on path hint
     }
+  }
+
+  if (kind === "mcp" && args) {
+    const server = typeof args.server === "string" ? args.server.trim() : "";
+    const tool = typeof args.tool === "string" ? args.tool.trim() : "";
+    const operation = typeof args.action === "string" && args.action.trim()
+      ? args.action.trim()
+      : typeof args.connect === "string" && args.connect.trim()
+        ? "connect"
+        : typeof args.describe === "string" && args.describe.trim()
+          ? "describe"
+          : typeof args.instructions === "string" && args.instructions.trim()
+            ? "instructions"
+            : typeof args.search === "string" && args.search.trim()
+              ? "search"
+              : tool ? "call" : "status";
+    const target = tool
+      || (typeof args.connect === "string" ? args.connect.trim() : "")
+      || (typeof args.describe === "string" ? args.describe.trim() : "")
+      || (typeof args.instructions === "string" ? args.instructions.trim() : "")
+      || (typeof args.search === "string" ? args.search.trim() : "");
+    if (operation === "call" && tool) {
+      prefix = server ? `${server} → ` : "";
+      argument = tool;
+      return { prefix, argument, suffix, gitBranch };
+    }
+    const effectiveServer = server || ((operation === "connect" || operation === "instructions") ? target : "");
+    if (effectiveServer) {
+      if (target && target !== effectiveServer) {
+        prefix = `${effectiveServer} → ${operation} `;
+        argument = target;
+      } else {
+        prefix = `${effectiveServer} → `;
+        argument = operation;
+      }
+    } else {
+      prefix = `mcp ${operation}${target ? " → " : ""}`;
+      argument = target || null;
+    }
+    return { prefix, argument, suffix, gitBranch };
   }
 
   if (kind === "bash" && args) {

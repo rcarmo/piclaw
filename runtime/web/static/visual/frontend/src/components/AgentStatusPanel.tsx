@@ -82,7 +82,7 @@ interface ToolCall {
   title: string;
   rawTitle: string;
   toolArgs: unknown;
-  kind: "bash" | "read" | "write" | "search" | "other";
+  kind: "bash" | "read" | "write" | "search" | "mcp" | "other";
   status: "running" | "done" | "error";
   hints: StatusHint[];    // "repo • branch"
   retryAt: number | null; // epoch ms for retry countdown
