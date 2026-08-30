@@ -531,6 +531,22 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
   },
   {
     method: "POST",
+    path: "/agent/settings/compaction/probe",
+    handle: async (channel, req) => {
+      try {
+        const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+        const model = typeof body.model === "string" ? body.model.trim() : "";
+        if (!model) return channel.json({ error: "Provide an exact provider/model compaction model." }, 400);
+        const result = await channel.agentPool.probeCompactionModel(model);
+        return channel.json(result, result.ok ? 200 : 422);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return channel.json({ error: message || "Compaction model probe failed." }, 400);
+      }
+    },
+  },
+  {
+    method: "POST",
     path: "/agent/settings/compaction/reset-backoff",
     handle: async (channel, req) => {
       try {

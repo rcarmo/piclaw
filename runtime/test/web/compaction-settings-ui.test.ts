@@ -15,9 +15,12 @@ test("classic compaction settings expose and persist both canonical processing m
 
   expect(component).toContain("smartCompactionMethod: normalizeSmartCompactionMethod(data.smartCompactionMethod)");
   expect(component).toContain("smartCompactionMethod,\n        compactionModel,\n        remoteCompactionEnabled,\n        remoteCompactionTimeoutSec,\n        compactionTimeoutSec");
-  expect(component).toContain('id="compactionModel"');
-  expect(component).toContain("t('settings.compaction.modelPlaceholder')");
-  expect(i18n).toContain("'settings.compaction.modelPlaceholder': 'provider/model (empty uses active model)'");
+  expect(component).toContain('normaliseModelCatalogue(modelPayload || {})');
+  expect(component).toContain('<select id="compactionModel"');
+  expect(component).toContain('<option value="">Use active model');
+  expect(component).toContain('Unavailable: ${compactionModel}');
+  expect(component).toContain("'/agent/settings/compaction/probe'");
+  expect(component).toContain("'Test compaction model'");
   expect(component).toContain("body: currentSnapshot");
   expect(component).toContain("replace(/[\\s-]+/g, '_')");
   expect(component).toContain("normalized === 'pipelined' || normalized === 'traditional_pipelined' ? 'pipelined' : 'selective'");
@@ -49,7 +52,13 @@ test("visual compaction settings use the same canonical processing-method contra
   expect(component).toContain('<option value="selective">Selective</option>');
   expect(component).toContain('<option value="pipelined">Pipelined</option>');
   expect(component).toContain('onSaveCompaction("smartCompactionMethod", value)');
-  expect(component).toContain('onSaveCompaction("compactionModel", compactionModel.value.trim())');
+  expect(component).toContain('normaliseModelCatalogue(modelPayload ?? {})');
+  expect(component).toContain('<select');
+  expect(component).toContain('<option value="">Use active model');
+  expect(component).toContain('Unavailable: {compactionModel.value}');
+  expect(component).toContain('fetch("/agent/settings/compaction/probe"');
+  expect(component).toContain('Test compaction model');
+  expect(component).toContain('onSaveCompaction("compactionModel", value)');
   expect(component).toContain('onSaveCompaction("remoteCompactionEnabled", value)');
   expect(component).toContain('onSaveCompaction("remoteCompactionTimeoutSec", v)');
   expect(component).toContain('saveSetting("compaction", field, value)');

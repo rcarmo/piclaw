@@ -1,7 +1,30 @@
 import { useSignal } from "@preact/signals";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import { type SettingsData, type WatchdogPhase, type CompactionBackoff, type SettingsSectionProps } from "./types";
 import { NumberStepper } from "./NumberStepper";
 import { registerSettingsPane } from "./pane-registry";
+import { getChatJid } from "../../api/chat-jid";
+import {
+  formatModelCatalogueContextWindow,
+  normaliseModelCatalogue,
+} from "../../../../../../src/ui/model-catalogue";
+
+interface CompactionModelsPayload {
+  current?: string | null;
+  model_options?: unknown[];
+  models?: string[];
+  provider_diagnostics?: { providers?: Array<{ provider: string; auth_configured?: boolean }> };
+}
+
+interface CompactionProbeResult {
+  ok?: boolean;
+  model?: string;
+  contextWindow?: number | null;
+  stage?: string;
+  timeToFirstTokenMs?: number | null;
+  durationMs?: number;
+  error?: string;
+}
 
 function normalizeSmartCompactionMethod(value: unknown): "selective" | "pipelined" {
   const normalized = String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
@@ -20,6 +43,9 @@ export function CompactionSection({
     normalizeSmartCompactionMethod(data.smartCompactionMethod)
   );
   const compactionModel = useSignal(data.compactionModel ?? "");
+  const [modelPayload, setModelPayload] = useState<CompactionModelsPayload | null>(null);
+  const [probeBusy, setProbeBusy] = useState(false);
+  const [probeResult, setProbeResult] = useState<CompactionProbeResult | null>(null);
   const remoteCompactionEnabled = useSignal(data.remoteCompactionEnabled ?? false);
   const remoteCompactionTimeoutSec = useSignal(data.remoteCompactionTimeoutSec ?? 60);
   const timeoutSec = useSignal(data.compactionTimeoutSec ?? 300);
@@ -32,6 +58,42 @@ export function CompactionSection({
   const semanticSummaryMaxTokens = useSignal(data.toolResultSemanticSummaryMaxTokens ?? 512);
   const semanticSummaryTimeoutSec = useSignal(data.toolResultSemanticSummaryTimeoutSec ?? 30);
   const resetStatus = useSignal<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`/agent/models?chat_jid=${encodeURIComponent(getChatJid())}`, { credentials: "same-origin", signal: controller.signal })
+      .then(async (response) => response.ok ? await response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
+      .then((payload) => setModelPayload(payload as CompactionModelsPayload))
+      .catch(() => { if (!controller.signal.aborted) setModelPayload({ models: [], model_options: [] }); });
+    return () => controller.abort();
+  }, []);
+
+  const catalogue = useMemo(() => normaliseModelCatalogue(modelPayload ?? {}), [modelPayload]);
+  const providerAuthById = useMemo(() => new Map(
+    (modelPayload?.provider_diagnostics?.providers ?? []).map((provider) => [provider.provider, Boolean(provider.auth_configured)]),
+  ), [modelPayload]);
+  const configuredModelMissing = Boolean(compactionModel.value && !catalogue.some((entry) => entry.key === compactionModel.value));
+  const effectiveProbeModel = compactionModel.value || modelPayload?.current || "";
+
+  async function handleProbe() {
+    if (!effectiveProbeModel || probeBusy) return;
+    setProbeBusy(true);
+    setProbeResult(null);
+    try {
+      const response = await fetch("/agent/settings/compaction/probe", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: effectiveProbeModel }),
+      });
+      const payload = await response.json().catch(() => ({})) as CompactionProbeResult;
+      setProbeResult(payload);
+    } catch (error) {
+      setProbeResult({ ok: false, model: effectiveProbeModel, error: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setProbeBusy(false);
+    }
+  }
 
   async function handleResetBackoff(chatJid: string) {
     try {
@@ -105,19 +167,41 @@ export function CompactionSection({
         </div>
       </div>
 
-      <div className="settings-panel__field">
+      <div className="settings-panel__field compaction-model-picker">
         <label className="settings-panel__label" htmlFor="compactionModel">Compaction model</label>
         <div className="settings-panel__field-content">
-          <input
+          <select
             id="compactionModel"
             className="settings-panel__input"
-            type="text"
             value={compactionModel.value}
-            onInput={(event) => (compactionModel.value = (event.target as HTMLInputElement).value)}
-            onBlur={() => onSaveCompaction("compactionModel", compactionModel.value.trim())}
-            placeholder="provider/model (empty uses active model)"
-          />
-          <span className="settings-panel__description">Strict local smart-compaction model. If configured but unavailable, compaction stops and preserves the session instead of falling back.</span>
+            aria-describedby="compactionModelHint"
+            onChange={(event) => {
+              const value = (event.target as HTMLSelectElement).value;
+              compactionModel.value = value;
+              setProbeResult(null);
+              onSaveCompaction("compactionModel", value);
+            }}
+          >
+            <option value="">Use active model{modelPayload?.current ? ` (${modelPayload.current})` : ""}</option>
+            {configuredModelMissing && <option value={compactionModel.value}>Unavailable: {compactionModel.value}</option>}
+            {catalogue.map((entry) => (
+              <option key={entry.key} value={entry.key}>
+                {entry.displayName} — {entry.key} · {formatModelCatalogueContextWindow(entry.contextWindow) || "unknown context"} · {providerAuthById.get(entry.provider) ? "credentials configured" : "credentials not configured"}
+              </option>
+            ))}
+          </select>
+          <button type="button" className="settings-panel__provider-btn" disabled={!effectiveProbeModel || probeBusy} onClick={handleProbe}>
+            {probeBusy ? "Testing…" : "Test compaction model"}
+          </button>
+          <span id="compactionModelHint" className="settings-panel__description">Strict local smart-compaction model. If configured but unavailable, compaction stops and preserves the session instead of falling back.</span>
+          {configuredModelMissing && <span className="settings-panel__description" role="alert">Configured model is not currently available. It remains selected so you can repair it explicitly.</span>}
+          {probeResult && (
+            <span className={`settings-panel__description compaction-model-probe-result ${probeResult.ok ? "success" : "error"}`} role="status" aria-live="polite">
+              {probeResult.ok
+                ? `${probeResult.model} ready · ${probeResult.contextWindow?.toLocaleString() || "unknown"} context · TTFT ${probeResult.timeToFirstTokenMs ?? "n/a"}ms · ${probeResult.durationMs}ms total`
+                : `${probeResult.model || effectiveProbeModel}: ${probeResult.stage ? `${probeResult.stage} · ` : ""}${probeResult.error || "Probe failed"}`}
+            </span>
+          )}
         </div>
       </div>
 

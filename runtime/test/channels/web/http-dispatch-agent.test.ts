@@ -37,6 +37,41 @@ describe("web http agent dispatch", () => {
     expect(await response?.text()).toBe("/agent/roster/message:web:branch");
   });
 
+  test("dispatches non-destructive compaction model probes", async () => {
+    const calls: string[] = [];
+    const channel = {
+      agentPool: {
+        probeCompactionModel: async (model: string) => {
+          calls.push(model);
+          return { ok: true, model, contextWindow: 64_000, timeoutMs: 30_000 };
+        },
+      },
+      json: (payload: unknown, status = 200) => new Response(JSON.stringify(payload), { status, headers: { "content-type": "application/json" } }),
+    } as any;
+    const req = new Request("https://example.com/agent/settings/compaction/probe", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: " local/probe " }),
+    });
+    const response = await handleAgentRoutes(channel, req, "/agent/settings/compaction/probe", new URL(req.url));
+    expect(response?.status).toBe(200);
+    expect(await response?.json()).toMatchObject({ ok: true, model: "local/probe" });
+    expect(calls).toEqual(["local/probe"]);
+  });
+
+  test("rejects missing compaction probe models", async () => {
+    const channel = {
+      agentPool: { probeCompactionModel: async () => { throw new Error("must not run"); } },
+      json: (payload: unknown, status = 200) => new Response(JSON.stringify(payload), { status }),
+    } as any;
+    const req = new Request("https://example.com/agent/settings/compaction/probe", {
+      method: "POST",
+      body: "{}",
+    });
+    const response = await handleAgentRoutes(channel, req, "/agent/settings/compaction/probe", new URL(req.url));
+    expect(response?.status).toBe(400);
+  });
+
   test("dispatches remaining agent endpoints", async () => {
     const channel = {
       handleThoughtVisibility: async () => new Response("thought-vis", { status: 201 }),

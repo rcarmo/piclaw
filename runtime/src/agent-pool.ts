@@ -407,6 +407,10 @@ export class AgentPool {
     });
   }
 
+  async probeCompactionModel(modelLabel: string) {
+    return await this.runtimeFacade.probeCompactionModel(modelLabel);
+  }
+
   /** Return available model labels and current model for a chat session. */
   async getAvailableModels(chatJid: string): Promise<AvailableModelsResult> {
     return this.runtimeFacade.getAvailableModels(chatJid);

@@ -154,7 +154,10 @@ function installMockFetch() {
     const method = String(init?.method || 'GET').toUpperCase();
     if (!mockMode) return originalFetch(input, init);
 
-    if (url.pathname === '/agent/settings-data') return json(mockSettingsData);
+    if (url.pathname === '/agent/settings-data') {
+      const configuredModel = new URLSearchParams(window.location.search).get('compaction_model');
+      return json(configuredModel === null ? mockSettingsData : { ...mockSettingsData, compactionModel: configuredModel });
+    }
     if (url.pathname === '/agent/models') return json(mockModelsPayload);
     if (url.pathname === '/agent/addons') return json(mockAddonsPayload);
     if (url.pathname.startsWith('/agent/addons/')) return json({ ok: true, message: 'Fixture add-on action accepted.', ...mockAddonsPayload });
@@ -163,6 +166,10 @@ function installMockFetch() {
       if (method === 'POST') return json({ ok: true, ...mockKeychainPayload });
     }
     if (url.pathname === '/agent/settings/general') return json({ ok: true, settings: mockSettingsData });
+    if (url.pathname === '/agent/settings/compaction/probe') {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      return json({ ok: true, model: body.model || mockSettingsData.current, contextWindow: 128000, timeoutMs: 30000, responseReceived: true, credentialStatus: 'verified', stage: 'completed', timeToFirstTokenMs: 42, durationMs: 84, error: null });
+    }
     if (url.pathname === '/agent/settings/widget-token/regenerate') return json({ ok: true, settings: { ...mockSettingsData, widgetToken: `piclaw_widget_fixture_regenerated_${Date.now()}` } });
     if (url.pathname.startsWith('/agent/default/message')) return json({ command: { status: 'success', message: 'Fixture command accepted.' } });
     if (url.pathname.startsWith('/agent/settings/')) return json({ ok: true, settings: mockSettingsData, items: [], entries: [] });

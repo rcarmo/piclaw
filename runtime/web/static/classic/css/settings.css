@@ -277,6 +277,57 @@
     background: color-mix(in srgb, var(--accent-color) 15%, var(--bg-primary));
 }
 
+.compaction-model-picker {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.compaction-model-picker > div {
+    flex: 1 1 420px;
+    min-width: 0;
+}
+
+.compaction-model-picker select {
+    flex: 1 1 320px;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 32px;
+    padding: 6px 10px;
+    border: 1px solid var(--border-color, rgba(128,128,128,0.3));
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.compaction-model-picker .settings-hint,
+.compaction-model-picker .compaction-model-probe-result {
+    flex: 1 0 100%;
+}
+
+@media (max-width: 600px) {
+    .compaction-model-picker {
+        display: block;
+    }
+
+    .compaction-model-picker > label,
+    .compaction-model-picker > div,
+    .compaction-model-picker select,
+    .compaction-model-picker button:not(.settings-number-step-btn) {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .compaction-model-picker select,
+    .compaction-model-picker button:not(.settings-number-step-btn) {
+        min-height: 44px;
+    }
+
+    .compaction-model-picker button:not(.settings-number-step-btn) {
+        margin-top: 8px;
+    }
+}
+
 .settings-hint {
     font-size: 0.84em;
     color: var(--text-secondary);

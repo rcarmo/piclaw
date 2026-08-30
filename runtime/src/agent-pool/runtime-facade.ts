@@ -24,6 +24,7 @@ import { resolveModelScope } from "../utils/scoped-models.js";
 import { withChatContext } from "../core/chat-context.js";
 import { sanitiseJid } from "./session.js";
 import type { PoolEntry } from "./session-manager.js";
+import { probeCompactionModel, type CompactionModelProbeResult } from "./compaction-model-probe.js";
 
 const MAX_PERSISTED_MODEL_STATE_CACHE_CHATS = 512;
 const persistedModelStateCache = new Map<string, {
@@ -331,6 +332,10 @@ export class AgentRuntimeFacade {
     const session = (await this.options.getOrCreateRuntime(chatJid)).session;
     const model = session.model;
     return model ? `${model.provider}/${model.id}` : null;
+  }
+
+  async probeCompactionModel(modelLabel: string): Promise<CompactionModelProbeResult> {
+    return await probeCompactionModel(this.options.modelRuntime, modelLabel);
   }
 
   async getAvailableModels(chatJid: string): Promise<AvailableModelsResult> {
