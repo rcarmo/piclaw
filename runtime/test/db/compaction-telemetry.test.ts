@@ -14,6 +14,7 @@ const record = {
   provider: "local",
   model: "fast-summary",
   timeout_stage: null,
+  input_tokens: 48_000,
   total_duration_ms: 1200,
   deterministic_duration_ms: 200,
   time_to_first_token_ms: 700,

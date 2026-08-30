@@ -114,7 +114,6 @@ export function createSmartCompactionExtension(options: { streamFn?: CompactionS
     // or adopts a different timeout midway.
     const compactionRuntimeConfig = getCompactionRuntimeConfig();
     const smartCompactionMethod = compactionRuntimeConfig.smartCompactionMethod;
-    updatePiclawCompactionExecution({ compactionMethod: smartCompactionMethod });
     const compactionMetadata = resolvePiclawCompactionTrigger({
       reason: (event as { reason?: string }).reason,
       willRetry: (event as { willRetry?: boolean }).willRetry,
@@ -133,6 +132,7 @@ export function createSmartCompactionExtension(options: { streamFn?: CompactionS
       settings,
     } = preparation;
 
+    updatePiclawCompactionExecution({ compactionMethod: smartCompactionMethod, compactionInputTokens: tokensBefore });
     let finalContextTokens: number | null = null;
     const publishContextSnapshot = (tokens: number | null | undefined, phase: "before_compaction" | "after_compaction") => {
       publishContextEstimate(ctx, typeof tokens === "number" && Number.isFinite(tokens) && tokens >= 0 ? tokens : null, phase, {

@@ -481,6 +481,7 @@ function createSchema(database: Database): void {
       provider TEXT,
       model TEXT,
       timeout_stage TEXT,
+      input_tokens INTEGER,
       total_duration_ms INTEGER NOT NULL DEFAULT 0,
       deterministic_duration_ms INTEGER,
       time_to_first_token_ms INTEGER,

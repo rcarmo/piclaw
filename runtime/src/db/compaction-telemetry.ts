@@ -13,6 +13,7 @@ export interface CompactionTelemetryRecord {
   provider: string | null;
   model: string | null;
   timeout_stage: CompactionTelemetryStage;
+  input_tokens: number | null;
   total_duration_ms: number;
   deterministic_duration_ms: number | null;
   time_to_first_token_ms: number | null;
@@ -47,6 +48,7 @@ export function normalizeCompactionTelemetryRecord(input: CompactionTelemetryRec
     provider,
     model,
     timeout_stage: input.timeout_stage && stages.has(input.timeout_stage) ? input.timeout_stage : null,
+    input_tokens: finiteCount(input.input_tokens),
     total_duration_ms: finiteMs(input.total_duration_ms) ?? 0,
     deterministic_duration_ms: finiteMs(input.deterministic_duration_ms),
     time_to_first_token_ms: finiteMs(input.time_to_first_token_ms),
@@ -67,13 +69,13 @@ export function storeCompactionTelemetry(input: CompactionTelemetryRecord): bool
   const record = normalizeCompactionTelemetryRecord(input);
   const db = getDb();
   const result = db.prepare(`INSERT OR IGNORE INTO compaction_telemetry (
-    generation_id, recorded_at, trigger, method, execution, outcome, provider, model, timeout_stage,
+    generation_id, recorded_at, trigger, method, execution, outcome, provider, model, timeout_stage, input_tokens,
     total_duration_ms, deterministic_duration_ms, time_to_first_token_ms, provider_generation_ms,
     provider_request_count, processed_chunk_count, total_chunk_count, settlement_timed_out
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     record.generation_id, record.recorded_at, record.trigger, record.method, record.execution, record.outcome,
-    record.provider, record.model, record.timeout_stage, record.total_duration_ms, record.deterministic_duration_ms,
+    record.provider, record.model, record.timeout_stage, record.input_tokens, record.total_duration_ms, record.deterministic_duration_ms,
     record.time_to_first_token_ms, record.provider_generation_ms, record.provider_request_count,
     record.processed_chunk_count, record.total_chunk_count, Number(record.settlement_timed_out),
   );
