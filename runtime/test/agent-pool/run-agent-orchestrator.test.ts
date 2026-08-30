@@ -255,7 +255,7 @@ test("runAgentPrompt keeps its wall-clock timeout active while stale-progress su
     const result = await run;
     expect(session.abortCalls).toBe(1);
     expect(result.status).toBe("error");
-    expect(result.error).toContain("timed out");
+    expect(result.error?.toLowerCase()).toContain("timed out");
     expect(getTrackedPhasesSnapshot()).toEqual([]);
   } finally {
     restoreWatchdogTimeout();
