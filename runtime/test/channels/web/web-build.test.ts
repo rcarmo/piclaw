@@ -30,6 +30,7 @@ test("build:web produces bundle assets", async () => {
   const appBundlePath = join(root, "web", "static", "classic", "dist", "app.bundle.js");
   const appMapPath = join(root, "web", "static", "classic", "dist", "app.bundle.js.map");
   const appCssPath = join(root, "web", "static", "classic", "dist", "app.bundle.css");
+  const sessionPickerFixturePath = join(root, "web", "static", "classic", "dist", "session-picker-fixture.bundle.js");
 
   const loginBundlePath = join(root, "web", "static", "common", "dist", "login.bundle.js");
   const loginMapPath = join(root, "web", "static", "common", "dist", "login.bundle.js.map");
@@ -41,6 +42,7 @@ test("build:web produces bundle assets", async () => {
   expect(existsSync(appBundlePath)).toBe(true);
   expect(existsSync(appMapPath)).toBe(true);
   expect(existsSync(appCssPath)).toBe(true);
+  expect(existsSync(sessionPickerFixturePath)).toBe(true);
 
   expect(existsSync(loginBundlePath)).toBe(true);
   expect(existsSync(loginMapPath)).toBe(true);

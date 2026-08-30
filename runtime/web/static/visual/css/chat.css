@@ -953,6 +953,80 @@
     color: var(--text-secondary);
 }
 
+.compose-session-popup {
+    max-height: min(72vh, 620px);
+    min-height: 300px;
+}
+
+.compose-session-popup-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.compose-session-popup-count {
+    margin-top: 2px;
+    color: var(--text-tertiary, var(--text-secondary));
+    font-size: 10px;
+}
+
+.compose-session-popup-close {
+    width: 32px;
+    height: 32px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.compose-session-popup-close:hover,
+.compose-session-popup-close:focus-visible {
+    border-color: var(--border-color);
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.compose-session-search-label {
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.compose-session-search {
+    width: 100%;
+    min-height: 36px;
+    padding: 7px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font: 12px var(--font-family-base);
+}
+
+.compose-session-popup-results {
+    flex: 1 1 auto;
+    min-height: 180px;
+    max-height: 430px;
+}
+
+.compose-session-section-heading {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 5px 8px 3px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
 .compose-model-popup-menu {
     max-height: 220px;
     overflow-y: auto;
@@ -1082,10 +1156,26 @@
     min-width: 0;
 }
 
-.compose-session-row-label {
+.compose-session-row-main {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-direction: column;
+}
+
+.compose-session-row-label,
+.compose-session-row-meta {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.compose-session-row-meta {
+    margin-top: 2px;
+    color: var(--text-tertiary, var(--text-secondary));
+    font-size: 9.5px;
+    font-weight: 400;
 }
 
 .compose-session-row-pills {
@@ -2007,4 +2097,36 @@
     background: var(--accent-color, #4a9eff);
     color: #fff;
     border-color: transparent;
+}
+
+@media (max-width: 639px) {
+    .compose-session-popup {
+        position: fixed;
+        inset: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom)) 8px;
+        width: auto;
+        min-height: 0;
+        max-height: none;
+        border-radius: var(--radius-md);
+    }
+
+    .compose-session-search,
+    .compose-session-popup-close,
+    .compose-session-popup .compose-model-popup-item,
+    .compose-session-popup .compose-model-popup-item-popout,
+    .compose-session-popup .compose-model-popup-item-delete,
+    .compose-session-popup .compose-model-popup-btn {
+        min-height: 44px;
+    }
+
+    .compose-session-popup-results {
+        min-height: 0;
+        max-height: none;
+    }
+
+    .compose-session-popup .compose-model-popup-item-popout,
+    .compose-session-popup .compose-model-popup-item-delete {
+        display: inline-flex;
+        width: 44px;
+        height: 44px;
+    }
 }

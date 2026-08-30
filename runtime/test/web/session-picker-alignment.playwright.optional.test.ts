@@ -1,0 +1,105 @@
+import { afterAll, beforeAll, expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { chromium, type Browser, type Page } from "playwright";
+
+const optionalBrowserTest = process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS === "1" ? test : test.skip;
+let browser: Browser | null = null;
+let server: ReturnType<typeof Bun.serve> | null = null;
+let baseUrl = "";
+
+beforeAll(async () => {
+  if (process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS !== "1") return;
+  browser = await chromium.launch({ headless: true });
+  server = Bun.serve({
+    port: 0,
+    async fetch(req) {
+      const url = new URL(req.url);
+      if (url.pathname === "/") return new Response(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/classic/dist/app.bundle.css"><script type="importmap">{"imports":{"#editor-vendor/codemirror":"/editor-vendor/codemirror.js"}}</script></head><body><div id="session-picker-fixture-root"></div><script type="module" src="/static/classic/dist/session-picker-fixture.bundle.js"></script></body></html>`, { headers: { "content-type": "text/html" } });
+      if (url.pathname.includes("..")) return new Response("not found", { status: 404 });
+      try {
+        const path = url.pathname === "/editor-vendor/codemirror.js"
+          ? join(import.meta.dir, "../../extensions/viewers/editor/vendor/codemirror.js")
+          : join(import.meta.dir, "../../web/static", url.pathname.slice("/static/".length));
+        const body = await readFile(path);
+        return new Response(body, { headers: { "content-type": url.pathname.endsWith(".css") ? "text/css" : "text/javascript" } });
+      } catch { return new Response("not found", { status: 404 }); }
+    },
+  });
+  baseUrl = `http://127.0.0.1:${server.port}`;
+});
+
+afterAll(async () => { await browser?.close(); server?.stop(true); browser = null; server = null; });
+
+async function openPicker(width: number, height: number): Promise<Page> {
+  if (!browser) throw new Error("browser not started");
+  const page = await browser.newPage({ viewport: { width, height } });
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
+  await page.getByTestId("session-switcher").click();
+  await page.waitForSelector(".compose-session-popup", { state: "visible" });
+  return page;
+}
+
+async function metrics(page: Page) {
+  return page.evaluate(() => {
+    const box = (selector: string) => { const el = document.querySelector(selector) as HTMLElement; const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom, clientHeight: el.clientHeight, scrollHeight: el.scrollHeight, overflowY: getComputedStyle(el).overflowY }; };
+    return { viewport: { width: innerWidth, height: innerHeight }, popup: box(".compose-session-popup"), results: box(".compose-session-popup-results"), search: box(".compose-session-search"), headings: Array.from(document.querySelectorAll(".compose-session-section-heading")).map(node => node.textContent) };
+  });
+}
+
+optionalBrowserTest("desktop session picker has stable scroll geometry, five sections, search, and keyboard selection", async () => {
+  const page = await openPicker(1280, 800);
+  try {
+    const before = await metrics(page);
+    expect(before.results.height).toBeGreaterThanOrEqual(180);
+    expect(before.results.height).toBeLessThanOrEqual(430);
+    expect(before.results.scrollHeight).toBeGreaterThan(before.results.clientHeight);
+    expect(before.headings).toEqual(["Current", "Active", "This session tree", "Other sessions", "Archived"]);
+    expect(await page.locator(".compose-model-popup-item-popout").count()).toBe(30);
+    expect(await page.getByRole("button", { name: "New branch" }).count()).toBe(1);
+    expect(await page.locator('.compose-model-popup-actions button[title="Rename the current session"]').count()).toBe(1);
+    const search = page.locator(".compose-session-search");
+    expect(await search.evaluate(node => document.activeElement === node)).toBe(true);
+    await search.fill("duplicate");
+    expect(await page.locator('[role="option"]').count()).toBe(3);
+    expect(await page.getByRole("button", { name: "New branch" }).count()).toBe(0);
+    expect(await page.locator('[role="option"]').nth(0).getAttribute("aria-label")).toContain("chat web:root-0");
+    await page.keyboard.press("End");
+    const activeId = await page.locator('[role="listbox"]').getAttribute("aria-activedescendant");
+    expect(activeId).toBeTruthy();
+    await page.keyboard.press("Enter");
+    expect(await page.locator("#session-picker-action").textContent()).toContain("switch:");
+  } finally { await page.close(); }
+});
+
+optionalBrowserTest("tablet picker pages through results and Escape restores trigger focus", async () => {
+  const page = await openPicker(820, 700);
+  try {
+    const listbox = page.locator('[role="listbox"]');
+    const first = await listbox.getAttribute("aria-activedescendant");
+    await page.keyboard.press("PageDown");
+    const paged = await listbox.getAttribute("aria-activedescendant");
+    expect(paged).not.toBe(first);
+    await page.keyboard.press("Escape");
+    expect(await page.locator(".compose-session-popup").count()).toBe(0);
+    await page.waitForFunction(() => document.activeElement === document.querySelector('[data-testid="session-switcher"]'));
+    expect(await page.getByTestId("session-switcher").evaluate(node => document.activeElement === node)).toBe(true);
+  } finally { await page.close(); }
+});
+
+optionalBrowserTest("phone picker uses safe-area sheet geometry and can reveal archived matches", async () => {
+  const page = await openPicker(412, 915);
+  try {
+    const measured = await metrics(page);
+    expect(measured.popup.x).toBeGreaterThanOrEqual(8);
+    expect(measured.popup.right).toBeLessThanOrEqual(404);
+    expect(measured.popup.y).toBeGreaterThanOrEqual(8);
+    expect(measured.popup.bottom).toBeLessThanOrEqual(907);
+    expect(measured.search.height).toBeGreaterThanOrEqual(44);
+    await page.locator(".compose-session-search").fill("archived");
+    expect(await page.locator('[role="option"]').count()).toBe(5);
+    expect(await page.locator(".compose-session-section-heading").allTextContents()).toEqual(["Archived"]);
+    await page.locator('[role="option"]').first().click();
+    expect(await page.locator("#session-picker-action").textContent()).toContain("restore:");
+  } finally { await page.close(); }
+});

@@ -1,10 +1,46 @@
 import { expect, test } from 'bun:test';
 
 import {
+  buildSessionPickerSearchDocument,
   canUseComposeSessionSwitcher,
+  filterSessionPickerChats,
+  groupSessionPickerChats,
+  moveSessionPickerIndex,
   shouldOpenSessionSwitcherFromBlankCompose,
   shouldRouteComposeValueToSessionSwitcher,
 } from '../../web/src/ui/compose-session-switcher.js';
+
+const chats = [
+  { chat_jid: 'web:root', root_chat_jid: 'web:root', branch_id: 'root', agent_name: 'ops', model: 'openai/gpt-5', is_active: false },
+  { chat_jid: 'web:root:branch:a', root_chat_jid: 'web:root', branch_id: 'a', parent_branch_id: 'root', agent_name: 'worker', model: 'local/qwen', is_active: true },
+  { chat_jid: 'web:root:branch:b', root_chat_jid: 'web:root', branch_id: 'b', parent_branch_id: 'a', agent_name: 'worker', model: 'local/llama', is_active: false },
+  { chat_jid: 'web:other', root_chat_jid: 'web:other', branch_id: 'other', agent_name: 'other', model: 'anthropic/claude', is_active: false },
+  { chat_jid: 'web:archived', root_chat_jid: 'web:archived', branch_id: 'archived', agent_name: 'old', model: 'local/qwen', is_active: true, archived_at: '2026-08-30T00:00:00Z' },
+];
+
+test('session picker search covers handle, JID, lifecycle state, and model while preserving ancestors', () => {
+  expect(buildSessionPickerSearchDocument(chats[1])).toContain('@worker');
+  expect(filterSessionPickerChats(chats, 'local llama').map(chat => chat.chat_jid)).toEqual(['web:root', 'web:root:branch:a', 'web:root:branch:b']);
+  expect(filterSessionPickerChats(chats, 'web:other').map(chat => chat.chat_jid)).toEqual(['web:other']);
+  expect(filterSessionPickerChats(chats, 'archived').map(chat => chat.chat_jid)).toEqual(['web:archived']);
+  expect(filterSessionPickerChats(chats, 'worker')).toHaveLength(3);
+});
+
+test('session picker grouping uses current-active-tree-other-archived precedence', () => {
+  const sections = groupSessionPickerChats(chats, 'web:root');
+  expect(sections.map(section => section.key)).toEqual(['current', 'active', 'tree', 'other', 'archived']);
+  expect(sections.find(section => section.key === 'archived')?.items[0].chat_jid).toBe('web:archived');
+  expect(sections.find(section => section.key === 'active')?.items[0].chat_jid).toBe('web:root:branch:a');
+});
+
+test('session picker navigation supports arrows, home/end, and paging', () => {
+  expect(moveSessionPickerIndex(0, 20, 'ArrowDown')).toBe(1);
+  expect(moveSessionPickerIndex(0, 20, 'ArrowUp')).toBe(19);
+  expect(moveSessionPickerIndex(8, 20, 'Home')).toBe(0);
+  expect(moveSessionPickerIndex(8, 20, 'End')).toBe(19);
+  expect(moveSessionPickerIndex(8, 20, 'PageDown')).toBe(16);
+  expect(moveSessionPickerIndex(8, 20, 'PageUp')).toBe(0);
+});
 
 test('opens the session switcher when @ is typed into a blank compose box', () => {
   expect(shouldOpenSessionSwitcherFromBlankCompose({ key: '@' } as any, '', {
