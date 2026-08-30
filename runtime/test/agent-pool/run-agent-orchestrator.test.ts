@@ -678,9 +678,7 @@ test("runAgentPrompt applies mid-turn projections to body-after-prefix usage ins
     PICLAW_AUTO_COMPACTION_SCOPE: "body_after_prefix",
     PICLAW_COMPACTION_THRESHOLD_PERCENT: "80",
     PICLAW_COMPACTION_MAX_THRESHOLD_TOKENS: "0",
-    PICLAW_PROGRESS_WATCHDOG_ENABLED: "0",
   });
-  const restoreWatchdogTimeout = setProgressWatchdogTimeoutForTests(0);
   const chatJid = `web:scoped-mid-turn-${Date.now()}`;
   setChatAutoCompactionWindow(chatJid, { ordinal: 2, baselineTokens: 50_000, prefillTokens: 50_000 });
 
@@ -741,7 +739,6 @@ test("runAgentPrompt applies mid-turn projections to body-after-prefix usage ins
     expect(session.aborted).toBe(false);
     expect(warnings.some((entry) => entry.operation === "run_agent.mid_turn_context_pressure")).toBe(false);
   } finally {
-    restoreWatchdogTimeout();
     restoreEnv();
   }
 });
@@ -1317,10 +1314,8 @@ test("runAgentPrompt refuses to prompt a session when pre-prompt timeout emergen
   const restoreEnv = setEnv({
     PICLAW_COMPACTION_TIMEOUT_MS: "1",
     PICLAW_COMPACTION_THRESHOLD_PERCENT: "1",
-    PICLAW_PROGRESS_WATCHDOG_ENABLED: "0",
   });
   const restoreSettlementGrace = setCompactionSettlementGraceForTests(0);
-  const restoreWatchdogTimeout = setProgressWatchdogTimeoutForTests(0);
   const calls: string[] = [];
 
   class StuckSession {
@@ -1373,7 +1368,6 @@ test("runAgentPrompt refuses to prompt a session when pre-prompt timeout emergen
     expect(result.error).toContain("Refusing to prompt a session that may still be physically compacting");
     expect(calls).toEqual(["compact", "abortCompaction"]);
   } finally {
-    restoreWatchdogTimeout();
     restoreSettlementGrace();
     restoreEnv();
   }
@@ -1384,9 +1378,7 @@ test("runAgentPrompt suppresses auto-compaction under backoff and refuses unsafe
     PICLAW_COMPACTION_TIMEOUT_MS: "20",
     PICLAW_COMPACTION_BACKOFF_BASE_MS: "600000",
     PICLAW_COMPACTION_BACKOFF_MAX_MS: "600000",
-    PICLAW_PROGRESS_WATCHDOG_ENABLED: "0",
   });
-  const restoreWatchdogTimeout = setProgressWatchdogTimeoutForTests(0);
   const chatJid = `web:compaction-backoff-${Date.now()}`;
   const db = await import("../../src/db.js");
   db.initDatabase();
@@ -1498,7 +1490,6 @@ test("runAgentPrompt suppresses auto-compaction under backoff and refuses unsafe
     expect(secondSession.calls).toEqual([]);
     expect(compactionEvents).toEqual(["compaction_suppressed"]);
   } finally {
-    restoreWatchdogTimeout();
     restoreEnv();
   }
 });

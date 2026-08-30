@@ -1,4 +1,4 @@
-import { beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 
 import { buildCompactionLatencyEstimate, compactionInputTokenBucket } from "../../src/agent-pool/compaction-prefill-estimate.js";
 import { initDatabase, storeCompactionTelemetry } from "../../src/db.js";
@@ -6,6 +6,7 @@ import { getCompactionRuntimeConfig, resetCompactionRuntimeConfigForTests, setCo
 
 process.env.PICLAW_DB_IN_MEMORY = "1";
 beforeEach(() => { initDatabase(); resetCompactionRuntimeConfigForTests(); });
+afterEach(resetCompactionRuntimeConfigForTests);
 
 function sample(index: number, inputTokens: number, durationMs: number, recordedAt: string, outcome: "success" | "partial" | "timeout" = "success", model = "summary") {
   storeCompactionTelemetry({
