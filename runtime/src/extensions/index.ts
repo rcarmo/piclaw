@@ -67,12 +67,14 @@ import { persistedToolResultSanitizer } from "./persisted-tool-result-sanitizer.
 import { createContextPruneExtension } from "./context-prune.js";
 import { mcpTimeoutPatch } from "./mcp-timeout-patch.js";
 import { localLitePromptProfile } from "./local-lite-prompt-profile.js";
+import { createUiPromptWatchdogExtension } from "./ui-prompt-watchdog.js";
 
 /** Build the built-in extension factory list used for session creation. */
 export function createBuiltinExtensionFactories(options?: {
   attachmentRegistry?: AttachmentRegistry;
   compactionStreamFn?: CompactionStreamFn;
   modelRuntime?: ModelRuntime;
+  chatJid?: string;
 }): ExtensionFactory[] {
   return [
     createFileAttachmentsExtension(options?.attachmentRegistry),
@@ -105,6 +107,7 @@ export function createBuiltinExtensionFactories(options?: {
     llmContextNormalizer,
     mcpTimeoutPatch,
     localLitePromptProfile,
+    createUiPromptWatchdogExtension(options?.chatJid),
   ];
 }
 

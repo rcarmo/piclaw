@@ -29,6 +29,33 @@ test('evaluateProgressWatchdogSnapshot returns a stalled entry when heartbeat ag
   }));
 });
 
+test('evaluateProgressWatchdogSnapshot ignores suspended entries but still evaluates active entries', () => {
+  const now = Date.now();
+  const evaluation = evaluateProgressWatchdogSnapshot({
+    pid: 123,
+    updatedAt: new Date(now).toISOString(),
+    timeoutMs: 30_000,
+    shuttingDown: false,
+    entries: [
+      {
+        chatJid: 'web:waiting',
+        phase: 'tool_execution',
+        startedAt: now - 90_000,
+        lastProgressAt: now - 60_000,
+        suspension: { reason: 'ui_prompt', startedAt: now - 50_000, metadata: { kind: 'select' } },
+      },
+      {
+        chatJid: 'web:active',
+        phase: 'streaming',
+        startedAt: now - 60_000,
+        lastProgressAt: now - 31_000,
+      },
+    ],
+  }, now);
+
+  expect(evaluation.stalledEntry).toEqual(expect.objectContaining({ chatJid: 'web:active' }));
+});
+
 test('evaluateProgressWatchdogSnapshot ignores empty or shutting-down state', () => {
   expect(evaluateProgressWatchdogSnapshot(null).stalledEntry).toBeNull();
   expect(evaluateProgressWatchdogSnapshot({

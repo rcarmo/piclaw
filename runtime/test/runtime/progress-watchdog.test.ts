@@ -6,11 +6,14 @@ import {
   flushProgressWatchdogState,
   getTrackedPhasesSnapshot,
   heartbeatTrackedPhase,
+  registerProgressWatchdogAborter,
   resetProgressWatchdogForTests,
+  resumeTrackedPhase,
   scanForStalls,
   setProgressWatchdogSnapshotPublisher,
   setProgressWatchdogTerminationHook,
   setProgressWatchdogTimeoutForTests,
+  suspendTrackedPhase,
 } from "../../src/runtime/progress-watchdog.js";
 
 let restoreTimeoutOverride: (() => void) | null = null;
@@ -57,6 +60,68 @@ test("progress watchdog heartbeat refreshes the active phase", () => {
   expect(after?.phase).toBe("streaming");
   expect((after?.lastProgressAt ?? 0)).toBeGreaterThanOrEqual(started?.lastProgressAt ?? 0);
   expect(after?.metadata).toMatchObject({ source: "test", eventType: "message_update" });
+});
+
+test("progress watchdog suspension preserves phase state, suppresses stalls, and resumes with fresh progress", async () => {
+  restoreTimeoutOverride = setProgressWatchdogTimeoutForTests(10);
+  beginTrackedPhase("web:test", "prompt", { source: "test", providerEventObserved: false });
+  const before = getTrackedPhasesSnapshot()[0];
+  expect(before).toBeTruthy();
+
+  suspendTrackedPhase("web:test", "ui_prompt", { kind: "confirm", title: "Continue?" });
+  const suspended = getTrackedPhasesSnapshot()[0];
+  expect(suspended).toEqual({
+    ...before,
+    suspension: expect.objectContaining({
+      reason: "ui_prompt",
+      metadata: { kind: "confirm", title: "Continue?" },
+    }),
+  });
+  expect(scanForStalls((before?.lastProgressAt ?? 0) + 100)).toEqual([]);
+
+  heartbeatTrackedPhase("web:test", "streaming", { providerEventObserved: true });
+  expect(getTrackedPhasesSnapshot()[0]).toEqual(suspended);
+
+  await Bun.sleep(2);
+  resumeTrackedPhase("web:test", "ui_prompt");
+  const resumed = getTrackedPhasesSnapshot()[0];
+  expect(resumed?.suspension).toBeUndefined();
+  expect(resumed?.phase).toBe("prompt");
+  expect(resumed?.startedAt).toBe(before?.startedAt);
+  expect(resumed?.metadata).toEqual(before?.metadata);
+  expect(resumed?.lastProgressAt ?? 0).toBeGreaterThan(before?.lastProgressAt ?? 0);
+  expect(scanForStalls(resumed?.lastProgressAt ?? 0)).toEqual([]);
+});
+
+test("progress watchdog suspension preserves the registered aborter after resume", async () => {
+  restoreTimeoutOverride = setProgressWatchdogTimeoutForTests(10);
+  const stalls: string[] = [];
+  beginTrackedPhase("web:test", "tool_execution");
+  registerProgressWatchdogAborter("web:test", (stall) => { stalls.push(stall.chatJid); });
+  suspendTrackedPhase("web:test", "ui_prompt");
+  resumeTrackedPhase("web:test", "ui_prompt");
+  const resumed = getTrackedPhasesSnapshot()[0];
+
+  expect(scanForStalls((resumed?.lastProgressAt ?? 0) + 20)).toHaveLength(1);
+  await Bun.sleep(0);
+  expect(stalls).toEqual(["web:test"]);
+});
+
+test("progress watchdog suspension is idempotent and endTrackedPhase clears it", () => {
+  beginTrackedPhase("web:test", "tool_execution", { tool: "confirm" });
+  suspendTrackedPhase("web:test", "ui_prompt", { kind: "custom" });
+  const first = getTrackedPhasesSnapshot()[0];
+  suspendTrackedPhase("web:test", "ui_prompt", { kind: "input" });
+  expect(getTrackedPhasesSnapshot()[0]).toEqual(first);
+
+  resumeTrackedPhase("web:test", "ui_prompt");
+  const resumed = getTrackedPhasesSnapshot()[0];
+  resumeTrackedPhase("web:test", "ui_prompt");
+  expect(getTrackedPhasesSnapshot()[0]).toEqual(resumed);
+
+  suspendTrackedPhase("web:test", "ui_prompt");
+  endTrackedPhase("web:test");
+  expect(getTrackedPhasesSnapshot()).toEqual([]);
 });
 
 test("progress watchdog publishes heartbeat snapshots when phases change", () => {

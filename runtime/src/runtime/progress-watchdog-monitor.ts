@@ -54,6 +54,7 @@ export function evaluateProgressWatchdogSnapshot(
   }
   const entries = Array.isArray(snapshot.entries) ? snapshot.entries : [];
   const stalledEntry = entries.find((entry) => {
+    if (entry?.suspension) return false;
     const lastProgressAt = Number(entry?.lastProgressAt);
     if (!Number.isFinite(lastProgressAt)) return false;
     return now - lastProgressAt > timeoutMs;

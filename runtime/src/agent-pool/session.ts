@@ -609,6 +609,7 @@ export async function createSessionInDir(
       ...createBuiltinExtensionFactories({
         compactionStreamFn: createCompactionStreamFn(options.modelRuntime, options.settingsManager),
         modelRuntime: options.modelRuntime,
+        chatJid: options.chatJid,
       }),
       createMcpAdapter({ config: getPreparedMcpConfig() }),
     ];

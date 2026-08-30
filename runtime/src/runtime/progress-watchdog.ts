@@ -19,12 +19,21 @@ export type ProgressWatchdogPhase =
   | "tool_execution"
   | "recovery";
 
+export type ProgressWatchdogSuspensionReason = "ui_prompt";
+
+export interface ProgressWatchdogSuspension {
+  reason: ProgressWatchdogSuspensionReason;
+  startedAt: number;
+  metadata?: Record<string, unknown>;
+}
+
 export interface ProgressWatchdogEntry {
   chatJid: string;
   phase: ProgressWatchdogPhase;
   startedAt: number;
   lastProgressAt: number;
   metadata?: Record<string, unknown>;
+  suspension?: ProgressWatchdogSuspension;
 }
 
 export interface ProgressWatchdogStall extends ProgressWatchdogEntry {
@@ -173,6 +182,37 @@ export function beginTrackedPhase(
   flushProgressWatchdogState();
 }
 
+export function suspendTrackedPhase(
+  chatJid: string,
+  reason: ProgressWatchdogSuspensionReason,
+  metadata?: Record<string, unknown>,
+): void {
+  const current = activeByChat.get(chatJid);
+  if (!current || current.suspension) return;
+  activeByChat.set(chatJid, {
+    ...current,
+    suspension: {
+      reason,
+      startedAt: Date.now(),
+      metadata: metadata ? { ...metadata } : undefined,
+    },
+  });
+  flushProgressWatchdogState();
+}
+
+export function resumeTrackedPhase(chatJid: string, reason: ProgressWatchdogSuspensionReason): void {
+  const current = activeByChat.get(chatJid);
+  if (!current || current.suspension?.reason !== reason) return;
+  const { suspension: _suspension, ...resumed } = current;
+  activeByChat.set(chatJid, {
+    ...resumed,
+    lastProgressAt: Date.now(),
+    stallReported: false,
+    abortAttempted: false,
+  });
+  flushProgressWatchdogState();
+}
+
 export function heartbeatTrackedPhase(
   chatJid: string,
   phase?: ProgressWatchdogPhase,
@@ -180,6 +220,7 @@ export function heartbeatTrackedPhase(
 ): void {
   const now = Date.now();
   const current = activeByChat.get(chatJid);
+  if (current?.suspension) return;
   if (!current) {
     if (!phase) return;
     activeByChat.set(chatJid, {
@@ -246,6 +287,7 @@ export function scanForStalls(now = Date.now()): ProgressWatchdogStall[] {
 
   const stalls: ProgressWatchdogStall[] = [];
   for (const [chatJid, current] of activeByChat) {
+    if (current.suspension) continue;
     const ageMs = Math.max(0, now - current.lastProgressAt);
     const effectiveTimeoutMs = getEffectiveEntryTimeoutMs(current, timeoutMs);
     if (ageMs < effectiveTimeoutMs) continue;
