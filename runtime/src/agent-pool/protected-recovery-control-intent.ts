@@ -25,6 +25,8 @@ export interface ProtectedRecoveryControlIntentBlock {
   tools_required?: boolean;
   retryable?: boolean;
   recovery_attempts?: number;
+  recovery_source_id?: string;
+  recovery_generation?: number;
 }
 
 interface MessageLike {
@@ -38,6 +40,8 @@ const HANDOFF_FIELD_KEYS = [
   "tools_required",
   "retryable",
   "recovery_attempts",
+  "recovery_source_id",
+  "recovery_generation",
 ] as const;
 
 function readHandoffFields(block: Record<string, unknown>): {
@@ -57,7 +61,11 @@ function readHandoffFields(block: Record<string, unknown>): {
     && typeof block.retryable === "boolean"
     && Number.isInteger(block.recovery_attempts)
     && Number(block.recovery_attempts) >= 0;
+  const hasRecoverySourceId = typeof block.recovery_source_id === "string" && block.recovery_source_id.trim().length > 0;
+  const hasRecoveryGeneration = Number.isInteger(block.recovery_generation) && Number(block.recovery_generation) >= 0;
   const semanticallyValid = structurallyValid
+    && (Object.hasOwn(block, "recovery_source_id") === Object.hasOwn(block, "recovery_generation"))
+    && (!Object.hasOwn(block, "recovery_source_id") || (hasRecoverySourceId && hasRecoveryGeneration))
     && (reason !== "post_compaction_tools_required" || (compaction === "succeeded" && toolsRequired === true))
     && (reason !== "compaction_failed" || compaction === "failed")
     && (reason !== "tools_required" || toolsRequired === true)
@@ -72,6 +80,8 @@ function readHandoffFields(block: Record<string, unknown>): {
       tools_required: toolsRequired,
       retryable: block.retryable as boolean,
       recovery_attempts: Number(block.recovery_attempts),
+      ...(hasRecoverySourceId ? { recovery_source_id: String(block.recovery_source_id).trim() } : {}),
+      ...(hasRecoveryGeneration ? { recovery_generation: Number(block.recovery_generation) } : {}),
     },
   };
 }

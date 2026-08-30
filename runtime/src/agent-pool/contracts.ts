@@ -178,6 +178,10 @@ export interface RunAgentOptions {
   protectedRecoveryContinuationDepth?: number;
   /** Validated safe evidence carried from the handoff that created this continuation. */
   protectedRecoveryHandoffContext?: ProtectedRecoveryHandoffMetadata;
+  /** Stable source-message identity used to partition repeated-failure suppression. */
+  recoverySourceId?: string;
+  /** Bounded progress generation within one source-message recovery chain. */
+  recoveryGeneration?: number;
 }
 
 export interface RetrySettingsProvider {

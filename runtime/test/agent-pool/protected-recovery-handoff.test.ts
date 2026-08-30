@@ -318,6 +318,8 @@ test("all protected-recovery reasons produce safe deterministic content-block fi
 test("protected recovery control authority requires the complete typed block", () => {
   const handoff = buildProtectedRecoveryHandoffMetadata("post_compaction_tools_required", {
     recoveryAttempts: 2,
+    recoverySourceId: "source-message",
+    recoveryGeneration: 1,
   });
   const block = buildProtectedRecoveryControlIntentBlock({
     sourceMessageId: "source-message",
@@ -334,6 +336,8 @@ test("protected recovery control authority requires the complete typed block", (
     tools_required: true,
     retryable: true,
     recovery_attempts: 2,
+    recovery_source_id: "source-message",
+    recovery_generation: 1,
   });
   expect(resolveProtectedRecoveryPrompt({ content_blocks: [block] })).toBe(TOOL_ENABLED_RECOVERY_CONTINUATION_PROMPT);
   expect(isProtectedRecoveryControlMessage({
@@ -356,6 +360,12 @@ test("protected recovery control authority requires the complete typed block", (
   })).toBe(false);
   expect(isProtectedRecoveryControlMessage({
     content_blocks: [{ ...block, compaction: "failed" }],
+  })).toBe(false);
+  expect(isProtectedRecoveryControlMessage({
+    content_blocks: [{ ...block, recovery_generation: undefined }],
+  })).toBe(false);
+  expect(isProtectedRecoveryControlMessage({
+    content_blocks: [{ ...block, recovery_source_id: undefined }],
   })).toBe(false);
 });
 

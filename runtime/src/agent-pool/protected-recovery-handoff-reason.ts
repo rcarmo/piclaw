@@ -17,6 +17,8 @@ export interface ProtectedRecoveryHandoffMetadata {
   toolsRequired: boolean;
   retryable: boolean;
   recoveryAttempts: number;
+  recoverySourceId?: string;
+  recoveryGeneration?: number;
 }
 
 export interface ProtectedRecoveryHandoffPresentation {
@@ -32,6 +34,8 @@ export interface ProtectedRecoveryHandoffContentBlockFields {
   tools_required: boolean;
   retryable: boolean;
   recovery_attempts: number;
+  recovery_source_id?: string;
+  recovery_generation?: number;
 }
 
 const PRESENTATION: Record<ProtectedRecoveryHandoffReason, Omit<ProtectedRecoveryHandoffPresentation, "nextAction">> = {
@@ -83,6 +87,8 @@ export function buildProtectedRecoveryHandoffMetadata(
     compaction?: ProtectedRecoveryCompactionOutcome;
     toolsRequired?: boolean;
     retryable?: boolean;
+    recoverySourceId?: string;
+    recoveryGeneration?: number;
   },
 ): ProtectedRecoveryHandoffMetadata {
   return {
@@ -97,6 +103,10 @@ export function buildProtectedRecoveryHandoffMetadata(
         || reason === "unresolved_tool_execution"),
     retryable: options.retryable ?? true,
     recoveryAttempts: Math.max(0, Math.trunc(options.recoveryAttempts)),
+    ...(options.recoverySourceId?.trim() ? { recoverySourceId: options.recoverySourceId.trim() } : {}),
+    ...(Number.isInteger(options.recoveryGeneration) && (options.recoveryGeneration ?? -1) >= 0
+      ? { recoveryGeneration: Number(options.recoveryGeneration) }
+      : {}),
   };
 }
 
@@ -120,5 +130,7 @@ export function protectedRecoveryHandoffContentBlockFields(
     tools_required: metadata.toolsRequired,
     retryable: metadata.retryable,
     recovery_attempts: metadata.recoveryAttempts,
+    ...(metadata.recoverySourceId ? { recovery_source_id: metadata.recoverySourceId } : {}),
+    ...(Number.isInteger(metadata.recoveryGeneration) ? { recovery_generation: metadata.recoveryGeneration } : {}),
   };
 }

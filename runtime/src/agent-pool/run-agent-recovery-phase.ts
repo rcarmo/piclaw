@@ -45,6 +45,7 @@ import {
 } from "./protected-recovery-handoff-reason.js";
 
 const MAX_RECOVERY_LOOP_GUARD_CHATS = 512;
+export const MAX_RECOVERY_GENERATIONS_PER_SOURCE = 3;
 const MIN_RECOVERY_FINALIZATION_RESERVE_MS = 5_000;
 const MAX_RECOVERY_FINALIZATION_RESERVE_MS = 60_000;
 const RECOVERY_FINALIZATION_RESERVE_RATIO = 0.15;
@@ -170,6 +171,8 @@ function pruneRecoveryFailureMap(now: number, windowMs: number): void {
 
 export function shouldSuppressRecoveryLoop(options: {
   chatJid: string;
+  recoverySourceId?: string;
+  recoveryGeneration?: number;
   modelLabel: string | null;
   failureCategory: AgentFailureCategory;
   classifier: RecoveryClassifier;
@@ -186,6 +189,8 @@ export function shouldSuppressRecoveryLoop(options: {
   pruneRecoveryFailureMap(now, windowMs);
 
   const signature = [
+    options.recoverySourceId?.trim() || "legacy-source",
+    Math.max(0, Math.trunc(options.recoveryGeneration ?? 0)),
     options.modelLabel ?? "unknown-model",
     options.failureCategory,
     options.classifier,
@@ -204,6 +209,34 @@ export function shouldSuppressRecoveryLoop(options: {
     attemptsInWindow,
     windowMs,
   };
+}
+
+export function resetRecoveryLoopGuardForTests(): void {
+  recentRecoveryFailuresByChat.clear();
+}
+
+export function shouldAdvanceRecoveryGeneration(options: {
+  recoveryGeneration: number;
+  successfulRecoveryCompaction: boolean;
+  promptWasPersisted: boolean;
+  hadCompletedTurnOutput: boolean;
+  attemptRanWithExecutionTools: boolean;
+  toolExecutionCountAtStart: number;
+  toolExecutionCountAtEnd: number;
+  hasUnresolvedToolExecution: boolean;
+  hadToolFailure: boolean;
+  decision: RecoveryDecision;
+}): boolean {
+  return options.recoveryGeneration + 1 < MAX_RECOVERY_GENERATIONS_PER_SOURCE
+    && options.successfulRecoveryCompaction
+    && options.promptWasPersisted
+    && options.hadCompletedTurnOutput
+    && options.attemptRanWithExecutionTools
+    && options.toolExecutionCountAtEnd > options.toolExecutionCountAtStart
+    && !options.hasUnresolvedToolExecution
+    && !options.hadToolFailure
+    && options.decision.recover
+    && options.decision.strategy !== null;
 }
 
 export function shouldDisableToolsForRecoveryAttempt(
@@ -447,6 +480,16 @@ export async function runAgentRecoveryPhase(options: RunAgentRecoveryPhaseOption
   let lastRecoveryCompactionOutcome: "not_attempted" | "succeeded" | "failed" =
     protectedRecoveryHandoffContext?.compaction ?? "not_attempted";
   let hasFreshSuccessfulRecoveryCompaction = false;
+  let generationAdvanceAvailableAfterCompaction = false;
+  const recoverySourceId = runOptions.recoverySourceId
+    ?? protectedRecoveryHandoffContext?.recoverySourceId
+    ?? runOptions.turnId
+    ?? chatJid;
+  let recoveryGeneration = Math.max(0, Math.trunc(
+    runOptions.recoveryGeneration
+      ?? protectedRecoveryHandoffContext?.recoveryGeneration
+      ?? 0,
+  ));
   let protectedRecoveryToolsRequired = protectedRecoveryHandoffContext?.toolsRequired ?? false;
   let protectedRecoveryHasUnresolvedToolExecution =
     protectedRecoveryHandoffContext?.reason === "unresolved_tool_execution";
@@ -490,6 +533,8 @@ export async function runAgentRecoveryPhase(options: RunAgentRecoveryPhaseOption
       || reason === "tools_required"
       || reason === "unresolved_tool_execution",
     retryable: protectedRecoveryHandoffContext?.retryable,
+    recoverySourceId,
+    recoveryGeneration,
   });
   const inferProtectedHandoffReason = (): ProtectedRecoveryHandoffReason => {
     const latestDiagnostic = recoveryDiagnostics.at(-1);
@@ -684,6 +729,10 @@ export async function runAgentRecoveryPhase(options: RunAgentRecoveryPhaseOption
       && recoveryAttemptsUsed > 0
       && strategyHistory.at(-1) !== "finalize";
     lastAttemptWasGenericProtected = currentAttemptWasGenericProtected;
+    const toolExecutionCountAtStart = turnToolExecutionCount;
+    const attemptRanWithExecutionTools = !recoveryContinuationWithoutTools
+      && Boolean(activeSessionCtrl?.getActiveToolNames?.().length);
+    const successfulRecoveryCompactionBeforeAttempt = generationAdvanceAvailableAfterCompaction;
     let attempt: PromptAttemptResult;
     try {
       attempt = await options.runPromptAttempt(attemptPrompt, attemptTimeoutMs, turnToolExecutionCount, finalizationReserveMs);
@@ -850,11 +899,35 @@ export async function runAgentRecoveryPhase(options: RunAgentRecoveryPhaseOption
           });
 
     let effectiveDecision = decision;
+    if (shouldAdvanceRecoveryGeneration({
+      recoveryGeneration,
+      successfulRecoveryCompaction: successfulRecoveryCompactionBeforeAttempt,
+      promptWasPersisted: attempt.promptWasPersisted,
+      hadCompletedTurnOutput: Boolean(attempt.snapshot.hadCompletedTurnOutput),
+      attemptRanWithExecutionTools,
+      toolExecutionCountAtStart,
+      toolExecutionCountAtEnd: attempt.toolExecutionCount,
+      hasUnresolvedToolExecution: Boolean(attempt.snapshot.hasUnresolvedToolExecution),
+      hadToolFailure: Boolean(attempt.snapshot.hadToolFailure),
+      decision,
+    })) {
+      recoveryGeneration += 1;
+      options.onInfo?.("Advanced bounded recovery generation after durable post-compaction progress", {
+        operation: "run_agent.recovery_generation_advanced",
+        chatJid,
+        recoverySourceId,
+        recoveryGeneration,
+        ...getRunObservabilityDetails(runOptions),
+      });
+    }
+    generationAdvanceAvailableAfterCompaction = false;
     // This retry is already turn-scoped, one-shot, and parameter-changing.
     // The generic cross-turn loop guard must not suppress its first safe use.
     if (decision.recover && decision.strategy && decision.classifier !== "provider_budget") {
       const guard = shouldSuppressRecoveryLoop({
         chatJid,
+        recoverySourceId,
+        recoveryGeneration,
         modelLabel,
         failureCategory,
         classifier: decision.classifier,
@@ -1033,6 +1106,7 @@ export async function runAgentRecoveryPhase(options: RunAgentRecoveryPhaseOption
       const compactionResult = await runRecoveryCompaction(activeSession, chatJid, runOptions, options);
       if (compactionResult.ok && compactionResult.compacted) {
         hasFreshSuccessfulRecoveryCompaction = true;
+        generationAdvanceAvailableAfterCompaction = true;
       }
       lastRecoveryCompactionOutcome = !compactionResult.ok
         ? "failed"

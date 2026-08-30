@@ -44,6 +44,8 @@ export function finishBoundedProtectedRecoveryHandoff(output: AgentOutput): Agen
       compaction: priorHandoff?.compaction,
       toolsRequired: priorHandoff?.toolsRequired ?? true,
       retryable: priorHandoff?.retryable ?? true,
+      recoverySourceId: priorHandoff?.recoverySourceId,
+      recoveryGeneration: priorHandoff?.recoveryGeneration,
     },
   );
   const presentation = formatProtectedRecoveryHandoff(protectedRecoveryHandoff);

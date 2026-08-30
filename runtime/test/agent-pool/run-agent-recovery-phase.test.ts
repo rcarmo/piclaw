@@ -4,7 +4,11 @@ import "../helpers.js";
 
 import {
   buildRecoveryDiagnosticEntry,
+  MAX_RECOVERY_GENERATIONS_PER_SOURCE,
+  resetRecoveryLoopGuardForTests,
   runAgentRecoveryPhase,
+  shouldAdvanceRecoveryGeneration,
+  shouldSuppressRecoveryLoop,
   type PromptAttemptResult,
   type SessionWithToolControl,
 } from "../../src/agent-pool/run-agent-recovery-phase.js";
@@ -26,6 +30,7 @@ const TEST_CHAT_JIDS = [
   "web:test-recovery-compact:protected:1",
   "web:test-recovery-compact:protected:2",
   "web:test-recovery-compact:protected:bounded",
+  "web:test-recovery-generation-progress",
   "web:test-openrouter-budget-recovery",
   "web:test-openrouter-budget-terminal",
 ];
@@ -36,6 +41,7 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const chatJid of TEST_CHAT_JIDS) endTrackedPhase(chatJid);
+  resetRecoveryLoopGuardForTests();
 });
 
 function output(status: AgentOutput["status"], error?: string, result: string | null = null): AgentOutput {
@@ -73,6 +79,63 @@ function recoveryConfig(overrides: Partial<Parameters<typeof runAgentRecoveryPha
     ...overrides,
   };
 }
+
+describe("recovery generation policy", () => {
+  const eligible = {
+    recoveryGeneration: 0,
+    successfulRecoveryCompaction: true,
+    promptWasPersisted: true,
+    hadCompletedTurnOutput: true,
+    attemptRanWithExecutionTools: true,
+    toolExecutionCountAtStart: 2,
+    toolExecutionCountAtEnd: 3,
+    hasUnresolvedToolExecution: false,
+    hadToolFailure: false,
+    decision: {
+      recover: true,
+      classifier: "transient" as const,
+      strategy: "retry" as const,
+      reason: "retry",
+    },
+  };
+
+  test("advances only after durable resolved post-compaction tool progress", () => {
+    expect(shouldAdvanceRecoveryGeneration(eligible)).toBe(true);
+    expect(shouldAdvanceRecoveryGeneration({ ...eligible, successfulRecoveryCompaction: false })).toBe(false);
+    expect(shouldAdvanceRecoveryGeneration({ ...eligible, promptWasPersisted: false })).toBe(false);
+    expect(shouldAdvanceRecoveryGeneration({ ...eligible, hadCompletedTurnOutput: false })).toBe(false);
+    expect(shouldAdvanceRecoveryGeneration({ ...eligible, attemptRanWithExecutionTools: false })).toBe(false);
+    expect(shouldAdvanceRecoveryGeneration({ ...eligible, toolExecutionCountAtEnd: 2 })).toBe(false);
+    expect(shouldAdvanceRecoveryGeneration({ ...eligible, hasUnresolvedToolExecution: true })).toBe(false);
+    expect(shouldAdvanceRecoveryGeneration({ ...eligible, hadToolFailure: true })).toBe(false);
+    expect(shouldAdvanceRecoveryGeneration({ ...eligible, decision: { ...eligible.decision, recover: false, strategy: null } })).toBe(false);
+  });
+
+  test("enforces an absolute three-generation source cap", () => {
+    expect(MAX_RECOVERY_GENERATIONS_PER_SOURCE).toBe(3);
+    expect(shouldAdvanceRecoveryGeneration({ ...eligible, recoveryGeneration: 1 })).toBe(true);
+    expect(shouldAdvanceRecoveryGeneration({ ...eligible, recoveryGeneration: 2 })).toBe(false);
+  });
+
+  test("partitions repeated-failure suppression by source and generation", () => {
+    const guard = (recoverySourceId: string, recoveryGeneration: number) => shouldSuppressRecoveryLoop({
+      chatJid: "web:test-recovery-phase",
+      recoverySourceId,
+      recoveryGeneration,
+      modelLabel: "test/model",
+      failureCategory: "timeout",
+      classifier: "transient",
+      strategy: "retry",
+      now: 1_000,
+    });
+
+    expect(guard("source-a", 0).suppress).toBe(false);
+    expect(guard("source-a", 0).suppress).toBe(false);
+    expect(guard("source-a", 0).suppress).toBe(true);
+    expect(guard("source-a", 1)).toMatchObject({ suppress: false, attemptsInWindow: 1 });
+    expect(guard("source-b", 0)).toMatchObject({ suppress: false, attemptsInWindow: 1 });
+  });
+});
 
 describe("runAgentRecoveryPhase", () => {
   test("continues after resolved tool work with tools available and execution budget carried", async () => {
@@ -826,6 +889,110 @@ describe("runAgentRecoveryPhase", () => {
       ]);
       expect(activeToolSets).toEqual([]);
     }
+  });
+
+  test("post-compaction durable tool progress advances the loop-guard generation", async () => {
+    const chatJid = "web:test-recovery-generation-progress";
+    const recoverySourceId = "source-message-1063";
+    let calls = 0;
+    let compactCalls = 0;
+    const generationEvents: Array<Record<string, unknown>> = [];
+    const sessionCtrl: SessionWithToolControl = {
+      getActiveToolNames: () => ["read", "edit"],
+      setActiveToolsByName: () => {},
+    };
+
+    const result = await runAgentRecoveryPhase({
+      prompt: "continue protected work",
+      chatJid,
+      session: { compact: async () => { compactCalls += 1; return {}; } } as any,
+      sessionCtrl,
+      timeoutMs: 0,
+      startTime: Date.now(),
+      modelLabel: "test/model",
+      recoveryConfig: recoveryConfig(),
+      runOptions: {
+        protectedRecoveryContinuation: true,
+        protectedRecoveryContinuationDepth: 1,
+        recoverySourceId,
+        recoveryGeneration: 0,
+      },
+      logsDir: "/tmp/nonexistent-piclaw-test-logs",
+      clearAttachments: () => {},
+      onInfo: (_message, details) => {
+        if (details.operation === "run_agent.recovery_generation_advanced") generationEvents.push(details);
+      },
+      runPromptAttempt: async (_prompt, _timeoutMs, toolExecutionCountAtStart) => {
+        calls += 1;
+        if (calls === 1) {
+          return attempt({
+            output: { ...output("error", "context length exceeded"), failureCategory: "context_pressure" },
+            snapshot: {
+              hadToolActivity: true,
+              hadPartialOutput: true,
+              hadCompletedTurnOutput: false,
+              hadTerminalTurnOutput: false,
+              sawCompactionIntent: true,
+              canDisableToolsForRecovery: true,
+              hasUnresolvedToolExecution: false,
+              hadToolFailure: false,
+              toolExecutionCount: 2,
+            },
+            promptWasPersisted: true,
+            toolExecutionCount: 2,
+          });
+        }
+        if (calls === 2) {
+          const oldGenerationGuard = () => shouldSuppressRecoveryLoop({
+            chatJid,
+            recoverySourceId,
+            recoveryGeneration: 0,
+            modelLabel: "test/model",
+            failureCategory: "timeout",
+            classifier: "transient",
+            strategy: "retry",
+            now: 2_000,
+          });
+          expect(oldGenerationGuard().suppress).toBe(false);
+          expect(oldGenerationGuard().suppress).toBe(false);
+          return attempt({
+            output: { ...output("error", "provider timed out before finalization"), failureCategory: "timeout" },
+            snapshot: {
+              hadToolActivity: true,
+              hadPartialOutput: true,
+              hadCompletedTurnOutput: true,
+              hadTerminalTurnOutput: false,
+              sawCompactionIntent: false,
+              canDisableToolsForRecovery: true,
+              hasUnresolvedToolExecution: false,
+              hadToolFailure: false,
+              toolExecutionCount: 3,
+            },
+            promptWasPersisted: true,
+            toolExecutionCount: 3,
+          });
+        }
+        return attempt({
+          output: output("success", undefined, "finished after generation advance"),
+          snapshot: {
+            hadToolActivity: false,
+            hadPartialOutput: false,
+            hadCompletedTurnOutput: true,
+            hadTerminalTurnOutput: true,
+            sawCompactionIntent: false,
+          },
+          promptWasPersisted: true,
+          toolExecutionCount: toolExecutionCountAtStart,
+        });
+      },
+    });
+
+    expect(result).toMatchObject({ status: "success", result: "finished after generation advance" });
+    expect(calls).toBe(3);
+    expect(compactCalls).toBe(1);
+    expect(generationEvents).toEqual([
+      expect.objectContaining({ recoverySourceId, recoveryGeneration: 1 }),
+    ]);
   });
 
   test("a later benign compaction skip cannot reuse fresh-compaction authority", async () => {

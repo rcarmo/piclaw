@@ -1544,6 +1544,12 @@ export async function processChat(
           toolsRequired: protectedRecoveryIntent.tools_required,
           retryable: protectedRecoveryIntent.retryable,
           recoveryAttempts: Number(protectedRecoveryIntent.recovery_attempts),
+          ...(protectedRecoveryIntent.recovery_source_id
+            ? { recoverySourceId: protectedRecoveryIntent.recovery_source_id }
+            : {}),
+          ...(Number.isInteger(protectedRecoveryIntent.recovery_generation)
+            ? { recoveryGeneration: protectedRecoveryIntent.recovery_generation }
+            : {}),
         }
       : undefined;
   const promptMessage = protectedRecoveryPrompt
@@ -1736,6 +1742,11 @@ export async function processChat(
     protectedRecoveryContinuation: Boolean(protectedRecoveryIntent),
     protectedRecoveryContinuationDepth: protectedRecoveryIntent?.handoff_depth,
     protectedRecoveryHandoffContext,
+    recoverySourceId: protectedRecoveryHandoffContext?.recoverySourceId
+      ?? protectedRecoveryIntent?.source_message_id
+      ?? lastMessage.id
+      ?? turnId,
+    recoveryGeneration: protectedRecoveryHandoffContext?.recoveryGeneration ?? 0,
     onEvent: trackedStreamingHandler,
     onTurnDiscard: () => {
       clearCommittedDraft();
@@ -2047,6 +2058,8 @@ export async function processChat(
         compaction: output.protectedRecoveryHandoff?.compaction,
         toolsRequired: output.protectedRecoveryHandoff?.toolsRequired ?? true,
         retryable: output.protectedRecoveryHandoff?.retryable ?? true,
+        recoverySourceId: output.protectedRecoveryHandoff?.recoverySourceId,
+        recoveryGeneration: output.protectedRecoveryHandoff?.recoveryGeneration,
       });
       const presentation = terminalHandoff ? formatProtectedRecoveryHandoff(terminalHandoff) : null;
       const detail = presentation?.detail ?? (protectedContinuation.terminalReason === "limit"
