@@ -5,6 +5,7 @@ import {
   runCompactionWithTimeout,
   setCompactionSettlementGraceForTests,
 } from "../../src/agent-pool/compaction.js";
+import { runWithPiclawCompactionTrigger } from "../../src/agent-pool/compaction-trigger-context.js";
 import {
   resetCompactionRuntimeConfigForTests,
   setCompactionRuntimeConfigForTests,
@@ -47,7 +48,7 @@ function model(): Model<"openai-completions"> {
   };
 }
 
-async function actualAdapterCompletion(signal: AbortSignal) {
+async function actualAdapterCompletion(signal: AbortSignal, onResponseHeaders?: () => void) {
   return await streamComplete({
     model: model(),
     systemPrompt: "Return a compact continuity summary.",
@@ -55,6 +56,7 @@ async function actualAdapterCompletion(signal: AbortSignal) {
     maxTokens: 128,
     signal,
     apiKey: "fixture-key",
+    onResponseHeaders,
     onProgress: () => {},
     progressIntervalMs: 0,
   });
@@ -105,23 +107,24 @@ test("outer deadline attributes delayed response headers to provider_connect", a
   });
 });
 
-test("outer deadline attributes delayed first content to first_token", async () => {
+test("actual adapter advances from response headers to first_token before content", async () => {
   fixture.enqueue({ firstTokenDelayMs: 3_000, chunks: ["too late"] });
   const controller = new AbortController();
-  setCompactionRuntimeConfigForTests({ timeoutMs: 1_000 });
-  restoreSettlementGrace = setCompactionSettlementGraceForTests(50);
+  let responseHeadersObserved = false;
+  const run = runWithPiclawCompactionTrigger({
+    chatJid: "web:delayed-first-token",
+    trigger: "manual",
+    willRetry: false,
+    source: "test",
+    deadlineAtMs: Date.now() + 10_000,
+    executionStage: "deterministic",
+  }, async () => await actualAdapterCompletion(controller.signal, () => {
+    responseHeadersObserved = true;
+    controller.abort();
+  }));
 
-  const result = await runCompactionWithTimeout(
-    { isCompacting: true, abortCompaction: () => controller.abort() } as any,
-    "web:delayed-first-token",
-    {},
-    async () => await actualAdapterCompletion(controller.signal),
-  );
-
-  expect(result).toEqual({
-    ok: false,
-    errorMessage: expect.stringContaining("Compaction timed out during first_token using local-fixture/delayed-fixture"),
-  });
+  await run.catch(() => undefined);
+  expect(responseHeadersObserved).toBe(true);
 });
 
 test("outer deadline attributes a mid-stream stall to streaming", async () => {
