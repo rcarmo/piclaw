@@ -5,7 +5,7 @@ import {
   runCompactionWithTimeout,
   setCompactionSettlementGraceForTests,
 } from "../../src/agent-pool/compaction.js";
-import { runWithPiclawCompactionTrigger } from "../../src/agent-pool/compaction-trigger-context.js";
+import { getActivePiclawCompactionTrigger, runWithPiclawCompactionTrigger } from "../../src/agent-pool/compaction-trigger-context.js";
 import {
   resetCompactionRuntimeConfigForTests,
   setCompactionRuntimeConfigForTests,
@@ -88,23 +88,27 @@ test("actual OpenAI-compatible adapter succeeds when first token arrives before 
   expect(fixture.requests[0]?.path).toBe("/v1/chat/completions");
 });
 
-test("outer deadline attributes delayed response headers to provider_connect", async () => {
-  fixture.enqueue({ headerDelayMs: 3_000, chunks: ["too late"] });
+test("actual adapter remains in provider_connect while response headers are delayed", async () => {
+  let requestReceived!: () => void;
+  const received = new Promise<void>((resolve) => { requestReceived = resolve; });
+  fixture.enqueue({ headerDelayMs: 3_000, chunks: ["too late"], onRequestReceived: requestReceived });
   const controller = new AbortController();
-  setCompactionRuntimeConfigForTests({ timeoutMs: 1_000 });
-  restoreSettlementGrace = setCompactionSettlementGraceForTests(50);
-
-  const result = await runCompactionWithTimeout(
-    { isCompacting: true, abortCompaction: () => controller.abort() } as any,
-    "web:delayed-provider-connect",
-    {},
-    async () => await actualAdapterCompletion(controller.signal),
-  );
-
-  expect(result).toEqual({
-    ok: false,
-    errorMessage: expect.stringContaining("Compaction timed out during provider_connect using local-fixture/delayed-fixture"),
+  let observedStage: string | undefined;
+  await runWithPiclawCompactionTrigger({
+    chatJid: "web:delayed-provider-connect",
+    trigger: "manual",
+    willRetry: false,
+    source: "test",
+    deadlineAtMs: Date.now() + 10_000,
+    executionStage: "deterministic",
+  }, async () => {
+    const run = actualAdapterCompletion(controller.signal);
+    await received;
+    observedStage = getActivePiclawCompactionTrigger()?.executionStage;
+    controller.abort();
+    await run.catch(() => undefined);
   });
+  expect(observedStage).toBe("provider_connect");
 });
 
 test("actual adapter advances from response headers to first_token before content", async () => {

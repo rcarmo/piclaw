@@ -1,5 +1,6 @@
 export type DelayedOpenAIScenario = {
   headerDelayMs?: number;
+  onRequestReceived?: () => void;
   firstTokenDelayMs?: number;
   betweenTokenDelayMs?: number;
   chunks?: string[];
@@ -37,6 +38,7 @@ export function startDelayedOpenAICompatibleServer(): DelayedOpenAIServer {
       if (url.pathname !== "/v1/chat/completions") return new Response("not found", { status: 404 });
       const scenario = scenarios.shift() ?? {};
       requests.push({ path: url.pathname, body: await request.clone().json(), startedAt: Date.now() });
+      scenario.onRequestReceived?.();
       await sleep(scenario.headerDelayMs);
       let cancelled = false;
       const body = new ReadableStream<Uint8Array>({
