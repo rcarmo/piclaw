@@ -6,7 +6,7 @@ export interface ComposeSessionSwitcherKeyEventLike {
   key?: string;
 }
 
-export type SessionPickerSectionKey = "current" | "active" | "tree" | "other" | "archived";
+export type SessionPickerSectionKey = "current" | "pinned" | "active" | "tree" | "other" | "archived";
 
 export interface SessionPickerSection<T = any> {
   key: SessionPickerSectionKey;
@@ -16,6 +16,7 @@ export interface SessionPickerSection<T = any> {
 
 const SECTION_LABELS: Record<SessionPickerSectionKey, string> = {
   current: "Current",
+  pinned: "Pinned",
   active: "Active",
   tree: "This session tree",
   other: "Other sessions",
@@ -66,22 +67,30 @@ export function filterSessionPickerChats<T extends Record<string, any>>(chats: T
   return chats.filter(chat => matches.has(clean(chat.chat_jid)));
 }
 
-export function groupSessionPickerChats<T extends Record<string, any>>(chats: T[], currentChatJid: string): SessionPickerSection<T>[] {
+export function groupSessionPickerChats<T extends Record<string, any>>(
+  chats: T[],
+  currentChatJid: string,
+  pinnedChatJids: Iterable<string> = [],
+): SessionPickerSection<T>[] {
   const current = clean(currentChatJid);
   const currentChat = chats.find(chat => clean(chat.chat_jid) === current);
   const currentRoot = clean(currentChat?.root_chat_jid) || current;
-  const buckets = new Map<SessionPickerSectionKey, T[]>([["current", []], ["active", []], ["tree", []], ["other", []], ["archived", []]]);
+  const pinned = new Set(Array.from(pinnedChatJids, clean).filter(Boolean));
+  const buckets = new Map<SessionPickerSectionKey, T[]>([
+    ["current", []], ["pinned", []], ["active", []], ["tree", []], ["other", []], ["archived", []],
+  ]);
   for (const chat of chats) {
     const jid = clean(chat.chat_jid);
     const archived = Boolean(chat.archived_at);
     const section: SessionPickerSectionKey = archived ? "archived"
       : jid === current ? "current"
-        : Boolean(chat.is_active) ? "active"
-          : (clean(chat.root_chat_jid) || jid) === currentRoot ? "tree"
-            : "other";
+        : pinned.has(jid) ? "pinned"
+          : Boolean(chat.is_active) ? "active"
+            : (clean(chat.root_chat_jid) || jid) === currentRoot ? "tree"
+              : "other";
     buckets.get(section)!.push(chat);
   }
-  return (["current", "active", "tree", "other", "archived"] as SessionPickerSectionKey[])
+  return (["current", "pinned", "active", "tree", "other", "archived"] as SessionPickerSectionKey[])
     .map(key => ({ key, label: SECTION_LABELS[key], items: buckets.get(key)! }))
     .filter(section => section.items.length > 0);
 }

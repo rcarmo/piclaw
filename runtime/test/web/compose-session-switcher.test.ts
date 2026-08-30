@@ -31,11 +31,21 @@ test('session picker search covers handle, JID, lifecycle state, and model while
   expect(filterSessionPickerChats(chats, 'worker')).toHaveLength(3);
 });
 
-test('session picker grouping uses current-active-tree-other-archived precedence', () => {
-  const sections = groupSessionPickerChats(chats, 'web:root');
-  expect(sections.map(section => section.key)).toEqual(['current', 'active', 'tree', 'other', 'archived']);
+test('session picker grouping uses current-pinned-active-tree-other-archived precedence', () => {
+  const sections = groupSessionPickerChats(chats, 'web:root', ['web:root', 'web:root:branch:a', 'web:other', 'web:archived']);
+  expect(sections.map(section => section.key)).toEqual(['current', 'pinned', 'tree', 'archived']);
+  expect(sections.find(section => section.key === 'current')?.items.map(chat => chat.chat_jid)).toEqual(['web:root']);
+  expect(sections.find(section => section.key === 'pinned')?.items.map(chat => chat.chat_jid)).toEqual(['web:root:branch:a', 'web:other']);
   expect(sections.find(section => section.key === 'archived')?.items[0].chat_jid).toBe('web:archived');
-  expect(sections.find(section => section.key === 'active')?.items[0].chat_jid).toBe('web:root:branch:a');
+  const orderedChatJids = sections.flatMap(section => section.items).map(chat => chat.chat_jid);
+  expect(orderedChatJids).toEqual([
+    'web:root',
+    'web:root:branch:a',
+    'web:other',
+    'web:root:branch:b',
+    'web:archived',
+  ]);
+  expect(new Set(orderedChatJids).size).toBe(chats.length);
 });
 
 test('session picker navigation supports arrows, home/end, and paging', () => {

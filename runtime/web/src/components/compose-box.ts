@@ -6,6 +6,11 @@ import { uploadFileBatch, uploadMedia } from '../ui/upload-transfers.js';
 import { getLocalStorageItem, setLocalStorageItem } from '../utils/storage.js';
 import { buildMentionValue, filterMentionAgents, parseMentionAutocompleteQuery } from '../ui/agent-mentions.js';
 import { filterSessionPickerChats, groupSessionPickerChats, moveSessionPickerIndex, resolveSessionPickerSearchInitialIndex, shouldOpenSessionSwitcherFromBlankCompose, shouldRouteComposeValueToSessionSwitcher } from '../ui/compose-session-switcher.js';
+import {
+    readSessionPickerPreferences,
+    SESSION_PICKER_PREFERENCES_EVENT,
+    togglePinnedSessionChatJid,
+} from '../ui/session-picker-preferences.ts';
 import { formatBranchPickerBaseLabel, formatBranchPickerLabel, getBranchLifecycleBadges } from '../ui/branch-lifecycle.js';
 import { buildComposeStatusDotClass } from '../ui/status-dot.js';
 import { getStatusElapsedLabel, isCompactionStatus, resolveStatusPanelTitle } from '../ui/status-duration.js';
@@ -1218,6 +1223,7 @@ export function ComposeBox({
     const [showModelPopup, setShowModelPopup] = useState(false);
     const [showSessionPopup, setShowSessionPopup] = useState(false);
     const [sessionPopupQuery, setSessionPopupQuery] = useState('');
+    const [pinnedSessionChatJids, setPinnedSessionChatJids] = useState(() => readSessionPickerPreferences().pinnedChatJids);
     const [pendingPurgeChatJid, setPendingPurgeChatJid] = useState(null);
     const [pendingPruneChatJid, setPendingPruneChatJid] = useState(null);
     const [hiddenSessionChatJids, setHiddenSessionChatJids] = useState(() => new Set());
@@ -1244,6 +1250,17 @@ export function ComposeBox({
             window.removeEventListener('storage', applyPreferences);
         };
     }, [agentModelsPayload, contextUsage]);
+    useEffect(() => {
+        const applySessionPreferences = () => {
+            setPinnedSessionChatJids(readSessionPickerPreferences().pinnedChatJids);
+        };
+        window.addEventListener(SESSION_PICKER_PREFERENCES_EVENT, applySessionPreferences);
+        window.addEventListener('storage', applySessionPreferences);
+        return () => {
+            window.removeEventListener(SESSION_PICKER_PREFERENCES_EVENT, applySessionPreferences);
+            window.removeEventListener('storage', applySessionPreferences);
+        };
+    }, []);
     useEffect(() => {
         const applyConfirmedModelState = (event) => {
             const detail = event?.detail;
@@ -1473,8 +1490,12 @@ export function ComposeBox({
         return parent || null;
     })();
     const switchableChatAgents = useMemo(() => resolveSessionPopupChats(activeChatAgents, currentChatJid, hiddenSessionChatJids), [activeChatAgents, currentChatJid, hiddenSessionChatJids]);
+    const pinnedSessionChatJidSet = useMemo(() => new Set(pinnedSessionChatJids), [pinnedSessionChatJids]);
     const filteredSessionChats = useMemo(() => filterSessionPickerChats(switchableChatAgents, sessionPopupQuery), [switchableChatAgents, sessionPopupQuery]);
-    const sessionPopupSections = useMemo(() => groupSessionPickerChats(filteredSessionChats, currentChatJid), [filteredSessionChats, currentChatJid]);
+    const sessionPopupSections = useMemo(
+        () => groupSessionPickerChats(filteredSessionChats, currentChatJid, pinnedSessionChatJids),
+        [filteredSessionChats, currentChatJid, pinnedSessionChatJids],
+    );
     const orderedSessionChats = useMemo(() => sessionPopupSections.flatMap((section) => section.items), [sessionPopupSections]);
     sessionPopupChatsRef.current = switchableChatAgents;
     const hasSwitchableChatAgents = switchableChatAgents.length > 0;
@@ -1857,6 +1878,20 @@ export function ComposeBox({
         sessionPopupIndexRef.current = clamped;
         if (clamped !== sessionPopupIndex) setSessionPopupIndex(clamped);
     }, [sessionPopupEntries.length, sessionPopupIndex]);
+
+    const toggleSessionPin = useCallback((chatJid) => {
+        const preferences = togglePinnedSessionChatJid(chatJid);
+        setPinnedSessionChatJids(preferences.pinnedChatJids);
+        const nextIndex = groupSessionPickerChats(
+            filteredSessionChats,
+            currentChatJid,
+            preferences.pinnedChatJids,
+        ).flatMap((section) => section.items).findIndex((chat) => chat.chat_jid === chatJid);
+        if (nextIndex >= 0) {
+            sessionPopupIndexRef.current = nextIndex;
+            setSessionPopupIndex(nextIndex);
+        }
+    }, [currentChatJid, filteredSessionChats]);
 
     const handleRenameSession = async (event) => {
         if (event?.preventDefault) event.preventDefault();
@@ -2617,6 +2652,15 @@ export function ComposeBox({
                 });
                 return true;
             }
+            if (e.key === 'Enter' && e.altKey && currentSessionPopupEntries.length > 0) {
+                consume();
+                resetPopupTypeahead();
+                const entry = currentSessionPopupEntries[Math.max(0, Math.min(sessionPopupIndexRef.current, currentSessionPopupEntries.length - 1))];
+                if (entry?.type === 'session' && !entry.chat?.archived_at) {
+                    toggleSessionPin(entry.chat.chat_jid);
+                }
+                return true;
+            }
             if ((e.key === 'Enter' || e.key === 'Tab') && currentSessionPopupEntries.length > 0) {
                 consume();
                 resetPopupTypeahead();
@@ -2643,6 +2687,7 @@ export function ComposeBox({
         sessionPopupEntries,
         sessionPopupIndex,
         closeModelPopup,
+        toggleSessionPin,
     ]);
 
     const handleKeyDown = (e) => {
@@ -3496,13 +3541,9 @@ export function ComposeBox({
                     ${showSessionPopup && !searchMode && html`
                         <div class="compose-model-popup compose-session-popup" data-testid="session-popup" ref=${sessionPopupRef} tabIndex="-1" onKeyDown=${handlePopupKeyboardEvent}>
                             <div class="compose-session-popup-header">
-                                <div>
-                                    <div class="compose-model-popup-title">${t('compose.manageSessions')}</div>
-                                    <div class="compose-session-popup-count">${filteredSessionChats.length} of ${switchableChatAgents.length} sessions</div>
-                                </div>
+                                <label class="compose-model-popup-title compose-session-search-heading" for="compose-session-search">Search sessions</label>
                                 <button type="button" class="compose-session-popup-close" aria-label="Close session picker" onClick=${() => { setShowSessionPopup(false); requestAnimationFrame(() => sessionTriggerRef.current?.querySelector?.('button')?.focus?.()); }}>×</button>
                             </div>
-                            <label class="compose-session-search-label" for="compose-session-search">Search sessions</label>
                             <input
                                 id="compose-session-search"
                                 class="compose-session-search"
@@ -3515,6 +3556,7 @@ export function ComposeBox({
                                     const nextOrderedChats = groupSessionPickerChats(
                                         filterSessionPickerChats(switchableChatAgents, query),
                                         currentChatJid,
+                                        pinnedSessionChatJids,
                                     ).flatMap((section) => section.items);
                                     sessionPopupEntriesRef.current = nextOrderedChats.map((chat) => ({
                                         type: 'session',
@@ -3546,6 +3588,7 @@ export function ComposeBox({
                                     const section = sessionPopupSections.find((candidate) => candidate.items.includes(chat));
                                     const sectionStart = section?.items[0] === chat;
                                     const archived = Boolean(chat.archived_at);
+                                    const pinned = !archived && pinnedSessionChatJidSet.has(chat.chat_jid);
                                     const isRoot = chat.chat_jid === (chat.root_chat_jid || chat.chat_jid);
                                     const canPrune = !isRoot && !chat.is_active && !archived && typeof onDeleteSession === 'function';
                                     const canPurgeArchived = archived && canPurgeArchivedSession;
@@ -3592,6 +3635,19 @@ export function ComposeBox({
                                                     `}
                                                 </span>
                                             </button>
+                                            ${!archived && html`<button
+                                                type="button"
+                                                class=${`compose-session-row-pin${pinned ? ' pinned' : ''}`}
+                                                title=${pinned ? `Unpin @${chat.agent_name}` : `Pin @${chat.agent_name}`}
+                                                aria-label=${pinned ? `Unpin @${chat.agent_name}` : `Pin @${chat.agent_name}`}
+                                                aria-pressed=${pinned ? 'true' : 'false'}
+                                                aria-keyshortcuts="Alt+Enter"
+                                                onClick=${(event) => {
+                                                    event.preventDefault();
+                                                    event.stopPropagation();
+                                                    toggleSessionPin(chat.chat_jid);
+                                                }}
+                                            >${pinned ? '★' : '☆'}</button>`}
                                             <button
                                                 type="button"
                                                 class="compose-model-popup-item-popout"
@@ -3901,7 +3957,7 @@ export function ComposeBox({
                     `}
                     ${!searchMode && html`
                         <div class="compose-send-stack">
-                                <button 
+                                <button
                                     class=${submitButtonState.className}
                                     data-testid="send-button"
                                     type="button"
@@ -3915,7 +3971,7 @@ export function ComposeBox({
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
                                 </button>
                                 ${abortButtonState && html`
-                                    <button 
+                                    <button
                                         class=${abortButtonState.className}
                                         data-testid="stop-button"
                                         type="button"

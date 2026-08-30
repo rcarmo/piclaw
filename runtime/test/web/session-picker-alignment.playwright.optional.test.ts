@@ -47,7 +47,7 @@ async function metrics(page: Page) {
   });
 }
 
-optionalBrowserTest("desktop session picker has stable scroll geometry, five sections, search, and keyboard selection", async () => {
+optionalBrowserTest("desktop session picker has stable geometry, one-line header, persistent pins, search, and keyboard selection", async () => {
   const page = await openPicker(1280, 800);
   try {
     const before = await metrics(page);
@@ -55,11 +55,33 @@ optionalBrowserTest("desktop session picker has stable scroll geometry, five sec
     expect(before.results.height).toBeLessThanOrEqual(430);
     expect(before.results.scrollHeight).toBeGreaterThan(before.results.clientHeight);
     expect(before.headings).toEqual(["Current", "Active", "This session tree", "Other sessions", "Archived"]);
+    expect(await page.locator(".compose-session-popup-header .compose-session-search-heading").allTextContents()).toEqual(["Search sessions"]);
+    expect(await page.locator(".compose-session-popup-count, .compose-session-search-label").count()).toBe(0);
+    const fontStacks = await page.locator(".compose-session-search").evaluate(node => ({
+      actual: getComputedStyle(node).fontFamily.replace(/\s+/g, ""),
+      expected: getComputedStyle(document.documentElement).getPropertyValue("--font-family-mono").replace(/\s+/g, ""),
+    }));
+    expect(fontStacks.actual).toBe(fontStacks.expected);
     expect(await page.locator(".compose-model-popup-item-popout").count()).toBe(30);
+    expect(await page.locator(".compose-session-row-pin").count()).toBe(25);
+    await page.getByRole("button", { name: "Pin @session-08" }).click();
+    expect(await page.locator("#session-picker-action").textContent()).toBe("none");
+    expect(await page.locator(".compose-session-section-heading").allTextContents()).toContain("Pinned");
+    expect(await page.getByRole("button", { name: "Unpin @session-08" }).getAttribute("aria-pressed")).toBe("true");
+    expect(await page.locator('[role="listbox"]').getAttribute("aria-activedescendant")).toContain(encodeURIComponent("web:root-1:branch:8"));
+    expect(await page.evaluate(() => localStorage.getItem("piclaw:session-picker-preferences:v1"))).toContain("web:root-1:branch:8");
+    await page.reload({ waitUntil: "networkidle" });
+    await page.getByTestId("session-switcher").click();
+    expect(await page.getByRole("button", { name: "Unpin @session-08" }).count()).toBe(1);
     expect(await page.getByRole("button", { name: "New branch" }).count()).toBe(1);
     expect(await page.locator('.compose-model-popup-actions button[title="Rename the current session"]').count()).toBe(1);
     const search = page.locator(".compose-session-search");
     expect(await search.evaluate(node => document.activeElement === node)).toBe(true);
+    await search.fill("session-09");
+    await page.keyboard.press("Alt+Enter");
+    expect(await page.locator("#session-picker-action").textContent()).toBe("none");
+    expect(await page.evaluate(() => localStorage.getItem("piclaw:session-picker-preferences:v1"))).toContain("web:root-1:branch:9");
+    expect(await page.locator('[role="listbox"]').getAttribute("aria-activedescendant")).toContain(encodeURIComponent("web:root-1:branch:9"));
     await search.fill("duplicate");
     expect(await page.locator('[role="option"]').count()).toBe(3);
     expect(await page.getByRole("button", { name: "New branch" }).count()).toBe(0);
@@ -95,6 +117,9 @@ optionalBrowserTest("phone picker uses safe-area sheet geometry and can reveal a
     expect(measured.popup.y).toBeGreaterThanOrEqual(8);
     expect(measured.popup.bottom).toBeLessThanOrEqual(907);
     expect(measured.search.height).toBeGreaterThanOrEqual(44);
+    const pinBox = await page.getByRole("button", { name: "Pin @session-03" }).boundingBox();
+    expect(pinBox?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(pinBox?.height ?? 0).toBeGreaterThanOrEqual(44);
     await page.locator(".compose-session-search").fill("archived");
     expect(await page.locator('[role="option"]').count()).toBe(5);
     expect(await page.locator(".compose-session-section-heading").allTextContents()).toEqual(["Archived"]);
