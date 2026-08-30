@@ -87,10 +87,10 @@ test("actual OpenAI-compatible adapter succeeds when first token arrives before 
 });
 
 test("outer deadline attributes delayed response headers to provider_connect", async () => {
-  fixture.enqueue({ headerDelayMs: 150, chunks: ["too late"] });
+  fixture.enqueue({ headerDelayMs: 3_000, chunks: ["too late"] });
   const controller = new AbortController();
-  setCompactionRuntimeConfigForTests({ timeoutMs: 25 });
-  restoreSettlementGrace = setCompactionSettlementGraceForTests(25);
+  setCompactionRuntimeConfigForTests({ timeoutMs: 1_000 });
+  restoreSettlementGrace = setCompactionSettlementGraceForTests(50);
 
   const result = await runCompactionWithTimeout(
     { isCompacting: true, abortCompaction: () => controller.abort() } as any,
@@ -106,10 +106,10 @@ test("outer deadline attributes delayed response headers to provider_connect", a
 });
 
 test("outer deadline attributes delayed first content to first_token", async () => {
-  fixture.enqueue({ firstTokenDelayMs: 150, chunks: ["too late"] });
+  fixture.enqueue({ firstTokenDelayMs: 3_000, chunks: ["too late"] });
   const controller = new AbortController();
-  setCompactionRuntimeConfigForTests({ timeoutMs: 30 });
-  restoreSettlementGrace = setCompactionSettlementGraceForTests(25);
+  setCompactionRuntimeConfigForTests({ timeoutMs: 1_000 });
+  restoreSettlementGrace = setCompactionSettlementGraceForTests(50);
 
   const result = await runCompactionWithTimeout(
     { isCompacting: true, abortCompaction: () => controller.abort() } as any,
@@ -125,10 +125,10 @@ test("outer deadline attributes delayed first content to first_token", async () 
 });
 
 test("outer deadline attributes a mid-stream stall to streaming", async () => {
-  fixture.enqueue({ chunks: ["first", "second"], betweenTokenDelayMs: 150 });
+  fixture.enqueue({ chunks: ["first", "second"], betweenTokenDelayMs: 3_000 });
   const controller = new AbortController();
-  setCompactionRuntimeConfigForTests({ timeoutMs: 45 });
-  restoreSettlementGrace = setCompactionSettlementGraceForTests(25);
+  setCompactionRuntimeConfigForTests({ timeoutMs: 1_000 });
+  restoreSettlementGrace = setCompactionSettlementGraceForTests(50);
 
   const result = await runCompactionWithTimeout(
     { isCompacting: true, abortCompaction: () => controller.abort() } as any,
@@ -151,12 +151,12 @@ test("actual adapter reports an early SSE termination without a finish reason", 
 });
 
 test("abort-resistant lifecycle reports post-timeout settlement detail", async () => {
-  fixture.enqueue({ firstTokenDelayMs: 150, chunks: ["ignored"], ignoreCancel: true });
+  fixture.enqueue({ firstTokenDelayMs: 3_000, chunks: ["ignored"], ignoreCancel: true });
   const controller = new AbortController();
   let release!: () => void;
   const neverSettlesUntilReleased = new Promise<void>((resolve) => { release = resolve; });
-  setCompactionRuntimeConfigForTests({ timeoutMs: 30 });
-  restoreSettlementGrace = setCompactionSettlementGraceForTests(15);
+  setCompactionRuntimeConfigForTests({ timeoutMs: 1_000 });
+  restoreSettlementGrace = setCompactionSettlementGraceForTests(50);
 
   const result = await runCompactionWithTimeout(
     { isCompacting: true, abortCompaction: () => controller.abort() } as any,
