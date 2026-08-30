@@ -21,6 +21,9 @@ test("classic compaction settings expose and persist both canonical processing m
   expect(component).toContain('Unavailable: ${compactionModel}');
   expect(component).toContain("'/agent/settings/compaction/probe'");
   expect(component).toContain("'Test compaction model'");
+  expect(component).toContain('compactionLatencyEstimate');
+  expect(component).toContain('compaction-latency-estimate');
+  expect(component).toContain('p90DurationMs');
   expect(component).toContain("body: currentSnapshot");
   expect(component).toContain("replace(/[\\s-]+/g, '_')");
   expect(component).toContain("normalized === 'pipelined' || normalized === 'traditional_pipelined' ? 'pipelined' : 'selective'");
@@ -58,6 +61,9 @@ test("visual compaction settings use the same canonical processing-method contra
   expect(component).toContain('Unavailable: {compactionModel.value}');
   expect(component).toContain('fetch("/agent/settings/compaction/probe"');
   expect(component).toContain('Test compaction model');
+  expect(component).toContain('data.compactionLatencyEstimate');
+  expect(component).toContain('compaction-latency-estimate');
+  expect(component).toContain('p90DurationMs');
   expect(component).toContain('onSaveCompaction("compactionModel", value)');
   expect(component).toContain('onSaveCompaction("remoteCompactionEnabled", value)');
   expect(component).toContain('onSaveCompaction("remoteCompactionTimeoutSec", v)');

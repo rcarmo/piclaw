@@ -15,6 +15,7 @@ import {
   type SmartCompactionMethod,
 } from "../../../core/config.js";
 import { getTrackedPhasesSnapshot } from "../../../runtime/progress-watchdog.js";
+import { buildLatestCompactionLatencyEstimate, type CompactionLatencyEstimate } from "../../../agent-pool/compaction-prefill-estimate.js";
 import {
   startExternalProgressWatchdogMonitor,
   stopExternalProgressWatchdogMonitor,
@@ -24,6 +25,7 @@ export interface CompactionSettingsData {
   autoCompactionEnabled: boolean;
   smartCompactionMethod: SmartCompactionMethod;
   compactionModel: string;
+  compactionLatencyEstimate: CompactionLatencyEstimate | null;
   remoteCompactionEnabled: boolean;
   remoteCompactionTimeoutSec: number;
   remoteCompactionSupportedProviders: string[];
@@ -115,10 +117,20 @@ export function getCompactionSettingsData(): CompactionSettingsData {
   const config = getCompactionRuntimeConfig();
   const summaryConfig = getToolResultSemanticSummaryConfig();
   const now = Date.now();
+  const separator = config.compactionModel.indexOf("/");
+  const compactionLatencyEstimate = separator > 0
+    ? buildLatestCompactionLatencyEstimate({
+      provider: config.compactionModel.slice(0, separator),
+      model: config.compactionModel.slice(separator + 1),
+      deadlineMs: config.timeoutMs,
+      now,
+    })
+    : null;
   return {
     autoCompactionEnabled: config.autoCompactionEnabled,
     smartCompactionMethod: config.smartCompactionMethod,
     compactionModel: config.compactionModel,
+    compactionLatencyEstimate,
     remoteCompactionEnabled: config.remoteCompactionEnabled,
     remoteCompactionTimeoutSec: Math.max(1, Math.round(config.remoteCompactionTimeoutMs / 1000)),
     remoteCompactionSupportedProviders: ["openai", "openai-codex"],

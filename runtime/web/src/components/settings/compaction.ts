@@ -17,6 +17,7 @@ function normalizeCompactionSettings(data: Record<string, any> = {}) {
         autoCompactionEnabled: Boolean(data.autoCompactionEnabled ?? true),
         smartCompactionMethod: normalizeSmartCompactionMethod(data.smartCompactionMethod),
         compactionModel: String(data.compactionModel ?? '').trim(),
+        compactionLatencyEstimate: data.compactionLatencyEstimate && typeof data.compactionLatencyEstimate === 'object' ? data.compactionLatencyEstimate : null,
         remoteCompactionEnabled: Boolean(data.remoteCompactionEnabled ?? false),
         remoteCompactionTimeoutSec: data.remoteCompactionTimeoutSec ?? 300,
         remoteCompactionSupportedProviders: Array.isArray(data.remoteCompactionSupportedProviders) ? data.remoteCompactionSupportedProviders : ['openai', 'openai-codex'],
@@ -50,6 +51,7 @@ export function CompactionSection({ settingsData, setStatus, mergeSettingsData }
     const [autoCompactionEnabled, setAutoCompactionEnabled] = useState(true);
     const [smartCompactionMethod, setSmartCompactionMethod] = useState('selective');
     const [compactionModel, setCompactionModel] = useState('');
+    const [compactionLatencyEstimate, setCompactionLatencyEstimate] = useState(null);
     const [modelPayload, setModelPayload] = useState(null);
     const [probeBusy, setProbeBusy] = useState(false);
     const [probeResult, setProbeResult] = useState(null);
@@ -85,6 +87,7 @@ export function CompactionSection({ settingsData, setStatus, mergeSettingsData }
         setAutoCompactionEnabled(next.autoCompactionEnabled);
         setSmartCompactionMethod(next.smartCompactionMethod);
         setCompactionModel(next.compactionModel);
+        setCompactionLatencyEstimate(next.compactionLatencyEstimate);
         setRemoteCompactionEnabled(next.remoteCompactionEnabled);
         setRemoteCompactionTimeoutSec(next.remoteCompactionTimeoutSec);
         setRemoteCompactionSupportedProviders(next.remoteCompactionSupportedProviders);
@@ -299,8 +302,11 @@ export function CompactionSection({ settingsData, setStatus, mergeSettingsData }
                 ${configuredModelMissing && html`<span class="settings-hint" role="alert" style="margin:0;color:var(--error, #dc2626)">Configured model is not currently available. It remains selected so you can repair it explicitly.</span>`}
                 ${probeResult && html`<div class=${`settings-hint compaction-model-probe-result ${probeResult.ok ? 'success' : 'error'}`} role="status" aria-live="polite" style="margin:0">
                     ${probeResult.ok
-                        ? `${probeResult.model} ready · ${probeResult.contextWindow?.toLocaleString?.() || 'unknown'} context · TTFT ${probeResult.timeToFirstTokenMs ?? 'n/a'}ms · ${probeResult.durationMs}ms total`
+                        ? `${probeResult.model} ready · ${probeResult.contextWindow?.toLocaleString?.() || 'unknown'} context · TTFT ${probeResult.timeToFirstTokenMs ?? 'n/a'}ms · ${probeResult.durationMs}ms total${probeResult.compactionLatencyEstimate ? ` · observed compaction median ${Math.round(probeResult.compactionLatencyEstimate.medianDurationMs / 1000)}s, p90 ${Math.round(probeResult.compactionLatencyEstimate.p90DurationMs / 1000)}s (${probeResult.compactionLatencyEstimate.sampleCount} samples)` : ''}`
                         : `${probeResult.model || effectiveProbeModel}: ${probeResult.stage ? `${probeResult.stage} · ` : ''}${probeResult.error || 'Probe failed'}`}
+                </div>`}
+                ${compactionLatencyEstimate && html`<div class=${`settings-hint compaction-latency-estimate ${compactionLatencyEstimate.warning ? 'error' : ''}`} role=${compactionLatencyEstimate.warning ? 'alert' : 'status'} style="margin:0">
+                    Observed ${Math.round(compactionLatencyEstimate.medianDurationMs / 1000)}–${Math.round(compactionLatencyEstimate.p90DurationMs / 1000)}s across ${compactionLatencyEstimate.sampleCount} recent comparable samples (${compactionLatencyEstimate.inputBucketMin.toLocaleString()}–${(compactionLatencyEstimate.inputBucketMax - 1).toLocaleString()} input tokens; newest ${formatIso(compactionLatencyEstimate.newestSampleAt)}). ${compactionLatencyEstimate.warningText || 'The conservative estimate is within the configured deadline.'}
                 </div>`}
             </div>
             <div class="settings-row">

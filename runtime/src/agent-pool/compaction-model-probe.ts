@@ -2,6 +2,7 @@ import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { Model } from "@earendil-works/pi-ai";
 
 import { getCompactionRuntimeConfig } from "../core/config.js";
+import { buildLatestCompactionLatencyEstimate, type CompactionLatencyEstimate } from "./compaction-prefill-estimate.js";
 
 const PROBE_TIMEOUT_MAX_MS = 30_000;
 const PROBE_PROMPT = "Reply with exactly: compaction probe ready";
@@ -16,6 +17,7 @@ export interface CompactionModelProbeResult {
   stage: "completed" | "provider_connect" | "first_token" | "streaming";
   timeToFirstTokenMs: number | null;
   durationMs: number;
+  compactionLatencyEstimate: CompactionLatencyEstimate | null;
   error: string | null;
 }
 
@@ -52,7 +54,9 @@ export async function probeCompactionModel(
   const model = modelRuntime.getModel(provider, modelId) as Model<any> | undefined;
   if (!model) throw new Error(`Compaction model is unavailable: ${configured}`);
 
-  const timeoutMs = Math.max(1, Math.min(PROBE_TIMEOUT_MAX_MS, getCompactionRuntimeConfig().timeoutMs));
+  const compactionDeadlineMs = getCompactionRuntimeConfig().timeoutMs;
+  const timeoutMs = Math.max(1, Math.min(PROBE_TIMEOUT_MAX_MS, compactionDeadlineMs));
+  const compactionLatencyEstimate = buildLatestCompactionLatencyEstimate({ provider: model.provider, model: model.id, deadlineMs: compactionDeadlineMs });
   const controller = new AbortController();
   const startedAt = Date.now();
   let rejectDeadline!: (error: Error) => void;
@@ -98,6 +102,7 @@ export async function probeCompactionModel(
       stage: "completed",
       timeToFirstTokenMs: firstTokenAt === null ? null : Math.max(0, firstTokenAt - startedAt),
       durationMs,
+      compactionLatencyEstimate,
       error: null,
     };
   } catch (error) {
@@ -111,6 +116,7 @@ export async function probeCompactionModel(
       stage: failureStage(responseReceived, firstTokenAt),
       timeToFirstTokenMs: firstTokenAt === null ? null : Math.max(0, firstTokenAt - startedAt),
       durationMs: Math.max(0, Date.now() - startedAt),
+      compactionLatencyEstimate,
       error: safeError(error),
     };
   } finally {

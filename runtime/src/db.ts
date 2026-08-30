@@ -152,6 +152,8 @@ export type {
 export {
   storeCompactionTelemetry,
   listCompactionTelemetryAfter,
+  getCompactionTelemetrySamples,
+  getLatestCompactionTelemetryInput,
   normalizeCompactionTelemetryRecord,
   pruneCompactionTelemetry,
 } from "./db/compaction-telemetry.js";

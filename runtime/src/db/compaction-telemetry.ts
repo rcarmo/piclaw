@@ -85,6 +85,31 @@ export function storeCompactionTelemetry(input: CompactionTelemetryRecord): bool
   return result.changes > 0;
 }
 
+export function getLatestCompactionTelemetryInput(provider: string, model: string, recordedAfter: string): { input_tokens: number; recorded_at: string } | null {
+  return getDb().prepare(`SELECT input_tokens, recorded_at FROM compaction_telemetry
+    WHERE provider = ? AND model = ? AND input_tokens IS NOT NULL AND recorded_at >= ?
+      AND outcome IN ('success', 'partial')
+    ORDER BY recorded_at DESC, id DESC LIMIT 1`
+  ).get(provider, model, recordedAfter) as { input_tokens: number; recorded_at: string } | null;
+}
+
+export function getCompactionTelemetrySamples(input: {
+  provider: string;
+  model: string;
+  minInputTokens: number;
+  maxInputTokens: number;
+  recordedAfter: string;
+  limit?: number;
+}): Array<Pick<CompactionTelemetryRecord, "recorded_at" | "total_duration_ms" | "time_to_first_token_ms" | "provider_generation_ms" | "input_tokens" | "outcome">> {
+  const limit = Math.min(500, Math.max(1, Math.floor(input.limit ?? 100)));
+  return getDb().prepare(`SELECT recorded_at, total_duration_ms, time_to_first_token_ms, provider_generation_ms, input_tokens, outcome
+    FROM compaction_telemetry
+    WHERE provider = ? AND model = ? AND input_tokens >= ? AND input_tokens < ? AND recorded_at >= ?
+      AND outcome IN ('success', 'partial')
+    ORDER BY recorded_at DESC, id DESC LIMIT ?`
+  ).all(input.provider, input.model, input.minInputTokens, input.maxInputTokens, input.recordedAfter, limit) as ReturnType<typeof getCompactionTelemetrySamples>;
+}
+
 export function listCompactionTelemetryAfter(id: number, limit = 500): Array<CompactionTelemetryRecord & { id: number }> {
   const bounded = Math.min(2_000, Math.max(1, Math.floor(limit)));
   return getDb().prepare(`SELECT * FROM compaction_telemetry WHERE id > ? ORDER BY id LIMIT ?`).all(id, bounded) as Array<CompactionTelemetryRecord & { id: number }>;

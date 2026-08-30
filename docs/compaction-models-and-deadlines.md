@@ -67,6 +67,12 @@ Earendil 0.84.4 disables undici’s former five-minute `headersTimeout` and `bod
 
 For local compaction, Piclaw passes the remaining compaction deadline into the provider adapter. Ordinary agent requests continue to use their normal Earendil/provider settings.
 
+## Historical latency warnings
+
+Piclaw retains at most 10,000 bounded compaction observations locally. After at least three successful or safe-partial observations for the exact provider/model and the same power-of-two **pre-compaction source-context token bucket**, it reports a median–p90 duration range. Samples older than 14 days, failed attempts, other models, and other token buckets are excluded.
+
+A warning appears when p90 reaches 80% of the configured compaction deadline. It is advisory only: Piclaw never extends or rewrites the deadline automatically. Missing, stale, or insufficient data produces no warning and never blocks compaction.
+
 ## Bounded local adapter fixture
 
 `runtime/test/extensions/delayed-openai-compaction.integration.test.ts` starts a local OpenAI-compatible SSE server and exercises the real `openai-completions` adapter. It covers delayed response headers, delayed first content, mid-stream stalls, early termination, and abort-resistant settlement with millisecond-scale delays.

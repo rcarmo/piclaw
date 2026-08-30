@@ -44,6 +44,7 @@ test("probe returns bounded metadata and does not expose provider output", async
     stage: "completed",
     timeToFirstTokenMs: expect.any(Number),
     durationMs: expect.any(Number),
+    compactionLatencyEstimate: null,
     error: null,
   });
   expect(probe).not.toHaveProperty("output");
