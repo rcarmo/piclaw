@@ -165,6 +165,8 @@ describe("audit-baseline-quality-deterministic", () => {
     expectGroup("channels-web-http-routes", "channels web http and route surfaces");
     expectGroup("channels-web-media-workspace-remote", "channels web media, workspace, and remote surfaces");
     expectGroup("service-effects", "latent service-effect contracts and compatibility");
+    expectGroup("web-ui-model-catalogue", "web ui model catalogue");
+    expect(groups.get("web-ui-model-catalogue")?.count).toBe(6);
     expectGroup("web-ui-interaction-and-state", "web ui interaction and state");
     expectGroup("web-ui-rendering-and-panes", "web ui rendering and panes");
     expectGroup("web-ui-remote-and-workspace", "web ui remote and workspace");
