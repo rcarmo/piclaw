@@ -87,7 +87,7 @@
       "semanticReaderOccurrences": 67
     },
     "docsDeploy": {
-      "referencedNames": 122,
+      "referencedNames": 123,
       "directReaderNames": 16,
       "directReaderOccurrences": 32,
       "helperReaderNames": 0,
@@ -1062,6 +1062,16 @@
     {
       "name": "PICLAW_COMPACTION_TIMEOUT_MS",
       "scopes": {
+        "docsDeploy": {
+          "referenced": true,
+          "directReaders": 0,
+          "helperReaders": 0,
+          "semanticReaders": 0,
+          "files": [
+            "docs/compaction-models-and-deadlines.md"
+          ],
+          "readerFiles": []
+        },
         "production": {
           "referenced": true,
           "directReaders": 0,
@@ -1232,6 +1242,7 @@
           "files": [
             ".github/workflows/integration-gate.yml",
             "Makefile",
+            "docs/compaction-models-and-deadlines.md",
             "docs/configuration.md",
             "docs/development.md",
             "docs/development/testing-and-linting-flow-presentation-2026-04-18.html",
