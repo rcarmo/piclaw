@@ -78,9 +78,10 @@ export async function streamComplete(opts: StreamCompleteOptions): Promise<Assis
   const requestTimeoutMs = getRemainingPiclawCompactionMs();
   const requestStartedAt = Date.now();
   updatePiclawCompactionExecution({ executionStage: "provider_connect", providerModel: `${String(model?.provider || "unknown")}/${String(model?.id || "unknown")}` });
+  const onResponse = () => updatePiclawCompactionExecution({ executionStage: "first_token" });
   const streamOptions: SimpleStreamOptions = reasoning
-    ? { maxTokens, signal, apiKey, headers, env, reasoning, onPayload, cacheRetention: "none", ...(requestTimeoutMs ? { timeoutMs: requestTimeoutMs } : {}) }
-    : { maxTokens, signal, apiKey, headers, env, onPayload, cacheRetention: "none", ...(requestTimeoutMs ? { timeoutMs: requestTimeoutMs } : {}) };
+    ? { maxTokens, signal, apiKey, headers, env, reasoning, onPayload, onResponse, cacheRetention: "none", ...(requestTimeoutMs ? { timeoutMs: requestTimeoutMs } : {}) }
+    : { maxTokens, signal, apiKey, headers, env, onPayload, onResponse, cacheRetention: "none", ...(requestTimeoutMs ? { timeoutMs: requestTimeoutMs } : {}) };
 
   const normalizedContext = normalizeLlmContext(context);
 
@@ -94,7 +95,6 @@ export async function streamComplete(opts: StreamCompleteOptions): Promise<Assis
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Compaction provider request failed before streaming: ${message}`, { cause: error });
   }
-  updatePiclawCompactionExecution({ executionStage: "first_token" });
   onWaitingForFirstToken?.({ requestStartedAt, timeoutMs: requestTimeoutMs });
 
   // If no progress callback, just collect the result directly. Check the
