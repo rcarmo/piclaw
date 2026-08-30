@@ -470,6 +470,29 @@ function createSchema(database: Database): void {
     CREATE INDEX IF NOT EXISTS idx_token_usage_run_at ON token_usage(run_at);
     CREATE INDEX IF NOT EXISTS idx_token_usage_chat_jid_run_at ON token_usage(chat_jid, run_at);
 
+    CREATE TABLE IF NOT EXISTS compaction_telemetry (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      generation_id TEXT NOT NULL UNIQUE,
+      recorded_at TEXT NOT NULL,
+      trigger TEXT NOT NULL,
+      method TEXT NOT NULL,
+      execution TEXT NOT NULL,
+      outcome TEXT NOT NULL,
+      provider TEXT,
+      model TEXT,
+      timeout_stage TEXT,
+      total_duration_ms INTEGER NOT NULL DEFAULT 0,
+      deterministic_duration_ms INTEGER,
+      time_to_first_token_ms INTEGER,
+      provider_generation_ms INTEGER,
+      provider_request_count INTEGER NOT NULL DEFAULT 0,
+      processed_chunk_count INTEGER,
+      total_chunk_count INTEGER,
+      settlement_timed_out INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_compaction_telemetry_recorded_at ON compaction_telemetry(recorded_at);
+    CREATE INDEX IF NOT EXISTS idx_compaction_telemetry_model ON compaction_telemetry(provider, model, recorded_at);
+
     -- Encrypted credential storage for the keychain (secure/keychain.ts).
     CREATE TABLE IF NOT EXISTS keychain_entries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

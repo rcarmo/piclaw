@@ -3,7 +3,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ExtensionAPI, ExtensionFactory, CompactionResult, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { createLogger } from "../../utils/logger.js";
 import { applyTokenEstimateSafetyMultiplier } from "../../utils/context-window-budget.js";
-import { checkPiclawCompactionBudget, maybeYieldPiclawCompaction, resolvePiclawCompactionTrigger } from "../../agent-pool/compaction-trigger-context.js";
+import { checkPiclawCompactionBudget, maybeYieldPiclawCompaction, resolvePiclawCompactionTrigger, updatePiclawCompactionExecution } from "../../agent-pool/compaction-trigger-context.js";
 import { getCompactionRuntimeConfig } from "../../core/config.js";
 import { MAX_PROMPT_CHARS, MIN_COMPACTION_OUTPUT_TOKENS, PROGRESSIVE_FALLBACK_CONTEXT_WINDOW, SMART_COMPACTION_PROGRESS_INTERVAL_MS } from "./config.js";
 import { estimateCompactionPromptTokens, estimateSmartCompactionCompletionPercent, getContextWindowEstimate, publishContextEstimate } from "./context.js";
@@ -114,6 +114,7 @@ export function createSmartCompactionExtension(options: { streamFn?: CompactionS
     // or adopts a different timeout midway.
     const compactionRuntimeConfig = getCompactionRuntimeConfig();
     const smartCompactionMethod = compactionRuntimeConfig.smartCompactionMethod;
+    updatePiclawCompactionExecution({ compactionMethod: smartCompactionMethod });
     const compactionMetadata = resolvePiclawCompactionTrigger({
       reason: (event as { reason?: string }).reason,
       willRetry: (event as { willRetry?: boolean }).willRetry,
@@ -332,6 +333,12 @@ export function createSmartCompactionExtension(options: { streamFn?: CompactionS
             backoffMaxMs: compactionRuntimeConfig.backoffMaxMs,
           });
           if (remoteResult.ok) {
+            updatePiclawCompactionExecution({
+              compactionMethod: "provider_native",
+              compactionExecution: "provider_native",
+              providerModel: `${remoteResult.details.provider}/${remoteResult.details.modelId}`,
+              providerRequestCount: 1,
+            });
             const outputChars = JSON.stringify(remoteResult.details.output).length;
             finalContextTokens = Math.max(1, Math.ceil(outputChars / 4)) + Math.max(0, Number(settings.keepRecentTokens) || 0);
             publishCompactionStage(
@@ -548,6 +555,7 @@ export function createSmartCompactionExtension(options: { streamFn?: CompactionS
             finalContextTokens = adjusted.estimatedTotal;
             publishCompactionStage(statusMessage(compactionMetadata, "reused summary with adjusted kept context…"), "completed_noop_adjusted", adjusted.estimatedTotal);
             logNoOpMetrics(noOpResult.compaction.summary, adjusted.estimatedTotal, null);
+            updatePiclawCompactionExecution({ compactionExecution: "deterministic_noop" });
             return {
               compaction: {
                 ...noOpResult.compaction,
@@ -566,6 +574,7 @@ export function createSmartCompactionExtension(options: { streamFn?: CompactionS
           finalContextTokens = postFit.estimatedTotal;
           publishCompactionStage(statusMessage(compactionMetadata, "reused existing summary…"), "completed_noop", postFit.estimatedTotal);
           logNoOpMetrics(noOpResult.compaction.summary, postFit.estimatedTotal, null);
+          updatePiclawCompactionExecution({ compactionExecution: "deterministic_noop" });
           return {
             compaction: {
               ...noOpResult.compaction,
@@ -843,6 +852,7 @@ export function createSmartCompactionExtension(options: { streamFn?: CompactionS
             coverageComplete: progressiveResult.complete,
           });
           log.debug(progressiveResult.complete ? "Progressive compaction complete ✓" : "Progressive compaction partial boundary complete ✓");
+          updatePiclawCompactionExecution({ compactionExecution: progressiveResult.complete ? "progressive" : "progressive_partial" });
           return {
             compaction: {
               summary: fullSummary,
@@ -955,6 +965,7 @@ export function createSmartCompactionExtension(options: { streamFn?: CompactionS
       });
       log.debug("Smart compaction complete ✓");
 
+      updatePiclawCompactionExecution({ compactionExecution: methodResult.modelCallCount > 1 ? "single_pass_repair" : "single_pass" });
       return {
         compaction: {
           summary: fullSummary,

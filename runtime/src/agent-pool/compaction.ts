@@ -23,6 +23,7 @@ import { buildPiclawCompactionEventFields, runWithPiclawCompactionTrigger, type 
 import { updateSessionCompacting } from "../extensions/session-status.js";
 import { applyTokenEstimateSafetyMultiplier, getContextThresholdTokens, getContextWindowFromModel, getEffectiveContextWindow, getSystemPromptOverheadTokens, getUnknownModelContextWindow } from "../utils/context-window-budget.js";
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
+import { recordCompactionTelemetry } from "./compaction-telemetry.js";
 
 const log = createLogger("agent-pool.compaction");
 const COMPACTION_MAX_WORK_UNITS = 1_000_000;
@@ -642,6 +643,7 @@ export async function runCompactionWithTimeout<T>(
 
   const metadata = buildCompactionTriggerMetadata(chatJid, reason, triggerOptions);
   metadata.executionStage = "deterministic";
+  const telemetryStartedAt = Date.now();
   const generationId = metadata.generationId!;
   const active: ActiveCompaction = {
     session,
@@ -669,7 +671,15 @@ export async function runCompactionWithTimeout<T>(
     reason,
     generationId,
     metadata,
-  ).then((result) => withCompactionOutcomeMetadata(result, generationId, false));
+  ).then((result) => {
+    recordCompactionTelemetry({
+      metadata,
+      startedAt: telemetryStartedAt,
+      outcome: result,
+      settlementTimedOut: !result.ok && /provider did not settle within/i.test(result.errorMessage),
+    });
+    return withCompactionOutcomeMetadata(result, generationId, false);
+  });
   active.outcome = outcome as Promise<CompactionOutcome<unknown>>;
   activeCompactions.set(chatJid, active);
   return await outcome;

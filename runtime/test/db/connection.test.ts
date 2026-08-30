@@ -51,6 +51,7 @@ test("fresh core schema contains no peer-owned remote tables", () => {
     expect(tables).not.toContain(table);
   }
   expect(tables).toContain("core_schema_migrations");
+  expect(tables).toContain("compaction_telemetry");
 });
 
 test("remote interop schema cleanup is transactional and idempotent", () => {

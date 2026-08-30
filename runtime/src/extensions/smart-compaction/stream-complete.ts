@@ -79,7 +79,7 @@ export async function streamComplete(opts: StreamCompleteOptions): Promise<Assis
 
   const requestTimeoutMs = getRemainingPiclawCompactionMs();
   const requestStartedAt = Date.now();
-  updatePiclawCompactionExecution({ executionStage: "provider_connect", providerModel: `${String(model?.provider || "unknown")}/${String(model?.id || "unknown")}` });
+  updatePiclawCompactionExecution({ executionStage: "provider_connect", providerModel: `${String(model?.provider || "unknown")}/${String(model?.id || "unknown")}`, providerRequestStartedAtMs: requestStartedAt });
   const onResponse = () => {
     updatePiclawCompactionExecution({ executionStage: "first_token" });
     onResponseHeaders?.();
@@ -122,8 +122,11 @@ export async function streamComplete(opts: StreamCompleteOptions): Promise<Assis
       firstEventObserved = true;
       const firstTokenAt = Date.now();
       const timeToFirstTokenMs = Math.max(0, firstTokenAt - requestStartedAt);
-      updatePiclawCompactionExecution({ executionStage: "streaming", timeToFirstTokenMs });
+      updatePiclawCompactionExecution({ executionStage: "streaming", providerFirstTokenAtMs: firstTokenAt, providerLastOutputAtMs: firstTokenAt, timeToFirstTokenMs });
       onFirstToken?.({ requestStartedAt, firstTokenAt, timeToFirstTokenMs });
+    }
+    if ((event.type === "text_delta" || event.type === "thinking_delta") && typeof event.delta === "string" && event.delta.length > 0) {
+      updatePiclawCompactionExecution({ providerLastOutputAtMs: Date.now() });
     }
     if (event.type === "text_delta") {
       generatedChars += event.delta.length;

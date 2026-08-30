@@ -14,7 +14,7 @@ import {
   scheduleIdleAutoCompaction,
   setCompactionSettlementGraceForTests,
 } from "../../src/agent-pool/compaction.js";
-import { getChatAutoCompactionWindow, getChatCompactionBackoff, initDatabase, setChatCompactionBackoff } from "../../src/db.js";
+import { getChatAutoCompactionWindow, getChatCompactionBackoff, initDatabase, listCompactionTelemetryAfter, setChatCompactionBackoff } from "../../src/db.js";
 import { resetCompactionRuntimeConfigForTests, setCompactionRuntimeConfigForTests } from "../../src/core/config.js";
 import { recordCompactionCancellationReason } from "../../src/agent-pool/compaction-cancel-reason.js";
 import { getActivePiclawCompactionTrigger, updatePiclawCompactionExecution } from "../../src/agent-pool/compaction-trigger-context.js";
@@ -485,6 +485,7 @@ test("runCompactionWithTimeout joins concurrent compaction calls for the same ch
     expect(ownerOutcome.generationId).toBe(joinedOutcome.generationId);
     expect(calls).toBe(1);
     expect(warnings).toEqual(["Compaction already in progress; joining existing compaction"]);
+    expect(listCompactionTelemetryAfter(0).filter((row) => row.generation_id === ownerOutcome.generationId)).toHaveLength(1);
   } finally {
     if (previousTimeout === undefined) delete process.env.PICLAW_COMPACTION_TIMEOUT_MS;
     else process.env.PICLAW_COMPACTION_TIMEOUT_MS = previousTimeout;

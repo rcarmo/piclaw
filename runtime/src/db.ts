@@ -150,6 +150,13 @@ export type {
   StalePreflightRecoveryRecord,
 } from "./db/chat-cursors.js";
 export {
+  storeCompactionTelemetry,
+  listCompactionTelemetryAfter,
+  normalizeCompactionTelemetryRecord,
+  pruneCompactionTelemetry,
+} from "./db/compaction-telemetry.js";
+export type { CompactionTelemetryRecord, CompactionTelemetryOutcome, CompactionTelemetryStage } from "./db/compaction-telemetry.js";
+export {
   storeTokenUsage,
   getTokenUsageTotals,
   getTokenUsageByProvider,
