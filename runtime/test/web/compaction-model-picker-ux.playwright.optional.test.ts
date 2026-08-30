@@ -54,6 +54,7 @@ optionalBrowserTest("desktop compaction model selector is constrained, keyboard-
     expect(await selector.evaluate((node: HTMLSelectElement) => node.tagName)).toBe("SELECT");
     expect(await selector.locator("option").count()).toBeGreaterThanOrEqual(100);
     expect(await selector.locator("option").first().textContent()).toContain("Use active model");
+    expect(await page.locator(".compaction-latency-estimate").textContent()).toContain("5 recent comparable samples");
     const box = await selector.boundingBox();
     expect(box?.width ?? 0).toBeGreaterThan(300);
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(28);
@@ -65,6 +66,7 @@ optionalBrowserTest("desktop compaction model selector is constrained, keyboard-
     await page.getByRole("button", { name: "Test compaction model" }).click();
     await page.waitForSelector(".compaction-model-probe-result.success");
     expect(await page.locator(".compaction-model-probe-result").textContent()).toContain("TTFT 42ms");
+    expect(await page.locator(".compaction-model-probe-result").textContent()).toContain("p90 290s");
     expect(await selector.inputValue()).toBe(selected);
   } finally {
     await page.close();
@@ -77,7 +79,7 @@ optionalBrowserTest("invalid configured model remains visible and explicitly rep
     const selector = page.locator("#compactionModel");
     expect(await selector.inputValue()).toBe("missing/retired-model");
     expect(await selector.locator('option[value="missing/retired-model"]').textContent()).toContain("Unavailable");
-    expect(await page.getByRole("alert").textContent()).toContain("not currently available");
+    expect(await page.getByText("Configured model is not currently available.", { exact: false }).textContent()).toContain("not currently available");
     await selector.selectOption("");
     expect(await selector.inputValue()).toBe("");
   } finally {
@@ -93,7 +95,9 @@ optionalBrowserTest("phone compaction selector and probe stay inside the viewpor
       const button = Array.from(document.querySelectorAll("button")).find((node) => node.textContent?.includes("Test compaction model")) as HTMLElement;
       const s = selector.getBoundingClientRect();
       const b = button.getBoundingClientRect();
-      return { viewport: innerWidth, selector: { left: s.left, right: s.right, height: s.height }, button: { left: b.left, right: b.right, height: b.height }, bodyScrollWidth: document.body.scrollWidth };
+      const advisory = document.querySelector(".compaction-latency-estimate") as HTMLElement;
+      const a = advisory.getBoundingClientRect();
+      return { viewport: innerWidth, selector: { left: s.left, right: s.right, height: s.height }, button: { left: b.left, right: b.right, height: b.height }, advisory: { left: a.left, right: a.right, height: a.height }, bodyScrollWidth: document.body.scrollWidth };
     });
     expect(metrics.selector.left).toBeGreaterThanOrEqual(0);
     expect(metrics.selector.right).toBeLessThanOrEqual(metrics.viewport);
@@ -101,6 +105,9 @@ optionalBrowserTest("phone compaction selector and probe stay inside the viewpor
     expect(metrics.button.right).toBeLessThanOrEqual(metrics.viewport);
     expect(metrics.selector.height).toBeGreaterThanOrEqual(28);
     expect(metrics.button.height).toBeGreaterThanOrEqual(28);
+    expect(metrics.advisory.left).toBeGreaterThanOrEqual(0);
+    expect(metrics.advisory.right).toBeLessThanOrEqual(metrics.viewport);
+    expect(metrics.advisory.height).toBeGreaterThan(0);
     expect(metrics.bodyScrollWidth).toBeLessThanOrEqual(metrics.viewport);
   } finally {
     await page.close();

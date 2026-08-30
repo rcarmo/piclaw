@@ -40,6 +40,7 @@ import { assemblePipelineEvents, buildCanonicalPipelineSourceUnits } from "./pip
 import { createProgressiveCheckpointStore } from "./progressive-checkpoint.js";
 import { createSmartCompactionResultDetails, type SmartCompactionRemoteOutcome } from "./result-details.js";
 import { createCompactionProviderTiming, formatFirstTokenWaitStatus, inferCompactionTimeoutStage } from "./provider-timing.js";
+import { buildCompactionLatencyEstimate } from "../../agent-pool/compaction-prefill-estimate.js";
 import { sanitizeContextPruneCompactionMessages } from "../context-prune/pruner.js";
 import {
   buildTargetContextGuidance,
@@ -629,6 +630,26 @@ export function createSmartCompactionExtension(options: { streamFn?: CompactionS
       }
       const { model: compactionModel, auth } = modelRequest;
       providerTiming = createCompactionProviderTiming(compactionModel);
+      const latencyEstimate = buildCompactionLatencyEstimate({
+        provider: compactionModel.provider,
+        model: compactionModel.id,
+        inputTokens: tokensBefore,
+        deadlineMs: compactionRuntimeConfig.timeoutMs,
+      });
+      if (latencyEstimate?.warningText) {
+        publishCompactionStage(statusMessage(compactionMetadata, latencyEstimate.warningText), "prefill_warning", tokensBefore, 24);
+        log.warn("Compaction latency warning", {
+          operation: "smart_compaction.latency_warning",
+          provider: latencyEstimate.provider,
+          model: latencyEstimate.model,
+          inputBucketMin: latencyEstimate.inputBucketMin,
+          inputBucketMax: latencyEstimate.inputBucketMax,
+          sampleCount: latencyEstimate.sampleCount,
+          medianDurationMs: latencyEstimate.medianDurationMs,
+          p90DurationMs: latencyEstimate.p90DurationMs,
+          deadlineMs: compactionRuntimeConfig.timeoutMs,
+        });
+      }
       if (previousRemoteState?.kind === "valid" && !isRemoteCompactionCompatible(compactionModel, previousRemoteState.details)) {
         return cancelCompactionWithReason(
           ctx,

@@ -23,6 +23,7 @@ interface CompactionProbeResult {
   stage?: string;
   timeToFirstTokenMs?: number | null;
   durationMs?: number;
+  compactionLatencyEstimate?: SettingsData["compactionLatencyEstimate"];
   error?: string;
 }
 
@@ -198,8 +199,13 @@ export function CompactionSection({
           {probeResult && (
             <span className={`settings-panel__description compaction-model-probe-result ${probeResult.ok ? "success" : "error"}`} role="status" aria-live="polite">
               {probeResult.ok
-                ? `${probeResult.model} ready · ${probeResult.contextWindow?.toLocaleString() || "unknown"} context · TTFT ${probeResult.timeToFirstTokenMs ?? "n/a"}ms · ${probeResult.durationMs}ms total`
+                ? `${probeResult.model} ready · ${probeResult.contextWindow?.toLocaleString() || "unknown"} context · TTFT ${probeResult.timeToFirstTokenMs ?? "n/a"}ms · ${probeResult.durationMs}ms total${probeResult.compactionLatencyEstimate ? ` · observed compaction median ${Math.round(probeResult.compactionLatencyEstimate.medianDurationMs / 1000)}s, p90 ${Math.round(probeResult.compactionLatencyEstimate.p90DurationMs / 1000)}s (${probeResult.compactionLatencyEstimate.sampleCount} samples)` : ""}`
                 : `${probeResult.model || effectiveProbeModel}: ${probeResult.stage ? `${probeResult.stage} · ` : ""}${probeResult.error || "Probe failed"}`}
+            </span>
+          )}
+          {data.compactionLatencyEstimate && (
+            <span className={`settings-panel__description compaction-latency-estimate ${data.compactionLatencyEstimate.warning ? "error" : ""}`} role={data.compactionLatencyEstimate.warning ? "alert" : "status"}>
+              Observed {Math.round(data.compactionLatencyEstimate.medianDurationMs / 1000)}–{Math.round(data.compactionLatencyEstimate.p90DurationMs / 1000)}s across {data.compactionLatencyEstimate.sampleCount} recent comparable samples ({data.compactionLatencyEstimate.inputBucketMin.toLocaleString()}–{(data.compactionLatencyEstimate.inputBucketMax - 1).toLocaleString()} input tokens). {data.compactionLatencyEstimate.warningText || "The conservative estimate is within the configured deadline."}
             </span>
           )}
         </div>
