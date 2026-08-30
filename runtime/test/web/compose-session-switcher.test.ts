@@ -5,7 +5,9 @@ import {
   canUseComposeSessionSwitcher,
   filterSessionPickerChats,
   groupSessionPickerChats,
+  matchesSessionPickerSearch,
   moveSessionPickerIndex,
+  resolveSessionPickerSearchInitialIndex,
   shouldOpenSessionSwitcherFromBlankCompose,
   shouldRouteComposeValueToSessionSwitcher,
 } from '../../web/src/ui/compose-session-switcher.js';
@@ -20,7 +22,10 @@ const chats = [
 
 test('session picker search covers handle, JID, lifecycle state, and model while preserving ancestors', () => {
   expect(buildSessionPickerSearchDocument(chats[1])).toContain('@worker');
-  expect(filterSessionPickerChats(chats, 'local llama').map(chat => chat.chat_jid)).toEqual(['web:root', 'web:root:branch:a', 'web:root:branch:b']);
+  const filtered = filterSessionPickerChats(chats, 'local llama');
+  expect(filtered.map(chat => chat.chat_jid)).toEqual(['web:root', 'web:root:branch:a', 'web:root:branch:b']);
+  expect(matchesSessionPickerSearch(filtered[0], 'local llama')).toBe(false);
+  expect(resolveSessionPickerSearchInitialIndex(filtered, 'local llama')).toBe(2);
   expect(filterSessionPickerChats(chats, 'web:other').map(chat => chat.chat_jid)).toEqual(['web:other']);
   expect(filterSessionPickerChats(chats, 'archived').map(chat => chat.chat_jid)).toEqual(['web:archived']);
   expect(filterSessionPickerChats(chats, 'worker')).toHaveLength(3);

@@ -5,7 +5,7 @@ import { getAgentModels, sendAgentMessage } from '../api.js';
 import { uploadFileBatch, uploadMedia } from '../ui/upload-transfers.js';
 import { getLocalStorageItem, setLocalStorageItem } from '../utils/storage.js';
 import { buildMentionValue, filterMentionAgents, parseMentionAutocompleteQuery } from '../ui/agent-mentions.js';
-import { filterSessionPickerChats, groupSessionPickerChats, moveSessionPickerIndex, shouldOpenSessionSwitcherFromBlankCompose, shouldRouteComposeValueToSessionSwitcher } from '../ui/compose-session-switcher.js';
+import { filterSessionPickerChats, groupSessionPickerChats, moveSessionPickerIndex, resolveSessionPickerSearchInitialIndex, shouldOpenSessionSwitcherFromBlankCompose, shouldRouteComposeValueToSessionSwitcher } from '../ui/compose-session-switcher.js';
 import { formatBranchPickerBaseLabel, formatBranchPickerLabel, getBranchLifecycleBadges } from '../ui/branch-lifecycle.js';
 import { buildComposeStatusDotClass } from '../ui/status-dot.js';
 import { getStatusElapsedLabel, isCompactionStatus, resolveStatusPanelTitle } from '../ui/status-duration.js';
@@ -1266,6 +1266,7 @@ export function ComposeBox({
     }, [currentChatJid]);
     const [sessionPopupIndex, setSessionPopupIndex] = useState(0);
     const sessionPopupIndexRef = useRef(0);
+    const sessionPopupEntriesRef = useRef([]);
     const [loadingModels, setLoadingModels] = useState(false);
     const [rollingUpSession, setRollingUpSession] = useState(false);
     const [footerWidth, setFooterWidth] = useState(0);
@@ -1849,6 +1850,7 @@ export function ComposeBox({
         }
         return entries;
     }, [orderedSessionChats, sessionPopupQuery, canRestoreSession, canSwitchSession, canCreateSession, canCreateRootSession, currentRollupParent, canRollupSession, canRenameSession, canDeleteSession, renameInProgress]);
+    sessionPopupEntriesRef.current = sessionPopupEntries;
 
     useEffect(() => {
         const clamped = Math.max(0, Math.min(sessionPopupIndexRef.current, Math.max(0, sessionPopupEntries.length - 1)));
@@ -2603,28 +2605,29 @@ export function ComposeBox({
         }
         if (showModelPopup) return false;
         if (showSessionPopup) {
+            const currentSessionPopupEntries = sessionPopupEntriesRef.current;
             const inSessionSearch = Boolean(e.target?.classList?.contains?.('compose-session-search'));
             if (['ArrowDown', 'ArrowUp', 'Home', 'End', 'PageDown', 'PageUp'].includes(e.key)) {
                 consume();
                 resetPopupTypeahead();
-                if (sessionPopupEntries.length > 0) setSessionPopupIndex((idx) => {
-                    const next = moveSessionPickerIndex(idx, sessionPopupEntries.length, e.key);
+                if (currentSessionPopupEntries.length > 0) setSessionPopupIndex((idx) => {
+                    const next = moveSessionPickerIndex(idx, currentSessionPopupEntries.length, e.key);
                     sessionPopupIndexRef.current = next;
                     return next;
                 });
                 return true;
             }
-            if ((e.key === 'Enter' || e.key === 'Tab') && sessionPopupEntries.length > 0) {
+            if ((e.key === 'Enter' || e.key === 'Tab') && currentSessionPopupEntries.length > 0) {
                 consume();
                 resetPopupTypeahead();
-                runSessionPopupEntry(sessionPopupEntries[Math.max(0, Math.min(sessionPopupIndexRef.current, sessionPopupEntries.length - 1))]);
+                runSessionPopupEntry(currentSessionPopupEntries[Math.max(0, Math.min(sessionPopupIndexRef.current, currentSessionPopupEntries.length - 1))]);
                 return true;
             }
-            if (!inSessionSearch && isPopupTypeaheadKey(e) && sessionPopupEntries.length > 0) {
+            if (!inSessionSearch && isPopupTypeaheadKey(e) && currentSessionPopupEntries.length > 0) {
                 consume();
                 const nextBuffer = updatePopupTypeaheadBuffer(popupTypeaheadRef.current, e.key);
                 popupTypeaheadRef.current = nextBuffer;
-                const match = resolvePopupTypeaheadMatch(sessionPopupEntries, nextBuffer.value, sessionPopupIndex, (item) => item.label);
+                const match = resolvePopupTypeaheadMatch(currentSessionPopupEntries, nextBuffer.value, sessionPopupIndex, (item) => item.label);
                 if (match >= 0) {
                     sessionPopupIndexRef.current = match;
                     setSessionPopupIndex(match);
@@ -3000,7 +3003,7 @@ export function ComposeBox({
         sessionPopupIndexRef.current = initialIndex;
         setSessionPopupIndex(initialIndex);
         popupTypeaheadRef.current = { value: '', updatedAt: 0 };
-    }, [showSessionPopup, currentChatJid, sessionPopupEntries]);
+    }, [showSessionPopup, currentChatJid]);
 
     useEffect(() => {
         if (!showModelPopup) return;
@@ -3508,9 +3511,22 @@ export function ComposeBox({
                                 placeholder="Handle, JID, state, or model"
                                 autocomplete="off"
                                 onInput=${(event) => {
-                                    sessionPopupIndexRef.current = 0;
-                                    setSessionPopupIndex(0);
-                                    setSessionPopupQuery(event.currentTarget.value);
+                                    const query = event.currentTarget.value;
+                                    const nextOrderedChats = groupSessionPickerChats(
+                                        filterSessionPickerChats(switchableChatAgents, query),
+                                        currentChatJid,
+                                    ).flatMap((section) => section.items);
+                                    sessionPopupEntriesRef.current = nextOrderedChats.map((chat) => ({
+                                        type: 'session',
+                                        key: `session:${chat.chat_jid}`,
+                                        label: `@${chat.agent_name} — ${chat.chat_jid}${chat.is_active ? ' active' : ''}${chat.archived_at ? ' archived' : ''}`,
+                                        chat,
+                                        disabled: chat.archived_at ? !canRestoreSession : !canSwitchSession,
+                                    }));
+                                    const initialIndex = resolveSessionPickerSearchInitialIndex(nextOrderedChats, query);
+                                    sessionPopupIndexRef.current = initialIndex;
+                                    setSessionPopupIndex(initialIndex);
+                                    setSessionPopupQuery(query);
                                 }}
                                 onKeyDown=${handlePopupKeyboardEvent}
                             />

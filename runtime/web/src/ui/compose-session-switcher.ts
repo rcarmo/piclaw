@@ -36,11 +36,22 @@ export function buildSessionPickerSearchDocument(chat: any): string {
   ].filter(Boolean).join(" ").toLocaleLowerCase();
 }
 
+export function matchesSessionPickerSearch(chat: any, query: string): boolean {
+  const terms = clean(query).toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return true;
+  const document = buildSessionPickerSearchDocument(chat);
+  return terms.every(term => document.includes(term));
+}
+
+export function resolveSessionPickerSearchInitialIndex(chats: Array<Record<string, any>>, query: string): number {
+  const index = chats.findIndex(chat => matchesSessionPickerSearch(chat, query));
+  return index >= 0 ? index : 0;
+}
+
 export function filterSessionPickerChats<T extends Record<string, any>>(chats: T[], query: string): T[] {
   const normalized = clean(query).toLocaleLowerCase();
   if (!normalized) return chats;
-  const terms = normalized.split(/\s+/).filter(Boolean);
-  const matches = new Set(chats.filter(chat => terms.every(term => buildSessionPickerSearchDocument(chat).includes(term))).map(chat => clean(chat.chat_jid)));
+  const matches = new Set(chats.filter(chat => matchesSessionPickerSearch(chat, normalized)).map(chat => clean(chat.chat_jid)));
   const byBranchId = new Map(chats.map(chat => [clean(chat.branch_id), chat]).filter(([id]) => Boolean(id)) as Array<[string, T]>);
   for (const chat of chats) {
     if (!matches.has(clean(chat.chat_jid))) continue;
