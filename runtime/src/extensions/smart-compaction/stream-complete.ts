@@ -46,6 +46,8 @@ export interface StreamCompleteOptions {
   onPayload?: SimpleStreamOptions["onPayload"];
   /** Custom stream function for proxy-routed providers. Falls back to streamSimple. */
   streamFn?: CompactionStreamFn;
+  /** Called after provider response headers arrive and before any response token. */
+  onResponseHeaders?: () => void;
   /** Called when the provider stream is created, before any response token arrives. */
   onWaitingForFirstToken?: (timing: { requestStartedAt: number; timeoutMs?: number }) => void;
   /** Called on the first provider stream event with request timing. */
@@ -64,7 +66,7 @@ export interface StreamCompleteOptions {
 export async function streamComplete(opts: StreamCompleteOptions): Promise<AssistantMessage> {
   const {
     model, systemPrompt, userPrompt, maxTokens, signal,
-    apiKey, headers, env, reasoning, onPayload, streamFn, onWaitingForFirstToken, onFirstToken, onProgress,
+    apiKey, headers, env, reasoning, onPayload, streamFn, onResponseHeaders, onWaitingForFirstToken, onFirstToken, onProgress,
     progressIntervalMs = SMART_COMPACTION_PROGRESS_INTERVAL_MS,
   } = opts;
 
@@ -78,7 +80,10 @@ export async function streamComplete(opts: StreamCompleteOptions): Promise<Assis
   const requestTimeoutMs = getRemainingPiclawCompactionMs();
   const requestStartedAt = Date.now();
   updatePiclawCompactionExecution({ executionStage: "provider_connect", providerModel: `${String(model?.provider || "unknown")}/${String(model?.id || "unknown")}` });
-  const onResponse = () => updatePiclawCompactionExecution({ executionStage: "first_token" });
+  const onResponse = () => {
+    updatePiclawCompactionExecution({ executionStage: "first_token" });
+    onResponseHeaders?.();
+  };
   const streamOptions: SimpleStreamOptions = reasoning
     ? { maxTokens, signal, apiKey, headers, env, reasoning, onPayload, onResponse, cacheRetention: "none", ...(requestTimeoutMs ? { timeoutMs: requestTimeoutMs } : {}) }
     : { maxTokens, signal, apiKey, headers, env, onPayload, onResponse, cacheRetention: "none", ...(requestTimeoutMs ? { timeoutMs: requestTimeoutMs } : {}) };
