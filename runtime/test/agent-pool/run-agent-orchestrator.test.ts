@@ -21,9 +21,11 @@ import { getRecoveryFinalizationReserveMs } from "../../src/agent-pool/run-agent
 import { RECOVERY_CONTINUATION_PROMPT } from "../../src/agent-pool/context-pressure-retry.js";
 import { getSshConfig, initDatabase, setChatAutoCompactionWindow, upsertSshConfig } from "../../src/db.js";
 import {
+  getTrackedPhasesSnapshot,
   resetProgressWatchdogForTests,
   scanForStalls,
   setProgressWatchdogTimeoutForTests,
+  suspendTrackedPhase,
 } from "../../src/runtime/progress-watchdog.js";
 import {
   getSessionStorageConfig,
@@ -191,6 +193,70 @@ test("runAgentPrompt aborts and returns an interrupted result when active progre
     expect(logs).toEqual(expect.arrayContaining([
       expect.objectContaining({ operation: "run_agent.stale_progress_abort", chatJid: "web:stale-progress" }),
     ]));
+  } finally {
+    restoreWatchdogTimeout();
+  }
+});
+
+test("runAgentPrompt keeps its wall-clock timeout active while stale-progress supervision is suspended", async () => {
+  initDatabase();
+  const chatJid = "web:ui-prompt-timeout";
+  const restoreWatchdogTimeout = setProgressWatchdogTimeoutForTests(5);
+
+  class UiPromptSession {
+    private listeners: Array<(event: any) => void> = [];
+    private releasePrompt: (() => void) | null = null;
+    sessionManager = { getLeafId: () => "leaf-ui-prompt-timeout" };
+    isStreaming = true;
+    isCompacting = false;
+    isRetrying = false;
+    abortCalls = 0;
+    subscribe(listener: (event: any) => void) {
+      this.listeners.push(listener);
+      return () => {
+        this.listeners = this.listeners.filter((entry) => entry !== listener);
+      };
+    }
+    async prompt() {
+      suspendTrackedPhase(chatJid, "ui_prompt", { kind: "confirm" });
+      await new Promise<void>((resolve) => {
+        this.releasePrompt = resolve;
+      });
+      this.isStreaming = false;
+    }
+    async abort() {
+      this.abortCalls += 1;
+      this.releasePrompt?.();
+    }
+  }
+
+  try {
+    const session = new UiPromptSession();
+    const run = runAgentPrompt("test", chatJid, {
+      timeoutMs: 1_000,
+      skipPrePromptCompaction: true,
+    }, {
+      getOrCreateRuntime: async () => createRuntime(session, { enabled: false }) as any,
+      turnCoordinator: new AgentTurnCoordinator({ takeAttachments: () => [], touchSession: () => {}, recordMessageUsage: () => {} }),
+      clearAttachments: () => {},
+      takeAttachments: () => [],
+      logsDir: createTestLogsDir(),
+      setActiveForkBaseLeaf: () => {},
+      clearActiveForkBaseLeaf: () => {},
+    });
+
+    for (let attempt = 0; !getTrackedPhasesSnapshot()[0]?.suspension && attempt < 100; attempt += 1) {
+      await Bun.sleep(5);
+    }
+    const suspended = getTrackedPhasesSnapshot()[0];
+    expect(suspended?.suspension?.reason).toBe("ui_prompt");
+    expect(scanForStalls((suspended?.lastProgressAt ?? 0) + 1_000)).toEqual([]);
+
+    const result = await run;
+    expect(session.abortCalls).toBe(1);
+    expect(result.status).toBe("error");
+    expect(result.error?.toLowerCase()).toContain("timed out");
+    expect(getTrackedPhasesSnapshot()).toEqual([]);
   } finally {
     restoreWatchdogTimeout();
   }
