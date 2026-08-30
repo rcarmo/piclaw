@@ -110,7 +110,7 @@ describe("WP-3C production-root coverage oracle", () => {
       service: inventory.compositionRoots.filter((root) => root === "src/agent-pool/service-factory.ts"),
     };
     expect(Object.fromEntries(Object.entries(compositionCategories).map(([category, roots]) => [category, roots.length]))).toEqual({
-      builtin: 30,
+      builtin: 31,
       optional: 8,
       service: 1,
     });

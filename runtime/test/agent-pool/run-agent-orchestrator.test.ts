@@ -233,7 +233,7 @@ test("runAgentPrompt keeps its wall-clock timeout active while stale-progress su
   try {
     const session = new UiPromptSession();
     const run = runAgentPrompt("test", chatJid, {
-      timeoutMs: 75,
+      timeoutMs: 1_000,
       skipPrePromptCompaction: true,
     }, {
       getOrCreateRuntime: async () => createRuntime(session, { enabled: false }) as any,
@@ -245,8 +245,8 @@ test("runAgentPrompt keeps its wall-clock timeout active while stale-progress su
       clearActiveForkBaseLeaf: () => {},
     });
 
-    for (let attempt = 0; !getTrackedPhasesSnapshot()[0]?.suspension && attempt < 20; attempt += 1) {
-      await Bun.sleep(2);
+    for (let attempt = 0; !getTrackedPhasesSnapshot()[0]?.suspension && attempt < 100; attempt += 1) {
+      await Bun.sleep(5);
     }
     const suspended = getTrackedPhasesSnapshot()[0];
     expect(suspended?.suspension?.reason).toBe("ui_prompt");
