@@ -64,7 +64,6 @@ optionalBrowserTest("desktop session picker has stable scroll geometry, five sec
     expect(await page.locator('[role="option"]').count()).toBe(3);
     expect(await page.getByRole("button", { name: "New branch" }).count()).toBe(0);
     expect(await page.locator('[role="option"]').nth(0).getAttribute("aria-label")).toContain("chat web:root-0");
-    await page.keyboard.press("End");
     const activeId = await page.locator('[role="listbox"]').getAttribute("aria-activedescendant");
     expect(activeId).toBeTruthy();
     await page.keyboard.press("Enter");

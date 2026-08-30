@@ -1850,6 +1850,12 @@ export function ComposeBox({
         return entries;
     }, [orderedSessionChats, sessionPopupQuery, canRestoreSession, canSwitchSession, canCreateSession, canCreateRootSession, currentRollupParent, canRollupSession, canRenameSession, canDeleteSession, renameInProgress]);
 
+    useEffect(() => {
+        const clamped = Math.max(0, Math.min(sessionPopupIndexRef.current, Math.max(0, sessionPopupEntries.length - 1)));
+        sessionPopupIndexRef.current = clamped;
+        if (clamped !== sessionPopupIndex) setSessionPopupIndex(clamped);
+    }, [sessionPopupEntries.length, sessionPopupIndex]);
+
     const handleRenameSession = async (event) => {
         if (event?.preventDefault) event.preventDefault();
         if (event?.stopPropagation) event.stopPropagation();
@@ -3501,7 +3507,11 @@ export function ComposeBox({
                                 value=${sessionPopupQuery}
                                 placeholder="Handle, JID, state, or model"
                                 autocomplete="off"
-                                onInput=${(event) => setSessionPopupQuery(event.currentTarget.value)}
+                                onInput=${(event) => {
+                                    sessionPopupIndexRef.current = 0;
+                                    setSessionPopupIndex(0);
+                                    setSessionPopupQuery(event.currentTarget.value);
+                                }}
                                 onKeyDown=${handlePopupKeyboardEvent}
                             />
                             <div
