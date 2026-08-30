@@ -240,8 +240,18 @@ describe("WP-3C active-composition snapshots", () => {
       expect(inventory.names).toEqual(withoutLatentInventories[index].names);
     }
 
-    expect(linux.names).not.toContain("powershell");
+    expect(linux.names).toContain("powershell");
     expect(windows.names).toContain("powershell");
+    const activationSource = readFileSync(resolve(runtimeRoot, "src/extensions/tool-activation.ts"), "utf8");
+    const registeredDefaults = stringArray(activationSource, "DEFAULT_ACTIVE_TOOL_NAMES");
+    const windowsAdditions = stringArray(activationSource, "WINDOWS_DEFAULT_ACTIVE_TOOL_NAMES");
+    const linuxActiveNames = registeredDefaults.filter((name) => name !== "powershell");
+    const windowsActiveNames = [...new Set([...registeredDefaults, ...windowsAdditions]
+      .map((name) => name === "bash" ? "powershell" : name)
+      .filter((name) => name !== "bash"))];
+    expect(registeredDefaults).toContain("powershell");
+    expect(linuxActiveNames).not.toContain("powershell");
+    expect(windowsActiveNames).toContain("powershell");
     expect(linux.unresolvedRegistrations).toEqual([]);
     expect(windows.unresolvedRegistrations).toEqual([]);
   }, 15_000);

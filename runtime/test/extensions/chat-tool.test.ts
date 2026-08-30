@@ -2,6 +2,8 @@
  * test/extensions/chat-tool.test.ts – Tests for cross-session chat relay.
  */
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createTempWorkspace, importFresh, setEnv } from "../helpers.js";
 import { withChatContext } from "../../src/core/chat-context.js";
@@ -87,6 +89,18 @@ describe("chat tool extension", () => {
       chatToolModule,
     };
   }
+
+  test("injects usable remote addresses and file limits into the agent prompt", async () => {
+    const module = await importFresh<typeof import("../src/extensions/chat-tool.js")>("../src/extensions/chat-tool.js");
+    const hint = module.buildChatTransportDirectoryHint([{
+      transport: "remote-peer",
+      generated_at: "now",
+      entries: [{ address: "lab!inbox", label: "Lab inbox", target_kind: "inbox", modes: ["queue"], status: "ready", attachments: { enabled: true, max_files: 4, max_file_bytes: 16 * 1024 * 1024, max_total_bytes: 32 * 1024 * 1024 } }],
+    }]);
+    expect(hint).toContain("chat({ action: 'directory' })");
+    expect(hint).toContain("lab!inbox — Lab inbox; modes: queue; ready; files: up to 4 × 16 MiB");
+    expect(hint).toContain("stable idempotency_key");
+  });
 
   test("registers the chat tool", async () => {
     const { tool } = await getTool();
@@ -231,6 +245,50 @@ describe("chat tool extension", () => {
       peer_instance_id: "peer-1",
     });
     expect(result.content[0].text).toContain("lab!inbox");
+  });
+
+  test("lists transport destinations and sends bounded workspace files", async () => {
+    const { tool } = await getTool();
+    const filePath = join(ws.workspace, "note.txt");
+    writeFileSync(filePath, "hello attachment");
+    const calls: Array<Record<string, unknown>> = [];
+    registerChatTransport({
+      id: "remote-peer",
+      kind: "bang",
+      directory: () => ({
+        transport: "remote-peer",
+        generated_at: "2026-08-29T00:00:00.000Z",
+        entries: [{
+          address: "lab!inbox",
+          label: "Lab inbox",
+          peer_alias: "lab",
+          peer_fingerprint: "abc-def",
+          target_kind: "inbox",
+          modes: ["queue", "auto"],
+          status: "ready",
+          attachments: { enabled: true, max_files: 4, max_file_bytes: 16 * 1024 * 1024, max_total_bytes: 32 * 1024 * 1024 },
+        }],
+      }),
+      async send(request) {
+        calls.push(request as unknown as Record<string, unknown>);
+        return { status: "queued", relayed: true, source_chat_jid: request.source_chat_jid, target_address: request.address.raw };
+      },
+    });
+
+    const directory = await tool.execute("directory", { action: "directory" });
+    expect(directory.content[0].text).toContain("lab!inbox");
+    expect(directory.content[0].text).toContain("files≤4");
+
+    const sent = await withChatContext(chatJid, "web", () => tool.execute("send", {
+      target_address: "lab!inbox",
+      files: ["note.txt"],
+      idempotency_key: "file-1",
+    }));
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ content: "", mode: "queue", idempotency_key: "file-1" });
+    expect((calls[0].attachments as any[])[0]).toMatchObject({ filename: "note.txt", content_type: "text/plain", size: 16 });
+    expect((calls[0].attachments as any[])[0].sha256).toHaveLength(64);
+    expect(sent.content[0].text).toContain("with 1 attachment");
   });
 
   test("reports malformed and unavailable bang transports", async () => {

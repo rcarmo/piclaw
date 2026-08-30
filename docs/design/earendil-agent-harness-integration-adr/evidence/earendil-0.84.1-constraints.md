@@ -1,6 +1,6 @@
 # Earendil 0.84.1 constraints for direct adoption
 
-This file records the historical constraints found in the then-installed `0.84.1` public contracts. It is not a request for Earendil changes. Piclaw now selects `0.84.2` for the existing loop, but that release retains the unsupported Harness boundary. Harness v3 resolves or supersedes several constraints at design/type level; see [`earendil-harness-v3-assessment.md`](earendil-harness-v3-assessment.md).
+This file records the historical constraints found in the then-installed `0.84.1` public contracts. It is not a request for Earendil changes. Piclaw now selects `0.84.4` for the existing loop, but that release retains the unsupported Harness boundary. Harness v3 resolves or supersedes several constraints at design/type level; see [`earendil-harness-v3-assessment.md`](earendil-harness-v3-assessment.md).
 
 ## Production blockers in this version
 
@@ -8,7 +8,7 @@ This file records the historical constraints found in the then-installed `0.84.1
 
 `AgentHarness` prompt, queue, abort, compaction, navigation, resume, lane, watcher and manual-drive methods throw `HarnessNotImplemented`. Restore rejects sessions containing records.
 
-Piclaw response: retain this version as historical baseline evidence only. Current `0.84.2` is selected for non-Harness production APIs but remains unsupported for Harness execution. Draft PR #8076 has superseded the earlier type-only branch and implements substantial v3 session/storage work, but still has no concrete public harness runtime. Select one coherent tagged Harness-v3 implementation before production Harness execution.
+Piclaw response: retain this version as historical baseline evidence only. Current `0.84.4` is selected for non-Harness production APIs but remains unsupported for Harness execution. Draft PR #8076 has superseded the earlier type-only branch and implements substantial v3 session/storage work, but still has no concrete public harness runtime. Select one coherent tagged Harness-v3 implementation before production Harness execution.
 
 ### C-002 — Coding-agent harness helper is private
 

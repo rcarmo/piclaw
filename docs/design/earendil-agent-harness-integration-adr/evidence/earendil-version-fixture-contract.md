@@ -1,8 +1,8 @@
 # Selected-version Earendil fixture and semantic contract suite
 
-Status: required while Harness v3 runtime composition remains incomplete. Released `0.84.1` is the historical stub baseline; current-loop `0.84.2` retains that unsupported Harness boundary. Authoritative `main` `harness.md` plus draft PR #8076 at `fd389abc4677b4e0fa5dc9b2bbd2e63418f079b4` provide the target design and current development evidence. PR #8076 includes substantial session/storage work but no concrete public harness constructor.
+Status: required while Harness v3 runtime composition remains incomplete. Released `0.84.1` is the historical stub baseline; current-loop `0.84.4` retains that unsupported Harness boundary. Authoritative `main` `harness.md` plus draft PR #8076 at `fd389abc4677b4e0fa5dc9b2bbd2e63418f079b4` provide the target design and current development evidence. PR #8076 includes substantial session/storage work but no concrete public harness constructor.
 
-Historical fixture evidence follows the released-v2 session/record model, while current compatibility and backend-conformance probes execute against installed `0.84.2`. The target fixture follows Harness v3 entries/registers/usage and manual effects as implementation slices land. It does not imitate Piclaw's current agent loop or promise compatibility with another Earendil version.
+Historical fixture evidence follows the released-v2 session/record model, while current compatibility and backend-conformance probes execute against installed `0.84.4`. The target fixture follows Harness v3 entries/registers/usage and manual effects as implementation slices land. It does not imitate Piclaw's current agent loop or promise compatibility with another Earendil version.
 
 ## Purpose
 

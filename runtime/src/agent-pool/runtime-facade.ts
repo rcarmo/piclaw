@@ -258,6 +258,7 @@ export interface AvailableModelsResult {
   latest_requested_model: string | null;
   latest_response_model: string | null;
   scoped_models_only: boolean;
+  scoped_model_filter_active: boolean;
   enabled_model_patterns: string[];
   provider_diagnostics: ProviderCompositionDiagnostics;
 }
@@ -412,7 +413,8 @@ export class AgentRuntimeFacade {
       provider_usage: providerUsage,
       latest_requested_model: latestRequestedModel,
       latest_response_model: latestResponseModel,
-      scoped_models_only: scopedModels.scoped,
+      scoped_models_only: scopedModels.scopedModelsOnly,
+      scoped_model_filter_active: scopedModels.scoped,
       enabled_model_patterns: scopedModels.patterns,
       provider_diagnostics: buildProviderCompositionDiagnostics(this.options.modelRuntime, available),
     };

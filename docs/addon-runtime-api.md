@@ -49,6 +49,16 @@ if (messaging?.version !== 1) {
 const unregister = messaging.registerChatTransport({
   id: "remote-peer",
   kind: "bang",
+  async directory() {
+    return {
+      transport: "remote-peer",
+      generated_at: new Date().toISOString(),
+      entries: [{ address: "lab!inbox", label: "Lab inbox", target_kind: "inbox", modes: ["queue"], status: "ready" }]
+    };
+  },
+  async validate(request) {
+    // Reject any address, mode or attachment outside the verified directory policy.
+  },
   async send(request) {
     // request.address is a validated one-hop bang address.
     return {
@@ -60,7 +70,7 @@ const unregister = messaging.registerChatTransport({
 });
 ```
 
-Installed add-ons may register only the `bang` transport. Core owns the local transport. Only one bang transport may be registered, and duplicate ownership fails explicitly. The unregister callback is idempotent.
+Installed add-ons may register only the `bang` transport. Core owns the local transport. Only one bang transport may be registered, and duplicate ownership fails explicitly. `directory()` feeds the built-in `chat({ action: "directory" })` result and agent system prompt. `validate()` runs immediately before `send()`. Transport attachments contain a filename, media type, exact byte count, SHA-256 digest and bytes; transports must enforce their advertised policy. The unregister callback is idempotent.
 
 ### Discover advertisable local agents
 
@@ -86,6 +96,7 @@ Provide exactly one of `target_agent_name` or `target_chat_jid`. Prefer agent al
 const receipt = await messaging.deliverPeerMessage({
   target_agent_name: "research",
   content: "Please review this plan.",
+  attachments: [{ filename: "plan.md", content_type: "text/markdown", size: bytes.length, sha256, data: bytes }],
   mode: "queue",
   source: {
     peer_instance_id: "immutable-authenticated-id",
@@ -100,7 +111,7 @@ const receipt = await messaging.deliverPeerMessage({
 
 Call this only after the add-on has authenticated the peer. Piclaw validates bounded peer fields, resolves the local target, constructs the reserved `peer_message` content block, and delivers through the normal timeline/queue path. The add-on cannot supply content blocks or a source chat JID.
 
-Message bodies are limited to 32 KiB. Unknown modes default to `queue`. Peer delivery metadata uses `source: "addon.peer-message"` so queued and persisted messages remain attributable.
+Message bodies are limited to 32 KiB. Peer delivery accepts at most four verified attachments, 16 MiB each and 32 MiB total. Piclaw recomputes SHA-256, persists each file as normal media, and attaches it to the queued/persisted message. Unknown modes default to `queue`. Peer delivery metadata uses `source: "addon.peer-message"` so queued and persisted messages remain attributable.
 
 ## External routes API v1
 
@@ -116,7 +127,8 @@ const unregister = externalRoutes.register({
   addonId: "remote-peer",
   prefix: "/api/addons/remote-peer/v1",
   methods: ["GET", "POST"],
-  maxBodyBytes: 32 * 1024,
+  maxBodyBytes: 32 * 1024 * 1024,
+  bodyMode: "stream",
   async handler(req, pathname, context) {
     return new Response(JSON.stringify({ ok: true }));
   }
@@ -131,7 +143,8 @@ Core enforces:
 - registration only during the owning package's `load: "startup"` import;
 - startup freeze, duplicate/overlapping prefix rejection, and reset on process restart;
 - `GET`/`POST` method allowlists;
-- declared and streamed body caps, with a 1 MiB registration ceiling;
+- declared and streamed body caps, with a 64 MiB registration ceiling;
+- optional `bodyMode: "stream"`, which preserves a bounded request stream for signed binary transfers instead of buffering the full request in core;
 - a coarse 120 requests/minute source bucket per add-on;
 - standard Piclaw request IDs, server timing and security headers;
 - generic 500 responses when handlers throw.

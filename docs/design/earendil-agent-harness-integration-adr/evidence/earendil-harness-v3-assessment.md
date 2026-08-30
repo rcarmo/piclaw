@@ -13,7 +13,7 @@ Evidence was refreshed on **2026-08-14 at 07:35 UTC**. Moving branches and pull 
 | Current implementation candidate | Draft PR [#8076](https://github.com/earendil-works/pi/pull/8076), head [`fd389abc4677b4e0fa5dc9b2bbd2e63418f079b4`](https://github.com/earendil-works/pi/commit/fd389abc4677b4e0fa5dc9b2bbd2e63418f079b4) |
 | Candidate specification | PR-head `packages/agent/docs/harness.md`, blob `80858b5eed97eb44e3d459217c58049e34759ce0`, SHA-256 `b14c390c474191b0546babe06fca9d452c49991ee755c50c3b54fa8a79ecdc7b` |
 | Superseded implementation PR | [#7976](https://github.com/earendil-works/pi/pull/7976), closed without merge; do not use as current implementation evidence |
-| Released packages | The current Piclaw loop selects coherent `0.84.2`; that release retains the unsupported released-v2 Harness scaffold |
+| Released packages | The current Piclaw loop selects coherent `0.84.4`; that release retains the unsupported released-v2 Harness scaffold |
 
 The specification at reviewed `main` is byte-identical to the specification originally audited by this ADR. PR #8076 changes that candidate specification by 743 insertions and 495 deletions. The PR-head document is therefore useful development evidence, but it is not yet the merged authoritative specification.
 
@@ -181,4 +181,4 @@ Harness v3 is not selectable for production until:
 
 ## Assessment decision
 
-Keep the current Piclaw loop on released `0.84.2` and retain `0.84.1` as historical baseline evidence. Use the specification on Earendil `main` as the authoritative design and PR #8076 only as pinned draft implementation evidence. The current-loop dependency update does not start Harness migration; one coherent tagged Harness-v3 implementation must pass every gate above before activation.
+Keep the current Piclaw loop on released `0.84.4` and retain `0.84.1` as historical baseline evidence. Use the specification on Earendil `main` as the authoritative design and PR #8076 only as pinned draft implementation evidence. The current-loop dependency update does not start Harness migration; one coherent tagged Harness-v3 implementation must pass every gate above before activation.

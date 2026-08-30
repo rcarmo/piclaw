@@ -27,6 +27,7 @@ export function ClassicModelPicker({
     loading = false,
     switching = false,
     onSelect,
+    onTogglePin,
     onClose,
     onCompact,
     onOpenSettings,
@@ -86,10 +87,11 @@ export function ClassicModelPicker({
         }
         if (event.target !== searchRef.current) return;
         if (event.key === 'Enter') {
-            const entry = selectableEntries.find((candidate) => candidate.key === activeKey);
+            const entry = projection.renderedEntries.find((candidate) => candidate.key === activeKey);
             if (entry) {
                 event.preventDefault();
-                choose(entry);
+                if (event.altKey) onTogglePin?.(entry);
+                else choose(entry);
             }
             return;
         }
@@ -97,7 +99,7 @@ export function ClassicModelPicker({
         if (!action || ((event.key === 'Home' || event.key === 'End') && !event.ctrlKey && !event.metaKey)) return;
         event.preventDefault();
         setActiveKey(moveModelPickerActiveKey(projection.renderedEntries, activeKey, action));
-    }, [activeKey, choose, onClose, projection.renderedEntries, selectableEntries]);
+    }, [activeKey, choose, onClose, onTogglePin, projection.renderedEntries]);
 
     const renderEntry = (entry) => {
         const blocked = entry.contextFit.state === 'blocked';
@@ -110,6 +112,8 @@ export function ClassicModelPicker({
                 key=${entry.key}
                 type="button"
                 role="option"
+                aria-label=${`${entry.displayName}, ${entry.pinned ? 'pinned' : 'not pinned'}. Alt+Enter to ${entry.pinned ? 'unpin' : 'pin'}.`}
+                aria-keyshortcuts="Alt+Enter"
                 aria-selected=${selected ? 'true' : 'false'}
                 aria-disabled=${blocked ? 'true' : 'false'}
                 tabIndex=${-1}
@@ -119,7 +123,12 @@ export function ClassicModelPicker({
                 onMouseEnter=${() => !blocked && setActiveKey(entry.key)}
                 onClick=${() => choose(entry)}
             >
-                <span class="compose-model-catalogue-option-check" aria-hidden="true">${selected ? '✓' : ''}</span>
+                <span
+                    class=${`compose-model-catalogue-pin${entry.pinned ? ' pinned' : ''}`}
+                    aria-hidden="true"
+                    title=${entry.pinned ? 'Unpin model' : 'Pin model'}
+                    onClick=${(event) => { event.preventDefault(); event.stopPropagation(); setActiveKey(entry.key); onTogglePin?.(entry); }}
+                >${entry.pinned ? '★' : '☆'}</span>
                 <span class="compose-model-catalogue-option-content">
                     <span class="compose-model-catalogue-option-primary">
                         <span class="compose-model-catalogue-option-name">${entry.displayName}</span>
@@ -157,7 +166,7 @@ export function ClassicModelPicker({
                         aria-expanded="true"
                         aria-controls=${resultsId}
                         aria-activedescendant=${activeKey ? optionId(instanceIdRef.current, activeKey) : undefined}
-                        placeholder="Search by model, provider, family, or context…"
+                        placeholder="Search models…"
                         value=${query}
                         onInput=${(event) => setQuery(event.currentTarget.value)}
                     />

@@ -86,14 +86,19 @@ describe("OpenAI-completions reasoning_details preservation", () => {
 
     const assistantMessage = await runOpenAICompletionsStream();
     const toolCall = assistantMessage.content.find((block) => block.type === "toolCall");
+    const thinking = assistantMessage.content.find((block) => block.type === "thinking");
     expect(toolCall).toMatchObject({
       type: "toolCall",
       id: "call_1",
       name: "read",
       arguments: { path: "README.md" },
-      thoughtSignature: JSON.stringify(reasoningDetail),
     });
-    expect(JSON.stringify(assistantMessage.content)).toContain("thoughtSignature");
+    expect(thinking).toMatchObject({
+      type: "thinking",
+      thinking: "",
+      thinkingSignature: JSON.stringify([reasoningDetail]),
+    });
+    expect(JSON.stringify(assistantMessage.content)).toContain("thinkingSignature");
     expect(assistantMessage.content.filter((block) => block.type === "text").map((block) => block.text).join("\n"))
       .not.toContain("encrypted-signature");
 

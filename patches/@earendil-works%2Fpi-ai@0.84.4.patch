@@ -1,21 +1,19 @@
-diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
-index c5a9f5da3f822a601091bb2ee8d2a30db41dd422..fcb7b1fee82dfca0c5988beee9f7f554f801faee 100644
 --- a/dist/api/openai-completions.js
 +++ b/dist/api/openai-completions.js
-@@ -1105,8 +1105,10 @@ function convertTools(tools, compat) {
+@@ -1174,8 +1174,10 @@
  }
  function parseChunkUsage(rawUsage, model) {
      const promptTokens = rawUsage.prompt_tokens || 0;
--    const cacheReadTokens = rawUsage.prompt_tokens_details?.cached_tokens ?? rawUsage.prompt_cache_hit_tokens ?? 0;
+-    const cacheReadTokens = rawUsage.prompt_tokens_details?.cached_tokens ?? rawUsage.prompt_cache_hit_tokens ?? rawUsage.cached_tokens ?? 0;
 -    const cacheWriteTokens = rawUsage.prompt_tokens_details?.cache_write_tokens || 0;
-+    const cacheReadCandidates = [rawUsage.prompt_tokens_details?.cached_tokens, rawUsage.prompt_cache_hit_tokens];
++    const cacheReadCandidates = [rawUsage.prompt_tokens_details?.cached_tokens, rawUsage.prompt_cache_hit_tokens, rawUsage.cached_tokens];
 +    const cacheReadTokens = cacheReadCandidates.find((value) => typeof value === "number" && Number.isFinite(value)) ?? 0;
 +    const cacheWriteValue = rawUsage.prompt_tokens_details?.cache_write_tokens;
 +    const cacheWriteTokens = typeof cacheWriteValue === "number" && Number.isFinite(cacheWriteValue) ? cacheWriteValue : 0;
      // Follow documented OpenAI/OpenRouter semantics: cached_tokens is cache-read
-     // tokens (hits). OpenAI does not document or emit cache_write_tokens, but
-     // OpenRouter-compatible providers can include it as a separate write count.
-@@ -1123,8 +1125,13 @@ function parseChunkUsage(rawUsage, model) {
+     // tokens (hits). Providers disagree on placement: OpenAI/OpenRouter use
+     // prompt_tokens_details.cached_tokens, DeepSeek uses prompt_cache_hit_tokens,
+@@ -1195,8 +1197,13 @@
          output: outputTokens,
          cacheRead: cacheReadTokens,
          cacheWrite: cacheWriteTokens,
@@ -29,11 +27,9 @@ index c5a9f5da3f822a601091bb2ee8d2a30db41dd422..fcb7b1fee82dfca0c5988beee9f7f554
          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
      };
      calculateCost(model, usage);
-diff --git a/dist/types.d.ts b/dist/types.d.ts
-index 77b46da2d31e472e519772b0d739766fa86dc3d0..05c635bcb3a29d929b8d9cf4c1ce6fabdf24ef47 100644
 --- a/dist/types.d.ts
 +++ b/dist/types.d.ts
-@@ -257,6 +257,10 @@ export interface Usage {
+@@ -267,6 +267,10 @@
      output: number;
      cacheRead: number;
      cacheWrite: number;
@@ -44,7 +40,7 @@ index 77b46da2d31e472e519772b0d739766fa86dc3d0..05c635bcb3a29d929b8d9cf4c1ce6fab
      /** Subset of `cacheWrite` written with 1h retention. Only Anthropic reports this split. */
      cacheWrite1h?: number;
      /**
-@@ -266,6 +270,8 @@ export interface Usage {
+@@ -276,6 +280,8 @@
       */
      reasoning?: number;
      totalTokens: number;

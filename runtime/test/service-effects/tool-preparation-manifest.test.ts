@@ -103,7 +103,7 @@ describe("WP-3C production-root coverage oracle", () => {
     expect(TOOL_PREPARATION_MANIFEST.map((row) => row.toolName).sort()).toEqual([...inventory.names]);
     expect(inventory.registrationSites.cdp_browser).toEqual(["extensions/browser/cdp-browser-tool/index.ts"]);
     expect(inventory.nonProductionDuplicateSites.cdp_browser).toEqual(["extensions/browser/cdp-browser/index.ts"]);
-    expect(inventory.sdkToolFamilies).toEqual(["bash", "edit", "find", "grep", "ls", "read", "write"]);
+    expect(inventory.sdkToolFamilies).toEqual(["bash", "edit", "find", "grep", "ls", "powershell", "read", "write"]);
     const compositionCategories = {
       builtin: inventory.compositionRoots.filter((root) => root.startsWith("src/extensions/")),
       optional: inventory.compositionRoots.filter((root) => root.startsWith("extensions/")),
@@ -123,9 +123,10 @@ describe("WP-3C production-root coverage oracle", () => {
       expect(currentSource).toBeDefined();
       for (const site of sites) expect(currentSource).toContain(`runtime/${site}`);
     }
-    for (const toolName of inventory.sdkToolFamilies) {
+    for (const toolName of inventory.sdkToolFamilies.filter((name) => name !== "powershell")) {
       expect(manifestByName.get(toolName)?.currentSource).toContain("@earendil-works/pi-coding-agent");
     }
+    expect(manifestByName.get("powershell")?.currentSource).toContain("runtime/extensions/platform/windows/powershell");
     expect(Object.hasOwn(inventory.registrationSites, "mcp")).toBeFalse();
     expect(manifestByName.get("mcp")?.currentSource).toContain("pi-mcp-adapter");
   });

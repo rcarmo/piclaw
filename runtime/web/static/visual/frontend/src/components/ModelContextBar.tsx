@@ -22,7 +22,7 @@ export function ModelContextBar() {
 
   const {
     showPicker, showThinkingPicker, models, thinkingLevels,
-    handleBadgeClick, handleSelectModel, handleThinkingClick, handleSelectThinking,
+    handleBadgeClick, handleSelectModel, handleTogglePin, handleThinkingClick, handleSelectThinking,
   } = useModelPicker();
 
   const contextTokens = useComputed(() => agentContext.value?.tokens ?? 0);
@@ -72,6 +72,7 @@ export function ModelContextBar() {
           activeModel={activeModel}
           contextTokens={agentContext.value?.tokens ?? null}
           onSelectModel={(id) => handleSelectModel(id, (m) => { currentModel.value = m; })}
+          onTogglePin={handleTogglePin}
           onClose={closeModelPicker}
           onCompact={() => {
             showPicker.value = false;

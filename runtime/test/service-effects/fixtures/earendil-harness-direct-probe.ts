@@ -78,14 +78,14 @@ export async function readInstalledEarendilAgentCoreVersion(): Promise<string> {
 }
 
 async function assertCurrentRuntime(): Promise<void> {
-  if (await readInstalledEarendilAgentCoreVersion() !== "0.84.2") {
-    throw new Error("The provisional direct probe executes only @earendil-works/pi-agent-core@0.84.2.");
+  if (await readInstalledEarendilAgentCoreVersion() !== "0.84.4") {
+    throw new Error("The provisional direct probe executes only @earendil-works/pi-agent-core@0.84.4.");
   }
 }
 
 async function createHarness(session = createSession()): Promise<AgentHarness> {
   const model = getModel("google", "gemini-2.5-flash");
-  if (!model) throw new Error("Expected the public 0.84.2 compatibility model catalogue entry.");
+  if (!model) throw new Error("Expected the public 0.84.4 compatibility model catalogue entry.");
   return (await AgentHarness.create({ session, models: createModels(), model })).harness;
 }
 

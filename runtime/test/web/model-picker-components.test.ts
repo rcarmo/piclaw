@@ -24,6 +24,19 @@ test("classic and visual model pickers expose the shared searchable listbox cont
   }
 });
 
+test("classic and visual pickers expose a separate accessible pin action", () => {
+  for (const source of [classicSource, visualSource]) {
+    expect(source).toContain("onTogglePin");
+    expect(source).toContain('aria-keyshortcuts="Alt+Enter"');
+    expect(source).toContain("event.altKey");
+    expect(source).toContain("event.stopPropagation()");
+    expect(source).toContain('placeholder="Search models…"');
+    expect(source).toContain('aria-hidden="true"');
+  }
+  expect(classicSource).toContain("compose-model-catalogue-pin");
+  expect(visualSource).toContain("model-picker__pin");
+});
+
 test("visual picker preserves unknown context instead of coercing it to zero", () => {
   expect(visualContextBarSource).toContain("contextTokens={agentContext.value?.tokens ?? null}");
   expect(visualSource).toContain("contextTokens: number | null");
@@ -38,5 +51,8 @@ test("classic and visual model picker styles include bounded desktop and mobile 
   expect(visualCss).toContain(".model-picker__footer-start");
   for (const css of [classicCss, visualCss]) {
     expect(css).toContain("min-height: 44px");
+    expect(css).toContain("grid-template-columns: 44px minmax(0, 1fr)");
+    expect(css).toContain("background: var(--bg-secondary");
+    expect(css).toContain("border-right: 1px solid");
   }
 });

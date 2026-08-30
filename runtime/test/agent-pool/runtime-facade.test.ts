@@ -384,6 +384,7 @@ test("AgentRuntimeFacade filters web model options with scopedModelsOnly enabled
 
     const available = await fixture.facade.getAvailableModels("web:cold-scoped");
     expect(available.scoped_models_only).toBe(true);
+    expect(available.scoped_model_filter_active).toBe(true);
     expect(available.enabled_model_patterns).toEqual(["anthropic/*", "gemini-test"]);
     expect(available.models).toEqual(["anthropic/claude-test", "google/gemini-test"]);
     expect(available.model_options.map((m) => m.label)).toEqual(["anthropic/claude-test", "google/gemini-test"]);
@@ -391,6 +392,36 @@ test("AgentRuntimeFacade filters web model options with scopedModelsOnly enabled
       ["off", "minimal", "low", "medium", "high"],
       ["off"],
     ]);
+  } finally {
+    if (previous === undefined) delete process.env.PICLAW_SCOPED_MODELS_ONLY;
+    else process.env.PICLAW_SCOPED_MODELS_ONLY = previous;
+  }
+});
+
+test("AgentRuntimeFacade keeps scopedModelsOnly visible when no enabledModels patterns exist", async () => {
+  const previous = process.env.PICLAW_SCOPED_MODELS_ONLY;
+  process.env.PICLAW_SCOPED_MODELS_ONLY = "1";
+  try {
+    const fixture = createFacade({
+      modelRegistry: {
+        refresh: () => {},
+        getAvailable: () => [
+          { provider: "openai", id: "gpt-fast", name: "GPT Fast", contextWindow: 128000, reasoning: true },
+          { provider: "anthropic", id: "claude-test", name: "Claude Test", contextWindow: 200000, reasoning: true },
+        ],
+        getAll: () => [],
+        registerProvider: () => {},
+      } as any,
+      settingsManager: {
+        getEnabledModels: () => [],
+      } as any,
+    });
+
+    const available = await fixture.facade.getAvailableModels("web:cold-scoped-empty");
+    expect(available.scoped_models_only).toBe(true);
+    expect(available.scoped_model_filter_active).toBe(false);
+    expect(available.enabled_model_patterns).toEqual([]);
+    expect(available.models).toEqual(["openai/gpt-fast", "anthropic/claude-test"]);
   } finally {
     if (previous === undefined) delete process.env.PICLAW_SCOPED_MODELS_ONLY;
     else process.env.PICLAW_SCOPED_MODELS_ONLY = previous;

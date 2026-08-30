@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSyn
 import { join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { getDataDir, getWorkspaceDir as getConfiguredWorkspaceDir } from "../core/config.js";
-import { createMedia } from "../db/media.js";
+import { createMedia, getMediaById } from "../db/media.js";
 import { postMessagesToolMessage } from "../extensions/messages-crud.js";
 import type { RuntimeAgentMessageRequest, RuntimeAgentMessageResult } from "../channels/web/core/web-channel-runtime-public-surface-service.js";
 import {
@@ -62,8 +62,17 @@ export interface AddonAuthenticatedPeerSource {
   in_reply_to?: string;
 }
 
+export interface AddonPeerMessageAttachment {
+  filename: string;
+  content_type: string;
+  size: number;
+  sha256: string;
+  data: Uint8Array;
+}
+
 export interface AddonPeerMessageDeliveryRequest extends AddonMessagingTargetInput {
   content: string;
+  attachments?: AddonPeerMessageAttachment[];
   mode?: "auto" | "queue" | "steer";
   thread_id?: number | null;
   source: AddonAuthenticatedPeerSource;
@@ -96,6 +105,7 @@ export interface PiclawRuntimeAddonApi {
   messaging: PiclawRuntimeMessagingApiV1;
   externalRoutes: PiclawRuntimeExternalRoutesApiV1;
   createMedia: typeof createMedia;
+  getMediaById: typeof getMediaById;
   postMessage: typeof postMessagesToolMessage;
   streamSessions: typeof runtimeStreamSessions;
 }
@@ -304,6 +314,7 @@ export function installAddonRuntimeApi(): PiclawRuntimeAddonApi {
       register: registerExternalAddonRoute,
     },
     createMedia,
+    getMediaById,
     postMessage: postMessagesToolMessage,
     streamSessions: runtimeStreamSessions,
   };

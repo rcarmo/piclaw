@@ -331,6 +331,7 @@ describe("model-control extension", () => {
       } as any);
       const result = await callTool(fake.tools, "list_models", {}, ctx);
       expect(result.details.scoped_models_only).toBe(true);
+      expect(result.details.scoped_model_filter_active).toBe(true);
       expect(result.details.enabled_model_patterns).toEqual(["other/*", "reasoning-model:high"]);
       expect(result.details.models.map((m: any) => m.label)).toEqual([
         "other/other-model",

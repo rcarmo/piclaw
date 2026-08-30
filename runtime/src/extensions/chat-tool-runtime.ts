@@ -8,7 +8,7 @@
  */
 import type { AgentPool } from "../agent-pool.js";
 import { getIdentityConfig } from "../core/config.js";
-import { getChatBranchByAgentName, getChatBranchByChatJid } from "../db.js";
+import { createMedia, getChatBranchByAgentName, getChatBranchByChatJid } from "../db.js";
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
 import type { ChatRelayRequest, ChatRelayResult } from "./chat-tool.js";
 
@@ -235,6 +235,13 @@ export function createDirectChatToolRelayHandler(
     if (source.chat_jid === target.chat_jid) throw new Error("source_chat_jid and target chat must differ");
 
     const content = request.content.trim();
+    const mediaIds = (request.attachments || []).map((attachment) => attachment.source_media_id || createMedia(
+      attachment.filename,
+      attachment.content_type,
+      attachment.data,
+      null,
+      { size: attachment.size, sha256: attachment.sha256, source: "chat" },
+    ));
     const replyTo = buildReplyToDescriptor(source);
     const contentBlocks = [buildPeerRelayBlock({ source, target, body: content })];
     const pathname = `/agent/${defaultAgentId}/message`;
@@ -254,6 +261,7 @@ export function createDirectChatToolRelayHandler(
         body: JSON.stringify({
           content: buildForwardedContent(source, target, content),
           content_blocks: contentBlocks,
+          ...(mediaIds.length ? { media_ids: mediaIds } : {}),
           mode: normalizeMode(request.mode),
           persist_steer: true,
         }),

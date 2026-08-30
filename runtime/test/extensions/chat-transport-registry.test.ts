@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { parseChatAddress } from "../../src/extensions/chat-address.js";
 import {
   getChatTransport,
+  getChatTransportDirectories,
   registerChatTransport,
   resetChatTransportRegistryForTests,
   sendViaChatTransport,
@@ -38,6 +39,20 @@ describe("chat transport registry", () => {
     unregister();
     unregister();
     expect(getChatTransport("bang")).toBeNull();
+  });
+
+  test("exposes transport directories and validates before send", async () => {
+    const events: string[] = [];
+    registerChatTransport({
+      id: "remote-peer",
+      kind: "bang",
+      directory: () => ({ transport: "remote-peer", generated_at: "now", entries: [] }),
+      validate: () => { events.push("validate"); },
+      send: async (request) => { events.push("send"); return { source_chat_jid: request.source_chat_jid }; },
+    });
+    await expect(getChatTransportDirectories()).resolves.toEqual([{ transport: "remote-peer", generated_at: "now", entries: [] }]);
+    await sendViaChatTransport({ source_chat_jid: "web:source", address: parseChatAddress("lab!inbox"), content: "hello", mode: "queue" });
+    expect(events).toEqual(["validate", "send"]);
   });
 
   test("rejects duplicate owners and unavailable bang transports", async () => {

@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { createAddonMessagingRuntimeHandlers } from "../../src/addons/runtime-messaging.js";
+import { getMediaById } from "../../src/db.js";
 
 afterEach(() => {
   // No process-global state is retained by this service; keep this hook so new
@@ -112,6 +114,29 @@ describe("add-on runtime messaging handlers", () => {
       source: "addon.peer-message",
       queuedBy: { source: "addon.peer-message", clientId: "peerInstance_1234567890" },
     }]);
+  });
+
+  test("persists verified peer attachments through the normal media path", async () => {
+    const { handlers, requests } = createFixture();
+    const data = new TextEncoder().encode("remote file");
+    await handlers.deliverPeerMessage({
+      target_agent_name: "research",
+      content: "See attachment",
+      attachments: [{ filename: "note.txt", content_type: "text/plain", size: data.length, sha256: createHash("sha256").update(data).digest("hex"), data }],
+      source: peerSource,
+    });
+    const request = requests.at(-1) as any;
+    expect(request.mediaIds).toHaveLength(1);
+    const media = getMediaById(request.mediaIds[0]);
+    expect(media?.filename).toBe("note.txt");
+    expect(new TextDecoder().decode(media?.data)).toBe("remote file");
+
+    await expect(handlers.deliverPeerMessage({
+      target_agent_name: "research",
+      content: "bad attachment",
+      attachments: [{ filename: "note.txt", content_type: "text/plain", size: data.length, sha256: "0".repeat(64), data }],
+      source: { ...peerSource, message_id: "rmsg_bad_attachment" },
+    })).rejects.toThrow("SHA-256");
   });
 
   test("does not accept caller-supplied blocks, chat identity, invalid peer facts, or missing targets", async () => {

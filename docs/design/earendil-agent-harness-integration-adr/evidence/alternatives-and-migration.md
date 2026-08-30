@@ -97,7 +97,7 @@ Piclaw builds only its service-plane operation model and service effectors. Test
 
 Piclaw implements a new service-plane operation coordinator over reviewed service effectors. It imports no current agent-pool, process-chat, recovery or compaction orchestration. For execution it stores and calls the exported `AgentHarness`/`AgentLane` objects directly; it does not insert a Piclaw-shaped execution interface.
 
-Harness v3 now has an authoritative `main` specification and draft PR #8076 with substantial types, session/storage and low-level execution primitives, but no concrete public runtime. Until one coherent tagged v3 implementation is usable, only tests use the fixture. Production remains on the stable loop with published `0.84.2`; Harness cutover waits for the real harness/backend to pass the shared suite.
+Harness v3 now has an authoritative `main` specification and draft PR #8076 with substantial types, session/storage and low-level execution primitives, but no concrete public runtime. Until one coherent tagged v3 implementation is usable, only tests use the fixture. Production remains on the stable loop with published `0.84.4`; Harness cutover waits for the real harness/backend to pass the shared suite.
 
 The selected architecture has three independently replaceable components:
 
@@ -388,4 +388,4 @@ Released-version constraints are recorded in [`earendil-0.84.1-constraints.md`](
 
 ## Selected decision
 
-Select alternative E: build the Piclaw service-plane operation model and a test implementation of the pinned Harness v3 contracts first; integrate a selected real v3 harness/backend only after it satisfies the same semantic suite. Track draft PR #8076 as pinned development evidence without selecting it for production. Accept Piclaw migration churn when selecting or upgrading Earendil. Keep production on the stable loop with published `0.84.2` until one coherent tagged Harness-v3 implementation and the M5/M6 gates pass. Remove the legacy loop only in M8 after an approved soak and rollback window.
+Select alternative E: build the Piclaw service-plane operation model and a test implementation of the pinned Harness v3 contracts first; integrate a selected real v3 harness/backend only after it satisfies the same semantic suite. Track draft PR #8076 as pinned development evidence without selecting it for production. Accept Piclaw migration churn when selecting or upgrading Earendil. Keep production on the stable loop with published `0.84.4` until one coherent tagged Harness-v3 implementation and the M5/M6 gates pass. Remove the legacy loop only in M8 after an approved soak and rollback window.

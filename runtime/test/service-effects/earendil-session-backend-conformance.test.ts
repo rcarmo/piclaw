@@ -15,7 +15,7 @@ const BACKENDS = [
 
 for (const [backend, factory] of BACKENDS) {
   const cases = createSessionBackendConformance(factory);
-  describe(`Earendil 0.84.2 ${backend} unchanged public conformance`, () => {
+  describe(`Earendil 0.84.4 ${backend} unchanged public conformance`, () => {
     test("retains the exact accepted 30-case current catalogue and runtime boundary", () => {
       const catalogue = cases.map(({ group, name }) => ({ group, name }));
       const catalogueJson = `${JSON.stringify(catalogue, null, 2)}\n`;

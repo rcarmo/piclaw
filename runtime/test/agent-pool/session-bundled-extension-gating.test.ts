@@ -44,8 +44,10 @@ describe("bundled extension gating by channel/platform", () => {
       expect(webSession._toolRegistry.has("open_office_viewer")).toBe(false);
       expect(whatsappSession._toolRegistry.has("open_office_viewer")).toBe(false);
 
-      expect(webSession._toolRegistry.has("powershell")).toBe(false);
-      expect(whatsappSession._toolRegistry.has("powershell")).toBe(false);
+      expect(webSession._toolRegistry.has("powershell")).toBe(true);
+      expect(whatsappSession._toolRegistry.has("powershell")).toBe(true);
+      expect(webSession.getActiveToolNames()).not.toContain("powershell");
+      expect(whatsappSession.getActiveToolNames()).not.toContain("powershell");
       expect(warnings.some((line) => line.includes("[office-viewer] WARNING"))).toBe(false);
 
       webRuntime.dispose?.();

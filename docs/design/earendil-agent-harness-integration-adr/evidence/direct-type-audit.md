@@ -1,6 +1,6 @@
 # Direct Earendil type audit
 
-This audit checks that the ADR uses Earendil's execution type system directly and defines Piclaw types only for Piclaw service responsibilities. The original compile probe covered then-installed `0.84.1`; current compatibility probes cover installed `0.84.2`. Harness v3 design and draft PR #8076 at `fd389abc4677b4e0fa5dc9b2bbd2e63418f079b4` supersede several v2 type families as noted below.
+This audit checks that the ADR uses Earendil's execution type system directly and defines Piclaw types only for Piclaw service responsibilities. The original compile probe covered then-installed `0.84.1`; current compatibility probes cover installed `0.84.4`. Harness v3 design and draft PR #8076 at `fd389abc4677b4e0fa5dc9b2bbd2e63418f079b4` supersede several v2 type families as noted below.
 
 ## Earendil-owned type families
 

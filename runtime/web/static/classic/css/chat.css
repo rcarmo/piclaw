@@ -1402,24 +1402,24 @@
 }
 
 .compose-model-catalogue-option {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    align-items: stretch;
     width: 100%;
-    padding: 8px 10px;
+    min-width: 0;
+    padding: 0;
     border: 0;
-    border-left: 2px solid transparent;
-    background: transparent;
+    border-left: 3px solid transparent;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 82%, var(--text-secondary) 18%);
+    background: var(--bg-secondary);
     color: var(--text-primary);
     text-align: left;
     cursor: pointer;
 }
 
 .compose-model-catalogue-option:hover,
-.compose-model-catalogue-option.focused,
-.compose-model-catalogue-option:focus-visible {
+.compose-model-catalogue-option.focused {
     background: var(--bg-hover);
-    outline: none;
 }
 
 .compose-model-catalogue-option.focused {
@@ -1428,7 +1428,7 @@
 
 .compose-model-catalogue-option.selected {
     color: var(--accent-color);
-    background: color-mix(in srgb, var(--accent-color) 9%, transparent);
+    background: color-mix(in srgb, var(--accent-color) 15%, var(--bg-secondary));
 }
 
 .compose-model-catalogue-option.blocked {
@@ -1437,11 +1437,31 @@
     opacity: 0.78;
 }
 
-.compose-model-catalogue-option-check {
-    width: 12px;
-    flex: 0 0 12px;
+.compose-model-catalogue-option:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent-color) 55%, transparent);
+    outline-offset: -2px;
+}
+
+.compose-model-catalogue-pin {
+    display: inline-flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-width: 32px;
+    padding: 9px 4px;
+    border-right: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+}
+
+.compose-model-catalogue-pin:hover,
+.compose-model-catalogue-pin.pinned {
     color: var(--accent-color);
-    text-align: center;
+}
+
+.compose-model-catalogue-option-content {
+    padding: 8px 10px 8px 4px;
 }
 
 .compose-model-catalogue-option-content {
@@ -1487,19 +1507,25 @@
 
 .compose-model-catalogue-option-badges {
     display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-top: 2px;
+    flex-wrap: nowrap;
+    gap: 0;
+    overflow: hidden;
+    margin-top: 1px;
+    color: var(--text-secondary);
+    font-size: 9px;
+    line-height: 1.4;
+    white-space: nowrap;
 }
 
 .compose-model-catalogue-badge {
-    padding: 1px 5px;
-    border: 1px solid color-mix(in srgb, var(--border-color) 75%, transparent);
-    border-radius: 999px;
-    color: var(--text-secondary);
-    background: color-mix(in srgb, var(--bg-secondary) 78%, transparent);
-    font-size: 9px;
-    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.compose-model-catalogue-badge + .compose-model-catalogue-badge::before {
+    content: " · ";
+    padding: 0 3px;
+    opacity: 0.72;
 }
 
 .compose-model-catalogue-option-note {
@@ -1536,9 +1562,9 @@
 @media (max-width: 639px) {
     .compose-model-catalogue {
         position: fixed;
-        inset: auto 8px 82px 8px;
+        inset: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom)) 8px;
         width: auto;
-        max-height: min(72vh, 620px);
+        max-height: none;
         border-radius: var(--radius-md);
     }
 
@@ -1555,7 +1581,8 @@
     }
 
     .compose-model-catalogue .compose-model-catalogue-results {
-        max-height: min(50vh, 420px);
+        min-height: 0;
+        max-height: none;
     }
 
     .compose-model-catalogue-section-heading {
@@ -1567,13 +1594,19 @@
     }
 
     .compose-model-catalogue-option {
+        grid-template-columns: 44px minmax(0, 1fr);
         min-height: 44px;
-        padding: 5px 8px;
-        gap: 6px;
+    }
+
+    .compose-model-catalogue-pin {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 8px 4px;
     }
 
     .compose-model-catalogue-option-content {
         gap: 1px;
+        padding: 5px 8px 5px 2px;
     }
 
     .compose-model-catalogue-option-primary {
@@ -1591,13 +1624,6 @@
     }
 
     .compose-model-catalogue-option-badges {
-        flex-wrap: nowrap;
-        overflow: hidden;
-        margin-top: 1px;
-    }
-
-    .compose-model-catalogue-badge {
-        padding: 0 4px;
         font-size: 8px;
     }
 

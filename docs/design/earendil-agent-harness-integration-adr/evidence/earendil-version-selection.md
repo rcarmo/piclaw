@@ -15,13 +15,13 @@ Piclaw follows Earendil's type system and semantics. It does not require Earendi
 
 ## Current runtime, historical baseline and Harness target
 
-Piclaw's existing coding-agent loop selects the coherent `0.84.2` package family. This is a current-loop dependency selection: it uses the already integrated public model, tool, environment and coding-agent APIs without selecting `AgentHarness` as Piclaw's execution plane.
+Piclaw's existing coding-agent loop selects the coherent `0.84.4` package family. This is a current-loop dependency selection: it uses the already integrated public model, tool, environment and coding-agent APIs without selecting `AgentHarness` as Piclaw's execution plane.
 
-Released `0.84.1` remains historical baseline evidence for the exported v2 session model, action vocabulary and unsupported Harness scaffold. Tagged `0.84.2` retains that scaffold: all audited Harness operations remain unimplemented, so it is rejected as a Harness-v3 implementation even though the current loop uses its non-Harness APIs.
+Released `0.84.1` remains historical baseline evidence for the exported v2 session model, action vocabulary and unsupported Harness scaffold. Tagged `0.84.4` retains that scaffold: all audited Harness operations remain unimplemented, so it is rejected as a Harness-v3 implementation even though the current loop uses its non-Harness APIs.
 
 The target execution design is the authoritative Harness v3 [`packages/agent/docs/harness.md`](https://github.com/earendil-works/pi/blob/5f7195c51eac43cdf329f813a7ef020d7bd74527/packages/agent/docs/harness.md), assessed in [`earendil-harness-v3-assessment.md`](earendil-harness-v3-assessment.md). Draft PR #8076 at `fd389abc4677b4e0fa5dc9b2bbd2e63418f079b4` implements substantial v3 types, session/storage and low-level execution primitives, but has no concrete public harness runtime and is not released.
 
-Piclaw retains `0.84.1` fixture data for historical comparisons while the executable compatibility probes and current backend conformance run against installed `0.84.2`. New Harness design work follows the selected Harness v3 contracts. No source compatibility with `0.84.1` or draft PR #8076 is required.
+Piclaw retains `0.84.1` fixture data for historical comparisons while the executable compatibility probes and current backend conformance run against installed `0.84.4`. New Harness design work follows the selected Harness v3 contracts. No source compatibility with `0.84.1` or draft PR #8076 is required.
 
 ## Upgrade workflow
 

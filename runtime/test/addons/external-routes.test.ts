@@ -120,6 +120,32 @@ describe("external add-on route registry", () => {
     expect(calls).toBe(0);
   });
 
+  test("preserves bounded streaming request bodies for binary add-on routes", async () => {
+    const chunks: number[] = [];
+    await register({
+      methods: ["POST"],
+      maxBodyBytes: 5,
+      bodyMode: "stream",
+      handler: async (req) => {
+        const reader = req.body!.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value.byteLength);
+        }
+        return new Response("ok");
+      },
+    });
+    const response = await handleExternalAddonRoutes(new Request("http://localhost/api/addons/remote-peer/v1/attachment", {
+      method: "POST",
+      body: new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array([1, 2])); controller.enqueue(new Uint8Array([3, 4, 5])); controller.close(); } }),
+      duplex: "half",
+    } as any), "/api/addons/remote-peer/v1/attachment");
+    expect(response?.status).toBe(200);
+    expect(chunks.reduce((sum, value) => sum + value, 0)).toBe(5);
+    expect(getRegisteredExternalAddonRoutes()[0].bodyMode).toBe("stream");
+  });
+
   test("passes bounded requests with immutable owner context", async () => {
     await register();
     const response = await handleExternalAddonRoutes(new Request("http://localhost/api/addons/remote-peer/v1/message", {

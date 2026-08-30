@@ -26,6 +26,7 @@ import {
     readModelCataloguePreferences,
     recordRecentModelKey,
     toModelCatalogueNormalisePreferences,
+    togglePinnedModelKey,
 } from '../ui/model-catalogue-preferences.ts';
 import {
     describeSpeechRecognitionError,
@@ -1226,7 +1227,15 @@ export function ComposeBox({
     currentChatJidRef.current = currentChatJid;
     const [modelOptions, setModelOptions] = useState([]);
     useEffect(() => {
-        const applyPreferences = () => setModelOptions(normaliseComposeModelCatalogue(agentModelsPayload, contextUsage));
+        const applyPreferences = () => {
+            const preferences = readModelCataloguePreferences();
+            const pinned = new Set(preferences.pinnedKeys);
+            setModelOptions((current) => current.map((entry) => ({
+                ...entry,
+                pinned: pinned.has(entry.key),
+                lastUsedAt: preferences.recentByKey[entry.key] ?? null,
+            })));
+        };
         window.addEventListener(MODEL_CATALOGUE_PREFERENCES_EVENT, applyPreferences);
         window.addEventListener('storage', applyPreferences);
         return () => {
@@ -3446,6 +3455,7 @@ export function ComposeBox({
                             loading=${loadingModels}
                             switching=${switchingModel}
                             onSelect=${(entry) => { void handleSelectModel(entry); }}
+                            onTogglePin=${(entry) => togglePinnedModelKey(entry.key)}
                             onClose=${closeModelPopup}
                             onCompact=${() => {
                                 closeModelPopup();

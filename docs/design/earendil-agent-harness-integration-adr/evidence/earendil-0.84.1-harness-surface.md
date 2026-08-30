@@ -1,6 +1,6 @@
 # Earendil 0.84.1 harness surface
 
-Historical evidence baseline: `@earendil-works/pi-agent-core@0.84.1` and `@earendil-works/pi-coding-agent@0.84.1` as installed in Piclaw `v2.13.2`. Piclaw's current loop now selects `0.84.2`; this file preserves the original baseline survey.
+Historical evidence baseline: `@earendil-works/pi-agent-core@0.84.1` and `@earendil-works/pi-coding-agent@0.84.1` as installed in Piclaw `v2.13.2`. Piclaw's current loop now selects `0.84.4`; this file preserves the original baseline survey.
 
 Confidence: source inspection of published declarations and JavaScript in the installed packages.
 

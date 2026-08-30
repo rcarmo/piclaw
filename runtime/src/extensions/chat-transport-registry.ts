@@ -4,11 +4,47 @@ import type { ParsedChatAddress, ChatAddressKind } from "./chat-address.js";
 
 export type ChatTransportMode = "auto" | "queue" | "steer";
 
+export interface ChatTransportAttachment {
+  filename: string;
+  content_type: string;
+  size: number;
+  sha256: string;
+  data: Uint8Array;
+  source_media_id?: number;
+}
+
+export interface ChatTransportDirectoryEntry {
+  address: string;
+  label: string;
+  peer_alias?: string;
+  peer_fingerprint?: string;
+  target_kind: "inbox" | "agent" | "reply";
+  modes: ChatTransportMode[];
+  status: "ready" | "stale" | "unreachable";
+  last_seen_at?: string | null;
+  attachments?: {
+    enabled: boolean;
+    max_files: number;
+    max_file_bytes: number;
+    max_total_bytes: number;
+  };
+}
+
+export interface ChatTransportDirectory {
+  transport: string;
+  generated_at: string;
+  entries: ChatTransportDirectoryEntry[];
+  notes?: string[];
+}
+
 export interface ChatTransportRequest {
   source_chat_jid: string;
+  source_agent_name?: string;
+  source_agent_display_name?: string;
   address: ParsedChatAddress;
   content: string;
   mode: ChatTransportMode;
+  attachments?: ChatTransportAttachment[];
   idempotency_key?: string;
   in_reply_to?: string;
 }
@@ -37,6 +73,8 @@ export interface ChatTransportResult {
 export interface ChatTransport {
   id: string;
   kind: ChatAddressKind;
+  directory?(): Promise<ChatTransportDirectory> | ChatTransportDirectory;
+  validate?(request: ChatTransportRequest): Promise<void> | void;
   send(request: ChatTransportRequest): Promise<ChatTransportResult>;
 }
 
@@ -87,6 +125,15 @@ export function getChatTransport(kind: ChatAddressKind): ChatTransport | null {
   return transports.get(kind) ?? null;
 }
 
+export async function getChatTransportDirectories(): Promise<ChatTransportDirectory[]> {
+  const directories: ChatTransportDirectory[] = [];
+  for (const transport of transports.values()) {
+    if (typeof transport.directory !== "function") continue;
+    directories.push(await transport.directory());
+  }
+  return directories;
+}
+
 export async function sendViaChatTransport(
   request: ChatTransportRequest,
   options: { annotate?: boolean } = {},
@@ -99,6 +146,7 @@ export async function sendViaChatTransport(
         : "Cross-session chat relay is unavailable in this runtime.",
     );
   }
+  await transport.validate?.(request);
   const result = await transport.send(request);
   if (options.annotate === false) return result;
   return {

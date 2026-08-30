@@ -8,7 +8,7 @@ const log = createLogger("addons.external-routes");
 const EXTERNAL_ROUTE_PREFIX = "/api/addons/";
 const EXTERNAL_ROUTE_RATE_WINDOW_MS = 60_000;
 const EXTERNAL_ROUTE_RATE_LIMIT = 120;
-const MAX_EXTERNAL_ROUTE_BODY_BYTES = 1024 * 1024;
+const MAX_EXTERNAL_ROUTE_BODY_BYTES = 64 * 1024 * 1024;
 const ALLOWED_METHODS = new Set(["GET", "POST"]);
 
 export interface ExternalAddonRouteHandlerContext {
@@ -28,6 +28,8 @@ export interface ExternalAddonRouteRegistration {
   prefix: string;
   methods: string[];
   maxBodyBytes: number;
+  /** Preserve the request stream for bounded binary uploads instead of buffering it in core. */
+  bodyMode?: "buffer" | "stream";
   handler: ExternalAddonRouteHandler;
 }
 
@@ -148,6 +150,25 @@ async function readBoundedBody(req: Request, maxBodyBytes: number): Promise<Uint
   return body;
 }
 
+function boundedStreamingRequest(req: Request, maxBodyBytes: number): Request | Response {
+  const declaredLength = contentLength(req);
+  if (declaredLength !== null && !Number.isFinite(declaredLength)) return jsonError("Invalid Content-Length.", 400);
+  if (declaredLength !== null && declaredLength > maxBodyBytes) return jsonError("Request body too large.", 413);
+  if (req.method === "GET" || req.body === null) return req;
+  let total = 0;
+  const bounded = req.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      total += chunk.byteLength;
+      if (total > maxBodyBytes) {
+        controller.error(new Error("Request body too large."));
+        return;
+      }
+      controller.enqueue(chunk);
+    },
+  }));
+  return new Request(req.url, { method: req.method, headers: new Headers(req.headers), body: bounded, duplex: "half" } as RequestInit & { duplex: "half" });
+}
+
 async function boundedRequest(req: Request, maxBodyBytes: number): Promise<Request | Response> {
   const declaredLength = contentLength(req);
   if (declaredLength !== null && !Number.isFinite(declaredLength)) return jsonError("Invalid Content-Length.", 400);
@@ -253,7 +274,9 @@ export async function handleExternalAddonRoutes(req: Request, pathname: string):
     return jsonError("External add-on route rate limit exceeded.", 429, { "Retry-After": "60" });
   }
 
-  const guarded = await boundedRequest(req, route.maxBodyBytes);
+  const guarded = route.bodyMode === "stream"
+    ? boundedStreamingRequest(req, route.maxBodyBytes)
+    : await boundedRequest(req, route.maxBodyBytes);
   if (guarded instanceof Response) return guarded;
 
   try {
@@ -280,6 +303,7 @@ export function getRegisteredExternalAddonRoutes(): Array<{
   prefix: string;
   methods: string[];
   maxBodyBytes: number;
+  bodyMode: "buffer" | "stream";
   registeredAt: string;
 }> {
   return routes.map((route) => ({
@@ -289,6 +313,7 @@ export function getRegisteredExternalAddonRoutes(): Array<{
     prefix: route.prefix,
     methods: [...route.methods],
     maxBodyBytes: route.maxBodyBytes,
+    bodyMode: route.bodyMode === "stream" ? "stream" : "buffer",
     registeredAt: route.registeredAt,
   }));
 }

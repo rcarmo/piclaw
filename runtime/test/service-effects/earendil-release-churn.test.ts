@@ -73,7 +73,7 @@ async function sha256(path: string): Promise<string> {
 }
 
 describe("Earendil release churn gate", () => {
-  test("pins the repository and lockfile to the selected coherent 0.84.2 current runtime", async () => {
+  test("pins the repository and lockfile to the selected coherent 0.84.4 current runtime", async () => {
     const [historical, current] = EARENDIL_HARNESS_V3_COMPATIBILITY_MANIFEST.releases;
     const rootManifest = requireRecord(await Bun.file(resolve(repositoryRoot, "package.json")).json(), "repository package.json");
     const rootDependencies = requireRecord(rootManifest.dependencies, "repository dependencies");
@@ -82,7 +82,7 @@ describe("Earendil release churn gate", () => {
       "@earendil-works/pi-ai",
       "@earendil-works/pi-coding-agent",
     ]) {
-      expect(rootDependencies[directName]).toBe("0.84.2");
+      expect(rootDependencies[directName]).toBe("0.84.4");
     }
     expect(rootDependencies.openai).toBe("7.5.0");
 
@@ -223,7 +223,7 @@ describe("Earendil release churn gate", () => {
     expect(current.packages.map((entry) => entry.installation)).toEqual(expectedInstallation);
   });
 
-  test("independently pins the selected 0.84.2 runtime and rejected Harness evidence aggregates", () => {
+  test("independently pins the selected 0.84.4 runtime and rejected Harness evidence aggregates", () => {
     const current = EARENDIL_HARNESS_V3_COMPATIBILITY_MANIFEST.releases[1];
     const packageEvidence = current.packages.map((entry) => ({
       name: entry.name,
@@ -235,8 +235,8 @@ describe("Earendil release churn gate", () => {
       exports: entry.exports,
       internalDependencies: entry.internalDependencies,
     }));
-    expect(digestEvidence(packageEvidence)).toBe("b5d1666137b44639217928a429d7bc040a6f4a2867e20c9ff333dc9f320e5aac");
-    expect(digestEvidence(current.fingerprints)).toBe("632a7a9847dac02ac76dcf1660b28689ad876df604eed2ebf09a35370d8a6631");
+    expect(digestEvidence(packageEvidence)).toBe("af6c2bd8149fafc1d55560691559d9434e56cf529d9ff6ae6d43425f39fbe04e");
+    expect(digestEvidence(current.fingerprints)).toBe("ff836d4226d75aadbe37940f79cfaf48abd8dcec8e0f5adb6decfb2a44a7e290");
     expect([
       current.conformance.caseCount,
       current.conformance.catalogueSha256,

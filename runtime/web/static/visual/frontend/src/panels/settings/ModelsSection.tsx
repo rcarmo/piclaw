@@ -43,6 +43,7 @@ interface ModelsResponse {
   models?: string[];
   provider_usage?: Record<string, unknown> | null;
   scoped_models_only?: boolean;
+  scoped_model_filter_active?: boolean;
   enabled_model_patterns?: string[];
   provider_diagnostics?: {
     providers?: ProviderDiagnostic[];
@@ -101,6 +102,7 @@ export function ModelsSection({ data: _data }: { data: SettingsData }) {
   const [contextUsage, setContextUsage] = useState<ContextResponse | null>(null);
   const [preferences, setPreferences] = useState<StoredModelCataloguePreferences>(() => readModelCataloguePreferences());
   const [filters, setFilters] = useState<FilterState>(() => defaultFilters(readModelCataloguePreferences().sort));
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedKey, setSelectedKey] = useState("");
   const [loading, setLoading] = useState(true);
@@ -225,7 +227,6 @@ export function ModelsSection({ data: _data }: { data: SettingsData }) {
     if (!projection.renderedEntries.some((entry) => entry.key === selectedKey)) {
       setSelectedKey(projection.renderedEntries[0]?.key ?? "");
     }
-    if (selectedKey) document.getElementById(optionId(selectedKey))?.scrollIntoView({ block: "nearest" });
   }, [projection.renderedEntries, selectedKey]);
 
   const updateFilter = <K extends keyof FilterState>(name: K, value: FilterState[K]) => {
@@ -337,7 +338,16 @@ export function ModelsSection({ data: _data }: { data: SettingsData }) {
     const action = actions[event.key as keyof typeof actions];
     if (!action) return;
     event.preventDefault();
-    setSelectedKey(moveModelSettingsActiveKey(projection.renderedEntries, selectedKey, action));
+    const nextKey = moveModelSettingsActiveKey(projection.renderedEntries, selectedKey, action);
+    setSelectedKey(nextKey ?? "");
+    requestAnimationFrame(() => {
+      if (nextKey) document.getElementById(optionId(nextKey))?.scrollIntoView({ block: "nearest" });
+    });
+  };
+
+  const togglePin = (key = selected?.key) => {
+    if (!key) return;
+    setPreferences(togglePinnedModelKey(key));
   };
 
   const renderEntry = (entry: ModelCatalogueEntry) => (
@@ -350,7 +360,14 @@ export function ModelsSection({ data: _data }: { data: SettingsData }) {
       class={`model-catalogue-settings__row${entry.key === selectedKey ? " selected" : ""}${entry.current ? " current" : ""}`}
       onClick={() => setSelectedKey(entry.key)}
     >
-      <span className="model-catalogue-settings__pin" aria-label={entry.pinned ? "Pinned" : "Not pinned"}>{entry.pinned ? "★" : "☆"}</span>
+      <button
+        type="button"
+        className="model-catalogue-settings__pin"
+        aria-label={entry.pinned ? `Unpin ${entry.displayName}` : `Pin ${entry.displayName}`}
+        aria-pressed={entry.pinned ? "true" : "false"}
+        title={entry.pinned ? "Unpin model" : "Pin model"}
+        onClick={(event) => { event.stopPropagation(); togglePin(entry.key); }}
+      >{entry.pinned ? "★" : "☆"}</button>
       <span className="model-catalogue-settings__row-main">
         <strong>{entry.displayName}</strong><code>{entry.key}</code>
         <span className="model-catalogue-settings__row-mobile-meta">
@@ -387,20 +404,34 @@ export function ModelsSection({ data: _data }: { data: SettingsData }) {
       {actionStatus && <div className={`model-catalogue-settings__notice ${actionStatus.type}`} role={actionStatus.type === "error" ? "alert" : "status"}>{actionStatus.text}</div>}
 
       <div className="model-catalogue-settings__scope">
-        <label><input type="checkbox" checked={Boolean(payload?.scoped_models_only)} disabled={scopedBusy} onChange={(event) => void setScopedModels(event.currentTarget.checked)} /> Restrict the catalogue and picker to entries matched by <code>enabledModels</code></label>
-        <span>{enabledPatterns.length ? `${enabledPatterns.join(", ")} · ${entries.length} matched` : `No enabledModels patterns · ${entries.length} models available`}</span>
+        <label><input type="checkbox" checked={Boolean(payload?.scoped_models_only)} disabled={scopedBusy} onChange={(event) => void setScopedModels(event.currentTarget.checked)} /> Use <code>enabledModels</code> to scope the catalogue and picker</label>
+        <span>{payload?.scoped_models_only ? (payload?.scoped_model_filter_active ? "enabledModels filter active" : "Scope enabled, but no enabledModels patterns are available") : "Showing the full provider catalogue"}</span>
+      </div>
+      <div className={`model-catalogue-settings__enabled-models${payload?.scoped_model_filter_active ? " active" : ""}`}>
+        <strong>enabledModels</strong>
+        <span>{enabledPatterns.length ? enabledPatterns.join(", ") : "No patterns reported by the active Pi settings manager."}</span>
+        <small>{enabledPatterns.length ? `${entries.length} catalogue entries after applying the configured patterns.` : "Configure enabledModels in Pi settings; this toggle only chooses whether Piclaw applies those patterns outside the TUI."}</small>
       </div>
 
       <input className="settings-panel__input settings-panel__model-filter" type="search" aria-label="Search model catalogue" placeholder="Search model, provider, publisher, family…" value={query} onInput={(event) => setQuery(event.currentTarget.value)} />
-      <div className="model-catalogue-settings__filters" aria-label="Model catalogue filters">
-        <select aria-label="Provider" value={filters.provider} onChange={(event) => updateFilter("provider", event.currentTarget.value)}><option value="">All providers</option>{facets.providers.map((value) => <option key={value} value={value}>{value}</option>)}</select>
-        <select aria-label="Publisher" value={filters.publisher} onChange={(event) => updateFilter("publisher", event.currentTarget.value)}><option value="">All publishers</option>{facets.publishers.map((value) => <option key={value} value={value}>{value}</option>)}</select>
-        <select aria-label="Family" value={filters.family} onChange={(event) => updateFilter("family", event.currentTarget.value)}><option value="">All families</option>{facets.families.map((value) => <option key={value} value={value}>{value}</option>)}</select>
-        <select aria-label="Context fit" value={filters.contextFit} onChange={(event) => updateFilter("contextFit", event.currentTarget.value)}><option value="all">Any context fit</option><option value="compatible">Compatible or unknown</option><option value="fits">Fits current context</option><option value="unknown">Unknown fit</option><option value="blocked">Blocked</option></select>
-        <select aria-label="Reasoning" value={filters.reasoning} onChange={(event) => updateFilter("reasoning", event.currentTarget.value)}><option value="all">Any reasoning</option><option value="yes">Reasoning</option><option value="no">Non-reasoning</option></select>
-        <select aria-label="Variant" value={filters.variant} onChange={(event) => updateFilter("variant", event.currentTarget.value)}><option value="">All variants</option>{facets.variants.map((value) => <option key={value} value={value}>{value}</option>)}</select>
-        <select aria-label="Sort models" value={filters.sort} onChange={(event) => updateFilter("sort", event.currentTarget.value as FilterState["sort"])}><option value="recommended">Recommended</option><option value="name">Name</option><option value="context">Context window</option><option value="input-price">Input price</option><option value="output-price">Output price</option></select>
-        <button type="button" className="settings-panel__provider-btn" onClick={() => { setQuery(""); setFilters(defaultFilters(preferences.sort)); }}>Reset filters</button>
+      <div className="model-catalogue-settings__filter-disclosure">
+        <button
+          type="button"
+          className="model-catalogue-settings__filter-toggle settings-panel__provider-btn"
+          aria-expanded={filtersExpanded}
+          aria-controls="visual-model-catalogue-filters"
+          onClick={() => setFiltersExpanded((value) => !value)}
+        >Filters and sorting</button>
+        <div id="visual-model-catalogue-filters" className={`model-catalogue-settings__filters${filtersExpanded ? " expanded" : ""}`} aria-label="Model catalogue filters">
+          <select aria-label="Provider" value={filters.provider} onChange={(event) => updateFilter("provider", event.currentTarget.value)}><option value="">All providers</option>{facets.providers.map((value) => <option key={value} value={value}>{value}</option>)}</select>
+          <select aria-label="Publisher" value={filters.publisher} onChange={(event) => updateFilter("publisher", event.currentTarget.value)}><option value="">All publishers</option>{facets.publishers.map((value) => <option key={value} value={value}>{value}</option>)}</select>
+          <select aria-label="Family" value={filters.family} onChange={(event) => updateFilter("family", event.currentTarget.value)}><option value="">All families</option>{facets.families.map((value) => <option key={value} value={value}>{value}</option>)}</select>
+          <select aria-label="Context fit" value={filters.contextFit} onChange={(event) => updateFilter("contextFit", event.currentTarget.value)}><option value="all">Any context fit</option><option value="compatible">Compatible or unknown</option><option value="fits">Fits current context</option><option value="unknown">Unknown fit</option><option value="blocked">Blocked</option></select>
+          <select aria-label="Reasoning" value={filters.reasoning} onChange={(event) => updateFilter("reasoning", event.currentTarget.value)}><option value="all">Any reasoning</option><option value="yes">Reasoning</option><option value="no">Non-reasoning</option></select>
+          <select aria-label="Variant" value={filters.variant} onChange={(event) => updateFilter("variant", event.currentTarget.value)}><option value="">All variants</option>{facets.variants.map((value) => <option key={value} value={value}>{value}</option>)}</select>
+          <select aria-label="Sort models" value={filters.sort} onChange={(event) => updateFilter("sort", event.currentTarget.value as FilterState["sort"])}><option value="recommended">Recommended</option><option value="name">Name</option><option value="context">Context window</option><option value="input-price">Input price</option><option value="output-price">Output price</option></select>
+          <button type="button" className="settings-panel__provider-btn" onClick={() => { setQuery(""); setFilters(defaultFilters(preferences.sort)); }}>Reset filters</button>
+        </div>
       </div>
 
       <div className="model-catalogue-settings__workspace">
@@ -432,7 +463,7 @@ export function ModelsSection({ data: _data }: { data: SettingsData }) {
         <aside className="model-catalogue-settings__detail" aria-live="polite">
           {selected ? (
             <>
-              <div className="model-catalogue-settings__detail-title"><div><h3>{selected.displayName}</h3><code>{selected.key}</code></div><button type="button" className="settings-panel__provider-btn" onClick={() => setPreferences(togglePinnedModelKey(selected.key))}>{selected.pinned ? "Unpin" : "Pin"}</button></div>
+              <div className="model-catalogue-settings__detail-title"><div><h3>{selected.displayName}</h3><code>{selected.key}</code></div><button type="button" className="settings-panel__provider-btn" onClick={() => togglePin()}>{selected.pinned ? "Unpin" : "Pin"}</button></div>
               <dl className="model-catalogue-settings__facts">
                 <div><dt>Access provider</dt><dd>{selected.provider || "Unknown"}</dd></div>
                 <div><dt>Publisher</dt><dd>{selected.publisher || "Unknown"}</dd></div>

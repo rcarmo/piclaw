@@ -9,6 +9,7 @@ import {
   readModelCataloguePreferences,
   recordRecentModelKey,
   toModelCatalogueNormalisePreferences,
+  togglePinnedModelKey,
 } from "../../../../../../src/ui/model-catalogue-preferences";
 
 export interface UseModelPickerResult {
@@ -18,6 +19,7 @@ export interface UseModelPickerResult {
   thinkingLevels: ReturnType<typeof useSignal<string[]>>;
   handleBadgeClick: (e: Event, currentModelName: string, onThinkingLevel: (l: string) => void, onCurrentModel: (m: string) => void) => Promise<void>;
   handleSelectModel: (id: string, onCurrentModel: (m: string) => void) => Promise<void>;
+  handleTogglePin: (id: string) => void;
   handleThinkingClick: (e: Event) => void;
   handleSelectThinking: (level: string) => Promise<void>;
 }
@@ -134,6 +136,10 @@ export function useModelPicker(): UseModelPickerResult {
     } catch { flashStatus("Model switch failed"); }
   }, []);
 
+  const handleTogglePin = useCallback((id: string) => {
+    togglePinnedModelKey(id);
+  }, []);
+
   const handleThinkingClick = useCallback((e: Event) => {
     e.stopPropagation();
     showThinkingPicker.value = !showThinkingPicker.value;
@@ -155,5 +161,5 @@ export function useModelPicker(): UseModelPickerResult {
     } catch { flashStatus("Thinking switch failed"); }
   }, []);
 
-  return { showPicker, showThinkingPicker, models, thinkingLevels, handleBadgeClick, handleSelectModel, handleThinkingClick, handleSelectThinking };
+  return { showPicker, showThinkingPicker, models, thinkingLevels, handleBadgeClick, handleSelectModel, handleTogglePin, handleThinkingClick, handleSelectThinking };
 }

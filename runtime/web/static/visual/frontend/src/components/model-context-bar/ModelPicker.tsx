@@ -15,6 +15,7 @@ interface ModelPickerProps {
   activeModel: string;
   contextTokens: number | null;
   onSelectModel: (id: string) => void;
+  onTogglePin: (id: string) => void;
   onClose: () => void;
   onCompact: () => void;
   onOpenSettings: () => void;
@@ -27,6 +28,7 @@ export function ModelPicker({
   activeModel,
   contextTokens,
   onSelectModel,
+  onTogglePin,
   onClose,
   onCompact,
   onOpenSettings,
@@ -91,10 +93,11 @@ export function ModelPicker({
     }
     if (event.target !== searchRef.current) return;
     if (event.key === "Enter") {
-      const entry = selectableEntries.find((candidate) => candidate.key === activeKey);
+      const entry = projection.renderedEntries.find((candidate) => candidate.key === activeKey);
       if (entry) {
         event.preventDefault();
-        choose(entry);
+        if (event.altKey) onTogglePin(entry.key);
+        else choose(entry);
       }
       return;
     }
@@ -102,7 +105,7 @@ export function ModelPicker({
     if (!action || ((event.key === "Home" || event.key === "End") && !event.ctrlKey && !event.metaKey)) return;
     event.preventDefault();
     setActiveKey(moveModelPickerActiveKey(projection.renderedEntries, activeKey, action));
-  }, [activeKey, choose, onClose, projection.renderedEntries, selectableEntries]);
+  }, [activeKey, choose, onClose, onTogglePin, projection.renderedEntries]);
 
   const renderEntry = (entry: ModelCatalogueEntry) => {
     const visualEntry = entry as VisualModelEntry;
@@ -120,6 +123,8 @@ export function ModelPicker({
         key={entry.key}
         type="button"
         role="option"
+        aria-label={`${entry.displayName}, ${entry.pinned ? "pinned" : "not pinned"}. Alt+Enter to ${entry.pinned ? "unpin" : "pin"}.`}
+        aria-keyshortcuts="Alt+Enter"
         aria-selected={selected}
         aria-disabled={blocked}
         tabIndex={-1}
@@ -132,7 +137,12 @@ export function ModelPicker({
         onMouseEnter={() => !blocked && setActiveKey(entry.key)}
         onClick={() => choose(entry)}
       >
-        <span class="model-picker__item__check" aria-hidden="true">{selected ? "✓" : ""}</span>
+        <span
+          class={`model-picker__pin${entry.pinned ? " model-picker__pin--active" : ""}`}
+          aria-hidden="true"
+          title={entry.pinned ? "Unpin model" : "Pin model"}
+          onClick={(event) => { event.preventDefault(); event.stopPropagation(); setActiveKey(entry.key); onTogglePin(entry.key); }}
+        >{entry.pinned ? "★" : "☆"}</span>
         <span class="model-picker__item__content">
           <span class="model-picker__item__primary">
             <span class="model-picker__item__name">{entry.displayName}</span>
@@ -165,7 +175,7 @@ export function ModelPicker({
             aria-expanded="true"
             aria-controls={resultsId}
             aria-activedescendant={activeKey ? optionId(instanceId, activeKey) : undefined}
-            placeholder="Search by model, provider, family, or context…"
+            placeholder="Search models…"
             value={query}
             onInput={(event) => setQuery(event.currentTarget.value)}
           />

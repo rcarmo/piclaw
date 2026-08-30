@@ -264,7 +264,7 @@ export const TOOL_PREPARATION_MANIFEST: readonly ToolPreparationSpec[] = Object.
     contextFields: ["chatJid", "operationId"],
     serviceEffector: "EF-S01",
     abortExpectation: "may_finish_late",
-    protectedFields: ["params.content", "params.target_address", "params.target_chat_jid", "params.target_agent_name", "params.media_ids", "params.idempotency_key", "params.in_reply_to", "result.content", "result.details"],
+    protectedFields: ["params.action", "params.content", "params.files", "params.target_address", "params.target_chat_jid", "params.target_agent_name", "params.media_ids", "params.idempotency_key", "params.in_reply_to", "result.content", "result.details"],
   }),
   ...rows(["session_control"], {
     currentSource: "runtime/src/extensions/session-control.ts",

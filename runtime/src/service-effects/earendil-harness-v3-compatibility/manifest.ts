@@ -24,7 +24,7 @@ export interface EarendilReleaseFingerprint {
 
 export interface EarendilReleaseEvidence {
   readonly role: "historical_harness_baseline" | "current_runtime_harness_candidate";
-  readonly tag: "v0.84.1" | "v0.84.2";
+  readonly tag: "v0.84.1" | "v0.84.4";
   readonly commit: string;
   readonly runtimeSelection: RuntimeSelection;
   readonly harnessSelection: HarnessSelection;
@@ -62,9 +62,9 @@ export interface EarendilCapabilityEvidence {
 export interface EarendilHarnessCompatibilityManifest {
   readonly schemaVersion: 2;
   readonly authority: Readonly<{
-    currentRuntimeVersion: "0.84.2";
+    currentRuntimeVersion: "0.84.4";
     harnessBaselineVersion: "0.84.1";
-    harnessCandidateVersion: "0.84.2";
+    harnessCandidateVersion: "0.84.4";
     harnessCandidateSelection: "rejected_evidence_only";
     unsupportedCountsAsPass: false;
     harnessActivation: "latent_only";
@@ -145,20 +145,20 @@ const PUBLICATION_COORDINATES = {
     ["sha512-180/xGJtsq7IoR3p9EKWjRd0e9M4DkxInhlo9xyD7prDC7Qrhqq+nhvwrW0lFjPfXcEI2FSHmGCSyvSJE9GsaQ==", "c82960238c0cee896c2f7caee4c18bbf932f58c3"],
     ["sha512-udeXFbgEhJ6JiB0uguwNVNkDy2FENfmtQwPcY+/iJ8GWeq18wkal1tKqa5YyeH0IqtX1vG0cGh8zfSYzyzVuLA==", "e9f05e103a9f268d0e4911959a4fb2095b0e3889"],
   ],
-  "0.84.2": [
-    ["sha512-8Pn3wSCxj0cfo5I6jxQYVB/3uuQRmHhAlEclyjqpOuMEdQMIODHizRogv56FLdbU+dTiGnybeHQ2N+sV1/L2YA==", "2a3212465902f2553dc08d06a8af5926d63d21a0"],
-    ["sha512-6MzsrYIYNVlE7SfpbL2yYb67Qo58p/7Q+xWG1RZvoX1P80aRCHSod2/13aFpxkow1lPO2LEh3c495J0Gwmyjig==", "708f13d19c0f5cfd9432fee704b0cde46e4d906f"],
-    ["sha512-/RFSPhD/bZbpOp1oJj+UneSUFSgZhWxzcSENUY+8+8xhoBrWXMYI2t77XNx4Yf+c8YK2qTHquForhNcelYpXvg==", "b49b564024eb5df0870b8b4022538bd32dd792c3"],
-    ["sha512-l4E+B7hgXKWddRo8bC/eSue2aWZjEgJ9xIpf5p0Og+lq8a2TArCwJ0HCoCPCgaBP/tN4zbYH/wOwvx9pJpeLCA==", "e4d4c1e769963c816959f5cea02a0a10ccc0495a"],
-    ["sha512-jbBh03fkeckWEroHpcZBr4w5/Ibat8WwdXFlXHivYQImrQNFtLpDeL0t1cku4hmK0q3pceIRQHkw4fwbM4YILQ==", "4aaa2250f615cc124d5dc81cbf3c6118bec350ee"],
-    ["sha512-AYlQHHSwI+d/peAgu+WfZzvqpReRGOOYRhyEdjOpZj5bSj95ta05X5szsEGbL+ZVHp75qni7HLI/YEWPir5R9Q==", "6739fa984b3f2ac8baca4f6ed162e033af184bb1"],
-    ["sha512-0VrMmogNeERG10I8ohpT1wY28XEDQgxeNYUv0UtfhFAp/96Hzjgqi3AlwuPVuPQ1uBg+bwHf7+D8Igq1Sk69vQ==", "94fc592073b9b7b5f76fb024e70b36289a9bdd47"],
-    ["sha512-wg5caea7uIv1BHRBm2Y116RvFG4oSAiP5qk9tA2463PDGIr4K8M1Ceyyg5DOpF/shUUl0gk826yQJAeAcHYB9g==", "a1725fe4aab01c9fed07b708247b54b2b2c978f5"],
-    ["sha512-ds2TLihOnM5sLJB3VpXV6y0uR5efVuHf4MN7yDpsty6hA2DUO/EDVzjp/0od0G2JslzVLMjT8T8zavtxVb+qbg==", "261adb51b3ec3e558aff4961ae329e6054bf3845"],
+  "0.84.4": [
+    ["sha512-HyUnjaOXj6oN/6SNcr8A1J/ElRQA50FtIE0XUTSKAQVqmdlb9qdojOyUQwF/jULE5+yOEtGuVgi/N1RnBiNG+g==", "451e9e76b6c7fecd2a49ed5bf905f8dd6c7ce876"],
+    ["sha512-AClAZxf5+c4RRu44NJPS6wyQy+Nmq+Mzyyrdvm4ZVMNuixelO02RZX4G4Aq1F145Yzp43wnM5S+hLlSI7ypfVw==", "348f1be5c2a0f4d17cc167fe1e5a7cabb191d079"],
+    ["sha512-q398WY/3ZQHTizk7IKxApzqFV0xt4yM9LkSkwyqeLK5Bj5RwRjOWxESt26z4LgNp4O+8hqhqFPf/8fj4H5rE4A==", "88523ba121aea1f57bae5d67656f09af7c6fcf02"],
+    ["sha512-jmOlrqUmvhh/siNWFRXjYLJzhKFIHNsAQaysRwzQPQFnPAaV/vhqHsLH/MBsIISA1Rjj7WTUFR3nJrpXoLx39w==", "3a2f04bfc5e463b4cfa36b174a586d11a0bdf9ad"],
+    ["sha512-acyE9ozxkMiWiz/xyWpU0O9vwnYv0hyG889Vniv6Sg9c9zfsX+8MePnDNphBacY2Fvm1rxdsGmiVDSZl9yuDFA==", "aee0630eb3ce6844d3f68323a4a1fffc988fb0c0"],
+    ["sha512-VchGLu8oMF8TjxAuPwQVdcBUSMvsdhJH5+WgKOWgeSxfgsjRJsoTQKqrambPojNuB+1MB/uWgZehq2R1sQQCUA==", "bf1e5c43310671e21d4b06ace0db3da6d91501d9"],
+    ["sha512-SIYZmYm8OBVTjB4rKXHTMuE/cesFr5mYo4cxsuhds6uHc6j092k3R66Uiw53fT305TkL89SQmS8SG57CPwVYug==", "06b2eb9c435e8a61a8df626e7f65088cca9e0b3c"],
+    ["sha512-8e2CuxM+ht+hedQXTZmi5JVl6/xDK9RpSDL2+MbITevKYQhMZ/z6lJOTFgox3HQyGxO8mOZEtYGVeQNaD4OzqA==", "0eefd361fab1db773496384c87bfd91be2772790"],
+    ["sha512-nPUnwDkLtupPXnZQYrCwPFcuTydCDqTY6ZbFqhsL4S4kVq0AT418kPa/6uXwtaCD+MjBNBltb7ScTYX65yeE1w==", "1b5bee5f22ba90539beaddac4e4ee7ad81c8a279"],
   ],
 } as const;
 
-function packageRows(version: "0.84.1" | "0.84.2", gitHead: string): EarendilPackageEvidence[] {
+function packageRows(version: "0.84.1" | "0.84.4", gitHead: string): EarendilPackageEvidence[] {
   return PACKAGE_NAMES.map((name, index) => ({
     name,
     version,
@@ -197,9 +197,9 @@ const CANDIDATE_FINGERPRINTS: EarendilReleaseFingerprint[] = [
   { package: PACKAGE_NAMES[0], subpath: "audit:harness-scaffold", kind: "runtime", sha256: "21fdb3355adafd53c26337617a73918ba49e9832c42cde8b71c469abeecb5916" },
   { package: PACKAGE_NAMES[0], subpath: "audit:harness-scaffold", kind: "declaration", sha256: "3ceafcd72816bc8312f3f851625c082ae0b9099821fb3329e6ff9df165033472" },
   { package: PACKAGE_NAMES[1], subpath: ".", kind: "runtime", sha256: "2317a3ec8d3b0474e45d6c5cca04c71d3795c21bf83c08008c5a0869f9f33d95" },
-  { package: PACKAGE_NAMES[1], subpath: ".", kind: "declaration", sha256: "9f3280dbef8435619289ea791e407fc3c2ca57748ab244d45ceb8bfdb7ea3a0e" },
-  { package: PACKAGE_NAMES[3], subpath: ".", kind: "runtime", sha256: "de74c5324f2b38317eb3f9ae36ef47b41e130a4501637a0e5fce555a3e1c065b" },
-  { package: PACKAGE_NAMES[3], subpath: ".", kind: "declaration", sha256: "c008e9286b62018fe0c294edb0d2dc9451209a276aaef97e179d15f38504ca89" },
+  { package: PACKAGE_NAMES[1], subpath: ".", kind: "declaration", sha256: "defc58571d6d5c9623e57c0dbb4db4c09687b205b539bd8b2a989377170b1799" },
+  { package: PACKAGE_NAMES[3], subpath: ".", kind: "runtime", sha256: "82cb4ea864f3d8816c06bc8f2f2d9a8d82d883297af179dc69d287d042834844" },
+  { package: PACKAGE_NAMES[3], subpath: ".", kind: "declaration", sha256: "fd58aa17ec9ef58367c0068c46181ae086ab2dbfe12ae744bc104b68da17d4cf" },
 ];
 
 const BOUNDARIES: EarendilBoundaryEvidence[] = [
@@ -248,9 +248,9 @@ const PROMOTION_CRITERIA = [
 const RAW_MANIFEST = {
   schemaVersion: 2,
   authority: {
-    currentRuntimeVersion: "0.84.2",
+    currentRuntimeVersion: "0.84.4",
     harnessBaselineVersion: "0.84.1",
-    harnessCandidateVersion: "0.84.2",
+    harnessCandidateVersion: "0.84.4",
     harnessCandidateSelection: "rejected_evidence_only",
     unsupportedCountsAsPass: false,
     harnessActivation: "latent_only",
@@ -278,11 +278,11 @@ const RAW_MANIFEST = {
     },
     {
       role: "current_runtime_harness_candidate",
-      tag: "v0.84.2",
-      commit: "914cf1472e715297caa30db4b9535d534a9eb718",
+      tag: "v0.84.4",
+      commit: "b79e4cc834970cca69daebffab7df1da7d1e52c4",
       runtimeSelection: "installed",
       harnessSelection: "rejected_evidence_only",
-      packages: packageRows("0.84.2", "914cf1472e715297caa30db4b9535d534a9eb718"),
+      packages: packageRows("0.84.4", "b79e4cc834970cca69daebffab7df1da7d1e52c4"),
       fingerprints: CANDIDATE_FINGERPRINTS,
       conformance: {
         caseCount: 30,

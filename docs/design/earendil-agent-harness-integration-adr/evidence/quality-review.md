@@ -42,9 +42,9 @@ Result: **decision-ready with explicit post-approval implementation gates**.
 | Every durable responsibility has a target owner | capability and traceability matrices | Pass |
 | Future effectors are implementable over current internals | `future-effector-specifications.md` gives complete illustrative types, adapter source maps, fakes, fault cases, effort and dependencies | Pass as documentation; no code authorised |
 | No reuse of current Piclaw orchestration | effector classification rejects agent pool, process-chat/recovery/compaction orchestration | Pass as design constraint; implementation boundary test is an M1 gate |
-| Earendil structure adopted early | historical 0.84.1 contracts, current 0.84.2 compatibility evidence, authoritative `main` design and draft PR #8076 storage/primitives pinned separately | Pass |
+| Earendil structure adopted early | historical 0.84.1 contracts, current 0.84.4 compatibility evidence, authoritative `main` design and draft PR #8076 storage/primitives pinned separately | Pass |
 | Parallel execution abstractions removed | `direct-type-audit.md` separates Earendil-owned from Piclaw service-owned types | Pass |
-| Real installed harness viability checked | current 0.84.2 Harness operations remain unsupported; PR #8076 has v3 storage/primitives but no concrete public harness runtime | Pass |
+| Real installed harness viability checked | current 0.84.4 Harness operations remain unsupported; PR #8076 has v3 storage/primitives but no concrete public harness runtime | Pass |
 | Selected-version test implementation specified | fixture layout, manual driver, direct Earendil `Models`/tools, fault plan and assumptions | Pass |
 | One semantic suite can target fixture and real harness | direct Earendil factory input and version-migration report | Pass as specification; implementation is an M1/M4 gate |
 | Replay and fault boundaries specified | target state model and selected-version fixture cover intent, `EffectGate` admission, unknown effect-start outcome and settlement | Pass |

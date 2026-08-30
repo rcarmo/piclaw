@@ -51,6 +51,22 @@ function registerFixturePanes() {
   }
 }
 
+const fixtureModelOptions = Array.from({ length: 160 }, (_, index) => {
+  const provider = ['openai', 'anthropic', 'github-copilot', 'azure-openai', 'cerebras'][index % 5];
+  const family = ['gpt', 'claude', 'sonnet', 'llama', 'qwen'][index % 5];
+  const label = `${provider}/${family}-fixture-${String(index + 1).padStart(3, '0')}`;
+  return {
+    label,
+    provider,
+    id: label.slice(provider.length + 1),
+    name: `${family.toUpperCase()} Fixture ${index + 1}`,
+    context_window: [128000, 200000, 400000, 1000000][index % 4],
+    reasoning: index % 3 !== 0,
+    thinking_levels: index % 3 !== 0 ? ['off', 'minimal', 'low', 'medium', 'high'] : ['off'],
+    pricing: { input_per_million: 0.25 + (index % 6), output_per_million: 1.25 + (index % 8) },
+  };
+});
+
 const mockSettingsData = {
   userName: 'Rui Carmo',
   assistantName: 'Smith',
@@ -73,13 +89,9 @@ const mockSettingsData = {
     { id: 'anthropic', label: 'Anthropic', authType: 'api_key', configured: false },
     { id: 'github-copilot', label: 'GitHub Copilot', authType: 'oauth', configured: true },
   ],
-  models: ['openai/gpt-5.1', 'anthropic/claude-sonnet-4-5', 'github-copilot/gpt-5.4-mini'],
-  model_options: [
-    { label: 'openai/gpt-5.1', provider: 'openai', name: 'GPT-5.1', context_window: 200000, reasoning: true },
-    { label: 'anthropic/claude-sonnet-4-5', provider: 'anthropic', name: 'Claude Sonnet 4.5', context_window: 200000, reasoning: true },
-    { label: 'github-copilot/gpt-5.4-mini', provider: 'github-copilot', name: 'GPT-5.4 mini', context_window: 128000, reasoning: false },
-  ],
-  current: 'openai/gpt-5.1',
+  models: fixtureModelOptions.map((model) => model.label),
+  model_options: fixtureModelOptions,
+  current: fixtureModelOptions[0].label,
   thinking_level: 'medium',
   supports_thinking: true,
   available_thinking_levels: ['off', 'minimal', 'low', 'medium', 'high'],
@@ -103,6 +115,9 @@ const mockModelsPayload = {
   thinking_level: mockSettingsData.thinking_level,
   supports_thinking: mockSettingsData.supports_thinking,
   available_thinking_levels: mockSettingsData.available_thinking_levels,
+  scoped_models_only: true,
+  scoped_model_filter_active: true,
+  enabled_model_patterns: ['openai/*', 'anthropic/claude*', 'github-copilot/gpt*'],
 };
 
 const mockAddonsPayload = {

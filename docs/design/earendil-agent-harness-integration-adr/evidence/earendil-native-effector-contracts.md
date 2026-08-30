@@ -1,6 +1,6 @@
 # Earendil-native effector contracts
 
-Historical Harness baseline: exported types and semantics in the `0.84.1` Earendil family. Current-loop runtime: coherent `0.84.2`, which retains the released-v2 unsupported Harness shape. Target design: Harness v3 [`harness.md`](https://github.com/earendil-works/pi/blob/5f7195c51eac43cdf329f813a7ef020d7bd74527/packages/agent/docs/harness.md), with current draft implementation evidence in PR #8076 at `fd389abc4677b4e0fa5dc9b2bbd2e63418f079b4`. Version-specific v2 details below are baseline evidence and must be replaced by direct v3 contracts when one coherent tagged Harness implementation is selected.
+Historical Harness baseline: exported types and semantics in the `0.84.1` Earendil family. Current-loop runtime: coherent `0.84.4`, which retains the released-v2 unsupported Harness shape. Target design: Harness v3 [`harness.md`](https://github.com/earendil-works/pi/blob/5f7195c51eac43cdf329f813a7ef020d7bd74527/packages/agent/docs/harness.md), with current draft implementation evidence in PR #8076 at `fd389abc4677b4e0fa5dc9b2bbd2e63418f079b4`. Version-specific v2 details below are baseline evidence and must be replaced by direct v3 contracts when one coherent tagged Harness implementation is selected.
 
 ## Rule
 
@@ -10,7 +10,7 @@ Allowed composition uses TypeScript's standard `Pick`, `Omit`, generics and decl
 
 ## Supported imports
 
-The following block is the historical verified `0.84.1` import baseline; current `0.84.2` compatibility probes exercise the corresponding public assignments. Harness v3 draft PR #8076 changes this surface substantially (`AgentHarnessConstructor`, generic harness/options/tools, `Storage`/register types, typed events/hooks, `NextRunResult`, `LaneLastResult`). At the pinned draft head `AgentHarnessConstructor` is still interface-only. Production must regenerate the import list from one selected tagged v3 release and delete this block.
+The following block is the historical verified `0.84.1` import baseline; current `0.84.4` compatibility probes exercise the corresponding public assignments. Harness v3 draft PR #8076 changes this surface substantially (`AgentHarnessConstructor`, generic harness/options/tools, `Storage`/register types, typed events/hooks, `NextRunResult`, `LaneLastResult`). At the pinned draft head `AgentHarnessConstructor` is still interface-only. Production must regenerate the import list from one selected tagged v3 release and delete this block.
 
 Use public package exports:
 

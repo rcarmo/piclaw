@@ -4,7 +4,7 @@
 
 ### API and package survey
 
-The historical `0.84.1` package survey is recorded in [`evidence/earendil-0.84.1-harness-surface.md`](evidence/earendil-0.84.1-harness-surface.md). It found implemented v2 session contracts and a private recovery reducer, but no usable released execution harness. Piclaw's current loop now selects `0.84.2`; that release retains the same unsupported Harness boundary.
+The historical `0.84.1` package survey is recorded in [`evidence/earendil-0.84.1-harness-surface.md`](evidence/earendil-0.84.1-harness-surface.md). It found implemented v2 session contracts and a private recovery reducer, but no usable released execution harness. Piclaw's current loop now selects `0.84.4`; that release retains the same unsupported Harness boundary.
 
 Earendil has since consolidated the audited Harness v3 target into [`packages/agent/docs/harness.md`](https://github.com/earendil-works/pi/blob/5f7195c51eac43cdf329f813a7ef020d7bd74527/packages/agent/docs/harness.md). The authoritative `main` specification and the materially changed draft specification/implementation in PR #8076 are assessed separately in [`evidence/earendil-harness-v3-assessment.md`](evidence/earendil-harness-v3-assessment.md). Harness v3 replaces the v2 record-log/reducer model with immutable entries, mutable total-state registers and an append-only usage ledger. PR #8076 implements substantial session/storage and low-level execution work, but still exposes no concrete public v3 harness runtime. A selected-version test implementation remains required until one coherent tagged runtime/backend is available.
 
