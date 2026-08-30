@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { runWithPiclawCompactionTrigger } from "../../src/agent-pool/compaction-trigger-context.js";
 import { streamComplete } from "../../src/extensions/smart-compaction/stream-complete.js";
 
 function message(text: string) {
@@ -69,6 +70,64 @@ describe("streamComplete", () => {
       apiKey: "key",
       headers: { "x-test": "1", authorization: null },
     });
+  });
+
+  it("passes the remaining Piclaw compaction deadline and reports first-token timing", async () => {
+    const finalMessage = message("done");
+    const events = [{ type: "text_delta", delta: "done" }, { type: "done", message: finalMessage }];
+    const calls: any[] = [];
+    const waiting: any[] = [];
+    const firstTokens: any[] = [];
+    const deadlineAtMs = Date.now() + 2_000;
+
+    const response = await runWithPiclawCompactionTrigger({
+      chatJid: "web:test",
+      trigger: "manual",
+      willRetry: false,
+      source: "test",
+      deadlineAtMs,
+    }, async () => await streamComplete({
+      model: { id: "test-model" },
+      systemPrompt: "system",
+      userPrompt: "summarize",
+      maxTokens: 128,
+      signal: new AbortController().signal,
+      streamFn: (_model, _context, options) => {
+        calls.push(options);
+        return fakeStream(events, finalMessage);
+      },
+      onWaitingForFirstToken: (timing) => waiting.push(timing),
+      onFirstToken: (timing) => firstTokens.push(timing),
+      onProgress: () => {},
+      progressIntervalMs: 0,
+    }));
+
+    expect(response).toBe(finalMessage);
+    expect(calls[0].timeoutMs).toBeGreaterThan(0);
+    expect(calls[0].timeoutMs).toBeLessThanOrEqual(2_000);
+    expect(waiting).toEqual([expect.objectContaining({ timeoutMs: calls[0].timeoutMs })]);
+    expect(firstTokens).toEqual([expect.objectContaining({ timeToFirstTokenMs: expect.any(Number) })]);
+  });
+
+  it("does not count stream metadata as first output but accepts reasoning deltas", async () => {
+    const finalMessage = message("done");
+    const firstTokens: any[] = [];
+    await streamComplete({
+      model: { id: "test-model" },
+      systemPrompt: "system",
+      userPrompt: "summarize",
+      maxTokens: 128,
+      signal: new AbortController().signal,
+      streamFn: () => fakeStream([
+        { type: "start" },
+        { type: "thinking_delta", delta: "reasoning" },
+        { type: "text_delta", delta: "done" },
+      ], finalMessage),
+      onFirstToken: (timing) => firstTokens.push(timing),
+      onProgress: () => {},
+      progressIntervalMs: 0,
+    });
+    expect(firstTokens).toHaveLength(1);
   });
 
   it("rejects a pre-aborted signal before starting a provider stream", async () => {

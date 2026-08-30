@@ -7,6 +7,8 @@ import { getCompactionReasoningEffort, getSafeCompactionMaxTokens } from "./safe
 import { SYSTEM_PROMPT } from "./selective-prompt.js";
 import { streamComplete, type CompactionStreamFn } from "./stream-complete.js";
 import { buildCompactionRepairInstruction, validateCompactionSummaryResponse } from "./summary-validation.js";
+import { updatePiclawCompactionExecution } from "../../agent-pool/compaction-trigger-context.js";
+import { formatCompactionProviderTimeout, type CompactionProviderTiming } from "./provider-timing.js";
 
 const log = createLogger("ext.smart-compaction.model-execution");
 
@@ -26,6 +28,7 @@ export async function runCompactionModelExecution(input: {
   onPayload?: (payload: unknown, model: any) => unknown | undefined | Promise<unknown | undefined>;
   onStage?: (stage: CompactionModelStage, promptTokens: number) => void;
   onProgress?: () => void;
+  providerTiming?: CompactionProviderTiming;
 }): Promise<CompactionModelExecutionResult> {
   let activePromptText = input.promptText;
   let modelCallCount = 0;
@@ -45,6 +48,19 @@ export async function runCompactionModelExecution(input: {
       reasoning: input.model?.reasoning ? getCompactionReasoningEffort(input.model, "selective") : undefined,
       onPayload: input.onPayload,
       streamFn: input.streamFn,
+      onWaitingForFirstToken: ({ requestStartedAt }) => {
+        if (!input.providerTiming) return;
+        input.providerTiming.requestCount += 1;
+        updatePiclawCompactionExecution({ providerRequestCount: input.providerTiming.requestCount });
+        input.providerTiming.requestStartedAt = requestStartedAt;
+        input.providerTiming.waitingForFirstTokenSince = requestStartedAt;
+      },
+      onFirstToken: ({ firstTokenAt, timeToFirstTokenMs }) => {
+        if (!input.providerTiming) return;
+        input.providerTiming.waitingForFirstTokenSince = null;
+        input.providerTiming.firstTokenAt ??= firstTokenAt;
+        input.providerTiming.timeToFirstTokenMs ??= timeToFirstTokenMs;
+      },
       onProgress: input.onProgress,
     });
     return { response, maxOutputChars: safeOutput.maxTokens * 4 };
@@ -113,7 +129,10 @@ export async function runCompactionModelExecution(input: {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const cancelled = input.abortSignal.aborted || /Compaction cancelled/i.test(message);
-    if (!cancelled) log.debug(`Smart compaction error: ${message}`);
-    return { ok: false, cancelled, error: message, modelCallCount };
+    const attributedMessage = !cancelled && input.providerTiming && /timed? out|timeout/i.test(message)
+      ? formatCompactionProviderTimeout(message, input.providerTiming)
+      : message;
+    if (!cancelled) log.debug(`Smart compaction error: ${attributedMessage}`);
+    return { ok: false, cancelled, error: attributedMessage, modelCallCount };
   }
 }

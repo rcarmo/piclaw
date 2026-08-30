@@ -612,6 +612,9 @@ type MessageKey =
   | 'settings.compaction.enableAutomatic'
   | 'settings.compaction.enableAutomaticHint'
   | 'settings.compaction.processingMethod'
+  | 'settings.compaction.model'
+  | 'settings.compaction.modelHint'
+  | 'settings.compaction.modelPlaceholder'
   | 'settings.compaction.methodSelective'
   | 'settings.compaction.methodSelectiveHint'
   | 'settings.compaction.methodPipelined'
@@ -1250,6 +1253,9 @@ const EN: Record<MessageKey, string> = {
   'settings.compaction.enableAutomatic': 'Enable automatic compaction',
   'settings.compaction.enableAutomaticHint': 'Piclaw-managed pre-prompt/idle compaction. The upstream agent auto-compactor stays suppressed internally.',
   'settings.compaction.processingMethod': 'Processing method',
+  'settings.compaction.model': 'Compaction model',
+  'settings.compaction.modelHint': 'Strict local smart-compaction model. If configured but unavailable, compaction stops and preserves the session instead of falling back.',
+  'settings.compaction.modelPlaceholder': 'provider/model (empty uses active model)',
   'settings.compaction.methodSelective': 'Selective',
   'settings.compaction.methodSelectiveHint': 'Extract high-value continuity excerpts, using complete progressive coverage whenever a bounded prompt cannot represent every discarded source event.',
   'settings.compaction.methodPipelined': 'Pipelined',
@@ -1277,7 +1283,7 @@ const EN: Record<MessageKey, string> = {
   'settings.compaction.thresholdHint': 'auto-compact when context exceeds this % of window',
   'settings.compaction.timeout': 'Compaction timeout (sec)',
   'settings.compaction.timeoutAria': 'compaction timeout',
-  'settings.compaction.timeoutHint': 'Abort a stuck pre-prompt/manual compaction instead of hanging forever.',
+  'settings.compaction.timeoutHint': 'Single wall-clock deadline for deterministic preparation, provider prefill/streaming, and settlement. Local provider requests inherit the remaining time.',
   'settings.compaction.backoffBase': 'Failure backoff base (min)',
   'settings.compaction.backoffBaseAria': 'compaction backoff base',
   'settings.compaction.backoffBaseHint': 'First suppression window after a compaction failure.',
@@ -1888,6 +1894,9 @@ const ZH_CN: Partial<Record<MessageKey, string>> = {
   'settings.compaction.enableAutomatic': '启用自动压缩',
   'settings.compaction.enableAutomaticHint': '由 Piclaw 管理的提示前/空闲压缩。上游代理自动压缩器会继续在内部保持禁用。',
   'settings.compaction.processingMethod': '处理方法',
+  'settings.compaction.model': '压缩模型',
+  'settings.compaction.modelHint': '用于本地智能压缩的严格模型。若已配置但不可用，压缩会停止并保留会话，不会回退。',
+  'settings.compaction.modelPlaceholder': '提供商/模型（留空则使用当前模型）',
   'settings.compaction.methodSelective': '选择性',
   'settings.compaction.methodSelectiveHint': '提取高价值的连续性片段；当有界提示无法表示所有被丢弃的源事件时，使用完整的渐进式覆盖。',
   'settings.compaction.methodPipelined': '流水线',
@@ -2526,6 +2535,9 @@ const JA: Partial<Record<MessageKey, string>> = {
   'settings.compaction.enableAutomatic': '自動圧縮を有効化',
   'settings.compaction.enableAutomaticHint': 'Piclaw が管理するプロンプト前/アイドル時の圧縮です。上流エージェントの自動圧縮は内部的に抑制されたままです。',
   'settings.compaction.processingMethod': '処理方式',
+  'settings.compaction.model': '圧縮モデル',
+  'settings.compaction.modelHint': 'ローカルスマート圧縮専用の厳密なモデルです。設定済みで利用できない場合は、フォールバックせずセッションを保持して停止します。',
+  'settings.compaction.modelPlaceholder': 'provider/model（空欄は現在のモデル）',
   'settings.compaction.methodSelective': '選択型',
   'settings.compaction.methodSelectiveHint': '重要な継続情報を抽出し、制限付きプロンプトですべての破棄対象イベントを表現できない場合は完全な段階的カバレッジを使用します。',
   'settings.compaction.methodPipelined': 'パイプライン',

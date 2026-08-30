@@ -8,6 +8,7 @@
 import type { Message, ProviderHeaders, SimpleStreamOptions } from "@earendil-works/pi-ai";
 import type { FileOperations } from "@earendil-works/pi-coding-agent";
 import { streamComplete, type CompactionStreamFn } from "./stream-complete.js";
+import { formatCompactionProviderTimeout, type CompactionProviderTiming } from "./provider-timing.js";
 import {
   DEFAULT_HIGH_CONTEXT_PROGRESSIVE_MAX_CHUNKS,
   DEFAULT_HIGH_CONTEXT_PROGRESSIVE_TARGET_CHUNKS,
@@ -25,7 +26,7 @@ import {
   SMART_COMPACTION_PROGRESS_INTERVAL_MS,
   type CompactionReasoningEffort,
 } from "./config.js";
-import { checkPiclawCompactionBudget, maybeYieldPiclawCompaction } from "../../agent-pool/compaction-trigger-context.js";
+import { checkPiclawCompactionBudget, maybeYieldPiclawCompaction, updatePiclawCompactionExecution } from "../../agent-pool/compaction-trigger-context.js";
 import { estimateCompactionPromptTokens, estimateSmartCompactionCompletionPercent, formatProgressCount, formatProgressRange, formatSmartCompactionStatus } from "./context.js";
 import { getCompactionOutputTokenTarget, getCompactionReasoningEffort, getSafeCompactionMaxTokens } from "./safety.js";
 import { createLogger } from "../../utils/logger.js";
@@ -99,6 +100,7 @@ async function completeCompactionPrompt(
   reasoning?: CompactionReasoningEffort,
   onModelRequest?: () => void,
   onPayload?: SimpleStreamOptions["onPayload"],
+  providerTiming?: CompactionProviderTiming,
 ): Promise<string> {
   const runOnce = async (
     activePromptText: string,
@@ -108,7 +110,9 @@ async function completeCompactionPrompt(
     if (abortSignal.aborted) throw new Error("Compaction cancelled");
     const safeOutput = getSafeCompactionMaxTokens(model, activePromptText, requestedMaxTokens);
     onModelRequest?.();
-    const response = await streamComplete({
+    let response;
+    try {
+      response = await streamComplete({
       model,
       systemPrompt: schema === "chunk" ? CHUNK_SYSTEM_PROMPT : SYSTEM_PROMPT,
       userPrompt: activePromptText,
@@ -120,8 +124,28 @@ async function completeCompactionPrompt(
       reasoning: (model as any).reasoning ? reasoning ?? getCompactionReasoningEffort(model, "selective") : undefined,
       onPayload,
       streamFn,
+      onWaitingForFirstToken: ({ requestStartedAt }) => {
+        if (!providerTiming) return;
+        providerTiming.requestCount += 1;
+        updatePiclawCompactionExecution({ providerRequestCount: providerTiming.requestCount });
+        providerTiming.requestStartedAt = requestStartedAt;
+        providerTiming.waitingForFirstTokenSince = requestStartedAt;
+      },
+      onFirstToken: ({ firstTokenAt, timeToFirstTokenMs }) => {
+        if (!providerTiming) return;
+        providerTiming.waitingForFirstTokenSince = null;
+        providerTiming.firstTokenAt ??= firstTokenAt;
+        providerTiming.timeToFirstTokenMs ??= timeToFirstTokenMs;
+      },
       onProgress,
     });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (providerTiming && !abortSignal.aborted && /timed? out|timeout/i.test(message)) {
+        throw new Error(formatCompactionProviderTimeout(message, providerTiming), { cause: error });
+      }
+      throw error;
+    }
     const validation = validateCompactionSummaryResponse(response, schema, safeOutput.maxTokens * 4, {
       modelFileBlocks: "discard",
     });
@@ -304,6 +328,7 @@ async function mergeProgressiveSummaries(input: {
   streamFn?: CompactionStreamFn;
   onProgress?: (generatedChars: number, progress?: ProgressiveCompactionProgress) => void;
   onModelRequest?: () => void;
+  providerTiming?: CompactionProviderTiming;
 }): Promise<string> {
   const MAX_PROGRESSIVE_MERGE_PASSES = 12;
   let summaries = input.summaries.flatMap((summary) => splitOversizedMergeSummary(summary, input.model, input.maxTokens));
@@ -384,6 +409,8 @@ async function mergeProgressiveSummaries(input: {
           input.onProgress ? (generatedChars) => input.onProgress?.(generatedChars, { phase: "progressive_merge", mergePass: pass, batchIndex }) : undefined,
           getCompactionReasoningEffort(input.model, "progressive_merge"),
           input.onModelRequest,
+          undefined,
+          input.providerTiming,
         )];
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -465,6 +492,8 @@ async function mergeProgressiveSummaries(input: {
       input.onProgress ? (generatedChars) => input.onProgress?.(generatedChars, { phase: "progressive_compress", compressPass }) : undefined,
       getCompactionReasoningEffort(input.model, "progressive_compress"),
       input.onModelRequest,
+      undefined,
+      input.providerTiming,
     )];
     finalPrompt = buildFinalPrompt();
   }
@@ -480,6 +509,8 @@ async function mergeProgressiveSummaries(input: {
     input.onProgress ? (generatedChars) => input.onProgress?.(generatedChars, { phase: "progressive_final" }) : undefined,
     getCompactionReasoningEffort(input.model, "progressive_final"),
     input.onModelRequest,
+    undefined,
+    input.providerTiming,
   );
 }
 
@@ -624,6 +655,7 @@ export async function runProgressiveCompaction(input: {
   onPayload?: SimpleStreamOptions["onPayload"];
   /** Optional durable validated-chunk checkpoint store. */
   checkpointStore?: ProgressiveCheckpointStore;
+  providerTiming?: CompactionProviderTiming;
 }): Promise<ProgressiveCompactionResult> {
   let modelCallCount = 0;
   const onModelRequest = () => { modelCallCount += 1; };
@@ -751,6 +783,7 @@ export async function runProgressiveCompaction(input: {
         getCompactionReasoningEffort(input.model, "progressive_chunk"),
         onModelRequest,
         chunk.groupIds?.includes("continuity:previous-summary") ? input.onPayload : undefined,
+        input.providerTiming,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1034,6 +1067,7 @@ export async function runProgressiveCompaction(input: {
       streamFn: input.streamFn,
       onProgress: input.onProgress,
       onModelRequest,
+      providerTiming: input.providerTiming,
       finalPromptExtras: {
         // previousSummary has already been summarized as the first atomic
         // source group above; do not duplicate the full source in the final

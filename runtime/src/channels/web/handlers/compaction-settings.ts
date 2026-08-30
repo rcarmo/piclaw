@@ -23,6 +23,7 @@ import {
 export interface CompactionSettingsData {
   autoCompactionEnabled: boolean;
   smartCompactionMethod: SmartCompactionMethod;
+  compactionModel: string;
   remoteCompactionEnabled: boolean;
   remoteCompactionTimeoutSec: number;
   remoteCompactionSupportedProviders: string[];
@@ -58,6 +59,7 @@ export interface CompactionSettingsData {
 export interface CompactionSettingsInput {
   autoCompactionEnabled?: unknown;
   smartCompactionMethod?: unknown;
+  compactionModel?: unknown;
   remoteCompactionEnabled?: unknown;
   remoteCompactionTimeoutSec?: unknown;
   compactionTimeoutSec?: unknown;
@@ -80,6 +82,14 @@ function normalizeOptionalSmartCompactionMethod(value: unknown): SmartCompaction
   const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
   if (!["selective", "traditional_pipelined", "pipelined"].includes(normalized)) return undefined;
   return normalizeSmartCompactionMethod(normalized);
+}
+
+function normalizeOptionalCompactionModel(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  if (!normalized) return "";
+  const separator = normalized.indexOf("/");
+  return separator > 0 && separator < normalized.length - 1 ? normalized : undefined;
 }
 
 function normalizeOptionalInt(value: unknown, min: number, max: number): number | undefined {
@@ -108,6 +118,7 @@ export function getCompactionSettingsData(): CompactionSettingsData {
   return {
     autoCompactionEnabled: config.autoCompactionEnabled,
     smartCompactionMethod: config.smartCompactionMethod,
+    compactionModel: config.compactionModel,
     remoteCompactionEnabled: config.remoteCompactionEnabled,
     remoteCompactionTimeoutSec: Math.max(1, Math.round(config.remoteCompactionTimeoutMs / 1000)),
     remoteCompactionSupportedProviders: ["openai", "openai-codex"],
@@ -153,6 +164,7 @@ export async function saveCompactionSettings(input: CompactionSettingsInput): Pr
   const patch: {
     autoCompactionEnabled?: boolean;
     smartCompactionMethod?: SmartCompactionMethod;
+    compactionModel?: string;
     remoteCompactionEnabled?: boolean;
     remoteCompactionTimeoutMs?: number;
     timeoutMs?: number;
@@ -172,6 +184,11 @@ export async function saveCompactionSettings(input: CompactionSettingsInput): Pr
   const nextSmartCompactionMethod = normalizeOptionalSmartCompactionMethod(input.smartCompactionMethod);
   if (nextSmartCompactionMethod !== undefined) {
     patch.smartCompactionMethod = nextSmartCompactionMethod;
+  }
+
+  const nextCompactionModel = normalizeOptionalCompactionModel(input.compactionModel);
+  if (nextCompactionModel !== undefined) {
+    patch.compactionModel = nextCompactionModel;
   }
 
   const nextRemoteCompactionEnabled = normalizeOptionalBoolean(input.remoteCompactionEnabled);

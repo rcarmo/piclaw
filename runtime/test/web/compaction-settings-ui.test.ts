@@ -14,7 +14,10 @@ test("classic compaction settings expose and persist both canonical processing m
   const bundle = source("web/static/classic/dist/app.bundle.js");
 
   expect(component).toContain("smartCompactionMethod: normalizeSmartCompactionMethod(data.smartCompactionMethod)");
-  expect(component).toContain("smartCompactionMethod,\n        remoteCompactionEnabled,\n        remoteCompactionTimeoutSec,\n        compactionTimeoutSec");
+  expect(component).toContain("smartCompactionMethod,\n        compactionModel,\n        remoteCompactionEnabled,\n        remoteCompactionTimeoutSec,\n        compactionTimeoutSec");
+  expect(component).toContain('id="compactionModel"');
+  expect(component).toContain("t('settings.compaction.modelPlaceholder')");
+  expect(i18n).toContain("'settings.compaction.modelPlaceholder': 'provider/model (empty uses active model)'");
   expect(component).toContain("body: currentSnapshot");
   expect(component).toContain("replace(/[\\s-]+/g, '_')");
   expect(component).toContain("normalized === 'pipelined' || normalized === 'traditional_pipelined' ? 'pipelined' : 'selective'");
@@ -38,6 +41,7 @@ test("visual compaction settings use the same canonical processing-method contra
   const bundle = source("web/static/visual/dist/app.bundle.js");
 
   expect(types).toContain('smartCompactionMethod?: "selective" | "pipelined"');
+  expect(types).toContain('compactionModel?: string');
   expect(types).toContain('remoteCompactionEnabled?: boolean');
   expect(types).toContain('remoteCompactionTimeoutSec?: number');
   expect(component).toContain('replace(/[\\s-]+/g, "_")');
@@ -45,6 +49,7 @@ test("visual compaction settings use the same canonical processing-method contra
   expect(component).toContain('<option value="selective">Selective</option>');
   expect(component).toContain('<option value="pipelined">Pipelined</option>');
   expect(component).toContain('onSaveCompaction("smartCompactionMethod", value)');
+  expect(component).toContain('onSaveCompaction("compactionModel", compactionModel.value.trim())');
   expect(component).toContain('onSaveCompaction("remoteCompactionEnabled", value)');
   expect(component).toContain('onSaveCompaction("remoteCompactionTimeoutSec", v)');
   expect(component).toContain('saveSetting("compaction", field, value)');

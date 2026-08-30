@@ -420,6 +420,8 @@ export interface CompactionRuntimeConfig {
   autoCompactionEnabled: boolean;
   /** Processing method captured once at the start of each smart compaction. */
   smartCompactionMethod: SmartCompactionMethod;
+  /** Optional provider/model used only for local smart compaction. Empty uses the active model. */
+  compactionModel: string;
   /** Attempt explicitly supported provider-native compaction before the selected local method. */
   remoteCompactionEnabled: boolean;
   /** Provider-native compaction request deadline. */
@@ -456,6 +458,7 @@ export interface CompactionRuntimeConfig {
 interface CompactionDomainConfig {
   autoCompactionEnabled: boolean;
   smartCompactionMethod: SmartCompactionMethod;
+  model: string;
   remoteCompactionEnabled: boolean;
   remoteCompactionTimeoutMs: number;
   timeoutMs: number;
@@ -505,6 +508,16 @@ function parseProgressiveCompactionCompatibilityValue(raw: string): boolean {
 
 const COMPACTION_REASONING_EFFORT_VALUES = ["", "minimal", "low", "medium", "high"] as const;
 
+function normalizeCompactionModel(value: unknown): string {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return "";
+  const separator = normalized.indexOf("/");
+  if (separator <= 0 || separator === normalized.length - 1) {
+    throw new Error("Compaction model must use provider/model syntax");
+  }
+  return normalized;
+}
+
 function normalizeCompactionReasoningFallback(value: unknown): string {
   const normalized = String(value ?? "").trim().toLowerCase();
   if ((COMPACTION_REASONING_EFFORT_VALUES as readonly string[]).includes(normalized)) return normalized;
@@ -522,6 +535,10 @@ const compactionDomainSchema = registerDomainConfig<CompactionDomainConfig>({
         return normalizeSmartCompactionMethod(value, "selective");
       },
     } as DomainConfigField<SmartCompactionMethod>,
+    model: {
+      ...stringField({ key: "model", owner: "core", defaultValue: "", persistence: "json-config", precedence: ["persisted", "default"], secretClass: "none" }),
+      validate: normalizeCompactionModel,
+    } as DomainConfigField<string>,
     remoteCompactionEnabled: boolField({ key: "remoteCompactionEnabled", owner: "core", defaultValue: configRemoteCompactionEnabled ?? false, persistence: "json-config", precedence: ["persisted", "default"], secretClass: "none" }),
     remoteCompactionTimeoutMs: integerField({ key: "remoteCompactionTimeoutMs", owner: "core", defaultValue: Number.isFinite(configRemoteCompactionTimeoutMs) && (configRemoteCompactionTimeoutMs ?? 0) > 0 ? Math.round(Number(configRemoteCompactionTimeoutMs)) : 300_000, min: 1, bounds: "positive integer ms", persistence: "json-config", precedence: ["persisted", "default"], secretClass: "none" }),
     timeoutMs: integerField({ key: "timeoutMs", owner: "core", defaultValue: Number.isFinite(configCompactionTimeoutMs) && (configCompactionTimeoutMs ?? 0) > 0 ? Math.round(Number(configCompactionTimeoutMs)) : 300_000, min: 1, bounds: "positive integer ms", persistence: "json-config", precedence: ["compat-env", "persisted", "default"], secretClass: "none", compatibilityEnv: [{ envKey: "PICLAW_COMPACTION_TIMEOUT_MS", replacement: "domains.compaction.timeoutMs", removalVersion: "3.0.0", skipInvalid: true }] }),
@@ -908,6 +925,7 @@ export function getCompactionRuntimeConfig(): Readonly<CompactionRuntimeConfig> 
   const resolved: CompactionRuntimeConfig = {
     autoCompactionEnabled: domain.autoCompactionEnabled,
     smartCompactionMethod: domain.smartCompactionMethod,
+    compactionModel: domain.model,
     remoteCompactionEnabled: domain.remoteCompactionEnabled,
     remoteCompactionTimeoutMs: domain.remoteCompactionTimeoutMs,
     timeoutMs: domain.timeoutMs,
@@ -939,6 +957,7 @@ export function getCompactionRuntimeConfig(): Readonly<CompactionRuntimeConfig> 
 export interface CompactionRuntimeConfigPatch {
   autoCompactionEnabled?: boolean;
   smartCompactionMethod?: SmartCompactionMethod;
+  compactionModel?: string;
   remoteCompactionEnabled?: boolean;
   remoteCompactionTimeoutMs?: number;
   timeoutMs?: number;
@@ -971,6 +990,7 @@ function applyCompactionRuntimeConfig(
     smartCompactionMethod: patch.smartCompactionMethod === undefined
       ? current.smartCompactionMethod
       : normalizeSmartCompactionMethod(patch.smartCompactionMethod, current.smartCompactionMethod),
+    compactionModel: patch.compactionModel === undefined ? current.compactionModel : String(patch.compactionModel).trim(),
     remoteCompactionEnabled: typeof patch.remoteCompactionEnabled === "boolean"
       ? patch.remoteCompactionEnabled
       : current.remoteCompactionEnabled,
@@ -1038,6 +1058,9 @@ function applyCompactionRuntimeConfig(
       "smartCompactionMethod",
       "smart_compaction_method",
       "PICLAW_SMART_COMPACTION_METHOD",
+      "model",
+      "compactionModel",
+      "compaction_model",
       "remoteCompactionEnabled",
       "remote_compaction_enabled",
       "remoteCompactionTimeoutMs",
@@ -1111,6 +1134,7 @@ function applyCompactionRuntimeConfig(
   const compactionDomainPatch: CompactionDomainConfig = {
     autoCompactionEnabled: next.autoCompactionEnabled,
     smartCompactionMethod: next.smartCompactionMethod,
+    model: next.compactionModel,
     remoteCompactionEnabled: next.remoteCompactionEnabled,
     remoteCompactionTimeoutMs: next.remoteCompactionTimeoutMs,
     timeoutMs: next.timeoutMs,
@@ -1139,6 +1163,7 @@ function applyCompactionRuntimeConfig(
     compactionDomainConfigOverride = {
       autoCompactionEnabled: next.autoCompactionEnabled,
       smartCompactionMethod: next.smartCompactionMethod,
+      model: next.compactionModel,
       remoteCompactionEnabled: next.remoteCompactionEnabled,
       remoteCompactionTimeoutMs: next.remoteCompactionTimeoutMs,
       timeoutMs: next.timeoutMs,

@@ -641,6 +641,7 @@ export async function runCompactionWithTimeout<T>(
   }
 
   const metadata = buildCompactionTriggerMetadata(chatJid, reason, triggerOptions);
+  metadata.executionStage = "deterministic";
   const generationId = metadata.generationId!;
   const active: ActiveCompaction = {
     session,
@@ -667,6 +668,7 @@ export async function runCompactionWithTimeout<T>(
     () => { active.timedOut = true; },
     reason,
     generationId,
+    metadata,
   ).then((result) => withCompactionOutcomeMetadata(result, generationId, false));
   active.outcome = outcome as Promise<CompactionOutcome<unknown>>;
   activeCompactions.set(chatJid, active);
@@ -682,6 +684,7 @@ async function runCompactionWithTimeoutExclusive<T>(
   markTimedOut: () => void,
   reason: string,
   generationId?: string,
+  metadata?: PiclawCompactionTriggerMetadata,
 ): Promise<BaseCompactionOutcome<T>> {
   const timeoutMs = getCompactionTimeoutMs();
   updateSessionCompacting(chatJid, true);
@@ -747,8 +750,9 @@ async function runCompactionWithTimeoutExclusive<T>(
   // can dispose the session.  Without this, emergency rotation can call
   // session.dispose() while the extension's ctx is still in use.
   const settlementGraceMs = compactionSettlementGraceOverrideMs ?? COMPACTION_SETTLEMENT_GRACE_MS;
-  await Promise.race([
-    compactionOutcome,
+  const settledAfterAbort = Symbol("compaction-settled-after-abort");
+  const settlementOutcome = await Promise.race([
+    compactionOutcome.then(() => settledAfterAbort),
     new Promise<void>((r) => setTimeout(r, settlementGraceMs)),
   ]);
 
@@ -757,9 +761,17 @@ async function runCompactionWithTimeoutExclusive<T>(
   // to rewrite the same session concurrently. A replacement session can still
   // supersede the identity-gated map entry safely.
   markTimedOut();
+  const timeoutStage = metadata?.executionStage ?? "settlement";
+  const modelDetail = metadata?.providerModel ? ` using ${metadata.providerModel}` : "";
+  const timingDetail = metadata?.timeToFirstTokenMs !== undefined
+    ? `; first token after ${formatTimeoutDuration(metadata.timeToFirstTokenMs)}`
+    : "";
+  const settlementDetail = settlementOutcome === settledAfterAbort
+    ? ""
+    : `; provider did not settle within ${formatTimeoutDuration(settlementGraceMs)} after abort`;
   return {
     ok: false,
-    errorMessage: `Compaction timed out after ${formatTimeoutDuration(timeoutMs)}`,
+    errorMessage: `Compaction timed out during ${timeoutStage}${modelDetail} after ${formatTimeoutDuration(timeoutMs)}${timingDetail}${settlementDetail}`,
   };
 }
 

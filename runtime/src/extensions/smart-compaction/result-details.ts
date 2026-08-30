@@ -1,5 +1,6 @@
 import type { SmartCompactionMethod } from "../../core/config.js";
 import { parseRemoteCompactionDetails, type RemoteCompactionDetails, type RemoteCompactionFailureCode } from "./remote-compaction.js";
+import type { CompactionTimeoutStage } from "./provider-timing.js";
 
 export const SMART_COMPACTION_RESULT_DETAILS_KIND = "piclaw.smart_compaction";
 export const SMART_COMPACTION_RESULT_DETAILS_VERSION = 1;
@@ -23,6 +24,11 @@ export interface SmartCompactionResultDetails {
     reason?: string;
   };
   modelCallCount: number;
+  model?: string;
+  providerRequestCount?: number;
+  timeToFirstTokenMs?: number;
+  durationMs?: number;
+  timeoutStage?: CompactionTimeoutStage;
   processedChunkCount?: number;
   totalChunkCount?: number;
 }
@@ -35,6 +41,11 @@ export function createSmartCompactionResultDetails(input: {
   remoteOutcome: Exclude<SmartCompactionRemoteOutcome, "success">;
   remoteReason?: string;
   modelCallCount: number;
+  model?: string;
+  providerRequestCount?: number;
+  timeToFirstTokenMs?: number;
+  durationMs?: number;
+  timeoutStage?: CompactionTimeoutStage;
   processedChunkCount?: number;
   totalChunkCount?: number;
 }): SmartCompactionResultDetails {
@@ -48,6 +59,11 @@ export function createSmartCompactionResultDetails(input: {
       ...(input.remoteReason ? { reason: input.remoteReason } : {}),
     },
     modelCallCount: input.modelCallCount,
+    ...(input.model ? { model: input.model } : {}),
+    ...(input.providerRequestCount !== undefined ? { providerRequestCount: input.providerRequestCount } : {}),
+    ...(input.timeToFirstTokenMs !== undefined ? { timeToFirstTokenMs: input.timeToFirstTokenMs } : {}),
+    ...(input.durationMs !== undefined ? { durationMs: input.durationMs } : {}),
+    ...(input.timeoutStage ? { timeoutStage: input.timeoutStage } : {}),
     ...(input.processedChunkCount !== undefined ? { processedChunkCount: input.processedChunkCount } : {}),
     ...(input.totalChunkCount !== undefined ? { totalChunkCount: input.totalChunkCount } : {}),
   };

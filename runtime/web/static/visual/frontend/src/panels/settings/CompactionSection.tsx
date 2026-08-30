@@ -19,6 +19,7 @@ export function CompactionSection({
   const processingMethod = useSignal<"selective" | "pipelined">(
     normalizeSmartCompactionMethod(data.smartCompactionMethod)
   );
+  const compactionModel = useSignal(data.compactionModel ?? "");
   const remoteCompactionEnabled = useSignal(data.remoteCompactionEnabled ?? false);
   const remoteCompactionTimeoutSec = useSignal(data.remoteCompactionTimeoutSec ?? 60);
   const timeoutSec = useSignal(data.compactionTimeoutSec ?? 300);
@@ -104,6 +105,22 @@ export function CompactionSection({
         </div>
       </div>
 
+      <div className="settings-panel__field">
+        <label className="settings-panel__label" htmlFor="compactionModel">Compaction model</label>
+        <div className="settings-panel__field-content">
+          <input
+            id="compactionModel"
+            className="settings-panel__input"
+            type="text"
+            value={compactionModel.value}
+            onInput={(event) => (compactionModel.value = (event.target as HTMLInputElement).value)}
+            onBlur={() => onSaveCompaction("compactionModel", compactionModel.value.trim())}
+            placeholder="provider/model (empty uses active model)"
+          />
+          <span className="settings-panel__description">Strict local smart-compaction model. If configured but unavailable, compaction stops and preserves the session instead of falling back.</span>
+        </div>
+      </div>
+
       <h3 className="settings-panel__subsection-title">Provider-native compaction</h3>
 
       <div className="settings-panel__field settings-panel__checkbox-row">
@@ -136,7 +153,7 @@ export function CompactionSection({
       <div className="settings-panel__field">
         <label className="settings-panel__label">Compaction timeout (sec)</label>
         <NumberStepper value={timeoutSec} min={1} max={3600} step={10} onSave={(v) => onSaveCompaction("compactionTimeoutSec", v)} />
-        <span className="settings-panel__description">Abort a stuck pre-prompt/manual compaction instead of hanging forever.</span>
+        <span className="settings-panel__description">Single wall-clock deadline for deterministic preparation, provider prefill/streaming, and settlement. Local provider requests inherit the remaining time.</span>
       </div>
 
       <div className="settings-panel__field">

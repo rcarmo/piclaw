@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
+export type PiclawCompactionExecutionStage = "deterministic" | "provider_connect" | "first_token" | "streaming" | "settlement";
+
 export type PiclawCompactionTrigger =
   | "manual"
   | "pre_prompt"
@@ -26,6 +28,10 @@ export interface PiclawCompactionTriggerMetadata {
   deadlineAtMs?: number;
   /** Maximum deterministic work units before cooperative compaction aborts. */
   maxWorkUnits?: number;
+  executionStage?: PiclawCompactionExecutionStage;
+  providerModel?: string;
+  providerRequestCount?: number;
+  timeToFirstTokenMs?: number;
 }
 
 interface ActiveCompactionTriggerState {
@@ -43,6 +49,21 @@ const compactionTriggerStorage = new AsyncLocalStorage<ActiveCompactionTriggerSt
 
 export function getActivePiclawCompactionTrigger(): PiclawCompactionTriggerMetadata | null {
   return compactionTriggerStorage.getStore()?.metadata ?? null;
+}
+
+/** Remaining wall-clock budget for the active Piclaw compaction generation. */
+export function updatePiclawCompactionExecution(patch: Partial<Pick<PiclawCompactionTriggerMetadata,
+  "executionStage" | "providerModel" | "providerRequestCount" | "timeToFirstTokenMs"
+>>): void {
+  const metadata = compactionTriggerStorage.getStore()?.metadata;
+  if (!metadata) return;
+  Object.assign(metadata, patch);
+}
+
+export function getRemainingPiclawCompactionMs(now = Date.now()): number | undefined {
+  const deadlineAtMs = compactionTriggerStorage.getStore()?.metadata.deadlineAtMs;
+  if (deadlineAtMs === undefined) return undefined;
+  return Math.max(1, Math.floor(deadlineAtMs - now));
 }
 
 export function checkPiclawCompactionBudget(label: string, units = 1): void {
@@ -105,5 +126,9 @@ export function buildPiclawCompactionEventFields(
     ...(metadata.attempt !== undefined ? { attempt: metadata.attempt } : {}),
     ...(metadata.targetContextWindow !== undefined ? { targetContextWindow: metadata.targetContextWindow } : {}),
     ...(metadata.targetModelLabel !== undefined ? { targetModelLabel: metadata.targetModelLabel } : {}),
+    ...(metadata.executionStage !== undefined ? { executionStage: metadata.executionStage } : {}),
+    ...(metadata.providerModel !== undefined ? { providerModel: metadata.providerModel } : {}),
+    ...(metadata.providerRequestCount !== undefined ? { providerRequestCount: metadata.providerRequestCount } : {}),
+    ...(metadata.timeToFirstTokenMs !== undefined ? { timeToFirstTokenMs: metadata.timeToFirstTokenMs } : {}),
   };
 }

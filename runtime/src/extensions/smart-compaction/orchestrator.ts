@@ -39,6 +39,7 @@ import { buildPipelinedAuditTelemetry, buildPipelinedPrompt } from "./pipelined.
 import { assemblePipelineEvents, buildCanonicalPipelineSourceUnits } from "./pipeline-events.js";
 import { createProgressiveCheckpointStore } from "./progressive-checkpoint.js";
 import { createSmartCompactionResultDetails, type SmartCompactionRemoteOutcome } from "./result-details.js";
+import { createCompactionProviderTiming, formatFirstTokenWaitStatus, inferCompactionTimeoutStage } from "./provider-timing.js";
 import { sanitizeContextPruneCompactionMessages } from "../context-prune/pruner.js";
 import {
   buildTargetContextGuidance,
@@ -146,6 +147,9 @@ export function createSmartCompactionExtension(options: { streamFn?: CompactionS
     if (discardedSourceMessages.length === 0) return;
 
     const statusOwner = beginCompactionStatusOwnership(compactionMetadata, ctx);
+    const compactionStartedAt = Date.now();
+    let providerTiming = createCompactionProviderTiming(ctx.model as any);
+    let providerWaitStatusTimer: ReturnType<typeof setInterval> | null = null;
     publishContextSnapshot(tokensBefore, "before_compaction");
     publishCompactionStatus(ctx, statusMessage(compactionMetadata, `scanning ${discardedSourceMessages.length} messages…`), estimateSmartCompactionCompletionPercent("scanning"), statusOwner);
 
@@ -157,7 +161,6 @@ export function createSmartCompactionExtension(options: { streamFn?: CompactionS
       // instead of falling through — which would crash upstream when it accesses
       // the already-cleared controller.
       const abortSignal = signal;
-      const compactionStartedAt = Date.now();
       let remoteOutcome: Exclude<SmartCompactionRemoteOutcome, "success"> = compactionRuntimeConfig.remoteCompactionEnabled
         ? "unsupported"
         : "disabled";
@@ -174,12 +177,26 @@ export function createSmartCompactionExtension(options: { streamFn?: CompactionS
         remoteOutcome,
         remoteReason,
         modelCallCount,
+        model: providerTiming.model,
+        providerRequestCount: providerTiming.requestCount,
+        ...(providerTiming.timeToFirstTokenMs !== null ? { timeToFirstTokenMs: providerTiming.timeToFirstTokenMs } : {}),
+        durationMs: Math.max(0, Date.now() - compactionStartedAt),
+        ...(providerTiming.timeoutStage ? { timeoutStage: providerTiming.timeoutStage } : {}),
         ...progress,
       });
       const publishCompactionStage = (message: string, phase: string, _tokens?: number | null, completionPercent = estimateSmartCompactionCompletionPercent(phase)) => {
         publishCompactionStatus(ctx, message, completionPercent, statusOwner);
       };
       let lastProgressUiAt = 0;
+      providerWaitStatusTimer = setInterval(() => {
+        const message = formatFirstTokenWaitStatus(providerTiming, Date.now(), compactionMetadata.deadlineAtMs);
+        if (!message) return;
+        publishCompactionStage(
+          statusMessage(compactionMetadata, message),
+          "provider_waiting_first_token",
+        );
+      }, SMART_COMPACTION_PROGRESS_INTERVAL_MS);
+      if (typeof providerWaitStatusTimer.unref === "function") providerWaitStatusTimer.unref();
       const setThrottledProgressMessage = (message: string, phase: string, completionPercent = estimateSmartCompactionCompletionPercent(phase)) => {
         const now = Date.now();
         if (now - lastProgressUiAt < SMART_COMPACTION_PROGRESS_INTERVAL_MS) return;
@@ -596,12 +613,13 @@ export function createSmartCompactionExtension(options: { streamFn?: CompactionS
           );
       publishCompactionStage(statusMessage(compactionMetadata, `preparing ${methodLabel} summary prompt…`), "summarizing_prompt", promptTokens);
 
-      const modelRequest = await resolveSmartCompactionModelRequest(ctx, options.modelRuntime);
+      const modelRequest = await resolveSmartCompactionModelRequest(ctx, options.modelRuntime, { useConfiguredModel: true });
       if (!modelRequest.ok) {
         log.debug("Compaction model or credentials are unavailable; cancelling instead of falling through to upstream full-pass compaction");
         return cancelCompactionWithReason(ctx, modelRequest.error);
       }
       const { model: compactionModel, auth } = modelRequest;
+      providerTiming = createCompactionProviderTiming(compactionModel);
       if (previousRemoteState?.kind === "valid" && !isRemoteCompactionCompatible(compactionModel, previousRemoteState.details)) {
         return cancelCompactionWithReason(
           ctx,
@@ -694,6 +712,7 @@ export function createSmartCompactionExtension(options: { streamFn?: CompactionS
               ? (payload) => prependRemoteCompactionPayload(payload, previousRemoteState.details)
               : undefined,
             checkpointStore: createProgressiveCheckpointStore(compactionMetadata.chatJid),
+            providerTiming,
             onProgress: (_generatedChars, progress) => {
               setThrottledProgressMessage(
                 statusMessage(compactionMetadata, formatProgressiveProgressMessage(progress).replace(/^Smart compaction:\s*/, "")),
@@ -874,6 +893,7 @@ export function createSmartCompactionExtension(options: { streamFn?: CompactionS
         onPayload: previousRemoteState?.kind === "valid"
           ? (payload) => prependRemoteCompactionPayload(payload, previousRemoteState.details)
           : undefined,
+        providerTiming,
         onProgress: () => {
           setThrottledProgressMessage(statusMessage(compactionMetadata, "generating summary still running…"), "generating_summary_streaming");
         },
@@ -946,9 +966,22 @@ export function createSmartCompactionExtension(options: { streamFn?: CompactionS
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (signal.aborted || /Compaction cancelled/i.test(message)) return { cancel: true };
+      if (/timed? out|timeout/i.test(message)) {
+        providerTiming.timeoutStage = inferCompactionTimeoutStage(providerTiming);
+        log.warn("Smart compaction timed out", {
+          operation: "smart_compaction.timeout",
+          model: providerTiming.model,
+          timeoutStage: providerTiming.timeoutStage,
+          providerRequestCount: providerTiming.requestCount,
+          timeToFirstTokenMs: providerTiming.timeToFirstTokenMs,
+          durationMs: Date.now() - compactionStartedAt,
+          errorMessage: message,
+        });
+      }
       log.debug(`Smart compaction lifecycle failed: ${message}`);
       return cancelCompactionWithReason(ctx, message);
     } finally {
+      if (providerWaitStatusTimer) clearInterval(providerWaitStatusTimer);
       // Always broadcast a final complete-context estimate so the meter is
       // never stale after compaction completes, fails, or is cancelled. During
       // compaction, keep prompt/chunk/merge estimates out of context_usage so

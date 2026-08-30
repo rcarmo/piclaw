@@ -14,6 +14,7 @@ function normalizeCompactionSettings(data: Record<string, any> = {}) {
     return {
         autoCompactionEnabled: Boolean(data.autoCompactionEnabled ?? true),
         smartCompactionMethod: normalizeSmartCompactionMethod(data.smartCompactionMethod),
+        compactionModel: String(data.compactionModel ?? '').trim(),
         remoteCompactionEnabled: Boolean(data.remoteCompactionEnabled ?? false),
         remoteCompactionTimeoutSec: data.remoteCompactionTimeoutSec ?? 300,
         remoteCompactionSupportedProviders: Array.isArray(data.remoteCompactionSupportedProviders) ? data.remoteCompactionSupportedProviders : ['openai', 'openai-codex'],
@@ -46,6 +47,7 @@ export function CompactionSection({ settingsData, setStatus, mergeSettingsData }
     const { t } = useTranslation();
     const [autoCompactionEnabled, setAutoCompactionEnabled] = useState(true);
     const [smartCompactionMethod, setSmartCompactionMethod] = useState('selective');
+    const [compactionModel, setCompactionModel] = useState('');
     const [remoteCompactionEnabled, setRemoteCompactionEnabled] = useState(false);
     const [remoteCompactionTimeoutSec, setRemoteCompactionTimeoutSec] = useState(300);
     const [remoteCompactionSupportedProviders, setRemoteCompactionSupportedProviders] = useState(['openai', 'openai-codex']);
@@ -77,6 +79,7 @@ export function CompactionSection({ settingsData, setStatus, mergeSettingsData }
         const next = normalizeCompactionSettings(data);
         setAutoCompactionEnabled(next.autoCompactionEnabled);
         setSmartCompactionMethod(next.smartCompactionMethod);
+        setCompactionModel(next.compactionModel);
         setRemoteCompactionEnabled(next.remoteCompactionEnabled);
         setRemoteCompactionTimeoutSec(next.remoteCompactionTimeoutSec);
         setRemoteCompactionSupportedProviders(next.remoteCompactionSupportedProviders);
@@ -97,6 +100,7 @@ export function CompactionSection({ settingsData, setStatus, mergeSettingsData }
         savedSnapshotRef.current = JSON.stringify({
             autoCompactionEnabled: next.autoCompactionEnabled,
             smartCompactionMethod: next.smartCompactionMethod,
+            compactionModel: next.compactionModel,
             remoteCompactionEnabled: next.remoteCompactionEnabled,
             remoteCompactionTimeoutSec: next.remoteCompactionTimeoutSec,
             compactionTimeoutSec: next.compactionTimeoutSec,
@@ -121,6 +125,7 @@ export function CompactionSection({ settingsData, setStatus, mergeSettingsData }
     const currentSnapshot = useMemo(() => JSON.stringify({
         autoCompactionEnabled,
         smartCompactionMethod,
+        compactionModel,
         remoteCompactionEnabled,
         remoteCompactionTimeoutSec,
         compactionTimeoutSec,
@@ -138,6 +143,7 @@ export function CompactionSection({ settingsData, setStatus, mergeSettingsData }
     }), [
         autoCompactionEnabled,
         smartCompactionMethod,
+        compactionModel,
         remoteCompactionEnabled,
         remoteCompactionTimeoutSec,
         compactionTimeoutSec,
@@ -240,6 +246,11 @@ export function CompactionSection({ settingsData, setStatus, mergeSettingsData }
                         ? t('settings.compaction.methodPipelinedHint')
                         : t('settings.compaction.methodSelectiveHint')}
                 </span>
+            </div>
+            <div class="settings-row">
+                <label for="compactionModel">${t('settings.compaction.model')}</label>
+                <input id="compactionModel" type="text" value=${compactionModel} onInput=${e => setCompactionModel(e.target.value)} placeholder=${t('settings.compaction.modelPlaceholder')} />
+                <span class="settings-hint" style="margin:0">${t('settings.compaction.modelHint')}</span>
             </div>
             <div class="settings-row">
                 <label>${t('settings.compaction.remoteNative')}</label>

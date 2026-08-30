@@ -82,6 +82,7 @@ export interface SettingsData {
   /* compaction */
   autoCompactionEnabled?: boolean;
   smartCompactionMethod?: "selective" | "pipelined";
+  compactionModel?: string;
   remoteCompactionEnabled?: boolean;
   remoteCompactionTimeoutSec?: number;
   remoteCompactionSupportedProviders?: string[];

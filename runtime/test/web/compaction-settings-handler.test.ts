@@ -40,6 +40,7 @@ test('saveCompactionSettings persists and applies compaction settings immediatel
     const saved = await handler.saveCompactionSettings({
       autoCompactionEnabled: false,
       smartCompactionMethod: 'traditional-pipelined',
+      compactionModel: 'local/fast-summary',
       remoteCompactionEnabled: true,
       remoteCompactionTimeoutSec: 45,
       compactionTimeoutSec: 240,
@@ -60,6 +61,7 @@ test('saveCompactionSettings persists and applies compaction settings immediatel
     expect(saved).toMatchObject({
       autoCompactionEnabled: false,
       smartCompactionMethod: 'pipelined',
+      compactionModel: 'local/fast-summary',
       remoteCompactionEnabled: true,
       remoteCompactionTimeoutSec: 45,
       remoteCompactionSupportedProviders: ['openai', 'openai-codex'],
@@ -102,6 +104,7 @@ test('saveCompactionSettings persists and applies compaction settings immediatel
         compaction: {
           autoCompactionEnabled: false,
           smartCompactionMethod: 'pipelined',
+          model: 'local/fast-summary',
           remoteCompactionEnabled: true,
           remoteCompactionTimeoutMs: 45000,
           timeoutMs: 240000,
@@ -136,13 +139,15 @@ test('saveCompactionSettings preserves the current processing method for invalid
 
     const before = await handler.saveCompactionSettings({
       smartCompactionMethod: 'pipelined',
+      compactionModel: 'local/fast-summary',
       compactionTimeoutSec: 211,
       compactionBackoffBaseMin: 17,
       progressWatchdogEnabled: false,
     });
-    const saved = await handler.saveCompactionSettings({ smartCompactionMethod: 'unsafe-unknown-method' });
+    const saved = await handler.saveCompactionSettings({ smartCompactionMethod: 'unsafe-unknown-method', compactionModel: 'ambiguous' });
 
     expect(saved.smartCompactionMethod).toBe('pipelined');
+    expect(saved.compactionModel).toBe('local/fast-summary');
     expect(saved.compactionTimeoutSec).toBe(before.compactionTimeoutSec);
     expect(saved.compactionBackoffBaseMin).toBe(before.compactionBackoffBaseMin);
     expect(saved.progressWatchdogEnabled).toBe(before.progressWatchdogEnabled);
