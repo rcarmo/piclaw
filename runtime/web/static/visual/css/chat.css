@@ -1216,6 +1216,11 @@
     background: color-mix(in srgb, var(--text-secondary) 10%, transparent);
 }
 
+.compose-session-row-pin-spacer {
+    flex: 0 0 28px;
+    width: 28px;
+}
+
 .compose-session-row-pin {
     display: inline-flex;
     align-items: center;
@@ -2141,6 +2146,11 @@
     .compose-session-popup-results {
         min-height: 0;
         max-height: none;
+    }
+
+    .compose-session-popup .compose-session-row-pin-spacer {
+        flex-basis: 44px;
+        width: 44px;
     }
 
     .compose-session-popup .compose-session-row-pin,

@@ -71,6 +71,7 @@ test("AgentBranchManager registers active chats and resolves agent handles", asy
       sessionId: "session-1",
       sessionName: "Research Bot",
       model: { provider: "openai", id: "gpt-test" },
+      getContextUsage: () => ({ tokens: 32_000, contextWindow: 128_000, percent: 25 }),
       isStreaming: false,
       isCompacting: false,
       isRetrying: false,
@@ -86,6 +87,9 @@ test("AgentBranchManager registers active chats and resolves agent handles", asy
   expect(active).toHaveLength(1);
   expect(active[0]?.agent_name).toBe("research-bot");
   expect(active[0]?.model).toBe("openai/gpt-test");
+  expect(active[0]?.context_tokens).toBe(32_000);
+  expect(active[0]?.context_window).toBe(128_000);
+  expect(active[0]?.context_percent).toBe(25);
   expect(active[0]?.is_active).toBe(false);
   expect(active[0]?.is_compacting).toBe(false);
   expect(active[0]?.activity_status).toBe("idle");

@@ -5,13 +5,13 @@ import { getAgentModels, sendAgentMessage } from '../api.js';
 import { uploadFileBatch, uploadMedia } from '../ui/upload-transfers.js';
 import { getLocalStorageItem, setLocalStorageItem } from '../utils/storage.js';
 import { buildMentionValue, filterMentionAgents, parseMentionAutocompleteQuery } from '../ui/agent-mentions.js';
-import { filterSessionPickerChats, groupSessionPickerChats, moveSessionPickerIndex, resolveSessionPickerSearchInitialIndex, shouldOpenSessionSwitcherFromBlankCompose, shouldRouteComposeValueToSessionSwitcher } from '../ui/compose-session-switcher.js';
+import { filterSessionPickerChats, formatSessionPickerMetrics, groupSessionPickerChats, moveSessionPickerIndex, resolveSessionPickerSearchInitialIndex, shouldOpenSessionSwitcherFromBlankCompose, shouldRouteComposeValueToSessionSwitcher } from '../ui/compose-session-switcher.js';
 import {
     readSessionPickerPreferences,
     SESSION_PICKER_PREFERENCES_EVENT,
     togglePinnedSessionChatJid,
 } from '../ui/session-picker-preferences.ts';
-import { formatBranchPickerBaseLabel, formatBranchPickerLabel, getBranchLifecycleBadges } from '../ui/branch-lifecycle.js';
+import { formatBranchPickerLabel, getBranchLifecycleBadges, normalizeHandle } from '../ui/branch-lifecycle.js';
 import { buildComposeStatusDotClass } from '../ui/status-dot.js';
 import { getStatusElapsedLabel, isCompactionStatus, resolveStatusPanelTitle } from '../ui/status-duration.js';
 import { useConnectionStatusPresentation } from '../ui/connection-status.js';
@@ -3596,13 +3596,29 @@ export function ComposeBox({
                                     const pruneConfirming = canPrune && pendingPruneChatJid === chat.chat_jid;
                                     const deleteConfirming = purgeConfirming || pruneConfirming;
                                     const label = formatBranchPickerLabel(chat, { currentChatJid });
-                                    const baseLabel = formatBranchPickerBaseLabel(chat);
+                                    const primaryLabel = normalizeHandle(chat.agent_name);
                                     const lifecycleBadges = getBranchLifecycleBadges(chat, { currentChatJid });
                                     const rootJid = chat.root_chat_jid || chat.chat_jid;
                                     const modelLabel = chat.model || chat.model_label || '';
+                                    const sessionMetrics = formatSessionPickerMetrics(chat);
                                     return html`
                                         ${sectionStart && html`<div class="compose-session-section-heading" role="presentation">${section.label}</div>`}
                                         <div key=${chat.chat_jid} class=${`compose-model-popup-item-row${archived ? ' archived' : ''}`}>
+                                            ${archived
+                                                ? html`<span class="compose-session-row-pin-spacer" aria-hidden="true"></span>`
+                                                : html`<button
+                                                    type="button"
+                                                    class=${`compose-session-row-pin${pinned ? ' pinned' : ''}`}
+                                                    title=${pinned ? `Unpin @${chat.agent_name}` : `Pin @${chat.agent_name}`}
+                                                    aria-label=${pinned ? `Unpin @${chat.agent_name}` : `Pin @${chat.agent_name}`}
+                                                    aria-pressed=${pinned ? 'true' : 'false'}
+                                                    aria-keyshortcuts="Alt+Enter"
+                                                    onClick=${(event) => {
+                                                        event.preventDefault();
+                                                        event.stopPropagation();
+                                                        toggleSessionPin(chat.chat_jid);
+                                                    }}
+                                                >${pinned ? '★' : '☆'}</button>`}
                                             <button
                                                 id=${`compose-session-option-${encodeURIComponent(chat.chat_jid)}`}
                                                 type="button"
@@ -3623,8 +3639,11 @@ export function ComposeBox({
                                             >
                                                 <span class="compose-session-row-content" style=${isSessionPopupChatEmphasized(chat) ? 'font-weight:700' : ''}>
                                                     <span class="compose-session-row-main">
-                                                        <span class="compose-session-row-label">${baseLabel}</span>
-                                                        <span class="compose-session-row-meta">${chat.chat_jid}${modelLabel ? ` · ${modelLabel}` : ''}</span>
+                                                        <span class="compose-session-row-label">${primaryLabel}</span>
+                                                        <span class="compose-session-row-meta">
+                                                            <span class="compose-session-row-jid">${chat.chat_jid}</span>
+                                                            ${sessionMetrics && html`<span class="compose-session-row-metrics"> · ${sessionMetrics}</span>`}
+                                                        </span>
                                                     </span>
                                                     ${lifecycleBadges.length > 0 && html`
                                                         <span class="compose-session-row-pills" aria-label=${`Session status: ${lifecycleBadges.join(', ')}`}>
@@ -3635,19 +3654,6 @@ export function ComposeBox({
                                                     `}
                                                 </span>
                                             </button>
-                                            ${!archived && html`<button
-                                                type="button"
-                                                class=${`compose-session-row-pin${pinned ? ' pinned' : ''}`}
-                                                title=${pinned ? `Unpin @${chat.agent_name}` : `Pin @${chat.agent_name}`}
-                                                aria-label=${pinned ? `Unpin @${chat.agent_name}` : `Pin @${chat.agent_name}`}
-                                                aria-pressed=${pinned ? 'true' : 'false'}
-                                                aria-keyshortcuts="Alt+Enter"
-                                                onClick=${(event) => {
-                                                    event.preventDefault();
-                                                    event.stopPropagation();
-                                                    toggleSessionPin(chat.chat_jid);
-                                                }}
-                                            >${pinned ? '★' : '☆'}</button>`}
                                             <button
                                                 type="button"
                                                 class="compose-model-popup-item-popout"

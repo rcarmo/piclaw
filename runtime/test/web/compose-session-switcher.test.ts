@@ -4,6 +4,7 @@ import {
   buildSessionPickerSearchDocument,
   canUseComposeSessionSwitcher,
   filterSessionPickerChats,
+  formatSessionPickerMetrics,
   groupSessionPickerChats,
   matchesSessionPickerSearch,
   moveSessionPickerIndex,
@@ -29,6 +30,18 @@ test('session picker search covers handle, JID, lifecycle state, and model while
   expect(filterSessionPickerChats(chats, 'web:other').map(chat => chat.chat_jid)).toEqual(['web:other']);
   expect(filterSessionPickerChats(chats, 'archived').map(chat => chat.chat_jid)).toEqual(['web:archived']);
   expect(filterSessionPickerChats(chats, 'worker')).toHaveLength(3);
+});
+
+test('session picker formats model and bounded context metrics without inventing missing values', () => {
+  expect(formatSessionPickerMetrics({
+    model: 'openai/gpt-5',
+    context_tokens: 42_000,
+    context_window: 128_000,
+    context_percent: 32.8125,
+  })).toBe('openai/gpt-5 · 42K / 128K (33% context)');
+  expect(formatSessionPickerMetrics({ model: 'local/qwen' })).toBe('local/qwen');
+  expect(formatSessionPickerMetrics({ context_percent: 140 })).toBe('100% context');
+  expect(formatSessionPickerMetrics({ context_tokens: -1, context_window: 0 })).toBe('');
 });
 
 test('session picker grouping uses current-pinned-active-tree-other-archived precedence', () => {

@@ -43,6 +43,9 @@ export interface ActiveChatAgent {
   session_id: string | null;
   session_name: string | null;
   model: string | null;
+  context_tokens: number | null;
+  context_window: number | null;
+  context_percent: number | null;
   is_active: boolean;
   is_streaming: boolean;
   is_compacting: boolean;
@@ -607,6 +610,18 @@ export class AgentBranchManager {
         const branch = this.ensureBranchRegistration(chatJid, session);
         if (branch.archived_at) return [];
         const activityStatus = getSessionActivityStatus(session);
+        const contextUsage = session.getContextUsage?.() ?? null;
+        const contextTokens = typeof contextUsage?.tokens === "number" && Number.isFinite(contextUsage.tokens) && contextUsage.tokens >= 0
+          ? contextUsage.tokens
+          : null;
+        const contextWindow = typeof contextUsage?.contextWindow === "number" && Number.isFinite(contextUsage.contextWindow) && contextUsage.contextWindow > 0
+          ? contextUsage.contextWindow
+          : null;
+        const contextPercent = typeof contextUsage?.percent === "number" && Number.isFinite(contextUsage.percent)
+          ? Math.max(0, Math.min(100, contextUsage.percent))
+          : contextTokens !== null && contextWindow !== null
+            ? Math.max(0, Math.min(100, (contextTokens / contextWindow) * 100))
+            : null;
         return [{
           branch_id: branch.branch_id,
           chat_jid: chatJid,
@@ -619,6 +634,9 @@ export class AgentBranchManager {
           session_id: session.sessionId,
           session_name: session.sessionName?.trim() || null,
           model: session.model ? `${session.model.provider}/${session.model.id}` : null,
+          context_tokens: contextTokens,
+          context_window: contextWindow,
+          context_percent: contextPercent,
           is_active: activityStatus !== "idle",
           is_streaming: Boolean(session.isStreaming),
           is_compacting: Boolean(session.isCompacting),
@@ -656,6 +674,9 @@ export class AgentBranchManager {
             session_id: active?.session_id ?? null,
             session_name: active?.session_name ?? null,
             model: active?.model ?? null,
+            context_tokens: active?.context_tokens ?? null,
+            context_window: active?.context_window ?? null,
+            context_percent: active?.context_percent ?? null,
             is_active: active?.is_active ?? false,
             is_streaming: active?.is_streaming ?? false,
             is_compacting: active?.is_compacting ?? false,

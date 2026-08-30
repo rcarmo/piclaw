@@ -64,11 +64,20 @@ optionalBrowserTest("desktop session picker has stable geometry, one-line header
     expect(fontStacks.actual).toBe(fontStacks.expected);
     expect(await page.locator(".compose-model-popup-item-popout").count()).toBe(30);
     expect(await page.locator(".compose-session-row-pin").count()).toBe(25);
-    await page.getByRole("button", { name: "Pin @session-08" }).click();
+    const pin = page.getByRole("button", { name: "Pin @session-08" });
+    const row = pin.locator("..");
+    const option = row.locator('[role="option"]');
+    const [pinBox, optionBox] = await Promise.all([pin.boundingBox(), option.boundingBox()]);
+    expect(pinBox?.x ?? Infinity).toBeLessThan(optionBox?.x ?? -Infinity);
+    expect(await row.locator(".compose-session-row-label").textContent()).toBe("@session-08");
+    expect(await row.locator(".compose-session-row-jid").textContent()).toBe("web:root-1:branch:8");
+    expect(await row.locator(".compose-session-row-metrics").textContent()).toBe(" · anthropic/claude · 42K / 128K (33% context)");
+    expect((await row.textContent())?.match(/web:root-1:branch:8/g)).toHaveLength(1);
+    await pin.click();
     expect(await page.locator("#session-picker-action").textContent()).toBe("none");
     expect(await page.locator(".compose-session-section-heading").allTextContents()).toContain("Pinned");
     expect(await page.getByRole("button", { name: "Unpin @session-08" }).getAttribute("aria-pressed")).toBe("true");
-    expect(await page.locator('[role="listbox"]').getAttribute("aria-activedescendant")).toContain(encodeURIComponent("web:root-1:branch:8"));
+    await page.waitForFunction((expected) => document.querySelector('[role="listbox"]')?.getAttribute("aria-activedescendant")?.includes(expected), encodeURIComponent("web:root-1:branch:8"));
     expect(await page.evaluate(() => localStorage.getItem("piclaw:session-picker-preferences:v1"))).toContain("web:root-1:branch:8");
     await page.reload({ waitUntil: "networkidle" });
     await page.getByTestId("session-switcher").click();
@@ -81,7 +90,7 @@ optionalBrowserTest("desktop session picker has stable geometry, one-line header
     await page.keyboard.press("Alt+Enter");
     expect(await page.locator("#session-picker-action").textContent()).toBe("none");
     expect(await page.evaluate(() => localStorage.getItem("piclaw:session-picker-preferences:v1"))).toContain("web:root-1:branch:9");
-    expect(await page.locator('[role="listbox"]').getAttribute("aria-activedescendant")).toContain(encodeURIComponent("web:root-1:branch:9"));
+    await page.waitForFunction((expected) => document.querySelector('[role="listbox"]')?.getAttribute("aria-activedescendant")?.includes(expected), encodeURIComponent("web:root-1:branch:9"));
     await search.fill("duplicate");
     expect(await page.locator('[role="option"]').count()).toBe(3);
     expect(await page.getByRole("button", { name: "New branch" }).count()).toBe(0);
@@ -117,12 +126,26 @@ optionalBrowserTest("phone picker uses safe-area sheet geometry and can reveal a
     expect(measured.popup.y).toBeGreaterThanOrEqual(8);
     expect(measured.popup.bottom).toBeLessThanOrEqual(907);
     expect(measured.search.height).toBeGreaterThanOrEqual(44);
-    const pinBox = await page.getByRole("button", { name: "Pin @session-03" }).boundingBox();
+    const pin = page.getByRole("button", { name: "Pin @session-03" });
+    const row = pin.locator("..");
+    const [pinBox, optionBox] = await Promise.all([pin.boundingBox(), row.locator('[role="option"]').boundingBox()]);
     expect(pinBox?.width ?? 0).toBeGreaterThanOrEqual(44);
     expect(pinBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect(pinBox?.x ?? Infinity).toBeLessThan(optionBox?.x ?? -Infinity);
+    expect(await row.locator(".compose-session-row-label").textContent()).toBe("@session-03");
+    expect((await row.textContent())?.match(/web:root-0:branch:3/g)).toHaveLength(1);
     await page.locator(".compose-session-search").fill("archived");
     expect(await page.locator('[role="option"]').count()).toBe(5);
     expect(await page.locator(".compose-session-section-heading").allTextContents()).toEqual(["Archived"]);
+    const archivedRow = page.locator(".compose-model-popup-item-row.archived").first();
+    expect(await archivedRow.locator(".compose-session-row-pin-spacer").count()).toBe(1);
+    expect(await archivedRow.locator(".compose-session-row-pin").count()).toBe(0);
+    const [archivedSpacerBox, archivedOptionBox] = await Promise.all([
+      archivedRow.locator(".compose-session-row-pin-spacer").boundingBox(),
+      archivedRow.locator('[role="option"]').boundingBox(),
+    ]);
+    expect(archivedSpacerBox?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(archivedSpacerBox?.x ?? Infinity).toBeLessThan(archivedOptionBox?.x ?? -Infinity);
     await page.locator('[role="option"]').first().click();
     expect(await page.locator("#session-picker-action").textContent()).toContain("restore:");
   } finally { await page.close(); }
