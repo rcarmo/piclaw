@@ -784,7 +784,7 @@ export class StandaloneEditorInstance implements PaneInstance {
         if (enabled) {
             const targetView = this.view;
             try {
-                const { markdownLivePreview } = await import('./markdown/index.js');
+                const { createMarkdownLivePreview } = await import('./markdown/index.js');
                 if (
                     this.disposed
                     || !this.view
@@ -794,7 +794,7 @@ export class StandaloneEditorInstance implements PaneInstance {
                 ) return;
                 this.view.dispatch({
                     effects: [
-                        this.livePreviewCompartment.reconfigure(markdownLivePreview),
+                        this.livePreviewCompartment.reconfigure(createMarkdownLivePreview(this.path)),
                         this.whitespaceCompartment.reconfigure(this.shouldApplyWhitespaceMarkers() ? highlightWhitespace() : []),
                         wrapEffect,
                     ],

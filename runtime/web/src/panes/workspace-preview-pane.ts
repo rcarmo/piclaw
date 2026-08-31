@@ -9,6 +9,7 @@
 import { renderMarkdown } from '../markdown.js';
 import { getWorkspaceRawUrl } from '../api.js';
 import { formatFileSize, formatTimestamp } from '../utils/format.js';
+import { rewriteWorkspaceMarkdownImageSrc } from '../ui/workspace-markdown-image.js';
 import type { PaneCapability, PaneContext, PaneInstance, WebPaneExtension } from './pane-types.js';
 
 function escapeHtml(value) {
@@ -18,43 +19,6 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
-}
-
-function rewriteMarkdownImagePath(src, markdownPath) {
-    const raw = String(src || '').trim();
-    if (!raw) return raw;
-
-    if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(raw) || raw.startsWith('#') || raw.startsWith('data:') || raw.startsWith('blob:')) {
-        return raw;
-    }
-
-    const match = raw.match(/^([^?#]*)(\?[^#]*)?(#.*)?$/);
-    const relPath = match?.[1] || raw;
-    const query = match?.[2] || '';
-    const hash = match?.[3] || '';
-
-    const baseDir = String(markdownPath || '')
-        .split('/')
-        .slice(0, -1)
-        .join('/');
-
-    const isAbsolute = relPath.startsWith('/');
-    const combined = isAbsolute
-        ? relPath
-        : `${baseDir ? `${baseDir}/` : ''}${relPath}`;
-
-    const normalized = [];
-    for (const segment of combined.split('/')) {
-        if (!segment || segment === '.') continue;
-        if (segment === '..') {
-            if (normalized.length > 0) normalized.pop();
-            continue;
-        }
-        normalized.push(segment);
-    }
-
-    const workspacePath = normalized.join('/');
-    return `${getWorkspaceRawUrl(workspacePath)}${query}${hash}`;
 }
 
 function getPreview(context) {
@@ -124,7 +88,7 @@ export function renderWorkspacePreviewMarkup(context) {
     if (preview.kind === 'text') {
         if (preview.content_type === 'text/markdown') {
             const rendered = renderMarkdown(preview.text || '', null, {
-                rewriteImageSrc: (src) => rewriteMarkdownImagePath(src, preview.path || context?.path),
+                rewriteImageSrc: (src) => rewriteWorkspaceMarkdownImageSrc(src, preview.path || context?.path),
             });
             return `${metadata}<div class="workspace-preview-text">${rendered}</div>`;
         }

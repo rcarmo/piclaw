@@ -9,6 +9,15 @@ const fixturePath = join(runtimeRoot, 'test/fixtures/markdown-live-preview-parit
 const workDir = join(runtimeRoot, 'generated/cache/markdown-live-preview-parity');
 const outDir = join(workDir, 'dist');
 const source = readFileSync(fixturePath, 'utf8');
+const markdownPath = 'notes/atomic-port-parity.md';
+const workspaceImagePaths = new Set([
+  'notes/atomic-port-parity-20260831-151050.png',
+  'notes/assets/editor-preview.png',
+]);
+const onePixelPng = Uint8Array.from(Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z5WQAAAAASUVORK5CYII=',
+  'base64',
+));
 
 const scenarios = [
   { name: 'desktop', width: 1280, height: 900 },
@@ -33,7 +42,7 @@ import {
   markdownLanguage,
   minimalSetup,
 } from '#editor-vendor/codemirror';
-import { markdownLivePreview, markdownParserExtensions } from '../../../extensions/viewers/editor/markdown/index.ts';
+import { createMarkdownLivePreview, markdownParserExtensions } from '../../../extensions/viewers/editor/markdown/index.ts';
 import { livePreviewFrozenField } from '../../../extensions/viewers/editor/markdown/live-preview.ts';
 import { openEditorSearch, revealText, searchRevealExtension, isEditorSearchOpen } from '../../../extensions/viewers/editor/search-reveal.ts';
 
@@ -51,7 +60,7 @@ const view = new EditorView({
       markdown({ base: markdownLanguage, extensions: markdownParserExtensions }),
       EditorView.lineWrapping,
       searchRevealExtension,
-      markdownLivePreview,
+      createMarkdownLivePreview(${JSON.stringify(markdownPath)}),
     ],
   }),
 });
@@ -126,6 +135,13 @@ function serveHarness() {
     port: 0,
     fetch(request) {
       const url = new URL(request.url);
+      if (url.pathname === '/workspace/raw') {
+        const workspacePath = url.searchParams.get('path') || '';
+        if (!workspaceImagePaths.has(workspacePath)) {
+          return new Response('Workspace image not found', { status: 404 });
+        }
+        return new Response(onePixelPng, { headers: { 'content-type': 'image/png' } });
+      }
       const pathname = url.pathname === '/' ? '/index.html' : url.pathname;
       const safePath = pathname.replace(/^\/+/, '');
       const filePath = resolve(workDir, safePath);
@@ -219,7 +235,18 @@ async function runScenario(page: Page, baseUrl: string, scenario: typeof scenari
     harness.scrollTo(harness.source.indexOf('![Alt image'));
   });
   await page.waitForTimeout(150);
-  assert(await count(page, '.cm-md-image-block') >= 1, `${scenario.name}: missing image block widget`);
+  assert(await count(page, '.cm-md-image-block') >= 3, `${scenario.name}: missing image block widgets`);
+  const workspaceImages = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLImageElement>('.cm-md-image'))
+    .filter((image) => image.alt === 'Pasted image' || image.alt === 'Relative image')
+    .map((image) => ({
+      alt: image.alt,
+      src: image.getAttribute('src'),
+      complete: image.complete,
+      naturalWidth: image.naturalWidth,
+    })));
+  assert(workspaceImages.length === 2, `${scenario.name}: missing pasted or relative image element`);
+  assert(workspaceImages.every((image) => image.src?.startsWith('/workspace/raw?path=')), `${scenario.name}: workspace images did not use the raw-file endpoint`);
+  assert(workspaceImages.every((image) => image.complete && image.naturalWidth > 0), `${scenario.name}: workspace images did not load`);
 
   await page.evaluate(() => {
     const harness = (window as any).__piclawMarkdownHarness;

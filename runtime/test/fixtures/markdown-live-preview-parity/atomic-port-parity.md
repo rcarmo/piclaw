@@ -22,6 +22,10 @@ Intro paragraph with **bold**, _italic_, ~~strike~~, `inline code`, #tag, [safe 
 
 ![Alt image](https://example.com/image.png "Image title")
 
+![Pasted image](atomic-port-parity-20260831-151050.png)
+
+![Relative image](assets/editor-preview.png)
+
 ```ts
 export function demo(value: string) {
   return value.toUpperCase();

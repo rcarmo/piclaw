@@ -11,6 +11,7 @@ import {
   workspaceMarkdownPreviewPaneExtension,
   workspacePreviewPaneExtension,
 } from "../../web/src/panes/workspace-preview-pane.js";
+import { rewriteWorkspaceMarkdownImageSrc } from "../../web/src/ui/workspace-markdown-image.js";
 
 const registeredIds = [
   editorPaneExtension.id,
@@ -114,5 +115,18 @@ describe("workspace preview pane extensions", () => {
     expect(html).toContain("extension:</strong> txt");
     expect(html).toContain("path:</strong> notes/test.txt");
     expect(html).toContain("<code>Hello</code>");
+  });
+
+  test("workspace markdown images resolve relative to the Markdown file", () => {
+    expect(rewriteWorkspaceMarkdownImageSrc("pasted.png", "notes/entry.md"))
+      .toBe("/workspace/raw?path=notes%2Fpasted.png");
+    expect(rewriteWorkspaceMarkdownImageSrc("../assets/diagram.png", "notes/daily/entry.md"))
+      .toBe("/workspace/raw?path=notes%2Fassets%2Fdiagram.png");
+    expect(rewriteWorkspaceMarkdownImageSrc("/shared/diagram.png", "notes/entry.md"))
+      .toBe("/workspace/raw?path=shared%2Fdiagram.png");
+    expect(rewriteWorkspaceMarkdownImageSrc("assets/diagram.png?v=2#crop", "notes/entry.md"))
+      .toBe("/workspace/raw?path=notes%2Fassets%2Fdiagram.png&v=2#crop");
+    expect(rewriteWorkspaceMarkdownImageSrc("https://example.com/diagram.png", "notes/entry.md"))
+      .toBe("https://example.com/diagram.png");
   });
 });

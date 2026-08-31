@@ -14,7 +14,11 @@ const parityMatrix = [
   { feature: "footnotes", patterns: ["[^note]", "[^note]: Footnote definition", "[^missing]"] },
   { feature: "hashtags", patterns: ["#tag"] },
   { feature: "links", patterns: ["[safe link](https://example.com \"Example\")", "[reference link][ref-link]", "[collapsed ref][]", "[shortcut ref]", "[ref-link]: https://example.com/reference"] },
-  { feature: "images", patterns: ["![Alt image](https://example.com/image.png \"Image title\")"] },
+  { feature: "images", patterns: [
+    "![Alt image](https://example.com/image.png \"Image title\")",
+    "![Pasted image](atomic-port-parity-20260831-151050.png)",
+    "![Relative image](assets/editor-preview.png)",
+  ] },
   { feature: "code-copy blocks", patterns: ["```ts", "export function demo"] },
   { feature: "tables", patterns: ["| Left | Center | Right |", "|:-----|:------:|------:|", "x \\| y"] },
   { feature: "large document / late parse sentinel", patterns: ["### Long/viewport sentinel"] },

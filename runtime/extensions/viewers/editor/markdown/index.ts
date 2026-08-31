@@ -63,17 +63,21 @@ export const markdownParserExtensions = [
  *   // Toggle off:
  *   view.dispatch({ effects: mdPreviewCompartment.reconfigure([]) });
  */
-export const markdownLivePreview: Extension = [
-    livePreviewFrozenField,
-    livePreviewPointerFreeze,
-    imageBlocks(),
-    editableTables(),
-    livePreviewPlugin,
+export function createMarkdownLivePreview(markdownPath = ''): Extension {
+    return [
+        livePreviewFrozenField,
+        livePreviewPointerFreeze,
+        imageBlocks(markdownPath),
+        editableTables(),
+        livePreviewPlugin,
 
-    livePreviewCursorNav,
-    livePreviewTableKeymap,
-    extendEmphasisPair,
-    autoCloseCodeFence,
-    tightListEnterKeymap,
-    markdownPreviewTheme,
-];
+        livePreviewCursorNav,
+        livePreviewTableKeymap,
+        extendEmphasisPair,
+        autoCloseCodeFence,
+        tightListEnterKeymap,
+        markdownPreviewTheme,
+    ];
+}
+
+export const markdownLivePreview: Extension = createMarkdownLivePreview();

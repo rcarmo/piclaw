@@ -7,6 +7,7 @@ import {
 } from '#editor-vendor/codemirror';
 import type { DecorationSet, EditorState, Extension, Range, Transaction } from '#editor-vendor/codemirror';
 import type { SyntaxNode } from '@lezer/common';
+import { rewriteWorkspaceMarkdownImageSrc } from '../../../../web/src/ui/workspace-markdown-image.js';
 import { normalizeLinkHref } from './link.js';
 import { treeGrowthEffect, treeProgressPlugin } from './tree-progress.js';
 
@@ -21,12 +22,14 @@ export function parseMarkdownImageSource(raw: string): { alt: string; url: strin
 }
 
 class ImageBlockWidget extends WidgetType {
-    constructor(readonly url: string, readonly alt: string) {
+    constructor(readonly url: string, readonly alt: string, readonly markdownPath: string) {
         super();
     }
 
     eq(other: ImageBlockWidget): boolean {
-        return this.url === other.url && this.alt === other.alt;
+        return this.url === other.url
+            && this.alt === other.alt
+            && this.markdownPath === other.markdownPath;
     }
 
     toDOM(view: EditorView): HTMLElement {
@@ -39,7 +42,7 @@ class ImageBlockWidget extends WidgetType {
         img.loading = 'lazy';
         img.decoding = 'async';
 
-        const href = normalizeLinkHref(this.url);
+        const href = normalizeLinkHref(rewriteWorkspaceMarkdownImageSrc(this.url, this.markdownPath));
         if (href) {
             img.src = href;
             const cached = imageDimensionCache.get(href);
@@ -130,7 +133,11 @@ function changedLineRanges(transaction: Transaction): DocumentRange[] {
     return ranges;
 }
 
-function imageBlockRanges(state: EditorState, scanRanges?: readonly DocumentRange[]): Range<Decoration>[] {
+function imageBlockRanges(
+    state: EditorState,
+    markdownPath: string,
+    scanRanges?: readonly DocumentRange[],
+): Range<Decoration>[] {
     const ranges: Range<Decoration>[] = [];
     const seen = new Set<string>();
     const scans = scanRanges?.length ? scanRanges : [{ from: 0, to: state.doc.length }];
@@ -150,7 +157,7 @@ function imageBlockRanges(state: EditorState, scanRanges?: readonly DocumentRang
 
                 const line = state.doc.lineAt(node.from);
                 ranges.push(Decoration.widget({
-                    widget: new ImageBlockWidget(parsed.url, parsed.alt),
+                    widget: new ImageBlockWidget(parsed.url, parsed.alt, markdownPath),
                     block: true,
                     side: 1,
                 }).range(line.to));
@@ -160,43 +167,44 @@ function imageBlockRanges(state: EditorState, scanRanges?: readonly DocumentRang
     return ranges;
 }
 
-function buildImageBlocks(state: EditorState): DecorationSet {
-    return Decoration.set(imageBlockRanges(state), true);
+function buildImageBlocks(state: EditorState, markdownPath: string): DecorationSet {
+    return Decoration.set(imageBlockRanges(state, markdownPath), true);
 }
 
 function refreshImageBlocks(
     decorations: DecorationSet,
     state: EditorState,
+    markdownPath: string,
     scanRanges: readonly DocumentRange[],
 ): DecorationSet {
     if (!scanRanges.length) return decorations;
     return decorations.update({
         filter: (from, to) => !scanRanges.some((scan) => from <= scan.to && to >= scan.from),
-        add: imageBlockRanges(state, scanRanges),
+        add: imageBlockRanges(state, markdownPath, scanRanges),
         sort: true,
     });
 }
 
-const imageBlockField = StateField.define<DecorationSet>({
-    create: (state) => buildImageBlocks(state),
-    update(decorations, transaction) {
-        for (const effect of transaction.effects) {
-            if (effect.is(treeGrowthEffect)) {
-                return refreshImageBlocks(decorations, transaction.state, [
-                    expandedLineRange(transaction.state, effect.value.from, effect.value.to),
-                ]);
+export function imageBlocks(markdownPath = ''): Extension {
+    const imageBlockField = StateField.define<DecorationSet>({
+        create: (state) => buildImageBlocks(state, markdownPath),
+        update(decorations, transaction) {
+            for (const effect of transaction.effects) {
+                if (effect.is(treeGrowthEffect)) {
+                    return refreshImageBlocks(decorations, transaction.state, markdownPath, [
+                        expandedLineRange(transaction.state, effect.value.from, effect.value.to),
+                    ]);
+                }
             }
-        }
-        if (!transaction.docChanged) return decorations;
-        return refreshImageBlocks(
-            decorations.map(transaction.changes),
-            transaction.state,
-            changedLineRanges(transaction),
-        );
-    },
-    provide: (field) => EditorView.decorations.from(field),
-});
-
-export function imageBlocks(): Extension {
+            if (!transaction.docChanged) return decorations;
+            return refreshImageBlocks(
+                decorations.map(transaction.changes),
+                transaction.state,
+                markdownPath,
+                changedLineRanges(transaction),
+            );
+        },
+        provide: (field) => EditorView.decorations.from(field),
+    });
     return [imageBlockField, treeProgressPlugin];
 }
