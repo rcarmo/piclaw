@@ -4,6 +4,7 @@ import { useSignal } from "@preact/signals";
 import { type SettingsData } from "./settings/types";
 import { safeGetItem, safeSetItem } from "../utils/storage";
 import { getRegisteredPanes, type SettingsPaneDefinition } from "./settings/pane-registry";
+import { mergeSavedSettings, SettingsSaveGeneration } from "./settings/save-state";
 
 // Import all built-in sections so their registerSettingsPane() calls execute
 import "./settings/GeneralSection";
@@ -69,6 +70,7 @@ export function SettingsPanel() {
   const error = useSignal<string | null>(null);
   const saveStatus = useSignal<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveGeneration = useRef(new SettingsSaveGeneration());
 
   // Re-render when panes register/unregister
   const [allPanes, setAllPanes] = useState<SettingsPaneDefinition[]>(() => getRegisteredPanes());
@@ -125,6 +127,7 @@ export function SettingsPanel() {
   }
 
   async function saveSetting(endpoint: string, field: string, value: unknown) {
+    const generation = saveGeneration.current.begin(endpoint, field);
     try {
       const res = await fetch(`/agent/settings/${endpoint}`, {
         method: "POST",
@@ -134,12 +137,13 @@ export function SettingsPanel() {
       });
       if (!res.ok) throw new Error("Save failed");
       const body: { settings?: SettingsData } = await res.json();
+      if (!saveGeneration.current.isCurrent(endpoint, field, generation)) return;
       if (body.settings) {
-        settings.value = { ...settings.value, ...body.settings };
+        settings.value = mergeSavedSettings(settings.value, endpoint, field, body.settings);
       }
       showSaved();
     } catch {
-      showError();
+      if (saveGeneration.current.isCurrent(endpoint, field, generation)) showError();
     }
   }
 
