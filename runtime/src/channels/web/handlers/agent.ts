@@ -1544,6 +1544,19 @@ export async function processChat(
           toolsRequired: protectedRecoveryIntent.tools_required,
           retryable: protectedRecoveryIntent.retryable,
           recoveryAttempts: Number(protectedRecoveryIntent.recovery_attempts),
+          ...(protectedRecoveryIntent.primary_failure_category === "timeout"
+            ? {
+                primaryFailure: {
+                  category: "timeout" as const,
+                  detail: String(protectedRecoveryIntent.primary_failure_detail),
+                  elapsedMs: Number(protectedRecoveryIntent.primary_failure_elapsed_ms),
+                  executionToolsEnabled: protectedRecoveryIntent.primary_failure_execution_tools === true,
+                  hadPartialOutput: protectedRecoveryIntent.primary_failure_had_partial_output === true,
+                  hadToolActivity: protectedRecoveryIntent.primary_failure_had_tool_activity === true,
+                  toolExecutionCount: Number(protectedRecoveryIntent.primary_failure_tool_executions),
+                },
+              }
+            : {}),
           ...(protectedRecoveryIntent.recovery_source_id
             ? { recoverySourceId: protectedRecoveryIntent.recovery_source_id }
             : {}),
@@ -2058,6 +2071,7 @@ export async function processChat(
         compaction: output.protectedRecoveryHandoff?.compaction,
         toolsRequired: output.protectedRecoveryHandoff?.toolsRequired ?? true,
         retryable: output.protectedRecoveryHandoff?.retryable ?? true,
+        primaryFailure: output.protectedRecoveryHandoff?.primaryFailure,
         recoverySourceId: output.protectedRecoveryHandoff?.recoverySourceId,
         recoveryGeneration: output.protectedRecoveryHandoff?.recoveryGeneration,
       });
@@ -2105,14 +2119,17 @@ export async function processChat(
         : null;
       const marker = buildTurnOutcomeMarker({
         kind: "recovery",
-        label: "recovery",
-        title: PROTECTED_RECOVERY_CONTROL_LABEL,
+        label: handoffPresentation?.label ?? "recovery",
+        title: output.protectedRecoveryHandoff?.primaryFailure
+          ? handoffPresentation?.title ?? PROTECTED_RECOVERY_CONTROL_LABEL
+          : PROTECTED_RECOVERY_CONTROL_LABEL,
         detail: handoffPresentation?.detail ?? (protectedRecoveryIntent
           ? "Compaction completed; continuing once more with execution tools restored."
           : "Continuing in an ordinary turn with execution tools restored."),
         severity: "info",
         attemptsUsed: output.recovery?.attemptsUsed,
         classifier: output.recovery?.lastClassifier ?? null,
+        failureCategory: output.failureCategory,
         protectedRecoveryHandoff: output.protectedRecoveryHandoff,
       });
       const persisted = persistVisibleFailureOutcome(marker);

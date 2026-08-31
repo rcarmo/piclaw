@@ -27,6 +27,35 @@ const PROTECTED_RECOVERY_TYPED_KEYS = [
   "retryable",
   "recovery_attempts",
 ] as const;
+const PRIMARY_FAILURE_KEYS = [
+  "primary_failure_category",
+  "primary_failure_detail",
+  "primary_failure_elapsed_ms",
+  "primary_failure_execution_tools",
+  "primary_failure_had_partial_output",
+  "primary_failure_had_tool_activity",
+  "primary_failure_tool_executions",
+] as const;
+
+function hasValidPrimaryFailureFields(block: ContentBlock): boolean {
+  const record = block as Record<string, unknown>;
+  const count = PRIMARY_FAILURE_KEYS.filter((key) => Object.hasOwn(record, key)).length;
+  if (count === 0) return true;
+  return count === PRIMARY_FAILURE_KEYS.length
+    && block.primary_failure_category === "timeout"
+    && typeof block.primary_failure_detail === "string"
+    && block.primary_failure_detail.trim().length <= 500
+    && /^Timed out after \d+s\.$/.test(block.primary_failure_detail.trim())
+    && Number.isInteger(block.primary_failure_elapsed_ms)
+    && Number(block.primary_failure_elapsed_ms) >= 0
+    && Number(block.primary_failure_elapsed_ms) <= 30 * 24 * 60 * 60 * 1000
+    && typeof block.primary_failure_execution_tools === "boolean"
+    && typeof block.primary_failure_had_partial_output === "boolean"
+    && typeof block.primary_failure_had_tool_activity === "boolean"
+    && Number.isInteger(block.primary_failure_tool_executions)
+    && Number(block.primary_failure_tool_executions) >= 0
+    && Number(block.primary_failure_tool_executions) <= 1_000_000;
+}
 
 function hasValidProtectedRecoveryHandoffFields(block: ContentBlock): boolean {
   const record = block as Record<string, unknown>;
@@ -38,7 +67,7 @@ function hasValidProtectedRecoveryHandoffFields(block: ContentBlock): boolean {
     && typeof block.retryable === "boolean"
     && Number.isInteger(block.recovery_attempts)
     && Number(block.recovery_attempts) >= 0;
-  if (!valid) return false;
+  if (!valid || !hasValidPrimaryFailureFields(block)) return false;
   if (block.reason === "post_compaction_tools_required") {
     return block.compaction === "succeeded" && block.tools_required === true;
   }

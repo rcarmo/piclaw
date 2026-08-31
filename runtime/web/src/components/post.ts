@@ -105,6 +105,34 @@ const PROTECTED_RECOVERY_REASONS = new Set([
     'provider_retry_exhausted',
 ]);
 const PROTECTED_RECOVERY_TYPED_KEYS = ['reason', 'compaction', 'tools_required', 'retryable', 'recovery_attempts'];
+const PRIMARY_FAILURE_KEYS = [
+    'primary_failure_category',
+    'primary_failure_detail',
+    'primary_failure_elapsed_ms',
+    'primary_failure_execution_tools',
+    'primary_failure_had_partial_output',
+    'primary_failure_had_tool_activity',
+    'primary_failure_tool_executions',
+];
+
+function hasValidPrimaryFailureFields(block) {
+    const count = PRIMARY_FAILURE_KEYS.filter(key => Object.prototype.hasOwnProperty.call(block, key)).length;
+    if (count === 0) return true;
+    return count === PRIMARY_FAILURE_KEYS.length
+        && block.primary_failure_category === 'timeout'
+        && typeof block.primary_failure_detail === 'string'
+        && block.primary_failure_detail.trim().length <= 500
+        && /^Timed out after \d+s\.$/.test(block.primary_failure_detail.trim())
+        && Number.isInteger(block.primary_failure_elapsed_ms)
+        && block.primary_failure_elapsed_ms >= 0
+        && block.primary_failure_elapsed_ms <= 30 * 24 * 60 * 60 * 1000
+        && typeof block.primary_failure_execution_tools === 'boolean'
+        && typeof block.primary_failure_had_partial_output === 'boolean'
+        && typeof block.primary_failure_had_tool_activity === 'boolean'
+        && Number.isInteger(block.primary_failure_tool_executions)
+        && block.primary_failure_tool_executions >= 0
+        && block.primary_failure_tool_executions <= 1000000;
+}
 
 function hasValidProtectedRecoveryHandoffFields(block) {
     const hasTypedFields = PROTECTED_RECOVERY_TYPED_KEYS.some(key => Object.prototype.hasOwnProperty.call(block, key));
@@ -115,7 +143,7 @@ function hasValidProtectedRecoveryHandoffFields(block) {
         && typeof block.retryable === 'boolean'
         && Number.isInteger(block.recovery_attempts)
         && block.recovery_attempts >= 0;
-    if (!valid) return false;
+    if (!valid || !hasValidPrimaryFailureFields(block)) return false;
     if (block.reason === 'post_compaction_tools_required') return block.compaction === 'succeeded' && block.tools_required;
     if (block.reason === 'compaction_failed') return block.compaction === 'failed';
     if (block.reason === 'tools_required' || block.reason === 'unresolved_tool_execution') return block.tools_required;
@@ -365,9 +393,19 @@ function OutcomePill({ marker }) {
     const attempts = Number.isInteger(marker?.recovery_attempts)
         ? `${marker.recovery_attempts} recovery attempt${marker.recovery_attempts === 1 ? '' : 's'}`
         : '';
-    const typedSummary = [reason, compaction, marker?.tools_required === true ? 'tools required' : '', attempts]
-        .filter(Boolean)
-        .join(' · ');
+    const toolExecutions = Number.isInteger(marker?.primary_failure_tool_executions)
+        ? `${marker.primary_failure_tool_executions} tool execution${marker.primary_failure_tool_executions === 1 ? '' : 's'}`
+        : '';
+    const typedSummary = [
+        reason,
+        compaction,
+        marker?.tools_required === true ? 'tools required' : '',
+        attempts,
+        marker?.primary_failure_execution_tools === true ? 'execution tools enabled' : '',
+        marker?.primary_failure_had_partial_output === true ? 'partial output' : '',
+        marker?.primary_failure_had_tool_activity === true ? 'tool activity' : '',
+        toolExecutions,
+    ].filter(Boolean).join(' · ');
     const draftRecovered = marker?.draft_recovered;
     const severity = String(marker?.severity || 'warning');
     const label = action || title || String(marker?.label || marker?.kind || 'issue');

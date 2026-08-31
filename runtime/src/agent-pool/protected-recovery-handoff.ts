@@ -44,6 +44,7 @@ export function finishBoundedProtectedRecoveryHandoff(output: AgentOutput): Agen
       compaction: priorHandoff?.compaction,
       toolsRequired: priorHandoff?.toolsRequired ?? true,
       retryable: priorHandoff?.retryable ?? true,
+      primaryFailure: priorHandoff?.primaryFailure,
       recoverySourceId: priorHandoff?.recoverySourceId,
       recoveryGeneration: priorHandoff?.recoveryGeneration,
     },

@@ -45,6 +45,20 @@ test("visual timeline hides complete protected-recovery control intents on SSE a
   });
 
   expect(getProtectedRecoveryControlIntent(sse.content_blocks)).toMatchObject(typedFields);
+  const primaryFields = {
+    primary_failure_category: "timeout",
+    primary_failure_detail: "Timed out after 3600s.",
+    primary_failure_elapsed_ms: 3_600_575,
+    primary_failure_execution_tools: true,
+    primary_failure_had_partial_output: true,
+    primary_failure_had_tool_activity: true,
+    primary_failure_tool_executions: 403,
+  };
+  expect(getProtectedRecoveryControlIntent([{ ...block, ...primaryFields }])).toMatchObject(primaryFields);
+  expect(getProtectedRecoveryControlIntent([{
+    ...block,
+    primary_failure_category: "timeout",
+  }])).toBeNull();
   expect(shouldHideTimelineInteraction(sse)).toBe(true);
   expect(shouldHideTimelineInteraction(reload)).toBe(true);
 });

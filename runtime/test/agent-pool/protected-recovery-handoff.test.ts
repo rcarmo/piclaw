@@ -315,6 +315,48 @@ test("all protected-recovery reasons produce safe deterministic content-block fi
   }
 });
 
+test("timeout primary cause round-trips through handoff fields and stays first in presentation", () => {
+  const metadata = buildProtectedRecoveryHandoffMetadata("tools_required", {
+    recoveryAttempts: 2,
+    toolsRequired: true,
+    primaryFailure: {
+      category: "timeout",
+      detail: "Timed out after 3600s.",
+      elapsedMs: 3_600_575,
+      executionToolsEnabled: true,
+      hadPartialOutput: true,
+      hadToolActivity: true,
+      toolExecutionCount: 403,
+    },
+  });
+  const fields = protectedRecoveryHandoffContentBlockFields(metadata);
+  const presentation = formatProtectedRecoveryHandoff(metadata);
+
+  expect(fields).toMatchObject({
+    reason: "tools_required",
+    primary_failure_category: "timeout",
+    primary_failure_elapsed_ms: 3_600_575,
+    primary_failure_execution_tools: true,
+    primary_failure_had_partial_output: true,
+    primary_failure_had_tool_activity: true,
+    primary_failure_tool_executions: 403,
+  });
+  expect(presentation).toMatchObject({
+    label: "timeout",
+    title: "Tool-enabled continuation timed out after 1h 00m",
+  });
+  expect(presentation.detail.indexOf("Timed out after 3600s.")).toBeLessThan(
+    presentation.detail.indexOf("Automatic recovery requires execution tools"),
+  );
+
+  const final = finishBoundedProtectedRecoveryHandoff({
+    ...protectedOutput(),
+    failureCategory: "timeout",
+    protectedRecoveryHandoff: metadata,
+  });
+  expect(final.protectedRecoveryHandoff?.primaryFailure).toEqual(metadata.primaryFailure);
+});
+
 test("protected recovery control authority requires the complete typed block", () => {
   const handoff = buildProtectedRecoveryHandoffMetadata("post_compaction_tools_required", {
     recoveryAttempts: 2,
@@ -340,6 +382,41 @@ test("protected recovery control authority requires the complete typed block", (
     recovery_generation: 1,
   });
   expect(resolveProtectedRecoveryPrompt({ content_blocks: [block] })).toBe(TOOL_ENABLED_RECOVERY_CONTINUATION_PROMPT);
+  const timeoutHandoff = buildProtectedRecoveryHandoffMetadata("tools_required", {
+    recoveryAttempts: 2,
+    toolsRequired: true,
+    primaryFailure: {
+      category: "timeout",
+      detail: "Timed out after 3600s.",
+      elapsedMs: 3_600_575,
+      executionToolsEnabled: true,
+      hadPartialOutput: true,
+      hadToolActivity: true,
+      toolExecutionCount: 403,
+    },
+  });
+  const timeoutBlock = buildProtectedRecoveryControlIntentBlock({
+    sourceMessageId: "timeout-source",
+    sourceRowId: 43,
+    threadId: 43,
+    handoff: timeoutHandoff,
+  });
+  expect(resolveProtectedRecoveryControlIntent({ content_blocks: [timeoutBlock] })).toMatchObject({
+    reason: "tools_required",
+    primary_failure_category: "timeout",
+    primary_failure_detail: "Timed out after 3600s.",
+    primary_failure_elapsed_ms: 3_600_575,
+    primary_failure_execution_tools: true,
+    primary_failure_had_partial_output: true,
+    primary_failure_had_tool_activity: true,
+    primary_failure_tool_executions: 403,
+  });
+  expect(isProtectedRecoveryControlMessage({
+    content_blocks: [{ ...timeoutBlock, primary_failure_tool_executions: undefined }],
+  })).toBe(false);
+  expect(isProtectedRecoveryControlMessage({
+    content_blocks: [{ ...timeoutBlock, primary_failure_detail: "x".repeat(501) }],
+  })).toBe(false);
   expect(isProtectedRecoveryControlMessage({
     content_blocks: [{ ...block, label: "Presentation text may change" }],
   })).toBe(true);

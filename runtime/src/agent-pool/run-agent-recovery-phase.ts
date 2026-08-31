@@ -42,6 +42,7 @@ import { logToolStateTransition } from "./tool-state-transitions.js";
 import {
   buildProtectedRecoveryHandoffMetadata,
   type ProtectedRecoveryHandoffReason,
+  type ProtectedRecoveryPrimaryFailure,
 } from "./protected-recovery-handoff-reason.js";
 
 const MAX_RECOVERY_LOOP_GUARD_CHATS = 512;
@@ -491,6 +492,7 @@ export async function runAgentRecoveryPhase(options: RunAgentRecoveryPhaseOption
       ?? 0,
   ));
   let protectedRecoveryToolsRequired = protectedRecoveryHandoffContext?.toolsRequired ?? false;
+  let protectedRecoveryPrimaryFailure: ProtectedRecoveryPrimaryFailure | undefined = protectedRecoveryHandoffContext?.primaryFailure;
   let protectedRecoveryHasUnresolvedToolExecution =
     protectedRecoveryHandoffContext?.reason === "unresolved_tool_execution";
   const strategyHistory: RecoveryStrategy[] = [];
@@ -533,6 +535,7 @@ export async function runAgentRecoveryPhase(options: RunAgentRecoveryPhaseOption
       || reason === "tools_required"
       || reason === "unresolved_tool_execution",
     retryable: protectedRecoveryHandoffContext?.retryable,
+    primaryFailure: protectedRecoveryPrimaryFailure,
     recoverySourceId,
     recoveryGeneration,
   });
@@ -574,7 +577,7 @@ export async function runAgentRecoveryPhase(options: RunAgentRecoveryPhaseOption
       status: "error",
       result: null,
       error,
-      failureCategory: "no_terminal_output",
+      failureCategory: protectedRecoveryPrimaryFailure?.category ?? "no_terminal_output",
       nextAction: reason === "unresolved_tool_execution"
         ? "Review the unresolved tool side effects before explicitly continuing."
         : "Continue automatically in one ordinary turn with the restored tool baseline.",
@@ -872,6 +875,23 @@ export async function runAgentRecoveryPhase(options: RunAgentRecoveryPhaseOption
     // an opaque error string at this compatibility boundary.
     const failureCategory = attempt.output.failureCategory ?? classifyOpaqueAgentFailure(errorText);
     attempt.output.failureCategory = failureCategory;
+    const timedOutAttemptHadExecutionTools = attemptRanWithExecutionTools
+      || Boolean(attempt.snapshot.hadToolActivity)
+      || attempt.toolExecutionCount > toolExecutionCountAtStart;
+    if (!protectedRecoveryPrimaryFailure
+      && failureCategory === "timeout"
+      && timedOutAttemptHadExecutionTools) {
+      const elapsedMs = Math.max(0, Date.now() - startTime);
+      protectedRecoveryPrimaryFailure = {
+        category: "timeout",
+        detail: `Timed out after ${Math.max(1, Math.round(attemptTimeoutMs / 1000))}s.`,
+        elapsedMs,
+        executionToolsEnabled: true,
+        hadPartialOutput: Boolean(attempt.snapshot.hadPartialOutput),
+        hadToolActivity: Boolean(attempt.snapshot.hadToolActivity),
+        toolExecutionCount: Number.isFinite(attempt.toolExecutionCount) ? Math.max(0, Math.trunc(attempt.toolExecutionCount)) : 0,
+      };
+    }
     lastRecoveryErrorText = errorText;
     allowPostTimeoutRecoveryWindow = recoveryAttemptsUsed === 0
       && attempt.snapshot.hadToolActivity

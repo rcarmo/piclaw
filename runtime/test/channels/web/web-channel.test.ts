@@ -2822,28 +2822,47 @@ test("processChat durably hands protected recovery to one ordinary tool-enabled 
           return {
             status: "error",
             error: "Protected recovery completed without execution tools; continuing once in an ordinary tool-enabled turn.",
+            failureCategory: "timeout",
             result: null,
             attachments: [],
             requiresToolEnabledContinuation: true,
             nextAction: "Continue automatically in one ordinary turn with the restored tool baseline.",
             protectedRecoveryHandoff: {
-              reason: "provider_retry_exhausted",
+              reason: "tools_required",
               compaction: "not_attempted",
               toolsRequired: true,
               retryable: true,
               recoveryAttempts: 1,
+              primaryFailure: {
+                category: "timeout",
+                detail: "Timed out after 3600s.",
+                elapsedMs: 3_600_575,
+                executionToolsEnabled: true,
+                hadPartialOutput: true,
+                hadToolActivity: true,
+                toolExecutionCount: 403,
+              },
             },
-            recovery: { attemptsUsed: 1, totalElapsedMs: 1000, recovered: false, exhausted: true, lastClassifier: "tool_activity", strategyHistory: ["retry"], diagnostics: [] },
+            recovery: { attemptsUsed: 1, totalElapsedMs: 3_600_575, recovered: false, exhausted: true, lastClassifier: "tool_activity", strategyHistory: ["retry"], diagnostics: [] },
           };
         }
         expect(options.protectedRecoveryContinuation).toBe(true);
         expect(options.protectedRecoveryContinuationDepth).toBe(1);
         expect(options.protectedRecoveryHandoffContext).toMatchObject({
-          reason: "provider_retry_exhausted",
+          reason: "tools_required",
           compaction: "not_attempted",
           toolsRequired: true,
           retryable: true,
           recoveryAttempts: 1,
+          primaryFailure: {
+            category: "timeout",
+            detail: "Timed out after 3600s.",
+            elapsedMs: 3_600_575,
+            executionToolsEnabled: true,
+            hadPartialOutput: true,
+            hadToolActivity: true,
+            toolExecutionCount: 403,
+          },
         });
         await options.onTurnComplete?.({
           text: committedToolProgress,
@@ -2881,11 +2900,18 @@ test("processChat durably hands protected recovery to one ordinary tool-enabled 
   `).get("web:default", PROTECTED_RECOVERY_CONTROL_LABEL) as any;
   expect(continuation).toMatchObject({ content: PROTECTED_RECOVERY_CONTROL_LABEL, thread_id: rootRowId });
   const typedFields = {
-    reason: "provider_retry_exhausted",
+    reason: "tools_required",
     compaction: "not_attempted",
     tools_required: true,
     retryable: true,
     recovery_attempts: 1,
+    primary_failure_category: "timeout",
+    primary_failure_detail: "Timed out after 3600s.",
+    primary_failure_elapsed_ms: 3_600_575,
+    primary_failure_execution_tools: true,
+    primary_failure_had_partial_output: true,
+    primary_failure_had_tool_activity: true,
+    primary_failure_tool_executions: 403,
   };
   const continuationBlocks = JSON.parse(continuation.content_blocks);
   expect(continuationBlocks).toEqual([
@@ -2908,9 +2934,13 @@ test("processChat durably hands protected recovery to one ordinary tool-enabled 
     .find((block: any) => block.type === "turn_outcome_marker" && block.kind === "recovery");
   expect(recoveryTimelineItem?.data.content).toBe("");
   expect(recoveryTimelineBlock).toMatchObject({
-    title: PROTECTED_RECOVERY_CONTROL_LABEL,
+    label: "timeout",
+    title: "Tool-enabled continuation timed out after 1h 00m",
+    failure_category: "timeout",
+    detail: expect.stringContaining("Automatic recovery requires execution tools"),
     ...typedFields,
   });
+  expect(recoveryTimelineBlock.primary_failure_detail).toBe("Timed out after 3600s.");
   const recoverySseBlock = events
     .flatMap((event) => event.data.content_blocks ?? event.data.data?.content_blocks ?? [])
     .find((block: any) => block.type === "turn_outcome_marker" && block.kind === "recovery");

@@ -308,6 +308,26 @@ test('protected recovery requires typed control intent instead of interpreting u
     thread_id: 41,
   };
   expect(getProtectedRecoveryControlIntent([{ ...envelope, reason: 'tools_required' }])).toBeNull();
+  const completeTimeout = {
+    ...envelope,
+    reason: 'tools_required',
+    compaction: 'not_attempted',
+    tools_required: true,
+    retryable: true,
+    recovery_attempts: 1,
+    primary_failure_category: 'timeout',
+    primary_failure_detail: 'Timed out after 3600s.',
+    primary_failure_elapsed_ms: 3_600_575,
+    primary_failure_execution_tools: true,
+    primary_failure_had_partial_output: true,
+    primary_failure_had_tool_activity: true,
+    primary_failure_tool_executions: 403,
+  };
+  expect(getProtectedRecoveryControlIntent([completeTimeout])).toMatchObject({ sourceMessageId: 'source-123' });
+  expect(getProtectedRecoveryControlIntent([{
+    ...completeTimeout,
+    primary_failure_tool_executions: undefined,
+  }])).toBeNull();
   expect(getProtectedRecoveryControlIntent([{
     ...envelope,
     reason: 'post_compaction_tools_required',
@@ -316,6 +336,38 @@ test('protected recovery requires typed control intent instead of interpreting u
     retryable: true,
     recovery_attempts: 1,
   }])).toBeNull();
+});
+
+test('Post renders safe timeout activity details before the tools-required handoff', async () => {
+  const host = await renderPostWithBlocks([{
+    type: 'turn_outcome_marker',
+    kind: 'recovery',
+    severity: 'warning',
+    label: 'timeout',
+    title: 'Tool-enabled continuation timed out after 1h 00m',
+    detail: 'Timed out after 3600s. Automatic recovery requires execution tools.',
+    reason: 'tools_required',
+    tools_required: true,
+    retryable: true,
+    recovery_attempts: 1,
+    primary_failure_category: 'timeout',
+    primary_failure_detail: 'Timed out after 3600s.',
+    primary_failure_elapsed_ms: 3_600_575,
+    primary_failure_execution_tools: true,
+    primary_failure_had_partial_output: true,
+    primary_failure_had_tool_activity: true,
+    primary_failure_tool_executions: 403,
+  }]);
+
+  expect(flattenText(host)).toContain('Tool-enabled continuation timed out after 1h 00m');
+  const header = findByClass(host, 'post-outcome-pill-header');
+  expect(header).toBeTruthy();
+  const click = header?.l?.Clickfalse;
+  expect(typeof click).toBe('function');
+  (click as (event: { stopPropagation(): void }) => void)({ stopPropagation() {} });
+  await Promise.resolve();
+  expect(flattenText(host)).toContain('403 tool executions');
+  expect(flattenText(host)).toContain('tools required');
 });
 
 test('Post renders a visible recovery chip with the recovery tooltip', async () => {

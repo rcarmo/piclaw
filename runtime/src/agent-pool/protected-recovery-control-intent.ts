@@ -25,6 +25,13 @@ export interface ProtectedRecoveryControlIntentBlock {
   tools_required?: boolean;
   retryable?: boolean;
   recovery_attempts?: number;
+  primary_failure_category?: "timeout";
+  primary_failure_detail?: string;
+  primary_failure_elapsed_ms?: number;
+  primary_failure_execution_tools?: boolean;
+  primary_failure_had_partial_output?: boolean;
+  primary_failure_had_tool_activity?: boolean;
+  primary_failure_tool_executions?: number;
   recovery_source_id?: string;
   recovery_generation?: number;
 }
@@ -40,6 +47,13 @@ const HANDOFF_FIELD_KEYS = [
   "tools_required",
   "retryable",
   "recovery_attempts",
+  "primary_failure_category",
+  "primary_failure_detail",
+  "primary_failure_elapsed_ms",
+  "primary_failure_execution_tools",
+  "primary_failure_had_partial_output",
+  "primary_failure_had_tool_activity",
+  "primary_failure_tool_executions",
   "recovery_source_id",
   "recovery_generation",
 ] as const;
@@ -63,7 +77,35 @@ function readHandoffFields(block: Record<string, unknown>): {
     && Number(block.recovery_attempts) >= 0;
   const hasRecoverySourceId = typeof block.recovery_source_id === "string" && block.recovery_source_id.trim().length > 0;
   const hasRecoveryGeneration = Number.isInteger(block.recovery_generation) && Number(block.recovery_generation) >= 0;
+  const primaryFailureKeys = [
+    "primary_failure_category",
+    "primary_failure_detail",
+    "primary_failure_elapsed_ms",
+    "primary_failure_execution_tools",
+    "primary_failure_had_partial_output",
+    "primary_failure_had_tool_activity",
+    "primary_failure_tool_executions",
+  ] as const;
+  const primaryFailureFieldCount = primaryFailureKeys.filter((key) => Object.hasOwn(block, key)).length;
+  const hasPrimaryFailure = primaryFailureFieldCount === primaryFailureKeys.length;
+  const validPrimaryFailure = primaryFailureFieldCount === 0 || (
+    hasPrimaryFailure
+    && block.primary_failure_category === "timeout"
+    && typeof block.primary_failure_detail === "string"
+    && block.primary_failure_detail.trim().length <= 500
+    && /^Timed out after \d+s\.$/.test(block.primary_failure_detail.trim())
+    && Number.isInteger(block.primary_failure_elapsed_ms)
+    && Number(block.primary_failure_elapsed_ms) >= 0
+    && Number(block.primary_failure_elapsed_ms) <= 30 * 24 * 60 * 60 * 1000
+    && typeof block.primary_failure_execution_tools === "boolean"
+    && typeof block.primary_failure_had_partial_output === "boolean"
+    && typeof block.primary_failure_had_tool_activity === "boolean"
+    && Number.isInteger(block.primary_failure_tool_executions)
+    && Number(block.primary_failure_tool_executions) >= 0
+    && Number(block.primary_failure_tool_executions) <= 1_000_000
+  );
   const semanticallyValid = structurallyValid
+    && validPrimaryFailure
     && (Object.hasOwn(block, "recovery_source_id") === Object.hasOwn(block, "recovery_generation"))
     && (!Object.hasOwn(block, "recovery_source_id") || (hasRecoverySourceId && hasRecoveryGeneration))
     && (reason !== "post_compaction_tools_required" || (compaction === "succeeded" && toolsRequired === true))
@@ -80,6 +122,15 @@ function readHandoffFields(block: Record<string, unknown>): {
       tools_required: toolsRequired,
       retryable: block.retryable as boolean,
       recovery_attempts: Number(block.recovery_attempts),
+      ...(hasPrimaryFailure ? {
+        primary_failure_category: "timeout" as const,
+        primary_failure_detail: String(block.primary_failure_detail).trim(),
+        primary_failure_elapsed_ms: Number(block.primary_failure_elapsed_ms),
+        primary_failure_execution_tools: block.primary_failure_execution_tools as boolean,
+        primary_failure_had_partial_output: block.primary_failure_had_partial_output as boolean,
+        primary_failure_had_tool_activity: block.primary_failure_had_tool_activity as boolean,
+        primary_failure_tool_executions: Number(block.primary_failure_tool_executions),
+      } : {}),
       ...(hasRecoverySourceId ? { recovery_source_id: String(block.recovery_source_id).trim() } : {}),
       ...(hasRecoveryGeneration ? { recovery_generation: Number(block.recovery_generation) } : {}),
     },

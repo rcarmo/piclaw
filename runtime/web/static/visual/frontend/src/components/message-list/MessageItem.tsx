@@ -148,6 +148,12 @@ function TurnOutcomeBlock({ marker }: { marker: ContentBlock }) {
     Number.isInteger(marker.recovery_attempts)
       ? `${marker.recovery_attempts} recovery attempt${marker.recovery_attempts === 1 ? "" : "s"}`
       : null,
+    marker.primary_failure_execution_tools === true ? "execution tools enabled" : null,
+    marker.primary_failure_had_partial_output === true ? "partial output" : null,
+    marker.primary_failure_had_tool_activity === true ? "tool activity" : null,
+    Number.isInteger(marker.primary_failure_tool_executions)
+      ? `${marker.primary_failure_tool_executions} tool execution${marker.primary_failure_tool_executions === 1 ? "" : "s"}`
+      : null,
   ].filter((value): value is string => Boolean(value));
 
   return (

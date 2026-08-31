@@ -537,6 +537,82 @@ describe("runAgentRecoveryPhase", () => {
     expect(activeTools).toEqual(["read", "bash"]);
   });
 
+  test("preserves a tool-enabled timeout as primary cause when handing off a skipped tools-disabled retry", async () => {
+    const sessionCtrl: SessionWithToolControl = {
+      // The production outer tool flag was stale; durable attempt activity is authoritative.
+      getActiveToolNames: () => [],
+      setActiveToolsByName: () => {},
+    };
+    let calls = 0;
+
+    const result = await runAgentRecoveryPhase({
+      prompt: "continue protected work",
+      chatJid: "web:test-recovery-tools-required",
+      session: {} as any,
+      sessionCtrl,
+      timeoutMs: 3_600_000,
+      startTime: Date.now(),
+      modelLabel: "test/model",
+      recoveryConfig: recoveryConfig({ transientRecoveryToolsEnabled: false }),
+      runOptions: {},
+      logsDir: "/tmp/nonexistent-piclaw-test-logs",
+      clearAttachments: () => {},
+      runPromptAttempt: async () => {
+        calls += 1;
+        if (calls > 1) throw new Error("tools-disabled recovery must be handed off without another provider call");
+        return attempt({
+          output: {
+            status: "error",
+            result: null,
+            error: "Timed out after 3600s",
+            failureCategory: "timeout",
+          },
+          snapshot: {
+            hadToolActivity: true,
+            hadPartialOutput: true,
+            hadCompletedTurnOutput: true,
+            hadTerminalTurnOutput: false,
+            sawCompactionIntent: false,
+            canDisableToolsForRecovery: true,
+            hasUnresolvedToolExecution: false,
+            assistantToolUseMessageCount: 205,
+            toolExecutionCount: 403,
+            toolUseMessageBudget: 512,
+          },
+          promptWasPersisted: true,
+          // Reproduces the production mismatch: the typed output said timeout
+          // while the outer legacy flag had already been reset.
+          timedOut: false,
+          toolExecutionCount: 403,
+        });
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: "error",
+      failureCategory: "timeout",
+      requiresToolEnabledContinuation: true,
+      protectedRecoveryHandoff: {
+        reason: "tools_required",
+        compaction: "not_attempted",
+        toolsRequired: true,
+        retryable: true,
+        recoveryAttempts: 1,
+        primaryFailure: {
+          category: "timeout",
+          detail: "Timed out after 3600s.",
+          executionToolsEnabled: true,
+          hadPartialOutput: true,
+          hadToolActivity: true,
+          toolExecutionCount: 403,
+        },
+      },
+      recovery: { recovered: false, exhausted: true, lastClassifier: "tool_activity" },
+    });
+    expect(result.protectedRecoveryHandoff?.primaryFailure?.elapsedMs).toBeGreaterThanOrEqual(0);
+    expect(calls).toBe(1);
+  });
+
   test("skips a tools-disabled transient provider attempt and preserves tools", async () => {
     let activeTools = ["read", "bash"];
     const activeToolSets: string[][] = [];

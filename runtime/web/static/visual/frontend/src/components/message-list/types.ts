@@ -31,6 +31,13 @@ export interface ContentBlock {
   tools_required?: boolean;
   retryable?: boolean;
   recovery_attempts?: number;
+  primary_failure_category?: string;
+  primary_failure_detail?: string;
+  primary_failure_elapsed_ms?: number;
+  primary_failure_execution_tools?: boolean;
+  primary_failure_had_partial_output?: boolean;
+  primary_failure_had_tool_activity?: boolean;
+  primary_failure_tool_executions?: number;
   next_action?: string;
 }
 
