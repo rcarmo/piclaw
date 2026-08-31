@@ -31,7 +31,6 @@
     "runtime/docs/dream-memory.md",
     "runtime/scripts",
     "runtime/LICENSE",
-    "patches",
     "skel/.mcp.json.example",
     "skel/.pi",
     "skel/.piclaw",
@@ -207,8 +206,5 @@
     "hono": "4.12.34",
     "qs": "6.15.2",
     "ws": "8.21.0"
-  },
-  "patchedDependencies": {
-    "@earendil-works/pi-ai@0.84.4": "patches/@earendil-works%2Fpi-ai@0.84.4.patch"
   }
 }

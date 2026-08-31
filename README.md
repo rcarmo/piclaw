@@ -107,10 +107,10 @@ For the full list, TOTP/passkey setup, session-scoped SSH-backed remote tools, r
 ### Install without Docker
 
 ```bash
-bun add -g github:rcarmo/piclaw
+bun add -g github:rcarmo/piclaw#v2.15.2
 ```
 
-Experimental. Linux/macOS/Windows. See [docs/install-from-repo.md](docs/install-from-repo.md).
+Pin an explicit release tag; `main` is not an install channel. Experimental on Linux/macOS/Windows. See [docs/install-from-repo.md](docs/install-from-repo.md).
 
 Windows support is experimental. Shell-like child processes run attached there (`detached=false`) so stdout and stderr remain capturable. Unix-like hosts use detached process groups so abort and shutdown can terminate the process tree.
 

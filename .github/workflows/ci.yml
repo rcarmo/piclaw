@@ -62,3 +62,6 @@ jobs:
 
       - name: Run canonical fast CI contract
         run: make ci-fast
+
+      - name: Smoke-test isolated Git global install
+        run: bun run smoke:repo-install

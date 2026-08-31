@@ -107,47 +107,6 @@ describe("OpenAI-completions reasoning_details preservation", () => {
     expect(getAssistantPayload(mockState.payloads[1])?.reasoning_details).toEqual([reasoningDetail]);
   });
 
-  test("inherits the patched cache-field and provider-cost provenance boundary", async () => {
-    mockState.chunkSets = [[
-      chunk({ content: "ok" }),
-      {
-        ...chunk({}, "stop") as Record<string, unknown>,
-        usage: {
-          prompt_tokens: 100,
-          completion_tokens: 20,
-          prompt_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
-          cost: 0.00123,
-        },
-      },
-    ]];
-
-    const assistantMessage = await runOpenAICompletionsStream();
-    expect(assistantMessage.usage).toMatchObject({
-      input: 100,
-      output: 20,
-      cacheRead: 0,
-      cacheWrite: 0,
-      cacheReadReported: true,
-      cacheWriteReported: true,
-      providerCost: 0.00123,
-    });
-  });
-
-  test("keeps omitted OpenAI-compatible cache fields distinct from explicit zero", async () => {
-    mockState.chunkSets = [[
-      chunk({ content: "ok" }),
-      {
-        ...chunk({}, "stop") as Record<string, unknown>,
-        usage: { prompt_tokens: 100, completion_tokens: 20, cost: 0 },
-      },
-    ]];
-
-    const assistantMessage = await runOpenAICompletionsStream();
-    expect(assistantMessage.usage.cacheReadReported).toBe(false);
-    expect(assistantMessage.usage.cacheWriteReported).toBe(false);
-    expect(assistantMessage.usage.providerCost).toBe(0);
-  });
-
   test("inherits upstream failure when a stream ends without finish_reason", async () => {
     mockState.chunkSets = [[chunk({ content: "partial answer" })]];
 

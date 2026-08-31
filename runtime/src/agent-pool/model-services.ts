@@ -9,6 +9,7 @@ import type { ModelsRefreshOptions, ModelsRefreshResult } from "@earendil-works/
 
 import { getPiclawAgentDir } from "../core/agent-dir.js";
 import { FileCredentialStore, type PiclawCredentialStore } from "./credential-store.js";
+import { installOpenAICompletionsUsageCompatibility } from "./openai-completions-usage-compat.js";
 
 export class PiclawModelRegistry extends ModelRegistry {
   private refreshInFlight: Promise<ModelsRefreshResult> | null = null;
@@ -55,6 +56,7 @@ export async function createRuntimeModelServices(
     modelsStorePath: join(agentDir, "models-store.json"),
     allowModelNetwork: false,
   });
+  installOpenAICompletionsUsageCompatibility(modelRuntime);
   const modelRegistry = new PiclawModelRegistry(modelRuntime);
   return { credentialStore, modelRuntime, modelRegistry, agentDir };
 }

@@ -33,8 +33,6 @@ workspaces/
 !LICENSE
 !package.json
 !bun.lock
-!patches/
-!patches/**
 !scripts/prepare-local-install.ts
 !docs/install-from-repo.md
 

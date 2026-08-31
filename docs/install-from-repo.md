@@ -4,11 +4,13 @@
 >
 > This repository requires Bun 1.4.0 or newer. Its version 2 lockfiles are not readable by Bun 1.3; rollback to a pre-1.4 runtime requires reverting the lockfile migration as well.
 
-PiClaw can be installed directly from the repository with Bun:
+PiClaw can be installed directly from a tagged release with Bun:
 
 ```bash
-bun add -g github:rcarmo/piclaw
+bun add -g github:rcarmo/piclaw#v2.15.2
 ```
+
+Replace `v2.15.2` with the release you want to install. Pin a tag for repeatable installs; `main` may contain packaging or dependency changes between releases.
 
 This is the intended **Docker-free** install path for people who want the
 packaged PiClaw CLI and web assets without building from source manually.
@@ -26,8 +28,8 @@ For maintainer-facing placement rules inside the repo, see
 ## What happens at install time
 
 Repo installs are expected to include the vendored Draw.io editor and the other
-bundled runtime assets directly in the package tree, so a normal
-`bun add -g github:rcarmo/piclaw` install should not need a Draw.io download at
+bundled runtime assets directly in the package tree, so a tagged
+`bun add -g github:rcarmo/piclaw#<version>` install should not need a Draw.io download at
 install time — including on Windows.
 
 A small `postinstall` repair step still runs automatically after `bun add`, but

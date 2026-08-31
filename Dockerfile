@@ -62,7 +62,6 @@ WORKDIR /home/agent
 RUN /tmp/install-agent-runtime.sh
 
 COPY --chown=agent:agent package.json bun.lock README.md LICENSE BUN_VERSION RESTIC_VERSION /home/agent/piclaw/
-COPY --chown=agent:agent patches/ /home/agent/piclaw/patches/
 COPY --chown=agent:agent scripts/postinstall.ts /home/agent/piclaw/scripts/postinstall.ts
 COPY --chown=agent:agent scripts/prepare-local-install.ts /home/agent/piclaw/scripts/prepare-local-install.ts
 COPY --chown=agent:agent docs/install-from-repo.md /home/agent/piclaw/docs/install-from-repo.md
