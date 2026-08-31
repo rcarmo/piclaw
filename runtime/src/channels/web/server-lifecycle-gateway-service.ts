@@ -33,6 +33,7 @@ interface TerminalServiceLike {
 }
 
 interface VncServiceLike {
+  prepareTargetReference(targetId: string): Promise<{ ok: boolean; error?: string; missingDependencies?: string[]; platform?: NodeJS.Platform }>;
   resolveOwnerFromRequest(req: Request, targetId: string, allowUnauthenticated?: boolean): VncSocketData | null;
   attachClient(ws: ServerWebSocket<VncSocketData>): void;
   handleMessage(ws: ServerWebSocket<VncSocketData>, message: string | Buffer | Uint8Array): void;
@@ -324,7 +325,7 @@ export class WebServerLifecycleGatewayService {
     await this.workspaceWatcherSyncPromise;
   }
 
-  handleVncWebSocketUpgrade(req: Request, server?: Bun.Server<WebSocketSessionData>): Response | undefined {
+  async handleVncWebSocketUpgrade(req: Request, server?: Bun.Server<WebSocketSessionData>): Promise<Response | undefined> {
     const url = new URL(req.url);
     const targetId = url.searchParams.get("target")?.trim() || "";
     const handoffToken = url.searchParams.get("handoff")?.trim() || "";
@@ -337,6 +338,14 @@ export class WebServerLifecycleGatewayService {
     }
     if (!checkCsrfOrigin(req)) {
       return this.deps.json({ error: "Origin not allowed" }, 403);
+    }
+    const prepared = await this.deps.vncService.prepareTargetReference(targetId);
+    if (!prepared.ok) {
+      return this.deps.json({
+        error: prepared.error || "Unknown or disallowed VNC target",
+        missing_dependencies: prepared.missingDependencies ?? [],
+        platform: prepared.platform ?? process.platform,
+      }, targetId === "cdp-browser" ? 503 : 401);
     }
     const owner = this.deps.vncService.resolveOwnerFromRequest(req, targetId, !authEnabled);
     if (!owner) {

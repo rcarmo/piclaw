@@ -34,6 +34,8 @@ import {
 import { VncRemoteDisplayProtocol } from './remote-display-vnc.js';
 
 export const VNC_TAB_PREFIX = 'piclaw://vnc';
+export const CDP_BROWSER_VNC_TARGET_ID = 'cdp-browser';
+export const CDP_BROWSER_VNC_TAB_PATH = `${VNC_TAB_PREFIX}/${CDP_BROWSER_VNC_TARGET_ID}`;
 export const DEFAULT_DIRECT_VNC_TARGET = Object.freeze({ host: 'localhost', port: '5901' });
 export const VNC_DIRECT_TARGET_STORAGE_KEY = 'piclaw:vnc-direct-target';
 export const MAX_VNC_FRAMEBUFFER_DIMENSION = 8192;
@@ -183,7 +185,7 @@ export function createVncPopoutTransferPayload(targetId?: string | null, passwor
     return payload;
 }
 
-function parseVncTargetFromPath(path?: string): string | null {
+export function parseVncTargetFromPath(path?: string): string | null {
     const raw = String(path || '');
     if (raw === VNC_TAB_PREFIX) return null;
     if (!raw.startsWith(`${VNC_TAB_PREFIX}/`)) return null;
@@ -194,6 +196,10 @@ function parseVncTargetFromPath(path?: string): string | null {
     } catch {
         return suffix;
     }
+}
+
+export function shouldOpenVncTargetDirectly(path?: string): boolean {
+    return parseVncTargetFromPath(path) !== null;
 }
 
 function esc(value) {

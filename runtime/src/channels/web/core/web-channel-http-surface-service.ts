@@ -172,7 +172,7 @@ export class WebChannelHttpSurfaceService {
     return this.channel.terminalVncHttpService.handleTerminalHandoff(req);
   }
 
-  handleVncSession(req: Request): Response {
+  handleVncSession(req: Request): Promise<Response> {
     return this.channel.terminalVncHttpService.handleVncSession(req);
   }
 

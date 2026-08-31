@@ -3,6 +3,7 @@ import { afterEach, expect, test } from 'bun:test';
 import {
   buildDirectVncTargetReference,
   buildVncTabPath,
+  CDP_BROWSER_VNC_TAB_PATH,
   clearVncPagePassword,
   consumeVncPopoutPassword,
   createVncPopoutTransferPayload,
@@ -13,8 +14,10 @@ import {
   isVncFramebufferSizeAllowed,
   loadVncDirectTarget,
   normalizeDirectVncHost,
+  parseVncTargetFromPath,
   prepareDirectVncSelection,
   relocateVncPaneRoot,
+  shouldOpenVncTargetDirectly,
   shouldRetryVncPopoutWithoutHandoff,
   stashVncPopoutPassword,
   VNC_DIRECT_TARGET_STORAGE_KEY,
@@ -23,6 +26,12 @@ import {
 test('buildVncTabPath encodes target ids when present', () => {
   expect(buildVncTabPath()).toBe('piclaw://vnc');
   expect(buildVncTabPath('host:5901')).toBe('piclaw://vnc/host%3A5901');
+  expect(buildVncTabPath('cdp-browser')).toBe(CDP_BROWSER_VNC_TAB_PATH);
+  expect(CDP_BROWSER_VNC_TAB_PATH).toBe('piclaw://vnc/cdp-browser');
+  expect(parseVncTargetFromPath(CDP_BROWSER_VNC_TAB_PATH)).toBe('cdp-browser');
+  expect(parseVncTargetFromPath('piclaw://vnc')).toBeNull();
+  expect(shouldOpenVncTargetDirectly(CDP_BROWSER_VNC_TAB_PATH)).toBe(true);
+  expect(shouldOpenVncTargetDirectly('piclaw://vnc')).toBe(false);
 });
 
 test('direct VNC target formatting preserves defaults, host formats, and integer port validation', () => {

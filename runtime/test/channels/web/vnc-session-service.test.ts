@@ -94,6 +94,89 @@ describe("VncSessionService", () => {
     });
   });
 
+  test("prepares the stable cdp-browser target without enabling generic direct connect", async () => {
+    let prepares = 0;
+    const service = new VncSessionService({
+      allowDirectTargets: false,
+      managedCdpBrowserDesktop: {
+        prepare: async () => {
+          prepares += 1;
+          return {
+            ok: true as const,
+            target: { id: "cdp-browser" as const, label: "CDP Browser" as const, host: "127.0.0.1" as const, port: 5907, readOnly: false as const },
+            cdpPort: 9227,
+            display: 93,
+            reused: prepares > 1,
+          };
+        },
+        shutdown: () => {},
+      },
+    });
+
+    expect(service.resolveTargetReference("cdp-browser")).toBeNull();
+    expect(await service.prepareTargetReference("cdp-browser")).toMatchObject({ ok: true, target: { port: 5907 } });
+    expect(service.resolveTargetReference("cdp-browser")).toMatchObject({ host: "127.0.0.1", port: 5907 });
+    expect(service.getSessionInfo("cdp-browser")).toMatchObject({
+      enabled: true,
+      ws_path: "/vnc/ws",
+      targets: [{ id: "cdp-browser", label: "CDP Browser", readOnly: false }],
+      target: {
+      id: "cdp-browser",
+      label: "CDP Browser",
+      read_only: false,
+      direct_connect: false,
+      managed: true,
+      },
+    });
+    expect(service.isDirectConnectEnabled()).toBe(false);
+  });
+
+  test("an explicitly configured cdp-browser target overrides managed startup", async () => {
+    let managedPrepares = 0;
+    const service = new VncSessionService({
+      allowDirectTargets: false,
+      targets: [{ id: "cdp-browser", label: "Bring-your-own browser", host: "127.0.0.1", port: 5999 }],
+      managedCdpBrowserDesktop: {
+        prepare: async () => {
+          managedPrepares += 1;
+          return { ok: false as const, error: "should not run", missingDependencies: [], platform: "darwin" as const };
+        },
+        shutdown: () => {},
+      },
+    });
+
+    expect(await service.prepareTargetReference("cdp-browser")).toMatchObject({
+      ok: true,
+      target: { label: "Bring-your-own browser", port: 5999 },
+    });
+    expect(service.getTargets()).toEqual([{ id: "cdp-browser", label: "Bring-your-own browser", readOnly: false }]);
+    expect(managedPrepares).toBe(0);
+  });
+
+  test("returns actionable managed-target diagnostics without affecting other VNC targets", async () => {
+    const service = new VncSessionService({
+      allowDirectTargets: false,
+      targets: [{ id: "desk", label: "Desk", host: "10.0.0.1", port: 5901 }],
+      managedCdpBrowserDesktop: {
+        prepare: async () => ({
+          ok: false as const,
+          error: "Missing Chromium and x11vnc. Run /skill:cdp-browser-vnc-setup.",
+          missingDependencies: ["x11vnc", "Chromium, Chrome, or Edge"],
+          platform: "linux" as const,
+        }),
+        shutdown: () => {},
+      },
+    });
+
+    expect(await service.prepareTargetReference("cdp-browser")).toEqual({
+      ok: false,
+      error: "Missing Chromium and x11vnc. Run /skill:cdp-browser-vnc-setup.",
+      missingDependencies: ["x11vnc", "Chromium, Chrome, or Edge"],
+      platform: "linux",
+    });
+    expect(await service.prepareTargetReference("desk")).toMatchObject({ ok: true, target: { id: "desk" } });
+  });
+
   test("times out unreachable VNC targets instead of hanging indefinitely", async () => {
     const socket = new FakeSocket();
     const service = new VncSessionService({

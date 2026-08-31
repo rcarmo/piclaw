@@ -2,9 +2,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 
+import { getWorkspaceDir } from "../../../src/core/config.js";
 import { closeWebSocketQuietly, runCdpCleanup } from "./cdp-cleanup.ts";
 
 export const CDP_PORTS = [9224, 9225, 9226, 9227, 9228, 9229, 9230, 9231, 9232, 9233] as const;
+const MANAGED_CDP_STATE_FILENAME = "managed-desktop.json";
 
 type BrowserLaunch = { command: string; name: string };
 export type MaybeAbortSignal = AbortSignal | null | undefined;
@@ -156,8 +158,25 @@ export async function httpPut(url: string, timeout = 5000, signal?: MaybeAbortSi
   }
 }
 
+export function readManagedCdpPort(workspace = getWorkspaceDir()): number | null {
+  const statePath = path.join(workspace, ".piclaw", "browser", MANAGED_CDP_STATE_FILENAME);
+  try {
+    const parsed = JSON.parse(fs.readFileSync(statePath, "utf8"));
+    const port = Number(parsed?.cdpPort);
+    return parsed?.version === 1 && Number.isInteger(port) && (CDP_PORTS as readonly number[]).includes(port)
+      ? port
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function findCdpPort(signal?: MaybeAbortSignal): Promise<number | null> {
-  for (const port of CDP_PORTS) {
+  const managedPort = readManagedCdpPort();
+  const ports = managedPort === null
+    ? CDP_PORTS
+    : [managedPort, ...CDP_PORTS.filter((port) => port !== managedPort)];
+  for (const port of ports) {
     throwIfAborted(signal);
     try {
       const version = await httpGet(`http://localhost:${port}/json/version`, 2000, signal);

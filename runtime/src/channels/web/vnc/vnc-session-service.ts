@@ -6,6 +6,12 @@ import { getWebRuntimeConfig } from "../../../core/config.js";
 import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
 import { WebSocketTcpBridge } from "../remote-display/websocket-tcp-bridge.js";
 import { getSessionTokenFromRequest } from "../auth/session-auth.js";
+import {
+  MANAGED_CDP_VNC_TARGET_ID,
+  ManagedCdpBrowserDesktop,
+  type ManagedCdpBrowserDesktopOptions,
+  type ManagedCdpBrowserPrepareResult,
+} from "./managed-cdp-browser-desktop.js";
 
 /** Allowlisted or direct-connect VNC target metadata. */
 export interface VncTargetRecord {
@@ -50,7 +56,15 @@ export interface VncSessionServiceOptions {
   handoffTtlMs?: number;
   /** Optional socket factory override for tests or custom transports. */
   createSocket?: (target: VncTargetRecord) => Socket;
+  /** Optional managed CDP browser desktop override for tests. */
+  managedCdpBrowserDesktop?: Pick<ManagedCdpBrowserDesktop, "prepare" | "shutdown">;
+  /** Managed CDP browser desktop construction overrides. */
+  managedCdpBrowserDesktopOptions?: ManagedCdpBrowserDesktopOptions;
 }
+
+export type VncTargetPreparationResult =
+  | { ok: true; target: VncTargetRecord }
+  | { ok: false; error: string; missingDependencies: string[]; platform: NodeJS.Platform };
 
 const FALLBACK_VNC_OWNER = {
   token: "web-vnc-local-default",
@@ -197,6 +211,8 @@ export class VncSessionService {
   private readonly connectTimeoutMs: number;
   private readonly handoffTtlMs: number;
   private readonly bridge: WebSocketTcpBridge<VncSocketData, VncTargetRecord>;
+  private readonly managedCdpBrowserDesktop: Pick<ManagedCdpBrowserDesktop, "prepare" | "shutdown">;
+  private managedCdpBrowserTarget: VncTargetRecord | null = null;
 
   /**
    * Create a VNC websocket/session bridge service.
@@ -218,6 +234,8 @@ export class VncSessionService {
     this.handoffTtlMs = Number.isFinite(options.handoffTtlMs)
       ? Math.max(1, Number(options.handoffTtlMs))
       : DEFAULT_VNC_HANDOFF_TTL_MS;
+    this.managedCdpBrowserDesktop = options.managedCdpBrowserDesktop
+      ?? new ManagedCdpBrowserDesktop(options.managedCdpBrowserDesktopOptions);
     this.bridge = new WebSocketTcpBridge<VncSocketData, VncTargetRecord>({
       createSocket: (target) => this.createSocketWithHandshakeTimeout(target),
       onConnect: (ws, target) => {
@@ -292,7 +310,9 @@ export class VncSessionService {
    * @returns Allowlisted targets without host/port details.
    */
   getTargets(): Array<Pick<VncTargetRecord, "id" | "label" | "readOnly">> {
-    return Array.from(this.targets.values()).map((target) => ({
+    const targets = Array.from(this.targets.values());
+    if (this.managedCdpBrowserTarget && !this.targets.has(MANAGED_CDP_VNC_TARGET_ID)) targets.push(this.managedCdpBrowserTarget);
+    return targets.map((target) => ({
       id: target.id,
       label: target.label,
       readOnly: Boolean(target.readOnly),
@@ -306,7 +326,31 @@ export class VncSessionService {
    */
   getTarget(targetId: string): VncTargetRecord | null {
     const normalized = sanitizeId(targetId);
-    return this.targets.get(normalized) || null;
+    const configured = this.targets.get(normalized);
+    if (configured) return configured;
+    if (normalized === MANAGED_CDP_VNC_TARGET_ID) return this.managedCdpBrowserTarget;
+    return null;
+  }
+
+  /** Prepare a stable target before session metadata or websocket ownership is resolved. */
+  async prepareTargetReference(targetRef: string): Promise<VncTargetPreparationResult> {
+    const normalized = sanitizeId(targetRef);
+    const configured = this.targets.get(normalized);
+    if (configured) return { ok: true, target: configured };
+    if (normalized !== MANAGED_CDP_VNC_TARGET_ID) {
+      const target = this.resolveTargetReference(targetRef);
+      return target
+        ? { ok: true, target }
+        : { ok: false, error: "Unknown or disallowed VNC target", missingDependencies: [], platform: process.platform };
+    }
+
+    const prepared: ManagedCdpBrowserPrepareResult = await this.managedCdpBrowserDesktop.prepare();
+    if (!prepared.ok) {
+      this.managedCdpBrowserTarget = null;
+      return prepared;
+    }
+    this.managedCdpBrowserTarget = prepared.target;
+    return { ok: true, target: prepared.target };
   }
 
   /**
@@ -382,9 +426,10 @@ export class VncSessionService {
   getSessionInfo(targetRef?: string | null) {
     const allowDirectTargets = this.getAllowDirectTargets();
     const target = targetRef ? this.resolveTargetReference(targetRef) : null;
-    const isDirectTarget = Boolean(target && !this.targets.has(target.id));
+    const isManagedTarget = target?.id === MANAGED_CDP_VNC_TARGET_ID;
+    const isDirectTarget = Boolean(target && !isManagedTarget && !this.targets.has(target.id));
     return {
-      enabled: this.targets.size > 0 || allowDirectTargets,
+      enabled: this.targets.size > 0 || allowDirectTargets || Boolean(this.managedCdpBrowserTarget),
       transport: "websocket",
       ws_path: "/vnc/ws",
       renderer: "placeholder",
@@ -397,6 +442,7 @@ export class VncSessionService {
           label: target.label,
           read_only: Boolean(target.readOnly),
           direct_connect: isDirectTarget,
+          ...(isManagedTarget ? { managed: true } : {}),
         },
       } : {}),
     };
@@ -464,5 +510,7 @@ export class VncSessionService {
    */
   shutdown(): void {
     this.bridge.shutdown();
+    this.managedCdpBrowserTarget = null;
+    this.managedCdpBrowserDesktop.shutdown();
   }
 }

@@ -102,6 +102,9 @@ function createLazyVncService(factory: () => VncSessionService): VncSessionServi
     return instance;
   };
   return {
+    prepareTargetReference(targetRef: string) {
+      return get().prepareTargetReference(targetRef);
+    },
     resolveTargetReference(targetRef: string) {
       return get().resolveTargetReference(targetRef);
     },

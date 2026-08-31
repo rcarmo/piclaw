@@ -29,6 +29,7 @@ function createFixture(overrides: Partial<WebTerminalVncHttpServiceDeps> = {}) {
     terminalResolveCalls: [] as boolean[],
     terminalSessionInfoOwners: [] as Array<{ token: string; userId: string }>,
     terminalHandoffCalls: [] as boolean[],
+    vncPrepareCalls: [] as string[],
     vncResolveCalls: [] as string[],
     vncSessionInfoCalls: [] as Array<string | null | undefined>,
     vncHandoffCalls: [] as Array<{ targetId: string; allowUnauthenticated: boolean }>,
@@ -69,6 +70,12 @@ function createFixture(overrides: Partial<WebTerminalVncHttpServiceDeps> = {}) {
       },
     },
     vncService: {
+      prepareTargetReference: async (targetId) => {
+        state.vncPrepareCalls.push(targetId);
+        return targetId === vncTarget.id
+          ? { ok: true, target: vncTarget }
+          : { ok: false, error: "Unknown or disallowed VNC target", missingDependencies: [], platform: "linux" as const };
+      },
       resolveTargetReference: (targetId) => {
         state.vncResolveCalls.push(targetId);
         return targetId === vncTarget.id ? vncTarget : null;
@@ -192,11 +199,12 @@ describe("web terminal/VNC HTTP service", () => {
         isAuthenticated: () => false,
       },
     });
-    expect(unauthenticated.service.handleVncSession(createRequest("/vnc/session?target=desk")).status).toBe(401);
+    expect((await unauthenticated.service.handleVncSession(createRequest("/vnc/session?target=desk"))).status).toBe(401);
+    expect(unauthenticated.state.vncPrepareCalls).toEqual([]);
     expect(unauthenticated.state.vncResolveCalls).toEqual([]);
 
     const unknownTarget = createFixture();
-    const unknownResponse = unknownTarget.service.handleVncSession(createRequest("/vnc/session?target=unknown"));
+    const unknownResponse = await unknownTarget.service.handleVncSession(createRequest("/vnc/session?target=unknown"));
     expect(unknownResponse.status).toBe(404);
     expect(await unknownResponse.json()).toEqual({
       error: "Unknown or disallowed VNC target",
@@ -205,11 +213,12 @@ describe("web terminal/VNC HTTP service", () => {
       ws_path: "/vnc/ws",
       targets: [{ id: "desk", label: "Desk", readOnly: false }],
     });
-    expect(unknownTarget.state.vncResolveCalls).toEqual(["unknown"]);
+    expect(unknownTarget.state.vncPrepareCalls).toEqual(["unknown"]);
+    expect(unknownTarget.state.vncResolveCalls).toEqual([]);
     expect(unknownTarget.state.vncSessionInfoCalls).toEqual([undefined]);
 
     const fixture = createFixture();
-    const response = fixture.service.handleVncSession(createRequest("/vnc/session?target=desk"));
+    const response = await fixture.service.handleVncSession(createRequest("/vnc/session?target=desk"));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       enabled: true,
@@ -219,8 +228,41 @@ describe("web terminal/VNC HTTP service", () => {
       target: { id: "desk", label: "desk", read_only: false, direct_connect: false },
     });
     expect(fixture.state.authChecks).toEqual(["enabled"]);
-    expect(fixture.state.vncResolveCalls).toEqual(["desk"]);
+    expect(fixture.state.vncPrepareCalls).toEqual(["desk"]);
+    expect(fixture.state.vncResolveCalls).toEqual([]);
     expect(fixture.state.vncSessionInfoCalls).toEqual(["desk"]);
+  });
+
+  test("managed CDP browser session returns actionable diagnostics after authentication", async () => {
+    const fixture = createFixture({
+      vncService: {
+        prepareTargetReference: async (targetId) => {
+          fixture.state.vncPrepareCalls.push(targetId);
+          return {
+            ok: false,
+            error: "Managed CDP browser view is unavailable. Missing: x11vnc, xauth, Chromium, Chrome, or Edge. Run /skill:cdp-browser-vnc-setup for setup and bring-your-own guidance.",
+            missingDependencies: ["x11vnc", "xauth", "Chromium, Chrome, or Edge"],
+            platform: "linux" as const,
+          };
+        },
+        resolveTargetReference: () => null,
+        getSessionInfo: () => ({ enabled: false, transport: "websocket", ws_path: "/vnc/ws", targets: [] }),
+        createHandoffFromRequest: () => null,
+      },
+    });
+
+    const response = await fixture.service.handleVncSession(createRequest("/vnc/session?target=cdp-browser"));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      error: "Managed CDP browser view is unavailable. Missing: x11vnc, xauth, Chromium, Chrome, or Edge. Run /skill:cdp-browser-vnc-setup for setup and bring-your-own guidance.",
+      missing_dependencies: ["x11vnc", "xauth", "Chromium, Chrome, or Edge"],
+      platform: "linux",
+      enabled: false,
+      transport: "websocket",
+      ws_path: "/vnc/ws",
+      targets: [],
+    });
+    expect(fixture.state.vncPrepareCalls).toEqual(["cdp-browser"]);
   });
 
   test("VNC handoff preserves auth, CSRF, target validation, and transfer behavior", async () => {
@@ -254,11 +296,18 @@ describe("web terminal/VNC HTTP service", () => {
       ws_path: "/vnc/ws",
       targets: [{ id: "desk", label: "Desk", readOnly: false }],
     });
-    expect(unknownTarget.state.vncResolveCalls).toEqual(["unknown"]);
+    expect(unknownTarget.state.vncPrepareCalls).toEqual(["unknown"]);
+    expect(unknownTarget.state.vncResolveCalls).toEqual([]);
     expect(unknownTarget.state.vncHandoffCalls).toEqual([]);
 
     const noLiveSession = createFixture({
       vncService: {
+        prepareTargetReference: async (targetId) => {
+          noLiveSession.state.vncPrepareCalls.push(targetId);
+          return targetId === noLiveSession.vncTarget.id
+            ? { ok: true, target: noLiveSession.vncTarget }
+            : { ok: false, error: "Unknown or disallowed VNC target", missingDependencies: [], platform: "linux" as const };
+        },
         resolveTargetReference: (targetId) => {
           noLiveSession.state.vncResolveCalls.push(targetId);
           return targetId === noLiveSession.vncTarget.id ? noLiveSession.vncTarget : null;
@@ -287,7 +336,8 @@ describe("web terminal/VNC HTTP service", () => {
     expect(await response.json()).toEqual({ ok: true, handoff: fixture.handoff });
     expect(fixture.state.authChecks).toEqual(["enabled"]);
     expect(fixture.state.csrfChecks).toEqual(["/vnc/handoff"]);
-    expect(fixture.state.vncResolveCalls).toEqual(["desk"]);
+    expect(fixture.state.vncPrepareCalls).toEqual(["desk"]);
+    expect(fixture.state.vncResolveCalls).toEqual([]);
     expect(fixture.state.vncHandoffCalls).toEqual([{ targetId: "desk", allowUnauthenticated: true }]);
   });
 });

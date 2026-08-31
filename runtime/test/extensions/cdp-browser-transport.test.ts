@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { cdpSendWithTimeout, findCdpPort, getTargets, httpGet, httpPut } from "../../extensions/browser/cdp-browser/cdp.ts";
+import { cdpSendWithTimeout, findCdpPort, getTargets, httpGet, httpPut, readManagedCdpPort } from "../../extensions/browser/cdp-browser/cdp.ts";
 
 class FakeWebSocket {
   sent: string[] = [];
@@ -107,6 +110,36 @@ test("findCdpPort skips non-JSON ports instead of accepting them as CDP", async 
     await expect(findCdpPort()).resolves.toBe(9225);
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+test("findCdpPort prefers a live managed desktop and falls back from stale state", async () => {
+  const root = mkdtempSync(join(tmpdir(), "piclaw-cdp-state-"));
+  const stateDir = join(root, ".piclaw", "browser");
+  mkdirSync(stateDir, { recursive: true });
+  const previousWorkspace = process.env.PICLAW_WORKSPACE;
+  const originalFetch = globalThis.fetch;
+  process.env.PICLAW_WORKSPACE = root;
+  try {
+    writeFileSync(join(stateDir, "managed-desktop.json"), JSON.stringify({ version: 1, cdpPort: 9228 }));
+    const requests: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requests.push(url);
+      if (url.includes(":9228/")) return new Response(JSON.stringify({ Browser: "Managed" }));
+      throw new Error(`unexpected url ${url}`);
+    }) as typeof fetch;
+    expect(readManagedCdpPort(root)).toBe(9228);
+    await expect(findCdpPort()).resolves.toBe(9228);
+    expect(requests).toHaveLength(1);
+
+    writeFileSync(join(stateDir, "managed-desktop.json"), JSON.stringify({ version: 1, cdpPort: 9999 }));
+    expect(readManagedCdpPort(root)).toBeNull();
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousWorkspace === undefined) delete process.env.PICLAW_WORKSPACE;
+    else process.env.PICLAW_WORKSPACE = previousWorkspace;
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

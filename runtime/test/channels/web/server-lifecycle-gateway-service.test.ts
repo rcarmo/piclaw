@@ -35,6 +35,7 @@ function createFixture(overrides: Partial<WebServerLifecycleGatewayDeps> = {}) {
     purgeCalls: [] as Array<{ nowIso: string; limit: number }>,
     authChecks: [] as string[],
     terminalResolveCalls: [] as boolean[],
+    vncPrepareCalls: [] as string[],
     vncResolveCalls: [] as Array<{ targetId: string; allowUnauthenticated: boolean }>,
     terminalShutdownCalls: 0,
     vncShutdownCalls: 0,
@@ -123,6 +124,10 @@ function createFixture(overrides: Partial<WebServerLifecycleGatewayDeps> = {}) {
       },
     },
     vncService: {
+      prepareTargetReference: async (targetId) => {
+        state.vncPrepareCalls.push(targetId);
+        return { ok: true };
+      },
       resolveOwnerFromRequest: (_req, targetId, allowUnauthenticated = false) => {
         state.vncResolveCalls.push({ targetId, allowUnauthenticated });
         return { ...vncOwner, targetRef: targetId };
@@ -263,7 +268,7 @@ describe("web server lifecycle gateway service", () => {
   test("vnc websocket upgrade preserves target, auth, csrf, and handoff behavior", async () => {
     const fixture = createFixture();
 
-    const missingTarget = fixture.service.handleVncWebSocketUpgrade(createRequest("/vnc/ws"), fixture.server);
+    const missingTarget = await fixture.service.handleVncWebSocketUpgrade(createRequest("/vnc/ws"), fixture.server);
     expect(missingTarget?.status).toBe(400);
 
     const unauthenticated = createFixture({
@@ -272,10 +277,11 @@ describe("web server lifecycle gateway service", () => {
         isAuthenticated: () => false,
       },
     });
-    expect(unauthenticated.service.handleVncWebSocketUpgrade(createRequest("/vnc/ws?target=desk"), unauthenticated.server)?.status).toBe(401);
+    expect((await unauthenticated.service.handleVncWebSocketUpgrade(createRequest("/vnc/ws?target=desk"), unauthenticated.server))?.status).toBe(401);
+    expect(unauthenticated.state.vncPrepareCalls).toEqual([]);
 
     const csrfBlocked = createFixture();
-    const csrfResponse = csrfBlocked.service.handleVncWebSocketUpgrade(
+    const csrfResponse = await csrfBlocked.service.handleVncWebSocketUpgrade(
       createRequest("/vnc/ws?target=desk", { headers: { origin: "https://evil.example", host: "localhost" } }),
       csrfBlocked.server,
     );
@@ -283,6 +289,7 @@ describe("web server lifecycle gateway service", () => {
 
     const noOwner = createFixture({
       vncService: {
+        prepareTargetReference: async () => ({ ok: true }),
         resolveOwnerFromRequest: () => null,
         attachClient: () => {},
         handleMessage: () => {},
@@ -290,10 +297,36 @@ describe("web server lifecycle gateway service", () => {
         shutdown: () => {},
       },
     });
-    expect(noOwner.service.handleVncWebSocketUpgrade(createRequest("/vnc/ws?target=desk"), noOwner.server)?.status).toBe(401);
+    expect((await noOwner.service.handleVncWebSocketUpgrade(createRequest("/vnc/ws?target=desk"), noOwner.server))?.status).toBe(401);
+
+    const managedUnavailable = createFixture({
+      vncService: {
+        prepareTargetReference: async (targetId) => {
+          managedUnavailable.state.vncPrepareCalls.push(targetId);
+          return { ok: false, error: "Missing Chromium", missingDependencies: ["Chromium"], platform: "linux" as const };
+        },
+        resolveOwnerFromRequest: () => null,
+        attachClient: () => {},
+        handleMessage: () => {},
+        detachClient: () => {},
+        shutdown: () => {},
+      },
+    });
+    const managedResponse = await managedUnavailable.service.handleVncWebSocketUpgrade(
+      createRequest("/vnc/ws?target=cdp-browser"),
+      managedUnavailable.server,
+    );
+    expect(managedResponse?.status).toBe(503);
+    expect(await managedResponse?.json()).toEqual({
+      error: "Missing Chromium",
+      missing_dependencies: ["Chromium"],
+      platform: "linux",
+    });
+    expect(managedUnavailable.state.vncPrepareCalls).toEqual(["cdp-browser"]);
 
     const okResponse = await fixture.service.handleFetch(createRequest("/vnc/ws?target=desk&handoff=token-7"), fixture.server);
     expect(okResponse).toBeUndefined();
+    expect(fixture.state.vncPrepareCalls).toEqual(["desk"]);
     expect(fixture.state.vncResolveCalls).toEqual([{ targetId: "desk", allowUnauthenticated: true }]);
     expect(fixture.state.upgradeCalls[0]?.data).toEqual({
       ...fixture.vncOwner,

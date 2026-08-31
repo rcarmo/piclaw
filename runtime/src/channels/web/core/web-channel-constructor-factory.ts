@@ -418,7 +418,7 @@ export function createWebChannelConstructorFactory(
     async handleTerminalHandoff(req: Request): Promise<Response> {
       return await getTerminalVncHttpService().handleTerminalHandoff(req);
     },
-    handleVncSession(req: Request): Response {
+    handleVncSession(req: Request): Promise<Response> {
       return getTerminalVncHttpService().handleVncSession(req);
     },
     async handleVncHandoff(req: Request): Promise<Response> {

@@ -37,7 +37,16 @@ interface VncHandoffLike {
   expires_at: string;
 }
 
+interface VncTargetPreparationLike {
+  ok: boolean;
+  target?: VncTargetLike;
+  error?: string;
+  missingDependencies?: string[];
+  platform?: NodeJS.Platform;
+}
+
 interface VncServiceLike {
+  prepareTargetReference(targetId: string): Promise<VncTargetPreparationLike>;
   resolveTargetReference(targetId: string): VncTargetLike | null;
   getSessionInfo(targetRef?: string | null): JsonObject;
   createHandoffFromRequest(req: Request, targetRef: string, allowUnauthenticated?: boolean): VncHandoffLike | null;
@@ -113,15 +122,26 @@ export class WebTerminalVncHttpService {
     return this.deps.json({ ok: true, handoff }, 200);
   }
 
-  handleVncSession(req: Request): Response {
+  async handleVncSession(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const targetId = url.searchParams.get("target")?.trim() || "";
     const authEnabled = this.deps.authGateway.isAuthEnabled();
     if (authEnabled && !this.deps.authGateway.isAuthenticated(req)) {
       return this.deps.json({ error: "Unauthorized" }, 401);
     }
-    if (targetId && !this.deps.vncService.resolveTargetReference(targetId)) {
-      return this.deps.json({ error: "Unknown or disallowed VNC target", ...this.deps.vncService.getSessionInfo() }, 404);
+    if (targetId) {
+      const prepared = await this.deps.vncService.prepareTargetReference(targetId);
+      if (!prepared.ok) {
+        const managedUnavailable = targetId === "cdp-browser";
+        return this.deps.json({
+          error: prepared.error || "Unknown or disallowed VNC target",
+          ...(managedUnavailable ? {
+            missing_dependencies: prepared.missingDependencies ?? [],
+            platform: prepared.platform ?? process.platform,
+          } : {}),
+          ...this.deps.vncService.getSessionInfo(),
+        }, managedUnavailable ? 503 : 404);
+      }
     }
     return this.deps.json(this.deps.vncService.getSessionInfo(targetId || null), 200);
   }
@@ -139,8 +159,17 @@ export class WebTerminalVncHttpService {
     if (!this.checkCsrfOrigin(req)) {
       return this.deps.json({ error: "Origin not allowed" }, 403);
     }
-    if (!this.deps.vncService.resolveTargetReference(targetId)) {
-      return this.deps.json({ error: "Unknown or disallowed VNC target", ...this.deps.vncService.getSessionInfo() }, 404);
+    const prepared = await this.deps.vncService.prepareTargetReference(targetId);
+    if (!prepared.ok) {
+      const managedUnavailable = targetId === "cdp-browser";
+      return this.deps.json({
+        error: prepared.error || "Unknown or disallowed VNC target",
+        ...(managedUnavailable ? {
+          missing_dependencies: prepared.missingDependencies ?? [],
+          platform: prepared.platform ?? process.platform,
+        } : {}),
+        ...this.deps.vncService.getSessionInfo(),
+      }, managedUnavailable ? 503 : 404);
     }
     const handoff = this.deps.vncService.createHandoffFromRequest(req, targetId, !authEnabled);
     if (!handoff) {

@@ -37,6 +37,9 @@ console.log("ok");\n`;
     const entries = loadScriptCatalogEntries({ scope: "packaged", role: "all" });
     expect(entries.length).toBeGreaterThan(3);
     expect(entries.some((entry) => entry.displayPath.endsWith("runtime/skills/operator/token-chart/token-chart.ts"))).toBe(true);
+    expect(entries.some((entry) => entry.displayPath.endsWith("runtime/skills/integrations/cdp-browser-vnc-setup/check.ts")
+      && entry.summary === "Check managed CDP browser VNC prerequisites."
+      && entry.kind === "read-only")).toBe(true);
     expect(entries.some((entry) => entry.displayPath.includes("runtime/skills/builtin/remote-peer/"))).toBe(false);
     expect(entries.some((entry) => entry.displayPath.includes("runtime/scripts/check-stale-dist.ts"))).toBe(false);
   });
