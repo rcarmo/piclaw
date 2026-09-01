@@ -1,6 +1,6 @@
 # Alternatives and migration
 
-The evidence-based comparison, selected alternative, nine-phase reversible migration, shadow parity metrics, validation matrix and installed-service gates are in [`evidence/alternatives-and-migration.md`](evidence/alternatives-and-migration.md). The selected execution design is the authoritative Earendil Harness v3 [`harness.md`](https://github.com/earendil-works/pi/blob/5f7195c51eac43cdf329f813a7ef020d7bd74527/packages/agent/docs/harness.md). Released `0.84.1` remains historical baseline evidence, while the current Piclaw loop selects `0.84.4`. Harness-v3 production selection still waits for one coherent tagged implementation.
+The evidence-based comparison, selected alternative, nine-phase reversible migration, shadow parity metrics, validation matrix and installed-service gates are in [`evidence/alternatives-and-migration.md`](evidence/alternatives-and-migration.md). The current execution design is Earendil `dev` [`harness.md`](https://github.com/earendil-works/pi/blob/d14d6b22327d545d6a253f932165b63e48d7f9c8/packages/agent/docs/harness.md). Released `0.84.1` remains historical baseline evidence, while the current Piclaw loop selects `0.84.4`. Harness-v3 production selection still waits for one coherent release candidate or approved source and the documented gates.
 
 ## Alternatives to assess
 

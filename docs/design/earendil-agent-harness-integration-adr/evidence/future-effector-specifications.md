@@ -489,7 +489,7 @@ interface ServiceWorkStore {
 | `claimNext` | Compare the expected frontier; claim the first eligible source once; create or return one service operation; increment its version |
 | `appendIntent` | Verify exact operation/version and append one immutable service intent; update the rebuildable current projection |
 | `acceptCancellation` | Persist the first exact-operation cancellation and increment the operation version; repeated equal cancellation returns it; wrong owner is a no-op |
-| `bindHarness` | Store exact `sessionId`, lane, returned Earendil `runId` in `harnessOperationId`, and caller-supplied nonnegative `watchGeneration`; any changed binding component is an owner conflict |
+| `bindHarness` | Store exact `sessionId`, lane and returned Earendil `operationId` in `harnessOperationId`, plus caller-supplied nonnegative `watchGeneration`; any changed binding component is an owner conflict |
 | `recordQueuedInput` | Distinguish accepted-but-undelivered, queued in Earendil and consumed/disposed source states |
 
 `acceptCancellation` records Piclaw authority only. A future coordinator calls direct `lane.abort()` after this mutation succeeds.
@@ -1330,16 +1330,16 @@ Prompts, tool arguments/results, media bytes and secret values are prohibited at
 
 ### EB-05 — harness, session, storage and events
 
-Harness production implementation against historical `0.84.1`, current-loop `0.84.4` or draft PR #8076 is forbidden. The latent WP-3B suite invokes the public `0.84.4` scaffold only to record exact unsupported outcomes. PR #8076 is storage/primitives evidence and has no selected runtime. The first coherent tagged Harness-v3 implementation must provide:
+Harness production implementation against historical `0.84.1`, the current-loop `0.84.4` scaffold or unselected `dev` is forbidden. The latent WP-3B suite invokes public `0.84.4` only to record exact unsupported outcomes. Exact `dev`/draft PR #8963 at `d14d6b22327d545d6a253f932165b63e48d7f9c8` is positive source evidence with public lane drive, but is not a production dependency. One coherent release candidate or approved source must provide:
 
 | Surface | Selection requirement | Piclaw preparation |
 |---|---|---|
 | `AgentHarness` / `AgentLane` | Exported concrete `AgentHarnessConstructor` plus implemented prompt, queue, abort, resume, compact, navigation and close | HC semantic cases and exact service correlation expectations |
-| `Storage` / `SessionRepo` | Memory conformance plus one durable backend, total migrations and precise-rewrite fencing | Backend fault, rewrite race, backup, corruption and Bun acceptance cases |
-| Restore | Total open-operation state, process-local task loss and `lane.lastResult` | PC reconciliation table and every intent/admission/settlement crash case |
-| Tools/context | Generic contextual tools and persisted `safe`/`never` semantics | EB-02 and EF-H01 specifications |
-| Hooks/events | Typed hooks/events and snapshot-first buffered watch | EB-03 and EF-S08 projection cases |
-| Manual drive | One selected action/effect at a time | HC manual/automatic equivalence cases |
+| `Storage` / `SessionRepo` | Memory/JSONL conformance plus selected durable backend, total migration, host ownership and required forks | Backend fault, replacement, fork, backup, corruption and Bun acceptance cases |
+| Restore | Total open-operation state, lane-owned Drive loss and immutable `OperationResultRecord` lookup | PC reconciliation table and every intent/admission/settlement crash case |
+| Tools/context | Context-last generic tools, stable invocation identity, memos/checkpoints and persisted `safe`/`never` semantics | EB-02 and EF-H01 specifications |
+| Hooks/events | Typed hooks/events and snapshot-first buffered lane watch | EB-03 and EF-S08 projection cases; explicitly exclude or implement session watch |
+| Deterministic drive | Public drive under gated storage/effects | HC gated/uninterrupted equivalence cases |
 | Errors/results | Exported tagged expected errors and thrown fault boundary | No Piclaw renaming or second taxonomy |
 
 When these gates pass, Piclaw calls the selected contracts directly. EF-S01–EF-S08 and EF-H01 supply the Piclaw side of boundary tests.
@@ -1363,9 +1363,9 @@ The compatibility matrix is provisional:
 | EB-04 telemetry | Pass | Unsupported |
 | EB-05 harness, session, storage and events | Fail | Unsupported |
 
-The compile fixture pins seven gaps: missing `AgentHarnessConstructor`, `HarnessEventBus`, `Storage`, `Transaction` and `UsageRow`; non-generic `AgentHarnessOptions`; and the incompatible `AgentHarnessTool<PiclawToolContext>`/released-v2 `HarnessTool` boundary. Package-root `createReadTool`, `createWriteTool`, `createEditTool` and `createBashTool` assignments compile directly.
+The released-`0.84.4` compile fixture pins seven gaps: missing `AgentHarnessConstructor`, `HarnessEventBus`, `Storage`, `Transaction` and `UsageRow`; non-generic `AgentHarnessOptions`; and the incompatible `AgentHarnessTool<PiclawToolContext>`/released-v2 `HarnessTool` boundary. These are negative released-package findings, not statements about current `dev`. Package-root `createReadTool`, `createWriteTool`, `createEditTool` and `createBashTool` assignments compile directly.
 
-HC-001–HC-020 all have status `unsupported`. The direct public `0.84.4` probe observes 25 exact `HarnessNotImplemented.operation` values. Wrong operation names, arbitrary throws and unexpected success are failures. No fixture supplies Harness execution semantics, storage, usage, manual driving or an event bus.
+HC-001–HC-020 all have status `unsupported` against released `0.84.4`. The direct public probe observes 25 exact `HarnessNotImplemented.operation` values. Wrong operation names, arbitrary throws and unexpected success are failures. The released-package suite supplies no Harness execution semantics, storage, usage, deterministic drive or event bus.
 
 The exported `0.84.4` backend catalogue passes 30 cases on Memory and 30 on JSONL; the JSONL fixture supplies the backend-required `cwd` to `create()` and `fork()`. The suite computes the current catalogue digest from executed case IDs and retains the independently audited result digest. SQLite remains unsupported under Bun because the backend requires unavailable `node:sqlite`; the SQLite package is not installed. Historical `0.84.1` coordinates, fingerprints and 29-case catalogue/result evidence remain pinned without executing that release.
 

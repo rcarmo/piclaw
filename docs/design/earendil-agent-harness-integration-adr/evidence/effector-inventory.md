@@ -15,13 +15,13 @@ An effector performs one external query or mutation from an explicit request. It
 | EF-005 | `db/connection.ts:getDb`, migration and transaction mechanism | Reusable | Storage mechanism, no agent lifecycle decision required | Use for Piclaw operation ledger/outbox migrations |
 | EF-006 | `AgentQueue` | Reusable only as dispatcher | Serialises and retries closures but is not durable acceptance and contains generic retry policy | Keep as idempotent wake/worker mechanism; derive tasks from durable pending work |
 | EF-007 | `AgentPool` | Reject | Central current orchestrator: session cache, run/recovery, controls, tools, branches and status | Replace with Piclaw service coordinator plus Earendil harness registry |
-| EF-008 | `run-agent-orchestrator.ts` | Reject | Implements prompt lifecycle, timers, tool policy, compaction, retries, status and cleanup | Harness v3 interpreter, process-local task and `EffectGate` own execution/admission; Piclaw supplies service policy and projects events |
-| EF-009 | `run-agent-recovery-phase.ts` | Reject | Decides recovery strategy, budgets, compaction, rotation, tool suppression and terminal outcome | Adopt Harness v3 total `op.state`, intent/effect/settlement and public resume semantics; retain only Piclaw service policy |
+| EF-008 | `run-agent-orchestrator.ts` | Reject | Implements prompt lifecycle, timers, tool policy, compaction, retries, status and cleanup | Harness v3 interpreter, lane-owned Drive and `Gate.admit()` own execution/admission; Piclaw supplies service policy and projects events |
+| EF-009 | `run-agent-recovery-phase.ts` | Reject | Decides recovery strategy, budgets, compaction, rotation, tool suppression and terminal outcome | Adopt Harness v3 flat operation state, intent/effect/settlement and public resume semantics; retain only Piclaw service policy |
 | EF-010 | `run-agent-attempt-finalization.ts` | Reject | Classifies provider/tool facts into terminal/recovery outcomes | Harness contract returns typed outcome; Piclaw maps to service disposition without prose classification |
 | EF-011 | `agent-pool/compaction.ts` | Split | Estimation and product thresholds may be policy; execution, timeout, single-flight and recovery are orchestration | Earendil compaction operation; Piclaw may provide threshold settings and UI projection |
 | EF-012 | `session-rotation.ts`, branch seeding | Replace with direct Harness v3 session operations | Mixes archive/session creation with fallback and recovery policy | Use selected v3 `SessionRepo`, lanes, navigation/fork; keep only Piclaw chat correlation/archive policy |
 | EF-013 | `agent-pool/session-manager.ts` | Reject | Cache, creation, branch realization, model restore, side session sync, eviction and shutdown policy | Harness v3 registry/session lifetime and selected backend own execution resources; Piclaw retains service correlation/cache policy only where needed |
-| EF-014 | `agent-pool/session-persistence.ts` and JSONL bridge | Replace with coherent Harness v3 backend | Targets legacy `SessionManager`/v2 shape | Adopt selected tagged v3 `Storage`/`SessionRepo`; require unchanged conformance, total migration and precise-rewrite fencing |
+| EF-014 | `agent-pool/session-persistence.ts` and JSONL bridge | Replace with coherent Harness v3 backend | Targets legacy `SessionManager`/v2 shape | Adopt selected v3 `Storage`/`SessionRepo`; require unchanged conformance, selected migration, host ownership and fork tests |
 | EF-015 | `agent-pool/sqlite-session-store.ts` prototype | Evidence only | Non-shipping schema is incompatible with Harness v3's planned per-session storage/register model | Do not adopt; use benchmark/fault evidence when selecting the v3 SQLite slice |
 | EF-016 | `createTrackedBashOperations` | Replace with direct Harness v3 environment/tool composition | Legacy `BashOperations` overlaps Earendil `ExecutionEnv`, `createBashTool` and built-in truncation/update semantics | Implement Piclaw requirements in `ExecutionEnv`; supply it through v3 `toolContext`; use public `createBashTool`; set `replay: "never"` |
 | EF-017 | read/write/edit tools | Replace legacy definitions with public Earendil tools | Earendil already implements contextual tools, `ExecutionEnv`, path handling, mutation queue, truncation and result details | Use selected Harness v3 `AgentHarnessTool<PiclawToolContext>` definitions directly with explicit replay metadata |
@@ -93,7 +93,7 @@ const abort: AbortResult = await lane.abort();
 const resumed: ResumeResult = await lane.resume();
 ```
 
-Piclaw stores correlation beside the actual harness/lane objects and verifies expected `operationId`/`runId` before calling them. Expected rejection remains Earendil's tagged error union.
+Piclaw stores correlation beside the actual harness/lane objects and verifies the expected Piclaw and Earendil operation IDs before calling them. Expected rejection remains Earendil's tagged error union.
 
 ### Earendil tool and environment contracts
 
@@ -103,7 +103,7 @@ Prefer Earendil's public `createReadTool`, `createWriteTool`, `createEditTool` a
 
 ### Projection boundary
 
-A future projection coordinator narrows selected Earendil snapshots/events, verifies `(chatJid, operationId, runId, generation, receiptSeq)`, and builds allowlisted Piclaw DTOs. The Piclaw-owned `AgentProjectionSink` only transports those DTOs. Raw tool arguments/results are excluded by default.
+A future projection coordinator narrows selected Earendil snapshots/events, verifies `(chatJid, piclawOperationId, harnessOperationId, generation, receiptSeq)`, and builds allowlisted Piclaw DTOs. The Piclaw-owned `AgentProjectionSink` only transports those DTOs. Raw tool arguments/results are excluded by default.
 
 ## Fake requirements
 
@@ -131,7 +131,7 @@ Initial classes:
 | Terminal UI/process action | `never` | send card/widget, exit/restart, notification |
 | Unknown add-on tool | `never` by default | dynamically installed tools without reviewed metadata |
 
-A restored Harness v3 tool in `effect_pending` is replayed only when both persisted and current declarations are `safe`; otherwise Earendil settles an interrupted result under the reserved ID. `EffectGate` admission is process-local and does not prove whether the external effect happened. Piclaw does not replay it independently.
+A restored Harness v3 tool in `effect_pending` is replayed only when both persisted and current declarations are `safe`; otherwise Earendil settles an interrupted result under the reserved ID. `Gate.admit()` is process-local and does not prove whether the external effect happened. Piclaw does not replay it independently.
 
 ## Preparation rule
 

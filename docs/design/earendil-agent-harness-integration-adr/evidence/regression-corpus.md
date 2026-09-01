@@ -24,7 +24,7 @@ The archive is root-cause and regression evidence. Its implementation is not the
 | INV-12 | UI status and SSE events carry exact Piclaw operation, correlated Earendil operation and watch/connection-generation identity. |
 | INV-13 | Harness transcript/queue state is execution evidence, not proof of Piclaw acceptance or terminal consumption. |
 | INV-14 | Protected tool arguments, results, scheduling intent and secrets do not leak through timelines, UI events or logs. |
-| INV-15 | Process-local admission does not erase external-effect uncertainty: abort prevents only work that has not passed the selected `EffectGate`, and crash recovery never treats admitted work as definitely absent. |
+| INV-15 | Process-local admission does not erase external-effect uncertainty: abort prevents only work that has not passed `Gate.admit()`, and crash recovery never treats admitted work as definitely absent. |
 
 ## Corpus
 
@@ -124,7 +124,7 @@ The archive is root-cause and regression evidence. Its implementation is not the
 - **Evidence:** rollback manifest PRs #910, #911, #914 and #915; issues [#920](https://github.com/rcarmo/piclaw/issues/920) and related archive tests.
 - **Baseline status:** architectural limitation of v2.13.2.
 - **Violates:** INV-01, INV-04, INV-05, INV-13.
-- **Target prevention:** Piclaw operation log owns service acceptance/frontier; Harness v3 entries/registers/usage own execution; one persisted correlation joins the durable domains.
+- **Target prevention:** Piclaw operation log owns service acceptance/frontier; Harness v3 entries, values/lists, operation results and usage own execution; one persisted correlation joins the durable domains.
 - **Contract scenario:** `fault_between_every_accept_execute_settle_boundary`.
 
 ### REG-010 — Cancellation targets whichever operation is active later
@@ -135,7 +135,7 @@ The archive is root-cause and regression evidence. Its implementation is not the
 - **Evidence:** issues [#918](https://github.com/rcarmo/piclaw/issues/918), [#932](https://github.com/rcarmo/piclaw/issues/932), [#951](https://github.com/rcarmo/piclaw/issues/951); rollback manifest PRs #919 and #945.
 - **Baseline status:** exact-owner cancellation is absent from stable baseline.
 - **Violates:** INV-02, INV-06.
-- **Target prevention:** Piclaw verifies expected operation and correlated Earendil `runId` in one owner transition, persists cancellation, then calls `abort()`; stale requests return no-op.
+- **Target prevention:** Piclaw verifies expected operation and correlated Earendil `operationId` in one owner transition, persists cancellation, then calls `requestAbort()`/`abort()`; stale requests return no-op.
 - **Contract scenario:** `stale_abort_cannot_cancel_replacement`.
 
 ### REG-011 — Late result overwrites cancellation
@@ -311,7 +311,7 @@ The archive is root-cause and regression evidence. Its implementation is not the
 - **Evidence:** Earendil PR [#7751](https://github.com/earendil-works/pi/pull/7751) at `f3e5cc82a44c0970d3e6935417b6fb4079dc3d2a`; issue-7738 regression tests cover manual/automatic compaction, navigation, prompts and listener re-entry.
 - **Baseline status:** upstream PR remains open; Piclaw migration has no selected v3 backend/rewrite proof.
 - **Violates:** INV-02, INV-03, INV-10, INV-15.
-- **Target prevention:** ordinary Harness v3 mutations use the per-lane mutation line and backend writer lease; administrative precise rewrite uses coherent snapshot-copy-and-atomic-swap with a new store generation. Stale session objects cannot write the replacement.
+- **Target prevention:** ordinary Harness v3 mutations use one Session mutation line; host/worker lifecycle assigns one writable Session authority, closes the old owner before replacement and uses read-only snapshots for live external forks. Stale workers cannot retain writable authority.
 - **Contract scenario:** `concurrent_session_rewrite_has_one_owner_and_generation`.
 
 ## Open issue requirements
@@ -326,7 +326,7 @@ Two open project issues affect the target architecture:
 Every corpus scenario must run at the narrowest applicable layer:
 
 1. pure Piclaw service-state/reducer replay;
-2. Harness v3 manual-drive fixture with instrumented storage and deterministic model/tool effects;
+2. Harness v3 direct-drive fixture with instrumented/gated storage and deterministic model/tool effects;
 3. Piclaw service-plane fault-boundary integration;
 4. restart/compaction integration with durable storage;
 5. installed browser/service E2E for UI authority and process lifecycle.

@@ -12,10 +12,11 @@ This ADR proposes how Piclaw replaces its agentic loop with a service-plane coor
 | Assessment baseline | Piclaw `v2.13.2` |
 | Baseline commit | `0afd3ae645c423bed82deef80c343bcaa6f31d4d` |
 | Earendil runtime selection | Current-loop packages use exact `0.84.4`; `0.84.1` remains the historical Harness baseline |
-| Earendil target design | Authoritative Harness v3 `packages/agent/docs/harness.md` on `main` at `5f7195c51eac43cdf329f813a7ef020d7bd74527` (blob `9e38c1fab7ed77107952c1de850cdba987fff82c`, SHA-256 `bbbebf7f74c5773bb675c5b00f2b71e359f85dc15c416d1217b249a63051d85b`) |
-| Earendil implementation watch | Draft PR `earendil-works/pi#8076` at observed head `fd389abc4677b4e0fa5dc9b2bbd2e63418f079b4`; unreleased and not runtime-complete |
-| Evidence timestamp | 2026-08-14 07:35 UTC; moving upstream state is valid only at the pinned revisions |
-| Document state | Assessment refreshed for current Harness v3 development; decision requested |
+| Earendil released evidence | `main` at `b8b873b9872db04a938fb4357b5e8e824ddc051c`; latest release `v0.84.4` at `b79e4cc834970cca69daebffab7df1da7d1e52c4` retains the unsupported released-v2 Harness scaffold |
+| Earendil implementation watch | `dev` / draft PR `earendil-works/pi#8963` at `d14d6b22327d545d6a253f932165b63e48d7f9c8`; public lane drive complete, only session watch deferred |
+| Earendil candidate design | `dev` `packages/agent/docs/harness.md` blob `c7c18c74730d4971f8ca004924e44c7fbe236f25`, SHA-256 `1b200eb7b4255d5afd71e17bb4cf54f82e2c5d1d1e24ae87ba97363838251785` |
+| Evidence timestamp | 2026-09-01 18:30 UTC; moving upstream state is valid only at the pinned revisions |
+| Document state | Assessment refreshed through public drive, SQLite host ownership and current fork work; decision requested |
 | Production changes | Current-loop dependencies select `0.84.4`; no Harness activation, execution-path or service change |
 | Final decision | Proposed: select direct Earendil adoption with a selected-version test implementation first |
 
@@ -48,7 +49,7 @@ The assessment covers the complete lifecycle of agent work:
 9. SSE and web status projection;
 10. extension and add-on integration points.
 
-The assessment produced this ADR, its evidence tables and a proposed semantic contract suite. It specifies a test implementation of the selected Earendil public contracts because the current `0.84.4` packages still expose the incomplete released-v2 Harness scaffold and draft PR #8076 has no concrete public v3 harness constructor/runtime. It does not implement the production runner, change persistence, replay archived fixes or deploy a service.
+The assessment produced this ADR, its evidence tables and a proposed semantic contract suite. Published `0.84.4` still exposes the incomplete released-v2 Harness scaffold. Earendil `dev` now has a concrete v3 constructor and complete public lane drive; source selection, session-wide watch scope, storage/fork stability and Piclaw acceptance remain. This ADR does not activate the production runner, change persistence or deploy a service.
 
 ## Chapters and evidence
 
@@ -83,9 +84,9 @@ The index is the ADR decision record. Chapters hold the assessment and design an
 Select the direct-adoption architecture in [`evidence/alternatives-and-migration.md`](evidence/alternatives-and-migration.md), starting with a selected-version test implementation:
 
 - Piclaw retains authenticated acceptance, canonical source order, operation identity, exact cancellation, timeline/media persistence, scheduler/delivery policy, terminal disposition, frontier and restart reconciliation.
-- Earendil owns transcript execution, model/tool lifecycle, execution compaction and execution recovery. Harness v3's entries/registers/usage-ledger design is the target execution model; `0.84.1` remains historical baseline evidence and draft PR #8076 remains unselected development evidence.
+- Earendil owns transcript execution, model/tool lifecycle, execution compaction and execution recovery. Harness v3's entries, typed values/lists, immutable operation results and usage ledger are the target execution model; `0.84.1` remains historical baseline evidence and `dev`/PR #8963 remains unselected development evidence.
 - Piclaw imports no current agent orchestration into the replacement path. Piclaw service actions use reviewed service-plane ports; execution uses Earendil's exported lower-level harness/session/model/tool/environment contracts directly, never private coding-agent factories.
-- A test-only implementation of the selected Earendil public contracts and one semantic contract suite precede real-harness integration. The suite covers process-local lane tasks, `EffectGate` admission, unknown effect-start outcomes, total-state migration, backend conformance and concurrent session rewrites. Piclaw updates the fixture and integration when Earendil types change; backward source compatibility is not a goal.
-- Production remains on the current Piclaw loop with Earendil `0.84.4`. That runtime dependency selection does not select Harness v3; Harness migration waits for a coherent tagged implementation and the documented gates.
+- One semantic suite runs against deterministic gated fixtures and a selected real constructor. It covers explicit Context propagation, one lane-owned Drive, `Gate.admit()` ordering, unknown effect outcomes, tool invocation identity, selected storage migration, host ownership and backend conformance. Piclaw updates its latent boundaries when Earendil types change; backward source compatibility is not a goal.
+- Production remains on the current Piclaw loop with Earendil `0.84.4`. That runtime selection does not select Harness v3. A latent positive compatibility refresh may target exact `dev`; production migration waits for storage/fork stability, Piclaw HC/PC evidence and explicit activation approval.
 
 Rui's approval is required before M1 or any production implementation. [`evidence/future-effector-specifications.md`](evidence/future-effector-specifications.md) is a documentation-only specification of contracts, fakes and later implementation slices; its TypeScript blocks are illustrative.

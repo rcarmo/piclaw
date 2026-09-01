@@ -54,7 +54,7 @@ Replace Piclaw's patched `setActiveToolsByName` logic with direct methods:
 
 - `AgentHarness.getTools()` / `setTools()` for definitions;
 - `AgentLane.getActiveTools()` / `setActiveTools()` for active names;
-- total `lane.config` registers as the recovered state.
+- total lane configuration values as the recovered state.
 
 `activate_tools` and `reset_active_tools` remain model-visible Piclaw tools only if product UX requires them. Their execute functions call direct harness methods through a per-run binding captured in tool context. Recovery/containment uses the same direct methods under Piclaw's exact operation fence; no method replacement or saved setter restoration is allowed.
 
@@ -108,7 +108,7 @@ The installed private coding-agent factory is evidence of `0.84.1` composition o
 - the system prompt derives from current tools and active names;
 - construction is supplied through the selected public `AgentHarnessConstructor` implementation.
 
-At `0.84.1`, Piclaw may reproduce the public agent-core part for fixture evidence. Draft PR #8076 declares the generic constructor/options but does not supply a concrete public runtime. Production waits for one coherent tagged implementation and deletes all v2 binding code.
+At `0.84.1`, Piclaw may reproduce the public agent-core part for historical fixture evidence. Current `dev` supplies the generic constructor/options and complete public lane drive, but remains an unselected source. Production waits for one coherent release candidate or approved source and deletes all v2 binding code.
 
 ## Verification
 
@@ -118,7 +118,7 @@ For each migrated tool/resource:
 - explicit replay value;
 - exact tool result/update/error semantics;
 - abort and late-result test;
-- safe/never recovery test, including crash after `EffectGate` admission before settlement;
+- safe/never recovery test, including crash after `Gate.admit()` before settlement;
 - redaction test for details, telemetry and public projection;
 - resource/hook compatibility test where applicable;
 - no import from legacy AgentSession orchestration in the new path.

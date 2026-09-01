@@ -2,183 +2,328 @@
 
 ## Pinned evidence
 
-Evidence was refreshed on **2026-08-14 at 07:35 UTC**. Moving branches and pull requests are described only at the exact revisions below.
+Evidence was refreshed on **2026-09-01 at 18:30 UTC**. Moving branches, pull requests and issues are described only at the exact revisions below.
 
 | Item | Pin and observed state |
 |---|---|
 | Earendil repository | [`earendil-works/pi`](https://github.com/earendil-works/pi) |
-| Reviewed `main` | [`5f7195c51eac43cdf329f813a7ef020d7bd74527`](https://github.com/earendil-works/pi/commit/5f7195c51eac43cdf329f813a7ef020d7bd74527) |
-| Authoritative `main` specification | [`packages/agent/docs/harness.md`](https://github.com/earendil-works/pi/blob/5f7195c51eac43cdf329f813a7ef020d7bd74527/packages/agent/docs/harness.md), blob `9e38c1fab7ed77107952c1de850cdba987fff82c`, SHA-256 `bbbebf7f74c5773bb675c5b00f2b71e359f85dc15c416d1217b249a63051d85b` |
-| Last specification commit on `main` | [`40a3d8556ab7fb4a6b4da20ffe1f5dfc08ec121d`](https://github.com/earendil-works/pi/commit/40a3d8556ab7fb4a6b4da20ffe1f5dfc08ec121d) |
-| Current implementation candidate | Draft PR [#8076](https://github.com/earendil-works/pi/pull/8076), head [`fd389abc4677b4e0fa5dc9b2bbd2e63418f079b4`](https://github.com/earendil-works/pi/commit/fd389abc4677b4e0fa5dc9b2bbd2e63418f079b4) |
-| Candidate specification | PR-head `packages/agent/docs/harness.md`, blob `80858b5eed97eb44e3d459217c58049e34759ce0`, SHA-256 `b14c390c474191b0546babe06fca9d452c49991ee755c50c3b54fa8a79ecdc7b` |
-| Superseded implementation PR | [#7976](https://github.com/earendil-works/pi/pull/7976), closed without merge; do not use as current implementation evidence |
-| Released packages | The current Piclaw loop selects coherent `0.84.4`; that release retains the unsupported released-v2 Harness scaffold |
+| Reviewed `main` | [`b8b873b9872db04a938fb4357b5e8e824ddc051c`](https://github.com/earendil-works/pi/commit/b8b873b9872db04a938fb4357b5e8e824ddc051c) |
+| Latest release | [`v0.84.4`](https://github.com/earendil-works/pi/releases/tag/v0.84.4), tag commit [`b79e4cc834970cca69daebffab7df1da7d1e52c4`](https://github.com/earendil-works/pi/commit/b79e4cc834970cca69daebffab7df1da7d1e52c4), published 2026-08-28 |
+| Released Harness evidence | The four packaged `dist/harness/agent-harness.{js,d.ts,js.map,d.ts.map}` files are byte-identical between `0.84.2` and `0.84.4` |
+| Current implementation branch | `dev` at [`d14d6b22327d545d6a253f932165b63e48d7f9c8`](https://github.com/earendil-works/pi/commit/d14d6b22327d545d6a253f932165b63e48d7f9c8) |
+| Current integration PR | Draft PR [#8963](https://github.com/earendil-works/pi/pull/8963), **DRAFT: dev branch**, at the same head; predecessor [#8232](https://github.com/earendil-works/pi/pull/8232) closed as the branch moved |
+| Candidate specification | `dev` [`packages/agent/docs/harness.md`](https://github.com/earendil-works/pi/blob/d14d6b22327d545d6a253f932165b63e48d7f9c8/packages/agent/docs/harness.md), blob `c7c18c74730d4971f8ca004924e44c7fbe236f25`, SHA-256 `1b200eb7b4255d5afd71e17bb4cf54f82e2c5d1d1e24ae87ba97363838251785` |
+| Direct-drive handoff | `dev` [`packages/agent/docs/work-packages/05-direct-durable-drive.md`](https://github.com/earendil-works/pi/blob/d14d6b22327d545d6a253f932165b63e48d7f9c8/packages/agent/docs/work-packages/05-direct-durable-drive.md), blob `b1deaffa78f442ae149473af7e04c66745a685e3`, SHA-256 `d774bd5e92d2db41d254b82175432d2a57bf4ea3ad38130f0d0f1ed7895e3dc8`; complete through public drive |
+| SQLite ownership | WP07 implemented on `dev`: host/worker lifecycle owns writable authority; storage-layer writer leases were removed |
+| Fork work | WP08 named-branch and streaming forks is in progress; part of its contract/classifier work is merged into `dev` |
+| Piclaw runtime selection | Piclaw now pins coherent `0.84.4`; issue [#1070](https://github.com/rcarmo/piclaw/issues/1070) is complete |
+| Piclaw UI-prompt compatibility | Issue [#1071](https://github.com/rcarmo/piclaw/issues/1071) is complete; stale-progress suspension uses extension-runner UI events without selecting Harness |
 
-The specification at reviewed `main` is byte-identical to the specification originally audited by this ADR. PR #8076 changes that candidate specification by 743 insertions and 495 deletions. The PR-head document is therefore useful development evidence, but it is not yet the merged authoritative specification.
+### Released Harness fingerprint
 
-At the observation time, PR #8076 was draft, open and mergeable, with 70 commits, 207 changed files, 12,969 additions and 19,024 deletions. Its `generate` job had passed, `publish` was skipped and `build-check-test` was pending at the pinned head. The immediately preceding head `b01c21e5e621d9e01a19e9c38530e57a0e61456f` failed `build-check-test` in the Cloudflare model-runtime compatibility test (`expected undefined to be defined`), while the root and SQLite backend suites shown in that run passed. This is evidence of draft instability, not evidence that the harness-specific changes failed.
+Independent extraction of the published `@earendil-works/pi-agent-core` tarballs produced these SHA-256 values for both `0.84.2` and `0.84.4`:
 
-Two older open PRs remain relevant only as separate evidence:
-
-- [#7784](https://github.com/earendil-works/pi/pull/7784), head `3fed85d9473dcbb47ec2444c61781fcc1200bc41`, proposes bounded generic `findRecords()` queries for the released-v2 record model. It is currently conflicting and is not a Harness v3 recovery dependency.
-- [#7751](https://github.com/earendil-works/pi/pull/7751), head `f3e5cc82a44c0970d3e6935417b6fb4079dc3d2a`, serialises current coding-agent compaction/navigation rewrites and adds issue-7738 race tests. It is current-loop regression evidence, not a v3 implementation slice.
-
-## Implementation status
-
-Harness v3 remains unreleased and is not yet a usable execution plane. PR #8076 has advanced far beyond the type-only #7976 branch. It has not completed the public runtime.
-
-### Implemented or substantially implemented at the pinned candidate
-
-- the v3 public type surface: entries, registers, usage rows, total operation state, results, typed events/hooks/snapshots, generic contextual tools and `AgentHarnessConstructor`;
-- `Session`, `SessionTree`, callback-scoped `SessionMutator` and per-lane mutation serialisation;
-- Memory storage/repository and shared session/storage conformance suites;
-- format-4 JSONL storage, replay and torn-tail handling;
-- a SQLite session backend with transaction, migration/repository/storage tests;
-- branch queries, context projection, lane creation, facts, forks, storage instrumentation and benchmarks;
-- low-level assistant and tool execution helpers plus an `EffectGate` contract.
-
-### Still absent at the pinned candidate
-
-`packages/agent/src/harness/agent-harness.ts` exports interfaces and tagged result/error types, but no concrete `AgentHarness` value or public runtime constructor/factory. `AgentHarnessConstructor.create()` is an interface contract only. The public lane methods — prompt, queue, abort, resume, compaction, navigation, manual drive and watches — therefore cannot yet be exercised as one real v3 harness at this head.
-
-The candidate should not be described as implementation-ready merely because storage and execution primitives exist. Runtime composition, complete operation procedures, restoration, cancellation reconciliation, manual drive, snapshots/watches, migrations across operation-state versions and backend parity still need one coherent implementation and passing acceptance evidence.
-
-Piclaw must consume public lower-level Earendil contracts. It must not depend on coding-agent's private `dist/server/create-harness` or preserve that helper's shape in a Piclaw wrapper.
-
-## Core durable model
-
-Harness v3 uses three durable stores:
-
-| Store | Semantics |
+| Packaged file | SHA-256 |
 |---|---|
-| Entries | Immutable conversation tree; write once |
-| Registers | Current mutable typed state; overwrite or delete |
-| Usage ledger | Append-only cost/usage rows |
+| `dist/harness/agent-harness.js` | `21fdb3355adafd53c26337617a73918ba49e9832c42cde8b71c469abeecb5916` |
+| `dist/harness/agent-harness.d.ts` | `3ceafcd72816bc8312f3f851625c082ae0b9099821fb3329e6ff9df165033472` |
+| `dist/harness/agent-harness.js.map` | `8cc842acad1ffabbb32ca09be449e22c70f1516d1b46788798af2e40b239369b` |
+| `dist/harness/agent-harness.d.ts.map` | `43182c5a9fa7149b82ef09cce483676f6d166522609014b7854ccb98331e248c` |
 
-The principal registers are:
+The `0.84.4` package retains the same released-v2 Harness scaffold and the same 25 direct `HarnessNotImplemented` outcomes in Piclaw's compatibility suite. The package upgrade is runtime maintenance, not Harness selection or activation.
 
-- `lane.leaf/{lane}`;
-- `lane.config/{lane}`;
-- `lane.state/{lane}`;
-- `lane.lastResult/{lane}`;
-- `op.meta/{operationId}`;
-- `op.state/{operationId}`;
-- `op.tool_args/{operationId}:{stepId}:{sourceIndex}`;
-- `op.preparation/{operationId}:{taskId}`;
-- `pending.entry/{entryId}`.
+### Current `dev` integration evidence
 
-`op.state` is the durable restart point, not a live JavaScript instruction pointer. Terminal transactions delete operation registers and operation-owned pending entries, clear the lane's current operation and write one bounded `lane.lastResult`. Permanent entries and usage rows remain.
+Draft PR #8963 reported 385 commits, 557 changed files, 89,658 additions and 23,752 deletions against current `main` at the observation time. GitHub classified it as open, draft, mergeable and clean.
 
-This remains strongly aligned with Piclaw's requirements: explicit operation identity, first-class cancellation, total current state, replay classification, bounded restore, deterministic manual barriers, typed projection and atomic terminal publication. It does not absorb Piclaw's external service responsibilities.
+Exact-head CI [run 33530830225](https://github.com/earendil-works/pi/actions/runs/33530830225) passed `build-check-test` at `d14d6b22327d545d6a253f932165b63e48d7f9c8`. Reported suites included:
 
-## Process-local execution and `EffectGate`
+- agent: 661 pass, 1 skip;
+- AI: 987 pass, 833 skip;
+- coding-agent: 2,066 pass, 50 skip;
+- SQLite: 133 pass;
+- protocol/client/server/telemetry/TUI shown suites: pass.
 
-PR #8076's candidate specification makes one important distinction explicit. A durable open operation may exist without a **live operation task**. The live task is only the process-local async continuation for one lane and contains:
+This is green source-branch integration evidence. It is not a published package or a Piclaw-runtime acceptance result.
 
-- its completion promise;
-- its process-local `EffectGate` and cooperative `AbortSignal`;
-- procedure-local provider/tool promises, settled values and streaming display state.
+## Assessment result
 
-This task is not another durable state machine. A restart loses it and activates from the total durable `op.state` instead.
+Harness v3 on `dev` has a complete public lane drive and a total 13-leaf execution graph. Only `AgentHarness.watchSession()` remains deliberately `SliceNotImplemented` in the runtime source.
 
-`EffectGate` arbitrates abort versus the start of ordinary hooks, provider operations, tools and retry timers. Preparation completes first; `assertOpen()` and invocation must then be adjacent synchronous statements with no `await` between them. Abort-first starts nothing. Admission-first gives the complete admitted operation the gate's signal.
+This closes the runtime-completeness blocker from the August assessment. Production selection still waits for a coherent package/source candidate, Piclaw's direct compatibility refresh, shared HC/PC suites, selected storage/fork semantics and explicit activation approval.
 
-The gate does **not** persist an `effect_started` marker and cannot remove the external-effect crash window. The durable sequence remains:
+## Implemented at the pinned `dev` tip
 
-1. commit an `effect_pending` intent;
-2. pass the process-local gate and start the external effect;
-3. commit its result and next total state.
+### Direct public contracts
 
-A process loss after step 2 but before step 3 leaves the effect's outcome unknown. Activation recovery must treat that state according to the selected harness semantics: provider work may be retried or classified under its captured policy; a tool may replay only when both persisted and current declarations are `safe`; unresolved `never` work must not be repeated. Piclaw's own service effectors retain their separate `not_applied | applied | unknown` certainty and outbox reconciliation rules.
+The candidate exports:
 
-Required Piclaw tests therefore cover both abort/admission orders and crashes at all four useful points: before intent, after intent before admission, after admission before external acknowledgement, and after external acknowledgement before settlement.
+- generic `AgentHarness<TContext>` and `AgentHarnessOptions<TContext>`;
+- public `AgentHarness.create` satisfying `AgentHarnessConstructor`;
+- direct `AgentLane` admission, drive, queue, abort, compaction, navigation, result, watch and configuration surfaces;
+- generic `AgentHarnessTool<TContext>` with stable `AgentHarnessToolInvocation`;
+- typed `HarnessEvent`, `HookMap`, lane snapshot reducer, `Context` and telemetry propagation;
+- `Storage`, `Session`, `Branch`, `SessionRepo`, `OperationResultRecord`, `UsageRow`, values/lists and backend test contracts;
+- direct `Models`, `CredentialStore`, `ExecutionEnv`, resources and built-in tool factories.
 
-## Session mutation, transactions and concurrency
+The constructor attaches without starting provider/tool effects, restores configured lanes and reports open operations. A fresh Session has no implicit main Branch or AgentLane; callers acquire one explicitly through `harness.lane(name, context)`.
 
-The candidate `Session.mutate(lane, callback)` serialises state-dependent mutations on one lane. The callback receives a scoped `SessionMutator`, may perform reads and may commit exactly once. `Storage.commit(Transaction)` remains the atomic write boundary. Session creation, lane creation and fact/tree updates have separate conformance cases.
+### Session, Branch, lane and Harness ownership
 
-Piclaw service locks must be released before awaiting model or tool effects. Harness effects start only after the relevant intent transaction and outside `Session.mutate`; Piclaw's accepted-source and terminal SQLite transactions remain in `messages.db` and do not share a distributed transaction with Earendil storage.
+| Concept | Responsibility |
+|---|---|
+| `Session` | Global entries, usage, values/lists, metadata, Branches, one mutation line and one backend lifecycle |
+| `Branch` | One named immutable-entry path plus mutable tip and direct data appends |
+| `AgentLane` | A Branch plus configuration, lane-owned tagged inbox, operation state, Drive and observation |
+| `AgentHarness` | Lane manager, global resources/options, hooks/events and lifecycle; it is not a lane |
 
-Current-loop PR #7751 demonstrates the danger of overlapping compaction and navigation rewrites. Harness v3 addresses ordinary lane mutations through its lane mutation line and a backend writer lease, while the **precise rewrite** is an administrative snapshot-copy-and-atomic-swap operation above the harness. Adoption must still test:
+One keyless Session mutation line serialises read-decide-commit-publication work. Ordinary reads bypass it and observe complete backend commits. Provider calls, tools, hooks, timers and asynchronous event delivery stay outside mutation callbacks.
 
-- prompt, compaction, navigation and close racing a live or queued mutation;
-- two processes contending for one session writer lease;
-- a precise rewrite racing a live writer, reader, index cursor and Piclaw backup;
-- process death before and after the swap;
-- no stale session object continuing to write the replaced generation.
+### Durable state and results
 
-The selected backend must define these semantics. PR #7751's current `AgentSession.isCompacting` fix is regression evidence, not an implementation to copy into v3.
+The candidate uses:
 
-## Recovery queries
+- immutable entries;
+- typed scalar `Value<T>` and append-only `ValueList<T>` addresses;
+- append-only usage rows;
+- one flat 13-leaf `OperationState` union;
+- one lane-owned tagged inbox for steer, follow-up, next-run and deferred writes;
+- orthogonal cancellation control;
+- immutable per-operation `OperationResultRecord` values under `pi.result`;
+- operation-owned values/lists for arguments, frames, memos, checkpoints, preparations and staged results.
 
-Harness v3 recovery is point-read based: lane state identifies the current operation, and restore reads current `op.meta`, `op.state` and the bounded referenced entries/registers. It does not fold history and must not depend on a dedicated Piclaw recovery-query API.
+`Lane.state` is authoritative while one Harness owns a Session. Procedures read storage only to dereference content or enumerate cleanup addresses. Process loss reconstructs the projection from durable values.
 
-PR #7784's generic `findRecords()` is useful evidence that a bounded query is preferable to proliferating one-off v2 record lookups. It does not apply directly to v3, whose selected `SessionReader` exposes `getEntries`, `getRegister` and `listRegisters`. Piclaw should use the exact selected public reader/harness surface and should not add a private `findOpenOperation` or deep-import a recovery helper.
+`drive({ operationId, ... })` installs or joins the current operation or returns its immutable result record. Terminal observation no longer hydrates transcript entries.
 
-## Storage versions, migrations and backend conformance
+### Provider, retry and deferred execution
 
-Harness storage has a `storageVersion` gate. Candidate migrations are intended to run on open under the writer lease and must map every register, including open `op.meta` and `op.state`. A newer unsupported version is refused. JSONL migration additionally requires lenient old-shape replay followed by compaction so superseded bytes are retired.
+Implemented procedures cover:
 
-The precise rewrite is the only sanctioned path that removes permanent entries or usage rows. It copies a coherent retained snapshot into a fresh store and atomically swaps it, while changing the store generation used by search/index cursors. It is administrative tooling, not a lane method.
+- atomic prompt/skill/template acceptance with optional caller-supplied operation ID;
+- checkpoint planning and lane-inbox consumption;
+- durable provider intent with reserved response/usage IDs;
+- admitted streaming under the operation gate;
+- burst-safe durable assistant frames;
+- atomic assistant entry, usage and next-state settlement;
+- unknown-outcome provider recovery from committed frame prefixes;
+- durable retry waits and direct wait policy;
+- deferred suspension, poll permits and fresh-ID unknown-poll recovery;
+- in-band model/tool configuration failures.
 
-Selection requires the upstream conformance suites unchanged, plus Piclaw-specific coverage for:
+### Durable tools
 
-- transaction rollback, write order, strictly increasing sequence and no partial visibility;
-- register set/delete/recreate and delete-of-absent-key behaviour;
-- Memory, JSONL and SQLite logical parity;
-- JSONL torn transaction tails and conversion/compaction;
-- SQLite `BEGIN IMMEDIATE`, fencing, lease expiry/repair and query-plan guards;
-- total, crash-resumable migration of an open operation;
-- precise-rewrite generation changes and concurrent access;
-- backup/restore and Bun compatibility.
+Implemented sequential and parallel tool procedures cover:
 
-Passing backend conformance proves Earendil session semantics only. It does not prove Piclaw accepted-source ordering, terminal settlement or external delivery.
+- deterministic lookup, argument preparation and typed hooks;
+- persisted arguments and `safe | never` replay before execution;
+- stable invocation identity (`invocationId`, `operationId`, `turnId`);
+- invocation-scoped durable memos and bounded output checkpoints;
+- safe replay only when persisted and current declarations both say `safe`;
+- synthetic interruption for `never`, unavailable or no-longer-safe calls;
+- completion-order staging with source-order transcript placement;
+- usage rows, `addedToolNames`, termination and cancellation;
+- direct contextual tool and invocation `Context` propagation.
 
-## Ownership boundary
+The later `dev` work also added bounded shell-output capture and integration. Piclaw should adopt the selected direct tool contract rather than preserving its current large-output wrapper shape.
 
-Harness v3 is a library, not Piclaw's authenticated service. Piclaw continues to own:
+### Structural execution and navigation
 
-- channel authentication and routing;
-- durable accepted-source ordering and acknowledgement;
-- Piclaw operation identity and correlation to session/lane/harness operation;
-- exact service cancellation authority;
-- timeline/media persistence;
-- scheduler intent, run logs, notifications and delivery policy;
-- immutable Piclaw terminal disposition and frontier;
-- reconciliation between Piclaw state and Earendil open state/`lane.lastResult`;
-- web/SSE projection generation and receipt ordering.
+The public drive implements:
 
-Earendil owns transcript execution, provider/tool lifecycle, compaction/navigation, total execution state, execution recovery, session transactions and harness cancellation signalling. No responsibility above is jointly owned.
+- threshold and overflow compaction;
+- standalone compaction;
+- summarized and unsummarized navigation;
+- structural decision hooks;
+- one durable intent and usage row per nested summary request;
+- attempt-level retry/recovery;
+- atomic compaction/navigation result publication;
+- threshold deduplication derived from the transcript;
+- family-neutral summary leaves and closed result-boundary handling.
 
-## Contract-suite changes
+### Cancellation, total dispatch and public surfaces
 
-Keep the existing HC/PC cases and add or strengthen these assertions:
+The candidate implements:
 
-- `EffectGate.assertOpen()` covers exactly the selected hook/provider/tool/timer catalogue, with abort-first and admission-first cases;
-- close is a controlled process loss, not abort, and writes no cancellation marker;
-- a live lane task and a restored orphaned `effect_pending` state are never mistaken for each other;
-- crashes after effect admission are classified without claiming the effect did not happen;
-- external finalisation stops a live task without duplicate writes or terminal events;
-- restore uses bounded current-state reads and does not require v2 `findRecords()`;
-- migration maps an open operation across every selected state-machine schema change;
-- Memory, JSONL and SQLite pass the same backend cases;
-- precise rewrite, session writer leases and PR-#7751-style rewrite races have deterministic outcomes;
-- snapshot-first buffered watch and Piclaw receipt sequencing close different gaps and both remain tested.
+- exact-ID `requestAbort()`;
+- durable cancellation before signal pull;
+- atomic drain-and-return of steer/follow-up input while preserving next-run/write items;
+- cancellation reconciliation for every execution leaf;
+- one total direct `state.at` dispatcher;
+- lane-owned Drive install/join/observation;
+- public prompt, resume, queue, abort, compaction and navigation methods;
+- convenience composition from public primitive operations;
+- immutable old-operation result lookup;
+- lane snapshot/event replication via `reduceLaneSnapshot()` and `resnapshot()`.
+
+Caller invocation cancellation affects only that observer after Drive installation. Durable operation cancellation uses `requestAbort()`.
+
+### Lane projection
+
+Typed lane watches are snapshot-first and buffered. `LaneSnapshot` carries configuration, operation state, tagged queue projection, stats and the latest operation result. `reduceLaneSnapshot()` is the event fold; navigation requests a rebase through `resnapshot()`.
+
+`watchSession()` remains unimplemented. Piclaw's first integration can use per-chat/lane projection. Session-wide dashboards must wait or compose from lane inventory and watches.
+
+### SQLite host ownership
+
+WP07 replaced an incomplete storage-layer writer lease with an explicit host/worker ownership model:
+
+- exactly one host-assigned process owns writable Session authority;
+- server/worker replacement closes the old owner before opening the new one;
+- same-repository active-source forks retain commit-queue ordering;
+- external/live-worker sources fork through independent read-only WAL snapshots;
+- non-creation paths use no-create modes;
+- active storage identity includes canonical container path plus Session ID;
+- IDs are path-safe;
+- repository close waits for all cleanup attempts.
+
+The storage layer does not protect against a trusted host opening two writable processes. Piclaw's selected runtime boundary must enforce worker ownership and test transfer/replacement explicitly.
+
+### Named-branch and streaming forks
+
+WP08 is in progress. `dev` already requires explicit named branches for branch forks, validates ancestry/configured lanes, centralises scalar namespace policy and merges part of the streaming-fork work. The final WP08 contract still covers bounded-memory Memory/JSONL/SQLite copies, application value/list policy, source non-mutation, sequence preservation and backend equivalence.
+
+Do not treat current draft format-4 fork/storage shapes as a compatibility promise. Select and test one coherent source/release.
+
+## Released `0.84.4` compatibility boundaries
+
+### Extension UI prompt lifecycle
+
+`0.84.4` adds blocking extension-runner events `ui_prompt_start` and `ui_prompt_end`. They are registered through `ExtensionAPI.on(...)`; they are not `AgentSessionEvent` values and do not arrive through `session.subscribe(...)`.
+
+Piclaw issue #1071 implemented a current-runtime extension listener that suspends stale-progress supervision with `reason: "ui_prompt"`, restores the previous phase and keeps the absolute turn deadline running. Duplicate/nested events and terminal cleanup are current-loop compatibility concerns, independent of Harness adoption.
+
+A future Harness projection represents an actual blocking user wait as public phase `waiting`, owned by the exact operation/lane. Response, timeout, rejection, abort and teardown clear it idempotently. Public waiting projection and watchdog suspension are separate contracts.
+
+### Terminal bookkeeping
+
+`0.84.4` changes low-level loop semantics so `prepareNextTurn` and `prepareNextTurnWithContext` run only when stop/queue decisions start another assistant turn. Terminal bookkeeping belongs in durable operation settlement or the selected terminal event (`agent_end` in the current loop), never in `prepareNextTurn`.
+
+Piclaw must not add compensating hooks that later conflict with Harness terminal ownership.
+
+### Current-loop boundaries preserved during convergence
+
+- Piclaw keeps upstream automatic compaction disabled and retains current safe-boundary compaction until the Harness path owns compaction end to end.
+- Current coding-agent session creation omits `tools`; passing it is an allowlist that can silently suppress extension tools.
+- Encrypted reasoning from `0.84.4` remains an empty thinking block with `thinkingSignature`; Piclaw must not convert it back to tool-call `thoughtSignature`.
+- Current-runtime UI-prompt suspension is not a Harness dependency or activation gate.
+
+### Usage and telemetry preservation
+
+Released `0.84.4` still lacks Piclaw's compatibility fields:
+
+- `cacheReadReported`;
+- `cacheWriteReported`;
+- validated finite non-negative `providerCost`.
+
+Issue #1070 rebased and preserved the versioned `pi-ai` patch. A future Harness usage/telemetry adapter must carry these values through direct usage ingestion. It must not infer cache-hit reporting from token counts or recompute provider cost.
+
+## Remaining blockers
+
+### Released packages remain unusable for Harness execution
+
+The published `0.84.4` Harness is byte-identical to `0.84.2`. Piclaw's 25 unsupported outcomes remain authoritative until a v3 implementation is released or separately selected from source.
+
+### No selected package/source candidate
+
+`dev` has green exact-head CI and complete public lane drive, but it remains an open draft integration branch with ongoing storage/fork and Chord work. Piclaw has not approved a reproducible source pin or package family for Harness execution.
+
+### Session-wide watch is incomplete
+
+`watchSession()` is the sole remaining runtime `SliceNotImplemented` method. This does not block lane-scoped canaries if explicitly excluded, but it blocks claiming complete session-wide observation.
+
+### Fork/storage contract is still moving
+
+WP08 remains in progress. Format 4 is work in progress and Earendil changes draft schemas/contracts in place. Piclaw must select a coherent storage version and test migration from that selected version; it should not persist production sessions using an arbitrary `dev` snapshot.
+
+### Host ownership needs Piclaw integration proof
+
+WP07 deliberately places writable ownership above the SQLite storage layer. A selected Piclaw host/worker boundary must prove old-owner close, new-owner open, live read-only fork snapshots, deletion ordering, process replacement and no duplicate writable authority.
+
+## Exact evidence and verification
+
+### Published `0.84.4`
+
+Piclaw now pins `@earendil-works/pi-agent-core`, `pi-ai` and `pi-coding-agent` to exact `0.84.4`. The latent compatibility manifest records:
+
+- historical `0.84.1` baseline;
+- current runtime/candidate release `0.84.4` at `b79e4cc834970cca69daebffab7df1da7d1e52c4`;
+- `rejected_evidence_only` Harness classification;
+- 30-case Memory and JSONL conformance;
+- unsupported-is-not-pass semantics;
+- no Harness activation.
+
+### Earlier local `dev` probes
+
+At `0e77e57d96e99b49f710c652d3f5985ac0c66f8f`, bounded local Bun probes produced:
+
+| Probe | Result |
+|---|---|
+| Agent TypeScript build | Pass |
+| Runtime/provider/deferred/tool/event/hook focus | 138 pass, 0 fail |
+| Session/Memory/JSONL focus | 125 pass, 0 fail |
+| Full agent Harness suite | 439 pass, 1 skip, 1 Bun return-value failure |
+| SQLite suite | 86 pass, 1 Bun return-value failure |
+
+Both failures were Bun/Node `fs.promises.access()` return-value assertions, not durable-state failures.
+
+### Current `dev` CI
+
+Exact-head CI at `d14d6b22327d545d6a253f932165b63e48d7f9c8` passed. Reported package counts are listed in the pinned-evidence section. These are upstream Node CI results, not Piclaw installed-service proof.
+
+## Mapping to Piclaw's prepared boundaries
+
+All latent work packages #970–#980 are merged and remain useful.
+
+| Piclaw boundary | Effect of current `dev` |
+|---|---|
+| EF-S01 service work | Piclaw ownership unchanged; caller-supplied Earendil operation IDs may simplify correlation |
+| EF-S02 terminal settlement | Piclaw ownership unchanged; immutable `OperationResultRecord` supplies typed execution evidence |
+| EF-S03–EF-S07 | No ownership transfer |
+| EF-S08 projection | Strong alignment with typed lane events, snapshot reducer and resnapshot; session watch remains deferred |
+| EF-H01 context resolver | Must adopt trailing `Context` and selected direct `ExecutionEnv` signatures |
+| EB-01 models/credentials | Direct `Models` and `CredentialStore` adoption remains valid; deferred streaming is implemented |
+| EB-02 tools/context | Strong source-level contract; update to stable invocation identity, memos/checkpoints, bounded output and trailing `Context` |
+| EB-03 resources/hooks | Typed resources/hooks/events and runtime registries exist |
+| EB-04 telemetry | `Context.telemetryContext` is direct parentage; preserve Piclaw cache-reporting/provider-cost fields |
+| EB-05 harness/session/storage/events | Public lane drive and SQLite host-ownership work exist; source selection, session watch scope, WP08 stability and Piclaw validation remain |
+
+## Contract-suite corrections
+
+Retain HC-001–HC-025 with these current interpretations:
+
+- HC-006–HC-008 cover one lane-owned tagged inbox and public queue methods;
+- HC-009 covers exact-ID abort, drain-and-return and terminal-control invariants;
+- HC-010 covers structural compaction/navigation and one intent/usage row per nested request;
+- HC-012 covers deferred suspension and process-loss recovery; missing identities fail in band;
+- HC-013 restores current values/lists and exact referenced content without a fixed read count;
+- HC-015 covers explicit Session/Branch/AgentLane isolation and no implicit main lane;
+- HC-017 covers deterministic direct drive under gated storage/effects, not manual actions;
+- HC-021 names `Gate.admit()` and proves abort-first versus admission-first;
+- HC-023 tests one lane-owned Drive and same-operation observers, not in-process Drive replacement;
+- HC-024 covers selected storage migration only;
+- HC-025 covers selected backend parity, host ownership and exclusive offline administration;
+- current-loop `ui_prompt_start`/`ui_prompt_end` tests remain outside Harness events; Harness waiting uses selected lane events/state;
+- terminal bookkeeping does not depend on `prepareNextTurn`;
+- usage/telemetry cases preserve cache reporting and provider cost;
+- encrypted reasoning remains selected Earendil content rather than rewritten signatures.
 
 ## Adoption gates
 
 Harness v3 is not selectable for production until:
 
-1. one coherent tagged release contains compatible `pi-coding-agent`, `pi-agent-core`, `pi-ai`, `pi-tui` and the selected session backend;
-2. the public lower-level constructor/factory and all required lane methods are implemented without private coding-agent imports;
-3. Memory conformance and at least one durable backend conformance suite pass;
-4. prompt, tools, queues, abort, resume, compaction, navigation, manual drive, watch and close pass HC-001–HC-025;
-5. every effect-intent/admission/settlement crash boundary passes under restart;
-6. schema migration of open operations and precise-rewrite concurrency are proven;
-7. Piclaw PC/golden suites pass under Bun, or an approved runtime boundary is documented;
-8. installed scheduler, mobile Abort, SSE reconnect, backup and rollback gates pass.
+1. one coherent release candidate or approved exact source contains compatible agent, AI, coding-agent, telemetry and selected backend packages;
+2. every Piclaw-required public lane method is implemented; `watchSession` is implemented or explicitly excluded from approved Piclaw scope;
+3. Memory and JSONL conformance pass unchanged; any selected SQLite boundary passes host-ownership and live-fork tests under its approved runtime;
+4. HC-001–HC-025 pass against the exact real public constructor and direct Context-last APIs;
+5. every provider/tool/structural intent-admission-settlement crash boundary passes after process replacement;
+6. selected storage migration of open operations is total and crash-resumable;
+7. Piclaw's PC/golden suites pass with exact operation correlation, terminal settlement, waiting projection and telemetry preservation;
+8. installed scheduler, mobile Abort, SSE reconnect, backup and rollback gates pass;
+9. a separate decision authorises activation of the already latent Piclaw service-effect packages.
 
 ## Assessment decision
 
-Keep the current Piclaw loop on released `0.84.4` and retain `0.84.1` as historical baseline evidence. Use the specification on Earendil `main` as the authoritative design and PR #8076 only as pinned draft implementation evidence. The current-loop dependency update does not start Harness migration; one coherent tagged Harness-v3 implementation must pass every gate above before activation.
+Keep Harness activation disabled and the current Piclaw session backend authoritative. Released `0.84.4` adds no Harness readiness despite being the current runtime family.
+
+Earendil `dev` is now suitable for a **latent positive compatibility refresh and HC dry run**, because public lane drive exists and exact-head CI is green. That work must use a separately approved source pin, no production importer and no activation path. Production selection waits for WP08/storage contract stability, explicit `watchSession` scope, host-ownership proof and successful Piclaw HC/PC suites.

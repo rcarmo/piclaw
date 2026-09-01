@@ -1,6 +1,6 @@
 # Target architecture and replay model
 
-The reviewed Piclaw effector classification is in [`evidence/effector-inventory.md`](evidence/effector-inventory.md). Implementable future interfaces, adapters over current Piclaw internals, fake contracts and fault cases are specified in [`evidence/future-effector-specifications.md`](evidence/future-effector-specifications.md). [`evidence/earendil-native-effector-contracts.md`](evidence/earendil-native-effector-contracts.md) requires direct use of Earendil's exported harness, session, model, tool, environment, result/error, resource and telemetry types; Piclaw-specific ports are limited to service-plane responsibilities. Harness v3's authoritative entries/registers/usage-ledger design and emerging type contracts are assessed in [`evidence/earendil-harness-v3-assessment.md`](evidence/earendil-harness-v3-assessment.md). The complete proposed Piclaw identity, accepted-source, settlement, cancellation, restart and replay design is in [`evidence/target-state-model.md`](evidence/target-state-model.md). Current Piclaw orchestration and Earendil v2 record-log details remain evidence only.
+The reviewed Piclaw effector classification is in [`evidence/effector-inventory.md`](evidence/effector-inventory.md). Implementable future interfaces, adapters over current Piclaw internals, fake contracts and fault cases are specified in [`evidence/future-effector-specifications.md`](evidence/future-effector-specifications.md). [`evidence/earendil-native-effector-contracts.md`](evidence/earendil-native-effector-contracts.md) requires direct use of Earendil's exported harness, session, model, tool, environment, result/error, resource and telemetry types; Piclaw-specific ports are limited to service-plane responsibilities. Harness v3's entries/typed-values-and-lists/operation-results/usage design and current public contracts are assessed in [`evidence/earendil-harness-v3-assessment.md`](evidence/earendil-harness-v3-assessment.md). The complete proposed Piclaw identity, accepted-source, settlement, cancellation, restart and replay design is in [`evidence/target-state-model.md`](evidence/target-state-model.md). Current Piclaw orchestration and Earendil v2 record-log details remain evidence only.
 
 ## Required target invariants
 
@@ -14,8 +14,8 @@ The assessment must test and refine these candidate invariants:
 6. The first accepted cancellation wins and remains scoped to its operation across late events and restart.
 7. Tool-call state is monotonic and duplicate results are idempotent.
 8. Recovery attempts, elapsed budget and tool use remain bounded.
-9. A process-local `EffectGate` orders abort against effect admission but never proves that an admitted external effect did or did not complete; unknown outcomes follow selected replay/reconciliation policy.
-10. At most one live operation task owns a lane locally, and durable `op.state` remains authoritative after that task is lost.
+9. A process-local operation gate orders abort against effect admission but never proves that an admitted external effect did or did not complete; unknown outcomes follow selected replay/reconciliation policy.
+10. At most one lane-owned Drive advances an operation locally, and durable flat operation state remains authoritative after process loss.
 11. Containment keeps tools disabled until accepted terminal settlement.
 12. Restart reconciliation preserves truthful FIFO carry, disposal and successor claims.
 13. Scheduler and `runAgent()` output have one delivery owner.
@@ -41,9 +41,9 @@ The ADR must assign each responsibility to one owner. The table below is a hypot
 | Tool execution lifecycle | Earendil harness | To verify |
 | Execution-time compaction | Earendil harness | To verify |
 | Harness-native execution recovery | Earendil harness | To verify |
-| Execution checkpoint/current operation state | Earendil harness | Harness v3 `op.state`; selected runtime still required |
-| Process-local lane task and effect admission | Earendil harness | Candidate PR #8076 `ActiveOperation`/`EffectGate`; never durable authority |
-| Storage transactions, migrations and session rewrite | Earendil session backend/repository | Piclaw selects and validates one conformant tagged backend |
+| Execution checkpoint/current operation state | Earendil harness | Harness v3 flat operation state; selected source/package still required |
+| Process-local lane Drive and effect admission | Earendil harness | Candidate `dev` lane-owned Drive/`Gate.admit()`; never durable authority |
+| Storage transactions, migrations and forks | Earendil Session/backend/repository plus host worker lifecycle | Piclaw selects and validates one conformant source/runtime boundary |
 | Projection from Earendil events/snapshots to Piclaw status | Piclaw projection service | Direct Earendil inputs; web DTO output |
 
 No final design may share ownership of accepted-input queues, operation completion, cancellation authority, scheduler delivery or terminal persistence.
@@ -60,7 +60,7 @@ reduce(serviceState, serviceEvent) -> { serviceState, commands }
 
 This reducer owns accepted sources, Piclaw operation correlation, terminal disposition, frontier and external delivery. It performs no I/O. Command executors call service effectors and direct Earendil methods, then turn results into service events.
 
-Earendil execution is not replayed through this reducer. Harness v3 owns its durable interpreter through `op.state` and atomic storage transactions. Time, IDs, external delivery results and storage faults must be injected into the Piclaw model; model/tool/provider execution uses the selected Earendil contracts. The same Piclaw snapshot and ordered service event stream must produce the same semantic service state and command trace.
+Earendil execution is not replayed through this reducer. Harness v3 owns its durable interpreter through flat operation state and atomic storage commits. Time, IDs, external delivery results and storage faults must be injected into the Piclaw model; model/tool/provider execution uses the selected Earendil contracts. The same Piclaw snapshot and ordered service event stream must produce the same semantic service state and command trace.
 
 ### Versioned state, events and commands
 
@@ -90,7 +90,7 @@ Each command must define:
 - compensation or reconciliation rule;
 - redaction policy.
 
-For Harness v3 effects, tests distinguish durable intent, process-local admission and durable settlement. `EffectGate.assertOpen()` is adjacent to invocation but is not a persisted effect-start record. A crash after admission remains an unknown outcome.
+For Harness v3 effects, tests distinguish durable intent, process-local admission and durable settlement. `Gate.admit()` is adjacent to invocation but is not a persisted effect-start record. A crash after admission remains an unknown outcome.
 
 ## Replay and fault-boundary standard
 
@@ -127,8 +127,8 @@ Replay equality excludes timestamps and generated IDs after normalisation. It in
 - successor claim and restart reconciliation;
 - stale generation event;
 - mobile Compose Abort with exact authority;
-- abort-first and admission-first at every `EffectGate` integration;
+- abort-first and admission-first at every `Gate.admit()` integration;
 - process loss after effect admission but before settlement;
 - live lane task versus restored orphaned `effect_pending` state;
 - open-operation migration and backend conformance;
-- precise rewrite concurrent with readers/writers and restart.
+- host ownership transfer and streaming forks concurrent with readers/writers and restart.

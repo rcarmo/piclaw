@@ -177,14 +177,14 @@ Adopt early:
 - `Session`, `SessionStorage`, `SessionRepo` and lane terminology;
 - `ExecutionEnv`, `FileSystem`, `Shell`, `Result`, `FileError` and `ExecutionError`;
 - `Models`, `HarnessTool`/`AgentHarnessTool`, `Resources` and `TelemetryContext`;
-- durable operation/tool/queue semantics, mapped to Harness v3 current registers rather than v2 record shapes;
+- durable operation/tool/queue semantics, mapped to Harness v3 values/lists and flat operation state rather than v2 record shapes;
 - the selected version's public Harness v3 restore/current-state surface; `0.84.1` reducer code is historical evidence only;
 - tagged `Result` outcomes;
-- `runId` correlation;
+- durable operation-ID correlation;
 - replay policy;
 - suspended-operation and missing-identity concepts;
 - the selected Harness v3 backend conformance suite;
-- manual-drive effects/action vocabulary as the fixture target.
+- deterministic direct-drive boundaries as the fixture target.
 
 Keep in Piclaw:
 
@@ -206,4 +206,4 @@ Do not build production against released `0.84.1`:
 - its contextual-tool widening workaround;
 - installed `AgentHarness` methods that throw.
 
-Harness v3 specifies replacements for all except runtime completeness. Draft PR #8076 at `fd389abc4677b4e0fa5dc9b2bbd2e63418f079b4` now contains v3 types, session/storage implementations and low-level execution helpers, but no concrete public harness runtime. Use only a coherent tagged release after its direct contracts and backends pass the documented gates.
+Harness v3 `dev`/draft PR #8963 at `d14d6b22327d545d6a253f932165b63e48d7f9c8` now contains a concrete constructor and complete public lane drive; only session watch remains stubbed, while WP08 fork/storage work continues. Use only one coherent selected source/package family after its direct contracts and backends pass the documented gates.

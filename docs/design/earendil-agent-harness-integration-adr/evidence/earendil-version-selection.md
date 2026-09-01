@@ -19,9 +19,9 @@ Piclaw's existing coding-agent loop selects the coherent `0.84.4` package family
 
 Released `0.84.1` remains historical baseline evidence for the exported v2 session model, action vocabulary and unsupported Harness scaffold. Tagged `0.84.4` retains that scaffold: all audited Harness operations remain unimplemented, so it is rejected as a Harness-v3 implementation even though the current loop uses its non-Harness APIs.
 
-The target execution design is the authoritative Harness v3 [`packages/agent/docs/harness.md`](https://github.com/earendil-works/pi/blob/5f7195c51eac43cdf329f813a7ef020d7bd74527/packages/agent/docs/harness.md), assessed in [`earendil-harness-v3-assessment.md`](earendil-harness-v3-assessment.md). Draft PR #8076 at `fd389abc4677b4e0fa5dc9b2bbd2e63418f079b4` implements substantial v3 types, session/storage and low-level execution primitives, but has no concrete public harness runtime and is not released.
+Current execution design and implementation evidence are on Earendil `dev`/draft PR #8963 at `d14d6b22327d545d6a253f932165b63e48d7f9c8`, assessed in [`earendil-harness-v3-assessment.md`](earendil-harness-v3-assessment.md). It implements public lane drive and SQLite host ownership; only session watch is stubbed, while WP08 fork/storage work remains active.
 
-Piclaw retains `0.84.1` fixture data for historical comparisons while the executable compatibility probes and current backend conformance run against installed `0.84.4`. New Harness design work follows the selected Harness v3 contracts. No source compatibility with `0.84.1` or draft PR #8076 is required.
+Piclaw retains `0.84.1` fixture data for historical comparisons while executable compatibility probes and backend conformance run against installed `0.84.4`. New Harness work follows current direct v3 contracts. No source compatibility with `0.84.1`, the released `0.84.4` scaffold or the current `dev` snapshot is required.
 
 ## Upgrade workflow
 
@@ -29,14 +29,14 @@ A current-loop package update may proceed when existing direct imports and behav
 
 For each Harness candidate:
 
-1. require one coherent tagged release and update all exact Earendil package pins together;
+1. require one coherent release candidate or approved exact source and pin its complete Earendil package/source set;
 2. compile Piclaw's direct imports and `satisfies` checks;
 3. update local construction/context binding to the candidate's API;
 4. run upstream session backend conformance unchanged;
 5. verify the candidate exports a real public `AgentHarnessConstructor`, then run HC-001–HC-025 through it;
 6. run PC-001–PC-020 and golden replay fixtures;
-7. inspect semantic differences in result tags, storage/register state, process-local task/admission behaviour, actions, snapshots, tools, errors and telemetry;
-8. run backend conformance, open-operation migration and concurrent precise-rewrite tests;
+7. inspect semantic differences in result tags, values/lists, immutable operation results, lane-owned Drive/admission behaviour, snapshots, tools, errors and telemetry;
+8. run backend/fork conformance, open-operation migration and host-ownership/process-replacement tests;
 9. remove obsolete Piclaw glue; do not retain both paths;
 10. record the selected version and evidence in the ADR/release review.
 
@@ -48,7 +48,7 @@ The following can change on the Piclaw side without blocking adoption:
 - tool-context binding;
 - resource loading/composition;
 - event narrowing and web projection;
-- session backend setup, migration and rewrite fencing;
+- session backend setup, migration, host ownership and fork policy;
 - model/provider construction;
 - hook registrations;
 - test fixtures and expected traces;

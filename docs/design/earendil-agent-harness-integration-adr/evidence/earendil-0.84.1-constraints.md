@@ -8,7 +8,7 @@ This file records the historical constraints found in the then-installed `0.84.1
 
 `AgentHarness` prompt, queue, abort, compaction, navigation, resume, lane, watcher and manual-drive methods throw `HarnessNotImplemented`. Restore rejects sessions containing records.
 
-Piclaw response: retain this version as historical baseline evidence only. Current `0.84.4` is selected for non-Harness production APIs but remains unsupported for Harness execution. Draft PR #8076 has superseded the earlier type-only branch and implements substantial v3 session/storage work, but still has no concrete public harness runtime. Select one coherent tagged Harness-v3 implementation before production Harness execution.
+Piclaw response: retain this version as historical baseline evidence only. Current `0.84.4` is selected for non-Harness production APIs but remains unsupported for Harness execution. Current `dev`/draft PR #8963 implements a concrete constructor and complete public lane drive, but remains unselected with active fork/storage work. Select one coherent release candidate or approved source before production Harness execution.
 
 ### C-002 — Coding-agent harness helper is private
 
@@ -40,7 +40,7 @@ Piclaw response: Harness v3 specifies total-state restore/resume. Keep assumptio
 
 The installed files implement `reduceLaneState()` and `validateRecordLog()`, but the package export map exposes only `.`, `./node`, `./session/testing` and `./package.json`; the root index does not re-export the reducer.
 
-Piclaw response: do not deep-import it. Harness v3 removes reducer/history recovery in favour of current registers and bounded restore; select that public implementation.
+Piclaw response: do not deep-import it. Harness v3 removes reducer/history recovery in favour of current values/lists, flat operation state and bounded restore; select that public implementation.
 
 ### C-008 — Bun is outside the declared engine contract
 
@@ -48,14 +48,14 @@ Piclaw response: run public session conformance, execution environment and real 
 
 ## Lower-confidence surfaces
 
-- implementation fidelity to Harness v3 typed event/watch ordering;
-- runtime enforcement that public `runId` is the durable operation ID;
+- implementation fidelity to Harness v3 typed lane-watch ordering; session watch is still stubbed at the pinned `dev` source;
+- runtime enforcement that public operation identity remains stable across drive/resume/result lookup;
 - abort ordering around queue state and late tool/model results;
 - hook durability/replay timing;
-- manual-drive action/effect timing;
-- process-local `EffectGate` coverage and abort/admission ordering;
+- deterministic direct-drive and gated storage/effect timing;
+- process-local `Gate.admit()` coverage and abort/admission ordering;
 - unknown outcomes after effect admission but before settlement;
-- transaction/migration/precise-rewrite behaviour across selected backends.
+- commit/migration/host-ownership/fork behaviour across selected backends.
 
 Piclaw response: let the selected version's direct contract tests determine behaviour. Do not hide differences behind compatibility interfaces.
 

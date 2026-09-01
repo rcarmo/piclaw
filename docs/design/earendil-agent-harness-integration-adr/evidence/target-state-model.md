@@ -5,7 +5,7 @@ Status: proposed architecture for the ADR decision.
 The target uses two durable domains with explicit correlation:
 
 1. Piclaw owns service acceptance, ordering, operation correlation, external delivery and terminal disposition.
-2. Earendil Harness v3 owns its entry tree, current execution registers, usage ledger, tools/compaction state and resumable interpreter.
+2. Earendil Harness v3 owns its entry tree, typed values/lists, immutable operation results, usage ledger, tools/compaction state and resumable interpreter.
 
 Piclaw does not recreate Earendil's execution interpreter or persist a duplicate harness journal. Earendil does not become the authority for external acceptance, timeline delivery or Piclaw terminal consumption.
 
@@ -19,7 +19,7 @@ Piclaw does not recreate Earendil's execution interpreter or persist a duplicate
 | `operationVersion` | Piclaw | Monotonic per operation | Compare-and-set fencing for intents and settlement |
 | `sessionId` | Earendil | Durable harness session | Transcript and lane namespace |
 | `lane` | Earendil | Session lane | Harness execution/tree branch |
-| `runId` / Earendil `operationId` | Earendil | Prompt/compaction/navigation operation | Same durable Harness v3 operation identity; exact abort/resume target |
+| Earendil `operationId` | Earendil | Prompt/compaction/navigation operation | Durable Harness v3 operation identity; exact drive/abort/result target |
 | `stepId` / attempt | Earendil | Durable step series | Retry, deferred and compaction correlation |
 | projection receipt sequence | Piclaw web projector | One connection/watch generation | UI ordering and stale-callback rejection; not harness authority |
 | `deliveryId` | Piclaw | One external delivery effect | Timeline/channel/log/notification idempotency |
@@ -32,7 +32,7 @@ interface OperationHarnessCorrelation {
   operationVersion: number;
   sessionId: string;
   lane: string;
-  harnessOperationId: string | null; // exposed publicly as runId
+  harnessOperationId: string | null; // Earendil operationId
   harnessState: "not_started" | "running" | "suspended" | "aborting" | "finished";
   lastResultObserved: boolean;
   watchGeneration: number;
@@ -134,7 +134,7 @@ The persisted operation log contains immutable intent/disposition rows plus a cu
 | none | source accepted and eligible | accepted | enqueue wake outbox |
 | accepted | claim succeeds | claimed | open/load harness lane |
 | claimed | harness lane ready | starting_harness | append correlation intent |
-| starting_harness | Earendil operation accepted | executing | persist returned Harness v3 `runId`/operation ID; start watch projection |
+| starting_harness | Earendil operation accepted | executing | persist returned Harness v3 operation ID; start watch projection |
 | executing | steer/follow-up accepted | executing | append source and deliver exact-run queue command |
 | executing | Earendil suspended | suspended | persist harness snapshot/missing identities |
 | suspended | resumable and owner valid | executing | call exact lane `resume()` |
@@ -145,24 +145,24 @@ The persisted operation log contains immutable intent/disposition rows plus a cu
 
 ## Earendil execution model
 
-Harness v3 [`harness.md`](https://github.com/earendil-works/pi/blob/5f7195c51eac43cdf329f813a7ef020d7bd74527/packages/agent/docs/harness.md) is the authoritative target execution design. Released `0.84.1` remains implemented baseline evidence; draft PR #8076 at `fd389abc4677b4e0fa5dc9b2bbd2e63418f079b4` is current but incomplete development evidence. Harness v3 specifies:
+Earendil `dev` [`harness.md`](https://github.com/earendil-works/pi/blob/d14d6b22327d545d6a253f932165b63e48d7f9c8/packages/agent/docs/harness.md) is the current target execution design. Released `0.84.4` remains an unsupported Harness scaffold; `dev`/draft PR #8963 at `d14d6b22327d545d6a253f932165b63e48d7f9c8` is implemented but unselected source evidence. Harness v3 provides:
 
-- immutable `Entry` tree, mutable typed registers and append-only `UsageRow` ledger;
-- `lane.state` naming at most one current operation;
-- immutable `op.meta` and replaceable total `op.state` as the durable program counter;
-- intent → process-local `EffectGate` admission → external effect → settlement around hooks, providers, tools and timers;
-- direct `AgentHarness`/`AgentLane` operations whose public `runId` is the durable operation ID;
-- tool replay through `effect_pending`, persisted effective args and `safe`/`never` declarations;
-- compaction/navigation as first-class operations;
+- immutable `Entry` trees, typed scalar `Value<T>` and append-only `ValueList<T>` addresses, and an append-only `UsageRow` ledger;
+- explicit Session, Branch and AgentLane ownership, with no implicit main Branch or lane;
+- `LaneState` naming at most one current operation and holding one lane-owned tagged inbox;
+- immutable operation metadata and a flat 13-leaf `OperationState` as the durable program counter;
+- intent → process-local `Gate.admit()` → external effect → settlement around hooks, providers, tools and timers;
+- direct `AgentLane.accept()`, `drive()`, `requestAbort()` and `getResult()` primitives plus convenience methods;
+- tool replay through `effect_pending`, stable invocation identity, durable memos/checkpoints and `safe`/`never` declarations;
+- compaction and navigation as first-class structural operations;
 - cancellation as orthogonal durable control committed before signal pull;
-- terminal transactions that delete `op.*`, clear the lane operation and write `lane.lastResult`;
-- restart restore by bounded current-register reads and exact hydration, without history folding or a reducer;
-- total storage-version migrations for current registers/open operations;
-- per-lane mutation serialisation, backend writer leases and administrative precise rewrite.
+- terminal transactions that delete operation-owned values/lists, clear the current operation and write one immutable `OperationResultRecord` under `pi.result`;
+- restart restore by bounded current-value/list reads and exact hydration, without history folding or a reducer;
+- one Session mutation line, independently atomic backend commits, host-managed writable ownership and explicit Branch/tree forks.
 
-Piclaw reads Earendil state through the exported harness/session/watch methods and `getLastResult()`. Recovery uses bounded selected-version point reads; it does not depend on private helpers or PR #7784's v2 `findRecords()` proposal. Piclaw does not mutate Earendil storage except through selected-version public contracts and does not persist duplicate Earendil operation records.
+Piclaw reads Earendil state through exported harness, lane, Session and lane-watch methods. It obtains a known terminal record with `getResult(operationId)` or the latest record from `LaneSnapshot.lastResult`; recovery never reads result records to reconstruct an open operation. Recovery uses bounded selected-version point reads and does not depend on private helpers or PR #7784's v2 `findRecords()` proposal. Piclaw does not mutate reserved Earendil state outside selected public contracts and does not persist duplicate Earendil operation records.
 
-A live operation task and its `EffectGate` are process-local. They arbitrate local ownership and abort-versus-admission only. They disappear on process loss; durable `op.state` then drives activation recovery. Because no durable effect-start marker exists, a crash after admission but before settlement is an unknown outcome, not proof that the effect was absent.
+One lane-owned Drive and its gate are process-local. They arbitrate local ownership and abort-versus-admission only. They disappear on process loss; durable flat operation state then drives reattachment and reconciliation. Because no durable effect-start marker exists, a crash after admission but before settlement is an unknown outcome, not proof that the effect was absent.
 
 ## Harness events and Piclaw projection
 
@@ -171,7 +171,7 @@ Harness v3 specifies typed `HarnessEvent`, `HookMap`, `LaneSnapshot` and `Sessio
 Piclaw treats:
 
 - `entry_added` as proof of durable transcript mutation;
-- operation promise results and `lane.lastResult` as terminal execution authority;
+- `OperationResultRecord`, `getResult(operationId)` and `LaneSnapshot.lastResult` as terminal execution evidence;
 - events as projection input that may contain sensitive content and must be redacted;
 - snapshot/watch reconnection as the state-recovery mechanism, not process-event replay.
 
@@ -192,7 +192,7 @@ type ServiceCommandV1 =
   | { v: 1; type: "maintenance"; operationId: string; maintenanceKind: string };
 ```
 
-Every command result is appended before the next transition. An `effect_may_have_happened` result triggers reconciliation by idempotency key or expected version. For Earendil-owned work, passing `EffectGate.assertOpen()` does not change that certainty: only durable settlement proves a harness result, and tool replay remains limited to the selected `safe`/`never` semantics.
+Every command result is appended before the next transition. An `effect_may_have_happened` result triggers reconciliation by idempotency key or expected version. For Earendil-owned work, passing `Gate.admit()` does not change that certainty: only durable settlement proves a Harness result, and tool replay remains limited to the selected `safe`/`never` semantics.
 
 ## Atomic terminal settlement
 
@@ -233,7 +233,7 @@ Rules:
 For each chat with non-terminal Piclaw work:
 
 1. read the Piclaw operation/source projection and immutable log;
-2. open the correlated Earendil session and obtain each relevant lane's public restored snapshot plus `getLastResult()` when idle; use bounded current-state reads and do not query history or v2 records;
+2. open the correlated Earendil Session, inspect the returned open-operation inventory and obtain each relevant lane's public snapshot; read `getResult(harnessOperationId)` when Piclaw expects terminal evidence, and do not query history or v2 records;
 3. compare Piclaw `operationId ↔ sessionId/lane/harnessOperationId` correlation;
 4. classify one of the cases below;
 5. append a Piclaw reconciliation event before issuing a command.
@@ -247,11 +247,11 @@ For each chat with non-terminal Piclaw work:
 | executing | run terminal, Piclaw not terminal | build terminal candidate and settle |
 | terminal | open same run | abort/close as stale execution; never unset Piclaw terminal |
 | non-terminal | different run | quarantine owner mismatch; operator/recovery policy decides |
-| non-terminal | corrupt current registers/referenced entries | fail/quarantine according to selected harness fault semantics; no automatic unsafe mutation replay |
+| non-terminal | corrupt current values/lists or referenced entries | fail/quarantine according to selected Harness fault semantics; no automatic unsafe mutation replay |
 | source pending | no operation | claim in FIFO order and wake |
 | `never` tool unresolved | open/suspended run | containment; do not replay; require result reconciliation or explicit disposition |
 
-Steers/follow-ups exist in Piclaw accepted-source state and, after successful exact-operation delivery, in Harness v3 queue state plus `pending.entry`. Piclaw distinguishes accepted-but-undelivered from delivered. Restart reissues delivery only after the selected harness snapshot/state proves that the entry ID is neither pending nor consumed, under the documented idempotency policy.
+Steers/follow-ups exist in Piclaw accepted-source state and, after successful exact-operation delivery, in the lane-owned tagged inbox. Piclaw distinguishes accepted-but-undelivered from delivered. Restart reissues delivery only after the selected Harness snapshot/state proves that the entry ID is neither queued nor consumed, under the documented idempotency policy.
 
 ## Replay record
 
@@ -282,8 +282,8 @@ Replay runs at two layers:
 
 1. the Piclaw service reducer consumes one service event and emits service commands;
 2. service fakes or direct Earendil calls return results as service events;
-3. the Harness v3 fixture advances through manual drive using the selected `ActionInfo`/effects surface;
-4. an instrumented `Storage.commit()` records Earendil transactions while current registers/entries/usage remain the durable oracle;
+3. the Harness v3 fixture advances through selected public drive with deterministic gated storage/effect boundaries;
+4. instrumented `Storage.commit(Write[])` records Earendil commits while entries, values/lists, operation results and usage remain the durable oracle;
 5. repeat until both layers are quiescent;
 6. compare Piclaw events/commands/deliveries plus Earendil transactions/current state and both terminal outcomes.
 
@@ -298,13 +298,13 @@ Every mutating command is tested with:
 - delayed result after replacement;
 - restart between each durable write;
 - cancellation concurrent with completion;
-- malformed/corrupt Harness v3 current register or referenced entry;
+- malformed/corrupt Harness v3 current value/list or referenced entry;
 - unavailable model/tool identity;
 - delivery success followed by completion-write failure;
-- crash after `EffectGate` admission and before harness settlement;
-- close while a live lane task owns an external effect;
+- crash after `Gate.admit()` and before Harness settlement;
+- close while a lane-owned Drive owns an external effect;
 - open-operation migration at every transaction boundary;
-- precise rewrite racing a reader, writer, backup or restart.
+- host ownership transfer or streaming fork racing a reader, writer, deletion, backup or restart.
 
 The expected result is one disposition, no lost accepted source, no unsafe mutation replay and bounded reconciliation.
 
