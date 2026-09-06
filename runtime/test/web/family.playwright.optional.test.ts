@@ -43,6 +43,108 @@ beforeAll(async () => {
 });
 afterAll(async () => { await browser?.close(); server?.stop(true); });
 
+async function memoryFixture(page:Page){
+  const state=await fixture(page),id='11111111-1111-4111-8111-111111111111',key='22222222-2222-4222-8222-222222222222',time='2026-09-06T00:00:00.000Z';
+  const source={chat_jid:'web:alice',message_rowid:1,message_id:'message-one'};
+  const preview={...source,source_hash:'a'.repeat(64),text:'Alice private text\n<img src=x onerror=alert(1)> SHARE\nprivate suffix'};
+  const detail={publication_id:id,request_id:key,published_at:time,publisher:{user_id:'alice',username:'alice',display_name:'Alice'},source_kind:'message-excerpt',text:'<img src=x onerror=alert(1)> SHARED_COPY',source:{...source,source_hash:preview.source_hash},withdrawn:false};
+  const own={owner_user_id:'alice',window_size:100,items:[{publication_id:id,request_id:key,published_at:time,withdrawn:false}]};
+  const sent:any[]=[],previews:any[]=[],withdrawals:any[]=[];
+  await page.route('**/timeline?**',r=>r.fulfill({json:{posts:[{id:1,data:{content:'Alice private text'},memory_source:source}],has_more:false}}));
+  await page.route('**/agent/family-memory/own',r=>r.fulfill({json:own}));
+  await page.route('**/agent/family-memory/shared',r=>r.fulfill({json:{window_size:20,items:[detail]}}));
+  await page.route('**/agent/family-memory/preview',r=>{previews.push(r.request().postDataJSON());return r.fulfill({json:preview});});
+  await page.route('**/agent/family-memory',r=>{sent.push({body:r.request().postDataJSON(),headers:r.request().headers()});return r.fulfill({json:{publication_id:id,request_id:r.request().postDataJSON().request_id,created:true}});});
+  await page.route(`**/agent/family-memory/${id}`,r=>r.fulfill({json:detail}));
+  await page.route(`**/agent/family-memory/${id}/withdraw`,r=>{withdrawals.push({body:r.request().postDataJSON(),headers:r.request().headers()});detail.withdrawn=true;return r.fulfill({json:{publication_id:id,withdrawn:true,created:true}});});
+  return {state,id,key,source,preview,detail,own,sent,previews,withdrawals};
+}
+async function memoryDraft(page:Page){await page.getByRole('button',{name:'Preview for family memory',exact:true}).click();await page.waitForFunction(()=>!document.getElementById('memory-form')?.hidden);await page.locator('#memory-excerpt').fill('SHARE');}
+async function inspectMemory(page:Page){await page.locator('#refresh-memory').click();await page.getByRole('button',{name:'Inspect memory',exact:true}).click();await page.waitForFunction(()=>!document.getElementById('memory-detail')?.hidden);}
+
+browserTest('memory publication previews exact source, requires verbatim confirmed excerpt and renders reference text safely',async()=>{
+  const page=await browser.newPage({viewport:{width:375,height:800}});
+  try{const f=await memoryFixture(page);await page.goto(base);await ready(page);expect(f.sent).toHaveLength(0);await memoryDraft(page);
+    expect(f.previews).toEqual([f.source]);expect(await page.locator('#memory-source-text').textContent()).toContain('<img');expect(await page.locator('#family-memory img').count()).toBe(0);
+    expect(await page.locator('#publish-memory').isDisabled()).toBe(true);await page.locator('#confirm-memory-publication').check();await page.locator('#memory-excerpt').fill('generated summary');expect(await page.locator('#publish-memory').isDisabled()).toBe(true);
+    await page.locator('#confirm-memory-publication').check();await page.locator('#publish-memory').click();expect(f.sent).toHaveLength(0);expect(await page.locator('#memory-status').textContent()).toContain('verbatim');
+    await page.locator('#memory-excerpt').fill('SHARE');await page.locator('#confirm-memory-publication').check();await page.locator('#publish-memory').click();await page.waitForFunction(()=>document.getElementById('memory-status')?.textContent?.includes('Memory published'));
+    expect(f.sent).toHaveLength(1);expect(f.sent[0].body).toEqual({...f.source,source_hash:f.preview.source_hash,text:'SHARE',request_id:expect.any(String),confirm:true});expect(f.sent[0].headers).toMatchObject({'content-type':'application/json','x-piclaw-account-id':'alice','x-piclaw-login-id':'login-a'});
+    expect(await page.locator('#memory-excerpt').inputValue()).toBe('');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(await page.evaluate(()=>[localStorage.length,sessionStorage.length])).toEqual([0,0]);
+  }finally{await page.close();}
+},20000);
+
+browserTest('memory uncertain retries retain exact identity, lock excerpt and require fresh manual confirmation',async()=>{
+  const page=await browser.newPage();try{await memoryFixture(page);const sent:any[]=[];await page.route('**/agent/family-memory',r=>{const p=r.request().postDataJSON();sent.push(p);return r.fulfill(sent.length===1?{status:500,json:{}}:sent.length===2?{json:{request_id:'wrong',publication_id:'wrong',created:true}}:{json:{request_id:p.request_id,publication_id:'11111111-1111-4111-8111-111111111111',created:false}});});
+    await page.goto(base);await ready(page);await memoryDraft(page);
+    for(let i=1;i<=3;i++){await page.locator('#confirm-memory-publication').check();await page.locator('#publish-memory').click();await page.waitForFunction(()=>!(document.getElementById('send-message') as HTMLButtonElement).disabled);expect(sent).toHaveLength(i);expect(await page.locator('#publish-memory').isDisabled()).toBe(true);
+      if(i<3){expect(await page.locator('#memory-excerpt').isDisabled()).toBe(true);expect(await page.locator('#publish-memory').textContent()).toBe('Retry same memory publication');await page.locator('#open-memory').click();}}
+    expect(sent[0]).toEqual(sent[1]);expect(sent[1]).toEqual(sent[2]);expect(await page.locator('#memory-status').textContent()).toContain('Publication verified');
+  }finally{await page.close();}
+},20000);
+
+browserTest('memory receipt and shared copy views are separate and withdrawal is explicit and owner-correlated',async()=>{
+  const page=await browser.newPage();try{const f=await memoryFixture(page);await page.goto(base);await ready(page);await page.locator('#open-memory').click();await inspectMemory(page);
+    expect(await page.locator('#withdraw-memory').isDisabled()).toBe(true);expect(await page.locator('#memory-detail-text').textContent()).toContain('SHARED_COPY');expect(await page.locator('#family-memory img').count()).toBe(0);
+    await page.locator('#confirm-memory-withdrawal').check();await page.locator('#withdraw-memory').click();await page.waitForFunction(()=>document.getElementById('memory-status')?.textContent?.includes('withdrawal verified'));expect(f.withdrawals).toHaveLength(1);expect(f.withdrawals[0].body).toEqual({confirm:true});
+    await inspectMemory(page);expect(await page.locator('#confirm-memory-withdrawal').isDisabled()).toBe(true);await page.locator('#shared-memory').click();await page.waitForFunction(()=>document.getElementById('memory-status')?.textContent?.includes('Newest 20'));
+    expect(await page.locator('#memory-list').textContent()).toContain('Published by Alice');expect(await page.locator('#memory-list').textContent()).not.toContain('message-one');expect(await page.locator('#memory-form').isVisible()).toBe(false);expect(await page.locator('#memory-detail').isVisible()).toBe(false);expect(f.sent).toHaveLength(0);
+  }finally{await page.close();}
+},20000);
+
+browserTest('memory drafts confirmations and retry keys clear on discard refresh sharedview inspection close blur session switch and navigation',async()=>{
+  const page=await browser.newPage();try{await memoryFixture(page);const sent:any[]=[];await page.route('**/agent/family-memory',r=>{sent.push(r.request().postDataJSON());return r.fulfill({status:500,json:{}});});await page.goto(base);await ready(page);
+    for(const action of ['discard','refresh','shared','inspect','close','blur','session','navigation']){
+      if(action==='session')await page.locator('#session-select').selectOption('web:alice');await memoryDraft(page);await page.locator('#confirm-memory-publication').check();await page.locator('#publish-memory').click();await page.waitForFunction(()=>!(document.getElementById('send-message') as HTMLButtonElement).disabled);
+      if(action==='discard')await page.locator('#discard-memory').click();if(action==='refresh')await page.locator('#refresh-memory').click();if(action==='shared')await page.locator('#shared-memory').click();if(action==='inspect')await inspectMemory(page);
+      if(action==='close'){await page.locator('#close-memory').click();await page.locator('#open-memory').click();}
+      if(action==='blur'){await page.evaluate(()=>dispatchEvent(new Event('blur')));expect(await page.locator('#memory-excerpt').inputValue()).toBe('');await page.evaluate(()=>dispatchEvent(new Event('focus')));await ready(page);}
+      if(action==='session'){await page.locator('#session-select').selectOption('web:alice-two');await ready(page);await page.locator('#session-select').selectOption('web:alice');await ready(page);}
+      if(action==='navigation')await page.evaluate(()=>dispatchEvent(new PageTransitionEvent('pagehide')));
+      expect(await page.locator('#memory-excerpt').inputValue()).toBe('');expect(await page.locator('#confirm-memory-publication').isChecked()).toBe(false);expect(await page.locator('#publish-memory').textContent()).toBe('Publish memory');
+    }expect(new Set(sent.map(v=>v.request_id)).size).toBe(sent.length);
+  }finally{await page.close();}
+},30000);
+
+browserTest('memory rejects mismatched source/history/receipt responses and clears stale account data',async()=>{
+  const page=await browser.newPage();try{const f=await memoryFixture(page);await page.goto(base);await ready(page);f.preview.message_id='wrong';await page.getByRole('button',{name:'Preview for family memory',exact:true}).click();await page.waitForFunction(()=>document.getElementById('memory-status')?.textContent==='Invalid memory source response.');expect(await page.locator('#memory-form').isVisible()).toBe(false);
+    f.own.owner_user_id='bob';await page.locator('#refresh-memory').click();await page.waitForFunction(()=>document.getElementById('memory-status')?.textContent==='Invalid memory list.');expect(await page.locator('#memory-list').textContent()).toBe('');
+    f.own.owner_user_id='alice';f.detail.publisher.user_id='bob';await page.locator('#refresh-memory').click();await page.getByRole('button',{name:'Inspect memory',exact:true}).click();await page.waitForFunction(()=>document.getElementById('memory-status')?.textContent==='Invalid memory receipt.');expect(await page.locator('#withdraw-memory').isDisabled()).toBe(true);
+    f.preview.message_id='message-one';await memoryDraft(page);f.state.identity=principal('bob','login-b');await page.locator('#confirm-memory-publication').check();await page.locator('#publish-memory').click();await page.waitForFunction(()=>document.getElementById('family-status')?.textContent?.includes('no longer bound'));expect(await page.locator('#family-memory').isVisible()).toBe(false);expect(await page.locator('#memory-excerpt').inputValue()).toBe('');
+  }finally{await page.close();}
+},20000);
+
+browserTest('memory pending publication is single-flight and late response cannot restore a closed panel',async()=>{
+  const page=await browser.newPage();let release=()=>{};try{const f=await memoryFixture(page);let entered!:()=>void;const waiting=new Promise<void>(r=>entered=r),held=new Promise<void>(r=>release=r);let sends=0;
+    await page.route('**/agent/family-memory',async r=>{sends++;entered();await held;await r.fulfill({json:{publication_id:f.id,request_id:r.request().postDataJSON().request_id,created:true}});});await page.goto(base);await ready(page);await memoryDraft(page);await page.locator('#confirm-memory-publication').check();await page.locator('#publish-memory').click();await waiting;
+    expect(await page.locator('#send-message').isDisabled()).toBe(true);await page.locator('#refresh-memory').click();expect(sends).toBe(1);await page.locator('#close-memory').click();release();await page.waitForFunction(()=>!(document.getElementById('send-message') as HTMLButtonElement).disabled);expect(await page.locator('#family-memory').isVisible()).toBe(false);expect(await page.locator('#memory-source-text').textContent()).toBe('');
+  }finally{release();await page.close();}
+},20000);
+
+browserTest('memory withdrawal remains reachable after blur during a held send without releasing its lock',async()=>{
+  const page=await browser.newPage();let release=()=>{};try{const f=await memoryFixture(page);let entered!:()=>void;const waiting=new Promise<void>(r=>entered=r),held=new Promise<void>(r=>release=r);
+    await page.route('**/agent/default/message?**',async r=>{entered();await held;await r.fulfill({json:{ok:true}});});await page.goto(base);await ready(page);await page.locator('#open-memory').click();await inspectMemory(page);
+    await page.locator('#message-text').fill('held message');await page.locator('#send-message').click();await waiting;await page.evaluate(()=>dispatchEvent(new Event('blur')));await page.evaluate(()=>dispatchEvent(new Event('focus')));await page.waitForFunction(()=>!document.getElementById('family-memory')?.hidden);
+    expect(await page.locator('#memory-detail-text').textContent()).toBe('');await inspectMemory(page);await page.locator('#confirm-memory-withdrawal').check();await page.locator('#withdraw-memory').click();await page.waitForFunction(()=>document.getElementById('memory-status')?.textContent?.includes('withdrawal verified'));expect(f.withdrawals).toHaveLength(1);expect(await page.locator('#send-message').isDisabled()).toBe(true);release();await page.waitForFunction(()=>!(document.getElementById('send-message') as HTMLButtonElement).disabled);
+  }finally{release();await page.close();}
+},20000);
+
+browserTest('memory rejects oversized preview or excerpts and duplicate shared/history identities without partial rendering',async()=>{
+  const page=await browser.newPage();try{const f=await memoryFixture(page);await page.goto(base);await ready(page);f.preview.text='x'.repeat(102401);await page.getByRole('button',{name:'Preview for family memory',exact:true}).click();await page.waitForFunction(()=>document.getElementById('memory-status')?.textContent==='Invalid memory source response.');
+    f.preview.text='é'.repeat(8193);await memoryDraft(page);await page.locator('#memory-excerpt').fill(f.preview.text);await page.locator('#confirm-memory-publication').check();await page.locator('#publish-memory').click();expect(f.sent).toHaveLength(0);expect(await page.locator('#memory-status').textContent()).toContain('16 KiB');
+    f.own.items.push({...f.own.items[0]!});await page.locator('#refresh-memory').click();await page.waitForFunction(()=>document.getElementById('memory-status')?.textContent==='Invalid memory metadata.');expect(await page.locator('#memory-list').textContent()).toBe('');
+    await page.route('**/agent/family-memory/shared',r=>r.fulfill({json:{window_size:20,items:[f.detail,{...f.detail}]}}));await page.locator('#shared-memory').click();await page.waitForFunction(()=>document.getElementById('memory-status')?.textContent==='Invalid memory metadata.');expect(await page.locator('#memory-list').textContent()).toBe('');
+  }finally{await page.close();}
+},20000);
+
+browserTest('memory armed publication is disarmed by unrelated send and does not become enabled until reconfirmed',async()=>{
+  const page=await browser.newPage();let release=()=>{};try{const f=await memoryFixture(page);let entered!:()=>void;const waiting=new Promise<void>(r=>entered=r),held=new Promise<void>(r=>release=r);
+    await page.route('**/agent/default/message?**',async r=>{entered();await held;await r.fulfill({json:{ok:true}});});await page.goto(base);await ready(page);await memoryDraft(page);await page.locator('#confirm-memory-publication').check();
+    await page.locator('#message-text').fill('held');await page.locator('#send-message').click();await waiting;expect(await page.locator('#confirm-memory-publication').isChecked()).toBe(false);expect(await page.locator('#confirm-memory-publication').isDisabled()).toBe(true);expect(f.sent).toHaveLength(0);release();await page.waitForFunction(()=>!(document.getElementById('send-message') as HTMLButtonElement).disabled);
+    expect(await page.locator('#publish-memory').isDisabled()).toBe(true);expect(await page.locator('#confirm-memory-publication').isDisabled()).toBe(false);expect(f.sent).toHaveLength(0);
+  }finally{release();await page.close();}
+},20000);
+
 async function taskFixture(page:Page) {
   const state=await fixture(page),requests:Array<{body:any;headers:Record<string,string>}>=[];
   const item={grant_id:'grant-one',task_id:'task-one',chat_jid:'web:alice-two',created_at:'2026-09-06T00:00:00.000Z',revoked:false};

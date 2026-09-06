@@ -11,6 +11,7 @@ import { storeMessageInDatabase } from '../../../src/db/messages.js';
 import { createOwnedRoot, archiveOwnedSession } from '../../../src/db/owned-session-lifecycle.js';
 import { previewOwnFamilyMemorySource, publishOwnFamilyMemory, listOwnFamilyMemoryPublications } from '../../../src/db/family-memory.js';
 import { RequestRouterService } from '../../../src/channels/web/request-router-service.js';
+import { getTimelineResponse } from '../../../src/channels/web/timeline-service.js';
 import { WebAuthGateway } from '../../../src/channels/web/auth/auth-gateway.js';
 import { WebauthnChallengeTracker } from '../../../src/channels/web/auth/webauthn-challenges.js';
 import { TotpFailureTracker } from '../../../src/channels/web/auth/totp-failure-tracker.js';
@@ -40,7 +41,8 @@ beforeEach(() => {
   const json = (value: unknown, status = 200) => Response.json(value, { status });
   const authGateway = new WebAuthGateway({ accessMode: 'family-shared', passkeyMode: '', totpSecret: '', internalSecret: '', hasTls: true, sessionTtlSeconds: 3600 },
     { json, challenges: new WebauthnChallengeTracker(), failureTracker: new TotpFailureTracker() });
-  r = new RequestRouterService({ json, authGateway } as any, 'family-shared');
+  r = new RequestRouterService({ json, authGateway, clampInt: (v: string | null, fallback: number) => v === null ? fallback : Number(v),
+    parseOptionalInt: (v: string | null) => v === null ? null : Number(v) } as any, 'family-shared');
 });
 afterEach(() => { closeDatabase(); resetRateLimiterStateForTests(); restore(); ws.cleanup(); });
 function request(path = base, who = alice, method = 'GET', body?: BodyInit, headers: Record<string, string> = {}, signal?: AbortSignal) {
@@ -79,6 +81,16 @@ test('HTTP preview publish own receipt shared projection and withdrawal work wit
   expect((await post(`${base}/${result.publication_id}/withdraw`, { confirm: true })).status).toBe(200);
   expect((await (await r.handle(request(base + '/shared', bob))).json()).items).toEqual([]); expect((await post(base, input)).status).toBe(403);
   expect(snapshot()).toBe(before);
+});
+
+test('only authorised family timeline exposes exact stable preview source references without publishing',async()=>{
+  const selected=source(),foreign=source(bob),large=source(alice,'x'.repeat(102401));
+  const response=await r.handle(request('/timeline?chat_jid='+encodeURIComponent(alice.homeChatJid!)));expect(response.status).toBe(200);
+  const value=await response.json();expect(value.posts.find((p:any)=>p.id===selected.message_rowid).memory_source).toEqual(selected);
+  expect(value.posts.find((p:any)=>p.id===large.message_rowid).memory_source).toBeUndefined();expect(JSON.stringify(value)).not.toContain(foreign.message_id);
+  for(const who of [bob,admin])expect((await r.handle(request('/timeline?chat_jid='+encodeURIComponent(alice.homeChatJid!),who))).status).toBe(403);
+  const preview=await post(base+'/preview',value.posts.find((p:any)=>p.id===selected.message_rowid).memory_source);expect(preview.status).toBe(200);expect(count()).toBe(0);
+  expect(JSON.stringify(getTimelineResponse(alice.homeChatJid!,100))).not.toContain('memory_source');
 });
 
 test('owner history is complete bounded metadata only including withdrawn and archived sources', async () => {

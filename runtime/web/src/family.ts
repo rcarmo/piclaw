@@ -6,6 +6,7 @@ import { FamilyWorkspace } from './family-workspace.js';
 import { FamilyPreferences } from './family-preferences.js';
 import { FamilyResults } from './family-results.js';
 import { FamilyTasks } from './family-tasks.js';
+import { FamilyMemory, validMemorySource } from './family-memory.js';
 
 function element<T extends HTMLElement>(id: string): T {
   const value = document.getElementById(id);
@@ -29,11 +30,14 @@ let workspacePolicy: FamilyWorkspace | null = null;
 let preferences: FamilyPreferences | null = null;
 let results: FamilyResults | null = null;
 let tasks: FamilyTasks | null = null;
+let memory: FamilyMemory | null = null;
 let directoryGeneration = 0;
 let refreshing: symbol | null = null, polling: ReturnType<typeof setInterval> | undefined;
 let pending: { text: string; chat: string; requestId: string } | null = null;
 function controls(enabled: boolean): void {
   tasks?.setExecutionBlocked(busy);
+  memory?.setBlocked(busy);
+  for (const button of timeline.querySelectorAll<HTMLButtonElement>('.memory-preview')) button.disabled = !enabled;
   for (const control of [select, compose, send, home, refresh]) control.disabled = !enabled;
   retry.disabled = !enabled || heldRow === null || legacyHeld; confirmSkip.disabled = !enabled || heldRow === null;
   skip.disabled = !enabled || heldRow === null || !confirmSkip.checked;
@@ -52,6 +56,7 @@ function mask(): void {
   preferences?.suspend();
   results?.suspend();
   tasks?.suspend();
+  memory?.suspend();
 }
 function invalidate(): void {
   if (stopped) return;
@@ -63,6 +68,7 @@ function invalidate(): void {
   preferences?.stop();
   results?.stop();
   tasks?.stop();
+  memory?.stop();
   if (polling) clearInterval(polling);
   select.replaceChildren(); compose.value = ''; pending = null; heldRow = null; recoveryRequest = null; confirmSkip.checked = false; recoveryStatus.textContent = ''; logout.disabled = true;
   status.textContent = 'This page is no longer bound to its original account.';
@@ -76,7 +82,13 @@ function renderPosts(posts: unknown): void {
     const meta = document.createElement('div'); meta.className = 'post-meta';
     meta.textContent = `${post.id} · ${post.data?.sender_name ?? (post.data?.is_bot_message ? 'Assistant' : 'User')} · ${post.timestamp ?? ''}`;
     const text = document.createElement('div'); text.className = 'post-text'; text.textContent = typeof post.data?.content === 'string' ? post.data.content : '';
-    article.append(meta, text); fragment.append(article);
+    article.append(meta, text);
+    const source = post.memory_source;
+    if (validMemorySource(source) && source.chat_jid === current && source.message_rowid === post.id) {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'memory-preview'; button.textContent = 'Preview for family memory';
+      button.disabled = busy || paused || stopped; button.addEventListener('click', () => { if (!busy && !paused && !stopped) void memory?.previewSource(source); }); article.append(button);
+    }
+    fragment.append(article);
   }
   timeline.replaceChildren(fragment);
 }
@@ -111,6 +123,7 @@ async function loadTimeline(): Promise<void> {
     workspacePolicy?.resume();
     results?.resume();
     tasks?.resume();
+    memory?.resume();
     preferences?.resume(); preferences?.applyAppearance(preferenceState);
     form.hidden = false; select.hidden = false; controls(!busy);
   } catch (failure) {
@@ -128,6 +141,7 @@ async function loadTimeline(): Promise<void> {
           workspacePolicy?.resume();
           results?.resume();
           tasks?.resume();
+          memory?.resume();
           preferences?.resume(); preferences?.applyAppearance(preferenceState);
         }
       } catch { /* Identity invalidation clears the page; network errors keep controls masked. */ }
@@ -173,7 +187,15 @@ async function start(): Promise<void> {
       changed: async () => { await loadTimeline(); },
     });
     results = new FamilyResults(api, {
-      beforeCancel: () => { tasks?.disarmRun(); },
+      beforeCancel: () => { tasks?.disarmRun(); memory?.disarm(); },
+      lock: value => {
+        if (value && (busy || paused || stopped)) return false;
+        busy = value; generation++; refreshing = null; controls(false); return true;
+      },
+      changed: async () => { await loadTimeline(); },
+    });
+    memory = new FamilyMemory(api, {
+      beforeWithdraw: () => { tasks?.disarmRun(); memory?.disarm(); },
       lock: value => {
         if (value && (busy || paused || stopped)) return false;
         busy = value; generation++; refreshing = null; controls(false); return true;
@@ -215,7 +237,7 @@ async function resumeVisiblePage(): Promise<void> {
   const expected = generation;
   try {
     await api.verifyIdentity();
-    if (!stopped && !paused && !document.hidden && expected === generation) results?.resume();
+    if (!stopped && !paused && !document.hidden && expected === generation) { results?.resume(); memory?.resume(); }
   } catch (failure) {
     if (!stopped && !paused && !document.hidden && expected === generation) error.textContent = (failure as Error).message;
   }

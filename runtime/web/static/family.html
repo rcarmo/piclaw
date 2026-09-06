@@ -16,12 +16,32 @@
       <button id="open-sessions" type="button" disabled>My sessions</button>
       <button id="open-results" type="button" disabled>Scheduled results</button>
       <button id="open-tasks" type="button" disabled>Prepared tasks</button>
+      <button id="open-memory" type="button" disabled>Family memory</button>
       <button id="open-administration" type="button" hidden disabled>Family administration</button>
       <button id="open-workspace-policy" type="button" disabled>Workspace and security</button>
       <button id="sign-out" type="button" disabled>Sign out</button>
       <a href="/login">Sign in</a>
     </header>
     <p class="notice">Family preview: text conversations only. Shared workspace files are not private between tool-capable users.</p>
+    <section id="family-memory" aria-labelledby="memory-heading" hidden>
+      <header><h2 id="memory-heading" tabindex="-1">Family memory</h2><button id="close-memory" type="button">Close memory</button></header>
+      <p class="notice">Publishing copies your chosen text for every family account. Private source identifiers stay in your receipt. Publisher attribution does not prove authorship or truth. No Dream, file or prompt projection is enabled.</p>
+      <p>Drafts, inspected text and retry keys clear on refresh, close, focus loss, session change or navigation. A sent request may finish. Inspect history before creating another publication after an uncertain response.</p>
+      <button id="refresh-memory" type="button">Refresh memory history</button><button id="shared-memory" type="button">View shared memory</button>
+      <p id="memory-status" role="status" aria-live="polite"></p><ul id="memory-list" class="account-list"></ul>
+      <form id="memory-form" class="account-section" hidden>
+        <h3>Publish an excerpt</h3><p id="memory-source-target"></p><pre id="memory-source-text"></pre>
+        <label for="memory-excerpt">Exact excerpt to share (up to 16 KiB UTF-8)</label><textarea id="memory-excerpt" rows="4" autocomplete="off" spellcheck="false"></textarea>
+        <p>Only a verbatim excerpt is accepted. Preview and publication require a sign-in within five minutes. Retained limits: 100 publications per owner and 1,000 globally, including withdrawn copies.</p>
+        <label><input id="confirm-memory-publication" type="checkbox" disabled /> I reviewed this exact excerpt and want to share it with every family account</label>
+        <button id="publish-memory" type="submit" disabled>Publish memory</button><button id="discard-memory" type="button">Discard memory draft</button>
+      </form>
+      <section id="memory-detail" class="account-section" aria-labelledby="memory-detail-heading" hidden>
+        <h3 id="memory-detail-heading" tabindex="-1">Owned memory receipt</h3><p id="memory-detail-meta"></p><pre id="memory-detail-text"></pre>
+        <p>Withdrawal excludes this copy from future shared reads. It cannot retract earlier copies or provider context, erase history or free a retained-history slot. A sign-in within five minutes is required.</p>
+        <label><input id="confirm-memory-withdrawal" type="checkbox" disabled /> I confirm withdrawal of this exact publication</label><button id="withdraw-memory" type="button" disabled>Withdraw memory</button>
+      </section>
+    </section>
     <section id="account-settings" aria-labelledby="account-heading" hidden>
       <header><h2 id="account-heading" tabindex="-1">My account</h2><button id="close-account" type="button">Close account settings</button></header>
       <p class="notice">Personal profile and sign-in security. Workspace files, skills, providers and add-ons are shared; these controls do not change them.</p>

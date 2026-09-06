@@ -217,6 +217,18 @@ Check the separate execution confirmation, then choose **Run once**. This may ca
 
 An uncertain response offers **Retry same run request**, requiring confirmation again and reusing the exact original request ID. This verifies an existing admission without queuing another run. Refresh, reinspection, close, focus loss, session switch or navigation discards the retry key; inspect **Scheduled results** before another request. The server refuses a new key for an already-admitted grant. A held send or another shell mutation disables and clears run confirmation; execution cancellation also clears an armed run. No run occurs without another explicit confirmation.
 
+## Family memory publication
+
+Choose **Preview for family memory** on a text message in the selected conversation. The server rechecks the exact owned message and shows its current source text. Enter only the verbatim excerpt you want to share (at most 16 KiB UTF-8), read the warning and check the separate confirmation before **Publish memory**. Changing the excerpt clears confirmation. Preview and publication require a sign-in within five minutes. No message is shared just by opening the panel or previewing it.
+
+**Family memory** opens your retained metadata history, including withdrawn copies. **Refresh memory history** reloads that history; **Inspect memory** loads an owner-only receipt and copied text. **View shared memory** shows the newest 20 non-withdrawn copies with publisher attribution, without private source identifiers. Names are publisher snapshots, not proof of authorship or truth. No Dream, file projection or automatic prompt injection consumes these copies yet.
+
+An uncertain publication keeps its exact request ID and locks the excerpt. Reconfirm and choose **Retry same memory publication** to acknowledge the same request manually. Reopening **Family memory** preserves that retry. **Discard memory draft**, previewing another source, inspection, refresh, shared view, close, blur, hiding the tab, session change or navigation clears it. Inspect history before creating a new publication after losing the key. A request already sent may finish; nothing retries automatically or persists in browser storage.
+
+After inspecting a non-withdrawn receipt, check its separate confirmation and choose **Withdraw memory**. Withdrawal stops future shared reads but cannot retract existing copies or provider context, erase history or free a retained-history slot. It remains available while an unrelated send is pending and never releases that send’s lock. On focus return, revalidate the login then explicitly refresh history and inspect again. **Close memory** clears the panel. Publication/withdrawal require another explicit confirmation after any clearing event; late responses cannot restore cleared content.
+
+The ledger retains at most 100 publications per owner and 1,000 globally, including withdrawals. A full ledger rejects new publications. Shared workspace files are still accessible to permitted tools; these application controls provide no filesystem confidentiality. [HTTP and source contracts](memory-bootstrap.md#publication-http-api) describe the limits.
+
 ## Inspect scheduled results
 
 Open **Scheduled results** to see metadata from the newest 50 execution records belonging to your account. Inaccessible or archived targets are omitted, so the list may contain fewer than 50 entries. Family scheduling and automatic execution are still disabled; this panel only exposes results prepared during development testing.

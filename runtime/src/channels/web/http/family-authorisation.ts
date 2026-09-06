@@ -243,6 +243,14 @@ export async function handleFamilyRequest(channel: WebChannelLike, req: Request,
     let result: { status: number; body: unknown };
     if (path === "/timeline") {
       result = getTimelineResponse(target.chatJid, limit, channel.parseOptionalInt(url.searchParams.get("before")) ?? undefined, { user_name: principal.displayName });
+      // Only the already-authorised family timeline gets stable IDs for explicit memory preview.
+      const body = result.body as { posts: { id: number }[] };
+      const source = database.query(`SELECT id FROM messages WHERE rowid=? AND chat_jid=?
+        AND length(CAST(content AS BLOB)) BETWEEN 1 AND 102400`);
+      result.body = { ...body, posts: body.posts.map(post => {
+        const row = source.get(post.id, target.chatJid) as { id: string } | null;
+        return row ? { ...post, memory_source: { chat_jid: target.chatJid, message_rowid: post.id, message_id: row.id } } : post;
+      }) };
     } else if (path === "/search") {
       const scope = selector(url, "scope") ?? "current";
       if (scope !== "current" && scope !== "root" && scope !== "all") throw new ChatAccessDenied();

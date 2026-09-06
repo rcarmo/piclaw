@@ -93,4 +93,9 @@ textarea { resize: vertical; width: 100%; }
 #account-preferences button, #account-preferences select, #open-preferences { min-height: 44px; }
 #administration-tools-list { border: 1px solid var(--border); margin: 12px 0; }
 #administration-tools-list label, #administration-tools-form > label { display: block; min-height: 44px; padding: 10px 0; }
+#family-memory { border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin: 16px 0; overflow-wrap: anywhere; }
+#family-memory button, #open-memory, .memory-preview { min-height: 44px; }
+#memory-form { display: grid; gap: 8px; }
+#memory-source-text, #memory-detail-text { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 24rem; overflow-y: auto; font: inherit; }
+#memory-detail label { display: block; padding: 12px 0; }
 @media (max-width: 480px) { .family-shell { padding: 12px; } .session-controls label { flex-basis: 100%; } }
