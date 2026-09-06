@@ -24,6 +24,59 @@ test('toggleWorkspaceVisibility flips boolean state via setter callback', () => 
   expect(value).toBe(true);
 });
 
+function createWorkspaceRuntime(matchesDesktop: boolean, writeError = false) {
+  const storage = new Map<string, string>();
+  return {
+    matchMedia: () => ({ matches: matchesDesktop }),
+    localStorage: {
+      setItem: (key: string, value: string) => {
+        if (writeError) throw new Error('storage blocked');
+        storage.set(key, value);
+      },
+    },
+    __storage: storage,
+  } as any;
+}
+
+test('explicit desktop Show and Hide persist the desktop preference', () => {
+  const runtime = createWorkspaceRuntime(true);
+  let value = false;
+  const setter = (next: boolean | ((prev: boolean) => boolean)) => {
+    value = typeof next === 'function' ? next(value) : next;
+  };
+
+  toggleWorkspaceVisibility(setter, { runtime });
+  expect(value).toBe(true);
+  expect(runtime.__storage.get('workspaceOpen.desktop')).toBe('true');
+
+  toggleWorkspaceVisibility(setter, { runtime });
+  expect(value).toBe(false);
+  expect(runtime.__storage.get('workspaceOpen.desktop')).toBe('false');
+});
+
+test('explicit narrow Show and Hide do not write persistence keys', () => {
+  const runtime = createWorkspaceRuntime(false);
+  let value = false;
+  const setter = (next: boolean | ((prev: boolean) => boolean)) => {
+    value = typeof next === 'function' ? next(value) : next;
+  };
+
+  toggleWorkspaceVisibility(setter, { runtime });
+  toggleWorkspaceVisibility(setter, { runtime });
+
+  expect(value).toBe(false);
+  expect(runtime.__storage.size).toBe(0);
+});
+
+test('desktop storage write failures do not prevent workspace toggling', () => {
+  const runtime = createWorkspaceRuntime(true, true);
+  let value = false;
+  expect(() => toggleWorkspaceVisibility((next) => {
+    value = typeof next === 'function' ? next(value) : next;
+  }, { runtime })).not.toThrow();
+  expect(value).toBe(true);
+});
+
 test('handleBranchPickerChangeAction delegates branch navigation with chat-only urls', () => {
   const calls: string[] = [];
 

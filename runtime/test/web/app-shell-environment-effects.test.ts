@@ -2,11 +2,16 @@ import { afterEach, expect, test } from 'bun:test';
 
 import {
   RESUME_LAYOUT_SETTLING_CLASS,
+  applyWorkspaceLayoutChange,
   applyBrandingIconLinks,
   persistBtwSession,
   scheduleResumeLayoutSettling,
   shouldApplyBrandingDocumentTitle,
 } from '../../web/src/ui/app-shell-environment-effects.js';
+import {
+  DESKTOP_WORKSPACE_OPEN_STORAGE_KEY,
+  persistDesktopWorkspaceOpenPreference,
+} from '../../web/src/ui/workspace-visibility.js';
 import { BTW_SESSION_KEY } from '../../web/src/ui/app-shell-state.js';
 import { formatSessionBrowserTitle } from '../../web/src/ui/browser-title.js';
 
@@ -118,4 +123,30 @@ test('persistBtwSession clears storage when no session exists', () => {
 
   persistBtwSession(null);
   expect(writes.get(BTW_SESSION_KEY)).toBe('');
+});
+
+test('desktop to narrow closes without overwriting the desktop preference', () => {
+  const storage = new Map<string, string>();
+  const runtime = {
+    localStorage: {
+      setItem: (key: string, value: string) => storage.set(key, value),
+    },
+  };
+  persistDesktopWorkspaceOpenPreference(true, runtime);
+
+  let workspaceOpen = true;
+  applyWorkspaceLayoutChange('desktop', 'narrow', (next) => {
+    workspaceOpen = next;
+  });
+
+  expect(workspaceOpen).toBe(false);
+  expect(storage.get(DESKTOP_WORKSPACE_OPEN_STORAGE_KEY)).toBe('true');
+});
+
+test('narrow to desktop does not auto-open during the current page', () => {
+  let calls = 0;
+  applyWorkspaceLayoutChange('narrow', 'desktop', () => {
+    calls += 1;
+  });
+  expect(calls).toBe(0);
 });

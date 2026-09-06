@@ -25,6 +25,10 @@ import {
   popOutChat,
   popOutPane,
 } from './app-window-actions.js';
+import {
+  persistDesktopWorkspaceOpenPreference,
+  resolveWorkspaceLayoutBucket,
+} from './workspace-visibility.js';
 
 type StateSetter<T> = (next: T | ((prev: T) => T)) => void;
 
@@ -64,8 +68,19 @@ interface BranchRecordLike {
   chat_jid?: string;
 }
 
-export function toggleWorkspaceVisibility(setWorkspaceOpen: StateSetter<boolean>): void {
-  setWorkspaceOpen((prev) => !prev);
+export function toggleWorkspaceVisibility(
+  setWorkspaceOpen: StateSetter<boolean>,
+  options: { runtime?: any } = {},
+): void {
+  const runtime = options.runtime ?? (typeof window !== 'undefined' ? window : null);
+  const persistDesktopPreference = resolveWorkspaceLayoutBucket(runtime) === 'desktop';
+  setWorkspaceOpen((prev) => {
+    const next = !prev;
+    if (persistDesktopPreference) {
+      persistDesktopWorkspaceOpenPreference(next, runtime);
+    }
+    return next;
+  });
 }
 
 export interface HandleBranchPickerChangeActionOptions {

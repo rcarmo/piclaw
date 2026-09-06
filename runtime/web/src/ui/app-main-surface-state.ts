@@ -6,9 +6,14 @@ import {
   describeSearchScope,
   loadStoredBtwSession,
 } from './app-shell-state.js';
+import {
+  readStoredDesktopWorkspaceOpenPreference,
+  resolveWorkspaceLayoutBucket,
+} from './workspace-visibility.js';
 
-export function getInitialWorkspaceOpen(): boolean {
-  return false;
+export function getInitialWorkspaceOpen(runtime: any = typeof window !== 'undefined' ? window : null): boolean {
+  if (resolveWorkspaceLayoutBucket(runtime) !== 'desktop') return false;
+  return readStoredDesktopWorkspaceOpenPreference(runtime);
 }
 
 export function resolveCurrentBranchRecord(options: {
@@ -119,9 +124,7 @@ export function useMainAppSurfaceState(options: {
   } = useNotifications({ chatJid: currentChatJid });
 
   const [removingPostIds, setRemovingPostIds] = useState(() => new Set<string | number>());
-  // Opening the workspace is an explicit action for the current page. Do not
-  // restore an old open state on reload or let a responsive layout change make
-  // it appear without the user asking for it.
+  // Narrow layouts always start closed; desktop restores only its scoped key.
   const [workspaceOpen, setWorkspaceOpen] = useState(getInitialWorkspaceOpen);
   const [userProfile, setUserProfile] = useState({ name: 'You', avatar_url: null, avatar_background: null });
   const staleUiVersionRef = useRef<string | null>(null);
