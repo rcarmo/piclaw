@@ -1,0 +1,305 @@
+{
+  "manifest_id": "xterm",
+  "registry": "https://registry.npmjs.org",
+  "generator": "scripts/vendor-xterm.ts",
+  "packages": [
+    {
+      "name": "@xterm/xterm",
+      "version": "6.0.0",
+      "license": "MIT",
+      "repository": "https://github.com/xtermjs/xterm.js",
+      "upstream_commit": "f447274f430fd22513f6adbf9862d19524471c04",
+      "tarball_url": "https://registry.npmjs.org/@xterm/xterm/-/xterm-6.0.0.tgz",
+      "integrity": "sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg==",
+      "license_sha256": "b569f629d00f2626a8100df2a1798210535621e42164dfd426a6fe5aac7b0ccd"
+    },
+    {
+      "name": "@xterm/addon-attach",
+      "version": "0.12.0",
+      "license": "MIT",
+      "repository": "https://github.com/xtermjs/xterm.js/tree/master/addons/addon-attach",
+      "upstream_commit": "f447274f430fd22513f6adbf9862d19524471c04",
+      "tarball_url": "https://registry.npmjs.org/@xterm/addon-attach/-/addon-attach-0.12.0.tgz",
+      "integrity": "sha512-1lxvXM4JYSm60lbFmE8WMOy2oF2ip3Ye8jWorSAmwy7x8FiC53netEJ5RguL8+FSRj79MUQsNCb2hprY2QA2ig==",
+      "license_sha256": "689ceb10716bd7a87a804c14951d7c2b818cbd60aab83d540902470ce3b13444"
+    },
+    {
+      "name": "@xterm/addon-canvas",
+      "version": "0.7.0",
+      "license": "MIT",
+      "repository": "https://github.com/xtermjs/xterm.js/tree/master/addons/addon-canvas",
+      "upstream_commit": null,
+      "tarball_url": "https://registry.npmjs.org/@xterm/addon-canvas/-/addon-canvas-0.7.0.tgz",
+      "integrity": "sha512-LF5LYcfvefJuJ7QotNRdRSPc9YASAVDeoT5uyXS/nZshZXjYplGXRECBGiznwvhNL2I8bq1Lf5MzRwstsYQ2Iw==",
+      "license_sha256": "689ceb10716bd7a87a804c14951d7c2b818cbd60aab83d540902470ce3b13444"
+    },
+    {
+      "name": "@xterm/addon-clipboard",
+      "version": "0.2.0",
+      "license": "MIT",
+      "repository": "https://github.com/xtermjs/xterm.js/tree/master/addons/addon-clipboard",
+      "upstream_commit": "f447274f430fd22513f6adbf9862d19524471c04",
+      "tarball_url": "https://registry.npmjs.org/@xterm/addon-clipboard/-/addon-clipboard-0.2.0.tgz",
+      "integrity": "sha512-Dl31BCtBhLaUEECUbEiVcCLvLBbaeGYdT7NofB8OJkGTD3MWgBsaLjXvfGAD4tQNHhm6mbKyYkR7XD8kiZsdNg==",
+      "license_sha256": "a26afeeba9ab0a19502a73df658d8fb09186d0906c81af6c04d334064971e81f"
+    },
+    {
+      "name": "@xterm/addon-fit",
+      "version": "0.11.0",
+      "license": "MIT",
+      "repository": "https://github.com/xtermjs/xterm.js/tree/master/addons/addon-fit",
+      "upstream_commit": "f447274f430fd22513f6adbf9862d19524471c04",
+      "tarball_url": "https://registry.npmjs.org/@xterm/addon-fit/-/addon-fit-0.11.0.tgz",
+      "integrity": "sha512-jYcgT6xtVYhnhgxh3QgYDnnNMYTcf8ElbxxFzX0IZo+vabQqSPAjC3c1wJrKB5E19VwQei89QCiZZP86DCPF7g==",
+      "license_sha256": "e256f01188af527e4d06d21d06fbf785ae9c50d4b328bf03cbe0ba7f0aa4228f"
+    },
+    {
+      "name": "@xterm/addon-image",
+      "version": "0.9.0",
+      "license": "MIT",
+      "repository": "https://github.com/xtermjs/xterm.js/tree/master/addons/addon-image",
+      "upstream_commit": "f447274f430fd22513f6adbf9862d19524471c04",
+      "tarball_url": "https://registry.npmjs.org/@xterm/addon-image/-/addon-image-0.9.0.tgz",
+      "integrity": "sha512-oYWA8/QAr5/Emwl1xL7WCoOqeG3IZfpzEz/OVq1j4Oi9934TQmHiyubClikRf0D/jL3JNiNuz/Lsqx0kXQ02BA==",
+      "license_sha256": "00994f891153ba5d613e2b838a9ad2f47d4484070cb594b46efc547ebea5ca05"
+    },
+    {
+      "name": "@xterm/addon-ligatures",
+      "version": "0.10.0",
+      "license": "MIT",
+      "repository": "https://github.com/xtermjs/xterm.js/tree/master/addons/addon-ligatures",
+      "upstream_commit": "f447274f430fd22513f6adbf9862d19524471c04",
+      "tarball_url": "https://registry.npmjs.org/@xterm/addon-ligatures/-/addon-ligatures-0.10.0.tgz",
+      "integrity": "sha512-/Few8ZSHMib7sGjRJoc5l7bCtEB9XJfkNofvPpOcWADxKaUl8og8P172j67OoACSNJAXqeCLIuvj8WFCBkcTxg==",
+      "license_sha256": "9ea8a12deea1b232d639881e35b0540f8678315ebcc27053a9d8359bd78ad040"
+    },
+    {
+      "name": "@xterm/addon-progress",
+      "version": "0.2.0",
+      "license": "MIT",
+      "repository": "https://github.com/xtermjs/xterm.js/tree/master/addons/addon-progress",
+      "upstream_commit": "f447274f430fd22513f6adbf9862d19524471c04",
+      "tarball_url": "https://registry.npmjs.org/@xterm/addon-progress/-/addon-progress-0.2.0.tgz",
+      "integrity": "sha512-94uxxYyv30z3+6QIqJhCgALrzZfH7z2ounuZWQvb5Lp8dA7bWZmsUZGi5V7lKsq3Fyif4hTbaxq8YoCsQRtXgg==",
+      "license_sha256": "0e4d73e9e2f874d1057a880fc05bb671107c76d97f4f4601f03f86064273db08"
+    },
+    {
+      "name": "@xterm/addon-search",
+      "version": "0.16.0",
+      "license": "MIT",
+      "repository": "https://github.com/xtermjs/xterm.js/tree/master/addons/addon-search",
+      "upstream_commit": "f447274f430fd22513f6adbf9862d19524471c04",
+      "tarball_url": "https://registry.npmjs.org/@xterm/addon-search/-/addon-search-0.16.0.tgz",
+      "integrity": "sha512-9OeuBFu0/uZJPu+9AHKY6g/w0Czyb/Ut0A5t79I4ULoU4IfU5BEpPFVGQxP4zTTMdfZEYkVIRYbHBX1xWwjeSA==",
+      "license_sha256": "689ceb10716bd7a87a804c14951d7c2b818cbd60aab83d540902470ce3b13444"
+    },
+    {
+      "name": "@xterm/addon-serialize",
+      "version": "0.14.0",
+      "license": "MIT",
+      "repository": "https://github.com/xtermjs/xterm.js/tree/master/addons/addon-serialize",
+      "upstream_commit": "f447274f430fd22513f6adbf9862d19524471c04",
+      "tarball_url": "https://registry.npmjs.org/@xterm/addon-serialize/-/addon-serialize-0.14.0.tgz",
+      "integrity": "sha512-uteyTU1EkrQa2Ux6P/uFl2fzmXI46jy5uoQMKEOM0fKTyiW7cSn0WrFenHm5vO5uEXX/GpwW/FgILvv3r0WbkA==",
+      "license_sha256": null
+    },
+    {
+      "name": "@xterm/addon-unicode-graphemes",
+      "version": "0.4.0",
+      "license": "MIT",
+      "repository": "https://github.com/xtermjs/xterm.js/tree/master/addons/addon-unicode-graphemes",
+      "upstream_commit": "f447274f430fd22513f6adbf9862d19524471c04",
+      "tarball_url": "https://registry.npmjs.org/@xterm/addon-unicode-graphemes/-/addon-unicode-graphemes-0.4.0.tgz",
+      "integrity": "sha512-9+/CqwbKcnlkJU4d3wIgO+wjsL8f6vyz+UwUWLu6nADQz8Gr8ONqGCJfdDjIdI+yYZLABQqQy47FzEM6AWELjw==",
+      "license_sha256": "a26afeeba9ab0a19502a73df658d8fb09186d0906c81af6c04d334064971e81f"
+    },
+    {
+      "name": "@xterm/addon-unicode11",
+      "version": "0.9.0",
+      "license": "MIT",
+      "repository": "https://github.com/xtermjs/xterm.js/tree/master/addons/addon-unicode11",
+      "upstream_commit": "f447274f430fd22513f6adbf9862d19524471c04",
+      "tarball_url": "https://registry.npmjs.org/@xterm/addon-unicode11/-/addon-unicode11-0.9.0.tgz",
+      "integrity": "sha512-FxDnYcyuXhNl+XSqGZL/t0U9eiNb/q3EWT5rYkQT/zuig8Gz/VagnQANKHdDWFM2lTMk9ly0EFQxxxtZUoRetw==",
+      "license_sha256": "e256f01188af527e4d06d21d06fbf785ae9c50d4b328bf03cbe0ba7f0aa4228f"
+    },
+    {
+      "name": "@xterm/addon-web-links",
+      "version": "0.12.0",
+      "license": "MIT",
+      "repository": "https://github.com/xtermjs/xterm.js/tree/master/addons/addon-web-links",
+      "upstream_commit": "f447274f430fd22513f6adbf9862d19524471c04",
+      "tarball_url": "https://registry.npmjs.org/@xterm/addon-web-links/-/addon-web-links-0.12.0.tgz",
+      "integrity": "sha512-4Smom3RPyVp7ZMYOYDoC/9eGJJJqYhnPLGGqJ6wOBfB8VxPViJNSKdgRYb8NpaM6YSelEKbA2SStD7lGyqaobw==",
+      "license_sha256": "689ceb10716bd7a87a804c14951d7c2b818cbd60aab83d540902470ce3b13444"
+    },
+    {
+      "name": "@xterm/addon-webgl",
+      "version": "0.19.0",
+      "license": "MIT",
+      "repository": "https://github.com/xtermjs/xterm.js/tree/master/addons/addon-webgl",
+      "upstream_commit": "f447274f430fd22513f6adbf9862d19524471c04",
+      "tarball_url": "https://registry.npmjs.org/@xterm/addon-webgl/-/addon-webgl-0.19.0.tgz",
+      "integrity": "sha512-b3fMOsyLVuCeNJWxolACEUED0vm7qC0cy4wRvf3oURSzDTYVQiGPhTnhWZwIHdvC48Y+oLhvYXnY4XDXPoJo6A==",
+      "license_sha256": "21b975c39532001d431dc3b2c29fbff691d83f370833a66b54698bda290fde0e"
+    }
+  ],
+  "output_file": "web/static/common/js/vendor/xterm/xterm.mjs",
+  "output_files": [
+    {
+      "package_name": "@xterm/xterm",
+      "package_version": "6.0.0",
+      "package_path": "lib/xterm.mjs",
+      "output_file": "web/static/common/js/vendor/xterm/xterm.mjs",
+      "source_sha256": "b336ec65a086c056d4804b3d4c2347da5663d3f23c3f25be866467bd8857ad59",
+      "patches": [],
+      "sha256": "b336ec65a086c056d4804b3d4c2347da5663d3f23c3f25be866467bd8857ad59",
+      "size_bytes": 344970
+    },
+    {
+      "package_name": "@xterm/xterm",
+      "package_version": "6.0.0",
+      "package_path": "css/xterm.css",
+      "output_file": "web/static/common/js/vendor/xterm/xterm.css",
+      "source_sha256": "854a7c0fb70e8b1a083c16797ab827299fb18744f5ad34f227b48337e33293c6",
+      "patches": [],
+      "sha256": "854a7c0fb70e8b1a083c16797ab827299fb18744f5ad34f227b48337e33293c6",
+      "size_bytes": 7112
+    },
+    {
+      "package_name": "@xterm/addon-attach",
+      "package_version": "0.12.0",
+      "package_path": "lib/addon-attach.mjs",
+      "output_file": "web/static/common/js/vendor/xterm/addon-attach.mjs",
+      "source_sha256": "f4926d0aaaaf84064ec6a4cbbe8d2d5625d65daf7dbd3a16c1a83f9838cbd265",
+      "patches": [],
+      "sha256": "f4926d0aaaaf84064ec6a4cbbe8d2d5625d65daf7dbd3a16c1a83f9838cbd265",
+      "size_bytes": 2069
+    },
+    {
+      "package_name": "@xterm/addon-canvas",
+      "package_version": "0.7.0",
+      "package_path": "lib/addon-canvas.js",
+      "output_file": "web/static/common/js/vendor/xterm/addon-canvas.js",
+      "source_sha256": "7b3e904d5bec98b54d26674994cf994396c4af0971010ffd0d4983229b65d933",
+      "patches": [],
+      "sha256": "7b3e904d5bec98b54d26674994cf994396c4af0971010ffd0d4983229b65d933",
+      "size_bytes": 94607
+    },
+    {
+      "package_name": "@xterm/addon-clipboard",
+      "package_version": "0.2.0",
+      "package_path": "lib/addon-clipboard.mjs",
+      "output_file": "web/static/common/js/vendor/xterm/addon-clipboard.mjs",
+      "source_sha256": "94afa044240a9af03846383996ec439611239b7ebf38b2b6c9a5ebea7b3d6ccc",
+      "patches": [],
+      "sha256": "94afa044240a9af03846383996ec439611239b7ebf38b2b6c9a5ebea7b3d6ccc",
+      "size_bytes": 5577
+    },
+    {
+      "package_name": "@xterm/addon-fit",
+      "package_version": "0.11.0",
+      "package_path": "lib/addon-fit.mjs",
+      "output_file": "web/static/common/js/vendor/xterm/addon-fit.mjs",
+      "source_sha256": "2d87e1bddc73be9111de8beee5370c3bb7aac9c94e18e6f245f02ca741ef1769",
+      "patches": [],
+      "sha256": "2d87e1bddc73be9111de8beee5370c3bb7aac9c94e18e6f245f02ca741ef1769",
+      "size_bytes": 1967
+    },
+    {
+      "package_name": "@xterm/addon-image",
+      "package_version": "0.9.0",
+      "package_path": "lib/addon-image.mjs",
+      "output_file": "web/static/common/js/vendor/xterm/addon-image.mjs",
+      "source_sha256": "16e9e5ffc20abf914d94b592890105776fbd1d3a46505343349498d80e08ee9c",
+      "patches": [],
+      "sha256": "16e9e5ffc20abf914d94b592890105776fbd1d3a46505343349498d80e08ee9c",
+      "size_bytes": 61966
+    },
+    {
+      "package_name": "@xterm/addon-ligatures",
+      "package_version": "0.10.0",
+      "package_path": "lib/addon-ligatures.mjs",
+      "output_file": "web/static/common/js/vendor/xterm/addon-ligatures.mjs",
+      "source_sha256": "51aa9b689ce28791ea322bc6cdc81a17c1ccd2068712a33431225cb0711c44d8",
+      "patches": [
+        "browser-safe-dynamic-require"
+      ],
+      "sha256": "9eed71b45eac94b5f136be266461c84f41460faa6c296edb4b3b4cfc38f82e13",
+      "size_bytes": 204026
+    },
+    {
+      "package_name": "@xterm/addon-progress",
+      "package_version": "0.2.0",
+      "package_path": "lib/addon-progress.mjs",
+      "output_file": "web/static/common/js/vendor/xterm/addon-progress.mjs",
+      "source_sha256": "e2f1745e0cd9f99b66ca8eed1bb5d956662ef72e61c423aa656af2b6b787e7e7",
+      "patches": [],
+      "sha256": "e2f1745e0cd9f99b66ca8eed1bb5d956662ef72e61c423aa656af2b6b787e7e7",
+      "size_bytes": 1814
+    },
+    {
+      "package_name": "@xterm/addon-search",
+      "package_version": "0.16.0",
+      "package_path": "lib/addon-search.mjs",
+      "output_file": "web/static/common/js/vendor/xterm/addon-search.mjs",
+      "source_sha256": "3ea90162233f867b938cd29b8ad98f589643436bbb5445bd11b825dc99ff0c04",
+      "patches": [],
+      "sha256": "3ea90162233f867b938cd29b8ad98f589643436bbb5445bd11b825dc99ff0c04",
+      "size_bytes": 39031
+    },
+    {
+      "package_name": "@xterm/addon-serialize",
+      "package_version": "0.14.0",
+      "package_path": "lib/addon-serialize.mjs",
+      "output_file": "web/static/common/js/vendor/xterm/addon-serialize.mjs",
+      "source_sha256": "6c93dff90bef3b7aac8664fa4c1cb4026bf4b701f3014a1fb88edde943dab906",
+      "patches": [],
+      "sha256": "6c93dff90bef3b7aac8664fa4c1cb4026bf4b701f3014a1fb88edde943dab906",
+      "size_bytes": 16338
+    },
+    {
+      "package_name": "@xterm/addon-unicode-graphemes",
+      "package_version": "0.4.0",
+      "package_path": "lib/addon-unicode-graphemes.mjs",
+      "output_file": "web/static/common/js/vendor/xterm/addon-unicode-graphemes.mjs",
+      "source_sha256": "8844a07489b9f23a4aa80b7e1667efe799088bfe17ec2d8d7050ba8679efbaa5",
+      "patches": [],
+      "sha256": "8844a07489b9f23a4aa80b7e1667efe799088bfe17ec2d8d7050ba8679efbaa5",
+      "size_bytes": 34130
+    },
+    {
+      "package_name": "@xterm/addon-unicode11",
+      "package_version": "0.9.0",
+      "package_path": "lib/addon-unicode11.mjs",
+      "output_file": "web/static/common/js/vendor/xterm/addon-unicode11.mjs",
+      "source_sha256": "37bb2d573c615661c875398be2a3497e02bd21d7202a5d1159f6ab70a8cfc2f2",
+      "patches": [],
+      "sha256": "37bb2d573c615661c875398be2a3497e02bd21d7202a5d1159f6ab70a8cfc2f2",
+      "size_bytes": 31220
+    },
+    {
+      "package_name": "@xterm/addon-web-links",
+      "package_version": "0.12.0",
+      "package_path": "lib/addon-web-links.mjs",
+      "output_file": "web/static/common/js/vendor/xterm/addon-web-links.mjs",
+      "source_sha256": "cce9cc1905c4d369dfa70ef0ed1eea12700754818a6c480d1fd94895dddd1a25",
+      "patches": [],
+      "sha256": "cce9cc1905c4d369dfa70ef0ed1eea12700754818a6c480d1fd94895dddd1a25",
+      "size_bytes": 3148
+    },
+    {
+      "package_name": "@xterm/addon-webgl",
+      "package_version": "0.19.0",
+      "package_path": "lib/addon-webgl.mjs",
+      "output_file": "web/static/common/js/vendor/xterm/addon-webgl.mjs",
+      "source_sha256": "5ac2cbbb8a861ba99176eda0ee91f10c08de32d091e3488edf699ad111131ebb",
+      "patches": [],
+      "sha256": "5ac2cbbb8a861ba99176eda0ee91f10c08de32d091e3488edf699ad111131ebb",
+      "size_bytes": 126558
+    }
+  ],
+  "metadata_file": "web/static/common/js/vendor/xterm/xterm.meta.json",
+  "sha256": "b336ec65a086c056d4804b3d4c2347da5663d3f23c3f25be866467bd8857ad59",
+  "size_bytes": 344970
+}
