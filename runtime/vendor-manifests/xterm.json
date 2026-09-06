@@ -1,0 +1,226 @@
+{
+  "id": "xterm",
+  "registry": "https://registry.npmjs.org",
+  "outputDir": "web/static/common/js/vendor/xterm",
+  "metadataFile": "web/static/common/js/vendor/xterm/xterm.meta.json",
+  "documentationFiles": ["README.md", "LICENSES.md", "xterm.meta.json"],
+  "packages": [
+    {
+      "name": "@xterm/xterm",
+      "version": "6.0.0",
+      "license": "MIT",
+      "integrity": "sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg==",
+      "licenseSha256": "b569f629d00f2626a8100df2a1798210535621e42164dfd426a6fe5aac7b0ccd",
+      "exports": [
+        {
+          "packagePath": "lib/xterm.mjs",
+          "outputFile": "xterm.mjs",
+          "sourceSha256": "b336ec65a086c056d4804b3d4c2347da5663d3f23c3f25be866467bd8857ad59",
+          "sha256": "b336ec65a086c056d4804b3d4c2347da5663d3f23c3f25be866467bd8857ad59"
+        },
+        {
+          "packagePath": "css/xterm.css",
+          "outputFile": "xterm.css",
+          "sourceSha256": "854a7c0fb70e8b1a083c16797ab827299fb18744f5ad34f227b48337e33293c6",
+          "sha256": "854a7c0fb70e8b1a083c16797ab827299fb18744f5ad34f227b48337e33293c6"
+        }
+      ]
+    },
+    {
+      "name": "@xterm/addon-attach",
+      "version": "0.12.0",
+      "license": "MIT",
+      "integrity": "sha512-1lxvXM4JYSm60lbFmE8WMOy2oF2ip3Ye8jWorSAmwy7x8FiC53netEJ5RguL8+FSRj79MUQsNCb2hprY2QA2ig==",
+      "licenseSha256": "689ceb10716bd7a87a804c14951d7c2b818cbd60aab83d540902470ce3b13444",
+      "exports": [
+        {
+          "packagePath": "lib/addon-attach.mjs",
+          "outputFile": "addon-attach.mjs",
+          "sourceSha256": "f4926d0aaaaf84064ec6a4cbbe8d2d5625d65daf7dbd3a16c1a83f9838cbd265",
+          "sha256": "f4926d0aaaaf84064ec6a4cbbe8d2d5625d65daf7dbd3a16c1a83f9838cbd265"
+        }
+      ]
+    },
+    {
+      "name": "@xterm/addon-canvas",
+      "version": "0.7.0",
+      "license": "MIT",
+      "integrity": "sha512-LF5LYcfvefJuJ7QotNRdRSPc9YASAVDeoT5uyXS/nZshZXjYplGXRECBGiznwvhNL2I8bq1Lf5MzRwstsYQ2Iw==",
+      "licenseSha256": "689ceb10716bd7a87a804c14951d7c2b818cbd60aab83d540902470ce3b13444",
+      "exports": [
+        {
+          "packagePath": "lib/addon-canvas.js",
+          "outputFile": "addon-canvas.js",
+          "sourceSha256": "7b3e904d5bec98b54d26674994cf994396c4af0971010ffd0d4983229b65d933",
+          "sha256": "7b3e904d5bec98b54d26674994cf994396c4af0971010ffd0d4983229b65d933"
+        }
+      ]
+    },
+    {
+      "name": "@xterm/addon-clipboard",
+      "version": "0.2.0",
+      "license": "MIT",
+      "integrity": "sha512-Dl31BCtBhLaUEECUbEiVcCLvLBbaeGYdT7NofB8OJkGTD3MWgBsaLjXvfGAD4tQNHhm6mbKyYkR7XD8kiZsdNg==",
+      "licenseSha256": "a26afeeba9ab0a19502a73df658d8fb09186d0906c81af6c04d334064971e81f",
+      "exports": [
+        {
+          "packagePath": "lib/addon-clipboard.mjs",
+          "outputFile": "addon-clipboard.mjs",
+          "sourceSha256": "94afa044240a9af03846383996ec439611239b7ebf38b2b6c9a5ebea7b3d6ccc",
+          "sha256": "94afa044240a9af03846383996ec439611239b7ebf38b2b6c9a5ebea7b3d6ccc"
+        }
+      ]
+    },
+    {
+      "name": "@xterm/addon-fit",
+      "version": "0.11.0",
+      "license": "MIT",
+      "integrity": "sha512-jYcgT6xtVYhnhgxh3QgYDnnNMYTcf8ElbxxFzX0IZo+vabQqSPAjC3c1wJrKB5E19VwQei89QCiZZP86DCPF7g==",
+      "licenseSha256": "e256f01188af527e4d06d21d06fbf785ae9c50d4b328bf03cbe0ba7f0aa4228f",
+      "exports": [
+        {
+          "packagePath": "lib/addon-fit.mjs",
+          "outputFile": "addon-fit.mjs",
+          "sourceSha256": "2d87e1bddc73be9111de8beee5370c3bb7aac9c94e18e6f245f02ca741ef1769",
+          "sha256": "2d87e1bddc73be9111de8beee5370c3bb7aac9c94e18e6f245f02ca741ef1769"
+        }
+      ]
+    },
+    {
+      "name": "@xterm/addon-image",
+      "version": "0.9.0",
+      "license": "MIT",
+      "integrity": "sha512-oYWA8/QAr5/Emwl1xL7WCoOqeG3IZfpzEz/OVq1j4Oi9934TQmHiyubClikRf0D/jL3JNiNuz/Lsqx0kXQ02BA==",
+      "licenseSha256": "00994f891153ba5d613e2b838a9ad2f47d4484070cb594b46efc547ebea5ca05",
+      "exports": [
+        {
+          "packagePath": "lib/addon-image.mjs",
+          "outputFile": "addon-image.mjs",
+          "sourceSha256": "16e9e5ffc20abf914d94b592890105776fbd1d3a46505343349498d80e08ee9c",
+          "sha256": "16e9e5ffc20abf914d94b592890105776fbd1d3a46505343349498d80e08ee9c"
+        }
+      ]
+    },
+    {
+      "name": "@xterm/addon-ligatures",
+      "version": "0.10.0",
+      "license": "MIT",
+      "integrity": "sha512-/Few8ZSHMib7sGjRJoc5l7bCtEB9XJfkNofvPpOcWADxKaUl8og8P172j67OoACSNJAXqeCLIuvj8WFCBkcTxg==",
+      "licenseSha256": "9ea8a12deea1b232d639881e35b0540f8678315ebcc27053a9d8359bd78ad040",
+      "exports": [
+        {
+          "packagePath": "lib/addon-ligatures.mjs",
+          "outputFile": "addon-ligatures.mjs",
+          "sourceSha256": "51aa9b689ce28791ea322bc6cdc81a17c1ccd2068712a33431225cb0711c44d8",
+          "patches": ["browser-safe-dynamic-require"],
+          "sha256": "9eed71b45eac94b5f136be266461c84f41460faa6c296edb4b3b4cfc38f82e13"
+        }
+      ]
+    },
+    {
+      "name": "@xterm/addon-progress",
+      "version": "0.2.0",
+      "license": "MIT",
+      "integrity": "sha512-94uxxYyv30z3+6QIqJhCgALrzZfH7z2ounuZWQvb5Lp8dA7bWZmsUZGi5V7lKsq3Fyif4hTbaxq8YoCsQRtXgg==",
+      "licenseSha256": "0e4d73e9e2f874d1057a880fc05bb671107c76d97f4f4601f03f86064273db08",
+      "exports": [
+        {
+          "packagePath": "lib/addon-progress.mjs",
+          "outputFile": "addon-progress.mjs",
+          "sourceSha256": "e2f1745e0cd9f99b66ca8eed1bb5d956662ef72e61c423aa656af2b6b787e7e7",
+          "sha256": "e2f1745e0cd9f99b66ca8eed1bb5d956662ef72e61c423aa656af2b6b787e7e7"
+        }
+      ]
+    },
+    {
+      "name": "@xterm/addon-search",
+      "version": "0.16.0",
+      "license": "MIT",
+      "integrity": "sha512-9OeuBFu0/uZJPu+9AHKY6g/w0Czyb/Ut0A5t79I4ULoU4IfU5BEpPFVGQxP4zTTMdfZEYkVIRYbHBX1xWwjeSA==",
+      "licenseSha256": "689ceb10716bd7a87a804c14951d7c2b818cbd60aab83d540902470ce3b13444",
+      "exports": [
+        {
+          "packagePath": "lib/addon-search.mjs",
+          "outputFile": "addon-search.mjs",
+          "sourceSha256": "3ea90162233f867b938cd29b8ad98f589643436bbb5445bd11b825dc99ff0c04",
+          "sha256": "3ea90162233f867b938cd29b8ad98f589643436bbb5445bd11b825dc99ff0c04"
+        }
+      ]
+    },
+    {
+      "name": "@xterm/addon-serialize",
+      "version": "0.14.0",
+      "license": "MIT",
+      "integrity": "sha512-uteyTU1EkrQa2Ux6P/uFl2fzmXI46jy5uoQMKEOM0fKTyiW7cSn0WrFenHm5vO5uEXX/GpwW/FgILvv3r0WbkA==",
+      "licenseSha256": null,
+      "exports": [
+        {
+          "packagePath": "lib/addon-serialize.mjs",
+          "outputFile": "addon-serialize.mjs",
+          "sourceSha256": "6c93dff90bef3b7aac8664fa4c1cb4026bf4b701f3014a1fb88edde943dab906",
+          "sha256": "6c93dff90bef3b7aac8664fa4c1cb4026bf4b701f3014a1fb88edde943dab906"
+        }
+      ]
+    },
+    {
+      "name": "@xterm/addon-unicode-graphemes",
+      "version": "0.4.0",
+      "license": "MIT",
+      "integrity": "sha512-9+/CqwbKcnlkJU4d3wIgO+wjsL8f6vyz+UwUWLu6nADQz8Gr8ONqGCJfdDjIdI+yYZLABQqQy47FzEM6AWELjw==",
+      "licenseSha256": "a26afeeba9ab0a19502a73df658d8fb09186d0906c81af6c04d334064971e81f",
+      "exports": [
+        {
+          "packagePath": "lib/addon-unicode-graphemes.mjs",
+          "outputFile": "addon-unicode-graphemes.mjs",
+          "sourceSha256": "8844a07489b9f23a4aa80b7e1667efe799088bfe17ec2d8d7050ba8679efbaa5",
+          "sha256": "8844a07489b9f23a4aa80b7e1667efe799088bfe17ec2d8d7050ba8679efbaa5"
+        }
+      ]
+    },
+    {
+      "name": "@xterm/addon-unicode11",
+      "version": "0.9.0",
+      "license": "MIT",
+      "integrity": "sha512-FxDnYcyuXhNl+XSqGZL/t0U9eiNb/q3EWT5rYkQT/zuig8Gz/VagnQANKHdDWFM2lTMk9ly0EFQxxxtZUoRetw==",
+      "licenseSha256": "e256f01188af527e4d06d21d06fbf785ae9c50d4b328bf03cbe0ba7f0aa4228f",
+      "exports": [
+        {
+          "packagePath": "lib/addon-unicode11.mjs",
+          "outputFile": "addon-unicode11.mjs",
+          "sourceSha256": "37bb2d573c615661c875398be2a3497e02bd21d7202a5d1159f6ab70a8cfc2f2",
+          "sha256": "37bb2d573c615661c875398be2a3497e02bd21d7202a5d1159f6ab70a8cfc2f2"
+        }
+      ]
+    },
+    {
+      "name": "@xterm/addon-web-links",
+      "version": "0.12.0",
+      "license": "MIT",
+      "integrity": "sha512-4Smom3RPyVp7ZMYOYDoC/9eGJJJqYhnPLGGqJ6wOBfB8VxPViJNSKdgRYb8NpaM6YSelEKbA2SStD7lGyqaobw==",
+      "licenseSha256": "689ceb10716bd7a87a804c14951d7c2b818cbd60aab83d540902470ce3b13444",
+      "exports": [
+        {
+          "packagePath": "lib/addon-web-links.mjs",
+          "outputFile": "addon-web-links.mjs",
+          "sourceSha256": "cce9cc1905c4d369dfa70ef0ed1eea12700754818a6c480d1fd94895dddd1a25",
+          "sha256": "cce9cc1905c4d369dfa70ef0ed1eea12700754818a6c480d1fd94895dddd1a25"
+        }
+      ]
+    },
+    {
+      "name": "@xterm/addon-webgl",
+      "version": "0.19.0",
+      "license": "MIT",
+      "integrity": "sha512-b3fMOsyLVuCeNJWxolACEUED0vm7qC0cy4wRvf3oURSzDTYVQiGPhTnhWZwIHdvC48Y+oLhvYXnY4XDXPoJo6A==",
+      "licenseSha256": "21b975c39532001d431dc3b2c29fbff691d83f370833a66b54698bda290fde0e",
+      "exports": [
+        {
+          "packagePath": "lib/addon-webgl.mjs",
+          "outputFile": "addon-webgl.mjs",
+          "sourceSha256": "5ac2cbbb8a861ba99176eda0ee91f10c08de32d091e3488edf699ad111131ebb",
+          "sha256": "5ac2cbbb8a861ba99176eda0ee91f10c08de32d091e3488edf699ad111131ebb"
+        }
+      ]
+    }
+  ]
+}
