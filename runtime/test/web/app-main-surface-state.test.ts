@@ -7,8 +7,48 @@ import {
   resolveStableRootChatJid,
 } from '../../web/src/ui/app-main-surface-state.js';
 
-test('workspace starts closed until the user explicitly opens it', () => {
-  expect(getInitialWorkspaceOpen()).toBe(false);
+function createWorkspaceRuntime(matchesDesktop: boolean, storage: Record<string, string> = {}) {
+  const values = new Map(Object.entries(storage));
+  return {
+    matchMedia: () => ({ matches: matchesDesktop }),
+    localStorage: {
+      getItem: (key: string) => values.get(key) ?? null,
+    },
+  } as any;
+}
+
+test('fresh desktop load restores workspaceOpen.desktop=true', () => {
+  expect(getInitialWorkspaceOpen(createWorkspaceRuntime(true, {
+    'workspaceOpen.desktop': 'true',
+  }))).toBe(true);
+});
+
+test('fresh desktop load stays closed for false, missing, or malformed values', () => {
+  expect(getInitialWorkspaceOpen(createWorkspaceRuntime(true, {
+    'workspaceOpen.desktop': 'false',
+  }))).toBe(false);
+  expect(getInitialWorkspaceOpen(createWorkspaceRuntime(true))).toBe(false);
+  expect(getInitialWorkspaceOpen(createWorkspaceRuntime(true, {
+    'workspaceOpen.desktop': 'sometimes',
+  }))).toBe(false);
+});
+
+test('fresh narrow load ignores the desktop preference', () => {
+  expect(getInitialWorkspaceOpen(createWorkspaceRuntime(false, {
+    'workspaceOpen.desktop': 'true',
+  }))).toBe(false);
+});
+
+test('fresh narrow load ignores the legacy shared preference', () => {
+  expect(getInitialWorkspaceOpen(createWorkspaceRuntime(false, {
+    workspaceOpen: 'true',
+  }))).toBe(false);
+});
+
+test('fresh narrow load ignores the stale narrow preference', () => {
+  expect(getInitialWorkspaceOpen(createWorkspaceRuntime(false, {
+    'workspaceOpen.narrow': 'true',
+  }))).toBe(false);
 });
 
 test('createBranchLoaderState reflects branch-loader mode', () => {

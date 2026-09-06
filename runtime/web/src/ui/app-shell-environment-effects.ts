@@ -4,6 +4,7 @@ import {
   DESKTOP_WORKSPACE_LAYOUT_MEDIA_QUERY,
   resolveWorkspaceLayoutBucket,
   shouldCollapseWorkspaceAfterLayoutChange,
+  type WorkspaceLayoutBucket,
 } from './workspace-visibility.js';
 import { initTheme, reapplyStoredTheme } from './theme.js';
 import { useTimestampRefresh } from './app-helpers.js';
@@ -52,6 +53,16 @@ export function persistBtwSession(btwSession: any): void {
     error: btwSession.error || null,
     status: btwSession.status || 'success',
   }));
+}
+
+export function applyWorkspaceLayoutChange(
+  previousBucket: WorkspaceLayoutBucket,
+  nextBucket: WorkspaceLayoutBucket,
+  setWorkspaceOpen: (next: boolean) => void,
+): void {
+  if (shouldCollapseWorkspaceAfterLayoutChange(previousBucket, nextBucket)) {
+    setWorkspaceOpen(false);
+  }
 }
 
 export function shouldApplyBrandingDocumentTitle(options: {
@@ -187,9 +198,7 @@ export function useAppShellEnvironmentEffects(options: UseAppShellEnvironmentEff
       if (workspaceLayoutBucketRef.current === nextBucket) return;
       const prevBucket = workspaceLayoutBucketRef.current;
       workspaceLayoutBucketRef.current = nextBucket;
-      if (shouldCollapseWorkspaceAfterLayoutChange(prevBucket, nextBucket)) {
-        setWorkspaceOpen(false);
-      }
+      applyWorkspaceLayoutChange(prevBucket, nextBucket, setWorkspaceOpen);
     };
 
     if (media.addEventListener) media.addEventListener('change', applyLayoutPreference);
