@@ -99,6 +99,17 @@ browserTest("invitation clears fragment, claims only on click, confirms and eras
   } finally { await page.close(); }
 }, 20000);
 
+browserTest("recovery-only completion hides the unavailable normal sign-in link", async () => {
+  const page = await browser.newPage();
+  try {
+    await page.route("**/auth/invitation/claim", route => route.fulfill({ json: { enrolment_token: enrolled, secret: seed, expires_at: Date.now()+60_000, username: "alice", qr_data_url: image } }));
+    await page.route("**/auth/invitation/confirm", route => route.fulfill({ json: { enrolled: true, login_required: true, recovery_only: true } }));
+    await page.goto(base+"/auth/invitation#token="+grant); await page.locator("#claim-invitation").click(); await page.locator("#confirmation-code").fill("123456"); await page.locator("#confirm-invitation").click();
+    await page.waitForFunction(()=>document.getElementById("invitation-status")?.textContent?.includes("recovery complete"));
+    expect(await page.locator("#invitation-login").isVisible()).toBe(false); expect(await page.locator("#enrolment-secret").textContent()).toBe("");
+  } finally { await page.close(); }
+}, 20000);
+
 browserTest("invalid/missing grants and failed claims do not reveal or automatically retry enrolment", async () => {
   const page = await browser.newPage(); let calls=0;
   try {

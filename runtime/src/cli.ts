@@ -28,7 +28,7 @@ Usage:
   piclaw [options]
   piclaw --post <chat_jid> <message>
   piclaw keychain <command> [args]
-  piclaw account-recovery preview|issue [args]
+  piclaw account-recovery preview|issue|serve [args]
   piclaw access-migration preview|prepare-copy [args]
 
 Options:
@@ -50,6 +50,8 @@ Offline family administrator recovery (no activation or restart):
   piclaw account-recovery preview --user-id <id> --username <name> --method totp|passkey --origin https://host
   piclaw account-recovery issue --user-id <id> --username <name> --method totp|passkey --origin https://host
     --backup <new.sqlite> --output <new.json> --writers-stopped --key-backup-confirmed --confirm "RECOVER <name>"
+  piclaw account-recovery serve --recovery-id <id> --origin https://host --writers-stopped
+    --confirm "SERVE RECOVERY <id>" [--host <addr>] [--port <number>] [--tls-cert <path>] [--tls-key <path>]
   Backup/output parents must exist with permissions 0700. Stop all writers first; retain the original bootstrap key.
 
 Offline ownership migration preparation (source unchanged; copy cannot start):
@@ -263,7 +265,7 @@ export async function handleCliOptions(args = process.argv.slice(2)): Promise<bo
     return true;
   }
   if (commandArgs[0] === 'account-recovery') {
-    try { const { handleOperatorRecovery } = await import('./cli-operator-recovery.js'); handleOperatorRecovery(commandArgs.slice(1)); }
+    try { const { handleOperatorRecovery } = await import('./cli-operator-recovery.js'); await handleOperatorRecovery(commandArgs.slice(1)); }
     catch { console.error('Offline recovery failed. Check the stopped runtime, migrated family store, exact target, factor policy, protected output paths and confirmations. No grant is printed; inspect the protected outputs before retrying.'); process.exitCode = 1; }
     return true;
   }

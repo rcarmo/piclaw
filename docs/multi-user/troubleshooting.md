@@ -79,7 +79,7 @@ Only the host operator should run these commands on an offline, backed-up worksp
 | Unresolved durable work blocks preparation | Resolve it through the relevant supported queue/outbox workflow before another preview. Stopped processes do not prove work is safe to discard. |
 | Recovery command returned no success | Inspect private output and database before retrying; a crash/lost output can leave commit status uncertain. Use fresh paths and the runbook. |
 
-Copy preparation leaves the live source unchanged and cannot activate a mode. Offline administrator recovery can prepare a restricted grant. Piclaw cannot yet start in recovery-only mode to redeem it. Back up the database, configuration, original key and session files together. Neither command rotates keys or installs a deployment.
+Copy preparation leaves the live source unchanged and cannot activate a mode. Offline administrator recovery can prepare a restricted grant and run a separate TLS-only invitation listener for that grant while normal Piclaw stays stopped. Back up the database, configuration, original key and session files together. Neither command rotates keys or installs or activates a deployment.
 
 ## Report a problem safely
 

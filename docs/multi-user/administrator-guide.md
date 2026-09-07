@@ -68,7 +68,7 @@ Reset removes **all** of another account's current factors, signs out every devi
 4. Choose **Confirm account change** and privately deliver the new invitation.
 5. Have the recipient complete enrolment and sign in again. Old credentials no longer work.
 
-Each reset action requires its corresponding sign-in method to be enabled. Reset to passkey works under passkey-only policy without TOTP. Self-reset is denied, and normal reset cannot remove the last enabled administrator. If no other administrator can help, contact the host operator. The [offline command](operator-recovery.md) can prepare a grant. Piclaw's recovery-only startup is not implemented, so the recipient cannot redeem it in a supported deployment. Do not disable startup guards.
+Each reset action requires its corresponding sign-in method to be enabled. Reset to passkey works under passkey-only policy without TOTP. Self-reset is denied, and normal reset cannot remove the last enabled administrator. If no other administrator can help, contact the host operator. The [offline recovery flow](operator-recovery.md) can prepare a grant and run a separate TLS-only invitation listener while the normal service remains stopped. Do not disable ordinary startup guards.
 
 If the server cannot write the replacement invitation or audit record, it rolls back the reset. If the response is lost, the browser cannot tell whether the reset committed. Refresh the account and inspect its security items before retrying. Revoke and reissue any invitation whose status is uncertain.
 

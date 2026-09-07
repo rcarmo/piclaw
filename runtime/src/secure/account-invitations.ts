@@ -12,7 +12,8 @@ interface Invitation { token_hash: string; user_id: string; issuer_user_id: stri
 
 /** Restricted enrolment grants. Never become account cookies or carry role/home changes. */
 export class AccountInvitations {
-  constructor(private readonly database: Database, private readonly factors = new UserAuthFactors(database), private readonly now = () => Date.now()) {}
+  constructor(private readonly database: Database, private readonly factors = new UserAuthFactors(database), private readonly now = () => Date.now(),
+    private readonly expectedRecoveryId?: string, private readonly validateScope?: () => void) {}
 
   private eligible(userId: string): void {
     const user = getUser(this.database, userId);
@@ -48,12 +49,15 @@ export class AccountInvitations {
   }
 
   private validIssuer(row: Invitation, origin?: string): boolean {
+    this.validateScope?.();
     if (row.recovery_event_id) {
-      return row.issuer_user_id === row.user_id && row.expected_origin === origin
+      return (this.expectedRecoveryId === undefined || row.recovery_event_id === this.expectedRecoveryId)
+        && row.issuer_user_id === row.user_id && row.expected_origin === origin
         && getUser(this.database, row.user_id)?.role === 'admin'
         && Boolean(this.database.query('SELECT 1 FROM operator_recovery_events WHERE id=? AND target_user_id=? AND method=? AND origin=?')
           .get(row.recovery_event_id, row.user_id, row.method, origin!));
     }
+    if (this.expectedRecoveryId !== undefined) return false;
     const issuer = getUser(this.database, row.issuer_user_id);
     return Boolean(issuer?.enabled && issuer.role === 'admin' && !row.expected_origin);
   }

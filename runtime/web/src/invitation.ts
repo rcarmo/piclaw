@@ -119,7 +119,8 @@ passkeyButton.addEventListener('click', async () => {
     const result = await confirmed.json();
     if (finished) return;
     if (!confirmed.ok || result.enrolled !== true || result.login_required !== true) throw new Error('Setup failed.');
-    finished = true; clearSecrets(); status.textContent = 'Account setup complete. Sign in to continue.'; element<HTMLAnchorElement>('invitation-login').textContent = 'Sign in';
+    finished = true; clearSecrets(); status.textContent = result.recovery_only === true ? 'Account recovery complete. Ask the operator to stop recovery mode and start Piclaw normally.' : 'Account setup complete. Sign in to continue.';
+    const login=element<HTMLAnchorElement>('invitation-login');login.textContent=result.recovery_only===true?'Recovery complete':'Sign in';login.hidden=result.recovery_only===true;
   } catch {
     if (!finished) { finished = true; clearSecrets(); status.textContent = 'Passkey setup could not be verified.'; error.textContent = 'No automatic retry was made. Try signing in if setup completed, or ask for a new invitation.'; }
   } finally { busy = false; nativeActive = false; }
@@ -141,8 +142,8 @@ form.addEventListener("submit", async event => {
     const body = await response.json();
     if (finished) return;
     if (!response.ok || body.enrolled !== true || body.login_required !== true) { error.textContent = "The code or invitation was not accepted. Check the code; after repeated failures request a new invitation."; return; }
-    finished = true; clearSecrets(); status.textContent = "Account setup complete. Sign in to continue.";
-    element<HTMLAnchorElement>("invitation-login").textContent = "Sign in";
+    finished = true; clearSecrets(); status.textContent = body.recovery_only === true ? "Account recovery complete. Ask the operator to stop recovery mode and start Piclaw normally." : "Account setup complete. Sign in to continue.";
+    const login=element<HTMLAnchorElement>("invitation-login");login.textContent=body.recovery_only===true?"Recovery complete":"Sign in";login.hidden=body.recovery_only===true;
   } catch {
     if (!finished) error.textContent = "Confirmation could not be verified. Try signing in if setup completed, or request a new invitation.";
   } finally { clearTimeout(timeout); busy = false; if (!finished) confirmButton.disabled = false; }
