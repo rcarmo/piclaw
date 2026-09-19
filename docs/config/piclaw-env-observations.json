@@ -1250,6 +1250,7 @@
             "Makefile",
             "docs/compaction-models-and-deadlines.md",
             "docs/configuration.md",
+            "docs/design/local-note-retrieval-lifecycle-tests.md",
             "docs/development.md",
             "docs/development/testing-and-linting-flow-presentation-2026-04-18.html",
             "package.json"
