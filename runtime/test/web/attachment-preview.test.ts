@@ -42,6 +42,17 @@ describe("attachment preview kind", () => {
     expect(getAttachmentPreviewKind("text/x-yaml", "config.yml")).toBe("text");
   });
 
+  test("classifies audio attachments by MIME type or common filename", () => {
+    expect(getAttachmentPreviewKind("audio/wav", "recording.wav")).toBe("audio");
+    expect(getAttachmentPreviewKind("audio/mpeg; codecs=mp3", "recording.bin")).toBe("audio");
+    expect(getAttachmentPreviewKind("application/octet-stream", "recording.wav")).toBe("audio");
+    expect(getAttachmentPreviewKind("application/octet-stream", "voice-note.m4a")).toBe("audio");
+  });
+
+  test("returns the audio player label", () => {
+    expect(getAttachmentPreviewLabel("audio")).toBe("Audio player");
+  });
+
   test("returns the ZIP archive preview label", () => {
     expect(getAttachmentPreviewLabel("archive")).toBe("ZIP archive preview");
     expect(getAttachmentPreviewLabel("eml")).toBe("Email preview");
@@ -74,5 +85,11 @@ describe("attachment preview kind", () => {
     expect(buildAttachmentPreviewModalClassName(true)).toBe("image-modal attachment-preview-modal maximized");
     expect(overlaysCss).toContain(".attachment-preview-modal.maximized");
     expect(overlaysCss).toContain(".attachment-preview-modal.maximized .attachment-preview-shell");
+  });
+
+  test("audio previews have responsive player styling", () => {
+    expect(overlaysCss).toContain(".attachment-preview-audio-shell");
+    expect(overlaysCss).toContain(".attachment-preview-audio");
+    expect(overlaysCss).toContain("width: min(680px, 100%)");
   });
 });

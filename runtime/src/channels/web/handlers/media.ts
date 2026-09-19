@@ -3,8 +3,8 @@
  *
  * Handles POST /media/upload (file upload) and GET /media/:id (download/thumbnail).
  * Media uploads are validated by MediaService (size + content-type checks).
- * Downloads use Content-Disposition: attachment for non-image types to
- * prevent stored XSS via HTML/SVG file uploads.
+ * Downloads use Content-Disposition: attachment for types that are not safe
+ * browser media, preventing stored XSS via HTML/SVG file uploads.
  *
  * Consumers: web/http/dispatch-media.ts routes media paths here.
  */
@@ -55,6 +55,11 @@ const INLINE_SAFE_TYPES = new Set([
   "image/x-icon",
 ]);
 
+function isInlineSafeType(contentType: string): boolean {
+  const normalized = contentType.split(";", 1)[0]?.trim().toLowerCase() || "";
+  return INLINE_SAFE_TYPES.has(normalized) || normalized.startsWith("audio/");
+}
+
 /**
  * Resolve media binary requests, including thumbnail and inline/attachment behavior.
  * @param channel Response context used for JSON errors.
@@ -72,10 +77,11 @@ export function handleMedia(channel: MediaResponseContext, id: number, thumbnail
     "Cache-Control": "no-cache",
     ...(result.body.size > 0 ? { "Content-Length": String(result.body.size) } : {}),
   };
-  // Force download for non-image types to prevent stored XSS via HTML/SVG uploads.
+  // Force download for types that are not safe browser media to prevent stored
+  // XSS via HTML/SVG uploads. Audio remains inline so the native player can load it.
   // Include a concrete filename because iOS Safari can ignore the HTML download
   // attribute for PDFs and will otherwise open the response fullscreen.
-  if (!INLINE_SAFE_TYPES.has(contentType)) {
+  if (!isInlineSafeType(contentType)) {
     headers["Content-Disposition"] = buildContentDisposition("attachment", result.filename || `attachment-${id}`);
   }
   return new Response(result.body, { headers });

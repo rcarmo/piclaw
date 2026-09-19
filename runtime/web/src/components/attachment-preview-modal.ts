@@ -276,6 +276,13 @@ export function AttachmentPreviewModal({ mediaId, info, onClose }) {
                         ${!loading && !error && previewKind === 'image' && html`
                             <img class="attachment-preview-image" src=${getMediaUrl(mediaId)} alt=${filename} />
                         `}
+                        ${!loading && !error && previewKind === 'audio' && html`
+                            <div class="attachment-preview-audio-shell">
+                                <audio class="attachment-preview-audio" src=${getMediaUrl(mediaId)} controls preload="metadata">
+                                    Your browser does not support audio playback. Download the file to listen to it.
+                                </audio>
+                            </div>
+                        `}
                         ${!loading && !error && previewKind === 'video' && html`
                             <video class="attachment-preview-video" src=${getMediaUrl(mediaId)} controls autoplay style="max-width:100%;max-height:100%;" />
                         `}

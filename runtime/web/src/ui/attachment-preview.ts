@@ -87,6 +87,21 @@ function isHtmlFilename(filename: unknown): boolean {
   return !!name && (name.endsWith(".html") || name.endsWith(".htm"));
 }
 
+function isAudioFilename(filename: unknown): boolean {
+  const name = normalize(filename);
+  return !!name && (
+    name.endsWith(".aac")
+    || name.endsWith(".flac")
+    || name.endsWith(".m4a")
+    || name.endsWith(".mp3")
+    || name.endsWith(".oga")
+    || name.endsWith(".ogg")
+    || name.endsWith(".opus")
+    || name.endsWith(".wav")
+    || name.endsWith(".weba")
+  );
+}
+
 function isTextFilename(filename: unknown): boolean {
   const name = normalize(filename);
   if (!name) return false;
@@ -100,7 +115,7 @@ function isTextFilename(filename: unknown): boolean {
   );
 }
 
-export type AttachmentPreviewKind = "image" | "video" | "pdf" | "office" | "eml" | "html" | "text" | "delimited" | "archive" | "unsupported" | string;
+export type AttachmentPreviewKind = "audio" | "image" | "video" | "pdf" | "office" | "eml" | "html" | "text" | "delimited" | "archive" | "unsupported" | string;
 
 export function getAttachmentPreviewKind(contentType: unknown, filename?: unknown): AttachmentPreviewKind {
   const addonPreview = resolveAddonAttachmentPreview(contentType, filename);
@@ -114,6 +129,7 @@ export function getAttachmentPreviewKind(contentType: unknown, filename?: unknow
   if (isHtmlFilename(filename) || normalized === "text/html") return "html";
   if (isDelimitedAttachment(normalized, filename)) return "delimited";
   if (isTextFilename(filename)) return "text";
+  if (isAudioFilename(filename) || normalized.startsWith("audio/")) return "audio";
   if (!normalized) return "unsupported";
   if (normalized.startsWith("video/")) return "video";
   if (normalized.startsWith("image/")) return "image";
@@ -128,6 +144,8 @@ export function isMarkdownAttachmentPreview(contentType: unknown): boolean {
 
 export function getAttachmentPreviewLabel(kind: AttachmentPreviewKind): string {
   switch (kind) {
+    case "audio":
+      return "Audio player";
     case "image":
       return "Image preview";
     case "video":

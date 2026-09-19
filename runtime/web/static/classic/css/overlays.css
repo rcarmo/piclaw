@@ -146,6 +146,19 @@
     min-height: 0;
 }
 
+.attachment-preview-audio-shell {
+    min-height: 240px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-xl);
+}
+
+.attachment-preview-audio {
+    display: block;
+    width: min(680px, 100%);
+}
+
 .attachment-preview-text {
     margin: 0;
     padding: var(--spacing-lg);

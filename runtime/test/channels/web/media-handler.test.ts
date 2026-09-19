@@ -13,6 +13,29 @@ class StubChannel {
   }
 }
 
+test("handleMedia serves audio inline for native browser playback", () => {
+  const ws = getTestWorkspace();
+  const restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  try {
+    initDatabase();
+    const mediaId = createMedia(
+      "recording.wav",
+      "audio/wav",
+      new TextEncoder().encode("RIFFtestWAVE"),
+      null,
+      { size: 12 },
+    );
+
+    const res = handleMedia(new StubChannel() as any, mediaId, false);
+    expect(res.headers.get("Content-Type")).toBe("audio/wav");
+    expect(res.headers.get("Content-Disposition")).toBeNull();
+    expect(res.headers.get("Content-Length")).toBe("12");
+  } finally {
+    restoreEnv();
+  }
+});
+
 test("handleMedia forces SVG downloads to attachment disposition", () => {
   const ws = getTestWorkspace();
   const restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
