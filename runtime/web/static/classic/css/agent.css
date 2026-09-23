@@ -165,6 +165,25 @@
     white-space: nowrap;
 }
 
+.agent-delegate-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 2px;
+    margin-right: 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    vertical-align: middle;
+}
+
 .agent-status-meta-row {
     display: flex;
     align-items: center;

@@ -1,6 +1,19 @@
 import { expect, test } from 'bun:test';
 
-import { resolveAgentStatusContent, resolveIntentElapsedLabel, resolveStatusActivityAgeLabel, shouldTickIntentElapsed, shouldTickStatusActivityAge } from '../../web/src/components/status.ts';
+import { countRunningDelegates, resolveAgentStatusContent, resolveIntentElapsedLabel, resolveStatusActivityAgeLabel, shouldTickIntentElapsed, shouldTickStatusActivityAge } from '../../web/src/components/status.ts';
+
+test('countRunningDelegates uses only live delegate calls in the current status snapshot', () => {
+  const tools = [{tool_name:'delegate'}, {tool_name:'bash'}, {tool_name:'delegate'}];
+  expect(countRunningDelegates({type:'tool_call',active_tools:tools})).toBe(2);
+  expect(countRunningDelegates({type:'tool_status',tool_name:'bash',active_tools:tools})).toBe(2);
+  expect(countRunningDelegates({type:'tool_call',tool_name:'delegate',active_tools:[]})).toBe(0);
+  expect(countRunningDelegates({type:'tool_call',tool_name:'delegate'})).toBe(0);
+  expect(countRunningDelegates({type:'tool_call',active_tools:[null,{tool_name:'delegate_other'}]})).toBe(0);
+  for (const type of ['done','error','waiting','intent']) expect(countRunningDelegates({type,active_tools:tools})).toBe(0);
+  expect(countRunningDelegates({type:'tool_call',active_tools:tools,last_activity:true})).toBe(0);
+  expect(countRunningDelegates({type:'tool_call',active_tools:tools,lastActivity:true})).toBe(0);
+  expect(countRunningDelegates(null)).toBe(0);
+});
 
 test('resolveAgentStatusContent preserves the last visible tool activity label without inlining age text', () => {
   expect(resolveAgentStatusContent({ type: 'tool_call', title: 'bash', last_activity: true, last_event_at: '2026-04-22T06:00:00.000Z' })).toBe('Recent activity: Running: bash');

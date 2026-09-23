@@ -220,6 +220,15 @@ export function resolveAgentStatusContent(status, options = {}) {
     return 'Last activity';
 }
 
+/** The host snapshot is already scoped to this chat and contains running calls only. */
+export function countRunningDelegates(status) {
+    if (!status || status.last_activity || status.lastActivity
+        || (status.type !== 'tool_call' && status.type !== 'tool_status')) return 0;
+    return Array.isArray(status.active_tools)
+        ? status.active_tools.filter(tool => tool?.tool_name === 'delegate').length
+        : 0;
+}
+
 function normalizeToolName(payload) {
     const raw = payload?.tool_name || payload?.toolName || '';
     return typeof raw === 'string' ? raw.trim().toLowerCase() : '';
@@ -619,6 +628,7 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
     const statusIntentColor = resolveIntentColor(status?.kind || (statusIsCompaction ? 'warning' : 'info'));
 
     const content = resolveAgentStatusContent(status, { isLastActivity });
+    const delegateCount = countRunningDelegates(status);
     const statusActivityAgeLabel = resolveStatusActivityAgeLabel(status, nowMs);
     const toolElapsedLabel = isToolIntentPayload(status)
         ? getStatusElapsedLabel(status, nowMs)
@@ -1093,7 +1103,7 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
                         ? html`<span class="agent-status-error-icon" aria-hidden="true">⚠</span>`
                         : (runningIndicatorMode === 'spinner' && html`<div class="agent-status-spinner"></div>`)}
                     <div class="agent-status-copy">
-                        <span class="agent-status-text">${renderToolArgumentInText(content, status)}</span>
+                        <span class="agent-status-text">${delegateCount > 0 && html`<span class="agent-delegate-count" title=${`${delegateCount} ${delegateCount === 1 ? 'delegate' : 'delegates'} running`} aria-label=${`${delegateCount} ${delegateCount === 1 ? 'delegate' : 'delegates'} running`}>${delegateCount}</span>`}${renderToolArgumentInText(content, status)}</span>
                         ${(toolRepoLabel || orderedStatusHints.length > 0 || statusActivityAgeLabel || toolElapsedLabel) && html`
                             <span class="agent-status-meta-row">
                                 ${leadingStatusHints.map((hint) => html`

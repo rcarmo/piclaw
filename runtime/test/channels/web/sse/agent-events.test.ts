@@ -658,3 +658,27 @@ describe("web SSE recovery events", () => {
     expect(statuses[0]).not.toHaveProperty("errorMessage");
   });
 });
+
+describe('Delegate active snapshots', () => {
+  it('counts starts once, removes success/error/cancelled calls and isolates separate chats', () => {
+    const a=makeHandler(),b=makeHandler();
+    const count=(source:typeof a)=>((source.statuses.at(-1)?.active_tools ?? []) as any[]).filter(tool=>tool.tool_name==='delegate').length;
+    a.handler({type:'tool_execution_start',toolCallId:'d1',toolName:'delegate',args:{prompt:'one'}} as any);
+    a.handler({type:'tool_execution_start',toolCallId:'d2',toolName:'delegate',args:{prompt:'two'}} as any);
+    a.handler({type:'tool_execution_start',toolCallId:'d2',toolName:'delegate',args:{prompt:'two'}} as any);
+    a.handler({type:'tool_execution_start',toolCallId:'b1',toolName:'bash',args:{command:'true'}} as any);
+    b.handler({type:'tool_execution_start',toolCallId:'other',toolName:'delegate',args:{prompt:'other chat'}} as any);
+    expect(count(a)).toBe(2);expect(count(b)).toBe(1);
+    a.handler({type:'tool_execution_update',toolCallId:'d1',toolName:'delegate',partialResult:{content:[{type:'text',text:'retry'}]}} as any);
+    expect(count(a)).toBe(2);
+    a.handler({type:'tool_execution_end',toolCallId:'d1',toolName:'delegate',result:{},isError:false} as any);
+    expect(count(a)).toBe(1);
+    a.handler({type:'tool_execution_end',toolCallId:'d2',toolName:'delegate',result:{error:'cancelled'},isError:true} as any);
+    expect(count(a)).toBe(0);expect(count(b)).toBe(1);
+    expect(a.statuses.at(-1)?.tool_name).toBe('bash');
+    a.handler({type:'tool_execution_end',toolCallId:'b1',toolName:'bash',result:{},isError:false} as any);
+    expect(count(a)).toBe(0);
+    b.handler({type:'tool_execution_end',toolCallId:'other',toolName:'delegate',result:{error:'timeout'},isError:true} as any);
+    expect(count(b)).toBe(0);
+  });
+});

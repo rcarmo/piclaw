@@ -619,3 +619,37 @@ test('AgentStatus can toggle between hidden and visible renders without hook-ord
     render(h(AgentStatus, { showCorePanels: false, showExtensionPanels: false }), host);
   }).not.toThrow();
 });
+
+test('Delegate badge updates with concurrent calls, hides at zero and never shows on recent activity', async () => {
+  const fakeDocument = new FakeDocument();
+  installStatusDomStubs(fakeDocument);
+  const { AgentStatus } = await importFresh<typeof import('../../web/src/components/status.ts')>('../web/src/components/status.ts');
+  const { h, render } = await import('../../web/src/vendor/preact-htm.js');
+  const host = fakeDocument.createElement('div');
+  fakeDocument.body.appendChild(host);
+  const update = (count: number, extra = {}) => render(h(AgentStatus, {
+    status: { type: 'tool_call', title: 'delegate', active_tools: Array.from({length:count}, (_,i)=>({tool_name:'delegate',tool_call_id:`d${i}`})), ...extra },
+    turnId: 'delegate-turn',
+  }), host);
+  const badges = () => findElements(host,node=>getAttr(node,'class')==='agent-delegate-count');
+  for (const count of [1,2,12,1]) {
+    update(count);
+    expect(badges()).toHaveLength(1);
+    expect(collectText(badges()[0])).toBe(String(count));
+    expect(getAttr(badges()[0],'title')).toBe(`${count} ${count===1?'delegate':'delegates'} running`);
+  }
+  update(0);expect(badges()).toHaveLength(0);
+  update(2,{last_activity:true});expect(badges()).toHaveLength(0);
+  update(2,{type:'error'});expect(badges()).toHaveLength(0);
+  render(null,host);
+});
+
+test('both skins give the Delegate count a small rounded square using theme colours',()=>{
+  for (const skin of ['classic','visual']) {
+    const css=readFileSync(join(import.meta.dir,`../../web/static/${skin}/css/agent.css`),'utf8');
+    const badge=css.match(/\.agent-delegate-count\s*\{([^}]+)\}/)![1];
+    expect(badge).toContain('min-width: 20px');expect(badge).toContain('height: 20px');
+    expect(badge).toContain('border-radius: 4px');
+    expect(badge).toContain('background: var(--bg-secondary)');expect(badge).toContain('color: var(--text-primary)');
+  }
+});
