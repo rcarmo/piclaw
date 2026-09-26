@@ -1,0 +1,1120 @@
+{
+  "version": 2,
+  "source": "github:rcarmo/piclaw-addons",
+  "addons": [
+    {
+      "slug": "a2a",
+      "name": "@rcarmo/piclaw-addon-a2a",
+      "version": "0.4.1",
+      "type": "extension",
+      "description": "Opt-in A2A v1 agents with authenticated JSON-RPC, durable tasks and approved endpoints",
+      "path": "addons/a2a",
+      "tags": [
+        "a2a",
+        "agents",
+        "interoperability"
+      ],
+      "skills": [
+        "a2a"
+      ],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-a2a-0.4.1.tgz"
+      },
+      "updatedAt": "2026-09-19",
+      "owner": {
+        "login": "rcarmo",
+        "url": "https://github.com/rcarmo"
+      },
+      "contributors": []
+    },
+    {
+      "slug": "ast-grep-tool",
+      "name": "@rcarmo/piclaw-addon-ast-grep",
+      "version": "0.1.7",
+      "type": "extension",
+      "description": "Structural code search and rewrite using ast-grep as a native LLM tool",
+      "path": "addons/ast-grep-tool",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/ast-grep-tool/",
+      "tags": [
+        "ast",
+        "code-search",
+        "refactoring"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-ast-grep-0.1.7.tgz"
+      },
+      "updatedAt": "2026-09-10"
+    },
+    {
+      "slug": "autoresearch",
+      "name": "@rcarmo/piclaw-addon-autoresearch",
+      "version": "0.1.4",
+      "type": "extension",
+      "description": "Autonomous experiment loop sub-agent (start/stop/status tools via tmux)",
+      "path": "addons/autoresearch",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/autoresearch/",
+      "tags": [
+        "automation",
+        "experiments",
+        "research"
+      ],
+      "skills": [
+        "autoresearch-create"
+      ],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-autoresearch-0.1.4.tgz"
+      },
+      "updatedAt": "2026-09-10"
+    },
+    {
+      "slug": "cheapskate",
+      "name": "@rcarmo/piclaw-addon-cheapskate",
+      "version": "0.5.2",
+      "type": "extension",
+      "description": "Catalogue-backed zero-cost model routing through one virtual cheapskate/auto model, with request-local failover and a free-only Settings pane",
+      "path": "addons/cheapskate",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/cheapskate/",
+      "tags": [
+        "cost-optimization",
+        "free-tier",
+        "models",
+        "providers",
+        "rotation"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-cheapskate-0.5.2.tgz"
+      },
+      "updatedAt": "2026-09-19"
+    },
+    {
+      "slug": "code-review",
+      "name": "@rcarmo/piclaw-addon-code-review",
+      "version": "0.1.8",
+      "type": "extension",
+      "description": "Saved-source and Git-diff reviews with durable inline discussions and explicit queued agent work",
+      "path": "addons/code-review",
+      "tags": [
+        "agent-workflow",
+        "code-review",
+        "core",
+        "workspace"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-code-review-0.1.8.tgz"
+      },
+      "updatedAt": "2026-09-25"
+    },
+    {
+      "slug": "code-validator",
+      "name": "@rcarmo/piclaw-addon-code-validator",
+      "version": "0.1.3",
+      "type": "extension",
+      "description": "Diagnostics tool for code validation (Python, JS/TS, JSON, extensible via validators.json)",
+      "path": "addons/code-validator",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/code-validator/",
+      "tags": [
+        "diagnostics",
+        "linting",
+        "validation"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-code-validator-0.1.3.tgz"
+      },
+      "updatedAt": "2026-09-10"
+    },
+    {
+      "slug": "codex-conversion",
+      "name": "@rcarmo/piclaw-addon-codex-conversion",
+      "version": "0.2.1",
+      "type": "extension",
+      "description": "Provider-aware Codex and Copilot prompt and tool profiles for Piclaw",
+      "path": "addons/codex-conversion",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/codex-conversion/",
+      "tags": [
+        "adapter",
+        "codex",
+        "openai",
+        "prompting",
+        "tools"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-codex-conversion-0.2.1.tgz"
+      },
+      "updatedAt": "2026-09-10"
+    },
+    {
+      "slug": "delegate",
+      "name": "@rcarmo/piclaw-addon-delegate",
+      "version": "0.2.13",
+      "type": "extension",
+      "description": "Delegate tasks to operator-approved child-Pi models with fail-closed enforcement",
+      "path": "addons/delegate",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/delegate/",
+      "tags": [
+        "core",
+        "cost-optimization",
+        "delegation",
+        "multi-model"
+      ],
+      "skills": [
+        "delegate"
+      ],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-delegate-0.2.13.tgz"
+      },
+      "updatedAt": "2026-09-25"
+    },
+    {
+      "slug": "dev-tools",
+      "name": "@rcarmo/piclaw-addon-dev-tools",
+      "version": "0.1.4",
+      "type": "extension",
+      "description": "Developer tools for workspace diagnostics and environment inspection",
+      "path": "addons/dev-tools",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/dev-tools/",
+      "tags": [
+        "developer",
+        "diagnostics",
+        "environment"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-dev-tools-0.1.4.tgz"
+      },
+      "updatedAt": "2026-09-10"
+    },
+    {
+      "slug": "diagram-tools",
+      "name": "@rcarmo/piclaw-addon-diagram-tools",
+      "version": "0.1.0",
+      "type": "skill",
+      "description": "Architecture diagram workflow — JSON graph definitions, SVG renderer, colour picker widget",
+      "path": "addons/diagram-tools",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/diagram-tools/",
+      "tags": [
+        "architecture",
+        "diagrams",
+        "portfolio",
+        "svg"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-diagram-tools-0.1.0.tgz"
+      },
+      "updatedAt": "2026-07-26"
+    },
+    {
+      "slug": "drawio-editor",
+      "name": "@rcarmo/piclaw-addon-drawio-editor",
+      "version": "31.4.4",
+      "type": "extension",
+      "description": "Self-hosted draw.io diagram editor with workspace file integration",
+      "path": "addons/drawio-editor",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/drawio-editor/",
+      "tags": [
+        "diagrams",
+        "drawio",
+        "editor"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-drawio-editor-31.4.4.tgz"
+      },
+      "updatedAt": "2026-09-21"
+    },
+    {
+      "slug": "editable-table",
+      "name": "@rcarmo/piclaw-addon-editable-table",
+      "version": "0.1.4",
+      "type": "extension",
+      "description": "Editable Markdown table widget for the web UI — opens a themed spreadsheet-style grid and inserts the edited Markdown table back into chat",
+      "path": "addons/editable-table",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/editable-table/",
+      "tags": [
+        "editor",
+        "markdown",
+        "table",
+        "web-ui",
+        "widget"
+      ],
+      "skills": [
+        "editable-table"
+      ],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-editable-table-0.1.4.tgz"
+      },
+      "updatedAt": "2026-09-10"
+    },
+    {
+      "slug": "eml-viewer",
+      "name": "@rcarmo/piclaw-addon-eml-viewer",
+      "version": "0.2.1",
+      "type": "extension",
+      "description": "Attachment preview route for email message (.eml) files in the web timeline",
+      "path": "addons/eml-viewer",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/eml-viewer/",
+      "tags": [
+        "email",
+        "eml",
+        "viewer"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-eml-viewer-0.2.1.tgz"
+      },
+      "updatedAt": "2026-07-26"
+    },
+    {
+      "slug": "export-timeline-pdf",
+      "name": "@rcarmo/piclaw-addon-export-timeline-pdf",
+      "version": "0.1.1",
+      "type": "skill",
+      "description": "Export chat timelines to PDF with inline avatars and referenced message pills",
+      "path": "addons/export-timeline-pdf",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/export-timeline-pdf/",
+      "tags": [
+        "export",
+        "pdf",
+        "timeline"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-export-timeline-pdf-0.1.1.tgz"
+      },
+      "updatedAt": "2026-09-08"
+    },
+    {
+      "slug": "ghostty-terminal",
+      "name": "@rcarmo/piclaw-addon-ghostty-terminal",
+      "version": "0.1.0",
+      "type": "extension",
+      "description": "Modern, more functional Ghostty-web terminal pane renderer for high-end Piclaw browsers",
+      "path": "addons/ghostty-terminal",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/ghostty-terminal/",
+      "tags": [
+        "desktop",
+        "experimental",
+        "ghostty",
+        "terminal",
+        "wasm"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-ghostty-terminal-0.1.0.tgz"
+      },
+      "updatedAt": "2026-09-08"
+    },
+    {
+      "slug": "git-query-tools",
+      "name": "@rcarmo/piclaw-addon-git-query-tools",
+      "version": "0.1.5",
+      "type": "extension",
+      "description": "Git history and JSON query tools for piclaw agents",
+      "path": "addons/git-query-tools",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/git-query-tools/",
+      "tags": [
+        "git",
+        "json",
+        "query"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-git-query-tools-0.1.5.tgz"
+      },
+      "updatedAt": "2026-09-10"
+    },
+    {
+      "slug": "goal",
+      "name": "@rcarmo/piclaw-addon-goal",
+      "version": "0.1.48",
+      "type": "extension",
+      "description": "Codex-style persisted thread goals with a hardened autonomous continuation loop and visible completion/stop summaries",
+      "path": "addons/goal",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/goal/",
+      "tags": [
+        "automation",
+        "core",
+        "goal-seeking",
+        "loop",
+        "productivity",
+        "session"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-goal-0.1.48.tgz"
+      },
+      "updatedAt": "2026-09-19"
+    },
+    {
+      "slug": "image-processing",
+      "name": "@rcarmo/piclaw-addon-image-processing",
+      "version": "0.1.4",
+      "type": "extension",
+      "description": "Image manipulation tool (image_process) for Piclaw — resize, crop, convert, composite and more via sharp",
+      "path": "addons/image-processing",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/image-processing/",
+      "tags": [
+        "image",
+        "processing",
+        "sharp",
+        "tools"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-image-processing-0.1.4.tgz"
+      },
+      "updatedAt": "2026-09-10"
+    },
+    {
+      "slug": "imap",
+      "name": "@rcarmo/piclaw-addon-imap",
+      "version": "0.1.11",
+      "type": "extension",
+      "description": "IMAP email management tool — search/fetch, move/copy, flag, create drafts, file messages, and STARTTLS support",
+      "path": "addons/imap",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/imap/",
+      "tags": [
+        "email",
+        "imap",
+        "mail",
+        "productivity"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-imap-0.1.11.tgz"
+      },
+      "updatedAt": "2026-09-19"
+    },
+    {
+      "slug": "kanban-board-widget",
+      "name": "@rcarmo/piclaw-addon-kanban-board-widget",
+      "version": "0.1.1",
+      "type": "extension",
+      "description": "Interactive kanban board dashboard widget for the web timeline",
+      "path": "addons/kanban-board-widget",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/kanban-board-widget/",
+      "tags": [
+        "dashboard",
+        "kanban",
+        "ui",
+        "widget"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-kanban-board-widget-0.1.1.tgz"
+      },
+      "updatedAt": "2026-07-26"
+    },
+    {
+      "slug": "kanban-editor",
+      "name": "@rcarmo/piclaw-addon-kanban-editor",
+      "version": "0.1.2",
+      "type": "extension",
+      "description": "Workspace .kanban.md editor add-on with Obsidian-style [[links]] between boards",
+      "path": "addons/kanban-editor",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/kanban-editor/",
+      "tags": [
+        "editor",
+        "kanban",
+        "markdown",
+        "wiki-links",
+        "workspace"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-kanban-editor-0.1.2.tgz"
+      },
+      "updatedAt": "2026-09-08"
+    },
+    {
+      "slug": "late-night-regrets",
+      "name": "@rcarmo/piclaw-addon-late-night-regrets",
+      "version": "0.1.4",
+      "type": "extension",
+      "description": "Nightly Bayesian interaction-quality classifier — trains on chat history, flags behavioral patterns, and writes self-improvement reflections",
+      "path": "addons/late-night-regrets",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/late-night-regrets/",
+      "tags": [
+        "bayesian",
+        "classifier",
+        "nightly",
+        "quality",
+        "reflection",
+        "self-improvement"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-late-night-regrets-0.1.4.tgz"
+      },
+      "updatedAt": "2026-09-10"
+    },
+    {
+      "slug": "linkr",
+      "name": "@rcarmo/piclaw-addon-linkr",
+      "version": "0.1.1",
+      "type": "extension",
+      "description": "Radxa Linkr KVM screenshots, bounded HID and firmware-entry jobs, with BIOS, boot and OS installation skills.",
+      "path": "addons/linkr",
+      "tags": [
+        "automation",
+        "bios",
+        "hardware",
+        "kvm"
+      ],
+      "skills": [
+        "linkr-boot-selection",
+        "linkr-control",
+        "linkr-firmware-navigation",
+        "linkr-os-install",
+        "linkr-qualify-device",
+        "linkr-reboot-bios",
+        "linkr-recovery"
+      ],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-linkr-0.1.1.tgz"
+      },
+      "updatedAt": "2026-09-19"
+    },
+    {
+      "slug": "lite-term",
+      "name": "@rcarmo/piclaw-addon-lite-term",
+      "version": "0.1.2",
+      "type": "extension",
+      "description": "xterm.js terminal pane identical to Piclaw's bundled default terminal and a good starting point for terminal customizations",
+      "path": "addons/lite-term",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/lite-term/",
+      "tags": [
+        "lite",
+        "low-spec",
+        "nerd-font",
+        "terminal",
+        "xterm"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-lite-term-0.1.2.tgz"
+      },
+      "updatedAt": "2026-09-08"
+    },
+    {
+      "slug": "m365",
+      "name": "@rcarmo/piclaw-addon-m365",
+      "version": "0.1.2",
+      "type": "extension",
+      "description": "Experimental Microsoft 365 tools for Teams, Graph, Outlook, OneDrive, SharePoint, Calendar, and To Do",
+      "path": "addons/m365",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/m365/",
+      "tags": [
+        "graph",
+        "m365",
+        "microsoft-365",
+        "onedrive",
+        "outlook",
+        "productivity",
+        "sharepoint",
+        "teams"
+      ],
+      "skills": [
+        "m365-document-link-metadata",
+        "m365-graph-query",
+        "m365-mail",
+        "m365-onedrive-share-local-file",
+        "m365-profile",
+        "m365-spo-browse",
+        "m365-spo-download",
+        "m365-spo-search",
+        "m365-teams-chats",
+        "m365-teams-messages",
+        "m365-teams-send"
+      ],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-m365-0.1.2.tgz"
+      },
+      "updatedAt": "2026-09-11"
+    },
+    {
+      "slug": "mindmap",
+      "name": "@rcarmo/piclaw-addon-mindmap",
+      "version": "0.1.3",
+      "type": "extension",
+      "description": "D3-based mindmap editor pane for .mindmap.yaml files in Piclaw",
+      "path": "addons/mindmap",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/mindmap/",
+      "tags": [
+        "diagrams",
+        "editor",
+        "mindmap",
+        "yaml"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-mindmap-0.1.3.tgz"
+      },
+      "updatedAt": "2026-09-10"
+    },
+    {
+      "slug": "observability",
+      "name": "@rcarmo/piclaw-addon-observability",
+      "version": "0.1.17",
+      "type": "extension",
+      "description": "OpenTelemetry observability — trace errors and agent turns across piclaw instances to Azure Application Insights (with Live Metrics) and local Graphite",
+      "path": "addons/observability",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/observability/",
+      "tags": [
+        "application-insights",
+        "core",
+        "graphite",
+        "live-metrics",
+        "metrics",
+        "observability",
+        "opentelemetry",
+        "otel",
+        "tracing"
+      ],
+      "skills": [
+        "usage-telemetry-chart"
+      ],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-observability-0.1.17.tgz"
+      },
+      "updatedAt": "2026-09-19"
+    },
+    {
+      "slug": "office-tools",
+      "name": "@rcarmo/piclaw-addon-office-tools",
+      "version": "0.1.6",
+      "type": "extension",
+      "description": "Office document read/write tools for Piclaw (docx, xlsx, pptx, odt, md→pdf)",
+      "path": "addons/office-tools",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/office-tools/",
+      "tags": [
+        "documents",
+        "docx",
+        "office",
+        "pdf",
+        "pptx",
+        "xlsx"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-office-tools-0.1.6.tgz"
+      },
+      "updatedAt": "2026-09-11"
+    },
+    {
+      "slug": "office-viewer",
+      "name": "@rcarmo/piclaw-addon-office-viewer",
+      "version": "0.1.3",
+      "type": "extension",
+      "description": "Office document viewer (.docx, .xlsx, .pptx, .odt, .ods, .odp) for Piclaw",
+      "path": "addons/office-viewer",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/office-viewer/",
+      "tags": [
+        "documents",
+        "docx",
+        "office",
+        "pptx",
+        "viewer",
+        "xlsx"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-office-viewer-0.1.3.tgz"
+      },
+      "updatedAt": "2026-09-10"
+    },
+    {
+      "slug": "plan-sidebar",
+      "name": "@rcarmo/piclaw-addon-plan-sidebar",
+      "version": "0.1.25",
+      "type": "extension",
+      "description": "Right-side session plan sidebar with canonical plan action=update and Markdown storage",
+      "path": "addons/plan-sidebar",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/plan-sidebar/",
+      "tags": [
+        "core",
+        "markdown",
+        "planning",
+        "session",
+        "ui"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-plan-sidebar-0.1.25.tgz"
+      },
+      "updatedAt": "2026-09-10"
+    },
+    {
+      "slug": "portainer",
+      "name": "@rcarmo/piclaw-addon-portainer",
+      "version": "0.1.9",
+      "type": "extension",
+      "description": "Portainer management tool — session-scoped API config, ad-hoc requests, and orchestration workflows for endpoints, stacks, containers, images, networks, and volumes",
+      "path": "addons/portainer",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/portainer/",
+      "tags": [
+        "containers",
+        "docker",
+        "infrastructure",
+        "portainer"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-portainer-0.1.9.tgz"
+      },
+      "updatedAt": "2026-09-19"
+    },
+    {
+      "slug": "proxmox",
+      "name": "@rcarmo/piclaw-addon-proxmox",
+      "version": "0.1.10",
+      "type": "extension",
+      "description": "Proxmox VE management tool — session-scoped API config, ad-hoc requests, and orchestration workflows for VMs, LXC containers, storage, tasks, and metrics",
+      "path": "addons/proxmox",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/proxmox/",
+      "tags": [
+        "homelab",
+        "infrastructure",
+        "proxmox",
+        "virtualization"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-proxmox-0.1.10.tgz"
+      },
+      "updatedAt": "2026-09-19"
+    },
+    {
+      "slug": "remote-peer",
+      "name": "@rcarmo/piclaw-addon-remote-peer",
+      "version": "0.3.5",
+      "type": "extension",
+      "description": "Iroh-only client-ID peer chat with explicit pairing, default-off mDNS, durable delivery and files",
+      "path": "addons/remote-peer",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/remote-peer/",
+      "tags": [
+        "agents",
+        "interop",
+        "messaging",
+        "remote"
+      ],
+      "skills": [
+        "remote-peer"
+      ],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-remote-peer-0.3.5.tgz"
+      },
+      "updatedAt": "2026-09-25",
+      "owner": {
+        "login": "rcarmo",
+        "url": "https://github.com/rcarmo"
+      },
+      "contributors": []
+    },
+    {
+      "slug": "restic",
+      "name": "@rcarmo/piclaw-addon-restic",
+      "version": "0.1.3",
+      "type": "extension",
+      "description": "Settings-managed Restic backups with consistent SQLite staging and scoped retention.",
+      "path": "addons/restic",
+      "tags": [
+        "backup",
+        "core",
+        "restic",
+        "settings"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-restic-0.1.3.tgz"
+      },
+      "updatedAt": "2026-09-26",
+      "owner": {
+        "login": "rcarmo",
+        "url": "https://github.com/rcarmo"
+      },
+      "contributors": []
+    },
+    {
+      "slug": "sample-addon",
+      "name": "@rcarmo/piclaw-addon-sample-addon",
+      "version": "0.1.11",
+      "type": "extension",
+      "description": "Sample add-on — starter template showing a settings pane, keychain secret, SQLite KV config, and a test endpoint",
+      "path": "addons/sample-addon",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/sample-addon/",
+      "tags": [
+        "developer",
+        "sample",
+        "template"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-sample-addon-0.1.11.tgz"
+      },
+      "updatedAt": "2026-09-18"
+    },
+    {
+      "slug": "session-dashboard",
+      "name": "@rcarmo/piclaw-addon-session-dashboard",
+      "version": "0.2.4",
+      "type": "extension",
+      "description": "Roll-down active session dashboard with recent work summaries and context indicators",
+      "path": "addons/session-dashboard",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/session-dashboard/",
+      "tags": [
+        "core",
+        "dashboard",
+        "navigation",
+        "session",
+        "ui"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-session-dashboard-0.2.4.tgz"
+      },
+      "updatedAt": "2026-09-08"
+    },
+    {
+      "slug": "session-tree",
+      "name": "@rcarmo/piclaw-addon-session-tree",
+      "version": "0.2.0",
+      "type": "extension",
+      "description": "Snapshot-driven interactive session tree renderer for Piclaw's /tree command",
+      "path": "addons/session-tree",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/session-tree/",
+      "tags": [
+        "navigation",
+        "session",
+        "tree",
+        "widget"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-session-tree-0.2.0.tgz"
+      },
+      "updatedAt": "2026-09-08"
+    },
+    {
+      "slug": "settings-dialog-screenshot",
+      "name": "@rcarmo/piclaw-addon-settings-dialog-screenshot",
+      "version": "0.1.0",
+      "type": "skill",
+      "description": "Developer skill for capturing tightly cropped screenshots of the Pi web settings dialog only",
+      "path": "addons/settings-dialog-screenshot",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/settings-dialog-screenshot/",
+      "tags": [
+        "developer",
+        "documentation",
+        "screenshots",
+        "ui"
+      ],
+      "skills": [
+        "settings-dialog-screenshot"
+      ],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-settings-dialog-screenshot-0.1.0.tgz"
+      },
+      "updatedAt": "2026-07-26"
+    },
+    {
+      "slug": "skill-model-effort",
+      "name": "@rcarmo/piclaw-addon-skill-model-effort",
+      "version": "0.1.3",
+      "type": "extension",
+      "description": "Honor model, effort, and thinking frontmatter on Piclaw skills",
+      "path": "addons/skill-model-effort",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/skill-model-effort/",
+      "tags": [
+        "models",
+        "runtime",
+        "skills",
+        "thinking"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-skill-model-effort-0.1.3.tgz"
+      },
+      "updatedAt": "2026-09-10"
+    },
+    {
+      "slug": "smart-compaction",
+      "name": "@rcarmo/piclaw-addon-smart-compaction",
+      "version": "0.1.4",
+      "type": "extension",
+      "description": "Standalone Pi-compatible smart compaction extension for vanilla pi users; Piclaw already includes this behavior natively.",
+      "path": "addons/smart-compaction",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/smart-compaction/",
+      "tags": [
+        "compaction",
+        "context",
+        "pi",
+        "vanilla-pi"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-smart-compaction-0.1.4.tgz"
+      },
+      "updatedAt": "2026-09-08"
+    },
+    {
+      "slug": "stealth-browser",
+      "name": "@rcarmo/piclaw-addon-stealth-browser",
+      "version": "0.1.1",
+      "type": "extension",
+      "description": "Stealth browser automation via mochi.js — human-like interactions, fingerprint consistency, anti-detection bypass",
+      "path": "addons/stealth-browser",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/stealth-browser/",
+      "tags": [
+        "automation",
+        "browser",
+        "stealth",
+        "web"
+      ],
+      "skills": [
+        "stealth-browse"
+      ],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-stealth-browser-0.1.1.tgz"
+      },
+      "updatedAt": "2026-09-10"
+    },
+    {
+      "slug": "telegram",
+      "name": "@rcarmo/piclaw-addon-telegram",
+      "version": "0.1.3",
+      "type": "extension",
+      "description": "Telegram Bot channel for PiClaw. Connects via Bot API long polling, receives/sends messages, and routes them through the agent.",
+      "path": "addons/telegram",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/telegram/",
+      "tags": [
+        "channel",
+        "messaging",
+        "telegram"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-telegram-0.1.3.tgz"
+      },
+      "updatedAt": "2026-09-19"
+    },
+    {
+      "slug": "vent",
+      "name": "@rcarmo/piclaw-addon-vent",
+      "version": "0.1.4",
+      "type": "extension",
+      "description": "Workspace vent log add-on, adapted from pi-vent by Igor Warzocha, with a configurable output file",
+      "path": "addons/vent",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/vent/",
+      "tags": [
+        "feedback",
+        "postmortem",
+        "quality",
+        "vent",
+        "workspace"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-vent-0.1.4.tgz"
+      },
+      "updatedAt": "2026-09-19"
+    },
+    {
+      "slug": "voice-pipeline",
+      "name": "@rcarmo/piclaw-addon-voice-pipeline",
+      "version": "0.2.2",
+      "type": "extension",
+      "description": "ESPHome-only voice assistant pipeline for ThinkSmart/ESP32-Audio devices using Azure STT/TTS and the Flint chat runtime",
+      "path": "addons/voice-pipeline",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/voice-pipeline/",
+      "tags": [
+        "audio",
+        "esp32",
+        "home-automation",
+        "smart-home",
+        "voice"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-voice-pipeline-0.2.2.tgz"
+      },
+      "updatedAt": "2026-09-10"
+    },
+    {
+      "slug": "web-viewer",
+      "name": "@rcarmo/piclaw-addon-web-viewer",
+      "version": "0.1.1",
+      "type": "extension",
+      "description": "HTML, image, and video viewer panes and routes for Piclaw",
+      "path": "addons/web-viewer",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/web-viewer/",
+      "tags": [
+        "html",
+        "image",
+        "media",
+        "video",
+        "viewer"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-web-viewer-0.1.1.tgz"
+      },
+      "updatedAt": "2026-09-10"
+    },
+    {
+      "slug": "whatsapp",
+      "name": "@rcarmo/piclaw-addon-whatsapp",
+      "version": "0.1.4",
+      "type": "extension",
+      "description": "WhatsApp channel for PiClaw via Baileys. Connects to WhatsApp Web, receives/sends messages, and routes them through the agent.",
+      "path": "addons/whatsapp",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/whatsapp/",
+      "tags": [
+        "channel",
+        "messaging",
+        "whatsapp"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-whatsapp-0.1.4.tgz"
+      },
+      "updatedAt": "2026-09-19"
+    },
+    {
+      "slug": "win-ui",
+      "name": "@rcarmo/piclaw-addon-win-ui",
+      "version": "0.1.1",
+      "type": "extension",
+      "description": "Windows desktop automation tools via Win32 UI Automation and screenshots",
+      "path": "addons/win-ui",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/win-ui/",
+      "tags": [
+        "automation",
+        "desktop",
+        "screenshots",
+        "windows"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-win-ui-0.1.1.tgz"
+      },
+      "updatedAt": "2026-09-10"
+    },
+    {
+      "slug": "writer-fonts",
+      "name": "@rcarmo/piclaw-addon-writer-fonts",
+      "version": "0.2.0",
+      "type": "extension",
+      "description": "Switch the document editor font from a dropdown in the editor footer — bundles Literata, Inter, Noto Sans, Noto Sans TC, New Tegomin and IBM Plex Sans, plus Georgia and the shipped System stack",
+      "path": "addons/writer-fonts",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/writer-fonts/",
+      "tags": [
+        "editor",
+        "fonts",
+        "typography",
+        "web-ui",
+        "writing"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-writer-fonts-0.2.0.tgz"
+      },
+      "updatedAt": "2026-07-26"
+    },
+    {
+      "slug": "yolo-vibe",
+      "name": "@rcarmo/piclaw-addon-yolo-vibe",
+      "version": "0.1.7",
+      "type": "extension",
+      "description": "Compose-box YOLO buttons (Continue, Audit, Docs) mounted in the bottom action bar, subtle until hover",
+      "path": "addons/yolo-vibe",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/yolo-vibe/",
+      "tags": [
+        "compose",
+        "quick-actions",
+        "web-ui",
+        "workflow"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-yolo-vibe-0.1.7.tgz"
+      },
+      "updatedAt": "2026-09-08"
+    },
+    {
+      "slug": "yolochat",
+      "name": "@rcarmo/piclaw-addon-yolochat",
+      "version": "0.1.0",
+      "type": "skill",
+      "description": "Zero-guardrail inter-instance messaging — lets Pi instances post and reply to each other over HTTP",
+      "path": "addons/yolochat",
+      "homepage": "https://rcarmo.github.io/piclaw-addons/addons/yolochat/",
+      "tags": [
+        "chat",
+        "experimental",
+        "multi-agent",
+        "networking"
+      ],
+      "skills": [],
+      "install": {
+        "kind": "tarball",
+        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-yolochat-0.1.0.tgz"
+      },
+      "updatedAt": "2026-07-26"
+    }
+  ]
+}

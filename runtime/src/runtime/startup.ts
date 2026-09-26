@@ -32,6 +32,7 @@ import { startToolOutputCleanup } from "../tool-output.js";
 import { createUuid } from "../utils/ids.js";
 import { applyEnvironmentOverrides } from "../environment-overrides.js";
 import { createLogger } from "../utils/logger.js";
+import { seedFreshWorkspaceCoreAddons } from "./core-addon-defaults.js";
 import { parseNonNegativeIntStrict } from "../utils/strict-int.js";
 import { patchConsoleTimestamps } from "./console-timestamps.js";
 import { startExternalProgressWatchdogMonitor } from "./progress-watchdog-supervisor.js";
@@ -166,6 +167,13 @@ export function initializeRuntimeEnvironment(state: RuntimeState): ReturnType<ty
   mkdirSync(STORE_DIR, { recursive: true });
   mkdirSync(DATA_DIR, { recursive: true });
   mkdirSync(WORKSPACE_DIR, { recursive: true });
+  try {
+    if (seedFreshWorkspaceCoreAddons(WORKSPACE_DIR, STORE_DIR, WORKSPACE_SKEL_DIR)) {
+      log.info("Seeded release-pinned core add-ons into fresh workspace", { operation: "workspace_bootstrap.core_addons" });
+    }
+  } catch (error) {
+    log.warn("Failed to seed fresh workspace core add-ons", { operation: "workspace_bootstrap.core_addons", err: error });
+  }
   bootstrapWorkspaceFromSkel();
 
   initDatabase();
