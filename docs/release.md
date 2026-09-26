@@ -23,6 +23,12 @@ The source archives contain tracked repository files at the release tag. They ex
 
 The portable artifacts bundle Bun, Piclaw, built web assets, `skel/`, vendored runtime assets, and production `node_modules` for the target OS/architecture. The `linux-x64-baseline` artifact uses Bun’s non-AVX baseline build.
 
+### Core add-ons in release artifacts
+
+The release snapshot in `release/core-addons/catalog.json` selects entries tagged `core`; `release/core-addons.lock.json` records their versions, public package URLs, SHA-256 checksums and the catalog checksum. The vendored `.tgz` files and `release/core-addons/bun.lock` fix the bytes and dependency graph for this candidate. `bun pm pack` builds the offline seed under `skel/.piclaw/core-addons/defaults` and removes the generated directory after packing. Docker's builder copies these inputs before packing; global packages and portable artifacts carry the packed seed. Source archives carry the snapshot, lock and tarballs, not installed `node_modules`.
+
+Before tagging a new release, refresh the catalog snapshot from the published `piclaw-addons` catalog, select **every** entry currently tagged `core`, fetch its published tarball, update its checksum and dependency lock, then rerun focused seed tests and pack/Docker/portable checks. A later catalog edit cannot alter a tagged artifact. First startup seeds the bundle only where no workspace add-on directory or persisted `messages.db` exists. After that, add-ons remain ordinary user-managed packages: removing or upgrading one survives later Piclaw upgrades.
+
 When `PICLAW_BUILD_EXPERIMENTAL_DESKTOP` is enabled (disabled by default), the workflow also builds the experimental Electrobun desktop shell with a `piclaw-desktop` prefix:
 
 - `piclaw-desktop-<version>-linux-x64.tar.gz`
