@@ -285,15 +285,15 @@
 
     "@rcarmo/piclaw-addon-code-review": ["@rcarmo/piclaw-addon-code-review@code-review.tgz", { "dependencies": { "@lezer/common": "1.5.1", "@lezer/highlight": "1.2.3", "@lezer/javascript": "1.5.4", "@lezer/json": "1.0.3", "@lezer/markdown": "1.6.3", "@lezer/python": "1.1.18", "diff": "9.0.0", "marked": "18.0.10" } }, "sha512-IQLiS+SIU21eTi6jHSt1wPzYH6I8iBtyQC5IC79sds1eHWX0Tqvq3o2nOE9hyEU/10y7vkCz9y9Udn6A+HX6zA=="],
 
-    "@rcarmo/piclaw-addon-delegate": ["@rcarmo/piclaw-addon-delegate@delegate.tgz", {}, "sha512-wETqjiqHMQhvLPKd7RB/EKtSwVyTKED7Yd6vU7n6N6NUZxa3UlH9qE7DA0i7+v1ryvts/L5ottl/RIUdl7ohqw=="],
+    "@rcarmo/piclaw-addon-delegate": ["@rcarmo/piclaw-addon-delegate@delegate.tgz", {}, "sha512-ipjbUy+4wI0zodxZwBTs18YZeHXbd6EXtKk3raTCt/Vv+uRphsRnjVKFmpJ8cu5DemtMTh1QT59dA8M+xUkQ+g=="],
 
-    "@rcarmo/piclaw-addon-goal": ["@rcarmo/piclaw-addon-goal@goal.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-CrKW8T82WQGEQnUQjrysoHmkjJGwd+HitLmfKHEjCIw5njtDc48o4Qb3Rh6MdkuG6JcK4t5Yu7e4hHWlmVc4mQ=="],
+    "@rcarmo/piclaw-addon-goal": ["@rcarmo/piclaw-addon-goal@goal.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-Clg+0d/vsAWuACetMzyekrKmWSc9wrVQ6F53CxaCTCx2Usa3Gt5/ClRg/RrMqycM+oqLmMSyRyCPzZS+7V4ISg=="],
 
-    "@rcarmo/piclaw-addon-observability": ["@rcarmo/piclaw-addon-observability@observability.tgz", { "dependencies": { "@azure/monitor-opentelemetry": "^1.19", "@opentelemetry/api": "^1.9", "@opentelemetry/resources": "^2.10.0" }, "peerDependencies": { "@earendil-works/pi-coding-agent": "*" } }, "sha512-xkPZjJ92Ch9M7fMPVhLiKAeQaDwrWEt1urAawFhCs1p3FRf/6Z/3NOs8znBSJS9qSNlWO5hzuIj65YwHirV2kw=="],
+    "@rcarmo/piclaw-addon-observability": ["@rcarmo/piclaw-addon-observability@observability.tgz", { "dependencies": { "@azure/monitor-opentelemetry": "^1.19", "@opentelemetry/api": "^1.9", "@opentelemetry/resources": "^2.10.0" }, "peerDependencies": { "@earendil-works/pi-coding-agent": "*" } }, "sha512-9QXZGc12Jte7AoCH96X5e0da/Q0GoLsiHqos1os2xaOk8o6e0TmQeiZHdnknBsugf9lru+94wtepC16vl5AyQw=="],
 
-    "@rcarmo/piclaw-addon-plan-sidebar": ["@rcarmo/piclaw-addon-plan-sidebar@plan-sidebar.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-ioUk+qUI7+pge904Lc3P0l1WR5pqHdHlJvcBJMyDYZ1Rycw177xZeyssD49SgSvdT4VNXKhcYIxs29P9jCbwCw=="],
+    "@rcarmo/piclaw-addon-plan-sidebar": ["@rcarmo/piclaw-addon-plan-sidebar@plan-sidebar.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-idYsBb8ACEn2eJ1/ISjKLOHHW1BP16IpK1wcAW4lbdBBdAuRJfCgkqFzcj/Y4WpvlqcifTLnI/vCcnd2hDh6fg=="],
 
-    "@rcarmo/piclaw-addon-session-dashboard": ["@rcarmo/piclaw-addon-session-dashboard@session-dashboard.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*" } }, "sha512-AaZOQDtm5822MJed96JOjTWlmvY6XLh2LB868Vp+l2czOFh9I2ZcWzvrulP/dw9lVoYpK41ztUkWjryNzqEusw=="],
+    "@rcarmo/piclaw-addon-session-dashboard": ["@rcarmo/piclaw-addon-session-dashboard@session-dashboard.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*" } }, "sha512-dfPXaZNyKKK/Y8pOzaCgQd5dxPikqtFfJgZJeOB/rtu53P31BbOY5TC6tgLkJXbpvBL1wqIklxhA9nkfBqHQaQ=="],
 
     "@silvia-odwyer/photon-node": ["@silvia-odwyer/photon-node@0.3.4", "", {}, "sha512-bnly4BKB3KDTFxrUIcgCLbaeVVS8lrAkri1pEzskpmxu9MdfGQTy8b8EgcD83ywD3RPMsIulY8xJH5Awa+t9fA=="],
 
@@ -565,7 +565,7 @@
 
     "wrap-ansi": ["wrap-ansi@7.0.0", "", { "dependencies": { "ansi-styles": "^4.0.0", "string-width": "^4.1.0", "strip-ansi": "^6.0.0" } }, "sha512-YVGIj2kamLSTxw6NsZjoBxfSwsn0ycdesmc4p+Q21c5zPuZ1pl+NfxVdxPtdHvmNVOQ6XSYG4AUtyt/Fi7D16Q=="],
 
-    "ws": ["ws@8.21.3", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": ">=5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw=="],
+    "ws": ["ws@8.22.0", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": ">=5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg=="],
 
     "wsl-utils": ["wsl-utils@0.1.0", "", { "dependencies": { "is-wsl": "^3.1.0" } }, "sha512-h3Fbisa2nKGPxCpm89Hk33lBLsnaGBvctQopaBSOW/uIs6FTe1ATyAnKFJrzVs9vpGdsTe73WF3V4lIsk4Gacw=="],
 

@@ -64,6 +64,11 @@ RUN /tmp/install-agent-runtime.sh
 COPY --chown=agent:agent package.json bun.lock README.md LICENSE BUN_VERSION RESTIC_VERSION /home/agent/piclaw/
 COPY --chown=agent:agent scripts/postinstall.ts /home/agent/piclaw/scripts/postinstall.ts
 COPY --chown=agent:agent scripts/prepare-local-install.ts /home/agent/piclaw/scripts/prepare-local-install.ts
+# `bun pm pack` runs prepack: the pinned catalog, tarballs and preparation scripts
+# must be in the builder, then the resulting seed travels with the installed package.
+COPY --chown=agent:agent scripts/release/prepare-core-addons.ts scripts/release/clean-core-addons.ts /home/agent/piclaw/scripts/release/
+COPY --chown=agent:agent release/core-addons.lock.json /home/agent/piclaw/release/core-addons.lock.json
+COPY --chown=agent:agent release/core-addons/ /home/agent/piclaw/release/core-addons/
 COPY --chown=agent:agent docs/install-from-repo.md /home/agent/piclaw/docs/install-from-repo.md
 COPY --chown=agent:agent runtime/ /home/agent/piclaw/runtime/
 RUN /tmp/build-piclaw-package.sh
