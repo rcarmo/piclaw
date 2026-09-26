@@ -28,7 +28,7 @@ export const markdownPreviewTheme = EditorView.theme({
     },
     /* Active line gets subtle background — like Obsidian */
     '& .cm-activeLine': {
-        backgroundColor: 'rgba(255, 255, 255, 0.03) !important',
+        backgroundColor: 'var(--accent-soft) !important',
     },
     /* Cursor line number emphasis (hidden gutters, but good to have) */
     '& .cm-activeLineGutter': {
@@ -87,7 +87,7 @@ export const markdownPreviewTheme = EditorView.theme({
     },
     '.cm-md-heading-fold:hover': {
         color: 'var(--text-primary, #d6d6d6)',
-        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+        backgroundColor: 'var(--bg-hover)',
     },
     '.cm-md-heading-fold:focus-visible': {
         boxShadow: '0 0 0 2px color-mix(in srgb, var(--accent-color, #1d9bf0) 38%, transparent)',
@@ -114,7 +114,8 @@ export const markdownPreviewTheme = EditorView.theme({
         fontFamily:
             'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
         fontSize: '0.9em',
-        backgroundColor: 'var(--bg-secondary, #2a2a2a)',
+        backgroundColor: 'var(--bg-code)',
+        color: 'var(--text-code)',
         padding: '1px 5px',
         borderRadius: '3px',
         border: '1px solid var(--border-color, #333)',
@@ -123,7 +124,8 @@ export const markdownPreviewTheme = EditorView.theme({
 
     /* ── Code blocks (line decorations on .cm-line) ── */
     '.cm-md-code-fence-open': {
-        backgroundColor: 'var(--bg-secondary, #2a2a2a)',
+        backgroundColor: 'var(--bg-code)',
+        color: 'var(--text-code)',
         borderRadius: '6px 6px 0 0',
         borderTop: '1px solid var(--border-color, #333)',
         borderLeft: '1px solid var(--border-color, #333)',
@@ -174,12 +176,12 @@ export const markdownPreviewTheme = EditorView.theme({
         boxShadow: '0 0 0 2px color-mix(in srgb, var(--accent-color, #1d9bf0) 40%, transparent)',
     },
     '.cm-md-code-copy-btn[data-state="copied"]': {
-        color: '#10b981',
-        borderColor: 'color-mix(in srgb, #10b981 35%, var(--border-color, #3a3a3a))',
+        color: 'var(--success-color)',
+        borderColor: 'color-mix(in srgb, var(--success-color) 35%, var(--border-color, #3a3a3a))',
     },
     '.cm-md-code-copy-btn[data-state="error"]': {
-        color: '#ef4444',
-        borderColor: 'color-mix(in srgb, #ef4444 35%, var(--border-color, #3a3a3a))',
+        color: 'var(--danger-color)',
+        borderColor: 'color-mix(in srgb, var(--danger-color) 35%, var(--border-color, #3a3a3a))',
     },
     '.cm-md-code-copy-icon': {
         display: 'inline-flex',
@@ -203,22 +205,10 @@ export const markdownPreviewTheme = EditorView.theme({
         fontSize: '0.9em',
         lineHeight: '1.35 !important',
     },
-    '.cm-md-code-content .tok-keyword': { color: '#c792ea' },
-    '.cm-md-code-content .tok-operator': { color: '#89ddff' },
-    '.cm-md-code-content .tok-comment': { color: '#6a737d', fontStyle: 'italic' },
-    '.cm-md-code-content .tok-string': { color: '#c3e88d' },
-    '.cm-md-code-content .tok-number': { color: '#f78c6c' },
-    '.cm-md-code-content .tok-bool': { color: '#ffcb6b' },
-    '.cm-md-code-content .tok-null': { color: '#ffcb6b' },
-    '.cm-md-code-content .tok-variableName, .cm-md-code-content .tok-propertyName': { color: '#e6edf3' },
-    '.cm-md-code-content .tok-typeName, .cm-md-code-content .tok-className': { color: '#82aaff' },
-    '.cm-md-code-content .tok-function, .cm-md-code-content .tok-functionName': { color: '#82aaff' },
-    '.cm-md-code-content .tok-punctuation': { color: '#9aa5b1' },
-    '.cm-md-code-content .tok-tagName': { color: '#f07178' },
-    '.cm-md-code-content .tok-attributeName': { color: '#c792ea' },
-    '.cm-md-code-content .tok-meta': { color: '#89ddff' },
+    // Syntax tokens use the shared theme-syntax.css role mapping.
     '.cm-md-code-line': {
-        backgroundColor: 'var(--bg-secondary, #2a2a2a)',
+        backgroundColor: 'var(--bg-code)',
+        color: 'var(--text-code)',
         fontFamily:
             'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important',
         fontSize: '0.9em',
@@ -236,7 +226,8 @@ export const markdownPreviewTheme = EditorView.theme({
         paddingBottom: '2px !important',
     },
     '.cm-md-code-fence-close': {
-        backgroundColor: 'var(--bg-secondary, #2a2a2a)',
+        backgroundColor: 'var(--bg-code)',
+        color: 'var(--text-code)',
         borderLeft: '1px solid var(--border-color, #333)',
         borderRight: '1px solid var(--border-color, #333)',
         borderBottom: '1px solid var(--border-color, #333)',
@@ -436,10 +427,10 @@ export const markdownPreviewTheme = EditorView.theme({
         backgroundColor: 'transparent',
     },
     '.cm-md-table-row-odd': {
-        backgroundColor: 'rgba(255, 255, 255, 0.02)',
+        backgroundColor: 'color-mix(in srgb, var(--text-primary) 3%, transparent)',
     },
     '.cm-md-table-row-even:hover, .cm-md-table-row-odd:hover': {
-        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+        backgroundColor: 'var(--bg-hover)',
     },
     '.cm-md-table-row-last': {
         borderBottom: '1px solid var(--border-color, #333)',
@@ -481,11 +472,11 @@ export const markdownPreviewTheme = EditorView.theme({
         outline: 'none',
     },
     '.cm-md-table-cell-widget:hover': {
-        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+        backgroundColor: 'var(--bg-hover)',
     },
     '.cm-md-table-cell-widget:focus-visible': {
         boxShadow: 'inset 0 0 0 1px var(--accent-color, #1d9bf0)',
-        backgroundColor: 'rgba(29, 155, 240, 0.1)',
+        backgroundColor: 'var(--accent-soft)',
     },
     /* Pipe separator widgets */
     '.cm-md-table-edge': {
@@ -597,7 +588,7 @@ export const markdownPreviewTheme = EditorView.theme({
         fontWeight: '700',
     },
     '.cm-md-editable-table tbody tr:nth-child(odd) td': {
-        backgroundColor: 'rgba(255, 255, 255, 0.02)',
+        backgroundColor: 'color-mix(in srgb, var(--text-primary) 3%, transparent)',
     },
     '.cm-md-editable-table-cell-left': { textAlign: 'left' },
     '.cm-md-editable-table-cell-center': { textAlign: 'center' },
@@ -607,7 +598,7 @@ export const markdownPreviewTheme = EditorView.theme({
     },
     '.cm-md-editable-table-cell:focus-within': {
         boxShadow: 'inset 0 0 0 2px var(--accent-color, #1d9bf0)',
-        backgroundColor: 'rgba(29, 155, 240, 0.12) !important',
+        backgroundColor: 'var(--accent-soft) !important',
     },
     '.cm-md-table-cell-source': {
         minHeight: '1.2em',
@@ -636,7 +627,8 @@ export const markdownPreviewTheme = EditorView.theme({
         fontSize: '0.92em',
         padding: '0 0.25em',
         borderRadius: '3px',
-        backgroundColor: 'var(--code-bg, rgba(127, 127, 127, 0.16))',
+        backgroundColor: 'var(--bg-code)',
+        color: 'var(--text-code)',
     },
     '.cm-md-table-cell-link': {
         color: 'var(--accent-color, #1d9bf0)',
@@ -892,7 +884,7 @@ export const markdownPreviewTheme = EditorView.theme({
         textDecoration: 'underline',
     },
     '.cm-md-footnote-ref-unresolved': {
-        color: '#f59e0b',
+        color: 'var(--warning-color)',
         textDecorationStyle: 'dotted',
     },
     '.cm-md-footnote-def-line': {
