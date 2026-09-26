@@ -68,6 +68,19 @@ export function themeAlpha(value: string, opacity: number): string {
     ? `rgba(${c.join(", ")}, ${opacity})`
     : `color-mix(in srgb, ${value} ${opacity * 100}%, transparent)`;
 }
+/** Keep selected prose readable without changing the theme's foreground hues.
+ * Keep authored code foregrounds unchanged and at least at their 3:1 baseline. */
+function selectionBackground(accent: string, mode: ThemeMode, pairs: [string, string][]): string {
+  const maximum = mode === 'dark' ? 0.28 : 0.2;
+  if (!rgb(accent) || pairs.some(([fg, bg]) => !rgb(fg) || !rgb(bg))) return themeAlpha(accent, maximum);
+  for (let step = Math.round(maximum * 100); step >= 0; step--) {
+    const alpha = step / 100;
+    if (pairs.every(([fg, bg], index) => themeContrast(fg, mix(bg, accent, alpha)) >= Math.min(index === 0 ? 4.5 : 3, themeContrast(fg, bg)))) {
+      return themeAlpha(accent, alpha);
+    }
+  }
+  return themeAlpha(accent, 0);
+}
 export function visualDefaultPalette(mode: ThemeMode): ThemePalette {
   const palette: ThemePalette =
     mode === "dark"
@@ -235,7 +248,7 @@ export function paletteVariables(
     "--focus-ring": readableThemeColor(accent, text, [bg, panel], 3),
     "--disabled-text": muted,
     "--readonly-background": panel,
-    "--selection-background": themeAlpha(accent, mode === "dark" ? 0.28 : 0.2),
+    "--selection-background": selectionBackground(accent, mode, [[text, bg], [p.codeForeground || p.textPrimary, p.codeBackground || bg]]),
     "--accent-color-alpha": themeAlpha(accent, mode === "dark" ? 0.35 : 0.25),
     "--accent-soft": themeAlpha(accent, mode === "dark" ? 0.16 : 0.12),
     "--accent-soft-strong": themeAlpha(accent, mode === "dark" ? 0.28 : 0.2),

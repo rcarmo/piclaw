@@ -1,0 +1,49 @@
+/* The editor uses drawSelection(). Native selection must not paint a second
+ * layer or replace syntax/prose foregrounds with the page selection colour.
+ * Widget inputs/contenteditables are deliberately excluded: they use native
+ * selection and need the normal foreground/background pair. */
+:root .cm-editor .cm-content::selection,
+:root .cm-editor .cm-line::selection,
+:root .cm-editor .cm-line *::selection {
+    background: transparent !important;
+    color: currentColor !important;
+    text-shadow: none !important;
+}
+:root .cm-editor :is(input, textarea, [contenteditable]:not(.cm-content), [contenteditable]:not(.cm-content) *)::selection {
+    background: var(--accent-color) !important;
+    color: var(--accent-contrast-text) !important;
+    text-shadow: none !important;
+}
+/* Both skins and embedded/diff editors share these overrides. They beat vendor
+ * default themes without sampling or parsing the accent in JavaScript. */
+:root .cm-editor .cm-fat-cursor {
+    background: var(--accent-color) !important;
+    color: var(--accent-contrast-text) !important;
+    outline-color: var(--accent-color) !important;
+}
+:root .cm-editor:not(.cm-focused) .cm-fat-cursor {
+    background: transparent !important;
+}
+:root .cm-editor .cm-content {
+    caret-color: transparent !important;
+}
+:root .cm-editor .cm-content :is(input, textarea, [contenteditable]) {
+    caret-color: var(--accent-color) !important;
+}
+:root .cm-editor.cm-markdown-preview .cm-content {
+    color: var(--text-primary);
+}
+:root .cm-editor.cm-markdown-preview .cm-scroller {
+    background-color: var(--bg-primary);
+}
+:root .cm-editor.cm-markdown-preview :is(.cm-md-inline-code, .cm-md-table-cell-code, .cm-md-code-line, .cm-md-code-content) {
+    color: var(--text-code);
+    background-color: var(--bg-code);
+}
+@media (forced-colors: active) {
+    :root .cm-editor .cm-selectionBackground { background: Highlight !important; opacity: 0.35; }
+    :root .cm-editor .cm-fat-cursor { background: Highlight !important; color: HighlightText !important; outline-color: Highlight !important; }
+    :root .cm-editor:not(.cm-focused) .cm-fat-cursor { background: transparent !important; }
+    :root .cm-editor :is(.cm-searchMatch, .cm-selectionMatch, .cm-initialRevealMatch) { background: transparent !important; outline: 1px solid Highlight !important; }
+    :root .cm-editor :is(input, textarea, [contenteditable]:not(.cm-content), [contenteditable]:not(.cm-content) *)::selection { background: Highlight !important; color: HighlightText !important; }
+}
