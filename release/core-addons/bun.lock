@@ -10,6 +10,7 @@
         "@rcarmo/piclaw-addon-goal": "file:goal.tgz",
         "@rcarmo/piclaw-addon-observability": "file:observability.tgz",
         "@rcarmo/piclaw-addon-plan-sidebar": "file:plan-sidebar.tgz",
+        "@rcarmo/piclaw-addon-restic": "file:restic.tgz",
         "@rcarmo/piclaw-addon-session-dashboard": "file:session-dashboard.tgz",
       },
     },
@@ -292,6 +293,8 @@
     "@rcarmo/piclaw-addon-observability": ["@rcarmo/piclaw-addon-observability@observability.tgz", { "dependencies": { "@azure/monitor-opentelemetry": "^1.19", "@opentelemetry/api": "^1.9", "@opentelemetry/resources": "^2.10.0" }, "peerDependencies": { "@earendil-works/pi-coding-agent": "*" } }, "sha512-9QXZGc12Jte7AoCH96X5e0da/Q0GoLsiHqos1os2xaOk8o6e0TmQeiZHdnknBsugf9lru+94wtepC16vl5AyQw=="],
 
     "@rcarmo/piclaw-addon-plan-sidebar": ["@rcarmo/piclaw-addon-plan-sidebar@plan-sidebar.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-idYsBb8ACEn2eJ1/ISjKLOHHW1BP16IpK1wcAW4lbdBBdAuRJfCgkqFzcj/Y4WpvlqcifTLnI/vCcnd2hDh6fg=="],
+
+    "@rcarmo/piclaw-addon-restic": ["@rcarmo/piclaw-addon-restic@restic.tgz", {}, "sha512-IupSOdRarMn3bqnKM2UYeHW1uHe8AHQTJzBWd8+NU//H6kDsI2rQ3Em7UeeB64EIIEYdyLyqc8jfZFX5864FIQ=="],
 
     "@rcarmo/piclaw-addon-session-dashboard": ["@rcarmo/piclaw-addon-session-dashboard@session-dashboard.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*" } }, "sha512-dfPXaZNyKKK/Y8pOzaCgQd5dxPikqtFfJgZJeOB/rtu53P31BbOY5TC6tgLkJXbpvBL1wqIklxhA9nkfBqHQaQ=="],
 
