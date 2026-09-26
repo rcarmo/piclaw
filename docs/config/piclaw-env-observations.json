@@ -87,7 +87,7 @@
       "semanticReaderOccurrences": 69
     },
     "docsDeploy": {
-      "referencedNames": 137,
+      "referencedNames": 138,
       "directReaderNames": 16,
       "directReaderOccurrences": 32,
       "helperReaderNames": 0,
@@ -3967,6 +3967,7 @@
           "files": [
             ".github/workflows/ci.yml",
             "docs/audio-attachment-preview.md",
+            "docs/development.md",
             "docs/performance/browser-idle-cpu-1352.md",
             "docs/performance/browser-idle-status-clock-1352.md",
             "docs/performance/browser-ui-snapshot-1352.md",
@@ -5415,6 +5416,21 @@
           "semanticReaders": 0,
           "files": [
             "runtime/src/channels/web/terminal/terminal-session-service.ts"
+          ],
+          "readerFiles": []
+        }
+      }
+    },
+    {
+      "name": "PICLAW_TEST_CHROMIUM_PATH",
+      "scopes": {
+        "docsDeploy": {
+          "referenced": true,
+          "directReaders": 0,
+          "helperReaders": 0,
+          "semanticReaders": 0,
+          "files": [
+            "docs/development.md"
           ],
           "readerFiles": []
         }
