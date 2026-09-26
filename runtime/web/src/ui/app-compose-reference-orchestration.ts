@@ -99,7 +99,7 @@ export function addEditorFileReferenceFromEvent(event: unknown, options: {
   return true;
 }
 
-interface UseComposeReferenceOrchestrationOptions {
+export interface UseComposeReferenceOrchestrationOptions {
   setIntentToast: StateSetter<any>;
   intentToastTimerRef: RefBox<ReturnType<typeof setTimeout> | null>;
   editorOpen: boolean;
@@ -123,7 +123,31 @@ interface UseComposeReferenceOrchestrationOptions {
   setPosts: StateSetter<any[] | null>;
 }
 
-export function useComposeReferenceOrchestration(options: UseComposeReferenceOrchestrationOptions) {
+export interface ComposeReferenceActions {
+  clearIntentToast: () => void;
+  addFileRef: (path: unknown) => void;
+  removeFileRef: (path: unknown) => void;
+  clearFileRefs: () => void;
+  setFileRefsFromCompose: (next: unknown) => void;
+  addFolderRef: (path: unknown) => void;
+  removeFolderRef: (path: unknown) => void;
+  clearFolderRefs: () => void;
+  setFolderRefsFromCompose: (next: unknown) => void;
+  showIntentToast: (title: string, detail?: string | null, kind?: string, durationMs?: number) => void;
+  openFileFromPill: (path: unknown) => void;
+  openTimelineFileFromPill: (path: unknown) => void;
+  attachActiveEditorFile: () => void;
+  addMessageRef: (id: unknown, targetChatJid?: string | null) => void;
+  scrollToMessage: (id: string | number, targetChatJid?: string | null) => Promise<void>;
+  removeMessageRef: (id: unknown) => void;
+  clearMessageRefs: () => void;
+  setMessageRefsFromCompose: (next: unknown) => void;
+  handleComposeSubmitError: (message: unknown) => void;
+}
+export type RemoveFileReference = ComposeReferenceActions['removeFileRef'];
+export type RemoveFileReferenceRef = { current: RemoveFileReference | null };
+
+export function useComposeReferenceOrchestration(options: UseComposeReferenceOrchestrationOptions): ComposeReferenceActions {
   const {
     setIntentToast,
     intentToastTimerRef,

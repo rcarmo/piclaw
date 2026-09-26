@@ -1,3 +1,5 @@
+import type { ComposeReferenceActions } from './app-compose-reference-orchestration.js';
+
 export interface ComposeMainAppShellOptionsInput {
   routing: {
     branchLoaderMode: boolean;
@@ -8,7 +10,7 @@ export interface ComposeMainAppShellOptionsInput {
   splitters: Record<string, any>;
   branchPaneActions: Record<string, any>;
   timelineViewActions: Record<string, any>;
-  composeReferenceActions: Record<string, any>;
+  composeReferenceActions: ComposeReferenceActions;
   sidepanelActions: Record<string, any>;
   shellState: Record<string, any>;
   agentState: Record<string, any>;
@@ -153,11 +155,12 @@ export function composeMainAppShellOptions(input: ComposeMainAppShellOptionsInpu
     ...splitters,
     ...branchPaneActions,
     ...timelineViewActions,
-    ...composeReferenceActions,
     ...sidepanelActions,
     ...agentState,
     ...composeState,
     ...modelState,
+    // Keep typed compose actions authoritative over legacy spread-merged bags.
+    ...composeReferenceActions,
   };
 
   return {

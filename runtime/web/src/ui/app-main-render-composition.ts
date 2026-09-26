@@ -1,4 +1,5 @@
 import { composeMainAppShellOptions } from './app-main-shell-composition.js';
+import type { MainInteractionComposeReferences } from './app-main-interaction-composition.js';
 
 export function deriveSteerQueuedState(options: {
   steerQueuedTurnId: string | null;
@@ -27,7 +28,7 @@ export function composeRenderedMainAppOptions(input: {
     chatRefreshLifecycle: Record<string, any>;
     isComposeBoxAgentActive: boolean;
   };
-  interaction: Record<string, any>;
+  interaction: Record<string, any> & MainInteractionComposeReferences;
   timeline: Record<string, any>;
   surface: Record<string, any>;
   editorState: {

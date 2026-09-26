@@ -65,7 +65,7 @@ function checkFile(filePath: string): Violation[] {
     // Track brace depth to find the function's scope boundaries
     let depth = 0;
     let funcDepth = -1;
-    let funcEnd = lines.length;
+    let funcEnd = lines.length - 1;
 
     // First pass: collect const/let declarations at the function's
     // immediate scope level (depth === funcDepth).

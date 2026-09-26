@@ -3,6 +3,9 @@ import {
 } from './app-shell-environment-effects.js';
 import {
   useComposeReferenceOrchestration,
+  type ComposeReferenceActions,
+  type RemoveFileReferenceRef,
+  type UseComposeReferenceOrchestrationOptions,
 } from './app-compose-reference-orchestration.js';
 import {
   useAgentActivityOrchestration,
@@ -18,20 +21,22 @@ import {
 type RefBox<T> = { current: T };
 
 export function bindComposeReferenceRemoval(options: {
-  removeFileRefRef: RefBox<any>;
-  composeReferenceActions: { removeFileRef?: (...args: any[]) => any };
+  removeFileRefRef: RemoveFileReferenceRef;
+  composeReferenceActions: Pick<ComposeReferenceActions, 'removeFileRef'>;
 }) {
   const {
     removeFileRefRef,
     composeReferenceActions,
   } = options;
 
-  removeFileRefRef.current = composeReferenceActions.removeFileRef || null;
+  removeFileRefRef.current = composeReferenceActions.removeFileRef;
 }
+
+export interface MainInteractionComposeReferences { composeReferenceActions: ComposeReferenceActions }
 
 export function composeMainInteractionResult(options: {
   applyBranding: (...args: any[]) => any;
-  composeReferenceActions: Record<string, any>;
+  composeReferenceActions: ComposeReferenceActions;
   agentActivity: Record<string, any>;
   chatPaneRuntime: Record<string, any>;
   recoveryCallbacks: Record<string, any>;
@@ -47,7 +52,7 @@ export function composeMainInteractionResult(options: {
 
 export function useMainAppInteractionComposition(options: {
   environment: Record<string, any>;
-  composeReferences: Record<string, any>;
+  composeReferences: UseComposeReferenceOrchestrationOptions;
   agentActivity: Record<string, any>;
   chatPaneRuntime: Record<string, any>;
   recovery: Record<string, any>;
@@ -57,7 +62,7 @@ export function useMainAppInteractionComposition(options: {
     searchQuery: string | null;
     searchOpen: boolean;
   };
-  removeFileRefRef: RefBox<any>;
+  removeFileRefRef: RemoveFileReferenceRef;
 }) {
   const {
     environment,

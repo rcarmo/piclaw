@@ -1,6 +1,7 @@
 import { useTimelineViewActions } from './app-timeline-view-actions.js';
 import { useMainAppLifecycleComposition } from './app-main-lifecycle-composition.js';
 import { useMainAppActionComposition } from './app-main-action-composition.js';
+import type { MainInteractionComposeReferences } from './app-main-interaction-composition.js';
 
 interface UseMainAppOrchestrationCompositionOptions {
   routeState: {
@@ -42,7 +43,7 @@ interface UseMainAppOrchestrationCompositionOptions {
     btwSession: any;
   };
   timeline: Record<string, any>;
-  interaction: Record<string, any>;
+  interaction: Record<string, any> & MainInteractionComposeReferences;
   paneRuntime: Record<string, any>;
   refs: Record<string, any>;
   setters: Record<string, any>;

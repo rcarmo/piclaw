@@ -5,16 +5,24 @@ import {
   composeMainInteractionResult,
 } from '../../web/src/ui/app-main-interaction-composition.js';
 
-test('bindComposeReferenceRemoval exposes compose removeFileRef through the mutable ref bridge', () => {
-  const removeFileRefRef = { current: null };
-  const removeFileRef = () => {};
+test('bindComposeReferenceRemoval exposes the latest removal action through a stable ref bridge', () => {
+  const removeFileRefRef: { current: ((path: unknown) => void) | null } = { current: null };
+  const removed: string[] = [];
+  const closeTab = (path: string) => removeFileRefRef.current?.(path);
 
+  closeTab('before-binding.md');
   bindComposeReferenceRemoval({
     removeFileRefRef,
-    composeReferenceActions: { removeFileRef },
+    composeReferenceActions: { removeFileRef: path => removed.push(`first:${path}`) },
   });
+  closeTab('first.md');
+  bindComposeReferenceRemoval({
+    removeFileRefRef,
+    composeReferenceActions: { removeFileRef: path => removed.push(`latest:${path}`) },
+  });
+  closeTab('second.md');
 
-  expect(removeFileRefRef.current).toBe(removeFileRef);
+  expect(removed).toEqual(['first:first.md', 'latest:second.md']);
 });
 
 test('composeMainInteractionResult preserves grouped interaction outputs', () => {

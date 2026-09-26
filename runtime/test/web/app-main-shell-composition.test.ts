@@ -3,6 +3,8 @@ import { expect, test } from 'bun:test';
 import { composeMainAppShellOptions } from '../../web/src/ui/app-main-shell-composition.js';
 
 test('composeMainAppShellOptions composes pane-popout and main-shell payloads from grouped state', () => {
+  const addFileRef = () => {};
+  const removeFileRef = () => {};
   const result = composeMainAppShellOptions({
     routing: {
       branchLoaderMode: false,
@@ -36,10 +38,7 @@ test('composeMainAppShellOptions composes pane-popout and main-shell payloads fr
       handleHashtagClick: () => {},
       isMainTimelineView: true,
     },
-    composeReferenceActions: {
-      addFileRef: () => {},
-      removeFileRef: () => {},
-    },
+    composeReferenceActions: { addFileRef, removeFileRef } as any,
     sidepanelActions: {
       handleExtensionPanelAction: () => {},
     },
@@ -110,6 +109,7 @@ test('composeMainAppShellOptions composes pane-popout and main-shell payloads fr
       pendingRequestRef: { current: null },
     },
     composeState: {
+      addFileRef: () => { throw new Error('legacy compose state overwrote typed action'); },
       fileRefs: [],
       messageRefs: [],
       followupQueueCount: 0,
@@ -138,6 +138,8 @@ test('composeMainAppShellOptions composes pane-popout and main-shell payloads fr
   expect(previewContent).toBe('abc');
   expect(typeof unsubscribe).toBe('function');
   expect(result.mainShellOptions.workspaceOpen).toBe(true);
+  expect(result.mainShellOptions.addFileRef).toBe(addFileRef);
+  expect(result.mainShellOptions.removeFileRef).toBe(removeFileRef);
   expect(result.mainShellOptions.connectionStatus).toBe('connected');
   expect(result.mainShellOptions.currentHashtag).toBe('tag');
   expect(result.mainShellOptions.searchQuery).toBe('hello');

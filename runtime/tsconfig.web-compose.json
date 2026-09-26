@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.web-panes.json",
+  "compilerOptions": { "rootDir": "." },
+  "include": [
+    "web/src/ui/app-compose-reference-orchestration.ts",
+    "web/src/ui/app-main-interaction-composition.ts",
+    "web/src/ui/app-main-pane-composition.ts",
+    "web/src/ui/app-main-shell-composition.ts",
+    "web/src/ui/app-main-orchestration-composition.ts",
+    "web/src/ui/app-main-render-composition.ts",
+    "test/web/contracts/compose-reference-contract.ts"
+  ]
+}
