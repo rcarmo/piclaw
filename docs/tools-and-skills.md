@@ -72,6 +72,28 @@ A comma-separated string is also accepted, and env var `PICLAW_ADDITIONAL_DEFAUL
 
 `reset_active_tools` restores this configured default set (not just the fixed baseline). Unknown tool names are ignored. New activations are session-scoped and reset on restart/session rotation.
 
+### Cross-session chat delivery
+
+Use `chat` with explicit `mode: "steer"` when a message must reach a busy agent during its current turn. This includes ownership handoffs and confirmations, blockers, stop/wait requests, and restart safety or idle coordination.
+
+Use `mode: "queue"` only for non-urgent updates that can wait until the recipient finishes its active work. Do not queue an answer another agent needs before proceeding: that can leave the recipient waiting and asking for confirmation again. Once ownership is accepted, avoid repeated handoff confirmations.
+
+| Mode | Use | Default |
+| --- | --- | --- |
+| `steer` | Priority or blocking coordination during active work | Local sends |
+| `queue` | Non-urgent updates delivered after active work | Remote sends |
+| `auto` | Standard request handling | Explicit choice |
+
+For remote sends, call `chat({ action: "directory" })` and use only the destination's advertised modes. If it does not support steering, report that limitation; a queued message is not evidence of immediate delivery or acknowledgement.
+
+```json
+{
+  "target_agent_name": "@review",
+  "content": "Ownership confirmed. You may edit the branch; I will leave it untouched.",
+  "mode": "steer"
+}
+```
+
 ### Preferred staged internal-tool flow
 
 For internal-tool discovery, prefer this order:

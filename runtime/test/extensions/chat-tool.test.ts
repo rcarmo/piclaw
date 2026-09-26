@@ -16,9 +16,10 @@ let restoreEnv: (() => void) | null = null;
 
 function makeFakeApi() {
   const tools = new Map<string, any>();
+  const hooks = new Map<string, (...args: any[]) => any>();
   return {
     api: {
-      on() {},
+      on(event: string, handler: (...args: any[]) => any) { hooks.set(event, handler); },
       registerTool(tool: any) {
         tools.set(tool.name, tool);
       },
@@ -45,6 +46,7 @@ function makeFakeApi() {
       unregisterProvider() {},
     } as unknown as ExtensionAPI,
     tools,
+    hooks,
   };
 }
 
@@ -87,8 +89,29 @@ describe("chat tool extension", () => {
     return {
       tool: fake.tools.get("chat")!,
       chatToolModule,
+      hooks: fake.hooks,
     };
   }
+
+  test("documents priority steering on all agent-facing tool surfaces", async () => {
+    const { tool, hooks } = await getTool();
+    const modeHelp = tool.parameters.properties.mode.description;
+    for (const text of [tool.description, tool.promptSnippet, modeHelp]) {
+      expect(text).toContain("steer");
+      expect(text).toContain("queue");
+      expect(text).toContain("priority");
+      expect(text).toContain("non-urgent");
+    }
+    expect(modeHelp).toContain("local 'steer', remote 'queue'");
+    expect(modeHelp).toContain("advertised");
+    const result = await hooks.get("before_agent_start")!({ systemPrompt: "Existing prompt" });
+    expect(result.systemPrompt).toStartWith("Existing prompt");
+    expect(result.systemPrompt).toContain("explicit mode='steer'");
+    expect(result.systemPrompt).toContain("ownership handoffs/confirmations");
+    expect(result.systemPrompt).toContain("restart safety/idle coordination");
+    expect(result.systemPrompt).toContain("Never queue a reply another agent needs before proceeding");
+    expect(result.systemPrompt).toContain("If remote steering is unavailable, report that limitation");
+  });
 
   test("injects usable remote addresses and file limits into the agent prompt", async () => {
     const module = await importFresh<typeof import("../src/extensions/chat-tool.js")>("../src/extensions/chat-tool.js");

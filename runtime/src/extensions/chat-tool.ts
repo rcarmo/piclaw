@@ -93,7 +93,7 @@ const ChatSchema = Type.Object({
     Type.Literal("auto"),
     Type.Literal("queue"),
     Type.Literal("steer"),
-  ], { description: "Delivery mode for busy targets: steer (default), queue, or auto." })),
+  ], { description: "Use explicit 'steer' for priority/blocking messages: ownership handoffs or confirmations, blockers, stop/wait requests, and restart safety/idle coordination. Use 'queue' only for non-urgent updates that can wait until active work finishes; never queue a reply another agent needs before proceeding. 'auto' uses standard request handling. Defaults: local 'steer', remote 'queue'. Remote sends must use a mode advertised by action='directory'." })),
   idempotency_key: Type.Optional(Type.String({ description: "Optional transport idempotency key. Used by transports that support durable retry deduplication." })),
   in_reply_to: Type.Optional(Type.String({ description: "Optional opaque transport reply token or message id." })),
 });
@@ -122,7 +122,9 @@ const HINT = [
   "@aliases are resolved through the internal Pi chat-branch/session-tree registry before delivery; do not use opaque session IDs when an alias is available.",
   "Sender identity is derived from the current chat session and cannot be supplied by the caller; destination identity is resolved before delivery.",
   "The destination receives the message through its normal inbound-message path with structured reply-to metadata.",
-  "Messages steer the target immediately by default. Use mode='queue' to enqueue behind active work, or mode='auto' for standard request behavior.",
+  "Use explicit mode='steer' for priority or blocking communications: ownership handoffs/confirmations, blockers, stop/wait requests, and restart safety/idle coordination. Steering lets a busy recipient receive the message during its current turn.",
+  "Use mode='queue' only for non-urgent updates that can wait until active work finishes. Never queue a reply another agent needs before proceeding; avoid repeated confirmations after ownership is accepted.",
+  "Defaults are mode='steer' for local sends and mode='queue' for remote sends; mode='auto' uses standard request handling. Remote sends must use a mode advertised by action='directory'. If remote steering is unavailable, report that limitation rather than treating a queued send as immediate delivery.",
 ].join("\n");
 
 export function buildChatTransportDirectoryHint(directories: Awaited<ReturnType<typeof getChatTransportDirectories>>): string {
@@ -235,8 +237,8 @@ export const chatTool: ExtensionFactory = (pi: ExtensionAPI) => {
   pi.registerTool({
     name: "chat",
     label: "chat",
-    description: "List usable chat destinations or send text and files to a local session or installed one-hop transport.",
-    promptSnippet: "chat: call action='directory' to discover remote addresses, then send text/files to a local @alias or one-hop address.",
+    description: "List usable chat destinations or send text and files to a local session or installed one-hop transport. Use explicit mode='steer' for priority/blocking messages (handoffs, confirmations, blockers, stop/wait and restart coordination); use mode='queue' only for non-urgent updates. Never queue a reply the recipient needs before proceeding. Remote modes must be advertised by action='directory'.",
+    promptSnippet: "chat: discover destinations with action='directory'; send text/files with mode='steer' for priority/blocking coordination, or 'queue' only for non-urgent updates. Respect advertised remote modes.",
     parameters: ChatSchema,
     async execute(_toolCallId, params: ChatToolParams) {
       if ((params.action || "send") === "directory") {
