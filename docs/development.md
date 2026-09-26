@@ -31,8 +31,10 @@ make build-piclaw    # full build: vendor bundle + web assets + TypeScript
 make vendor          # rebuild vendored assets
 make lint            # Oxlint
 make test            # full test suite
-make ci-fast         # canonical fast CI guardrails + web build
-make local-install   # pack and install piclaw globally (no restart)
+make ci-fast          # canonical fast CI guardrails + web build
+bun run typecheck     # runtime, scripts, settings, panes and compose-reference contracts
+bun run check:hook-tdz # scan hook dependency arrays for forward references
+make local-install    # pack and install piclaw globally (no restart)
 make restart         # restart piclaw via the detected service manager
 ```
 
@@ -85,6 +87,16 @@ bun run test
 
 Default controlled runs do not write `runtime/generated/controlled-test-report.json` or any other JSON report. They print stage summaries, exit codes, and memory measurements to the terminal so a clean source worktree stays clean after `bun run test`, `bun run quality`, `make ci-fast`, and `make pre-push-ci`.
 
+`bun run typecheck` checks the runtime and scripts, then three frontend scopes: settings, panes, and compose-reference composition. `typecheck:web-compose` compiles six explicit UI modules and a contract fixture with positive assignments and `@ts-expect-error` cases. The imported classic frontend graph still has 96 audited transitive diagnostics in `runtime/scripts/web-compose-type-baseline.json`; `check-web-compose-types.ts` rejects new or resolved diagnostics until that baseline is updated deliberately. Passing this target does not mean the full classic frontend typechecks without errors.
+
+Use the disposable Chromium test for the tab-close bridge when changing compose-reference wiring:
+
+```bash
+PICLAW_RUN_OPTIONAL_BROWSER_TESTS=1 bun run test:controlled -- runtime/test/web/compose-reference-tab-close.browser.optional.test.ts
+```
+
+Set `PICLAW_TEST_CHROMIUM_PATH` to an installed Chromium executable if the isolated test home does not contain Playwright's browser cache.
+
 Use `--report` for #394 or performance evidence that needs a durable JSON artifact:
 
 ```bash
@@ -120,9 +132,9 @@ extensions/integrations/nested.ts: disallowed direct src import (../../src/db/me
 
 ## Focused integration notes
 
-### Earendil 0.84.0 runtime
+### Earendil 0.87.1 runtime
 
-Piclaw's Pi runtime packages are sourced from `@earendil-works/*` and are pinned together at `0.84.0`. The runtime uses upstream model/auth services, provider composition, model catalogs, pricing, scoped extension models, raw provider stop reasons, OAuth minimum-validity refresh, native `max` thinking, compaction estimation, summarization retries, Anthropic signature handling, configurable `shellPath` behaviour, generation-checked provider catalog publication, remote-catalog revalidation, and Claude Opus 5 support on Anthropic, Amazon Bedrock, and GitHub Copilot.
+Piclaw's Pi runtime packages are sourced from `@earendil-works/*` and are pinned together at `0.87.1` in `package.json`. The runtime uses upstream model/auth services, provider composition, model catalogs, pricing, scoped extension models, raw provider stop reasons, OAuth minimum-validity refresh, native `max` thinking, compaction estimation, summarization retries, Anthropic signature handling, configurable `shellPath` behaviour, generation-checked provider catalog publication, remote-catalog revalidation, and Claude Opus 5 support on Anthropic, Amazon Bedrock, and GitHub Copilot.
 
 | Piclaw layer | Why Piclaw still owns it | Focused coverage |
 |---|---|---|
@@ -168,7 +180,7 @@ Relevant files when working on MCP integration:
 - `skel/.pi/mcp.json.example`
 - `skel/.pi/skills/mcp-adapter/SKILL.md`
 
-Piclaw uses `pi-mcp-adapter` `2.11.0`, which forwards abort signals and applies its configured `requestTimeoutMs` to protocol requests. Piclaw independently wraps MCP tools after their `session_start` registration so existing `PICLAW_MCP_TOOL_TIMEOUT_MS` behavior remains stable across adapter upgrades.
+Piclaw pins `pi-mcp-adapter` 2.15.0 to Git commit `715843cd574923880c6a82e30641a0c2dc01c96a` in `package.json` and `bun.lock`. The adapter forwards abort signals and applies its configured `requestTimeoutMs` to protocol requests. Piclaw independently wraps MCP tools after their `session_start` registration so existing `PICLAW_MCP_TOOL_TIMEOUT_MS` behavior remains stable across adapter upgrades.
 
 Focused regression tests:
 
@@ -230,7 +242,7 @@ Notes:
 - the live Azure extension aligns `prompt_cache_key`, `session_id`, and `x-client-request-id` from the active session id on the Azure Responses path
 - the harness checks those correlation fields automatically and fails if they drift
 - the harness also fails if replayed request payloads still contain leaked `partialJson` scratch buffers
-- historical `0.67.2` live-provider evidence for `gpt-5-3-codex` and `gpt-5-4` is recorded in [azure-openai-extension.md](azure/azure-openai-extension.md); deterministic `0.81.0` behavior is covered by the focused tests in the Earendil section above
+- historical `0.67.2` live-provider evidence for `gpt-5-3-codex` and `gpt-5-4` is recorded in [azure-openai-extension.md](azure/azure-openai-extension.md); the focused Azure tests above run against the current pinned runtime
 - `AOAI_EXPERIMENT_AZURE_CLIENT_REQUEST_ID=1` remains available for the optional `x-ms-client-request-id` experiment
 
 ### Workspace search / reindex UI
@@ -270,7 +282,7 @@ The script:
 
 - ensures Playwright Chromium is available
 - builds a local image (`piclaw-oobe-test:local`) unless skipped
-- mounts the repo's current `runtime/web/static/dist` into the container so web-bundle changes can be validated against the latest local build without requiring a fresh image for every UI-only tweak
+- mounts the repo's current `runtime/web/static/classic/dist` into the container so web-bundle changes can be validated against the latest local build without requiring a fresh image for every UI-only tweak
 - starts a temporary local Piclaw container on a random localhost port
 - runs Playwright against the live web UI
 - writes screenshots, DOM dumps, state captures, and container logs under `artifacts/oobe-local-container/`

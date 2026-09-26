@@ -294,7 +294,7 @@ Page load
       ├── editorPaneExtension.mount(container, context)
       │   └── new LazyEditorInstance()
       │       ├── Shows "Loading..." spinner
-      │       ├── import('/static/dist/editor.bundle.js') ← ~1.57 MB, one-time
+      │       ├── import('/static/classic/dist/editor.bundle.js') ← lazy-loaded and cached
       │       │   └── exports { StandaloneEditorInstance, editorPaneExtension }
       │       ├── new mod.StandaloneEditorInstance(container, context)
       │       ├── Replays queued callbacks (dirty, save, close, viewState)
