@@ -133,6 +133,10 @@ See [runtime-flows.md](runtime-flows.md) for the runtime-level details.
 - dirty-state tracking
 - line wrapping
 - lazy-loaded local bundle with no CDN dependency
+- editor, Markdown preview, search, diff and selection colours follow the active theme; widget inputs keep native text selection
+- file-reference pills can be added from an open editor tab; closing a referenced file tab removes that file from the compose references
+
+Bundled palette selection aims to keep prose legible; authored syntax and imported selection colours remain under their theme's control. See the [editor theme audit](reviews/editor-highlight-theme.md) for test scope and native iOS limits.
 
 ## Terminal
 
