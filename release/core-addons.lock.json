@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "catalog": "https://raw.githubusercontent.com/rcarmo/piclaw-addons/main/catalog.json",
+  "addons": [
+    {
+      "slug": "code-review",
+      "name": "@rcarmo/piclaw-addon-code-review",
+      "version": "0.1.8",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-code-review-0.1.8.tgz",
+      "sha256": "32ec07243cfe420aca7b32bac3623d9542081b984f7112e6d0c692f837777045"
+    },
+    {
+      "slug": "delegate",
+      "name": "@rcarmo/piclaw-addon-delegate",
+      "version": "0.2.13",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-delegate-0.2.13.tgz",
+      "sha256": "443081301ada61c065dea6d06680b48246a271e8cb4668c8c3984054a2b73746"
+    },
+    {
+      "slug": "goal",
+      "name": "@rcarmo/piclaw-addon-goal",
+      "version": "0.1.48",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-goal-0.1.48.tgz",
+      "sha256": "21a5c9a0b2f066ae613969579967fa69016921cace24ba42618b46a0aa780170"
+    },
+    {
+      "slug": "observability",
+      "name": "@rcarmo/piclaw-addon-observability",
+      "version": "0.1.17",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-observability-0.1.17.tgz",
+      "sha256": "fae4011d5d0f543ee36fd9dfda817b7c2019ce1aac6e6e7f2b14ac0dc63b89fc"
+    },
+    {
+      "slug": "plan-sidebar",
+      "name": "@rcarmo/piclaw-addon-plan-sidebar",
+      "version": "0.1.25",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-plan-sidebar-0.1.25.tgz",
+      "sha256": "fe19ca8b8e34bfba3dc330beeef99e0944274dd0d1286efa7e54dd4ca33dead9"
+    },
+    {
+      "slug": "session-dashboard",
+      "name": "@rcarmo/piclaw-addon-session-dashboard",
+      "version": "0.2.4",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-session-dashboard-0.2.4.tgz",
+      "sha256": "75dfefe93f59fb965b4771e40a7b351153bbe2832ee34e61ec6f788eb1827617"
+    }
+  ],
+  "catalogSha256": "0e2c6736f9e899a0bcd4a95640b038edf49fa54689108e9c25fb715c336f0b4f"
+}
