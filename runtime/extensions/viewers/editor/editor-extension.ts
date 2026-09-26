@@ -1,3 +1,4 @@
+import { editorTheme } from "./theme.js";
 import { themeClassHighlighter } from "./syntax-highlighter.js";
 /**
  * editor-extension.ts — Standalone editor pane extension.
@@ -18,7 +19,6 @@ import {
     minimalSetup,
     lineNumbers,
     highlightActiveLine,
-    highlightActiveLineGutter,
     highlightWhitespace,
     scrollPastEnd,
     showPanel,
@@ -46,18 +46,14 @@ import {
     indentWithTab,
     search,
     searchKeymap,
-    highlightSelectionMatches,
     autocompletion,
     completionKeymap,
     closeBrackets,
     closeBracketsKeymap,
     vim,
-    indentationMarkers,
-    githubLight,
-    githubDark,
     MergeView,
 } from '#editor-vendor/codemirror';
-import { getWorkspaceBranch, getWorkspaceFile, getWorkspaceFileStat, updateWorkspaceFile, uploadWorkspaceFile } from '../../../web/src/api.js';
+import { getWorkspaceBranch, getWorkspaceFile, updateWorkspaceFile, uploadWorkspaceFile } from '../../../web/src/api.js';
 import { createFileConflictMonitor, type FileConflictMonitor } from '../../../web/src/panes/file-conflict-monitor.js';
 import type { WebPaneExtension, PaneContext, PaneInstance, PaneCapability, PaneHostAttachContext, PaneHostDetachContext } from '../../../web/src/panes/pane-types.js';
 import { frontmatterExtension } from './markdown/frontmatter.js';
@@ -283,13 +279,11 @@ export class StandaloneEditorInstance implements PaneInstance {
     private mergeView: MergeView | null = null;
     private vimCompartment = new Compartment();
     private themeCompartment = new Compartment();
-    private accentCompartment = new Compartment();
     private whitespaceCompartment = new Compartment();
     private livePreviewCompartment = new Compartment();
     private wrappingCompartment = new Compartment();
     private languageCompartment = new Compartment();
     private baselineThemeCompartment = new Compartment();
-    private baselineAccentCompartment = new Compartment();
     private baselineWhitespaceCompartment = new Compartment();
 
     // State
@@ -656,8 +650,7 @@ export class StandaloneEditorInstance implements PaneInstance {
             search(),
             searchRevealExtension,
             this.vimCompartment.of([]), // vim loaded async after mount
-            this.themeCompartment.of(isDark ? githubDark : githubLight),
-            this.accentCompartment.of(this.buildAccentTheme()),
+            this.themeCompartment.of(editorTheme(isDark)),
             showPanel.of(createStatusPanel(this.ownerDocument, this.vimEnabledRef)),
             keymap.of([
                 ...searchKeymap,
@@ -702,8 +695,7 @@ export class StandaloneEditorInstance implements PaneInstance {
             minimalSetup,
             lineNumbers(),
             this.baselineWhitespaceCompartment.of(enableRichFeatures && this.shouldApplyWhitespaceMarkers() ? highlightWhitespace() : []),
-            this.baselineThemeCompartment.of(isDark ? githubDark : githubLight),
-            this.baselineAccentCompartment.of(this.buildAccentTheme()),
+            this.baselineThemeCompartment.of(editorTheme(isDark)),
             ...(enableRichFeatures ? [EditorView.lineWrapping, syntaxHighlighting(headingStyle), syntaxHighlighting(themeClassHighlighter)] : []),
             EditorState.readOnly.of(true),
             EditorView.editable.of(false),
@@ -794,7 +786,7 @@ export class StandaloneEditorInstance implements PaneInstance {
                 ) return;
                 this.view.dispatch({
                     effects: [
-                        this.livePreviewCompartment.reconfigure(createMarkdownLivePreview(this.path)),
+                        this.livePreviewCompartment.reconfigure([createMarkdownLivePreview(this.path), EditorView.editorAttributes.of({ class: 'cm-markdown-preview' })]),
                         this.whitespaceCompartment.reconfigure(this.shouldApplyWhitespaceMarkers() ? highlightWhitespace() : []),
                         wrapEffect,
                     ],
@@ -1079,45 +1071,18 @@ export class StandaloneEditorInstance implements PaneInstance {
 
     // ── Theme ───────────────────────────────────────────────────
 
-    /** Build an EditorView.theme override that uses the host's --accent-color. */
-    private buildAccentTheme(): ReturnType<typeof EditorView.theme> {
-        const style = getComputedStyle(this.ownerDocument.documentElement);
-        const accent = style.getPropertyValue('--accent-color').trim() || '#1d9bf0';
-        // Parse hex to extract RGB for alpha variants
-        const hexToRgb = (hex: string): string => {
-            const h = hex.replace('#', '');
-            const r = parseInt(h.substring(0, 2), 16);
-            const g = parseInt(h.substring(2, 4), 16);
-            const b = parseInt(h.substring(4, 6), 16);
-            return `${r}, ${g}, ${b}`;
-        };
-        let rgb: string;
-        try { rgb = hexToRgb(accent); } catch { rgb = '29, 155, 240'; }
-
-        return EditorView.theme({
-            '.cm-cursor, .cm-dropCursor': { borderLeftColor: accent },
-            '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
-                backgroundColor: `rgba(${rgb}, 0.2) !important`,
-            },
-            '.cm-activeLine': { backgroundColor: `rgba(${rgb}, 0.06)` },
-            '.cm-selectionMatch': { backgroundColor: `rgba(${rgb}, 0.15)` },
-        });
-    }
-
     private handleThemeChange(): void {
         if (!this.view || this.disposed) return;
         const isDark = getThemeMode(this.ownerDocument) === 'dark';
 
         this.view.dispatch({
             effects: [
-                this.themeCompartment.reconfigure(isDark ? githubDark : githubLight),
-                this.accentCompartment.reconfigure(this.buildAccentTheme()),
+                this.themeCompartment.reconfigure(editorTheme(isDark)),
             ],
         });
         this.baselineView?.dispatch({
             effects: [
-                this.baselineThemeCompartment.reconfigure(isDark ? githubDark : githubLight),
-                this.baselineAccentCompartment.reconfigure(this.buildAccentTheme()),
+                this.baselineThemeCompartment.reconfigure(editorTheme(isDark)),
             ],
         });
     }

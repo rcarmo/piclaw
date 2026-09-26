@@ -63,8 +63,8 @@ const VSCODE_TO_CSS: Record<string, string> = {
   "editorLink.activeForeground": "--accent",
   "textLink.foreground": "--accent",
   "textLink.activeForeground": "--accent",
-  "selection.background": "--accent",
-  "editor.selectionBackground": "--accent",
+  "editor.selectionBackground": "--selection-background",
+  "selection.background": "--selection-background",
 
   // Semantic colors
   errorForeground: "--error",
@@ -257,6 +257,7 @@ export function applyTheme(vars: Record<string, string>): void {
           "--input-border",
           "--handle",
           "--handle-hover",
+          "--selection-background",
         ].includes(key),
     ),
   );

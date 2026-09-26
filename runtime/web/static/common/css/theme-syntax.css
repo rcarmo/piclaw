@@ -7,30 +7,63 @@
 :root[data-color-theme] :is(.post-content pre, .cm-editor .cm-scroller) {
     background-color: var(--bg-code);
 }
-:root :is(.cm-editor, .post-content) .tok-keyword { color: var(--syntax-keyword) !important; }
-:root :is(.cm-editor, .post-content) .tok-string { color: var(--syntax-string) !important; }
-:root :is(.cm-editor, .post-content) .tok-regexp { color: var(--syntax-regexp) !important; }
-:root :is(.cm-editor, .post-content) .tok-number { color: var(--syntax-number) !important; }
-:root :is(.cm-editor, .post-content) .tok-bool { color: var(--syntax-bool) !important; }
-:root :is(.cm-editor, .post-content) .tok-atom { color: var(--syntax-atom) !important; }
-:root :is(.cm-editor, .post-content) .tok-labelName { color: var(--syntax-label) !important; }
-:root :is(.cm-editor, .post-content) .tok-variableName { color: var(--syntax-variable) !important; }
-:root :is(.cm-editor, .post-content) .tok-variableName.tok-definition { color: var(--syntax-definition) !important; }
-:root :is(.cm-editor, .post-content) .tok-variableName.tok-local { color: var(--syntax-local) !important; }
-:root :is(.cm-editor, .post-content) .tok-variableName2 { color: var(--syntax-variable2) !important; }
-:root :is(.cm-editor, .post-content) .tok-propertyName { color: var(--syntax-property) !important; }
-:root :is(.cm-editor, .post-content) .tok-propertyName.tok-definition { color: var(--syntax-propertyDefinition) !important; }
-:root :is(.cm-editor, .post-content) :is(.tok-variableName, .tok-propertyName).tok-function { color: var(--syntax-function) !important; }
-:root :is(.cm-editor, .post-content) .tok-typeName { color: var(--syntax-type) !important; }
-:root :is(.cm-editor, .post-content) .tok-className { color: var(--syntax-class) !important; }
-:root :is(.cm-editor, .post-content) .tok-namespace { color: var(--syntax-namespace) !important; }
-:root :is(.cm-editor, .post-content) .tok-macroName { color: var(--syntax-macro) !important; }
-:root :is(.cm-editor, .post-content) .tok-comment { color: var(--syntax-comment) !important; }
-:root :is(.cm-editor, .post-content) .tok-meta { color: var(--syntax-meta) !important; }
-:root :is(.cm-editor, .post-content) .tok-operator { color: var(--syntax-operator) !important; }
-:root :is(.cm-editor, .post-content) .tok-punctuation { color: var(--syntax-punctuation) !important; }
-:root :is(.cm-editor, .post-content) .tok-link { color: var(--syntax-link) !important; }
-:root :is(.cm-editor, .post-content) .tok-heading { color: var(--syntax-heading) !important; }
-:root :is(.cm-editor, .post-content) .tok-invalid { color: var(--syntax-invalid) !important; }
-:root :is(.cm-editor, .post-content) .tok-deleted { color: var(--syntax-deleted) !important; }
-:root :is(.cm-editor, .post-content) .tok-inserted { color: var(--syntax-inserted) !important; }
+:root :is(.cm-editor, .post-content) .tok-keyword,
+:root .cm-editor .tok-keyword::selection { color: var(--syntax-keyword) !important; }
+:root :is(.cm-editor, .post-content) .tok-string,
+:root .cm-editor .tok-string::selection { color: var(--syntax-string) !important; }
+:root :is(.cm-editor, .post-content) .tok-regexp,
+:root .cm-editor .tok-regexp::selection { color: var(--syntax-regexp) !important; }
+:root :is(.cm-editor, .post-content) .tok-number,
+:root .cm-editor .tok-number::selection { color: var(--syntax-number) !important; }
+:root :is(.cm-editor, .post-content) .tok-bool,
+:root .cm-editor .tok-bool::selection { color: var(--syntax-bool) !important; }
+:root :is(.cm-editor, .post-content) .tok-atom,
+:root .cm-editor .tok-atom::selection { color: var(--syntax-atom) !important; }
+:root :is(.cm-editor, .post-content) .tok-labelName,
+:root .cm-editor .tok-labelName::selection { color: var(--syntax-label) !important; }
+:root :is(.cm-editor, .post-content) .tok-variableName,
+:root .cm-editor .tok-variableName::selection { color: var(--syntax-variable) !important; }
+:root :is(.cm-editor, .post-content) .tok-variableName.tok-definition,
+:root .cm-editor .tok-variableName.tok-definition::selection { color: var(--syntax-definition) !important; }
+:root :is(.cm-editor, .post-content) .tok-variableName.tok-local,
+:root .cm-editor .tok-variableName.tok-local::selection { color: var(--syntax-local) !important; }
+:root :is(.cm-editor, .post-content) .tok-variableName2,
+:root .cm-editor .tok-variableName2::selection { color: var(--syntax-variable2) !important; }
+:root :is(.cm-editor, .post-content) .tok-propertyName,
+:root .cm-editor .tok-propertyName::selection { color: var(--syntax-property) !important; }
+:root :is(.cm-editor, .post-content) .tok-propertyName.tok-definition,
+:root .cm-editor .tok-propertyName.tok-definition::selection { color: var(--syntax-propertyDefinition) !important; }
+:root :is(.cm-editor, .post-content) :is(.tok-variableName, .tok-propertyName).tok-function,
+:root .cm-editor :is(.tok-variableName, .tok-propertyName).tok-function::selection { color: var(--syntax-function) !important; }
+:root :is(.cm-editor, .post-content) .tok-typeName,
+:root .cm-editor .tok-typeName::selection { color: var(--syntax-type) !important; }
+:root :is(.cm-editor, .post-content) .tok-className,
+:root .cm-editor .tok-className::selection { color: var(--syntax-class) !important; }
+:root :is(.cm-editor, .post-content) .tok-namespace,
+:root .cm-editor .tok-namespace::selection { color: var(--syntax-namespace) !important; }
+:root :is(.cm-editor, .post-content) .tok-macroName,
+:root .cm-editor .tok-macroName::selection { color: var(--syntax-macro) !important; }
+:root :is(.cm-editor, .post-content) .tok-comment,
+:root .cm-editor .tok-comment::selection { color: var(--syntax-comment) !important; }
+:root :is(.cm-editor, .post-content) .tok-meta,
+:root .cm-editor .tok-meta::selection { color: var(--syntax-meta) !important; }
+:root :is(.cm-editor, .post-content) .tok-operator,
+:root .cm-editor .tok-operator::selection { color: var(--syntax-operator) !important; }
+:root :is(.cm-editor, .post-content) .tok-punctuation,
+:root .cm-editor .tok-punctuation::selection { color: var(--syntax-punctuation) !important; }
+:root :is(.cm-editor, .post-content) .tok-link,
+:root .cm-editor .tok-link::selection { color: var(--syntax-link) !important; }
+:root :is(.cm-editor, .post-content) .tok-heading,
+:root .cm-editor .tok-heading::selection { color: var(--syntax-heading) !important; }
+:root :is(.cm-editor, .post-content) .tok-invalid,
+:root .cm-editor .tok-invalid::selection { color: var(--syntax-invalid) !important; }
+:root :is(.cm-editor, .post-content) .tok-deleted,
+:root .cm-editor .tok-deleted::selection { color: var(--syntax-deleted) !important; }
+:root :is(.cm-editor, .post-content) .tok-inserted,
+:root .cm-editor .tok-inserted::selection { color: var(--syntax-inserted) !important; }
+
+/* Typography accompanies colour in the shared highlighter contract. */
+:root :is(.cm-editor, .post-content) .tok-comment,
+:root :is(.cm-editor, .post-content) .tok-emphasis { font-style: italic; }
+:root :is(.cm-editor, .post-content) :is(.tok-heading, .tok-strong) { font-weight: bold; }
+:root :is(.cm-editor, .post-content) .tok-link { text-decoration: underline; }

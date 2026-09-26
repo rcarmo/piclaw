@@ -36,7 +36,7 @@ const revealField = StateField.define<DecorationSet>({
 
 const revealTheme = EditorView.theme({
     '.cm-initialRevealMatch': {
-        backgroundColor: 'color-mix(in srgb, var(--accent-color, #1d9bf0) 32%, transparent)',
+        backgroundColor: 'var(--search-highlight-color)',
         borderRadius: '3px',
         boxShadow: '0 0 0 1px color-mix(in srgb, var(--accent-color, #1d9bf0) 40%, transparent)',
         transition: `background-color ${REVEAL_FADE_MS}ms ease, box-shadow ${REVEAL_FADE_MS}ms ease`,
