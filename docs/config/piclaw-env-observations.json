@@ -1200,6 +1200,7 @@
           "semanticReaders": 4,
           "files": [
             "runtime/scripts/benchmark-cold-session.ts",
+            "runtime/scripts/note-passage-experiment.ts",
             "runtime/scripts/note-retrieval-baseline.ts",
             "runtime/scripts/test-filesystem-isolation.ts",
             "scripts/audit-baseline-quality-deterministic.ts",
@@ -1266,6 +1267,7 @@
           "files": [
             "runtime/scripts/benchmark-cold-session.ts",
             "runtime/scripts/controlled-test-runner.ts",
+            "runtime/scripts/note-passage-experiment.ts",
             "runtime/scripts/note-retrieval-baseline.ts",
             "runtime/scripts/test-filesystem-isolation.ts",
             "scripts/audit-baseline-quality-deterministic.ts",
@@ -1371,6 +1373,7 @@
           "semanticReaders": 1,
           "files": [
             "runtime/scripts/benchmark-cold-session.ts",
+            "runtime/scripts/note-passage-experiment.ts",
             "runtime/scripts/note-retrieval-baseline.ts"
           ],
           "readerFiles": [
@@ -5183,6 +5186,7 @@
           "semanticReaders": 5,
           "files": [
             "runtime/scripts/benchmark-cold-session.ts",
+            "runtime/scripts/note-passage-experiment.ts",
             "runtime/scripts/note-retrieval-baseline.ts",
             "runtime/scripts/test-filesystem-isolation.ts",
             "scripts/audit-baseline-quality-deterministic.ts",
@@ -7718,6 +7722,7 @@
           "semanticReaders": 3,
           "files": [
             "runtime/scripts/benchmark-cold-session.ts",
+            "runtime/scripts/note-passage-experiment.ts",
             "runtime/scripts/note-retrieval-baseline.ts",
             "runtime/scripts/test-filesystem-isolation.ts",
             "scripts/audit-baseline-quality-deterministic.ts",

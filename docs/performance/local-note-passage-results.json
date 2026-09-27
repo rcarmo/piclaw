@@ -1,0 +1,3459 @@
+{
+  "freezeCommit": "a0a7eed5e",
+  "reports": [
+    {
+      "schema": 1,
+      "split": "development",
+      "candidateSha256": "bd20abbb11c63c5de8a35a0b2cadc3fa1e10288fc8a628c7d30d144c411ec860",
+      "fingerprint": {
+        "experimentSha256": "3ad91abeea90a0d8999167b72ca8898cf5d6b3bb439562278bb1aea4f8fc6fc5",
+        "productionSourceSha256": "ddf48bbf681e87e8bc160fa2b8c05892d5f1d9d976a95514d43f7021019955e2",
+        "corpusSha256": "db85bb05160e8aa3a577b03c9e2d1dde90ec208e079ef96a4b830627ebdb0f9d",
+        "dependenciesSha256": "35b4f271330c6301df15415f53c34b05c2db84b946c5bd40bfa2105e47b5e170"
+      },
+      "stable": true,
+      "corpusSha256": "46e0f5e112cd711e4f28c32133d4ff05562597bb63da7d2f6b600b8b03ae5bca",
+      "limitations": [
+        "Exact labelled-span containment, not model answer accuracy or a calibrated probability.",
+        "Frozen small synthetic set; known topics are not a statistically unseen evaluation.",
+        "No production query/get admission, citations, refresh or ranking changes. Old budgets are not approved."
+      ],
+      "fullReportSha256": "83eb299aec6cf13c3be0ce28bf8af91763f29e8e0efb90b94cf12442e003ee99",
+      "runs": [
+        {
+          "split": "development",
+          "mode": "build",
+          "scale": 0,
+          "direction": "forward",
+          "versions": {
+            "bun": "1.4.2",
+            "sqlite": {
+              "version": "3.53.2"
+            }
+          },
+          "policy": {
+            "version": "passage-bm25-v1",
+            "tokenizer": "porter unicode61 remove_diacritics 2",
+            "windowBytes": 1536,
+            "overlapLines": 2,
+            "candidateLimit": 50,
+            "maxTerms": 8,
+            "maxQueryBytes": 512,
+            "limit": 5,
+            "responseBytes": 4096,
+            "headingWeight": 2,
+            "pathWeight": 0.5
+          },
+          "indexMs": 100.96175100000028,
+          "rssBytes": 65900544,
+          "passageDatabaseBytes": 65536,
+          "summary": {
+            "current-tool": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0,
+              "labelledLineCoverage": 0.3,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.45,
+              "queriesWithAllLabelledSpans": 0,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 274.6666666666667,
+              "maxPayloadBytes": 626
+            },
+            "passage-or": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.515,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 748.3333333333334,
+              "maxPayloadBytes": 2204
+            },
+            "passage-two-thirds": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.8666666666666666,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 313.9166666666667,
+              "maxPayloadBytes": 655
+            },
+            "passage-all": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0.9,
+              "labelledLineCoverage": 0.9,
+              "fileSectionUpperBound": 0.9,
+              "usefulHitFraction": 0.8666666666666666,
+              "queriesWithAllLabelledSpans": 9,
+              "answerableAbstentions": 1,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 246.91666666666666,
+              "maxPayloadBytes": 655
+            }
+          },
+          "payloadSha256": "5131fa930a241987cccc68336a5af0c1a728ab90a6b99eab6f016761135bc886",
+          "queryResults": [
+            {
+              "id": "dev-storage",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0.3333333333333333,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.5,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 277,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 2 files (limit 5, offset 0).\n• notes/decisions.md — # Decisions\n\n## [Lantern] storage\n[Lantern] stores event receipts in [SQLite]. PostgreSQL was rejected…\n• notes/noise.md — # Unrelated maintenance\n\n## Lamps\nThe storage room has a paper [lantern] beside the…"
+            },
+            {
+              "id": "dev-storage",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.3333333333333333,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 724,
+              "warmP95Ms": 0.2499149999994188,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/decisions.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Lantern storage\\nLantern stores event receipts in SQLite. PostgreSQL was rejected for its offline-only deployment.\\nThe storage decision was accepted on 2030-02-08 by the fictional design group.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":2},{\"path\":\"notes/decisions.md\",\"lineStart\":7,\"lineEnd\":8,\"text\":\"## Lantern retention\\nLantern retains diagnostic receipts for fourteen days. Backups retain receipts for thirty days.\\n\",\"matchedTerms\":1,\"queryTerms\":2},{\"path\":\"notes/noise.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Lamps\\nThe storage room has a paper lantern beside the kettle.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "dev-storage",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 344,
+              "warmP95Ms": 0.1510969999999361,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/decisions.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Lantern storage\\nLantern stores event receipts in SQLite. PostgreSQL was rejected for its offline-only deployment.\\nThe storage decision was accepted on 2030-02-08 by the fictional design group.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "dev-storage",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 344,
+              "warmP95Ms": 0.14589299999988725,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/decisions.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Lantern storage\\nLantern stores event receipts in SQLite. PostgreSQL was rejected for its offline-only deployment.\\nThe storage decision was accepted on 2030-02-08 by the fictional design group.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "dev-retention",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 521,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 4 files (limit 5, offset 0).\n• notes/decisions.md — …[Lantern] retention\n[Lantern] retains [diagnostic] [receipts] for fourteen days. Backups retain [receipts]…\n• notes/noise.md — # Unrelated maintenance\n\n## Lamps\nThe storage room has a paper [lantern] beside the…\n• notes/harbor.md — …s confirmation.\n\n## Export\nHarbor exports [receipts] as JSON Lines and does not…\n• notes/long-notebook.md — …Meridian retention\nMeridian retains task [receipts] for forty-five days; application logs…"
+            },
+            {
+              "id": "dev-retention",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.2,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 1129,
+              "warmP95Ms": 0.2923030000001745,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/decisions.md\",\"lineStart\":7,\"lineEnd\":8,\"text\":\"## Lantern retention\\nLantern retains diagnostic receipts for fourteen days. Backups retain receipts for thirty days.\\n\",\"matchedTerms\":3,\"queryTerms\":3},{\"path\":\"notes/decisions.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Lantern storage\\nLantern stores event receipts in SQLite. PostgreSQL was rejected for its offline-only deployment.\\nThe storage decision was accepted on 2030-02-08 by the fictional design group.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":3},{\"path\":\"notes/noise.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Lamps\\nThe storage room has a paper lantern beside the kettle.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":3},{\"path\":\"notes/harbor.md\",\"lineStart\":7,\"lineEnd\":8,\"text\":\"## Export\\nHarbor exports receipts as JSON Lines and does not export private key material.\\n\",\"matchedTerms\":1,\"queryTerms\":3},{\"path\":\"notes/long-notebook.md\",\"lineStart\":102,\"lineEnd\":103,\"text\":\"## Meridian retention\\nMeridian retains task receipts for forty-five days; application logs remain seven days.\\n\",\"matchedTerms\":1,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "dev-retention",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.5,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 561,
+              "warmP95Ms": 0.27907199999935983,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/decisions.md\",\"lineStart\":7,\"lineEnd\":8,\"text\":\"## Lantern retention\\nLantern retains diagnostic receipts for fourteen days. Backups retain receipts for thirty days.\\n\",\"matchedTerms\":3,\"queryTerms\":3},{\"path\":\"notes/decisions.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Lantern storage\\nLantern stores event receipts in SQLite. PostgreSQL was rejected for its offline-only deployment.\\nThe storage decision was accepted on 2030-02-08 by the fictional design group.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "dev-retention",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 262,
+              "warmP95Ms": 0.23091399999975692,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/decisions.md\",\"lineStart\":7,\"lineEnd\":8,\"text\":\"## Lantern retention\\nLantern retains diagnostic receipts for fourteen days. Backups retain receipts for thirty days.\\n\",\"matchedTerms\":3,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "dev-preference",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0.3333333333333333,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.5,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 292,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 2 files (limit 5, offset 0).\n• notes/preferences.md — # Fictional preferences\n\n## [Reports]\n[Mira] prefers concise [reports] with numbered recommendations and explicit…\n• notes/noise.md — …The words parser, recovery and [reports] appear in this vocabulary exercise.\nThere…"
+            },
+            {
+              "id": "dev-preference",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.5,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 570,
+              "warmP95Ms": 0.1375720000005458,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/preferences.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Reports\\nMira prefers concise reports with numbered recommendations and explicit uncertainty.\\nUse British spelling. Do not replace missing measurements with confident estimates.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":2},{\"path\":\"notes/noise.md\",\"lineStart\":9,\"lineEnd\":11,\"text\":\"## Samples\\nThe words parser, recovery and reports appear in this vocabulary exercise.\\nThere is no operational recommendation in this section.\\n\",\"matchedTerms\":1,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "dev-preference",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 330,
+              "warmP95Ms": 0.11701499999981024,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/preferences.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Reports\\nMira prefers concise reports with numbered recommendations and explicit uncertainty.\\nUse British spelling. Do not replace missing measurements with confident estimates.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "dev-preference",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 330,
+              "warmP95Ms": 0.11222600000019156,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/preferences.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Reports\\nMira prefers concise reports with numbered recommendations and explicit uncertainty.\\nUse British spelling. Do not replace missing measurements with confident estimates.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "dev-chronology",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0.5,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.5,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 253,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 2 files (limit 5, offset 0).\n• notes/chronology.md — …04 with seven synthetic accounts.\n\n## [Launch]\n[Kestrel] launched on 2030-04-19…\n• notes/noise.md — …beside the kettle.\n\n## Birds\nA [kestrel] appeared near the northern gate on…"
+            },
+            {
+              "id": "dev-chronology",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.25,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 690,
+              "warmP95Ms": 0.20116299999972398,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/chronology.md\",\"lineStart\":6,\"lineEnd\":8,\"text\":\"## Launch\\nKestrel launched on 2030-04-19 after the recovery drill passed.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":2},{\"path\":\"notes/chronology.md\",\"lineStart\":1,\"lineEnd\":2,\"text\":\"# Kestrel chronology\\n\\n\",\"matchedTerms\":1,\"queryTerms\":2},{\"path\":\"notes/chronology.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Pilot\\nKestrel started its pilot on 2030-03-04 with seven synthetic accounts.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":2},{\"path\":\"notes/noise.md\",\"lineStart\":6,\"lineEnd\":8,\"text\":\"## Birds\\nA kestrel appeared near the northern gate on Thursday.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "dev-chronology",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 222,
+              "warmP95Ms": 0.16012299999965762,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/chronology.md\",\"lineStart\":6,\"lineEnd\":8,\"text\":\"## Launch\\nKestrel launched on 2030-04-19 after the recovery drill passed.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "dev-chronology",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 222,
+              "warmP95Ms": 0.19429899999977351,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/chronology.md\",\"lineStart\":6,\"lineEnd\":8,\"text\":\"## Launch\\nKestrel launched on 2030-04-19 after the recovery drill passed.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "dev-before-after",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 626,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 5 files (limit 5, offset 0).\n• notes/chronology.md — …On 2030-05-02 the [maintenance] window moved from Monday to [Thursday].\n\n• notes/noise.md — # Unrelated [maintenance]\n\n## Lamps\nThe storage room has a paper lantern beside the…\n• notes/long-notebook.md — …synthetic [maintenance] notes discuss labels, shelves and packing lists without specifying a…\n• notes/preferences.md — …estimates.\n\n## Meetings\nThe team reserves Friday mornings for [maintenance], not customer meetings.\n\n• notes/harbor.md — # Harbor [maintenance]\n\n## Rotation\nHarbor rotates its signing key every ninety days in…"
+            },
+            {
+              "id": "dev-before-after",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.2,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 2204,
+              "warmP95Ms": 0.30082000000038533,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":true,\"hits\":[{\"path\":\"notes/noise.md\",\"lineStart\":6,\"lineEnd\":8,\"text\":\"## Birds\\nA kestrel appeared near the northern gate on Thursday.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":2},{\"path\":\"notes/chronology.md\",\"lineStart\":9,\"lineEnd\":10,\"text\":\"## Change\\nOn 2030-05-02 the maintenance window moved from Monday to Thursday.\\n\",\"matchedTerms\":2,\"queryTerms\":2},{\"path\":\"notes/harbor.md\",\"lineStart\":1,\"lineEnd\":2,\"text\":\"# Harbor maintenance\\n\\n\",\"matchedTerms\":1,\"queryTerms\":2},{\"path\":\"notes/noise.md\",\"lineStart\":1,\"lineEnd\":2,\"text\":\"# Unrelated maintenance\\n\\n\",\"matchedTerms\":1,\"queryTerms\":2},{\"path\":\"notes/long-notebook.md\",\"lineStart\":16,\"lineEnd\":26,\"text\":\"Background paragraph 10: synthetic maintenance notes discuss labels, shelves and packing lists without specifying a project setting.\\nBackground paragraph 11: synthetic maintenance notes discuss labels, shelves and packing lists without specifying a project setting.\\nBackground paragraph 12: synthetic maintenance notes discuss labels, shelves and packing lists without specifying a project setting.\\nBackground paragraph 13: synthetic maintenance notes discuss labels, shelves and packing lists without specifying a project setting.\\nBackground paragraph 14: synthetic maintenance notes discuss labels, shelves and packing lists without specifying a project setting.\\nBackground paragraph 15: synthetic maintenance notes discuss labels, shelves and packing lists without specifying a project setting.\\nBackground paragraph 16: synthetic maintenance notes discuss labels, shelves and packing lists without specifying a project setting.\\nBackground paragraph 17: synthetic maintenance notes discuss labels, shelves and packing lists without specifying a project setting.\\nBackground paragraph 18: synthetic maintenance notes discuss labels, shelves and packing lists without specifying a project setting.\\nBackground paragraph 19: synthetic maintenance notes discuss labels, shelves and packing lists without specifying a project setting.\\nBackground paragraph 20: synthetic maintenance notes discuss labels, shelves and packing lists without specifying a project setting.\\n\",\"matchedTerms\":1,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "dev-before-after",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 225,
+              "warmP95Ms": 0.3937000000005355,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/chronology.md\",\"lineStart\":9,\"lineEnd\":10,\"text\":\"## Change\\nOn 2030-05-02 the maintenance window moved from Monday to Thursday.\\n\",\"matchedTerms\":2,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "dev-before-after",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 225,
+              "warmP95Ms": 0.3785749999997279,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/chronology.md\",\"lineStart\":9,\"lineEnd\":10,\"text\":\"## Change\\nOn 2030-05-02 the maintenance window moved from Monday to Thursday.\\n\",\"matchedTerms\":2,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "dev-identifier",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0.5,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 145,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 1 file (limit 5, offset 0).\n• notes/identifiers.md — # Build identifiers\n\n## Recovery job\nThe recovery job identifier is [RCV-204-B]…"
+            },
+            {
+              "id": "dev-identifier",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 240,
+              "warmP95Ms": 0.11757399999987683,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/identifiers.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Recovery job\\nThe recovery job identifier is RCV-204-B. It restores the blue test queue.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":1}]}"
+            },
+            {
+              "id": "dev-identifier",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 240,
+              "warmP95Ms": 0.0693810000002486,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/identifiers.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Recovery job\\nThe recovery job identifier is RCV-204-B. It restores the blue test queue.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":1}]}"
+            },
+            {
+              "id": "dev-identifier",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 240,
+              "warmP95Ms": 0.08657700000003388,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/identifiers.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Recovery job\\nThe recovery job identifier is RCV-204-B. It restores the blue test queue.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":1}]}"
+            },
+            {
+              "id": "dev-duplicate-parser",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0.5,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.5,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 282,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 2 files (limit 5, offset 0).\n• notes/duplicate-headings.md — # Deployment notebook\n\n## [Rollback]\nThe [parser] [rollback] restores schema version 3 and replays…\n• notes/noise.md — …on Thursday.\n\n## Samples\nThe words [parser], recovery and reports appear in this…"
+            },
+            {
+              "id": "dev-duplicate-parser",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.5,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 895,
+              "warmP95Ms": 0.16837200000009034,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/duplicate-headings.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Rollback\\nThe parser rollback restores schema version 3 and replays the fixture journal.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":2},{\"path\":\"notes/duplicate-headings.md\",\"lineStart\":6,\"lineEnd\":8,\"text\":\"## Rollback\\nThe gateway rollback changes the upstream pool to amber and drains pending requests.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":2},{\"path\":\"notes/noise.md\",\"lineStart\":9,\"lineEnd\":11,\"text\":\"## Samples\\nThe words parser, recovery and reports appear in this vocabulary exercise.\\nThere is no operational recommendation in this section.\\n\",\"matchedTerms\":1,\"queryTerms\":2},{\"path\":\"notes/duplicate-headings.md\",\"lineStart\":9,\"lineEnd\":10,\"text\":\"## Verification\\nBoth rollbacks require a synthetic health probe before accepting traffic.\\n\",\"matchedTerms\":1,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "dev-duplicate-parser",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 247,
+              "warmP95Ms": 0.1358300000001691,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/duplicate-headings.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Rollback\\nThe parser rollback restores schema version 3 and replays the fixture journal.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "dev-duplicate-parser",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 247,
+              "warmP95Ms": 0.13782699999956094,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/duplicate-headings.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Rollback\\nThe parser rollback restores schema version 3 and replays the fixture journal.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "dev-duplicate-gateway",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 155,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 1 file (limit 5, offset 0).\n• notes/duplicate-headings.md — …Rollback\nThe [gateway] rollback changes the upstream pool to [amber] and drains…"
+            },
+            {
+              "id": "dev-duplicate-gateway",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 253,
+              "warmP95Ms": 0.1279979999999341,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/duplicate-headings.md\",\"lineStart\":6,\"lineEnd\":8,\"text\":\"## Rollback\\nThe gateway rollback changes the upstream pool to amber and drains pending requests.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "dev-duplicate-gateway",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 253,
+              "warmP95Ms": 0.10585600000013073,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/duplicate-headings.md\",\"lineStart\":6,\"lineEnd\":8,\"text\":\"## Rollback\\nThe gateway rollback changes the upstream pool to amber and drains pending requests.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "dev-duplicate-gateway",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 253,
+              "warmP95Ms": 0.11291200000050594,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/duplicate-headings.md\",\"lineStart\":6,\"lineEnd\":8,\"text\":\"## Rollback\\nThe gateway rollback changes the upstream pool to amber and drains pending requests.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "dev-multisection",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0.5,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 169,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 1 file (limit 5, offset 0).\n• notes/duplicate-headings.md — # Deployment notebook\n\n## [Rollback]\nThe parser [rollback] restores schema version 3 and replays…"
+            },
+            {
+              "id": "dev-multisection",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.6666666666666666,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 655,
+              "warmP95Ms": 0.11959399999977904,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/duplicate-headings.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Rollback\\nThe parser rollback restores schema version 3 and replays the fixture journal.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":1},{\"path\":\"notes/duplicate-headings.md\",\"lineStart\":6,\"lineEnd\":8,\"text\":\"## Rollback\\nThe gateway rollback changes the upstream pool to amber and drains pending requests.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":1},{\"path\":\"notes/duplicate-headings.md\",\"lineStart\":9,\"lineEnd\":10,\"text\":\"## Verification\\nBoth rollbacks require a synthetic health probe before accepting traffic.\\n\",\"matchedTerms\":1,\"queryTerms\":1}]}"
+            },
+            {
+              "id": "dev-multisection",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.6666666666666666,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 655,
+              "warmP95Ms": 0.09320099999968079,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/duplicate-headings.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Rollback\\nThe parser rollback restores schema version 3 and replays the fixture journal.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":1},{\"path\":\"notes/duplicate-headings.md\",\"lineStart\":6,\"lineEnd\":8,\"text\":\"## Rollback\\nThe gateway rollback changes the upstream pool to amber and drains pending requests.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":1},{\"path\":\"notes/duplicate-headings.md\",\"lineStart\":9,\"lineEnd\":10,\"text\":\"## Verification\\nBoth rollbacks require a synthetic health probe before accepting traffic.\\n\",\"matchedTerms\":1,\"queryTerms\":1}]}"
+            },
+            {
+              "id": "dev-multisection",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.6666666666666666,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 655,
+              "warmP95Ms": 0.09434500000043045,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/duplicate-headings.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Rollback\\nThe parser rollback restores schema version 3 and replays the fixture journal.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":1},{\"path\":\"notes/duplicate-headings.md\",\"lineStart\":6,\"lineEnd\":8,\"text\":\"## Rollback\\nThe gateway rollback changes the upstream pool to amber and drains pending requests.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":1},{\"path\":\"notes/duplicate-headings.md\",\"lineStart\":9,\"lineEnd\":10,\"text\":\"## Verification\\nBoth rollbacks require a synthetic health probe before accepting traffic.\\n\",\"matchedTerms\":1,\"queryTerms\":1}]}"
+            },
+            {
+              "id": "dev-unanswerable-lexical",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": null,
+                "labelledLineCoverage": null,
+                "fileSectionUpperBound": null,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": true,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 250,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 2 files (limit 5, offset 0).\n• notes/chronology.md — # [Kestrel] chronology\n\n## Pilot\n[Kestrel] started its pilot on 2030-03-04 with…\n• notes/noise.md — …beside the kettle.\n\n## Birds\nA [kestrel] appeared near the northern gate on…"
+            },
+            {
+              "id": "dev-unanswerable-lexical",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": null,
+                "labelledLineCoverage": null,
+                "fileSectionUpperBound": null,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": true,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 995,
+              "warmP95Ms": 0.323008999999729,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":true,\"hits\":[{\"path\":\"notes/atlas.md\",\"lineStart\":9,\"lineEnd\":10,\"text\":\"## Formats\\nAtlas supports plain UTF-8 Markdown and JSON Lines for its import fixture.\\n\",\"matchedTerms\":1,\"queryTerms\":4},{\"path\":\"notes/preferences.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Reports\\nMira prefers concise reports with numbered recommendations and explicit uncertainty.\\nUse British spelling. Do not replace missing measurements with confident estimates.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":4},{\"path\":\"notes/chronology.md\",\"lineStart\":1,\"lineEnd\":2,\"text\":\"# Kestrel chronology\\n\\n\",\"matchedTerms\":1,\"queryTerms\":4},{\"path\":\"notes/chronology.md\",\"lineStart\":6,\"lineEnd\":8,\"text\":\"## Launch\\nKestrel launched on 2030-04-19 after the recovery drill passed.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":4},{\"path\":\"notes/chronology.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Pilot\\nKestrel started its pilot on 2030-03-04 with seven synthetic accounts.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":4}]}"
+            },
+            {
+              "id": "dev-unanswerable-lexical",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": null,
+                "labelledLineCoverage": null,
+                "fileSectionUpperBound": null,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": true,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 65,
+              "warmP95Ms": 0.29138500000044587,
+              "stable": true,
+              "payload": "{\"status\":\"insufficient_term_coverage\",\"limited\":false,\"hits\":[]}"
+            },
+            {
+              "id": "dev-unanswerable-lexical",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": null,
+                "labelledLineCoverage": null,
+                "fileSectionUpperBound": null,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": true,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 65,
+              "warmP95Ms": 1.5951869999998962,
+              "stable": true,
+              "payload": "{\"status\":\"insufficient_term_coverage\",\"limited\":false,\"hits\":[]}"
+            },
+            {
+              "id": "dev-unanswerable-empty",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": null,
+                "labelledLineCoverage": null,
+                "fileSectionUpperBound": null,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": true,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 34,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "No matching workspace files found."
+            },
+            {
+              "id": "dev-unanswerable-empty",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": null,
+                "labelledLineCoverage": null,
+                "fileSectionUpperBound": null,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": true,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 55,
+              "warmP95Ms": 0.09609499999987747,
+              "stable": true,
+              "payload": "{\"status\":\"no_lexical_match\",\"limited\":false,\"hits\":[]}"
+            },
+            {
+              "id": "dev-unanswerable-empty",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": null,
+                "labelledLineCoverage": null,
+                "fileSectionUpperBound": null,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": true,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 55,
+              "warmP95Ms": 0.06943300000057206,
+              "stable": true,
+              "payload": "{\"status\":\"no_lexical_match\",\"limited\":false,\"hits\":[]}"
+            },
+            {
+              "id": "dev-unanswerable-empty",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": null,
+                "labelledLineCoverage": null,
+                "fileSectionUpperBound": null,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": true,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 55,
+              "warmP95Ms": 0.06952499999988504,
+              "stable": true,
+              "payload": "{\"status\":\"no_lexical_match\",\"limited\":false,\"hits\":[]}"
+            },
+            {
+              "id": "dev-paraphrase",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0.3333333333333333,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.5,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 292,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 2 files (limit 5, offset 0).\n• notes/preferences.md — # Fictional preferences\n\n## [Reports]\nMira prefers concise [reports] with numbered [recommendations] and explicit…\n• notes/noise.md — …The words parser, recovery and [reports] appear in this vocabulary exercise.\nThere…"
+            },
+            {
+              "id": "dev-paraphrase",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.5,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 570,
+              "warmP95Ms": 0.16501599999992322,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/preferences.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Reports\\nMira prefers concise reports with numbered recommendations and explicit uncertainty.\\nUse British spelling. Do not replace missing measurements with confident estimates.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":3},{\"path\":\"notes/noise.md\",\"lineStart\":9,\"lineEnd\":11,\"text\":\"## Samples\\nThe words parser, recovery and reports appear in this vocabulary exercise.\\nThere is no operational recommendation in this section.\\n\",\"matchedTerms\":2,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "dev-paraphrase",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.5,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 570,
+              "warmP95Ms": 0.13876299999992625,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/preferences.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Reports\\nMira prefers concise reports with numbered recommendations and explicit uncertainty.\\nUse British spelling. Do not replace missing measurements with confident estimates.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":3},{\"path\":\"notes/noise.md\",\"lineStart\":9,\"lineEnd\":11,\"text\":\"## Samples\\nThe words parser, recovery and reports appear in this vocabulary exercise.\\nThere is no operational recommendation in this section.\\n\",\"matchedTerms\":2,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "dev-paraphrase",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0,
+                "fileSectionUpperBound": 0,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": true,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 65,
+              "warmP95Ms": 0.13483299999916198,
+              "stable": true,
+              "payload": "{\"status\":\"insufficient_term_coverage\",\"limited\":false,\"hits\":[]}"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "mode": "reopen",
+          "scale": 0,
+          "direction": "forward",
+          "versions": {
+            "bun": "1.4.2",
+            "sqlite": {
+              "version": "3.53.2"
+            }
+          },
+          "policy": {
+            "version": "passage-bm25-v1",
+            "tokenizer": "porter unicode61 remove_diacritics 2",
+            "windowBytes": 1536,
+            "overlapLines": 2,
+            "candidateLimit": 50,
+            "maxTerms": 8,
+            "maxQueryBytes": 512,
+            "limit": 5,
+            "responseBytes": 4096,
+            "headingWeight": 2,
+            "pathWeight": 0.5
+          },
+          "indexMs": 0.000489000000001738,
+          "rssBytes": 59600896,
+          "passageDatabaseBytes": 65536,
+          "summary": {
+            "current-tool": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0,
+              "labelledLineCoverage": 0.3,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.45,
+              "queriesWithAllLabelledSpans": 0,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 274.6666666666667,
+              "maxPayloadBytes": 626
+            },
+            "passage-or": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.515,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 748.3333333333334,
+              "maxPayloadBytes": 2204
+            },
+            "passage-two-thirds": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.8666666666666666,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 313.9166666666667,
+              "maxPayloadBytes": 655
+            },
+            "passage-all": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0.9,
+              "labelledLineCoverage": 0.9,
+              "fileSectionUpperBound": 0.9,
+              "usefulHitFraction": 0.8666666666666666,
+              "queriesWithAllLabelledSpans": 9,
+              "answerableAbstentions": 1,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 246.91666666666666,
+              "maxPayloadBytes": 655
+            }
+          },
+          "payloadSha256": "5131fa930a241987cccc68336a5af0c1a728ab90a6b99eab6f016761135bc886"
+        },
+        {
+          "split": "development",
+          "mode": "build",
+          "scale": 0,
+          "direction": "reverse",
+          "versions": {
+            "bun": "1.4.2",
+            "sqlite": {
+              "version": "3.53.2"
+            }
+          },
+          "policy": {
+            "version": "passage-bm25-v1",
+            "tokenizer": "porter unicode61 remove_diacritics 2",
+            "windowBytes": 1536,
+            "overlapLines": 2,
+            "candidateLimit": 50,
+            "maxTerms": 8,
+            "maxQueryBytes": 512,
+            "limit": 5,
+            "responseBytes": 4096,
+            "headingWeight": 2,
+            "pathWeight": 0.5
+          },
+          "indexMs": 70.22840899999937,
+          "rssBytes": 64569344,
+          "passageDatabaseBytes": 65536,
+          "summary": {
+            "current-tool": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0,
+              "labelledLineCoverage": 0.3,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.45,
+              "queriesWithAllLabelledSpans": 0,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 274.6666666666667,
+              "maxPayloadBytes": 626
+            },
+            "passage-or": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.515,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 748.3333333333334,
+              "maxPayloadBytes": 2204
+            },
+            "passage-two-thirds": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.8666666666666666,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 313.9166666666667,
+              "maxPayloadBytes": 655
+            },
+            "passage-all": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0.9,
+              "labelledLineCoverage": 0.9,
+              "fileSectionUpperBound": 0.9,
+              "usefulHitFraction": 0.8666666666666666,
+              "queriesWithAllLabelledSpans": 9,
+              "answerableAbstentions": 1,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 246.91666666666666,
+              "maxPayloadBytes": 655
+            }
+          },
+          "payloadSha256": "5131fa930a241987cccc68336a5af0c1a728ab90a6b99eab6f016761135bc886"
+        },
+        {
+          "split": "development",
+          "mode": "reopen",
+          "scale": 0,
+          "direction": "reverse",
+          "versions": {
+            "bun": "1.4.2",
+            "sqlite": {
+              "version": "3.53.2"
+            }
+          },
+          "policy": {
+            "version": "passage-bm25-v1",
+            "tokenizer": "porter unicode61 remove_diacritics 2",
+            "windowBytes": 1536,
+            "overlapLines": 2,
+            "candidateLimit": 50,
+            "maxTerms": 8,
+            "maxQueryBytes": 512,
+            "limit": 5,
+            "responseBytes": 4096,
+            "headingWeight": 2,
+            "pathWeight": 0.5
+          },
+          "indexMs": 0.0007790000000085229,
+          "rssBytes": 59719680,
+          "passageDatabaseBytes": 65536,
+          "summary": {
+            "current-tool": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0,
+              "labelledLineCoverage": 0.3,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.45,
+              "queriesWithAllLabelledSpans": 0,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 274.6666666666667,
+              "maxPayloadBytes": 626
+            },
+            "passage-or": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.515,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 748.3333333333334,
+              "maxPayloadBytes": 2204
+            },
+            "passage-two-thirds": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.8666666666666666,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 313.9166666666667,
+              "maxPayloadBytes": 655
+            },
+            "passage-all": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0.9,
+              "labelledLineCoverage": 0.9,
+              "fileSectionUpperBound": 0.9,
+              "usefulHitFraction": 0.8666666666666666,
+              "queriesWithAllLabelledSpans": 9,
+              "answerableAbstentions": 1,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 246.91666666666666,
+              "maxPayloadBytes": 655
+            }
+          },
+          "payloadSha256": "5131fa930a241987cccc68336a5af0c1a728ab90a6b99eab6f016761135bc886"
+        },
+        {
+          "split": "development",
+          "mode": "build",
+          "scale": 500,
+          "direction": "forward",
+          "versions": {
+            "bun": "1.4.2",
+            "sqlite": {
+              "version": "3.53.2"
+            }
+          },
+          "policy": {
+            "version": "passage-bm25-v1",
+            "tokenizer": "porter unicode61 remove_diacritics 2",
+            "windowBytes": 1536,
+            "overlapLines": 2,
+            "candidateLimit": 50,
+            "maxTerms": 8,
+            "maxQueryBytes": 512,
+            "limit": 5,
+            "responseBytes": 4096,
+            "headingWeight": 2,
+            "pathWeight": 0.5
+          },
+          "indexMs": 104.65527400000065,
+          "rssBytes": 93081600,
+          "passageDatabaseBytes": 188416,
+          "summary": {
+            "current-tool": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0,
+              "labelledLineCoverage": 0.3,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.45,
+              "queriesWithAllLabelledSpans": 0,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 274.6666666666667,
+              "maxPayloadBytes": 626
+            },
+            "passage-or": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.515,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 738.0833333333334,
+              "maxPayloadBytes": 2204
+            },
+            "passage-two-thirds": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.8666666666666666,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 313.9166666666667,
+              "maxPayloadBytes": 655
+            },
+            "passage-all": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0.9,
+              "labelledLineCoverage": 0.9,
+              "fileSectionUpperBound": 0.9,
+              "usefulHitFraction": 0.8666666666666666,
+              "queriesWithAllLabelledSpans": 9,
+              "answerableAbstentions": 1,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 246.91666666666666,
+              "maxPayloadBytes": 655
+            }
+          },
+          "payloadSha256": "10f061d733f78f72c4bdb9e107010030f7e45b4d9c67ef73ae55727c81450833"
+        },
+        {
+          "split": "development",
+          "mode": "reopen",
+          "scale": 500,
+          "direction": "forward",
+          "versions": {
+            "bun": "1.4.2",
+            "sqlite": {
+              "version": "3.53.2"
+            }
+          },
+          "policy": {
+            "version": "passage-bm25-v1",
+            "tokenizer": "porter unicode61 remove_diacritics 2",
+            "windowBytes": 1536,
+            "overlapLines": 2,
+            "candidateLimit": 50,
+            "maxTerms": 8,
+            "maxQueryBytes": 512,
+            "limit": 5,
+            "responseBytes": 4096,
+            "headingWeight": 2,
+            "pathWeight": 0.5
+          },
+          "indexMs": 0.0005400000000008731,
+          "rssBytes": 68329472,
+          "passageDatabaseBytes": 188416,
+          "summary": {
+            "current-tool": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0,
+              "labelledLineCoverage": 0.3,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.45,
+              "queriesWithAllLabelledSpans": 0,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 274.6666666666667,
+              "maxPayloadBytes": 626
+            },
+            "passage-or": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.515,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 738.0833333333334,
+              "maxPayloadBytes": 2204
+            },
+            "passage-two-thirds": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.8666666666666666,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 313.9166666666667,
+              "maxPayloadBytes": 655
+            },
+            "passage-all": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0.9,
+              "labelledLineCoverage": 0.9,
+              "fileSectionUpperBound": 0.9,
+              "usefulHitFraction": 0.8666666666666666,
+              "queriesWithAllLabelledSpans": 9,
+              "answerableAbstentions": 1,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 246.91666666666666,
+              "maxPayloadBytes": 655
+            }
+          },
+          "payloadSha256": "10f061d733f78f72c4bdb9e107010030f7e45b4d9c67ef73ae55727c81450833"
+        },
+        {
+          "split": "development",
+          "mode": "build",
+          "scale": 500,
+          "direction": "reverse",
+          "versions": {
+            "bun": "1.4.2",
+            "sqlite": {
+              "version": "3.53.2"
+            }
+          },
+          "policy": {
+            "version": "passage-bm25-v1",
+            "tokenizer": "porter unicode61 remove_diacritics 2",
+            "windowBytes": 1536,
+            "overlapLines": 2,
+            "candidateLimit": 50,
+            "maxTerms": 8,
+            "maxQueryBytes": 512,
+            "limit": 5,
+            "responseBytes": 4096,
+            "headingWeight": 2,
+            "pathWeight": 0.5
+          },
+          "indexMs": 168.6649070000003,
+          "rssBytes": 93835264,
+          "passageDatabaseBytes": 192512,
+          "summary": {
+            "current-tool": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0,
+              "labelledLineCoverage": 0.3,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.45,
+              "queriesWithAllLabelledSpans": 0,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 274.6666666666667,
+              "maxPayloadBytes": 626
+            },
+            "passage-or": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.515,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 738.0833333333334,
+              "maxPayloadBytes": 2204
+            },
+            "passage-two-thirds": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.8666666666666666,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 313.9166666666667,
+              "maxPayloadBytes": 655
+            },
+            "passage-all": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0.9,
+              "labelledLineCoverage": 0.9,
+              "fileSectionUpperBound": 0.9,
+              "usefulHitFraction": 0.8666666666666666,
+              "queriesWithAllLabelledSpans": 9,
+              "answerableAbstentions": 1,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 246.91666666666666,
+              "maxPayloadBytes": 655
+            }
+          },
+          "payloadSha256": "10f061d733f78f72c4bdb9e107010030f7e45b4d9c67ef73ae55727c81450833"
+        },
+        {
+          "split": "development",
+          "mode": "reopen",
+          "scale": 500,
+          "direction": "reverse",
+          "versions": {
+            "bun": "1.4.2",
+            "sqlite": {
+              "version": "3.53.2"
+            }
+          },
+          "policy": {
+            "version": "passage-bm25-v1",
+            "tokenizer": "porter unicode61 remove_diacritics 2",
+            "windowBytes": 1536,
+            "overlapLines": 2,
+            "candidateLimit": 50,
+            "maxTerms": 8,
+            "maxQueryBytes": 512,
+            "limit": 5,
+            "responseBytes": 4096,
+            "headingWeight": 2,
+            "pathWeight": 0.5
+          },
+          "indexMs": 0.00041599999998709336,
+          "rssBytes": 67170304,
+          "passageDatabaseBytes": 192512,
+          "summary": {
+            "current-tool": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0,
+              "labelledLineCoverage": 0.3,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.45,
+              "queriesWithAllLabelledSpans": 0,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 274.6666666666667,
+              "maxPayloadBytes": 626
+            },
+            "passage-or": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.515,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 738.0833333333334,
+              "maxPayloadBytes": 2204
+            },
+            "passage-two-thirds": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.8666666666666666,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 313.9166666666667,
+              "maxPayloadBytes": 655
+            },
+            "passage-all": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0.9,
+              "labelledLineCoverage": 0.9,
+              "fileSectionUpperBound": 0.9,
+              "usefulHitFraction": 0.8666666666666666,
+              "queriesWithAllLabelledSpans": 9,
+              "answerableAbstentions": 1,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 0,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 246.91666666666666,
+              "maxPayloadBytes": 655
+            }
+          },
+          "payloadSha256": "10f061d733f78f72c4bdb9e107010030f7e45b4d9c67ef73ae55727c81450833"
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "split": "held-out",
+      "candidateSha256": "bd20abbb11c63c5de8a35a0b2cadc3fa1e10288fc8a628c7d30d144c411ec860",
+      "fingerprint": {
+        "experimentSha256": "3ad91abeea90a0d8999167b72ca8898cf5d6b3bb439562278bb1aea4f8fc6fc5",
+        "productionSourceSha256": "ddf48bbf681e87e8bc160fa2b8c05892d5f1d9d976a95514d43f7021019955e2",
+        "corpusSha256": "db85bb05160e8aa3a577b03c9e2d1dde90ec208e079ef96a4b830627ebdb0f9d",
+        "dependenciesSha256": "35b4f271330c6301df15415f53c34b05c2db84b946c5bd40bfa2105e47b5e170"
+      },
+      "stable": true,
+      "corpusSha256": "46e0f5e112cd711e4f28c32133d4ff05562597bb63da7d2f6b600b8b03ae5bca",
+      "limitations": [
+        "Exact labelled-span containment, not model answer accuracy or a calibrated probability.",
+        "Frozen small synthetic set; known topics are not a statistically unseen evaluation.",
+        "No production query/get admission, citations, refresh or ranking changes. Old budgets are not approved."
+      ],
+      "fullReportSha256": "e104555786aa4b38da583b06fa47ae629e39d6ad9bc9b3d6a88113f3af2b8666",
+      "runs": [
+        {
+          "split": "held-out",
+          "mode": "build",
+          "scale": 0,
+          "direction": "forward",
+          "versions": {
+            "bun": "1.4.2",
+            "sqlite": {
+              "version": "3.53.2"
+            }
+          },
+          "policy": {
+            "version": "passage-bm25-v1",
+            "tokenizer": "porter unicode61 remove_diacritics 2",
+            "windowBytes": 1536,
+            "overlapLines": 2,
+            "candidateLimit": 50,
+            "maxTerms": 8,
+            "maxQueryBytes": 512,
+            "limit": 5,
+            "responseBytes": 4096,
+            "headingWeight": 2,
+            "pathWeight": 0.5
+          },
+          "indexMs": 90.98058299999957,
+          "rssBytes": 65224704,
+          "passageDatabaseBytes": 65536,
+          "summary": {
+            "current-tool": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0.1,
+              "labelledLineCoverage": 0.2333333333333333,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.18333333333333332,
+              "queriesWithAllLabelledSpans": 1,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 199.83333333333334,
+              "maxPayloadBytes": 407
+            },
+            "passage-or": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.3216666666666667,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 730.1666666666666,
+              "maxPayloadBytes": 1167
+            },
+            "passage-two-thirds": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.8166666666666667,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 314,
+              "maxPayloadBytes": 716
+            },
+            "passage-all": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.95,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 254.25,
+              "maxPayloadBytes": 553
+            }
+          },
+          "payloadSha256": "7d27597b28c8336c66d0a5790b90c89aa41922901dbfa08c7e9cb81e1a894887",
+          "queryResults": [
+            {
+              "id": "eval-current",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0.3333333333333333,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.5,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 1,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 274,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 2 files (limit 5, offset 0).\n• notes/cedar-current.md — # [Cedar] policy — current\n\n## Retries\nCurrent [Cedar] [retry] [limit]: three attempts, effective 2030…\n• notes/cedar-old.md — …before 2030-06-10 the [Cedar] [retry] [limit] was nine attempts.\nDo…"
+            },
+            {
+              "id": "eval-current",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.2,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 1,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 1039,
+              "warmP95Ms": 0.3555949999999939,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":true,\"hits\":[{\"path\":\"notes/cedar-current.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Retries\\nCurrent Cedar retry limit: three attempts, effective 2030-06-10.\\nThis decision replaces the previous nine-attempt policy.\\n\\n\",\"matchedTerms\":3,\"queryTerms\":3},{\"path\":\"notes/cedar-old.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Retries\\nSUPERSEDED: before 2030-06-10 the Cedar retry limit was nine attempts.\\nDo not use this obsolete value for current operations; use the current Cedar policy.\\n\",\"matchedTerms\":3,\"queryTerms\":3},{\"path\":\"notes/cedar-current.md\",\"lineStart\":7,\"lineEnd\":8,\"text\":\"## Backoff\\nCedar waits two seconds between retry attempts.\\n\",\"matchedTerms\":2,\"queryTerms\":3},{\"path\":\"notes/atlas.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Limits\\nAtlas accepts at most twelve attachments per message, each at most eight mebibytes.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":3},{\"path\":\"notes/cedar-current.md\",\"lineStart\":1,\"lineEnd\":2,\"text\":\"# Cedar policy — current\\n\\n\",\"matchedTerms\":1,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-current",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.3333333333333333,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 1,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 716,
+              "warmP95Ms": 0.2790599999998449,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/cedar-current.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Retries\\nCurrent Cedar retry limit: three attempts, effective 2030-06-10.\\nThis decision replaces the previous nine-attempt policy.\\n\\n\",\"matchedTerms\":3,\"queryTerms\":3},{\"path\":\"notes/cedar-old.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Retries\\nSUPERSEDED: before 2030-06-10 the Cedar retry limit was nine attempts.\\nDo not use this obsolete value for current operations; use the current Cedar policy.\\n\",\"matchedTerms\":3,\"queryTerms\":3},{\"path\":\"notes/cedar-current.md\",\"lineStart\":7,\"lineEnd\":8,\"text\":\"## Backoff\\nCedar waits two seconds between retry attempts.\\n\",\"matchedTerms\":2,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-current",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.5,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 1,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 553,
+              "warmP95Ms": 0.25450199999977485,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/cedar-current.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Retries\\nCurrent Cedar retry limit: three attempts, effective 2030-06-10.\\nThis decision replaces the previous nine-attempt policy.\\n\\n\",\"matchedTerms\":3,\"queryTerms\":3},{\"path\":\"notes/cedar-old.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Retries\\nSUPERSEDED: before 2030-06-10 the Cedar retry limit was nine attempts.\\nDo not use this obsolete value for current operations; use the current Cedar policy.\\n\",\"matchedTerms\":3,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-history",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 269,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 2 files (limit 5, offset 0).\n• notes/cedar-old.md — …[SUPERSEDED]: before 2030-06-10 the [Cedar] retry limit was [nine] attempts…\n• notes/cedar-current.md — …This decision replaces the previous [nine]-attempt policy.\n\n## Backoff\n[Cedar] waits two…"
+            },
+            {
+              "id": "eval-history",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.2,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 979,
+              "warmP95Ms": 0.28254200000083074,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/cedar-old.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Retries\\nSUPERSEDED: before 2030-06-10 the Cedar retry limit was nine attempts.\\nDo not use this obsolete value for current operations; use the current Cedar policy.\\n\",\"matchedTerms\":3,\"queryTerms\":3},{\"path\":\"notes/cedar-old.md\",\"lineStart\":1,\"lineEnd\":2,\"text\":\"# Cedar policy — superseded\\n\\n\",\"matchedTerms\":2,\"queryTerms\":3},{\"path\":\"notes/cedar-current.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Retries\\nCurrent Cedar retry limit: three attempts, effective 2030-06-10.\\nThis decision replaces the previous nine-attempt policy.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":3},{\"path\":\"notes/cedar-current.md\",\"lineStart\":1,\"lineEnd\":2,\"text\":\"# Cedar policy — current\\n\\n\",\"matchedTerms\":1,\"queryTerms\":3},{\"path\":\"notes/cedar-current.md\",\"lineStart\":7,\"lineEnd\":8,\"text\":\"## Backoff\\nCedar waits two seconds between retry attempts.\\n\",\"matchedTerms\":1,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-history",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.3333333333333333,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 684,
+              "warmP95Ms": 0.27343500000006316,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/cedar-old.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Retries\\nSUPERSEDED: before 2030-06-10 the Cedar retry limit was nine attempts.\\nDo not use this obsolete value for current operations; use the current Cedar policy.\\n\",\"matchedTerms\":3,\"queryTerms\":3},{\"path\":\"notes/cedar-old.md\",\"lineStart\":1,\"lineEnd\":2,\"text\":\"# Cedar policy — superseded\\n\\n\",\"matchedTerms\":2,\"queryTerms\":3},{\"path\":\"notes/cedar-current.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Retries\\nCurrent Cedar retry limit: three attempts, effective 2030-06-10.\\nThis decision replaces the previous nine-attempt policy.\\n\\n\",\"matchedTerms\":2,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-history",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 313,
+              "warmP95Ms": 0.23278399999981048,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/cedar-old.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Retries\\nSUPERSEDED: before 2030-06-10 the Cedar retry limit was nine attempts.\\nDo not use this obsolete value for current operations; use the current Cedar policy.\\n\",\"matchedTerms\":3,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-backoff",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.5,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 262,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 2 files (limit 5, offset 0).\n• notes/cedar-current.md — …previous nine-attempt policy.\n\n## Backoff\n[Cedar] [waits] two [seconds] between retry attempts.\n\n• notes/cedar-old.md — …before 2030-06-10 the [Cedar] retry limit was nine attempts.\nDo…"
+            },
+            {
+              "id": "eval-backoff",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.2,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 978,
+              "warmP95Ms": 0.2666030000000319,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":true,\"hits\":[{\"path\":\"notes/cedar-current.md\",\"lineStart\":7,\"lineEnd\":8,\"text\":\"## Backoff\\nCedar waits two seconds between retry attempts.\\n\",\"matchedTerms\":3,\"queryTerms\":3},{\"path\":\"notes/cedar-current.md\",\"lineStart\":1,\"lineEnd\":2,\"text\":\"# Cedar policy — current\\n\\n\",\"matchedTerms\":1,\"queryTerms\":3},{\"path\":\"notes/cedar-old.md\",\"lineStart\":1,\"lineEnd\":2,\"text\":\"# Cedar policy — superseded\\n\\n\",\"matchedTerms\":1,\"queryTerms\":3},{\"path\":\"notes/cedar-old.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Retries\\nSUPERSEDED: before 2030-06-10 the Cedar retry limit was nine attempts.\\nDo not use this obsolete value for current operations; use the current Cedar policy.\\n\",\"matchedTerms\":1,\"queryTerms\":3},{\"path\":\"notes/cedar-current.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Retries\\nCurrent Cedar retry limit: three attempts, effective 2030-06-10.\\nThis decision replaces the previous nine-attempt policy.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-backoff",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 208,
+              "warmP95Ms": 0.2626540000001114,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/cedar-current.md\",\"lineStart\":7,\"lineEnd\":8,\"text\":\"## Backoff\\nCedar waits two seconds between retry attempts.\\n\",\"matchedTerms\":3,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-backoff",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 208,
+              "warmP95Ms": 0.2529210000002422,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/cedar-current.md\",\"lineStart\":7,\"lineEnd\":8,\"text\":\"## Backoff\\nCedar waits two seconds between retry attempts.\\n\",\"matchedTerms\":3,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-preference",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 153,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 1 file (limit 5, offset 0).\n• notes/harbor.md — …[Rotation] is manual and requires a second operator's [confirmation].\n\n## Export\n[Harbor]…"
+            },
+            {
+              "id": "eval-preference",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.3333333333333333,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 613,
+              "warmP95Ms": 0.20781600000009348,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/harbor.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Rotation\\nHarbor rotates its signing key every ninety days in the synthetic test environment.\\nRotation is manual and requires a second operator's confirmation.\\n\\n\",\"matchedTerms\":3,\"queryTerms\":3},{\"path\":\"notes/harbor.md\",\"lineStart\":1,\"lineEnd\":2,\"text\":\"# Harbor maintenance\\n\\n\",\"matchedTerms\":1,\"queryTerms\":3},{\"path\":\"notes/harbor.md\",\"lineStart\":7,\"lineEnd\":8,\"text\":\"## Export\\nHarbor exports receipts as JSON Lines and does not export private key material.\\n\",\"matchedTerms\":1,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-preference",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 307,
+              "warmP95Ms": 0.17170199999964098,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/harbor.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Rotation\\nHarbor rotates its signing key every ninety days in the synthetic test environment.\\nRotation is manual and requires a second operator's confirmation.\\n\\n\",\"matchedTerms\":3,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-preference",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 307,
+              "warmP95Ms": 0.2023749999998472,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/harbor.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Rotation\\nHarbor rotates its signing key every ninety days in the synthetic test environment.\\nRotation is manual and requires a second operator's confirmation.\\n\\n\",\"matchedTerms\":3,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-export",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0.5,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.5,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 248,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 2 files (limit 5, offset 0).\n• notes/harbor.md — …s confirmation.\n\n## Export\n[Harbor] exports receipts as [JSON] [Lines] and does not…\n• notes/atlas.md — …supports plain UTF-8 Markdown and [JSON] [Lines] for its import fixture.\n"
+            },
+            {
+              "id": "eval-export",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.25,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 796,
+              "warmP95Ms": 0.2244959999998173,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/harbor.md\",\"lineStart\":7,\"lineEnd\":8,\"text\":\"## Export\\nHarbor exports receipts as JSON Lines and does not export private key material.\\n\",\"matchedTerms\":3,\"queryTerms\":3},{\"path\":\"notes/atlas.md\",\"lineStart\":9,\"lineEnd\":10,\"text\":\"## Formats\\nAtlas supports plain UTF-8 Markdown and JSON Lines for its import fixture.\\n\",\"matchedTerms\":2,\"queryTerms\":3},{\"path\":\"notes/harbor.md\",\"lineStart\":1,\"lineEnd\":2,\"text\":\"# Harbor maintenance\\n\\n\",\"matchedTerms\":1,\"queryTerms\":3},{\"path\":\"notes/harbor.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Rotation\\nHarbor rotates its signing key every ninety days in the synthetic test environment.\\nRotation is manual and requires a second operator's confirmation.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-export",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.5,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 415,
+              "warmP95Ms": 0.19890099999975064,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/harbor.md\",\"lineStart\":7,\"lineEnd\":8,\"text\":\"## Export\\nHarbor exports receipts as JSON Lines and does not export private key material.\\n\",\"matchedTerms\":3,\"queryTerms\":3},{\"path\":\"notes/atlas.md\",\"lineStart\":9,\"lineEnd\":10,\"text\":\"## Formats\\nAtlas supports plain UTF-8 Markdown and JSON Lines for its import fixture.\\n\",\"matchedTerms\":2,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-export",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 232,
+              "warmP95Ms": 0.18900699999994686,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/harbor.md\",\"lineStart\":7,\"lineEnd\":8,\"text\":\"## Export\\nHarbor exports receipts as JSON Lines and does not export private key material.\\n\",\"matchedTerms\":3,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-limits",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 155,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 1 file (limit 5, offset 0).\n• notes/atlas.md — …[attachments] per message, each at most eight [mebibytes].\n\n## Identifier\nThe [Atlas] repair…"
+            },
+            {
+              "id": "eval-limits",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.25,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 730,
+              "warmP95Ms": 0.22063600000001315,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/atlas.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Limits\\nAtlas accepts at most twelve attachments per message, each at most eight mebibytes.\\n\\n\",\"matchedTerms\":3,\"queryTerms\":3},{\"path\":\"notes/atlas.md\",\"lineStart\":1,\"lineEnd\":2,\"text\":\"# Atlas reference\\n\\n\",\"matchedTerms\":1,\"queryTerms\":3},{\"path\":\"notes/atlas.md\",\"lineStart\":6,\"lineEnd\":8,\"text\":\"## Identifier\\nThe Atlas repair command is atlas-repair-7f2. It rebuilds only disposable indexes.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":3},{\"path\":\"notes/atlas.md\",\"lineStart\":9,\"lineEnd\":10,\"text\":\"## Formats\\nAtlas supports plain UTF-8 Markdown and JSON Lines for its import fixture.\\n\",\"matchedTerms\":1,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-limits",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 237,
+              "warmP95Ms": 0.19724000000041997,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/atlas.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Limits\\nAtlas accepts at most twelve attachments per message, each at most eight mebibytes.\\n\\n\",\"matchedTerms\":3,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-limits",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 237,
+              "warmP95Ms": 0.20378400000026886,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/atlas.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Limits\\nAtlas accepts at most twelve attachments per message, each at most eight mebibytes.\\n\\n\",\"matchedTerms\":3,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-identifier",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 142,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 1 file (limit 5, offset 0).\n• notes/atlas.md — …Atlas repair command is [atlas-repair-7f2]. It rebuilds only disposable indexes…"
+            },
+            {
+              "id": "eval-identifier",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 240,
+              "warmP95Ms": 0.09762799999953131,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/atlas.md\",\"lineStart\":6,\"lineEnd\":8,\"text\":\"## Identifier\\nThe Atlas repair command is atlas-repair-7f2. It rebuilds only disposable indexes.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":1}]}"
+            },
+            {
+              "id": "eval-identifier",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 240,
+              "warmP95Ms": 0.08502899999984947,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/atlas.md\",\"lineStart\":6,\"lineEnd\":8,\"text\":\"## Identifier\\nThe Atlas repair command is atlas-repair-7f2. It rebuilds only disposable indexes.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":1}]}"
+            },
+            {
+              "id": "eval-identifier",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 240,
+              "warmP95Ms": 0.08087500000056025,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/atlas.md\",\"lineStart\":6,\"lineEnd\":8,\"text\":\"## Identifier\\nThe Atlas repair command is atlas-repair-7f2. It rebuilds only disposable indexes.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":1}]}"
+            },
+            {
+              "id": "eval-unicode",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 138,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 1 file (limit 5, offset 0).\n• notes/unicode-crlf.md — …[café] uses São Tomé labels and keeps the [café] ledger in [UTF]…"
+            },
+            {
+              "id": "eval-unicode",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.3333333333333333,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 586,
+              "warmP95Ms": 0.16892099999950005,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/unicode-crlf.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Café\\r\\nThe fictional café uses São Tomé labels and keeps the café ledger in UTF-8.\\r\\n\\r\\n\",\"matchedTerms\":2,\"queryTerms\":2},{\"path\":\"notes/unicode-crlf.md\",\"lineStart\":6,\"lineEnd\":7,\"text\":\"## Clock\\r\\nThe café clock is checked every Tuesday.\\r\\n\",\"matchedTerms\":1,\"queryTerms\":2},{\"path\":\"notes/atlas.md\",\"lineStart\":9,\"lineEnd\":10,\"text\":\"## Formats\\nAtlas supports plain UTF-8 Markdown and JSON Lines for its import fixture.\\n\",\"matchedTerms\":1,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "eval-unicode",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 245,
+              "warmP95Ms": 0.15158400000018446,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/unicode-crlf.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Café\\r\\nThe fictional café uses São Tomé labels and keeps the café ledger in UTF-8.\\r\\n\\r\\n\",\"matchedTerms\":2,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "eval-unicode",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 245,
+              "warmP95Ms": 0.1392470000000685,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/unicode-crlf.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Café\\r\\nThe fictional café uses São Tomé labels and keeps the café ledger in UTF-8.\\r\\n\\r\\n\",\"matchedTerms\":2,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "eval-long",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 166,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 1 file (limit 5, offset 0).\n• notes/long-notebook.md — …The [restore] validation checks the [manifest] digest before publishing any files.\n\n## Meridian…"
+            },
+            {
+              "id": "eval-long",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.2,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 1167,
+              "warmP95Ms": 0.23683400000027177,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/long-notebook.md\",\"lineStart\":98,\"lineEnd\":101,\"text\":\"## Orchard restore\\nOrchard restores require the sealed recovery token and an isolated destination.\\nThe restore validation checks the manifest digest before publishing any files.\\n\\n\",\"matchedTerms\":3,\"queryTerms\":3},{\"path\":\"notes/long-notebook.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Orchard backups\\nOrchard backups run at 03:15 UTC and are encrypted before upload.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":3},{\"path\":\"notes/duplicate-headings.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Rollback\\nThe parser rollback restores schema version 3 and replays the fixture journal.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":3},{\"path\":\"notes/identifiers.md\",\"lineStart\":3,\"lineEnd\":5,\"text\":\"## Recovery job\\nThe recovery job identifier is RCV-204-B. It restores the blue test queue.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":3},{\"path\":\"notes/identifiers.md\",\"lineStart\":6,\"lineEnd\":8,\"text\":\"## Other jobs\\nRCV-204-A validates backups but never restores a queue.\\nThe quota alert is QTA-77; its owner is the fictional reliability group.\\n\",\"matchedTerms\":1,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-long",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 333,
+              "warmP95Ms": 0.19976599999972677,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/long-notebook.md\",\"lineStart\":98,\"lineEnd\":101,\"text\":\"## Orchard restore\\nOrchard restores require the sealed recovery token and an isolated destination.\\nThe restore validation checks the manifest digest before publishing any files.\\n\\n\",\"matchedTerms\":3,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-long",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 333,
+              "warmP95Ms": 0.28236500000002707,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/long-notebook.md\",\"lineStart\":98,\"lineEnd\":101,\"text\":\"## Orchard restore\\nOrchard restores require the sealed recovery token and an isolated destination.\\nThe restore validation checks the manifest digest before publishing any files.\\n\\n\",\"matchedTerms\":3,\"queryTerms\":3}]}"
+            },
+            {
+              "id": "eval-retention",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": 0,
+                "labelledLineCoverage": 0.5,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.3333333333333333,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 407,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 3 files (limit 5, offset 0).\n• notes/decisions.md — # Decisions\n\n## Lantern storage\nLantern stores event [receipts] in SQLite. PostgreSQL was rejected…\n• notes/harbor.md — …s confirmation.\n\n## Export\nHarbor exports [receipts] as JSON Lines and does not…\n• notes/long-notebook.md — …publishing any files.\n\n## [Meridian] retention\n[Meridian] retains task [receipts] for forty-five…"
+            },
+            {
+              "id": "eval-retention",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 0.25,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 966,
+              "warmP95Ms": 0.1679260000000795,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/long-notebook.md\",\"lineStart\":102,\"lineEnd\":103,\"text\":\"## Meridian retention\\nMeridian retains task receipts for forty-five days; application logs remain seven days.\\n\",\"matchedTerms\":2,\"queryTerms\":2},{\"path\":\"notes/decisions.md\",\"lineStart\":7,\"lineEnd\":8,\"text\":\"## Lantern retention\\nLantern retains diagnostic receipts for fourteen days. Backups retain receipts for thirty days.\\n\",\"matchedTerms\":1,\"queryTerms\":2},{\"path\":\"notes/harbor.md\",\"lineStart\":7,\"lineEnd\":8,\"text\":\"## Export\\nHarbor exports receipts as JSON Lines and does not export private key material.\\n\",\"matchedTerms\":1,\"queryTerms\":2},{\"path\":\"notes/decisions.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Lantern storage\\nLantern stores event receipts in SQLite. PostgreSQL was rejected for its offline-only deployment.\\nThe storage decision was accepted on 2030-02-08 by the fictional design group.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "eval-retention",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 263,
+              "warmP95Ms": 0.17617900000004738,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/long-notebook.md\",\"lineStart\":102,\"lineEnd\":103,\"text\":\"## Meridian retention\\nMeridian retains task receipts for forty-five days; application logs remain seven days.\\n\",\"matchedTerms\":2,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "eval-retention",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": 1,
+                "labelledLineCoverage": 1,
+                "fileSectionUpperBound": 1,
+                "usefulHitFraction": 1,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": true,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 263,
+              "warmP95Ms": 0.1532440000000861,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/long-notebook.md\",\"lineStart\":102,\"lineEnd\":103,\"text\":\"## Meridian retention\\nMeridian retains task receipts for forty-five days; application logs remain seven days.\\n\",\"matchedTerms\":2,\"queryTerms\":2}]}"
+            },
+            {
+              "id": "eval-unanswerable-overlap",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": null,
+                "labelledLineCoverage": null,
+                "fileSectionUpperBound": null,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": true,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 150,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "Found 1 file (limit 5, offset 0).\n• notes/harbor.md — # [Harbor] maintenance\n\n## Rotation\n[Harbor] rotates its signing key every ninety days in…"
+            },
+            {
+              "id": "eval-unanswerable-overlap",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": null,
+                "labelledLineCoverage": null,
+                "fileSectionUpperBound": null,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": true,
+                "allLabelledSpansDelivered": false,
+                "abstained": false,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 613,
+              "warmP95Ms": 0.2631499999997686,
+              "stable": true,
+              "payload": "{\"status\":\"matches\",\"limited\":false,\"hits\":[{\"path\":\"notes/harbor.md\",\"lineStart\":1,\"lineEnd\":2,\"text\":\"# Harbor maintenance\\n\\n\",\"matchedTerms\":1,\"queryTerms\":4},{\"path\":\"notes/harbor.md\",\"lineStart\":7,\"lineEnd\":8,\"text\":\"## Export\\nHarbor exports receipts as JSON Lines and does not export private key material.\\n\",\"matchedTerms\":1,\"queryTerms\":4},{\"path\":\"notes/harbor.md\",\"lineStart\":3,\"lineEnd\":6,\"text\":\"## Rotation\\nHarbor rotates its signing key every ninety days in the synthetic test environment.\\nRotation is manual and requires a second operator's confirmation.\\n\\n\",\"matchedTerms\":1,\"queryTerms\":4}]}"
+            },
+            {
+              "id": "eval-unanswerable-overlap",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": null,
+                "labelledLineCoverage": null,
+                "fileSectionUpperBound": null,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": true,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 65,
+              "warmP95Ms": 0.21032599999944068,
+              "stable": true,
+              "payload": "{\"status\":\"insufficient_term_coverage\",\"limited\":false,\"hits\":[]}"
+            },
+            {
+              "id": "eval-unanswerable-overlap",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": null,
+                "labelledLineCoverage": null,
+                "fileSectionUpperBound": null,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": true,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 65,
+              "warmP95Ms": 0.2154999999993379,
+              "stable": true,
+              "payload": "{\"status\":\"insufficient_term_coverage\",\"limited\":false,\"hits\":[]}"
+            },
+            {
+              "id": "eval-unanswerable-empty",
+              "variant": "current-tool",
+              "score": {
+                "labelledSpanRecall": null,
+                "labelledLineCoverage": null,
+                "fileSectionUpperBound": null,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": true,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 34,
+              "warmP95Ms": null,
+              "stable": true,
+              "payload": "No matching workspace files found."
+            },
+            {
+              "id": "eval-unanswerable-empty",
+              "variant": "passage-or",
+              "score": {
+                "labelledSpanRecall": null,
+                "labelledLineCoverage": null,
+                "fileSectionUpperBound": null,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": true,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 55,
+              "warmP95Ms": 0.09095000000070286,
+              "stable": true,
+              "payload": "{\"status\":\"no_lexical_match\",\"limited\":false,\"hits\":[]}"
+            },
+            {
+              "id": "eval-unanswerable-empty",
+              "variant": "passage-two-thirds",
+              "score": {
+                "labelledSpanRecall": null,
+                "labelledLineCoverage": null,
+                "fileSectionUpperBound": null,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": true,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 55,
+              "warmP95Ms": 0.06908300000031886,
+              "stable": true,
+              "payload": "{\"status\":\"no_lexical_match\",\"limited\":false,\"hits\":[]}"
+            },
+            {
+              "id": "eval-unanswerable-empty",
+              "variant": "passage-all",
+              "score": {
+                "labelledSpanRecall": null,
+                "labelledLineCoverage": null,
+                "fileSectionUpperBound": null,
+                "usefulHitFraction": 0,
+                "unanswerableFalsePositive": false,
+                "allLabelledSpansDelivered": false,
+                "abstained": true,
+                "conflictingHits": 0,
+                "ambiguousHits": 0
+              },
+              "payloadBytes": 55,
+              "warmP95Ms": 0.0674059999992096,
+              "stable": true,
+              "payload": "{\"status\":\"no_lexical_match\",\"limited\":false,\"hits\":[]}"
+            }
+          ]
+        },
+        {
+          "split": "held-out",
+          "mode": "reopen",
+          "scale": 0,
+          "direction": "forward",
+          "versions": {
+            "bun": "1.4.2",
+            "sqlite": {
+              "version": "3.53.2"
+            }
+          },
+          "policy": {
+            "version": "passage-bm25-v1",
+            "tokenizer": "porter unicode61 remove_diacritics 2",
+            "windowBytes": 1536,
+            "overlapLines": 2,
+            "candidateLimit": 50,
+            "maxTerms": 8,
+            "maxQueryBytes": 512,
+            "limit": 5,
+            "responseBytes": 4096,
+            "headingWeight": 2,
+            "pathWeight": 0.5
+          },
+          "indexMs": 0.0003670000000113305,
+          "rssBytes": 59801600,
+          "passageDatabaseBytes": 65536,
+          "summary": {
+            "current-tool": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0.1,
+              "labelledLineCoverage": 0.2333333333333333,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.18333333333333332,
+              "queriesWithAllLabelledSpans": 1,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 199.83333333333334,
+              "maxPayloadBytes": 407
+            },
+            "passage-or": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.3216666666666667,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 730.1666666666666,
+              "maxPayloadBytes": 1167
+            },
+            "passage-two-thirds": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.8166666666666667,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 314,
+              "maxPayloadBytes": 716
+            },
+            "passage-all": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.95,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 254.25,
+              "maxPayloadBytes": 553
+            }
+          },
+          "payloadSha256": "7d27597b28c8336c66d0a5790b90c89aa41922901dbfa08c7e9cb81e1a894887"
+        },
+        {
+          "split": "held-out",
+          "mode": "build",
+          "scale": 0,
+          "direction": "reverse",
+          "versions": {
+            "bun": "1.4.2",
+            "sqlite": {
+              "version": "3.53.2"
+            }
+          },
+          "policy": {
+            "version": "passage-bm25-v1",
+            "tokenizer": "porter unicode61 remove_diacritics 2",
+            "windowBytes": 1536,
+            "overlapLines": 2,
+            "candidateLimit": 50,
+            "maxTerms": 8,
+            "maxQueryBytes": 512,
+            "limit": 5,
+            "responseBytes": 4096,
+            "headingWeight": 2,
+            "pathWeight": 0.5
+          },
+          "indexMs": 510.0561230000003,
+          "rssBytes": 64303104,
+          "passageDatabaseBytes": 65536,
+          "summary": {
+            "current-tool": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0.1,
+              "labelledLineCoverage": 0.2333333333333333,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.18333333333333332,
+              "queriesWithAllLabelledSpans": 1,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 199.83333333333334,
+              "maxPayloadBytes": 407
+            },
+            "passage-or": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.3216666666666667,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 730.1666666666666,
+              "maxPayloadBytes": 1167
+            },
+            "passage-two-thirds": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.8166666666666667,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 314,
+              "maxPayloadBytes": 716
+            },
+            "passage-all": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.95,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 254.25,
+              "maxPayloadBytes": 553
+            }
+          },
+          "payloadSha256": "7d27597b28c8336c66d0a5790b90c89aa41922901dbfa08c7e9cb81e1a894887"
+        },
+        {
+          "split": "held-out",
+          "mode": "reopen",
+          "scale": 0,
+          "direction": "reverse",
+          "versions": {
+            "bun": "1.4.2",
+            "sqlite": {
+              "version": "3.53.2"
+            }
+          },
+          "policy": {
+            "version": "passage-bm25-v1",
+            "tokenizer": "porter unicode61 remove_diacritics 2",
+            "windowBytes": 1536,
+            "overlapLines": 2,
+            "candidateLimit": 50,
+            "maxTerms": 8,
+            "maxQueryBytes": 512,
+            "limit": 5,
+            "responseBytes": 4096,
+            "headingWeight": 2,
+            "pathWeight": 0.5
+          },
+          "indexMs": 0.0003930000000025302,
+          "rssBytes": 59453440,
+          "passageDatabaseBytes": 65536,
+          "summary": {
+            "current-tool": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0.1,
+              "labelledLineCoverage": 0.2333333333333333,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.18333333333333332,
+              "queriesWithAllLabelledSpans": 1,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 199.83333333333334,
+              "maxPayloadBytes": 407
+            },
+            "passage-or": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.3216666666666667,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 730.1666666666666,
+              "maxPayloadBytes": 1167
+            },
+            "passage-two-thirds": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.8166666666666667,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 314,
+              "maxPayloadBytes": 716
+            },
+            "passage-all": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.95,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 254.25,
+              "maxPayloadBytes": 553
+            }
+          },
+          "payloadSha256": "7d27597b28c8336c66d0a5790b90c89aa41922901dbfa08c7e9cb81e1a894887"
+        },
+        {
+          "split": "held-out",
+          "mode": "build",
+          "scale": 500,
+          "direction": "forward",
+          "versions": {
+            "bun": "1.4.2",
+            "sqlite": {
+              "version": "3.53.2"
+            }
+          },
+          "policy": {
+            "version": "passage-bm25-v1",
+            "tokenizer": "porter unicode61 remove_diacritics 2",
+            "windowBytes": 1536,
+            "overlapLines": 2,
+            "candidateLimit": 50,
+            "maxTerms": 8,
+            "maxQueryBytes": 512,
+            "limit": 5,
+            "responseBytes": 4096,
+            "headingWeight": 2,
+            "pathWeight": 0.5
+          },
+          "indexMs": 101.12983299999905,
+          "rssBytes": 93618176,
+          "passageDatabaseBytes": 188416,
+          "summary": {
+            "current-tool": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0.1,
+              "labelledLineCoverage": 0.2333333333333333,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.18333333333333332,
+              "queriesWithAllLabelledSpans": 1,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 199.83333333333334,
+              "maxPayloadBytes": 407
+            },
+            "passage-or": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.3216666666666667,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 2,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 725.0833333333334,
+              "maxPayloadBytes": 1167
+            },
+            "passage-two-thirds": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.8166666666666667,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 314,
+              "maxPayloadBytes": 716
+            },
+            "passage-all": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.95,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 254.25,
+              "maxPayloadBytes": 553
+            }
+          },
+          "payloadSha256": "1ab0d8ab6f2b70c8f6b3d6e8bfdd972deb3f717e7a135b10e7aaf32a720eb324"
+        },
+        {
+          "split": "held-out",
+          "mode": "reopen",
+          "scale": 500,
+          "direction": "forward",
+          "versions": {
+            "bun": "1.4.2",
+            "sqlite": {
+              "version": "3.53.2"
+            }
+          },
+          "policy": {
+            "version": "passage-bm25-v1",
+            "tokenizer": "porter unicode61 remove_diacritics 2",
+            "windowBytes": 1536,
+            "overlapLines": 2,
+            "candidateLimit": 50,
+            "maxTerms": 8,
+            "maxQueryBytes": 512,
+            "limit": 5,
+            "responseBytes": 4096,
+            "headingWeight": 2,
+            "pathWeight": 0.5
+          },
+          "indexMs": 0.0006690000000020291,
+          "rssBytes": 67993600,
+          "passageDatabaseBytes": 188416,
+          "summary": {
+            "current-tool": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0.1,
+              "labelledLineCoverage": 0.2333333333333333,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.18333333333333332,
+              "queriesWithAllLabelledSpans": 1,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 199.83333333333334,
+              "maxPayloadBytes": 407
+            },
+            "passage-or": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.3216666666666667,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 2,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 725.0833333333334,
+              "maxPayloadBytes": 1167
+            },
+            "passage-two-thirds": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.8166666666666667,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 314,
+              "maxPayloadBytes": 716
+            },
+            "passage-all": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.95,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 254.25,
+              "maxPayloadBytes": 553
+            }
+          },
+          "payloadSha256": "1ab0d8ab6f2b70c8f6b3d6e8bfdd972deb3f717e7a135b10e7aaf32a720eb324"
+        },
+        {
+          "split": "held-out",
+          "mode": "build",
+          "scale": 500,
+          "direction": "reverse",
+          "versions": {
+            "bun": "1.4.2",
+            "sqlite": {
+              "version": "3.53.2"
+            }
+          },
+          "policy": {
+            "version": "passage-bm25-v1",
+            "tokenizer": "porter unicode61 remove_diacritics 2",
+            "windowBytes": 1536,
+            "overlapLines": 2,
+            "candidateLimit": 50,
+            "maxTerms": 8,
+            "maxQueryBytes": 512,
+            "limit": 5,
+            "responseBytes": 4096,
+            "headingWeight": 2,
+            "pathWeight": 0.5
+          },
+          "indexMs": 87.87048499999946,
+          "rssBytes": 93335552,
+          "passageDatabaseBytes": 192512,
+          "summary": {
+            "current-tool": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0.1,
+              "labelledLineCoverage": 0.2333333333333333,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.18333333333333332,
+              "queriesWithAllLabelledSpans": 1,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 199.83333333333334,
+              "maxPayloadBytes": 407
+            },
+            "passage-or": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.3216666666666667,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 2,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 725.0833333333334,
+              "maxPayloadBytes": 1167
+            },
+            "passage-two-thirds": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.8166666666666667,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 314,
+              "maxPayloadBytes": 716
+            },
+            "passage-all": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.95,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 254.25,
+              "maxPayloadBytes": 553
+            }
+          },
+          "payloadSha256": "1ab0d8ab6f2b70c8f6b3d6e8bfdd972deb3f717e7a135b10e7aaf32a720eb324"
+        },
+        {
+          "split": "held-out",
+          "mode": "reopen",
+          "scale": 500,
+          "direction": "reverse",
+          "versions": {
+            "bun": "1.4.2",
+            "sqlite": {
+              "version": "3.53.2"
+            }
+          },
+          "policy": {
+            "version": "passage-bm25-v1",
+            "tokenizer": "porter unicode61 remove_diacritics 2",
+            "windowBytes": 1536,
+            "overlapLines": 2,
+            "candidateLimit": 50,
+            "maxTerms": 8,
+            "maxQueryBytes": 512,
+            "limit": 5,
+            "responseBytes": 4096,
+            "headingWeight": 2,
+            "pathWeight": 0.5
+          },
+          "indexMs": 0.0004130000000088785,
+          "rssBytes": 68300800,
+          "passageDatabaseBytes": 192512,
+          "summary": {
+            "current-tool": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 0.1,
+              "labelledLineCoverage": 0.2333333333333333,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.18333333333333332,
+              "queriesWithAllLabelledSpans": 1,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 199.83333333333334,
+              "maxPayloadBytes": 407
+            },
+            "passage-or": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.3216666666666667,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 1,
+              "unanswerableFalsePositiveRate": 0.5,
+              "conflictingHits": 2,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 725.0833333333334,
+              "maxPayloadBytes": 1167
+            },
+            "passage-two-thirds": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.8166666666666667,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 314,
+              "maxPayloadBytes": 716
+            },
+            "passage-all": {
+              "queries": 12,
+              "answerable": 10,
+              "unanswerable": 2,
+              "labelledSpanRecall": 1,
+              "labelledLineCoverage": 1,
+              "fileSectionUpperBound": 1,
+              "usefulHitFraction": 0.95,
+              "queriesWithAllLabelledSpans": 10,
+              "answerableAbstentions": 0,
+              "falsePositives": 0,
+              "unanswerableFalsePositiveRate": 0,
+              "conflictingHits": 1,
+              "ambiguousHighlights": 0,
+              "meanPayloadBytes": 254.25,
+              "maxPayloadBytes": 553
+            }
+          },
+          "payloadSha256": "1ab0d8ab6f2b70c8f6b3d6e8bfdd972deb3f717e7a135b10e7aaf32a720eb324"
+        }
+      ]
+    }
+  ]
+}

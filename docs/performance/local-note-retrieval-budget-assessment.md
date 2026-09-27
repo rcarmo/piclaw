@@ -8,6 +8,11 @@ This assessment reconciles the merged #1367 benchmark with subsequent fixes.
 Historical baseline reports remain unchanged. The corpus, relevance labels,
 query inputs, scoring and numerical thresholds are unchanged.
 
+The file-based scores below do not establish that an answer's evidence appears
+in the text delivered to an agent. The [agent-visible passage experiment](local-note-passage-experiment.md)
+compares exact labelled-span coverage of current snippets and bounded BM25
+passages. It keeps these historical budgets unchanged and unapproved.
+
 ## Assessment semantics
 
 `runtime/scripts/note-retrieval-budget.ts` evaluates the existing version-1 budget
