@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "baseCommit": "136eea30a2c170df29056834a0a73c3d042fc63e",
+  "selectedOnDevelopment": "passage-two-thirds",
+  "reason": "Both scales preserved all development labelled spans and rejected 2/2 negative queries; all-terms matching lost one answerable query, while OR retained a false positive. No held-out tuning.",
+  "qualification": "Small, historically published synthetic set, not statistically unseen data. The evaluator loads all labels to validate their frozen hashes, but candidates receive only query strings and indexed sources. Prior conversations have mentioned some held-out topics. No deployment or approval of the old file-recall budgets.",
+  "versions": { "bun": "1.4.2", "policy": "passage-bm25-v1" },
+  "fingerprint": {
+    "experimentSha256": "3ad91abeea90a0d8999167b72ca8898cf5d6b3bb439562278bb1aea4f8fc6fc5",
+    "productionSourceSha256": "ddf48bbf681e87e8bc160fa2b8c05892d5f1d9d976a95514d43f7021019955e2",
+    "corpusSha256": "db85bb05160e8aa3a577b03c9e2d1dde90ec208e079ef96a4b830627ebdb0f9d",
+    "dependenciesSha256": "35b4f271330c6301df15415f53c34b05c2db84b946c5bd40bfa2105e47b5e170"
+  }
+}
