@@ -41,7 +41,7 @@ Start with [getting started](getting-started.md) for installation, first chat, a
 - [Pipelined compaction](pipelined-compaction.md)
 - [Local note retrieval contract](design/local-note-retrieval-contract.md) — accepted access, freshness and citation rules; [lifecycle and implementation test map](design/local-note-retrieval-lifecycle-tests.md); no new tools enabled
 - [Local note retrieval baseline](performance/local-note-retrieval-baseline.md) — synthetic file-search evaluation, measured limits and proposed release budgets; [current budget assessment](performance/local-note-retrieval-budget-assessment.md) separates passing, failing and unsupported targets
-- [Agent-visible passage experiment](performance/local-note-passage-experiment.md) — deterministic BM25/coverage comparison scored on returned text; offline evidence only
+- [Agent-visible passage experiment](performance/local-note-passage-experiment.md) — deterministic BM25/coverage comparison scored on returned text; [harder anchor/context experiment](performance/local-note-anchor-experiment.md) measures recall/false-positive trade-offs; offline evidence only
 - [Add-on runtime API](addon-runtime-api.md)
 - [Web pane extensions](web-pane-extensions.md) and [extension UI contract](extension-ui-contract.md)
 - [Vendored widget libraries](vendored-widget-libraries.md)

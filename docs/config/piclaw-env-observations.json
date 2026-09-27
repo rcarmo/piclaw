@@ -1200,6 +1200,7 @@
           "semanticReaders": 4,
           "files": [
             "runtime/scripts/benchmark-cold-session.ts",
+            "runtime/scripts/note-anchor-experiment.ts",
             "runtime/scripts/note-passage-experiment.ts",
             "runtime/scripts/note-retrieval-baseline.ts",
             "runtime/scripts/test-filesystem-isolation.ts",
@@ -1267,6 +1268,7 @@
           "files": [
             "runtime/scripts/benchmark-cold-session.ts",
             "runtime/scripts/controlled-test-runner.ts",
+            "runtime/scripts/note-anchor-experiment.ts",
             "runtime/scripts/note-passage-experiment.ts",
             "runtime/scripts/note-retrieval-baseline.ts",
             "runtime/scripts/test-filesystem-isolation.ts",
@@ -1373,6 +1375,7 @@
           "semanticReaders": 1,
           "files": [
             "runtime/scripts/benchmark-cold-session.ts",
+            "runtime/scripts/note-anchor-experiment.ts",
             "runtime/scripts/note-passage-experiment.ts",
             "runtime/scripts/note-retrieval-baseline.ts"
           ],
@@ -5186,6 +5189,7 @@
           "semanticReaders": 5,
           "files": [
             "runtime/scripts/benchmark-cold-session.ts",
+            "runtime/scripts/note-anchor-experiment.ts",
             "runtime/scripts/note-passage-experiment.ts",
             "runtime/scripts/note-retrieval-baseline.ts",
             "runtime/scripts/test-filesystem-isolation.ts",
@@ -7722,6 +7726,7 @@
           "semanticReaders": 3,
           "files": [
             "runtime/scripts/benchmark-cold-session.ts",
+            "runtime/scripts/note-anchor-experiment.ts",
             "runtime/scripts/note-passage-experiment.ts",
             "runtime/scripts/note-retrieval-baseline.ts",
             "runtime/scripts/test-filesystem-isolation.ts",
