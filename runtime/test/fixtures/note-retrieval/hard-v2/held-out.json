@@ -1,0 +1,157 @@
+{
+  "version": 1,
+  "provenance": "Independently authored synthetic hard-v2 retrieval fixture; frozen before evaluation and without consulting candidate outputs.",
+  "queries": [
+    {
+      "id": "held-exact-entity-id",
+      "split": "held-out",
+      "category": "exact-entity-identifier",
+      "question": "What catalogue identifier belongs to the exact quoted specimen “Vesper Ice Core”?",
+      "query": "\"Vesper Ice Core\" catalogue identifier",
+      "relevant": [
+        {
+          "path": "notes/held-glacier-specimens.md",
+          "lineStart": 4,
+          "lineEnd": 4,
+          "quote": "The quoted specimen “Vesper Ice Core” carries catalogue identifier VIC-4412."
+        }
+      ]
+    },
+    {
+      "id": "held-current-conflict",
+      "split": "held-out",
+      "category": "temporal-conflict-current",
+      "question": "What is the current storm-park azimuth for the Morrow Array?",
+      "query": "Morrow Array current storm park azimuth shutdown setting",
+      "relevant": [
+        {
+          "path": "notes/held-observatory-current.md",
+          "lineStart": 3,
+          "lineEnd": 3,
+          "quote": "The current storm-park azimuth for the Morrow Array is 118 degrees."
+        }
+      ],
+      "conflictingPaths": [
+        "notes/held-observatory-archive.md"
+      ]
+    },
+    {
+      "id": "held-historical-conflict",
+      "split": "held-out",
+      "category": "temporal-conflict-historical",
+      "question": "What storm-park azimuth did the Morrow Array use from 2018 through 2021?",
+      "query": "Morrow Array historical 2018 2021 storm park azimuth",
+      "relevant": [
+        {
+          "path": "notes/held-observatory-archive.md",
+          "lineStart": 3,
+          "lineEnd": 3,
+          "quote": "From 2018 through 2021, the Morrow Array's storm-park azimuth was 104 degrees."
+        }
+      ],
+      "conflictingPaths": [
+        "notes/held-observatory-current.md"
+      ]
+    },
+    {
+      "id": "held-semantic-paraphrase",
+      "split": "held-out",
+      "category": "synonym-paraphrase",
+      "question": "At Reedbed Delta, when should sound recording stop after frog calls cease?",
+      "query": "Reedbed Delta stop sound recording after no frog calls",
+      "relevant": [
+        {
+          "path": "notes/held-wetland-phrasing.md",
+          "lineStart": 1,
+          "lineEnd": 3,
+          "quote": "# Reedbed Delta listening protocol\n\nEnd acoustic logging after two successive survey checks in which the frogs fall silent."
+        }
+      ]
+    },
+    {
+      "id": "held-paragraph-boundary",
+      "split": "held-out",
+      "category": "cross-paragraph-anaphora",
+      "question": "Where is the humidity capsule for sensor Obsidian-7 located?",
+      "query": "sensor Obsidian-7 humidity capsule location",
+      "relevant": [
+        {
+          "path": "notes/held-cave-boundary.md",
+          "lineStart": 3,
+          "lineEnd": 5,
+          "quote": "The placement note below concerns sensor Obsidian-7 alone.\n\nIts humidity capsule rests on the upper shelf beyond marker cairn 16."
+        }
+      ]
+    },
+    {
+      "id": "held-repeated-heading",
+      "split": "held-out",
+      "category": "repeated-heading-scope",
+      "question": "How much filtered seawater does Station Limpet use for its rinse cycle?",
+      "query": "Station Limpet Rinse cycle filtered seawater quantity",
+      "relevant": [
+        {
+          "path": "notes/held-tidepool-repeated.md",
+          "lineStart": 3,
+          "lineEnd": 5,
+          "quote": "## Station Limpet\n### Rinse cycle\nUse three cups of filtered seawater."
+        }
+      ]
+    },
+    {
+      "id": "held-multipart-flight",
+      "split": "held-out",
+      "category": "multi-part-cross-paragraph",
+      "question": "For flight AP-31, which corridor crosses the ridge and at what altitude is the dust sampler released?",
+      "query": "AP-31 ridge corridor and dust sampler release altitude",
+      "relevant": [
+        {
+          "path": "notes/held-flight-plan.md",
+          "lineStart": 3,
+          "lineEnd": 6,
+          "quote": "## Flight AP-31\nAP-31 crosses the basalt ridge using corridor Echo.\n\nThe same flight releases its dust sampler at 1,600 meters."
+        }
+      ]
+    },
+    {
+      "id": "held-noanswer-missing-fact",
+      "split": "held-out",
+      "category": "no-answer-missing-requested-fact",
+      "question": "What pH value was measured at Sable Moraine?",
+      "query": "Sable Moraine pH acidity measurement lichen surface temperature",
+      "relevant": []
+    },
+    {
+      "id": "held-noanswer-wrong-entity",
+      "split": "held-out",
+      "category": "no-answer-wrong-entity-same-attributes",
+      "question": "What is Buoy Lambda's flash interval and radio channel?",
+      "query": "Buoy Lambda flash interval radio channel",
+      "relevant": []
+    },
+    {
+      "id": "held-noanswer-negated-proposal",
+      "split": "held-out",
+      "category": "no-answer-keywords-negated",
+      "question": "Which mesh and bank were selected for Quartz Fen's winter deployment?",
+      "query": "Quartz Fen winter deployment selected silver mesh north bank",
+      "relevant": []
+    },
+    {
+      "id": "held-noanswer-nearmatch-id",
+      "split": "held-out",
+      "category": "no-answer-near-match-identifier",
+      "question": "On what date was the “Vesper-Ice Core” photograph VIC-4412B collected?",
+      "query": "Vesper-Ice Core VIC-4412B photograph collection date",
+      "relevant": []
+    },
+    {
+      "id": "held-noanswer-known-topic",
+      "split": "held-out",
+      "category": "no-answer-known-topic-unspecified-attribute",
+      "question": "What is the measured mass of the “Comet Lichen” specimen CL-772?",
+      "query": "Comet Lichen specimen CL-772 measured mass scale card",
+      "relevant": []
+    }
+  ]
+}

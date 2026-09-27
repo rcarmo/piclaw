@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "provenance": "Independently authored synthetic hard-v2 retrieval fixture; frozen before evaluation and without consulting candidate outputs.",
+  "hashAlgorithm": "SHA-256",
+  "counts": {
+    "notes": 16,
+    "development": {
+      "queries": 12,
+      "answerable": 7,
+      "noAnswer": 5
+    },
+    "heldOut": {
+      "queries": 12,
+      "answerable": 7,
+      "noAnswer": 5
+    }
+  },
+  "files": {
+    "development.json": "44fa954b4babc2f36bfd71c37f010c954376e3952e8b3c9fbc46a85d6d12dfd6",
+    "held-out.json": "0ce19379b0c3437ec862d1f8b12a9bb75e65d6440e83e7d57cc31285ddd2172f",
+    "notes": {
+      "notes/dev-harbor-archive.md": "feda7d332cd4f02cb4c08d99abcb7d0da009d2bc6ba989640ad6f3fff323c95b",
+      "notes/dev-harbor-current.md": "aa92468baed99148cae08c244670c3f4f25e1bac6af4bc92962429a4af9b4e48",
+      "notes/dev-lantern-registry.md": "68c6581d6b0372b71a7e34a77b56a59d8f7c14f1b0317f58799e47bdf08ef44a",
+      "notes/dev-library-repeated.md": "2d78138528d17a1ed05797fc63cf8f3875df78a13f16a64163060c8ed08f8051",
+      "notes/dev-negative-ledger.md": "b371fd0e13e2450e8cfae71575cfc85ae245b2394a25e9acc6c5a176ae2aa6ee",
+      "notes/dev-orchard-phrasing.md": "bd0654a4f107bc4ec04360dffe781abd12b42a4ad25f775c35b951067968433d",
+      "notes/dev-route-cards.md": "97983678c861612922b4a579bb24c238cef8ba8b8d0b1a28f2ba3e38e7177f7e",
+      "notes/dev-workshop-boundary.md": "0197a5fe007002e7a6e657d76331ac2a728804f47fb79156203d982d0430b747",
+      "notes/held-cave-boundary.md": "7e8518ac0f555664f92e11ff71bdff6884579ff397a25acf58390de547993eb6",
+      "notes/held-flight-plan.md": "524b808fbe759e34838b8bbf609e61abdc1778d70e919253a0f8cfb4892fc8a1",
+      "notes/held-glacier-specimens.md": "8d033d7e47cc9a93990899b6c4e39ca5165b9cd21296b0e408bcd5a5127c0906",
+      "notes/held-negative-fieldlog.md": "2d62826a642b99f6db4248abe555880d3bf4e6b2f0989b4d698ef31b9fe81939",
+      "notes/held-observatory-archive.md": "6c90854be21770c2d3bddcc8bde5405cd6fd552ecbadaedc30f6b189a3439fbc",
+      "notes/held-observatory-current.md": "3aa88e88dbb1e90aca13794c12abdfe1b42dd5b304b3ae2114c8b2706c97ddfc",
+      "notes/held-tidepool-repeated.md": "1fd94b2fef8e1a963b4c86570481bb1244ccbe2eda45c2fbac9e452084114bcd",
+      "notes/held-wetland-phrasing.md": "e3211f18dd0d6a8304a8771560fdf80b3ee26909805c16636668eed39fd681ee"
+    }
+  }
+}

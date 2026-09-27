@@ -1,0 +1,157 @@
+{
+  "version": 1,
+  "provenance": "Independently authored synthetic hard-v2 retrieval fixture; frozen before evaluation and without consulting candidate outputs.",
+  "queries": [
+    {
+      "id": "dev-exact-entity-id",
+      "split": "development",
+      "category": "exact-entity-identifier",
+      "question": "What registry identifier belongs to the exact quoted unit “Lantern Finch”?",
+      "query": "\"Lantern Finch\" registry identifier",
+      "relevant": [
+        {
+          "path": "notes/dev-lantern-registry.md",
+          "lineStart": 4,
+          "lineEnd": 4,
+          "quote": "The quoted unit “Lantern Finch” carries registry identifier LF-2087."
+        }
+      ]
+    },
+    {
+      "id": "dev-current-conflict",
+      "split": "development",
+      "category": "temporal-conflict-current",
+      "question": "What is the current evacuation assembly point for Harbor Room Alder?",
+      "query": "Harbor Room Alder current evacuation assembly point present safety card",
+      "relevant": [
+        {
+          "path": "notes/dev-harbor-current.md",
+          "lineStart": 4,
+          "lineEnd": 4,
+          "quote": "For Harbor Room Alder, the current evacuation assembly point is North Quay Gate 3."
+        }
+      ],
+      "conflictingPaths": [
+        "notes/dev-harbor-archive.md"
+      ]
+    },
+    {
+      "id": "dev-historical-conflict",
+      "split": "development",
+      "category": "temporal-conflict-historical",
+      "question": "Which evacuation assembly point did Harbor Room Alder use in 2019?",
+      "query": "Harbor Room Alder 2019 historical evacuation assembly point",
+      "relevant": [
+        {
+          "path": "notes/dev-harbor-archive.md",
+          "lineStart": 4,
+          "lineEnd": 4,
+          "quote": "In 2019, Harbor Room Alder used East Jetty Gate 3 as its evacuation assembly point."
+        }
+      ],
+      "conflictingPaths": [
+        "notes/dev-harbor-current.md"
+      ]
+    },
+    {
+      "id": "dev-semantic-paraphrase",
+      "split": "development",
+      "category": "synonym-paraphrase",
+      "question": "At Orchard Nine, when should the greenhouse covers be secured?",
+      "query": "Orchard Nine secure greenhouse covers timing",
+      "relevant": [
+        {
+          "path": "notes/dev-orchard-phrasing.md",
+          "lineStart": 1,
+          "lineEnd": 3,
+          "quote": "# Orchard Nine closing routine\n\nThe tender should make the cold-frame lids fast when the evening light fades."
+        }
+      ]
+    },
+    {
+      "id": "dev-paragraph-boundary",
+      "split": "development",
+      "category": "cross-paragraph-anaphora",
+      "question": "Where is the torque key for press Kestrel stored?",
+      "query": "press Kestrel torque key storage cabinet",
+      "relevant": [
+        {
+          "path": "notes/dev-workshop-boundary.md",
+          "lineStart": 3,
+          "lineEnd": 5,
+          "quote": "The maintenance card below applies only to press Kestrel.\n\nIts torque key is kept in cabinet Rowan-4, behind the gauge tray."
+        }
+      ]
+    },
+    {
+      "id": "dev-repeated-heading",
+      "split": "development",
+      "category": "repeated-heading-scope",
+      "question": "Which return slot handles after-hours items at Birch Annex?",
+      "query": "Birch Annex Returns after-hours item slot",
+      "relevant": [
+        {
+          "path": "notes/dev-library-repeated.md",
+          "lineStart": 3,
+          "lineEnd": 5,
+          "quote": "## Birch Annex\n### Returns\nAfter-hours items go through slot C."
+        }
+      ]
+    },
+    {
+      "id": "dev-multipart-route",
+      "split": "development",
+      "category": "multi-part-cross-paragraph",
+      "question": "For packet MR-44, which arcade is used and how long is the wait at the copper line?",
+      "query": "MR-44 route arcade and copper line waiting duration",
+      "relevant": [
+        {
+          "path": "notes/dev-route-cards.md",
+          "lineStart": 3,
+          "lineEnd": 6,
+          "quote": "## Packet MR-44\nCarry MR-44 through the west arcade before entering the dye room.\n\nFor the same packet, wait seven minutes at the copper line before proceeding."
+        }
+      ]
+    },
+    {
+      "id": "dev-noanswer-missing-fact",
+      "split": "development",
+      "category": "no-answer-missing-requested-fact",
+      "question": "What battery chemistry powers the Maple Clock?",
+      "query": "Maple Clock inspection battery chemistry power source spring case",
+      "relevant": []
+    },
+    {
+      "id": "dev-noanswer-wrong-entity",
+      "split": "development",
+      "category": "no-answer-wrong-entity-same-attributes",
+      "question": "What time does Wren Pavilion open, and which visitor locker does it assign?",
+      "query": "Wren Pavilion opening time visitor locker",
+      "relevant": []
+    },
+    {
+      "id": "dev-noanswer-negated-proposal",
+      "split": "development",
+      "category": "no-answer-keywords-negated",
+      "question": "Which route and weekday were adopted for Juniper Hall's blue cart?",
+      "query": "Juniper Hall blue cart adopted route weekday route 6 Tuesday service",
+      "relevant": []
+    },
+    {
+      "id": "dev-noanswer-nearmatch-id",
+      "split": "development",
+      "category": "no-answer-near-match-identifier",
+      "question": "Who is the custodian of the “Lantern Finches” mural indexed LF-2087A?",
+      "query": "Lantern Finches LF-2087A mural custodian",
+      "relevant": []
+    },
+    {
+      "id": "dev-noanswer-known-topic",
+      "split": "development",
+      "category": "no-answer-known-topic-unspecified-attribute",
+      "question": "What is the maximum passenger capacity of the Solace Ferry?",
+      "query": "Solace Ferry maximum passenger capacity lower landing green wheelhouse",
+      "relevant": []
+    }
+  ]
+}
