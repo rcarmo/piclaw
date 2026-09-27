@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "baseCommit": "8a3053b7fb73f07754109cfa5f6fa8acbf687ba2",
+  "corpusFreezeCommit": "afa12469a",
+  "selectedForEvaluation": "anchors-v2",
+  "decision": "Evaluate all fixed ablations; do not promote v2 as universally better. Development improves hard evidence recall but still 4/5 false positives; strict rarity loses one original paraphrase, relaxed rarity admits 5/5 hard negatives. No tuning on held-out results.",
+  "qualification": "Independent fixture authoring before candidate runs; small synthetic test, no model answer probability or production safety claim. V1 frozen inputs/code remain unchanged.",
+  "fingerprint": {
+    "experimentSha256": "3ad91abeea90a0d8999167b72ca8898cf5d6b3bb439562278bb1aea4f8fc6fc5",
+    "productionSourceSha256": "ddf48bbf681e87e8bc160fa2b8c05892d5f1d9d976a95514d43f7021019955e2",
+    "corpusSha256": "db85bb05160e8aa3a577b03c9e2d1dde90ec208e079ef96a4b830627ebdb0f9d",
+    "dependenciesSha256": "35b4f271330c6301df15415f53c34b05c2db84b946c5bd40bfa2105e47b5e170",
+    "anchorCodeSha256": "85dec4eadd018e2d46e59e98ea4c317a0282444ebacbc3d42d1c3e7e7cb73046",
+    "hardCorpusSha256": "beee2bbb34455211dd89f82bb41010db450ab33319f520dfa968ee5e1243d6a9"
+  }
+}
