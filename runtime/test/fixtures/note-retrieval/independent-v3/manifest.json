@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "hashAlgorithm": "SHA-256",
+  "provenance": "Independent fictional 16-note, 22-query corpus and predeclared decision policy; frozen before any memory_query invocation",
+  "files": {
+    "evaluation.json": "452afc808bff37d2ba2389041a0ce73eba2fb34e74e91038fdc072dc5f166595",
+    "policy.json": "f7d3779ea67feed6de4118ce4a059de912baac9a9cf322c89bd604f802d7a56d",
+    "notes": {
+      "notes/archive-azimuth.md": "fb3c39a6c880fe72e6efbbd49cdffe28f5d556ef33c4bcc6bb2154f622282dff",
+      "notes/civic-map.md": "7b9a1c70130071a462f8b419f21d706906b42fb1766cd47112f85938444d8f43",
+      "notes/courier-plan.md": "cd7524e5369f538732cd3c458b009319afc7c05f10a277cea32987356daf1fcd",
+      "notes/current-azimuth.md": "ebd6d60b4eed86b60e396de52d60ad465adfe36e5c9efd49b16b4c99231b0dd6",
+      "notes/field-negatives.md": "6a88e3fbb02f378fd609817b8bd88eb661ffacdb84e5708f2bb9536cd5100e2d",
+      "notes/flight-check.md": "f62141ce2d2118412ca2f93ed0b3e8f9ea66032151a5af4aa48dfc0f9bc779d1",
+      "notes/garden-register.md": "3581ccc2766b4b207f6b4118b5d19128ee34a641a24aeb3594a1fbcb6f3c286b",
+      "notes/glacier-catalogue.md": "332d2e5acde3f4f97b7f8a7488424f04f58a1572828149dba4146089e61b75dd",
+      "notes/ledger-extras.md": "abb6f761eda7b408a166b530b5e27a5de6b8eef550a31d0cfba99be72af76217",
+      "notes/pond-instructions.md": "e8e7f5fb91708a7f2e62a7059b106a2232873fbee336d1b1e5bbeb78285b38cd",
+      "notes/press-ledger.md": "5bd20ef227153107c705d99755573d74aecfcb058e260b6d5eb2db26f19207d1",
+      "notes/recorder-handbook.md": "567ff9f47f8e9d4cf5c7fda8d696f1170334fc68f14b0301f0c26627d3e857f4",
+      "notes/sensor-notes.md": "feedbaaf1bc026e7030d145803e466cef04122087c1572d03f328fcc4c2525ac",
+      "notes/solar-folio.md": "7863274f4ddeeb08eb6ce89ffc723d7e18ed7cf6a5f80fa9af6d717dfaf28eca",
+      "notes/tower-archive.md": "28c57cbb52f0aedd9913cea664b1c58f517383e1c2a0c4f5d5143c7a84468e3d",
+      "notes/tower-duty.md": "78f69d7953ac54d42a6938deb20a03a8f4a95cac540e2c7e04c5db26441b076b"
+    }
+  }
+}

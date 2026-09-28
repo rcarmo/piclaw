@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "frozenBeforeResults": true,
+  "variants": ["strict", "candidate"],
+  "queryLimit": 5,
+  "scoring": {
+    "answerCoverage": "all relevant labelled quote bytes appear contiguously in returned agent-visible snippet at the correct path",
+    "noAnswerHit": "any result for a query labelled with no relevant quote",
+    "conflictHit": "returned path is listed as conflicting for this query",
+    "referenceIntegrity": "each returned chunk_id and source_revision resolves via memory_get to the identical source path and includes its snippet"
+  },
+  "decisionRule": {
+    "maxNoAnswerHitRate": 0.2,
+    "minAnswerCoverageRate": 0.8,
+    "maxConflictingHits": 0,
+    "requiredReferenceIntegrityRate": 1,
+    "maxResponseBytes": 16384,
+    "note": "Proposed #1346 criteria are used as a predeclared diagnostic gate for this evaluation only; they are not approved production budgets. Both rates must pass for one mode to be recommended as a default."
+  }
+}
