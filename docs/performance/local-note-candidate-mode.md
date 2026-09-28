@@ -15,7 +15,7 @@ The hash-verified hard-v2 fixture in [the baseline report](local-note-current-to
 | Tool mode | Development answer spans | Held-out answer spans | Development no-answer hits | Held-out no-answer hits | Conflicting hits (dev / held) | Max encoded response bytes (dev / held) |
 |---|---:|---:|---:|---:|---:|---:|
 | Strict default | 2/7 | 3/7 | 0/5 | 0/5 | 0 / 0 | 894 / 1,621 |
-| Explicit candidate | 6/7 | 6/7 | 5/5 | 5/5 | 4 / 2 | 3,548 / 3,554 |
+| Explicit candidate | 6/7 | 6/7 | 5/5 | 5/5 | 4 / 2 | 3,707 / 3,713 |
 
 All returned references resolved to their original bytes in the frozen unchanged corpus; no model answer accuracy was measured. A first-three-unit AND probe reduced no-answer hits to 3/5 per split but lost one development answer and still missed both repeated-heading labelled spans; it is **not** in the tool. The pre-existing pure context assembler preserves original chunk bounds and also cannot add an ancestor heading to those leaf chunks. The held-out labels were examined in earlier experiments, so this comparison does not establish an unbiased ranking threshold. Source-changing, admission, cancellation and index-corruption tests remain separate from these quality counts.
 
