@@ -1,7 +1,7 @@
 import {test,expect} from 'bun:test';
 import {join} from 'node:path';
 import {createTempWorkspace} from '../helpers.js';
-for(const variant of ['current','expanded','anchored','anchored-two','ranked'] as const)test(`frozen hard corpus: ${variant} memory_query snippet and query→get evidence`,async()=>{
+for(const variant of ['current','candidate','expanded','anchored','anchored-two','ranked','head'] as const)test(`frozen hard corpus: ${variant} memory_query snippet and query→get evidence`,async()=>{
  const ws=createTempWorkspace('note-current-evidence-');
  const child=Bun.spawn([process.execPath,join(import.meta.dir,'../fixtures/note-retrieval/current-tool-worker.ts'),variant],{
   env:{...process.env,PICLAW_WORKSPACE:ws.workspace,PICLAW_STORE:ws.store,PICLAW_DATA:ws.data,PICLAW_DB_IN_MEMORY:'0',PICLAW_DISABLE_BACKGROUND_WORKSPACE_INDEX:'1'},stdout:'pipe',stderr:'pipe'});

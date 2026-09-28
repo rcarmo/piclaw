@@ -16,7 +16,7 @@ const mode=(value:string)=>writeFileSync(config,JSON.stringify({domains:{access:
 const path=join(workspace,'notes/a.md'),other=join(workspace,'notes/b.md');
 const original=scenario==='late-match'?'# Lantern\n'+'filler '.repeat(90)+'cobalt sunrise\n':'\uFEFF# Lantern\r\nRegistry answer: cobalt sunrise.\r\n';
 writeFileSync(path,original);writeFileSync(other,'# Lantern\nThe registry contains cobalt, but the answer is elsewhere.\n');
-if(scenario==='candidate-budget') for(let i=0;i<22;i++)writeFileSync(join(workspace,`notes/entry-${i}.md`),`# Entry ${i}\ncobalt candidate ${i}\n`);
+if(['candidate-budget','candidate-mode-budget'].includes(scenario!)) for(let i=0;i<22;i++)writeFileSync(join(workspace,`notes/entry-${i}.md`),`# Entry ${i}\ncobalt candidate ${i}\n`);
 const {initDatabase,getDb,closeDatabase}=await import('../../../src/db/connection.js');initDatabase();const db=getDb();
 const {captureNoteIndexBinding}=await import('../../../src/note-retrieval/access.js');
 const worker=spawn(process.execPath,['-e',"const {runNoteIndexPhase}=await import('./src/note-retrieval/coordinator.ts');await runNoteIndexPhase();"],{
@@ -52,15 +52,25 @@ try {
   const page=body(await run({query:'cobalt',limit:1,offset:1}));assert.equal(page.hits.length,1);
   only(await run({query:'  '}),'invalid_request');only(await run({query:'cobalt',path:'notes/a.md'}),'invalid_request');
   only(await run({query:'cobalt',limit:6}),'invalid_request');only(await run({query:'"broken'}),'invalid_request');
+  only(await run({query:'cobalt',mode:'unsafe'}),'invalid_request');
+  const candidate=body(await run({query:'cobalt sunrise',mode:'candidate'}));
+  assert.equal(candidate.status,'ok');assert.equal(candidate.retrieval_mode,'candidate');assert.equal(candidate.answer_assessed,false);
+  assert.match(candidate.candidate_warning,/contradicted or missing facts/);
+  assert.ok(candidate.hits.some((hit:any)=>hit.chunk_id===row.chunk_id));
+  const strict=body(await run({query:'sunrise'}));assert.equal(strict.retrieval_mode,'strict');assert.equal(strict.answer_assessed,false);
  }else if(scenario==='admission'){
   let touched=false;const selector=new Proxy({}, {get(){touched=true;throw Error('accessed');},ownKeys(){touched=true;throw Error('accessed');}});
   const family:any=Object.freeze({mode:'family-shared',provenance:Object.freeze({})});
   only(await withExecutionIdentity(family,()=>run(selector)),'access_denied');fake.setActiveTools([]);only(await run(selector),'access_denied');fake.setActiveTools(['memory_query']);
+  only(await withExecutionIdentity(family,()=>run({query:'cobalt',mode:'candidate'})),'access_denied');
+  fake.setActiveTools([]);only(await run({query:'cobalt',mode:'candidate'}),'access_denied');fake.setActiveTools(['memory_query']);
   only(await tool.execute('query',selector,undefined,undefined,ctx),'access_denied');sessionId='other';only(await run(selector),'access_denied');
   sessionId='query-session';await stop();only(await run(selector),'access_denied');assert.equal(touched,false);
- }else if(scenario==='stale'){
+ }else if(scenario==='stale'||scenario==='candidate-stale'){
   const stat=statSync(path);writeFileSync(path,original.replace('cobalt','violet'));utimesSync(path,stat.atime,stat.mtime);
-  const r=body(await run({query:'sunrise'}));assert.equal(r.status,'partial');assert.deepEqual(r.reasons,['source_stale']);assert.equal(r.hits.length,0);
+  const r=body(await run({query:'sunrise',...(scenario==='candidate-stale'?{mode:'candidate'}:{})}));
+  assert.equal(r.status,'partial');assert.deepEqual(r.reasons,['source_stale']);assert.equal(r.hits.length,0);
+  if(scenario==='candidate-stale')assert.equal(r.answer_assessed,false);
   assert.ok(db.query("SELECT path FROM note_retrieval_dirty WHERE path='notes/a.md'").get());assert.equal(refreshes,1);
  }else if(scenario==='mixed'){
   writeFileSync(path,original.replace('sunrise','moonset'));
@@ -78,9 +88,11 @@ try {
   const r=body(await run({query:'absentunique'}));assert.equal(r.status,'partial');assert.deepEqual(r.reasons,['refresh_pending']);assert.equal(r.hits.length,0);assert.equal(refreshes,1);
  }else if(scenario==='late-match'){
   const r=body(await run({query:'sunrise'}));assert.equal(r.status,'ok');assert.equal(r.hits.length,1);assert.match(r.hits[0].snippet,/cobalt sunrise/);
- }else if(scenario==='candidate-budget'){
-  const r=body(await run({query:'cobalt'}));assert.equal(r.status,'partial');assert.ok(r.reasons.includes('validation_budget'));
+ }else if(scenario==='candidate-budget'||scenario==='candidate-mode-budget'){
+  const r=body(await run({query:scenario==='candidate-mode-budget'?'cobalt sunrise':'cobalt',...(scenario==='candidate-mode-budget'?{mode:'candidate'}:{})}));
+  assert.equal(r.status,'partial');assert.ok(r.reasons.includes('validation_budget'));
   assert.equal(r.hits.length,5);assert.equal(refreshes,0);
+  if(scenario==='candidate-mode-budget')assert.equal(r.answer_assessed,false);
  }else if(scenario==='output-bound'){
   db.query('UPDATE note_retrieval_chunks SET heading=?').run(JSON.stringify(['x'.repeat(12000)]));
   const r=await run({query:'cobalt'}),b=body(r);assert.equal(b.status,'partial');assert.ok(b.reasons.includes('validation_budget'));

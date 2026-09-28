@@ -12,11 +12,13 @@ import { admittedNotePath, readNote, NoteSourceExcluded, NoteSourceUnstable } fr
 import { markNoteIndexDirty } from '../note-retrieval/coordinator.js';
 import { requestBackgroundWorkspaceIndexRefresh } from '../workspace-search.js';
 import { prepareFtsQuery, extractFtsFallbackTerms, isFtsOperatorQuery } from '../utils/fts-query.js';
+import { prepareBroadNoteQuery } from '../note-retrieval/query-candidates.js';
 
 const querySchema = Type.Object({
   query: Type.String({ description: 'Plain-language or FTS5 note query (1–512 characters).', minLength: 1, maxLength: 512 }),
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 5, description: 'Maximum verified hits (default 5).' })),
   offset: Type.Optional(Type.Integer({ minimum: 0, maximum: 50, description: 'Bounded candidate offset (default 0).' })),
+  mode: Type.Optional(Type.Union([Type.Literal('strict'), Type.Literal('candidate')], { description: 'strict (default) uses the existing all-term retrieval; candidate explicitly requests broader lexical matches, not assessed answers.' })),
 }, { additionalProperties: false });
 const schema = Type.Object({
   chunk_id: Type.String({ description: 'Exact nr1 chunk reference; never a path or heading.', pattern: '^nr1:[a-f0-9]{64}$' }),
@@ -53,8 +55,8 @@ export function createMemorySearchExtension(chatJid?: string): ExtensionFactory 
     pi.on('session_shutdown', async () => { session = null; });
     pi.registerTool({
       name: 'memory_query', label: 'memory_query', parameters: querySchema,
-      description: 'Search indexed local Markdown notes in single-user mode. Returns bounded, source-verified chunk references and snippets with honest completeness; activates explicitly. No implicit full scan, semantic confidence or no-answer rejection.',
-      promptSnippet: 'memory_query: search local indexed notes for verified citation references; partial does not mean no answer.',
+      description: 'Search indexed local Markdown notes in single-user mode. Strict mode is the default. Explicit candidate mode broadens lexical matching but returns unassessed candidates, never an answer verdict. Both modes source-verify citations and enforce the same bounds. Activate explicitly.',
+      promptSnippet: 'memory_query: strict by default. Candidate mode is explicit broader lexical recall, NOT answer evidence; verify cited text via memory_get. Partial never means no answer.',
       async execute(_callId, params, signal, _onUpdate, ctx) {
         const captured = session;
         let revoked = false;
@@ -80,13 +82,14 @@ export function createMemorySearchExtension(chatJid?: string): ExtensionFactory 
         const db = access.database;
         try {
           check();
-          if (!params || typeof params !== 'object' || Object.keys(params).some(k => !['query','limit','offset'].includes(k))) return finish('invalid_request');
-          const { query, limit = 5, offset = 0 } = params as { query: unknown; limit?: unknown; offset?: unknown };
+          if (!params || typeof params !== 'object' || Object.keys(params).some(k => !['query','limit','offset','mode'].includes(k))) return finish('invalid_request');
+          const { query, limit = 5, offset = 0, mode = 'strict' } = params as { query: unknown; limit?: unknown; offset?: unknown; mode?: unknown };
           if (typeof query !== 'string' || query.trim().length < 1 || query.length > 512
             || (query.match(/"/g)?.length ?? 0) % 2 !== 0
+            || (mode !== 'strict' && mode !== 'candidate')
             || !Number.isSafeInteger(limit) || (limit as number) < 1 || (limit as number) > 5
             || !Number.isSafeInteger(offset) || (offset as number) < 0 || (offset as number) > 50) return finish('invalid_request');
-          const fts = prepareFtsQuery(query, 'and');
+          const fts = mode === 'candidate' ? prepareBroadNoteQuery(query) : prepareFtsQuery(query, 'and');
           if (!fts || fts.length > 2048) return finish('invalid_request');
           if (db.inTransaction || !db.query("SELECT 1 FROM sqlite_master WHERE name='note_retrieval_state'").get()) return finish('index_unavailable');
           const state = () => db.query('SELECT namespace,binding,format,published,state,dirty,coverage,last_complete,exclusions FROM note_retrieval_state WHERE id=1').get() as (IndexState & { exclusions: number }) | null;
@@ -221,6 +224,8 @@ export function createMemorySearchExtension(chatJid?: string): ExtensionFactory 
           }
           const response = (hits: typeof verified) => answer(reasons.size ? 'partial':'ok', {
             completeness: reasons.size ? 'partial':'complete', reasons: [...reasons].sort(), hits,
+            retrieval_mode: mode, answer_assessed: false,
+            ...(mode === 'candidate' ? { candidate_warning: 'Broad lexical matches can omit answers and include irrelevant, contradicted or missing facts; inspect cited source before answering.' } : {}),
             limit, offset, index_generation: current.published, validated_at: new Date().toISOString(),
           });
           let result=response(verified);

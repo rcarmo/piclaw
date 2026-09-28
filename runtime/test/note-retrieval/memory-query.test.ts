@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { createTempWorkspace } from '../helpers.js';
-for(const scenario of ['roundtrip','admission','stale','mixed','deleted','links','dirty','overdue','late-match','candidate-budget','output-bound','corrupt','ghost','unavailable','cancelled','transaction',
+for(const scenario of ['roundtrip','admission','stale','candidate-stale','mixed','deleted','links','dirty','overdue','late-match','candidate-budget','candidate-mode-budget','output-bound','corrupt','ghost','unavailable','cancelled','transaction',
   'revoke-grant','replace-session','change-generation','change-coverage','scope-dirty','row-change','cancel-during-read','mode-change']){
   test(`memory_query: ${scenario}`,async()=>{
     const ws=createTempWorkspace('memory-query-');

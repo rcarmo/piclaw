@@ -39,8 +39,8 @@ for(const split of ['development','held-out']){
  for(const item of data.queries){
    const started=performance.now();
    const variant=process.argv[2];
-   const query=variant==='current'?item.query:expandNoteQuery(item.query,variant as 'expanded'|'anchored'|'anchored-two'|'ranked')??item.query;
-   const response=await withChatContext('web:coverage','web',()=>queryTool.execute('q',{query,limit:5},undefined,undefined,ctx));
+   const query=variant==='current'||variant==='candidate'?item.query:expandNoteQuery(item.query,variant as 'expanded'|'anchored'|'anchored-two'|'ranked'|'head')??item.query;
+   const response=await withChatContext('web:coverage','web',()=>queryTool.execute('q',{query,limit:5,...(variant==='candidate'?{mode:'candidate'}:{})},undefined,undefined,ctx));
    const result=JSON.parse(response.content[0].text);
    const candidates=result.hits??[];
    const units=[...new Set([...item.query.replace(/[“”]/g,'"').matchAll(/"([^"\n]+)"|([\p{L}\p{N}_]+(?:[-./][\p{L}\p{N}_]+)*)/gu)].map(m=>(m[1]??m[2]!).toLocaleLowerCase('und')))]

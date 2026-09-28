@@ -49,7 +49,7 @@ const SAFE_PARAMETER_EXCEPTIONS = Object.freeze([
   safeException("introspect_sql", ["limit"], "The bounded result count is safe while the SQL query and returned database values remain protected."),
   safeException("schedule_task", ["schedule_type", "schedule_value", "model", "task_kind", "timeout_sec", "notify", "muted", "no_nudge"], "Schedule timing, task/model enums, timeout, and notification flags are controls; command and prompt bodies remain protected."),
   safeException("scheduled_tasks", ["action", "status", "limit", "include_latest_run_log", "allow_internal", "notify", "muted", "no_nudge", "schedule_type", "schedule_value", "model", "task_kind", "timeout_sec"], "Closed task actions/status, timing, bounds, and notification flags do not include stored prompts, commands, or run output."),
-  safeException("memory_query", ["limit", "offset"], "Bounded count and candidate offset are pagination mechanics; query text and returned notes remain protected."),
+  safeException("memory_query", ["limit", "offset", "mode"], "Bounded count, candidate offset, and closed retrieval-mode selector are mechanics; query text and returned notes remain protected."),
   safeException("search_workspace", ["scope", "limit", "offset", "refresh", "max_kb"], "Search scope, pagination, refresh, and size bounds are mechanics; the free-form query and matched content stay protected."),
   safeException("send_adaptive_card", ["schema_version", "submit_behavior", "completed_at"], "Schema version, closed submit behavior, and completion time describe transport state rather than card payload content."),
   safeException("send_dashboard_widget", ["interactive"], "The interaction boolean is a transport capability flag; widget HTML and fallback content remain protected."),
