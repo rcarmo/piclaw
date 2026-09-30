@@ -8,6 +8,7 @@ import { handleSingleUserPasskeys } from "../auth/single-user-passkeys.js";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { getVersion } from "../../../cli.js";
+import { getRuntimeVersions } from "../../../core/runtime-versions.js";
 import { getPiclawAgentDir } from "../../../core/agent-dir.js";
 import { THEME_PRESETS, THEME_LIST_COLOR_KEYS } from "../theming/ui-theme-data.js";
 import { TOOLSETS } from "../../../extensions/tool-activation.js";
@@ -393,6 +394,11 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
   },
   {
     method: "GET",
+    path: "/agent/about",
+    handle: (channel) => channel.json(getRuntimeVersions()),
+  },
+  {
+    method: "GET",
     path: "/agent/settings-data",
     handle: (channel) => {
       const themes = THEME_PRESETS.map((p) => {
@@ -434,6 +440,7 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
         ...getGeneralSettingsData(),
         ...getCompactionSettingsData(),
         version: getVersion(),
+        runtimeVersions: getRuntimeVersions(),
         quickActions: getQuickActionsSettingsData(),
         workspaceSettings: getWorkspaceSettingsData(),
         environmentSettings: getEnvironmentSettingsData(),

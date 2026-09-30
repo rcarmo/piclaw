@@ -2,6 +2,7 @@ import { html, useState, useEffect, useCallback, useMemo, useRef } from '../../v
 import { METERS_EVENT_NAME, applyMetersEnabled, readStoredMetersEnabled } from '../../ui/meters.js';
 import { NumberStepper } from './number-stepper.js';
 import { useTranslation } from '../../utils/i18n.js';
+import { AboutVersions } from '../about-dialog.js';
 
 export function resolveAvatarPreview(value, kind) {
     const raw = String(value || '').trim();
@@ -206,6 +207,10 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
                 <span class="settings-hint" style="margin:0">${t('settings.general.uploadLimitHint')}</span>
             </div>
 
+            <section class="settings-about" aria-label="About">
+                <h3>About</h3>
+                <${AboutVersions} versions=${settingsData?.runtimeVersions} />
+            </section>
         </div>
     `;
 }

@@ -214,7 +214,8 @@ Panes self-register on import. Both web skins list add-on panes alphabetically b
 | `/agent/addons/web-entries` | GET | List installed add-on browser entrypoints (`pi.web.entries`) |
 | `/agent/addons/assets/<package>/<path>` | GET | Serve transpiled installed add-on browser assets |
 | `/agent/addons/api/<addon>/<action>` | GET / POST | Direct add-on config/settings API for browser panes |
-| `/agent/settings-data` | GET | Full settings data (identity, providers, themes, toolsets) |
+| `/agent/settings-data` | GET | Full settings data (identity, providers, themes, toolsets, runtime versions) |
+| `/agent/about` | GET | Running core versions as `{ piclaw, piAi, bun }`; also exposed as `runtimeVersions` in settings data |
 
 ### Install Flow
 

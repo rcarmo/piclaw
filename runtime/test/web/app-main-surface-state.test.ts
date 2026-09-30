@@ -51,6 +51,22 @@ test('fresh narrow load ignores the stale narrow preference', () => {
   }))).toBe(false);
 });
 
+test('narrow first load snapshots its own preference before another window changes the default', () => {
+  let desktop = false;
+  const shared = new Map([['workspaceOpen.desktop', 'false']]);
+  const session = new Map<string, string>();
+  const runtime = {
+    matchMedia: () => ({ matches: desktop }),
+    localStorage: { getItem: (key: string) => shared.get(key) ?? null },
+    sessionStorage: { getItem: (key: string) => session.get(key) ?? null, setItem: (key: string, value: string) => session.set(key, value) },
+  };
+  expect(getInitialWorkspaceOpen(runtime)).toBe(false);
+  expect(session.get('workspaceOpen.window')).toBe('false');
+  shared.set('workspaceOpen.desktop', 'true');
+  desktop = true;
+  expect(getInitialWorkspaceOpen(runtime)).toBe(false);
+});
+
 test('createBranchLoaderState reflects branch-loader mode', () => {
   expect(createBranchLoaderState(false)).toEqual({ status: 'idle', message: '' });
   expect(createBranchLoaderState(true)).toEqual({ status: 'running', message: 'Preparing a new chat branch…' });

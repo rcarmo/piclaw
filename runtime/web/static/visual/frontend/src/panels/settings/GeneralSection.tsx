@@ -3,6 +3,7 @@ import { useSignal } from "@preact/signals";
 import { type SettingsData, type SettingsSectionProps } from "./types";
 import { NumberStepper } from "./NumberStepper";
 import { registerSettingsPane } from "./pane-registry";
+import { AboutVersions } from "../../../../../../src/components/about-dialog";
 
 export function GeneralSection({
   data,
@@ -25,15 +26,6 @@ export function GeneralSection({
   return (
     <section className="settings-panel__section settings-panel__section--general">
       <h2 className="settings-panel__section-title">General</h2>
-
-      {data.version && (
-        <div className="settings-panel__field">
-          <label className="settings-panel__label">Version</label>
-          <div className="settings-panel__field-content">
-            <span className="settings-panel__description" style="font-family: var(--font-mono, monospace); font-size: 13px;">piclaw v{data.version}</span>
-          </div>
-        </div>
-      )}
 
       <h3 className="settings-panel__subsection-title">Identity</h3>
 
@@ -108,6 +100,10 @@ export function GeneralSection({
         <span className="settings-panel__description">Limit the model picker to models that have been explicitly scoped to this instance.</span>
       </div>
 
+      <section className="settings-about" aria-label="About">
+        <h3 className="settings-panel__subsection-title">About</h3>
+        <AboutVersions versions={data.runtimeVersions} />
+      </section>
     </section>
   );
 }

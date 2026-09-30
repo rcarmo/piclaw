@@ -1,0 +1,14 @@
+/* The About modal reuses the Settings shell, without its navigation or controls. */
+.settings-dialog.about-dialog {
+    width: min(420px, calc(100vw - 32px));
+    height: auto;
+    max-height: calc(100dvh - 32px);
+}
+.about-dialog-content { padding: 20px 24px; }
+.settings-about { margin-top: 24px; }
+.about-versions { margin: 0; font-size: 13px; color: var(--text-secondary); }
+.about-version { display: grid; grid-template-columns: 1fr auto; gap: 24px; padding: 7px 0; }
+.about-version dt, .about-version dd { margin: 0; }
+.about-version dd { font-family: var(--font-family-mono, monospace); overflow-wrap: anywhere; }
+.about-version a { color: var(--accent-color); text-decoration: none; }
+.about-version a:hover, .about-version a:focus-visible { text-decoration: underline; }

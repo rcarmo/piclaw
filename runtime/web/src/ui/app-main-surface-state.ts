@@ -12,8 +12,9 @@ import {
 } from './workspace-visibility.js';
 
 export function getInitialWorkspaceOpen(runtime: any = typeof window !== 'undefined' ? window : null): boolean {
-  if (resolveWorkspaceLayoutBucket(runtime) !== 'desktop') return false;
-  return readStoredDesktopWorkspaceOpenPreference(runtime);
+  // Capture this window's desktop preference even when its first view is narrow.
+  const desktopOpen = readStoredDesktopWorkspaceOpenPreference(runtime);
+  return resolveWorkspaceLayoutBucket(runtime) === 'desktop' ? desktopOpen : false;
 }
 
 export function resolveCurrentBranchRecord(options: {

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 
 import {
   DESKTOP_WORKSPACE_OPEN_STORAGE_KEY,
+  WINDOW_WORKSPACE_OPEN_STORAGE_KEY,
   persistDesktopWorkspaceOpenPreference,
   readStoredDesktopWorkspaceOpenPreference,
   resolveWorkspaceLayoutBucket,
@@ -72,6 +73,38 @@ describe('workspace visibility preferences', () => {
     expect(runtime.__storage.get(DESKTOP_WORKSPACE_OPEN_STORAGE_KEY)).toBe('true');
     persistDesktopWorkspaceOpenPreference(false, runtime);
     expect(runtime.__storage.get(DESKTOP_WORKSPACE_OPEN_STORAGE_KEY)).toBe('false');
+  });
+
+  test('each window snapshots its initial state and ignores later choices from other windows', () => {
+    const shared = createRuntime({ storage: { [DESKTOP_WORKSPACE_OPEN_STORAGE_KEY]: 'true' } });
+    const makeWindow = () => {
+      const session = new Map<string, string>();
+      return { ...shared, sessionStorage: { getItem: (key: string) => session.get(key) ?? null, setItem: (key: string, value: string) => session.set(key, value) } };
+    };
+    const first = makeWindow(), second = makeWindow();
+    expect(readStoredDesktopWorkspaceOpenPreference(first)).toBe(true);
+    persistDesktopWorkspaceOpenPreference(false, second);
+    // Simulate a discarded document reading storage again, without a toggle in first.
+    expect(readStoredDesktopWorkspaceOpenPreference(first)).toBe(true);
+    expect(readStoredDesktopWorkspaceOpenPreference(second)).toBe(false);
+    persistDesktopWorkspaceOpenPreference(true, first);
+    expect(readStoredDesktopWorkspaceOpenPreference(second)).toBe(false);
+    expect(readStoredDesktopWorkspaceOpenPreference(makeWindow())).toBe(true);
+  });
+
+  test('invalid window state falls back, and blocked local storage does not prevent window persistence', () => {
+    const session = new Map([[WINDOW_WORKSPACE_OPEN_STORAGE_KEY, 'invalid']]);
+    const runtime = { ...createRuntime({ readError: true, writeError: true }), sessionStorage: {
+      getItem: (key: string) => session.get(key) ?? null,
+      setItem: (key: string, value: string) => session.set(key, value),
+    } };
+    expect(readStoredDesktopWorkspaceOpenPreference(runtime)).toBe(false);
+    persistDesktopWorkspaceOpenPreference(true, runtime);
+    expect(readStoredDesktopWorkspaceOpenPreference(runtime)).toBe(true);
+    const blocked = createRuntime({ storage: { [DESKTOP_WORKSPACE_OPEN_STORAGE_KEY]: 'true' } });
+    Object.defineProperty(blocked, 'sessionStorage', { get: () => { throw new Error('blocked'); } });
+    expect(readStoredDesktopWorkspaceOpenPreference(blocked)).toBe(true);
+    expect(() => persistDesktopWorkspaceOpenPreference(false, blocked)).not.toThrow();
   });
 
   test('storage failures are ignored', () => {
