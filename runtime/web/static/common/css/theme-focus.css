@@ -32,6 +32,13 @@
     border: 0 !important;
     box-shadow: none !important;
 }
+/* Quick Actions already owns a distinct floating surface. Keep its filter
+ * borderless on autofocus and keyboard focus, including theme-specific glow. */
+:root .timeline-quick-actions-input:focus,
+:root .timeline-quick-actions-input:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+}
 :root ::selection {
     background: var(--accent-color);
     color: var(--accent-contrast-text);
