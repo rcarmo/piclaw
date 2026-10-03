@@ -1,0 +1,903 @@
+{
+  "recordedAt": "2026-10-03T16:57:20.301Z",
+  "baseRevision": "05f46639ad7a53d8925034d8b76f994dbfced966",
+  "runtime": "Bun 1.4.2",
+  "host": "Smith Debian LXC",
+  "settings": {
+    "journal": "wal",
+    "synchronous": 2,
+    "busyTimeoutMs": 5000,
+    "writerHoldMs": 250
+  },
+  "scope": [
+    "Synthetic legacy row only; direct production getWebSession invocation, no HTTP socket or provider",
+    "Real separate SQLite writer changes private transaction, reader SELECT sees committed old row; hook starts release timer at actual repair invocation",
+    "All outcomes from one deterministic overlap per mode/revision, not timing percentiles",
+    "SQL counters count intercepted reader SELECT/UPDATE calls; no raw bind values; writer CPU and timer delay retained",
+    "A null-ID exact ABA with all compared fields identical cannot be distinguished without new persisted generation",
+    "Post-final-read revocation and general request-principal caching not covered",
+    "No CPU sampling profiles in this slice; process.cpuUsage/read-update counts/timer retained. Prior contention profiler earlyBUSY failures prohibit assuming profiler equivalence"
+  ],
+  "cases": [
+    {
+      "tag": "baseline",
+      "sourceSha256": "cfd44123304f8ee31e31203ddfa4f229753e19d6f6af24adfd48c9bd8f3aeae2",
+      "mode": "delete",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": true,
+      "returnedOldOwner": true,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 0,
+      "elapsedMs": 330.9496299999996,
+      "timerMs": 331.4328209999999,
+      "cpu": {
+        "user": 1026,
+        "system": 301
+      },
+      "writer": {
+        "writer": true,
+        "ms": 270.27593099999996,
+        "cpu": {
+          "user": 316,
+          "system": 158
+        }
+      },
+      "observationOnly": true
+    },
+    {
+      "tag": "baseline",
+      "sourceSha256": "cfd44123304f8ee31e31203ddfa4f229753e19d6f6af24adfd48c9bd8f3aeae2",
+      "mode": "expire",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": true,
+      "returnedOldOwner": true,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 375.1027790000003,
+      "timerMs": 375.6076280000002,
+      "cpu": {
+        "user": 0,
+        "system": 1524
+      },
+      "writer": {
+        "writer": true,
+        "ms": 266.06597800000003,
+        "cpu": {
+          "user": 0,
+          "system": 517
+        }
+      },
+      "observationOnly": true
+    },
+    {
+      "tag": "baseline",
+      "sourceSha256": "cfd44123304f8ee31e31203ddfa4f229753e19d6f6af24adfd48c9bd8f3aeae2",
+      "mode": "owner",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": true,
+      "returnedOldOwner": true,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 344.30944,
+      "timerMs": 344.7166980000002,
+      "cpu": {
+        "user": 1482,
+        "system": 117
+      },
+      "writer": {
+        "writer": true,
+        "ms": 275.562507,
+        "cpu": {
+          "user": 263,
+          "system": 267
+        }
+      },
+      "observationOnly": true
+    },
+    {
+      "tag": "baseline",
+      "sourceSha256": "cfd44123304f8ee31e31203ddfa4f229753e19d6f6af24adfd48c9bd8f3aeae2",
+      "mode": "method",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": true,
+      "returnedOldOwner": true,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 366.8816059999999,
+      "timerMs": 367.34418400000004,
+      "cpu": {
+        "user": 241,
+        "system": 1128
+      },
+      "writer": {
+        "writer": true,
+        "ms": 278.84253,
+        "cpu": {
+          "user": 234,
+          "system": 182
+        }
+      },
+      "observationOnly": true
+    },
+    {
+      "tag": "baseline",
+      "sourceSha256": "cfd44123304f8ee31e31203ddfa4f229753e19d6f6af24adfd48c9bd8f3aeae2",
+      "mode": "created",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": true,
+      "returnedOldOwner": true,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 344.636794,
+      "timerMs": 345.10527999999977,
+      "cpu": {
+        "user": 637,
+        "system": 884
+      },
+      "writer": {
+        "writer": true,
+        "ms": 264.468763,
+        "cpu": {
+          "user": 215,
+          "system": 307
+        }
+      },
+      "observationOnly": true
+    },
+    {
+      "tag": "baseline",
+      "sourceSha256": "cfd44123304f8ee31e31203ddfa4f229753e19d6f6af24adfd48c9bd8f3aeae2",
+      "mode": "identity",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": true,
+      "returnedOldOwner": true,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 343.21083799999997,
+      "timerMs": 343.7035820000001,
+      "cpu": {
+        "user": 272,
+        "system": 1113
+      },
+      "writer": {
+        "writer": true,
+        "ms": 264.576982,
+        "cpu": {
+          "user": 562,
+          "system": 0
+        }
+      },
+      "observationOnly": true
+    },
+    {
+      "tag": "baseline",
+      "sourceSha256": "cfd44123304f8ee31e31203ddfa4f229753e19d6f6af24adfd48c9bd8f3aeae2",
+      "mode": "migrate",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": true,
+      "returnedOldOwner": true,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 331.00911799999994,
+      "timerMs": 331.43070499999976,
+      "cpu": {
+        "user": 195,
+        "system": 1239
+      },
+      "writer": {
+        "writer": true,
+        "ms": 272.776728,
+        "cpu": {
+          "user": 0,
+          "system": 629
+        }
+      },
+      "observationOnly": true
+    },
+    {
+      "tag": "baseline",
+      "sourceSha256": "cfd44123304f8ee31e31203ddfa4f229753e19d6f6af24adfd48c9bd8f3aeae2",
+      "mode": "id-delete",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": false,
+      "returnedOldOwner": false,
+      "returnedOtherOwner": false,
+      "error": "TypeError",
+      "rows": 0,
+      "elapsedMs": 331.24671499999977,
+      "timerMs": 331.6975269999998,
+      "cpu": {
+        "user": 682,
+        "system": 960
+      },
+      "writer": {
+        "writer": true,
+        "ms": 280.472527,
+        "cpu": {
+          "user": 440,
+          "system": 110
+        }
+      },
+      "observationOnly": true
+    },
+    {
+      "tag": "baseline",
+      "sourceSha256": "cfd44123304f8ee31e31203ddfa4f229753e19d6f6af24adfd48c9bd8f3aeae2",
+      "mode": "id-expire",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": true,
+      "returnedOldOwner": true,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 343.952808,
+      "timerMs": 344.4373449999998,
+      "cpu": {
+        "user": 1278,
+        "system": 98
+      },
+      "writer": {
+        "writer": true,
+        "ms": 263.315384,
+        "cpu": {
+          "user": 312,
+          "system": 134
+        }
+      },
+      "observationOnly": true
+    },
+    {
+      "tag": "baseline",
+      "sourceSha256": "cfd44123304f8ee31e31203ddfa4f229753e19d6f6af24adfd48c9bd8f3aeae2",
+      "mode": "id-owner",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": true,
+      "returnedOldOwner": true,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 343.9655710000002,
+      "timerMs": 344.3867690000002,
+      "cpu": {
+        "user": 245,
+        "system": 1092
+      },
+      "writer": {
+        "writer": true,
+        "ms": 324.770313,
+        "cpu": {
+          "user": 403,
+          "system": 68
+        }
+      },
+      "observationOnly": true
+    },
+    {
+      "tag": "baseline",
+      "sourceSha256": "cfd44123304f8ee31e31203ddfa4f229753e19d6f6af24adfd48c9bd8f3aeae2",
+      "mode": "id-method",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": true,
+      "returnedOldOwner": true,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 341.2898060000002,
+      "timerMs": 341.79959499999995,
+      "cpu": {
+        "user": 1487,
+        "system": 0
+      },
+      "writer": {
+        "writer": true,
+        "ms": 263.363164,
+        "cpu": {
+          "user": 533,
+          "system": 0
+        }
+      },
+      "observationOnly": true
+    },
+    {
+      "tag": "baseline",
+      "sourceSha256": "cfd44123304f8ee31e31203ddfa4f229753e19d6f6af24adfd48c9bd8f3aeae2",
+      "mode": "id-created",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": true,
+      "returnedOldOwner": true,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 341.4860899999999,
+      "timerMs": 341.8849989999999,
+      "cpu": {
+        "user": 1140,
+        "system": 39
+      },
+      "writer": {
+        "writer": true,
+        "ms": 262.66797199999996,
+        "cpu": {
+          "user": 319,
+          "system": 106
+        }
+      },
+      "observationOnly": true
+    },
+    {
+      "tag": "baseline",
+      "sourceSha256": "cfd44123304f8ee31e31203ddfa4f229753e19d6f6af24adfd48c9bd8f3aeae2",
+      "mode": "null-method",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": true,
+      "returnedOldOwner": true,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 343.42891599999984,
+      "timerMs": 343.9263169999999,
+      "cpu": {
+        "user": 427,
+        "system": 824
+      },
+      "writer": {
+        "writer": true,
+        "ms": 264.484711,
+        "cpu": {
+          "user": 380,
+          "system": 118
+        }
+      },
+      "observationOnly": true
+    },
+    {
+      "tag": "baseline",
+      "sourceSha256": "cfd44123304f8ee31e31203ddfa4f229753e19d6f6af24adfd48c9bd8f3aeae2",
+      "mode": "both-migrate",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 3,
+      "updateCalls": 2,
+      "returned": true,
+      "returnedOldOwner": true,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 331.06960500000014,
+      "timerMs": 331.545388,
+      "cpu": {
+        "user": 1136,
+        "system": 323
+      },
+      "writer": {
+        "writer": true,
+        "ms": 260.600535,
+        "cpu": {
+          "user": 360,
+          "system": 60
+        }
+      },
+      "observationOnly": true
+    },
+    {
+      "tag": "baseline",
+      "sourceSha256": "cfd44123304f8ee31e31203ddfa4f229753e19d6f6af24adfd48c9bd8f3aeae2",
+      "mode": "id-migrate",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": true,
+      "returnedOldOwner": true,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 331.56609899999967,
+      "timerMs": 332.0324819999996,
+      "cpu": {
+        "user": 1360,
+        "system": 123
+      },
+      "writer": {
+        "writer": true,
+        "ms": 273.189158,
+        "cpu": {
+          "user": 385,
+          "system": 115
+        }
+      },
+      "observationOnly": true
+    },
+    {
+      "tag": "candidate",
+      "sourceSha256": "03c861c72d669ea91a264906d6e1c4cc1561a0a171db6fa7b28f69ea2f58e9a0",
+      "mode": "delete",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 3,
+      "updateCalls": 1,
+      "returned": false,
+      "returnedOldOwner": false,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 0,
+      "elapsedMs": 331.67671999999993,
+      "timerMs": 332.13853900000004,
+      "cpu": {
+        "user": 1545,
+        "system": 0
+      },
+      "writer": {
+        "writer": true,
+        "ms": 260.538,
+        "cpu": {
+          "user": 485,
+          "system": 40
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "tag": "candidate",
+      "sourceSha256": "03c861c72d669ea91a264906d6e1c4cc1561a0a171db6fa7b28f69ea2f58e9a0",
+      "mode": "expire",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 3,
+      "updateCalls": 1,
+      "returned": false,
+      "returnedOldOwner": false,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 331.5439940000001,
+      "timerMs": 332.10593100000006,
+      "cpu": {
+        "user": 417,
+        "system": 1257
+      },
+      "writer": {
+        "writer": true,
+        "ms": 263.298258,
+        "cpu": {
+          "user": 456,
+          "system": 107
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "tag": "candidate",
+      "sourceSha256": "03c861c72d669ea91a264906d6e1c4cc1561a0a171db6fa7b28f69ea2f58e9a0",
+      "mode": "owner",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 3,
+      "updateCalls": 1,
+      "returned": false,
+      "returnedOldOwner": false,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 330.340013,
+      "timerMs": 330.813537,
+      "cpu": {
+        "user": 213,
+        "system": 1166
+      },
+      "writer": {
+        "writer": true,
+        "ms": 271.77682,
+        "cpu": {
+          "user": 161,
+          "system": 182
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "tag": "candidate",
+      "sourceSha256": "03c861c72d669ea91a264906d6e1c4cc1561a0a171db6fa7b28f69ea2f58e9a0",
+      "mode": "method",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 3,
+      "updateCalls": 1,
+      "returned": false,
+      "returnedOldOwner": false,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 331.22117100000014,
+      "timerMs": 331.694211,
+      "cpu": {
+        "user": 1065,
+        "system": 437
+      },
+      "writer": {
+        "writer": true,
+        "ms": 277.14201099999997,
+        "cpu": {
+          "user": 301,
+          "system": 162
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "tag": "candidate",
+      "sourceSha256": "03c861c72d669ea91a264906d6e1c4cc1561a0a171db6fa7b28f69ea2f58e9a0",
+      "mode": "created",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 3,
+      "updateCalls": 1,
+      "returned": false,
+      "returnedOldOwner": false,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 330.87473199999977,
+      "timerMs": 331.2488269999999,
+      "cpu": {
+        "user": 1015,
+        "system": 397
+      },
+      "writer": {
+        "writer": true,
+        "ms": 261.700349,
+        "cpu": {
+          "user": 471,
+          "system": 0
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "tag": "candidate",
+      "sourceSha256": "03c861c72d669ea91a264906d6e1c4cc1561a0a171db6fa7b28f69ea2f58e9a0",
+      "mode": "identity",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 3,
+      "updateCalls": 1,
+      "returned": false,
+      "returnedOldOwner": false,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 330.71279400000003,
+      "timerMs": 331.1841330000002,
+      "cpu": {
+        "user": 1399,
+        "system": 127
+      },
+      "writer": {
+        "writer": true,
+        "ms": 282.995435,
+        "cpu": {
+          "user": 0,
+          "system": 420
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "tag": "candidate",
+      "sourceSha256": "03c861c72d669ea91a264906d6e1c4cc1561a0a171db6fa7b28f69ea2f58e9a0",
+      "mode": "migrate",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 3,
+      "updateCalls": 1,
+      "returned": true,
+      "returnedOldOwner": true,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 330.89811299999974,
+      "timerMs": 331.2943529999998,
+      "cpu": {
+        "user": 1260,
+        "system": 98
+      },
+      "writer": {
+        "writer": true,
+        "ms": 264.721717,
+        "cpu": {
+          "user": 515,
+          "system": 85
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "tag": "candidate",
+      "sourceSha256": "03c861c72d669ea91a264906d6e1c4cc1561a0a171db6fa7b28f69ea2f58e9a0",
+      "mode": "id-delete",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": false,
+      "returnedOldOwner": false,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 0,
+      "elapsedMs": 331.2568260000003,
+      "timerMs": 331.7542470000003,
+      "cpu": {
+        "user": 1425,
+        "system": 131
+      },
+      "writer": {
+        "writer": true,
+        "ms": 270.16449,
+        "cpu": {
+          "user": 319,
+          "system": 159
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "tag": "candidate",
+      "sourceSha256": "03c861c72d669ea91a264906d6e1c4cc1561a0a171db6fa7b28f69ea2f58e9a0",
+      "mode": "id-expire",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": false,
+      "returnedOldOwner": false,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 331.0091560000001,
+      "timerMs": 331.3744069999998,
+      "cpu": {
+        "user": 255,
+        "system": 1159
+      },
+      "writer": {
+        "writer": true,
+        "ms": 262.92639699999995,
+        "cpu": {
+          "user": 288,
+          "system": 216
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "tag": "candidate",
+      "sourceSha256": "03c861c72d669ea91a264906d6e1c4cc1561a0a171db6fa7b28f69ea2f58e9a0",
+      "mode": "id-owner",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": false,
+      "returnedOldOwner": false,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 331.47665199999983,
+      "timerMs": 331.94913899999983,
+      "cpu": {
+        "user": 1557,
+        "system": 0
+      },
+      "writer": {
+        "writer": true,
+        "ms": 266.80294299999997,
+        "cpu": {
+          "user": 464,
+          "system": 109
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "tag": "candidate",
+      "sourceSha256": "03c861c72d669ea91a264906d6e1c4cc1561a0a171db6fa7b28f69ea2f58e9a0",
+      "mode": "id-method",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": false,
+      "returnedOldOwner": false,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 331.3123810000002,
+      "timerMs": 331.76986000000034,
+      "cpu": {
+        "user": 1113,
+        "system": 382
+      },
+      "writer": {
+        "writer": true,
+        "ms": 263.575891,
+        "cpu": {
+          "user": 377,
+          "system": 151
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "tag": "candidate",
+      "sourceSha256": "03c861c72d669ea91a264906d6e1c4cc1561a0a171db6fa7b28f69ea2f58e9a0",
+      "mode": "id-created",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": false,
+      "returnedOldOwner": false,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 330.362846,
+      "timerMs": 330.82817799999975,
+      "cpu": {
+        "user": 979,
+        "system": 370
+      },
+      "writer": {
+        "writer": true,
+        "ms": 261.589289,
+        "cpu": {
+          "user": 339,
+          "system": 124
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "tag": "candidate",
+      "sourceSha256": "03c861c72d669ea91a264906d6e1c4cc1561a0a171db6fa7b28f69ea2f58e9a0",
+      "mode": "null-method",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 3,
+      "updateCalls": 1,
+      "returned": false,
+      "returnedOldOwner": false,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 331.38854500000025,
+      "timerMs": 331.89440200000035,
+      "cpu": {
+        "user": 1112,
+        "system": 426
+      },
+      "writer": {
+        "writer": true,
+        "ms": 259.303511,
+        "cpu": {
+          "user": 277,
+          "system": 194
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "tag": "candidate",
+      "sourceSha256": "03c861c72d669ea91a264906d6e1c4cc1561a0a171db6fa7b28f69ea2f58e9a0",
+      "mode": "both-migrate",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 3,
+      "updateCalls": 1,
+      "returned": true,
+      "returnedOldOwner": true,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 331.06720700000005,
+      "timerMs": 331.52574300000015,
+      "cpu": {
+        "user": 1340,
+        "system": 143
+      },
+      "writer": {
+        "writer": true,
+        "ms": 272.90767900000003,
+        "cpu": {
+          "user": 224,
+          "system": 168
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "tag": "candidate",
+      "sourceSha256": "03c861c72d669ea91a264906d6e1c4cc1561a0a171db6fa7b28f69ea2f58e9a0",
+      "mode": "id-migrate",
+      "selectedOld": true,
+      "repairReached": true,
+      "selectCalls": 2,
+      "updateCalls": 1,
+      "returned": true,
+      "returnedOldOwner": true,
+      "returnedOtherOwner": false,
+      "error": null,
+      "rows": 1,
+      "elapsedMs": 330.43820700000015,
+      "timerMs": 330.90478299999995,
+      "cpu": {
+        "user": 1533,
+        "system": 0
+      },
+      "writer": {
+        "writer": true,
+        "ms": 258.65151000000003,
+        "cpu": {
+          "user": 391,
+          "system": 78
+        }
+      },
+      "status": "pass"
+    }
+  ],
+  "negativeControl": {
+    "mode": "delete",
+    "baselineStrictExit": 1,
+    "result": "baseline row returned after committed deletion; candidate requiresnull"
+  },
+  "sourceHashes": {
+    "baseline": "cfd44123304f8ee31e31203ddfa4f229753e19d6f6af24adfd48c9bd8f3aeae2",
+    "candidate": "03c861c72d669ea91a264906d6e1c4cc1561a0a171db6fa7b28f69ea2f58e9a0",
+    "fixture": "e1bf61e91e92b2dc31674f7c1fbefda8e5a830ec3cf03fd585af1de4e459e218"
+  }
+}
