@@ -30,52 +30,83 @@ function usage(value: unknown): void {
   for (const key of ['input','output','cacheRead','cacheWrite','total']) if (typeof costs[key] !== 'number' || (costs[key] as number) < 0) fail();
   for (const key of ['cacheWrite1h','reasoning']) if (costs[key] !== undefined && (typeof costs[key] !== 'number' || (costs[key] as number) < 0)) fail();
 }
-function textContent(content: unknown, toolCall: boolean): void {
+function declarations(value: unknown): void {
+  if (!Array.isArray(value) || value.length > 256) fail();
+  const names = new Set<string>();
+  for (const item of value) {
+    const tool = record(item, ['name','description','parameters','constrainedSampling']);
+    if (typeof tool.name !== 'string' || !tool.name || tool.name.length > 256 || names.has(tool.name)
+      || typeof tool.description !== 'string' || tool.description.length > 64*1024
+      || !tool.parameters || typeof tool.parameters !== 'object' || Array.isArray(tool.parameters)) fail();
+    names.add(tool.name);
+    if (tool.constrainedSampling === undefined || tool.constrainedSampling === false) continue;
+    const config = record(tool.constrainedSampling, ['type','strict','variants']);
+    if (config.type === 'json_schema') {
+      if (!['prefer','require'].includes(config.strict as string) || config.variants !== undefined) fail();
+    } else if (config.type === 'grammar') {
+      if (config.strict !== undefined) fail();
+      const variants = record(config.variants, ['openai_lark','openai_regex']);
+      if (!Object.keys(variants).length || Object.values(variants).some(v => typeof v !== 'string' || v.length > 64*1024)) fail();
+    } else fail();
+  }
+}
+function textContent(content: unknown, toolCall: boolean, images = false): void {
   if (typeof content === 'string' && !toolCall) return;
   if (!Array.isArray(content) || content.length > 4096) fail();
   for (const item of content) {
     const type = (item as { type?: unknown })?.type;
-    const value = record(item, type === 'text' ? ['type','text','textSignature'] : type === 'thinking' ? ['type','thinking','thinkingSignature','redacted'] : ['type','id','name','arguments','thoughtSignature','namespace']);
+    const value = record(item, type === 'text' ? ['type','text','textSignature'] : type === 'thinking' ? ['type','thinking','thinkingSignature','redacted'] : type === 'image' ? ['type','data','mimeType'] : ['type','id','name','arguments','thoughtSignature','namespace']);
     if (value.type === 'text') { if (typeof value.text !== 'string') fail(); }
+    else if (value.type === 'image' && images) {
+      if (typeof value.data !== 'string' || !value.data || value.data.length % 4 !== 0
+        || !/^[A-Za-z0-9+/]*={0,2}$/.test(value.data) || Buffer.from(value.data, 'base64').toString('base64') !== value.data
+        || typeof value.mimeType !== 'string' || !/^image\/[A-Za-z0-9.+-]{1,64}$/.test(value.mimeType)) fail();
+    }
     else if (value.type === 'thinking' && toolCall) { if (typeof value.thinking !== 'string' || value.redacted !== undefined && typeof value.redacted !== 'boolean') fail(); }
     else if (value.type === 'toolCall' && toolCall) {
       if (typeof value.id !== 'string' || !value.id || typeof value.name !== 'string' || !value.name || !value.arguments || typeof value.arguments !== 'object' || Array.isArray(value.arguments)) fail();
     } else fail();
-    for (const key of ['textSignature','thinkingSignature','thoughtSignature','namespace']) if (value[key] !== undefined && typeof value[key] !== 'string') fail(); // Initial host plan is text-only; no image price ceiling yet.
+    for (const key of ['textSignature','thinkingSignature','thoughtSignature','namespace']) if (value[key] !== undefined && typeof value[key] !== 'string') fail();
   }
 }
-/** Bounded text-only provider context. Tool declarations require a separate
- * qualified policy; MCP-required and image inputs deny for the initial host.
- * Historic tool calls/results carry no work/account/cost authority. */
+/** Bounded public provider context. Tool declarations are transcript data, not
+ * executable host tools; trusted host policy/pricing separately admits models
+ * and images. Historic messages never carry work/account/cost authority. */
 export function validateChildRequest(context: Context, options: ChildRequestOptionsV1, maxTokens: number) {
   try {
     json(context); json(options);
     if (Buffer.byteLength(JSON.stringify({ context, options })) > 4 * 1024 * 1024) fail();
     const raw = record(context, ['messages','systemPrompt','tools']);
     if (raw.systemPrompt !== undefined && typeof raw.systemPrompt !== 'string') fail();
-    if (raw.tools !== undefined && (!Array.isArray(raw.tools) || raw.tools.length)) fail();
+    if (raw.tools !== undefined) declarations(raw.tools);
     if (!Array.isArray(raw.messages) || raw.messages.length > 4096) fail();
     for (const item of raw.messages) {
       const role = (item as { role?: unknown })?.role;
       if (role === 'user') {
-        const value = record(item, ['role','content','timestamp']); textContent(value.content,false);
+        const value = record(item, ['role','content','timestamp']); textContent(value.content,false,true);
         if (typeof value.timestamp !== 'number' || value.timestamp < 0) fail();
       } else if (role === 'assistant') {
-        const value = record(item, ['role','content','api','provider','model','usage','stopReason','timestamp','responseId','responseModel','thinkingLevel','providerThinkingLevel','endTurn']);
+        const value = record(item, ['role','content','api','provider','model','usage','stopReason','timestamp','responseId','responseModel','thinkingLevel','providerThinkingLevel','endTurn','errorMessage','rawStopReason']);
         textContent(value.content,true);
         for (const key of ['api','provider','model']) if (typeof value[key] !== 'string') fail();
         if (!['pending','stop','length','toolUse','error','aborted'].includes(value.stopReason as string)) fail();
         usage(value.usage);
-        for (const key of ['responseId','responseModel','providerThinkingLevel']) if (value[key] !== undefined && typeof value[key] !== 'string') fail();
+        for (const key of ['responseId','responseModel','providerThinkingLevel','errorMessage','rawStopReason']) if (value[key] !== undefined && typeof value[key] !== 'string') fail();
         if (value.thinkingLevel !== undefined && !['off','minimal','low','medium','high','xhigh','max'].includes(value.thinkingLevel as string)) fail();
         if (value.endTurn !== undefined && typeof value.endTurn !== 'boolean') fail();
         if (typeof value.timestamp !== 'number' || value.timestamp < 0) fail();
       } else if (role === 'toolResult') {
-        const value = record(item, ['role','toolCallId','toolName','content','isError','timestamp']); textContent(value.content,false);
+        const value = record(item, ['role','toolCallId','toolName','content','isError','timestamp']); textContent(value.content,false,true);
         if (typeof value.toolCallId !== 'string' || typeof value.toolName !== 'string' || typeof value.isError !== 'boolean' || typeof value.timestamp !== 'number' || value.timestamp < 0) fail();
       } else if (role === 'system') {
-        const value = record(item, ['role','content','timestamp','sections']);
-        if (typeof value.content !== 'string' || typeof value.timestamp !== 'number' || value.timestamp < 0) fail();
+        const value = record(item, ['role','content','timestamp','sections','toolsAdded','toolsRemoved']);
+        textContent(value.content,false);
+        if (value.toolsAdded !== undefined) declarations(value.toolsAdded);
+        if (value.toolsRemoved !== undefined) {
+          if (!Array.isArray(value.toolsRemoved) || value.toolsRemoved.length > 256) fail();
+          for (const ref of value.toolsRemoved) { const removal = record(ref,['name']); if (typeof removal.name !== 'string' || !removal.name || removal.name.length>256) fail(); }
+        }
+        if (typeof value.timestamp !== 'number' || value.timestamp < 0) fail();
         if (value.sections !== undefined && (!value.sections || typeof value.sections !== 'object' || Array.isArray(value.sections) || Object.values(value.sections).some(section=>section!==null && typeof section!=='string'))) fail();
       } else fail();
     }

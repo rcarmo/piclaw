@@ -1,4 +1,5 @@
 import { operationSessionProfile, operationSessionTools } from "./operation-session-profile.js";
+import { bindAddonChildRequestTools } from '../addons/child-request-runtime.js';
 import { assertCurrentProviderSelection } from './retired-provider-selection.js';
 /**
  * agent-pool/session.ts – pi-agent session creation and directory management.
@@ -640,6 +641,11 @@ export async function createSessionInDir(
       ...(appendSystemPromptOverride ? { appendSystemPromptOverride } : {}),
       ...operationProfile,
     });
+    const reloadResources = resourceLoader.reload.bind(resourceLoader);
+    resourceLoader.reload = async (reloadOptions) => {
+      await reloadResources(reloadOptions);
+      if (options.chatJid) bindAddonChildRequestTools(resourceLoader.getExtensions().extensions, options.chatJid, resourceLoader);
+    };
     await resourceLoader.reload();
     mcpOwner?.assertLoaded(resourceLoader.getExtensions());
     if (mode === 'family-shared' && !requireOwnedSessionExecution(options.chatJid!)) throw new Error('Owned family session identity is required.');

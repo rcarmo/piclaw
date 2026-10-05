@@ -1,4 +1,6 @@
 import { addonLocalContextApi, setAddonLocalContextHost } from "./local-context.js";
+import { addonChildRequestsApi, shutdownAddonChildRequests, resetAddonChildRequestsForTests } from './child-request-runtime.js';
+import type { ChildRequestsApiV1 } from './child-request-contracts.js';
 import { AddonOperationService } from "./operation-service.js";
 import { admitAddonOutboundWork } from './operation-outbound-admission.js';
 import type { OperationHost } from "./operation-contracts.js";
@@ -131,6 +133,7 @@ export interface PiclawRuntimeAddonApi {
   localContext: typeof addonLocalContextApi;
   externalRoutes: PiclawRuntimeExternalRoutesApiV1;
   operations: PiclawRuntimeOperationsApiV1;
+  childRequests: ChildRequestsApiV1;
   createMedia: typeof createMedia;
   getMediaById: typeof getMediaById;
   postMessage: typeof postMessagesToolMessage;
@@ -177,6 +180,10 @@ function registerAddonRuntimeShutdownHandler(handler: () => void | Promise<void>
 }
 
 async function shutdownAddonRuntimeContributions(): Promise<void> {
+  // Raw model scopes are never released by the legacy add-on timeout race.
+  // Start independent legacy cleanup too: it may release a pipe needed by close.
+  const children = shutdownAddonChildRequests();
+  void children.catch(() => undefined);
   const handlers = [...addonRuntimeShutdownHandlers];
   addonRuntimeShutdownHandlers.clear();
   const timeout = Symbol("timeout");
@@ -195,6 +202,7 @@ async function shutdownAddonRuntimeContributions(): Promise<void> {
     }
   }));
   void results;
+  await children;
 }
 
 function getWorkspaceDir(): string {
@@ -374,6 +382,7 @@ export function installAddonRuntimeApi(): PiclawRuntimeAddonApi {
       register: registerExternalAddonRoute,
     },
     operations: { version: 1, register: registerOperations },
+    childRequests: addonChildRequestsApi,
     createMedia,
     getMediaById,
     postMessage: postMessagesToolMessage,
@@ -474,6 +483,7 @@ export async function shutdownAddonRuntimeContributionsForTests(): Promise<void>
 }
 
 export function resetAddonRuntimeContributionsForTests(): void {
+  resetAddonChildRequestsForTests();
   operationService?.shutdown();
   operationService = null;
   statusPanelProviders.clear();
