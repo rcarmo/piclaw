@@ -1,0 +1,163 @@
+{
+  "version": 1,
+  "qualificationSource": {
+    "head": "bdf9bf913ce7eb0185588f47fde28e3b046a7984",
+    "tree": "96f07225f2745b204c0697583b8633a78dc5201e",
+    "status": ""
+  },
+  "sourceFiles": {
+    "runtime/src/addons/child-request-runtime.ts": "b93f8f60722465e2226d855c572600c3f0f472de9f58107f6fa6a3614348a8a7",
+    "runtime/src/addons/child-request-validation.ts": "0414e1b34ffd70fc5490cc245ea3d2fde8527ce917268de02cebe3a42089ded3",
+    "runtime/src/addons/runtime-contributions.ts": "0089d85affc2d94fb99a117b344318bb179c36539bee93a285a774633d87cf91",
+    "runtime/src/agent-pool/session.ts": "4b5ba1c58a7f22db31d50640dd17fef2486b1733e5ddf77d81c27ad4bd2bcb3b",
+    "runtime/test/addons/child-request-runtime.test.ts": "60ad617eed57715f65fa4c1134a0c5350479444d31edab3fbf9ead7206a2e7a2",
+    "runtime/test/addons/child-request-validation.test.ts": "40490e3caf864f2ccf5be0e20553dba4688446e7e3130c910d1cca95f0855bd2",
+    "runtime/test/fixtures/child-request-runtime-profile.ts": "f830bd867b09c38b1f0b338573a8c6f6050bf47c0dc9823d2e103ef171f22960"
+  },
+  "sdk": "released Pi 1.0.3",
+  "runtime": "Bun1.4.2",
+  "full": {
+    "pass": 6566,
+    "skip": 8,
+    "fail": 0,
+    "assertions": 42879,
+    "runtimeSeconds": 664.72,
+    "elapsedMs": 673574.5207969999,
+    "features": {
+      "pass": 25,
+      "assertions": 246
+    },
+    "web": {
+      "pass": 9,
+      "assertions": 26
+    },
+    "command": "timeout --signal=TERM 2400 bun --no-env-file runtime/scripts/local-test-priority.ts -- make ci-fast"
+  },
+  "focused": {
+    "pass": 84,
+    "assertions": 320,
+    "files": 11
+  },
+  "types": "five projects pass; compose reports95 unchanged preexisting transitive diagnostics",
+  "lint": "changed files0warnings/errors; logging/silent guards and diffcheck pass",
+  "profiling": {
+    "plain": {
+      "runtime": "1.4.2",
+      "instrument": false,
+      "admitted": 500,
+      "authorised": 500,
+      "closed": 500,
+      "wallMs": 42.37253800000002,
+      "cpu": {
+        "user": 55926,
+        "system": 10729
+      },
+      "json": {
+        "parse": {
+          "calls": 0,
+          "ms": 0
+        },
+        "stringify": {
+          "calls": 0,
+          "ms": 0
+        }
+      },
+      "eventLoop": {
+        "resolutionMs": 1,
+        "samples": 9,
+        "maxMs": 4.319921
+      },
+      "journal": {
+        "journal_mode": "wal"
+      },
+      "synchronous": {
+        "synchronous": 2
+      },
+      "scope": "500 sequential actual installed-tool wrappers and synchronous durable-work/DB/path/config authority checks over owned WAL/FULL database; injected scope closes, no auth/provider/HTTP/reservation or OS child; startup excluded from wall/CPU, CPU profile includes startup; no baseline speed claim"
+    },
+    "instrumented": {
+      "runtime": "1.4.2",
+      "instrument": true,
+      "admitted": 500,
+      "authorised": 500,
+      "closed": 500,
+      "wallMs": 51.01798099999996,
+      "cpu": {
+        "user": 62137,
+        "system": 14552
+      },
+      "json": {
+        "parse": {
+          "calls": 1500,
+          "ms": 0.4716969999990397
+        },
+        "stringify": {
+          "calls": 5000,
+          "ms": 1.066507000000172
+        }
+      },
+      "eventLoop": {
+        "resolutionMs": 1,
+        "samples": 9,
+        "maxMs": 6.546764
+      },
+      "journal": {
+        "journal_mode": "wal"
+      },
+      "synchronous": {
+        "synchronous": 2
+      },
+      "scope": "500 sequential actual installed-tool wrappers and synchronous durable-work/DB/path/config authority checks over owned WAL/FULL database; injected scope closes, no auth/provider/HTTP/reservation or OS child; startup excluded from wall/CPU, CPU profile includes startup; no baseline speed claim"
+    },
+    "full": {
+      "sampleMs": 1000,
+      "samples": 673,
+      "observedProcesses": 262,
+      "peakTreeRssPages": 258944,
+      "pageSizeBytes": 4096,
+      "cpuClockTicksPerSecond": 100,
+      "mainTestProcess": {
+        "pid": 3050196,
+        "ppid": 3050187,
+        "name": "bun",
+        "nice": 10,
+        "cpuTicks": 10082,
+        "peakRssPages": 241715,
+        "samples": 664
+      },
+      "limits": "Linux proc stat CPU ticks and RSS pages; 1s observed process-tree samples, includes startup; short-lived processes can be missed; no CPU-profile attribution"
+    }
+  },
+  "peerReview": {
+    "reviewer": "@addons",
+    "scope": "bounded captured lease/raw close/startup and reentrant scope creation",
+    "finding": "pending close must be published before synchronous host entry",
+    "correction": "prepublished deferred owned close plus posthost lease/signal/plan checks; four held-tail regressions",
+    "notApproval": [
+      "production executor",
+      "confinement",
+      "activation"
+    ]
+  },
+  "retainedFailures": [
+    "early focused/type logs",
+    "edge-red three failed regressions",
+    "unsafe finally lint error",
+    "broad-v1 literal glob only10lifecycle tests, not broad pass",
+    "two independent model reviews timed out240/120s, no approval",
+    "full-v1 missing/usr/bin/time exit127, gate never started"
+  ],
+  "artifacts": {
+    "ci-fast.log": "e549bb9c2dfe7d944ff79a91c7cf69710295c512b9cc3877479fb90d4a2414c8",
+    "resources.json": "ad1b397c9cf9d1752b7403a3604e2566201f0421608b41d7b1178403206c99d9",
+    "source.json": "4a02ddccbdfc101f9458ed2df36bebd8be86023c4abd1ff0e18590d4a3ac92fc"
+  },
+  "notQualified": [
+    "provider/auth/transport raw-tail executor",
+    "account generation dispatch lease",
+    "child filesystem/process confinement",
+    "live credentials or spend",
+    "installation/restart/Delegate activation"
+  ],
+  "hostDefault": "unset; no production executor installer"
+}

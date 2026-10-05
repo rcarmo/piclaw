@@ -87,7 +87,17 @@ out at 240 and 120 seconds; neither supplies approval. A first broad test comman
 passed only ten lifecycle tests because its cwd-relative glob did not expand;
 the explicit-file rerun and final run cover all eleven files.
 
-Full exact-head qualification and publication are pending. No
+Frozen `bdf9bf913` / tree `96f07225` passed the isolated full low-priority
+`make ci-fast` gate: 6,566 pass, eight opt-in skips, zero failures and 42,879
+assertions, plus 25 feature and nine web tests. The full launcher took 673.57 s;
+source and tree remained clean and unchanged. One-second `/proc` samples tracked
+262 process IDs, including the actual test child at nice 10. Short-lived children
+can be missed; sampled RSS/CPU are not complete attribution or leak evidence.
+The first full launcher failed before starting because `/usr/bin/time` was absent;
+its exit 127 is retained. The replacement Bun sampler launched the passing gate.
+See `receipts/child-request-runtime-registration.json` for source hashes and scope.
+
+Publication/hosted checks remain separate. No
 installation, restart, provider executor or Delegate production activation is
 part of this slice. The next implementation requires public task-owned
 authentication/provider handles, account-generation dispatch leases and reviewed
