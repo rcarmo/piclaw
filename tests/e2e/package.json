@@ -19,8 +19,8 @@
     "report:html": "playwright show-report reports/html"
   },
   "devDependencies": {
-    "@playwright/test": "1.62.1",
-    "@cucumber/cucumber": "^13.2.1",
-    "playwright-bdd": "^9.2.0"
+    "@playwright/test": "1.64.0",
+    "@cucumber/cucumber": "^13.3.0",
+    "playwright-bdd": "^9.2.1"
   }
 }
