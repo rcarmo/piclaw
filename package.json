@@ -151,7 +151,7 @@
     "openai": "7.5.0",
     "pi-mcp-adapter": "github:piclaw-bot/pi-mcp-adapter#dddfcf630508f42c169889c11dee94e69b746e7c",
     "pptxviewjs": "1.1.9",
-    "preact": "10.29.8",
+    "preact": "11.0.1",
     "proper-lockfile": "4.1.2",
     "qrcode-terminal": "0.12.0",
     "sharp": "0.35.5",
