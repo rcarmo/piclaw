@@ -31,7 +31,7 @@ jobs:
     steps:
       - name: Resolve exact hotfix source
         id: ref
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
           script: |-
             const tag = context.payload.inputs.tag;
@@ -249,7 +249,7 @@ jobs:
           TAG_NAME: ${{ inputs.tag }}
         run: gh release upload "$HOTFIX_TAG" artifacts/release/* --clobber
       - name: Record untested release and move tag
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
           script: >-
             const tag=context.payload.inputs.tag, sha=context.payload.inputs.sha;
