@@ -9,6 +9,7 @@ import type {
   AppendOperationIntentRequest,
   BindHarnessRequest,
   ClaimNextSourceRequest,
+  HarnessCorrelation,
   ListOpenOperationsRequest,
   RecordQueuedInputRequest,
 } from "../contracts/service-work-store.js";
@@ -19,7 +20,8 @@ export type NormalisedMutationRequest =
   | AppendOperationIntentRequest
   | AcceptCancellationRequest
   | BindHarnessRequest
-  | RecordQueuedInputRequest;
+  | RecordQueuedInputRequest
+  | FinishHarnessRequest;
 
 export type MutationMethod =
   | "acceptSource"
@@ -27,6 +29,7 @@ export type MutationMethod =
   | "appendIntent"
   | "acceptCancellation"
   | "bindHarness"
+  | "finishHarness"
   | "recordQueuedInput";
 
 const HASH = /^[0-9a-f]{64}$/;
@@ -181,6 +184,14 @@ export function normaliseMutationRequest(
         state: state as BindHarnessRequest["state"],
         watchGeneration: requiredSafeInteger(request.watchGeneration, 0),
       };
+    } else if (method === "finishHarness" && exactKeys(request, ["effect", "expectedVersion", "expectedHarness"])) {
+      const harness = record(request.expectedHarness);
+      if (!effect.operationId || !harness || !exactKeys(harness, ["sessionId", "lane", "harnessOperationId", "state", "watchGeneration"]) || harness.state !== "running") return null;
+      normalised = {
+        effect: { ...effect, operationId: effect.operationId }, expectedVersion: requiredSafeInteger(request.expectedVersion, 1),
+        expectedHarness: { sessionId: requiredText(harness.sessionId), lane: requiredText(harness.lane),
+          harnessOperationId: requiredText(harness.harnessOperationId), state: "running", watchGeneration: requiredSafeInteger(harness.watchGeneration, 0) },
+      };
     } else if (
       method === "recordQueuedInput" &&
       exactKeys(request, [
@@ -207,7 +218,7 @@ export function normaliseMutationRequest(
 
     if (!normalised) return null;
     const expectedHash = hashCanonicalRequest(
-      normalised as unknown as CanonicalJsonValue,
+      (method === "finishHarness" ? { method: "finishHarness.v1", ...normalised } : normalised) as unknown as CanonicalJsonValue,
     );
     if (effect.requestHash !== expectedHash) return null;
     return deepFreeze(normalised);
@@ -215,6 +226,68 @@ export function normaliseMutationRequest(
     void caught;
     return null;
   }
+}
+
+/** Host-only completion receipt. Caller must verify committed candidate outcomes for all claimed inputs. */
+export interface FinishHarnessRequest {
+  readonly effect: EffectIdentity & { readonly operationId: string };
+  readonly expectedVersion: number;
+  readonly expectedHarness: HarnessCorrelation;
+}
+
+export interface WithdrawUnclaimedSourceRequest {
+  readonly effect: EffectIdentity;
+  readonly chatJid: string;
+  readonly sourceId: string;
+  readonly sourceHash: string;
+  readonly payloadRef: string;
+  readonly actor: string;
+}
+
+/** Host-only versioned identity; never aliases an existing public mutation hash. */
+export function normaliseWithdrawalRequest(input: unknown): WithdrawUnclaimedSourceRequest | null {
+  try {
+    const value = record(input);
+    if (!value || !isBoundedTree(input) || !exactKeys(value, ["effect", "chatJid", "sourceId", "sourceHash", "payloadRef", "actor"])) return null;
+    const effect = normaliseEffect(value.effect);
+    if (!effect || effect.operationId !== null || effect.sourceSeq !== null) return null;
+    const request = { effect, chatJid: requiredText(value.chatJid), sourceId: requiredText(value.sourceId),
+      sourceHash: requiredText(value.sourceHash), payloadRef: requiredText(value.payloadRef), actor: requiredText(value.actor) };
+    if (!HASH.test(request.sourceHash) || effect.requestHash !== hashCanonicalRequest({ method: "withdrawUnclaimedSource.v1", ...request } as unknown as CanonicalJsonValue)) return null;
+    return deepFreeze(request);
+  } catch { return null; }
+}
+
+export interface AttachQueuedSourceRequest {
+  readonly effect: EffectIdentity & { readonly operationId: string; readonly sourceSeq: number };
+  readonly chatJid: string;
+  readonly expectedVersion: number;
+  readonly expectedHarness: HarnessCorrelation;
+  readonly sourceId: string;
+  readonly sourceHash: string;
+  readonly payloadRef: string;
+  readonly createdAt: string;
+}
+
+/** Concrete host transition only; no change to the public EF-S01 protocol. */
+export function normaliseQueuedSourceAttachment(input: unknown): AttachQueuedSourceRequest | null {
+  try {
+    const value = record(input);
+    if (!value || !isBoundedTree(input) || !exactKeys(value, ["effect", "chatJid", "expectedVersion", "expectedHarness", "sourceId", "sourceHash", "payloadRef", "createdAt"])) return null;
+    const effect = normaliseEffect(value.effect);
+    const harness = record(value.expectedHarness);
+    if (!effect?.operationId || !effect.sourceSeq || !harness || !exactKeys(harness, ["sessionId", "lane", "harnessOperationId", "state", "watchGeneration"]) || harness.state !== "running") return null;
+    const request: AttachQueuedSourceRequest = {
+      effect: { ...effect, operationId: effect.operationId, sourceSeq: requiredSafeInteger(effect.sourceSeq, 1) },
+      chatJid: requiredText(value.chatJid), expectedVersion: requiredSafeInteger(value.expectedVersion, 1),
+      expectedHarness: { sessionId: requiredText(harness.sessionId), lane: requiredText(harness.lane),
+        harnessOperationId: requiredText(harness.harnessOperationId), state: "running", watchGeneration: requiredSafeInteger(harness.watchGeneration, 0) },
+      sourceId: requiredText(value.sourceId), sourceHash: requiredText(value.sourceHash),
+      payloadRef: requiredText(value.payloadRef), createdAt: requiredInstant(value.createdAt),
+    };
+    if (!HASH.test(request.sourceHash) || effect.requestHash !== hashCanonicalRequest({ method: "attachQueuedSource.v1", ...request } as unknown as CanonicalJsonValue)) return null;
+    return deepFreeze(request);
+  } catch { return null; }
 }
 
 export function normaliseListRequest(

@@ -25,6 +25,21 @@ function makeMessage(id: string, timestamp: string, threadId?: number | null): N
 }
 
 describe("process chat control runtime", () => {
+  test('accepted input remains queued beyond the legacy terminal retry limit', async () => {
+    let item: QueuedFollowupItem = { rowId: -1, queuedContent: 'accepted', queuedAt: '2026-01-01T00:00:00Z',
+      source_id: 'source-00000000-0000-4000-8000-000000000001', source_accepted: true, materializeRetries: 5 };
+    let drops = 0, broadcasts = 0;
+    const channel = { peekQueuedFollowupItem: () => item, storeMessage: () => null,
+      consumeQueuedFollowupItem() { drops++; return item; },
+      replaceQueuedFollowupItem(_chat: string, replacement: QueuedFollowupItem) { item = replacement; return true; },
+      broadcastEvent() { broadcasts++; } } as unknown as QueuedFollowupMaterializationRuntime;
+    const result = await materializeDeferredFollowups({ channel, chatJid: 'web:test', agentId: 'default' });
+    expect(result.status).toBe('retried');
+    expect(item.materializeRetries).toBe(6);
+    expect(item.source_accepted).toBe(true);
+    expect(drops).toBe(0);
+    expect(broadcasts).toBe(0);
+  });
   test("selectProcessChatMessage returns no_messages when the persisted frontier is empty", () => {
     const store: ProcessChatMessageSelectionStore = {
       getMessagesSince: () => [],
@@ -275,8 +290,10 @@ describe("process chat control runtime", () => {
       sessionGeneration: "session-new",
       reset: true,
     }]);
-    expect(statusUpdates).toHaveLength(1);
-    expect(statusUpdates[0]).toMatchObject({
+    expect(statusUpdates).toHaveLength(3);
+    expect(statusUpdates.map(status => status.type)).toEqual(["intent", "context_usage", "done"]);
+    expect(new Set(statusUpdates.map(status => status.turn_id)).size).toBe(1);
+    expect(statusUpdates[1]).toMatchObject({
       type: "context_usage",
       context_reset: true,
       sessionGeneration: "session-new",

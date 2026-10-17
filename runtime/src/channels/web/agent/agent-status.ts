@@ -52,6 +52,7 @@ export interface AgentStatusContext {
   getContextUsageForChat(
     chatJid: string
   ): Promise<{ tokens: number | null; contextWindow: number | null; percent: number | null; sessionGeneration?: string } | null>;
+  getSessionTreeSummaryForChat?(chatJid: string): Promise<{ leafId: string | null; total: number } | null>;
   getTokenUsageForChat(chatJid: string): AgentTokenUsageContext | null;
   getAvailableModels(chatJid: string, options?: { includeProviderDiagnostics?: boolean; includeCatalogue?: boolean }): Promise<unknown>;
   getProviderReadyCompletedForInstance(): boolean;
@@ -289,9 +290,13 @@ export function handleAgentStatusRequest(req: Request, ctx: AgentStatusContext):
 /** Build shared context and latest-run usage metadata for an authorised chat. */
 export async function buildAgentContextSnapshot(chatJid: string, ctx: AgentStatusContext): Promise<Record<string, unknown>> {
   const cacheUsage = formatTokenUsageContext(ctx.getTokenUsageForChat(chatJid));
+  // Read-only endpoint: never claims or clears the active turn/status surface.
+  const sessionTree = ctx.getSessionTreeSummaryForChat
+    ? { sessionTree: await ctx.getSessionTreeSummaryForChat(chatJid) }
+    : {};
   const usage = await ctx.getContextUsageForChat(chatJid);
   if (!usage) {
-    return { tokens: null, contextWindow: null, percent: null, sessionGeneration: null, cacheUsage };
+    return { tokens: null, contextWindow: null, percent: null, sessionGeneration: null, cacheUsage, ...sessionTree };
   }
   return {
     tokens: usage.tokens,
@@ -299,6 +304,7 @@ export async function buildAgentContextSnapshot(chatJid: string, ctx: AgentStatu
     percent: usage.percent,
     sessionGeneration: usage.sessionGeneration ?? null,
     cacheUsage,
+    ...sessionTree,
   };
 }
 

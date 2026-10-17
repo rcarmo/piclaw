@@ -157,6 +157,19 @@ describe("web channel endpoint context factory", () => {
     });
   });
 
+  test("authoritative unknown native counts do not revive same-generation stored estimates", async () => {
+    const usage = { tokens: null, contextWindow: 200000, percent: null, sessionGeneration: "session-current", tokensAreAuthoritative: true as const };
+    const channel = {
+      json: (payload: unknown) => new Response(JSON.stringify(payload)),
+      getContextUsage: () => ({ tokens: 999, contextWindow: 100000, percent: 1, sessionGeneration: "session-current" }),
+      agentPool: { getContextUsageForChat: async () => usage, getSessionGenerationForChat: () => "session-current" },
+    };
+    const contexts = createWebChannelEndpointContexts(channel as any, {
+      defaultChatJid: "web:default", defaultAgentId: "default", getIdentitySnapshot: () => createIdentitySnapshot(),
+    });
+    expect(await contexts.agentStatus().getContextUsageForChat("web:default")).toEqual(usage);
+  });
+
   test("rejects persisted context usage from a replaced session generation", async () => {
     const channel = {
       json: (payload: unknown, status = 200) => new Response(JSON.stringify(payload), { status }),

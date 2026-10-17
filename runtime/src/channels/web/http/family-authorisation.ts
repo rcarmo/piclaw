@@ -2,6 +2,7 @@ import type Database from "bun:sqlite";
 import type { AuthenticatedPrincipal } from "../../../core/access-types.js";
 import { getDb } from "../../../db/connection.js";
 import { handlePickerPins } from "../handlers/picker-pins.js";
+import { publicContextUsage } from "../context-usage.js";
 import { getMessageByRowIdFromDatabase, getThinkingContentForChat, updateMessageAnnotationsInDatabase } from "../../../db/messages.js";
 import { ChatAccessDenied, resolveAuthorisedChat } from "../../../db/session-ownership.js";
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
@@ -273,7 +274,7 @@ export async function handleFamilyRequest(channel: WebChannelLike, req: Request,
           ? await pool.getAvailableModels(branch.chat_jid, { includeProviderUsage: false, includeProviderDiagnostics: false })
           : null;
         const context = typeof pool.getContextUsageForChat === "function" ? await pool.getContextUsageForChat(branch.chat_jid) : null;
-        return { ...branch, is_active: isActive, model: models?.current ?? null, context_usage: context };
+        return { ...branch, is_active: isActive, model: models?.current ?? null, context_usage: publicContextUsage(context) };
       }));
       requireAccountActor(getDb(), principal);
       return channel.json({ home_chat_jid: settings.home_chat_jid, capabilities: settings.capabilities, branches });

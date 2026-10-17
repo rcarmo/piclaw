@@ -8,7 +8,7 @@ import { isOperationSession } from "./operation-session-profile.js";
  * existing map-based cache structure used by callers and tests.
  */
 
-import type { AgentSession, AgentSessionRuntime, ExtensionFactory, ModelRuntime, SettingsManager } from "@earendil-works/pi-coding-agent";
+import type { AgentSession, AgentSessionRuntime, ExtensionFactory, ModelRegistry, ModelRuntime, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { closeOpenAICodexWebSocketSessions } from "@earendil-works/pi-ai/api/openai-codex-responses";
 
 import {
@@ -25,7 +25,7 @@ import { ChatAccessDenied } from "../db/session-ownership.js";
 import { readOwnedForkSeed, finishOwnedForkSeed } from "../db/owned-forks.js";
 import { requireOwnedSessionExecution } from "./owned-session-access.js";
 import { importAdoptedSession } from './adopted-session-import.js';
-import { createDefaultSession, createSessionInDir, ensureNamedSessionDir, ensureSessionDir, lightweightPrewarmSession } from "./session.js";
+import type { createDefaultSession } from "./session.js";
 import { forcePersistSessionFile, seedRotatedSession } from "../session-rotation.js";
 import { getSessionPersistencePort } from "./session-persistence.js";
 import { getSessionThinkingPolicy, restoreSessionThinkingPolicy } from './thinking-policy.js';
@@ -46,20 +46,22 @@ const RECENT_USE_EVICTION_GRACE_MS = 1_000;
 
 /** Dependencies required to manage AgentPool session lifecycles. */
 export interface AgentSessionManagerOptions {
+  getDurableSession?: import("./contracts.js").AgentPoolOptions["getDurableSession"];
   pool: Map<string, PoolEntry>;
   sidePool: Map<string, PoolEntry>;
   createSession?: (chatJid: string, sessionDir: string) => Promise<AgentSessionRuntime>;
   createSideSession?: (chatJid: string, sessionDir: string) => Promise<AgentSessionRuntime>;
   disposePersistence?: (runtime: AgentSessionRuntime) => Promise<void> | void;
   modelRuntime: ModelRuntime;
+  modelRegistry?: ModelRegistry;
   settingsManager: SettingsManager;
   mainSessionMaxSize?: number | null;
   lightweightPrewarmSession?: (chatJid: string) => Promise<void>;
-  createDefaultTools: () => NonNullable<Parameters<typeof createDefaultSession>[1]["tools"]>;
+  createDefaultTools?: () => NonNullable<Parameters<typeof createDefaultSession>[1]["tools"]>;
   createCustomToolOverrides?: (chatJid: string) => unknown[];
   getSessionExtensionFactories?: (chatJid: string) => Promise<ExtensionFactory[]>;
-  bindSession: (runtime: AgentSessionRuntime, chatJid: string) => Promise<void>;
-  ensureBranchRegistration: (chatJid: string, session?: AgentSession | null) => void;
+  bindSession?: (runtime: AgentSessionRuntime, chatJid: string) => Promise<void>;
+  ensureBranchRegistration?: (chatJid: string, session?: AgentSession | null) => void;
   onInfo?: (message: string, details: Record<string, unknown>) => void;
   onWarn?: (message: string, details: Record<string, unknown>) => void;
   onError?: (message: string, details: Record<string, unknown>) => void;
@@ -114,6 +116,19 @@ export class AgentSessionManager {
   }
 
   constructor(private readonly options: AgentSessionManagerOptions) {}
+
+  private assertLegacySession(): void {
+    if (this.options.getDurableSession !== undefined) throw new Error("Durable application does not construct legacy sessions");
+  }
+
+  /** Read-only capture also requires an external all-controller admission fence. */
+  assertLegacyCaptureIdle(): void {
+    if (this.isShuttingDown || this.mcpSnapshotInFlight || this.hasActiveMemoryReclamationWork() ||
+      this.queuedPrewarms.size || this.prewarmLoopActive || this.failedMcpDisposals.size ||
+      [...this.options.pool.values(), ...this.options.sidePool.values()].some(({ runtime }) =>
+        runtime.session.isRetrying || runtime.session.hasPendingBashMessages || runtime.session.pendingMessageCount > 0))
+      throw new Error("Legacy pool lifecycle/agent work has not drained");
+  }
 
   /** Synchronous full GC must not interrupt protected runs or lifecycle work. */
   hasActiveMemoryReclamationWork(): boolean {
@@ -249,6 +264,7 @@ export class AgentSessionManager {
   }
 
   async refreshRuntime(chatJid: string, runtime: AgentSessionRuntime): Promise<void> {
+    this.assertLegacySession();
     requireOwnedSessionExecution(chatJid);
     this.assertNonReentrantLifecycleTransition();
     this.assertMcpAdmission();
@@ -260,13 +276,14 @@ export class AgentSessionManager {
     this.assertMcpAdmission(epoch);
     const entry = this.options.pool.get(chatJid);
     if (entry) entry.lastUsed = Date.now();
-    await this.options.bindSession(runtime, chatJid);
+    await this.options.bindSession!(runtime, chatJid);
     requireOwnedSessionExecution(chatJid);
     this.assertMcpAdmission(epoch);
-    this.options.ensureBranchRegistration(chatJid, runtime.session);
+    this.options.ensureBranchRegistration!(chatJid, runtime.session);
   }
 
   async getOrCreate(chatJid: string): Promise<AgentSessionRuntime> {
+    this.assertLegacySession();
     requireOwnedSessionExecution(chatJid);
     this.assertNonReentrantLifecycleTransition();
     this.assertMcpAdmission();
@@ -330,6 +347,11 @@ export class AgentSessionManager {
         chatJid,
       });
 
+      if (this.options.modelRegistry) {
+        const { installLegacySessionAffinityCompatibility } = await import("./session-affinity-compat.js");
+        installLegacySessionAffinityCompatibility(this.options.modelRegistry, (message, details) => this.options.onWarn?.(message, details));
+      }
+      const { ensureSessionDir, createDefaultSession } = await import("./session.js");
       const chatSessionDir = ensureSessionDir(chatJid);
 
       const extensionFactories = isOperationSession(chatJid) ? [] : await this.options.getSessionExtensionFactories?.(chatJid) ?? [];
@@ -340,7 +362,7 @@ export class AgentSessionManager {
         : await createDefaultSession(chatJid, {
             modelRuntime: this.options.modelRuntime,
             settingsManager: this.options.settingsManager,
-            tools: this.options.createDefaultTools(),
+            tools: this.options.createDefaultTools!(),
             customTools: isOperationSession(chatJid) ? [] : this.options.createCustomToolOverrides?.(chatJid) ?? [],
             extensionFactories,
           });
@@ -382,6 +404,7 @@ export class AgentSessionManager {
   }
 
   async getOrCreateSide(chatJid: string): Promise<AgentSessionRuntime> {
+    this.assertLegacySession();
     requireOwnedSessionExecution(chatJid);
     this.assertNonReentrantLifecycleTransition();
     this.assertMcpAdmission();
@@ -429,6 +452,11 @@ export class AgentSessionManager {
         operation: "get_or_create_side.create_session",
         chatJid,
       });
+      if (this.options.modelRegistry) {
+        const { installLegacySessionAffinityCompatibility } = await import("./session-affinity-compat.js");
+        installLegacySessionAffinityCompatibility(this.options.modelRegistry, (message, details) => this.options.onWarn?.(message, details));
+      }
+      const { ensureNamedSessionDir, createSessionInDir } = await import("./session.js");
       const sideSessionDir = ensureNamedSessionDir(chatJid, "btw-side");
 
       const extensionFactories = await this.options.getSessionExtensionFactories?.(chatJid) ?? [];
@@ -439,7 +467,7 @@ export class AgentSessionManager {
         : await createSessionInDir(sideSessionDir, {
             modelRuntime: this.options.modelRuntime,
             settingsManager: this.options.settingsManager,
-            tools: this.options.createDefaultTools(),
+            tools: this.options.createDefaultTools!(),
             customTools: this.options.createCustomToolOverrides?.(chatJid) ?? [],
             extensionFactories,
           });
@@ -574,6 +602,7 @@ export class AgentSessionManager {
   }
 
   prewarm(chatJid: string, options: { priority?: boolean; mode?: "full" | "lightweight" } = {}): boolean {
+    if (this.options.getDurableSession !== undefined) return false;
     // Queue provenance must be durable before background multi-user hydration is enabled.
     if (readAccessConfig().mode !== "single-user") return false;
     if (this.isShuttingDown || this.mcpAdmissionsBlocked) return false;
@@ -984,9 +1013,9 @@ export class AgentSessionManager {
               const epoch = this.mcpAdmissionEpoch;
               await this.trackMcpLifecycle(async () => {
                 this.assertMcpAdmission(epoch);
-                return (this.options.lightweightPrewarmSession ?? ((jid: string) => lightweightPrewarmSession(jid, {
-                  getSessionExtensionFactories: this.options.getSessionExtensionFactories,
-                })))(chatJid);
+                if (this.options.lightweightPrewarmSession) return this.options.lightweightPrewarmSession(chatJid);
+                const { lightweightPrewarmSession } = await import("./session.js");
+                return lightweightPrewarmSession(chatJid, { getSessionExtensionFactories: this.options.getSessionExtensionFactories });
               });
               this.options.onInfo?.("Lightweight-prewarmed chat session", {
                 operation: "prewarm_session.lightweight",

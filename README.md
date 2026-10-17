@@ -68,6 +68,7 @@ The [web UI guide](docs/web-ui.md#chat-and-status-surfaces) and [tools and skill
 - **Single-user is the default.** [Experimental family mode](docs/multi-user/README.md) is a trusted multi-user mode for small groups. Promoted `family-shared` deployments provide owned conversations while sharing one workspace and process; they do not provide filesystem isolation. Isolated-container mode is unavailable. See the [family user guide](docs/multi-user/user-guide.md).
 - The agent runs with its process user's permissions. Native installs can access that user's files and commands; containers expose their mounted files and configured network access. Use a dedicated environment and mount only what you intend to share.
 - Browser authentication supports authenticator codes (TOTP) and passkeys. Keep the backend private, use HTTPS for remote access, and trust forwarded headers only from your configured [reverse proxy](docs/reverse-proxy.md).
+- Enabled runtime locking refuses every existing lock path, including stale or malformed records. A crash can require [offline operator cleanup](docs/multi-user/operator-recovery.md#existing-runtime-locks) before startup or maintenance can proceed; never remove a lock while an owner may be running.
 - Self-hosting keeps application state on your machine. Cloud models and external tools still receive the data you send to them. The optional [keychain](docs/keychain.md) needs a master key and does not encrypt the whole workspace or chat history.
 
 ## Documentation

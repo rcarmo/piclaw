@@ -42,18 +42,18 @@ const start = performance.now(), cpu = process.cpuUsage();
 try {
   const baseline = await pool.runAgent('Synthetic baseline conversation', chat, { timeoutMs: 0 });
   assert.equal(baseline.status, 'success', JSON.stringify(baseline));
-  const before = pool.getSessionTreeSummaryForChat(chat); assert(before?.leafId);
+  const before = await pool.getSessionTreeSummaryForChat(chat); assert(before?.leafId);
   const due = new Date(Date.now() - 60000).toISOString();
   createTask({ id: 'real-agent-task', chat_jid: chat, prompt, schedule_type: 'interval', schedule_value: '3600000', next_run: due, status: 'active', notify_on_complete: false, created_at: due });
   resetSchedulerMetricsForTests();
   startSchedulerLoop({ queue, agentPool: pool, sendMessage: async (jid, text) => { deliveries.push({ jid, text }); } });
   const deadline = performance.now() + 15000;
   while (queue.getMetrics().succeeded < 1 && queue.getMetrics().failed === 0 && performance.now() < deadline) await Bun.sleep(5);
-  stopSchedulerLoop();
+  await stopSchedulerLoop();
   assert.equal(queue.getMetrics().failed, 0); assert.equal(queue.getMetrics().succeeded, 1);
   const logs = getTaskRunLogs('real-agent-task'); assert.equal(logs.length, 1); assert.equal(logs[0].status, 'success', JSON.stringify(logs));
   assert.equal(providerCalls, 2); assert.equal(deliveries.length, 1); assert.equal(deliveries[0].jid, chat); assert(deliveries[0].text.includes('Synthetic scheduler response 2'));
-  const session = await pool.getSessionForIntrospection(chat), after = pool.getSessionTreeSummaryForChat(chat);
+  const session = await pool.getSessionForIntrospection(chat), after = await pool.getSessionTreeSummaryForChat(chat);
   assert.equal(after?.leafId, before.leafId); assert(after!.total > before.total);
   assert(JSON.stringify(session.sessionManager.getEntries()).includes(prompt)); assert(!JSON.stringify(session.sessionManager.getBranch()).includes(prompt));
   const persisted = SessionManager.open(session.sessionFile!);
@@ -66,7 +66,7 @@ try {
   loop.disable();
   console.log(JSON.stringify({ runtime: Bun.version, providerCalls, deliveries: deliveries.length, realAgentPool: true, realSessionConstruction: true, realLeafRestored: true, scheduledBranchPersisted: true, scheduledBranchExcludedFromActiveContext: true, durableSourceSettled: true, recurrenceVerified: true, entriesBefore: before.total, entriesAfter: after!.total, sessionBytes: statSync(session.sessionFile!).size, queue: queue.getMetrics(), scheduler: getSchedulerMetrics(), networkAttempts: guard.networkAttempts, childProcessAttempts: guard.childProcessAttempts, wallMs: performance.now() - start, cpu: process.cpuUsage(cpu), eventLoop: { samples: loop.count, maxMs: loop.max / 1e6, meanMs: loop.mean / 1e6 }, scope: 'Actual scheduler claim/AgentQueue/AgentPool.runAgent/Piclaw session construction/public Pi SDK prompting and leaf navigation over owned disk state. Native synthetic provider emits deterministic zero-cost responses; outbound sink observes delivery only, no live provider/account/transport. No raw auth/provider/account-generation contract qualification.' }));
 } finally {
-  stopSchedulerLoop();
+  await stopSchedulerLoop();
   try { await queue.shutdown(); }
   finally {
     try { await pool.shutdown(); }

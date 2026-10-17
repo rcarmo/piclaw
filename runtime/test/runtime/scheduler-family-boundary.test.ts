@@ -19,13 +19,13 @@ const identity: ExecutionIdentity = {
 
 async function fixture(run: (configure: (mode: Mode) => void, workspace: string) => Promise<void>) {
   await withTempWorkspaceEnv("scheduler-boundary-", {}, async (ws) => {
-    stopSchedulerLoop(); closeDatabase(); initDatabase(); resetSchedulerMetricsForTests();
+    await stopSchedulerLoop(); closeDatabase(); initDatabase(); resetSchedulerMetricsForTests();
     mkdirSync(join(ws.workspace, ".piclaw"));
     const configure = (mode: Mode) => writeFileSync(join(ws.workspace, ".piclaw/config.json"), mode === "invalid" ? "{" : JSON.stringify({ domains: { access: {
       mode, ...(mode === "isolated-containers" ? { isolation: { component: "backend", backendId: "test", ownerUserId: "alice", gatewayUrl: "https://gateway.example", verificationKeyRef: "test-key" } } : {}),
     } } }));
     configure("single-user");
-    try { await run(configure, ws.workspace); } finally { stopSchedulerLoop(); closeDatabase(); }
+    try { await run(configure, ws.workspace); } finally { await stopSchedulerLoop(); closeDatabase(); }
   });
 }
 
@@ -86,7 +86,7 @@ test("scheduler entry points deny unsupported modes, stale context and invalid c
           expect(await runScheduledTask(new Proxy({} as ScheduledTask, { get: () => { throw new Error("Unexpected task read"); } }), deps)).toEqual(skipped);
           for (const current of tasks) expect(await runScheduledTask(current, deps)).toEqual(skipped);
           await pollScheduledRunsOnce(deps, forbiddenStore);
-          startSchedulerLoop(deps)();
+          await startSchedulerLoop(deps)();
         });
       }
     }
@@ -104,6 +104,52 @@ test("scheduler stops after each agent await or rejection without later restorat
       expect(await runScheduledTask(current, h.deps)).toEqual(skipped);
       expect(h.calls).toEqual(stages.slice(0, stages.indexOf(stage) + 1));
       expect(snapshot()).toBe(before);
+    }
+  });
+});
+
+test("native dispatch joins a rejecting promise after synchronous authority revocation without settlement", async () => {
+  await fixture(async (configure) => {
+    const current = task(), h = harness();
+    const entered = Promise.withResolvers<void>();
+    const native = Promise.withResolvers<Awaited<ReturnType<SchedulerDeps["agentPool"]["runAgent"]>>>();
+    const unhandled: unknown[] = [];
+    const onUnhandled = (error: unknown) => { unhandled.push(error); };
+    let atDispatch = "", finished = false;
+    h.deps.agentPool.dispatchScheduledAgent = (lease) => {
+      expect(lease.record.taskId).toBe(current.id);
+      h.calls.push("native");
+      atDispatch = snapshot();
+      // Revocation happens before dispatch returns, not at a later await.
+      configure("family-shared");
+      entered.resolve();
+      return native.promise;
+    };
+    process.on("unhandledRejection", onUnhandled);
+    let running: Promise<void> | undefined;
+    try {
+      await pollScheduledRunsOnce(h.deps, store());
+      expect(h.queued).toHaveLength(1);
+      running = h.queued[0]().then(() => { finished = true; });
+      await entered.promise;
+      await Bun.sleep(0);
+      // The queue-owned callback must remain active until native work settles.
+      expect(finished).toBe(false);
+      expect(h.calls).toEqual(["native"]);
+      expect(snapshot()).toBe(atDispatch);
+      native.reject(new Error("native rejected after authority revocation"));
+      await running;
+      await Bun.sleep(0);
+      expect(finished).toBe(true);
+      expect(unhandled).toEqual([]);
+      expect(h.calls).toEqual(["native"]);
+      // No result log, delivery, restoration, completion, or source settlement.
+      expect(snapshot()).toBe(atDispatch);
+    } finally {
+      native.reject(new Error("native regression cleanup"));
+      await running;
+      await Bun.sleep(0);
+      process.off("unhandledRejection", onUnhandled);
     }
   });
 });
@@ -172,7 +218,7 @@ test("source binding and settlement continuations do not mutate after a mode cha
       if (stage === "abandon") getDb().query("UPDATE scheduled_tasks SET status='paused' WHERE id=?").run(current.id);
       await run(); expect(afterStage).not.toBe(""); expect(snapshot()).toBe(afterStage);
       if (stage !== "complete") expect(h.calls).toEqual([]);
-      stopSchedulerLoop();
+      await stopSchedulerLoop();
     }
   });
 });
@@ -265,11 +311,11 @@ test("automatic denial stops polling, releases store resources and permits a cle
       getDb().exec("PRAGMA foreign_keys=OFF"); const h = harness(); const before = snapshot();
       startSchedulerLoop(h.deps); await waitFor(() => polls.length === 1);
       expect(foreignKeys()).toBe(1);
-      configure("family-shared"); await polls.shift()!();
+      configure("family-shared"); await polls.shift()!(); await stopSchedulerLoop();
       expect(polls).toHaveLength(0); expect(foreignKeys()).toBe(0); expect(snapshot()).toBe(before);
       configure("single-user"); const stop = startSchedulerLoop(h.deps);
       await waitFor(() => polls.length === 1); expect(foreignKeys()).toBe(1);
-      stop(); expect(foreignKeys()).toBe(0); expect(snapshot()).toBe(before);
+      await stop(); expect(foreignKeys()).toBe(0); expect(snapshot()).toBe(before);
     } finally { timerSpy.mockRestore(); }
   });
 });

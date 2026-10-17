@@ -15,7 +15,9 @@ import { assertCurrentProviderSelection } from './retired-provider-selection.js'
  *   - ensureSessionDir() is also used by agent-control/handlers/session.ts.
  */
 
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "fs";
+import { createReadStream, createWriteStream, existsSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "fs";
+import { ensureSessionDir } from "./session-paths.js";
+export { ensureSessionDir, ensureNamedSessionDir, sanitiseJid } from "./session-paths.js";
 import { join, resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { createInterface } from "readline";
@@ -38,7 +40,7 @@ import { bindMcpBridgeOwner, createMcpBridgeOwner } from "./mcp-bridge-owner.js"
 import { createConstrainedNativeOwner } from './mcp-native-owner.js';
 import { mcpRuntimeRegistrationPolicy } from "../extensions/mcp-runtime-policy.js";
 import { getPiclawAgentDir } from "../core/agent-dir.js";
-import { SESSIONS_DIR, getRuntimeRoot, getSessionPersistenceConfig, getWorkspaceDir } from "../core/config.js";
+import { getRuntimeRoot, getSessionPersistenceConfig, getWorkspaceDir } from "../core/config.js";
 import { buildChannelSystemPromptAppendix } from "../channels/formatting.js";
 import { detectChannel } from "../router.js";
 import { createBuiltinExtensionFactories } from "../extensions/index.js";
@@ -59,9 +61,7 @@ import type { CompactionStreamFn } from "../extensions/smart-compaction/stream-c
 import { normalizeLlmContext } from "./llm-context-normalizer.js";
 import { writeMergedSessionArchive } from "../session-archive.js";
 import {
-  listInstalledAddonPackageDirs,
-  readInstalledAddonPackage,
-  resolveAddonPackageEntries,
+  getInstalledAddonExtensionPaths as installedAddonExtensionPaths,
 } from "../addons/package-entries.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -208,14 +208,7 @@ function ensureWorkspaceExtensionNodeModulesLink(nodeModulesDir: string | null):
 }
 
 export function getInstalledAddonExtensionPaths(workspaceDir = getWorkspaceDir()): string[] {
-  const addonsNodeModulesDir = join(workspaceDir, ".pi", "extensions", "node_modules");
-  const extensionPaths: string[] = [];
-  for (const packageDir of listInstalledAddonPackageDirs(addonsNodeModulesDir)) {
-    const addonPackage = readInstalledAddonPackage(packageDir);
-    if (!addonPackage) continue;
-    extensionPaths.push(...resolveAddonPackageEntries(packageDir, addonPackage.manifest.pi?.extensions));
-  }
-  return extensionPaths;
+  return installedAddonExtensionPaths(workspaceDir);
 }
 
 function getBundledExtensionPaths(chatJid?: string): string[] {
@@ -533,20 +526,6 @@ export function trimPreCompactionEntries(sessionDir: string): void {
   }
 }
 
-/** Ensure the session directory exists for a chat and return its path. */
-export function ensureSessionDir(chatJid: string): string {
-  const chatSessionDir = join(SESSIONS_DIR, sanitiseJid(chatJid));
-  mkdirSync(chatSessionDir, { recursive: true });
-  return chatSessionDir;
-}
-
-/** Ensure a named auxiliary session directory exists for a chat and return its path. */
-export function ensureNamedSessionDir(chatJid: string, name: string): string {
-  const dir = join(SESSIONS_DIR, `${sanitiseJid(chatJid)}__${sanitiseJid(name)}`);
-  mkdirSync(dir, { recursive: true });
-  return dir;
-}
-
 /**
  * Create a fully-configured pi-agent session for the given chat.
  * Loads workspace resources (AGENTS.md, skills, extensions, prompt templates)
@@ -761,9 +740,4 @@ export async function lightweightPrewarmSession(
   void getAppendSystemPromptOverride(appendix);
   void getBundledExtensionPaths(chatJid);
   await options.getSessionExtensionFactories?.(chatJid);
-}
-
-/** Replace characters that are unsafe for filesystem paths. */
-export function sanitiseJid(jid: string): string {
-  return jid.replace(/[^a-zA-Z0-9._-]/g, "_");
 }

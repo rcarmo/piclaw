@@ -47,6 +47,16 @@ export function listInstalledAddonPackageDirs(addonsNodeModulesDir: string): str
   return results.sort();
 }
 
+/** Shared installed extension discovery for session and application lifetimes. */
+export function getInstalledAddonExtensionPaths(workspaceDir: string): string[] {
+  const paths: string[] = [];
+  for (const packageDir of listInstalledAddonPackageDirs(join(workspaceDir, ".pi", "extensions", "node_modules"))) {
+    const addon = readInstalledAddonPackage(packageDir);
+    if (addon) paths.push(...resolveAddonPackageEntries(packageDir, addon.manifest.pi?.extensions));
+  }
+  return paths;
+}
+
 /** Read one installed package manifest, or null when absent/malformed. */
 export function readInstalledAddonPackage(packageDir: string): InstalledAddonPackage | null {
   const packageJsonPath = join(packageDir, "package.json");

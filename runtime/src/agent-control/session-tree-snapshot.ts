@@ -24,12 +24,20 @@ export interface SessionTreeSnapshotNode extends Record<string, unknown> {
 export interface SessionTreeSnapshot {
   version: 1;
   leafId: string | null;
+  /** Derived presentation target when the exact public head is not rendered. */
+  visibleLeafId?: string | null;
   nodes: SessionTreeSnapshotNode[];
   flat: true;
   total: number;
 }
 
-type SessionTreeManager = Pick<AgentSession["sessionManager"], "getLeafId" | "getTree">;
+/** UI-only data, deliberately not a Pi SessionEntry/AgentSession impersonation. */
+export interface RootSessionTreeNode {
+  entry: Record<string, unknown> & { id: string; parentId: string | null; type: string };
+  children: RootSessionTreeNode[];
+  label?: string;
+}
+type SessionTreeManager = { getLeafId(): string | null; getTree(): RootSessionTreeNode[] | ReturnType<AgentSession["sessionManager"]["getTree"]> };
 
 function truncateText(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
@@ -365,8 +373,9 @@ function describeTreeEntry(entry: Record<string, unknown>): string {
   return "[entry]";
 }
 
-export function buildSessionTreeSnapshot(sessionManager: SessionTreeManager): SessionTreeSnapshot {
+export function buildSessionTreeSnapshot(sessionManager: SessionTreeManager, presentation?: { visibleLeafId: string | null }): SessionTreeSnapshot {
   const leafId = sessionManager.getLeafId();
+  const activeId = presentation ? presentation.visibleLeafId : leafId;
   const roots = sessionManager.getTree();
   const nodes: SessionTreeSnapshotNode[] = [];
   const stack = [...roots].reverse();
@@ -381,7 +390,7 @@ export function buildSessionTreeSnapshot(sessionManager: SessionTreeManager): Se
       type: typeof entry.type === "string" ? entry.type : "entry",
       timestamp: typeof entry.timestamp === "string" ? entry.timestamp : undefined,
       label: typeof node.label === "string" ? node.label : null,
-      active: entry.id === leafId,
+      active: entry.id === activeId,
       preview: describeTreeEntry(entry),
       childCount: children.length,
       ...getEntryMeta(entry),
@@ -389,5 +398,5 @@ export function buildSessionTreeSnapshot(sessionManager: SessionTreeManager): Se
     for (let index = children.length - 1; index >= 0; index -= 1) stack.push(children[index]);
   }
 
-  return { version: 1, leafId, nodes, flat: true, total: nodes.length };
+  return { version: 1, leafId, ...(presentation ? { visibleLeafId: presentation.visibleLeafId } : {}), nodes, flat: true, total: nodes.length };
 }

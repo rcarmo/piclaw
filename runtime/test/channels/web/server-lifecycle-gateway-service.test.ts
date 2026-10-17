@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import {
   WebServerLifecycleGatewayService,
@@ -197,6 +197,270 @@ function createFixture(overrides: Partial<WebServerLifecycleGatewayDeps> = {}) {
 }
 
 describe("web server lifecycle gateway service", () => {
+  test("concurrent starts allocate once and a stopped instance cannot restart", async () => {
+    const fixture = createFixture();
+    const starting = fixture.service.start();
+    expect(fixture.service.start()).toBe(starting);
+    await starting;
+    await fixture.service.start();
+    expect(fixture.calls.serveAttempts).toBe(1);
+    expect(fixture.calls.intervalCalls).toHaveLength(1);
+    await fixture.service.stop();
+    await expect(fixture.service.start()).rejects.toThrow("cannot restart");
+    expect(fixture.calls.serveAttempts).toBe(1);
+  });
+
+  test("stop joins held TLS and fences every startup publication after release", async () => {
+    const tls = Promise.withResolvers<string>();
+    const reading = Promise.withResolvers<void>();
+    const fixture = createFixture({
+      webServerConfig: { host: "127.0.0.1", port: 8080, idleTimeout: 30, tlsCert: "cert", tlsKey: "key" },
+      readTextFile: () => { reading.resolve(); return tls.promise; },
+    });
+    fixture.setWorkspaceVisible(true);
+    const starting = fixture.service.start();
+    await reading.promise;
+    let stopped = false;
+    const stopping = fixture.service.stop();
+    void stopping.then(() => { stopped = true; });
+    await Promise.resolve(); await Promise.resolve();
+    expect(stopped).toBe(false);
+    expect(fixture.calls.sseCloseCalls).toBe(0);
+    tls.resolve("held TLS contents");
+    await Promise.all([starting, stopping]);
+    await fixture.service.syncWorkspaceWatcher();
+    expect(fixture.calls.serveAttempts).toBe(0);
+    expect(fixture.calls.startWorkspaceWatcherCalls).toBe(0);
+    expect(fixture.calls.intervalCalls).toHaveLength(0);
+    expect(fixture.calls.purgeCalls).toHaveLength(0);
+    expect(fixture.calls.logInfo.some(entry => entry.meta?.operation === "start.listen")).toBe(false);
+    expect(fixture.service.server).toBeNull();
+  });
+
+  test("stop interrupts a held busy-bind retry without another serve attempt", async () => {
+    const sleeping = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    let signal: AbortSignal | undefined;
+    const fixture = createFixture({
+      serve: (() => { fixture.calls.serveAttempts++; throw Object.assign(new Error("busy"), { code: "EADDRINUSE" }); }) as typeof Bun.serve,
+      sleep: (_ms, abort) => { signal = abort; sleeping.resolve(); return release.promise; },
+    });
+    const starting = fixture.service.start();
+    await sleeping.promise;
+    await fixture.service.stop();
+    await starting;
+    expect(signal?.aborted).toBe(true);
+    expect(fixture.calls.serveAttempts).toBe(1);
+    expect(fixture.calls.intervalCalls).toHaveLength(0);
+    release.resolve();
+    await Promise.resolve();
+    expect(fixture.calls.serveAttempts).toBe(1);
+  });
+
+  test("stop clears the owned bind-retry timeout promptly", async () => {
+    const sleeping = Promise.withResolvers<void>();
+    const timeoutToken = {};
+    const originalSetTimeout = globalThis.setTimeout;
+    const originalClearTimeout = globalThis.clearTimeout;
+    let cleared = false;
+    const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(((handler: TimerHandler, ms?: number, ...args: any[]) => {
+      if (ms === 1500) { sleeping.resolve(); return timeoutToken; }
+      return originalSetTimeout(handler, ms, ...args);
+    }) as typeof setTimeout);
+    const clearSpy = spyOn(globalThis, "clearTimeout").mockImplementation(((timer: unknown) => {
+      if (timer === timeoutToken) { cleared = true; return; }
+      originalClearTimeout(timer as never);
+    }) as typeof clearTimeout);
+    try {
+      const fixture = createFixture({
+        sleep: undefined,
+        serve: (() => { fixture.calls.serveAttempts++; throw Object.assign(new Error("busy"), { code: "EADDRINUSE" }); }) as typeof Bun.serve,
+      });
+      const starting = fixture.service.start();
+      await sleeping.promise;
+      await fixture.service.stop();
+      await starting;
+      expect(cleared).toBe(true);
+      expect(fixture.calls.serveAttempts).toBe(1);
+      expect(fixture.calls.intervalCalls).toHaveLength(0);
+    } finally {
+      timeoutSpy.mockRestore();
+      clearSpy.mockRestore();
+    }
+  });
+
+  test("stop before startup work begins prevents all allocation", async () => {
+    const fixture = createFixture();
+    const starting = fixture.service.start();
+    await fixture.service.stop();
+    await starting;
+    expect(fixture.calls.loadStateCalls).toBe(0);
+    expect(fixture.calls.serveAttempts).toBe(0);
+    expect(fixture.calls.intervalCalls).toHaveLength(0);
+  });
+
+  test("stop fences watcher restart after held close and joins partial listener cleanup", async () => {
+    const closing = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const fixture = createFixture();
+    fixture.setWorkspaceVisible(true);
+    fixture.service.workspaceWatcher = { close: async () => { closing.resolve(); await release.promise; } };
+    let listenerClosed = false, stopped = false;
+    fixture.server.stop = async () => { listenerClosed = true; };
+    const starting = fixture.service.start();
+    await closing.promise;
+    const stopping = fixture.service.stop();
+    void stopping.then(() => { stopped = true; });
+    await Promise.resolve();
+    expect(stopped).toBe(false);
+    release.resolve();
+    await Promise.all([starting, stopping]);
+    expect(listenerClosed).toBe(true);
+    expect(fixture.calls.startWorkspaceWatcherCalls).toBe(0);
+    expect(fixture.calls.intervalCalls).toHaveLength(0);
+    expect(fixture.service.workspaceWatcher).toBeNull();
+    expect(fixture.service.server).toBeNull();
+  });
+
+  test("startup failure cleans partial resources without joining its own cleanup wrapper", async () => {
+    const fixture = createFixture({ purgeExpiredLinkPreviewImageCache: () => { throw new Error("purge failed"); } });
+    fixture.setWorkspaceVisible(true);
+    let listenerClosed = false;
+    fixture.server.stop = async () => { listenerClosed = true; };
+    await expect(fixture.service.start()).rejects.toThrow("purge failed");
+    await fixture.service.stop();
+    expect(listenerClosed).toBe(true);
+    expect(fixture.calls.watcherCloseCalls).toBe(1);
+    expect(fixture.service.server).toBeNull();
+    expect(fixture.service.workspaceWatcher).toBeNull();
+  });
+
+  test("startup preserves its primary error identity when cleanup succeeds", async () => {
+    const primary = new Error("purge failed");
+    const fixture = createFixture({ purgeExpiredLinkPreviewImageCache: () => { throw primary; } });
+    expect(await fixture.service.start().catch(error => error)).toBe(primary);
+    await fixture.service.stop();
+  });
+
+  test("startup and transport failures retain both identities and still close the watcher", async () => {
+    const primary = new Error("purge failed");
+    const cleanup = new Error("transport failed");
+    const fixture = createFixture({ purgeExpiredLinkPreviewImageCache: () => { throw primary; } });
+    fixture.setWorkspaceVisible(true);
+    let stopCalls = 0;
+    fixture.server.stop = async () => { stopCalls++; throw cleanup; };
+    const failure = await fixture.service.start().catch(error => error);
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect(failure.errors).toEqual([primary, cleanup]);
+    expect(failure.errors[0]).toBe(primary);
+    expect(failure.errors[1]).toBe(cleanup);
+    const stopping = fixture.service.stop();
+    expect(fixture.service.stop()).toBe(stopping);
+    expect(await stopping.catch(error => error)).toBe(cleanup);
+    expect(fixture.calls.watcherCloseCalls).toBe(1);
+    expect(fixture.service.workspaceWatcher).toBeNull();
+    expect(fixture.service.server).toBe(fixture.server);
+    await fixture.service.syncWorkspaceWatcher();
+    await expect(fixture.service.start()).rejects.toThrow("cannot restart");
+    await Promise.resolve();
+    expect(stopCalls).toBe(1);
+    expect(fixture.calls.serveAttempts).toBe(1);
+    expect(fixture.calls.startWorkspaceWatcherCalls).toBe(1);
+    expect(fixture.calls.intervalCalls).toHaveLength(0);
+    expect(fixture.calls.logInfo.some(entry => entry.meta?.operation === "start.listen")).toBe(false);
+  });
+
+  test("independent cleanup collects failures and clears timers after an earlier failure", async () => {
+    const sseFailure = new Error("sse failed");
+    const transportFailure = new Error("transport failed");
+    const watcherFailure = new Error("watcher failed");
+    const fixture = createFixture({ sse: { closeAll: () => { throw sseFailure; } } });
+    fixture.setWorkspaceVisible(true);
+    await fixture.service.start();
+    fixture.server.stop = async () => { throw transportFailure; };
+    fixture.service.workspaceWatcher = { close: async () => { fixture.calls.watcherCloseCalls++; throw watcherFailure; } };
+    const stopping = fixture.service.stop();
+    const failure = await stopping.catch(error => error);
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect(failure.errors).toEqual([sseFailure, transportFailure, watcherFailure]);
+    expect(fixture.calls.uiBridgeStopCalls).toBe(1);
+    expect(fixture.calls.terminalShutdownCalls).toBe(1);
+    expect(fixture.calls.vncShutdownCalls).toBe(1);
+    expect(fixture.calls.clearIntervalCalls).toHaveLength(1);
+    expect(fixture.service.linkPreviewCachePurgeTimer).toBeNull();
+    expect(fixture.calls.watcherCloseCalls).toBe(1);
+    expect(fixture.service.workspaceWatcher).not.toBeNull();
+    expect(fixture.service.server).toBe(fixture.server);
+    expect(fixture.service.stop()).toBe(stopping);
+    expect(await fixture.service.stop().catch(error => error)).toBe(failure);
+  });
+
+  test("stop synchronously seals admission and joins a real pending request body before teardown", async () => {
+    const body = Promise.withResolvers<ReadableStreamDefaultController<Uint8Array>>();
+    const entered = Promise.withResolvers<void>();
+    let writes = 0, stopped = false;
+    const fixture = createFixture({ handleRequest: async req => {
+      entered.resolve();
+      await req.text();
+      writes++;
+      return json({ accepted: true });
+    } });
+    const req = createRequest('/post', { method: 'POST', body: new ReadableStream({ start(controller) { body.resolve(controller); } }) });
+    const pending = fixture.service.handleFetch(req);
+    await entered.promise;
+    const stopping = fixture.service.stop();
+    expect(fixture.service.stop()).toBe(stopping);
+    void stopping.then(() => { stopped = true; });
+    const denied = createRequest('/post', { method: 'POST', body: 'must not read' });
+    expect((await fixture.service.handleFetch(denied))?.status).toBe(503);
+    expect(denied.bodyUsed).toBe(false);
+    await Promise.resolve();
+    expect(stopped).toBe(false);
+    expect(fixture.calls.sseCloseCalls).toBe(0);
+    const controller = await body.promise;
+    controller.enqueue(new TextEncoder().encode('accepted before seal')); controller.close();
+    expect((await pending)?.status).toBe(200);
+    await stopping;
+    expect(writes).toBe(1);
+    expect(fixture.calls.sseCloseCalls).toBe(1);
+    expect((await fixture.service.handleFetch(createRequest('/post')))?.status).toBe(503);
+    expect(writes).toBe(1);
+  });
+
+  test("handler rejection releases the join and transport cleanup failure remains sticky", async () => {
+    const release = Promise.withResolvers<void>();
+    const failure = new Error('handler failed');
+    const fixture = createFixture({ handleRequest: async () => { await release.promise; throw failure; } });
+    const request = fixture.service.handleFetch(createRequest('/post')).catch(error => error);
+    const stopping = fixture.service.stop();
+    release.resolve();
+    expect(await request).toBe(failure);
+    await stopping;
+    const broken = createFixture();
+    broken.server.stop = async () => { throw new Error('transport failed'); };
+    broken.service.server = broken.server;
+    const rejected = broken.service.stop();
+    await expect(rejected).rejects.toThrow('transport failed');
+    expect(broken.service.stop()).toBe(rejected);
+    expect((await broken.service.handleFetch(createRequest('/post')))?.status).toBe(503);
+  });
+
+  test("already-entered WebSocket add-on control callbacks join the same admission drain", async () => {
+    const release = Promise.withResolvers<void>();
+    let messages = 0, closed = 0, joined = false;
+    const fixture = createFixture();
+    await fixture.service.start();
+    const socket = { data: { kind: 'authenticated-addon', session: { message: async () => { messages++; await release.promise; } } }, close: () => { closed++; } };
+    fixture.calls.serveCalls[0].websocket.message(socket, 'first');
+    const drain = fixture.service.sealAdmissions();
+    void drain.then(() => { joined = true; });
+    fixture.calls.serveCalls[0].websocket.message(socket, 'denied');
+    await Promise.resolve();
+    expect(messages).toBe(1); expect(closed).toBe(1); expect(joined).toBe(false);
+    release.resolve(); await drain;
+    expect(joined).toBe(true);
+    await fixture.service.stop();
+  });
   test("CDP viewer upgrade requires authentication and same origin", async () => {
     const fixture = createFixture();
     const req = createRequest('/cdp-view/ws');

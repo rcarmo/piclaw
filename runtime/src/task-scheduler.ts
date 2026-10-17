@@ -315,6 +315,7 @@ async function executeScheduledTask(
   deps: SchedulerDeps,
   options: { advanceTask?: boolean },
   claimActive: () => boolean = () => true,
+  scheduledLease?: ScheduledRunLease,
 ): Promise<ScheduledTaskRunOutcome> {
   if (!canRunLegacyScheduledWork()) return unsupportedScheduledRun();
   // Once denied, finally/catch paths must not restore models or persist results.
@@ -390,17 +391,17 @@ async function executeScheduledTask(
         }
       }
     } else {
-      // Save session position so we can restore after the task.
-      // This isolates the task's prompt/response in a side branch of the session
-      // tree, preventing context pollution of the user's conversation.
-      const savedLeafId = await deps.agentPool.saveSessionPosition(task.chat_jid);
       if (!mayContinue()) return unsupportedScheduledRun();
-      const savedModel = await deps.agentPool.getCurrentModelLabel(task.chat_jid);
-      if (!mayContinue()) return unsupportedScheduledRun();
+      // A durable dispatcher returns its isolated run; a legacy pool returns undefined.
+      const native = scheduledLease ? deps.agentPool.dispatchScheduledAgent?.(scheduledLease) : undefined;
+      const savedLeafId = native ? null : await deps.agentPool.saveSessionPosition(task.chat_jid);
+      if (!native && !mayContinue()) return unsupportedScheduledRun();
+      const savedModel = native ? null : await deps.agentPool.getCurrentModelLabel(task.chat_jid);
+      if (!native && !mayContinue()) return unsupportedScheduledRun();
 
       try {
         // Switch model if task specifies one.
-        if (task.model) {
+        if (!native && task.model) {
           if (!savedModel || savedModel !== task.model) {
             error = await switchTaskModel(task, deps);
             if (!mayContinue()) return unsupportedScheduledRun();
@@ -408,11 +409,13 @@ async function executeScheduledTask(
         }
 
         if (!error) {
-          const out = await deps.agentPool.runAgent(task.prompt, task.chat_jid, {
+          // Once started, native work must be joined even if authority is revoked.
+          if (!native && !mayContinue()) return unsupportedScheduledRun();
+          const out = await (native ?? deps.agentPool.runAgent(task.prompt, task.chat_jid, {
             budgetWorkId,
             budgetExecutionKind: "scheduled",
             budgetScheduledTaskId: task.id,
-          });
+          }));
           if (!mayContinue()) return unsupportedScheduledRun();
           const recoverySummary = formatRecoverySummary(out.recovery);
           if (out.status === "error") {
@@ -438,7 +441,7 @@ async function executeScheduledTask(
       } finally {
         // Navigate back to the saved position — the task's prompt and response
         // stay in a side branch and won't pollute the user's conversation context.
-        if (mayContinue()) {
+        if (!native && mayContinue()) {
           await deps.agentPool.restoreSessionPosition(task.chat_jid, savedLeafId);
           // Restore the original model only while the legacy path is still allowed.
           if (mayContinue()) await restoreOriginalModel(task, deps, savedModel, mayContinue);
@@ -510,36 +513,42 @@ function sealScheduledEffect<T extends { effect: EffectIdentity }>(request: T): 
   return request;
 }
 
-let schedulerStoreDatabase: Database | null = null;
-let schedulerStoreUsesPrimary = false;
-let schedulerPrimaryForeignKeysWereEnabled = false;
+const primaryStores = new WeakMap<Database, { users: number; foreignKeysWereEnabled: boolean }>();
 
-function productionScheduledRunStore(): ScheduledRunStore {
+function productionScheduledRunStore(): { store: ScheduledRunStore; close: () => void } {
   const primary = getDb();
   const databaseRow = primary.query("PRAGMA database_list").all() as Array<{ name: string; file: string }>;
   const filename = databaseRow.find((row) => row.name === "main")?.file || "";
   let database: Database;
+  let primaryState = primaryStores.get(primary);
   if (filename) {
     database = new Database(filename);
     database.exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON");
-    schedulerStoreDatabase = database;
-    schedulerStoreUsesPrimary = false;
   } else {
-    schedulerPrimaryForeignKeysWereEnabled = (primary.query("PRAGMA foreign_keys").get() as { foreign_keys?: number } | undefined)?.foreign_keys === 1;
+    if (!primaryState) {
+      primaryState = { users: 0, foreignKeysWereEnabled: (primary.query("PRAGMA foreign_keys").get() as { foreign_keys?: number } | undefined)?.foreign_keys === 1 };
+      primaryStores.set(primary, primaryState);
+    }
+    primaryState.users++;
     primary.exec("PRAGMA foreign_keys=ON");
     database = primary;
-    schedulerStoreUsesPrimary = true;
   }
   const built = createCurrentPiclawScheduledRunStore(database, {
     hitFault: () => false,
     recordTrace: () => undefined,
   });
+  const close = () => {
+    if (filename) database.close();
+    else if (primaryState && --primaryState.users === 0) {
+      primaryStores.delete(primary);
+      if (!primaryState.foreignKeysWereEnabled) primary.exec("PRAGMA foreign_keys=OFF");
+    }
+  };
   if (!built.ok) {
-    if (!schedulerStoreUsesPrimary) database.close();
-    schedulerStoreDatabase = null;
+    close();
     throw new Error(`Scheduled run store unavailable: ${built.error._tag}`);
   }
-  return built.value;
+  return { store: built.value, close };
 }
 
 function reconcileExpiredScheduledAgentSources(now: string): void {
@@ -696,8 +705,6 @@ interface LeaseController {
   stop: () => void;
 }
 
-const liveLeaseControllers = new Set<LeaseController>();
-
 function mayContinueClaim(controller: LeaseController): boolean {
   if (!canRunLegacyScheduledWork()) controller.stop();
   return controller.valid;
@@ -712,7 +719,6 @@ function startLeaseController(store: ScheduledRunStore, initial: ScheduledRunLea
       controller.valid = false;
       if (controller.timer) clearTimeout(controller.timer);
       controller.timer = null;
-      liveLeaseControllers.delete(controller);
     },
   };
   const schedule = () => {
@@ -756,7 +762,6 @@ function startLeaseController(store: ScheduledRunStore, initial: ScheduledRunLea
     }, SCHEDULED_LEASE_RENEW_MS);
     controller.timer.unref?.();
   };
-  liveLeaseControllers.add(controller);
   schedule();
   return controller;
 }
@@ -840,7 +845,7 @@ async function runClaimedScheduledTask(
       }
     }
 
-    const outcome = await executeScheduledTask(task, deps, { advanceTask: false }, () => controller.valid);
+    const outcome = await executeScheduledTask(task, deps, { advanceTask: false }, () => controller.valid, controller.lease);
     if (outcome.status === "skipped" && outcome.error !== null) { controller.stop(); return; }
     if (!mayContinueClaim(controller)) return;
     if (outcome.status === "skipped") {
@@ -916,10 +921,15 @@ async function runClaimedScheduledTask(
 }
 
 export async function pollScheduledRunsOnce(deps: SchedulerDeps, store: ScheduledRunStore): Promise<void> {
-  if (!canRunLegacyScheduledWork()) return;
+  await runSchedulerPoll(deps, store, () => true);
+}
+
+async function runSchedulerPoll(deps: SchedulerDeps, store: ScheduledRunStore, isCurrent: () => boolean): Promise<void> {
+  const mayPoll = () => isCurrent() && canRunLegacyScheduledWork();
+  if (!mayPoll()) return;
   schedulerMetrics.polls += 1;
   await drainScheduledBudgetNotifications(deps);
-  if (!canRunLegacyScheduledWork()) return;
+  if (!mayPoll()) return;
   const now = new Date().toISOString();
   schedulerMetrics.lastPollAt = now;
   reconcileExpiredScheduledAgentSources(now);
@@ -932,10 +942,10 @@ export async function pollScheduledRunsOnce(deps: SchedulerDeps, store: Schedule
     leaseDurationMs: SCHEDULED_LEASE_DURATION_MS,
     reclaimAuthorities: scheduledReclaimAuthorities(now),
   });
-  if (!canRunLegacyScheduledWork()) return;
+  if (!mayPoll()) return;
   if (!claimed.ok) throw new Error(`claimDue failed: ${claimed.error._tag}`);
   for (const lease of claimed.value) {
-    if (!canRunLegacyScheduledWork()) return;
+    if (!mayPoll()) return;
     const controller = startLeaseController(store, lease);
     deps.queue.enqueueTask(
       lease.record.runId,
@@ -955,9 +965,22 @@ export async function pollScheduledRunsOnce(deps: SchedulerDeps, store: Schedule
   }
 }
 
-/** Guard to prevent starting the loop more than once. */
-let started = false;
-let schedulerTimer: ReturnType<typeof setTimeout> | null = null;
+/** One polling generation owns admission; accepted tasks remain queue-owned. */
+interface SchedulerLoop {
+  stopped: boolean;
+  timer: ReturnType<typeof setTimeout> | null;
+  active: Promise<void>;
+  stop: () => Promise<void>;
+}
+let schedulerLoop: SchedulerLoop | null = null;
+const stoppedScheduler = Promise.resolve();
+
+/** Poll admission has joined; only releasing its store failed. */
+export class SchedulerStoreReleaseError extends Error {
+  constructor(cause: unknown) {
+    super("Scheduler store release failed after poll join", { cause });
+  }
+}
 
 /**
  * Start the scheduler polling loop. Checks for due tasks every
@@ -965,45 +988,83 @@ let schedulerTimer: ReturnType<typeof setTimeout> | null = null;
  *
  * Called once by runtime.ts during startup.
  */
-export function startSchedulerLoop(deps: SchedulerDeps): () => void {
-  if (!canRunLegacyScheduledWork()) return () => {};
-  if (started) return stopSchedulerLoop;
-  started = true;
-  const store = productionScheduledRunStore();
-  log.info("Scheduler loop started", { operation: "start_scheduler_loop", workerId: schedulerWorkerId });
-  const loop = async () => {
-    try {
-      await pollScheduledRunsOnce(deps, store);
-    } catch (e) {
-      log.error("Scheduler poll failed", {
-        operation: "start_scheduler_loop.poll",
-        err: e,
+export function startSchedulerLoop(deps: SchedulerDeps): () => Promise<void> {
+  if (schedulerLoop) return schedulerLoop.stop;
+  if (!canRunLegacyScheduledWork()) return () => stoppedScheduler;
+  const resource = productionScheduledRunStore();
+  let pendingTasks = 0;
+  let pollJoined = false;
+  let closed = false;
+  const releaseStore = () => {
+    if (!closed && pollJoined && pendingTasks === 0) {
+      closed = true;
+      resource.close();
+    }
+  };
+  // Keep the store alive for work already handed to the queue, without making
+  // stop/join wait for agent execution (or cancelling its lease controller).
+  const pollDeps = { ...deps, queue: {
+    enqueueTask: (id: string, run: () => Promise<void>, lane?: string) => {
+      pendingTasks++;
+      deps.queue.enqueueTask(id, async () => {
+        try { await run(); }
+        finally { pendingTasks--; releaseStore(); }
+      }, lane);
+    },
+  } as AgentQueue };
+  let stopPromise: Promise<void> | null = null;
+  const instance: SchedulerLoop = {
+    stopped: false,
+    timer: null,
+    active: stoppedScheduler,
+    stop: () => {
+      if (stopPromise) return stopPromise;
+      instance.stopped = true;
+      if (instance.timer) clearTimeout(instance.timer);
+      instance.timer = null;
+      stopPromise = instance.active.then(() => {
+        pollJoined = true;
+        try {
+          releaseStore();
+        } catch (error) {
+          throw new SchedulerStoreReleaseError(error);
+        } finally {
+          if (schedulerLoop === instance) schedulerLoop = null;
+        }
       });
-    }
-    if (!canRunLegacyScheduledWork()) {
-      stopSchedulerLoop();
-      return;
-    }
-    if (!started) return;
-    schedulerTimer = setTimeout(loop, getRuntimeTimingConfig().schedulerPollIntervalMs);
+      // Observe legacy fire-and-forget callers without changing their promise.
+      void stopPromise.catch((error) => {
+        log.error("Scheduler stop failed", { operation: "stop_scheduler_loop", err: error });
+      });
+      return stopPromise;
+    },
+  };
+  schedulerLoop = instance;
+  const isCurrent = () => schedulerLoop === instance && !instance.stopped;
+  log.info("Scheduler loop started", { operation: "start_scheduler_loop", workerId: schedulerWorkerId });
+  const loop = (): Promise<void> => {
+    if (!isCurrent()) return stoppedScheduler;
+    instance.timer = null;
+    instance.active = (async () => {
+      try {
+        await runSchedulerPoll(pollDeps, resource.store, isCurrent);
+      } catch (e) {
+        log.error("Scheduler poll failed", { operation: "start_scheduler_loop.poll", err: e });
+      }
+      if (!isCurrent()) return;
+      if (!canRunLegacyScheduledWork()) {
+        void instance.stop();
+        return;
+      }
+      instance.timer = setTimeout(loop, getRuntimeTimingConfig().schedulerPollIntervalMs);
+    })();
+    return instance.active;
   };
   void loop();
-  return stopSchedulerLoop;
+  return instance.stop;
 }
 
-/** Stop the global scheduler timer loop if currently running. */
-export function stopSchedulerLoop(): void {
-  started = false;
-  if (schedulerTimer) {
-    clearTimeout(schedulerTimer);
-    schedulerTimer = null;
-  }
-  for (const controller of [...liveLeaseControllers]) controller.stop();
-  if (schedulerStoreDatabase) {
-    try { schedulerStoreDatabase.close(); } catch (error) { void error; }
-    schedulerStoreDatabase = null;
-  } else if (schedulerStoreUsesPrimary && !schedulerPrimaryForeignKeysWereEnabled) {
-    try { getDb().exec("PRAGMA foreign_keys=OFF"); } catch (error) { void error; }
-  }
-  schedulerStoreUsesPrimary = false;
+/** Stop new admission and join the active poll, not queue-owned task execution. */
+export function stopSchedulerLoop(): Promise<void> {
+  return schedulerLoop?.stop() ?? stoppedScheduler;
 }

@@ -7,6 +7,7 @@ import { requireAccountActor } from "../../../db/account-administration.js";
 import { ChatAccessDenied, resolveAuthorisedChat } from "../../../db/session-ownership.js";
 import { createUuid } from "../../../utils/ids.js";
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
+import { publicContextUsage } from "../context-usage.js";
 import { isRateLimited } from "./rate-limit.js";
 import { checkCsrfOrigin, rateLimitResponse } from "./security.js";
 
@@ -34,7 +35,7 @@ export function projectFamilyModelState(state: Awaited<ReturnType<WebChannelLike
     available_thinking_level_labels: Array.isArray(state?.available_thinking_level_labels) ? state.available_thinking_level_labels : [],
     latest_requested_model: typeof state?.latest_requested_model === "string" ? state.latest_requested_model : null,
     latest_response_model: typeof state?.latest_response_model === "string" ? state.latest_response_model : null,
-    context_usage: contextUsage,
+    context_usage: publicContextUsage(contextUsage),
   };
 }
 

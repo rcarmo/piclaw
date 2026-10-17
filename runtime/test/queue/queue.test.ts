@@ -8,7 +8,7 @@
 import { describe, test, expect } from "bun:test";
 import "../helpers.js";
 
-import { AgentQueue } from "../../src/queue.js";
+import { AgentQueue, QueueShutdownIncompleteError, QueueShutdownTimeoutError } from "../../src/queue.js";
 import { getRetryDelay, shouldRetry } from "../../src/queue/retry-policy.js";
 
 describe("AgentQueue", () => {
@@ -258,7 +258,8 @@ describe("AgentQueue", () => {
       }, "task-1");
 
       await Bun.sleep(5);
-      await queue.shutdown(100);
+      await expect(queue.shutdown(100)).rejects.toBeInstanceOf(QueueShutdownIncompleteError);
+      expect(() => queue.assertLegacyCaptureDrained()).toThrow();
       await new Promise((resolve) => originalSetTimeout(resolve, 80));
 
       expect(attempts).toBe(1);
@@ -268,7 +269,7 @@ describe("AgentQueue", () => {
     }
   });
 
-  test("shutdown returns after timeout and clears pending", async () => {
+  test("shutdown rejects at deadline, retains accepted pending work and stays sealed after late completion", async () => {
     const queue = new AgentQueue();
     let ran = false;
     let pendingRan = false;
@@ -283,13 +284,22 @@ describe("AgentQueue", () => {
     });
 
     const start = Date.now();
-    await queue.shutdown(5);
+    const shutdown = queue.shutdown(5);
+    await expect(shutdown).rejects.toBeInstanceOf(QueueShutdownTimeoutError);
+    expect(() => queue.assertLegacyCaptureDrained()).toThrow();
     const duration = Date.now() - start;
     expect(duration).toBeLessThan(40);
 
     await new Promise((resolve) => setTimeout(resolve, 80));
     expect(ran).toBe(true);
     expect(pendingRan).toBe(false);
+    expect(() => queue.assertLegacyCaptureDrained()).toThrow();
+    expect(queue.shutdown()).toBe(shutdown);
+    await expect(queue.shutdown()).rejects.toBeInstanceOf(QueueShutdownTimeoutError);
+    queue.enqueue(async () => { pendingRan = true; });
+    await Bun.sleep(10);
+    expect(pendingRan).toBe(false);
+    expect(queue.getMetrics().enqueued).toBe(2);
   });
 
   test("retry policy helpers", () => {

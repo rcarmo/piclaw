@@ -10,6 +10,7 @@ import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 
 import { createSshAwareBashOperations } from "../extensions/ssh-core.js";
 import { getDefaultActiveToolNames } from "../extensions/tool-activation.js";
+import { createHostGrepDefinition } from "./host-grep.js";
 
 /** The tracked bash operations injected into the built-in bash tool. */
 export type AgentBashOperations = NonNullable<Parameters<typeof createBashTool>[1]>["operations"];
@@ -44,8 +45,9 @@ export class AgentToolFactory {
    */
   createCustomToolOverrides(chatJid?: string): ToolDefinition[] {
     const { workspaceDir, bashOperations, platform = process.platform } = this.options;
-    if (platform === "win32" || !bashOperations) return [];
+    const grep = createHostGrepDefinition(workspaceDir) as unknown as ToolDefinition;
+    if (platform === "win32" || !bashOperations) return [grep];
     const operations = chatJid ? createSshAwareBashOperations(chatJid, bashOperations) : bashOperations;
-    return [createBashToolDefinition(workspaceDir, { operations }) as unknown as ToolDefinition];
+    return [grep, createBashToolDefinition(workspaceDir, { operations }) as unknown as ToolDefinition];
   }
 }

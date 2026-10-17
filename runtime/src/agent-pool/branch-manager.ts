@@ -23,7 +23,7 @@ import {
   type ChatBranchRecord,
 } from "../db.js";
 import { SESSIONS_DIR } from "../core/config.js";
-import { sanitiseJid } from "./session.js";
+import { sanitiseJid } from "./session-paths.js";
 import { existsSync, readdirSync, renameSync, rmSync } from "fs";
 import { join } from "path";
 import { createLogger, debugSuppressedError } from "../utils/logger.js";

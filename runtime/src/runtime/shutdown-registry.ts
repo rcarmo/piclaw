@@ -23,6 +23,12 @@ const log = createLogger("runtime.shutdown-registry");
 type ShutdownFn = (signal: string) => Promise<void>;
 type PreShutdownHook = () => void | Promise<void>;
 
+/** Per-runtime success-only lifetime gate. Failure never certifies resource release. */
+export function createShutdownCompletion(): { promise: Promise<void>; complete: () => void } {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  return { promise, complete: resolve };
+}
+
 let registeredShutdown: ShutdownFn | null = null;
 let pendingShutdownReason: string | null = null;
 const preShutdownHooks = new Set<PreShutdownHook>();
@@ -81,7 +87,9 @@ export function requestGracefulShutdown(reason: string, delayMs = 800): void {
     // pre-shutdown hooks inside that deadline. Waiting here first would let a
     // stuck extensible hook prevent the backstop from ever being armed.
     log.info("Graceful shutdown requested", { operation: "request", reason });
-    void registeredShutdown(`exit_process: ${reason}`);
+    void registeredShutdown(`exit_process: ${reason}`).catch((error) => {
+      log.error("Requested runtime shutdown failed", { operation: "request_shutdown", reason, err: error });
+    });
     return;
   }
 

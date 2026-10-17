@@ -12,9 +12,10 @@ import type { AgentSession, AgentSessionRuntime, ModelRegistry, ModelRuntime, Se
 import type { Api, Model, Provider } from "@earendil-works/pi-ai";
 
 import { applyControlCommand, type AgentControlCommand, type AgentControlResult } from "../agent-control/index.js";
-import { handleModel } from "../agent-control/handlers/model.js";
+import { handleModel, resolveControlModelSelection } from "../agent-control/handlers/model.js";
 import { formatThinkingLevelForDisplay, getAvailableThinkingLevelsForModel, resolveThinkingAlias, THINKING_LEVELS } from "../agent-control/agent-control-helpers.js";
 import { buildSessionTreeSnapshot } from "../agent-control/session-tree-snapshot.js";
+import { renderSessionTreeWidget } from "../agent-control/handlers/tree.js";
 import { getLatestTokenUsageModel } from "../db.js";
 import { requireOwnedSessionExecution } from "./owned-session-access.js";
 import { getSessionThinkingPolicy } from './thinking-policy.js';
@@ -27,7 +28,7 @@ import { peekProviderUsage, peekProviderUsageForRuntime, warmProviderUsage, type
 import { resolveModelLabel } from "../utils/model-utils.js";
 import { resolveModelScope } from "../utils/scoped-models.js";
 import { withChatContext, getChatJid } from "../core/chat-context.js";
-import { sanitiseJid } from "./session.js";
+import { sanitiseJid } from "./session-paths.js";
 import type { PoolEntry } from "./session-manager.js";
 import { probeCompactionModel, type CompactionModelProbeResult } from "./compaction-model-probe.js";
 import { readAccessConfig } from "../core/config-access.js";
@@ -289,6 +290,9 @@ export interface ProviderUsageRefreshEvent {
 
 export interface AgentRuntimeFacadeOptions {
   pool: Map<string, PoolEntry>;
+  getDurableSession?: (chatJid: string) => import("./durable-runtime-adapter.js").DurableSessionPositionPort | undefined;
+  /** Compatibility input for isolated callers; application routing uses the backend lookup. */
+  durableSessions?: ReadonlyMap<string, import("./durable-runtime-adapter.js").DurableSessionPositionPort>;
   getOrCreateRuntime: (chatJid: string) => Promise<AgentSessionRuntime>;
   modelRegistry: ModelRegistry;
   modelRuntime: ModelRuntime;
@@ -311,11 +315,22 @@ export interface AgentRuntimeFacadeOptions {
 export class AgentRuntimeFacade {
   // ModelRuntime auth is instance-wide, so provider id is also the credential scope here.
   // provider-usage.ts fingerprints that credential and discards superseded refresh results.
+  private readonly getDurableSession: NonNullable<AgentRuntimeFacadeOptions["getDurableSession"]>;
   private readonly providerUsageRefreshInFlight = new Map<string, Promise<void>>();
   private providerUsageRefreshListener: ((event: ProviderUsageRefreshEvent) => void) | undefined;
 
   constructor(private readonly options: AgentRuntimeFacadeOptions) {
     this.providerUsageRefreshListener = options.onProviderUsageRefresh;
+    // Capture routing before any session factory is entered. Never fall back on port failure.
+    const compatibility = options.durableSessions === undefined ? undefined : new Map([...options.durableSessions].map(([chat, port]) =>
+      [chat, Object.freeze({ ...port, readPosition: port.readPosition.bind(port), readModel: port.readModel?.bind(port), setModel: port.setModel?.bind(port), compact: port.compact?.bind(port), readTree: port.readTree?.bind(port) })]));
+    this.getDurableSession = options.getDurableSession?.bind(options) ?? (chat => compatibility?.get(chat));
+    options = { ...options, getDurableSession: options.getDurableSession ?? (compatibility && this.getDurableSession) };
+    const legacy = options.getOrCreateRuntime;
+    this.options = { ...options, getOrCreateRuntime: chat => {
+      if (options.getDurableSession !== undefined) return Promise.reject(new Error("Durable application does not construct legacy sessions"));
+      return legacy(chat);
+    } };
   }
 
   setProviderUsageRefreshListener(listener: ((event: ProviderUsageRefreshEvent) => void) | undefined): void {
@@ -323,6 +338,39 @@ export class AgentRuntimeFacade {
   }
 
   async applyControlCommand(chatJid: string, command: AgentControlCommand): Promise<AgentControlResult> {
+    if (this.getDurableSession(chatJid)) {
+      if (command.type === "compact") {
+        requireSingleUserDirectExecution("Direct control commands");
+        const port = this.getDurableSession(chatJid)!;
+        if (!port.compact) throw new Error("Durable compaction unavailable");
+        revokeAddonLocalAgent(chatJid);
+        const release = this.options.acquireCommandProtection?.(chatJid);
+        try {
+          const result = await port.compact(command.instructions?.trim() || undefined);
+          return { status: "success", message: result.compacted ? "Context compacted." : "Nothing to compact.",
+            sessionGeneration: port.sessionId,
+            contextUsage: { tokens: null, contextWindow: null, percent: null, sessionGeneration: port.sessionId,
+              source: "durable_context", phase: "after_manual_compaction" } };
+        } catch (error) {
+          return { status: "error", message: error instanceof Error ? error.message : "Compaction failed." };
+        } finally { release?.(); }
+      }
+      if (command.type === "model") {
+        requireSingleUserDirectExecution("Direct model commands");
+        const port = this.getDurableSession(chatJid)!;
+        if (!port.setModel) throw new Error("Durable model mutation unavailable");
+        if (command.compact) return { status: "error", message: "Durable model compaction unavailable" };
+        const selected = resolveControlModelSelection(this.options.modelRegistry, command);
+        if ("status" in selected) return selected;
+        await port.setModel({ provider: selected.provider, modelId: selected.id });
+        return { status: "success", message: `Model set to ${selected.provider}/${selected.id}.` };
+      }
+      if (command.type !== "tree" || command.targetId) throw new Error("Durable history mutation unavailable");
+      const tree = await this.getSessionTreeForChat(chatJid);
+      return renderSessionTreeWidget(tree, chatJid) ?? { status: "success", message: tree.nodes.length
+        ? ["Session tree:", ...tree.nodes.slice(command.mode === "head" ? command.offset ?? 0 : -(command.limit ?? 10), command.mode === "head" ? (command.offset ?? 0) + (command.limit ?? 10) : undefined).map(node => `${node.active ? "→ " : ""}${node.id} ${node.preview}`)].join("\n")
+        : "Tree is empty." };
+    }
     requireSingleUserDirectExecution("Direct control commands");
     revokeAddonLocalAgent(chatJid);
     const release = this.options.acquireCommandProtection?.(chatJid);
@@ -401,6 +449,11 @@ export class AgentRuntimeFacade {
   }
 
   async getCurrentModelLabel(chatJid: string): Promise<string | null> {
+    const durable = this.getDurableSession(chatJid);
+    if (durable) {
+      if (!durable.readModel) throw new Error("Durable session model unavailable");
+      return durable.readModel();
+    }
     const session = (await this.options.getOrCreateRuntime(chatJid)).session;
     const model = session.model;
     return model ? `${model.provider}/${model.id}` : null;
@@ -416,8 +469,10 @@ export class AgentRuntimeFacade {
   ): Promise<AvailableModelsResult> {
     // Passive UI refreshes should not hydrate a cold runtime just to render
     // model state for the picker.
-    const session = this.options.pool.get(chatJid)?.runtime.session ?? null;
-    const persistedState = session ? { current: null, thinkingLevel: null } : getPersistedSessionState(chatJid);
+    const session = this.options.getDurableSession === undefined ? this.options.pool.get(chatJid)?.runtime.session ?? null : null;
+    const persistedState = this.options.getDurableSession !== undefined
+      ? { current: await this.getCurrentModelLabel(chatJid), thinkingLevel: null }
+      : session ? { current: null, thinkingLevel: null } : getPersistedSessionState(chatJid);
     const registry = (session as (AgentSession & { modelRegistry?: ModelRegistry }) | null)?.modelRegistry ?? this.options.modelRegistry;
     const scopedModels = resolveModelScope(
       registry.getAvailable(),
@@ -535,12 +590,27 @@ export class AgentRuntimeFacade {
     }
   }
 
-  getContextUsageForChat(chatJid: string): {
+  async getContextUsageForChat(chatJid: string): Promise<{
     tokens: number | null;
-    contextWindow: number;
+    contextWindow: number | null;
     percent: number | null;
     sessionGeneration?: string;
-  } | null {
+    /** Unknown counts from this reader must not be replaced by stored estimates. */
+    tokensAreAuthoritative?: true;
+  } | null> {
+    if (this.options.getDurableSession !== undefined) {
+      const binding = this.getDurableSession(chatJid);
+      if (!binding) throw new Error("Durable application does not construct legacy sessions");
+      if (!binding.readModel) throw new Error("Durable model reader unavailable");
+      const label = await binding.readModel();
+      const separator = label?.indexOf("/") ?? -1;
+      const physical = label && separator > 0
+        ? this.options.modelRuntime.getPhysicalModel(label.slice(0, separator), label.slice(separator + 1))
+        : undefined;
+      const window = physical?.contextWindow;
+      return { tokens: null, contextWindow: typeof window === "number" && Number.isFinite(window) && window > 0 ? window : null,
+        percent: null, sessionGeneration: binding.sessionId, tokensAreAuthoritative: true };
+    }
     const entry = this.options.pool.get(chatJid);
     if (!entry) return null;
     const session = entry.runtime.session;
@@ -553,23 +623,38 @@ export class AgentRuntimeFacade {
   }
 
   getSessionGenerationForChat(chatJid: string): string | null {
-    const sessionId = this.options.pool.get(chatJid)?.runtime.session.sessionId;
+    const sessionId = this.options.getDurableSession !== undefined
+      ? this.getDurableSession(chatJid)?.sessionId
+      : this.options.pool.get(chatJid)?.runtime.session.sessionId;
     return typeof sessionId === "string" && sessionId.trim() ? sessionId.trim() : null;
   }
 
-  getSessionTreeSummaryForChat(chatJid: string): { leafId: string | null; total: number } | null {
-    const entry = this.options.pool.get(chatJid);
-    if (!entry) return null;
-    const snapshot = buildSessionTreeSnapshot(entry.runtime.session.sessionManager);
+  /** Exact public head and visible node count, from the same tree reader as /tree. */
+  async getSessionTreeSummaryForChat(chatJid: string): Promise<{ leafId: string | null; total: number } | null> {
+    // Legacy introspection must not instantiate an idle/unknown session.
+    if (this.options.getDurableSession === undefined && !this.options.pool.has(chatJid)) return null;
+    const snapshot = await this.getSessionTreeForChat(chatJid);
     return { leafId: snapshot.leafId, total: snapshot.total };
   }
 
+  async getSessionTreeForChat(chatJid: string): Promise<import("../agent-control/session-tree-snapshot.js").SessionTreeSnapshot> {
+    const durable = this.getDurableSession(chatJid);
+    if (durable) {
+      if (!durable.readTree) throw new Error("Durable session tree unavailable");
+      return durable.readTree();
+    }
+    return buildSessionTreeSnapshot((await this.options.getOrCreateRuntime(chatJid)).session.sessionManager);
+  }
+
   async saveSessionPosition(chatJid: string): Promise<string | null> {
+    const durable = this.getDurableSession(chatJid);
+    if (durable) return durable.readPosition();
     const session = (await this.options.getOrCreateRuntime(chatJid)).session;
     return session.sessionManager.getLeafId();
   }
 
   async restoreSessionPosition(chatJid: string, leafId: string | null): Promise<void> {
+    if (this.options.getDurableSession !== undefined) throw new Error("Durable history navigation unavailable");
     if (leafId === null) return;
     const session = (await this.options.getOrCreateRuntime(chatJid)).session;
     const currentLeaf = session.sessionManager.getLeafId();

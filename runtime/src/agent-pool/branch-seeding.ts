@@ -14,7 +14,7 @@ import type { AgentSession, SessionContext, SessionEntry, SessionManager } from 
 
 import { seedRotatedSession } from "../session-rotation.js";
 import { getSessionThinkingPolicy, readThinkingPreference, THINKING_POLICY_ENTRY } from './thinking-policy.js';
-import { ensureSessionDir } from "./session.js";
+import { ensureSessionDir } from "./session-paths.js";
 import { createSessionManagerPersistencePort, getSessionPersistencePort, type ContextEditReplacement, type SessionEntryAppendPort, type SessionManagerLike } from "./session-persistence.js";
 
 type LegacyCustomEntry = {

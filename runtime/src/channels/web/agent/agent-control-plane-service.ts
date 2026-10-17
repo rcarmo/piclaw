@@ -10,6 +10,7 @@
 import type { AgentPool } from "../../../agent-pool.js";
 import {
   clearInflightMarker,
+  getDeferredQueuedFollowups,
   exportArchivedBranchDownloadData,
   getInflightMessageId,
   getInflightRuns,
@@ -100,6 +101,8 @@ type ControlPlaneQueuedLifecycle = Pick<
 >;
 
 export interface WebAgentControlPlaneServiceOptions {
+  getAcceptedQueuedSteering?: (chatJid: string) => import('../../../agent-pool/durable-queued-steering.js').AcceptedQueuedSteering | undefined;
+  getQueuedInputSourceWithdrawal?: (chatJid: string) => import('../runtime/queued-followup-lifecycle-service.js').QueuedInputSourceAdmission | undefined;
   defaultChatJid: string;
   defaultAgentId: string;
   json(payload: unknown, status?: number): Response;
@@ -126,6 +129,8 @@ export interface WebAgentControlPlaneServiceOptions {
 }
 
 export interface WebAgentControlPlaneChannelLike {
+  getAcceptedQueuedSteering?: WebAgentControlPlaneServiceOptions['getAcceptedQueuedSteering'];
+  getQueuedInputSourceWithdrawal?: WebAgentControlPlaneServiceOptions['getQueuedInputSourceWithdrawal'];
   json(payload: unknown, status?: number): Response;
   broadcastEvent(eventType: string, data: unknown): void;
   queue: AgentQueueLike;
@@ -156,6 +161,8 @@ export function createWebAgentControlPlaneService(
     queue: channel.queue,
     agentPool: channel.agentPool,
     queuedFollowupLifecycle: channel.queuedFollowupLifecycle,
+    get getAcceptedQueuedSteering() { return channel.getAcceptedQueuedSteering?.bind(channel); },
+    get getQueuedInputSourceWithdrawal() { return channel.getQueuedInputSourceWithdrawal?.bind(channel); },
     queuePendingSteering: (chatJid, timestamp) => channel.queuePendingSteering(chatJid, timestamp),
     storeMessage: (chatJid, content, isBot, mediaIds, options) =>
       channel.storeMessage(chatJid, content, isBot, mediaIds, options),
@@ -264,6 +271,7 @@ export class WebAgentControlPlaneService {
   }
 
   async handleAgentQueueRemove(req: Request): Promise<Response> {
+    const selectWithdrawal = this.options.getQueuedInputSourceWithdrawal;
     const parsed = await parseJsonObjectRequest(req);
     if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
 
@@ -275,7 +283,11 @@ export class WebAgentControlPlaneService {
         return this.options.json({ error: "Missing or invalid row_id" }, 400);
       }
 
-      const { removed } = await this.removeQueuedFollowupForAction(chatJid, rowId);
+      const withdrawAcceptedSource = selectWithdrawal?.(chatJid);
+      const { removed } = await this.options.queuedFollowupLifecycle.removeQueuedFollowupForAction(chatJid, rowId, {
+        withdrawAcceptedSource,
+        removeQueuedFollowupMessage: (jid, content) => this.options.agentPool.removeQueuedFollowupMessage?.(jid, content) ?? false,
+      });
       if (!removed) {
         return this.options.json({ status: "ok", removed: false, count: this.options.queuedFollowupLifecycle.getQueuedFollowupCount(chatJid) }, 200);
       }
@@ -293,8 +305,8 @@ export class WebAgentControlPlaneService {
         count: this.options.queuedFollowupLifecycle.getQueuedFollowupCount(chatJid),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return this.options.json({ error: message }, 500);
+      // Host selectors/callbacks can carry private engine or source details.
+      return this.options.json({ error: "Unable to remove queued follow-up" }, 500);
     }
   }
 
@@ -317,6 +329,8 @@ export class WebAgentControlPlaneService {
   }
 
   async handleAgentQueueSteer(req: Request): Promise<Response> {
+    const selectSteering = this.options.getAcceptedQueuedSteering;
+    let acceptedSteering = false;
     const parsed = await parseJsonObjectRequest(req);
     if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
 
@@ -328,6 +342,27 @@ export class WebAgentControlPlaneService {
         return this.options.json({ error: "Missing or invalid row_id" }, 400);
       }
 
+      // Detect protected accepted input before any legacy removal or SDK call.
+      const queued = getDeferredQueuedFollowups(chatJid).find(item => item.rowId === rowId);
+      if (queued?.source_accepted) {
+        acceptedSteering = true;
+        const host = selectSteering?.(chatJid);
+        if (!host) return this.options.json({ error: 'Accepted input requires host cancellation' }, 500);
+        const accept = host.accept.bind(host);
+        const { interaction, dispatch } = await accept(rowId);
+        void dispatch().catch((error) => {
+          log.warn("Accepted steering dispatch remains pending", { err: error, chatJid });
+        });
+        this.options.broadcastEvent('agent_followup_removed', { chat_jid: chatJid, row_id: rowId, thread_id: queued.threadId ?? null });
+        this.options.broadcastEvent('new_post', interaction);
+        this.options.queuePendingSteering(chatJid, interaction.timestamp);
+        this.options.broadcastEvent('agent_steer_queued', { chat_jid: chatJid,
+          thread_id: interaction.data?.thread_id ?? null, source: 'queued-item' });
+        // Host intent accepted; this does not promise provider placement/execution.
+        return this.options.json({ status: 'ok', removed: true, row_id: rowId,
+          queued: 'steer', steering_delivery: 'pending', user_message: interaction,
+          count: this.options.queuedFollowupLifecycle.getQueuedFollowupCount(chatJid) }, 201);
+      }
       const { removed } = await this.removeQueuedFollowupForAction(chatJid, rowId);
       if (!removed) {
         return this.options.json({ status: "ok", removed: false, count: this.options.queuedFollowupLifecycle.getQueuedFollowupCount(chatJid) }, 200);
@@ -417,7 +452,7 @@ export class WebAgentControlPlaneService {
         count: this.options.queuedFollowupLifecycle.getQueuedFollowupCount(chatJid),
       }, 201);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = acceptedSteering ? 'Accepted steering is unavailable.' : error instanceof Error ? error.message : String(error);
       return this.options.json({ error: message }, 500);
     }
   }

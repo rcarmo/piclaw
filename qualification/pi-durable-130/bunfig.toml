@@ -1,0 +1,3 @@
+[test]
+preload = ["./src/test-guard.ts"]
+timeout = 10000

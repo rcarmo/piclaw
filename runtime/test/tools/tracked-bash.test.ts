@@ -6,7 +6,7 @@
  */
 
 import { expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -43,6 +43,116 @@ test("tracked bash executes commands and captures output", async () => {
 
   expect(result.exitCode).toBe(0);
   expect(output).toContain("hello");
+});
+
+for (const action of ["revoke", "cancel"] as const) {
+  test(`tracked bash fences ${action} during asynchronous environment resolution`, async () => {
+    const directory = mkdtempSync(join(getTestWorkspace().workspace, "spawn-fence-"));
+    const controller = new AbortController();
+    let allowed = true, checks = 0;
+    const ops = createTrackedBashOperations({ validateSpawn: () => { checks++; return allowed; } });
+    try {
+      const execution = ops.exec("printf forbidden > sentinel", directory, {
+        onData: () => {}, signal: controller.signal, timeout: 2,
+      });
+      // Actual env/keychain resolution yields even for a literal command. No mock
+      // or pre-exec barrier: change authority after entering the real backend.
+      queueMicrotask(() => { if (action === "revoke") allowed = false; else controller.abort(); });
+      await expect(execution).rejects.toThrow(action === "revoke" ? "Bash execution no longer authorized" : "aborted");
+      expect(checks).toBe(action === "revoke" ? 1 : 0);
+      expect(existsSync(join(directory, "sentinel"))).toBe(false);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+}
+
+for (const invalid of [false, undefined, "true", Promise.resolve(true), Promise.resolve(false), "throw"] as const) {
+  test(`tracked bash admission fails closed for ${String(invalid)}`, async () => {
+    const directory = mkdtempSync(join(getTestWorkspace().workspace, "spawn-deny-"));
+    let checks = 0;
+    const ops = createTrackedBashOperations({ validateSpawn: (() => {
+      checks++;
+      if (invalid === "throw") throw new Error("private authority failure", { cause: new Error("private cause") });
+      return invalid;
+    }) as () => boolean });
+    try {
+      let error: unknown;
+      try { await ops.exec("printf forbidden > sentinel", directory, { onData: () => {}, timeout: 2 }); }
+      catch (caught) { error = caught; }
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe("Bash execution no longer authorized");
+      expect(error).not.toHaveProperty("cause");
+      expect(checks).toBe(1); // Policy denial must not fall back to another shell.
+      expect(existsSync(join(directory, "sentinel"))).toBe(false);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+}
+
+test("tracked bash observes invalid async admission without leaking rejections or spawning", async () => {
+  const directory = mkdtempSync(join(getTestWorkspace().workspace, "spawn-async-deny-"));
+  const source = `
+    import { createTrackedBashOperations } from ${JSON.stringify(join(import.meta.dir, "../../src/tools/tracked-bash.ts"))};
+    const marker = "PRIVATE_ASYNC_POLICY_SENTINEL";
+    let unhandled = 0, settled = 0;
+    process.on("unhandledRejection", () => { unhandled++; });
+    const callbacks = [
+      async () => { throw new Error(marker); },
+      () => ({ then(_resolve, reject) { settled++; reject(new Error(marker)); } }),
+      () => ({ get then() { settled++; throw new Error(marker); } }),
+    ];
+    for (const validateSpawn of callbacks) {
+      const ops = createTrackedBashOperations({ shellPath: "/bin/bash", validateSpawn });
+      try {
+        await ops.exec("printf forbidden > sentinel", ${JSON.stringify(directory)}, { onData() {}, timeout: 2 });
+        process.exit(2);
+      } catch (error) {
+        if (error.message !== "Bash execution no longer authorized" || error.cause) process.exit(3);
+      }
+      await Bun.sleep(0);
+    }
+    await Bun.sleep(10);
+    console.log(JSON.stringify({ unhandled, settled }));
+  `;
+  try {
+    const child = Bun.spawn([process.execPath, "--eval", source], {
+      stdout: "pipe", stderr: "pipe",
+      env: { ...process.env, PICLAW_WEB_VNC_ALLOW_DIRECT: undefined },
+    });
+    const [stdout, stderr, code] = await Promise.all([
+      new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
+    ]);
+    expect(code).toBe(0);
+    expect(stderr).toBe("");
+    expect(JSON.parse(stdout)).toEqual({ unhandled: 0, settled: 2 });
+    expect(existsSync(join(directory, "sentinel"))).toBe(false);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("tracked bash admits a literal true and rechecks each fallback candidate", async () => {
+  const directory = mkdtempSync(join(getTestWorkspace().workspace, "spawn-fallback-"));
+  const shell = join(directory, "unavailable-shell");
+  writeFileSync(shell, "#!/no/such/interpreter\n", { mode: 0o700 });
+  const restore = setEnv({ SHELL: shell });
+  let checks = 0;
+  try {
+    const ops = createTrackedBashOperations({ validateSpawn: () => ++checks === 1 });
+    await expect(ops.exec("printf forbidden > sentinel", directory, { onData: () => {}, timeout: 2 }))
+      .rejects.toThrow("Bash execution no longer authorized");
+    expect(checks).toBe(2);
+    expect(existsSync(join(directory, "sentinel"))).toBe(false);
+    const admitted = createTrackedBashOperations({ shellPath: "/bin/bash", validateSpawn: () => true });
+    expect((await admitted.exec("printf admitted > sentinel", directory, { onData: () => {}, timeout: 2 })).exitCode).toBe(0);
+    expect(readFileSync(join(directory, "sentinel"), "utf8")).toBe("admitted");
+  } finally { restore(); rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("tracked bash rechecks abort after a synchronous admission callback", async () => {
+  const controller = new AbortController();
+  const ops = createTrackedBashOperations({ validateSpawn: () => { controller.abort(); return true; } });
+  let output = "";
+  await expect(ops.exec("printf forbidden", getTestWorkspace().workspace, {
+    signal: controller.signal, onData: chunk => { output += chunk; }, timeout: 2,
+  })).rejects.toThrow("aborted");
+  expect(output).toBe("");
 });
 
 test("resolveShellCandidates honors the explicit Pi shellPath without fallbacks", () => {

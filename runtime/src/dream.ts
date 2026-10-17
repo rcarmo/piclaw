@@ -19,7 +19,7 @@ import { refreshWorkspaceIndex } from "./workspace-search.js";
 import { launchWorkspaceIndexProcess, waitForWorkspaceIndexProcess } from "./workspace-index-process.js";
 import { markNoteIndexDirty } from "./note-retrieval/coordinator.js";
 import { computeNextRun } from "./task-scheduler-utils.js";
-import { sanitiseJid } from "./agent-pool/session.js";
+import { sanitiseJid } from "./agent-pool/session-paths.js";
 import { createLogger, debugSuppressedError } from "./utils/logger.js";
 
 export const DREAM_TASK_ID = "builtin-dream-midnight";

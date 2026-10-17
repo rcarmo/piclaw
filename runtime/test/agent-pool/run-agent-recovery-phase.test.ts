@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import "../helpers.js";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -146,77 +146,83 @@ describe("recovery generation policy", () => {
 describe("runAgentRecoveryPhase", () => {
   test("continues after resolved tool work with tools available and execution budget carried", async () => {
     let activeTools = ["read", "bash"];
-    const activeToolSets: string[][] = [];
-    const sessionCtrl: SessionWithToolControl = {
-      getActiveToolNames: () => [...activeTools],
-      setActiveToolsByName: (names) => {
-        activeTools = [...names];
-        activeToolSets.push([...names]);
-      },
-    };
-    const calls: Array<{ prompt: string; timeoutMs: number; toolExecutionCountAtStart: number }> = [];
-    const events: unknown[] = [];
+    let now = Date.now();
+    const clock = spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      const activeToolSets: string[][] = [];
+      const sessionCtrl: SessionWithToolControl = {
+        getActiveToolNames: () => [...activeTools],
+        setActiveToolsByName: (names) => {
+          activeTools = [...names];
+          activeToolSets.push([...names]);
+        },
+      };
+      const calls: Array<{ prompt: string; timeoutMs: number; toolExecutionCountAtStart: number }> = [];
+      const events: unknown[] = [];
 
-    const result = await runAgentRecoveryPhase({
-      prompt: "original prompt",
-      chatJid: "web:test-recovery-phase",
-      session: {} as any,
-      sessionCtrl,
-      timeoutMs: 10_000,
-      startTime: Date.now(),
-      modelLabel: "test/model",
-      recoveryConfig: recoveryConfig(),
-      runOptions: { onEvent: (event) => events.push(event) },
-      logsDir: "/tmp/nonexistent-piclaw-test-logs",
-      clearAttachments: () => {},
-      runPromptAttempt: async (prompt, timeoutMs, toolExecutionCountAtStart) => {
-        calls.push({ prompt, timeoutMs, toolExecutionCountAtStart });
-        if (calls.length === 1) {
-          return attempt({
-            output: output("error", "429 Too Many Requests"),
-            snapshot: {
-              hadToolActivity: true,
-              hadPartialOutput: false,
-              hadCompletedTurnOutput: false,
-              hadTerminalTurnOutput: false,
-              sawCompactionIntent: false,
-              canDisableToolsForRecovery: true,
-              hasUnresolvedToolExecution: false,
+      const result = await runAgentRecoveryPhase({
+        prompt: "original prompt",
+        chatJid: "web:test-recovery-phase",
+        session: {} as any,
+        sessionCtrl,
+        timeoutMs: 10_000,
+        startTime: now,
+        modelLabel: "test/model",
+        recoveryConfig: recoveryConfig(),
+        runOptions: { onEvent: (event) => events.push(event) },
+        logsDir: "/tmp/nonexistent-piclaw-test-logs",
+        clearAttachments: () => {},
+        runPromptAttempt: async (prompt, timeoutMs, toolExecutionCountAtStart) => {
+          calls.push({ prompt, timeoutMs, toolExecutionCountAtStart });
+          if (calls.length === 1) {
+            now += 20;
+            return attempt({
+              output: output("error", "429 Too Many Requests"),
+              snapshot: {
+                hadToolActivity: true,
+                hadPartialOutput: false,
+                hadCompletedTurnOutput: false,
+                hadTerminalTurnOutput: false,
+                sawCompactionIntent: false,
+                canDisableToolsForRecovery: true,
+                hasUnresolvedToolExecution: false,
+                toolExecutionCount: 3,
+              },
+              promptWasPersisted: true,
               toolExecutionCount: 3,
+            });
+          }
+          expect(activeTools).toEqual(["read", "bash"]);
+          return attempt({
+            output: output("success", undefined, "done"),
+            snapshot: {
+              hadToolActivity: false,
+              hadPartialOutput: false,
+              hadCompletedTurnOutput: true,
+              hadTerminalTurnOutput: true,
+              sawCompactionIntent: false,
             },
             promptWasPersisted: true,
-            toolExecutionCount: 3,
+            toolExecutionCount: toolExecutionCountAtStart,
           });
-        }
-        expect(activeTools).toEqual(["read", "bash"]);
-        return attempt({
-          output: output("success", undefined, "done"),
-          snapshot: {
-            hadToolActivity: false,
-            hadPartialOutput: false,
-            hadCompletedTurnOutput: true,
-            hadTerminalTurnOutput: true,
-            sawCompactionIntent: false,
-          },
-          promptWasPersisted: true,
-          toolExecutionCount: toolExecutionCountAtStart,
-        });
-      },
-    });
+        },
+      });
 
-    expect(result.status).toBe("success");
-    expect(result.result).toBe("done");
-    expect(result.recovery?.attemptsUsed).toBe(1);
-    expect(calls[0]).toEqual({ prompt: "original prompt", timeoutMs: 10_000, toolExecutionCountAtStart: 0 });
-    expect(calls[1]?.prompt).toBe(RECOVERY_CONTINUATION_PROMPT);
-    expect(calls[1]?.toolExecutionCountAtStart).toBe(3);
-    expect(calls[1]?.timeoutMs).toBeGreaterThanOrEqual(950);
-    expect(calls[1]?.timeoutMs).toBeLessThanOrEqual(1_000);
-    expect(activeToolSets).toEqual([]);
-    expect(events).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: "recovery_start", attempt: 1, strategy: "retry" }),
-      expect.objectContaining({ type: "recovery_end", outcome: "recovered", attemptsUsed: 1 }),
-    ]));
+      expect(result.status).toBe("success");
+      expect(result.result).toBe("done");
+      expect(result.recovery?.attemptsUsed).toBe(1);
+      expect(calls[0]).toEqual({ prompt: "original prompt", timeoutMs: 10_000, toolExecutionCountAtStart: 0 });
+      expect(calls[1]?.prompt).toBe(RECOVERY_CONTINUATION_PROMPT);
+      expect(calls[1]?.toolExecutionCountAtStart).toBe(3);
+      expect(calls[1]?.timeoutMs).toBe(980);
+      expect(activeToolSets).toEqual([]);
+      expect(events).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: "recovery_start", attempt: 1, strategy: "retry" }),
+        expect.objectContaining({ type: "recovery_end", outcome: "recovered", attemptsUsed: 1 }),
+      ]));
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   test("preserves a first-attempt protected terminal category without inventing provider retry exhaustion", async () => {

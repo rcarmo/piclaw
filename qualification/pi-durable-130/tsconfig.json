@@ -1,0 +1,51 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": [
+      "bun"
+    ],
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "../../runtime/src/types/gifenc.d.ts",
+    "../../runtime/src/types/web-push.d.ts",
+    "test.ts",
+    "db-tree.test.ts",
+    "idle-model.test.ts",
+    "compact.test.ts",
+    "application-web.test.ts",
+    "runtime-upgrade-workflow.test.ts",
+    "host-frontier.test.ts",
+    "sqlite.test.ts",
+    "host-handoff.test.ts",
+    "runtime.test.ts",
+    "host-recovery.test.ts",
+    "host-controller.test.ts",
+    "migration.test.ts",
+    "ownership.test.ts",
+    "cross-store.test.ts",
+    "models.test.ts",
+    "tools.test.ts",
+    "bash-port.test.ts",
+    "plan.test.ts",
+    "installed-tool-catalog.test.ts",
+    "installed-delegate-catalog.test.ts",
+    "vertical.test.ts",
+    "projection.test.ts",
+    "addon-host-services.test.ts",
+    "delegate.test.ts",
+    "native-delegate-parallel.test.ts",
+    "host-delegate-tool.test.ts",
+    "scheduled.test.ts",
+    "scheduled-allocation.test.ts",
+    "cutover.test.ts",
+    "cutover-runtime.test.ts",
+    "host-grep.test.ts"
+  ]
+}

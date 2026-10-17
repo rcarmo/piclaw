@@ -104,8 +104,8 @@ export class WebChannelRuntimeFollowupFacadeService {
     );
   }
 
-  admitQueuedFollowupItem(args: Parameters<QueuedFollowupLifecycleService['enqueueQueuedFollowupItem']>, authorise: () => void, signal: AbortSignal): Promise<number> {
-    return this.deps.getQueuedFollowupLifecycle().admitQueuedFollowupItem(args, authorise, signal);
+  admitQueuedFollowupItem(args: Parameters<QueuedFollowupLifecycleService['enqueueQueuedFollowupItem']>, authorise: () => void, signal: AbortSignal, acceptSource?: import('./queued-followup-lifecycle-service.js').QueuedInputSourceAdmission): Promise<number> {
+    return this.deps.getQueuedFollowupLifecycle().admitQueuedFollowupItem(args, authorise, signal, acceptSource);
   }
 
   peekQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null {

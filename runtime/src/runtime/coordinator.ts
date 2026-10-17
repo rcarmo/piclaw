@@ -20,7 +20,8 @@ export type StartRuntimeLoopDeps = {
   assistantName: MessageLoopDeps["assistantName"];
   triggerPattern: MessageProcessingDeps["triggerPattern"];
   pollIntervalMs: MessageLoopDeps["pollIntervalMs"];
-  runMessageLoopFn?: (deps: MessageLoopDeps) => Promise<void>;
+  signal?: AbortSignal;
+  runMessageLoopFn?: (deps: MessageLoopDeps, signal?: AbortSignal) => Promise<void>;
   processMessagesFn?: (chatJid: string, deps: MessageProcessingDeps) => Promise<boolean>;
 };
 
@@ -48,5 +49,5 @@ export async function startRuntimeLoop(deps: StartRuntimeLoopDeps): Promise<void
         assistantName: deps.assistantName,
         triggerPattern: deps.triggerPattern,
       }),
-  });
+  }, deps.signal);
 }

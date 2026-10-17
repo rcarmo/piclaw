@@ -7,6 +7,14 @@ import {
 } from "../src/queued-followups.js";
 
 describe("queued follow-up projections", () => {
+  test("preserves host identity through clones and persistence without inventing legacy identity", () => {
+    const legacy = { rowId: -1, queuedContent: "legacy" };
+    expect(projectPersistedQueuedFollowupItem(legacy)).not.toHaveProperty("source_id");
+    expect(projectQueuedFollowupItem(legacy)).not.toHaveProperty("source_id");
+    const item = projectPersistedQueuedFollowupItem({ ...legacy, source_id: "source-stable" });
+    expect(cloneQueuedFollowupItem(item).source_id).toBe("source-stable");
+    expect(projectPersistedQueuedFollowupItem(JSON.parse(JSON.stringify(item))).source_id).toBe("source-stable");
+  });
   test("normalizes shared metadata, trims optional strings, and preserves persistence-only retry default", () => {
     const input = {
       rowId: -1,

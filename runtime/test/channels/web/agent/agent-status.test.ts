@@ -32,6 +32,23 @@ function createContext(overrides: Partial<AgentStatusContext> = {}): AgentStatus
 }
 
 describe("web agent status helpers", () => {
+  test("context awaits tree summary without changing a newer active status", async () => {
+    let release!: (value: { leafId: string; total: number }) => void;
+    const pendingTree = new Promise<{ leafId: string; total: number }>(resolve => { release = resolve; });
+    let status = { turn_id: "older", title: "Working" };
+    let recoveries = 0;
+    const ctx = createContext({
+      getAgentStatus: () => status,
+      recoverStaleInflightRun: () => { recoveries++; return false; },
+      getSessionTreeSummaryForChat: async chat => { expect(chat).toBe("web:default"); return pendingTree; },
+    });
+    const response = handleAgentContextRequest(new Request("https://example.com/agent/context"), ctx);
+    status = { turn_id: "newer", title: "Compacting context" };
+    release({ leafId: "exact-hidden-head", total: 2 });
+    expect((await (await response).json()).sessionTree).toEqual({ leafId: "exact-hidden-head", total: 2 });
+    expect(ctx.getAgentStatus("web:default")).toEqual({ turn_id: "newer", title: "Compacting context" });
+    expect(recoveries).toBe(0);
+  });
   test("handleAgentStatusRequest returns idle status when no active agent", async () => {
     const req = new Request("https://example.com/agent/status");
     const res = handleAgentStatusRequest(req, createContext());

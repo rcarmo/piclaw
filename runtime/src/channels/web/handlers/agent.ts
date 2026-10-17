@@ -8,6 +8,7 @@
  * Consumers: web/request-router.ts routes agent paths to these handlers.
  */
 
+import { acceptQueuedInputSource } from "../runtime/queued-followup-lifecycle-service.js";
 import { getAddonLocalDispatchBlock } from "../../../addons/local-dispatch.js";
 import { withVerifiedAddonMessage } from "../../../addons/local-context.js";
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
@@ -677,6 +678,20 @@ export async function handleAgentMessage(
   let revalidateInputAuthority: ValidateInputAuthority;
   try { internalAuthority = readInputRequestAuthority(req, chatJid, pathname); revalidateInputAuthority = internalAuthority?.validate ?? captureInputAuthority(channel, req); revalidateInputAuthority(); }
   catch { return channel.json({ error: 'Input authority is unavailable.' }, 403); }
+  // Pin the trusted host selection to this route before any body read/await.
+  // Request contents cannot select an engine or replace this SQL-only callback.
+  const prepareAdmission = channel.prepareInputSourceAdmission?.bind(channel);
+  const lookupAdmission = channel.getInputSourceAdmission?.bind(channel);
+  const lookupQueuedAdmission = channel.getQueuedInputSourceAdmission?.bind(channel);
+  let acceptSource: ReturnType<NonNullable<WebChannelLike["getInputSourceAdmission"]>>;
+  let acceptQueuedSource: ReturnType<NonNullable<WebChannelLike["getQueuedInputSourceAdmission"]>>;
+  try {
+    if (!prepareAdmission) {
+      acceptSource = lookupAdmission?.(chatJid);
+      acceptQueuedSource = lookupQueuedAdmission?.(chatJid);
+    }
+  }
+  catch { return channel.json({ error: 'Input admission could not be confirmed.' }, 503); }
   if (internalAuthority) {
     try {
       const reader = req.clone().body?.getReader();
@@ -737,6 +752,17 @@ export async function handleAgentMessage(
   const themeCommand = handleUiThemeCommand(trimmed);
   const metersCommand = handleUiMetersCommand(trimmed);
   const isSettingsCommand = /^\/settings\s*$/i.test(trimmed);
+  if (prepareAdmission) {
+    try {
+      revalidateInputAuthority();
+      if (!command && !themeCommand && !metersCommand && !isSettingsCommand && !isSlashCommandInvocation(content)) {
+        await prepareAdmission(chatJid);
+        revalidateInputAuthority();
+      }
+      acceptSource = lookupAdmission?.(chatJid);
+      acceptQueuedSource = lookupQueuedAdmission?.(chatJid);
+    } catch { return channel.json({ error: 'Input admission could not be confirmed.' }, 503); }
+  }
   const isStreaming = typeof channel.agentPool.isStreaming === "function"
     ? channel.agentPool.isStreaming(chatJid)
     : false;
@@ -857,8 +883,11 @@ export async function handleAgentMessage(
     }];
     let queuedRowId: number;
     try {
+      const accept = !command && !themeCommand && !metersCommand && !isSettingsCommand
+        && !isSlashCommandInvocation(trimmed) && extras.source === 'web.compose' ? acceptQueuedSource : undefined;
+      if (accept && !channel.admitQueuedFollowupItem) throw Error('Atomic queued admission is unavailable.');
       queuedRowId = channel.admitQueuedFollowupItem
-        ? await channel.admitQueuedFollowupItem(args, revalidateQueuedAdmission, req.signal)
+        ? await channel.admitQueuedFollowupItem(args, revalidateQueuedAdmission, req.signal, accept)
         : channel.enqueueQueuedFollowupItem(...args);
     } catch (error) {
       if (isSqliteContention(error)) return channel.json({ error: 'Queue storage is busy; this input was not accepted.' }, 503);
@@ -1016,6 +1045,13 @@ export async function handleAgentMessage(
     );
   }
 
+  // Bound durable maintenance must follow the accepted primary's terminal
+  // settlement. Reuse the host selector captured before body awaits, without
+  // invoking source admission for a command. Legacy compaction stays immediate.
+  if (command?.type === "compact" && acceptSource !== undefined && isActive) {
+    return queueDeferredFollowup(content, { source: "web.compose", browserContext: browserObservability, wakeIfIdle: true });
+  }
+
   // Model/thinking commands: execute without writing to the timeline,
   // EXCEPT for bare /model (list) and bare /thinking (query) which should
   // surface their table/output as a timeline message like /theme does.
@@ -1107,6 +1143,7 @@ export async function handleAgentMessage(
   let queuedDuringAdmission = false;
   let deferredRowId = 0;
   let deferredAt = '';
+  const deferredSource = requestMode === 'steer' ? 'web.steer_startup_fallback' : 'web.compose';
   let interaction: ReturnType<typeof storeAgentUserMessage>;
   // Ordinary input admitted while idle can become a follow-up while waiting
   // for storage. Decide against fresh in-memory state inside the same commit.
@@ -1115,7 +1152,7 @@ export async function handleAgentMessage(
     try {
       interaction = await channel.admitUserMessage(chatJid, content, normalized.mediaIds, {
         contentBlocks: normalized.contentBlocks, linkPreviews: normalized.linkPreviews,
-        threadId: normalized.threadId, screenHint: normalized.screenHint,
+        threadId: normalized.threadId, screenHint: normalized.screenHint, acceptSource,
       }, revalidateQueuedAdmission, req.signal, () => {
         const busy = isChatActive();
         queuedDuringAdmission = busy || channel.getQueuedFollowupCount(chatJid) > 0;
@@ -1123,12 +1160,14 @@ export async function handleAgentMessage(
         deferredAt = new Date().toISOString();
         deferredRowId = channel.enqueueQueuedFollowupItem(chatJid, 0, content,
           null, deferredAt, {
-            source: 'web.compose', mediaIds: normalized.mediaIds, contentBlocks: normalized.contentBlocks,
+            source: deferredSource, mediaIds: normalized.mediaIds, contentBlocks: normalized.contentBlocks,
             linkPreviews: normalized.linkPreviews, screenHint: normalized.screenHint,
             queuedBy: { ...(browserObservability.userId ? { userId: browserObservability.userId } : {}),
               ...(browserObservability.sessionId ? { sessionId: browserObservability.sessionId } : {}),
               ...(browserObservability.clientId ? { clientId: browserObservability.clientId } : {}) },
           });
+        if (deferredSource === 'web.compose' && acceptQueuedSource)
+          acceptQueuedInputSource(chatJid, deferredRowId, getDb(), acceptQueuedSource);
         return true;
       });
     } catch (error) {
@@ -1147,7 +1186,7 @@ export async function handleAgentMessage(
 
   if (queuedDuringAdmission) {
     channel.broadcastEvent('agent_followup_queued', { chat_jid: chatJid, row_id: deferredRowId, content,
-      thread_id: null, timestamp: deferredAt, source: 'web.compose' });
+      thread_id: null, timestamp: deferredAt, source: deferredSource });
     if (!isChatActive()) channel.resumeChat(chatJid);
     return channel.json({ thread_id: null, queued: 'followup' }, 201);
   }
@@ -1701,6 +1740,33 @@ async function processAuthorisedChat(
     effectiveThreadRootId: effectiveThreadRootId ?? null,
     processingMessageId: currentMessage.id,
   });
+
+  const coordinator = channel.dispatchAcceptedInput;
+  const pendingIdentity = Object.freeze({ chatJid, messageId: currentMessage.id,
+    rowId: getMessageRowIdById(chatJid, currentMessage.id) ?? 0 });
+  const waitForPending = coordinator?.waitForPending.bind(coordinator);
+  let acceptedDispatch: (() => Promise<"settled" | "pending">) | undefined;
+  try {
+    acceptedDispatch = coordinator?.(chatJid, currentMessage.id, pendingIdentity.rowId);
+  } catch {
+    // A fenced or unreadable persisted selection is not evidence of legacy ownership.
+    acceptedDispatch = async () => "pending";
+  }
+  if (acceptedDispatch) {
+    const { beginChatRun, endChatRun } = await import("../../../db/chat-cursors.js");
+    beginChatRun(chatJid, currentMessage.timestamp, { prevTs: prevCursor,
+      messageId: currentMessage.id, startedAt: new Date().toISOString() });
+    let result = await acceptedDispatch().catch(() => "pending" as const);
+    if (result === "pending") {
+      // The captured host port owns observation only. Shutdown must retain the recovery marker.
+      if (!waitForPending) throw new Error("Accepted dispatch requires host pending observation");
+      result = await waitForPending(pendingIdentity);
+      if (result === "pending") return;
+    }
+    endChatRun(chatJid);
+    channel.resumeChat(chatJid);
+    return;
+  }
 
   const persistedCommand = parseControlCommand(String(currentMessage.content || ""), getRoutingConfig().triggerPattern);
   if (isDeferredControlCommand(persistedCommand)) {

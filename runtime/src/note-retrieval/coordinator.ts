@@ -90,7 +90,9 @@ export async function runNoteIndexPhase(options: { rebuild?: boolean; signal?: A
         if(again.revision!==source.revision)throw new Error('source_unavailable');
         db.transaction(()=>{
           check();again.verify();if(state().dirty!==captured.dirty)throw new Error('superseded');
-          deleteStagedPath(generation,relative);
+          // This writer exclusively owns the generation; source/chunks/FTS stage atomically.
+          // A path absent from the existing lookup has nothing to replace (notably a full build).
+          if(previousSource)deleteStagedPath(generation,relative);
           db.query('INSERT INTO note_retrieval_sources VALUES(?,?,?,?,?,?)').run(generation,relative,parsed.sourceRevision,source.bytes.length,Date.now(),captured.dirty);
           // Bun's SQLite string binding can strip an initial BOM. Bind raw UTF-8
           // and CAST to TEXT so stored content still matches the hashed byte range.

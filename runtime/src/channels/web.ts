@@ -67,6 +67,14 @@ const STATE_KEY = "last_agent_timestamp_web";
 export interface WebChannelOpts {
   queue: AgentQueue;
   agentPool: AgentPool;
+  /** Internal host coordinator only; never derived from request fields. */
+  prepareInputSourceAdmission?: WebChannelLike["prepareInputSourceAdmission"];
+  getInputSourceAdmission?: WebChannelLike["getInputSourceAdmission"];
+  getQueuedInputSourceAdmission?: WebChannelLike["getQueuedInputSourceAdmission"];
+  getQueuedInputSourceWithdrawal?: WebChannelLike["getQueuedInputSourceWithdrawal"];
+  getAcceptedQueuedSteering?: WebChannelLike["getAcceptedQueuedSteering"];
+  getQueuedInputMaterialization?: WebChannelLike["getQueuedInputMaterialization"];
+  dispatchAcceptedInput?: WebChannelLike["dispatchAcceptedInput"];
 }
 
 /** Web channel: HTTP/SSE server, API endpoints, and agent event bridge. */

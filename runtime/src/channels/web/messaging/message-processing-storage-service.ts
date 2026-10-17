@@ -7,12 +7,14 @@
  */
 
 import type { InteractionRow } from "../../../db.js";
+import { isSlashCommandInvocation } from "../../../agent-pool/slash-command.js";
 import { processChat as processAgentChat } from "../handlers/agent.js";
 import type { LinkPreviewChannel } from "../media/link-previews.js";
 import {
   storeWebMessage as persistWebMessage,
   admitWebUserMessage,
   type StoreWebMessageOptions,
+  type WebUserMessageStoreOptions,
   type StoreWebMessageParams,
 } from "./message-store.js";
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
@@ -81,6 +83,9 @@ export class WebMessageProcessingStorageService {
     mediaIds: number[],
     options: WebChannelStoreMessageOptions = {},
   ): InteractionRow | null {
+    // Capture the host port before entering SQL; request fields never select it.
+    const materializeQueuedSource = !isBot && typeof options.consumeDeferredFollowupRowId === 'number'
+      ? this.channel.getQueuedInputMaterialization?.(chatJid) : undefined;
     const interaction = this.options.storeWebMessage(
       this.channel,
       {
@@ -101,13 +106,16 @@ export class WebMessageProcessingStorageService {
         isSteeringMessage: options.isSteeringMessage,
         removeProtectedContinuationForSourceMessageId: options.removeProtectedContinuationForSourceMessageId,
         consumeDeferredFollowupRowId: options.consumeDeferredFollowupRowId,
+        materializeQueuedSource,
+        acceptMaterializedSource: !isBot && typeof options.consumeDeferredFollowupRowId === 'number' && !isSlashCommandInvocation(content.trim())
+          ? this.channel.getInputSourceAdmission?.(chatJid) : undefined,
       },
     );
     recordTimelineInteraction(interaction);
     return interaction;
   }
 
-  async admitUserMessage(chatJid: string, content: string, mediaIds: number[], options: WebChannelStoreMessageOptions,
+  async admitUserMessage(chatJid: string, content: string, mediaIds: number[], options: WebUserMessageStoreOptions,
     authorise: () => void, signal: AbortSignal, deferBeforeInsert?: () => boolean): Promise<InteractionRow | null> {
     const interaction = await admitWebUserMessage(this.channel, {
       chatJid, content, isBot: false, mediaIds,

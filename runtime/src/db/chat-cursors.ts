@@ -103,6 +103,9 @@ export interface StalePreflightRecoveryRecord extends FailedRunRecord {
 
 /** Deferred queued follow-up items persisted outside the timeline. */
 export interface DeferredQueuedFollowupRecord {
+  /** Host-owned durable identity, preserved verbatim across queue persistence. */
+  readonly source_id?: string;
+  readonly source_accepted?: true;
   rowId: number;
   queuedContent: string;
   threadId: number | null;

@@ -1,0 +1,17 @@
+{
+  "name": "piclaw-pi-durable-130-qualification",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun ../../runtime/scripts/local-test-priority.ts --cwd . -- bun test ./default-application-runtime.test.ts ./test.ts ./sqlite.test.ts ./host-handoff.test.ts ./bindings.test.ts ./schema-convergence.test.ts ./single-database.test.ts ./application-web.test.ts ./runtime.test.ts ./migration.test.ts ./ownership.test.ts ./cross-store.test.ts ./models.test.ts ./tools.test.ts ./host-builtins.test.ts ./host-grep.test.ts ./bash-port.test.ts ./plan.test.ts ./installed-tool-catalog.test.ts ./installed-delegate-catalog.test.ts ./host-delegate-tool.test.ts ./vertical.test.ts ./projection.test.ts ./addon-host-services.test.ts ./delegate.test.ts ./native-delegate-parallel.test.ts ./scheduled.test.ts ./scheduled-allocation.test.ts ./cutover.test.ts ./cutover-runtime.test.ts ./accepted-steer-recovery.test.ts ./host-recovery.test.ts ./host-controller.test.ts ./worker-recovery.test.ts ./rehearsal.test.ts ./copied-upgrade.test.ts ./db-tree.test.ts ./idle-model.test.ts ./compact.test.ts ./runtime-upgrade-workflow.test.ts ./host-frontier.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@number0/iroh": "1.1.0",
+    "@types/bun": "1.3.14",
+    "typescript": "7.0.2"
+  },
+  "optionalDependencies": {
+    "@number0/iroh-linux-x64-gnu": "1.1.0"
+  }
+}

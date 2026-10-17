@@ -482,8 +482,8 @@ export class WebChannelRuntimePublicSurfaceService {
     return this.channel.runtimeFollowupFacade.peekQueuedFollowupItem(chatJid);
   }
 
-  admitQueuedFollowupItem(args: Parameters<import('../runtime/queued-followup-lifecycle-service.js').QueuedFollowupLifecycleService['enqueueQueuedFollowupItem']>, authorise: () => void, signal: AbortSignal): Promise<number> {
-    return this.channel.runtimeFollowupFacade.admitQueuedFollowupItem(args, authorise, signal);
+  admitQueuedFollowupItem(args: Parameters<import('../runtime/queued-followup-lifecycle-service.js').QueuedFollowupLifecycleService['enqueueQueuedFollowupItem']>, authorise: () => void, signal: AbortSignal, acceptSource?: import('../runtime/queued-followup-lifecycle-service.js').QueuedInputSourceAdmission): Promise<number> {
+    return this.channel.runtimeFollowupFacade.admitQueuedFollowupItem(args, authorise, signal, acceptSource);
   }
 
   consumeQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null {

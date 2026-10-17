@@ -26,6 +26,7 @@ import { getWebPreviewMaxChars, shouldPreviewWebContent } from "../../../db/web-
 import { scheduleLinkPreviews, type LinkPreviewChannel } from "../media/link-previews.js";
 import type { InteractionRow } from "../../../db.js";
 import type { NewMessage } from "../../../types.js";
+import type { Database } from "bun:sqlite";
 import { readAccessConfig } from "../../../core/config-access.js";
 import { requireOwnedSessionExecution } from "../../../agent-pool/owned-session-access.js";
 import { createUuid } from "../../../utils/ids.js";
@@ -35,6 +36,18 @@ import { getWorkspaceDir, getStoreDir, getConfigPath } from '../../../core/confi
 import { statSync } from 'node:fs';
 import { createLogger, debugSuppressedError } from '../../../utils/logger.js';
 const log = createLogger('web.message-store');
+
+/** Host SQL-only binding of an existing accepted queue source, never re-admission.
+ * sourceId must be item.source_id; payloadRef remains queued-source:<sourceId>.
+ * Receives persisted queue bytes and the new row in the same transaction.
+ * The host must verify chat/source identity and the accepted immutable input digest
+ * (excluding retry/acceptance bookkeeping), throwing on conflict. Never mutate
+ * the accepted source payloadRef or create a second source. Payload resolution
+ * after consume uses messages.id = item.source_id, not the deleted queue row. */
+export type QueuedInputMaterialization = (stored: Readonly<{
+  chatJid: string; item: Readonly<import('../../../queued-followups.js').QueuedFollowupItem & { source_id: string }>;
+  message: Readonly<NewMessage>; rowId: number; database: Database;
+}>) => void;
 
 /** Options for storing a web channel message (content, media, thread). */
 export interface StoreWebMessageOptions {
@@ -50,6 +63,23 @@ export interface StoreWebMessageOptions {
   consumeDeferredFollowupRowId?: number | null;
   /** Fault-injection seam used to prove transaction rollback before consume. */
   beforeDeferredFollowupConsume?: () => void;
+  /** Captured host callback only; never sourced from request/content blocks. */
+  materializeQueuedSource?: QueuedInputMaterialization;
+  /** Admit a legacy queued row atomically when it becomes durable normal input. */
+  acceptMaterializedSource?: WebUserMessageStoreOptions["acceptSource"];
+}
+
+/** Host-only incoming admission options; never populated from HTTP fields. */
+export interface WebUserMessageStoreOptions extends StoreWebMessageOptions {
+  /**
+   * Runs after row/media writes on the SAME owned SQL connection, before commit.
+   * Trusted SQL-only, synchronous, retry-safe callback; return exactly undefined
+   * or throw on failure to roll back everything. Never schedule work after await:
+   * rollback cannot cancel arbitrary SQL in an asynchronous continuation.
+   * The message identity/timestamp are prepared once and stable across retries.
+   * Any receipt captured here is precommit only: do not publish/acknowledge here.
+   */
+  acceptSource?: (stored: Readonly<{ message: Readonly<NewMessage>; rowId: number; database: Database }>) => void;
 }
 
 /** Resolved parameters for storeWebMessage (after defaults applied). */
@@ -98,6 +128,25 @@ function prepareWebMessage(params: StoreWebMessageParams, options: StoreWebMessa
 /** Caller owns the transaction. All generated media and metadata roll back together. */
 function writePreparedWebMessage(prepared: PreparedWebMessage): CommittedWebMessage {
   const { params, options } = prepared;
+  const consumeId = options.consumeDeferredFollowupRowId;
+  const queued = !params.isBot && typeof consumeId === 'number' && Number.isFinite(consumeId)
+    ? getDeferredQueuedFollowups(params.chatJid) : undefined;
+  const queueIndex = queued?.findIndex(item => item.rowId === consumeId) ?? -1;
+  const queuedItem = queued?.[queueIndex];
+  if (queued && !queuedItem) throw Error('Deferred follow-up intent disappeared before materialization');
+  let messageId = prepared.messageId;
+  if (queuedItem?.source_accepted) {
+    if (!queuedItem.source_id || !/^source-[0-9a-f-]{36}$/i.test(queuedItem.source_id) || !options.materializeQueuedSource)
+      throw Error('Accepted queued input requires its host materialization binding');
+    if (params.content !== queuedItem.queuedContent || JSON.stringify(params.mediaIds) !== JSON.stringify(queuedItem.mediaIds ?? []) ||
+      JSON.stringify(options.contentBlocks ?? []) !== JSON.stringify(queuedItem.contentBlocks ?? []) ||
+      JSON.stringify(options.linkPreviews ?? []) !== JSON.stringify(queuedItem.linkPreviews ?? []) ||
+      (options.threadId ?? null) !== (queuedItem.threadId ?? null) || (options.screenHint ?? null) !== (queuedItem.screenHint ?? null))
+      throw Error('Accepted queued input payload conflict');
+    messageId = queuedItem.source_id;
+    // storeMessage upserts: never permit materialization to overwrite any existing row.
+    if (getDb().query('SELECT 1 FROM messages WHERE id = ?').get(messageId)) throw Error('Accepted queued input identity collision');
+  }
   let contentBlocks = Array.isArray(options.contentBlocks)
     ? [...options.contentBlocks]
     : undefined;
@@ -141,7 +190,7 @@ function writePreparedWebMessage(prepared: PreparedWebMessage): CommittedWebMess
   }
 
   const msg: NewMessage = {
-    id: prepared.messageId,
+    id: messageId,
     chat_jid: params.chatJid,
     sender: params.isBot ? "web-agent" : "web-user",
     sender_name: params.isBot ? params.agentName : (typeof params.userName === "string" && params.userName.trim() ? params.userName.trim() : "You"),
@@ -182,10 +231,23 @@ function writePreparedWebMessage(prepared: PreparedWebMessage): CommittedWebMess
     : null;
   if (!params.isBot && consumeDeferredRowId !== null && Number.isFinite(consumeDeferredRowId)) {
     options.beforeDeferredFollowupConsume?.();
-    const queued = getDeferredQueuedFollowups(params.chatJid);
-    const index = queued.findIndex((item) => item.rowId === consumeDeferredRowId);
-    if (index < 0) throw new Error("Deferred follow-up intent disappeared before materialization");
-    queued.splice(index, 1);
+    if (!queued || !queuedItem || queueIndex < 0) throw Error('Deferred follow-up intent disappeared before materialization');
+    if (queuedItem.source_accepted) {
+      const result: unknown = options.materializeQueuedSource!({ chatJid: params.chatJid,
+        item: { ...structuredClone(queuedItem), source_id: queuedItem.source_id! }, message: { ...msg }, rowId, database: getDb() });
+      if (result !== undefined) {
+        void Promise.resolve(result).then(() => undefined, () => undefined);
+        throw Error('Queued materialization callback must be synchronous');
+      }
+    }
+    if (!queuedItem.source_accepted) {
+      const result: unknown = options.acceptMaterializedSource?.({ message: { ...msg }, rowId, database: getDb() });
+      if (result !== undefined) {
+        void Promise.resolve(result).then(() => undefined, () => undefined);
+        throw Error('Queued admission callback must be synchronous');
+      }
+    }
+    queued.splice(queueIndex, 1);
     setDeferredQueuedFollowups(params.chatJid, queued);
   }
 
@@ -214,7 +276,7 @@ export function storeWebMessage(channel: LinkPreviewChannel, params: StoreWebMes
 }
 
 /** Single-user incoming messages only; every retry owns a complete atomic write. */
-export async function admitWebUserMessage(channel: LinkPreviewChannel, params: StoreWebMessageParams, options: StoreWebMessageOptions,
+export async function admitWebUserMessage(channel: LinkPreviewChannel, params: StoreWebMessageParams, options: WebUserMessageStoreOptions,
   authorise: (phase?: 'before' | 'after') => void, signal: AbortSignal, deferBeforeInsert?: () => boolean): Promise<InteractionRow | null> {
   if (params.isBot || readAccessConfig().mode !== 'single-user') throw Error('Incoming web admission requires single-user authority.');
   const database = getDb(), binding = getDatabaseBinding();
@@ -230,10 +292,18 @@ export async function admitWebUserMessage(channel: LinkPreviewChannel, params: S
     authorise(phase);
   };
   const prepared = prepareWebMessage(params, options);
+  const acceptSource = options.acceptSource;
   const committed = await admitSqliteWrite(database, () => {
     for (const mediaId of prepared.params.mediaIds) if (!getMediaInfoById(mediaId)) throw Error('Incoming media is unavailable.');
     if (deferBeforeInsert?.()) return null;
-    return writePreparedWebMessage(prepared);
+    const stored = writePreparedWebMessage(prepared);
+    const result: unknown = acceptSource?.({ message: stored.msg, rowId: stored.rowId, database });
+    if (result !== undefined) {
+      // Observe rejected promises/thenables without awaiting or exposing their payloads.
+      void Promise.resolve(result).then(() => undefined, () => undefined);
+      throw new Error('Source admission callback must be synchronous');
+    }
+    return stored;
   }, check, signal, 5000, assertBinding);
   return committed ? finishWebMessage(channel, committed) : null;
 }

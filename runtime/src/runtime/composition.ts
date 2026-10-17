@@ -57,9 +57,13 @@ export function registerRuntimeShutdownSignals(
     signals: ["SIGTERM", "SIGINT"],
   });
   registrar.on("SIGTERM", () => {
-    void shutdown("SIGTERM");
+    void shutdown("SIGTERM").catch((error) => {
+      log.error("Runtime shutdown failed", { operation: "shutdown_signal", signal: "SIGTERM", err: error });
+    });
   });
   registrar.on("SIGINT", () => {
-    void shutdown("SIGINT");
+    void shutdown("SIGINT").catch((error) => {
+      log.error("Runtime shutdown failed", { operation: "shutdown_signal", signal: "SIGINT", err: error });
+    });
   });
 }

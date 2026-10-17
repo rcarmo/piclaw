@@ -87,7 +87,7 @@
       "semanticReaderOccurrences": 71
     },
     "docsDeploy": {
-      "referencedNames": 148,
+      "referencedNames": 150,
       "directReaderNames": 16,
       "directReaderOccurrences": 32,
       "helperReaderNames": 0,
@@ -1247,6 +1247,7 @@
           "helperReaders": 0,
           "semanticReaders": 0,
           "files": [
+            ".github/workflows/ci.yml",
             ".github/workflows/integration-gate.yml",
             "Makefile",
             "docs/compaction-models-and-deadlines.md",
@@ -1354,6 +1355,21 @@
           "files": [
             "runtime/src/core/config-sources.ts",
             "runtime/src/core/config-web.ts"
+          ],
+          "readerFiles": []
+        }
+      }
+    },
+    {
+      "name": "PICLAW_DEFAULT_FACTORY_CASE",
+      "scopes": {
+        "docsDeploy": {
+          "referenced": true,
+          "directReaders": 0,
+          "helperReaders": 0,
+          "semanticReaders": 0,
+          "files": [
+            "docs/design/earendil-agent-harness-integration-adr/evidence/pi-durable-130-acceptance-current-20261017.md"
           ],
           "readerFiles": []
         }
@@ -3978,6 +3994,21 @@
           "semanticReaders": 0,
           "files": [
             "skel/.pi/skills/reload/restart-piclaw.sh"
+          ],
+          "readerFiles": []
+        }
+      }
+    },
+    {
+      "name": "PICLAW_REQUIRE_DURABLE_ENGINE",
+      "scopes": {
+        "docsDeploy": {
+          "referenced": true,
+          "directReaders": 0,
+          "helperReaders": 0,
+          "semanticReaders": 0,
+          "files": [
+            ".github/workflows/ci.yml"
           ],
           "readerFiles": []
         }

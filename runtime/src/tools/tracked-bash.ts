@@ -41,8 +41,12 @@ interface ResolveShellConfigOptions {
   shellPath?: string;
 }
 
-interface TrackedBashOperationsOptions {
+export interface TrackedBashOperationsOptions {
   shellPath?: string | (() => string | undefined);
+  /** Synchronous, invocation-local admission after resolution, before every spawn.
+   * Only literal true authorizes execution; throws and non-booleans fail closed.
+   */
+  validateSpawn?: () => boolean;
 }
 
 const POWERSHELL_ARGS = ["-NoProfile", "-Command"];
@@ -181,7 +185,7 @@ export function resolveShellCandidates(options: ResolveShellConfigOptions = {}):
   return candidates;
 }
 
-function createTrackedShellOperations(resolveCandidates: () => ShellConfig[]): BashOperations {
+function createTrackedShellOperations(resolveCandidates: () => ShellConfig[], validateSpawn?: () => boolean): BashOperations {
   return {
     exec: (command, cwd, { onData, signal, timeout, env }) => {
       return new Promise((resolve, reject) => {
@@ -296,6 +300,36 @@ function createTrackedShellOperations(resolveCandidates: () => ShellConfig[]): B
               return;
             }
 
+            // This fence must stay synchronous and outside shell-unavailable retry
+            // handling: denial is terminal, never a reason to try another shell.
+            if (aborted || signal?.aborted) {
+              settleError(new Error("aborted"));
+              return;
+            }
+            if (validateSpawn) {
+              let outcome: unknown;
+              try {
+                outcome = validateSpawn();
+                if (outcome !== true) {
+                  // Observe invalid async results without awaiting admission. This
+                  // also contains rejecting thenables and throwing then getters.
+                  Promise.resolve(outcome).then(() => undefined, () => undefined);
+                }
+              } catch {
+                // Authority exceptions may contain credentials; never export them.
+                settleError(new Error("Bash execution no longer authorized"));
+                return;
+              }
+              if (outcome !== true) {
+                settleError(new Error("Bash execution no longer authorized"));
+                return;
+              }
+            }
+            // The callback itself may synchronously abort the invocation.
+            if (signal?.aborted) {
+              settleError(new Error("aborted"));
+              return;
+            }
             attemptedShells.push(candidate.shell);
             const spawned = spawn(candidate.shell, [...candidate.args, resolvedCommand], {
               cwd,
@@ -431,7 +465,7 @@ export function createTrackedBashOperations(options: TrackedBashOperationsOption
   return createTrackedShellOperations(() => {
     const shellPath = typeof options.shellPath === "function" ? options.shellPath() : options.shellPath;
     return resolveShellCandidates({ shellPath });
-  });
+  }, options.validateSpawn);
 }
 
 /** Create Windows PowerShell-only tool operations. */

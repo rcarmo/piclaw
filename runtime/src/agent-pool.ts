@@ -23,6 +23,7 @@
 
 import { existsSync, mkdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
+import { captureResidentLegacyUpgradeBindings } from "./agent-pool/legacy-authority-capture.js";
 import {
   type AgentSession,
   type AgentSessionRuntime,
@@ -58,7 +59,6 @@ import { MemoryReclamationGate } from "./agent-pool/memory-reclamation.js";
 import { type AgentSessionManagerInstrumentationSnapshot, type PoolEntry } from "./agent-pool/session-manager.js";
 import { ownAccountModelDefaults } from './agent-pool/family-model-defaults.js';
 import type { PiclawCredentialStore } from "./agent-pool/credential-store.js";
-import { installLegacySessionAffinityCompatibility } from "./agent-pool/session-affinity-compat.js";
 import {
   type ChatBranchRecord,
   type MergeChatBranchIntoParentResult,
@@ -88,7 +88,7 @@ import {
   extensionKvClear,
   migrateProxmoxPortainerToKv,
 } from "./db.js";
-import { registerExtensionKvStore } from "./extension-kv-registry.js";
+import { registerRootExtensionKvStore } from "./db/register-extension-kv.js";
 import { setSshToolHandlers } from "./extensions/ssh.js";
 import { applyLiveSshConfig, clearLiveSshConfig, hasLiveChatSshConnection, hasLiveChatSshSession, resolveSshCoreConfigFromChatConfig } from "./extensions/ssh-core.js";
 import { getKeychainEntry } from "./secure/keychain.js";
@@ -286,6 +286,11 @@ export function createKnownModelCostResolver(agentDir: string): (provider: strin
  * process-spawn overhead, conversation context already loaded.
  */
 export class AgentPool {
+  assertLegacyCaptureIdle(): void { this.sessionManager.assertLegacyCaptureIdle(); }
+  /** Explicit read-only resident capture; never selects or constructs a session. */
+  captureLegacyUpgradeBindings(options: import("./agent-pool/legacy-authority-capture.js").LegacyCaptureOptions) {
+    return captureResidentLegacyUpgradeBindings(options, this.pool, () => this.sessionManager.assertLegacyCaptureIdle());
+  }
   inspectMcpSettings(policy?: unknown) { return this.mcpSettings.inspect(policy); }
   inspectMcpServers(edit?: unknown) { return this.mcpSettings.inspectServers(edit); }
   applyMcpServers(input: { revision: string; acknowledgeInterruptions: boolean }, authorise: () => void, signal: AbortSignal) {
@@ -314,8 +319,6 @@ export class AgentPool {
   private modelRegistry: ModelRegistry;
   private settingsManager = SettingsManager.create(WORKSPACE_DIR, getPiclawAgentDir());
   private logsDir = join(WORKSPACE_DIR, "logs");
-  private createSession?: AgentPoolOptions["createSession"];
-  private createSideSession?: AgentPoolOptions["createSideSession"];
   private bashOperations = createTrackedBashOperations({
     shellPath: () => this.settingsManager.getShellPath(),
   });
@@ -329,16 +332,23 @@ export class AgentPool {
   private sideStreamSimple?: NonNullable<AgentPoolOptions["sideStreamSimple"]>;
   private readonly config = getSessionPoolConfig();
 
+  private readonly scheduledDispatch: AgentPoolOptions["dispatchScheduledAgent"];
+  private readonly durableApplication: boolean;
+  dispatchScheduledAgent(lease: import("./service-effects/contracts/scheduled-run-store.js").ScheduledRunLease): Promise<AgentOutput> | undefined {
+    if (this.scheduledDispatch) return this.scheduledDispatch(lease);
+    if (this.durableApplication) throw new Error("Durable scheduled dispatcher unavailable");
+    return undefined;
+  }
+
   constructor(options: AgentPoolOptions) {
-    this.createSession = options.createSession;
-    this.createSideSession = options.createSideSession;
+    this.scheduledDispatch = options.dispatchScheduledAgent?.bind(options);
+    this.durableApplication = options.getDurableSession !== undefined;
     if (!options.credentialStore || !options.modelRuntime) {
       throw new Error("AgentPool requires shared credentialStore and modelRuntime services");
     }
     this.credentialStore = options.credentialStore;
     this.modelRuntime = options.modelRuntime;
     this.modelRegistry = options.modelRegistry ?? new ModelRegistry(this.modelRuntime);
-    installLegacySessionAffinityCompatibility(this.modelRegistry, (message, details) => log.warn(message, details));
     this.applyRateLimitRetryDefaults();
     ({
       attachments: this.attachments,
@@ -360,8 +370,11 @@ export class AgentPool {
       workspaceDir: WORKSPACE_DIR,
       mainSessionMaxSize: this.config.mainSessionPoolMaxSize,
       bashOperations: this.bashOperations,
-      createSession: this.createSession,
-      createSideSession: this.createSideSession,
+      getDurableSession: options.getDurableSession,
+      ...(options.getDurableSession === undefined ? {
+        createSession: options.createSession,
+        createSideSession: options.createSideSession,
+      } : {}),
       onInfo: (message, details) => log.info(message, details),
       onWarn: (message, details) => log.warn(message, details),
       onError: (message, details) => log.error(message, details),
@@ -373,14 +386,7 @@ export class AgentPool {
       set: (chatJid, config) => this.setSshConfig(chatJid, config),
       clear: (chatJid) => this.clearSshConfig(chatJid),
     });
-    registerExtensionKvStore({
-      get: extensionKvGet,
-      set: extensionKvSet,
-      delete: extensionKvDelete,
-      list: extensionKvList,
-      query: extensionKvQuery,
-      clear: extensionKvClear,
-    });
+    registerRootExtensionKvStore();
     const runtimeInterop = ((globalThis as { __piclawRuntimeInterop?: RuntimeInteropBridge }).__piclawRuntimeInterop ||= {});
     runtimeInterop.getChatJid = getChatJid;
     runtimeInterop.getChatChannel = getChatChannel;
@@ -394,18 +400,11 @@ export class AgentPool {
     };
     runtimeInterop.getSessionId = (chatJid) => getSessionEntry(chatJid)?.runtime.session.sessionId ?? null;
     runtimeInterop.getScopedModels = (chatJid) => getSessionEntry(chatJid)?.runtime.session.scopedModels ?? [];
-    runtimeInterop.getExtensionKvStore = () => ({
-      get: extensionKvGet,
-      set: extensionKvSet,
-      delete: extensionKvDelete,
-      list: extensionKvList,
-      clear: extensionKvClear,
-    });
     runtimeInterop.addLogSink = addLogSink;
     runtimeInterop.removeLogSink = removeLogSink;
     runtimeInterop.getKeychainEntry = getKeychainEntry;
     try { migrateProxmoxPortainerToKv(); } catch (e) { void e; /* migration is best-effort */ }
-    mkdirSync(SESSIONS_DIR, { recursive: true });
+    if (options.getDurableSession === undefined) mkdirSync(SESSIONS_DIR, { recursive: true });
     mkdirSync(this.logsDir, { recursive: true });
     const agentLogConfig = getAgentLogConfig();
     startAgentLogCleanup(this.logsDir, agentLogConfig.retentionMs, agentLogConfig.cleanupIntervalMs);
@@ -636,9 +635,10 @@ export class AgentPool {
   /** Return the current context token usage for a chat session, or null if unknown. */
   async getContextUsageForChat(chatJid: string): Promise<{
     tokens: number | null;
-    contextWindow: number;
+    contextWindow: number | null;
     percent: number | null;
     sessionGeneration?: string;
+    tokensAreAuthoritative?: true;
   } | null> {
     return this.runtimeFacade.getContextUsageForChat(chatJid);
   }
@@ -717,7 +717,11 @@ export class AgentPool {
     return this.sessionManager.prewarm(chatJid, options);
   }
 
-  getSessionTreeSummaryForChat(chatJid: string): { leafId: string | null; total: number } | null {
+  getSessionTreeForChat(chatJid: string) {
+    return this.runtimeFacade.getSessionTreeForChat(chatJid);
+  }
+
+  getSessionTreeSummaryForChat(chatJid: string): Promise<{ leafId: string | null; total: number } | null> {
     return this.runtimeFacade.getSessionTreeSummaryForChat(chatJid);
   }
 

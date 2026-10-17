@@ -465,7 +465,8 @@ describe("WP-3C hermetic add-on package-tree oracle", () => {
       sessionSource.indexOf("export function getInstalledAddonExtensionPaths"),
       sessionSource.indexOf("function getBundledExtensionPaths"),
     );
-    expect(discoveryBody).toContain("resolveAddonPackageEntries(packageDir, addonPackage.manifest.pi?.extensions)");
+    expect(discoveryBody).toContain("installedAddonExtensionPaths(workspaceDir)");
+    expect(resolverSource).toMatch(/resolveAddonPackageEntries\(packageDir,\s*\w+\.manifest\.pi\?\.extensions\)/);
     expect(resolverSource).toContain("statSync(fullPath).isFile()");
     expect(resolverSource).toContain("realpathSync(fullPath)");
     expect(resolverSource).toContain("isInside(realPackageDir, realEntryPath)");

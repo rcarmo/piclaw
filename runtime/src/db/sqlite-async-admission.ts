@@ -18,6 +18,7 @@ export async function admitSqliteWrite<T>(
   signal: AbortSignal,
   timeoutMs = 5000,
   assertBinding: () => void = () => {},
+  afterRollback: () => void = () => {},
 ): Promise<T> {
   const deadline = performance.now() + timeoutMs;
   for (;;) {
@@ -37,6 +38,7 @@ export async function admitSqliteWrite<T>(
         return result;
       }).immediate();
     } catch (error) {
+      afterRollback(); // Synchronous: restore attempt-local memory before any retry yields.
       if (!isSqliteContention(error)) throw error;
       contention = error;
     } finally {

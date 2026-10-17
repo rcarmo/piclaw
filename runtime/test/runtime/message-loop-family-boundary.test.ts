@@ -59,12 +59,12 @@ test('retained family execution context cannot fall through after config changes
 
 test('running single-user poll loop stops before another poll after mode changes', async () => {
   const fixture = setup();
-  const originalSleep = Bun.sleep;
   try {
     fixture.configure('single-user'); const calls: string[] = [];
     const loop = await import('../../src/runtime/message-loop.js');
-    (Bun as any).sleep = async () => { calls.push('sleep'); fixture.configure('family-shared'); };
-    await expect(loop.runMessageLoop(loopDeps(calls))).rejects.toThrow('Owner-bound non-web message processing is not available');
-    expect(calls).toEqual(['sleep']);
-  } finally { (Bun as any).sleep = originalSleep; fixture.cleanup(); }
+    const running = loop.runMessageLoop(loopDeps(calls));
+    fixture.configure('family-shared');
+    await expect(running).rejects.toThrow('Owner-bound non-web message processing is not available');
+    expect(calls).toEqual([]);
+  } finally { fixture.cleanup(); }
 });

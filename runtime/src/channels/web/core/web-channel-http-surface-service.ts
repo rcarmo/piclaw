@@ -72,7 +72,7 @@ export interface WebChannelHttpSurfaceChannel {
   requestRouter: Pick<RequestRouterService, "handle">;
   endpointFacade: WebChannelHttpSurfaceEndpointFacade;
   controlPlaneService: WebChannelHttpSurfaceControlPlane;
-  serverLifecycleGateway: Pick<WebServerLifecycleGatewayService, "handleFetch">;
+  serverLifecycleGateway: Pick<WebServerLifecycleGatewayService, "handleFetch" | "handleRequest">;
   terminalVncHttpService: Pick<
     WebTerminalVncHttpService,
     "handleTerminalSession" | "handleTerminalHandoff" | "handleVncSession" | "handleVncHandoff"
@@ -93,7 +93,7 @@ export class WebChannelHttpSurfaceService {
   }
 
   async handleRequest(req: Request): Promise<Response> {
-    return this.channel.requestRouter.handle(req);
+    return this.channel.serverLifecycleGateway.handleRequest(req, () => this.channel.requestRouter.handle(req));
   }
 
   async handleAgents(): Promise<Response> {

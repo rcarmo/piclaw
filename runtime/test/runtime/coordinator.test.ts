@@ -8,11 +8,14 @@ describe("runtime coordinator", () => {
     const state = {} as unknown as MessageLoopDeps["state"];
     const agentPool = {} as unknown as MessageProcessingDeps["agentPool"];
 
+    const controller = new AbortController();
+    let capturedSignal: AbortSignal | undefined;
     let capturedLoopDeps: MessageLoopDeps | null = null;
     let capturedChatJid: string | null = null;
     let capturedMessageDeps: MessageProcessingDeps | null = null;
 
-    const runMessageLoopFn: NonNullable<StartRuntimeLoopDeps["runMessageLoopFn"]> = async (deps) => {
+    const runMessageLoopFn: NonNullable<StartRuntimeLoopDeps["runMessageLoopFn"]> = async (deps, signal) => {
+      capturedSignal = signal;
       capturedLoopDeps = deps;
     };
 
@@ -29,10 +32,12 @@ describe("runtime coordinator", () => {
       assistantName: "Pi",
       triggerPattern: /@Pi/i,
       pollIntervalMs: 1234,
+      signal: controller.signal,
       runMessageLoopFn,
       processMessagesFn,
     });
 
+    expect(capturedSignal).toBe(controller.signal);
     expect(capturedLoopDeps).not.toBeNull();
     if (!capturedLoopDeps) throw new Error("Expected loop deps to be captured");
 

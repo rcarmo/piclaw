@@ -95,6 +95,7 @@ export interface DeferredControlCommandRuntime {
   sendMessage: WebChannelLike["sendMessage"];
   setContextUsage(chatJid: string, usage: Record<string, unknown> | null): void;
   updateAgentStatus(chatJid: string, status: Record<string, unknown>): void;
+  getAgentStatus?(chatJid: string): Record<string, unknown> | null;
   broadcastEvent(eventType: string, data: unknown): void;
   saveState?(): void;
   retryFailedOnModelSwitch(chatJid: string): boolean;
@@ -276,6 +277,15 @@ export async function executeDeferredControlCommand(
     contentPreview: message.content.slice(0, 80),
   });
 
+  const compactTurn = command.type === "compact" ? createUuid("turn") : null;
+  const compactStatus = (type: string, title: string) => {
+    if (!compactTurn) return;
+    const status = { chat_jid: chatJid, agent_id: agentId, turn_id: compactTurn,
+      thread_id: message.threadId ?? message.rowId, type, title };
+    channel.updateAgentStatus(chatJid, status);
+    channel.broadcastEvent("agent_status", status);
+  };
+  compactStatus("intent", "Compacting context");
   const result = await channel.agentPool.applyControlCommand(chatJid, command);
   const formatted = formatOutbound(result.message, "web");
   const commandThreadId = message.threadId ?? effectiveThreadRootId ?? message.rowId ?? null;
@@ -291,7 +301,7 @@ export async function executeDeferredControlCommand(
       chat_jid: chatJid,
       thread_id: commandThreadId,
       agent_id: agentId,
-      turn_id: createUuid("turn"),
+      turn_id: compactTurn ?? createUuid("turn"),
       type: "context_usage",
       context_reset: true,
       sessionGeneration: result.sessionGeneration,
@@ -341,7 +351,7 @@ export async function executeDeferredControlCommand(
           chat_jid: chatJid,
           thread_id: commandThreadId,
           agent_id: agentId,
-          turn_id: createUuid("turn"),
+          turn_id: compactTurn ?? createUuid("turn"),
           type: "context_usage",
           context_usage: {
             ...persistedUsage,
@@ -368,6 +378,9 @@ export async function executeDeferredControlCommand(
     await resolveAndBroadcastModelStateForCommand(channel, chatJid, result);
   }
 
+  if (!channel.getAgentStatus || channel.getAgentStatus(chatJid)?.turn_id === compactTurn) {
+    compactStatus(result.status === "success" ? "done" : "error", result.message);
+  }
   cursorStore.setChatCursor(chatJid, message.timestamp);
   channel.saveState?.();
 
@@ -446,7 +459,9 @@ export async function materializeDeferredFollowups(
     const queuedInteraction = materializeQueuedFollowup(channel, chatJid, nextQueued);
 
     if (!queuedInteraction) {
-      if (retries >= maxMaterializeRetries) {
+      // Accepted engine input cannot be discarded by the legacy retry budget.
+      // Retain the existing queue/recovery surface until its binding can commit.
+      if (retries >= maxMaterializeRetries && !nextQueued.source_accepted) {
         const consumed = channel.consumeQueuedFollowupItem(chatJid);
         if (!consumed || consumed.rowId !== nextQueued.rowId) {
           throw new Error("Deferred follow-up queue changed before terminal materialization drop");

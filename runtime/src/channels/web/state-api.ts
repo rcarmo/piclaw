@@ -4,6 +4,7 @@
 
 import { getIdentityConfig, getOrCreateWebWidgetToken, getWebRuntimeConfig } from "../../core/config.js";
 import { safeEqual } from "./auth/auth.js";
+import { publicContextUsage } from "./context-usage.js";
 import type { WebChannelLike } from "./core/web-channel-contracts.js";
 
 export const PICLAW_STATE_SCHEMA = "piclaw.state.v1";
@@ -109,7 +110,7 @@ export async function buildPiclawStateSnapshot(channel: WebChannelLike): Promise
       has_side_session: Boolean(record.has_side_session),
       queued_followups: channel.getQueuedFollowupCount(chatJid),
       status: channel.getAgentStatus(chatJid),
-      context: context ? { ...context } : null,
+      context: publicContextUsage(context),
     });
   }
 

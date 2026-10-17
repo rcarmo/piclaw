@@ -1,0 +1,339 @@
+{
+  "status": "PASS",
+  "startedAt": "2026-10-17T18:59:50.859Z",
+  "source": "/workspace/tmp/durable-1650",
+  "sizes": [
+    {
+      "contextUsage": {
+        "firstMs": 0.9391469999999345,
+        "warmMs": [
+          0.13306699999998273,
+          0.08014400000001842,
+          0.07682699999998022,
+          0.06080999999994674,
+          0.0654819999999745
+        ],
+        "medianMs": 0.07682699999998022,
+        "p95Ms": 0.13306699999998273,
+        "afterReopenMs": 0.2506220000000212,
+        "value": {
+          "tokens": null,
+          "contextWindow": 100000,
+          "percent": null,
+          "sessionGeneration": "perf",
+          "tokensAreAuthoritative": true
+        }
+      },
+      "entries": 100,
+      "total": 100,
+      "nodes": 100,
+      "leafId": "106",
+      "physicalEntries": 100,
+      "openMs": 1.7557259999999815,
+      "firstReadMs": 2.2252770000000055,
+      "warmMs": [
+        0.5846440000000257,
+        0.5280850000000328,
+        0.4748409999999694,
+        0.4309299999999894,
+        0.3739669999999933
+      ],
+      "medianMs": 0.4748409999999694,
+      "p95Ms": 0.5846440000000257,
+      "reopenMs": 1.1386050000000978,
+      "coldReadMs": 0.5037810000000036,
+      "reopenPlusReadMs": 1.6423860000001014,
+      "rssBeforeAppend": 120573952,
+      "rssBefore": 122671104,
+      "rssAfter": 127782912,
+      "sqliteFileBytes": {
+        "one.sqlite-wal": 679832,
+        "one.sqlite-shm": 32768,
+        "one.sqlite": 8192
+      },
+      "goldenHash": "3363888192454717410"
+    },
+    {
+      "contextUsage": {
+        "firstMs": 0.361554999999953,
+        "warmMs": [
+          0.08909800000003543,
+          0.04778099999998631,
+          0.04348800000002484,
+          0.052583000000026914,
+          0.07133899999996629
+        ],
+        "medianMs": 0.052583000000026914,
+        "p95Ms": 0.08909800000003543,
+        "afterReopenMs": 0.2945069999999532,
+        "value": {
+          "tokens": null,
+          "contextWindow": 100000,
+          "percent": null,
+          "sessionGeneration": "perf",
+          "tokensAreAuthoritative": true
+        }
+      },
+      "entries": 1000,
+      "total": 1000,
+      "nodes": 1000,
+      "leafId": "1006",
+      "physicalEntries": 1000,
+      "openMs": 1.107328999999936,
+      "firstReadMs": 3.392820000000029,
+      "warmMs": [
+        2.863785000000007,
+        2.6619349999999713,
+        2.574277000000052,
+        2.4609499999999116,
+        2.487494999999967
+      ],
+      "medianMs": 2.574277000000052,
+      "p95Ms": 2.863785000000007,
+      "reopenMs": 1.2316230000000132,
+      "coldReadMs": 2.775846999999999,
+      "reopenPlusReadMs": 4.007470000000012,
+      "rssBeforeAppend": 127782912,
+      "rssBefore": 131162112,
+      "rssAfter": 146567168,
+      "sqliteFileBytes": {
+        "one.sqlite-wal": 1042392,
+        "one.sqlite-shm": 32768,
+        "one.sqlite": 8192
+      },
+      "goldenHash": "2547454277206277114"
+    },
+    {
+      "contextUsage": {
+        "firstMs": 0.5076750000000629,
+        "warmMs": [
+          0.09260099999994509,
+          0.05291500000009819,
+          0.04251499999998032,
+          0.03751799999997729,
+          0.03980300000000625
+        ],
+        "medianMs": 0.04251499999998032,
+        "p95Ms": 0.09260099999994509,
+        "afterReopenMs": 0.3582729999999401,
+        "value": {
+          "tokens": null,
+          "contextWindow": 100000,
+          "percent": null,
+          "sessionGeneration": "perf",
+          "tokensAreAuthoritative": true
+        }
+      },
+      "entries": 2000,
+      "total": 2000,
+      "nodes": 2000,
+      "leafId": "2006",
+      "physicalEntries": 2000,
+      "openMs": 1.2397409999999809,
+      "firstReadMs": 5.3347270000000435,
+      "warmMs": [
+        4.921520999999984,
+        4.576610999999957,
+        8.310739000000012,
+        8.152942000000053,
+        7.430300999999986
+      ],
+      "medianMs": 7.430300999999986,
+      "p95Ms": 8.310739000000012,
+      "reopenMs": 1.948959000000059,
+      "coldReadMs": 4.707066000000054,
+      "reopenPlusReadMs": 6.656025000000113,
+      "rssBeforeAppend": 146567168,
+      "rssBefore": 148836352,
+      "rssAfter": 160145408,
+      "sqliteFileBytes": {
+        "one.sqlite-wal": 1458512,
+        "one.sqlite-shm": 32768,
+        "one.sqlite": 8192
+      },
+      "goldenHash": "10063800396326035101"
+    }
+  ],
+  "assertions": 18716,
+  "scope": "Actual public SDK SQLite + borrowed physical root + real HostConversationRuntime + durable adapter + AgentRuntimeFacade; synthetic linear native rows; no provider execution. Not application bootstrap/runtimeFactory or production qualification.",
+  "methodology": "5 warm timed reads following one untimed read; nearest-rank median/p95. Cold = close/reopen host runtime/storage then first facade read; same process and OS page cache (not disk cold). Timing excludes golden assertions. RSS is process snapshots, not peak or isolated reader allocation. Shared host gate contention is uncontrolled.",
+  "head": "8dcf4dd73d88150e5da5e869d480e006d4714b59",
+  "sourceSha256": {
+    "runtime/durable-engine/src/host-runtime.ts": "60ddaca50d117667de811464917ad84916de3af908f0469cb928d378f7dc207d",
+    "runtime/durable-engine/src/session-tree.ts": "e928c452ec6591f5fa873a2e8283dd51b6a5691a1f17003c1b13334d6d71f88e",
+    "runtime/durable-engine/src/bun-sqlite.ts": "e7e660eaa311d095a1218e83b13cf221793edd400ca72e911609957ae0ab40f9",
+    "runtime/src/agent-pool/runtime-facade.ts": "0b999935613db055cf4ea0fe87bd4d8c4cedf44fe27ad922187ddb4601ac4962",
+    "runtime/src/agent-pool/durable-runtime-adapter.ts": "8ae782d077374d4f34bf5df9f251e2baf7948d6d0e720e07d155903c6b12c005",
+    "runtime/src/agent-control/session-tree-snapshot.ts": "538417d2deccedb835c22b5951c21a4a6eaebbae22a8582e4d67e78cf080b633",
+    "qualification/pi-durable-130/src/fixture.ts": "852b3fe0c1a1c4cb8c0b8861d56a6319001ba93517e47deb496df27d5c45b007",
+    "bun.lock": "fe2ddc392cd91c46d00e5a6f063e07498c13ad9473131aa907a9315f935861fe"
+  },
+  "worktreeStatus": " M qualification/pi-durable-130/README.md\n M qualification/pi-durable-130/application-web.test.ts\n M qualification/pi-durable-130/default-application-runtime.test.ts\n M runtime/src/agent-pool.ts\n M runtime/src/agent-pool/runtime-facade.ts\n M runtime/src/channels/web/endpoints/channel-endpoint-context-factory.ts\n M runtime/src/channels/web/http/family-authorisation.ts\n M runtime/src/channels/web/http/family-model-control.ts\n M runtime/src/channels/web/state-api.ts\n M runtime/test/agent-pool/runtime-facade.test.ts\n M runtime/test/channels/web/endpoints/channel-endpoint-context-factory.test.ts\n M runtime/test/channels/web/family-authorisation.test.ts\n M runtime/test/channels/web/widget-state-api.test.ts\n?? runtime/src/channels/web/context-usage.ts\n",
+  "scriptSha256": "302f34af4c951545a9a8419fbfbfd95a991c0349ca2f998da2debe7d179a6fd6",
+  "environment": {
+    "hostname": "smith",
+    "bun": "1.4.2",
+    "platform": "linux",
+    "arch": "x64",
+    "pid": 1381918,
+    "nice": "10",
+    "runtime": "LXC/systemd user service; no services accessed",
+    "rssAfterImportsPending": 23220224,
+    "rssFinal": 160145408
+  },
+  "tables": [
+    {
+      "name": "chats"
+    },
+    {
+      "name": "conversations"
+    },
+    {
+      "name": "document_revisions"
+    },
+    {
+      "name": "documents"
+    },
+    {
+      "name": "durable_metadata"
+    },
+    {
+      "name": "durable_schema"
+    },
+    {
+      "name": "entries"
+    },
+    {
+      "name": "media"
+    },
+    {
+      "name": "message_media"
+    },
+    {
+      "name": "messages"
+    },
+    {
+      "name": "messages_fts"
+    },
+    {
+      "name": "messages_fts_config"
+    },
+    {
+      "name": "messages_fts_data"
+    },
+    {
+      "name": "messages_fts_docsize"
+    },
+    {
+      "name": "messages_fts_idx"
+    },
+    {
+      "name": "piclaw_durable_bindings_v1"
+    },
+    {
+      "name": "piclaw_durable_intent_bindings_v1"
+    },
+    {
+      "name": "qualification_process_owner"
+    },
+    {
+      "name": "record_ids"
+    },
+    {
+      "name": "service_effect_media_deletions"
+    },
+    {
+      "name": "service_effect_media_upload_history"
+    },
+    {
+      "name": "service_effect_media_uploads"
+    },
+    {
+      "name": "service_effect_operation_media"
+    },
+    {
+      "name": "service_effect_outbox_media_refs"
+    },
+    {
+      "name": "service_effect_s01_chats"
+    },
+    {
+      "name": "service_effect_s01_decisions"
+    },
+    {
+      "name": "service_effect_s01_intents"
+    },
+    {
+      "name": "service_effect_s01_operation_sources"
+    },
+    {
+      "name": "service_effect_s01_operations"
+    },
+    {
+      "name": "service_effect_s01_queued_inputs"
+    },
+    {
+      "name": "service_effect_s01_sources"
+    },
+    {
+      "name": "service_effect_s01_wake_intents"
+    },
+    {
+      "name": "service_effect_s02_commit_outbox"
+    },
+    {
+      "name": "service_effect_s02_commits"
+    },
+    {
+      "name": "service_effect_s05_decisions"
+    },
+    {
+      "name": "service_effect_s05_leases"
+    },
+    {
+      "name": "service_effect_s05_outbox"
+    },
+    {
+      "name": "service_effect_s05_outcomes"
+    },
+    {
+      "name": "service_effect_s05_resolutions"
+    },
+    {
+      "name": "service_effect_timeline_writes"
+    },
+    {
+      "name": "sqlite_sequence"
+    },
+    {
+      "name": "submissions"
+    },
+    {
+      "name": "tasks"
+    }
+  ],
+  "databaseList": [
+    {
+      "seq": 0,
+      "name": "main",
+      "file": "/workspace/tmp/tree-read-performance-W8XiPu/one.sqlite"
+    },
+    {
+      "seq": 1,
+      "name": "temp",
+      "file": ""
+    }
+  ],
+  "sourceSha256After": {
+    "runtime/durable-engine/src/host-runtime.ts": "60ddaca50d117667de811464917ad84916de3af908f0469cb928d378f7dc207d",
+    "runtime/durable-engine/src/session-tree.ts": "e928c452ec6591f5fa873a2e8283dd51b6a5691a1f17003c1b13334d6d71f88e",
+    "runtime/durable-engine/src/bun-sqlite.ts": "e7e660eaa311d095a1218e83b13cf221793edd400ca72e911609957ae0ab40f9",
+    "runtime/src/agent-pool/runtime-facade.ts": "0b999935613db055cf4ea0fe87bd4d8c4cedf44fe27ad922187ddb4601ac4962",
+    "runtime/src/agent-pool/durable-runtime-adapter.ts": "8ae782d077374d4f34bf5df9f251e2baf7948d6d0e720e07d155903c6b12c005",
+    "runtime/src/agent-control/session-tree-snapshot.ts": "538417d2deccedb835c22b5951c21a4a6eaebbae22a8582e4d67e78cf080b633",
+    "qualification/pi-durable-130/src/fixture.ts": "852b3fe0c1a1c4cb8c0b8861d56a6319001ba93517e47deb496df27d5c45b007",
+    "bun.lock": "fe2ddc392cd91c46d00e5a6f063e07498c13ad9473131aa907a9315f935861fe"
+  },
+  "tempCleaned": true,
+  "elapsedMs": 840.2202100000001
+}

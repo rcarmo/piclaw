@@ -1,7 +1,7 @@
 import {beforeEach,afterEach,expect,test} from 'bun:test';
 import Database from 'bun:sqlite';
 import {createHash,createHmac} from 'node:crypto';
-import {chmodSync,existsSync,mkdirSync,readFileSync,statSync,symlinkSync,writeFileSync} from 'node:fs';
+import {chmodSync,existsSync,lstatSync,mkdirSync,readFileSync,rmSync,statSync,symlinkSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {createTempWorkspace,setEnv} from './helpers.js';
 import {getDb,initDatabase,closeDatabase} from '../src/db/connection.js';
@@ -39,9 +39,15 @@ test('changed source or bad plan cannot prepare; existing/symlink/unsafe destina
   const db=new Database(source);db.exec("UPDATE chat_branches SET agent_name='newname'");db.close();
   await expect(handleAccessMigration(args().map(value=>value===target?join(dir,'new.sqlite'):value))).rejects.toThrow('changed');expect(existsSync(join(dir,'new.sqlite'))).toBe(false);
 });
-test('active lock, quarantined source and failed destination migration leave no partial output',async()=>{
+test('active/stale locks and failed destination migration leave no partial output',async()=>{
   await preview();const before=digest();writeFileSync(join(ws.store,'runtime.lock'),JSON.stringify({pid:process.pid}));await expect(handleAccessMigration(args())).rejects.toThrow('already running');
-  writeFileSync(join(ws.store,'runtime.lock'),JSON.stringify({pid:2147483647}));const db=new Database(source);db.exec("CREATE TRIGGER reject_copy BEFORE INSERT ON session_roots BEGIN SELECT RAISE(ABORT,'copy failed'); END");
+  const lockPath=join(ws.store,'runtime.lock'),stale=JSON.stringify({pid:2147483647});writeFileSync(lockPath,stale);const lockBefore=lstatSync(lockPath);
+  await expect(handleAccessMigration(args())).rejects.toThrow('Offline operator cleanup required');
+  expect(digest()).toBe(before);expect(readFileSync(lockPath,'utf8')).toBe(stale);expect(lstatSync(lockPath).ino).toBe(lockBefore.ino);expect(lstatSync(lockPath).dev).toBe(lockBefore.dev);
+  expect(existsSync(join(dir,'prepared.sqlite'))).toBe(false);
+  // Explicit offline operator cleanup of this disposable fixture only.
+  rmSync(lockPath);
+  const db=new Database(source);db.exec("CREATE TRIGGER reject_copy BEFORE INSERT ON session_roots BEGIN SELECT RAISE(ABORT,'copy failed'); END");
   const revised=readAccessMigrationInventory(db).plan;revised.assignments[0]!.owner_user_id='default';writeFileSync(join(dir,'plan.json'),JSON.stringify(revised));db.close();
   await expect(handleAccessMigration(args())).rejects.toThrow('copy failed');expect(existsSync(join(dir,'prepared.sqlite'))).toBe(false);expect(existsSync(join(ws.store,'runtime.lock'))).toBe(false);
   const check=new Database(source,{readonly:true});try{expect(check.query('SELECT * FROM session_roots').all()).toEqual([]);expect(readAccessState(check).activatedMode).toBe('single-user');}finally{check.close();}

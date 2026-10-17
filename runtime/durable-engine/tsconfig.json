@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["bun"],
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src/**/*.ts", "qualification/**/*.ts", "../src/types/gifenc.d.ts", "../src/types/web-push.d.ts"]
+}

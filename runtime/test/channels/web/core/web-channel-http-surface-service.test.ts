@@ -17,6 +17,7 @@ describe("web channel http surface service", () => {
     const jsonResponse = response("json", 208);
     const service = createWebChannelHttpSurfaceService({
       serverLifecycleGateway: {
+        handleRequest: (_req, dispatch) => dispatch(),
         handleFetch: async (req: Request) => {
           calls.push(`fetch:${new URL(req.url).pathname}`);
           return fetchResponse;

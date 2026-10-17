@@ -7,7 +7,8 @@ import { setAddonOperationHost } from "../addons/runtime-contributions.js";
 import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "fs";
 import { dirname, join, resolve } from "path";
 import type { AgentPool } from "../agent-pool.js";
-import { WebChannel } from "../channels/web.js";
+import { WebChannel, type WebChannelOpts } from "../channels/web.js";
+import { RuntimeStartupCleanupError } from "./shutdown.js";
 import { PushoverChannel } from "../channels/pushover.js";
 import { setMessagesPostFn } from "../extensions/messages-crud.js";
 import { setChatToolRelayFn } from "../extensions/chat-tool.js";
@@ -341,7 +342,7 @@ async function buildSessionControlSnapshot(agentPool: AgentPool, chatJid: string
   const models = await agentPool.getAvailableModels(chatJid).catch(() => null);
   const activity = getSessionActivitySnapshot(chatJid);
   const context = await agentPool.getContextUsageForChat(chatJid).catch(() => null);
-  const tree = agentPool.getSessionTreeSummaryForChat(chatJid);
+  const tree = await agentPool.getSessionTreeSummaryForChat(chatJid);
   return {
     chat_jid: chatJid,
     active: agentPool.isActive(chatJid),
@@ -413,7 +414,7 @@ function resolveSessionControlTarget(agentPool: AgentPool, request: SessionContr
 }
 
 function registerSessionControlHandler(agentPool: AgentPool, web: WebChannel): void {
-  setSessionControlHandler(async (request): Promise<SessionControlResult> => {
+  setSessionControlHandler((request) => web.runInternalDispatch(async (): Promise<SessionControlResult> => {
     if (getSessionIsolationLevel() === "full") throw new Error("Session isolation is full; session_control is disabled.");
     if (readAccessConfig().mode !== "single-user") return inspectOwnedSession(agentPool, request);
     const target = resolveSessionControlTarget(agentPool, request);
@@ -513,7 +514,7 @@ function registerSessionControlHandler(agentPool: AgentPool, web: WebChannel): v
 
     const after = await buildSessionControlSnapshot(agentPool, target.chatJid);
     return { ok: true, ...base, before, after, message, ...extra };
-  });
+  }));
 }
 
 export function runWebStartupRecoveryBootstrap(
@@ -566,8 +567,13 @@ export async function initializeWebAddonMessagingRuntime(
 }
 
 /** Start web channel and run immediate crash-recovery bootstrap. */
-export async function startWebChannel(queue: AgentQueue, agentPool: AgentPool): Promise<WebChannel> {
-  const web = new WebChannel({ queue, agentPool });
+export async function startWebChannel(
+  queue: AgentQueue, agentPool: AgentPool,
+  bind?: (options: Pick<WebChannelOpts, "queue" | "agentPool">) => Readonly<WebChannelOpts>,
+): Promise<WebChannel> {
+  const options = { queue, agentPool };
+  const web = new WebChannel(bind ? bind(options) : options);
+  try {
   await web.start();
   // office-viewer route removed: now registered by @rcarmo/piclaw-addon-office-viewer
   // Do not freeze extension routes here: workspace/add-on extension factories
@@ -608,6 +614,12 @@ export async function startWebChannel(queue: AgentQueue, agentPool: AgentPool): 
   queueStartupSessionWarmup(agentPool, resolveStartupSessionWarmupOptions());
   runWebStartupRecoveryBootstrap(web, () => {
     recoverPendingRestartHandoffs(web);
+  }, (resume) => {
+    setTimeout(() => {
+      void web.runInternalDispatch(resume).catch((error) => {
+        log.info("Deferred startup recovery not admitted", { error: String(error) });
+      });
+    }, 0);
   });
 
   // Wire session_control separately from chat relay. This tool controls target
@@ -615,6 +627,13 @@ export async function startWebChannel(queue: AgentQueue, agentPool: AgentPool): 
   registerSessionControlHandler(agentPool, web);
 
   return web;
+  } catch (error) {
+    if (bind) {
+      try { await web.stop(); }
+      catch (cleanupError) { throw new RuntimeStartupCleanupError([error, cleanupError], "Web startup cleanup uncertain"); }
+    }
+    throw error;
+  }
 }
 
 /**

@@ -599,7 +599,7 @@ test("durable polling queues one runId and binds scheduled-agent source before d
     "SELECT s.state,o.phase FROM service_effect_s01_sources s JOIN service_effect_s01_operations o ON o.chat_jid=s.chat_jid AND o.primary_source_seq=s.source_seq WHERE s.source_id=?",
   ).get(durableQueued[0].id) as { state: string; phase: string };
   expect(source).toEqual({ state: "consumed", phase: "terminal" });
-  scheduler.stopSchedulerLoop();
+  await scheduler.stopSchedulerLoop();
 });
 
 test("expired scheduled-agent claim is reclaimed only after stable source absence reconciliation", async () => {
@@ -641,7 +641,7 @@ test("expired scheduled-agent claim is reclaimed only after stable source absenc
   ).get(taskId) as { run_id: string; attempt: number };
   expect(first.attempt).toBe(1);
   expect(db.getDb().query("SELECT 1 FROM service_effect_s01_sources WHERE source_id=?").get(first.run_id)).toBeNull();
-  scheduler.stopSchedulerLoop();
+  await scheduler.stopSchedulerLoop();
 
   const claimedAt = new Date(Date.now() - 2000).toISOString();
   const expiredAt = new Date(Date.now() - 1000).toISOString();
@@ -659,7 +659,7 @@ test("expired scheduled-agent claim is reclaimed only after stable source absenc
   ).get(first.run_id) as { authority_kind: string; reconciliation_ref: string };
   expect(authority.authority_kind).toBe("agent_reconciled_absent");
   expect(authority.reconciliation_ref).toContain(first.run_id);
-  scheduler.stopSchedulerLoop();
+  await scheduler.stopSchedulerLoop();
 });
 
 test("startSchedulerLoop returns stop function and stop is idempotent", async () => {
@@ -700,6 +700,6 @@ test("startSchedulerLoop returns stop function and stop is idempotent", async ()
   expect(metrics.polls).toBeGreaterThanOrEqual(1);
   expect(metrics.tasksEnqueued).toBeGreaterThanOrEqual(1);
 
-  stop();
-  scheduler.stopSchedulerLoop();
+  await stop();
+  await scheduler.stopSchedulerLoop();
 });

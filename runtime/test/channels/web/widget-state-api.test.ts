@@ -49,6 +49,38 @@ describe("widget state API", () => {
     expect(snapshot.chats[0]?.queued_followups).toBe(1);
   });
 
+  test("state JSON projects runtime and stored context without private hints or new defaults", async () => {
+    const previous = WEB_RUNTIME_CONFIG.widgetToken;
+    WEB_RUNTIME_CONFIG.widgetToken = "widget-test-token";
+    try {
+      for (const stored of [false, true]) {
+        for (const context of [
+          { tokens: null, contextWindow: 200000, percent: null, sessionGeneration: "session-1", tokensAreAuthoritative: true, futurePrivateField: "private" },
+          { tokens: 123, contextWindow: 1000, percent: 12.3 },
+          { tokens: undefined, contextWindow: 1000, percent: undefined },
+          null,
+        ]) {
+          const channel = makeChannel();
+          channel.agentPool.getContextUsageForChat = async () => stored ? null : context;
+          channel.getContextUsage = () => stored ? context : null;
+          const response = await handleWidgetStateRoutes(channel,
+            new Request("https://example.test/api/state", { headers: { Authorization: "Bearer widget-test-token" } }), "/api/state");
+          expect(response?.status).toBe(200);
+          const body = await response!.json();
+          // Runtime context inherits the live generation; unversioned stored data remains rejected.
+          const accepted = context && (!stored || "sessionGeneration" in context);
+          const expected = accepted ? JSON.parse(JSON.stringify({
+            tokens: context.tokens, contextWindow: context.contextWindow, percent: context.percent, sessionGeneration: "session-1",
+          })) : { tokens: null, contextWindow: null, percent: null, sessionGeneration: "session-1" };
+          expect(body.chats[0].context).toEqual(expected);
+          expect(JSON.stringify(body)).not.toMatch(/tokensAreAuthoritative|futurePrivateField/);
+        }
+      }
+    } finally {
+      WEB_RUNTIME_CONFIG.widgetToken = previous;
+    }
+  });
+
   test("requires bearer token auth", async () => {
     const previous = WEB_RUNTIME_CONFIG.widgetToken;
     WEB_RUNTIME_CONFIG.widgetToken = "widget-test-token";

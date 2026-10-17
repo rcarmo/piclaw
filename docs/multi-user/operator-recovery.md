@@ -7,11 +7,24 @@ Normal family startup requires a promoted database and matching explicit configu
 ## Preconditions
 
 - Use the correct host, workspace, store and installed version. Confirm the service manager for that host; do not copy service commands between container and host-native deployments.
-- Stop the managed Piclaw service and every other process that writes database or authentication state, including CLI jobs, add-ons, schedulers and backup maintenance. Disable automatic restart while recovering. The runtime lock rejects an active Piclaw or maintenance process, and SQLite rejects a competing writer. You must still check for external processes that do not use Piclaw's lock.
+- Stop the managed Piclaw service and every other process that writes database or authentication state, including CLI jobs, add-ons, schedulers and backup maintenance. Disable automatic restart while recovering. The runtime lock refuses every existing lock path, and SQLite rejects a competing writer. You must still check for external processes that do not use Piclaw's lock.
 - Keep a coordinated backup of the database, original bootstrap key, configuration and session files. The command makes and verifies an additional SQLite snapshot, including committed WAL data. It does not back up or rotate keys, configuration or session files. Losing the existing key may also make unrelated credentials unreadable.
 - Have the exact immutable administrator ID and current username. The account must already own an active home root; repair missing ownership separately.
 - Choose `totp` or `passkey` according to the configured authentication policy. TOTP needs the existing bootstrap key. Passkey recovery does not require TOTP. Use the exact externally trusted HTTPS origin without a trailing slash, path, query, credentials or fragment.
 - Prepare a directory owned by the invoking OS user, mode `0700`, for the backup and secret grant. Use new filenames. The command refuses existing files/symlinks and never prints the grant URL.
+
+## Existing runtime locks
+
+Every enabled runtime-lock acquirer, including ordinary startup and offline maintenance, refuses any existing `runtime.lock` path. Empty, malformed and apparently dead-PID records remain unchanged. Automatic stale-lock recovery is intentionally disabled: exclusive file creation publishes the path before the JSON record, so an empty path may belong to a process still acquiring ownership.
+
+After SIGKILL, a crash or failed lock publication, startup and maintenance may require manual cleanup:
+
+1. Confirm the host, workspace, configured store and service manager. Stop every runtime and maintenance process for that workspace and prevent automatic restart.
+2. Verify that no owner or other writer remains. PID, command text or lock age alone cannot authorise removal. If ownership is uncertain, leave the lock untouched.
+3. Remove only that store's `runtime.lock` manually while all writers remain stopped. Never remove the database, WAL/SHM files or authentication state to clear a lock error. Never replace or remove a lock while an owner may be running.
+4. Retry the intended command. Restore service management only after a separately authorised normal startup.
+
+Normal exact-owner release removes its own unchanged lock. The lock directory must be trusted; release cannot atomically compare an inode and unlink it through Node's filesystem API. This fail-closed policy can prevent unattended restart after a crash. Disabling locking is not a recovery procedure; maintenance always requires the lock and strict ownership rejects disabled locking.
 
 ## Preview and issue
 

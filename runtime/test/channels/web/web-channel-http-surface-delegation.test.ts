@@ -11,6 +11,7 @@ describe("web channel http surface delegation", () => {
     const calls: string[] = [];
     const stub = {
       serverLifecycleGateway: {
+        handleRequest: (_req: Request, dispatch: () => Promise<Response>) => dispatch(),
         handleFetch: async (req: Request) => {
           calls.push(`fetch:${new URL(req.url).pathname}`);
           return response("fetch");

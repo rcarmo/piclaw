@@ -7,7 +7,22 @@
  * fall back to an in-memory Map.
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { KvScope, KvQueryOptions } from "./db/extension-kv.js";
+
+/** Private host effect authority; never supplied through extension context. */
+export interface ExtensionKvAuthority {
+  readonly chatJid: string;
+  readonly extensionId: string;
+  assertCurrent(): void;
+  write<T>(body: () => T): T;
+}
+const operationAuthority = new AsyncLocalStorage<ExtensionKvAuthority>();
+let requireAuthority = false;
+export function requireExtensionKvAuthority(): void { requireAuthority = true; }
+export function withExtensionKvAuthority<T>(authority: ExtensionKvAuthority, body: () => T): T {
+  return operationAuthority.run(authority, body);
+}
 
 export interface ExtensionKvStore {
   get<T = unknown>(extensionId: string, key: string, scope?: KvScope, scopeKey?: string): T | null;
@@ -87,9 +102,33 @@ export function registerExtensionKvStore(store: ExtensionKvStore): void {
 /** Reset the registry to an isolated in-memory store for monolithic test suites. */
 export function resetExtensionKvStoreForTests(): void {
   registeredStore = new InMemoryKvStore();
+  requireAuthority = false;
 }
 
-/** Get the registered KV store. */
-export function getExtensionKvStore(): ExtensionKvStore {
-  return registeredStore;
+// One stable router, including for extensions that cache it during factory load.
+// Registering a backing store never replaces the authority boundary.
+function effect<T>(extensionId: string, scope: KvScope | undefined, scopeKey: string | undefined, write: boolean, body: () => T): T {
+  const authority = operationAuthority.getStore();
+  if (!authority) {
+    if (requireAuthority) throw Error("Extension KV operation authority required");
+    return body();
+  }
+  const check = () => {
+    authority.assertCurrent();
+    if (extensionId !== authority.extensionId || scope !== "chat" || !scopeKey || scopeKey !== authority.chatJid)
+      throw Error("Extension KV scope denied");
+  };
+  const invoke = () => { check(); const result = body(); check(); return result; };
+  return write ? authority.write(invoke) : invoke();
 }
+const router: ExtensionKvStore = Object.freeze({
+  get: <T>(id: string, key: string, scope?: KvScope, chat?: string) => effect(id, scope, chat, false, () => registeredStore.get<T>(id, key, scope, chat)),
+  set: (id: string, key: string, value: unknown, scope?: KvScope, chat?: string) => effect(id, scope, chat, true, () => registeredStore.set(id, key, value, scope, chat)),
+  delete: (id: string, key: string, scope?: KvScope, chat?: string) => effect(id, scope, chat, true, () => registeredStore.delete(id, key, scope, chat)),
+  list: (id: string, prefix?: string, scope?: KvScope, chat?: string) => effect(id, scope, chat, false, () => registeredStore.list(id, prefix, scope, chat)),
+  query: <T>(id: string, options: KvQueryOptions) => effect(id, options.scope, options.scopeKey, false, () => registeredStore.query<T>(id, options)),
+  clear: (id: string, scope?: KvScope, chat?: string) => effect(id, scope, chat, true, () => registeredStore.clear(id, scope, chat)),
+});
+
+/** Get the stable authority-aware registry, not its mutable backing store. */
+export function getExtensionKvStore(): ExtensionKvStore { return router; }

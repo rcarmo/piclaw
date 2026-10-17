@@ -1,6 +1,6 @@
 import {beforeEach,afterEach,expect,test} from 'bun:test';
 import Database from 'bun:sqlite';
-import {chmodSync,existsSync,mkdirSync,readFileSync,statSync,symlinkSync,writeFileSync} from 'node:fs';
+import {chmodSync,existsSync,lstatSync,mkdirSync,readFileSync,rmSync,statSync,symlinkSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {createTempWorkspace,setEnv} from './helpers.js';
 import {getDb,initDatabase,closeDatabase} from '../src/db/connection.js';
@@ -38,11 +38,18 @@ test('offline CLI preview is read-only and issue creates verified private backup
   expect(existsSync(join(ws.store,'runtime.lock'))).toBe(false);
 });
 
-test('missing confirmations, unsafe/existing/symlink outputs and active runtime lock reject before mutation',()=>{
+test('missing confirmations, unsafe/existing/symlink outputs and active/stale runtime locks reject before mutation',()=>{
   const before=inspect();expect(()=>handleOperatorRecovery(args().filter(arg=>arg!=='--writers-stopped'))).toThrow();expect(()=>handleOperatorRecovery([...args(),'--user-id',id])).toThrow();
   writeFileSync(join(ws.store,'runtime.lock'),JSON.stringify({pid:process.pid,command:'other'}));expect(()=>handleOperatorRecovery(args())).toThrow('already running');
   writeFileSync(join(ws.store,'runtime.lock'),'{bad');expect(()=>handleOperatorRecovery(args())).toThrow('already running');
-  writeFileSync(join(ws.store,'runtime.lock'),JSON.stringify({pid:2147483647,command:'dead'}));
+  const lockPath=join(ws.store,'runtime.lock'),stale=JSON.stringify({pid:2147483647,command:'dead'}),sourceBefore=readFileSync(source);
+  writeFileSync(lockPath,stale);const lockBefore=lstatSync(lockPath);
+  expect(()=>handleOperatorRecovery(args())).toThrow('Offline operator cleanup required');
+  expect(readFileSync(source)).toEqual(sourceBefore);expect(inspect()).toEqual(before);
+  expect(readFileSync(lockPath,'utf8')).toBe(stale);expect(lstatSync(lockPath).ino).toBe(lockBefore.ino);expect(lstatSync(lockPath).dev).toBe(lockBefore.dev);
+  expect(existsSync(join(privateDir,'before.sqlite'))).toBe(false);expect(existsSync(join(privateDir,'grant.json'))).toBe(false);
+  // Explicit offline operator cleanup of this disposable fixture only.
+  rmSync(lockPath);
   chmodSync(privateDir,0o755);expect(()=>handleOperatorRecovery(args())).toThrow('owner-only');chmodSync(privateDir,0o700);
   const unrelated=join(privateDir,'keep');writeFileSync(unrelated,'unchanged');symlinkSync(unrelated,join(privateDir,'grant.json'));expect(()=>handleOperatorRecovery(args())).toThrow('already exists');
   expect(readFileSync(unrelated,'utf8')).toBe('unchanged');expect(inspect()).toEqual(before);expect(existsSync(join(privateDir,'before.sqlite'))).toBe(false);

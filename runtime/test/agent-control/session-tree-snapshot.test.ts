@@ -55,6 +55,18 @@ describe("session tree command snapshot", () => {
     });
   });
 
+  test("keeps the exact excluded public head distinct from the visible active ancestor", () => {
+    const snapshot = buildSessionTreeSnapshot({
+      getLeafId: () => "raw-system-head",
+      getTree: () => [{ entry: { id: "visible", parentId: null, type: "compaction" }, children: [] }],
+    }, { visibleLeafId: "visible" });
+    expect(snapshot.leafId).toBe("raw-system-head");
+    expect(snapshot.visibleLeafId).toBe("visible");
+    expect(snapshot.nodes.filter(n => n.active).map(n => n.id)).toEqual(["visible"]);
+    const empty = buildSessionTreeSnapshot({ getLeafId: () => "system-only", getTree: () => [] }, { visibleLeafId: null });
+    expect(empty).toMatchObject({ leafId: "system-only", visibleLeafId: null, nodes: [] });
+  });
+
   test("normalizes transcript prompt envelopes while retaining raw detail", () => {
     const raw = [
       "Channel: web",

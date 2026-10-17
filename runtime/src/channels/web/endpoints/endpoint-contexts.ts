@@ -56,6 +56,7 @@ export interface AgentStatusContextDeps extends JsonLike {
   getContextUsageForChat(
     chatJid: string
   ): Promise<{ tokens: number | null; contextWindow: number | null; percent: number | null; sessionGeneration?: string } | null>;
+  getSessionTreeSummaryForChat?: AgentStatusContext["getSessionTreeSummaryForChat"];
   getTokenUsageForChat(chatJid: string): AgentTokenUsageContext | null;
   getAvailableModels(chatJid: string, options?: { includeProviderDiagnostics?: boolean; includeCatalogue?: boolean }): Promise<unknown>;
   getProviderReadyCompletedForInstance(): boolean;
@@ -71,6 +72,7 @@ export function createAgentStatusContext(deps: AgentStatusContextDeps): AgentSta
     recoverStaleInflightRun: deps.recoverStaleInflightRun,
     getBuffer: deps.getBuffer,
     getContextUsageForChat: deps.getContextUsageForChat,
+    getSessionTreeSummaryForChat: deps.getSessionTreeSummaryForChat,
     getTokenUsageForChat: deps.getTokenUsageForChat,
     getAvailableModels: deps.getAvailableModels,
     getProviderReadyCompletedForInstance: deps.getProviderReadyCompletedForInstance,

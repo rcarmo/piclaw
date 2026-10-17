@@ -13,17 +13,37 @@
  */
 
 import { DATA_DIR } from "./core/config.js";
-import { bootstrapRuntime, createDefaultRuntimeBootstrapDeps } from "./runtime/bootstrap.js";
+import { bootstrapRuntime, createDefaultRuntimeBootstrapDeps, RuntimeStartupCleanupError, type RuntimeBootstrapDeps } from "./runtime/bootstrap.js";
 import { createRuntimeBaseServices } from "./runtime/composition.js";
 import { acquireRuntimeLock } from "./runtime/single-instance.js";
 
+/** Lifecycle injection keeps tests on disposable owners without replacing bootstrap. */
+export interface RuntimeMainDeps {
+  acquireLock(): ReturnType<typeof acquireRuntimeLock>;
+  createBootstrapDeps(): RuntimeBootstrapDeps;
+}
+
 /** Boot all subsystems (DB, channels, agent pool, scheduler) and enter the main loop. */
-export async function main(): Promise<void> {
-  const runtimeLock = acquireRuntimeLock();
+export async function main(deps: RuntimeMainDeps = {
+  acquireLock: () => acquireRuntimeLock({ strictOwnership: true }),
+  createBootstrapDeps: () => createDefaultRuntimeBootstrapDeps(createRuntimeBaseServices({ dataDir: DATA_DIR })),
+}): Promise<void> {
+  const runtimeLock = deps.acquireLock();
+  let retain = false;
   try {
-    const base = createRuntimeBaseServices({ dataDir: DATA_DIR });
-    await bootstrapRuntime(createDefaultRuntimeBootstrapDeps(base));
+    const bootstrapDeps = deps.createBootstrapDeps();
+    const onShutdownComplete = bootstrapDeps.onShutdownComplete;
+    await bootstrapRuntime({
+      ...bootstrapDeps,
+      onShutdownComplete: () => {
+        onShutdownComplete?.();
+        runtimeLock.markSafeReleaseOnExit();
+      },
+    }, runtimeLock);
+  } catch (error) {
+    retain = error instanceof RuntimeStartupCleanupError;
+    throw error;
   } finally {
-    runtimeLock.release();
+    if (!retain) runtimeLock.release();
   }
 }

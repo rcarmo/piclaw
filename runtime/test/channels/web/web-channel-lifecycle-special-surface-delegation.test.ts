@@ -15,6 +15,7 @@ describe("web channel lifecycle/special surface delegation", () => {
         stop: async () => {
           calls.push("stop");
         },
+        handleRequest: async (_req: Request, dispatch: () => Promise<Response>) => dispatch(),
       },
       adaptiveCardSidePromptService: {
         handleAdaptiveCardAction: async (_req: Request) => {

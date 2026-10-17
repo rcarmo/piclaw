@@ -208,6 +208,35 @@ test('family status/context expose only an owned standard-pane snapshot and reva
   expect((await router.handle(request('/agent/status?chat_jid=web:alice'))).status).toBe(403);
 });
 
+test("family models and branches project public context fields without changing legacy JSON", async () => {
+  getDb().query("UPDATE chat_branches SET handle_owner_id=? WHERE chat_jid='web:alice'").run(alice);
+  const contexts = [
+    { tokens: null, contextWindow: 200000, percent: null, sessionGeneration: "native-session", tokensAreAuthoritative: true, futurePrivateField: "private" },
+    { tokens: 1200, contextWindow: 120000, percent: 1 },
+    { tokens: undefined, contextWindow: 120000, percent: undefined, sessionGeneration: undefined },
+    null,
+  ];
+  for (const context of contexts) {
+    channel.agentPool = {
+      getAvailableModels: async () => ({ current: "test/model" }),
+      getContextUsageForChat: async () => context,
+    };
+    const expected = context === null ? null : JSON.parse(JSON.stringify({
+      tokens: context.tokens, contextWindow: context.contextWindow,
+      percent: context.percent, sessionGeneration: context.sessionGeneration,
+    }));
+    for (const path of ["/agent/models", "/agent/branches"]) {
+      const response = await router.handle(request(path));
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      const usages = path === "/agent/models" ? [body.context_usage] : body.branches.map((branch: any) => branch.context_usage);
+      expect(usages.length).toBeGreaterThan(0);
+      for (const usage of usages) expect(usage).toEqual(expected);
+      expect(JSON.stringify(body)).not.toMatch(/tokensAreAuthoritative|futurePrivateField/);
+    }
+  }
+});
+
 test("family compose catalogue exposes only permitted controls and owner-scoped mentions", async () => {
   const fork = registerChat("web:alice-compose-fork", "web:alice", (getDb().query("SELECT branch_id FROM chat_branches WHERE chat_jid='web:alice'").get() as any).branch_id);
   getDb().query("UPDATE chat_branches SET handle_owner_id=? WHERE branch_id=?").run(alice, fork.branch_id);

@@ -1,9 +1,10 @@
-import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import "../helpers.js";
 import {
   extensionKvClear,
   getDb,
   initDatabase,
+  storeChatMetadata,
 } from "../../src/db.js";
 import { storeWebMessage } from "../../src/channels/web/messaging/message-store.js";
 import {
@@ -74,6 +75,9 @@ function createReadyHandoff(input: {
   reason: string;
   resumeMessage?: string | null;
 }) {
+  // A ready handoff follows a persisted restart notice in an existing chat.
+  // Seed that parent explicitly rather than depending on foreign keys being off.
+  storeChatMetadata(input.chatJid, new Date().toISOString());
   const preparing = prepareRestartHandoff(input);
   return markRestartHandoffReady(preparing, Math.floor(Math.random() * 100_000) + 1);
 }
@@ -94,12 +98,22 @@ function getChatMessages(chatJid: string): Array<{
 }
 
 describe("restart handoff recovery", () => {
-  beforeAll(() => {
+  let restoreForeignKeys: () => void;
+
+  beforeEach(() => {
     initDatabase();
+    const database = getDb();
+    const foreignKeys = (database.query("PRAGMA foreign_keys").get() as { foreign_keys: number }).foreign_keys;
+    database.exec("PRAGMA foreign_keys=ON");
+    restoreForeignKeys = () => database.exec(`PRAGMA foreign_keys=${foreignKeys ? "ON" : "OFF"}`);
   });
 
   afterEach(() => {
-    extensionKvClear(EXIT_PROCESS_HANDOFF_EXTENSION_ID);
+    try {
+      extensionKvClear(EXIT_PROCESS_HANDOFF_EXTENSION_ID);
+    } finally {
+      restoreForeignKeys();
+    }
   });
 
   test("posts the visible completion before a labelled inbound continuation and starts one turn", () => {

@@ -14,7 +14,7 @@ import type { WebChannelLike } from "./web-channel-contracts.js";
 
 type WebChannelLifecycleSpecialSurfaceServerLifecycle = Pick<
   WebServerLifecycleGatewayService,
-  "server" | "start" | "stop"
+  "server" | "start" | "stop" | "sealAdmissions" | "handleRequest" | "runInternalDispatch"
 >;
 
 export interface WebChannelLifecycleSpecialSurfaceChannel {
@@ -75,8 +75,16 @@ export class WebChannelLifecycleSpecialSurfaceService {
     await this.channel.serverLifecycleGateway.start();
   }
 
-  async stop(): Promise<void> {
-    await this.channel.serverLifecycleGateway.stop();
+  sealAdmissions(): Promise<void> {
+    return this.channel.serverLifecycleGateway.sealAdmissions();
+  }
+
+  stop(): Promise<void> {
+    return this.channel.serverLifecycleGateway.stop();
+  }
+
+  runInternalDispatch<T>(dispatch: () => T | Promise<T>): Promise<T> {
+    return this.channel.serverLifecycleGateway.runInternalDispatch(dispatch);
   }
 
   async handleAdaptiveCardAction(req: Request): Promise<Response> {
@@ -96,10 +104,10 @@ export class WebChannelLifecycleSpecialSurfaceService {
   }
 
   handleAgentMessage(req: Request, pathname: string): Promise<Response> {
-    return getWebAgentMessageEntryService(
+    return this.channel.serverLifecycleGateway.handleRequest(req, () => getWebAgentMessageEntryService(
       this.channel as unknown as WebChannelLike & { agentMessageEntryService?: WebAgentMessageEntryService },
       this.defaults,
-    ).handleAgentMessage(req, pathname);
+    ).handleAgentMessage(req, pathname));
   }
 }
 

@@ -25,6 +25,36 @@ import { getDb, getDatabaseBinding } from '../../../db/connection.js';
 import { admitSqliteWrite } from '../../../db/sqlite-async-admission.js';
 import { getWorkspaceDir, getStoreDir, getConfigPath } from '../../../core/config.js';
 import { statSync } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
+import { createUuid } from '../../../utils/ids.js';
+
+export type QueuedInputSourceAdmission = (stored: Readonly<{
+  chatJid: string; item: Readonly<QueuedFollowupItem & { source_id: string }>; database: ReturnType<typeof getDb>;
+}>) => void;
+
+/** SQL-only host callback. Use item.source_id, never the reusable rowId, for source identity. */
+export function acceptQueuedInputSource(chatJid: string, rowId: number, database: ReturnType<typeof getDb>, accept?: QueuedInputSourceAdmission): void {
+  if (!accept) return;
+  if (!database.inTransaction || database !== getDb()) throw Error('Queue admission requires its database transaction.');
+  const queued = getDeferredQueuedFollowups(chatJid);
+  const index = queued.findIndex(item => item.rowId === rowId);
+  const item = queued[index];
+  if (!item) throw Error('Accepted queue item is unavailable.');
+  // Legacy reads remain side-effect free. Adopt once in the same transaction as
+  // source acceptance, so rejection also rolls back this identity assignment.
+  const source_id = item.source_id ?? createUuid('source');
+  if (!item.source_id) {
+    queued[index] = { ...item, source_id };
+    setDeferredQueuedFollowups(chatJid, queued);
+  }
+  const result: unknown = accept({ chatJid, item: { ...cloneQueuedFollowupItem(item), source_id }, database });
+  if (result !== undefined) {
+    void Promise.resolve(result).then(() => undefined, () => undefined);
+    throw Error('Queued source admission callback must be synchronous.');
+  }
+  queued[index] = { ...item, source_id, source_accepted: true };
+  setDeferredQueuedFollowups(chatJid, queued);
+}
 
 export interface QueuedFollowupStateItem {
   row_id: number;
@@ -36,6 +66,8 @@ export interface QueuedFollowupStateItem {
 }
 
 export interface RemoveQueuedFollowupForActionOptions {
+  /** Host-selected, explicit DELETE action only. Never supplied by steer/drain. */
+  withdrawAcceptedSource?: QueuedInputSourceAdmission;
   removeQueuedFollowupMessage?: (chatJid: string, queuedContent?: string) => Promise<boolean> | boolean;
 }
 
@@ -87,6 +119,9 @@ export class QueuedFollowupLifecycleService {
       threadId,
       queuedAt: queuedAt ?? new Date().toISOString(),
       ...extras,
+      // Never accept an identity from enqueue extras (including untyped callers).
+      source_id: createUuid('source'),
+      source_accepted: undefined,
     });
     // Protected recovery is unfinished work from the active source turn. It
     // must run before follow-ups queued later while that source was inflight;
@@ -109,6 +144,7 @@ export class QueuedFollowupLifecycleService {
     args: Parameters<QueuedFollowupLifecycleService['enqueueQueuedFollowupItem']>,
     authorise: (phase?: 'before' | 'after') => void,
     signal: AbortSignal,
+    acceptSource?: QueuedInputSourceAdmission,
   ): Promise<number> {
     const database = getDb();
     const binding = getDatabaseBinding();
@@ -119,7 +155,22 @@ export class QueuedFollowupLifecycleService {
       if (binding) { const stat=statSync(binding.path); if(`${stat.dev}:${stat.ino}` !== binding.identity) throw Error('Queue database file changed.'); }
     };
     const check = (phase: 'before' | 'after') => { assertBinding(); authorise(phase); };
-    return admitSqliteWrite(database, () => this.enqueueQueuedFollowupItem(...args), check, signal, 5000, assertBinding);
+    let attempted = false;
+    let previousSeed: number | undefined;
+    return admitSqliteWrite(database, () => {
+      // Capture inside each attempt, never across a lock-backoff await.
+      previousSeed = this.nextDeferredRowIdByChat.get(args[0]);
+      attempted = true;
+      const rowId = this.enqueueQueuedFollowupItem(...args);
+      acceptQueuedInputSource(args[0], rowId, database, acceptSource);
+      return rowId;
+    }, check, signal, 5000, assertBinding, () => {
+      // Queue contents are SQL-backed; only the allocation seed lives in memory.
+      if (!attempted) return;
+      if (previousSeed === undefined) this.nextDeferredRowIdByChat.delete(args[0]);
+      else this.nextDeferredRowIdByChat.set(args[0], previousSeed);
+      attempted = false;
+    });
   }
 
   peekQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null {
@@ -144,7 +195,15 @@ export class QueuedFollowupLifecycleService {
     const queued = this.getDeferredQueuedFollowupItems(chatJid);
     const index = queued.findIndex((entry) => entry.rowId === item.rowId);
     if (index < 0) return false;
-    queued[index] = cloneQueuedFollowupItem(item);
+    const existing = queued[index]!;
+    if (existing.source_accepted && (
+      item.materializeRetries !== (existing.materializeRetries ?? 0) + 1
+      || !isDeepStrictEqual({ ...item, materializeRetries: existing.materializeRetries }, existing)
+    )) {
+      throw new Error('Accepted input only permits a materialization retry increment');
+    }
+    // Unaccepted edits retain the host-owned identity; accepted payloads are immutable.
+    queued[index] = cloneQueuedFollowupItem({ ...item, source_id: existing.source_id, source_accepted: existing.source_accepted });
     this.setDeferredQueuedFollowupItems(chatJid, queued);
     return true;
   }
@@ -171,6 +230,7 @@ export class QueuedFollowupLifecycleService {
     const queued = this.getDeferredQueuedFollowupItems(chatJid);
     const queuedIndex = queued.findIndex((item) => item.rowId === rowId);
     if (queuedIndex >= 0) {
+      if (queued[queuedIndex]!.source_accepted) throw new Error('Accepted input requires host cancellation');
       const [removed] = queued.splice(queuedIndex, 1);
       this.setDeferredQueuedFollowupItems(chatJid, queued);
       return removed ? cloneQueuedFollowupItem(removed) : null;
@@ -205,6 +265,27 @@ export class QueuedFollowupLifecycleService {
   ): Promise<RemoveQueuedFollowupForActionResult> {
     const queued = this.getDeferredQueuedFollowupItems(chatJid);
     const queuedIndex = queued.findIndex((item) => item.rowId === rowId);
+    if (queuedIndex >= 0 && queued[queuedIndex]!.source_accepted) {
+      const withdraw = options.withdrawAcceptedSource;
+      if (!withdraw) throw new Error('Accepted input requires host cancellation');
+      const database = getDb();
+      // No await between the authoritative read, host transition, and queue removal.
+      return database.transaction(() => {
+        const current = this.getDeferredQueuedFollowupItems(chatJid);
+        const index = current.findIndex(item => item.rowId === rowId);
+        const item = current[index];
+        if (!item?.source_accepted || !item.source_id) throw new Error('Accepted queue item is unavailable.');
+        const result: unknown = withdraw({ chatJid, item: { ...cloneQueuedFollowupItem(item), source_id: item.source_id }, database });
+        if (result !== undefined) {
+          void Promise.resolve(result).then(() => undefined, () => undefined);
+          throw new Error('Queued source withdrawal callback must be synchronous.');
+        }
+        current.splice(index, 1);
+        this.setDeferredQueuedFollowupItems(chatJid, current);
+        if (item.rowId > 0) deleteMessageByRowId(chatJid, item.rowId);
+        return { removed: cloneQueuedFollowupItem(item), source: 'deferred' as const };
+      }).immediate();
+    }
     const removedQueued = queuedIndex >= 0 ? (queued.splice(queuedIndex, 1)[0] ?? null) : null;
     if (queuedIndex >= 0) {
       this.setDeferredQueuedFollowupItems(chatJid, queued);
@@ -238,6 +319,7 @@ export class QueuedFollowupLifecycleService {
 
   reorderQueuedFollowupItems(chatJid: string, fromIndex: number, toIndex: number): boolean {
     const queued = this.getDeferredQueuedFollowupItems(chatJid);
+    if (queued.some(item => item.source_accepted)) throw new Error('Accepted input requires host cancellation');
     if (fromIndex < 0 || toIndex < 0 || fromIndex >= queued.length || toIndex >= queued.length || fromIndex === toIndex) return false;
     const [moved] = queued.splice(fromIndex, 1);
     queued.splice(toIndex, 0, moved);

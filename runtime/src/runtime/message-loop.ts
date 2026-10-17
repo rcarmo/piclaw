@@ -171,30 +171,47 @@ export interface MessageLoopDeps {
   processMessages: (chatJid: string) => Promise<boolean>;
 }
 
-/** Start the polling loop that checks for new messages across all chats. */
-export async function runMessageLoop(deps: MessageLoopDeps): Promise<void> {
+/** Sleep without leaving a timer or abort listener behind after stop. */
+function waitForPoll(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    signal?.addEventListener("abort", finish, { once: true });
+  });
+}
+
+/** Stop joins polling only; accepted work remains owned by AgentQueue. */
+export async function runMessageLoop(deps: MessageLoopDeps, signal?: AbortSignal): Promise<void> {
   requireSingleUserMessageLoop();
   log.info("Starting runtime message loop", {
     operation: "run_message_loop.start",
     assistantName: deps.assistantName,
   });
-  while (true) {
+  while (!signal?.aborted) {
     requireSingleUserMessageLoop();
     try {
       const jids = [...deps.state.chatJids];
+      if (signal?.aborted) return;
       const { messages, newTimestamp } = getNewMessages(jids, deps.state.lastTimestamp, deps.assistantName);
       if (messages.length > 0) {
-        deps.state.lastTimestamp = newTimestamp;
-        deps.state.saveTimestamps();
         // Deduplicate by chat
         const byChat = new Map<string, boolean>();
         for (const msg of messages) byChat.set(msg.chat_jid, true);
         for (const chatJid of byChat.keys()) {
+          if (signal?.aborted) return;
           deps.queue.enqueue(async () => {
             const ok = await deps.processMessages(chatJid);
             if (!ok) throw new Error(`Agent processing failed for ${chatJid}`);
           }, `chat:${chatJid}`, `chat:${chatJid}`);
         }
+        // A partially admitted batch must replay from its original cursor.
+        deps.state.lastTimestamp = newTimestamp;
+        deps.state.saveTimestamps();
       }
     } catch (error) {
       log.error("Message loop iteration failed", {
@@ -202,6 +219,6 @@ export async function runMessageLoop(deps: MessageLoopDeps): Promise<void> {
         err: error,
       });
     }
-    await Bun.sleep(deps.pollIntervalMs);
+    await waitForPoll(deps.pollIntervalMs, signal);
   }
 }

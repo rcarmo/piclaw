@@ -81,6 +81,39 @@ function compactionGuard(session: AgentSession): AgentControlResult | null {
   };
 }
 
+export function resolveControlModelSelection(registry: Pick<ModelRegistry, "getAll">, command: ModelCommand): Model<Api> | AgentControlResult {
+  if (!command.modelId) return { status: "error", message: "Select one exact available model." };
+  const models = registry.getAll();
+  let selected: Model<Api> | undefined;
+  if (command.provider) {
+    selected = normalizeModelMatch(models, command.provider, command.modelId!);
+    if (!selected) {
+      return {
+        status: "error",
+        message: `Model not found: ${command.provider}/${command.modelId}.`,
+      };
+    }
+  } else {
+    const matches = models.filter((model) => model.id.toLowerCase() === command.modelId!.toLowerCase());
+    if (matches.length === 0) {
+      return {
+        status: "error",
+        message: `Model not found: ${command.modelId}.`,
+      };
+    }
+    if (matches.length > 1) {
+      const providers = matches.map((model) => `${model.provider}/${model.id}`).join(", ");
+      return {
+        status: "error",
+        message: `Model "${command.modelId}" matches multiple providers: ${providers}. Use /model <provider>/<modelId>.`,
+      };
+    }
+    selected = matches[0];
+  }
+
+  return selected!;
+}
+
 /** Handle /model: switch model, list models, or show current model. */
 export async function handleModel(
   session: AgentSession,
@@ -147,34 +180,9 @@ export async function handleModel(
     };
   }
 
-  const models = registry.getAll();
-  let selected: Model<Api> | undefined;
-
-  if (command.provider) {
-    selected = normalizeModelMatch(models, command.provider, command.modelId);
-    if (!selected) {
-      return {
-        status: "error",
-        message: `Model not found: ${command.provider}/${command.modelId}.`,
-      };
-    }
-  } else {
-    const matches = models.filter((model) => model.id.toLowerCase() === command.modelId!.toLowerCase());
-    if (matches.length === 0) {
-      return {
-        status: "error",
-        message: `Model not found: ${command.modelId}.`,
-      };
-    }
-    if (matches.length > 1) {
-      const providers = matches.map((model) => `${model.provider}/${model.id}`).join(", ");
-      return {
-        status: "error",
-        message: `Model "${command.modelId}" matches multiple providers: ${providers}. Use /model <provider>/<modelId>.`,
-      };
-    }
-    selected = matches[0];
-  }
+  const resolution = resolveControlModelSelection(registry, command);
+  if ("status" in resolution) return resolution;
+  const selected = resolution;
 
   const contextFitError = getContextFitError(session, selected);
   let compactedBeforeSwitch = false;

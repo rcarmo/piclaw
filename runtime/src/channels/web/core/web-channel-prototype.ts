@@ -37,6 +37,8 @@ export interface WebChannelPrototypeMembers extends WebChannelLike {
   readonly server: Bun.Server<WebSocketSessionData> | null;
   start(): Promise<void>;
   stop(): Promise<void>;
+  sealAdmissions(): Promise<void>;
+  runInternalDispatch<T>(dispatch: () => T | Promise<T>): Promise<T>;
   handleFetch(req: Request, server?: Bun.Server<WebSocketSessionData>): Promise<Response | undefined>;
   handleRequest(req: Request): Promise<Response>;
   enqueueAgentMessage(request: RuntimeAgentMessageRequest): Promise<RuntimeAgentMessageResult>;
@@ -136,7 +138,18 @@ export function installWebChannelPrototype(
     stop: {
       configurable: true,
       writable: true,
-      value: withLifecycleSpecialSurface(defaults, async (service) => await service.stop()),
+      value: withLifecycleSpecialSurface(defaults, (service) => service.stop()),
+    },
+    sealAdmissions: {
+      configurable: true,
+      writable: true,
+      value: withLifecycleSpecialSurface(defaults, (service) => service.sealAdmissions()),
+    },
+    runInternalDispatch: {
+      configurable: true,
+      writable: true,
+      value: withLifecycleSpecialSurface(defaults, <T>(service: WebChannelLifecycleSpecialSurfaceService, dispatch: () => T | Promise<T>) =>
+        service.runInternalDispatch(dispatch)),
     },
     sendMessage: {
       configurable: true,
@@ -156,8 +169,9 @@ export function installWebChannelPrototype(
     enqueueAgentMessage: {
       configurable: true,
       writable: true,
-      value: withRuntimePublicSurface(async (service, request: RuntimeAgentMessageRequest): Promise<RuntimeAgentMessageResult> =>
-        await service.enqueueAgentMessage(request)),
+      value: function(this: WebChannelPrototypeMembers, request: RuntimeAgentMessageRequest): Promise<RuntimeAgentMessageResult> {
+        return this.runInternalDispatch(() => getRuntimePublicSurfaceService(this).enqueueAgentMessage(request));
+      },
     },
     queueFollowupPlaceholder: {
       configurable: true,
@@ -190,7 +204,7 @@ export function installWebChannelPrototype(
     admitQueuedFollowupItem: {
       configurable: true,
       writable: true,
-      value: withRuntimePublicSurface((service, args: Parameters<WebChannelRuntimePublicSurfaceService['enqueueQueuedFollowupItem']>, authorise: () => void, signal: AbortSignal) => service.admitQueuedFollowupItem(args, authorise, signal)),
+      value: withRuntimePublicSurface((service, args: Parameters<WebChannelRuntimePublicSurfaceService['enqueueQueuedFollowupItem']>, authorise: () => void, signal: AbortSignal, acceptSource?: import('../runtime/queued-followup-lifecycle-service.js').QueuedInputSourceAdmission) => service.admitQueuedFollowupItem(args, authorise, signal, acceptSource)),
     },
     consumeQueuedFollowupItem: {
       configurable: true,

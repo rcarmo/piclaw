@@ -16,9 +16,10 @@ afterEach(()=>{restore();for(const key of workspaceEnvKeys){const value=previous
 const put=(name:string,content:string)=>{writeFileSync(join(ws.workspace,'notes',name),content);};
 const binding=()=>{const paths=[ws.workspace,ws.store,ws.data,join(ws.store,'messages.db')].map(realpathSync),identities=paths.map(p=>{const s=lstatSync(p);return `${s.dev}:${s.ino}`;});return {version:1,mode:'single-user',workspace:paths[0],store:paths[1],data:paths[2],database:paths[3],databaseIdentity:identities[3],identities};};
 const database=()=>new Database(join(ws.store,'messages.db'));
-async function run(bound:unknown=binding(),rebuild=false,aborted=false){
- const p=spawn(process.execPath,['-e',`const {runNoteIndexPhase}=await import('./src/note-retrieval/coordinator.ts');const controller=new AbortController();if(${aborted})controller.abort();try{await runNoteIndexPhase({rebuild:${rebuild},signal:controller.signal})}catch(e){console.error(e.name+':'+e.message);process.exitCode=1}`],{cwd:resolve(import.meta.dir,'../..'),env:process.env,stdio:['ignore','pipe','pipe','pipe']});
- let errors='';p.stderr!.on('data',b=>errors+=b);(p.stdio[3] as any).end(JSON.stringify(bound));const [code]=await once(p,'exit');return {code,errors:errors.split('\n').filter(line=>!line.startsWith('{"ts"')).join('\n')};
+async function run(bound:unknown=binding(),rebuild=false,aborted=false,measureDeletes=false){
+ const instrumentation=measureDeletes?`const {Database}=await import('bun:sqlite');const query=Database.prototype.query;let deletes=0;Database.prototype.query=function(sql,...args){if(/^DELETE FROM note_retrieval_(fts|chunks|sources) WHERE generation=\\? AND path=\\?$/.test(sql))deletes++;return query.call(this,sql,...args)};process.on('exit',()=>console.log('PATH_DELETES='+deletes));`:'';
+ const p=spawn(process.execPath,['-e',`${instrumentation}const {runNoteIndexPhase}=await import('./src/note-retrieval/coordinator.ts');const controller=new AbortController();if(${aborted})controller.abort();try{await runNoteIndexPhase({rebuild:${rebuild},signal:controller.signal})}catch(e){console.error(e.name+':'+e.message);process.exitCode=1}`],{cwd:resolve(import.meta.dir,'../..'),env:process.env,stdio:['ignore','pipe','pipe','pipe']});
+ let errors='',output='';p.stdout!.on('data',b=>output+=b);p.stderr!.on('data',b=>errors+=b);(p.stdio[3] as any).end(JSON.stringify(bound));const [code]=await once(p,'exit');return {code,pathDeletes:Number(/PATH_DELETES=(\d+)/.exec(output)?.[1]??NaN),errors:errors.split('\n').filter(line=>!line.startsWith('{"ts"')).join('\n')};
 }
 const snapshot=()=>{const db=database();try{return db.query('SELECT * FROM note_retrieval_state').get() as any;}finally{db.close();}};
 const chunks=()=>{const db=database();try{return db.query('SELECT chunk_id,path,revision,first_byte,after_last_byte,line_start,line_end,content FROM note_retrieval_chunks WHERE generation=(SELECT published FROM note_retrieval_state)').all() as any[];}finally{db.close();}};
@@ -59,6 +60,16 @@ test('versioned atomic snapshots preserve unchanged IDs, detect same-metadata ed
  expect((await run()).code).toBe(0);expect(chunks()).toHaveLength(1);expect(chunks()[0].path).toBe('notes/renamed.md');
  const old=chunks()[0].chunk_id;expect((await run(binding(),true)).code).toBe(0);expect(chunks()[0].chunk_id).not.toBe(old);
  expect(snapshot().staging).toBeNull();expect(sql('SELECT count(DISTINCT generation) n FROM note_retrieval_sources')).toEqual({n:1});
+});
+test('new paths skip staged deletes; incremental replacements still delete all three representations',async()=>{
+ put('a.md','alpha');put('b.md','beta');
+ const fresh=await run(binding(),false,false,true);expect(fresh.code,fresh.errors).toBe(0);expect(fresh.pathDeletes).toBe(0);
+ const initial=chunks();put('a.md','replacement');put('new.md','new source');
+ expect(await childEval(`const {initDatabase}=await import('./src/db/connection.ts');const {markNoteIndexDirty}=await import('./src/note-retrieval/coordinator.ts');initDatabase();markNoteIndexDirty(['notes/a.md','notes/new.md'])`)).toBe(0);
+ const changed=await run(binding(),false,false,true);expect(changed.code,changed.errors).toBe(0);expect(changed.pathDeletes).toBe(3);
+ expect(chunks()).toHaveLength(3);expect(chunks().find(c=>c.path==='notes/b.md')).toEqual(initial.find(c=>c.path==='notes/b.md'));
+ expect(sql("SELECT count(*) n FROM note_retrieval_fts WHERE path='notes/a.md'")).toEqual({n:1});
+ expect(sql("SELECT count(*) n FROM note_retrieval_fts WHERE note_retrieval_fts MATCH 'alpha'")).toEqual({n:0});
 });
 test('independent WAL reader keeps one published generation across dirty refresh and commit',async()=>{
  put('a.md','# Entry\nold source');expect((await run()).code).toBe(0);

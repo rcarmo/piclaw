@@ -15,6 +15,10 @@ export interface QueuedFollowupSourceMetadata {
 }
 
 export interface QueuedFollowupItem {
+  /** Host-owned durable identity; absent on legacy items until transactional adoption. */
+  readonly source_id?: string;
+  /** Host-only receipt, written atomically after successful source acceptance. */
+  readonly source_accepted?: true;
   rowId: number;
   queuedContent: string;
   threadId?: number | null;
@@ -73,6 +77,8 @@ export function projectQueuedFollowupItem(
     ? Number(item.materializeRetries)
     : options.materializeRetriesDefault;
   return {
+    ...(trimOptionalString(item.source_id) ? { source_id: trimOptionalString(item.source_id) } : {}),
+    ...(item.source_accepted === true ? { source_accepted: true as const } : {}),
     rowId: Number(item.rowId),
     queuedContent: typeof item.queuedContent === "string" ? item.queuedContent : "",
     threadId: Number.isFinite(item.threadId) ? Number(item.threadId) : null,
