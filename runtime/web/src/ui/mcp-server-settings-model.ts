@@ -33,7 +33,7 @@ export function createMcpServerSettingsController(publish: (value: McpServerSett
     }
   }
   return { refresh: () => run('refresh'), preview: () => run('preview'), apply: (ack: boolean) => ack ? run('apply') : Promise.resolve(),
-    edit(draft: McpServerDraft) { if (disposed || state.applying) return; abort?.abort(); generation++; emit({ draft: structuredClone({ ...draft, action: state.draft.action === 'create' && draft.action === 'update' && draft.name === state.draft.name ? 'create' : draft.action }), previewed: false, applied: false, loading: false, error: null }); },
+    edit(draft: McpServerDraft, { selectExisting = false } = {}) { if (disposed || state.applying) return; abort?.abort(); generation++; emit({ draft: structuredClone({ ...draft, action: !selectExisting && state.draft.action === 'create' && draft.action === 'update' ? 'create' : draft.action }), previewed: false, applied: false, loading: false, error: null }); },
     dispose() { disposed = true; generation++; abort?.abort(); } };
 }
 /** Form values are explicit local patches, not whole effective configs. */

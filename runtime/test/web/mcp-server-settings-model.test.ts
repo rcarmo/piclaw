@@ -29,3 +29,13 @@ test('Parallel preset is an explicit fresh draft and never replaces saved or dis
  await controller.preview();expect(JSON.parse(requests[0].options.body)).toEqual(createParallelSearchDraft([]));
  expect(requests[0].url).toEndWith('/preview');controller.dispose();
 });
+
+
+test('new-server intent survives renaming and field edits until an existing row is selected',async()=>{
+ const {createParallelSearchDraft}=await import('../../web/src/ui/mcp-server-settings-model.js');
+ const requests:any[]=[],controller=createMcpServerSettingsController(()=>{},async(_url,options)=>{const draft=JSON.parse(options!.body as string);requests.push(draft);return Response.json(body({name:draft.name,action:draft.action,applicable:true}));});
+ controller.edit(createParallelSearchDraft([])!);
+ controller.edit({name:'saved',action:'update',patch:{url:'https://search.parallel.ai/mcp'}});await controller.preview();expect(requests.at(-1).action).toBe('create');
+ controller.edit({name:'parallel-search',action:'update',patch:{requestTimeoutMs:5000}});await controller.preview();expect(requests.at(-1).action).toBe('create');
+ controller.edit({name:'saved',action:'update',patch:{disabled:true}},{selectExisting:true});await controller.preview();expect(requests.at(-1).action).toBe('update');controller.dispose();
+});
