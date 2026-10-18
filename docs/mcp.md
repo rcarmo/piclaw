@@ -168,8 +168,10 @@ sessions. The same flow is available in Classic and Visual.
 provides free web search and page fetching without an account or API key.
 Anonymous searches use Fast mode and are subject to service rate limits. The
 preset uses Streamable HTTP, connects lazily, and keeps `web_search` and
-`web_fetch` behind the existing `mcp` proxy. Discover their names and schemas with
-`mcp({ search: "parallel-search" })` and `mcp({ describe: "<tool name>" })`.
+`web_fetch` behind the existing `mcp` proxy. First connect the lazy server with
+`mcp({ connect: "parallel-search" })`. Then discover its tool names and schemas
+with `mcp({ search: "parallel-search" })` and
+`mcp({ describe: "<tool name>" })`.
 Call a discovered tool with `mcp({ tool: "<tool name>", args: "<JSON arguments>" })`.
 Search takes `objective` and `search_queries`; fetch takes `urls`. Reuse one
 `session_id` across related calls in a conversation. Search results include

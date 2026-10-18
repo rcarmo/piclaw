@@ -78,17 +78,27 @@ try{
  await runtime.session.bindExtensions({mode:'rpc',onError:event=>{throw Error(event.error);}});
  assert(runtime.session.getAllTools().some(tool=>tool.name==='mcp'));assert.equal(requests.length,0,'lazy startup must not connect');
  async function execute(id:string,args:Record<string,unknown>){pending={type:'toolCall',id,name:'mcp',arguments:args};await runtime.session.prompt('Scripted MCP fixture');assert.equal(pending,undefined);const result=runtime.session.messages.findLast(m=>m.role==='toolResult'&&m.toolCallId===id);assert(result&&result.role==='toolResult');return result;}
- const args={server:'parallel-search',tool:'web_search',args:JSON.stringify({objective:'Find Bun documentation',search_queries:['Bun runtime documentation']})};
+ let searchTool='web_search',fetchTool='web_fetch';
+ if(mode==='normal'){
+  const cold=await execute('cold-discovery',{search:'parallel-search'});assert.equal((cold.details as any)?.count,0);assert.equal(requests.length,0);
+  const connected=await execute('connect',{connect:'parallel-search'});assert.equal(connected.isError,false);assert.equal((connected.details as any)?.error,undefined);
+  const discovery=await execute('discovery',{search:'parallel-search'});
+  const matches=(discovery.details as {matches:Array<{tool:string}>}).matches;
+  searchTool=matches.find(match=>match.tool.endsWith('web_search'))?.tool!;fetchTool=matches.find(match=>match.tool.endsWith('web_fetch'))?.tool!;
+  assert(searchTool&&fetchTool,JSON.stringify(discovery));assert.equal(matches.length,2);
+  const description=await execute('describe',{describe:searchTool});assert(JSON.stringify(description).includes('objective'));
+ }
+ const args={server:'parallel-search',tool:searchTool,args:JSON.stringify({objective:'Find Bun documentation',search_queries:['Bun runtime documentation']})};
  if(mode==='cancel'){
   const call=execute('cancel',args);await entered;await runtime.session.abort();await call;assert(requests.some(r=>r.rpc==='notifications/cancelled'),JSON.stringify(requests));assert.equal(requests.filter(r=>r.tool).length,1);
  }else{
   const result=await execute('search',args);
   if(mode==='normal'){
    assert.equal(result.isError,false,JSON.stringify(result));assert(JSON.stringify(result).includes('https://bun.sh/docs'));
-   const fetchResult=await execute('fetch',{server:'parallel-search',tool:'web_fetch',args:JSON.stringify({urls:['https://bun.sh/docs']})});
+   const fetchResult=await execute('fetch',{server:'parallel-search',tool:fetchTool,args:JSON.stringify({urls:['https://bun.sh/docs']})});
    assert.equal(fetchResult.isError,false,JSON.stringify(fetchResult));assert(JSON.stringify(fetchResult).includes('Bun runtime documentation content.'));
    const denied=await execute('filtered',{server:'parallel-search',tool:'unrelated',args:'{}'});assert.equal((denied.details as any)?.error,'tool_not_found',JSON.stringify(denied));
-   assert(consumed>=3,'scripted model must consume tool results');
+   assert(consumed>=7,'scripted model must consume tool results');
    assert(requests.some(r=>r.rpc==='initialize'));assert(requests.some(r=>r.rpc==='tools/list'));
    assert.deepEqual(requests.filter(r=>r.tool).map(r=>r.tool),['web_search','web_fetch']);
   }else{
