@@ -770,3 +770,9 @@ flowchart LR
   Tree --> Pool[AgentPool]
   Pool --> Channel[Web UI / WhatsApp]
 ```
+
+### Optional Parallel Search MCP
+
+Use the [Parallel Search preset](mcp.md#optional-parallel-search-preset) in MCP
+settings for free keyless search and page fetching through the `mcp` proxy. The
+existing web-search skills and configured servers remain available.

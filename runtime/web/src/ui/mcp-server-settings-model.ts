@@ -1,4 +1,4 @@
-export interface McpServerDraft { name: string; action: 'update' | 'remove_override'; patch: Record<string, unknown> }
+export interface McpServerDraft { name: string; action: 'update' | 'create' | 'remove_override'; patch: Record<string, unknown> }
 export interface McpServerRow { name: string; patch: Record<string, unknown>; withheldFields: string[]; enabled: boolean; localOverride: boolean; source: string }
 export interface McpServerPayload { ok: true; servers: McpServerRow[]; revision: string; preview: { name: string; action: string; present: boolean; enabled: boolean; applicable: boolean; patch: Record<string, unknown>; withheldFields: string[] } | null; applyAvailable: boolean; phase: string }
 export interface McpServerSettingsState { payload: McpServerPayload | null; draft: McpServerDraft; loading: boolean; applying: boolean; previewed: boolean; applied: boolean; error: string | null }
@@ -20,7 +20,7 @@ export function createMcpServerSettingsController(publish: (value: McpServerSett
     emit({ loading: true, applying: mode === 'apply', error: null, applied: false, previewed: false, ...(mode === 'refresh' ? { payload: null } : {}) });
     try {
       const response = await request(`/agent/settings/mcp/servers${mode === 'refresh' ? '' : `/${mode}`}`, { credentials: 'same-origin', cache: 'no-store', signal,
-        ...(mode === 'refresh' ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mode === 'apply' ? { revision, acknowledgeInterruptions: true } : { name: draft.name, action: draft.action, ...(draft.action === 'update' ? { patch: draft.patch } : {}) }) }) });
+        ...(mode === 'refresh' ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mode === 'apply' ? { revision, acknowledgeInterruptions: true } : { name: draft.name, action: draft.action, ...(draft.action !== 'remove_override' ? { patch: draft.patch } : {}) }) }) });
       if (!response.ok) throw Error(response.status === 401 || response.status === 403 ? 'owner' : mode === 'apply' ? 'apply' : 'preview');
       const result = payload(await response.json()); if (disposed || current !== generation || signal.aborted) return;
       if (mode === 'preview' && (result.preview?.name !== draft.name || result.preview.action !== draft.action)) throw Error('preview');
@@ -33,7 +33,7 @@ export function createMcpServerSettingsController(publish: (value: McpServerSett
     }
   }
   return { refresh: () => run('refresh'), preview: () => run('preview'), apply: (ack: boolean) => ack ? run('apply') : Promise.resolve(),
-    edit(draft: McpServerDraft) { if (disposed || state.applying) return; abort?.abort(); generation++; emit({ draft: structuredClone(draft), previewed: false, applied: false, loading: false, error: null }); },
+    edit(draft: McpServerDraft) { if (disposed || state.applying) return; abort?.abort(); generation++; emit({ draft: structuredClone({ ...draft, action: state.draft.action === 'create' && draft.action === 'update' && draft.name === state.draft.name ? 'create' : draft.action }), previewed: false, applied: false, loading: false, error: null }); },
     dispose() { disposed = true; generation++; abort?.abort(); } };
 }
 /** Form values are explicit local patches, not whole effective configs. */
@@ -47,4 +47,21 @@ export function patchFromForm(values: Record<string, string>): Record<string, un
   const patch: Record<string, unknown> = {};
   for (const [field,, kind] of MCP_SERVER_FIELDS) { const text = values[field]?.trim(); if (!text) continue; patch[field] = text === 'null' ? null : kind === 'json' ? JSON.parse(text) : text; }
   return patch;
+}
+
+/** An explicit new-server draft. Never repoint an existing or disabled server. */
+export function createParallelSearchDraft(servers: readonly Pick<McpServerRow, 'name'>[]): McpServerDraft | null {
+  if (servers.some(server => server.name === 'parallel-search')) return null;
+  return {
+    name: 'parallel-search', action: 'create', patch: {
+      url: 'https://search.parallel.ai/mcp',
+      httpTransport: 'streamable-http',
+      auth: false,
+      headers: { 'User-Agent': 'PiClaw (+https://github.com/rcarmo/piclaw)' },
+      lifecycle: 'lazy',
+      directTools: false,
+      includeTools: ['web_search', 'web_fetch'],
+      requestTimeoutMs: 60000,
+    },
+  };
 }

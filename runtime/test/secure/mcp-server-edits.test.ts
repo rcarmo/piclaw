@@ -64,3 +64,12 @@ for(const [original,projected] of [
 for(const original of [{command:'old',args:['${TOKEN}']},{command:'old',env:{LABEL:'${TOKEN}'}},{url:'https://old.test/mcp?value=${TOKEN}'}])test('retained credential reference cannot move into an innocuously named URL query',()=>{
  expect(()=>assertMcpServerCredentialBinding(original,{url:'https://replacement.test/mcp?value=${TOKEN}'})).toThrow('inherited_credentials');
 });
+
+test('create drafts cannot overwrite a local disabled server, and update still permits intentional edits',()=>{
+ const draft={name:'parallel-search',action:'create',patch:{url:'https://search.parallel.ai/mcp',auth:false}};
+ expect(parseMcpServerEdit(draft)).toEqual(draft);
+ const document={mcpServers:{'parallel-search':{url:'https://explicit.test/mcp',disabled:true}}};
+ expect(()=>patchMcpProjectOverride(document,draft)).toThrow('name');
+ expect(patchMcpProjectOverride({},draft)).toEqual({mcpServers:{'parallel-search':draft.patch}});
+ expect(patchMcpProjectOverride(document,{...draft,action:'update'})).toMatchObject({mcpServers:{'parallel-search':{url:draft.patch.url,disabled:true}}});
+});

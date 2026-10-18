@@ -410,6 +410,7 @@ export function prepareMcpServerEdit(workspaceDir: string, value: unknown) {
   assertMcpBridgeSourcesCurrent();
   const edit = parseMcpServerEdit(value), document = patchMcpProjectOverride(readProjectDocument(workspaceDir), edit);
   const original = loadMcpConfig(undefined, workspaceDir);
+  if (edit.action === 'create' && Object.hasOwn(original.mcpServers, edit.name)) throw new Error('MCP server already exists; select it to edit its configuration.');
   const effective = loadMcpConfig(undefined, workspaceDir, { projectOverride: document });
   const definition = effective.mcpServers[edit.name] as PiclawServerEntry | undefined;
   if (definition) {

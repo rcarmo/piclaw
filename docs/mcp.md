@@ -157,6 +157,36 @@ mcp({ tool: "filesystem_read_file", args: "{\"path\":\"./README.md\"}" })
 
 `args` must be a JSON string.
 
+## Optional Parallel Search preset
+
+In **Settings → MCP → Adapter servers**, select **Use Parallel Search preset**,
+review the populated fields, then **Preview server change**. Acknowledge the
+session reload and select **Apply server change** to enable it in current and new
+sessions. The same flow is available in Classic and Visual.
+
+[Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp)
+provides free web search and page fetching without an account or API key.
+Anonymous searches use Fast mode and are subject to service rate limits. The
+preset uses Streamable HTTP, connects lazily, and keeps `web_search` and
+`web_fetch` behind the existing `mcp` proxy. Discover their names and schemas with
+`mcp({ search: "parallel-search" })` and `mcp({ describe: "<tool name>" })`.
+Call a discovered tool with `mcp({ tool: "<tool name>", args: "<JSON arguments>" })`.
+Search takes `objective` and `search_queries`; fetch takes `urls`. Reuse one
+`session_id` across related calls in a conversation. Search results include
+source URLs and excerpts; fetch can extract those pages for follow-up reading.
+
+No search provider is selected automatically. The existing DuckDuckGo/SearXNG
+skills and configured MCP servers remain available. The preset is unavailable
+when a server named `parallel-search` already exists, including a disabled or
+inherited definition. Select that server to inspect or edit it instead. To stop
+using the new server, select it and use **Preview disable**, then Apply. Existing
+tool authorization and owner-only settings controls still apply.
+
+The preset sets a 60-second protocol request timeout; the existing PiClaw outer
+MCP guard also applies. Errors and quotas are returned through the proxy without
+switching providers. Authentication remains opt-in through the normal MCP
+configuration and keychain references.
+
 ## Tool authorization filters
 
 Per-server `includeTools` and `excludeTools` are authorization controls for the adapter's model-visible surfaces, not only prompt-size filters. They apply to direct tools and to generic proxy status, list, search, describe, resource reads, and tool calls. Exclusions take precedence over inclusions.

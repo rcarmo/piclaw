@@ -22,7 +22,7 @@ export interface McpServerPatch {
   toolPrefix?: 'server' | 'none' | 'short' | 'mcp' | null;
   httpTransport?: 'streamable-http' | 'sse' | null;
 }
-export type McpServerEdit = { name: string; action: 'update'; patch: McpServerPatch } | { name: string; action: 'remove_override' };
+export type McpServerEdit = { name: string; action: 'update' | 'create'; patch: McpServerPatch } | { name: string; action: 'remove_override' };
 export class McpServerEditError extends Error {
   constructor(readonly field: string) { super(`Invalid MCP server edit field: ${field}.`); }
 }
@@ -63,7 +63,7 @@ export function parseMcpServerEdit(value: unknown): McpServerEdit {
     if (Object.hasOwn(value, 'patch')) throw new McpServerEditError('patch');
     return { name: value.name, action: 'remove_override' };
   }
-  if (value.action !== 'update' || !record(value.patch) || !Object.keys(value.patch).length || Object.keys(value.patch).some(key => !FIELDS.has(key))) throw new McpServerEditError('patch');
+  if ((value.action !== 'update' && value.action !== 'create') || !record(value.patch) || !Object.keys(value.patch).length || Object.keys(value.patch).some(key => !FIELDS.has(key))) throw new McpServerEditError('patch');
   const patch: Record<string, unknown> = {};
   for (const [field, input] of Object.entries(value.patch)) {
     if (input === null) { patch[field] = null; continue; }
@@ -91,7 +91,7 @@ export function parseMcpServerEdit(value: unknown): McpServerEdit {
       default: patch[field] = text(input, field, 1024);
     }
   }
-  return { name: value.name, action: 'update', patch: patch as McpServerPatch };
+  return { name: value.name, action: value.action, patch: patch as McpServerPatch };
 }
 
 export interface McpServerEditProjection { patch: McpServerPatch; withheldFields: string[] }
@@ -138,6 +138,7 @@ export function patchMcpProjectOverride(document: unknown, value: unknown): Reco
     delete servers[edit.name];
     return next;
   }
+  if (edit.action === 'create' && Object.hasOwn(servers, edit.name)) throw new McpServerEditError('name');
   const previous = servers[edit.name];
   if (previous !== undefined && !record(previous)) throw new McpServerEditError('configuration');
   const definition = previous ? { ...previous } : {};

@@ -15,3 +15,17 @@ test('form patch omits blank fields, parses bounded types, and preserves local n
 test('an ok response with blocked runtime is never an applied confirmation',async()=>{
  const states:McpServerSettingsState[]=[],controller=createMcpServerSettingsController(value=>states.push(value),async url=>Response.json(String(url).endsWith('/apply')?{...body(),phase:'blocked',applyAvailable:false}:body({name:'demo',action:'update',applicable:true})));controller.edit({name:'demo',action:'update',patch:{disabled:true}});await controller.preview();await controller.apply(true);expect(states.at(-1)?.applied).toBe(false);expect(states.at(-1)?.payload).toBeNull();controller.dispose();
 });
+
+test('Parallel preset is an explicit fresh draft and never replaces saved or disabled choices', async () => {
+ const {createParallelSearchDraft}=await import('../../web/src/ui/mcp-server-settings-model.js');
+ expect(createParallelSearchDraft([{name:'parallel-search'}])).toBeNull();
+ const first=createParallelSearchDraft([{name:'other'}])!;
+ expect(first).toMatchObject({name:'parallel-search',action:'create',patch:{url:'https://search.parallel.ai/mcp',auth:false,httpTransport:'streamable-http',directTools:false,includeTools:['web_search','web_fetch']}});
+ expect(first.patch).not.toHaveProperty('bearerTokenEnv');
+ (first.patch.headers as Record<string,string>)['User-Agent']='changed';
+ expect(createParallelSearchDraft([])!.patch.headers).toEqual({'User-Agent':'PiClaw (+https://github.com/rcarmo/piclaw)'});
+ const requests:any[]=[],controller=createMcpServerSettingsController(()=>{},async(url,options)=>{requests.push({url,options});return Response.json(body({name:'parallel-search',action:'create',applicable:true}));});
+ controller.edit(createParallelSearchDraft([])!);controller.edit({...createParallelSearchDraft([])!,action:'update'});expect(requests).toHaveLength(0);
+ await controller.preview();expect(JSON.parse(requests[0].options.body)).toEqual(createParallelSearchDraft([]));
+ expect(requests[0].url).toEndWith('/preview');controller.dispose();
+});
