@@ -2,6 +2,8 @@
 
 ![PiClaw](docs/icon-256.png)
 
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/-Gp9JJ?referralCode=tyJIJY&utm_medium=integration&utm_source=template&utm_campaign=generic)
+
 Languages: **English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
 
 PiClaw is a self-hosted AI workspace, single-user by default, built on the [Pi Coding Agent](https://github.com/earendil-works/pi). Work with an agent, edit files, run commands and inspect the results in the same browser window. Conversations, files and scheduled tasks persist between visits; model requests go to the provider you configure, including local OpenAI-compatible servers.
