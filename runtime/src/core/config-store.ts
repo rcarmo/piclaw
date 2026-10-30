@@ -7,10 +7,11 @@
  * any module that needs simple JSON-file persistence.
  */
 
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "fs";
+import { mkdirSync, renameSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
+import { invalidateJsonFileCache, readCachedJsonFile } from "./config-file-cache.js";
 
 const log = createLogger("core.config-store");
 
@@ -23,8 +24,7 @@ const log = createLogger("core.config-store");
  */
 export function readJsonConfig(filePath: string): Record<string, unknown> {
   try {
-    const raw = readFileSync(filePath, "utf-8");
-    const parsed = JSON.parse(raw);
+    const parsed = readCachedJsonFile(filePath);
     if (parsed && typeof parsed === "object") return parsed as Record<string, unknown>;
   } catch (err) {
     debugSuppressedError(log, "Failed to read JSON config; returning an empty object.", err, {
@@ -51,4 +51,5 @@ export function writeJsonConfig(filePath: string, config: Record<string, unknown
   // strict MCP owner. Atomic replacement must never widen it to the umask mode.
   writeFileSync(tempPath, `${next}\n`, { encoding: "utf-8", mode: 0o600, flag: "wx" });
   renameSync(tempPath, filePath);
+  invalidateJsonFileCache(filePath);
 }
