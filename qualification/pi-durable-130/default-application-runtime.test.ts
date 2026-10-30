@@ -3789,7 +3789,8 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
       const ready = new Promise<void>(resolve => { entered = resolve; });
       checkpointHold = { entered };
       const taskId = await conversation.compact("Retain the accepted decision", context);
-      // Existing host ledger represents a dispatched attempt whose result was lost.
+      // Historical unscoped hold represents a dispatched attempt whose result
+      // was lost. It cannot identify this checkpoint or authorise another send.
       const request = await reserveHostRequest({ database: root, operationId: "", chatJid: "web:default", authPath: join(getPiclawAgentDir(), "auth.json"), model: model as Model<Api>,
         executionKind: "side_prompt", maintenanceWorkId: `durable-maintenance:${row.incarnation}:${taskId}`,
         terminalOwner: { signal: new AbortController().signal, assertCurrent: () => owner.assertCurrentOwner() },
@@ -3800,6 +3801,7 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
       await request!.dispatch();
       await h.close(context); await request!.abandon(); checkpointHold = undefined;
       expect(root.query("SELECT state FROM budget_request_reservations WHERE work_id LIKE 'durable-request:%' AND state='unresolved'").all()).toHaveLength(1);
+      const originalUnknown = root.query('SELECT * FROM budget_request_reservations WHERE id=?').get(request!.id);
       backend = await createDefaultApplicationRuntime(owner, async () => services);
       let recovered = backend.sessionOptions.getDurableSession!("web:default")!;
       expect(recovered.sessionId).toBe(identity);
@@ -3808,11 +3810,16 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
       root.query("INSERT INTO service_effect_s01_chats(chat_jid,active_operation_id) VALUES ('web:pending-recovery',NULL)").run();
       root.query("UPDATE service_effect_s01_chats SET next_source_seq=2 WHERE chat_jid='web:pending-recovery'").run();
       root.query("INSERT INTO service_effect_s01_sources VALUES ('web:pending-recovery',1,'pending-recovery',?,'message','pending','payload',NULL,NULL,'now',NULL,'provenance',0)").run("a".repeat(64));
-      // Scoped startup recovery may already have completed this exact task.
-      // Unrelated accepted work must not block reconciliation or be consumed.
-      await recovered.reconcileMaintenance!();
-      expect(calls).toBe(beforeCalls + 2); // One held attempt and one recovered attempt.
-      expect(calls).toBeGreaterThanOrEqual(callsBeforeStop);
+      // Exact receipt recovery is qualified separately across close/SIGKILL.
+      // This legacy hold has no attempt proof: deny resend, preserve it, and
+      // retain the SDK's failed result without consuming unrelated accepted work.
+      await expect(recovered.reconcileMaintenance!()).rejects.toThrow('Compaction did not complete');
+      expect(calls).toBe(beforeCalls + 1); // Only the original held attempt.
+      expect(calls).toBe(callsBeforeStop);
+      expect(root.query('SELECT * FROM budget_request_reservations WHERE id=?').get(request!.id)).toEqual(originalUnknown);
+      const failedTask = root.query('SELECT * FROM tasks WHERE id=?').get(taskId);
+      expect(JSON.stringify(failedTask)).toContain('category=budget');
+      expect(JSON.stringify(failedTask)).toContain('failed');
       expect(root.query("SELECT state FROM service_effect_s01_sources WHERE source_id='pending-recovery'").get()).toEqual({ state: "pending" });
       const callsAfterMaintenance = calls;
       backend.stop();
@@ -3824,11 +3831,13 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
       recovered = backend.sessionOptions.getDurableSession!("web:default")!;
       const callsBeforeResume = calls;
       await recovered.reconcileMaintenance!();
-      expect(calls).toBe(callsBeforeResume); // Completed maintenance must not run again.
-      expect(root.query("SELECT state FROM budget_request_reservations r JOIN budget_work w ON w.id=r.work_id WHERE w.execution_kind='side_prompt' ORDER BY r.rowid").all()).toEqual([{ state: "unresolved" }, { state: "settled" }]);
+      expect(calls).toBe(callsBeforeResume); // Failed maintenance is not revived.
+      expect(root.query('SELECT * FROM tasks WHERE id=?').get(taskId)).toEqual(failedTask);
+      expect(root.query('SELECT * FROM budget_request_reservations WHERE id=?').get(request!.id)).toEqual(originalUnknown);
+      expect(root.query("SELECT state FROM budget_request_reservations r JOIN budget_work w ON w.id=r.work_id WHERE w.execution_kind='side_prompt' ORDER BY r.rowid").all()).toEqual([{ state: "unresolved" }]);
       expect(root.query("SELECT status FROM budget_work WHERE parent_work_id IS NULL AND execution_kind='side_prompt'").all()).toEqual([{ status: "active" }]);
-      expect(root.query("SELECT id FROM entries WHERE json_extract(record, '$.kind')='pi.compaction'").all()).toHaveLength(1);
-      expect(root.query("SELECT SUM(t.api_equivalent_cost_microusd) AS amount FROM token_usage t JOIN budget_work w ON w.id=t.work_id WHERE w.execution_kind='side_prompt'").get()).toEqual({ amount: 10 });
+      expect(root.query("SELECT id FROM entries WHERE json_extract(record, '$.kind')='pi.compaction'").all()).toHaveLength(0);
+      expect(root.query("SELECT COUNT(*) AS n FROM token_usage t JOIN budget_work w ON w.id=t.work_id WHERE w.execution_kind='side_prompt'").get()).toEqual({ n: 0 });
       backend.stop(); await backend.close(); compactionPolicySpy?.mockRestore();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
       closeDatabase(); owner.release(); return;
