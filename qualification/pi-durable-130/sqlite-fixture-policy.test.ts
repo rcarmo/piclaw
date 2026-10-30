@@ -35,8 +35,8 @@ describe("WAL FULL policy for historical separate fixtures, not shared applicati
   test("standalone candidate file verifies WAL and FULL on every open; public transaction rollback remains intact", () => disk(async path => {
     const first = await openWalFixtureDatabase(path);
     try {
-      expect(await first.get("PRAGMA journal_mode")).toEqual({ journal_mode: "wal" });
-      expect(await first.get("PRAGMA synchronous")).toEqual({ synchronous: 2 });
+      expect(await first.get("SELECT * FROM pragma_journal_mode")).toEqual({ journal_mode: "wal" });
+      expect(await first.get("SELECT * FROM pragma_synchronous")).toEqual({ synchronous: 2 });
       await first.exec("CREATE TABLE sample (n INTEGER)");
       await first.run("INSERT INTO sample VALUES (1)");
       const rejected = new Error("policy rollback probe");
@@ -49,8 +49,8 @@ describe("WAL FULL policy for historical separate fixtures, not shared applicati
     } finally { await first.close(); }
     const reopened = await openWalFixtureDatabase(path);
     try {
-      expect(await reopened.get("PRAGMA journal_mode")).toEqual({ journal_mode: "wal" });
-      expect(await reopened.get("PRAGMA synchronous")).toEqual({ synchronous: 2 });
+      expect(await reopened.get("SELECT * FROM pragma_journal_mode")).toEqual({ journal_mode: "wal" });
+      expect(await reopened.get("SELECT * FROM pragma_synchronous")).toEqual({ synchronous: 2 });
       expect(await reopened.all("SELECT n FROM sample")).toEqual([{ n: 1 }]);
     } finally { await reopened.close(); }
   }));

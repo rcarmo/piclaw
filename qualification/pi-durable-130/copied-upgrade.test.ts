@@ -310,7 +310,7 @@ test("copied upgrade: single host messages.db preserves original rows through lo
     expect(conversations).toEqual(originalConversations);
     expect(conversations.filter(c => before!.binding!.branches.some(b => b.engineConversationId === c.id))).toHaveLength(2);
     expect(f.hostSnapshot(journal)).toEqual(f.originalHost);
-    const connections = [journal.query("PRAGMA database_list").all(), await sdk.all("PRAGMA database_list")] as
+    const connections = [journal.query("PRAGMA database_list").all(), await sdk.all("SELECT * FROM pragma_database_list")] as
       { seq: number; name: string; file: string }[][];
     for (const [index, connection] of connections.entries()) {
       // ALTER TABLE during the owned core rebuild allocates SQLite's internal
@@ -325,9 +325,9 @@ test("copied upgrade: single host messages.db preserves original rows through lo
       }
     }
     expect(journal.query("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
-    expect(await sdk.get("PRAGMA foreign_keys")).toEqual({ foreign_keys: 1 });
+    expect(await sdk.get("SELECT * FROM pragma_foreign_keys")).toEqual({ foreign_keys: 1 });
     expect(journal.query("PRAGMA integrity_check").all()).toEqual([{ integrity_check: "ok" }]);
-    expect(await sdk.all("PRAGMA foreign_key_check")).toEqual([]);
+    expect(await sdk.all("SELECT * FROM pragma_foreign_key_check")).toEqual([]);
     expect(journal.query("SELECT version FROM durable_schema").get()).toEqual({ version: CURRENT_SQLITE_SCHEMA_VERSION });
     for (const table of ["qualification_cutover_v1", "documents", "document_revisions", "entries", "conversations"]) {
       expect((journal.query(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n).toBeGreaterThan(0);

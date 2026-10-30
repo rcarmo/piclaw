@@ -44,16 +44,16 @@ test("single physical database: accepted primary + attached intent, terminal ide
     const checkConnections = async () => {
       f.owner.assert();
       const sdk = f.candidateDatabase;
-        for (const rows of [f.db.query("PRAGMA database_list").all(), await sdk.all("PRAGMA database_list")]) {
+        for (const rows of [f.db.query("PRAGMA database_list").all(), await sdk.all("SELECT * FROM pragma_database_list")]) {
           const databases = rows as { name: string; file: string }[];
           expect(databases.filter(r => r.name !== "temp")).toEqual([{ seq: 0, name: "main", file: f.hostPath }]);
         }
         expect(f.db.query("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
-        expect(await sdk.get("PRAGMA foreign_keys")).toEqual({ foreign_keys: 1 });
+        expect(await sdk.get("SELECT * FROM pragma_foreign_keys")).toEqual({ foreign_keys: 1 });
         expect(f.db.query("PRAGMA integrity_check").all()).toEqual([{ integrity_check: "ok" }]);
-        expect(await sdk.all("PRAGMA integrity_check")).toEqual([{ integrity_check: "ok" }]);
+        expect(await sdk.all("SELECT * FROM pragma_integrity_check")).toEqual([{ integrity_check: "ok" }]);
         expect(f.db.query("PRAGMA foreign_key_check").all()).toEqual([]);
-        expect(await sdk.all("PRAGMA foreign_key_check")).toEqual([]);
+        expect(await sdk.all("SELECT * FROM pragma_foreign_key_check")).toEqual([]);
     };
     const { primary, primaryId, b, adapter } = await f.prepare();
     const captured = JSON.parse((f.db.query("SELECT input FROM recovery_fixture_identity WHERE id=?").get(f.incarnation) as { input: string }).input) as DurableConversationOperation;

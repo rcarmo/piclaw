@@ -1,4 +1,5 @@
 import { isSqliteContention } from '../../src/db/sqlite-async-admission.js';
+import { prepareSqliteRead } from '../../src/db/sqlite-read.js';
 import { registerSqliteCheckpoint } from "../../src/db/sqlite-checkpoint.js";
 import { openSqliteRole } from "../../src/db/sqlite-role-policy.js";
 import { Database } from "bun:sqlite";
@@ -132,10 +133,10 @@ export class BunSqliteDatabase implements SqliteDatabase {
       exec: async sql => { valid(); this.db.exec(sql); },
       run: async (sql, ...params) => { valid(); this.db.query(sql).run(...params); },
       get: async <T extends object>(sql: string, ...params: SqliteValue[]) => {
-        valid(); return (this.db.query(sql).get(...params) ?? undefined) as T | undefined;
+        valid(); return (prepareSqliteRead(this.db, sql).get(...params) ?? undefined) as T | undefined;
       },
       all: async <T extends object>(sql: string, ...params: SqliteValue[]) => {
-        valid(); return this.db.query(sql).all(...params) as T[];
+        valid(); return prepareSqliteRead(this.db, sql).all(...params) as T[];
       },
     };
   }

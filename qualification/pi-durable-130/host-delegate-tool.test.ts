@@ -429,8 +429,8 @@ for (const boundary of ["before-effect", "after-effect"] as const) {
       try { await setup.commit(tx => configure(tx, f.base.root.id, { tools: [delegate], extensions: [extension] }), context); }
       finally { await setup.close(context); }
       await f.open(); f.permit = true;
-      expect(await f.candidateDatabase.get("PRAGMA journal_mode")).toEqual({ journal_mode: "wal" });
-      expect(await f.candidateDatabase.get("PRAGMA synchronous")).toEqual({ synchronous: 2 });
+      expect(await f.candidateDatabase.get("SELECT * FROM pragma_journal_mode")).toEqual({ journal_mode: "wal" });
+      expect(await f.candidateDatabase.get("SELECT * FROM pragma_synchronous")).toEqual({ synchronous: 2 });
       storeChatMetadata(f.chatJid, at);
       const source = value(await f.ports.work.acceptSource(sealed({ effect: effect(`${f.incarnation}:standard`), chatJid: f.chatJid,
         sourceId: "standard", kind: "message" as const, payloadRef: "standard", targetOperationId: null, parentSourceSeq: null, acceptedAt: at, createWakeIntent: false })));

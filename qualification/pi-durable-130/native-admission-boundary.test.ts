@@ -22,7 +22,7 @@ async function disk(body: (db: BunSqliteDatabase, root: Database) => Promise<voi
     });
     db.assertApplicationRoot(root);
     expect(root.query("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
-    expect(await db.get("PRAGMA foreign_keys")).toEqual({ foreign_keys: 1 });
+    expect(await db.get("SELECT * FROM pragma_foreign_keys")).toEqual({ foreign_keys: 1 });
     await body(db, root);
     expect(root.query("PRAGMA foreign_key_check").all()).toEqual([]);
     expect(ownerChecks).toBeGreaterThan(2);

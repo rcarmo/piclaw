@@ -86,15 +86,15 @@ for (const { mode, sharedDatabase } of [
       const checkSharedConnections = async () => {
         if (!sharedDatabase) return;
         expect((await stat(f.path)).ino).toBe((await stat(f.hostPath)).ino);
-        for (const rows of [f.db.query("PRAGMA database_list").all(), await f.candidateDatabase.all("PRAGMA database_list")]) {
+        for (const rows of [f.db.query("PRAGMA database_list").all(), await f.candidateDatabase.all("SELECT * FROM pragma_database_list")]) {
           expect((rows as { name: string; file: string }[]).filter(r => r.name !== "temp")).toEqual([{ seq: 0, name: "main", file: f.hostPath }]);
         }
         expect(f.db.query("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
-        expect(await f.candidateDatabase.get("PRAGMA foreign_keys")).toEqual({ foreign_keys: 1 });
+        expect(await f.candidateDatabase.get("SELECT * FROM pragma_foreign_keys")).toEqual({ foreign_keys: 1 });
         expect(f.db.query("PRAGMA integrity_check").all()).toEqual([{ integrity_check: "ok" }]);
-        expect(await f.candidateDatabase.all("PRAGMA integrity_check")).toEqual([{ integrity_check: "ok" }]);
+        expect(await f.candidateDatabase.all("SELECT * FROM pragma_integrity_check")).toEqual([{ integrity_check: "ok" }]);
         expect(f.db.query("PRAGMA foreign_key_check").all()).toEqual([]);
-        expect(await f.candidateDatabase.all("PRAGMA foreign_key_check")).toEqual([]);
+        expect(await f.candidateDatabase.all("SELECT * FROM pragma_foreign_key_check")).toEqual([]);
         const owner = f.db.query("SELECT generation, pid, active FROM main.qualification_process_owner WHERE singleton=1").get();
         expect(owner).toEqual({ generation: f.owner.token.generation, pid: process.pid, active: 1 });
         expect(await f.candidateDatabase.get("SELECT generation, pid, active FROM main.qualification_process_owner WHERE singleton=1")).toEqual(owner);

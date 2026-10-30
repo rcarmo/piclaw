@@ -1,5 +1,5 @@
 import "./src/test-guard.js";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { Database } from "bun:sqlite";
 import { join } from "node:path";
@@ -236,6 +236,72 @@ describe("host persistence transaction scope", () => {
       expect(root.query("SELECT next_seq FROM durable_metadata").get()).toEqual({ next_seq: before.next_seq + 2 });
     } finally { await attempt; await storage.close(context); root.close(); }
   }));
+});
+
+describe("SDK SQLite read executors", () => {
+  for (const method of ["get", "all"] as const) for (const transaction of [false, true]) {
+    test(`${method} rejects result-producing writes before stepping; transaction=${transaction}`, async () => {
+      const db = new BunSqliteDatabase(":memory:");
+      try {
+        await db.exec("CREATE TABLE sample(n INTEGER); INSERT INTO sample VALUES(1)");
+        const check = async (tx: SqliteExecutor) => {
+          for (const sql of ["INSERT INTO sample VALUES(2) RETURNING n", "UPDATE sample SET n=3 RETURNING n", "DELETE FROM sample RETURNING n",
+            "WITH value(n) AS (SELECT 2) INSERT INTO sample SELECT n FROM value RETURNING n"])
+            await expect(tx[method](sql)).rejects.toThrow("Read-only");
+          expect(await tx.all("SELECT n FROM sample")).toEqual([{ n: 1 }]);
+        };
+        if (transaction) await db.transaction(check); else await check(db);
+        expect(await db.all("SELECT n FROM sample")).toEqual([{ n: 1 }]);
+      } finally { await db.close(); }
+    });
+
+    test(`${method} rejects PRAGMA grammar before prepare; transaction=${transaction}`, async () => {
+      const db = new BunSqliteDatabase(":memory:");
+      const prepared = spyOn(Database.prototype, "query");
+      try {
+        const check = async (tx: SqliteExecutor) => {
+          for (const sql of [
+            "PRAGMA busy_timeout=1000",
+            " ; -- prefix\n /* policy */ pragma query_only=ON",
+            "-- a carriage return does not end this comment\rSELECT 1\nPRAGMA busy_timeout=1000",
+            "EXPLAIN PRAGMA busy_timeout=2000",
+            "/* prefix */ EXPLAIN /* a */ QUERY /* b */ PLAN /* c */ PRAGMA busy_timeout=3000",
+            "\ufeffPRAGMA query_only=ON",
+          ]) await expect(tx[method](sql)).rejects.toThrow("Read-only");
+          expect(prepared).not.toHaveBeenCalled();
+        };
+        if (transaction) await db.transaction(check); else await check(db);
+      } finally { prepared.mockRestore(); await db.close(); }
+    });
+
+    if (transaction) test(`${method} cannot commit the owning transaction`, async () => {
+      const db = new BunSqliteDatabase(":memory:");
+      try {
+        await db.exec("CREATE TABLE sample(n INTEGER)");
+        await db.transaction(async tx => {
+          await tx.run("INSERT INTO sample VALUES(1)");
+          await expect(tx[method]("COMMIT")).rejects.toThrow("Read-only");
+          await tx.run("INSERT INTO sample VALUES(2)");
+        });
+        expect(await db.all("SELECT n FROM sample ORDER BY n")).toEqual([{ n: 1 }, { n: 2 }]);
+      } finally { await db.close(); }
+    });
+  }
+
+  test("read executors retain parameterised SELECT, CTE, EXPLAIN and pragma table functions", async () => {
+    const db = new BunSqliteDatabase(":memory:");
+    try {
+      await db.exec("CREATE TABLE sample(n INTEGER); INSERT INTO sample VALUES(1)");
+      expect(await db.get("/* PRAGMA in a comment */ SELECT ? AS n", 7)).toEqual({ n: 7 });
+      expect(await db.all("WITH value(n) AS (SELECT ?) SELECT n FROM value", 8)).toEqual([{ n: 8 }]);
+      expect((await db.all("EXPLAIN SELECT n FROM sample")).length).toBeGreaterThan(0);
+      expect(await db.all("SELECT name FROM pragma_table_info('sample')")).toEqual([{ name: "n" }]);
+      await db.transaction(async tx => {
+        await tx.run("INSERT INTO sample VALUES(2)");
+        expect(await tx.all("SELECT n FROM sample ORDER BY n")).toEqual([{ n: 1 }, { n: 2 }]);
+      });
+    } finally { await db.close(); }
+  });
 });
 
 describe("public Harness on actual disk SQLite", () => {

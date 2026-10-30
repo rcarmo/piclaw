@@ -27,11 +27,11 @@ export async function openWalFixtureDatabase(path: string): Promise<BunSqliteDat
     }
   }
   try {
-    const before = await db.get<{ synchronous: number }>("PRAGMA synchronous");
+    const before = await db.get<{ synchronous: number }>("SELECT * FROM pragma_synchronous");
     if (before?.synchronous !== 2) throw new Error("Candidate fixture requires existing synchronous=FULL (2)");
     await db.exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL");
-    const journal = await db.get<{ journal_mode: string }>("PRAGMA journal_mode");
-    const after = await db.get<{ synchronous: number }>("PRAGMA synchronous");
+    const journal = await db.get<{ journal_mode: string }>("SELECT * FROM pragma_journal_mode");
+    const after = await db.get<{ synchronous: number }>("SELECT * FROM pragma_synchronous");
     if (journal?.journal_mode.toLowerCase() !== "wal" || after?.synchronous !== 2)
       throw new Error("Candidate fixture requires WAL and synchronous=FULL (2)");
     return db;
