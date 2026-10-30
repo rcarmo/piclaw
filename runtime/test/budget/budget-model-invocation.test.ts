@@ -12,7 +12,7 @@ import { canonicalJson } from '../../src/utils/canonical-json.js';
 import { applyOwnedMigrations, listAppliedOwnedMigrations } from '../../src/db/migrations.js';
 import { initializeBudgetLimitsSchema, budgetTerminalReceiptMigration, budgetModelInvocationMigration } from '../../src/db/budget-limits-schema.js';
 import { reserveBudgetRequest, findBudgetRequestByModelInvocation, getBudgetRequest, dispatchBudgetRequest, abandonBudgetRequest,
-  recordBudgetTerminalReceipt, readBudgetTerminalReceipt, type BudgetRequestBinding, type BudgetModelInvocation } from '../../src/db/budget-request-reservations.js';
+  recordBudgetTerminalReceipt, readBudgetTerminalReceipt, settleBudgetRequest, type BudgetRequestBinding, type BudgetModelInvocation } from '../../src/db/budget-request-reservations.js';
 
 isolateBudgetTestDatabase();
 const time = '2026-10-04T12:00:00.000Z';
@@ -147,6 +147,49 @@ test('released scope remains consumed; exact old id is only idempotent and canno
   expect(() => reserveBudgetRequest({ ...binding, id: 'replacement' }, {}, db)).toThrow('conflict');
   expect(() => dispatchBudgetRequest(binding, { authorise() {}, signal: new AbortController().signal }, db)).toThrow('invalid_state');
   expect(findBudgetRequestByModelInvocation(scope(), db)).toEqual(released);
+});
+
+for (const collision of ['rowid', 'usage id']) test(`logical invocation without a receipt resists REPLACE by ${collision}`, () => {
+  const { db, binding } = fixture();
+  reserveBudgetRequest(binding, {}, db);
+  if (collision === 'usage id') {
+    dispatchBudgetRequest(binding, { authorise() {}, signal: new AbortController().signal }, db);
+    settleBudgetRequest(binding, { chat_jid: binding.chatJid, run_at: time, input_tokens: 1, output_tokens: 0,
+      cache_read_tokens: 0, cache_write_tokens: 0, total_tokens: 1, cost_input: 0.00001, cost_output: 0,
+      cost_cache_read: 0, cost_cache_write: 0, cost_total: 0.00001, provider: binding.providerId, model: binding.modelId,
+      api_equivalent_cost_known: true, api_equivalent_cost_microusd: 10, valuation_provenance: 'catalogue_estimate' }, db);
+  }
+  const before = getBudgetRequest(binding.id, db);
+  db.exec('PRAGMA recursive_triggers=OFF');
+  const columns = 'work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,amount_microusd,state,created_at,updated_at,settlement_sha256,usage_event_id';
+  const rowid = collision === 'rowid' ? ',rowid' : '';
+  expect(() => db.exec(`INSERT OR REPLACE INTO budget_request_reservations (id,${columns}${rowid})
+    SELECT 'replacement',${columns}${rowid} FROM budget_request_reservations WHERE id='nonce-1'`)).toThrow('conflict');
+  expect(getBudgetRequest(binding.id, db)).toEqual(before);
+  expect(findBudgetRequestByModelInvocation(scope(), db)).toEqual(before);
+  expect(getBudgetRequest('replacement', db)).toBeNull();
+});
+
+for (const collision of ['primary key', 'rowid', 'usage id']) test(`logical invocation without a receipt resists UPDATE OR REPLACE victim deletion by ${collision}`, () => {
+  const { db, binding } = fixture();
+  reserveBudgetRequest(binding, {}, db);
+  if (collision === 'usage id') {
+    // A real legacy charge has an invocation but no terminal receipt.
+    dispatchBudgetRequest(binding, { authorise() {}, signal: new AbortController().signal }, db);
+    settleBudgetRequest(binding, { chat_jid: binding.chatJid, run_at: time, input_tokens: 1, output_tokens: 0,
+      cache_read_tokens: 0, cache_write_tokens: 0, total_tokens: 1, cost_input: 0.00001, cost_output: 0,
+      cost_cache_read: 0, cost_cache_write: 0, cost_total: 0.00001, provider: binding.providerId, model: binding.modelId,
+      api_equivalent_cost_known: true, api_equivalent_cost_microusd: 10, valuation_provenance: 'catalogue_estimate' }, db);
+  }
+  reserveBudgetRequest({ ...binding, id: 'peer', modelInvocation: undefined }, {}, db);
+  const before = allRows(db);
+  db.exec('PRAGMA recursive_triggers=OFF');
+  const change = collision === 'primary key' ? "id='nonce-1'" : collision === 'rowid'
+    ? "rowid=(SELECT rowid FROM budget_request_reservations WHERE id='nonce-1')"
+    : "state='settled',settlement_sha256='peer-settlement',usage_event_id=(SELECT usage_event_id FROM budget_request_reservations WHERE id='nonce-1')";
+  expect(() => db.exec(`UPDATE OR REPLACE budget_request_reservations SET ${change} WHERE id='peer'`)).toThrow('immutable');
+  expect(allRows(db)).toEqual(before);
+  expect(findBudgetRequestByModelInvocation(scope(), db)).toEqual(getBudgetRequest(binding.id, db));
 });
 
 test('checkpoint attempts are preserved by canonical JSON; every logical dimension participates in the key', () => {

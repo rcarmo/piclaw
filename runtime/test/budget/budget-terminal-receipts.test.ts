@@ -215,6 +215,55 @@ test('SQL pairing, envelope, first-capture state and immutable body/hash/time/bi
   expect(readBudgetTerminalReceipt(binding, db)).toEqual(first);
 });
 
+test('retained paid facts cannot release capacity or regress a completed financial transition', () => {
+  const { db, binding, payload } = fixture();
+  const receipt = recordBudgetTerminalReceipt(binding, payload, receivedAt, db), captured = getBudgetRequest(binding.id, db);
+  for (const state of ['reserved', 'released']) {
+    expect(() => db.query('UPDATE budget_request_reservations SET state=? WHERE id=?').run(state, binding.id)).toThrow('immutable');
+    expect(getBudgetRequest(binding.id, db)).toEqual(captured);
+  }
+  expect(abandonBudgetRequest(binding, db).state).toBe('unresolved');
+  const settled = settleBudgetRequest(binding, usage(), db);
+  for (const sql of ["state='dispatched',settlement_sha256=NULL,usage_event_id=NULL", "state='unresolved',settlement_sha256=NULL,usage_event_id=NULL",
+    "settlement_sha256='changed'", "usage_event_id='changed'"]) {
+    expect(() => db.exec(`UPDATE budget_request_reservations SET ${sql}`)).toThrow('immutable');
+    expect(getBudgetRequest(binding.id, db)).toEqual(settled);
+  }
+  expect(readBudgetTerminalReceipt(binding, db)).toEqual(receipt);
+  expect(db.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 1 });
+});
+
+for (const collision of ['primary key', 'rowid', 'usage id']) test(`receipt-only binding resists REPLACE by ${collision} when recursive triggers are off`, () => {
+  const { db, binding, payload } = fixture();
+  const receipt = recordBudgetTerminalReceipt(binding, payload, receivedAt, db);
+  if (collision === 'usage id') settleBudgetRequest(binding, usage(), db);
+  const before = getBudgetRequest(binding.id, db), replacementId = collision === 'primary key' ? binding.id : 'replacement';
+  db.exec('PRAGMA recursive_triggers=OFF');
+  const columns = 'id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,amount_microusd,state,created_at,updated_at,settlement_sha256,usage_event_id';
+  const rowid = collision === 'rowid' ? ',rowid' : '';
+  expect(() => db.query(`INSERT OR REPLACE INTO budget_request_reservations (${columns}${rowid})
+    SELECT ?,${columns.slice(3)}${rowid} FROM budget_request_reservations WHERE id=?`).run(replacementId, binding.id)).toThrow('immutable');
+  expect(getBudgetRequest(binding.id, db)).toEqual(before);
+  if (replacementId !== binding.id) expect(getBudgetRequest(replacementId, db)).toBeNull();
+  expect(readBudgetTerminalReceipt(binding, db)).toEqual(receipt);
+});
+
+for (const collision of ['primary key', 'rowid', 'usage id']) test(`receipt-only binding resists UPDATE OR REPLACE victim deletion by ${collision}`, () => {
+  const { db, binding, payload } = fixture();
+  const receipt = recordBudgetTerminalReceipt(binding, payload, receivedAt, db);
+  if (collision === 'usage id') settleBudgetRequest(binding, usage(), db);
+  const peer = { ...binding, id: 'peer' };
+  reserveBudgetRequest(peer, {}, db);
+  const before = db.query('SELECT rowid,* FROM budget_request_reservations ORDER BY id').all();
+  db.exec('PRAGMA recursive_triggers=OFF');
+  const change = collision === 'primary key' ? `id='${binding.id}'` : collision === 'rowid'
+    ? `rowid=(SELECT rowid FROM budget_request_reservations WHERE id='${binding.id}')`
+    : `state='settled',settlement_sha256='peer-settlement',usage_event_id=(SELECT usage_event_id FROM budget_request_reservations WHERE id='${binding.id}')`;
+  expect(() => db.exec(`UPDATE OR REPLACE budget_request_reservations SET ${change} WHERE id='peer'`)).toThrow('immutable');
+  expect(db.query('SELECT rowid,* FROM budget_request_reservations ORDER BY id').all()).toEqual(before);
+  expect(readBudgetTerminalReceipt(binding, db)).toEqual(receipt);
+});
+
 test('bound receipt reads reject corrupt payload/hash/time without repairing financial records', () => {
   const { db, binding, payload } = fixture();
   const receipt = recordBudgetTerminalReceipt(binding, payload, receivedAt, db);

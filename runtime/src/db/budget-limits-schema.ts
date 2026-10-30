@@ -26,9 +26,19 @@ CREATE TRIGGER main.budget_request_receipt_capture_state BEFORE UPDATE ON budget
   WHEN OLD.terminal_receipt_json IS NULL AND NEW.terminal_receipt_json IS NOT NULL
     AND (OLD.state NOT IN ('dispatched','unresolved') OR NEW.state IS NOT OLD.state)
   BEGIN SELECT RAISE(ABORT,'invalid terminal receipt state'); END;
+-- REPLACE deletes need not fire DELETE triggers; cover every conflict key.
+CREATE TRIGGER main.budget_request_receipt_no_replace BEFORE INSERT ON budget_request_reservations
+  WHEN EXISTS (SELECT 1 FROM budget_request_reservations WHERE terminal_receipt_json IS NOT NULL
+    AND (id=NEW.id OR rowid=NEW.rowid OR usage_event_id=NEW.usage_event_id))
+  BEGIN SELECT RAISE(ABORT,'terminal receipts are immutable'); END;
 CREATE TRIGGER main.budget_request_receipt_no_update BEFORE UPDATE ON budget_request_reservations
-  WHEN OLD.terminal_receipt_json IS NOT NULL AND (
-    NEW.terminal_receipt_json IS NOT OLD.terminal_receipt_json
+  WHEN EXISTS (SELECT 1 FROM budget_request_reservations WHERE terminal_receipt_json IS NOT NULL
+    AND rowid<>OLD.rowid AND (id=NEW.id OR rowid=NEW.rowid OR usage_event_id=NEW.usage_event_id))
+  OR OLD.terminal_receipt_json IS NOT NULL AND (
+    NEW.state NOT IN ('dispatched','unresolved','settled')
+    OR (OLD.state='settled' AND (NEW.state IS NOT OLD.state
+      OR NEW.settlement_sha256 IS NOT OLD.settlement_sha256 OR NEW.usage_event_id IS NOT OLD.usage_event_id))
+    OR NEW.terminal_receipt_json IS NOT OLD.terminal_receipt_json
     OR NEW.terminal_receipt_sha256 IS NOT OLD.terminal_receipt_sha256
     OR NEW.terminal_received_at IS NOT OLD.terminal_received_at
     OR NEW.id IS NOT OLD.id OR NEW.work_id IS NOT OLD.work_id OR NEW.chat_jid IS NOT OLD.chat_jid
@@ -79,11 +89,14 @@ CREATE TRIGGER main.budget_request_invocation_insert BEFORE INSERT ON budget_req
 -- REPLACE can bypass DELETE triggers unless recursive_triggers is enabled.
 CREATE TRIGGER main.budget_request_invocation_no_replace BEFORE INSERT ON budget_request_reservations
   WHEN EXISTS (SELECT 1 FROM budget_request_reservations WHERE
-    (id=NEW.id AND (model_invocation_json IS NOT NULL OR NEW.model_invocation_json IS NOT NULL))
+    ((id=NEW.id OR rowid=NEW.rowid OR usage_event_id=NEW.usage_event_id)
+      AND (model_invocation_json IS NOT NULL OR NEW.model_invocation_json IS NOT NULL))
     OR model_invocation_key_sha256=NEW.model_invocation_key_sha256)
   BEGIN SELECT RAISE(ABORT,'model invocation conflict'); END;
 CREATE TRIGGER main.budget_request_invocation_no_update BEFORE UPDATE ON budget_request_reservations
-  WHEN NEW.model_invocation_json IS NOT OLD.model_invocation_json
+  WHEN EXISTS (SELECT 1 FROM budget_request_reservations WHERE model_invocation_json IS NOT NULL
+    AND rowid<>OLD.rowid AND (id=NEW.id OR rowid=NEW.rowid OR usage_event_id=NEW.usage_event_id))
+    OR NEW.model_invocation_json IS NOT OLD.model_invocation_json
     OR NEW.model_invocation_key_sha256 IS NOT OLD.model_invocation_key_sha256
     OR (OLD.model_invocation_json IS NOT NULL AND (
       NEW.id IS NOT OLD.id OR NEW.work_id IS NOT OLD.work_id OR NEW.chat_jid IS NOT OLD.chat_jid

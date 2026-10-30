@@ -39,6 +39,15 @@ applicationTest("fresh core inventory owns every object and exact FTS shadow wit
     expect(db.query("SELECT * FROM sqlite_schema ORDER BY type,name").all()).toEqual(before);
     expect(db.query("SELECT * FROM piclaw_schema_migrations ORDER BY owner,migration_order").all()).toEqual(receipts);
     expect(readSchemaInventory(db)).toEqual(readSchemaInventory(db));
+    for (const [kind, name] of [['trigger', 'budget_request_receipt_no_replace'], ['index', 'idx_budget_requests_model_invocation']]) {
+      db.exec(`SAVEPOINT terminal_inventory_negative; DROP ${kind} ${name}`);
+      try { expect(() => inventory(db, 'core')).toThrow(`Missing required object ${kind}:${name}`); }
+      finally { db.exec('ROLLBACK TO terminal_inventory_negative; RELEASE terminal_inventory_negative'); }
+    }
+    db.exec('SAVEPOINT terminal_inventory_drift; DROP TRIGGER budget_request_receipt_no_update; CREATE TRIGGER budget_request_receipt_no_update BEFORE UPDATE ON budget_request_reservations BEGIN SELECT 1; END');
+    try { expect(() => inventory(db, 'core')).toThrow('Unapproved schema drift trigger:budget_request_receipt_no_update'); }
+    finally { db.exec('ROLLBACK TO terminal_inventory_drift; RELEASE terminal_inventory_drift'); }
+    expect(db.query('SELECT * FROM sqlite_schema ORDER BY type,name').all()).toEqual(before);
   } finally { closeDatabase(); }
 });
 
