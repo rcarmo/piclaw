@@ -326,6 +326,14 @@ export async function retainBudgetTerminalReceipt(binding: BudgetRequestBinding,
   const { database, signal } = options, check = options.assertCurrent.bind(options);
   signal.throwIfAborted(); check();
   const prepared = prepareTerminalReceipt(binding, payload, receivedAt);
+  const existing = receiptColumns(boundRequest(prepared.binding, database));
+  if (existing) {
+    // Exact equality to the validated snapshot verifies stored canonical bytes
+    // and hash. An acknowledged receipt needs no new writer or callback.
+    if (existing.bodyJson !== prepared.receipt.bodyJson || existing.sha256 !== prepared.receipt.sha256) throw new BudgetRequestError('conflict');
+    signal.throwIfAborted(); check();
+    return existing;
+  }
   return admitSqliteWrite(database, () => writeTerminalReceipt(prepared, database), check,
     signal, Number.POSITIVE_INFINITY, check);
 }

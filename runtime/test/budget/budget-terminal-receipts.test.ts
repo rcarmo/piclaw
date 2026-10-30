@@ -316,6 +316,29 @@ test('later settlement SQL failure cannot erase an already committed terminal re
   expect(db.query('SELECT count(*) n FROM budget_usage_events').get()).toEqual({ n: 0 });
 });
 
+test('exact committed receipt readback needs no writer admission even while another connection holds the writer', async () => {
+  const { db, binding, payload } = fixture(), first = recordBudgetTerminalReceipt(binding, payload, receivedAt, db);
+  const ws = createTempWorkspace('terminal-receipt-readback-'), path = join(ws.workspace, 'receipt.db');
+  await Bun.write(path, db.serialize());
+  const disk = new Database(path), owner = new AbortController();
+  disk.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=0');
+  const writer = new Database(path); writer.exec('BEGIN IMMEDIATE');
+  let observed = false, checks = 0, rejected: unknown;
+  const pending = retainBudgetTerminalReceipt(binding, payload, later, { database: disk, signal: owner.signal, assertCurrent() { checks++; } });
+  const joined = pending.then(() => { observed = true; }, error => { rejected = error; });
+  try {
+    await Promise.resolve();
+    expect(observed).toBe(true); expect(await pending).toEqual(first);
+    expect(checks).toBeGreaterThanOrEqual(2);
+    expect(getBudgetRequest(binding.id, disk)).toEqual(getBudgetRequest(binding.id, db));
+    expect(writer.inTransaction).toBe(true); expect(disk.inTransaction).toBe(false);
+  } finally {
+    owner.abort(Error('owned duplicate readback cleanup')); if (writer.inTransaction) writer.exec('ROLLBACK');
+    await joined; writer.close(); disk.close(); ws.cleanup();
+    expect(rejected === undefined || rejected === owner.signal.reason).toBe(true);
+  }
+});
+
 test('patient receipt acquisition survives a real writer longer than five seconds and freezes data before waiting', async () => {
   const { db, binding, payload } = fixture(), originalBinding = { ...binding };
   const ws = createTempWorkspace('terminal-receipt-patient-'), path = join(ws.workspace, 'receipt.db');
