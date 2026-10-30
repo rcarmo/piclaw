@@ -62,6 +62,50 @@ test("Goal hook identity resolves only its current public generation IDs without
   expect(taskModelHookScope({ taskId: 12 as never, conversationId: 34 as never })).toBeUndefined();
 });
 
+for (const [kind, phaseName] of [["pi.generation", "request"], ["pi.compaction", "summarize"]] as const) test(`${kind}: checkpoint identity preserves attempts and input without hashing volatile task state`, async () => {
+  const registry = createRegistry(), controller = new AbortController();
+  const hashes: (string | undefined)[] = [];
+  const observe = async (_record: unknown, runtime: { signal: AbortSignal }) => {
+    hashes.push(taskModelRequestScope(runtime.signal)?.checkpointHash);
+  };
+  const task = defineTask({ name: kind, version: 1, initial: () => ({ phase: phaseName }),
+    phases: { request: observe, summarize: observe }, async abort() {} });
+  // Public executable-definition fixture only; no storage or execution authority.
+  const reader = { subscribe: registry.subscribe.bind(registry), snapshot() {
+    const snapshot = registry.snapshot();
+    return new Proxy(snapshot, { get(target, key) {
+      if (key === "task") return (name: string) => name === kind ? task : target.task(name);
+      if (key === "tasks") return () => target.tasks().map(current => current.definition.name === kind ? task : current);
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+  } };
+  const execute = withTaskModelRequestScope(reader).snapshot().task(kind)!.definition.phases[phaseName] as Function;
+  const runtime = { taskId: 12, conversationId: 34, signal: controller.signal };
+  const checkpoint = { phase: phaseName, attempt: 1, cutoff: 5, model: { provider: "fixture", modelId: "same" } };
+  const record = { id: 12, conversationId: 34, kind, version: 1, input: { z: 2, a: 1 }, state: { status: "running", checkpoint } };
+  await execute(record, runtime, context);
+  expect(hashes[0]).toMatch(/^[a-f0-9]{64}$/);
+  await execute({ ...record, startedAt: 999, input: { a: 1, z: 2 }, state: { status: "running", checkpoint: {
+    model: { modelId: "same", provider: "fixture" }, cutoff: 5, attempt: 1, phase: phaseName,
+  } } }, runtime, context);
+  expect(hashes[1]).toBe(hashes[0]);
+  for (const changed of [
+    { ...record, input: { z: 3, a: 1 } },
+    { ...record, state: { status: "running", checkpoint: { ...checkpoint, attempt: 2 } } },
+    { ...record, state: { status: "running", checkpoint: { ...checkpoint, cutoff: 6 } } },
+    { ...record, state: { status: "running", checkpoint: { ...checkpoint, model: { provider: "fixture", modelId: "changed" } } } },
+  ]) {
+    await execute(changed, runtime, context);
+    expect(hashes.at(-1)).not.toBe(hashes[0]); expect(hashes.at(-1)).toMatch(/^[a-f0-9]{64}$/);
+  }
+  for (const changed of [{ ...record, id: 99 }, { ...record, conversationId: 99 }, { ...record, version: 2 },
+    { ...record, state: { status: "pending", checkpoint } }, { ...record, state: { status: "running", checkpoint: { ...checkpoint, phase: "other" } } }]) {
+    await execute(changed, runtime, context); expect(hashes.at(-1)).toBeUndefined();
+  }
+  expect(taskModelRequestScope(controller.signal)).toBeUndefined();
+});
+
 test("temporary request scope isolates concurrent phases and follows registry replacement", async () => {
   const registry = createRegistry();
   const seen: number[] = [];
@@ -87,6 +131,41 @@ test("temporary request scope isolates concurrent phases and follows registry re
   expect(wrapped.snapshot().task("qualification.concurrent")!.definition.version).toBe(2);
   expect(seen).toEqual([1, 1]);
   unsubscribe();
+});
+
+test("real SDK generation model call receives checkpoint identity from its actual running record", async () => {
+  const { Harness } = await import("../../runtime/durable-engine/qualification/durable.ts");
+  const { openFixture } = await import("./src/fixture.ts");
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  const { SqliteStorage } = await import("../../runtime/durable-engine/qualification/sqlite.ts");
+  const { BunSqliteDatabase } = await import("../../runtime/durable-engine/src/bun-sqlite.ts");
+  const base = await openFixture({ acquired: true }); await base.close();
+  const directory = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "real-checkpoint-"));
+  const scopes: NonNullable<ReturnType<typeof taskModelRequestScope>>[] = [];
+  const invoke = base.models.streamSimple.bind(base.models);
+  const models = new Proxy(base.models, { get(target, key) {
+    if (key === "streamSimple") return (...args: Parameters<typeof invoke>) => {
+      const scope = taskModelRequestScope(args[2]?.signal);
+      if (!scope) throw Error("Real task scope missing");
+      scopes.push(scope); return invoke(...args);
+    };
+    const value = Reflect.get(target, key, target);
+    return typeof value === "function" ? value.bind(target) : value;
+  } });
+  const harness = await Harness.open(await SqliteStorage.open(new BunSqliteDatabase(join(directory, "tasks.sqlite"))),
+    { models, registry: withTaskModelRequestScope(base.registry) }, context);
+  try {
+    const root = await harness.root(context, { agent: { model: { provider: "qualification", modelId: "synthetic" } } });
+    const submission = await root.submit({ type: "input", requestId: "real-checkpoint", content: "synthetic answer" }, context);
+    expect((await submission.wait(context)).status).toBe("done");
+    expect(scopes).toHaveLength(1);
+    expect(scopes[0]!.taskKind).toBe("pi.generation"); expect(scopes[0]!.phase).toBe("request");
+    expect(scopes[0]!.conversationId).toBe(root.id);
+    expect(scopes[0]!.checkpointHash).toMatch(/^[a-f0-9]{64}$/);
+    expect((await harness.getTask(scopes[0]!.taskId, context))?.state.status).toBe("terminal");
+    expect(Object.isFrozen(scopes[0])).toBe(true);
+  } finally { await harness.close(context); await rm(directory, { recursive: true, force: true }); }
 });
 
 test("temporary request scope is rebuilt for a persisted summary phase after harness reopen", async () => {

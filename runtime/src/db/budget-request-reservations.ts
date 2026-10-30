@@ -2,6 +2,7 @@ import type Database from 'bun:sqlite';
 import { createHash } from 'node:crypto';
 import { isProxy } from 'node:util/types';
 import { admitSqliteWrite } from './sqlite-async-admission.js';
+import { canonicalJson as canonical } from '../utils/canonical-json.js';
 import { getDb } from './connection.js';
 import { getBudgetWork, getBudgetCap } from './budget-limits.js';
 import { storeTokenUsage, type TokenUsageRecord } from './token-usage.js';
@@ -43,12 +44,6 @@ export class BudgetRequestError extends Error {
   constructor(readonly code: 'invalid_binding' | 'conflict' | 'unavailable' | 'budget_denied' | 'invalid_state' | 'invalid_receipt') {
     super(`Model request ${code}.`);
   }
-}
-function canonical(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  const object = value as Record<string, unknown>;
-  return `{${Object.keys(object).sort().filter(key => object[key] !== undefined).map(key => `${JSON.stringify(key)}:${canonical(object[key])}`).join(',')}}`;
 }
 const digest = (value: unknown) => createHash('sha256').update(canonical(value)).digest('hex');
 function validate(binding: BudgetRequestBinding): void {
