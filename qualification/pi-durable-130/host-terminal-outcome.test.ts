@@ -2,7 +2,7 @@ import "./src/test-guard.js";
 import { expect, test } from "bun:test";
 import { isDeepStrictEqual } from "node:util";
 import type { AssistantMessage } from "../../runtime/src/durable-legacy-sdk.js";
-import { projectTerminalOutcome } from "../../runtime/durable-engine/src/host-terminal-outcome.js";
+import { projectTerminalOutcome, decodeStoredTerminalOutcome } from "../../runtime/durable-engine/src/host-terminal-outcome.js";
 import { parseModelFailure } from "../../runtime/durable-engine/src/host-model-failure.js";
 import { reserveHostRequest } from "../../runtime/durable-engine/src/host-request-accounting.js";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
@@ -117,8 +117,40 @@ for (const [diagnostic, category, httpStatus] of [
   expect(parseModelFailure(projected.errorMessage)).toEqual({ phase: "provider", category,
     ...(httpStatus === undefined ? {} : { httpStatus }) });
   expect(projected.errorMessage!.length).toBeLessThan(256);
+  expect(isDeepStrictEqual(decodeStoredTerminalOutcome(JSON.stringify(projected), physical), projected)).toBe(true);
   expect(JSON.stringify(projected)).not.toContain(secret);
   expect(JSON.stringify(projected)).not.toContain("private.invalid");
+});
+
+test("stored outcome recovery must preserve its original bounded provider classification", () => {
+  const original = message(); original.stopReason = "error"; original.errorMessage = "ECONNRESET synthetic provider interruption";
+  const first = projectTerminalOutcome(original, physical);
+  const recovered = decodeStoredTerminalOutcome(JSON.stringify(first), physical);
+  expect(recovered.errorMessage).toBe(first.errorMessage);
+  expect(parseModelFailure(recovered.errorMessage)).toEqual({ phase: "provider", category: "transport" });
+  expect(recovered.usage).toEqual(first.usage);
+});
+
+test("stored success decoder preserves the exact projected outcome without granting execution", () => {
+  const projected = projectTerminalOutcome(reportingMessage(), physical);
+  const decoded = decodeStoredTerminalOutcome(JSON.stringify(projected), physical);
+  expect(isDeepStrictEqual(decoded, projected)).toBe(true); expectFrozen(decoded);
+  expect(Object.is(decoded, projected)).toBe(false);
+  expect(() => decodeStoredTerminalOutcome(JSON.stringify(projected), { ...physical, id: "other" })).toThrow();
+});
+
+test("stored decoder rejects raw errors and unknown fields instead of projecting them away", () => {
+  const raw = reportingMessage(); raw.stopReason = "error"; raw.errorMessage = secret;
+  expect(() => decodeStoredTerminalOutcome(JSON.stringify(raw), physical)).toThrow();
+  const success = projectTerminalOutcome(reportingMessage(), physical);
+  for (const location of ["message", "usage", "cost", "content"] as const) {
+    const value = JSON.parse(JSON.stringify(success));
+    const target = location === "message" ? value : location === "usage" ? value.usage : location === "cost" ? value.usage.cost : value.content[0];
+    target.unqualifiedPrivateField = secret;
+    expect(() => decodeStoredTerminalOutcome(JSON.stringify(value), physical)).toThrow();
+  }
+  for (const invalid of ["not json", "null", "[]", "{}"])
+    expect(() => decodeStoredTerminalOutcome(invalid, physical)).toThrow();
 });
 
 test("aborted retains its original stop reason and usage without retaining abort reasons or partial tools", () => {

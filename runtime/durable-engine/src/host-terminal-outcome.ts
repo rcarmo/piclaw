@@ -1,6 +1,7 @@
 import { isProxy } from "node:util/types";
 import type { Api, AssistantMessage } from "../../src/durable-legacy-sdk.js";
-import { classifyModelFailure, modelFailureDetail } from "./host-model-failure.js";
+import { classifyModelFailure, modelFailureDetail, parseModelFailure } from "./host-model-failure.js";
+import { canonicalJson } from "../../src/utils/canonical-json.js";
 
 type ReportingUsage = AssistantMessage["usage"] & {
   providerCost?: number;
@@ -125,13 +126,8 @@ function freeze<T>(value: T): Immutable<T> {
   return value as Immutable<T>;
 }
 
-/** WIP, not wired: safe ORIGINAL SDK-visible final outcome, not a raw provider
- * response or a billing-validity decision. Negative finite telemetry is fact,
- * not authority to settle. No receipt I/O, retention or recovery policy here. */
-export function projectTerminalOutcome(
-  message: AssistantMessage,
-  expectedPhysical: Readonly<{ provider: string; id: string; api: Api }>,
-): Immutable<TerminalOutcome> {
+type TerminalPhysical = Readonly<{ provider: string; id: string; api: Api }>;
+function terminalOutcome(message: unknown, expectedPhysical: TerminalPhysical, stored: boolean): Immutable<TerminalOutcome> {
   const source = record(message), expected = record(expectedPhysical);
   const provider = text(field(source, "provider")), model = text(field(source, "model")), api = text(field(source, "api"));
   if (!provider || !model || !api || provider !== text(field(expected, "provider"))
@@ -164,7 +160,27 @@ export function projectTerminalOutcome(
     // handles or private partial content. The existing bounded format is public.
     const errorMessage = field(source, "errorMessage");
     if (errorMessage !== undefined) text(errorMessage);
-    result.errorMessage = modelFailureDetail(classifyModelFailure("provider", { stopReason, errorMessage }));
+    if (stored) {
+      if (parseModelFailure(errorMessage)?.phase !== "provider") return invalid();
+      result.errorMessage = text(errorMessage);
+    } else result.errorMessage = modelFailureDetail(classifyModelFailure("provider", { stopReason, errorMessage }));
   }
+  if (stored && canonicalJson(result) !== canonicalJson(source)) return invalid();
   return freeze(result);
+}
+
+/** WIP producer projection, not billing validity. Negative finite telemetry is
+ * retained as fact. Never pass an already-stored outcome through this classifier. */
+export function projectTerminalOutcome(message: AssistantMessage, expectedPhysical: TerminalPhysical): Immutable<TerminalOutcome> {
+  return terminalOutcome(message, expectedPhysical, false);
+}
+
+/** Decode an exact version-1 projected outcome after its receipt binding/hash
+ * was verified. Shape validation supplies no permission to resume or dispatch.
+ * Stored classifications are facts; never classify their redacted text again. */
+export function decodeStoredTerminalOutcome(bodyJson: string, expectedPhysical: TerminalPhysical): Immutable<TerminalOutcome> {
+  if (typeof bodyJson !== "string") return invalid();
+  let value: unknown;
+  try { value = JSON.parse(bodyJson); } catch { return invalid(); }
+  return terminalOutcome(value, expectedPhysical, true);
 }
