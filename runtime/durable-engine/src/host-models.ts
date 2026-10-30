@@ -39,6 +39,8 @@ export interface HostModelPolicy {
     readonly id?: string;
     /** Exact verified prior terminal; no transport or observer replay. */
     readonly recoveredTerminal?: AssistantMessage;
+    /** Exact reservation/account/source fence, synchronous after every await. */
+    assertRecoveredCurrent?(): void;
     /** Owner-lifetime retention only; supplies no permission for later effects. */
     retainTerminal(message: AssistantMessage): Promise<unknown>;
     dispatch(): Promise<void>; settle(message: AssistantMessage): Promise<void>; abandon(): Promise<void>;
@@ -320,15 +322,20 @@ export function createHostModels(
           captureTerminalUsage(request.recoveredTerminal);
           if (request.recoveredTerminal.stopReason === 'error' || request.recoveredTerminal.stopReason === 'aborted')
             providerFailure = parseModelFailure(request.recoveredTerminal.errorMessage);
-          const guard = policy.assertStoredOutcomeCurrent;
-          if (!guard) throw Error('Stored model outcome authority unavailable');
+          const guard = policy.assertStoredOutcomeCurrent, requestGuard = request.assertRecoveredCurrent?.bind(request);
+          if (!guard || !requestGuard) throw Error('Stored model outcome authority unavailable');
           const checkStored = () => {
             phase = 'source'; signal.throwIfAborted(); assertSource();
-            const checked: unknown = guard.call(policy, ref, signal);
-            if (checked !== undefined) {
-              if (isPromise(checked)) void Promise.prototype.catch.call(checked, () => {});
-              throw TypeError('Stored model outcome authority must be synchronous');
+            for (const check of [requestGuard, () => guard.call(policy, ref, signal)]) {
+              const checked: unknown = check();
+              if (checked !== undefined) {
+                if (isPromise(checked)) void Promise.prototype.catch.call(checked, () => {});
+                throw TypeError('Stored model outcome authority must be synchronous');
+              }
             }
+            const physical = hostModelRuntime120.getPhysicalModel(ref.provider, ref.id);
+            if (!physical || (physical.type ?? 'chat') !== 'chat' || physical.provider !== ref.provider ||
+              physical.id !== ref.id || physical.api !== listed.api) throw Error('Model owner changed');
             assertEventCurrent(); phase = 'source';
           };
           checkStored();

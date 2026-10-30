@@ -211,7 +211,7 @@ async function storedOutcomeFixture(failed = false) {
     stored.stopReason = 'error'; stored.content = [];
     stored.errorMessage = modelFailureDetail({ phase: 'provider', category: 'transport' });
   }
-  const calls = { source: 0, current: 0, event: 0, observer: 0, authorize: 0, codex: 0, retain: 0, dispatch: 0, settle: 0, abandon: 0 };
+  const calls = { source: 0, current: 0, request: 0, event: 0, observer: 0, authorize: 0, codex: 0, retain: 0, dispatch: 0, settle: 0, abandon: 0 };
   f.policy.captureSourceGuard = () => () => { calls.source++; };
   f.policy.assertStoredOutcomeCurrent = (owner, signal) => { expect(owner).toEqual(ref); signal.throwIfAborted(); calls.current++; };
   f.policy.authorize = async () => { calls.authorize++; throw Error('Stored outcome must not request new spend'); };
@@ -222,6 +222,7 @@ async function storedOutcomeFixture(failed = false) {
   }, { createNativeCodexHooks() { throw Error('Unused Codex hooks'); } });
   f.observe(() => { calls.observer++; }); f.eventAuthority(() => { calls.event++; });
   f.policy.prepareRequest = async () => ({ id: 'exact-receipt', recoveredTerminal: stored,
+    assertRecoveredCurrent() { calls.request++; },
     async retainTerminal() { calls.retain++; }, async dispatch() { calls.dispatch++; },
     async settle() { calls.settle++; }, async abandon() { calls.abandon++; } });
   return { ...f, stored, recoveredCalls: calls };
@@ -237,18 +238,34 @@ for (const method of ['stream', 'streamSimple', 'complete', 'completeSimple'] as
     expect(result).toEqual(f.stored); expect(JSON.stringify(f.stored)).toBe(before);
     expect(result).not.toBe(f.stored); expect(result.content).not.toBe(f.stored.content);
     if (failed) expect(parseModelFailure(result.errorMessage)).toEqual({ phase: 'provider', category: 'transport' });
-    expect(f.recoveredCalls).toEqual({ source: 3, current: 2, event: 2, observer: 0, authorize: 0, codex: 0, retain: 0, dispatch: 0, settle: 0, abandon: 0 });
+    expect(f.recoveredCalls).toEqual({ source: 3, current: 2, request: 2, event: 2, observer: 0, authorize: 0, codex: 0, retain: 0, dispatch: 0, settle: 0, abandon: 0 });
     expect(f.calls()).toBe(0); expect(f.requested).toEqual([]);
     if ('result' in value) expect(events).toEqual([failed ? 'error' : 'done']);
   });
 }
 
-for (const failed of [false, true]) for (const denial of ['missing', 'async', 'current', 'source', 'event', 'late-event', 'cancel'] as const) {
+for (const failed of [false, true]) for (const denial of ['missing', 'async', 'current', 'request-missing', 'request-async', 'request-account', 'physical-api', 'physical-type', 'source', 'event', 'late-event', 'cancel'] as const) {
   test(`stored outcome still requires current synchronous source/model/event authority; denial=${denial}, failed=${failed}`, async () => {
     const f = await storedOutcomeFixture(failed);
     if (denial === 'missing') f.policy.assertStoredOutcomeCurrent = undefined;
     if (denial === 'async') f.policy.assertStoredOutcomeCurrent = async () => { throw Error(token); };
     if (denial === 'current') f.policy.assertStoredOutcomeCurrent = () => { throw Error(token); };
+    if (denial.startsWith('request-')) {
+      const prepare = f.policy.prepareRequest!;
+      f.policy.prepareRequest = async (...args) => {
+        const prepared = await prepare(...args); if (!prepared) throw Error('Stored fixture required');
+        return { ...prepared, assertRecoveredCurrent:
+          denial === 'request-missing' ? undefined : denial === 'request-async' ? async () => { throw Error(token); } : () => { throw Error(token); } };
+      };
+    }
+    if (denial === 'physical-api' || denial === 'physical-type') {
+      const prepare = f.policy.prepareRequest!;
+      f.policy.prepareRequest = async (...args) => {
+        const result = await prepare(...args);
+        Object.assign(f.runtime.getPhysicalModel(ref.provider, ref.id)!, denial === 'physical-api' ? { api: 'anthropic-messages' } : { type: 'classifier' });
+        return result;
+      };
+    }
     if (denial === 'source') f.policy.captureSourceGuard = () => () => { if (++f.recoveredCalls.source === 2) throw Error(token); };
     if (denial === 'event' || denial === 'late-event') f.eventAuthority(() => { if (++f.recoveredCalls.event === (denial === 'event' ? 1 : 2)) throw Error(token); });
     if (denial === 'cancel') {

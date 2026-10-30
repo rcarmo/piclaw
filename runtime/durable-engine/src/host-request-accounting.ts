@@ -181,6 +181,7 @@ export async function reserveHostRequest(options: {
   };
   return {
     id: binding.id, retainTerminal, recoveredTerminal,
+    assertRecoveredCurrent() { terminalOwner(); current(); },
     async dispatch() {
       if (recoveredTerminal) throw new BudgetRequestError('invalid_state');
       terminalOwner(); current();

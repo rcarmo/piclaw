@@ -322,6 +322,19 @@ test('native stored outcome preserves old price, receipt time and original bound
   expect(getBudgetRequest(f.request.id, f.database)).toEqual(before); expect(f.database.query('SELECT * FROM budget_usage_events').all()).toEqual(charges);
 }, true, false, { modelInvocation: invocation() }));
 
+for (const changed of ['account', 'source', 'owner', 'caller'] as const) test(`native recovered terminal keeps its request-scoped authority after preparation; changed=${changed}`, () => reservedTerminal(async f => {
+  await f.request.settle(f.terminal);
+  const caller = new AbortController(), recovered = await f.prepareAgain({ signal: caller.signal });
+  expect(recovered?.recoveredTerminal).toBeDefined(); expect(() => recovered!.assertRecoveredCurrent()).not.toThrow();
+  const before = getBudgetRequest(f.request.id, f.database), charges = f.database.query('SELECT * FROM budget_usage_events').all();
+  if (changed === 'account') writeFileSync(f.authPath, JSON.stringify({ 'openai-codex': { type: 'oauth', access: 'synthetic', refresh: 'synthetic', accountId: 'switched-after-prepare', expires: Date.now() + 60000 } }));
+  if (changed === 'source') f.revokeSource();
+  if (changed === 'owner') f.owner.abort();
+  if (changed === 'caller') caller.abort();
+  expect(() => recovered!.assertRecoveredCurrent()).toThrow();
+  expect(getBudgetRequest(f.request.id, f.database)).toEqual(before); expect(f.database.query('SELECT * FROM budget_usage_events').all()).toEqual(charges);
+}, true, false, { modelInvocation: invocation() }));
+
 test('native definitely-unsent logical invocation reuses its exact reserved binding and dispatches once', () => reservedTerminal(async f => {
   const before = getBudgetRequest(f.request.id, f.database), recovered = await f.prepareAgain();
   expect(recovered?.id).toBe(f.request.id); expect(recovered?.recoveredTerminal).toBeUndefined();
