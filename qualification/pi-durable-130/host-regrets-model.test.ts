@@ -61,7 +61,7 @@ for (const outcome of ["success", "error", "cancel", "revoke"] as const) {
     const dir = mkdtempSync(join(tmpdir(), "regrets-ledger-"));
     const authPath = join(dir, "auth.json");
     writeFileSync(authPath, JSON.stringify({ "openai-codex": { type: "oauth", access: "synthetic", refresh: "synthetic", accountId: "regrets-fixture", expires: Date.now()+60000 } }));
-    const controller = new AbortController(); let owned = true, calls = 0;
+    const controller = new AbortController(), databaseLifetime = new AbortController(); let owned = true, calls = 0;
     const authority = createHostOperationAuthority(root, captured as any, () => { if (!owned) throw Error("revoked"); });
     const model = { provider: "openai-codex", id: "synthetic", api: "openai-codex-responses", maxTokens: 100, contextWindow: 1000,
       cost: { input: 1, output: 1, cacheRead: 1, cacheWrite: 1 } } as any;
@@ -75,6 +75,7 @@ for (const outcome of ["success", "error", "cancel", "revoke"] as const) {
       const operations = root.query("SELECT * FROM service_effect_s01_operations").all();
       const port = createHostRegretsAccountedDecision({ database: root, operationId: captured.operation.operationId,
         chatJid: captured.operation.chatJid, authPath, signal: controller.signal, assertCurrent: authority.assertCurrent,
+        terminalOwner: { signal: databaseLifetime.signal, assertCurrent() { if (getDb() !== root) throw Error('Fixture database owner changed'); } },
         getAvailable: () => [model], async request() {
           calls++;
           expect(root.query("SELECT state FROM budget_request_reservations").get()).toEqual({ state: "dispatched" });
@@ -105,13 +106,16 @@ for (const outcome of ["success", "error", "cancel", "revoke"] as const) {
       expect(calls).toBe(1); expect(captures).toBe(1);
       const row = root.query("SELECT state,work_id FROM budget_request_reservations").get() as any;
       expect(row.state).toBe(outcome === "error" ? "unresolved" : "settled");
+      const receipt = root.query('SELECT terminal_receipt_json FROM budget_request_reservations').get() as { terminal_receipt_json: string | null };
+      if (outcome === 'error') expect(receipt.terminal_receipt_json).toBeNull();
+      else expect(JSON.parse(receipt.terminal_receipt_json!).projectedOutcome.usage).toEqual(message.usage);
       expect(root.query("SELECT parent_work_id FROM budget_work WHERE id=?").get(row.work_id)).toEqual({ parent_work_id: `durable-operation:${captured.operation.operationId}` });
       const usage = root.query("SELECT * FROM token_usage").all() as any[];
       expect(usage.length).toBe(outcome === "error" ? 0 : 1);
       if (usage.length) { expect(usage[0].work_id).toBe(row.work_id); expect(usage[0].api_equivalent_cost_microusd).toBe(15); }
       expect(root.query("SELECT * FROM service_effect_s01_sources").all()).toEqual(sources);
       expect(root.query("SELECT * FROM service_effect_s01_operations").all()).toEqual(operations);
-    } finally { closeDatabase(); rmSync(dir, { recursive: true }); }
+    } finally { databaseLifetime.abort(); closeDatabase(); rmSync(dir, { recursive: true }); }
   });
 }
 
@@ -124,9 +128,18 @@ test("same host ledger refunds only undispatched reservation, not an uncertain p
     const authority = createHostOperationAuthority(root, captured as any, () => {});
     const model = { provider: "openai-codex", id: "synthetic", maxTokens: 100, contextWindow: 1000, cost: { input: 1, output: 1, cacheRead: 1, cacheWrite: 1 } } as any;
     const reservation = await reserveHostRequest({ database: root, operationId: captured.operation.operationId, chatJid: captured.operation.chatJid,
-      authPath, model, signal: new AbortController().signal, assertCurrent: authority.assertCurrent });
+      authPath, model, signal: new AbortController().signal, assertCurrent: authority.assertCurrent,
+      terminalOwner: { signal: new AbortController().signal, assertCurrent() { if (getDb() !== root) throw Error('Fixture database owner changed'); } } });
     expect(root.query("SELECT state FROM budget_request_reservations").get()).toEqual({ state: "reserved" });
-    await reservation!.abandon(); await reservation!.abandon();
+    root.exec("CREATE TRIGGER unsent_work_fault BEFORE UPDATE ON budget_work WHEN NEW.status='stopped' BEGIN SELECT RAISE(ABORT,'unsent work fault'); END");
+    await expect(reservation!.abandon()).rejects.toThrow('unsent work fault');
+    expect(root.query("SELECT state FROM budget_request_reservations").get()).toEqual({ state: "reserved" });
+    root.exec('DROP TRIGGER unsent_work_fault');
+    await reservation!.abandon();
+    const stopped = root.query("SELECT * FROM budget_work WHERE id LIKE 'durable-request:%'").get();
+    expect(stopped).toMatchObject({ status: 'stopped' });
+    await Bun.sleep(2); await reservation!.abandon();
+    expect(root.query("SELECT * FROM budget_work WHERE id LIKE 'durable-request:%'").get()).toEqual(stopped);
     expect(root.query("SELECT state FROM budget_request_reservations").get()).toEqual({ state: "released" });
     expect(root.query("SELECT count(*) n FROM token_usage").get()).toEqual({ n: 0 });
   } finally { closeDatabase(); rmSync(dir, { recursive: true }); }

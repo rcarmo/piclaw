@@ -259,7 +259,8 @@ for (const failBinding of [false, true]) test(`side prompt allocation binds an e
     const priced = { ...fixture.models.getModel("qualification", "synthetic"), provider: "openai-codex", contextWindow: 1000, maxTokens: 100,
       cost: { input: 1, output: 1, cacheRead: 1, cacheWrite: 1 } };
     const reservation = await reserveHostRequest({ database: db, operationId: recovering.operation.operationId, chatJid: chat, authPath,
-      model: priced as any, signal: new AbortController().signal, assertCurrent: assert });
+      model: priced as any, signal: new AbortController().signal, assertCurrent: assert,
+      terminalOwner: { signal: new AbortController().signal, assertCurrent: assert } });
     expect(reservation).toBeDefined();
     expect(db.query("SELECT execution_kind FROM budget_work WHERE id=?").get(`durable-operation:${recovering.operation.operationId}`)).toEqual({ execution_kind: "side_prompt" });
     expect(db.query("SELECT execution_kind FROM budget_work WHERE parent_work_id=?").all(`durable-operation:${recovering.operation.operationId}`)).toEqual([{ execution_kind: "side_prompt" }]);

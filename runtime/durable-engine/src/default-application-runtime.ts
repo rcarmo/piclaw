@@ -294,6 +294,9 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   const officeViewer = qualifyInstalledOfficeViewer(catalog, WORKSPACE_DIR);
   const drawio = await qualifyInstalledDrawio(catalog, WORKSPACE_DIR), goal = await qualifyInstalledGoal(catalog, WORKSPACE_DIR);
   const lifetime = new AbortController();
+  // SDK close joins requests before this lifetime ends. Paid facts do not use
+  // task/source/model-grant cancellation as database ownership authority.
+  const terminalOwner = { signal: lifetime.signal, assertCurrent() { assert(); lifetime.signal.throwIfAborted(); } };
   let notifyStorageFailure!: (error: unknown) => void;
   const storageFailure = new Promise<unknown>(resolve => { notifyStorageFailure = resolve; });
   const remotePeer = await qualifyInstalledAddon(catalog, WORKSPACE_DIR, "remote-peer");
@@ -884,11 +887,11 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         identity.assertCurrent();
         if(identity.background){
           const {input,policy}=identity.background;assertNativeBackgroundModel(policy,model);
-          const reservation=await reserveHostRequest({database:root,operationId:input.operationId,chatJid:input.chatJid,authPath:join(getPiclawAgentDir(),'auth.json'),model:model as any,maxTokens:options?.maxTokens,
+          const reservation=await reserveHostRequest({database:root,terminalOwner,operationId:input.operationId,chatJid:input.chatJid,authPath:join(getPiclawAgentDir(),'auth.json'),model:model as any,maxTokens:options?.maxTokens,
             executionKind:'background',backgroundPolicy:policy,usageSource:'compaction',signal,assertCurrent(){assert();identity.assertCurrent();}});
           backgroundRequests.set(signal,{accounted:reservation!==undefined,assertCurrent:identity.assertCurrent});return reservation;
         }
-        return reserveHostRequest({ database: root, operationId: identity.workId, maintenanceWorkId: identity.workId,
+        return reserveHostRequest({ database: root, terminalOwner, operationId: identity.workId, maintenanceWorkId: identity.workId,
           chatJid: identity.chatJid, authPath: join(getPiclawAgentDir(), "auth.json"), model: model as any,
           maxTokens: options?.maxTokens, executionKind: "side_prompt", signal,
           assertCurrent() { assert(); identity.assertCurrent(); } });
@@ -899,7 +902,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       const scheduled = root.query("SELECT task_id FROM service_effect_s07_occurrences WHERE operation_id=?").get(captured.operation.operationId) as { task_id: string } | null;
       const background=bundle.backgroundPolicyFor(captured.inputs[0]!);
       if(background)assertNativeBackgroundModel(background,model);
-      const reservation=await reserveHostRequest({ database: root, operationId: captured.operation.operationId,
+      const reservation=await reserveHostRequest({ database: root, terminalOwner, operationId: captured.operation.operationId,
         chatJid: captured.operation.chatJid, authPath: join(getPiclawAgentDir(), "auth.json"), model: model as any,
         maxTokens: options?.maxTokens, executionKind: captured.delegateModel ? "delegate" : scheduled ? "scheduled" : background ? 'background' : "interactive",
         backgroundPolicy:background,scheduledTaskId: scheduled?.task_id, signal,
@@ -909,7 +912,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     },
     async authorize(model, _kind, signal) { checkRequest(model, signal); }, assertCurrent(model, _kind, signal) { checkRequest(model, signal); } });
   regretsDecision = (captured, authority) => createHostRegretsAccountedDecision({
-    database: root, operationId: captured.operation.operationId, chatJid: captured.operation.chatJid,
+    database: root, terminalOwner, operationId: captured.operation.operationId, chatJid: captured.operation.chatJid,
     authPath: join(getPiclawAgentDir(), "auth.json"), executionKind: "side_prompt", signal: lifetime.signal,
     assertCurrent() { assertRegrets(); authority.assertCurrent(); },
     getAvailable() { assertRegrets(); authority.assertCurrent(); return host.modelRegistry.getAvailable().filter(model => available.some(approved => approved.provider === model.provider && approved.id === model.id)); },

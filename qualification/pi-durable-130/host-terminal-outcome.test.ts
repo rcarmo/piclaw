@@ -10,6 +10,9 @@ import { getBudgetRequest } from "../../runtime/src/db/budget-request-reservatio
 import { writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { Api, Model } from "../../runtime/src/durable-legacy-sdk.js";
+import { Database } from 'bun:sqlite';
+import { createTempWorkspace, setEnv } from '../../runtime/test/helpers.js';
+import { resolveRuntimeConfigPaths } from '../../runtime/src/core/config-paths.js';
 
 const physical = { provider: "fixture", id: "physical-model", api: "openai-responses" };
 const secret = "SYNTHETIC-PRIVATE-CREDENTIAL";
@@ -250,14 +253,21 @@ async function reservedTerminal(body: (fixture: {
   request: NonNullable<Awaited<ReturnType<typeof reserveHostRequest>>>;
   database: ReturnType<typeof getDb>; caller: AbortController; owner: AbortController;
   revokeSource(): void; sourceChecks(): number; terminal: AssistantMessage;
-}) => Promise<void>, withOwner = true) {
+}) => Promise<void>, withOwner = true, file = false) {
+  const workspace = createTempWorkspace('host-terminal-integration-');
+  const restore = setEnv({ PICLAW_WORKSPACE: workspace.workspace, PICLAW_STORE: workspace.store, PICLAW_DATA: workspace.data });
   const previousMemory = process.env.PICLAW_DB_IN_MEMORY;
   process.env.PICLAW_DB_IN_MEMORY = "1";
   const authPath = join(process.env.PICLAW_WORKSPACE!, `terminal-auth-${crypto.randomUUID()}.json`);
   const caller = new AbortController(), owner = new AbortController();
   let source = true, checks = 0;
   try {
-    initDatabase(); const database = getDb();
+    const paths = resolveRuntimeConfigPaths({ env: { ...process.env, PICLAW_DB_IN_MEMORY: file ? '0' : '1' } });
+    initDatabase(paths); const database = getDb();
+    if (file) {
+      expect(database.query("SELECT file FROM pragma_database_list WHERE name='main'").get()).toEqual({ file: paths.databasePath });
+      expect(database.query('PRAGMA journal_mode').get()).toEqual({ journal_mode: 'wal' });
+    }
     writeFileSync(authPath, JSON.stringify({ "openai-codex": { type: "oauth", access: "synthetic", refresh: "synthetic", accountId: "terminal-fixture", expires: Date.now() + 60_000 } }), { mode: 0o600 });
     const model: Model<Api> = { provider: "openai-codex", id: physical.id, api: physical.api, name: "synthetic",
       baseUrl: "https://fixture.invalid", input: ["text"], reasoning: true, contextWindow: 1000, maxTokens: 100,
@@ -266,14 +276,91 @@ async function reservedTerminal(body: (fixture: {
       signal: caller.signal, assertCurrent() { checks++; caller.signal.throwIfAborted(); if (!source) throw Error("source revoked"); },
       terminalOwner: withOwner ? { signal: owner.signal, assertCurrent() { owner.signal.throwIfAborted(); } } : undefined });
     if (!request) throw Error("synthetic reservation unavailable");
-    await request.dispatch();
+    if (withOwner) await request.dispatch();
     const terminal = { ...reportingMessage(), provider: model.provider, responseModel: `${model.provider}/${model.id}` };
     await body({ request, database, caller, owner, terminal, revokeSource() { source = false; }, sourceChecks() { return checks; } });
   } finally {
     owner.abort(); caller.abort(); closeDatabase(); rmSync(authPath, { force: true });
     if (previousMemory === undefined) delete process.env.PICLAW_DB_IN_MEMORY; else process.env.PICLAW_DB_IN_MEMORY = previousMemory;
+    restore(); workspace.cleanup();
   }
 }
+
+test("actual native settlement retains safe evidence after caller/source cancellation and charges/completes once", () => reservedTerminal(async f => {
+  const checks = f.sourceChecks(); f.caller.abort(); f.revokeSource();
+  Object.assign(f.terminal, { apiKey: secret, headers: { authorization: secret } });
+  await f.request.settle(f.terminal);
+  const row = getBudgetRequest(f.request.id, f.database)!;
+  expect(row.state).toBe('settled'); expect(row.terminal_receipt_json).not.toBeNull();
+  expect(row.terminal_receipt_json).not.toContain(secret);
+  expect(JSON.parse(row.terminal_receipt_json!).projectedOutcome.usage).toEqual(f.terminal.usage);
+  expect(f.sourceChecks()).toBe(checks);
+  const work = f.database.query('SELECT * FROM budget_work WHERE id=?').get(row.work_id);
+  expect(work).toMatchObject({ status: 'completed', closed_at: row.terminal_received_at });
+  await Bun.sleep(2); await f.request.settle(f.terminal); await f.request.abandon();
+  expect(getBudgetRequest(f.request.id, f.database)).toEqual(row);
+  expect(f.database.query('SELECT * FROM budget_work WHERE id=?').get(row.work_id)).toEqual(work);
+  expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 1 });
+  expect(f.database.query('SELECT count(*) n FROM budget_usage_events').get()).toEqual({ n: 1 });
+}));
+
+test("native status-write fault rolls charge back, preserves prior receipt and exact recovery does not reset completion", () => reservedTerminal(async f => {
+  f.database.exec("CREATE TRIGGER native_work_fault BEFORE UPDATE ON budget_work WHEN NEW.id LIKE 'durable-request:%' AND NEW.status='completed' BEGIN SELECT RAISE(ABORT,'native work fault'); END");
+  await expect(f.request.settle(f.terminal)).rejects.toThrow('native work fault');
+  const held = getBudgetRequest(f.request.id, f.database)!;
+  expect(held.state).toBe('dispatched'); expect(held.terminal_receipt_json).not.toBeNull();
+  expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
+  expect(f.database.query('SELECT count(*) n FROM budget_usage_events').get()).toEqual({ n: 0 });
+  await f.request.abandon();
+  const marked = getBudgetRequest(f.request.id, f.database)!;
+  expect(marked).toEqual({ ...held, state: 'unresolved', updated_at: marked.updated_at });
+  await f.request.abandon(); expect(getBudgetRequest(f.request.id, f.database)).toEqual(marked);
+  f.database.exec('DROP TRIGGER native_work_fault');
+  await f.request.settle(f.terminal);
+  const recovered = getBudgetRequest(f.request.id, f.database)!;
+  expect(recovered.state).toBe('settled');
+  expect(recovered.terminal_receipt_json).toBe(held.terminal_receipt_json);
+  expect(recovered.terminal_receipt_sha256).toBe(held.terminal_receipt_sha256);
+  expect(recovered.terminal_received_at).toBe(held.terminal_received_at);
+  expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 1 });
+}));
+
+test("native unknown valuation preserves original safe receipt and hold without a charge", () => reservedTerminal(async f => {
+  f.terminal.usage.cost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
+  await expect(f.request.settle(f.terminal)).rejects.toThrow('settlement unresolved');
+  const row = getBudgetRequest(f.request.id, f.database)!;
+  expect(row.state).toBe('unresolved'); expect(row.terminal_receipt_json).not.toBeNull();
+  expect(JSON.parse(row.terminal_receipt_json!).projectedOutcome.usage).toEqual(f.terminal.usage);
+  await f.request.abandon(); expect(getBudgetRequest(f.request.id, f.database)).toEqual(row);
+  expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
+  expect(f.database.query('SELECT status FROM budget_work WHERE id=?').get(row.work_id)).toEqual({ status: 'active' });
+}));
+
+test("native settlement survives an actual writer beyond five seconds with responsive event loop and exact original evidence", () => reservedTerminal(async f => {
+  const path = (f.database.query("SELECT file FROM pragma_database_list WHERE name='main'").get() as { file: string }).file;
+  const writer = new Database(path), started = performance.now(); let ticks = 0;
+  writer.exec('BEGIN IMMEDIATE');
+  const pulse = setInterval(() => { ticks++; }, 10);
+  const release = setTimeout(() => writer.exec('COMMIT'), 5200);
+  const deadline = setTimeout(() => f.owner.abort(Error('owned native settlement deadline')), 10000);
+  const original = JSON.stringify(f.terminal), pending = f.request.settle(f.terminal);
+  // The financial producer must detach its payload before the first wait.
+  f.terminal.content.length = 0; f.terminal.usage.input = 999;
+  try {
+    await pending;
+    expect(performance.now() - started).toBeGreaterThanOrEqual(5000); expect(ticks).toBeGreaterThan(20);
+    const row = getBudgetRequest(f.request.id, f.database)!;
+    expect(row.state).toBe('settled'); expect(row.terminal_receipt_json).not.toBeNull();
+    const preserved = JSON.parse(row.terminal_receipt_json!).projectedOutcome;
+    expect(preserved.content).toEqual(JSON.parse(original).content); expect(preserved.usage).toEqual(JSON.parse(original).usage);
+    expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 1 });
+    expect(f.database.query('SELECT status,closed_at FROM budget_work WHERE id=?').get(row.work_id)).toEqual({ status: 'completed', closed_at: row.terminal_received_at });
+  } finally {
+    clearInterval(pulse); clearTimeout(release); clearTimeout(deadline);
+    if (writer.inTransaction) writer.exec('ROLLBACK');
+    await Promise.allSettled([pending]); writer.close();
+  }
+}, true, true), 15000);
 
 test("actual reserved request retains safe paid facts after caller cancellation without a new dispatch or charge", () => reservedTerminal(async f => {
   const checks = f.sourceChecks(); f.caller.abort(); f.revokeSource();
@@ -306,8 +393,9 @@ test("wrong physical outcome cannot populate an actual request receipt", () => r
   expect(getBudgetRequest(f.request.id, f.database)).toEqual(before);
 }));
 
-test("missing retention owner never falls back to request authority", () => reservedTerminal(async f => {
+test("missing retention owner never falls back to request authority or dispatches paid work", () => reservedTerminal(async f => {
   const before = getBudgetRequest(f.request.id, f.database);
+  await expect(f.request.dispatch()).rejects.toThrow("Terminal receipt owner unavailable");
   await expect(f.request.retainTerminal(f.terminal)).rejects.toThrow("Terminal receipt owner unavailable");
   expect(getBudgetRequest(f.request.id, f.database)).toEqual(before);
 }, false));

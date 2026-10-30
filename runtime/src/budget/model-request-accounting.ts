@@ -167,7 +167,7 @@ export function modelRequestAccounting(input: {
         // Never retire parent/shared work, reopen cancelled/stopped work, or
         // replace an existing completion timestamp. No other work is written.
         if (settled.state === 'settled' && (work.status === 'active' || work.status === 'paused')) {
-          setBudgetWorkStatus(binding.workId, 'completed', { now: receipt.receivedAt, boundary: 'retained_request_settled' }, database);
+          setBudgetWorkStatus(binding.workId, 'completed', { now: receipt.receivedAt, boundary: 'request_settled' }, database);
         }
         return settled;
       }, check, signal, Number.POSITIVE_INFINITY, check);
