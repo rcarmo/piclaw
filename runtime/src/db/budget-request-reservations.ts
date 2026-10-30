@@ -12,6 +12,17 @@ import { valueApiEquivalentCost } from '../budget/valuation.js';
 import type { BudgetProviderEvidence } from '../budget/types.js';
 
 export type BudgetRequestState = 'reserved' | 'dispatched' | 'unresolved' | 'settled' | 'released';
+/** SDK identity DATA only: never authority, dispatch permission or paid proof. */
+export interface BudgetModelInvocation {
+  version: 1;
+  domain: string;
+  operationId: string;
+  conversationId: number;
+  taskId: number;
+  taskKind: 'pi.generation' | 'pi.compaction';
+  phase: 'request' | 'summarize';
+  checkpointHash: string;
+}
 /** Trusted host binding, not a tool or wire request shape. */
 export interface BudgetRequestBinding {
   id: string;
@@ -21,6 +32,7 @@ export interface BudgetRequestBinding {
   modelId: string;
   accountRef: string;
   amountMicros: number | null;
+  modelInvocation?: BudgetModelInvocation;
 }
 export interface BudgetRequestReservation {
   id: string;
@@ -36,6 +48,8 @@ export interface BudgetRequestReservation {
   updated_at: string;
   settlement_sha256: string | null;
   usage_event_id: string | null;
+  model_invocation_json: string | null;
+  model_invocation_key_sha256: string | null;
   terminal_receipt_json: string | null;
   terminal_receipt_sha256: string | null;
   terminal_received_at: string | null;
@@ -46,7 +60,70 @@ export class BudgetRequestError extends Error {
   }
 }
 const digest = (value: unknown) => createHash('sha256').update(canonical(value)).digest('hex');
+function validateModelInvocation(scope: BudgetModelInvocation): void {
+  const invalid = () => { throw new BudgetRequestError('invalid_binding'); };
+  if (!scope || typeof scope !== 'object' || isProxy(scope)
+    || ![Object.prototype, null].includes(Object.getPrototypeOf(scope))) return invalid();
+  const keys = Reflect.ownKeys(scope);
+  if (keys.length !== 8 || keys.some(key => typeof key !== 'string'
+    || !['version','domain','operationId','conversationId','taskId','taskKind','phase','checkpointHash'].includes(key))) invalid();
+  for (const key of keys) {
+    const descriptor = Object.getOwnPropertyDescriptor(scope, key)!;
+    if (!descriptor.enumerable || !('value' in descriptor)) invalid();
+  }
+  if (scope.version !== 1) invalid();
+  for (const value of [scope.domain, scope.operationId]) {
+    // Bound metadata strings to 256 Unicode code points, matching SQLite length.
+    if (typeof value !== 'string' || !value.trim() || Array.from(value).length > 256 || /\p{Cc}/u.test(value)) invalid();
+  }
+  if (![scope.conversationId, scope.taskId].every(id => Number.isSafeInteger(id) && id > 0)
+    || !(scope.taskKind === 'pi.generation' && scope.phase === 'request'
+      || scope.taskKind === 'pi.compaction' && scope.phase === 'summarize')
+    || typeof scope.checkpointHash !== 'string' || scope.checkpointHash.length !== 64 || !/^[0-9a-f]{64}$/.test(scope.checkpointHash)) invalid();
+}
+function modelInvocationKey(scope: BudgetModelInvocation): string {
+  // operationId is deliberately NOT a nonce for allocating a second paid call.
+  return digest({ version: scope.version, domain: scope.domain, conversationId: scope.conversationId,
+    taskId: scope.taskId, taskKind: scope.taskKind, phase: scope.phase, checkpointHash: scope.checkpointHash });
+}
+function verifyModelInvocation(row: BudgetRequestReservation, scope?: BudgetModelInvocation): void {
+  try {
+    if (row.model_invocation_json === null && row.model_invocation_key_sha256 === null) {
+      if (scope !== undefined) throw new BudgetRequestError('conflict');
+      return;
+    }
+    if (row.model_invocation_json === null || row.model_invocation_key_sha256 === null || scope === undefined)
+      throw new BudgetRequestError('conflict');
+    const stored = JSON.parse(row.model_invocation_json);
+    validateModelInvocation(stored);
+    if (canonical(stored) !== row.model_invocation_json || modelInvocationKey(stored) !== row.model_invocation_key_sha256
+      || canonical(scope) !== row.model_invocation_json) throw new BudgetRequestError('conflict');
+    const binding: BudgetRequestBinding = { id: row.id, workId: row.work_id, chatJid: row.chat_jid,
+      providerId: row.provider_id, modelId: row.model_id, accountRef: row.account_ref,
+      amountMicros: row.amount_microusd, modelInvocation: stored };
+    validate(binding);
+    if (digest(binding) !== row.binding_sha256) throw new BudgetRequestError('conflict');
+  } catch { throw new BudgetRequestError('conflict'); }
+}
+/** Indexed passive lookup only. A match/absence grants no reservation or replay. */
+export function findBudgetRequestByModelInvocation(scope: BudgetModelInvocation, database: Database = getDb()): BudgetRequestReservation | null {
+  validateModelInvocation(scope);
+  const row = database.query('SELECT * FROM budget_request_reservations WHERE model_invocation_key_sha256=?')
+    .get(modelInvocationKey(scope)) as BudgetRequestReservation | null;
+  if (row) verifyModelInvocation(row, scope);
+  return row;
+}
 function validate(binding: BudgetRequestBinding): void {
+  if (!binding || typeof binding !== 'object' || isProxy(binding)) throw new BudgetRequestError('invalid_binding');
+  const descriptor = Object.getOwnPropertyDescriptor(binding, 'modelInvocation');
+  if (descriptor && (!descriptor.enumerable || !('value' in descriptor))
+    || !descriptor && 'modelInvocation' in binding) throw new BudgetRequestError('invalid_binding');
+  if (binding.modelInvocation !== undefined) {
+    try { validateReceiptJson(binding); } catch { throw new BudgetRequestError('invalid_binding'); }
+    if (Object.keys(binding).sort().join(',') !== 'accountRef,amountMicros,chatJid,id,modelId,modelInvocation,providerId,workId')
+      throw new BudgetRequestError('invalid_binding');
+    validateModelInvocation(binding.modelInvocation);
+  }
   for (const key of ['id','workId','chatJid','providerId','modelId','accountRef'] as const) {
     const value = binding[key];
     if (typeof value !== 'string' || !value.trim() || value.length > 256 || /\p{Cc}/u.test(value)) throw new BudgetRequestError('invalid_binding');
@@ -60,6 +137,7 @@ function boundRequest(binding: BudgetRequestBinding, database: Database): Budget
   validate(binding);
   const row = getBudgetRequest(binding.id, database);
   if (!row) throw new BudgetRequestError('unavailable');
+  verifyModelInvocation(row, binding.modelInvocation);
   if (row.binding_sha256 !== digest(binding)) throw new BudgetRequestError('conflict');
   return row;
 }
@@ -98,16 +176,21 @@ export function reserveBudgetRequest(binding: BudgetRequestBinding, input: { now
   return database.transaction(() => {
     const existing = getBudgetRequest(binding.id, database);
     if (existing) return boundRequest(binding, database);
+    if (binding.modelInvocation && findBudgetRequestByModelInvocation(binding.modelInvocation, database))
+      throw new BudgetRequestError('conflict'); // Includes released rows: never adopt/resume/fund another call.
     admission(binding, input, database);
     const now = (input.now ?? new Date()).toISOString();
     database.query(`INSERT INTO budget_request_reservations
-      (id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,amount_microusd,state,created_at,updated_at)
-      VALUES(?,?,?,?,?,?,?,?,'reserved',?,?)`).run(binding.id,binding.workId,binding.chatJid,binding.providerId,binding.modelId,binding.accountRef,digest(binding),binding.amountMicros,now,now);
+      (id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,amount_microusd,state,created_at,updated_at,model_invocation_json,model_invocation_key_sha256)
+      VALUES(?,?,?,?,?,?,?,?,'reserved',?,?,?,?)`).run(binding.id,binding.workId,binding.chatJid,binding.providerId,binding.modelId,binding.accountRef,digest(binding),binding.amountMicros,now,now,
+        binding.modelInvocation === undefined ? null : canonical(binding.modelInvocation),
+        binding.modelInvocation === undefined ? null : modelInvocationKey(binding.modelInvocation));
     return getBudgetRequest(binding.id, database)!;
   }).immediate();
 }
 /** One dispatch only. Recheck caps/ancestors and host authority after any awaits. */
 export function dispatchBudgetRequest(binding: BudgetRequestBinding, input: { now?: Date; providerEvidence?: BudgetProviderEvidence[]; authorise: () => void; signal: AbortSignal }, database: Database = getDb()): BudgetRequestReservation {
+  validate(binding);
   return database.transaction(() => {
     const row = boundRequest(binding, database);
     if (row.state !== 'reserved') throw new BudgetRequestError('invalid_state');
@@ -120,6 +203,7 @@ export function dispatchBudgetRequest(binding: BudgetRequestBinding, input: { no
 }
 /** Only definitely-unsent work releases capacity; ambiguous sends remain held. */
 export function abandonBudgetRequest(binding: BudgetRequestBinding, database: Database = getDb(), now = new Date()): BudgetRequestReservation {
+  validate(binding);
   return database.transaction(() => {
     const row = boundRequest(binding, database);
     if (row.state === 'settled' || row.state === 'released' || row.state === 'unresolved') return row;
@@ -247,6 +331,7 @@ export async function retainBudgetTerminalReceipt(binding: BudgetRequestBinding,
 }
 /** Parent-owned actual usage. Late settlement survives cancellation of the work. */
 export function settleBudgetRequest(binding: BudgetRequestBinding, usage: Omit<TokenUsageRecord,'work_id' | 'invocation_id' | 'usage_event_id' | 'execution_kind'>, database: Database = getDb()): BudgetRequestReservation {
+  validate(binding);
   return database.transaction(() => {
     const row = boundRequest(binding,database);
     if (usage.chat_jid !== binding.chatJid || usage.provider !== binding.providerId || usage.model !== binding.modelId

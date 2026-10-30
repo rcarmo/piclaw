@@ -40,6 +40,61 @@ CREATE TRIGGER main.budget_request_receipt_no_delete BEFORE DELETE ON budget_req
   WHEN OLD.terminal_receipt_json IS NOT NULL
   BEGIN SELECT RAISE(ABORT,'terminal receipts are immutable'); END;`,
 });
+
+/** Same reservation owner, next order after receipt retention. No legacy backfill. */
+export const budgetModelInvocationMigration = Object.freeze({
+  owner: budgetTerminalReceiptMigration.owner, id: "model-invocation-v1", order: 2,
+  sql: `ALTER TABLE main.budget_request_reservations ADD COLUMN model_invocation_json TEXT;
+ALTER TABLE main.budget_request_reservations ADD COLUMN model_invocation_key_sha256 TEXT CHECK (
+  (model_invocation_json IS NULL AND model_invocation_key_sha256 IS NULL)
+  OR (model_invocation_json IS NOT NULL AND model_invocation_key_sha256 IS NOT NULL
+    AND length(CAST(model_invocation_key_sha256 AS BLOB))=64 AND model_invocation_key_sha256 NOT GLOB '*[^0-9a-f]*')
+);
+CREATE UNIQUE INDEX main.idx_budget_requests_model_invocation ON budget_request_reservations(model_invocation_key_sha256);
+CREATE TRIGGER main.budget_request_invocation_insert BEFORE INSERT ON budget_request_reservations
+  WHEN NEW.model_invocation_json IS NOT NULL
+  BEGIN
+    SELECT CASE WHEN CASE WHEN json_valid(NEW.model_invocation_json) THEN
+      json_type(NEW.model_invocation_json)='object'
+      AND (SELECT count(*) FROM json_each(NEW.model_invocation_json))=8
+      AND (SELECT count(DISTINCT key) FROM json_each(NEW.model_invocation_json)
+        WHERE key IN ('version','domain','operationId','conversationId','taskId','taskKind','phase','checkpointHash'))=8
+      AND json_type(NEW.model_invocation_json,'$.version')='integer'
+      AND json_extract(NEW.model_invocation_json,'$.version')=1
+      AND json_type(NEW.model_invocation_json,'$.conversationId')='integer'
+      AND json_extract(NEW.model_invocation_json,'$.conversationId') BETWEEN 1 AND 9007199254740991
+      AND json_type(NEW.model_invocation_json,'$.taskId')='integer'
+      AND json_extract(NEW.model_invocation_json,'$.taskId') BETWEEN 1 AND 9007199254740991
+      AND ((json_extract(NEW.model_invocation_json,'$.taskKind')='pi.generation' AND json_extract(NEW.model_invocation_json,'$.phase')='request')
+        OR (json_extract(NEW.model_invocation_json,'$.taskKind')='pi.compaction' AND json_extract(NEW.model_invocation_json,'$.phase')='summarize'))
+      AND json_type(NEW.model_invocation_json,'$.checkpointHash')='text'
+      AND length(CAST(json_extract(NEW.model_invocation_json,'$.checkpointHash') AS BLOB))=64
+      AND json_extract(NEW.model_invocation_json,'$.checkpointHash') NOT GLOB '*[^0-9a-f]*'
+      AND NOT EXISTS (SELECT 1 FROM json_each(NEW.model_invocation_json) WHERE key IN ('domain','operationId') AND (
+        type!='text' OR length(value) NOT BETWEEN 1 AND 256
+        OR length(trim(value,char(9,10,11,12,13,32,160,5760,8192,8193,8194,8195,8196,8197,8198,8199,8200,8201,8202,8232,8233,8239,8287,12288,65279)))=0
+        OR instr(value,char(0))>0 OR value GLOB ('*[' || char(1) || '-' || char(31) || char(127) || '-' || char(159) || ']*')))
+    ELSE 0 END IS NOT 1 THEN RAISE(ABORT,'invalid model invocation') END;
+  END;
+-- REPLACE can bypass DELETE triggers unless recursive_triggers is enabled.
+CREATE TRIGGER main.budget_request_invocation_no_replace BEFORE INSERT ON budget_request_reservations
+  WHEN EXISTS (SELECT 1 FROM budget_request_reservations WHERE
+    (id=NEW.id AND (model_invocation_json IS NOT NULL OR NEW.model_invocation_json IS NOT NULL))
+    OR model_invocation_key_sha256=NEW.model_invocation_key_sha256)
+  BEGIN SELECT RAISE(ABORT,'model invocation conflict'); END;
+CREATE TRIGGER main.budget_request_invocation_no_update BEFORE UPDATE ON budget_request_reservations
+  WHEN NEW.model_invocation_json IS NOT OLD.model_invocation_json
+    OR NEW.model_invocation_key_sha256 IS NOT OLD.model_invocation_key_sha256
+    OR (OLD.model_invocation_json IS NOT NULL AND (
+      NEW.id IS NOT OLD.id OR NEW.work_id IS NOT OLD.work_id OR NEW.chat_jid IS NOT OLD.chat_jid
+      OR NEW.provider_id IS NOT OLD.provider_id OR NEW.model_id IS NOT OLD.model_id
+      OR NEW.account_ref IS NOT OLD.account_ref OR NEW.amount_microusd IS NOT OLD.amount_microusd
+      OR NEW.binding_sha256 IS NOT OLD.binding_sha256))
+  BEGIN SELECT RAISE(ABORT,'model invocation bindings are immutable'); END;
+CREATE TRIGGER main.budget_request_invocation_no_delete BEFORE DELETE ON budget_request_reservations
+  WHEN OLD.model_invocation_json IS NOT NULL
+  BEGIN SELECT RAISE(ABORT,'model invocation bindings are immutable'); END;`,
+});
 import { budgetUsageEventTableSql, initializeUsageReportProjection, verifyExistingUsageReportProjection } from "./usage-report-projection.js";
 
 /** Additive budget tables. Every cap is absent until the user creates one. */
@@ -208,7 +263,7 @@ export function initializeBudgetLimitsSchema(database: Database): void {
     CREATE TRIGGER IF NOT EXISTS budget_usage_events_no_delete
       BEFORE DELETE ON budget_usage_events BEGIN SELECT RAISE(ABORT, 'budget usage events are immutable'); END;
     `);
-    applyOwnedMigrations(database, [budgetTerminalReceiptMigration]);
+    applyOwnedMigrations(database, [budgetTerminalReceiptMigration, budgetModelInvocationMigration]);
     initializeUsageReportProjection(database);
   }).immediate();
 }
