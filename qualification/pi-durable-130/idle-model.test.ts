@@ -77,10 +77,10 @@ test("shared DB next-request model controls persist while destructive reset reta
     expect(await app.getCurrentModelLabel("web:idle")).toBe("alternate/other");
     expect(promptRenders).toBeGreaterThan(0);
     promptText = "界".repeat(100000);
-    expect(await app.applyControlCommand("web:idle", command)).toMatchObject({ status: "error", message: expect.stringContaining("bound exceeded") });
+    expect(await app.applyControlCommand("web:idle", command)).toMatchObject({ status: "error", message: expect.stringContaining("estimate exceeded") });
     expect(await app.getCurrentModelLabel("web:idle")).toBe("alternate/other");
     promptText = "";
-    expect(await app.applyControlCommand("web:idle", { ...other, modelId: "tiny" })).toMatchObject({ status: "error", message: expect.stringContaining("bound exceeded") });
+    expect(await app.applyControlCommand("web:idle", { ...other, modelId: "tiny" })).toMatchObject({ status: "error", message: expect.stringContaining("estimate exceeded") });
     expect(await app.getCurrentModelLabel("web:idle")).toBe("alternate/other");
     expect((await app.applyControlCommand("web:idle", command)).status).toBe("success");
     expect((await app.applyControlCommand("web:idle", { ...command, modelId: "unknown" })).status).toBe("error");

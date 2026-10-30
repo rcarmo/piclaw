@@ -103,6 +103,8 @@
     "installed-tool-catalog.test.ts",
     "migration.test.ts",
     "model-context-bound.test.ts",
+    "model-context-recovery.test.ts",
+    "model-context-usage-framing.test.ts",
     "model-failure.test.ts",
     "models.test.ts",
     "native-admission-boundary.test.ts",
@@ -144,9 +146,7 @@
     "tools.test.ts",
     "usage-error-recovery.test.ts",
     "vertical.test.ts",
-    "worker-recovery.test.ts",
-    "model-context-recovery.test.ts",
-    "model-context-usage-framing.test.ts"
+    "worker-recovery.test.ts"
   ],
   "fileTimeoutMs": {
     "default-application-runtime.test.ts": 900000
