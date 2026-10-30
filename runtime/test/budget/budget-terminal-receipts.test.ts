@@ -294,7 +294,7 @@ test('patient receipt acquisition survives a real writer longer than five second
     expect(disk.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
   } finally {
     owner.abort(); clearInterval(pulse); clearTimeout(deadline); clearTimeout(release);
-    await pending.catch(() => {});
+    await Promise.allSettled([pending]);
     if (writer.inTransaction) writer.exec('ROLLBACK');
     writer.close(); disk.close(); ws.cleanup();
   }
@@ -319,7 +319,7 @@ for (const revoke of ['signal', 'owner'] as const) test(`patient receipt wait re
     expect(getBudgetRequest(binding.id, disk)).toEqual(before);
     expect(readBudgetTerminalReceipt(binding, disk)).toBeNull();
   } finally {
-    owner.abort(); await pending.catch(() => {});
+    owner.abort(); await Promise.allSettled([pending]);
     writer.exec('ROLLBACK'); writer.close(); disk.close(); ws.cleanup();
   }
 });
