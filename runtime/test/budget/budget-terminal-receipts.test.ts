@@ -11,7 +11,7 @@ import { applyOwnedMigrations, listAppliedOwnedMigrations } from '../../src/db/m
 import { budgetTerminalReceiptMigration, initializeBudgetLimitsSchema } from '../../src/db/budget-limits-schema.js';
 import { admitSqliteWrite } from '../../src/db/sqlite-async-admission.js';
 import { reserveBudgetRequest, dispatchBudgetRequest, abandonBudgetRequest, settleBudgetRequest, getBudgetRequest,
-  recordBudgetTerminalReceipt, readBudgetTerminalReceipt, type BudgetRequestBinding, type BudgetTerminalReceiptPayload } from '../../src/db/budget-request-reservations.js';
+  recordBudgetTerminalReceipt, readBudgetTerminalReceipt, retainBudgetTerminalReceipt, type BudgetRequestBinding, type BudgetTerminalReceiptPayload } from '../../src/db/budget-request-reservations.js';
 
 isolateBudgetTestDatabase();
 const receivedAt = '2026-10-04T12:00:00.000Z';
@@ -264,6 +264,64 @@ test('later settlement SQL failure cannot erase an already committed terminal re
   expect(getBudgetRequest(binding.id, db)!.state).toBe('dispatched');
   expect(db.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
   expect(db.query('SELECT count(*) n FROM budget_usage_events').get()).toEqual({ n: 0 });
+});
+
+test('patient receipt acquisition survives a real writer longer than five seconds and freezes data before waiting', async () => {
+  const { db, binding, payload } = fixture(), originalBinding = { ...binding };
+  const ws = createTempWorkspace('terminal-receipt-patient-'), path = join(ws.workspace, 'receipt.db');
+  await Bun.write(path, db.serialize());
+  const disk = new Database(path), owner = new AbortController();
+  disk.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL');
+  const writer = new Database(path);
+  let writes = 0, ticks = 0, checks = 0;
+  disk.function('receipt_write_entered', () => { writes++; return 1; });
+  disk.exec('CREATE TRIGGER count_receipt_write BEFORE UPDATE ON budget_request_reservations WHEN NEW.terminal_receipt_json IS NOT NULL BEGIN SELECT receipt_write_entered(); END');
+  writer.exec('BEGIN IMMEDIATE');
+  const pulse = setInterval(() => { ticks++; }, 10);
+  const deadline = setTimeout(() => owner.abort(Error('owned receipt probe deadline')), 10_000);
+  const release = setTimeout(() => writer.exec('COMMIT'), 5_200);
+  const started = performance.now();
+  const pending = retainBudgetTerminalReceipt(binding, payload, receivedAt, { database: disk, signal: owner.signal, assertCurrent() { checks++; } });
+  payload.projectedOutcome.stopReason = 'length'; binding.accountRef = 'caller mutated after capture';
+  try {
+    const receipt = await pending;
+    expect(performance.now() - started).toBeGreaterThanOrEqual(5_000);
+    expect(ticks).toBeGreaterThan(20); expect(checks).toBeGreaterThan(20);
+    expect(writes).toBe(1);
+    expect(JSON.parse(receipt.bodyJson).projectedOutcome.stopReason).toBe('stop');
+    expect(readBudgetTerminalReceipt(originalBinding, disk)).toEqual(receipt);
+    expect(getBudgetRequest(originalBinding.id, disk)?.state).toBe('dispatched');
+    expect(disk.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
+  } finally {
+    owner.abort(); clearInterval(pulse); clearTimeout(deadline); clearTimeout(release);
+    await pending.catch(() => {});
+    if (writer.inTransaction) writer.exec('ROLLBACK');
+    writer.close(); disk.close(); ws.cleanup();
+  }
+}, 15_000);
+
+for (const revoke of ['signal', 'owner'] as const) test(`patient receipt wait releases on ${revoke} revocation without stale SQL`, async () => {
+  const { db, binding, payload } = fixture();
+  const ws = createTempWorkspace('terminal-receipt-revoke-'), path = join(ws.workspace, 'receipt.db');
+  await Bun.write(path, db.serialize());
+  const disk = new Database(path); disk.exec('PRAGMA journal_mode=WAL');
+  const writer = new Database(path), owner = new AbortController(), denied = Error('receipt owner revoked');
+  let current = true;
+  writer.exec('BEGIN IMMEDIATE');
+  const before = getBudgetRequest(binding.id, disk);
+  const pending = retainBudgetTerminalReceipt(binding, payload, receivedAt, {
+    database: disk, signal: owner.signal, assertCurrent() { if (!current) throw denied; },
+  });
+  if (revoke === 'signal') owner.abort(denied); else current = false;
+  try {
+    await expect(pending).rejects.toBe(denied);
+    expect(writer.inTransaction).toBe(true);
+    expect(getBudgetRequest(binding.id, disk)).toEqual(before);
+    expect(readBudgetTerminalReceipt(binding, disk)).toBeNull();
+  } finally {
+    owner.abort(); await pending.catch(() => {});
+    writer.exec('ROLLBACK'); writer.close(); disk.close(); ws.cleanup();
+  }
 });
 
 test('receipt and original time survive owned WAL close/reopen without changing the source fixture', async () => {

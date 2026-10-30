@@ -18,6 +18,7 @@
     "installed-addons-fixture.ts",
     "host-operation-authority.test.ts",
     "host-process-controls.test.ts",
+    "host-terminal-outcome.test.ts",
     "native-process-exit.test.ts",
     "native-ui-projection.test.ts",
     "native-admission-boundary.test.ts",

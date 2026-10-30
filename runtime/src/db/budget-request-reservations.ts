@@ -1,6 +1,7 @@
 import type Database from 'bun:sqlite';
 import { createHash } from 'node:crypto';
 import { isProxy } from 'node:util/types';
+import { admitSqliteWrite } from './sqlite-async-admission.js';
 import { getDb } from './connection.js';
 import { getBudgetWork, getBudgetCap } from './budget-limits.js';
 import { storeTokenUsage, type TokenUsageRecord } from './token-usage.js';
@@ -183,42 +184,71 @@ function receiptBody(payload: BudgetTerminalReceiptPayload, requestId: string, b
 function receiptTime(value: string): boolean {
   return typeof value === 'string' && value.length === 24 && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 }
-function receiptFromRow(row: BudgetRequestReservation): BudgetTerminalReceipt | null {
+function receiptColumns(row: BudgetRequestReservation): BudgetTerminalReceipt | null {
   if (row.terminal_receipt_json === null && row.terminal_receipt_sha256 === null && row.terminal_received_at === null) return null;
-  try {
-    if (row.terminal_receipt_json === null || row.terminal_receipt_sha256 === null || row.terminal_received_at === null || !receiptTime(row.terminal_received_at))
-      throw new BudgetRequestError('conflict');
-    const payload = JSON.parse(row.terminal_receipt_json);
-    if (receiptBody(payload, row.id, row.binding_sha256) !== row.terminal_receipt_json || digest(payload) !== row.terminal_receipt_sha256)
+  if (row.terminal_receipt_json === null || row.terminal_receipt_sha256 === null || row.terminal_received_at === null || !receiptTime(row.terminal_received_at))
+    throw new BudgetRequestError('conflict');
+  return Object.freeze({ bodyJson: row.terminal_receipt_json, sha256: row.terminal_receipt_sha256, receivedAt: row.terminal_received_at });
+}
+function receiptFromRow(row: BudgetRequestReservation): BudgetTerminalReceipt | null {
+  const receipt = receiptColumns(row);
+  if (receipt) try {
+    const payload = JSON.parse(receipt.bodyJson);
+    if (receiptBody(payload, row.id, row.binding_sha256) !== receipt.bodyJson || digest(payload) !== receipt.sha256)
       throw new BudgetRequestError('conflict');
   } catch { throw new BudgetRequestError('conflict'); }
-  return Object.freeze({ bodyJson: row.terminal_receipt_json, sha256: row.terminal_receipt_sha256, receivedAt: row.terminal_received_at });
+  return receipt;
 }
 /** Exact bound read only; absence never authorises provider replay. */
 export function readBudgetTerminalReceipt(binding: BudgetRequestBinding, database: Database = getDb()): BudgetTerminalReceipt | null {
   validateReceiptJson(binding); validate(binding);
   return receiptFromRow(boundRequest(binding, database));
 }
-/** Synchronous SQL-only retention, composable as a savepoint under
- * admitSqliteWrite. Does not settle, release, change work status or updated_at.
- * receivedAt is captured by the host before admission; retries keep the first.
- * A crash before this write still leaves the original unknown/held request. */
-export function recordBudgetTerminalReceipt(binding: BudgetRequestBinding, payload: BudgetTerminalReceiptPayload, receivedAt: string, database: Database = getDb()): BudgetTerminalReceipt {
+function prepareTerminalReceipt(binding: BudgetRequestBinding, payload: BudgetTerminalReceiptPayload, receivedAt: string) {
   validateReceiptJson(binding); validate(binding);
-  const bodyJson = receiptBody(payload, binding.id, digest(binding)), sha256 = digest(payload);
+  const bodyJson = receiptBody(payload, binding.id, digest(binding));
   if (!receiptTime(receivedAt)) throw new BudgetRequestError('invalid_receipt');
+  const captured: BudgetRequestBinding = JSON.parse(canonical(binding));
+  return Object.freeze({ binding: Object.freeze(captured),
+    receipt: Object.freeze({ bodyJson, sha256: createHash('sha256').update(bodyJson).digest('hex'), receivedAt }) });
+}
+/** Private prepared write: no large JSON validation/hash work under the writer.
+ * Prepared data supplies identity only; the caller must still own the database. */
+function writeTerminalReceipt(prepared: ReturnType<typeof prepareTerminalReceipt>, database: Database): BudgetTerminalReceipt {
+  const { binding, receipt } = prepared;
   return database.transaction(() => {
-    const row = boundRequest(binding, database), existing = receiptFromRow(row);
+    const row = boundRequest(binding, database), existing = receiptColumns(row);
     if (existing) {
-      if (existing.bodyJson !== bodyJson || existing.sha256 !== sha256) throw new BudgetRequestError('conflict');
+      // Equality to the already validated canonical snapshot also verifies its hash.
+      if (existing.bodyJson !== receipt.bodyJson || existing.sha256 !== receipt.sha256) throw new BudgetRequestError('conflict');
       return existing;
     }
     if (row.state !== 'dispatched' && row.state !== 'unresolved') throw new BudgetRequestError('invalid_state');
-    database.query(`UPDATE main.budget_request_reservations
+    const changed = database.query(`UPDATE main.budget_request_reservations
       SET terminal_receipt_json=?,terminal_receipt_sha256=?,terminal_received_at=? WHERE id=?`)
-      .run(bodyJson,sha256,receivedAt,binding.id);
-    return receiptFromRow(getBudgetRequest(binding.id, database)!)!;
+      .run(receipt.bodyJson,receipt.sha256,receipt.receivedAt,binding.id);
+    if (changed.changes !== 1) throw new BudgetRequestError('conflict');
+    const stored = receiptColumns(getBudgetRequest(binding.id, database)!)!;
+    if (stored.bodyJson !== receipt.bodyJson || stored.sha256 !== receipt.sha256 || stored.receivedAt !== receipt.receivedAt) throw new BudgetRequestError('conflict');
+    return stored;
   }).immediate();
+}
+/** Synchronous retention for an already exclusively owned connection. Async
+ * callers use retainBudgetTerminalReceipt so preparation precedes admission. */
+export function recordBudgetTerminalReceipt(binding: BudgetRequestBinding, payload: BudgetTerminalReceiptPayload, receivedAt: string, database: Database = getDb()): BudgetTerminalReceipt {
+  return writeTerminalReceipt(prepareTerminalReceipt(binding, payload, receivedAt), database);
+}
+/** Patient terminal retention, not a whole-turn timeout. Retries acquisition only.
+ * Supply an owner/file/database-lifetime guard and signal, NOT request cancellation.
+ * The owning request must join this promise before database close/owner release.
+ * A crash before this write still leaves the original unknown/held request. */
+export async function retainBudgetTerminalReceipt(binding: BudgetRequestBinding, payload: BudgetTerminalReceiptPayload, receivedAt: string,
+  options: { database: Database; signal: AbortSignal; assertCurrent(): void }): Promise<BudgetTerminalReceipt> {
+  const { database, signal } = options, check = options.assertCurrent.bind(options);
+  signal.throwIfAborted(); check();
+  const prepared = prepareTerminalReceipt(binding, payload, receivedAt);
+  return admitSqliteWrite(database, () => writeTerminalReceipt(prepared, database), check,
+    signal, Number.POSITIVE_INFINITY, check);
 }
 /** Parent-owned actual usage. Late settlement survives cancellation of the work. */
 export function settleBudgetRequest(binding: BudgetRequestBinding, usage: Omit<TokenUsageRecord,'work_id' | 'invocation_id' | 'usage_event_id' | 'execution_kind'>, database: Database = getDb()): BudgetRequestReservation {

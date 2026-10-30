@@ -6,7 +6,9 @@ import { admitSqliteWrite } from "../../src/db/sqlite-async-admission.js";
 import { boundHostRequestCost } from "../../src/budget/request-cost-bound.js";
 import { ensureBudgetWork, getBudgetWork, setBudgetWorkStatus } from "../../src/db/budget-limits.js";
 import { readStoredProviderUsageAccountRef } from "../../src/agent-pool/provider-usage.js";
-import { BudgetRequestError,getBudgetRequest } from '../../src/db/budget-request-reservations.js';
+import { BudgetRequestError,getBudgetRequest,retainBudgetTerminalReceipt } from '../../src/db/budget-request-reservations.js';
+import { getDb } from '../../src/db/connection.js';
+import { projectTerminalOutcome } from './host-terminal-outcome.js';
 import { nativeBackgroundIdentity,nativeBackgroundPolicyHash,readNativeBackgroundPolicy,type NativeBackgroundPolicy } from '../../src/agent-pool/background-operation-contract.js';
 
 export const operationBudgetWorkId = (operationId: string) => `durable-operation:${operationId}`;
@@ -60,6 +62,9 @@ export async function reserveHostRequest(options: {
   backgroundPolicy?:NativeBackgroundPolicy;
   usageSource?:'compaction';
   maintenanceWorkId?: string; signal: AbortSignal; assertCurrent(): void;
+  /** Database/lease lifetime only. Request cancellation cannot erase paid facts.
+   * The backend must keep this owner alive while SDK close joins the request. */
+  terminalOwner?: { signal: AbortSignal; assertCurrent(): void };
 }) {
   const { database, model, signal, assertCurrent } = options;
   const background=options.backgroundPolicy&&readNativeBackgroundPolicy(options.backgroundPolicy);
@@ -111,7 +116,8 @@ export async function reserveHostRequest(options: {
   const binding = { id, workId, chatJid: options.chatJid, providerId: model.provider, modelId: model.id, accountRef, amountMicros: amount.amountMicros };
   let dispatchStarted = false;
   let settled = false;
-  let settlementHash: string | undefined;
+  let settlementHash: string | undefined, terminalReceivedAt: string | undefined;
+  const terminalPhysical = Object.freeze({ provider: binding.providerId, id: binding.modelId, api: model.api });
   // A rejected reservation may have committed before an ACK/storage failure.
   // Keep work active; never retire authority needed to reconcile that hold.
   try{await accounting.reserve(binding, signal);}
@@ -124,6 +130,27 @@ export async function reserveHostRequest(options: {
   }
   return {
     id: binding.id,
+    /** WIP producer port: not yet called by the model relay. Persist only the
+     * allowlisted SDK-visible outcome, never raw provider diagnostics/handles. */
+    async retainTerminal(message: AssistantMessage) {
+      const owner = options.terminalOwner;
+      if (!owner) throw Error('Terminal receipt owner unavailable');
+      const check = () => {
+        owner.signal.throwIfAborted(); owner.assertCurrent();
+        if (getDb() !== database) throw Error('Terminal receipt database binding changed');
+      };
+      check();
+      const projected = projectTerminalOutcome(message, terminalPhysical);
+      terminalReceivedAt ??= new Date().toISOString();
+      const row = getBudgetRequest(binding.id, database);
+      if (!row) throw new BudgetRequestError('unavailable');
+      // Explicit JSON boundary: the projection is detached/frozen, and the
+      // reservation owner validates this exact finite payload before admission.
+      const projectedOutcome = JSON.parse(JSON.stringify(projected));
+      return retainBudgetTerminalReceipt(binding, { version: 1, requestId: binding.id,
+        requestBindingSha256: row.binding_sha256, projectedOutcome }, terminalReceivedAt,
+        { database, signal: owner.signal, assertCurrent: check });
+    },
     async dispatch() {
       current();
       if (dispatchStarted) throw Error("Native request already dispatched");

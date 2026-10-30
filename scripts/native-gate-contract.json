@@ -90,6 +90,7 @@
     "host-regrets-tool.test.ts",
     "host-remote-peer-service.test.ts",
     "host-remote-peer-tool.test.ts",
+    "host-terminal-outcome.test.ts",
     "host-tool-binding-identity.test.ts",
     "idle-model.test.ts",
     "infrastructure-default-runtime.test.ts",
