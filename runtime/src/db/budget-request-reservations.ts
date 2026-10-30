@@ -1,5 +1,6 @@
 import type Database from 'bun:sqlite';
 import { createHash } from 'node:crypto';
+import { isProxy } from 'node:util/types';
 import { getDb } from './connection.js';
 import { getBudgetWork, getBudgetCap } from './budget-limits.js';
 import { storeTokenUsage, type TokenUsageRecord } from './token-usage.js';
@@ -33,9 +34,12 @@ export interface BudgetRequestReservation {
   updated_at: string;
   settlement_sha256: string | null;
   usage_event_id: string | null;
+  terminal_receipt_json: string | null;
+  terminal_receipt_sha256: string | null;
+  terminal_received_at: string | null;
 }
 export class BudgetRequestError extends Error {
-  constructor(readonly code: 'invalid_binding' | 'conflict' | 'unavailable' | 'budget_denied' | 'invalid_state') {
+  constructor(readonly code: 'invalid_binding' | 'conflict' | 'unavailable' | 'budget_denied' | 'invalid_state' | 'invalid_receipt') {
     super(`Model request ${code}.`);
   }
 }
@@ -125,6 +129,95 @@ export function abandonBudgetRequest(binding: BudgetRequestBinding, database: Da
     if (row.state === 'settled' || row.state === 'released' || row.state === 'unresolved') return row;
     database.query('UPDATE budget_request_reservations SET state=?,updated_at=? WHERE id=?').run(row.state === 'reserved' ? 'released' : 'unresolved',now.toISOString(),binding.id);
     return getBudgetRequest(binding.id,database)!;
+  }).immediate();
+}
+export type BudgetReceiptJson = null | boolean | number | string | BudgetReceiptJson[] | { [key: string]: BudgetReceiptJson };
+/** WIP host-only contract. The later host projector owns allowlisting/privacy;
+ * this storage API must never receive raw SDK messages, errors or handles.
+ * Binding is identity, not authority to resume execution or dispatch effects. */
+export interface BudgetTerminalReceiptPayload {
+  version: 1;
+  requestId: string;
+  requestBindingSha256: string;
+  projectedOutcome: { [key: string]: BudgetReceiptJson };
+}
+export interface BudgetTerminalReceipt {
+  readonly bodyJson: string;
+  readonly sha256: string;
+  readonly receivedAt: string;
+}
+/** Reject lossy JSON (including getters/toJSON), cycles and non-plain values
+ * before any SQL. No projection callbacks or I/O are accepted by this owner. */
+function validateReceiptJson(value: unknown, ancestors = new Set<object>(), depth = 0): void {
+  const invalid = () => { throw new BudgetRequestError('invalid_receipt'); };
+  if (depth > 64) invalid();
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
+  if (typeof value === 'number') { if (!Number.isFinite(value)) invalid(); return; }
+  if (typeof value !== 'object' || value === null) return invalid();
+  if (isProxy(value)) invalid();
+  const array = Array.isArray(value);
+  if (Object.getPrototypeOf(value) !== (array ? Array.prototype : Object.prototype)
+    && (array || Object.getPrototypeOf(value) !== null)) invalid();
+  if (ancestors.has(value)) invalid();
+  ancestors.add(value);
+  const keys = Reflect.ownKeys(value);
+  if (array && keys.length !== value.length + 1) invalid();
+  for (const key of keys) {
+    if (array && key === 'length') continue;
+    if (typeof key !== 'string' || array && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= value.length)) invalid();
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
+    if (!descriptor.enumerable || !('value' in descriptor)) invalid();
+    validateReceiptJson(descriptor.value, ancestors, depth + 1);
+  }
+  ancestors.delete(value);
+}
+function receiptBody(payload: BudgetTerminalReceiptPayload, requestId: string, bindingSha256: string): string {
+  validateReceiptJson(payload);
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+    || Object.keys(payload).sort().join(',') !== 'projectedOutcome,requestBindingSha256,requestId,version'
+    || payload.version !== 1 || payload.requestId !== requestId || payload.requestBindingSha256 !== bindingSha256
+    || !payload.projectedOutcome || typeof payload.projectedOutcome !== 'object' || Array.isArray(payload.projectedOutcome))
+    throw new BudgetRequestError('invalid_receipt');
+  return canonical(payload);
+}
+function receiptTime(value: string): boolean {
+  return typeof value === 'string' && value.length === 24 && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
+}
+function receiptFromRow(row: BudgetRequestReservation): BudgetTerminalReceipt | null {
+  if (row.terminal_receipt_json === null && row.terminal_receipt_sha256 === null && row.terminal_received_at === null) return null;
+  try {
+    if (row.terminal_receipt_json === null || row.terminal_receipt_sha256 === null || row.terminal_received_at === null || !receiptTime(row.terminal_received_at))
+      throw new BudgetRequestError('conflict');
+    const payload = JSON.parse(row.terminal_receipt_json);
+    if (receiptBody(payload, row.id, row.binding_sha256) !== row.terminal_receipt_json || digest(payload) !== row.terminal_receipt_sha256)
+      throw new BudgetRequestError('conflict');
+  } catch { throw new BudgetRequestError('conflict'); }
+  return Object.freeze({ bodyJson: row.terminal_receipt_json, sha256: row.terminal_receipt_sha256, receivedAt: row.terminal_received_at });
+}
+/** Exact bound read only; absence never authorises provider replay. */
+export function readBudgetTerminalReceipt(binding: BudgetRequestBinding, database: Database = getDb()): BudgetTerminalReceipt | null {
+  validateReceiptJson(binding); validate(binding);
+  return receiptFromRow(boundRequest(binding, database));
+}
+/** Synchronous SQL-only retention, composable as a savepoint under
+ * admitSqliteWrite. Does not settle, release, change work status or updated_at.
+ * receivedAt is captured by the host before admission; retries keep the first.
+ * A crash before this write still leaves the original unknown/held request. */
+export function recordBudgetTerminalReceipt(binding: BudgetRequestBinding, payload: BudgetTerminalReceiptPayload, receivedAt: string, database: Database = getDb()): BudgetTerminalReceipt {
+  validateReceiptJson(binding); validate(binding);
+  const bodyJson = receiptBody(payload, binding.id, digest(binding)), sha256 = digest(payload);
+  if (!receiptTime(receivedAt)) throw new BudgetRequestError('invalid_receipt');
+  return database.transaction(() => {
+    const row = boundRequest(binding, database), existing = receiptFromRow(row);
+    if (existing) {
+      if (existing.bodyJson !== bodyJson || existing.sha256 !== sha256) throw new BudgetRequestError('conflict');
+      return existing;
+    }
+    if (row.state !== 'dispatched' && row.state !== 'unresolved') throw new BudgetRequestError('invalid_state');
+    database.query(`UPDATE main.budget_request_reservations
+      SET terminal_receipt_json=?,terminal_receipt_sha256=?,terminal_received_at=? WHERE id=?`)
+      .run(bodyJson,sha256,receivedAt,binding.id);
+    return receiptFromRow(getBudgetRequest(binding.id, database)!)!;
   }).immediate();
 }
 /** Parent-owned actual usage. Late settlement survives cancellation of the work. */

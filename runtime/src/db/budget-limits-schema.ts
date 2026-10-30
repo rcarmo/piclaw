@@ -1,4 +1,45 @@
 import type Database from "bun:sqlite";
+import { applyOwnedMigrations } from "./migrations.js";
+
+/** Receipt retention only: no charge, status change, legacy backfill or recovery scan. */
+export const budgetTerminalReceiptMigration = Object.freeze({
+  owner: "host.budget-request-reservations", id: "terminal-receipt-v1", order: 1,
+  sql: `ALTER TABLE main.budget_request_reservations ADD COLUMN terminal_receipt_json TEXT;
+ALTER TABLE main.budget_request_reservations ADD COLUMN terminal_receipt_sha256 TEXT;
+ALTER TABLE main.budget_request_reservations ADD COLUMN terminal_received_at TEXT CHECK (
+  (terminal_receipt_json IS NULL AND terminal_receipt_sha256 IS NULL AND terminal_received_at IS NULL)
+  OR (terminal_receipt_json IS NOT NULL AND terminal_receipt_sha256 IS NOT NULL AND terminal_received_at IS NOT NULL
+    AND length(terminal_received_at)=24
+    AND length(terminal_receipt_sha256)=64 AND terminal_receipt_sha256 NOT GLOB '*[^0-9a-f]*'
+    AND CASE WHEN json_valid(terminal_receipt_json) THEN
+      json_type(terminal_receipt_json)='object'
+      AND json_extract(terminal_receipt_json,'$.version') IS 1
+      AND json_extract(terminal_receipt_json,'$.requestId') IS id
+      AND json_extract(terminal_receipt_json,'$.requestBindingSha256') IS binding_sha256
+      AND json_type(terminal_receipt_json,'$.projectedOutcome') IS 'object'
+    ELSE 0 END)
+);
+CREATE TRIGGER main.budget_request_receipt_insert_state BEFORE INSERT ON budget_request_reservations
+  WHEN NEW.terminal_receipt_json IS NOT NULL AND NEW.state NOT IN ('dispatched','unresolved')
+  BEGIN SELECT RAISE(ABORT,'invalid terminal receipt state'); END;
+CREATE TRIGGER main.budget_request_receipt_capture_state BEFORE UPDATE ON budget_request_reservations
+  WHEN OLD.terminal_receipt_json IS NULL AND NEW.terminal_receipt_json IS NOT NULL
+    AND (OLD.state NOT IN ('dispatched','unresolved') OR NEW.state IS NOT OLD.state)
+  BEGIN SELECT RAISE(ABORT,'invalid terminal receipt state'); END;
+CREATE TRIGGER main.budget_request_receipt_no_update BEFORE UPDATE ON budget_request_reservations
+  WHEN OLD.terminal_receipt_json IS NOT NULL AND (
+    NEW.terminal_receipt_json IS NOT OLD.terminal_receipt_json
+    OR NEW.terminal_receipt_sha256 IS NOT OLD.terminal_receipt_sha256
+    OR NEW.terminal_received_at IS NOT OLD.terminal_received_at
+    OR NEW.id IS NOT OLD.id OR NEW.work_id IS NOT OLD.work_id OR NEW.chat_jid IS NOT OLD.chat_jid
+    OR NEW.provider_id IS NOT OLD.provider_id OR NEW.model_id IS NOT OLD.model_id
+    OR NEW.account_ref IS NOT OLD.account_ref OR NEW.amount_microusd IS NOT OLD.amount_microusd
+    OR NEW.binding_sha256 IS NOT OLD.binding_sha256)
+  BEGIN SELECT RAISE(ABORT,'terminal receipts are immutable'); END;
+CREATE TRIGGER main.budget_request_receipt_no_delete BEFORE DELETE ON budget_request_reservations
+  WHEN OLD.terminal_receipt_json IS NOT NULL
+  BEGIN SELECT RAISE(ABORT,'terminal receipts are immutable'); END;`,
+});
 import { budgetUsageEventTableSql, initializeUsageReportProjection, verifyExistingUsageReportProjection } from "./usage-report-projection.js";
 
 /** Additive budget tables. Every cap is absent until the user creates one. */
@@ -167,6 +208,7 @@ export function initializeBudgetLimitsSchema(database: Database): void {
     CREATE TRIGGER IF NOT EXISTS budget_usage_events_no_delete
       BEFORE DELETE ON budget_usage_events BEGIN SELECT RAISE(ABORT, 'budget usage events are immutable'); END;
     `);
+    applyOwnedMigrations(database, [budgetTerminalReceiptMigration]);
     initializeUsageReportProjection(database);
   }).immediate();
 }
