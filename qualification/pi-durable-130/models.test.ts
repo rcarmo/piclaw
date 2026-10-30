@@ -24,6 +24,8 @@ const { createAssistantMessageEventStream }: typeof import("../../node_modules/@
 import { Type, normalizeContext } from "../../runtime/durable-engine/qualification/ai.ts";
 const ref = { provider: "qualification-provider", id: "qualification-model" };
 const token = "SYNTHETIC-HOST-ONLY-TOKEN";
+// Protocol-only fixture snapshot. Real durable receipt/storage tests are separate.
+const fixtureTerminalReceipt = async (message: AssistantMessage) => structuredClone(message);
 const model: Model<"openai-completions"> = { ...ref, name: "Qualification", api: "openai-completions",
   baseUrl: "https://fixture.invalid", input: ["text"], reasoning: true,
   contextWindow: 10000, maxTokens: 1000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
@@ -770,7 +772,7 @@ for (const method of ["stream", "streamSimple", "complete", "completeSimple"] as
     const f = await fixture(false, false, false, false, failed, `HTTP 504 timed out ${token}`);
     const settlements: AssistantMessage[] = [], records: LogRecord[] = [];
     let observers = 0;
-    f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle(message) { settlements.push(structuredClone(message)); }, async abandon() {} });
+    f.policy.prepareRequest = async () => ({ retainTerminal: fixtureTerminalReceipt, async dispatch() {}, async settle(message) { settlements.push(structuredClone(message)); }, async abandon() {} });
     f.observe(() => { observers++; throw Error(token); });
     const sink = (record: LogRecord) => { records.push(record); }; addLogSink(sink);
     try {
@@ -792,7 +794,7 @@ test("optional observer failure on final delta detaches while provider terminal 
   const f = await fixture(); f.finalDelta();
   let observers = 0, settlements = 0;
   f.observe(() => { observers++; throw Error(token); });
-  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle() { settlements++; }, async abandon() {} });
+  f.policy.prepareRequest = async () => ({ retainTerminal: fixtureTerminalReceipt, async dispatch() {}, async settle() { settlements++; }, async abandon() {} });
   const result = await f.models.completeSimple(f.model, context);
   expect(result.stopReason).toBe("toolUse"); expect(result.content).toEqual(f.message.content);
   expect(result.usage).toEqual(f.message.usage);
@@ -807,7 +809,7 @@ test("optional observer mutations never change provider terminal or accounting e
     if ("partial" in event) { event.partial.usage.input = 999; event.partial.content.length = 0; }
     if (event.type === "done") { event.message.usage.input = 999; event.message.content.length = 0; }
   });
-  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle(message) { settled = structuredClone(message); }, async abandon() {} });
+  f.policy.prepareRequest = async () => ({ retainTerminal: fixtureTerminalReceipt, async dispatch() {}, async settle(message) { settled = structuredClone(message); }, async abandon() {} });
   const result = await f.models.completeSimple(f.model, context);
   expect(result.content).toEqual(f.message.content); expect(result.usage).toEqual(f.message.usage);
   expect(settled?.content).toEqual(f.message.content); expect(settled?.usage).toEqual(f.message.usage);
@@ -833,7 +835,7 @@ test("rejected asynchronous observer cannot poison result publication or produce
 test("late observer rejection after SDK-visible result publication preserves outcome and at-most-once settlement", async () => {
   const f = await fixture(), release = barrier(); let observers = 0, settlements = 0;
   f.observe(() => { observers++; return release.promise.then(() => { throw Error(token); }); });
-  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle() { settlements++; }, async abandon() {} });
+  f.policy.prepareRequest = async () => ({ retainTerminal: fixtureTerminalReceipt, async dispatch() {}, async settle() { settlements++; }, async abandon() {} });
   try {
     const result = await bounded(f.models.completeSimple(f.model, context));
     const published = JSON.stringify(result);
@@ -845,16 +847,52 @@ test("late observer rejection after SDK-visible result publication preserves out
   } finally { release.release(); await Bun.sleep(0); }
 });
 
-test("mandatory event authority failure remains fatal and keeps original terminal usage", async () => {
+test("mandatory event authority failure remains fatal after retaining the full original terminal before the fence", async () => {
   const f = await fixture(); let observers = 0, settlements = 0;
-  f.eventAuthority(() => { throw Error(token); });
+  const retained: AssistantMessage[] = [], order: string[] = [];
+  f.eventAuthority(() => { order.push('fence'); throw Error(token); });
   f.observe(() => { observers++; });
-  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle() { settlements++; }, async abandon() {} });
+  f.policy.prepareRequest = async () => ({ async dispatch() {}, async retainTerminal(message) { retained.push(structuredClone(message)); order.push('retain'); }, async settle() { settlements++; }, async abandon() {} });
   const result = await f.models.completeSimple(f.model, context);
   expect(result.stopReason).toBe("error"); expect(parseModelFailure(result.errorMessage)?.phase).toBe("source");
   expect(result.usage).toEqual(f.message.usage);
+  expect(retained).toHaveLength(1); expect(retained[0]).toMatchObject({ content: f.message.content, usage: f.message.usage, stopReason: f.message.stopReason });
+  expect(order).toEqual(['retain', 'fence']);
   expect(observers).toBe(0); expect(settlements).toBe(0); expect(f.calls()).toBe(1);
   expect(JSON.stringify(result)).not.toContain(token);
+});
+
+test('mandatory nonterminal fence failure drains and retains the actual terminal without provider or financial callback replay', async () => {
+  const f = await fixture(); f.finalDelta();
+  const retained: AssistantMessage[] = [], order: string[] = []; let settlements = 0, observers = 0;
+  f.eventAuthority(() => { order.push('fence'); throw Error(token); }); f.observe(() => { observers++; });
+  f.policy.prepareRequest = async () => ({ async dispatch() {}, async retainTerminal(message) { retained.push(structuredClone(message)); order.push('retain'); }, async settle() { settlements++; }, async abandon() {} });
+  const result = await f.models.completeSimple(f.model, context);
+  expect(parseModelFailure(result.errorMessage)?.phase).toBe('source'); expect(result.stopReason).toBe('error');
+  expect(retained).toHaveLength(1); expect(retained[0]).toMatchObject({ content: f.message.content, usage: f.message.usage, stopReason: f.message.stopReason });
+  expect(order).toEqual(['fence', 'retain']); expect(f.captured().options.signal.aborted).toBe(true);
+  expect(f.calls()).toBe(1); expect(settlements).toBe(0); expect(observers).toBe(0);
+});
+
+test('result-only terminal is retained before its final mandatory authority check', async () => {
+  const f = await fixture(); f.resultOnly(); const order: string[] = []; let settlements = 0;
+  f.eventAuthority(() => { order.push('fence'); throw Error(token); }); f.observe(() => {});
+  f.policy.prepareRequest = async () => ({ async dispatch() {}, async retainTerminal(message) { expect(message.content).toEqual(f.message.content); order.push('retain'); }, async settle() { settlements++; }, async abandon() {} });
+  const result = await f.models.completeSimple(f.model, context);
+  expect(parseModelFailure(result.errorMessage)?.phase).toBe('source'); expect(result.usage).toEqual(f.message.usage);
+  expect(order).toEqual(['retain', 'fence']); expect(settlements).toBe(0); expect(f.calls()).toBe(1);
+});
+
+for (const failed of [false, true]) test(`terminal-retention rejection is not replayed by physical drain or financial cleanup; providerFailed=${failed}`, async () => {
+  const f = await fixture(false, false, false, false, failed, 'HTTP 504 timed out');
+  let retentions = 0, settlements = 0, observers = 0, abandonments = 0;
+  f.observe(() => { observers++; });
+  f.policy.prepareRequest = async () => ({ async dispatch() {}, async retainTerminal() { retentions++; throw Error(token); }, async settle() { settlements++; }, async abandon() { abandonments++; } });
+  const result = await f.models.completeSimple(f.model, context);
+  expect(result.stopReason).toBe('error'); expect(retentions).toBe(1); expect(settlements).toBe(0); expect(observers).toBe(0); expect(abandonments).toBe(1);
+  expect(parseModelFailure(result.errorMessage)).toEqual(failed ? { phase: 'accounting', category: 'timeout', httpStatus: 504 } : { phase: 'accounting', category: 'unknown' });
+  expect(result.usage).toEqual(failed ? { ...f.message.usage, cost: { input: 0.1, output: 0.2, cacheRead: 0, cacheWrite: 0, total: 0.3 } } : f.message.usage);
+  expect(f.calls()).toBe(1); expect(JSON.stringify(result)).not.toContain(token);
 });
 
 test("terminal projection failure cannot erase validated original usage", async () => {
@@ -911,7 +949,7 @@ test("asynchronous event authority is rejected rather than ignored as an optiona
 test("event authority is rechecked after result publication before accounting or SDK success", async () => {
   const f = await fixture(); let settlements = 0;
   f.observe(() => { f.eventAuthority(() => { throw Error(token); }); });
-  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle() { settlements++; }, async abandon() {} });
+  f.policy.prepareRequest = async () => ({ retainTerminal: fixtureTerminalReceipt, async dispatch() {}, async settle() { settlements++; }, async abandon() {} });
   const result = await f.models.completeSimple(f.model, context);
   expect(result.stopReason).toBe("error"); expect(parseModelFailure(result.errorMessage)?.phase).toBe("source");
   expect(result.usage).toEqual(f.message.usage); expect(settlements).toBe(0); expect(f.calls()).toBe(1);
@@ -931,7 +969,7 @@ test("provider failure preserves safe category, accounting and a single dispatch
   const f = await fixture(false, false, false, false, true, `HTTP 504 timed out; Authorization: Bearer ${token}`);
   const records: LogRecord[] = [], sink = (record: LogRecord) => { records.push(record); };
   let settlements = 0, abandonments = 0;
-  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle() { settlements++; }, async abandon() { abandonments++; } });
+  f.policy.prepareRequest = async () => ({ retainTerminal: fixtureTerminalReceipt, async dispatch() {}, async settle() { settlements++; }, async abandon() { abandonments++; } });
   addLogSink(sink);
   try {
     const result = await f.models.completeSimple(f.model, context);
@@ -947,7 +985,7 @@ test("provider failure preserves safe category, accounting and a single dispatch
 
 test("unresolved accounting does not overwrite the original provider timeout", async () => {
   const f = await fixture(false, false, false, false, true, `HTTP 504 timed out ${token}`);
-  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle() { throw Error(token); }, async abandon() {} });
+  f.policy.prepareRequest = async () => ({ retainTerminal: fixtureTerminalReceipt, async dispatch() {}, async settle() { throw Error(token); }, async abandon() {} });
   const result = await f.models.completeSimple(f.model, context);
   expect(parseModelFailure(result.errorMessage)).toEqual({phase:"accounting",category:"timeout",httpStatus:504});
   expect(f.calls()).toBe(1);
@@ -967,7 +1005,7 @@ test("admission failure reports its stage without dispatch or private exception 
 test("accounting and cleanup failures remain visible without repeating provider work", async () => {
   const f = await fixture();
   const records: LogRecord[] = [], sink = (record: LogRecord) => { records.push(record); };
-  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle() { throw Error(token); }, async abandon() { throw Error(token); } });
+  f.policy.prepareRequest = async () => ({ retainTerminal: fixtureTerminalReceipt, async dispatch() {}, async settle() { throw Error(token); }, async abandon() { throw Error(token); } });
   addLogSink(sink);
   try {
     const result = await f.models.completeSimple(f.model, context);
@@ -1001,7 +1039,7 @@ for (const archiveFails of [false, true]) for (const exhausted of [false, true])
   };
   f.policy.prepareRequest = async () => {
     const row = {id: crypto.randomUUID(), state: "reserved"}; requests.push(row);
-    return {id:row.id, async dispatch() {row.state = "dispatched";}, async settle(message) {
+    return {id:row.id, retainTerminal: fixtureTerminalReceipt, async dispatch() {row.state = "dispatched";}, async settle(message) {
       if (message.stopReason === "error") { row.state = "unresolved"; throw Error("Native request settlement unresolved"); }
       row.state = "settled";
     }, async abandon() { if (row.state === "dispatched") row.state = "unresolved"; }};
@@ -1030,7 +1068,7 @@ for (const archiveFails of [false, true]) for (const exhausted of [false, true])
 test("retention write failure preserves original provider classification and unresolved request", async () => {
   const f=await fixture(false,true,false,false,true,"HTTP 504 upstream interrupted; PRIVATE_ORIGINAL_REASON");
   const records:LogRecord[]=[],sink=(record:LogRecord)=>{records.push(record);};let seen:unknown,abandoned=0;
-  f.policy.prepareRequest=async()=>({id:"original-unresolved-request",async dispatch(){},async settle(){throw Error("PRIVATE_SETTLEMENT_FAILURE");},async abandon(){abandoned++;}});
+  f.policy.prepareRequest=async()=>({ retainTerminal: fixtureTerminalReceipt,id:"original-unresolved-request",async dispatch(){},async settle(){throw Error("PRIVATE_SETTLEMENT_FAILURE");},async abandon(){abandoned++;}});
   f.policy.retainFailure=evidence=>{seen=evidence;throw Error("PRIVATE_ARCHIVE_FAILURE");};
   addLogSink(sink);
   try {
@@ -1083,7 +1121,7 @@ test("abort during retry backoff survives reopen without replay or resolving unc
   const requests: { id: string; state: string }[] = [];
   f.policy.prepareRequest = async () => {
     const row = { id: crypto.randomUUID(), state: "reserved" }; requests.push(row);
-    return { id: row.id, async dispatch() { row.state = "dispatched"; }, async settle(message) {
+    return { id: row.id, retainTerminal: fixtureTerminalReceipt, async dispatch() { row.state = "dispatched"; }, async settle(message) {
       if (message.stopReason === "error") { row.state = "unresolved"; throw Error("Native request settlement unresolved"); }
       row.state = "settled";
     }, async abandon() { if (row.state === "dispatched") row.state = "unresolved"; } };

@@ -37,6 +37,8 @@ export interface HostModelPolicy {
   retainFailure?(evidence: ModelFailureEvidence): string | Promise<string>;
   prepareRequest?(model: Model<Api>, options: SimpleStreamOptions | undefined, signal: AbortSignal): Promise<{
     readonly id?: string;
+    /** Owner-lifetime retention only; supplies no permission for later effects. */
+    retainTerminal(message: AssistantMessage): Promise<unknown>;
     dispatch(): Promise<void>; settle(message: AssistantMessage): Promise<void>; abandon(): Promise<void>;
   } | undefined>;
   /** Includes host model approval and budget admission; never auth/login approval. */
@@ -245,6 +247,12 @@ export function createHostModels(
     let request: Awaited<ReturnType<NonNullable<HostModelPolicy["prepareRequest"]>>>;
     let transportAbort: AbortController | undefined;
     let providerResult: { result(): Promise<AssistantMessage> } | undefined;
+    let retentionAttempted = false;
+    const retainTerminal = async (message: AssistantMessage) => {
+      if (!request || retentionAttempted) return;
+      retentionAttempted = true; // Never retry an entered retention callback on drain.
+      await request.retainTerminal(message);
+    };
     const captureTerminalUsage = (message: AssistantMessage) => {
       if (message.provider !== model.provider || message.model !== model.id || message.api !== model.api) return;
       const responseModel = message.responseModel ?? message.model;
@@ -351,6 +359,9 @@ export function createHostModels(
               providerError = message;
               providerFailure = dispatchBudgetFailure ?? classifyModelFailure("provider", message);
             }
+            // Retain original paid facts before mandatory fences or optional UI.
+            // This database owner is independent of request/source cancellation.
+            phase = 'accounting'; await retainTerminal(message); phase = 'provider';
           }
           assertEventCurrent();
           if (observer && !observerDetached) {
@@ -372,6 +383,7 @@ export function createHostModels(
         const result = await stream.result();
         captureTerminalUsage(result);
         if (result.stopReason === "error" || result.stopReason === "aborted") { providerError = result; providerFailure = dispatchBudgetFailure??classifyModelFailure("provider", result); }
+        phase = 'accounting'; await retainTerminal(result); phase = 'provider';
         assertEventCurrent();
         phase = "accounting";
         await request?.settle(result);
@@ -385,8 +397,9 @@ export function createHostModels(
         // after its SDK observer has ended. Optional UI failures never reach here.
         transportAbort?.abort(cause);
         if (providerResult) {
+          let terminal: AssistantMessage | undefined;
           try {
-            const terminal = await providerResult.result();
+            terminal = await providerResult.result();
             captureTerminalUsage(terminal);
             if (terminal.stopReason === "error" || terminal.stopReason === "aborted") {
               providerError = terminal;
@@ -397,6 +410,13 @@ export function createHostModels(
             providerFailure ??= classifyModelFailure("provider", error);
             log.warn("Native provider result drain failed", { operation: "durable_model.provider_drain_failed",
               taskId: scope?.taskId, conversationId: scope?.conversationId });
+          }
+          if (terminal) {
+            try { await retainTerminal(terminal); }
+            catch {
+              log.warn('Native drained terminal retention remains unresolved', { operation: 'durable_model.cleanup_failed', phase: 'accounting',
+                taskId: scope?.taskId, conversationId: scope?.conversationId });
+            }
           }
         }
         // Preserve the provider reason even when accounting/conversion fails next.
