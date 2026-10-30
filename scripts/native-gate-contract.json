@@ -144,7 +144,9 @@
     "tools.test.ts",
     "usage-error-recovery.test.ts",
     "vertical.test.ts",
-    "worker-recovery.test.ts"
+    "worker-recovery.test.ts",
+    "model-context-recovery.test.ts",
+    "model-context-usage-framing.test.ts"
   ],
   "fileTimeoutMs": {
     "default-application-runtime.test.ts": 900000
