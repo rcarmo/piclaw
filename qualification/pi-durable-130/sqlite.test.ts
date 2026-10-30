@@ -145,7 +145,8 @@ describe("Bun asynchronous database facade", () => {
   test("commit failure rolls back before unlock", () => disk(async path => {
     const db = new BunSqliteDatabase(path);
     try {
-      await db.exec("PRAGMA foreign_keys = ON; CREATE TABLE parent (id INTEGER PRIMARY KEY); CREATE TABLE child (id INTEGER REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED)");
+      expect(await db.get('SELECT foreign_keys FROM pragma_foreign_keys')).toEqual({ foreign_keys: 1 });
+      await db.exec("CREATE TABLE parent (id INTEGER PRIMARY KEY); CREATE TABLE child (id INTEGER REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED)");
       await expect(db.transaction(async tx => { await tx.run("INSERT INTO child VALUES (99)"); })).rejects.toThrow();
       expect(await db.all("SELECT * FROM child")).toEqual([]);
       await db.transaction(async tx => { await tx.run("INSERT INTO parent VALUES (99)"); });
@@ -154,10 +155,17 @@ describe("Bun asynchronous database facade", () => {
 
   test("rollback failure is explicit, poisons queued operations, still drains close", () => disk(async path => {
     const db = new BunSqliteDatabase(path);
+    await db.exec('CREATE TABLE sample(n INTEGER UNIQUE); INSERT INTO sample VALUES(1)');
     const entered = barrier(), hold = barrier(), original = new Error("not guaranteed rolled back");
     const failed = db.transaction(async tx => {
-      // Deliberate contract-breaking SQL fault injection: the adapter's ROLLBACK must now fail.
-      await tx.exec("ROLLBACK"); entered.release(); await hold.promise; throw original;
+      // Seed outside this transaction: a missed lifetime guard would otherwise
+      // autocommit these later writes after the implicit rollback.
+      await expect(tx.run('INSERT OR ROLLBACK INTO sample VALUES(1)')).rejects.toThrow('UNIQUE');
+      await expect(tx.run('INSERT INTO sample VALUES(2)')).rejects.toThrow('transaction ended');
+      await expect(tx.exec('INSERT INTO sample VALUES(3)')).rejects.toThrow('transaction ended');
+      await expect(tx.get('SELECT 1')).rejects.toThrow('transaction ended');
+      await expect(tx.all('SELECT 1')).rejects.toThrow('transaction ended');
+      entered.release(); await hold.promise; throw original;
     });
     await entered.promise;
     const queued = db.get("SELECT 1");
@@ -170,6 +178,9 @@ describe("Bun asynchronous database facade", () => {
     expect(failure.errors[0]).toBe(original);
     expect(failure.errors).toHaveLength(2);
     await expect(db.run("SELECT 1")).rejects.toThrow("closed");
+    const observed = new Database(path);
+    try { expect(observed.query('SELECT n FROM sample').all()).toEqual([{ n: 1 }]); }
+    finally { observed.close(); }
   }));
 
   test("nested facade operations reject instead of deadlocking; tx handle remains usable", async () => {
@@ -254,6 +265,80 @@ describe("host persistence transaction scope", () => {
       expect(root.query("SELECT next_seq FROM durable_metadata").get()).toEqual({ next_seq: before.next_seq + 2 });
     } finally { await attempt; await storage.close(context); root.close(); }
   }));
+});
+
+describe('SDK SQLite mutation boundaries', () => {
+  for (const mechanism of ['statement', 'schema', 'trigger'] as const) test(`implicit ${mechanism} rollback cannot escape into host persistence or autocommit writes`, () => disk(async path => {
+    const root = new Database(path);
+    root.exec(`PRAGMA journal_mode=WAL; CREATE TABLE sample(n INTEGER UNIQUE ${mechanism === 'schema' ? 'ON CONFLICT ROLLBACK' : ''}); INSERT INTO sample VALUES(1)`);
+    if (mechanism === 'trigger') root.exec("CREATE TRIGGER rollback_probe BEFORE INSERT ON sample WHEN NEW.n=1 BEGIN SELECT RAISE(ROLLBACK, 'implicit rollback'); END");
+    const db = new BunSqliteDatabase(path, { root, fenceTransactions: true, assertOwner() {} });
+    let persistence = 0;
+    try {
+      await expect(db.withHostSourceGuard(() => {}, async tx => { persistence++; await tx.run('INSERT INTO sample VALUES(3)'); }, () => db.transaction(async tx => {
+        await expect(tx.run(`INSERT ${mechanism === 'statement' ? 'OR ROLLBACK' : ''} INTO sample VALUES(1)`)).rejects.toThrow();
+        await expect(tx.run('INSERT INTO sample VALUES(2)')).rejects.toThrow('transaction ended');
+        return 'not committed';
+      }))).rejects.toBeInstanceOf(AggregateError);
+      expect(persistence).toBe(0); expect(root.query('SELECT n FROM sample').all()).toEqual([{ n: 1 }]);
+      await expect(db.all('SELECT n FROM sample')).rejects.toThrow('rollback failed');
+    } finally { await db.close(); root.close(); }
+  }));
+
+  for (const method of ['exec', 'run'] as const) for (const transaction of [false, true]) test(`${method} rejects connection and transaction control before preparation; transaction=${transaction}`, async () => {
+    const db = new BunSqliteDatabase(':memory:');
+    await db.exec('CREATE TABLE sample(n INTEGER)');
+    const prepared = spyOn(Database.prototype, 'prepare'), queried = spyOn(Database.prototype, 'query');
+    try {
+      const check = async (tx: SqliteExecutor) => {
+        for (const sql of ['BEGIN', 'COMMIT', 'END TRANSACTION', 'ROLLBACK', 'SAVEPOINT nested', 'RELEASE nested', 'ROLLBACK TO nested',
+          'PRAGMA busy_timeout=1000', 'ATTACH DATABASE ":memory:" AS other', 'DETACH other', 'VACUUM',
+          ' ; -- prefix\n /* control */ cOmMiT', '\ufeffROLLBACK', 'EXPLAIN PRAGMA query_only=ON', 'EXPLAIN QUERY PLAN COMMIT',
+          '-- CR does not end SQLite comments\rSELECT 1\nCOMMIT']) {
+          const p = prepared.mock.calls.length, q = queried.mock.calls.length;
+          await expect(tx[method](sql)).rejects.toThrow('host-owned');
+          expect(prepared.mock.calls.length).toBe(p); expect(queried.mock.calls.length).toBe(q);
+        }
+        await tx.run('INSERT INTO sample VALUES(?)', 1);
+      };
+      if (transaction) await db.transaction(check); else await check(db);
+      expect(await db.all('SELECT n FROM sample')).toEqual([{ n: 1 }]);
+      expect(await db.get('SELECT timeout FROM pragma_busy_timeout')).toEqual({ timeout: 0 });
+      expect(await db.all('SELECT name FROM pragma_database_list')).toEqual([{ name: 'main' }]);
+    } finally { prepared.mockRestore(); queried.mockRestore(); await db.close(); }
+  });
+
+  for (const control of ['COMMIT', 'ROLLBACK', 'SAVEPOINT hidden', 'PRAGMA busy_timeout=1000']) test(`multi-statement exec cannot hide ${control} after quoted semicolons`, async () => {
+    const db = new BunSqliteDatabase(':memory:');
+    try {
+      await db.exec('CREATE TABLE sample(n INTEGER)');
+      await expect(db.transaction(async tx => {
+        await tx.run('INSERT INTO sample VALUES(1)');
+        await tx.exec(`SELECT '; COMMIT is text', 'it''s; quoted'; /* prefix */ ${control}`);
+      })).rejects.toThrow('host-owned');
+      expect(await db.all('SELECT n FROM sample')).toEqual([]);
+      await db.run('INSERT INTO sample VALUES(?)', 2);
+      expect(await db.all('SELECT n FROM sample')).toEqual([{ n: 2 }]);
+    } finally { await db.close(); }
+  });
+
+  test('SQLite delimits actual triggers and dependent DDL/DML without truncation or semicolon splitting', async () => {
+    const db = new BunSqliteDatabase(':memory:');
+    try {
+      await db.exec(`-- schema\n CREATE TABLE sample(n INTEGER); CREATE TABLE audit(value TEXT);
+        CREATE TRIGGER sample_insert AFTER INSERT ON sample BEGIN
+          INSERT INTO audit VALUES('BEGIN; COMMIT; END');
+          INSERT INTO audit VALUES('it''s; not ROLLBACK');
+        END;
+        INSERT INTO sample VALUES(7); INSERT INTO sample VALUES(8); -- trailing comment`);
+      expect(await db.all('SELECT n FROM sample ORDER BY n')).toEqual([{ n: 7 }, { n: 8 }]);
+      expect(await db.all('SELECT value FROM audit ORDER BY rowid')).toEqual([{ value: 'BEGIN; COMMIT; END' }, { value: "it's; not ROLLBACK" }, { value: 'BEGIN; COMMIT; END' }, { value: "it's; not ROLLBACK" }]);
+      await db.exec(' ; ; /* empty tail */ -- comment');
+      await expect(db.exec('EXPLAIN')).rejects.toThrow('Incomplete');
+      await expect(db.exec('INSERT INTO sample VALUES(?)')).rejects.toThrow('parameter-free');
+      expect(await db.all('SELECT n FROM sample ORDER BY n')).toEqual([{ n: 7 }, { n: 8 }]);
+    } finally { await db.close(); }
+  });
 });
 
 describe("SDK SQLite read executors", () => {

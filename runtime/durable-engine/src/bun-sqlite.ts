@@ -1,5 +1,6 @@
 import { isSqliteContention } from '../../src/db/sqlite-async-admission.js';
 import { prepareSqliteRead } from '../../src/db/sqlite-read.js';
+import { assertSqliteMutation, execSqliteMutation } from '../../src/db/sqlite-write.js';
 import { registerSqliteCheckpoint } from "../../src/db/sqlite-checkpoint.js";
 import { openSqliteRole } from "../../src/db/sqlite-role-policy.js";
 import { Database } from "bun:sqlite";
@@ -130,8 +131,8 @@ export class BunSqliteDatabase implements SqliteDatabase {
 
   private executor(valid: () => void): SqliteExecutor {
     return {
-      exec: async sql => { valid(); this.db.exec(sql); },
-      run: async (sql, ...params) => { valid(); this.db.query(sql).run(...params); },
+      exec: async sql => { valid(); execSqliteMutation(this.db, sql); },
+      run: async (sql, ...params) => { valid(); assertSqliteMutation(sql); this.db.query(sql).run(...params); },
       get: async <T extends object>(sql: string, ...params: SqliteValue[]) => {
         valid(); return (prepareSqliteRead(this.db, sql).get(...params) ?? undefined) as T | undefined;
       },
@@ -174,6 +175,7 @@ export class BunSqliteDatabase implements SqliteDatabase {
       let phase: "callback" | "persist" | "closed" = "callback";
       const executorFor = (expected: "callback" | "persist") => this.executor(() => {
         if (phase !== expected) throw new Error("SQLite transaction handle expired");
+        if (!this.db.inTransaction) throw new Error('SQLite transaction ended before completion');
         if (this.guard?.fenceTransactions) this.guard.assertOwner();
       });
       try {
@@ -183,6 +185,7 @@ export class BunSqliteDatabase implements SqliteDatabase {
         const value = await this.callback.run(true, async () => {
           try {
             const result = await callback(executorFor("callback"));
+            if (!this.db.inTransaction) throw new Error('SQLite transaction ended before completion');
             phase = "persist";
             await source?.persist(executorFor("persist"));
             return result;
