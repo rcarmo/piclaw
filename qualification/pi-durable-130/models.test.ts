@@ -830,6 +830,21 @@ test("rejected asynchronous observer cannot poison result publication or produce
   expect(result.usage).toEqual(f.message.usage); expect(f.calls()).toBe(1);
 });
 
+test("late observer rejection after SDK-visible result publication preserves outcome and at-most-once settlement", async () => {
+  const f = await fixture(), release = barrier(); let observers = 0, settlements = 0;
+  f.observe(() => { observers++; return release.promise.then(() => { throw Error(token); }); });
+  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle() { settlements++; }, async abandon() {} });
+  try {
+    const result = await bounded(f.models.completeSimple(f.model, context));
+    const published = JSON.stringify(result);
+    expect(result.stopReason).toBe("toolUse"); expect(result.content).toEqual(f.message.content);
+    expect(result.usage).toEqual(f.message.usage); expect(settlements).toBe(1);
+    release.release(); await Bun.sleep(0);
+    expect(JSON.stringify(result)).toBe(published);
+    expect(observers).toBe(1); expect(settlements).toBe(1); expect(f.calls()).toBe(1);
+  } finally { release.release(); await Bun.sleep(0); }
+});
+
 test("mandatory event authority failure remains fatal and keeps original terminal usage", async () => {
   const f = await fixture(); let observers = 0, settlements = 0;
   f.eventAuthority(() => { throw Error(token); });
