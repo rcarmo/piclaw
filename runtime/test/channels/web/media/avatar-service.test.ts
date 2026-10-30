@@ -351,3 +351,34 @@ test('buildAvatarResponse rejects non-image media avatar sources', () => {
     ws.cleanup();
   }
 });
+
+test('buildAvatarResponse serves the same image after migrating an inline avatar to a local source', () => {
+  const ws = createTempWorkspace('piclaw-avatar-local-migration-');
+  try {
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAEklEQVQImWP4z8DwHxkzkC4AADxAH+HdRw9wAAAAAElFTkSuQmCC', 'base64');
+    const source = join(ws.workspace, 'assistant-source.png');
+    writeFileSync(source, png);
+    const script = `
+      const { buildAvatarResponse } = await import('./src/channels/web/media/avatar-service.js');
+      const source = ${JSON.stringify(source)};
+      const inline = 'data:image/png;base64,${png.toString('base64')}';
+      const request = new Request('https://example.com/avatar/agent');
+      const before = await buildAvatarResponse('agent', inline, request);
+      const after = await buildAvatarResponse('agent', source, request);
+      if (!before || !after) throw new Error('Avatar response missing');
+      const a = Buffer.from(await before.arrayBuffer());
+      const b = Buffer.from(await after.arrayBuffer());
+      console.log(JSON.stringify({ status: after.status, type: after.headers.get('Content-Type'), same: a.equals(b), original: b.equals(Buffer.from('${png.toString('base64')}', 'base64')) }));
+    `;
+    const result = spawnSync(process.execPath, ['-e', script], {
+      cwd: resolve(import.meta.dir, '..', '..', '..', '..'),
+      env: { ...process.env, PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data, PICLAW_DB_IN_MEMORY: '1' },
+      encoding: 'utf8',
+    });
+    expect(result.status).toBe(0);
+    // Avatar caching intentionally converts both sources to WebP.
+    expect(JSON.parse(result.stdout.trim().split('\n').filter(Boolean).pop() || '{}')).toEqual({ status: 200, type: 'image/webp', same: true, original: false });
+  } finally {
+    ws.cleanup();
+  }
+});
