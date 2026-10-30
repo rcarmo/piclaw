@@ -3,7 +3,7 @@ import type { HostCodexModelServices } from "./host-codex-model-services.js";
 import { createLogger } from "../../src/utils/logger.js";
 import { taskModelRequestScope } from "./task-model-boundary-shim.js";
 import { isPromise } from "node:util/types";
-import { classifyModelFailure, modelFailureDetail, type ModelFailure, type ModelFailurePhase } from "./host-model-failure.js";
+import { classifyModelFailure, modelFailureDetail, parseModelFailure, type ModelFailure, type ModelFailurePhase } from "./host-model-failure.js";
 import type { ModelFailureEvidence } from "./host-model-failure-evidence.js";
 const log = createLogger("durable.models");
 import {
@@ -37,10 +37,14 @@ export interface HostModelPolicy {
   retainFailure?(evidence: ModelFailureEvidence): string | Promise<string>;
   prepareRequest?(model: Model<Api>, options: SimpleStreamOptions | undefined, signal: AbortSignal): Promise<{
     readonly id?: string;
+    /** Exact verified prior terminal; no transport or observer replay. */
+    readonly recoveredTerminal?: AssistantMessage;
     /** Owner-lifetime retention only; supplies no permission for later effects. */
     retainTerminal(message: AssistantMessage): Promise<unknown>;
     dispatch(): Promise<void>; settle(message: AssistantMessage): Promise<void>; abandon(): Promise<void>;
   } | undefined>;
+  /** Current source/model approval for an exact stored fact; grants no spend. */
+  assertStoredOutcomeCurrent?(ref: ModelRef, signal: AbortSignal): void;
   /** Includes host model approval and budget admission; never auth/login approval. */
   authorize(ref: ModelRef, kind: Operation, signal: AbortSignal): Promise<void>;
   /** Synchronous approval/budget-generation check after host auth has resolved. */
@@ -311,6 +315,30 @@ export function createHostModels(
         signal.throwIfAborted();
         phase = "admission";
         if (policy.prepareRequest) request = await policy.prepareRequest(model, { ...safeOptions, signal: options?.signal }, signal);
+        if (request?.recoveredTerminal) {
+          phase = 'source';
+          captureTerminalUsage(request.recoveredTerminal);
+          if (request.recoveredTerminal.stopReason === 'error' || request.recoveredTerminal.stopReason === 'aborted')
+            providerFailure = parseModelFailure(request.recoveredTerminal.errorMessage);
+          const guard = policy.assertStoredOutcomeCurrent;
+          if (!guard) throw Error('Stored model outcome authority unavailable');
+          const checkStored = () => {
+            phase = 'source'; signal.throwIfAborted(); assertSource();
+            const checked: unknown = guard.call(policy, ref, signal);
+            if (checked !== undefined) {
+              if (isPromise(checked)) void Promise.prototype.catch.call(checked, () => {});
+              throw TypeError('Stored model outcome authority must be synchronous');
+            }
+            assertEventCurrent(); phase = 'source';
+          };
+          checkStored();
+          const result = projectMessage(request.recoveredTerminal, model);
+          checkStored();
+          if (result.stopReason === 'error' || result.stopReason === 'aborted') output.push({ type: 'error', reason: result.stopReason, error: result });
+          else if (result.stopReason === 'stop' || result.stopReason === 'length' || result.stopReason === 'toolUse') output.push({ type: 'done', reason: result.stopReason, message: result });
+          else throw Error('Stored model outcome is not terminal');
+          output.end(result); return;
+        }
         await policy.authorize(ref, "chat", signal);
         signal.throwIfAborted();
         assertSource();

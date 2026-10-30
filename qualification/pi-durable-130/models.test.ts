@@ -13,6 +13,7 @@ import type { Models, ImageModel, ClassifierModel, Api, ImageApi, ClassifierApi,
 import { createHostModels, type HostModelPolicy } from "../../runtime/durable-engine/src/index.js";
 import { modelFailureDetail, parseModelFailure } from "../../runtime/durable-engine/src/host-model-failure.js";
 import type { HostModelEventObserver } from "../../runtime/durable-engine/src/host-models.js";
+import { HostCodexModelServices } from '../../runtime/durable-engine/src/host-codex-model-services.js';
 import { addLogSink, removeLogSink, type LogRecord } from "../../runtime/src/utils/logger.js";
 
 // These ESM-only public exports have no require condition; resolve from root.
@@ -199,6 +200,70 @@ async function fixture(multimodal = false, keyless = false, deferred = false, im
 }
 const context = { messages: [{ role: "user" as const, content: "fixture", timestamp: 1 }],
   tools: [{ name: "fixture_tool", description: "fixture", parameters: { type: "object" as const } }] };
+
+async function storedOutcomeFixture(failed = false) {
+  const f = await fixture();
+  // Provider registration schedules its initial credential availability refresh.
+  // Measure request-time access separately from construction of the host runtime.
+  await Bun.sleep(0); f.requested.length = 0;
+  const stored: AssistantMessage = structuredClone(f.message);
+  if (failed) {
+    stored.stopReason = 'error'; stored.content = [];
+    stored.errorMessage = modelFailureDetail({ phase: 'provider', category: 'transport' });
+  }
+  const calls = { source: 0, current: 0, event: 0, observer: 0, authorize: 0, codex: 0, retain: 0, dispatch: 0, settle: 0, abandon: 0 };
+  f.policy.captureSourceGuard = () => () => { calls.source++; };
+  f.policy.assertStoredOutcomeCurrent = (owner, signal) => { expect(owner).toEqual(ref); signal.throwIfAborted(); calls.current++; };
+  f.policy.authorize = async () => { calls.authorize++; throw Error('Stored outcome must not request new spend'); };
+  f.policy.codex = new HostCodexModelServices({
+    async capture() { calls.codex++; throw Error('Stored outcome must not enter Codex conversion'); },
+    assertAccount() { throw Error('Unused Codex account'); }, routingScope() { throw Error('Unused Codex routing'); },
+    async observe() { throw Error('Unused Codex output'); }, async flush() { throw Error('Unused Codex flush'); },
+  }, { createNativeCodexHooks() { throw Error('Unused Codex hooks'); } });
+  f.observe(() => { calls.observer++; }); f.eventAuthority(() => { calls.event++; });
+  f.policy.prepareRequest = async () => ({ id: 'exact-receipt', recoveredTerminal: stored,
+    async retainTerminal() { calls.retain++; }, async dispatch() { calls.dispatch++; },
+    async settle() { calls.settle++; }, async abandon() { calls.abandon++; } });
+  return { ...f, stored, recoveredCalls: calls };
+}
+
+for (const method of ['stream', 'streamSimple', 'complete', 'completeSimple'] as const) for (const failed of [false, true]) {
+  test(`${method}: exact stored outcome bypasses auth, transport, Codex and historical callbacks; failed=${failed}`, async () => {
+    const f = await storedOutcomeFixture(failed); f.exhaust();
+    const before = JSON.stringify(f.stored), events: string[] = [];
+    const value = f.models[method](f.model, context);
+    if ('result' in value) for await (const event of value) events.push(event.type);
+    const result = 'result' in value ? await value.result() : await value;
+    expect(result).toEqual(f.stored); expect(JSON.stringify(f.stored)).toBe(before);
+    expect(result).not.toBe(f.stored); expect(result.content).not.toBe(f.stored.content);
+    if (failed) expect(parseModelFailure(result.errorMessage)).toEqual({ phase: 'provider', category: 'transport' });
+    expect(f.recoveredCalls).toEqual({ source: 3, current: 2, event: 2, observer: 0, authorize: 0, codex: 0, retain: 0, dispatch: 0, settle: 0, abandon: 0 });
+    expect(f.calls()).toBe(0); expect(f.requested).toEqual([]);
+    if ('result' in value) expect(events).toEqual([failed ? 'error' : 'done']);
+  });
+}
+
+for (const failed of [false, true]) for (const denial of ['missing', 'async', 'current', 'source', 'event', 'late-event', 'cancel'] as const) {
+  test(`stored outcome still requires current synchronous source/model/event authority; denial=${denial}, failed=${failed}`, async () => {
+    const f = await storedOutcomeFixture(failed);
+    if (denial === 'missing') f.policy.assertStoredOutcomeCurrent = undefined;
+    if (denial === 'async') f.policy.assertStoredOutcomeCurrent = async () => { throw Error(token); };
+    if (denial === 'current') f.policy.assertStoredOutcomeCurrent = () => { throw Error(token); };
+    if (denial === 'source') f.policy.captureSourceGuard = () => () => { if (++f.recoveredCalls.source === 2) throw Error(token); };
+    if (denial === 'event' || denial === 'late-event') f.eventAuthority(() => { if (++f.recoveredCalls.event === (denial === 'event' ? 1 : 2)) throw Error(token); });
+    if (denial === 'cancel') {
+      const prepare = f.policy.prepareRequest!;
+      f.policy.prepareRequest = async (...args) => { const result = await prepare(...args); f.abort(); return result; };
+    }
+    const result = await f.models.completeSimple(f.model, context); await Bun.sleep(0);
+    expect(result.stopReason).toBe('error'); expect(result.content).toEqual([]);
+    expect(parseModelFailure(result.errorMessage)).toEqual({ phase: 'source', category: failed ? 'transport' : denial === 'cancel' ? 'aborted' : 'unknown' });
+    expect(result.usage).toEqual(f.stored.usage); expect(JSON.stringify(result)).not.toContain(token);
+    expect(f.calls()).toBe(0); expect(f.requested).toEqual([]);
+    expect(f.recoveredCalls.authorize + f.recoveredCalls.codex + f.recoveredCalls.observer + f.recoveredCalls.dispatch + f.recoveredCalls.retain + f.recoveredCalls.settle).toBe(0);
+    expect(f.recoveredCalls.abandon).toBe(1);
+  });
+}
 
 for (const method of ["stream", "streamSimple", "complete", "completeSimple"] as const) {
   test(`${method}: delegates actual host runtime; preserves JSON tool/thinking/options`, async () => {

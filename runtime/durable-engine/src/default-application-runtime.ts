@@ -48,7 +48,7 @@ import { buildDreamPrompt } from '../../src/agent-memory/dream-prompt.js';
 import { getBudgetWorkContext } from '../../src/budget/context.js';
 import type { NativeDreamRequest,AgentOutput } from '../../src/agent-pool/contracts.js';
 import { getBudgetWork,ensureBudgetWork,setBudgetWorkStatus } from '../../src/db/budget-limits.js';
-import { BudgetRequestError } from '../../src/db/budget-request-reservations.js';
+import { BudgetRequestError, type BudgetModelInvocation } from '../../src/db/budget-request-reservations.js';
 import { reserveHostRequest, reconcileOperationBudgetWork, completeMaintenanceBudgetWork,operationBudgetWorkId } from "./host-request-accounting.js";
 import { createHostMcp } from "./host-mcp.js";
 import { createHostFetch } from "./host-fetch.js";
@@ -881,6 +881,12 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     async prepareRequest(model, options, signal) {
       const scope = taskModelRequestScope(options?.signal);
       if (!scope) throw Error("Native request task scope unavailable");
+      const invocation = (operationId: string): BudgetModelInvocation => {
+        if (!scope.checkpointHash || !(scope.taskKind === 'pi.generation' && scope.phase === 'request'
+          || scope.taskKind === 'pi.compaction' && scope.phase === 'summarize')) throw Error('Native request checkpoint identity unavailable');
+        return { version: 1, domain: mapping.domain, operationId, conversationId: scope.conversationId, taskId: scope.taskId,
+          taskKind: scope.taskKind, phase: scope.phase, checkpointHash: scope.checkpointHash };
+      };
       if (scope.taskKind === "pi.compaction") {
         const identity = maintenanceRequests.get(scope.signal);
         if (!identity) throw Error("Compaction request source capture unavailable");
@@ -888,10 +894,10 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         if(identity.background){
           const {input,policy}=identity.background;assertNativeBackgroundModel(policy,model);
           const reservation=await reserveHostRequest({database:root,terminalOwner,operationId:input.operationId,chatJid:input.chatJid,authPath:join(getPiclawAgentDir(),'auth.json'),model:model as any,maxTokens:options?.maxTokens,
-            executionKind:'background',backgroundPolicy:policy,usageSource:'compaction',signal,assertCurrent(){assert();identity.assertCurrent();}});
+            executionKind:'background',backgroundPolicy:policy,modelInvocation:invocation(input.operationId),usageSource:'compaction',signal,assertCurrent(){assert();identity.assertCurrent();}});
           backgroundRequests.set(signal,{accounted:reservation!==undefined,assertCurrent:identity.assertCurrent});return reservation;
         }
-        return reserveHostRequest({ database: root, terminalOwner, operationId: identity.workId, maintenanceWorkId: identity.workId,
+        return reserveHostRequest({ database: root, terminalOwner, operationId: identity.workId, modelInvocation: invocation(identity.workId), maintenanceWorkId: identity.workId,
           chatJid: identity.chatJid, authPath: join(getPiclawAgentDir(), "auth.json"), model: model as any,
           maxTokens: options?.maxTokens, executionKind: "side_prompt", signal,
           assertCurrent() { assert(); identity.assertCurrent(); } });
@@ -905,10 +911,13 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       const reservation=await reserveHostRequest({ database: root, terminalOwner, operationId: captured.operation.operationId,
         chatJid: captured.operation.chatJid, authPath: join(getPiclawAgentDir(), "auth.json"), model: model as any,
         maxTokens: options?.maxTokens, executionKind: captured.delegateModel ? "delegate" : scheduled ? "scheduled" : background ? 'background' : "interactive",
-        backgroundPolicy:background,scheduledTaskId: scheduled?.task_id, signal,
+        backgroundPolicy:background,modelInvocation:invocation(captured.operation.operationId),scheduledTaskId: scheduled?.task_id, signal,
         assertCurrent() { assert(); scope.signal.throwIfAborted(); runtime().assertCapturedSourceCurrent(captured.inputs); if (captured.delegateModel) assertDelegateModel(captured.delegateModel); } });
       if(background)backgroundRequests.set(signal,{accounted:reservation!==undefined,assertCurrent:()=>runtime().assertCapturedSourceCurrent(captured.inputs)});
       return reservation;
+    },
+    assertStoredOutcomeCurrent(model, signal) {
+      backgroundRequests.get(signal)?.assertCurrent(); check(model, signal, true);
     },
     async authorize(model, _kind, signal) { checkRequest(model, signal); }, assertCurrent(model, _kind, signal) { checkRequest(model, signal); } });
   regretsDecision = (captured, authority) => createHostRegretsAccountedDecision({

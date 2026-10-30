@@ -6,9 +6,10 @@ import { admitSqliteWrite } from "../../src/db/sqlite-async-admission.js";
 import { boundHostRequestCost } from "../../src/budget/request-cost-bound.js";
 import { ensureBudgetWork, getBudgetWork, setBudgetWorkStatus } from "../../src/db/budget-limits.js";
 import { readStoredProviderUsageAccountRef } from "../../src/agent-pool/provider-usage.js";
-import { abandonBudgetRequest,BudgetRequestError,getBudgetRequest,readBudgetTerminalReceipt,retainBudgetTerminalReceipt } from '../../src/db/budget-request-reservations.js';
+import { abandonBudgetRequest,BudgetRequestError,findBudgetRequestByModelInvocation,getBudgetRequest,readBudgetTerminalReceipt,retainBudgetTerminalReceipt,
+  type BudgetModelInvocation,type BudgetRequestBinding,type BudgetTerminalReceiptPayload } from '../../src/db/budget-request-reservations.js';
 import { getDb } from '../../src/db/connection.js';
-import { projectTerminalOutcome } from './host-terminal-outcome.js';
+import { projectTerminalOutcome,decodeStoredTerminalOutcome } from './host-terminal-outcome.js';
 import { nativeBackgroundIdentity,nativeBackgroundPolicyHash,readNativeBackgroundPolicy,type NativeBackgroundPolicy } from '../../src/agent-pool/background-operation-contract.js';
 
 export const operationBudgetWorkId = (operationId: string) => `durable-operation:${operationId}`;
@@ -53,13 +54,15 @@ export async function reconcileOperationBudgetWork(database: Database, operation
 
 /** Stored-identity host model requests. Exact background input policy supports
  * capped reservations; other native paths retain their existing cap denial.
- * One fresh request ID per actual invocation, including a recovery resend. A
- * dispatched unknown outcome retains its old hold; it is never called free.
+ * SDK checkpoint identity reuses an exact stored outcome or definitely-unsent
+ * binding. An unknown dispatched send remains held and cannot be resent.
  */
 export async function reserveHostRequest(options: {
   database: Database; operationId: string; chatJid: string; authPath: string;
   model: Model<Api>; maxTokens?: number; executionKind?: "interactive" | "delegate" | "scheduled" | "side_prompt" | "background"; scheduledTaskId?: string;
   backgroundPolicy?:NativeBackgroundPolicy;
+  /** Public running SDK checkpoint identity; caller/source guards remain required. */
+  modelInvocation?: BudgetModelInvocation;
   usageSource?:'compaction';
   maintenanceWorkId?: string; signal: AbortSignal; assertCurrent(): void;
   /** Database/lease lifetime only. Request cancellation cannot erase paid facts.
@@ -69,6 +72,15 @@ export async function reserveHostRequest(options: {
   const { database, model, signal, assertCurrent } = options;
   const originalOwner = options.terminalOwner;
   const capturedOwner = originalOwner && { signal: originalOwner.signal, assertCurrent: originalOwner.assertCurrent.bind(originalOwner) };
+  const terminalOwner = () => {
+    const owner = capturedOwner;
+    if (!owner) throw Error('Terminal receipt owner unavailable');
+    owner.signal.throwIfAborted(); owner.assertCurrent();
+    if (getDb() !== database) throw Error('Terminal receipt database binding changed');
+    return owner;
+  };
+  const modelInvocation = options.modelInvocation && structuredClone(options.modelInvocation);
+  if (modelInvocation && modelInvocation.operationId !== options.operationId) throw new BudgetRequestError('conflict');
   const background=options.backgroundPolicy&&readNativeBackgroundPolicy(options.backgroundPolicy);
   if((options.executionKind==='background')!==!!background)throw Error('Background request policy required');
   const operationWork = options.maintenanceWorkId ?? operationBudgetWorkId(options.operationId);
@@ -86,8 +98,13 @@ export async function reserveHostRequest(options: {
         .get(identity.operationId,identity.chatJid,identity.sourceId,identity.payloadRef,'application:background:'+nativeBackgroundPolicyHash(background)))throw Error('Background request ancestry or source changed');
   };
   assertCurrent();assertBackground(); signal.throwIfAborted();
+  const previous = modelInvocation ? findBudgetRequestByModelInvocation(modelInvocation, database) : null;
+  if (modelInvocation && !previous && database.query(`SELECT 1 FROM budget_work w JOIN budget_request_reservations r ON r.work_id=w.id
+    WHERE w.parent_work_id=? AND r.model_invocation_json IS NULL AND r.state IN ('reserved','dispatched','unresolved') LIMIT 1`).get(operationWork))
+    throw new BudgetRequestError('budget_denied'); // Old unknown holds have no exact attempt attribution.
   const accountRef = readStoredProviderUsageAccountRef(model.provider, options.authPath);
   if(!accountRef){
+    if (previous) throw new BudgetRequestError('conflict');
     if(background&&database.query('SELECT 1 FROM budget_caps WHERE enabled=1 LIMIT 1').get())throw new BudgetRequestError('budget_denied');
     return undefined;
   }
@@ -95,17 +112,21 @@ export async function reserveHostRequest(options: {
   // A smaller request hint is not proof that every provider enforces it. Fund
   // the full approved model output ceiling for this capped background port.
   const amount = background&&requested.amountMicros!==null?boundHostRequestCost(model,model.maxTokens):requested;
-  if(amount.amountMicros===null){
+  if(amount.amountMicros===null && !previous){
     if(background&&database.query('SELECT 1 FROM budget_caps WHERE enabled=1 LIMIT 1').get())throw new BudgetRequestError('budget_denied');
     return undefined;
   }
-  const id = randomUUID();
+  const id = previous?.id ?? randomUUID();
   const workId = `durable-request:${id}`;
+  if (previous && (previous.work_id !== workId || previous.chat_jid !== options.chatJid || previous.provider_id !== model.provider
+    || previous.model_id !== model.id || previous.account_ref !== accountRef
+    || getBudgetWork(workId, database)?.parent_work_id !== operationWork
+    || previous.state === 'reserved' && previous.amount_microusd !== amount.amountMicros)) throw new BudgetRequestError('conflict');
   const current = () => {
     assertCurrent();assertBackground(); signal.throwIfAborted();
     if (readStoredProviderUsageAccountRef(model.provider, options.authPath) !== accountRef) throw Error("Native request account changed");
   };
-  await admitSqliteWrite(database, () => {
+  if (!previous) await admitSqliteWrite(database, () => {
     const sidePrompt = database.query(`SELECT 1 FROM service_effect_s01_operations o
       JOIN service_effect_s01_sources s ON s.chat_jid=o.chat_jid AND s.source_seq=o.primary_source_seq
       WHERE o.operation_id=? AND o.chat_jid=? AND s.kind='internal' AND s.source_id LIKE 'side-prompt:%'`).get(options.operationId, options.chatJid);
@@ -115,13 +136,14 @@ export async function reserveHostRequest(options: {
     ensureBudgetWork({ id: workId, chatJid: options.chatJid, executionKind: options.executionKind === "delegate" ? "delegate" : sidePrompt ? "side_prompt" : options.executionKind ?? "interactive", parentWorkId: operationWork }, database);
   }, current, signal);
   const accounting = modelRequestAccounting({ authorise: current, documentedFree: false, usageSource: options.usageSource ?? (options.maintenanceWorkId ? "compaction" : "assistant") }, database);
-  const binding = { id, workId, chatJid: options.chatJid, providerId: model.provider, modelId: model.id, accountRef, amountMicros: amount.amountMicros };
+  const binding: BudgetRequestBinding = { id, workId, chatJid: options.chatJid, providerId: model.provider, modelId: model.id, accountRef,
+    amountMicros: previous ? previous.amount_microusd : amount.amountMicros, ...(modelInvocation ? { modelInvocation } : {}) };
   let dispatchStarted = false;
   let terminalReceivedAt: string | undefined;
   const terminalPhysical = Object.freeze({ provider: binding.providerId, id: binding.modelId, api: model.api });
   // A rejected reservation may have committed before an ACK/storage failure.
   // Keep work active; never retire authority needed to reconcile that hold.
-  try{await accounting.reserve(binding, signal);}
+  try{if (!previous) await accounting.reserve(binding, signal);}
   catch(error){
     if(background&&error instanceof BudgetRequestError&&error.code==='budget_denied'){
       try{await admitSqliteWrite(database,()=>{if(!getBudgetRequest(binding.id,database))setBudgetWorkStatus(workId,'stopped',{boundary:'request_budget_blocked'},database);});}
@@ -129,13 +151,18 @@ export async function reserveHostRequest(options: {
     }
     throw error;
   }
-  const terminalOwner = () => {
-    const owner = capturedOwner;
-    if (!owner) throw Error('Terminal receipt owner unavailable');
-    owner.signal.throwIfAborted(); owner.assertCurrent();
-    if (getDb() !== database) throw Error('Terminal receipt database binding changed');
-    return owner;
-  };
+  let recoveredTerminal: AssistantMessage | undefined;
+  if (previous) {
+    const receipt = readBudgetTerminalReceipt(binding, database);
+    if (receipt) {
+      const payload = JSON.parse(receipt.bodyJson) as BudgetTerminalReceiptPayload; // Bound canonical envelope verified above.
+      const decoded = decodeStoredTerminalOutcome(JSON.stringify(payload.projectedOutcome), terminalPhysical);
+      const settled = await accounting.settleRetainedRequest(binding, terminalOwner());
+      if (settled.state !== 'settled') throw new BudgetRequestError('budget_denied');
+      current();
+      recoveredTerminal = JSON.parse(JSON.stringify(decoded)) as AssistantMessage; // Validated JSON crosses SDK families.
+    } else if (previous.state !== 'reserved') throw new BudgetRequestError('budget_denied');
+  }
   // One detached safe receipt precedes the atomic charge/work transition. The
   // database/lease owner outlives caller/source cancellation until close joins.
   const retainTerminal = async (message: AssistantMessage) => {
@@ -153,8 +180,9 @@ export async function reserveHostRequest(options: {
       { database, signal: owner.signal, assertCurrent: check });
   };
   return {
-    id: binding.id, retainTerminal,
+    id: binding.id, retainTerminal, recoveredTerminal,
     async dispatch() {
+      if (recoveredTerminal) throw new BudgetRequestError('invalid_state');
       terminalOwner(); current();
       if (dispatchStarted) throw Error("Native request already dispatched");
       dispatchStarted = true;

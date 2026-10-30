@@ -6,7 +6,7 @@ import { projectTerminalOutcome, decodeStoredTerminalOutcome } from "../../runti
 import { parseModelFailure } from "../../runtime/durable-engine/src/host-model-failure.js";
 import { reserveHostRequest } from "../../runtime/durable-engine/src/host-request-accounting.js";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
-import { getBudgetRequest } from "../../runtime/src/db/budget-request-reservations.js";
+import { getBudgetRequest, type BudgetModelInvocation } from "../../runtime/src/db/budget-request-reservations.js";
 import { writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { Api, Model } from "../../runtime/src/durable-legacy-sdk.js";
@@ -252,8 +252,9 @@ test("cycles, lossy JSON, exotic objects and deep tool arguments reject before s
 async function reservedTerminal(body: (fixture: {
   request: NonNullable<Awaited<ReturnType<typeof reserveHostRequest>>>;
   database: ReturnType<typeof getDb>; caller: AbortController; owner: AbortController;
-  revokeSource(): void; sourceChecks(): number; terminal: AssistantMessage;
-}) => Promise<void>, withOwner = true, file = false) {
+  revokeSource(): void; sourceChecks(): number; terminal: AssistantMessage; model: Model<Api>; authPath: string;
+  prepareAgain(changes?: Partial<Parameters<typeof reserveHostRequest>[0]>): ReturnType<typeof reserveHostRequest>;
+}) => Promise<void>, withOwner = true, file = false, settings: { modelInvocation?: BudgetModelInvocation; dispatch?: boolean } = {}) {
   const workspace = createTempWorkspace('host-terminal-integration-');
   const restore = setEnv({ PICLAW_WORKSPACE: workspace.workspace, PICLAW_STORE: workspace.store, PICLAW_DATA: workspace.data });
   const previousMemory = process.env.PICLAW_DB_IN_MEMORY;
@@ -272,19 +273,86 @@ async function reservedTerminal(body: (fixture: {
     const model: Model<Api> = { provider: "openai-codex", id: physical.id, api: physical.api, name: "synthetic",
       baseUrl: "https://fixture.invalid", input: ["text"], reasoning: true, contextWindow: 1000, maxTokens: 100,
       cost: { input: 1, output: 1, cacheRead: 1, cacheWrite: 1 } };
-    const request = await reserveHostRequest({ database, operationId: "terminal-fixture-operation", chatJid: "web:terminal-fixture", authPath, model,
+    const options: Parameters<typeof reserveHostRequest>[0] = { database, operationId: "terminal-fixture-operation", chatJid: "web:terminal-fixture", authPath, model,
+      modelInvocation: settings.modelInvocation,
       signal: caller.signal, assertCurrent() { checks++; caller.signal.throwIfAborted(); if (!source) throw Error("source revoked"); },
-      terminalOwner: withOwner ? { signal: owner.signal, assertCurrent() { owner.signal.throwIfAborted(); } } : undefined });
+      terminalOwner: withOwner ? { signal: owner.signal, assertCurrent() { owner.signal.throwIfAborted(); } } : undefined };
+    const request = await reserveHostRequest(options);
     if (!request) throw Error("synthetic reservation unavailable");
-    if (withOwner) await request.dispatch();
+    if (withOwner && settings.dispatch !== false) await request.dispatch();
     const terminal = { ...reportingMessage(), provider: model.provider, responseModel: `${model.provider}/${model.id}` };
-    await body({ request, database, caller, owner, terminal, revokeSource() { source = false; }, sourceChecks() { return checks; } });
+    await body({ request, database, caller, owner, terminal, model, authPath,
+      prepareAgain(changes = {}) {
+        const signal = changes.signal ?? new AbortController().signal;
+        return reserveHostRequest({ ...options, signal,
+          assertCurrent() { checks++; signal.throwIfAborted(); if (!source) throw Error('source revoked'); }, ...changes });
+      },
+      revokeSource() { source = false; }, sourceChecks() { return checks; } });
   } finally {
     owner.abort(); caller.abort(); closeDatabase(); rmSync(authPath, { force: true });
     if (previousMemory === undefined) delete process.env.PICLAW_DB_IN_MEMORY; else process.env.PICLAW_DB_IN_MEMORY = previousMemory;
     restore(); workspace.cleanup();
   }
 }
+
+const invocation = (): BudgetModelInvocation => ({ version: 1, domain: 'owned-recovery-contract', operationId: 'terminal-fixture-operation',
+  conversationId: 1, taskId: 2, taskKind: 'pi.generation', phase: 'request', checkpointHash: 'a'.repeat(64) });
+
+test('native logical invocation reuses an exact retained terminal and charge identity without a new reservation', () => reservedTerminal(async f => {
+  const receipt = await f.request.retainTerminal(f.terminal);
+  const works = f.database.query('SELECT id FROM budget_work ORDER BY id').all(); f.caller.abort();
+  const recovered = await f.prepareAgain();
+  expect(recovered?.id).toBe(f.request.id); expect(recovered?.recoveredTerminal).toEqual(JSON.parse(receipt.bodyJson).projectedOutcome);
+  expect(f.database.query('SELECT count(*) n FROM budget_request_reservations').get()).toEqual({ n: 1 });
+  expect(f.database.query('SELECT id FROM budget_work ORDER BY id').all()).toEqual(works);
+  expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 1 });
+  await expect(recovered!.dispatch()).rejects.toThrow('invalid_state');
+  const row = getBudgetRequest(f.request.id, f.database); await f.prepareAgain();
+  expect(getBudgetRequest(f.request.id, f.database)).toEqual(row);
+  expect(f.database.query('SELECT count(*) n FROM budget_usage_events').get()).toEqual({ n: 1 });
+}, true, false, { modelInvocation: invocation() }));
+
+test('native stored outcome preserves old price, receipt time and original bounded provider classification', () => reservedTerminal(async f => {
+  f.terminal.stopReason = 'error'; f.terminal.errorMessage = 'ECONNRESET ' + secret;
+  await f.request.settle(f.terminal);
+  const before = getBudgetRequest(f.request.id, f.database), charges = f.database.query('SELECT * FROM budget_usage_events').all();
+  const recovered = await f.prepareAgain({ model: { ...f.model, maxTokens: 200, cost: { input: 100, output: 100, cacheRead: 0, cacheWrite: 0 } } });
+  expect(recovered?.id).toBe(f.request.id); expect(parseModelFailure(recovered?.recoveredTerminal?.errorMessage)).toEqual({ phase: 'provider', category: 'transport' });
+  expect(JSON.stringify(recovered?.recoveredTerminal)).not.toContain(secret);
+  expect(getBudgetRequest(f.request.id, f.database)).toEqual(before); expect(f.database.query('SELECT * FROM budget_usage_events').all()).toEqual(charges);
+}, true, false, { modelInvocation: invocation() }));
+
+test('native definitely-unsent logical invocation reuses its exact reserved binding and dispatches once', () => reservedTerminal(async f => {
+  const before = getBudgetRequest(f.request.id, f.database), recovered = await f.prepareAgain();
+  expect(recovered?.id).toBe(f.request.id); expect(recovered?.recoveredTerminal).toBeUndefined();
+  expect(getBudgetRequest(f.request.id, f.database)).toEqual(before);
+  await recovered!.dispatch(); expect(getBudgetRequest(f.request.id, f.database)?.state).toBe('dispatched');
+  await expect(f.request.dispatch()).rejects.toThrow('invalid_state');
+  expect(f.database.query('SELECT count(*) n FROM budget_request_reservations').get()).toEqual({ n: 1 });
+}, true, false, { modelInvocation: invocation(), dispatch: false }));
+
+for (const released of [false, true]) test(`native consumed or unknown logical invocation cannot create another paid send; released=${released}`, () => reservedTerminal(async f => {
+  if (released) await f.request.abandon();
+  const before = getBudgetRequest(f.request.id, f.database), works = f.database.query('SELECT * FROM budget_work ORDER BY id').all();
+  await expect(f.prepareAgain()).rejects.toThrow('budget_denied');
+  expect(getBudgetRequest(f.request.id, f.database)).toEqual(before); expect(f.database.query('SELECT * FROM budget_work ORDER BY id').all()).toEqual(works);
+  expect(f.database.query('SELECT count(*) n FROM budget_request_reservations').get()).toEqual({ n: 1 });
+}, true, false, { modelInvocation: invocation(), dispatch: !released }));
+
+for (const account of ['changed', 'removed']) test(`native existing invocation never falls through to a fresh or unaccounted send when account is ${account}`, () => reservedTerminal(async f => {
+  await f.request.retainTerminal(f.terminal); const before = getBudgetRequest(f.request.id, f.database);
+  writeFileSync(f.authPath, JSON.stringify(account === 'removed' ? {} : { 'openai-codex': { type: 'oauth', access: 'synthetic', refresh: 'synthetic', accountId: 'changed-fixture', expires: Date.now() + 60000 } }));
+  await expect(f.prepareAgain()).rejects.toThrow('conflict'); expect(getBudgetRequest(f.request.id, f.database)).toEqual(before);
+  expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
+  expect(f.database.query('SELECT count(*) n FROM budget_request_reservations').get()).toEqual({ n: 1 });
+}, true, false, { modelInvocation: invocation() }));
+
+test('native legacy hold without exact attempt attribution is preserved and blocks a recovery resend', () => reservedTerminal(async f => {
+  await f.request.abandon(); const before = getBudgetRequest(f.request.id, f.database);
+  await expect(f.prepareAgain({ modelInvocation: invocation() })).rejects.toThrow('budget_denied');
+  expect(getBudgetRequest(f.request.id, f.database)).toEqual(before);
+  expect(f.database.query('SELECT count(*) n FROM budget_request_reservations').get()).toEqual({ n: 1 });
+}));
 
 test("actual native settlement retains safe evidence after caller/source cancellation and charges/completes once", () => reservedTerminal(async f => {
   const checks = f.sourceChecks(); f.caller.abort(); f.revokeSource();
