@@ -67,6 +67,24 @@ describe("Bun asynchronous database facade", () => {
     } finally { await db.close(); root.close(); }
   }));
 
+  test('a committed SDK transaction returns its result; a later owner denial cannot recast it as unapplied', () => disk(async path => {
+    const root = new Database(path); root.exec('PRAGMA journal_mode=WAL; CREATE TABLE sample(n INTEGER)');
+    const lost = Error('owner changed after durability');
+    let checksAfterCommit = 0, callbacks = 0;
+    const db = new BunSqliteDatabase(path, { root, fenceTransactions: true, assertOwner() {
+      if (root.query('SELECT 1 FROM sample WHERE n=1').get()) { checksAfterCommit++; throw lost; }
+    } });
+    try {
+      const committed = await db.transaction(async tx => { callbacks++; await tx.run('INSERT INTO sample VALUES (1)'); return 'original committed value'; });
+      expect(committed).toBe('original committed value'); expect(callbacks).toBe(1);
+      expect(root.query('SELECT n FROM sample').all()).toEqual([{ n: 1 }]);
+      expect(checksAfterCommit).toBe(0);
+      await expect(db.get('SELECT n FROM sample')).rejects.toBe(lost);
+      expect(checksAfterCommit).toBe(1); expect(callbacks).toBe(1);
+      expect(root.query('SELECT n FROM sample').all()).toEqual([{ n: 1 }]);
+    } finally { await db.close(); root.close(); }
+  }));
+
   test("async transaction isolates unrelated read/write/transaction and close drains", () => disk(async path => {
     const db = new BunSqliteDatabase(path);
     await db.exec("CREATE TABLE sample (n INTEGER)");

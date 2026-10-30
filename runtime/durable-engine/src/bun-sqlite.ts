@@ -171,7 +171,7 @@ export class BunSqliteDatabase implements SqliteDatabase {
           await new Promise(resolve => setTimeout(resolve, 25));
         }
       }
-      let phase: "callback" | "persist" | "closed" = "callback", committed = false;
+      let phase: "callback" | "persist" | "closed" = "callback";
       const executorFor = (expected: "callback" | "persist") => this.executor(() => {
         if (phase !== expected) throw new Error("SQLite transaction handle expired");
         if (this.guard?.fenceTransactions) this.guard.assertOwner();
@@ -192,11 +192,10 @@ export class BunSqliteDatabase implements SqliteDatabase {
         admission?.(); idle?.();
         if (this.guard?.fenceTransactions) this.guard.assertOwner();
         this.db.exec("COMMIT");
-        committed = true;
-        if (this.guard?.fenceTransactions) this.guard.assertOwner();
+        // No fallible observation after durability. The next queued operation
+        // still fences ownership before accessing SQL; never replay this body.
         return value;
       } catch (error) {
-        if (committed) throw error;
         // Explicit SQL, never Bun's synchronous transaction(callback) helper.
         try { this.db.exec("ROLLBACK"); }
         catch (rollbackError) {
