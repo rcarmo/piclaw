@@ -12,6 +12,7 @@ import type { Credential, CredentialStore, Model, TranscriptContext as HostTrans
 import type { Models, ImageModel, ClassifierModel, Api, ImageApi, ClassifierApi, SimpleStreamOptions } from "../../runtime/durable-engine/qualification/ai.ts";
 import { createHostModels, type HostModelPolicy } from "../../runtime/durable-engine/src/index.js";
 import { modelFailureDetail, parseModelFailure } from "../../runtime/durable-engine/src/host-model-failure.js";
+import type { HostModelEventObserver } from "../../runtime/durable-engine/src/host-models.js";
 import { addLogSink, removeLogSink, type LogRecord } from "../../runtime/src/utils/logger.js";
 
 // These ESM-only public exports have no require condition; resolve from root.
@@ -57,10 +58,11 @@ async function fixture(multimodal = false, keyless = false, deferred = false, im
     modelsStore: { read: async () => undefined, write: async () => {}, delete: async () => {} },
     allowModelNetwork: false, refreshOnCreate: false });
   const entered = barrier();
-  const held = barrier();
+  const held = barrier(), providerClosed = barrier();
   let hold = false;
   let fail = false;
   let calls = 0;
+  let finalDelta = false, resultOnly = false, heldProvider = false;
   let approved = true;
   let budget = true;
   let captured: any;
@@ -68,8 +70,10 @@ async function fixture(multimodal = false, keyless = false, deferred = false, im
   const admissions: string[] = [];
   let onFence = () => {};
   const generation = new AbortController();
+  let eventObserver: HostModelEventObserver["onEvent"] | undefined, eventGuard = () => {};
   const check = () => { if (!approved || !budget) throw new Error("Policy denied"); };
   const policy: HostModelPolicy = { signal: generation.signal,
+    captureEventObserver: () => eventObserver ? { assertCurrent() { return eventGuard(); }, onEvent(event) { return eventObserver!(event); } } : undefined,
     authorize: async (owner, kind) => { admissions.push(`${owner.provider}/${owner.id}/${kind}`); check(); }, assertCurrent: () => { check(); if (++checks === 2) onFence(); } };
   const message: AssistantMessage = { role: "assistant", api: model.api, provider: ref.provider,
     model: ref.id, thinkingLevel: "high", timestamp: Date.now(), stopReason: "toolUse",
@@ -99,6 +103,18 @@ async function fixture(multimodal = false, keyless = false, deferred = false, im
     calls++; captured = { owner, context, options };
     const stream = createAssistantMessageEventStream();
     const result = deferred ? { ...message, stopReason: "deferred" as const, deferred: privateHandle } : structuredClone(message);
+    if (finalDelta) stream.push({ type: "text_delta", contentIndex: 0, delta: "final delta", partial: result });
+    if (heldProvider) {
+      const signal = captured.options.signal;
+      if (!(signal instanceof AbortSignal)) throw Error("Synthetic provider signal required");
+      const cancelled = () => {
+        const aborted = { ...result, stopReason: "aborted" as const, errorMessage: "synthetic transport cancelled" };
+        stream.push({ type: "error", reason: "aborted", error: aborted }); stream.end(aborted); providerClosed.release();
+      };
+      signal.addEventListener("abort", cancelled, { once: true });
+      if (signal.aborted) cancelled();
+      return stream;
+    }
     if (terminalError && terminalError !== "retry-once" && terminalError !== "retry-always" || terminalError === "retry-once" && calls === 2 || terminalError === "retry-always" && calls >= 2) {
       const error: AssistantMessage = { ...message, content: [], stopReason: "error" as const, errorMessage: errorText,
         usage: { ...message.usage, cost: { input: 0.1, output: 0.2, cacheRead: 0, cacheWrite: 0, total: 0.3 } } };
@@ -106,11 +122,12 @@ async function fixture(multimodal = false, keyless = false, deferred = false, im
       if (terminalError === "invalid-usage") error.usage.cost.total = -1;
       if (terminalError === "wrong-owner") error.provider = "different-provider";
       if (terminalError === "wrong-response") error.responseModel = "different-model";
-      stream.push({ type: "error", reason: "error", error }); stream.end(error); return stream;
+      if (!resultOnly) stream.push({ type: "error", reason: "error", error });
+      stream.end(error); return stream;
     }
     if (terminalError === "retry-once" && calls >= 3) { result.stopReason = "stop"; result.content = [{ type: "text", text: "continued after retained failure" }]; }
     if (deferred) stream.push({ type: "start", partial: result });
-    stream.push({ type: "done", reason: result.stopReason as "toolUse" | "deferred", message: result });
+    if (!resultOnly) stream.push({ type: "done", reason: result.stopReason as "toolUse" | "deferred", message: result });
     stream.end(result);
     return stream;
   };
@@ -169,6 +186,12 @@ async function fixture(multimodal = false, keyless = false, deferred = false, im
     calls: () => calls, captured: () => captured,
     cleanup: () => { cleanup = true; }, denyOwner: () => { ownerAllowed = false; },
     hold: () => { hold = true; }, fail: () => { fail = true; },
+    finalDelta: () => { finalDelta = true; message.content.unshift({ type: "text", text: "final delta" }); },
+    resultOnly: () => { resultOnly = true; },
+    holdUntilAbort: () => { heldProvider = true; finalDelta = true; message.content.unshift({ type: "text", text: "final delta" }); },
+    providerClosed,
+    observe: (observer: HostModelEventObserver["onEvent"]) => { eventObserver = observer; },
+    eventAuthority: (check: () => void) => { eventGuard = check; },
     revoke: () => { approved = false; }, exhaust: () => { budget = false; },
     abort: () => generation.abort(), onFence: (fn: () => void) => { onFence = fn; } };
 }
@@ -740,6 +763,143 @@ test("accepted limitation: public transformHeaders is awaited, not an atomic dis
   // requires a public synchronous guard at provider invocation in host 1.2.
   expect(f.calls()).toBe(1);
   expect(f.captured().options.signal.aborted).toBe(true);
+});
+
+for (const method of ["stream", "streamSimple", "complete", "completeSimple"] as const) for (const failed of [false, true]) {
+  test(`${method}: optional observer failure on terminal preserves original outcome/accounting; providerError=${failed}`, async () => {
+    const f = await fixture(false, false, false, false, failed, `HTTP 504 timed out ${token}`);
+    const settlements: AssistantMessage[] = [], records: LogRecord[] = [];
+    let observers = 0;
+    f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle(message) { settlements.push(structuredClone(message)); }, async abandon() {} });
+    f.observe(() => { observers++; throw Error(token); });
+    const sink = (record: LogRecord) => { records.push(record); }; addLogSink(sink);
+    try {
+      const value = f.models[method](f.model, context);
+      const result = "result" in value ? await value.result() : await value;
+      expect(result.stopReason).toBe(failed ? "error" : "toolUse");
+      expect(settlements).toHaveLength(1);
+      expect(result.usage).toEqual(settlements[0]!.usage);
+      if (failed) expect(parseModelFailure(result.errorMessage)).toEqual({ phase: "provider", category: "timeout", httpStatus: 504 });
+      else expect(result.content).toEqual(f.message.content);
+      expect(observers).toBe(1); expect(f.calls()).toBe(1);
+      expect(records.filter(record => record.operation === "durable_model.observer_failed")).toHaveLength(1);
+      expect(JSON.stringify([result, records])).not.toContain(token);
+    } finally { removeLogSink(sink); }
+  });
+}
+
+test("optional observer failure on final delta detaches while provider terminal still settles once", async () => {
+  const f = await fixture(); f.finalDelta();
+  let observers = 0, settlements = 0;
+  f.observe(() => { observers++; throw Error(token); });
+  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle() { settlements++; }, async abandon() {} });
+  const result = await f.models.completeSimple(f.model, context);
+  expect(result.stopReason).toBe("toolUse"); expect(result.content).toEqual(f.message.content);
+  expect(result.usage).toEqual(f.message.usage);
+  expect(observers).toBe(1); expect(settlements).toBe(1); expect(f.calls()).toBe(1);
+  expect(f.captured().options.signal.aborted).toBe(false);
+});
+
+test("optional observer mutations never change provider terminal or accounting evidence", async () => {
+  const f = await fixture(); f.finalDelta();
+  let settled: AssistantMessage | undefined;
+  f.observe(event => {
+    if ("partial" in event) { event.partial.usage.input = 999; event.partial.content.length = 0; }
+    if (event.type === "done") { event.message.usage.input = 999; event.message.content.length = 0; }
+  });
+  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle(message) { settled = structuredClone(message); }, async abandon() {} });
+  const result = await f.models.completeSimple(f.model, context);
+  expect(result.content).toEqual(f.message.content); expect(result.usage).toEqual(f.message.usage);
+  expect(settled?.content).toEqual(f.message.content); expect(settled?.usage).toEqual(f.message.usage);
+  expect(f.calls()).toBe(1);
+});
+
+test("ordinary synchronous observer return values do not detach notification", async () => {
+  const f = await fixture(); f.finalDelta(); const seen: string[] = [];
+  f.observe(event => seen.push(event.type));
+  const result = await f.models.completeSimple(f.model, context);
+  expect(result.stopReason).toBe("toolUse"); expect(result.content).toEqual(f.message.content);
+  expect(seen).toEqual(["text_delta", "done"]); expect(f.calls()).toBe(1);
+});
+
+test("rejected asynchronous observer cannot poison result publication or produce unhandled rejection", async () => {
+  const f = await fixture();
+  f.observe(async () => { throw Error(token); });
+  const result = await f.models.completeSimple(f.model, context); await Bun.sleep(0);
+  expect(result.stopReason).toBe("toolUse"); expect(result.content).toEqual(f.message.content);
+  expect(result.usage).toEqual(f.message.usage); expect(f.calls()).toBe(1);
+});
+
+test("mandatory event authority failure remains fatal and keeps original terminal usage", async () => {
+  const f = await fixture(); let observers = 0, settlements = 0;
+  f.eventAuthority(() => { throw Error(token); });
+  f.observe(() => { observers++; });
+  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle() { settlements++; }, async abandon() {} });
+  const result = await f.models.completeSimple(f.model, context);
+  expect(result.stopReason).toBe("error"); expect(parseModelFailure(result.errorMessage)?.phase).toBe("source");
+  expect(result.usage).toEqual(f.message.usage);
+  expect(observers).toBe(0); expect(settlements).toBe(0); expect(f.calls()).toBe(1);
+  expect(JSON.stringify(result)).not.toContain(token);
+});
+
+test("terminal projection failure cannot erase validated original usage", async () => {
+  const f = await fixture(); Object.assign(f.message, { unsupportedProviderMetadata: new Date() });
+  const result = await f.models.completeSimple(f.model, context);
+  expect(result.stopReason).toBe("error");
+  expect(result.usage).toEqual(f.message.usage);
+  expect(parseModelFailure(result.errorMessage)?.phase).toBe("conversion");
+  expect(f.calls()).toBe(1);
+});
+
+test("provider error facts survive a simultaneous mandatory observer authority failure", async () => {
+  const f = await fixture(false, false, false, false, true, `HTTP 504 timed out ${token}`);
+  f.eventAuthority(() => { throw Error("source authority revoked"); }); f.observe(() => {});
+  const result = await f.models.completeSimple(f.model, context);
+  expect(result.stopReason).toBe("error");
+  expect(parseModelFailure(result.errorMessage)).toEqual({ phase: "source", category: "timeout", httpStatus: 504 });
+  expect(result.usage.cost.total).toBe(0.3); expect(f.calls()).toBe(1);
+  expect(JSON.stringify(result)).not.toContain(token);
+});
+
+test("result-only provider error is classified before the mandatory post-result fence", async () => {
+  const f = await fixture(false, false, false, false, true, `HTTP 504 timed out ${token}`); f.resultOnly();
+  let observers = 0;
+  f.eventAuthority(() => { throw Error("result authority revoked"); }); f.observe(() => { observers++; });
+  const result = await f.models.completeSimple(f.model, context);
+  expect(result.stopReason).toBe("error");
+  expect(parseModelFailure(result.errorMessage)).toEqual({ phase: "source", category: "timeout", httpStatus: 504 });
+  expect(result.usage.cost.total).toBe(0.3); expect(observers).toBe(0); expect(f.calls()).toBe(1);
+});
+
+test("nonterminal authority failure aborts and joins the actual provider result without replay", async () => {
+  const f = await fixture(); f.holdUntilAbort(); let observers = 0;
+  f.eventAuthority(() => { throw Error("stream authority revoked"); }); f.observe(() => { observers++; });
+  try {
+    const result = await bounded(f.models.completeSimple(f.model, context));
+    await bounded(f.providerClosed.promise);
+    expect(f.captured().options.signal.aborted).toBe(true);
+    expect(result.stopReason).toBe("error"); expect(parseModelFailure(result.errorMessage)?.phase).toBe("source");
+    expect(result.usage).toEqual(f.message.usage); expect(observers).toBe(0); expect(f.calls()).toBe(1);
+  } finally { f.abort(); await bounded(f.providerClosed.promise); }
+});
+
+test("asynchronous event authority is rejected rather than ignored as an optional observer", async () => {
+  const f = await fixture(); let observers = 0;
+  f.eventAuthority(async () => { throw Error(token); });
+  f.observe(() => { observers++; });
+  const result = await f.models.completeSimple(f.model, context); await Bun.sleep(0);
+  expect(result.stopReason).toBe("error"); expect(parseModelFailure(result.errorMessage)?.phase).toBe("source");
+  expect(result.usage).toEqual(f.message.usage); expect(observers).toBe(0); expect(f.calls()).toBe(1);
+  expect(JSON.stringify(result)).not.toContain(token);
+});
+
+test("event authority is rechecked after result publication before accounting or SDK success", async () => {
+  const f = await fixture(); let settlements = 0;
+  f.observe(() => { f.eventAuthority(() => { throw Error(token); }); });
+  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle() { settlements++; }, async abandon() {} });
+  const result = await f.models.completeSimple(f.model, context);
+  expect(result.stopReason).toBe("error"); expect(parseModelFailure(result.errorMessage)?.phase).toBe("source");
+  expect(result.usage).toEqual(f.message.usage); expect(settlements).toBe(0); expect(f.calls()).toBe(1);
 });
 
 test('failed host request preserves validated reported usage without private diagnostics', async () => {

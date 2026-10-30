@@ -36,7 +36,8 @@ import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite
 import { awaitWithContext, withAbortSignal, BACKGROUND_CONTEXT as context } from "../../runtime/durable-engine/qualification/context.ts";
 import { reserveHostRequest } from "../../runtime/durable-engine/src/host-request-accounting.ts";
 import { withTaskModelRequestScope,taskModelRequestScope } from "../../runtime/durable-engine/src/task-model-boundary-shim.ts";
-import { createHostModels } from "../../runtime/durable-engine/src/host-models.js";
+import { createHostModels, type HostModelEventObserver } from "../../runtime/durable-engine/src/host-models.js";
+import * as hostModelBridge from "../../runtime/durable-engine/src/host-models.js";
 import { createHostBuiltinTools } from "../../runtime/durable-engine/src/host-builtins.js";
 import { HostConversationRuntime } from "../../runtime/durable-engine/src/host-runtime.js";
 import { createCurrentPiclawScheduledRunStore } from "../../runtime/src/service-effects/current-piclaw/scheduled-run-store.js";
@@ -798,6 +799,17 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
     closeDatabase(); owner.release(); return;
   }
+  const capturedEventObservers: HostModelEventObserver[] = [];
+  const originalModelFactory = hostModelBridge.createHostModels;
+  const observerPolicySpy = scenario === "native-compaction-accounting-side-dispatch"
+    ? spyOn(hostModelBridge, "createHostModels").mockImplementation((host, approved, policy) => {
+      const capture = policy.captureEventObserver;
+      return originalModelFactory(host, approved, { ...policy, captureEventObserver(signal) {
+        const observer = capture?.call(policy, signal);
+        if (observer) capturedEventObservers.push(observer);
+        return observer;
+      } });
+    }) : undefined;
   let backend: Awaited<ReturnType<typeof createDefaultApplicationRuntime>>;
   if (scenario === "native-drawio-prepare-held") {
     let entered!: () => void, release!: () => void;
@@ -3585,6 +3597,25 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
       expect(root.query("SELECT state FROM service_effect_s01_sources WHERE chat_jid='web:default' AND state NOT IN ('consumed','disposed')").all()).toEqual([]);
       expect(root.query("SELECT active_operation_id FROM service_effect_s01_chats WHERE chat_jid='web:default'").get()).toEqual({ active_operation_id: null });
       checkpointHold = undefined;
+      const observerChargeBefore = root.query("SELECT SUM(t.api_equivalent_cost_microusd) AS amount,COUNT(*) AS n FROM token_usage t JOIN budget_work w ON w.id=t.work_id WHERE w.execution_kind='side_prompt'").get() as { amount: number; n: number };
+      const callsBeforeAsyncObservers = calls;
+      for (const kind of ["event", "text"] as const) {
+        let observed = 0;
+        const rejectObserver = async () => { observed++; throw Error("PRIVATE_ASYNC_OBSERVER_FAILURE"); };
+        const reply = await pool.runSidePrompt("web:default", `asynchronous ${kind} observer`, kind === "event" ? { onEvent: rejectObserver } : { onTextDelta: rejectObserver });
+        await Bun.sleep(0);
+        expect(reply.status).toBe("success"); expect(reply.result).toBe("factory synthetic reply");
+        expect(observed).toBe(1);
+      }
+      expect(calls).toBe(callsBeforeAsyncObservers + 2);
+      expect(root.query("SELECT SUM(t.api_equivalent_cost_microusd) AS amount,COUNT(*) AS n FROM token_usage t JOIN budget_work w ON w.id=t.work_id WHERE w.execution_kind='side_prompt'").get()).toEqual({ amount: observerChargeBefore.amount + 20, n: observerChargeBefore.n + 2 });
+      expect(capturedEventObservers.length).toBeGreaterThan(0);
+      // Actual factory callback, after the source retired and optional observer unregistered.
+      // Removing UI observation must not turn its captured authority fence into a no-op.
+      const ownerFailure = Error("owned observer fixture lease revoked");
+      const deniedOwner = spyOn(owner, "assertCurrentOwner").mockImplementation(() => { throw ownerFailure; });
+      try { expect(() => capturedEventObservers.at(-1)!.assertCurrent()).toThrow(ownerFailure.message); }
+      finally { deniedOwner.mockRestore(); }
       await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close();
       const callsBeforeRestartReplay = calls;
       backend = await createDefaultApplicationRuntime(owner, async () => services);
@@ -3597,6 +3628,7 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
       expect(await backend.sessionOptions.dispatchSidePrompt!("web:default", "native isolated side prompt", { budgetWorkId: "stable-side-retry", budgetParentWorkId: "native-side-parent", systemPrompt: "SIDE_SYSTEM_PREFIX" })).toEqual(result);
       expect(calls).toBe(callsBeforeRestartReplay);
       backend.stop(); await backend.close();
+      observerPolicySpy?.mockRestore();
       compactionPolicySpy?.mockRestore();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
       closeDatabase(); owner.release(); return;

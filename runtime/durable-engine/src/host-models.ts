@@ -2,6 +2,7 @@ import { BudgetRequestError } from '../../src/db/budget-request-reservations.js'
 import type { HostCodexModelServices } from "./host-codex-model-services.js";
 import { createLogger } from "../../src/utils/logger.js";
 import { taskModelRequestScope } from "./task-model-boundary-shim.js";
+import { isPromise } from "node:util/types";
 import { classifyModelFailure, modelFailureDetail, type ModelFailure, type ModelFailurePhase } from "./host-model-failure.js";
 import type { ModelFailureEvidence } from "./host-model-failure-evidence.js";
 const log = createLogger("durable.models");
@@ -21,10 +22,18 @@ type Operation = "chat" | "generateImages" | "classify";
 type HostPort = Pick<ModelRuntime, "getPhysicalModel" | "stream" | "streamSimple"> &
   Partial<Pick<ModelRuntime, "getModelOfType" | "generateImages" | "classify" | "streamDeferred" | "cancelDeferred">>;
 type DeferredOperation = "fetchDeferred" | "cancelDeferred";
+export interface HostModelEventObserver {
+  /** Mandatory synchronous authority fence, independent of observer health. */
+  assertCurrent(): void;
+  /** Optional synchronous observation receives a detached event copy. */
+  onEvent(event: AssistantMessageEvent): void;
+}
 export interface HostModelPolicy {
   /** Invocation-local source fence retained through asynchronous credential resolution. */
   captureSourceGuard?(signal: AbortSignal | undefined): (() => void) | Promise<() => void>;
-  onEvent?(event: AssistantMessageEvent, requestSignal?: AbortSignal): void;
+  /** Resolve once after source capture; ordinary requests without observers do
+   * not clone every streaming partial. Observer failure cannot change outcomes. */
+  captureEventObserver?(requestSignal?: AbortSignal): HostModelEventObserver | undefined;
   retainFailure?(evidence: ModelFailureEvidence): string | Promise<string>;
   prepareRequest?(model: Model<Api>, options: SimpleStreamOptions | undefined, signal: AbortSignal): Promise<{
     readonly id?: string;
@@ -234,6 +243,8 @@ export function createHostModels(
     let scope: ReturnType<typeof taskModelRequestScope>;
     let codex: Awaited<ReturnType<HostCodexModelServices["bind"]>> | undefined;
     let request: Awaited<ReturnType<NonNullable<HostModelPolicy["prepareRequest"]>>>;
+    let transportAbort: AbortController | undefined;
+    let providerResult: { result(): Promise<AssistantMessage> } | undefined;
     const captureTerminalUsage = (message: AssistantMessage) => {
       if (message.provider !== model.provider || message.model !== model.id || message.api !== model.api) return;
       const responseModel = message.responseModel ?? message.model;
@@ -270,12 +281,24 @@ export function createHostModels(
         phase = "source";
         const assertSource = await policy.captureSourceGuard?.(options?.signal) ?? (() => {});
         assertSource();
+        const observer = policy.captureEventObserver?.(options?.signal);
+        let observerDetached = false;
+        const assertEventCurrent = () => {
+          if (!observer) return;
+          phase = "source";
+          const checked: unknown = observer.assertCurrent();
+          if (checked !== undefined) {
+            if (isPromise(checked)) void Promise.prototype.catch.call(checked, () => {});
+            throw new TypeError("Model event authority must be synchronous");
+          }
+          phase = "provider";
+        };
         const ref = { provider: model.provider, id: model.id };
         const listed = catalog.find((m) => (m.type ?? "chat") === "chat" && m.provider === ref.provider && m.id === ref.id);
         if ((model.type ?? "chat") !== "chat") throw new Error("Wrong model type");
         if (!listed || listed.api !== model.api) throw new Error("Model is not approved");
-        const signal = options?.signal
-          ? AbortSignal.any([options.signal, policy.signal]) : policy.signal;
+        transportAbort = new AbortController();
+        const signal = AbortSignal.any([policy.signal, transportAbort.signal, ...(options?.signal ? [options.signal] : [])]);
         const safeOptions = requestOptions(options, !!policy.deferred);
         signal.throwIfAborted();
         phase = "admission";
@@ -315,23 +338,67 @@ export function createHostModels(
         const stream = simple
           ? hostModelRuntime120.streamSimple(physical, codex ? codex.context(data(context)) : data(context), hostOptions)
           : hostModelRuntime120.stream(physical, codex ? codex.context(data(context)) : data(context), hostOptions);
-        let terminal: AssistantMessageEvent | undefined;
+        providerResult = stream;
+        let terminalReason: Extract<AssistantMessageEvent, { type: "done" }>["reason"] | undefined;
         for await (const event of stream) {
-          policy.onEvent?.(event, options?.signal);
-          if (event.type === "error" || event.type === "done") { terminal = event; continue; }
+          // The stream owns its complete result. Capture validated facts before
+          // fences/UI work, without fallible serialization ahead of accounting.
+          if (event.type === "error" || event.type === "done") {
+            const message = event.type === "error" ? event.error : event.message;
+            captureTerminalUsage(message);
+            if (event.type === "done") terminalReason = event.reason;
+            if (event.type === "error" || message.stopReason === "error" || message.stopReason === "aborted") {
+              providerError = message;
+              providerFailure = dispatchBudgetFailure ?? classifyModelFailure("provider", message);
+            }
+          }
+          assertEventCurrent();
+          if (observer && !observerDetached) {
+            try {
+              const observed: unknown = observer.onEvent(data(event));
+              if (isPromise(observed)) {
+                void Promise.prototype.catch.call(observed, () => {});
+                throw new TypeError("Model event observer must be synchronous");
+              }
+            } catch {
+              observerDetached = true;
+              log.warn("Native model observer detached", { operation: "durable_model.observer_failed", eventType: event.type,
+                taskId: scope?.taskId, conversationId: scope?.conversationId });
+            }
+          }
+          if (event.type === "error" || event.type === "done") continue;
           output.push("partial" in event ? { ...data({ ...event, partial: undefined }), partial: projectMessage(event.partial, model) } : data(event));
         }
         const result = await stream.result();
         captureTerminalUsage(result);
         if (result.stopReason === "error" || result.stopReason === "aborted") { providerError = result; providerFailure = dispatchBudgetFailure??classifyModelFailure("provider", result); }
+        assertEventCurrent();
         phase = "accounting";
         await request?.settle(result);
         phase = "conversion";
         await codex?.finish();
         if (providerFailure) { phase = "provider"; throw new Error("Host request failed"); }
-        if (terminal?.type === "done") output.push({ ...data({ ...terminal, message: undefined }), message: projectMessage(result, model) });
+        if (terminalReason !== undefined) output.push({ type: "done", reason: terminalReason, message: projectMessage(result, model) });
         output.end(projectMessage(result, model));
       } catch (cause) {
+        // Authority/projection failure must not leave the physical request running
+        // after its SDK observer has ended. Optional UI failures never reach here.
+        transportAbort?.abort(cause);
+        if (providerResult) {
+          try {
+            const terminal = await providerResult.result();
+            captureTerminalUsage(terminal);
+            if (terminal.stopReason === "error" || terminal.stopReason === "aborted") {
+              providerError = terminal;
+              providerFailure = dispatchBudgetFailure ?? classifyModelFailure("provider", terminal);
+            }
+          } catch (error) {
+            providerError ??= error;
+            providerFailure ??= classifyModelFailure("provider", error);
+            log.warn("Native provider result drain failed", { operation: "durable_model.provider_drain_failed",
+              taskId: scope?.taskId, conversationId: scope?.conversationId });
+          }
+        }
         // Preserve the provider reason even when accounting/conversion fails next.
         const failure = providerFailure ? { ...providerFailure, phase } : classifyModelFailure(phase, cause);
         let evidenceId: string | undefined;

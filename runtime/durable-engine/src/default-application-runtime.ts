@@ -862,15 +862,18 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       assert();
       return id;
     },
-    onEvent(event, signal) {
+    captureEventObserver(signal) {
       const captured = signal && requestSources.get(signal);
       if (!captured || captured.delegateModel) return;
       const source = captured.inputs.find(input => input.sourceSeq === captured.operation.primarySourceSeq);
-      const observer = source && sideObservers.get(source.sourceId);
-      if (!observer) return;
-      assert(); signal!.throwIfAborted(); runtime().assertCapturedSourceCurrent(captured.inputs);
-      // Observers never receive the provider's mutable accounting evidence.
-      observer(structuredClone(event));
+      if (!source || !sideObservers.has(source.sourceId)) return;
+      return {
+        assertCurrent() {
+          assert(); signal!.throwIfAborted(); runtime().assertCapturedSourceCurrent(captured.inputs);
+        },
+        // Preserve the return for async misuse detection; the bridge owns the copy.
+        onEvent(event) { return sideObservers.get(source.sourceId)?.(event); },
+      };
     },
     async prepareRequest(model, options, signal) {
       const scope = taskModelRequestScope(options?.signal);

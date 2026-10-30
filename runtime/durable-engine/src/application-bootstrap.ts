@@ -14,6 +14,9 @@ import { ensureBudgetWork, getBudgetWork } from "../../src/db/budget-limits.js";
 import { operationBudgetWorkId, sidePromptSourceId } from "./host-request-accounting.js";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
+import { isPromise } from "node:util/types";
+import { createLogger } from "../../src/utils/logger.js";
+const observerLog = createLogger("durable.side-observer");
 import type { Context } from "@earendil-works/chord/context";
 import { SqliteStorage } from "@earendil-works/pi-durable/storage/sqlite";
 import type { RuntimeLockHandle } from "../../src/runtime/single-instance.js";
@@ -1018,18 +1021,25 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
         checkScope(); return accepted;
       }, () => { checkScope(); assertParent(); }, options.signal);
       let observerFailed = false;
+      const synchronous = (value: unknown) => {
+        if (isPromise(value)) {
+          void Promise.prototype.catch.call(value, () => {});
+          throw new TypeError("Side prompt observers must be synchronous");
+        }
+      };
       const unobserve = config.observeSidePrompt?.(sourceId, event => {
         assertLive();
         if (observerFailed || options.signal?.aborted) return;
         try {
           const text = event.type === "text_delta" ? event.delta : undefined;
           const thinking = event.type === "thinking_delta" ? event.delta : undefined;
-          options.onEvent?.(event);
-          if (text !== undefined) options.onTextDelta?.(text);
-          if (thinking !== undefined) options.onThinkingDelta?.(thinking);
+          synchronous(options.onEvent?.(event));
+          if (text !== undefined) synchronous(options.onTextDelta?.(text));
+          if (thinking !== undefined) synchronous(options.onThinkingDelta?.(thinking));
         } catch {
           // Callback failures detach this observer, not provider accounting.
           observerFailed = true;
+          observerLog.warn("Side prompt observer detached", { operation: "application.side_observer_failed", sourceId });
         }
       });
       try {
