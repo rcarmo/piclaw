@@ -26,7 +26,6 @@ function Fixture() {
             reasoningKnown: true,
           }))}
           activeModel="test/large"
-          contextTokens={32000}
           onSelectModel={(model) => setAction(model)}
           onCompact={() => setAction("compact")}
           onTogglePin={() => setAction("pin")}

@@ -10,7 +10,6 @@ import {
   formatOpenRouterKeyUsageTitle,
   getComposeHistoryStorageKey,
   readStoredComposeHeight,
-  getModelPickerContextLimit,
   getModelPickerOptionSearchLabel,
   normalizeModelPickerOptions,
   resolveComposeCacheHitMeta,
@@ -549,7 +548,7 @@ test('returnQueuedFollowupToEditor restores compose state before removing the qu
   expect(calls.indexOf('content:Please check this later.')).toBeLessThan(calls.indexOf('remove'));
 });
 
-test('model picker helpers expose searchable names, formatted context windows, and context-fit guards', () => {
+test('model picker helpers expose searchable names, formatted context windows, without browser capacity guards', () => {
   const option = {
     label: 'anthropic/claude-sonnet-4',
     provider: 'anthropic',
@@ -565,35 +564,7 @@ test('model picker helpers expose searchable names, formatted context windows, a
   expect(getModelPickerOptionSearchLabel(option)).toContain('Claude Sonnet 4');
   expect(getModelPickerOptionSearchLabel(option)).toContain('200K ctx');
 
-  expect(getModelPickerContextLimit(option, { tokens: 150000 })).toEqual({
-    blocked: false,
-    note: '',
-    title: '',
-    tokens: 150000,
-    safetyAdjustedTokens: 165000,
-    contextWindow: 200000,
-    effectiveContextWindow: 196000,
-  });
 
-  expect(getModelPickerContextLimit({ ...option, contextWindow: 128000 }, { tokens: 150000 })).toEqual({
-    blocked: true,
-    note: 'Compact context first',
-    title: 'Current context uses 150K tokens (~165K with estimator safety) plus app/tool overhead, but this model effectively fits about 124K (128K raw). Compact context first, then switch.',
-    tokens: 150000,
-    safetyAdjustedTokens: 165000,
-    contextWindow: 128000,
-    effectiveContextWindow: 124000,
-  });
-
-  expect(getModelPickerContextLimit({ ...option, contextWindow: 4096 }, { tokens: 100 })).toEqual({
-    blocked: true,
-    note: 'Compact context first',
-    title: 'Current context uses 100 tokens (~110 with estimator safety) plus app/tool overhead, but this model effectively fits about 96 (4K raw). Compact context first, then switch.',
-    tokens: 100,
-    safetyAdjustedTokens: 110,
-    contextWindow: 4096,
-    effectiveContextWindow: 96,
-  });
 });
 
 test('resolveComposeRoutedModelStatus shows latest routed model when it differs from the requested model', () => {

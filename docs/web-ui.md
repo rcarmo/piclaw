@@ -34,6 +34,12 @@ These rules apply to core UI, add-ons and generated interactive surfaces. Visual
 - syntax-highlighted previews for common text/code attachments
 - theme and tint controls via `/theme` and `/tint`
 
+### Model selection
+
+Both model pickers and Models settings send the selection to the backend. Catalogue context windows describe model capacity; the browser does not infer whether the current conversation fits. Models settings shows candidate fit as unknown until the backend checks the switch.
+
+Backend refusals leave the current selection unchanged. Successful selections require confirmation from `/agent/models` and apply to the next model request. Selecting a model never implicitly compacts or replays conversation input. Use the existing explicit compaction control when needed.
+
 ### Native reply threads
 
 A native terminal reply uses the thread root of its accepted user message. The host resolves that message from the immutable source ID and payload reference. It never selects the latest timeline message. Existing null-rooted and self-threaded roots are valid; cross-chat and nested roots are rejected.
