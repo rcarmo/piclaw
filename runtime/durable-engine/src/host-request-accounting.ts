@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type Database from "bun:sqlite";
 import type { AssistantMessage, Api, Model } from "../../src/durable-legacy-sdk.js";
-import { modelRequestAccounting } from "../../src/budget/model-request-accounting.js";
+import { modelRequestAccounting, assertModelAccountingReady } from "../../src/budget/model-request-accounting.js";
 import { admitSqliteWrite } from "../../src/db/sqlite-async-admission.js";
 import { boundHostRequestCost } from "../../src/budget/request-cost-bound.js";
 import { ensureBudgetWork, getBudgetWork, setBudgetWorkStatus } from "../../src/db/budget-limits.js";
@@ -13,6 +13,9 @@ import { projectTerminalOutcome,decodeStoredTerminalOutcome } from './host-termi
 import { nativeBackgroundIdentity,nativeBackgroundPolicyHash,readNativeBackgroundPolicy,type NativeBackgroundPolicy } from '../../src/agent-pool/background-operation-contract.js';
 
 export const operationBudgetWorkId = (operationId: string) => `durable-operation:${operationId}`;
+export function assertOperationAccountingReady(database: Database, operationId: string, terminal = false): void {
+  assertModelAccountingReady(operationBudgetWorkId(operationId), database, undefined, terminal);
+}
 export function sidePromptSourceId(chatJid: string, retryId: string): string {
   const digest = createHash("sha256").update(JSON.stringify([chatJid, retryId])).digest("hex");
   return `side-prompt:${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
@@ -22,7 +25,12 @@ export function sidePromptSourceId(chatJid: string, retryId: string): string {
 export async function completeMaintenanceBudgetWork(database: Database, workId: string): Promise<void> {
   await admitSqliteWrite(database, () => {
     const work = getBudgetWork(workId, database);
-    if (work?.status !== "active" || work.execution_kind !== "side_prompt" || work.parent_work_id !== null || database.query(`SELECT 1 FROM budget_request_reservations r JOIN budget_work w ON w.id=r.work_id
+    if (work?.status !== "active" || work.execution_kind !== "side_prompt") return;
+    if (work.parent_work_id !== null) {
+      const parent = getBudgetWork(work.parent_work_id, database);
+      if (!workId.startsWith('durable-maintenance:') || !parent?.id.startsWith('durable-operation:') || parent.chat_jid !== work.chat_jid) return;
+    }
+    if (database.query(`SELECT 1 FROM budget_request_reservations r JOIN budget_work w ON w.id=r.work_id
       WHERE w.parent_work_id=? AND r.state NOT IN ('settled','released') LIMIT 1`).get(workId)) return;
     setBudgetWorkStatus(workId, "completed", { boundary: "maintenance_settled" }, database);
   });
@@ -34,8 +42,9 @@ export async function reconcileOperationBudgetWork(database: Database, operation
     for (const terminal of terminals) {
       const id = operationBudgetWorkId(terminal.operation_id);
       if (getBudgetWork(id, database)?.status !== "active") continue;
-      if (!database.query(`SELECT 1 FROM budget_request_reservations r JOIN budget_work w ON w.id=r.work_id
-        WHERE w.parent_work_id=? AND r.state NOT IN ('settled','released') LIMIT 1`).get(id))
+      if (!database.query(`WITH RECURSIVE scope(id) AS (
+        SELECT id FROM budget_work WHERE id=? UNION SELECT w.id FROM budget_work w JOIN scope s ON w.parent_work_id=s.id
+      ) SELECT 1 FROM budget_request_reservations r JOIN scope s ON s.id=r.work_id WHERE r.state NOT IN ('settled','released') LIMIT 1`).get(id))
       {
         setBudgetWorkStatus(id, "completed", { boundary: "operation_settled" }, database);
         const work = getBudgetWork(id, database);
@@ -64,7 +73,10 @@ export async function reserveHostRequest(options: {
   /** Public running SDK checkpoint identity; caller/source guards remain required. */
   modelInvocation?: BudgetModelInvocation;
   usageSource?:'compaction';
-  maintenanceWorkId?: string; signal: AbortSignal; assertCurrent(): void;
+  maintenanceWorkId?: string;
+  /** Proven public generation owner, never a busy-chat guess. */
+  maintenanceParentOperationId?: string;
+  signal: AbortSignal; assertCurrent(): void;
   /** Database/lease lifetime only. Request cancellation cannot erase paid facts.
    * The backend must keep this owner alive while SDK close joins the request. */
   terminalOwner?: { signal: AbortSignal; assertCurrent(): void };
@@ -84,6 +96,9 @@ export async function reserveHostRequest(options: {
   const background=options.backgroundPolicy&&readNativeBackgroundPolicy(options.backgroundPolicy);
   if((options.executionKind==='background')!==!!background)throw Error('Background request policy required');
   const operationWork = options.maintenanceWorkId ?? operationBudgetWorkId(options.operationId);
+  if (options.maintenanceParentOperationId && (!options.maintenanceWorkId || options.maintenanceParentOperationId !== options.operationId)) throw new BudgetRequestError('invalid_binding');
+  const maintenanceParent = options.maintenanceParentOperationId ? operationBudgetWorkId(options.maintenanceParentOperationId) : undefined;
+  const barrierWork = maintenanceParent ?? operationWork;
   const assertBackground=()=>{
     if(!background)return;
     const identity=nativeBackgroundIdentity(background),work=getBudgetWork(operationWork,database),owner=getBudgetWork(background.workId,database);
@@ -99,6 +114,9 @@ export async function reserveHostRequest(options: {
   };
   assertCurrent();assertBackground(); signal.throwIfAborted();
   const previous = modelInvocation ? findBudgetRequestByModelInvocation(modelInvocation, database) : null;
+  // Recovering an exact stored fact is not a new outbound effect. Let each
+  // paid sibling reconcile; tools/new sends/S02 still require the whole scope.
+  if (!previous?.terminal_receipt_json) assertModelAccountingReady(barrierWork, database, previous?.id);
   if (modelInvocation && !previous && database.query(`SELECT 1 FROM budget_work w JOIN budget_request_reservations r ON r.work_id=w.id
     WHERE w.parent_work_id=? AND r.model_invocation_json IS NULL AND r.state IN ('reserved','dispatched','unresolved') LIMIT 1`).get(operationWork))
     throw new BudgetRequestError('budget_denied'); // Old unknown holds have no exact attempt attribution.
@@ -126,16 +144,18 @@ export async function reserveHostRequest(options: {
     assertCurrent();assertBackground(); signal.throwIfAborted();
     if (readStoredProviderUsageAccountRef(model.provider, options.authPath) !== accountRef) throw Error("Native request account changed");
   };
+  const requestCurrent = () => { current(); assertModelAccountingReady(barrierWork, database, id); };
   if (!previous) await admitSqliteWrite(database, () => {
     const sidePrompt = database.query(`SELECT 1 FROM service_effect_s01_operations o
       JOIN service_effect_s01_sources s ON s.chat_jid=o.chat_jid AND s.source_seq=o.primary_source_seq
       WHERE o.operation_id=? AND o.chat_jid=? AND s.kind='internal' AND s.source_id LIKE 'side-prompt:%'`).get(options.operationId, options.chatJid);
     const existingSide = sidePrompt ? getBudgetWork(operationWork, database) : null;
+    if (maintenanceParent) ensureBudgetWork({ id: maintenanceParent, chatJid: options.chatJid, executionKind: options.scheduledTaskId ? 'scheduled' : 'interactive', scheduledTaskId: options.scheduledTaskId }, database);
     if (!background) ensureBudgetWork({ id: operationWork, chatJid: options.chatJid, executionKind: options.maintenanceWorkId || sidePrompt ? "side_prompt" : options.scheduledTaskId ? "scheduled" : "interactive",
-      parentWorkId: existingSide?.parent_work_id, scheduledTaskId: options.scheduledTaskId }, database);
+      parentWorkId: maintenanceParent ?? existingSide?.parent_work_id, scheduledTaskId: options.scheduledTaskId }, database);
     ensureBudgetWork({ id: workId, chatJid: options.chatJid, executionKind: options.executionKind === "delegate" ? "delegate" : sidePrompt ? "side_prompt" : options.executionKind ?? "interactive", parentWorkId: operationWork }, database);
-  }, current, signal);
-  const accounting = modelRequestAccounting({ authorise: current, documentedFree: false, usageSource: options.usageSource ?? (options.maintenanceWorkId ? "compaction" : "assistant") }, database);
+  }, requestCurrent, signal);
+  const accounting = modelRequestAccounting({ authorise: requestCurrent, documentedFree: false, usageSource: options.usageSource ?? (options.maintenanceWorkId ? "compaction" : "assistant") }, database);
   const binding: BudgetRequestBinding = { id, workId, chatJid: options.chatJid, providerId: model.provider, modelId: model.id, accountRef,
     amountMicros: previous ? previous.amount_microusd : amount.amountMicros, ...(modelInvocation ? { modelInvocation } : {}) };
   let dispatchStarted = false;
@@ -184,11 +204,11 @@ export async function reserveHostRequest(options: {
     assertRecoveredCurrent() { terminalOwner(); current(); },
     async dispatch() {
       if (recoveredTerminal) throw new BudgetRequestError('invalid_state');
-      terminalOwner(); current();
+      terminalOwner(); requestCurrent();
       if (dispatchStarted) throw Error("Native request already dispatched");
       dispatchStarted = true;
       await accounting.dispatch(binding, signal);
-      current();
+      requestCurrent();
     },
     async settle(message: AssistantMessage) {
       const owner = terminalOwner();

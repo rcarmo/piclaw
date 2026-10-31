@@ -3,7 +3,7 @@ import { admitSqliteWrite } from '../db/sqlite-async-admission.js';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import type { BudgetProviderEvidence } from './types.js';
 import { admitBudgetRequest, admitBudgetRequestDispatch } from './request-reservation-admission.js';
-import { abandonBudgetRequest, BudgetRequestError, getBudgetRequest, readBudgetTerminalReceipt, settleBudgetRequest, type BudgetRequestBinding } from '../db/budget-request-reservations.js';
+import { abandonBudgetRequest, BudgetRequestError, getBudgetRequest, readBudgetTerminalReceipt, settleBudgetRequest, validateBudgetSettlementUsage, type BudgetRequestBinding, type BudgetRequestReservation } from '../db/budget-request-reservations.js';
 import { getDb } from '../db/connection.js';
 import { getBudgetWork, setBudgetWorkStatus } from '../db/budget-limits.js';
 import type { TokenUsageRecord } from '../db/token-usage.js';
@@ -91,6 +91,34 @@ function retainedUsageFacts(value: unknown): UsageFacts {
     }
   }
   return facts;
+}
+
+/** Read-only, ancestry-scoped effect barrier. A known paid terminal whose local
+ * charge/status transition is incomplete cannot authorise the next effect.
+ * Intentional unknown valuation remains held, not charged or relabelled as free.
+ * Only exact invocation recovery may exclude its own already-bound request. */
+export function assertModelAccountingReady(workId: string, database: Database = getDb(), excludeRequestId?: string, terminal = false): void {
+  const pending = database.query(`WITH RECURSIVE scope(id) AS (
+    SELECT id FROM budget_work WHERE id=? UNION SELECT w.id FROM budget_work w JOIN scope s ON w.parent_work_id=s.id
+  ) SELECT r.* FROM budget_request_reservations r JOIN scope s ON s.id=r.work_id JOIN budget_work w ON w.id=r.work_id
+    WHERE r.state<>'released' AND (? OR r.terminal_receipt_json IS NOT NULL OR r.state='unresolved')
+    AND (r.state<>'settled' OR w.status IN ('active','paused'))
+    AND (? IS NULL OR r.id<>?)`).all(workId, terminal ? 1 : 0, excludeRequestId ?? null, excludeRequestId ?? null) as BudgetRequestReservation[];
+  for (const row of pending) {
+    // Unresolved receipt-less sends include hard retention failures. They are
+    // not readiness. Terminal publication additionally waits for in-flight holds.
+    if (row.terminal_receipt_json === null) throw new BudgetRequestError('budget_denied');
+    const binding: BudgetRequestBinding = { id: row.id, workId: row.work_id, chatJid: row.chat_jid, providerId: row.provider_id,
+      modelId: row.model_id, accountRef: row.account_ref, amountMicros: row.amount_microusd,
+      ...(row.model_invocation_json === null ? {} : { modelInvocation: JSON.parse(row.model_invocation_json) }) };
+    const receipt = readBudgetTerminalReceipt(binding, database);
+    if (!receipt) throw new BudgetRequestError('conflict');
+    const payload = JSON.parse(receipt.bodyJson);
+    const usage = prepareUsage(binding, retainedUsageFacts(payload.projectedOutcome), false, undefined)(receipt.receivedAt, false);
+    validateBudgetSettlementUsage(binding, usage);
+    if (row.state !== 'unresolved' || usage.api_equivalent_cost_known) throw new BudgetRequestError('budget_denied');
+    if (row.settlement_sha256 !== null || row.usage_event_id !== null) throw new BudgetRequestError('conflict');
+  }
 }
 
 /** Shared request accounting for parent, side and Delegate callers. Each caller

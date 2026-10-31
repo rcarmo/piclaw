@@ -424,9 +424,12 @@ export function createHostModels(
         await request?.settle(result);
         phase = "conversion";
         await codex?.finish();
+        phase = 'source'; signal.throwIfAborted(); assertSource(); assertEventCurrent();
         if (providerFailure) { phase = "provider"; throw new Error("Host request failed"); }
-        if (terminalReason !== undefined) output.push({ type: "done", reason: terminalReason, message: projectMessage(result, model) });
-        output.end(projectMessage(result, model));
+        phase = 'conversion'; const message = projectMessage(result, model);
+        phase = 'source'; signal.throwIfAborted(); assertSource(); assertEventCurrent();
+        if (terminalReason !== undefined) output.push({ type: "done", reason: terminalReason, message });
+        output.end(message);
       } catch (cause) {
         // Authority/projection failure must not leave the physical request running
         // after its SDK observer has ended. Optional UI failures never reach here.

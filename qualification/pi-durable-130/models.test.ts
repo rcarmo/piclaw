@@ -914,6 +914,28 @@ test("rejected asynchronous observer cannot poison result publication or produce
   expect(result.usage).toEqual(f.message.usage); expect(f.calls()).toBe(1);
 });
 
+for (const boundary of ['source', 'cancel'] as const) for (const observed of [false, true]) for (const streamed of [false, true]) {
+  test(`live publication rechecks authority after settlement; ${boundary}, observer=${observed}, streamed=${streamed}`, async () => {
+    const f = await fixture(); let current = true, retentions = 0, settlements = 0;
+    const retained: AssistantMessage[] = [];
+    f.policy.captureSourceGuard = () => () => { if (!current) throw Error(token); };
+    if (observed) f.observe(() => {});
+    f.policy.prepareRequest = async () => ({
+      async dispatch() {}, async retainTerminal(message) { retentions++; retained.push(structuredClone(message)); },
+      async settle() { settlements++; await Bun.sleep(0); if (boundary === 'source') current = false; else f.abort(); },
+      async abandon() {},
+    });
+    const stream = streamed ? f.models.streamSimple(f.model, context) : undefined;
+    const events: string[] = [];
+    if (stream) for await (const event of stream) events.push(event.type);
+    const result = stream ? await stream.result() : await f.models.completeSimple(f.model, context);
+    expect(result.stopReason).toBe('error'); expect(parseModelFailure(result.errorMessage)?.phase).toBe('source');
+    expect(result.usage).toEqual(f.message.usage); expect(JSON.stringify(result)).not.toContain(token);
+    expect(retained).toEqual([f.message]); expect(retentions).toBe(1); expect(settlements).toBe(1); expect(f.calls()).toBe(1);
+    expect(events).not.toContain('done'); if (stream) expect(events.at(-1)).toBe('error');
+  });
+}
+
 test("late observer rejection after SDK-visible result publication preserves outcome and at-most-once settlement", async () => {
   const f = await fixture(), release = barrier(); let observers = 0, settlements = 0;
   f.observe(() => { observers++; return release.promise.then(() => { throw Error(token); }); });

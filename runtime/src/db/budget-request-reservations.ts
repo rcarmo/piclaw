@@ -337,21 +337,27 @@ export async function retainBudgetTerminalReceipt(binding: BudgetRequestBinding,
   return admitSqliteWrite(database, () => writeTerminalReceipt(prepared, database), check,
     signal, Number.POSITIVE_INFINITY, check);
 }
+type SettlementUsage = Omit<TokenUsageRecord,'work_id' | 'invocation_id' | 'usage_event_id' | 'execution_kind'>;
+/** Pure validation shared with the pending-effect barrier; invalid telemetry is
+ * not an intentionally recorded unknown valuation. No SQL or permission grant. */
+export function validateBudgetSettlementUsage(binding: BudgetRequestBinding, usage: SettlementUsage): void {
+  if (usage.chat_jid !== binding.chatJid || usage.provider !== binding.providerId || usage.model !== binding.modelId
+    || usage.response_model && usage.response_model !== binding.modelId) throw new BudgetRequestError('conflict');
+  for (const key of ['input_tokens','output_tokens','cache_read_tokens','cache_write_tokens','total_tokens'] as const) {
+    if (!Number.isSafeInteger(usage[key]) || usage[key] < 0) throw new BudgetRequestError('invalid_binding');
+  }
+  for (const key of ['cost_input','cost_output','cost_cache_read','cost_cache_write','cost_total'] as const) {
+    if (!Number.isFinite(usage[key]) || usage[key] < 0) throw new BudgetRequestError('invalid_binding');
+  }
+  if (!Number.isFinite(Date.parse(usage.run_at)) || usage.api_equivalent_cost_known === true
+    && (!Number.isSafeInteger(usage.api_equivalent_cost_microusd) || usage.api_equivalent_cost_microusd! < 0)) throw new BudgetRequestError('invalid_binding');
+}
 /** Parent-owned actual usage. Late settlement survives cancellation of the work. */
-export function settleBudgetRequest(binding: BudgetRequestBinding, usage: Omit<TokenUsageRecord,'work_id' | 'invocation_id' | 'usage_event_id' | 'execution_kind'>, database: Database = getDb()): BudgetRequestReservation {
+export function settleBudgetRequest(binding: BudgetRequestBinding, usage: SettlementUsage, database: Database = getDb()): BudgetRequestReservation {
   validate(binding);
   return database.transaction(() => {
     const row = boundRequest(binding,database);
-    if (usage.chat_jid !== binding.chatJid || usage.provider !== binding.providerId || usage.model !== binding.modelId
-      || usage.response_model && usage.response_model !== binding.modelId) throw new BudgetRequestError('conflict');
-    for (const key of ['input_tokens','output_tokens','cache_read_tokens','cache_write_tokens','total_tokens'] as const) {
-      if (!Number.isSafeInteger(usage[key]) || usage[key] < 0) throw new BudgetRequestError('invalid_binding');
-    }
-    for (const key of ['cost_input','cost_output','cost_cache_read','cost_cache_write','cost_total'] as const) {
-      if (!Number.isFinite(usage[key]) || usage[key] < 0) throw new BudgetRequestError('invalid_binding');
-    }
-    if (!Number.isFinite(Date.parse(usage.run_at)) || usage.api_equivalent_cost_known === true
-      && (!Number.isSafeInteger(usage.api_equivalent_cost_microusd) || usage.api_equivalent_cost_microusd! < 0)) throw new BudgetRequestError('invalid_binding');
+    validateBudgetSettlementUsage(binding, usage);
     const hash = digest(usage), eventId = `usage:invocation:${binding.id}`;
     if (row.state === 'settled') {
       if (row.settlement_sha256 !== hash || row.usage_event_id !== eventId) throw new BudgetRequestError('conflict');

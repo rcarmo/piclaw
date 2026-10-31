@@ -8,7 +8,7 @@ import { closeDatabase, getDb, initDatabase } from '../../src/db/connection.js';
 import { ensureBudgetWork, getBudgetWork, saveBudgetCap, setBudgetWorkStatus, setBudgetWarningsOnly, grantBudgetAllowance } from '../../src/db/budget-limits.js';
 import { getBudgetRequest, recordBudgetTerminalReceipt, readBudgetTerminalReceipt, settleBudgetRequest,
   type BudgetRequestBinding, type BudgetTerminalReceiptPayload } from '../../src/db/budget-request-reservations.js';
-import { modelRequestAccounting } from '../../src/budget/model-request-accounting.js';
+import { modelRequestAccounting, assertModelAccountingReady } from '../../src/budget/model-request-accounting.js';
 import { evaluateBudget } from '../../src/budget/evaluator.js';
 import { canonicalJson } from '../../src/utils/canonical-json.js';
 
@@ -42,10 +42,11 @@ function terminal(): AssistantMessage {
 }
 function owner() { return { signal: new AbortController().signal, assertCurrent() {} }; }
 function accounting() { return modelRequestAccounting({ authorise() {}, documentedFree: false, usageSource: 'compaction' }); }
-async function fixture(message = terminal(), retain = true, workId = 'durable-request:request') {
+async function fixture(message = terminal(), retain = true, workId = 'durable-request:request', parentId = 'parent') {
   const db = getDb(), helper = accounting(), signal = new AbortController().signal;
   ensureBudgetWork({ id: 'parent', chatJid: 'web:receipt', executionKind: 'interactive' });
-  ensureBudgetWork({ id: workId, chatJid: 'web:receipt', executionKind: 'background', parentWorkId: 'parent' });
+  if (parentId !== 'parent') ensureBudgetWork({ id: parentId, chatJid: 'web:receipt', executionKind: 'delegate', parentWorkId: 'parent' });
+  ensureBudgetWork({ id: workId, chatJid: 'web:receipt', executionKind: 'background', parentWorkId: parentId });
   saveBudgetCap({ scope: 'task', workId: 'parent', metric: 'api_usd_micros', amount: 100 });
   const binding: BudgetRequestBinding = { id: 'request', workId, chatJid: 'web:receipt', providerId: 'fixture',
     modelId: 'fixture-model', accountRef: 'original-account-generation', amountMicros: 60 };
@@ -60,6 +61,58 @@ function financialRows() {
   return { tokens: getDb().query('SELECT * FROM token_usage').all(), events: getDb().query('SELECT * FROM budget_usage_events').all() };
 }
 function unchangedFinancials() { expect(financialRows()).toEqual({ tokens: [], events: [] }); }
+
+test('pending terminal barrier follows nested work ancestry, not unrelated work or global active holds', async () => {
+  const { helper, binding, receipt } = await fixture(terminal(), true, 'durable-request:request', 'delegate-owner');
+  const before = getBudgetRequest(binding.id), work = getBudgetWork(binding.workId);
+  for (const scope of ['parent', 'delegate-owner', binding.workId]) expect(() => assertModelAccountingReady(scope)).toThrow('budget_denied');
+  expect(() => assertModelAccountingReady('unrelated-operation')).not.toThrow();
+  expect(() => assertModelAccountingReady('parent', getDb(), binding.id)).not.toThrow();
+  expect(() => assertModelAccountingReady('parent', getDb(), 'wrong-request')).toThrow('budget_denied');
+  expect(getBudgetRequest(binding.id)).toEqual(before); expect(getBudgetWork(binding.workId)).toEqual(work); unchangedFinancials();
+  await helper.abandon(binding); const abandoned = getBudgetRequest(binding.id);
+  expect(abandoned?.state).toBe('unresolved'); expect(() => assertModelAccountingReady('parent')).toThrow('budget_denied');
+  await helper.settleRetainedRequest(binding, owner());
+  expect(() => assertModelAccountingReady('parent')).not.toThrow();
+  expect(readBudgetTerminalReceipt(binding)).toEqual(receipt); expect(getBudgetWork(binding.workId)?.status).toBe('completed');
+});
+
+test('receipt absence never proves a terminal is accounted; ended unknown sends block effects too', async () => {
+  const { helper, binding, db } = await fixture(terminal(), false);
+  const before = getBudgetRequest(binding.id);
+  // Parallel live requests are not serialized by this effect barrier, but the
+  // operation cannot finish while any send remains physically in flight.
+  expect(() => assertModelAccountingReady('parent')).not.toThrow();
+  expect(() => assertModelAccountingReady('parent', db, undefined, true)).toThrow('budget_denied');
+  expect(getBudgetRequest(binding.id)).toEqual(before);
+  await helper.abandon(binding); const unknown = getBudgetRequest(binding.id);
+  expect(unknown?.state).toBe('unresolved');
+  expect(() => assertModelAccountingReady('parent')).toThrow('budget_denied');
+  expect(() => assertModelAccountingReady('parent', db, undefined, true)).toThrow('budget_denied');
+  expect(getBudgetRequest(binding.id)).toEqual(unknown); unchangedFinancials();
+});
+
+test('pending barrier accepts an intentional validated unknown hold, not merely any unresolved row', async () => {
+  const message = terminal(); message.usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
+  const { helper, binding, receipt } = await fixture(message);
+  expect(() => assertModelAccountingReady('parent')).toThrow('budget_denied');
+  await helper.settleRetainedRequest(binding, owner());
+  const held = getBudgetRequest(binding.id), work = getBudgetWork(binding.workId);
+  expect(() => assertModelAccountingReady('parent')).not.toThrow();
+  expect(getBudgetRequest(binding.id)).toEqual(held); expect(getBudgetWork(binding.workId)).toEqual(work);
+  expect(readBudgetTerminalReceipt(binding)).toEqual(receipt); expect(evaluateBudget({ workId: 'parent' }).blockers[0].reason).toBe('unknown_pricing'); unchangedFinancials();
+});
+
+for (const invalid of ['negative-cost', 'negative-token', 'fractional-token'] as const) test(`pending barrier does not turn invalid ${invalid} into an intentional unknown valuation`, async () => {
+  const message = terminal();
+  if (invalid === 'negative-cost') message.usage.cost.input = -1;
+  if (invalid === 'negative-token') message.usage.input = -1;
+  if (invalid === 'fractional-token') message.usage.output = 0.5;
+  const { helper, binding } = await fixture(message); await helper.abandon(binding);
+  const held = getBudgetRequest(binding.id);
+  expect(() => assertModelAccountingReady('parent')).toThrow('invalid_binding');
+  expect(getBudgetRequest(binding.id)).toEqual(held); unchangedFinancials();
+});
 
 test('prior committed receipt survives work-write fault: charge/reservation/work roll back together, exact retry commits once', async () => {
   const { db, helper, binding, receipt } = await fixture();

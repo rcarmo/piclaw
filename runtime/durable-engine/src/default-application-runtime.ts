@@ -48,8 +48,9 @@ import { buildDreamPrompt } from '../../src/agent-memory/dream-prompt.js';
 import { getBudgetWorkContext } from '../../src/budget/context.js';
 import type { NativeDreamRequest,AgentOutput } from '../../src/agent-pool/contracts.js';
 import { getBudgetWork,ensureBudgetWork,setBudgetWorkStatus } from '../../src/db/budget-limits.js';
+import { assertModelAccountingReady } from '../../src/budget/model-request-accounting.js';
 import { BudgetRequestError, type BudgetModelInvocation } from '../../src/db/budget-request-reservations.js';
-import { reserveHostRequest, reconcileOperationBudgetWork, completeMaintenanceBudgetWork,operationBudgetWorkId } from "./host-request-accounting.js";
+import { reserveHostRequest, reconcileOperationBudgetWork, completeMaintenanceBudgetWork,operationBudgetWorkId,assertOperationAccountingReady } from "./host-request-accounting.js";
 import { createHostMcp } from "./host-mcp.js";
 import { createHostFetch } from "./host-fetch.js";
 import { taskModelRequestScope, taskModelHookScope, withTaskModelRequestScope } from "./task-model-boundary-shim.js";
@@ -444,9 +445,9 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     assertNativeBackgroundDeadline(payload.policy,Date.now());
   };
   const assertBackgroundCurrent=(payload:NativeBackgroundPayload)=>payload.policy.origin.kind==='dream'?assertDreamCurrent(payload):assertAddonBackgroundCurrent(root,payload);
-  const maintenanceRequests = new WeakMap<AbortSignal, { chatJid: string; workId: string; assertCurrent(): void; background?:{input:HostInputBinding;policy:NativeBackgroundPayload['policy']} }>();
+  const maintenanceRequests = new WeakMap<AbortSignal, { chatJid: string; workId: string; operationId?: string; assertCurrent(): void; background?:{input:HostInputBinding;policy:NativeBackgroundPayload['policy']} }>();
   const requestSources = new WeakMap<AbortSignal, Awaited<ReturnType<HostConversationRuntime["captureRunSource"]>>>();
-  const backgroundRequests=new WeakMap<AbortSignal,{accounted:boolean;assertCurrent():void}>();
+  const preparedRequests=new WeakMap<AbortSignal,{accounted:boolean;assertCurrent():void;assertAccountingReady():void}>();
   const codexNative = {} as HostCodexToolGroupAddon & NativeCodexFactories & Record<string, any>;
   for (const exports of Object.values(codex?.nativeExports ?? {})) for (const [name, value] of Object.entries(exports)) {
     if (name in codexNative && codexNative[name] !== value) throw Error("Ambiguous qualified Codex export: " + name);
@@ -813,7 +814,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   };
   const sideObservers = new Map<string, NonNullable<import("../../src/agent-pool/contracts.js").SidePromptOptions["onEvent"]>>();
   const checkRequest=(model:{provider:string;id:string},signal:AbortSignal)=>{
-    const prepared=backgroundRequests.get(signal);prepared?.assertCurrent();
+    const prepared=preparedRequests.get(signal);prepared?.assertCurrent();prepared?.assertAccountingReady();
     if(prepared&&!prepared.accounted&&root.query('SELECT 1 FROM budget_caps WHERE enabled=1 LIMIT 1').get())throw new BudgetRequestError('budget_denied');
     check(model,signal,prepared?.accounted===true);
   };
@@ -895,12 +896,17 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
           const {input,policy}=identity.background;assertNativeBackgroundModel(policy,model);
           const reservation=await reserveHostRequest({database:root,terminalOwner,operationId:input.operationId,chatJid:input.chatJid,authPath:join(getPiclawAgentDir(),'auth.json'),model:model as any,maxTokens:options?.maxTokens,
             executionKind:'background',backgroundPolicy:policy,modelInvocation:invocation(input.operationId),usageSource:'compaction',signal,assertCurrent(){assert();identity.assertCurrent();}});
-          backgroundRequests.set(signal,{accounted:reservation!==undefined,assertCurrent:identity.assertCurrent});return reservation;
+          preparedRequests.set(signal,{accounted:reservation!==undefined,assertCurrent:identity.assertCurrent,assertAccountingReady:()=>assertOperationAccountingReady(root,input.operationId)});return reservation;
         }
-        return reserveHostRequest({ database: root, terminalOwner, operationId: identity.workId, modelInvocation: invocation(identity.workId), maintenanceWorkId: identity.workId,
+        const operationId = identity.operationId ?? identity.workId;
+        const scheduled = identity.operationId ? root.query('SELECT task_id FROM service_effect_s07_occurrences WHERE operation_id=?').get(identity.operationId) as { task_id: string } | null : null;
+        const reservation = await reserveHostRequest({ database: root, terminalOwner, operationId, modelInvocation: invocation(operationId), maintenanceWorkId: identity.workId,
+          maintenanceParentOperationId: identity.operationId, scheduledTaskId: scheduled?.task_id,
           chatJid: identity.chatJid, authPath: join(getPiclawAgentDir(), "auth.json"), model: model as any,
           maxTokens: options?.maxTokens, executionKind: "side_prompt", signal,
           assertCurrent() { assert(); identity.assertCurrent(); } });
+        preparedRequests.set(signal,{accounted:false,assertCurrent:identity.assertCurrent,assertAccountingReady:()=>identity.operationId ? assertOperationAccountingReady(root,identity.operationId) : assertModelAccountingReady(identity.workId,root)});
+        return reservation;
       }
       if (scope.taskKind !== "pi.generation") throw Error("Native request kind unavailable");
       const captured = requestSources.get(scope.signal);
@@ -913,11 +919,11 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         maxTokens: options?.maxTokens, executionKind: captured.delegateModel ? "delegate" : scheduled ? "scheduled" : background ? 'background' : "interactive",
         backgroundPolicy:background,modelInvocation:invocation(captured.operation.operationId),scheduledTaskId: scheduled?.task_id, signal,
         assertCurrent() { assert(); scope.signal.throwIfAborted(); runtime().assertCapturedSourceCurrent(captured.inputs); if (captured.delegateModel) assertDelegateModel(captured.delegateModel); } });
-      if(background)backgroundRequests.set(signal,{accounted:reservation!==undefined,assertCurrent:()=>runtime().assertCapturedSourceCurrent(captured.inputs)});
+      preparedRequests.set(signal,{accounted:!!background&&reservation!==undefined,assertCurrent:()=>runtime().assertCapturedSourceCurrent(captured.inputs),assertAccountingReady:()=>assertOperationAccountingReady(root,captured.operation.operationId)});
       return reservation;
     },
     assertStoredOutcomeCurrent(model, signal) {
-      backgroundRequests.get(signal)?.assertCurrent(); check(model, signal, true);
+      preparedRequests.get(signal)?.assertCurrent(); check(model, signal, true);
     },
     async authorize(model, _kind, signal) { checkRequest(model, signal); }, assertCurrent(model, _kind, signal) { checkRequest(model, signal); } });
   regretsDecision = (captured, authority) => createHostRegretsAccountedDecision({
@@ -1278,6 +1284,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
             check({provider:payload.policy.model.provider,id:payload.policy.model.modelId},lifetime.signal,true);assertBackgroundCurrent(payload);
           },history),
         },
+        assertAccountingReady(operationId, terminal) { assert(); assertOperationAccountingReady(root, operationId, terminal); },
         assertAdmission: input => processControls!.assertAdmission(input),
         assertInputAdmission(chat) { assertAdmission(); ensureLiveWatch(chat); },
         materializeAnswer: codex ? createHostCodexAnswerMaterializer({ root, cwd: WORKSPACE_DIR, answers, assertOwner: assert }) : undefined,

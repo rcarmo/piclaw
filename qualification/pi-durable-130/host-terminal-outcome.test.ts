@@ -4,7 +4,7 @@ import { isDeepStrictEqual } from "node:util";
 import type { AssistantMessage } from "../../runtime/src/durable-legacy-sdk.js";
 import { projectTerminalOutcome, decodeStoredTerminalOutcome } from "../../runtime/durable-engine/src/host-terminal-outcome.js";
 import { parseModelFailure } from "../../runtime/durable-engine/src/host-model-failure.js";
-import { reserveHostRequest } from "../../runtime/durable-engine/src/host-request-accounting.js";
+import { reserveHostRequest, assertOperationAccountingReady } from "../../runtime/durable-engine/src/host-request-accounting.js";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
 import { getBudgetRequest, type BudgetModelInvocation } from "../../runtime/src/db/budget-request-reservations.js";
 import { writeFileSync, rmSync } from "node:fs";
@@ -333,6 +333,47 @@ for (const changed of ['account', 'source', 'owner', 'caller'] as const) test(`n
   if (changed === 'caller') caller.abort();
   expect(() => recovered!.assertRecoveredCurrent()).toThrow();
   expect(getBudgetRequest(f.request.id, f.database)).toEqual(before); expect(f.database.query('SELECT * FROM budget_usage_events').all()).toEqual(charges);
+}, true, false, { modelInvocation: invocation() }));
+
+for (const mode of ['priced', 'unpriced', 'no-account'] as const) test(`native next invocation cannot bypass a pending paid terminal via ${mode} admission`, () => reservedTerminal(async f => {
+  await f.request.retainTerminal(f.terminal);
+  const before = getBudgetRequest(f.request.id, f.database), works = f.database.query('SELECT * FROM budget_work ORDER BY id').all();
+  if (mode === 'no-account') writeFileSync(f.authPath, '{}');
+  const changed = { ...invocation(), checkpointHash: 'b'.repeat(64) };
+  await expect(f.prepareAgain({ modelInvocation: changed, ...(mode === 'unpriced' ? { model: { ...f.model, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } } } : {}) })).rejects.toThrow('budget_denied');
+  expect(getBudgetRequest(f.request.id, f.database)).toEqual(before); expect(f.database.query('SELECT * FROM budget_work ORDER BY id').all()).toEqual(works);
+  expect(f.database.query('SELECT count(*) n FROM budget_request_reservations').get()).toEqual({ n: 1 });
+  expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
+}, true, false, { modelInvocation: invocation() }));
+
+test('native hard first-receipt failure cannot disappear behind an unresolved receipt-less hold', () => reservedTerminal(async f => {
+  f.database.exec("CREATE TRIGGER reject_receipt BEFORE UPDATE OF terminal_receipt_json ON budget_request_reservations WHEN NEW.terminal_receipt_json IS NOT NULL BEGIN SELECT RAISE(ABORT, 'receipt write failed'); END");
+  await expect(f.request.retainTerminal(f.terminal)).rejects.toThrow('receipt write failed');
+  await f.request.abandon();
+  const held = getBudgetRequest(f.request.id, f.database);
+  expect(held?.state).toBe('unresolved'); expect(held?.terminal_receipt_json).toBeNull();
+  expect(() => assertOperationAccountingReady(f.database, invocation().operationId)).toThrow('budget_denied');
+  expect(() => assertOperationAccountingReady(f.database, invocation().operationId, true)).toThrow('budget_denied');
+  await expect(f.prepareAgain({ modelInvocation: { ...invocation(), checkpointHash: 'b'.repeat(64) } })).rejects.toThrow('budget_denied');
+  expect(getBudgetRequest(f.request.id, f.database)).toEqual(held);
+  expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
+}, true, false, { modelInvocation: invocation() }));
+
+test('native exact sibling receipts can reconcile without granting another send or deadlocking each other', () => reservedTerminal(async f => {
+  const secondScope = { ...invocation(), checkpointHash: 'b'.repeat(64) };
+  const second = (await f.prepareAgain({ modelInvocation: secondScope }))!; await second.dispatch();
+  await f.request.retainTerminal(f.terminal); await second.retainTerminal(f.terminal);
+  expect(() => assertOperationAccountingReady(f.database, invocation().operationId)).toThrow('budget_denied');
+  const firstRecovered = (await f.prepareAgain())!;
+  expect(firstRecovered.id).toBe(f.request.id); expect(firstRecovered.recoveredTerminal).toBeDefined();
+  expect(() => firstRecovered.assertRecoveredCurrent()).not.toThrow();
+  expect(() => assertOperationAccountingReady(f.database, invocation().operationId)).toThrow('budget_denied');
+  const secondRecovered = (await f.prepareAgain({ modelInvocation: secondScope }))!;
+  expect(secondRecovered.id).toBe(second.id); expect(secondRecovered.recoveredTerminal).toBeDefined();
+  expect(() => assertOperationAccountingReady(f.database, invocation().operationId)).not.toThrow();
+  expect(f.database.query('SELECT count(*) n FROM budget_request_reservations').get()).toEqual({ n: 2 });
+  expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 2 });
+  await expect(firstRecovered.dispatch()).rejects.toThrow('invalid_state'); await expect(secondRecovered.dispatch()).rejects.toThrow('invalid_state');
 }, true, false, { modelInvocation: invocation() }));
 
 test('native definitely-unsent logical invocation reuses its exact reserved binding and dispatches once', () => reservedTerminal(async f => {
