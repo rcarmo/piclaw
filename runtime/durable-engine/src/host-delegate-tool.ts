@@ -79,7 +79,7 @@ export function createHostDelegateTool(definition: Pick<ToolDefinition<TSchema>,
       const parent = await api.agent(context);
       const proposed = await selectModel(args, parent.model);
       const model = await api.memo("model", proposed, context);
-      const check = () => { assertCurrent(); runtime().assertCapturedSourceCurrent(captured.inputs); assertModelCurrent(model); };
+      const check = () => { assertCurrent(); runtime().assertCapturedSourceCurrent(captured.inputs, true); assertModelCurrent(model); };
       check();
       const requestId = `delegate:${api.taskId}`;
       // Reconcile accepted work before touching files. Public SDK request-ID

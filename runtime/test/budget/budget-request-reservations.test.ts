@@ -9,7 +9,7 @@ import { ensureBudgetWork, saveBudgetCap, setBudgetWorkStatus, grantBudgetAllowa
 import { evaluateBudget } from '../../src/budget/evaluator.js';
 import { recordSessionEventUsage } from '../../src/agent-pool/usage.js';
 import { withBudgetWorkContext } from '../../src/budget/context.js';
-import { reserveBudgetRequest, dispatchBudgetRequest, settleBudgetRequest, abandonBudgetRequest, getBudgetRequest, type BudgetRequestBinding } from '../../src/db/budget-request-reservations.js';
+import { reserveBudgetRequest, dispatchBudgetRequest, settleBudgetRequest, abandonBudgetRequest, getBudgetRequest, findBudgetRequestByModelInvocation, findBudgetRequestByLogicalModelInvocation, type BudgetModelInvocation, type BudgetModelInvocationIdentity, type BudgetRequestBinding } from '../../src/db/budget-request-reservations.js';
 isolateBudgetTestDatabase();
 function fixture(amount = 100) {
   const db = getDb();
@@ -222,3 +222,154 @@ test('two real WAL writer processes cannot reserve the same remaining balance', 
     expect((disk.query('PRAGMA synchronous').get() as {synchronous:number}).synchronous).toBe(2);
   } finally { clearTimeout(timer);for(const c of children){if(c.child.exitCode===null)c.child.kill('SIGKILL');await c.child.exited;}disk.close();ws.cleanup(); }
 },10000);
+
+const logicalInvocation = (): BudgetModelInvocationIdentity => ({
+  version: 1, domain: 'fixture-sdk', conversationId: 17, taskId: 23,
+  taskKind: 'pi.generation', phase: 'request', checkpointHash: 'a'.repeat(64),
+});
+
+test('logical invocation lookup uses the migrated index and returns the original full binding without writes', () => {
+  const { db, binding } = fixture(1000);
+  const scopes: BudgetModelInvocationIdentity[] = [logicalInvocation(), { ...logicalInvocation(), taskKind: 'pi.compaction', phase: 'summarize' }];
+  const originals = scopes.map((scope, index) => reserveBudgetRequest({
+    ...binding, id: `logical-${index}`, modelInvocation: { ...scope, operationId: `original-operation-${index}` },
+  }));
+  const plan = db.query('EXPLAIN QUERY PLAN SELECT * FROM budget_request_reservations WHERE model_invocation_key_sha256=?')
+    .all(originals[0].model_invocation_key_sha256) as { detail: string }[];
+  expect(plan.some(row => /SEARCH .*USING INDEX idx_budget_requests_model_invocation/.test(row.detail))).toBe(true);
+  const changes = db.query('SELECT total_changes() n').get();
+  const rows = db.query('SELECT * FROM budget_request_reservations ORDER BY id').all();
+  // SQLite itself forbids even a transient write during both hits and misses.
+  db.exec('PRAGMA query_only=ON');
+  try {
+    for (const [index, scope] of scopes.entries()) {
+      const found = findBudgetRequestByLogicalModelInvocation(scope, db);
+      expect(found).toEqual(originals[index]); // Includes original hashes, timestamps and reserved state.
+      expect(JSON.parse(found!.model_invocation_json!)).toEqual({ ...scope, operationId: `original-operation-${index}` });
+      expect(findBudgetRequestByLogicalModelInvocation(Object.assign(Object.create(null), scope), db)).toEqual(found);
+    }
+    const scope = scopes[0];
+    const misses: BudgetModelInvocationIdentity[] = [
+      { ...scope, domain: 'other-sdk' }, { ...scope, conversationId: 18 },
+      { ...scope, taskId: 24 }, { ...scope, checkpointHash: 'b'.repeat(64) },
+      { ...scope, taskKind: 'pi.compaction', phase: 'summarize', taskId: 24 },
+    ];
+    for (const miss of misses) expect(findBudgetRequestByLogicalModelInvocation(miss, db)).toBeNull();
+    expect(db.query('SELECT * FROM budget_request_reservations ORDER BY id').all()).toEqual(rows);
+    expect(db.query('SELECT total_changes() n').get()).toEqual(changes);
+    expect(db.query('SELECT count(*) n FROM budget_request_reservations').get()).toEqual({ n: 2 });
+    expect(db.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
+    expect(db.query('SELECT count(*) n FROM budget_usage_events').get()).toEqual({ n: 0 });
+  } finally { db.exec('PRAGMA query_only=OFF'); }
+});
+
+test('logical lookup omits operationId without relaxing the existing full invocation lookup', () => {
+  const { db, binding } = fixture();
+  const logical = logicalInvocation(), full: BudgetModelInvocation = { ...logical, operationId: 'original-operation' };
+  const original = reserveBudgetRequest({ ...binding, modelInvocation: full });
+  const changes = db.query('SELECT total_changes() n').get();
+  expect(findBudgetRequestByLogicalModelInvocation(logical, db)).toEqual(original);
+  expect(findBudgetRequestByModelInvocation(full, db)).toEqual(original);
+  expect(() => findBudgetRequestByModelInvocation(logical as BudgetModelInvocation, db)).toThrow('invalid_binding');
+  expect(() => findBudgetRequestByModelInvocation({ ...full, operationId: 'replacement-operation' }, db)).toThrow('conflict');
+  for (const operationId of [full.operationId, 'replacement-operation', undefined, null]) {
+    expect(() => findBudgetRequestByLogicalModelInvocation({ ...logical, operationId } as BudgetModelInvocationIdentity, db)).toThrow('invalid_binding');
+  }
+  expect(getBudgetRequest(binding.id, db)).toEqual(original);
+  expect(db.query('SELECT total_changes() n').get()).toEqual(changes);
+});
+
+test('logical invocation selector rejects missing fields and invalid values rather than returning absence', () => {
+  const { db, binding } = fixture();
+  const scope = logicalInvocation();
+  const original = reserveBudgetRequest({ ...binding, modelInvocation: { ...scope, operationId: 'original-operation' } });
+  const changes = db.query('SELECT total_changes() n').get();
+  const invalid: unknown[] = [null, undefined, 1, 'scope', [], Object.create(scope),
+    { ...scope, extra: true }, { ...scope, [Symbol('extra')]: true }];
+  for (const key of Object.keys(scope)) {
+    const missing = { ...scope } as Record<string, unknown>;
+    delete missing[key];
+    invalid.push(missing, { ...scope, [key]: undefined }, { ...scope, [key]: null },
+      Object.defineProperty({ ...scope }, key, { enumerable: false }));
+  }
+  const invalidFields: Record<string, unknown[]> = {
+    version: [0, 2, '1'],
+    domain: ['', ' \t', 1, 'bad\u0000domain', 'x'.repeat(257)],
+    conversationId: [0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, '17'],
+    taskId: [0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, '23'],
+    taskKind: ['generation', 'pi.compaction'], phase: ['summarize', 'other'],
+    checkpointHash: ['', 'a'.repeat(63), 'a'.repeat(65), 'A'.repeat(64), 'g'.repeat(64), 1],
+  };
+  for (const [key, values] of Object.entries(invalidFields)) {
+    for (const value of values) invalid.push({ ...scope, [key]: value });
+  }
+  for (const candidate of invalid) {
+    expect(() => findBudgetRequestByLogicalModelInvocation(candidate as BudgetModelInvocationIdentity, db)).toThrow('invalid_binding');
+  }
+  expect(getBudgetRequest(binding.id, db)).toEqual(original);
+  expect(db.query('SELECT total_changes() n').get()).toEqual(changes);
+});
+
+test('logical invocation selector rejects accessors and proxies without executing getters or traps', () => {
+  const { db } = fixture();
+  const scope = logicalInvocation();
+  let executions = 0;
+  const trap = () => { executions++; throw Error('selector executed caller code'); };
+  const candidates: unknown[] = Object.keys(scope).map(key => Object.defineProperty({ ...scope }, key, { enumerable: true, get: trap }));
+  candidates.push(Object.defineProperty({ ...scope }, 'operationId', { enumerable: true, get: trap }),
+    new Proxy(scope, { get: trap, has: trap, ownKeys: trap, getPrototypeOf: trap, getOwnPropertyDescriptor: trap }));
+  const revoked = Proxy.revocable(scope, {});
+  revoked.revoke();
+  candidates.push(revoked.proxy);
+  const changes = db.query('SELECT total_changes() n').get();
+  for (const candidate of candidates) {
+    expect(() => findBudgetRequestByLogicalModelInvocation(candidate as BudgetModelInvocationIdentity, db)).toThrow('invalid_binding');
+  }
+  expect(executions).toBe(0);
+  expect(db.query('SELECT total_changes() n').get()).toEqual(changes);
+  expect(db.query('SELECT count(*) n FROM budget_request_reservations').get()).toEqual({ n: 0 });
+});
+
+test('logical invocation lookup cannot return a malformed or corrupted stored full binding', () => {
+  const { db, binding } = fixture();
+  const logical = logicalInvocation(), full: BudgetModelInvocation = { ...logical, operationId: 'original-operation' };
+  const original = reserveBudgetRequest({ ...binding, modelInvocation: full });
+  const stored = JSON.parse(original.model_invocation_json!);
+  const withoutOperation = { ...stored };
+  delete withoutOperation.operationId;
+  const corruptions = [
+    { column: 'model_invocation_json', value: null },
+    ...['{', 'null', '[]', JSON.stringify(withoutOperation),
+      JSON.stringify({ ...stored, operationId: '' }), JSON.stringify({ ...stored, operationId: 'replacement-operation' }),
+      JSON.stringify({ ...stored, taskId: stored.taskId + 1 }), JSON.stringify({ ...stored, extra: true }),
+      ` ${original.model_invocation_json}`].map(value => ({ column: 'model_invocation_json' as const, value })),
+    { column: 'binding_sha256', value: '0'.repeat(64) },
+    { column: 'id', value: 'corrupted-request' }, { column: 'work_id', value: 'parent' },
+    { column: 'chat_jid', value: 'web:other' }, { column: 'provider_id', value: 'other-provider' },
+    { column: 'model_id', value: 'other-model' }, { column: 'account_ref', value: 'other-account' },
+    { column: 'amount_microusd', value: 1 },
+  ] as const;
+  const { rowid } = db.query('SELECT rowid FROM budget_request_reservations WHERE id=?').get(binding.id) as { rowid: number };
+  // Fault injection ONLY in this disposable migrated DB, never an alternate schema.
+  // Remove the immutability guard and permit a torn NULL/nonnull pair to exercise defensive reads.
+  db.exec('DROP TRIGGER budget_request_invocation_no_update; PRAGMA ignore_check_constraints=ON');
+  expect(() => db.query('UPDATE budget_request_reservations SET model_invocation_json=? WHERE rowid=?').run('{', rowid)).toThrow('malformed JSON');
+  db.exec('DROP INDEX idx_budget_requests_domain_state'); // Deliberate physical corruption crosses this additional integrity barrier too.
+  try {
+    for (const { column, value } of corruptions) {
+      const update = db.query(`UPDATE budget_request_reservations SET ${column}=? WHERE rowid=?`);
+      update.run(value, rowid);
+      try {
+        const damaged = db.query('SELECT * FROM budget_request_reservations WHERE rowid=?').get(rowid);
+        const changes = db.query('SELECT total_changes() n').get();
+        expect(() => findBudgetRequestByLogicalModelInvocation(logical, db)).toThrow('conflict');
+        expect(db.query('SELECT * FROM budget_request_reservations WHERE rowid=?').get(rowid)).toEqual(damaged);
+        expect(db.query('SELECT total_changes() n').get()).toEqual(changes);
+      } finally { update.run(original[column], rowid); }
+    }
+  } finally { db.exec('PRAGMA ignore_check_constraints=OFF'); }
+  expect(findBudgetRequestByLogicalModelInvocation(logical, db)).toEqual(original);
+  expect(db.query('SELECT count(*) n FROM budget_request_reservations').get()).toEqual({ n: 1 });
+  expect(db.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
+  expect(db.query('SELECT count(*) n FROM budget_usage_events').get()).toEqual({ n: 0 });
+});

@@ -5,12 +5,18 @@ import {join} from 'node:path';
 import {acquireRuntimeLock} from '../../runtime/src/runtime/single-instance.js';
 import { expect, test } from "bun:test";
 import { createHostOperationAuthority } from "../../runtime/durable-engine/src/host-operation-authority.js";
+import { assertOperationAccountingReady } from '../../runtime/durable-engine/src/host-request-accounting.js';
 import { createCurrentPiclawServiceWorkStore } from "../../runtime/src/service-effects/current-piclaw/service-work-store.js";
 import { installTerminalSettlementCompositionSchema } from "../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js";
 import { at, effect, sealed, value } from "./src/host-handoff.js";
+import { initDatabase, getDb, closeDatabase } from '../../runtime/src/db/connection.js';
+import { ensureBudgetWork } from '../../runtime/src/db/budget-limits.js';
+import { reserveBudgetRequest, dispatchBudgetRequest, recordBudgetTerminalReceipt, getBudgetRequest } from '../../runtime/src/db/budget-request-reservations.js';
 
-async function fixture() {
-  const root = new Database(":memory:");
+async function fixture(financial = false) {
+  let root: Database;
+  if (financial) { initDatabase(); root = Database.deserialize(getDb().serialize()); closeDatabase(); }
+  else root = new Database(":memory:");
   installTerminalSettlementCompositionSchema(root);
   const work = value(createCurrentPiclawServiceWorkStore(root, { hitFault: () => false, recordTrace() {} }));
   const chatJid = "web:authority";
@@ -28,6 +34,44 @@ async function fixture() {
   root.exec("CREATE TABLE authority_probe (value TEXT)");
   return { root, before, captured: { operation, inputs } };
 }
+
+for (const readonly of [false, true]) test(`captured tool authority repeats the pending accounting barrier before its effect; readonly=${readonly}`, async () => {
+  const { root, captured } = await fixture(true);
+  const guarded = { ...captured, accountingBarrier: () => assertOperationAccountingReady(root, captured.operation.operationId) };
+  const authority = createHostOperationAuthority(root, guarded, () => {}, readonly);
+  try {
+    authority.assertCurrent();
+    const operationWork = `durable-operation:${captured.operation.operationId}`;
+    ensureBudgetWork({ id: operationWork, chatJid: captured.operation.chatJid, executionKind: 'interactive' }, root);
+    const binding = { id: 'paid-pending', workId: 'durable-request:paid-pending', chatJid: captured.operation.chatJid, providerId: 'fixture', modelId: 'fixture', accountRef: 'generation', amountMicros: 100 };
+    ensureBudgetWork({ id: binding.workId, chatJid: binding.chatJid, executionKind: 'interactive', parentWorkId: operationWork }, root);
+    reserveBudgetRequest(binding, {}, root);
+    dispatchBudgetRequest(binding, { authorise() {}, signal: new AbortController().signal }, root);
+    recordBudgetTerminalReceipt(binding, { version: 1, requestId: binding.id, requestBindingSha256: getBudgetRequest(binding.id, root)!.binding_sha256,
+      projectedOutcome: { role: 'assistant', provider: binding.providerId, model: binding.modelId, api: 'openai-completions', stopReason: 'stop', usage: {
+        input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0.00003, output: 0.00001, cacheRead: 0, cacheWrite: 0, total: 0.00004 } } } }, at, root);
+    const before = root.serialize(); let entered = 0;
+    expect(() => authority.assertSourceCurrent()).not.toThrow(); // Existing outcome observation only.
+    expect(() => authority.assertCurrent()).toThrow('budget_denied');
+    if (!readonly) await expect(authority.admitWrite(() => { entered++; root.exec("INSERT INTO authority_probe VALUES('must not write')"); })).rejects.toThrow('budget_denied');
+    expect(entered).toBe(0); expect(root.serialize()).toEqual(before);
+    // Model/prompt source capture is not a tool grant. It can still reach the
+    // exact reservation recovery path rather than being denied prematurely.
+    expect(() => createHostOperationAuthority(root, captured, () => {}, true).assertCurrent()).not.toThrow();
+  } finally { root.close(); }
+});
+
+for (const readonly of [false, true]) for (const invalid of ['value', 'async', 'reject'] as const) test(`captured accounting callback stays synchronous and fail closed; ${invalid}, readonly=${readonly}`, async () => {
+  const { root, captured } = await fixture(); let entered = 0;
+  try {
+    const accountingBarrier = invalid === 'value' ? () => true : invalid === 'async' ? () => Promise.resolve() : () => Promise.reject(Error('synthetic guard rejection'));
+    const authority = createHostOperationAuthority(root, { ...captured, accountingBarrier }, () => {}, readonly);
+    const before = root.serialize();
+    expect(() => authority.assertCurrent()).toThrow('Accounting barrier must be synchronous');
+    if (!readonly) await expect(authority.admitWrite(() => { entered++; })).rejects.toThrow('Accounting barrier must be synchronous');
+    expect(entered).toBe(0); expect(root.serialize()).toEqual(before); await Promise.resolve();
+  } finally { root.close(); }
+});
 
 test("host authority requires a bound write harness; pre-ACK readonly checks remain valid without SQL writes", async () => {
   const { root, before } = await fixture();
@@ -70,6 +114,8 @@ test("host authority checks exact operation, harness and claimed source evidence
       root.exec("SAVEPOINT mutation");
       try {
         root.exec(sql);
+        expect(() => authority.assertSourceCurrent()).toThrow();
+        expect(() => readonly.assertSourceCurrent()).toThrow();
         expect(() => authority.assertCurrent()).toThrow(/Stale host (operation|source) authority/);
         expect(() => readonly.assertCurrent()).toThrow(/Stale host (operation|harness|source) authority/);
         let called = false;

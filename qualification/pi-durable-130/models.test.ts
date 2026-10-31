@@ -13,6 +13,7 @@ import type { Models, ImageModel, ClassifierModel, Api, ImageApi, ClassifierApi,
 import { createHostModels, type HostModelPolicy } from "../../runtime/durable-engine/src/index.js";
 import { modelFailureDetail, parseModelFailure } from "../../runtime/durable-engine/src/host-model-failure.js";
 import type { HostModelEventObserver } from "../../runtime/durable-engine/src/host-models.js";
+import { HostCodexModelServices } from '../../runtime/durable-engine/src/host-codex-model-services.js';
 import { addLogSink, removeLogSink, type LogRecord } from "../../runtime/src/utils/logger.js";
 
 // These ESM-only public exports have no require condition; resolve from root.
@@ -24,6 +25,8 @@ const { createAssistantMessageEventStream }: typeof import("../../node_modules/@
 import { Type, normalizeContext } from "../../runtime/durable-engine/qualification/ai.ts";
 const ref = { provider: "qualification-provider", id: "qualification-model" };
 const token = "SYNTHETIC-HOST-ONLY-TOKEN";
+// Protocol-only fixture snapshot. Real durable receipt/storage tests are separate.
+const fixtureTerminalReceipt = async (message: AssistantMessage) => structuredClone(message);
 const model: Model<"openai-completions"> = { ...ref, name: "Qualification", api: "openai-completions",
   baseUrl: "https://fixture.invalid", input: ["text"], reasoning: true,
   contextWindow: 10000, maxTokens: 1000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
@@ -197,6 +200,87 @@ async function fixture(multimodal = false, keyless = false, deferred = false, im
 }
 const context = { messages: [{ role: "user" as const, content: "fixture", timestamp: 1 }],
   tools: [{ name: "fixture_tool", description: "fixture", parameters: { type: "object" as const } }] };
+
+async function storedOutcomeFixture(failed = false) {
+  const f = await fixture();
+  // Provider registration schedules its initial credential availability refresh.
+  // Measure request-time access separately from construction of the host runtime.
+  await Bun.sleep(0); f.requested.length = 0;
+  const stored: AssistantMessage = structuredClone(f.message);
+  if (failed) {
+    stored.stopReason = 'error'; stored.content = [];
+    stored.errorMessage = modelFailureDetail({ phase: 'provider', category: 'transport' });
+  }
+  const calls = { source: 0, current: 0, request: 0, event: 0, observer: 0, authorize: 0, codex: 0, retain: 0, dispatch: 0, settle: 0, abandon: 0 };
+  f.policy.captureSourceGuard = () => () => { calls.source++; };
+  f.policy.assertStoredOutcomeCurrent = (owner, signal) => { expect(owner).toEqual(ref); signal.throwIfAborted(); calls.current++; };
+  f.policy.authorize = async () => { calls.authorize++; throw Error('Stored outcome must not request new spend'); };
+  f.policy.codex = new HostCodexModelServices({
+    async capture() { calls.codex++; throw Error('Stored outcome must not enter Codex conversion'); },
+    assertAccount() { throw Error('Unused Codex account'); }, routingScope() { throw Error('Unused Codex routing'); },
+    async observe() { throw Error('Unused Codex output'); }, async flush() { throw Error('Unused Codex flush'); },
+  }, { createNativeCodexHooks() { throw Error('Unused Codex hooks'); } });
+  f.observe(() => { calls.observer++; }); f.eventAuthority(() => { calls.event++; });
+  f.policy.prepareRequest = async () => ({ id: 'exact-receipt', recoveredTerminal: stored,
+    assertRecoveredCurrent() { calls.request++; },
+    async retainTerminal() { calls.retain++; }, async dispatch() { calls.dispatch++; },
+    async settle() { calls.settle++; }, async abandon() { calls.abandon++; } });
+  return { ...f, stored, recoveredCalls: calls };
+}
+
+for (const method of ['stream', 'streamSimple', 'complete', 'completeSimple'] as const) for (const failed of [false, true]) {
+  test(`${method}: exact stored outcome bypasses auth, transport, Codex and historical callbacks; failed=${failed}`, async () => {
+    const f = await storedOutcomeFixture(failed); f.exhaust();
+    const before = JSON.stringify(f.stored), events: string[] = [];
+    const value = f.models[method](f.model, context);
+    if ('result' in value) for await (const event of value) events.push(event.type);
+    const result = 'result' in value ? await value.result() : await value;
+    expect(result).toEqual(f.stored); expect(JSON.stringify(f.stored)).toBe(before);
+    expect(result).not.toBe(f.stored); expect(result.content).not.toBe(f.stored.content);
+    if (failed) expect(parseModelFailure(result.errorMessage)).toEqual({ phase: 'provider', category: 'transport' });
+    expect(f.recoveredCalls).toEqual({ source: 3, current: 2, request: 2, event: 2, observer: 0, authorize: 0, codex: 0, retain: 0, dispatch: 0, settle: 0, abandon: 0 });
+    expect(f.calls()).toBe(0); expect(f.requested).toEqual([]);
+    if ('result' in value) expect(events).toEqual([failed ? 'error' : 'done']);
+  });
+}
+
+for (const failed of [false, true]) for (const denial of ['missing', 'async', 'current', 'request-missing', 'request-async', 'request-account', 'physical-api', 'physical-type', 'source', 'event', 'late-event', 'cancel'] as const) {
+  test(`stored outcome still requires current synchronous source/model/event authority; denial=${denial}, failed=${failed}`, async () => {
+    const f = await storedOutcomeFixture(failed);
+    if (denial === 'missing') f.policy.assertStoredOutcomeCurrent = undefined;
+    if (denial === 'async') f.policy.assertStoredOutcomeCurrent = async () => { throw Error(token); };
+    if (denial === 'current') f.policy.assertStoredOutcomeCurrent = () => { throw Error(token); };
+    if (denial.startsWith('request-')) {
+      const prepare = f.policy.prepareRequest!;
+      f.policy.prepareRequest = async (...args) => {
+        const prepared = await prepare(...args); if (!prepared) throw Error('Stored fixture required');
+        return { ...prepared, assertRecoveredCurrent:
+          denial === 'request-missing' ? undefined : denial === 'request-async' ? async () => { throw Error(token); } : () => { throw Error(token); } };
+      };
+    }
+    if (denial === 'physical-api' || denial === 'physical-type') {
+      const prepare = f.policy.prepareRequest!;
+      f.policy.prepareRequest = async (...args) => {
+        const result = await prepare(...args);
+        Object.assign(f.runtime.getPhysicalModel(ref.provider, ref.id)!, denial === 'physical-api' ? { api: 'anthropic-messages' } : { type: 'classifier' });
+        return result;
+      };
+    }
+    if (denial === 'source') f.policy.captureSourceGuard = () => () => { if (++f.recoveredCalls.source === 2) throw Error(token); };
+    if (denial === 'event' || denial === 'late-event') f.eventAuthority(() => { if (++f.recoveredCalls.event === (denial === 'event' ? 1 : 2)) throw Error(token); });
+    if (denial === 'cancel') {
+      const prepare = f.policy.prepareRequest!;
+      f.policy.prepareRequest = async (...args) => { const result = await prepare(...args); f.abort(); return result; };
+    }
+    const result = await f.models.completeSimple(f.model, context); await Bun.sleep(0);
+    expect(result.stopReason).toBe('error'); expect(result.content).toEqual([]);
+    expect(parseModelFailure(result.errorMessage)).toEqual({ phase: 'source', category: failed ? 'transport' : denial === 'cancel' ? 'aborted' : 'unknown' });
+    expect(result.usage).toEqual(f.stored.usage); expect(JSON.stringify(result)).not.toContain(token);
+    expect(f.calls()).toBe(0); expect(f.requested).toEqual([]);
+    expect(f.recoveredCalls.authorize + f.recoveredCalls.codex + f.recoveredCalls.observer + f.recoveredCalls.dispatch + f.recoveredCalls.retain + f.recoveredCalls.settle).toBe(0);
+    expect(f.recoveredCalls.abandon).toBe(1);
+  });
+}
 
 for (const method of ["stream", "streamSimple", "complete", "completeSimple"] as const) {
   test(`${method}: delegates actual host runtime; preserves JSON tool/thinking/options`, async () => {
@@ -770,7 +854,7 @@ for (const method of ["stream", "streamSimple", "complete", "completeSimple"] as
     const f = await fixture(false, false, false, false, failed, `HTTP 504 timed out ${token}`);
     const settlements: AssistantMessage[] = [], records: LogRecord[] = [];
     let observers = 0;
-    f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle(message) { settlements.push(structuredClone(message)); }, async abandon() {} });
+    f.policy.prepareRequest = async () => ({ retainTerminal: fixtureTerminalReceipt, async dispatch() {}, async settle(message) { settlements.push(structuredClone(message)); }, async abandon() {} });
     f.observe(() => { observers++; throw Error(token); });
     const sink = (record: LogRecord) => { records.push(record); }; addLogSink(sink);
     try {
@@ -792,7 +876,7 @@ test("optional observer failure on final delta detaches while provider terminal 
   const f = await fixture(); f.finalDelta();
   let observers = 0, settlements = 0;
   f.observe(() => { observers++; throw Error(token); });
-  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle() { settlements++; }, async abandon() {} });
+  f.policy.prepareRequest = async () => ({ retainTerminal: fixtureTerminalReceipt, async dispatch() {}, async settle() { settlements++; }, async abandon() {} });
   const result = await f.models.completeSimple(f.model, context);
   expect(result.stopReason).toBe("toolUse"); expect(result.content).toEqual(f.message.content);
   expect(result.usage).toEqual(f.message.usage);
@@ -807,7 +891,7 @@ test("optional observer mutations never change provider terminal or accounting e
     if ("partial" in event) { event.partial.usage.input = 999; event.partial.content.length = 0; }
     if (event.type === "done") { event.message.usage.input = 999; event.message.content.length = 0; }
   });
-  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle(message) { settled = structuredClone(message); }, async abandon() {} });
+  f.policy.prepareRequest = async () => ({ retainTerminal: fixtureTerminalReceipt, async dispatch() {}, async settle(message) { settled = structuredClone(message); }, async abandon() {} });
   const result = await f.models.completeSimple(f.model, context);
   expect(result.content).toEqual(f.message.content); expect(result.usage).toEqual(f.message.usage);
   expect(settled?.content).toEqual(f.message.content); expect(settled?.usage).toEqual(f.message.usage);
@@ -830,16 +914,92 @@ test("rejected asynchronous observer cannot poison result publication or produce
   expect(result.usage).toEqual(f.message.usage); expect(f.calls()).toBe(1);
 });
 
-test("mandatory event authority failure remains fatal and keeps original terminal usage", async () => {
+for (const boundary of ['source', 'cancel'] as const) for (const observed of [false, true]) for (const streamed of [false, true]) {
+  test(`live publication rechecks authority after settlement; ${boundary}, observer=${observed}, streamed=${streamed}`, async () => {
+    const f = await fixture(); let current = true, retentions = 0, settlements = 0;
+    // Keep the complete expected terminal deterministic: the SDK stream stamps
+    // duration only when its wall-clock creation shares the message's millisecond.
+    f.message.durationMs = 7;
+    const retained: AssistantMessage[] = [];
+    f.policy.captureSourceGuard = () => () => { if (!current) throw Error(token); };
+    if (observed) f.observe(() => {});
+    f.policy.prepareRequest = async () => ({
+      async dispatch() {}, async retainTerminal(message) { retentions++; retained.push(structuredClone(message)); },
+      async settle() { settlements++; await Bun.sleep(0); if (boundary === 'source') current = false; else f.abort(); },
+      async abandon() {},
+    });
+    const stream = streamed ? f.models.streamSimple(f.model, context) : undefined;
+    const events: string[] = [];
+    if (stream) for await (const event of stream) events.push(event.type);
+    const result = stream ? await stream.result() : await f.models.completeSimple(f.model, context);
+    expect(result.stopReason).toBe('error'); expect(parseModelFailure(result.errorMessage)?.phase).toBe('source');
+    expect(result.usage).toEqual(f.message.usage); expect(JSON.stringify(result)).not.toContain(token);
+    expect(retained).toEqual([f.message]); expect(retentions).toBe(1); expect(settlements).toBe(1); expect(f.calls()).toBe(1);
+    expect(events).not.toContain('done'); if (stream) expect(events.at(-1)).toBe('error');
+  });
+}
+
+test("late observer rejection after SDK-visible result publication preserves outcome and at-most-once settlement", async () => {
+  const f = await fixture(), release = barrier(); let observers = 0, settlements = 0;
+  f.observe(() => { observers++; return release.promise.then(() => { throw Error(token); }); });
+  f.policy.prepareRequest = async () => ({ retainTerminal: fixtureTerminalReceipt, async dispatch() {}, async settle() { settlements++; }, async abandon() {} });
+  try {
+    const result = await bounded(f.models.completeSimple(f.model, context));
+    const published = JSON.stringify(result);
+    expect(result.stopReason).toBe("toolUse"); expect(result.content).toEqual(f.message.content);
+    expect(result.usage).toEqual(f.message.usage); expect(settlements).toBe(1);
+    release.release(); await Bun.sleep(0);
+    expect(JSON.stringify(result)).toBe(published);
+    expect(observers).toBe(1); expect(settlements).toBe(1); expect(f.calls()).toBe(1);
+  } finally { release.release(); await Bun.sleep(0); }
+});
+
+test("mandatory event authority failure remains fatal after retaining the full original terminal before the fence", async () => {
   const f = await fixture(); let observers = 0, settlements = 0;
-  f.eventAuthority(() => { throw Error(token); });
+  const retained: AssistantMessage[] = [], order: string[] = [];
+  f.eventAuthority(() => { order.push('fence'); throw Error(token); });
   f.observe(() => { observers++; });
-  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle() { settlements++; }, async abandon() {} });
+  f.policy.prepareRequest = async () => ({ async dispatch() {}, async retainTerminal(message) { retained.push(structuredClone(message)); order.push('retain'); }, async settle() { settlements++; }, async abandon() {} });
   const result = await f.models.completeSimple(f.model, context);
   expect(result.stopReason).toBe("error"); expect(parseModelFailure(result.errorMessage)?.phase).toBe("source");
   expect(result.usage).toEqual(f.message.usage);
+  expect(retained).toHaveLength(1); expect(retained[0]).toMatchObject({ content: f.message.content, usage: f.message.usage, stopReason: f.message.stopReason });
+  expect(order).toEqual(['retain', 'fence']);
   expect(observers).toBe(0); expect(settlements).toBe(0); expect(f.calls()).toBe(1);
   expect(JSON.stringify(result)).not.toContain(token);
+});
+
+test('mandatory nonterminal fence failure drains and retains the actual terminal without provider or financial callback replay', async () => {
+  const f = await fixture(); f.finalDelta();
+  const retained: AssistantMessage[] = [], order: string[] = []; let settlements = 0, observers = 0;
+  f.eventAuthority(() => { order.push('fence'); throw Error(token); }); f.observe(() => { observers++; });
+  f.policy.prepareRequest = async () => ({ async dispatch() {}, async retainTerminal(message) { retained.push(structuredClone(message)); order.push('retain'); }, async settle() { settlements++; }, async abandon() {} });
+  const result = await f.models.completeSimple(f.model, context);
+  expect(parseModelFailure(result.errorMessage)?.phase).toBe('source'); expect(result.stopReason).toBe('error');
+  expect(retained).toHaveLength(1); expect(retained[0]).toMatchObject({ content: f.message.content, usage: f.message.usage, stopReason: f.message.stopReason });
+  expect(order).toEqual(['fence', 'retain']); expect(f.captured().options.signal.aborted).toBe(true);
+  expect(f.calls()).toBe(1); expect(settlements).toBe(0); expect(observers).toBe(0);
+});
+
+test('result-only terminal is retained before its final mandatory authority check', async () => {
+  const f = await fixture(); f.resultOnly(); const order: string[] = []; let settlements = 0;
+  f.eventAuthority(() => { order.push('fence'); throw Error(token); }); f.observe(() => {});
+  f.policy.prepareRequest = async () => ({ async dispatch() {}, async retainTerminal(message) { expect(message.content).toEqual(f.message.content); order.push('retain'); }, async settle() { settlements++; }, async abandon() {} });
+  const result = await f.models.completeSimple(f.model, context);
+  expect(parseModelFailure(result.errorMessage)?.phase).toBe('source'); expect(result.usage).toEqual(f.message.usage);
+  expect(order).toEqual(['retain', 'fence']); expect(settlements).toBe(0); expect(f.calls()).toBe(1);
+});
+
+for (const failed of [false, true]) test(`terminal-retention rejection is not replayed by physical drain or financial cleanup; providerFailed=${failed}`, async () => {
+  const f = await fixture(false, false, false, false, failed, 'HTTP 504 timed out');
+  let retentions = 0, settlements = 0, observers = 0, abandonments = 0;
+  f.observe(() => { observers++; });
+  f.policy.prepareRequest = async () => ({ async dispatch() {}, async retainTerminal() { retentions++; throw Error(token); }, async settle() { settlements++; }, async abandon() { abandonments++; } });
+  const result = await f.models.completeSimple(f.model, context);
+  expect(result.stopReason).toBe('error'); expect(retentions).toBe(1); expect(settlements).toBe(0); expect(observers).toBe(0); expect(abandonments).toBe(1);
+  expect(parseModelFailure(result.errorMessage)).toEqual(failed ? { phase: 'accounting', category: 'timeout', httpStatus: 504 } : { phase: 'accounting', category: 'unknown' });
+  expect(result.usage).toEqual(failed ? { ...f.message.usage, cost: { input: 0.1, output: 0.2, cacheRead: 0, cacheWrite: 0, total: 0.3 } } : f.message.usage);
+  expect(f.calls()).toBe(1); expect(JSON.stringify(result)).not.toContain(token);
 });
 
 test("terminal projection failure cannot erase validated original usage", async () => {
@@ -896,7 +1056,7 @@ test("asynchronous event authority is rejected rather than ignored as an optiona
 test("event authority is rechecked after result publication before accounting or SDK success", async () => {
   const f = await fixture(); let settlements = 0;
   f.observe(() => { f.eventAuthority(() => { throw Error(token); }); });
-  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle() { settlements++; }, async abandon() {} });
+  f.policy.prepareRequest = async () => ({ retainTerminal: fixtureTerminalReceipt, async dispatch() {}, async settle() { settlements++; }, async abandon() {} });
   const result = await f.models.completeSimple(f.model, context);
   expect(result.stopReason).toBe("error"); expect(parseModelFailure(result.errorMessage)?.phase).toBe("source");
   expect(result.usage).toEqual(f.message.usage); expect(settlements).toBe(0); expect(f.calls()).toBe(1);
@@ -916,7 +1076,7 @@ test("provider failure preserves safe category, accounting and a single dispatch
   const f = await fixture(false, false, false, false, true, `HTTP 504 timed out; Authorization: Bearer ${token}`);
   const records: LogRecord[] = [], sink = (record: LogRecord) => { records.push(record); };
   let settlements = 0, abandonments = 0;
-  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle() { settlements++; }, async abandon() { abandonments++; } });
+  f.policy.prepareRequest = async () => ({ retainTerminal: fixtureTerminalReceipt, async dispatch() {}, async settle() { settlements++; }, async abandon() { abandonments++; } });
   addLogSink(sink);
   try {
     const result = await f.models.completeSimple(f.model, context);
@@ -932,7 +1092,7 @@ test("provider failure preserves safe category, accounting and a single dispatch
 
 test("unresolved accounting does not overwrite the original provider timeout", async () => {
   const f = await fixture(false, false, false, false, true, `HTTP 504 timed out ${token}`);
-  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle() { throw Error(token); }, async abandon() {} });
+  f.policy.prepareRequest = async () => ({ retainTerminal: fixtureTerminalReceipt, async dispatch() {}, async settle() { throw Error(token); }, async abandon() {} });
   const result = await f.models.completeSimple(f.model, context);
   expect(parseModelFailure(result.errorMessage)).toEqual({phase:"accounting",category:"timeout",httpStatus:504});
   expect(f.calls()).toBe(1);
@@ -952,7 +1112,7 @@ test("admission failure reports its stage without dispatch or private exception 
 test("accounting and cleanup failures remain visible without repeating provider work", async () => {
   const f = await fixture();
   const records: LogRecord[] = [], sink = (record: LogRecord) => { records.push(record); };
-  f.policy.prepareRequest = async () => ({ async dispatch() {}, async settle() { throw Error(token); }, async abandon() { throw Error(token); } });
+  f.policy.prepareRequest = async () => ({ retainTerminal: fixtureTerminalReceipt, async dispatch() {}, async settle() { throw Error(token); }, async abandon() { throw Error(token); } });
   addLogSink(sink);
   try {
     const result = await f.models.completeSimple(f.model, context);
@@ -986,7 +1146,7 @@ for (const archiveFails of [false, true]) for (const exhausted of [false, true])
   };
   f.policy.prepareRequest = async () => {
     const row = {id: crypto.randomUUID(), state: "reserved"}; requests.push(row);
-    return {id:row.id, async dispatch() {row.state = "dispatched";}, async settle(message) {
+    return {id:row.id, retainTerminal: fixtureTerminalReceipt, async dispatch() {row.state = "dispatched";}, async settle(message) {
       if (message.stopReason === "error") { row.state = "unresolved"; throw Error("Native request settlement unresolved"); }
       row.state = "settled";
     }, async abandon() { if (row.state === "dispatched") row.state = "unresolved"; }};
@@ -1015,7 +1175,7 @@ for (const archiveFails of [false, true]) for (const exhausted of [false, true])
 test("retention write failure preserves original provider classification and unresolved request", async () => {
   const f=await fixture(false,true,false,false,true,"HTTP 504 upstream interrupted; PRIVATE_ORIGINAL_REASON");
   const records:LogRecord[]=[],sink=(record:LogRecord)=>{records.push(record);};let seen:unknown,abandoned=0;
-  f.policy.prepareRequest=async()=>({id:"original-unresolved-request",async dispatch(){},async settle(){throw Error("PRIVATE_SETTLEMENT_FAILURE");},async abandon(){abandoned++;}});
+  f.policy.prepareRequest=async()=>({ retainTerminal: fixtureTerminalReceipt,id:"original-unresolved-request",async dispatch(){},async settle(){throw Error("PRIVATE_SETTLEMENT_FAILURE");},async abandon(){abandoned++;}});
   f.policy.retainFailure=evidence=>{seen=evidence;throw Error("PRIVATE_ARCHIVE_FAILURE");};
   addLogSink(sink);
   try {
@@ -1068,7 +1228,7 @@ test("abort during retry backoff survives reopen without replay or resolving unc
   const requests: { id: string; state: string }[] = [];
   f.policy.prepareRequest = async () => {
     const row = { id: crypto.randomUUID(), state: "reserved" }; requests.push(row);
-    return { id: row.id, async dispatch() { row.state = "dispatched"; }, async settle(message) {
+    return { id: row.id, retainTerminal: fixtureTerminalReceipt, async dispatch() { row.state = "dispatched"; }, async settle(message) {
       if (message.stopReason === "error") { row.state = "unresolved"; throw Error("Native request settlement unresolved"); }
       row.state = "settled";
     }, async abandon() { if (row.state === "dispatched") row.state = "unresolved"; } };

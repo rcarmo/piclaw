@@ -3,7 +3,7 @@ import type { HostCodexModelServices } from "./host-codex-model-services.js";
 import { createLogger } from "../../src/utils/logger.js";
 import { taskModelRequestScope } from "./task-model-boundary-shim.js";
 import { isPromise } from "node:util/types";
-import { classifyModelFailure, modelFailureDetail, type ModelFailure, type ModelFailurePhase } from "./host-model-failure.js";
+import { classifyModelFailure, modelFailureDetail, parseModelFailure, type ModelFailure, type ModelFailurePhase } from "./host-model-failure.js";
 import type { ModelFailureEvidence } from "./host-model-failure-evidence.js";
 const log = createLogger("durable.models");
 import {
@@ -37,8 +37,16 @@ export interface HostModelPolicy {
   retainFailure?(evidence: ModelFailureEvidence): string | Promise<string>;
   prepareRequest?(model: Model<Api>, options: SimpleStreamOptions | undefined, signal: AbortSignal): Promise<{
     readonly id?: string;
+    /** Exact verified prior terminal; no transport or observer replay. */
+    readonly recoveredTerminal?: AssistantMessage;
+    /** Exact reservation/account/source fence, synchronous after every await. */
+    assertRecoveredCurrent?(): void;
+    /** Owner-lifetime retention only; supplies no permission for later effects. */
+    retainTerminal(message: AssistantMessage): Promise<unknown>;
     dispatch(): Promise<void>; settle(message: AssistantMessage): Promise<void>; abandon(): Promise<void>;
   } | undefined>;
+  /** Current source/model approval for an exact stored fact; grants no spend. */
+  assertStoredOutcomeCurrent?(ref: ModelRef, signal: AbortSignal): void;
   /** Includes host model approval and budget admission; never auth/login approval. */
   authorize(ref: ModelRef, kind: Operation, signal: AbortSignal): Promise<void>;
   /** Synchronous approval/budget-generation check after host auth has resolved. */
@@ -245,6 +253,12 @@ export function createHostModels(
     let request: Awaited<ReturnType<NonNullable<HostModelPolicy["prepareRequest"]>>>;
     let transportAbort: AbortController | undefined;
     let providerResult: { result(): Promise<AssistantMessage> } | undefined;
+    let retentionAttempted = false;
+    const retainTerminal = async (message: AssistantMessage) => {
+      if (!request || retentionAttempted) return;
+      retentionAttempted = true; // Never retry an entered retention callback on drain.
+      await request.retainTerminal(message);
+    };
     const captureTerminalUsage = (message: AssistantMessage) => {
       if (message.provider !== model.provider || message.model !== model.id || message.api !== model.api) return;
       const responseModel = message.responseModel ?? message.model;
@@ -303,6 +317,35 @@ export function createHostModels(
         signal.throwIfAborted();
         phase = "admission";
         if (policy.prepareRequest) request = await policy.prepareRequest(model, { ...safeOptions, signal: options?.signal }, signal);
+        if (request?.recoveredTerminal) {
+          phase = 'source';
+          captureTerminalUsage(request.recoveredTerminal);
+          if (request.recoveredTerminal.stopReason === 'error' || request.recoveredTerminal.stopReason === 'aborted')
+            providerFailure = parseModelFailure(request.recoveredTerminal.errorMessage);
+          const guard = policy.assertStoredOutcomeCurrent, requestGuard = request.assertRecoveredCurrent?.bind(request);
+          if (!guard || !requestGuard) throw Error('Stored model outcome authority unavailable');
+          const checkStored = () => {
+            phase = 'source'; signal.throwIfAborted(); assertSource();
+            for (const check of [requestGuard, () => guard.call(policy, ref, signal)]) {
+              const checked: unknown = check();
+              if (checked !== undefined) {
+                if (isPromise(checked)) void Promise.prototype.catch.call(checked, () => {});
+                throw TypeError('Stored model outcome authority must be synchronous');
+              }
+            }
+            const physical = hostModelRuntime120.getPhysicalModel(ref.provider, ref.id);
+            if (!physical || (physical.type ?? 'chat') !== 'chat' || physical.provider !== ref.provider ||
+              physical.id !== ref.id || physical.api !== listed.api) throw Error('Model owner changed');
+            assertEventCurrent(); phase = 'source';
+          };
+          checkStored();
+          const result = projectMessage(request.recoveredTerminal, model);
+          checkStored();
+          if (result.stopReason === 'error' || result.stopReason === 'aborted') output.push({ type: 'error', reason: result.stopReason, error: result });
+          else if (result.stopReason === 'stop' || result.stopReason === 'length' || result.stopReason === 'toolUse') output.push({ type: 'done', reason: result.stopReason, message: result });
+          else throw Error('Stored model outcome is not terminal');
+          output.end(result); return;
+        }
         await policy.authorize(ref, "chat", signal);
         signal.throwIfAborted();
         assertSource();
@@ -351,6 +394,9 @@ export function createHostModels(
               providerError = message;
               providerFailure = dispatchBudgetFailure ?? classifyModelFailure("provider", message);
             }
+            // Retain original paid facts before mandatory fences or optional UI.
+            // This database owner is independent of request/source cancellation.
+            phase = 'accounting'; await retainTerminal(message); phase = 'provider';
           }
           assertEventCurrent();
           if (observer && !observerDetached) {
@@ -372,21 +418,26 @@ export function createHostModels(
         const result = await stream.result();
         captureTerminalUsage(result);
         if (result.stopReason === "error" || result.stopReason === "aborted") { providerError = result; providerFailure = dispatchBudgetFailure??classifyModelFailure("provider", result); }
+        phase = 'accounting'; await retainTerminal(result); phase = 'provider';
         assertEventCurrent();
         phase = "accounting";
         await request?.settle(result);
         phase = "conversion";
         await codex?.finish();
+        phase = 'source'; signal.throwIfAborted(); assertSource(); assertEventCurrent();
         if (providerFailure) { phase = "provider"; throw new Error("Host request failed"); }
-        if (terminalReason !== undefined) output.push({ type: "done", reason: terminalReason, message: projectMessage(result, model) });
-        output.end(projectMessage(result, model));
+        phase = 'conversion'; const message = projectMessage(result, model);
+        phase = 'source'; signal.throwIfAborted(); assertSource(); assertEventCurrent();
+        if (terminalReason !== undefined) output.push({ type: "done", reason: terminalReason, message });
+        output.end(message);
       } catch (cause) {
         // Authority/projection failure must not leave the physical request running
         // after its SDK observer has ended. Optional UI failures never reach here.
         transportAbort?.abort(cause);
         if (providerResult) {
+          let terminal: AssistantMessage | undefined;
           try {
-            const terminal = await providerResult.result();
+            terminal = await providerResult.result();
             captureTerminalUsage(terminal);
             if (terminal.stopReason === "error" || terminal.stopReason === "aborted") {
               providerError = terminal;
@@ -397,6 +448,13 @@ export function createHostModels(
             providerFailure ??= classifyModelFailure("provider", error);
             log.warn("Native provider result drain failed", { operation: "durable_model.provider_drain_failed",
               taskId: scope?.taskId, conversationId: scope?.conversationId });
+          }
+          if (terminal) {
+            try { await retainTerminal(terminal); }
+            catch {
+              log.warn('Native drained terminal retention remains unresolved', { operation: 'durable_model.cleanup_failed', phase: 'accounting',
+                taskId: scope?.taskId, conversationId: scope?.conversationId });
+            }
           }
         }
         // Preserve the provider reason even when accounting/conversion fails next.

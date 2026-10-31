@@ -26,7 +26,7 @@ beforeAll(() => {
 afterAll(() => {if(blocker.inTransaction)blocker.exec('ROLLBACK');blocker.close();closeDatabase();if(restoreMemory===undefined)delete process.env.PICLAW_DB_IN_MEMORY;else process.env.PICLAW_DB_IN_MEMORY=restoreMemory;});
 function request(signal=new AbortController().signal,authorise=()=>{}) {
   const operationId='model-admission-'+(++serial);
-  return {operationId,chatJid:'web:admission',database:root,authPath,model,signal,assertCurrent:authorise};
+  return {terminalOwner:{signal:new AbortController().signal,assertCurrent:authorise},operationId,chatJid:'web:admission',database:root,authPath,model,signal,assertCurrent:authorise};
 }
 const originalPolicy=()=>root.query('PRAGMA busy_timeout').get();
 async function heldBeyondOldLimit<T>(start:()=>Promise<T>):Promise<T> {

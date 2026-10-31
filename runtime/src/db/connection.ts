@@ -34,7 +34,7 @@ import path from "path";
 
 import { WORKSPACE_DIR, getRuntimeConfigPaths } from "../core/config.js";
 import type { RuntimeConfigPaths } from "../core/config-paths.js";
-import { createLogger, debugSuppressedError } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.js";
 import { migrateMediaCompression } from "./media-recompress.js";
 import { ensureLegacyColumns } from "./legacy-columns.js";
 import { createVerifiedSqliteBackup, type SqliteBackupManifest } from "./backup.js";
@@ -585,69 +585,55 @@ function ensureKeychainNoteColumns(database: Database): void {
   ]);
 }
 
-function ensureTokenUsageColumns(database: Database): void {
-  const columns = database.prepare("PRAGMA table_info(token_usage)").all() as Array<{ name: string }>;
-  const existing = new Set(columns.map((col) => col.name));
-  const ensureColumn = (name: string, type: string) => {
-    if (existing.has(name)) return;
-    try {
-      database.exec(`ALTER TABLE token_usage ADD COLUMN ${name} ${type}`);
-    } catch (err) {
-      debugSuppressedError(log, "Token-usage column migration raced an already-updated schema state.", err, {
-        operation: "db.ensure_token_usage_columns.add_column",
-        name,
-        type,
-      });
-    }
-  };
+// These historical columns have presence-only compatibility contracts (some
+// released schemas differ in nullability). Keep the stricter selected-column
+// bridge separate. The schema transaction owns the writer: ALTER errors are
+// failures, not evidence of a concurrent migration to suppress.
+function addMissingLegacyColumns(database: Database, table: 'token_usage' | 'scheduled_tasks' | 'thinking_content',
+  columns: ReadonlyArray<readonly [string, string]>): void {
+  const existing = new Set((database.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(column => column.name));
+  for (const [name, definition] of columns) {
+    if (!existing.has(name)) database.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
+  }
+}
 
-  ensureColumn("response_model", "TEXT");
-  ensureColumn("reasoning_tokens", "INTEGER DEFAULT 0");
-  ensureColumn("usage_source", "TEXT DEFAULT 'assistant'");
-  ensureColumn("cache_read_reported", "INTEGER");
-  ensureColumn("cache_write_reported", "INTEGER");
-  ensureColumn("provider_cost_total", "REAL");
-  ensureColumn("catalogue_cost_total", "REAL");
-  ensureColumn("cost_provenance", "TEXT");
-  ensureColumn("work_id", "TEXT");
-  ensureColumn("invocation_id", "TEXT");
-  ensureColumn("usage_event_id", "TEXT");
-  ensureColumn("api_equivalent_cost_microusd", "INTEGER");
-  ensureColumn("api_equivalent_cost_known", "INTEGER");
-  ensureColumn("valuation_provenance", "TEXT");
-  ensureColumn("api_equivalent_known_subtotal_microusd", "INTEGER");
-  ensureColumn("api_equivalent_unknown_categories", "TEXT");
-  ensureColumn("pricing_currency", "TEXT");
-  ensureColumn("pricing_source", "TEXT");
-  ensureColumn("pricing_version", "TEXT");
-  ensureColumn("pricing_context_tier", "TEXT");
-  ensureColumn("pricing_cache_fallbacks", "TEXT");
+function ensureTokenUsageColumns(database: Database): void {
+  addMissingLegacyColumns(database, 'token_usage', [
+    ['response_model', 'TEXT'],
+    ['reasoning_tokens', 'INTEGER DEFAULT 0'],
+    ['usage_source', "TEXT DEFAULT 'assistant'"],
+    ['cache_read_reported', 'INTEGER'],
+    ['cache_write_reported', 'INTEGER'],
+    ['provider_cost_total', 'REAL'],
+    ['catalogue_cost_total', 'REAL'],
+    ['cost_provenance', 'TEXT'],
+    ['work_id', 'TEXT'],
+    ['invocation_id', 'TEXT'],
+    ['usage_event_id', 'TEXT'],
+    ['api_equivalent_cost_microusd', 'INTEGER'],
+    ['api_equivalent_cost_known', 'INTEGER'],
+    ['valuation_provenance', 'TEXT'],
+    ['api_equivalent_known_subtotal_microusd', 'INTEGER'],
+    ['api_equivalent_unknown_categories', 'TEXT'],
+    ['pricing_currency', 'TEXT'],
+    ['pricing_source', 'TEXT'],
+    ['pricing_version', 'TEXT'],
+    ['pricing_context_tier', 'TEXT'],
+    ['pricing_cache_fallbacks', 'TEXT'],
+  ]);
   database.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_token_usage_usage_event_id ON token_usage(usage_event_id) WHERE usage_event_id IS NOT NULL");
 }
 
 function ensureScheduledTaskColumns(database: Database): void {
-  const columns = database.prepare("PRAGMA table_info(scheduled_tasks)").all() as Array<{ name: string }>;
-  const existing = new Set(columns.map((col) => col.name));
-  const ensureColumn = (name: string, type: string) => {
-    if (existing.has(name)) return;
-    try {
-      database.exec(`ALTER TABLE scheduled_tasks ADD COLUMN ${name} ${type}`);
-    } catch (err) {
-      debugSuppressedError(log, "Scheduled-task column migration raced an already-updated schema state.", err, {
-        operation: "db.ensure_scheduled_task_columns.add_column",
-        name,
-        type,
-      });
-    }
-  };
-
-  ensureColumn("model", "TEXT");
-  ensureColumn("task_kind", "TEXT DEFAULT 'agent'");
-  ensureColumn("command", "TEXT");
-  ensureColumn("cwd", "TEXT");
-  ensureColumn("timeout_sec", "INTEGER");
-  ensureColumn("notify_on_complete", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("revision", "INTEGER NOT NULL DEFAULT 1");
+  addMissingLegacyColumns(database, 'scheduled_tasks', [
+    ['model', 'TEXT'],
+    ['task_kind', "TEXT DEFAULT 'agent'"],
+    ['command', 'TEXT'],
+    ['cwd', 'TEXT'],
+    ['timeout_sec', 'INTEGER'],
+    ['notify_on_complete', 'INTEGER NOT NULL DEFAULT 1'],
+    ['revision', 'INTEGER NOT NULL DEFAULT 1'],
+  ]);
 }
 
 function ensureChatBranchConstraints(database: Database): void {
@@ -892,19 +878,7 @@ function initializeSchema(database: Database): void {
 
 /** Add duration_ms column to thinking_content for databases created before it was introduced. */
 function ensureThinkingContentDuration(database: Database): void {
-  try {
-    const cols = new Set(
-      (database.prepare("PRAGMA table_info(thinking_content)").all() as Array<{ name: string }>)
-        .map((r) => r.name)
-    );
-    if (!cols.has("duration_ms")) {
-      database.exec("ALTER TABLE thinking_content ADD COLUMN duration_ms INTEGER NOT NULL DEFAULT 0");
-    }
-  } catch (err) {
-    debugSuppressedError(log, "thinking_content duration_ms migration skipped.", err, {
-      operation: "db.ensure_thinking_content_duration",
-    });
-  }
+  addMissingLegacyColumns(database, 'thinking_content', [['duration_ms', 'INTEGER NOT NULL DEFAULT 0']]);
 }
 
 const REMOTE_INTEROP_CLEANUP_MIGRATION = "drop-core-remote-interop-v1";

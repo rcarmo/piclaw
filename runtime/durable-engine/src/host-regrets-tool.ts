@@ -1,6 +1,6 @@
 import { admitSqliteWrite } from "../../src/db/sqlite-async-admission.js";
 import type { Database } from "bun:sqlite";
-import { createHostTool } from "./host-tools.js";
+import { createHostTool, type HostToolEffectPort } from "./host-tools.js";
 import { createHostOperationAuthority } from "./host-operation-authority.js";
 import type { HostConversationRuntime } from "./host-runtime.js";
 import type { ToolDefinition } from "../../src/durable-legacy-sdk.js";
@@ -16,7 +16,7 @@ export function createHostRegretsTool<P>(addon: RegretsNativeExports<P>, options
   runtime(): Pick<HostConversationRuntime, "captureToolSource">;
   assertOwner(): void;
   definition: ToolDefinition<any, JsonValue>;
-  bind(operation: Awaited<ReturnType<HostConversationRuntime["captureToolSource"]>>, authority: ReturnType<typeof createHostOperationAuthority>): P;
+  bind(operation: Awaited<ReturnType<HostConversationRuntime["captureToolSource"]>>, authority: ReturnType<typeof createHostOperationAuthority>, call: Parameters<HostToolEffectPort<any, JsonValue>['invoke']>[1]): P;
 }) {
   return createHostTool(options.definition, {
     authority: { check: options.assertOwner }, effectFence: "host-effect-port", replay: "unsafe",
@@ -26,9 +26,9 @@ export function createHostRegretsTool<P>(addon: RegretsNativeExports<P>, options
       const captured = await options.runtime().captureToolSource(call.conversationId, call.taskId, call.toolCallId);
       const authority = createHostOperationAuthority(options.root, captured, () => { call.assertAllowed(); options.assertOwner(); });
       authority.assertCurrent();
-      const native = addon.createLateNightRegrets(options.bind(captured, authority));
+      const native = addon.createLateNightRegrets(options.bind(captured, authority, call));
       const result = await native.tool.execute(call.toolCallId, args, call.signal, undefined, undefined as never);
-      authority.assertCurrent();
+      authority.assertSourceCurrent(); // Reading this entered controller's result grants no next effect.
       return result;
     },
   });

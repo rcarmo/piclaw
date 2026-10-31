@@ -8,7 +8,7 @@ import { storeChatMetadata } from "../../src/db/messages.js";
 import { ensureChatBranch, archiveChatBranch, permanentDeleteArchivedBranch } from "../../src/db/chat-branches.js";
 import { getDb } from "../../src/db/connection.js";
 import { ensureBudgetWork, saveBudgetCap } from "../../src/db/budget-limits.js";
-import { reserveBudgetRequest, dispatchBudgetRequest, settleBudgetRequest, abandonBudgetRequest, getBudgetRequest } from "../../src/db/budget-request-reservations.js";
+import { reserveBudgetRequest, dispatchBudgetRequest, settleBudgetRequest, abandonBudgetRequest, getBudgetRequest, recordBudgetTerminalReceipt } from "../../src/db/budget-request-reservations.js";
 import { storeTokenUsage, getTokenUsageTotals, pruneOldTokenUsage, type TokenUsageRecord } from "../../src/db/token-usage.js";
 import { initializeBudgetLimitsSchema } from "../../src/db/budget-limits-schema.js";
 import { modelRequestAccounting } from "../../src/budget/model-request-accounting.js";
@@ -21,12 +21,12 @@ const usage = (): TokenUsageRecord => ({ chat_jid: binding.chatJid, run_at: "202
   cost_input: 0.00004, cost_output: 0, cost_cache_read: 0, cost_cache_write: 0, cost_total: 0.00004, model: binding.modelId, provider: binding.providerId,
   api_equivalent_cost_known: true, api_equivalent_cost_microusd: 40, valuation_provenance: "catalogue_estimate" });
 const eventId = `usage:invocation:${binding.id}`;
-function setup() {
+function setup(request = binding) {
   const database = getDb();
   ensureBudgetWork({ id: "projection-parent", chatJid: "web:parent", executionKind: "interactive" });
-  ensureBudgetWork({ id: binding.workId, chatJid: binding.chatJid, parentWorkId: "projection-parent", executionKind: "delegate" });
+  ensureBudgetWork({ id: request.workId, chatJid: request.chatJid, parentWorkId: "projection-parent", executionKind: "delegate" });
   saveBudgetCap({ id: "projection-cap", scope: "task", metric: "api_usd_micros", amount: 60, workId: "projection-parent" });
-  reserveBudgetRequest(binding); dispatchBudgetRequest(binding, { authorise() {}, signal: new AbortController().signal });
+  reserveBudgetRequest(request); dispatchBudgetRequest(request, { authorise() {}, signal: new AbortController().signal });
   return database;
 }
 const budget = () => evaluateBudget({ workId: "projection-parent", pendingRequest: { amountMicros: 30 } });
@@ -166,14 +166,18 @@ test("canonical usage projection: malformed canonical evidence rolls back bounde
   expect(() => reconcileUsageReports(database, { limit: 0 })).toThrow("limit");
 });
 for (const providerCost of [0, 0.2]) test(`canonical usage projection: native provider cost ${providerCost} and catalogue valuation survive fresh callback context`, async () => {
-  const database = setup();
+  const request = { ...binding, workId: `durable-request:${binding.id}` }, database = setup(request);
   const message = { role: "assistant", provider: binding.providerId, model: binding.modelId, api: "fixture", stopReason: "stop", timestamp: 0, content: [],
     usage: { input: 10, output: 2, cacheRead: 0, cacheWrite: 0, totalTokens: 12, providerCost, reasoningTokens: 1, cacheReadReported: true,
       cost: { input: 0.00004, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.00004 } } };
   const accounting = () => modelRequestAccounting({ authorise() {}, documentedFree: false, usageSource: "compaction" });
-  await accounting().settle(binding, message as any);
+  recordBudgetTerminalReceipt(request, { version: 1, requestId: request.id,
+    requestBindingSha256: getBudgetRequest(request.id)!.binding_sha256,
+    projectedOutcome: JSON.parse(JSON.stringify(message)) }, new Date().toISOString());
+  const owner = { signal: new AbortController().signal, assertCurrent() { expect(getDb()).toBe(database); } };
+  await accounting().settleRetainedRequest(request, owner);
   await Bun.sleep(5);
-  await accounting().settle(binding, message as any);
+  await accounting().settleRetainedRequest(request, owner);
   const row = database.query("SELECT provider_cost_total,catalogue_cost_total,cost_total,cost_provenance,reasoning_tokens,cache_read_reported,usage_source FROM token_usage").get();
   expect(row).toEqual({ provider_cost_total: providerCost, catalogue_cost_total: 0.00004, cost_total: providerCost, cost_provenance: "provider_reported", reasoning_tokens: 1, cache_read_reported: 1, usage_source: "compaction" });
   expect(budget().blockers[0]?.knownUsage).toBe(70);
@@ -302,11 +306,13 @@ test("canonical usage projection: pre-cutover model settlement replays its origi
   settleBudgetRequest(binding, { ...usage(), response_model: binding.modelId, api: "fixture", usage_source: "assistant" });
   legacyFixture(database); initializeBudgetLimitsSchema(database);
   const event = readUsageProjectionEvent(database, eventId), request = getBudgetRequest(binding.id);
-  const message = { role: "assistant", provider: binding.providerId, model: binding.modelId, api: "fixture", stopReason: "stop", timestamp: 0, content: [],
-    usage: { input: 10, output: 2, cacheRead: 0, cacheWrite: 0, totalTokens: 12, providerCost: 0.2,
-      cost: { input: 0.00004, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.00004 } } };
-  const accounting = modelRequestAccounting({ authorise() {}, documentedFree: false });
-  expect((await accounting.settle(binding, message as any)).state).toBe("settled");
+  // The reporting consumer replays stored canonical ownership, ignoring this
+  // fresh provider observation. Preserve the old noncanonical work ID and hash.
+  storeTokenUsage({ ...usage(), work_id: binding.workId, invocation_id: binding.id, usage_event_id: eventId,
+    provider_cost_total: 0.2, cost_total: 0.2, cost_provenance: 'provider_reported',
+    response_model: binding.modelId, api: 'fixture', usage_source: 'assistant' });
+  expect(getBudgetRequest(binding.id)?.state).toBe("settled");
+  expect(getBudgetRequest(binding.id)?.terminal_receipt_json).toBeNull();
   expect(getBudgetRequest(binding.id)).toEqual(request);
   expect(readUsageProjectionEvent(database, eventId)).toEqual(event);
   expect(database.query("SELECT provider_cost_total,cost_provenance,cost_total FROM token_usage").get())

@@ -58,6 +58,38 @@ for (const kind of ['reservation','dispatch'] as const) {
   });
  }
 }
+for (const kind of ['reservation','dispatch'] as const) {
+ test(`${kind} pre-acquisition denial enters no authority or SQL callback and is not retried`,async()=>{
+  fixture();const database=getDb(),signal=new AbortController().signal;
+  if(kind==='dispatch')await admitBudgetRequest(binding,{signal,authorise(){}});
+  const snapshot=()=>['budget_request_reservations','budget_work','budget_caps','budget_decisions','token_usage']
+   .map(table=>database.query(`SELECT * FROM ${table} ORDER BY rowid`).all());
+  const before=snapshot(),policy=database.query('PRAGMA busy_timeout').get();
+  const denied=Object.assign(Error('unentered dependency'),{code:'SQLITE_BUSY'});let preflight=0,authority=0;
+  const admit=kind==='reservation'?admitBudgetRequest:admitBudgetRequestDispatch;
+  await expect(admit(binding,{signal,authorise(){authority++;},beforeAcquire(){
+   preflight++;expect(database.inTransaction).toBe(false);throw denied;
+  }})).rejects.toBe(denied);
+  expect(preflight).toBe(1);expect(authority).toBe(0);expect(snapshot()).toEqual(before);
+  expect(database.inTransaction).toBe(false);expect(database.query('PRAGMA busy_timeout').get()).toEqual(policy);
+ });
+ test(`${kind} pure preflight stays outside the unchanged transaction authority contract`,async()=>{
+  fixture();const database=getDb(),signal=new AbortController().signal;
+  if(kind==='dispatch')await admitBudgetRequest(binding,{signal,authorise(){}});
+  let preflight=0,authority=0;const admit=kind==='reservation'?admitBudgetRequest:admitBudgetRequestDispatch;
+  const row=await admit(binding,{signal,beforeAcquire(){preflight++;expect(database.inTransaction).toBe(false);},
+   authorise(){authority++;expect(database.inTransaction).toBe(true);}});
+  expect(preflight).toBe(2);expect(authority).toBe(kind==='reservation'?2:4);
+  expect(row.state).toBe(kind==='reservation'?'reserved':'dispatched');
+ });
+}
+for (const mode of ['async','promise','nonvoid'] as const) test(`pre-acquisition ${mode} guard cannot enter funding or authority`,async()=>{
+ fixture();let body=0,authority=0;
+ const beforeAcquire=mode==='async'?async()=>{body++;}:mode==='promise'?()=>{body++;return Promise.reject(Error('synthetic preflight rejection'));}:()=>{body++;return 17;};
+ await expect(admitBudgetRequest(binding,{signal:new AbortController().signal,beforeAcquire,authorise(){authority++;}})).rejects.toThrow('Request pre-acquisition guard must');
+ await Bun.sleep(0);expect(body).toBe(mode==='async'?0:1);expect(authority).toBe(0);expect(getBudgetRequest(binding.id)).toBeNull();
+});
+
 test('actual reservation contention yields to timers, restores policy and denies revocation',async()=>{
  const entry=new URL('../fixtures/budget-request-admission-disk.ts',import.meta.url).pathname;
  const launcher=new URL('../../scripts/local-test-priority.ts',import.meta.url).pathname;

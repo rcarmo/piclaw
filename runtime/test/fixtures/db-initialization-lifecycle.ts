@@ -12,7 +12,7 @@ const scenario = process.argv[2];
 const paths = getRuntimeConfigPaths(), file = paths.databasePath;
 assert.notEqual(file, ':memory:');
 assertPathWithinTestFilesystemIsolation(file, process.env, { allowRoot: false });
-const exec = Database.prototype.exec, close = Database.prototype.close;
+const exec = Database.prototype.exec, close = Database.prototype.close, transaction = Database.prototype.transaction, prepare = Database.prototype.prepare;
 const primary = Error('injected schema failure'), restoration = Error('injected FK restoration failure'), disposal = Error('injected close failure');
 let candidate: Database | undefined;
 let closed = 0;
@@ -35,7 +35,102 @@ function failSchema() {
   };
 }
 try {
-  if (['schema-failure', 'restoration-failure', 'schema-and-close-failure'].includes(scenario)) {
+  if (scenario === 'schema-lock') {
+    const blocker = new Database(file);
+    blocker.exec("PRAGMA journal_mode=WAL; CREATE TABLE legacy_sentinel(value TEXT); INSERT INTO legacy_sentinel VALUES('keep'); BEGIN IMMEDIATE");
+    Database.prototype.close = function(throwOnError?: boolean) {
+      if (this !== blocker) { candidate = this; closed++; }
+      return close.call(this, throwOnError);
+    };
+    // Isolate schema-lock publication failure without spending the existing
+    // test deadline on Root's still-separate 5s policy (#1818 remains open).
+    Database.prototype.transaction = function(this: Database, body: (...args: any[]) => any) {
+      if (this !== blocker) this.exec('PRAGMA busy_timeout=0');
+      return transaction.call(this, body);
+    } as typeof Database.prototype.transaction;
+    try {
+      let failure: unknown;
+      try { initDatabase(paths); } catch (error) { failure = error; }
+      assert.equal((failure as { code?: string })?.code, 'SQLITE_BUSY');
+      assert.equal(closed, 1); assert.throws(() => getDb(), /not initialized/); assert.equal(getDatabaseBinding(), null);
+      assert.throws(() => candidate!.query('SELECT 1'), /closed/);
+    } finally {
+      Database.prototype.close = close; Database.prototype.transaction = transaction;
+      blocker.exec('ROLLBACK'); blocker.close(true);
+    }
+    initDatabase(paths);
+    assert.deepEqual(getDb().query('SELECT value FROM legacy_sentinel').all(), [{ value: 'keep' }]);
+    assert(getDatabaseBinding());
+  } else if (['token-column-failure', 'scheduled-column-failure', 'thinking-column-failure', 'thinking-inspection-failure', 'column-and-close-failure'].includes(scenario)) {
+    // Representative pre-column schemas, owned by this disposable fixture.
+    // Keep the historically nullable scheduled task_kind contract intact.
+    const kind = scenario === 'column-and-close-failure' ? 'token' : scenario.split('-')[0];
+    const legacy = {
+      token: { table: 'token_usage', column: 'response_model',
+        sql: `CREATE TABLE token_usage (id INTEGER PRIMARY KEY AUTOINCREMENT,chat_jid TEXT NOT NULL,run_at TEXT NOT NULL,
+          input_tokens INTEGER DEFAULT 0,output_tokens INTEGER DEFAULT 0,cache_read_tokens INTEGER DEFAULT 0,cache_write_tokens INTEGER DEFAULT 0,
+          total_tokens INTEGER DEFAULT 0,cost_input REAL DEFAULT 0,cost_output REAL DEFAULT 0,cost_cache_read REAL DEFAULT 0,
+          cost_cache_write REAL DEFAULT 0,cost_total REAL DEFAULT 0,model TEXT,provider TEXT,api TEXT,turns INTEGER DEFAULT 0);
+          INSERT INTO token_usage(chat_jid,run_at,input_tokens,total_tokens,cost_input,cost_total,model,provider,api)
+          VALUES('web:legacy','2026-10-01T00:00:00.000Z',1,1,0.00001,0.00001,'synthetic','fixture','fixture');`,
+        select: 'SELECT id,chat_jid,run_at,input_tokens,total_tokens,cost_input,cost_total,model,provider,api FROM token_usage' },
+      scheduled: { table: 'scheduled_tasks', column: 'model',
+        sql: `CREATE TABLE scheduled_tasks(id TEXT PRIMARY KEY,chat_jid TEXT NOT NULL,prompt TEXT NOT NULL,task_kind TEXT DEFAULT 'agent',
+          schedule_type TEXT NOT NULL,schedule_value TEXT NOT NULL,next_run TEXT,last_run TEXT,last_result TEXT,status TEXT DEFAULT 'active',created_at TEXT NOT NULL);
+          INSERT INTO scheduled_tasks(id,chat_jid,prompt,task_kind,schedule_type,schedule_value,status,created_at)
+          VALUES('legacy-task','web:legacy','do not execute','agent','once','2027-01-01T00:00:00.000Z','paused','2026-10-01T00:00:00.000Z');`,
+        select: 'SELECT id,chat_jid,prompt,task_kind,schedule_type,schedule_value,status,created_at FROM scheduled_tasks' },
+      thinking: { table: 'thinking_content', column: 'duration_ms',
+        sql: `CREATE TABLE thinking_content(message_id TEXT PRIMARY KEY,text TEXT NOT NULL,lines INTEGER NOT NULL DEFAULT 0,
+          model TEXT,truncated INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL);
+          INSERT INTO thinking_content VALUES('legacy-message','preserve legacy thought',1,'synthetic',0,'2026-10-01T00:00:00.000Z');`,
+        select: 'SELECT message_id,text,lines,model,truncated,created_at FROM thinking_content' },
+    }[kind as 'token' | 'scheduled' | 'thinking'];
+    const seed = new Database(file); seed.exec(legacy.sql);
+    const rows = seed.query(legacy.select).all();
+    const schemaSql = "SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY type,name";
+    const schema = seed.query(schemaSql).all(); seed.close(true);
+    let injected = 0;
+    Database.prototype.prepare = function(this: Database, sql: string, ...args: any[]) {
+      if (scenario === 'thinking-inspection-failure' && sql === 'PRAGMA table_info(thinking_content)') {
+        candidate = this; injected++;
+        assert.throws(() => getDb(), /not initialized/); assert.equal(getDatabaseBinding(), null);
+        throw primary;
+      }
+      return prepare.call(this, sql, ...args);
+    } as typeof Database.prototype.prepare;
+    Database.prototype.exec = function(sql: string) {
+      if (scenario !== 'thinking-inspection-failure' && sql.startsWith(`ALTER TABLE ${legacy.table} ADD COLUMN ${legacy.column} `)) {
+        candidate = this; injected++;
+        assert.throws(() => getDb(), /not initialized/); assert.equal(getDatabaseBinding(), null);
+        throw primary;
+      }
+      return exec.call(this, sql);
+    };
+    Database.prototype.close = function(throwOnError?: boolean) {
+      if (this === candidate) { closed++; if (scenario === 'column-and-close-failure') throw disposal; }
+      return close.call(this, throwOnError);
+    };
+    let failure: unknown;
+    try { initDatabase(paths); } catch (error) { failure = error; }
+    assert.equal(injected, 1);
+    if (scenario === 'column-and-close-failure') {
+      assert(failure instanceof RuntimeStartupCleanupError); assert.deepEqual(failure.errors, [primary, disposal]);
+    } else assert.equal(failure, primary);
+    assert.equal(closed, 1); assert.throws(() => getDb(), /not initialized/); assert.equal(getDatabaseBinding(), null);
+    Database.prototype.exec = exec; Database.prototype.close = close; Database.prototype.prepare = prepare;
+    const inspect = new Database(file, { readonly: true });
+    try { assert.deepEqual(inspect.query(schemaSql).all(), schema); assert.deepEqual(inspect.query(legacy.select).all(), rows); }
+    finally { inspect.close(true); }
+    if (scenario === 'column-and-close-failure') {
+      assert.throws(() => initDatabase(paths), error => error === failure); close.call(candidate!, true);
+    } else {
+      assert.throws(() => candidate!.query('SELECT 1'), /closed/);
+      initDatabase(paths); assert.deepEqual(getDb().query(legacy.select).all(), rows);
+      assert((getDb().query(`PRAGMA table_info(${legacy.table})`).all() as {name:string}[]).some(column => column.name === legacy.column));
+      if (kind === 'scheduled') assert.equal((getDb().query('PRAGMA table_info(scheduled_tasks)').all() as {name:string;notnull:number}[]).find(column => column.name === 'task_kind')!.notnull, 0);
+    }
+  } else if (['schema-failure', 'restoration-failure', 'schema-and-close-failure'].includes(scenario)) {
     failSchema();
     let failure: unknown;
     try { initDatabase(paths); } catch (error) { failure = error; }
@@ -137,6 +232,6 @@ try {
   console.log(JSON.stringify({ scenario, privatePublicationAndLifetime: true }));
 } finally {
   registration?.mockRestore();
-  Database.prototype.exec = exec; Database.prototype.close = close;
+  Database.prototype.exec = exec; Database.prototype.close = close; Database.prototype.transaction = transaction; Database.prototype.prepare = prepare;
   closeDatabase({ shrinkMemory: false });
 }
