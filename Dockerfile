@@ -63,6 +63,8 @@ RUN /tmp/install-agent-runtime.sh
 
 COPY --chown=agent:agent package.json bun.lock README.md LICENSE BUN_VERSION RESTIC_VERSION /home/agent/piclaw/
 COPY --chown=agent:agent scripts/postinstall.ts /home/agent/piclaw/scripts/postinstall.ts
+# Reason: the packaged postinstall imports the private engine installer.
+COPY --chown=agent:agent scripts/install-durable-engine.ts /home/agent/piclaw/scripts/install-durable-engine.ts
 COPY --chown=agent:agent scripts/prepare-local-install.ts /home/agent/piclaw/scripts/prepare-local-install.ts
 # `bun pm pack` runs prepack: the pinned catalog, tarballs and preparation scripts
 # must be in the builder, then the resulting seed travels with the installed package.
