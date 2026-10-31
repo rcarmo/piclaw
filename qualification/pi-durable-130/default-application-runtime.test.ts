@@ -57,6 +57,24 @@ import { installDrawioFixture } from "./drawio-fixture.ts";
 import { withAddonLocalDispatch, bindAddonLocalDispatchRequest, getAddonLocalDispatchBlock, bindAddonLocalMessage, verifyAddonLocalMessage } from "../../runtime/src/addons/local-dispatch.js";
 import { admitAddonLocalRequest, withAddonLocalRequest } from "../../runtime/src/addons/local-context.js";
 
+// Unknown valuation is not a failed provider outcome. Keep its exact original
+// evidence and completed SDK task while the reservation remains unresolved.
+function unknownTerminalSnapshot(database: Database, count: number) {
+  const requests = database.query("SELECT * FROM budget_request_reservations WHERE state='unresolved' ORDER BY id").all() as BudgetRequestReservation[];
+  expect(requests).toHaveLength(count);
+  const tasks = requests.map(row => {
+    expect(row.terminal_receipt_sha256).toBe(createHash('sha256').update(row.terminal_receipt_json!).digest('hex'));
+    expect(JSON.parse(row.terminal_receipt_json!)).toMatchObject({ requestId: row.id, requestBindingSha256: row.binding_sha256,
+      projectedOutcome: { role: 'assistant', stopReason: 'stop' } });
+    const invocation = JSON.parse(row.model_invocation_json!);
+    const task = database.query('SELECT * FROM tasks WHERE id=?').get(invocation.taskId) as { record: string };
+    expect(JSON.parse(task.record)).toMatchObject({ conversationId: invocation.conversationId, kind: invocation.taskKind,
+      state: { status: 'terminal', outcome: { status: 'completed' } } });
+    return task;
+  });
+  return { requests, tasks };
+}
+
 function factoryTest(scenario: string, name: string, body: () => Promise<void>) {
   const selected = process.env.PICLAW_DEFAULT_FACTORY_CASE;
   if (selected && selected !== scenario) return;
@@ -960,6 +978,9 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
         },
       });
     }) : undefined;
+  // Keep this recovery window held now that terminal observation also repairs
+  // retained money automatically; the mandatory event fence still fails.
+  if (terminalFenceSpy) root.exec("CREATE TEMP TRIGGER hold_fenced_receipt_charge BEFORE INSERT ON budget_usage_events BEGIN SELECT RAISE(ABORT,'synthetic retained charge held after terminal fence'); END");
   let backend: Awaited<ReturnType<typeof createDefaultApplicationRuntime>>;
   if (scenario === "native-drawio-prepare-held") {
     let entered!: () => void, release!: () => void;
@@ -2153,11 +2174,13 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
         expect(root.query("SELECT r.state FROM budget_request_reservations r JOIN budget_work w ON w.id=r.work_id WHERE w.execution_kind='scheduled'").all()).toEqual([{ state: "unresolved" }]);
         expect(root.query("SELECT status,scheduled_task_id FROM budget_work WHERE parent_work_id IS NULL AND execution_kind='scheduled'").all()).toEqual([{ status: "active", scheduled_task_id: id }]);
         expect(root.query("SELECT t.invocation_id FROM token_usage t JOIN budget_work w ON w.id=t.work_id WHERE w.execution_kind='scheduled'").all()).toHaveLength(0);
-        expect(delivered.join(" ")).not.toContain("factory synthetic reply");
+        expect(delivered.join(" ")).toContain("factory synthetic reply");
+        const unknown = unknownTerminalSnapshot(root, 1);
         await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close();
         closeDatabase(); initDatabase(); root = getDb();
         expect(root.query("SELECT r.state FROM budget_request_reservations r JOIN budget_work w ON w.id=r.work_id WHERE w.execution_kind='scheduled'").all()).toEqual([{ state: "unresolved" }]);
         expect(root.query("SELECT status FROM budget_work WHERE parent_work_id IS NULL AND execution_kind='scheduled'").all()).toEqual([{ status: "active" }]);
+        expect(unknownTerminalSnapshot(root, 1)).toEqual(unknown);
         for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
         closeDatabase(); owner.release(); return;
       }
@@ -3032,11 +3055,14 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
     expect(root.query("SELECT state, COUNT(*) AS n FROM budget_request_reservations GROUP BY state ORDER BY state").all()).toEqual([{ state: "settled", n: 2 }, { state: "unresolved", n: 2 }]);
     expect(root.query("SELECT status FROM budget_work WHERE parent_work_id IS NULL").all()).toEqual([{ status: "active" }]);
     expect(root.query("SELECT SUM(api_equivalent_cost_microusd) AS amount FROM token_usage WHERE invocation_id IS NOT NULL").get()).toEqual({ amount: 20 });
-    for (const id of ["A", "B"]) expect(observedResults.get(id)).toMatchObject({ toolName: "delegate", isError: true });
+    for (const id of ["A", "B"]) expect(observedResults.get(id)).toMatchObject({ toolName: "delegate", isError: false,
+      content: [{ type: 'text', text: 'factory synthetic reply' }] });
+    const unknown = unknownTerminalSnapshot(root, 2);
     backend.stop(); await backend.close();
     closeDatabase(); initDatabase(); root = getDb();
     expect(root.query("SELECT state FROM budget_request_reservations WHERE state='unresolved'").all()).toHaveLength(2);
     expect(root.query("SELECT status FROM budget_work WHERE parent_work_id IS NULL").all()).toEqual([{ status: "active" }]);
+    expect(unknownTerminalSnapshot(root, 2)).toEqual(unknown);
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
     closeDatabase(); owner.release(); return;
   }
@@ -3423,6 +3449,7 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
         ...(row.model_invocation_json ? { modelInvocation: JSON.parse(row.model_invocation_json) } : {}) };
       const accounting = modelRequestAccounting({ authorise() { throw Error('Failed execution authority must not be used for paid-fact recovery'); }, documentedFree: false }, root);
       const factOwner = { signal: new AbortController().signal, assertCurrent() { owner.assertCurrentOwner(); } };
+      root.exec('DROP TRIGGER hold_fenced_receipt_charge');
       const recovered = await accounting.settleRetainedRequest(binding, factOwner);
       expect(recovered.state).toBe('settled'); expect(await accounting.settleRetainedRequest(binding, factOwner)).toEqual(recovered);
       expect(recovered.terminal_receipt_json).toBe(row.terminal_receipt_json); expect(recovered.terminal_received_at).toBe(row.terminal_received_at);
@@ -3438,6 +3465,7 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
       expect(root.query('SELECT * FROM service_effect_s02_commits').all()).toHaveLength(1);
       expect(root.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(tasks); expect(calls).toBe(1);
     } finally {
+      root.exec('DROP TRIGGER IF EXISTS hold_fenced_receipt_charge');
       terminalFenceSpy?.mockRestore(); backend.stop(); await backend.close();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
       closeDatabase(); owner.release();
@@ -4463,18 +4491,20 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
       closeDatabase(); owner.release(); return;
     }
     if (compactionAccountingUnknown) {
-      await expect(first!.compact!("Retain the accepted decision")).rejects.toThrow("did not complete");
+      expect(await first!.compact!("Retain the accepted decision")).toEqual({ compacted: true });
       expect(calls).toBe(beforeCalls + 1);
       expect(root.query("SELECT r.state FROM budget_request_reservations r JOIN budget_work w ON w.id=r.work_id WHERE w.execution_kind='side_prompt'").all()).toEqual([{ state: "unresolved" }]);
       expect(root.query("SELECT status FROM budget_work WHERE parent_work_id IS NULL AND execution_kind='side_prompt'").all()).toEqual([{ status: "active" }]);
-      expect(root.query("SELECT id FROM entries WHERE json_extract(record, '$.kind')='pi.compaction'").all()).toHaveLength(0);
+      expect(root.query("SELECT id FROM entries WHERE json_extract(record, '$.kind')='pi.compaction'").all()).toHaveLength(1);
       expect(root.query("SELECT t.invocation_id FROM token_usage t JOIN budget_work w ON w.id=t.work_id WHERE w.execution_kind='side_prompt'").all()).toHaveLength(0);
+      const unknown = unknownTerminalSnapshot(root, 1);
       backend.stop(); await backend.close(); compactionPolicySpy?.mockRestore();
       closeDatabase(); initDatabase(); root = getDb();
       backend = await createDefaultApplicationRuntime(owner, async () => services);
       expect(root.query("SELECT r.state FROM budget_request_reservations r JOIN budget_work w ON w.id=r.work_id WHERE w.execution_kind='side_prompt'").all()).toEqual([{ state: "unresolved" }]);
       expect(root.query("SELECT status FROM budget_work WHERE parent_work_id IS NULL AND execution_kind='side_prompt'").all()).toEqual([{ status: "active" }]);
       expect(calls).toBe(beforeCalls + 1);
+      expect(unknownTerminalSnapshot(root, 1)).toEqual(unknown);
       backend.stop(); await backend.close();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
       closeDatabase(); owner.release(); return;

@@ -295,10 +295,10 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   const editableTable = await qualifyInstalledEditableTable(catalog, WORKSPACE_DIR);
   const officeViewer = qualifyInstalledOfficeViewer(catalog, WORKSPACE_DIR);
   const drawio = await qualifyInstalledDrawio(catalog, WORKSPACE_DIR), goal = await qualifyInstalledGoal(catalog, WORKSPACE_DIR);
-  const lifetime = new AbortController();
-  // SDK close joins requests before this lifetime ends. Paid facts do not use
-  // task/source/model-grant cancellation as database ownership authority.
-  const terminalOwner = { signal: lifetime.signal, assertCurrent() { assert(); lifetime.signal.throwIfAborted(); } };
+  const lifetime = new AbortController(), terminalLifetime = new AbortController();
+  // Fatal prompt/source errors seal execution, not the still-owned database.
+  // SDK close joins financial callbacks before the database lifetime ends.
+  const terminalOwner = { signal: terminalLifetime.signal, assertCurrent() { assert(); terminalLifetime.signal.throwIfAborted(); } };
   let notifyStorageFailure!: (error: unknown) => void;
   const storageFailure = new Promise<unknown>(resolve => { notifyStorageFailure = resolve; });
   const remotePeer = await qualifyInstalledAddon(catalog, WORKSPACE_DIR, "remote-peer");
@@ -1535,7 +1535,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       // ownership; the operator's process-wide backstop still bounds shutdown.
       await bundle.close();
       const producerResults = await Promise.allSettled([closeRemote(), closeCodex()]);
-      lifetime.abort(); closeResources(); releaseAdminKv?.(); closeInfrastructure(); releaseReviewSource?.(); releaseObservabilityConfiguration?.();
+      terminalLifetime.abort(); lifetime.abort(); closeResources(); releaseAdminKv?.(); closeInfrastructure(); releaseReviewSource?.(); releaseObservabilityConfiguration?.();
       const results = [...producerResults, ...await Promise.allSettled([mcp?.close(), closeSandbox(), drawioHost?.close()])];
       const failures: unknown[] = results.filter((result): result is PromiseRejectedResult => result.status === "rejected").map(result => result.reason);
       await closeLiveViews();
@@ -1545,7 +1545,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   closeForProcessControl = () => backend.close();
   return backend;
   } catch (error) {
-    lifetime.abort(); closeResources(); releaseAdminKv?.(); closeInfrastructure(); releaseReviewSource?.(); releaseObservabilityConfiguration?.();
+    terminalLifetime.abort(); lifetime.abort(); closeResources(); releaseAdminKv?.(); closeInfrastructure(); releaseReviewSource?.(); releaseObservabilityConfiguration?.();
     const cleanupFailures: unknown[] = [];
     try { await closeRemote(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     try { await closeCodex(); } catch (cleanup) { cleanupFailures.push(cleanup); }

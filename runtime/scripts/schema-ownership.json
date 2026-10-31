@@ -4740,6 +4740,30 @@
         "b5f577c2f6e5e9c25eb8d62245559171ccd5bdf44372fc80435d6e5b59287040"
       ]
     },
+    "index:idx_budget_requests_domain_state": {
+      "owner": "core:budget_request_reservations",
+      "fingerprints": [
+        "194e625af756b3df6ba42189fad4b3b4e5674474e795db32c3299d36ca421391"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "budget_request_reservations"
+    },
+    "index:idx_budget_work_status": {
+      "owner": "core:budget_work",
+      "fingerprints": [
+        "0f5055166a4220b24010a1fdb503832255e8da8ad2916ad10abda56c93d5148b"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "budget_work"
+    },
     "index:idx_budget_requests_model_invocation": {
       "owner": "core:budget_request_reservations",
       "fingerprints": [
@@ -4755,7 +4779,7 @@
     "trigger:budget_request_invocation_insert": {
       "owner": "core:budget_request_reservations",
       "fingerprints": [
-        "2f875dcde6644d53361999808c811cc5da17f7a821ee9484df55e13a50b32d62"
+        "0f189387442e0f58d31c482aea2719d36b51cf14f68a0e8528810dfbc6f8fb50"
       ],
       "requiredIn": [
         "core",
