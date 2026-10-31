@@ -2,12 +2,15 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { createHash } from 'node:crypto';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
+import legacySettlement from '../fixtures/legacy-settlement-root.json';
+import type { TokenUsageRecord } from '../../src/db/token-usage.js';
+import { readUsageProjectionEvent } from '../../src/db/usage-report-projection.js';
 import { createTempWorkspace, setEnv, type TempWorkspace } from '../helpers.js';
 import { resolveRuntimeConfigPaths } from '../../src/core/config-paths.js';
 import { closeDatabase, getDb, initDatabase } from '../../src/db/connection.js';
 import { ensureBudgetWork, getBudgetWork, saveBudgetCap, setBudgetWorkStatus, setBudgetWarningsOnly, grantBudgetAllowance } from '../../src/db/budget-limits.js';
 import { getBudgetRequest, recordBudgetTerminalReceipt, readBudgetTerminalReceipt, settleBudgetRequest,
-  BudgetRequestError, type BudgetRequestBinding, type BudgetTerminalReceiptPayload, type BudgetModelInvocation } from '../../src/db/budget-request-reservations.js';
+  abandonBudgetRequest, BudgetRequestError, type BudgetRequestBinding, type BudgetTerminalReceiptPayload, type BudgetModelInvocation } from '../../src/db/budget-request-reservations.js';
 import { modelRequestAccounting, assertModelAccountingReady, RetainedAccountingPending } from '../../src/budget/model-request-accounting.js';
 import { evaluateBudget } from '../../src/budget/evaluator.js';
 import { canonicalJson } from '../../src/utils/canonical-json.js';
@@ -70,7 +73,7 @@ for (const mode of ['attributed', 'legacy', 'receiptless', 'invalid', 'unknown']
   if (mode === 'invalid') message.usage.input = -1;
   if (mode === 'unknown') message.usage.cost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
   const { helper, binding } = await fixture(message, mode !== 'receiptless', undefined, undefined, mode === 'legacy' ? undefined : invocation);
-  if (mode === 'receiptless') await helper.abandon(binding);
+  if (mode === 'receiptless') abandonBudgetRequest(binding);
   if (mode === 'unknown') await helper.settleRetainedRequest(binding, owner());
   const before = getBudgetRequest(binding.id), work = getBudgetWork(binding.workId);
   let denied: unknown;
@@ -92,7 +95,7 @@ test('pending terminal barrier follows nested work ancestry, not unrelated work 
   expect(() => assertModelAccountingReady('parent', getDb(), binding.id)).not.toThrow();
   expect(() => assertModelAccountingReady('parent', getDb(), 'wrong-request')).toThrow('budget_denied');
   expect(getBudgetRequest(binding.id)).toEqual(before); expect(getBudgetWork(binding.workId)).toEqual(work); unchangedFinancials();
-  await helper.abandon(binding); const abandoned = getBudgetRequest(binding.id);
+  abandonBudgetRequest(binding); const abandoned = getBudgetRequest(binding.id);
   expect(abandoned?.state).toBe('unresolved'); expect(() => assertModelAccountingReady('parent')).toThrow('budget_denied');
   await helper.settleRetainedRequest(binding, owner());
   expect(() => assertModelAccountingReady('parent')).not.toThrow();
@@ -107,7 +110,7 @@ test('receipt absence never proves a terminal is accounted; ended unknown sends 
   expect(() => assertModelAccountingReady('parent')).not.toThrow();
   expect(() => assertModelAccountingReady('parent', db, undefined, true)).toThrow('budget_denied');
   expect(getBudgetRequest(binding.id)).toEqual(before);
-  await helper.abandon(binding); const unknown = getBudgetRequest(binding.id);
+  abandonBudgetRequest(binding); const unknown = getBudgetRequest(binding.id);
   expect(unknown?.state).toBe('unresolved');
   expect(() => assertModelAccountingReady('parent')).toThrow('budget_denied');
   expect(() => assertModelAccountingReady('parent', db, undefined, true)).toThrow('budget_denied');
@@ -130,7 +133,7 @@ for (const invalid of ['negative-cost', 'negative-token', 'fractional-token'] as
   if (invalid === 'negative-cost') message.usage.cost.input = -1;
   if (invalid === 'negative-token') message.usage.input = -1;
   if (invalid === 'fractional-token') message.usage.output = 0.5;
-  const { helper, binding } = await fixture(message); await helper.abandon(binding);
+  const { helper, binding } = await fixture(message); abandonBudgetRequest(binding);
   const held = getBudgetRequest(binding.id);
   expect(() => assertModelAccountingReady('parent')).toThrow('invalid_binding');
   expect(getBudgetRequest(binding.id)).toEqual(held); unchangedFinancials();
@@ -395,9 +398,17 @@ test('pre-report legacy replay keeps original hash/time/provenance and charge by
 });
 
 test('receipt reconciliation of an already recorded shipping settlement keeps original host time and exact charge', async () => {
-  const message = terminal(), { helper, binding, receipt } = await fixture(message);
-  await helper.settle(binding, message);
+  const message = terminal(), { binding, receipt } = await fixture(message);
+  // Captured from the removed shipping API at6ea, before its deletion. Seeding
+  // with candidate retained settlement would make this compatibility check vacuous.
+  expect(binding).toEqual(legacySettlement.binding);
+  expect(message.usage).toEqual(legacySettlement.message.usage);
+  settleBudgetRequest(binding, legacySettlement.usage as TokenUsageRecord);
   const before = getBudgetRequest(binding.id), rows = financialRows();
+  const event = readUsageProjectionEvent(getDb(), before!.usage_event_id!)!;
+  expect(before?.settlement_sha256).toBe(legacySettlement.settlementSha256);
+  expect(event.report_payload_json).toBe(legacySettlement.reportPayloadJson);
+  expect(event.report_payload_sha256).toBe(legacySettlement.reportPayloadSha256);
   await accounting().settleRetainedRequest(binding, owner());
   expect(getBudgetRequest(binding.id)).toEqual(before); expect(financialRows()).toEqual(rows);
   expect(readBudgetTerminalReceipt(binding)).toEqual(receipt);
