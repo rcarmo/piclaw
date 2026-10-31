@@ -163,12 +163,15 @@
       "writers": [
         "runtime/src/db/budget-request-reservations.ts"
       ],
-      "sourceOfTruth": "Host budget admission/audit ledger budget_request_reservations as defined by budget-limits-schema and its store APIs. Persisted cap, window, allowance, override, reservation, work and evidence identities are not reconstructed from transcript totals.",
-      "replayRetention": "No universal reconstruction or age-expiry guarantee. Preserve persisted identity, history and FK/receipt obligations; changes belong to the cited owner APIs. This read-only inventory adds no deletion, pruning, replay or migration authority. Actual event payloads bind request/settlement hashes and require their reservation proof for reconstruction. Missing settled-event evidence stays an uncertain capacity hold. Report pruning cannot release any request or retire this semantic reference; #1702 must coordinate retirement.",
+      "sourceOfTruth": "Host budget admission/audit ledger budget_request_reservations as defined by budget-limits-schema and its store APIs. Persisted cap, window, allowance, override, reservation, work and evidence identities are not reconstructed from transcript totals. Owned terminal-receipt-v1 and model-invocation-v1 migrations extend this same reservation with immutable safe terminal JSON/hash/original host time and exact logical SDK invocation metadata; neither is execution authority.",
+      "replayRetention": "No universal reconstruction or age-expiry guarantee. Preserve persisted identity, history and FK/receipt obligations; changes belong to the cited owner APIs. This read-only inventory adds no deletion, pruning, replay or migration authority. Actual event payloads bind request/settlement hashes and require their reservation proof for reconstruction. Missing settled-event evidence stays an uncertain capacity hold. Report pruning cannot release any request or retire this semantic reference; #1702 must coordinate retirement. Terminal receipts and logical invocation keys cannot be erased, replaced or reassigned; known terminal evidence cannot release its hold, and a settled receipt retains its financial binding. Retirement requires explicit coordination with this owner; no legacy receipt backfill or new automatic pruning is implied.",
       "references": [
         "runtime/src/db/budget-limits-schema.ts",
         "runtime/src/db/usage-report-projection.ts",
-        "runtime/src/budget/usage-total.ts"
+        "runtime/src/budget/usage-total.ts",
+        "runtime/src/db/budget-request-reservations.ts",
+        "runtime/src/budget/model-request-accounting.ts",
+        "runtime/durable-engine/src/host-terminal-outcome.ts"
       ]
     },
     "core:budget_usage_events": {
@@ -2360,7 +2363,7 @@
     "table:budget_request_reservations": {
       "owner": "core:budget_request_reservations",
       "fingerprints": [
-        "6dd819f8244b481cdcd464265509c36544d4c177a20c41d14bb9fa9dd5747f9b"
+        "0f4122e34d1c9b32875480272a960d9888e4d59afde348ec22bfd4c3e8cceb3d"
       ],
       "requiredIn": [
         "core",
@@ -4736,6 +4739,150 @@
         "64159762982ce5663407e3a742fe21d3a9a5c9ccb7e3843ff75e4038016abd42",
         "b5f577c2f6e5e9c25eb8d62245559171ccd5bdf44372fc80435d6e5b59287040"
       ]
+    },
+    "index:idx_budget_requests_domain_state": {
+      "owner": "core:budget_request_reservations",
+      "fingerprints": [
+        "194e625af756b3df6ba42189fad4b3b4e5674474e795db32c3299d36ca421391"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "budget_request_reservations"
+    },
+    "index:idx_budget_work_status": {
+      "owner": "core:budget_work",
+      "fingerprints": [
+        "0f5055166a4220b24010a1fdb503832255e8da8ad2916ad10abda56c93d5148b"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "budget_work"
+    },
+    "index:idx_budget_requests_model_invocation": {
+      "owner": "core:budget_request_reservations",
+      "fingerprints": [
+        "b2f18d048e571ba1e9ed110462abbca43f3fa2a4632c7420a40637e5da9f9996"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "budget_request_reservations"
+    },
+    "trigger:budget_request_invocation_insert": {
+      "owner": "core:budget_request_reservations",
+      "fingerprints": [
+        "0f189387442e0f58d31c482aea2719d36b51cf14f68a0e8528810dfbc6f8fb50"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "budget_request_reservations"
+    },
+    "trigger:budget_request_invocation_no_delete": {
+      "owner": "core:budget_request_reservations",
+      "fingerprints": [
+        "70ab1d8f31af034cfd9602735b5bf296a848825b504969fabfae8f4f410caf78"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "budget_request_reservations"
+    },
+    "trigger:budget_request_invocation_no_replace": {
+      "owner": "core:budget_request_reservations",
+      "fingerprints": [
+        "20ba08ab93da55e7f02ddab62345f94d37614a9c9abfd6d0e078d5210abd3ee3"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "budget_request_reservations"
+    },
+    "trigger:budget_request_invocation_no_update": {
+      "owner": "core:budget_request_reservations",
+      "fingerprints": [
+        "9a728e20bbbe5bddc5f06ec5efdd2e3d2fbd2926665e7ec6886b64dd60b2fa68"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "budget_request_reservations"
+    },
+    "trigger:budget_request_receipt_capture_state": {
+      "owner": "core:budget_request_reservations",
+      "fingerprints": [
+        "b26830d09f3d0f5888d9183ef5863589c5dc69c5ce3571f7e14984facdac9853"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "budget_request_reservations"
+    },
+    "trigger:budget_request_receipt_insert_state": {
+      "owner": "core:budget_request_reservations",
+      "fingerprints": [
+        "b80fbf30ddbf924b3450ae6022ed3411c8b99dc9c7710aa5bcf37fffb2dd1b9e"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "budget_request_reservations"
+    },
+    "trigger:budget_request_receipt_no_delete": {
+      "owner": "core:budget_request_reservations",
+      "fingerprints": [
+        "76e05eabb7ce39778e7b654eaf17c3fd77742768d9df23fb3bd3dd7af26553a1"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "budget_request_reservations"
+    },
+    "trigger:budget_request_receipt_no_replace": {
+      "owner": "core:budget_request_reservations",
+      "fingerprints": [
+        "49e3a45dea35b8e462c06b02ce321727a92a493e54401da8db2f2d7a6846be07"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "budget_request_reservations"
+    },
+    "trigger:budget_request_receipt_no_update": {
+      "owner": "core:budget_request_reservations",
+      "fingerprints": [
+        "950ba7377a98d9fb303c0a2d5c02b21c2c2b0d9e47597da1cf59b98088d09310"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "budget_request_reservations"
     }
   },
   "documents": [

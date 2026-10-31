@@ -64,9 +64,11 @@ test('reported spend remains settled after failed output and request cleanup', a
  const service=new HostCodexModelServices({ routingScope,capture:async(signal)=>({id:'o',sessionId:'s',cwd:'/synthetic',model,signal,assertCurrent(){}}),assertAccount(){},observe:async()=>{},flush:async()=>{order.push('flush');throw Error('output failed')}},factories);
  service.register(root,provider);
  const models=createHostModels(root,[model],{signal:new AbortController().signal,authorize:async()=>{},assertCurrent(){},codex:service,
- prepareRequest:async()=>({dispatch:async()=>{order.push('dispatch')},settle:async(m:any)=>{expect(m.usage.totalTokens).toBe(5);if(!settled)order.push('settle');settled=true},abandon:async()=>{cleanups++;if(!settled){released=true;order.push('release')}}})});
+ prepareRequest:async()=>({retainTerminal:async(m)=>{expect(m.usage.totalTokens).toBe(5);order.push('retain')},dispatch:async()=>{order.push('dispatch')},settle:async(m:any)=>{expect(m.usage.totalTokens).toBe(5);if(!settled)order.push('settle');settled=true},abandon:async()=>{cleanups++;if(!settled){released=true;order.push('release')}}})});
  const result=await models.streamSimple(models.getModel(model.provider,model.id)!,{messages:[]}).result();
  expect(result.stopReason).toBe('error');expect(result.usage.totalTokens).toBe(5);
+ expect(order.indexOf('retain')).toBeLessThan(order.indexOf('settle'));
+ expect(order.filter(step=>step==='retain')).toHaveLength(1);
  expect(order.indexOf('settle')).toBeLessThan(order.indexOf('flush'));
  expect(cleanups).toBe(1);expect(settled).toBe(true);expect(released).toBe(false);expect(order).not.toContain('release');
 });

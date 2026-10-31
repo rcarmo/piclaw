@@ -18,6 +18,8 @@
     "installed-addons-fixture.ts",
     "host-operation-authority.test.ts",
     "host-process-controls.test.ts",
+    "host-terminal-outcome.test.ts",
+    "sdk-accounting-scope.test.ts",
     "native-process-exit.test.ts",
     "native-ui-projection.test.ts",
     "native-admission-boundary.test.ts",
@@ -81,6 +83,7 @@
     "host-fetch.test.ts",
     "task-model-boundary.test.ts",
     "task-model-compaction-recovery.test.ts",
+    "task-model-receipt-recovery.test.ts",
     "goal-tools.test.ts",
     "goal-queued-expiry.test.ts",
     "host-code-review-write-admission.test.ts"
