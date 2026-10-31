@@ -1283,7 +1283,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         addon: goal.addon, prepare: createHostGoalProgressReader(goal.addon, { runtime, assertOwner: assertGoal }),
         readPlan: createHostGoalPlanReader(root, plan!.addon, goal.addon), admit: (input, onlyIfIdle = true) => bundle.admitHostFollowup(input, onlyIfIdle),
       } }) : undefined;
-      bundle = await createApplicationBootstrapBundle({ root, path, ownership, offlineInitialize: true, answers,
+      bundle = await createApplicationBootstrapBundle({ root, path, ownership, offlineInitialize: true, answers, contentionSignal: lifetime.signal,
         background:{contexts:backgroundContexts,payloads:backgroundPayloads,
           sourceIdForAddon:id=>nativeBackgroundSourceId(addonBackgroundOrigin(root,id)),
           prepareAddon(id,existing,history){

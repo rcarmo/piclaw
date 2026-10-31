@@ -38,7 +38,7 @@ export class BunSqliteDatabase implements SqliteDatabase {
     try { check(); return await this.writeScope.run({ ...this.writeScope.getStore(), source: { check, persist } }, body); } finally { this.allocatingSource = false; }
   }
   private readonly identity?: ReturnType<typeof statSync>;
-  constructor(private readonly path: string, private readonly guard?: { root: Database; assertOwner(): void; fenceTransactions?: boolean }) {
+  constructor(private readonly path: string, private readonly guard?: { root: Database; assertOwner(): void; fenceTransactions?: boolean; contentionSignal?: AbortSignal }) {
     guard?.assertOwner();
     this.identity = guard ? statSync(path) : undefined;
     let expectedPath: string | undefined;
@@ -162,22 +162,28 @@ export class BunSqliteDatabase implements SqliteDatabase {
    * would retain the writer. Perform external work before this scope. */
   transaction<T>(callback: (tx: SqliteExecutor) => Promise<T>): Promise<T> {
     const idle = this.idleGuard, { source, admission } = this.writeScope.getStore() ?? {};
+    const contentionSignal = this.guard?.contentionSignal; // Capture policy before enqueue.
     return this.enqueue(async () => {
       // Yield while another host connection owns the writer lock, allowing an
       // in-process asynchronous transaction to finish without a blocking wait.
-      const deadline = performance.now() + 10_000;
+      const deadline = contentionSignal ? Infinity : performance.now() + 10_000;
+      let contended = false;
       for (;;) {
         if (this.guard?.fenceTransactions) this.guard.assertOwner();
         // Captured authority can expire while acquisition yields. Check it
         // before another attempt; no entered callback or persistence is replayed.
         admission?.(); idle?.(); source?.check();
+        // A fresh uncontended attempt still permits SDK cleanup after execution
+        // sealing. Once waiting, cancellation must win before another attempt.
+        if (contended) contentionSignal?.throwIfAborted();
         // Match the public Node adapter: reserve the writer before invoking SDK
         // code, including unguarded stores. A deferred read-to-write upgrade can
         // lose to a checkpoint and cannot safely replay its callback.
         try { this.db.exec("BEGIN IMMEDIATE"); break; }
         catch (error) {
           if (!isSqliteContention(error) || performance.now() >= deadline) throw error;
-          await waitForSqliteContention(deadline);
+          contended = true;
+          await waitForSqliteContention(deadline, contentionSignal);
           if (performance.now() >= deadline) throw error;
         }
       }

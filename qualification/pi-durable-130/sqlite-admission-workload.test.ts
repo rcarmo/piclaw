@@ -119,6 +119,174 @@ test("unchanged 10000ms acquisition deadline survives a >=10200ms foreign lock; 
   }
 }), 20_000);
 
+// Caller lifetime replaces only the contended acquisition budget, never the body.
+test("caller signal survives a >=10200ms foreign WAL writer without early settlement or replay", () => disk(async path => {
+  const root = ownedRoot(path), controller = new AbortController();
+  const db = new BunSqliteDatabase(path, { root, assertOwner() {}, fenceTransactions: true, contentionSignal: controller.signal });
+  const writer = new Database(path), attempted = barrier();
+  writer.exec("PRAGMA busy_timeout=0; BEGIN IMMEDIATE; INSERT INTO probe VALUES(1)");
+  let callbacks = 0, persists = 0, beats = 0, settled = false;
+  const exec = Database.prototype.exec;
+  const spy = spyOn(Database.prototype, "exec").mockImplementation(function (this: Database, sql: string) {
+    try { return exec.call(this, sql); }
+    catch (error) {
+      if (this !== root && this !== writer && sql === "BEGIN IMMEDIATE" && (error as { code?: string }).code === "SQLITE_BUSY") attempted.release();
+      throw error;
+    }
+  });
+  const heartbeat = setInterval(() => { beats++; }, 20), start = performance.now();
+  const pending = outcome(db.withHostSourceGuard(() => {}, async tx => {
+    persists++; await tx.run("INSERT INTO probe VALUES(3)");
+  }, () => db.transaction(async tx => { callbacks++; await tx.run("INSERT INTO probe VALUES(2)"); })))
+    .then(result => { settled = true; return result; });
+  try {
+    await attempted.promise;
+    do { await new Promise(resolve => setTimeout(resolve, Math.max(1, 10_200 - (performance.now() - start)))); }
+    while (performance.now() - start < 10_200);
+    expect(performance.now() - start).toBeGreaterThanOrEqual(10_200);
+    expect(writer.inTransaction).toBe(true); expect(settled).toBe(false);
+    expect(callbacks).toBe(0); expect(persists).toBe(0); expect(beats).toBeGreaterThan(10);
+    writer.exec("COMMIT");
+    expect((await pending).error).toBeUndefined();
+    expect(callbacks).toBe(1); expect(persists).toBe(1);
+    expect(root.query("SELECT n FROM probe ORDER BY rowid").all()).toEqual([{ n: 1 }, { n: 2 }, { n: 3 }]);
+  } finally {
+    clearInterval(heartbeat);
+    if (writer.inTransaction) writer.exec("ROLLBACK");
+    await pending; spy.mockRestore();
+    try { await db.close(); } finally { writer.close(); root.close(); }
+  }
+}), 20_000);
+
+test("caller abort rejects within 500ms of a confirmed busy BEGIN and leaves the queue usable", () => disk(async path => {
+  const root = ownedRoot(path), controller = new AbortController(), reason = Error("caller stopped");
+  const db = new BunSqliteDatabase(path, { root, assertOwner() {}, fenceTransactions: true, contentionSignal: controller.signal });
+  const writer = new Database(path), attempted = barrier();
+  writer.exec("PRAGMA busy_timeout=0; BEGIN IMMEDIATE");
+  let callbacks = 0, persists = 0, timer: ReturnType<typeof setTimeout> | undefined;
+  const exec = Database.prototype.exec;
+  const spy = spyOn(Database.prototype, "exec").mockImplementation(function (this: Database, sql: string) {
+    try { return exec.call(this, sql); }
+    catch (error) {
+      if (this !== root && this !== writer && sql === "BEGIN IMMEDIATE" && (error as { code?: string }).code === "SQLITE_BUSY") attempted.release();
+      throw error;
+    }
+  });
+  const pending = outcome(db.withHostSourceGuard(() => {}, async tx => {
+    persists++; await tx.run("INSERT INTO probe VALUES(3)");
+  }, () => db.transaction(async tx => { callbacks++; await tx.run("INSERT INTO probe VALUES(2)"); })));
+  let queued: Promise<void> | undefined;
+  try {
+    await attempted.promise; controller.abort(reason);
+    const result = await Promise.race([pending, new Promise<"timeout">(resolve => { timer = setTimeout(() => resolve("timeout"), 500); })]);
+    expect(writer.inTransaction).toBe(true); expect(result).not.toBe("timeout");
+    if (result !== "timeout") expect(result.error).toBe(reason);
+    expect(callbacks).toBe(0); expect(persists).toBe(0);
+    writer.exec("ROLLBACK");
+    queued = db.transaction(async tx => { await tx.run("INSERT INTO probe VALUES(7)"); });
+    await queued;
+    expect(root.query("SELECT n FROM probe").all()).toEqual([{ n: 7 }]);
+  } finally {
+    if (timer) clearTimeout(timer);
+    if (writer.inTransaction) writer.exec("ROLLBACK");
+    await Promise.allSettled([pending, queued]); spy.mockRestore();
+    try { await db.close(); } finally { writer.close(); root.close(); }
+  }
+}));
+
+test("retry owner check abort wins even when releasing the writer makes the next BEGIN possible", () => disk(async path => {
+  const root = ownedRoot(path), writer = new Database(path), controller = new AbortController();
+  const reason = Error("retry boundary stopped");
+  let armed = false, failedBegins = 0, begins = 0, callbacks = 0, persists = 0, boundary = false;
+  const guard = { root, fenceTransactions: true, contentionSignal: controller.signal, assertOwner() {
+    if (armed && failedBegins && !boundary) {
+      boundary = true; controller.abort(reason); writer.exec("ROLLBACK");
+    }
+  } };
+  const db = new BunSqliteDatabase(path, guard);
+  writer.exec("PRAGMA busy_timeout=0; BEGIN IMMEDIATE");
+  const exec = Database.prototype.exec;
+  const spy = spyOn(Database.prototype, "exec").mockImplementation(function (this: Database, sql: string) {
+    const candidate = this !== root && this !== writer && sql === "BEGIN IMMEDIATE";
+    if (candidate) begins++;
+    try { return exec.call(this, sql); }
+    catch (error) {
+      if (candidate && (error as { code?: string }).code === "SQLITE_BUSY") failedBegins++;
+      throw error;
+    }
+  });
+  armed = true;
+  const pending = outcome(db.withHostSourceGuard(() => {}, async () => { persists++; },
+    () => db.transaction(async () => { callbacks++; })));
+  try {
+    expect((await pending).error).toBe(reason);
+    expect(boundary).toBe(true); expect(writer.inTransaction).toBe(false);
+    expect(failedBegins).toBe(1); expect(begins).toBe(1);
+    expect(callbacks).toBe(0); expect(persists).toBe(0);
+    expect(root.query("SELECT n FROM probe").all()).toEqual([]);
+  } finally {
+    if (writer.inTransaction) writer.exec("ROLLBACK");
+    await pending; spy.mockRestore();
+    try { await db.close(); } finally { writer.close(); root.close(); }
+  }
+}));
+
+test("queued transaction captures signal A at call; later B cancels contention but permits authorized uncontended cleanup", () => disk(async path => {
+  const root = ownedRoot(path), writer = new Database(path), a = new AbortController(), b = new AbortController();
+  const reason = Error("B stopped"), denied = Error("owner denied"), sourceDenied = Error("source denied");
+  b.abort(reason);
+  let ownerAllowed = true, callbacks = 0, persists = 0, lockAfterCommit = false;
+  const guard = { root, fenceTransactions: true, contentionSignal: a.signal, assertOwner() { if (!ownerAllowed) throw denied; } };
+  const db = new BunSqliteDatabase(path, guard), entered = barrier(), release = barrier(), attempted = barrier();
+  const exec = Database.prototype.exec;
+  const spy = spyOn(Database.prototype, "exec").mockImplementation(function (this: Database, sql: string) {
+    try {
+      const result = exec.call(this, sql);
+      if (this !== root && this !== writer && sql === "COMMIT" && lockAfterCommit) {
+        lockAfterCommit = false; writer.exec("BEGIN IMMEDIATE");
+      }
+      return result;
+    } catch (error) {
+      if (this !== root && this !== writer && sql === "BEGIN IMMEDIATE" && (error as { code?: string }).code === "SQLITE_BUSY") attempted.release();
+      throw error;
+    }
+  });
+  const blocker = outcome(db.transaction(async () => { entered.release(); await release.promise; }));
+  let captured: ReturnType<typeof outcome<void>> | undefined, later: ReturnType<typeof outcome<void>> | undefined;
+  try {
+    await entered.promise;
+    captured = outcome(db.withHostSourceGuard(() => {}, async tx => {
+      persists++; await tx.run("INSERT INTO probe VALUES(2)");
+    }, () => db.transaction(async tx => { callbacks++; await tx.run("INSERT INTO probe VALUES(1)"); })));
+    guard.contentionSignal = b.signal;
+    lockAfterCommit = true; release.release();
+    await attempted.promise;
+    expect((await blocker).error).toBeUndefined();
+    expect(writer.inTransaction).toBe(true); expect(callbacks).toBe(0);
+    writer.exec("ROLLBACK");
+    expect((await captured).error).toBeUndefined();
+    expect(callbacks).toBe(1); expect(persists).toBe(1);
+    writer.exec("BEGIN IMMEDIATE");
+    later = outcome(db.transaction(async () => { callbacks++; }));
+    expect((await later).error).toBe(reason);
+    expect(writer.inTransaction).toBe(true); expect(callbacks).toBe(1);
+    writer.exec("ROLLBACK");
+    await db.run("INSERT INTO probe VALUES(3)"); // Already-aborted, uncontended SDK cleanup.
+    ownerAllowed = false;
+    expect((await outcome(db.run("INSERT INTO probe VALUES(99)"))).error).toBe(denied);
+    ownerAllowed = true;
+    expect((await outcome(db.withHostSourceGuard(() => { throw sourceDenied; }, async () => { persists++; },
+      () => db.run("INSERT INTO probe VALUES(99)")))).error).toBe(sourceDenied);
+    expect(persists).toBe(1);
+    expect(root.query("SELECT n FROM probe ORDER BY rowid").all()).toEqual([{ n: 1 }, { n: 2 }, { n: 3 }]);
+  } finally {
+    lockAfterCommit = false; ownerAllowed = true; release.release();
+    if (writer.inTransaction) writer.exec("ROLLBACK");
+    await Promise.allSettled([blocker, captured, later]); spy.mockRestore();
+    try { await db.close(); } finally { writer.close(); root.close(); }
+  }
+}));
+
 test("actual SDK Harness commits and document materialization: SQL inventory, writer holds and concurrent root admission", () => disk(async path => {
   const root = ownedRoot(path), db = guarded(path, root);
   const storage = await SqliteStorage.open(db);
@@ -203,12 +371,16 @@ test("actual SDK Harness commits and document materialization: SQL inventory, wr
 // Trusted async callbacks CAN hold the writer across external awaits. Keep this
 // separate from the SQL-only SDK samples rather than attributing it to SQL cost.
 test("entered external await holds writer; close seals immediately and joins entered/queued work exactly once", () => disk(async path => {
-  const root = ownedRoot(path), db = guarded(path, root), entered = barrier(), release = barrier();
-  let first = 0, second = 0, closed = false;
-  const pending = db.transaction(async tx => {
+  const root = ownedRoot(path), controller = new AbortController(), entered = barrier(), release = barrier();
+  const db = new BunSqliteDatabase(path, { root, assertOwner() {}, fenceTransactions: true, contentionSignal: controller.signal });
+  let first = 0, second = 0, persists = 0, closed = false;
+  const pending = db.withHostSourceGuard(() => {}, async tx => {
+    persists++; await tx.run("INSERT INTO probe VALUES(3)");
+  }, () => db.transaction(async tx => {
     first++; await tx.run("INSERT INTO probe VALUES(1)"); entered.release(); await release.promise;
-  });
+  }));
   await entered.promise;
+  controller.abort(Error("entered callback must finish"));
   const queued = db.transaction(async tx => { second++; await tx.run("INSERT INTO probe VALUES(2)"); });
   const closing = db.close().then(() => { closed = true; });
   try {
@@ -219,8 +391,12 @@ test("entered external await holds writer; close seals immediately and joins ent
     expect(root.query("SELECT n FROM probe").all()).toEqual([]);
   } finally {
     release.release();
-    try { await pending; await queued; await closing; }
+    try {
+      const results = await Promise.allSettled([pending, queued, closing]);
+      for (const result of results) expect(result.status).toBe("fulfilled");
+      expect(root.query("SELECT n FROM probe ORDER BY rowid").all()).toEqual([{ n: 1 }, { n: 3 }, { n: 2 }]);
+    }
     finally { await db.close(); root.close(); }
   }
-  expect(first).toBe(1); expect(second).toBe(1); expect(closed).toBe(true);
+  expect(first).toBe(1); expect(second).toBe(1); expect(persists).toBe(1); expect(closed).toBe(true);
 }));
