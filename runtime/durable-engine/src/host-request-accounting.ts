@@ -6,10 +6,11 @@ import { admitSqliteWrite } from "../../src/db/sqlite-async-admission.js";
 import { boundHostRequestCost } from "../../src/budget/request-cost-bound.js";
 import { ensureBudgetWork, getBudgetWork, setBudgetWorkStatus } from "../../src/db/budget-limits.js";
 import { readStoredProviderUsageAccountRef } from "../../src/agent-pool/provider-usage.js";
-import { abandonBudgetRequest,BudgetRequestError,findBudgetRequestByModelInvocation,getBudgetRequest,readBudgetTerminalReceipt,retainBudgetTerminalReceipt,
+import { abandonBudgetRequest,BudgetRequestError,findBudgetRequestByModelInvocation,findBudgetRequestByLogicalModelInvocation,getBudgetRequest,readBudgetTerminalReceipt,retainBudgetTerminalReceipt,
   type BudgetModelInvocation,type BudgetRequestBinding,type BudgetRequestReservation,type BudgetTerminalReceiptPayload } from '../../src/db/budget-request-reservations.js';
 import { getDb } from '../../src/db/connection.js';
 import { createLogger } from '../../src/utils/logger.js';
+import type { TaskModelRequestScope } from './task-model-boundary-shim.js';
 const log = createLogger('durable.accounting');
 import { projectTerminalOutcome,decodeStoredTerminalOutcome } from './host-terminal-outcome.js';
 import { nativeBackgroundIdentity,nativeBackgroundPolicyHash,readNativeBackgroundPolicy,type NativeBackgroundPolicy } from '../../src/agent-pool/background-operation-contract.js';
@@ -20,10 +21,7 @@ function hasSdkAccountingScope(database: Database): boolean {
   if (count === 1) throw new BudgetRequestError('conflict');
   return count === 2;
 }
-/** Denial-only dependency scope. SDK conversation ownership is not a new source
- * grant or invented generation parent. History/fork edges never join scopes. */
-export function assertConversationAccountingReady(database: Database, scope: { domain: string; conversationId: number; chatJid: string }, excludeRequestId?: string, terminal = false): void {
-  if (!hasSdkAccountingScope(database)) return; // Generic Root accounting has no SDK work.
+function accountingConversationRoots(database: Database) {
   const roots = new Map<number, number>();
   const rootFor = (id: number): number => {
     if (!Number.isSafeInteger(id) || id < 1) throw new BudgetRequestError('conflict');
@@ -35,16 +33,16 @@ export function assertConversationAccountingReady(database: Database, scope: { d
     if (rows.length !== 1) throw new BudgetRequestError('conflict');
     roots.set(id, rows[0]!.id); return rows[0]!.id;
   };
-  const root = rootFor(scope.conversationId);
-  // Existing state/work indexes bound this to outstanding facts, not all billed
-  // history. Terminal owner tasks remain valid ancestry locators after reopen.
-  const pending = database.query(`SELECT r.* FROM budget_request_reservations r INDEXED BY idx_budget_requests_state
-    WHERE r.chat_jid=? AND r.state IN ('reserved','dispatched','unresolved')
-    UNION ALL SELECT r.* FROM budget_work w INDEXED BY idx_budget_work_chat_status
-    CROSS JOIN budget_request_reservations r INDEXED BY idx_budget_requests_work_state ON r.work_id=w.id
-    WHERE w.chat_jid=? AND w.status IN ('active','paused') AND r.state='settled'`)
-    .all(scope.chatJid, scope.chatJid) as BudgetRequestReservation[];
+  return rootFor;
+}
+/** Denial-only dependency scope. SDK conversation ownership is not a new source
+ * grant or invented generation parent. History/fork edges never join scopes. */
+export function assertConversationAccountingReady(database: Database, scope: { domain: string; conversationId: number; chatJid: string }, excludeRequestId?: string, terminal = false): void {
+  if (!hasSdkAccountingScope(database)) return; // Generic Root accounting has no SDK work.
+  const rootFor = accountingConversationRoots(database), root = rootFor(scope.conversationId);
+  const pending = pendingSdkAccountingRows(database, scope.domain, root, scope.chatJid);
   for (const row of pending) {
+    if (row.accounting_scope_broken) throw new BudgetRequestError('conflict');
     if (row.id === excludeRequestId || row.model_invocation_json === null) continue;
     const invocation = JSON.parse(row.model_invocation_json) as BudgetModelInvocation;
     if (findBudgetRequestByModelInvocation(invocation, database)?.id !== row.id) throw new BudgetRequestError('conflict');
@@ -93,8 +91,8 @@ export async function completeMaintenanceBudgetWork(database: Database, workId: 
   });
 }
 
-export async function reconcileOperationBudgetWork(database: Database, operationId: string | undefined,
-  owner: { signal: AbortSignal; assertCurrent(): void }): Promise<void> {
+type AccountingOwner = { signal: AbortSignal; assertCurrent(): void };
+function captureAccountingOwner(database: Database, owner: AccountingOwner): AccountingOwner {
   const signal = owner.signal, assertOwner = owner.assertCurrent.bind(owner);
   const check = () => {
     signal.throwIfAborted();
@@ -102,24 +100,99 @@ export async function reconcileOperationBudgetWork(database: Database, operation
     if (checked !== undefined) { void Promise.resolve(checked).catch(() => {}); throw Error('Accounting owner must be synchronous'); }
     if (getDb() !== database) throw Error('Model request database binding changed.');
   };
-  check();
+  check(); return { signal, assertCurrent: check };
+}
+async function reconcileRetainedAccountingRow(database: Database, row: BudgetRequestReservation, owner: AccountingOwner): Promise<void> {
+  owner.assertCurrent();
+  const invocation = JSON.parse(row.model_invocation_json!) as BudgetModelInvocation;
+  if (findBudgetRequestByModelInvocation(invocation, database)?.id !== row.id) throw new BudgetRequestError('conflict');
+  try { assertModelAccountingReady(row.work_id, database); return; }
+  catch (pending) { if (!(pending instanceof BudgetRequestError) || pending.code !== 'budget_denied') throw pending; }
+  const binding: BudgetRequestBinding = { id: row.id, workId: row.work_id, chatJid: row.chat_jid, providerId: row.provider_id,
+    modelId: row.model_id, accountRef: row.account_ref, amountMicros: row.amount_microusd, modelInvocation: invocation };
+  await modelRequestAccounting({ authorise() { throw Error('Financial reconciliation cannot dispatch'); }, documentedFree: false,
+    usageSource: invocation.taskKind === 'pi.compaction' ? 'compaction' : 'assistant' }, database).settleRetainedRequest(binding, owner);
+}
+function pendingSdkAccountingRows(database: Database, domain: string, root: number, chatJid?: string): (BudgetRequestReservation & { accounting_scope_broken: number })[] {
+  // Only IDs enter the outstanding-fact/ownership walk; unrelated receipts and
+  // corrupt bindings never become this tree's financial or execution authority.
+  return database.query(`WITH RECURSIVE candidates(id,conversation_id) AS MATERIALIZED (
+    SELECT r.id,json_extract(r.model_invocation_json,'$.conversationId')
+    FROM budget_request_reservations r INDEXED BY idx_budget_requests_domain_state
+    WHERE json_extract(r.model_invocation_json,'$.domain')=? AND r.state IN ('reserved','dispatched','unresolved')
+      AND r.model_invocation_json IS NOT NULL AND (? IS NULL OR r.chat_jid=?)
+    UNION ALL SELECT r.id,json_extract(r.model_invocation_json,'$.conversationId') FROM budget_work w INDEXED BY idx_budget_work_status
+    CROSS JOIN budget_request_reservations r INDEXED BY idx_budget_requests_work_state ON r.work_id=w.id
+    WHERE w.status IN ('active','paused') AND r.state='settled'
+      AND r.model_invocation_json IS NOT NULL AND json_extract(r.model_invocation_json,'$.domain')=?
+      AND (? IS NULL OR w.chat_jid=?)
+  ), ancestry(request_id,id,owner_task_id,owner_conversation_id,broken) AS (
+    SELECT p.id,c.id,c.owner_task_id,c.owner_conversation_id,0 FROM candidates p JOIN conversations c ON c.id=p.conversation_id
+    UNION SELECT a.request_id,c.id,c.owner_task_id,c.owner_conversation_id,a.broken OR t.id IS NULL
+      FROM ancestry a LEFT JOIN tasks t ON t.id=a.owner_task_id
+      JOIN conversations c ON c.id=coalesce(t.conversation_id,a.owner_conversation_id)
+      WHERE a.owner_task_id IS NOT NULL
+  ) SELECT r.*,a.broken AS accounting_scope_broken FROM ancestry a JOIN budget_request_reservations r ON r.id=a.request_id
+    WHERE a.id=? AND a.owner_task_id IS NULL`).all(domain,chatJid ?? null,chatJid ?? null,domain,chatJid ?? null,chatJid ?? null,root) as (BudgetRequestReservation & { accounting_scope_broken: number })[];
+}
+/** Before the SDK phase body enters: reconcile immutable local facts or ask the
+ * existing SDK scheduler to wait. No provider, tool, task-revival or queue port. */
+export async function prepareTaskAccounting(database: Database, domain: string, scope: TaskModelRequestScope, owner: AccountingOwner): Promise<boolean> {
+  const captured = captureAccountingOwner(database, owner);
+  scope.signal.throwIfAborted();
+  // Recovering an exact paid checkpoint is observation, not a new effect. Its
+  // real model/account/source guards still run in the unchanged model port.
+  if (scope.checkpointHash && (scope.taskKind === 'pi.generation' && scope.phase === 'request'
+    || scope.taskKind === 'pi.compaction' && scope.phase === 'summarize')) {
+    const row = findBudgetRequestByLogicalModelInvocation({ version: 1, domain, conversationId: scope.conversationId,
+      taskId: scope.taskId, taskKind: scope.taskKind, phase: scope.phase as 'request' | 'summarize', checkpointHash: scope.checkpointHash }, database);
+    if (row && row.terminal_receipt_json !== null) return true;
+  }
+  // This phase has not entered. Its observer may stop waiting for acquisition;
+  // the immutable receipt remains for the database owner's later reconciliation.
+  const observer = { signal: AbortSignal.any([captured.signal, scope.signal]), assertCurrent: captured.assertCurrent };
+  const ready = await prepareConversationAccounting(database, domain, scope.conversationId, observer);
+  scope.signal.throwIfAborted(); return ready;
+}
+/** Same receipt owner for SDK phase preparation and terminal observation. */
+export async function prepareConversationAccounting(database: Database, domain: string, conversationId: number, owner: AccountingOwner): Promise<boolean> {
+  const captured = captureAccountingOwner(database, owner);
+  const rootFor = accountingConversationRoots(database), root = rootFor(conversationId);
+  const rows = pendingSdkAccountingRows(database, domain, root);
+  for (const row of rows) {
+    if (row.accounting_scope_broken) throw new BudgetRequestError('conflict');
+    const invocation = JSON.parse(row.model_invocation_json!) as BudgetModelInvocation;
+    if (invocation.domain !== domain) continue;
+    if (findBudgetRequestByModelInvocation(invocation, database)?.id !== row.id) throw new BudgetRequestError('conflict');
+    try { assertModelAccountingReady(row.work_id, database); continue; }
+    catch (pending) { if (!(pending instanceof BudgetRequestError) || pending.code !== 'budget_denied') throw pending; }
+    if (rootFor(invocation.conversationId) !== root) throw new BudgetRequestError('conflict');
+    if (row.terminal_receipt_json === null) return false; // Unknown send stays held; no financial guess or resend.
+    try { await reconcileRetainedAccountingRow(database, row, captured); }
+    catch (error) {
+      captured.assertCurrent();
+      if (error instanceof BudgetRequestError) throw error;
+      // A failed ACK may follow commit. Re-read exact monetary readiness before
+      // deciding to wait; never replay an entered SDK/provider/tool callback.
+      try { assertModelAccountingReady(row.work_id, database); }
+      catch (pending) {
+        if (pending instanceof BudgetRequestError && pending.code === 'budget_denied') return false;
+        throw pending;
+      }
+    }
+    captured.assertCurrent();
+  }
+  return true;
+}
+export async function reconcileOperationBudgetWork(database: Database, operationId: string | undefined, owner: AccountingOwner): Promise<void> {
+  const { signal, assertCurrent: check } = captureAccountingOwner(database, owner);
   // Reuse this existing financial reconciler, not a provider/task recovery queue.
   // Only v1 attributed retained facts can reconstruct their original reporting
   // route. Legacy unattributed/receipt-less holds are never guessed or backfilled.
   const retained = database.query(`SELECT * FROM budget_request_reservations INDEXED BY idx_budget_requests_state
     WHERE state IN ('dispatched','unresolved') AND terminal_receipt_json IS NOT NULL AND model_invocation_json IS NOT NULL
     AND (? IS NULL OR json_extract(model_invocation_json,'$.operationId')=?)`).all(operationId ?? null, operationId ?? null) as BudgetRequestReservation[];
-  for (const row of retained) {
-    check();
-    const invocation = JSON.parse(row.model_invocation_json!) as BudgetModelInvocation;
-    if (findBudgetRequestByModelInvocation(invocation, database)?.id !== row.id) throw new BudgetRequestError('conflict');
-    try { assertModelAccountingReady(row.work_id, database); continue; }
-    catch (pending) { if (!(pending instanceof BudgetRequestError) || pending.code !== 'budget_denied') throw pending; }
-    const binding: BudgetRequestBinding = { id: row.id, workId: row.work_id, chatJid: row.chat_jid, providerId: row.provider_id,
-      modelId: row.model_id, accountRef: row.account_ref, amountMicros: row.amount_microusd, modelInvocation: invocation };
-    await modelRequestAccounting({ authorise() { throw Error('Financial reconciliation cannot dispatch'); }, documentedFree: false,
-      usageSource: invocation.taskKind === 'pi.compaction' ? 'compaction' : 'assistant' }, database).settleRetainedRequest(binding, { signal, assertCurrent: check });
-  }
+  for (const row of retained) await reconcileRetainedAccountingRow(database, row, { signal, assertCurrent: check });
   await admitSqliteWrite(database, () => {
     const terminals = (operationId !== undefined
       ? database.query('SELECT operation_id FROM service_effect_s02_commits WHERE operation_id=?').all(operationId)

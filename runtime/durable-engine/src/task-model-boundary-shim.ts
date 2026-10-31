@@ -33,9 +33,12 @@ export function taskModelHookScope(api: Pick<TaskModelRequestScope, "taskId" | "
 /** TEMPORARY pi-durable 1.4 phase adapter. Replace with an SDK task-bound model-request
  * callback. Uses exported definitions and RegistryReader, without SDK file or
  * persisted-task mutation. Includes checkpoint recovery and every phase entry.
- * Supplies identity only: not dispatch, accounting or exactly-once proof.
+ * Identity is not dispatch/exactly-once proof. Optional accounting preparation
+ * runs BEFORE the phase body: native SDK sleep preserves its same checkpoint;
+ * exceptions from an entered body are never caught or replayed here.
  */
-export function withTaskModelRequestScope(registry: RegistryReader): RegistryReader {
+export function withTaskModelRequestScope(registry: RegistryReader,
+  beforePhase?: (scope: TaskModelRequestScope) => Promise<boolean>): RegistryReader {
   const wrapped = new WeakMap<AnyTask, AnyTask>();
   const wrap = (task: AnyTask): AnyTask => {
     const previous = wrapped.get(task);
@@ -47,15 +50,26 @@ export function withTaskModelRequestScope(registry: RegistryReader): RegistryRea
       (record: Parameters<typeof execute>[0], runtime: Runtime, context: Context) => {
         const requestPhase = definition.name === "pi.generation" && phase === "request"
           || definition.name === "pi.compaction" && phase === "summarize";
-        const checkpointHash = requestPhase && record?.id === runtime.taskId && record.conversationId === runtime.conversationId
+        const valid = record?.id === runtime.taskId && record.conversationId === runtime.conversationId
           && record.kind === definition.name && record.version === definition.version && record.state?.status === "running"
-          && record.state.checkpoint?.phase === phase
+          && record.state.checkpoint?.phase === phase;
+        const checkpointHash = requestPhase && valid
           ? createHash("sha256").update(canonicalJson({ version: 1, kind: definition.name, taskVersion: definition.version,
             input: record.input, checkpoint: record.state.checkpoint })).digest("hex") : undefined;
-        return requests.run(Object.freeze({
+        const scope = Object.freeze({
           taskId: runtime.taskId, conversationId: runtime.conversationId, signal: runtime.signal,
           taskKind: definition.name, phase, ...(checkpointHash ? { checkpointHash } : {}),
-        }), () => execute(record, runtime, context));
+        });
+        if (!beforePhase) return requests.run(scope, () => execute(record, runtime, context));
+        return requests.run(scope, async () => {
+          if (!valid) throw Error('Exact running SDK phase required');
+          runtime.signal.throwIfAborted();
+          const ready = await beforePhase(scope);
+          runtime.signal.throwIfAborted();
+          if (ready !== true && ready !== false) throw Error('SDK accounting preparation must return readiness');
+          if (!ready) return runtime.sleepUntil(runtime.now() + 1000, record.state.checkpoint, context);
+          return execute(record, runtime, context);
+        });
       },
     ]));
     const result = { ...task, definition: { ...definition, phases } };

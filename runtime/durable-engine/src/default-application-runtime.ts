@@ -50,7 +50,7 @@ import type { NativeDreamRequest,AgentOutput } from '../../src/agent-pool/contra
 import { getBudgetWork,ensureBudgetWork,setBudgetWorkStatus } from '../../src/db/budget-limits.js';
 import { assertModelAccountingReady } from '../../src/budget/model-request-accounting.js';
 import { BudgetRequestError, type BudgetModelInvocation } from '../../src/db/budget-request-reservations.js';
-import { reserveHostRequest, reconcileOperationBudgetWork, completeMaintenanceBudgetWork,operationBudgetWorkId,assertOperationAccountingReady,assertConversationAccountingReady } from "./host-request-accounting.js";
+import { reserveHostRequest, reconcileOperationBudgetWork, completeMaintenanceBudgetWork,operationBudgetWorkId,assertOperationAccountingReady,assertConversationAccountingReady,prepareTaskAccounting,prepareConversationAccounting } from "./host-request-accounting.js";
 import { createHostMcp } from "./host-mcp.js";
 import { createHostFetch } from "./host-fetch.js";
 import { taskModelRequestScope, taskModelHookScope, withTaskModelRequestScope } from "./task-model-boundary-shim.js";
@@ -1082,7 +1082,10 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     assertOwner() { assert(); lifetime.signal.throwIfAborted(); observability.assertCurrent(); }, failClosed(error) { lifetime.abort(error); } }));
   if (goal) registry.install(createHostGoalTerminalFence(goal.addon, { root, runtime, assertOwner: assertGoal }));
   const commandPolicy = createHostCommandPolicy(root, () => { assert(); if (readAccessConfig().mode !== "single-user") throw Error("Native controls require single-user policy"); });
-  const harnessOptions = { models, registry: withTaskModelRequestScope(registry), settings: commandPolicy.settings };
+  const harnessOptions = { models, registry: withTaskModelRequestScope(registry, async scope => {
+    if (!['pi.generation', 'pi.compaction', 'pi.tool'].includes(scope.taskKind)) return true;
+    return prepareTaskAccounting(root, mapping.domain, scope, terminalOwner);
+  }), settings: commandPolicy.settings };
   const path = (root.query("PRAGMA database_list").all() as { name: string; file: string }[]).find(row => row.name === "main")?.file;
   if (!path) throw Error("Durable default requires a file-backed application database");
   const storage = new BunSqliteDatabase(path, { root, assertOwner: assert, fenceTransactions: true });
@@ -1288,6 +1291,10 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
           },history),
         },
         assertAccountingReady(operationId, terminal) { assert(); assertOperationAccountingReady(root, operationId, terminal, {domain:mapping.domain,incarnation:mapping.domain}); },
+        async prepareAccounting(_operationId, conversationId) {
+          assert(); const ready = await prepareConversationAccounting(root, mapping.domain, conversationId, terminalOwner); assert();
+          if (!ready) throw new BudgetRequestError('budget_denied');
+        },
         assertAdmission: input => processControls!.assertAdmission(input),
         assertInputAdmission(chat) { assertAdmission(); ensureLiveWatch(chat); },
         materializeAnswer: codex ? createHostCodexAnswerMaterializer({ root, cwd: WORKSPACE_DIR, answers, assertOwner: assert }) : undefined,

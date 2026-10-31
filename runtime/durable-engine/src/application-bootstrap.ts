@@ -116,6 +116,7 @@ export interface ApplicationBootstrapOptions {
   onMaintenanceSettled?: (workId: string) => void | Promise<void>;
   onOperationSettled?: RuntimeOptions["onOperationSettled"];
   assertAccountingReady?: RuntimeOptions['assertAccountingReady'];
+  prepareAccounting?: RuntimeOptions['prepareAccounting'];
   prepareTerminalEffect?: RuntimeOptions["prepareTerminalEffect"];
   materializeAnswer?: RuntimeOptions["materializeAnswer"];
   dispatchHostCommand?: import("../../src/agent-pool/contracts.js").AgentPoolOptions["dispatchHostCommand"];
@@ -272,7 +273,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       runtime: { ...r, work, terminal, bindings,
         completeInputHandoff: createInputHandoffCompletion(root, { domain: r.incarnation, incarnation: r.incarnation,
           sessionId: r.sessionId, bindings, work, assertCurrent(input) { assert(); config.assertAdmission?.(input); } }),
-        assertAdmission: config.assertAdmission, assertAccountingReady, materializeAnswer: config.materializeAnswer, prepareTerminalEffect: config.prepareTerminalEffect, onOperationSettled: config.onOperationSettled, onMaintenanceSettled: config.onMaintenanceSettled, putAnswer: config.answers.put.bind(config.answers),
+        assertAdmission: config.assertAdmission, assertAccountingReady, prepareAccounting: config.prepareAccounting, materializeAnswer: config.materializeAnswer, prepareTerminalEffect: config.prepareTerminalEffect, onOperationSettled: config.onOperationSettled, onMaintenanceSettled: config.onMaintenanceSettled, putAnswer: config.answers.put.bind(config.answers),
         replyThreadFor(input) { assert(); return resolveAcceptedMessageThread(root, input); },
         async cancelOperationSource(input, expectedVersion, retryTaskId, cause) {
           await admitSqliteWrite(root, () => {

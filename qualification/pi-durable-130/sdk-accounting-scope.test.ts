@@ -1,11 +1,12 @@
 import "./src/test-guard.js";
 import { beforeAll, expect, test, spyOn } from "bun:test";
 import { writeFileSync } from 'node:fs';
+import { Database } from 'bun:sqlite';
 import { createSession, GenerationTask, CompactionTask, type ConversationId, type TaskId, type StorageWrite } from "../../runtime/durable-engine/qualification/durable.ts";
 import { BACKGROUND_CONTEXT as context } from "../../runtime/durable-engine/qualification/context.ts";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
 import { BunSqliteDatabase } from "../../runtime/durable-engine/src/bun-sqlite.js";
-import { assertConversationAccountingReady, operationBudgetWorkId } from "../../runtime/durable-engine/src/host-request-accounting.js";
+import { assertConversationAccountingReady, operationBudgetWorkId, prepareTaskAccounting } from "../../runtime/durable-engine/src/host-request-accounting.js";
 import { projectTerminalOutcome } from "../../runtime/durable-engine/src/host-terminal-outcome.js";
 import { modelRequestAccounting } from "../../runtime/src/budget/model-request-accounting.js";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
@@ -14,6 +15,7 @@ import { abandonBudgetRequest, BudgetRequestError, dispatchBudgetRequest, getBud
 import type { AssistantMessage } from "../../runtime/src/durable-legacy-sdk.js";
 import { createTempWorkspace, setEnv } from "../../runtime/test/helpers.js";
 import { resolveRuntimeConfigPaths } from "../../runtime/src/core/config-paths.js";
+import { installTerminalSettlementCompositionSchema } from '../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js';
 
 // Financial metadata/dependency units only. No Harness, scheduler, provider,
 // credential lookup, source authority, or outbound execution is exercised here.
@@ -56,6 +58,7 @@ async function fixture(body: (f: {
     if (seed) writeFileSync(paths.databasePath, seed.image);
     initDatabase(paths);
     let database = getDb();
+    if (!seed) installTerminalSettlementCompositionSchema(database);
     expect(database.query("SELECT file FROM pragma_database_list WHERE name='main'").get()).toEqual({ file: paths.databasePath });
     const open = () => SqliteStorage.open(new BunSqliteDatabase(paths.databasePath, { root: database, assertOwner() {}, fenceTransactions: true }));
     storage = await open();
@@ -288,17 +291,93 @@ test('dependency queries use outstanding-work/status indexes rather than billed 
   const spy = spyOn(f.database, 'query'); let queries: string[];
   try { f.ready(f.parent, undefined, true); queries = spy.mock.calls.map(call => call[0]); }
   finally { spy.mockRestore(); }
-  const pending = queries.find(sql => sql.startsWith('SELECT r.* FROM budget_request_reservations'));
+  const pending = queries.find(sql => sql.startsWith('WITH RECURSIVE candidates'));
   const live = queries.find(sql => sql.startsWith('SELECT conversation_id FROM tasks'));
   if (!pending || !live) throw Error('Actual dependency queries not observed');
-  const pendingPlan = f.database.query('EXPLAIN QUERY PLAN ' + pending).all(chatJid, chatJid) as { detail: string }[];
+  const pendingPlan = f.database.query('EXPLAIN QUERY PLAN ' + pending).all(domain,chatJid,chatJid,domain,chatJid,chatJid,f.parent.conversationId) as { detail: string }[];
   const livePlan = f.database.query('EXPLAIN QUERY PLAN ' + live).all(JSON.stringify(CompactionTask.definition.name)) as { detail: string }[];
-  for (const name of ['idx_budget_requests_state', 'idx_budget_work_chat_status', 'idx_budget_requests_work_state'])
+  for (const name of ['idx_budget_requests_domain_state', 'idx_budget_work_status', 'idx_budget_requests_work_state'])
     expect(pendingPlan.some(row => row.detail.includes(name))).toBe(true);
   expect(livePlan.some(row => row.detail.includes('tasks_by_status'))).toBe(true);
   const scan = /\bSCAN (r|w|tasks)\b/;
   expect(scan.test('SCAN r')).toBe(true);
   expect([...pendingPlan, ...livePlan].some(row => scan.test(row.detail))).toBe(false);
+}));
+
+for (const namespace of [domain, 'unrelated-domain']) test(`invalid retained facts outside the tree/domain do not fault phase preparation: ${namespace}`, () => fixture(async f => {
+  const at = namespace === domain ? f.independent : f.child;
+  const binding = f.reserve(at, namespace), invalid = terminal(); invalid.usage.input = -1;
+  f.retain(binding, invalid); const held = getBudgetRequest(binding.id, f.database);
+  const scope = (location: Location) => ({ ...location, signal: owner.signal, taskKind: 'pi.generation', phase: 'prepare' });
+  expect(await prepareTaskAccounting(f.database, domain, scope(f.parent), owner)).toBe(true);
+  expect(() => f.ready(f.parent)).not.toThrow();
+  await expect(prepareTaskAccounting(f.database, namespace, scope(at), owner)).rejects.toBeInstanceOf(BudgetRequestError);
+  expect(getBudgetRequest(binding.id, f.database)).toEqual(held);
+  expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
+}));
+
+test('receipt-less unresolved sends wait before a new phase without guessing or dispatching', () => fixture(async f => {
+  const binding = f.reserve(f.child); dispatchBudgetRequest(binding, { signal: owner.signal, authorise() {} }, f.database);
+  abandonBudgetRequest(binding, f.database); const held = getBudgetRequest(binding.id, f.database);
+  expect(await prepareTaskAccounting(f.database, domain, { ...f.parent, signal: owner.signal, taskKind: 'pi.generation', phase: 'prepare' }, owner)).toBe(false);
+  expect(getBudgetRequest(binding.id, f.database)).toEqual(held);
+  expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
+}));
+
+test('phase preparation reconciles only related retained debt, preserving receipt and independent scopes', () => fixture(async f => {
+  const binding = f.reserve(f.child); f.retain(binding);
+  const held = getBudgetRequest(binding.id, f.database)!;
+  const scope = (at: Location) => ({ taskId: at.taskId, conversationId: at.conversationId,
+    signal: owner.signal, taskKind: 'pi.generation', phase: 'prepare' });
+  f.database.exec("CREATE TRIGGER phase_price_fault BEFORE INSERT ON token_usage BEGIN SELECT RAISE(ABORT,'synthetic phase price fault'); END");
+  expect(await prepareTaskAccounting(f.database, domain, scope(f.parent), owner)).toBe(false);
+  expect(getBudgetRequest(binding.id, f.database)).toEqual(held);
+  expect(await prepareTaskAccounting(f.database, domain, scope(f.independent), owner)).toBe(true);
+  expect(await prepareTaskAccounting(f.database, domain, scope(f.fork), owner)).toBe(true);
+  expect(getBudgetRequest(binding.id, f.database)).toEqual(held);
+  f.database.exec('DROP TRIGGER phase_price_fault');
+  expect(await prepareTaskAccounting(f.database, domain, scope(f.sibling), owner)).toBe(true);
+  const settled = getBudgetRequest(binding.id, f.database)!;
+  expect(settled.state).toBe('settled'); expect(settled.terminal_receipt_json).toBe(held.terminal_receipt_json);
+  expect(settled.terminal_receipt_sha256).toBe(held.terminal_receipt_sha256); expect(settled.terminal_received_at).toBe(held.terminal_received_at);
+  expect(f.database.query('SELECT count(*) n FROM token_usage WHERE invocation_id=?').get(binding.id)).toEqual({ n: 1 });
+}));
+
+test('an unentered phase cancels writer acquisition without discarding its paid receipt or owner', () => fixture(async f => {
+  const binding = f.reserve(f.child); f.retain(binding);
+  const held = getBudgetRequest(binding.id, f.database)!;
+  const path = (f.database.query("SELECT file FROM pragma_database_list WHERE name='main'").get() as { file: string }).file;
+  const writer = new Database(path), caller = new AbortController(), cancelled = Error('phase observer cancelled');
+  writer.exec('BEGIN IMMEDIATE');
+  const timer = setTimeout(() => caller.abort(cancelled), 20);
+  try {
+    await expect(prepareTaskAccounting(f.database, domain, { taskId: f.parent.taskId, conversationId: f.parent.conversationId,
+      signal: caller.signal, taskKind: 'pi.generation', phase: 'prepare' }, owner)).rejects.toBe(cancelled);
+    expect(owner.signal.aborted).toBe(false); expect(getBudgetRequest(binding.id, f.database)).toEqual(held);
+    expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
+  } finally { clearTimeout(timer); writer.exec('ROLLBACK'); writer.close(); }
+}));
+
+test('phase preparation permits exact paid-checkpoint observation while sibling debt still blocks new effects', () => fixture(async f => {
+  const first = f.reserve(f.parent), second = f.reserve(f.child); f.retain(first); f.retain(second);
+  const before = f.database.query('SELECT * FROM budget_request_reservations ORDER BY id').all();
+  f.database.exec("CREATE TRIGGER phase_price_fault BEFORE INSERT ON token_usage BEGIN SELECT RAISE(ABORT,'synthetic phase price fault'); END");
+  const scope = { taskId: f.parent.taskId, conversationId: f.parent.conversationId, signal: owner.signal,
+    taskKind: 'pi.generation', phase: 'request', checkpointHash: first.modelInvocation!.checkpointHash };
+  expect(await prepareTaskAccounting(f.database, domain, scope, owner)).toBe(true);
+  expect(f.database.query('SELECT * FROM budget_request_reservations ORDER BY id').all()).toEqual(before);
+  expect(await prepareTaskAccounting(f.database, domain, { ...scope, checkpointHash: 'f'.repeat(64) }, owner)).toBe(false);
+  expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
+}));
+
+test('phase preparation leaves intentional unknown valuation ready and byte-identical', () => fixture(async f => {
+  const binding = f.reserve(f.child); f.retain(binding, terminal(true));
+  await modelRequestAccounting({ authorise() {}, documentedFree: false }, f.database).settleRetainedRequest(binding, owner);
+  const row = getBudgetRequest(binding.id, f.database);
+  expect(await prepareTaskAccounting(f.database, domain, { taskId: f.parent.taskId, conversationId: f.parent.conversationId,
+    signal: owner.signal, taskKind: 'pi.generation', phase: 'prepare' }, owner)).toBe(true);
+  expect(getBudgetRequest(binding.id, f.database)).toEqual(row);
+  expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
 }));
 
 test("cyclic ownership with no ownerless root fails closed, including terminal checks", () => fixture(async f => {

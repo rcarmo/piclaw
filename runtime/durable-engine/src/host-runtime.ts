@@ -1,3 +1,4 @@
+import { BudgetRequestError } from '../../src/db/budget-request-reservations.js';
 import { createTrackedBashOperations } from "../../src/tools/tracked-bash.js";
 import { withChatContext } from "../../src/core/chat-context.js";
 import { assertModelContextFits, measureModelPromptSections, prepareModelContextAdmission, type ModelContextAdmission, type ModelToolSchema } from "./host-model-context.js";
@@ -81,6 +82,8 @@ export interface RuntimeOptions {
   readonly onOperationSettled?: (operationId: string, processExit?: NativeExitReceipt) => void | Promise<void>;
   /** Synchronous, ancestry-scoped barrier before new effects and host settlement. */
   readonly assertAccountingReady?: (operationId: string, terminal?: boolean) => void;
+  /** Existing receipt owner prepares facts outside SQL before terminal CAS. */
+  readonly prepareAccounting?: (operationId: string, conversationId: ConversationId) => Promise<void>;
   /** New work is sealed while an exact native shutdown request settles. */
   readonly assertAdmission?: (input?: AcceptedInput) => void;
   /** Host timeline root for this exact accepted input, including queued messages. */
@@ -210,6 +213,7 @@ function runtimeSnapshot(o: RuntimeOptions): RuntimeSnapshot {
     materializeAnswer: materializeAnswer?.bind(o), now: now.bind(o),
     prepareTerminalEffect: o.prepareTerminalEffect?.bind(o),
     assertAccountingReady: o.assertAccountingReady?.bind(o),
+    prepareAccounting: o.prepareAccounting?.bind(o),
     replyThreadFor: o.replyThreadFor?.bind(o),
     onOperationSettled: o.onOperationSettled?.bind(o), onMaintenanceSettled: o.onMaintenanceSettled?.bind(o), cancelSideSource: o.cancelSideSource?.bind(o),
     cancelOperationSource: o.cancelOperationSource?.bind(o),
@@ -2027,7 +2031,15 @@ export class HostConversationRuntime {
         taskId = await readAbortTask(); this.fence();
         if (taskId === abortedTask) throw Error("Aborted run has not settled");
       }
-      const terminal = await this.settleInput(copy); this.fence();
+      let terminal;
+      try { terminal = await this.settleInput(copy); this.fence(); }
+      catch (error) {
+        this.fence();
+        // Cancellation and the exact SDK abort already committed. Retained
+        // accounting debt may delay S02, not turn that accepted abort into error.
+        if (error instanceof BudgetRequestError && error.code === 'budget_denied') return true;
+        throw error;
+      }
       if (!terminal) throw Error("Abort terminal settlement pending");
       return true;
     }).catch(async error => {
@@ -2261,6 +2273,10 @@ export class HostConversationRuntime {
     // ACK-only/reopened evidence cannot create execution authority during settlement.
     // Retain the original outcome and host hold until an explicitly qualified owner can reconcile it.
     if (!operation.harness) return null;
+    if (o.prepareAccounting) {
+      const prepared: unknown = await o.prepareAccounting(input.operationId, o.operationConversationFor?.(input) ?? input.conversationId); this.fence();
+      if (prepared !== undefined) throw Error('Accounting preparation must return no effect');
+    }
     this.assertAccountingReady(input.operationId, true);
     if (operation.phase !== "settling") {
       if (!o.work.finishHarness) throw new Error("Host settlement API required");

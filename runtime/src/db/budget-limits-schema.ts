@@ -110,6 +110,15 @@ CREATE TRIGGER main.budget_request_invocation_no_delete BEFORE DELETE ON budget_
 });
 import { budgetUsageEventTableSql, initializeUsageReportProjection, verifyExistingUsageReportProjection } from "./usage-report-projection.js";
 
+/** Same owner; bound phase preparation to this domain's outstanding facts. */
+export const budgetAccountingScopeMigration = Object.freeze({
+  owner: budgetTerminalReceiptMigration.owner, id: 'accounting-scope-index-v1', order: 3,
+  sql: `CREATE INDEX main.idx_budget_requests_domain_state ON budget_request_reservations(
+    json_extract(model_invocation_json,'$.domain'),state)
+    WHERE model_invocation_json IS NOT NULL;
+  CREATE INDEX main.idx_budget_work_status ON budget_work(status,chat_jid);`,
+});
+
 /** Additive budget tables. Every cap is absent until the user creates one. */
 export function initializeBudgetLimitsSchema(database: Database): void {
   database.transaction(() => {
@@ -276,7 +285,7 @@ export function initializeBudgetLimitsSchema(database: Database): void {
     CREATE TRIGGER IF NOT EXISTS budget_usage_events_no_delete
       BEFORE DELETE ON budget_usage_events BEGIN SELECT RAISE(ABORT, 'budget usage events are immutable'); END;
     `);
-    applyOwnedMigrations(database, [budgetTerminalReceiptMigration, budgetModelInvocationMigration]);
+    applyOwnedMigrations(database, [budgetTerminalReceiptMigration, budgetModelInvocationMigration, budgetAccountingScopeMigration]);
     initializeUsageReportProjection(database);
   }).immediate();
 }

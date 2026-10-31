@@ -917,6 +917,9 @@ test("rejected asynchronous observer cannot poison result publication or produce
 for (const boundary of ['source', 'cancel'] as const) for (const observed of [false, true]) for (const streamed of [false, true]) {
   test(`live publication rechecks authority after settlement; ${boundary}, observer=${observed}, streamed=${streamed}`, async () => {
     const f = await fixture(); let current = true, retentions = 0, settlements = 0;
+    // Keep the complete expected terminal deterministic: the SDK stream stamps
+    // duration only when its wall-clock creation shares the message's millisecond.
+    f.message.durationMs = 7;
     const retained: AssistantMessage[] = [];
     f.policy.captureSourceGuard = () => () => { if (!current) throw Error(token); };
     if (observed) f.observe(() => {});

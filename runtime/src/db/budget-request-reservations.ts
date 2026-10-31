@@ -23,6 +23,8 @@ export interface BudgetModelInvocation {
   phase: 'request' | 'summarize';
   checkpointHash: string;
 }
+/** Passive SDK checkpoint key; deliberately contains no host-operation authority. */
+export type BudgetModelInvocationIdentity = Omit<BudgetModelInvocation, 'operationId'>;
 /** Trusted host binding, not a tool or wire request shape. */
 export interface BudgetRequestBinding {
   id: string;
@@ -60,19 +62,19 @@ export class BudgetRequestError extends Error {
   }
 }
 const digest = (value: unknown) => createHash('sha256').update(canonical(value)).digest('hex');
-function validateModelInvocation(scope: BudgetModelInvocation): void {
+function validateModelInvocation(scope: BudgetModelInvocationIdentity & Partial<Pick<BudgetModelInvocation, 'operationId'>>, logicalOnly = false): void {
   const invalid = () => { throw new BudgetRequestError('invalid_binding'); };
   if (!scope || typeof scope !== 'object' || isProxy(scope)
     || ![Object.prototype, null].includes(Object.getPrototypeOf(scope))) return invalid();
   const keys = Reflect.ownKeys(scope);
-  if (keys.length !== 8 || keys.some(key => typeof key !== 'string'
-    || !['version','domain','operationId','conversationId','taskId','taskKind','phase','checkpointHash'].includes(key))) invalid();
+  const allowed = ['version','domain','conversationId','taskId','taskKind','phase','checkpointHash', ...(logicalOnly ? [] : ['operationId'])];
+  if (keys.length !== allowed.length || keys.some(key => typeof key !== 'string' || !allowed.includes(key))) invalid();
   for (const key of keys) {
     const descriptor = Object.getOwnPropertyDescriptor(scope, key)!;
     if (!descriptor.enumerable || !('value' in descriptor)) invalid();
   }
   if (scope.version !== 1) invalid();
-  for (const value of [scope.domain, scope.operationId]) {
+  for (const value of [scope.domain, ...(logicalOnly ? [] : [scope.operationId])]) {
     // Bound metadata strings to 256 Unicode code points, matching SQLite length.
     if (typeof value !== 'string' || !value.trim() || Array.from(value).length > 256 || /\p{Cc}/u.test(value)) invalid();
   }
@@ -81,7 +83,7 @@ function validateModelInvocation(scope: BudgetModelInvocation): void {
       || scope.taskKind === 'pi.compaction' && scope.phase === 'summarize')
     || typeof scope.checkpointHash !== 'string' || scope.checkpointHash.length !== 64 || !/^[0-9a-f]{64}$/.test(scope.checkpointHash)) invalid();
 }
-function modelInvocationKey(scope: BudgetModelInvocation): string {
+function modelInvocationKey(scope: BudgetModelInvocationIdentity): string {
   // operationId is deliberately NOT a nonce for allocating a second paid call.
   return digest({ version: scope.version, domain: scope.domain, conversationId: scope.conversationId,
     taskId: scope.taskId, taskKind: scope.taskKind, phase: scope.phase, checkpointHash: scope.checkpointHash });
@@ -111,6 +113,19 @@ export function findBudgetRequestByModelInvocation(scope: BudgetModelInvocation,
   const row = database.query('SELECT * FROM budget_request_reservations WHERE model_invocation_key_sha256=?')
     .get(modelInvocationKey(scope)) as BudgetRequestReservation | null;
   if (row) verifyModelInvocation(row, scope);
+  return row;
+}
+/** Read-only fact lookup for the actual SDK phase before its body enters. The
+ * stored FULL binding is still verified; this cannot adopt, reserve or resend. */
+export function findBudgetRequestByLogicalModelInvocation(scope: BudgetModelInvocationIdentity, database: Database = getDb()): BudgetRequestReservation | null {
+  validateModelInvocation(scope, true);
+  const row = database.query('SELECT * FROM budget_request_reservations WHERE model_invocation_key_sha256=?')
+    .get(modelInvocationKey(scope)) as BudgetRequestReservation | null;
+  if (row) {
+    if (row.model_invocation_json === null) throw new BudgetRequestError('conflict');
+    try { verifyModelInvocation(row, JSON.parse(row.model_invocation_json)); }
+    catch { throw new BudgetRequestError('conflict'); }
+  }
   return row;
 }
 function validate(binding: BudgetRequestBinding): void {

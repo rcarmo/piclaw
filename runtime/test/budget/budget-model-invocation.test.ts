@@ -10,7 +10,7 @@ import { ensureBudgetWork, saveBudgetCap } from '../../src/db/budget-limits.js';
 import { evaluateBudget } from '../../src/budget/evaluator.js';
 import { canonicalJson } from '../../src/utils/canonical-json.js';
 import { applyOwnedMigrations, listAppliedOwnedMigrations } from '../../src/db/migrations.js';
-import { initializeBudgetLimitsSchema, budgetTerminalReceiptMigration, budgetModelInvocationMigration } from '../../src/db/budget-limits-schema.js';
+import { initializeBudgetLimitsSchema, budgetTerminalReceiptMigration, budgetModelInvocationMigration, budgetAccountingScopeMigration } from '../../src/db/budget-limits-schema.js';
 import { reserveBudgetRequest, findBudgetRequestByModelInvocation, getBudgetRequest, dispatchBudgetRequest, abandonBudgetRequest,
   recordBudgetTerminalReceipt, readBudgetTerminalReceipt, settleBudgetRequest, type BudgetRequestBinding, type BudgetModelInvocation } from '../../src/db/budget-request-reservations.js';
 
@@ -43,9 +43,9 @@ CREATE INDEX idx_budget_requests_state ON budget_request_reservations(state);`;
 test('invocation fresh schema owns order 2 after unchanged receipt migration with a unique nullable index', () => {
   const { db } = fixture();
   const before = listAppliedOwnedMigrations(db, budgetTerminalReceiptMigration.owner);
-  expect(before.map(m => m.id)).toEqual(['terminal-receipt-v1', 'model-invocation-v1']);
+  expect(before.map(m => m.id)).toEqual(['terminal-receipt-v1', 'model-invocation-v1', 'accounting-scope-index-v1']);
   expect(db.query('SELECT migration_order FROM piclaw_schema_migrations WHERE owner=? ORDER BY migration_order').all(budgetTerminalReceiptMigration.owner))
-    .toEqual([{ migration_order: 1 }, { migration_order: 2 }]);
+    .toEqual([{ migration_order: 1 }, { migration_order: 2 }, { migration_order: 3 }]);
   initializeBudgetLimitsSchema(db);
   expect(listAppliedOwnedMigrations(db, budgetTerminalReceiptMigration.owner)).toEqual(before);
   expect(db.query("SELECT name,type,\"notnull\" FROM pragma_table_info('budget_request_reservations') WHERE name LIKE 'model_invocation_%'").all()).toEqual([
@@ -61,7 +61,7 @@ test('actual old shape upgrades add only NULL columns preserving legacy hashes, 
   const db = new Database(':memory:');
   const legacy: BudgetRequestBinding = { id: 'reserved', workId: 'work', chatJid: 'web:scope', providerId: 'fixture', modelId: 'model', accountRef: 'account', amountMicros: 60 };
   try {
-    db.exec(`PRAGMA foreign_keys=ON; CREATE TABLE budget_work(id TEXT PRIMARY KEY); INSERT INTO budget_work VALUES('work'); ${oldTable}`);
+    db.exec(`PRAGMA foreign_keys=ON; CREATE TABLE budget_work(id TEXT PRIMARY KEY, status TEXT DEFAULT 'active', chat_jid TEXT DEFAULT 'web:scope'); INSERT INTO budget_work(id) VALUES('work'); ${oldTable}`);
     for (const state of ['reserved','dispatched','unresolved','settled','released']) {
       const binding = { ...legacy, id: state, amountMicros: state === 'unresolved' ? null : 60 };
       db.query('INSERT INTO budget_request_reservations VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').run(state, 'work', 'web:scope', 'fixture', 'model', 'account', hash(binding), binding.amountMicros,
@@ -90,6 +90,14 @@ test('actual old shape upgrades add only NULL columns preserving legacy hashes, 
     expect(() => db.exec("UPDATE budget_request_reservations SET work_id='missing' WHERE id='reserved'")).toThrow('FOREIGN KEY');
     expect(db.query('PRAGMA foreign_key_check').all()).toEqual([]);
     expect(allRows(db)).toEqual(before.map(row => ({ ...row, model_invocation_json: null, model_invocation_key_sha256: null })));
+    const facts = allRows(db), previousMigrations = listAppliedOwnedMigrations(db, budgetTerminalReceiptMigration.owner);
+    applyOwnedMigrations(db, [budgetAccountingScopeMigration]); applyOwnedMigrations(db, [budgetAccountingScopeMigration]);
+    expect(allRows(db)).toEqual(facts); expect(readBudgetTerminalReceipt(receiptBinding, db)).toEqual(receipt);
+    expect(listAppliedOwnedMigrations(db, budgetTerminalReceiptMigration.owner).slice(0, 2)).toEqual(previousMigrations);
+    expect(db.query("SELECT name FROM sqlite_schema WHERE name IN ('idx_budget_requests_domain_state','idx_budget_work_status') ORDER BY name").all())
+      .toEqual([{ name: 'idx_budget_requests_domain_state' }, { name: 'idx_budget_work_status' }]);
+    expect(() => applyOwnedMigrations(db, [{ ...budgetAccountingScopeMigration, sql: budgetAccountingScopeMigration.sql + '\n' }])).toThrow('checksum mismatch');
+    expect(allRows(db)).toEqual(facts);
   } finally { db.close(); }
 });
 
@@ -304,6 +312,8 @@ test('lookup detects stored JSON/key/full-metadata corruption and never repairs 
   const first = reserveBudgetRequest(binding, {}, db);
   // Physical corruption in an owned fixture only, never a production repair path.
   db.exec('DROP TRIGGER budget_request_invocation_no_update; PRAGMA ignore_check_constraints=ON');
+  expect(() => db.query('UPDATE budget_request_reservations SET model_invocation_json=? WHERE id=?').run('not json', binding.id)).toThrow('malformed JSON');
+  db.exec('DROP INDEX idx_budget_requests_domain_state'); // Cross the additional expression-index integrity barrier for physical-corruption lookup tests.
   for (const body of ['not json', JSON.stringify(scope()), canonicalJson({ ...scope(), extra: true }), null,
     canonicalJson({ ...scope(), taskId: 9 }), canonicalJson({ ...scope(), operationId: 'changed' })]) {
     db.query('UPDATE budget_request_reservations SET model_invocation_json=? WHERE id=?').run(body, binding.id);
