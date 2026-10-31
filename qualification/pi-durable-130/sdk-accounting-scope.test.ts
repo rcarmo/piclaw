@@ -11,8 +11,10 @@ import { projectTerminalOutcome } from "../../runtime/durable-engine/src/host-te
 import { modelRequestAccounting } from "../../runtime/src/budget/model-request-accounting.js";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
 import { ensureBudgetWork, setBudgetWorkStatus } from "../../runtime/src/db/budget-limits.js";
-import { abandonBudgetRequest, BudgetRequestError, dispatchBudgetRequest, getBudgetRequest, recordBudgetTerminalReceipt, reserveBudgetRequest, type BudgetRequestBinding } from "../../runtime/src/db/budget-request-reservations.js";
+import { abandonBudgetRequest, BudgetRequestError, dispatchBudgetRequest, getBudgetRequest, recordBudgetTerminalReceipt, reserveBudgetRequest, settleBudgetRequest, type BudgetRequestBinding } from "../../runtime/src/db/budget-request-reservations.js";
 import type { AssistantMessage } from "../../runtime/src/durable-legacy-sdk.js";
+import type { TokenUsageRecord } from '../../runtime/src/db/token-usage.js';
+import legacySettlement from '../../runtime/test/fixtures/legacy-settlement-sdk-scope.json';
 import { createTempWorkspace, setEnv } from "../../runtime/test/helpers.js";
 import { resolveRuntimeConfigPaths } from "../../runtime/src/core/config-paths.js";
 import { installTerminalSettlementCompositionSchema } from '../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js';
@@ -289,7 +291,9 @@ test("intentional valid unknown valuation stays held but is allowed by the exist
 
 for (const status of ["active", "paused"] as const) test(`settled receipt with ${status} request work still requires its local completion`, () => fixture(async f => {
   const binding = f.reserve(f.child), message = terminal(); f.retain(binding, message);
-  await modelRequestAccounting({ authorise() {}, documentedFree: false }, f.database).settle(binding, message);
+  // Old shipping data preserves a charged request whose publication is still
+  // active/paused; retained settlement would prematurely complete that fixture.
+  settleBudgetRequest(binding, legacySettlement.usage as TokenUsageRecord, f.database);
   if (status === "paused") setBudgetWorkStatus(binding.workId, "paused", { boundary: "unit-paused" }, f.database);
   expect(getBudgetRequest(binding.id, f.database)?.state).toBe("settled");
   denied(() => f.ready(f.parent));

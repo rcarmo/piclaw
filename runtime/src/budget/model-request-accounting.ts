@@ -3,7 +3,7 @@ import { admitSqliteWrite } from '../db/sqlite-async-admission.js';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import type { BudgetProviderEvidence } from './types.js';
 import { admitBudgetRequest, admitBudgetRequestDispatch } from './request-reservation-admission.js';
-import { abandonBudgetRequest, BudgetRequestError, getBudgetRequest, readBudgetTerminalReceipt, settleBudgetRequest, validateBudgetSettlementUsage, type BudgetRequestBinding, type BudgetRequestReservation, type BudgetModelInvocation } from '../db/budget-request-reservations.js';
+import { BudgetRequestError, getBudgetRequest, readBudgetTerminalReceipt, settleBudgetRequest, validateBudgetSettlementUsage, type BudgetRequestBinding, type BudgetRequestReservation, type BudgetModelInvocation } from '../db/budget-request-reservations.js';
 import { getDb } from '../db/connection.js';
 import { getBudgetWork, setBudgetWorkStatus } from '../db/budget-limits.js';
 import type { TokenUsageRecord } from '../db/token-usage.js';
@@ -18,7 +18,7 @@ export class RetainedAccountingPending extends BudgetRequestError {
 type UsageFacts = Pick<AssistantMessage, 'provider' | 'model' | 'responseModel' | 'stopReason' | 'usage'> & { api: string };
 type SettlementUsage = Omit<TokenUsageRecord, 'work_id' | 'invocation_id' | 'usage_event_id' | 'execution_kind'>;
 
-/** Pure mapping shared with the shipping path; retain its legacy hash shape. */
+/** Map retained facts while preserving the original settlement hash shape. */
 function prepareUsage(binding: BudgetRequestBinding, message: UsageFacts, documentedFree: boolean,
   usageSource: 'assistant' | 'compaction' | undefined) {
   const usage = message.usage;
@@ -141,17 +141,11 @@ export function modelRequestAccounting(input: {
   const authorise = input.authorise, beforeAcquire = input.beforeAcquire;
   const evidence = input.providerEvidence ? structuredClone(input.providerEvidence) : undefined;
   const documentedFree = input.documentedFree, usageSource = input.usageSource;
-  const accountedAt = new Map<string, string>();
   const current = () => { if (getDb() !== database) throw Error('Model request database binding changed.'); authorise(); };
   const options = (signal: AbortSignal) => ({ signal, authorise: current, beforeAcquire, providerEvidence: evidence });
   return Object.freeze({
     async reserve(binding: BudgetRequestBinding, signal: AbortSignal) { await admitBudgetRequest(binding, options(signal)); },
     async dispatch(binding: BudgetRequestBinding, signal: AbortSignal) { await admitBudgetRequestDispatch(binding, options(signal)); },
-    // Terminal reconciliation survives cancellation; it never dispatches work.
-    async abandon(binding: BudgetRequestBinding) {
-      const captured = structuredClone(binding);
-      return admitSqliteWrite(database, () => abandonBudgetRequest(captured, database));
-    },
     /** WIP receipt-only reconciliation. No provider/reserve/dispatch port.
      * Supply database/owner-lifetime authority, NOT request cancellation/source
      * authority. The caller MUST join this promise before releasing/closing DB.
@@ -206,23 +200,6 @@ export function modelRequestAccounting(input: {
         }
         return settled;
       }, check, signal, Number.POSITIVE_INFINITY, check);
-    },
-    async settle(binding: BudgetRequestBinding, message: AssistantMessage) {
-      binding = structuredClone(binding); message = structuredClone(message);
-      if (!accountedAt.has(binding.id)) accountedAt.set(binding.id, new Date().toISOString());
-      return admitSqliteWrite(database, () => {
-        const mapping = prepareUsage(binding, message, documentedFree, usageSource);
-        // Provider timestamps cannot move charges outside a capped calendar
-        // window. Capture the host time once and preserve it for payload replay.
-        const existing = getBudgetRequest(binding.id, database);
-        const event = existing?.state === 'settled' && existing.usage_event_id ? readUsageProjectionEvent(database, existing.usage_event_id) : null;
-        const prior = event ? decodeUsageReport(event) : null;
-        // Explicit pre-cutover decoder: the original settlement hash still has to
-        // match. Added reporting metadata cannot rewrite an older charge payload.
-        const legacyReplay = event !== null && (!prior || prior.origin.kind === 'legacy_projection_capture');
-        if (event) accountedAt.set(binding.id, event.accounted_at);
-        return settleBudgetRequest(binding, mapping(accountedAt.get(binding.id)!, legacyReplay), database);
-      });
     },
   });
 }
