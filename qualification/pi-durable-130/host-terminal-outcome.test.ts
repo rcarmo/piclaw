@@ -4,9 +4,10 @@ import { isDeepStrictEqual } from "node:util";
 import type { AssistantMessage } from "../../runtime/src/durable-legacy-sdk.js";
 import { projectTerminalOutcome, decodeStoredTerminalOutcome } from "../../runtime/durable-engine/src/host-terminal-outcome.js";
 import { parseModelFailure } from "../../runtime/durable-engine/src/host-model-failure.js";
-import { reserveHostRequest, assertOperationAccountingReady, reconcileOperationBudgetWork } from "../../runtime/durable-engine/src/host-request-accounting.js";
+import { reserveHostRequest, assertOperationAccountingReady, reconcileOperationBudgetWork, completeMaintenanceBudgetWork } from "../../runtime/durable-engine/src/host-request-accounting.js";
 import { installTerminalSettlementCompositionSchema } from '../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js';
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
+import { setBudgetWorkStatus } from '../../runtime/src/db/budget-limits.js';
 import { getBudgetRequest, type BudgetModelInvocation } from "../../runtime/src/db/budget-request-reservations.js";
 import { writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -689,6 +690,58 @@ test('late asynchronous terminal-owner denial cannot dispatch, retain, settle or
   await expect(request.abandon()).rejects.toThrow('Accounting owner must be synchronous');
   expect(f.database.serialize()).toEqual(before);
 }, true, false, { dispatch: false }));
+
+for (const boundary of ['ready','unknown','half-work','false-proof','bad-proof','async-owner','cancel-proof','parent-change','close-fault'] as const)
+test(`maintenance financial close retains original facts and ownership: ${boundary}`, () => reservedTerminal(async f => {
+  const workId = 'durable-maintenance:unit-only:123';
+  const request = (await f.prepareAgain({ maintenanceWorkId: workId, maintenanceParentOperationId: 'terminal-fixture-operation' }))!;
+  await request.dispatch();
+  if (boundary === 'unknown') f.terminal.usage.cost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
+  await request.settle(f.terminal);
+  const row = getBudgetRequest(request.id,f.database)!;
+  if (boundary === 'half-work') setBudgetWorkStatus(row.work_id,'active',{},f.database);
+  const facts = f.database.query('SELECT * FROM budget_request_reservations ORDER BY id').all();
+  const before = f.database.query('SELECT * FROM budget_work WHERE id=?').get(workId); let proofs = 0;
+  const owner = { signal: f.owner.signal, assertCurrent() {
+    if (boundary === 'async-owner') return Promise.reject(Error('asynchronous maintenance owner'));
+    f.owner.signal.throwIfAborted();
+  } };
+  const proof = async () => {
+    proofs++; // Financial interface unit only; real SDK proof is covered by the factory.
+    if (boundary === 'false-proof') return false;
+    if (boundary === 'bad-proof') return null as never;
+    if (boundary === 'cancel-proof') f.owner.abort(Error('maintenance owner cancelled'));
+    if (boundary === 'parent-change') f.database.query('UPDATE budget_work SET parent_work_id=NULL WHERE id=?').run(workId);
+    return true;
+  };
+  if (boundary === 'close-fault') f.database.exec(`CREATE TRIGGER maintenance_close_fault BEFORE UPDATE ON budget_work WHEN NEW.id='${workId}' AND NEW.status='completed' BEGIN SELECT RAISE(ABORT,'close pending'); END`);
+  const tx = spyOn(f.database,'transaction');
+  try {
+    const operation = completeMaintenanceBudgetWork(f.database,workId,owner,proof);
+    if (boundary === 'async-owner') await expect(operation).rejects.toThrow('Accounting owner must be synchronous');
+    else if (boundary === 'cancel-proof') await expect(operation).rejects.toThrow('maintenance owner cancelled');
+    else if (boundary === 'bad-proof') await expect(operation).rejects.toThrow('Maintenance proof must return completion');
+    else if (boundary === 'parent-change') await expect(operation).rejects.toThrow('conflict');
+    else await operation;
+    expect(f.database.query('SELECT * FROM budget_request_reservations ORDER BY id').all()).toEqual(facts);
+    if (boundary === 'ready') {
+      const closed = f.database.query('SELECT * FROM budget_work WHERE id=?').get(workId);
+      expect(closed).toMatchObject({ status: 'completed' });
+      await completeMaintenanceBudgetWork(f.database,workId,owner,proof);
+      expect(proofs).toBe(1); expect(f.database.query('SELECT * FROM budget_work WHERE id=?').get(workId)).toEqual(closed);
+    } else {
+      if (boundary !== 'parent-change') expect(f.database.query('SELECT * FROM budget_work WHERE id=?').get(workId)).toEqual(before);
+      else expect(f.database.query('SELECT status FROM budget_work WHERE id=?').get(workId)).toEqual({ status: 'active' });
+      expect(proofs).toBe(['unknown','half-work','async-owner'].includes(boundary) ? 0 : 1);
+      if (boundary !== 'close-fault' && boundary !== 'parent-change') expect(tx.mock.calls).toHaveLength(0);
+      if (boundary === 'close-fault') {
+        f.database.exec('DROP TRIGGER maintenance_close_fault');
+        await completeMaintenanceBudgetWork(f.database,workId,owner,proof);
+        expect(proofs).toBe(2); expect(f.database.query('SELECT status FROM budget_work WHERE id=?').get(workId)).toEqual({ status: 'completed' });
+      }
+    }
+  } finally { tx.mockRestore(); f.database.exec('DROP TRIGGER IF EXISTS maintenance_close_fault'); }
+}));
 
 test("getters and proxies cannot execute at input, usage, cost, content, array or argument boundaries", () => {
   let executed = 0;

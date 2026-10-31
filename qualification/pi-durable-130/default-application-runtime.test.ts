@@ -1,4 +1,6 @@
 import { admitSqliteWrite } from "../../runtime/src/db/sqlite-async-admission.js";
+import { AsyncLocalStorage } from "node:async_hooks";
+import * as maintenanceAccountingBridge from "../../runtime/durable-engine/src/host-request-accounting.js";
 import { Database } from 'bun:sqlite';
 import { modelRequestAccounting } from '../../runtime/src/budget/model-request-accounting.js';
 import * as requestAccountingBridge from '../../runtime/src/budget/model-request-accounting.js';
@@ -195,7 +197,7 @@ const explicitDelegateCases: Record<string, { id: string; model: string | number
   "native-delegate-explicit-fuzzy": { id: "gpt-5-mini", model: "synthetic/GPT-5-mini", denied: true },
   "native-delegate-explicit-virtual": { id: "gpt-5-mini", model: "synthetic/virtual", denied: true },
 };
-for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "native-recovery-unit", "native-retention-unit", "native-runner-denial", "native-scheduled-lease-free", "native-nonweb-admission", "native-addon-admission", "native-addon-admission-rollback", "native-addon-admission-overlap", "native-addon-admission-rejected", "native-addon-admission-alias", "native-addon-admission-model-revoked", "native-addon-admission-public-model-revoked", "native-addon-execution", "native-addon-execution-accounting", "native-addon-execution-accounting-unknown", "native-addon-execution-accounting-capped", "native-addon-execution-accounting-capped-daily", "native-addon-execution-accounting-capped-exact", "native-addon-execution-accounting-capped-denied", "native-addon-execution-accounting-capped-initial-denied", "native-addon-execution-accounting-capped-auth-denied", "native-addon-execution-accounting-capped-unknown", "native-addon-execution-accounting-capped-missing-account", "native-addon-execution-accounting-capped-account-changed", "native-addon-execution-accounting-capped-tool-race", "native-addon-execution-accounting-capped-pricing-changed", "native-addon-execution-accounting-capped-small-output", "native-addon-execution-accounting-capped-cleanup-failed", "native-addon-execution-no-account-auth-cap", "native-addon-execution-revoked", "native-addon-execution-auth-revoked", "native-addon-execution-cancelled", "native-addon-execution-deadline", "native-addon-execution-quota", "native-addon-execution-ceiling", "native-addon-execution-large-result", "native-addon-execution-live-input", "native-addon-execution-recovery-terminal", "native-addon-execution-recovery-cancel-requested", "native-addon-execution-recovery-unknown", "native-addon-execution-recovery-cancelled", "native-addon-execution-recovery-unsafe", "native-addon-execution-recovery-input-ack", "native-addon-execution-recovery-budget-blocked", "native-addon-execution-recovery-owned", "native-addon-execution-recovery-no-source", "native-addon-service-execution", "native-addon-service-budget-resume", "native-addon-service-continuation", "native-addon-service-continuation-budget-gap", "native-addon-service-continuation-interrupted", "native-addon-service-continuation-staged", "native-addon-service-continuation-compaction", "native-addon-service-continuation-compaction-background", "native-addon-service-continuation-compaction-auth-revoked", "native-addon-service-continuation-compaction-auth-budget", "native-addon-service-continuation-compaction-unknown", "native-addon-service-continuation-compaction-background-held", "native-dream-runner", "native-dream-runner-model", "native-dream-runner-tools", "native-dream-runner-held-provider", "native-dream-runner-held-tool", "native-dream-runner-lock-revoked", "native-dream-runner-accounted", "native-dream-runner-budget-denied", "native-dream-runner-deadline", "native-dream-runner-original-time", "native-dream-runner-accounted-unknown", "native-dream-runner-unsafe-result", "native-dream-runner-held-provider-accounted", "native-dream-runner-recovery-unit", "native-dream-runner-scheduled-model", "native-dream-runner-scheduled-budget", "native-dream-runner-scheduled-lease-revoked", "native-dream-runner-scheduled-token-revoked", "native-dream-runner-scheduled-tool-revoked", "native-dream-runner-scheduled-reclaim", "native-dream-runner-scheduled-budget-denied", "native-dream-runner-scheduled-unknown", "native-dream-runner-scheduled-final-revoked", "native-dream-runner-scheduled-index-revoked", "native-routing-bash-active", "native-routing-control-race", "native-routing-queued-race", "native-routing-side-race", "native-routing-create-race", "native-routing-policy", "native-routing-initial-rollback", "native-routing-initial-ack", "native-usage-projection", "native-scheduler-definition", "native-plan-clear", "native-plan-initial-empty", "native-shutdown-stop-recover", "native-shutdown-close-recover", "native-process-exit", "native-process-exit-accounting", "native-process-exit-accounting-close-fail", "native-process-exit-queue-busy", "native-process-exit-shell-lease", "native-process-status", "native-compaction-accounting-auto", "native-compaction-accounting-auto-pending", "native-compaction-accounting-auto-pending-cancel", "native-compaction-accounting-auto-pending-reopen", "native-compaction-accounting-background", "native-compaction-accounting-background-pending", "native-compaction-accounting-background-pre-reservation", "native-events", "native-web-cursor-ack", "native-infrastructure", "native-goal", "native-goal-local-denial", "native-goal-critical-denial", "native-goal-budget", "native-codemode-plan-goal", "native-compaction-accounting-close-fail", "native-compaction-accounting-recover", "native-compaction-accounting-side-provenance", "native-compaction-accounting-side-dispatch", "native-compaction-accounting-side-auto", "native-compaction-accounting-unknown", "native-compaction-accounting", "native-scheduler-accounting-unknown", "native-scheduler-accounting", "native-scheduler-accounting-auto-compaction", "native-delegate-accounting-unknown", "native-delegate-accounting", "native-delegate-accounting-auto-compaction", "native-delegate-accounting-auto-compaction-revoked", "native-parent-accounting-event-fence", "native-parent-accounting-held-writer", "native-parent-accounting-two-turns", "native-parent-accounting-regrets", "native-parent-accounting-regrets-unknown", "native-parent-accounting-regrets-receipt-failure", "native-parent-accounting-regrets-pending", "native-parent-accounting-regrets-pending-cancel", "native-parent-accounting-regrets-pending-reopen", "native-parent-accounting-regrets-pending-reopen-held", "native-parent-accounting-two-turns-pending", "native-parent-accounting-two-turns-pending-cancel", "native-parent-accounting-two-turns-pending-reopen", "native-parent-accounting-close-work-fail", "native-parent-accounting-storage-fail", "native-parent-accounting-storage-fail-live", "native-parent-accounting-rotate", "native-parent-accounting-auth-deny", "native-parent-accounting-late-unpriced", "native-parent-accounting-late-no-account", "native-parent-accounting-unknown", "native-parent-accounting", "public-shim-compaction", "source-filter-subset", "public-admission-row-mismatch", "public-admission-chat-mismatch", "public-archived-admission", "public-thinking-reasoning", "native-mcp-cleanup-fail", "native-mcp-disconnect", "native-mcp-catalog-change", "native-mcp-error", "native-parent-budget-cap", "native-parent-budget-auth-cap", "native-mcp-concurrent", "native-mcp-config-change", "native-mcp-codemode", "native-mcp-codemode-cancel", "native-mcp-http-deny", "native-codemode-drawio", "native-codemode-drawio-cancel", "native-codemode-editable-table", "native-codemode-editable-table-cancel", "native-codemode-office-viewer", "native-codemode-office-viewer-cancel", "native-codemode-plan", "native-codemode-plan-cancel", "native-codemode-reopen", "native-codemode-cancel", "native-codemode-binding-revoked", "native-drawio", "native-drawio-cancel", "native-drawio-missing-opener", "native-drawio-prepare-held", "public-conversations", "custom-subset", "pending-host", "native-office-viewer", "native-office-viewer-cancel", "native-editable-table", "native-editable-table-missing-publisher", "native-editable-table-revoked", "native-editable-table-closed-publisher", "native-editable-table-nonweb", "native-editable-table-branch", "native-editable-table-archived", "native-editable-table-binding-revoked", "native-code-review", "native-codemode-code-review", "native-codemode-code-review-cancel", "native-plan", "native-scheduler", "native-delegate", "native-delegate-standard", "native-delegate-readonly-deny", "native-delegate-standard-revoke", "native-delegate-files", "native-delegate-images", "native-delegate-timeout", "native-delegate-denied", "native-delegate-revoke-cap", "native-delegate-revoke-provider", ...Object.keys(explicitDelegateCases)] as const) factoryTest(scenario, scenario === "native-infrastructure" ? "production factory: native infrastructure installed sources, public admission, terminal receipt and reopen" : scenario.startsWith("native-mcp-") ? `configured default factory: ${scenario}` : scenario === "custom-subset"
+for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "native-recovery-unit", "native-retention-unit", "native-runner-denial", "native-scheduled-lease-free", "native-nonweb-admission", "native-addon-admission", "native-addon-admission-rollback", "native-addon-admission-overlap", "native-addon-admission-rejected", "native-addon-admission-alias", "native-addon-admission-model-revoked", "native-addon-admission-public-model-revoked", "native-addon-execution", "native-addon-execution-accounting", "native-addon-execution-accounting-unknown", "native-addon-execution-accounting-capped", "native-addon-execution-accounting-capped-daily", "native-addon-execution-accounting-capped-exact", "native-addon-execution-accounting-capped-denied", "native-addon-execution-accounting-capped-initial-denied", "native-addon-execution-accounting-capped-auth-denied", "native-addon-execution-accounting-capped-unknown", "native-addon-execution-accounting-capped-missing-account", "native-addon-execution-accounting-capped-account-changed", "native-addon-execution-accounting-capped-tool-race", "native-addon-execution-accounting-capped-pricing-changed", "native-addon-execution-accounting-capped-small-output", "native-addon-execution-accounting-capped-cleanup-failed", "native-addon-execution-no-account-auth-cap", "native-addon-execution-revoked", "native-addon-execution-auth-revoked", "native-addon-execution-cancelled", "native-addon-execution-deadline", "native-addon-execution-quota", "native-addon-execution-ceiling", "native-addon-execution-large-result", "native-addon-execution-live-input", "native-addon-execution-recovery-terminal", "native-addon-execution-recovery-cancel-requested", "native-addon-execution-recovery-unknown", "native-addon-execution-recovery-cancelled", "native-addon-execution-recovery-unsafe", "native-addon-execution-recovery-input-ack", "native-addon-execution-recovery-budget-blocked", "native-addon-execution-recovery-owned", "native-addon-execution-recovery-no-source", "native-addon-service-execution", "native-addon-service-budget-resume", "native-addon-service-continuation", "native-addon-service-continuation-budget-gap", "native-addon-service-continuation-interrupted", "native-addon-service-continuation-staged", "native-addon-service-continuation-compaction", "native-addon-service-continuation-compaction-background", "native-addon-service-continuation-compaction-auth-revoked", "native-addon-service-continuation-compaction-auth-budget", "native-addon-service-continuation-compaction-unknown", "native-addon-service-continuation-compaction-background-held", "native-dream-runner", "native-dream-runner-model", "native-dream-runner-tools", "native-dream-runner-held-provider", "native-dream-runner-held-tool", "native-dream-runner-lock-revoked", "native-dream-runner-accounted", "native-dream-runner-budget-denied", "native-dream-runner-deadline", "native-dream-runner-original-time", "native-dream-runner-accounted-unknown", "native-dream-runner-unsafe-result", "native-dream-runner-held-provider-accounted", "native-dream-runner-recovery-unit", "native-dream-runner-scheduled-model", "native-dream-runner-scheduled-budget", "native-dream-runner-scheduled-lease-revoked", "native-dream-runner-scheduled-token-revoked", "native-dream-runner-scheduled-tool-revoked", "native-dream-runner-scheduled-reclaim", "native-dream-runner-scheduled-budget-denied", "native-dream-runner-scheduled-unknown", "native-dream-runner-scheduled-final-revoked", "native-dream-runner-scheduled-index-revoked", "native-routing-bash-active", "native-routing-control-race", "native-routing-queued-race", "native-routing-side-race", "native-routing-create-race", "native-routing-policy", "native-routing-initial-rollback", "native-routing-initial-ack", "native-usage-projection", "native-scheduler-definition", "native-plan-clear", "native-plan-initial-empty", "native-shutdown-stop-recover", "native-shutdown-close-recover", "native-process-exit", "native-process-exit-accounting", "native-process-exit-accounting-close-fail", "native-process-exit-queue-busy", "native-process-exit-shell-lease", "native-process-status", "native-compaction-accounting-auto", "native-compaction-accounting-auto-pending", "native-compaction-accounting-auto-pending-cancel", "native-compaction-accounting-auto-pending-reopen", "native-compaction-accounting-background", "native-compaction-accounting-background-proof-close", "native-compaction-accounting-background-pending", "native-compaction-accounting-background-pre-reservation", "native-events", "native-web-cursor-ack", "native-infrastructure", "native-goal", "native-goal-local-denial", "native-goal-critical-denial", "native-goal-budget", "native-codemode-plan-goal", "native-compaction-accounting-close-fail", "native-compaction-accounting-startup-proof-fail", "native-compaction-accounting-startup-proof-close-uncertain", "native-compaction-accounting-recover", "native-compaction-accounting-side-provenance", "native-compaction-accounting-side-dispatch", "native-compaction-accounting-side-auto", "native-compaction-accounting-unknown", "native-compaction-accounting", "native-scheduler-accounting-unknown", "native-scheduler-accounting", "native-scheduler-accounting-auto-compaction", "native-delegate-accounting-unknown", "native-delegate-accounting", "native-delegate-accounting-auto-compaction", "native-delegate-accounting-auto-compaction-revoked", "native-parent-accounting-event-fence", "native-parent-accounting-held-writer", "native-parent-accounting-two-turns", "native-parent-accounting-regrets", "native-parent-accounting-regrets-unknown", "native-parent-accounting-regrets-receipt-failure", "native-parent-accounting-regrets-pending", "native-parent-accounting-regrets-pending-cancel", "native-parent-accounting-regrets-pending-reopen", "native-parent-accounting-regrets-pending-reopen-held", "native-parent-accounting-two-turns-pending", "native-parent-accounting-two-turns-pending-cancel", "native-parent-accounting-two-turns-pending-reopen", "native-parent-accounting-close-work-fail", "native-parent-accounting-storage-fail", "native-parent-accounting-storage-fail-live", "native-parent-accounting-rotate", "native-parent-accounting-auth-deny", "native-parent-accounting-late-unpriced", "native-parent-accounting-late-no-account", "native-parent-accounting-unknown", "native-parent-accounting", "public-shim-compaction", "source-filter-subset", "public-admission-row-mismatch", "public-admission-chat-mismatch", "public-archived-admission", "public-thinking-reasoning", "native-mcp-cleanup-fail", "native-mcp-disconnect", "native-mcp-catalog-change", "native-mcp-error", "native-parent-budget-cap", "native-parent-budget-auth-cap", "native-mcp-concurrent", "native-mcp-config-change", "native-mcp-codemode", "native-mcp-codemode-cancel", "native-mcp-http-deny", "native-codemode-drawio", "native-codemode-drawio-cancel", "native-codemode-editable-table", "native-codemode-editable-table-cancel", "native-codemode-office-viewer", "native-codemode-office-viewer-cancel", "native-codemode-plan", "native-codemode-plan-cancel", "native-codemode-reopen", "native-codemode-cancel", "native-codemode-binding-revoked", "native-drawio", "native-drawio-cancel", "native-drawio-missing-opener", "native-drawio-prepare-held", "public-conversations", "custom-subset", "pending-host", "native-office-viewer", "native-office-viewer-cancel", "native-editable-table", "native-editable-table-missing-publisher", "native-editable-table-revoked", "native-editable-table-closed-publisher", "native-editable-table-nonweb", "native-editable-table-branch", "native-editable-table-archived", "native-editable-table-binding-revoked", "native-code-review", "native-codemode-code-review", "native-codemode-code-review-cancel", "native-plan", "native-scheduler", "native-delegate", "native-delegate-standard", "native-delegate-readonly-deny", "native-delegate-standard-revoke", "native-delegate-files", "native-delegate-images", "native-delegate-timeout", "native-delegate-denied", "native-delegate-revoke-cap", "native-delegate-revoke-provider", ...Object.keys(explicitDelegateCases)] as const) factoryTest(scenario, scenario === "native-infrastructure" ? "production factory: native infrastructure installed sources, public admission, terminal receipt and reopen" : scenario.startsWith("native-mcp-") ? `configured default factory: ${scenario}` : scenario === "custom-subset"
   ? "default factory preserves persisted custom read subset and all metadata/history/identity on reopen"
   : scenario === "pending-host"
     ? "default factory recovers pending host work without upgrading persisted tools"
@@ -251,6 +253,8 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
   const compactionAccounting = scenario.startsWith("native-compaction-accounting");
   const compactionAccountingUnknown = scenario === "native-compaction-accounting-unknown";
   const compactionCloseFailure = scenario === "native-compaction-accounting-close-fail";
+  const compactionStartupProofFailure = scenario.startsWith('native-compaction-accounting-startup-proof-');
+  const compactionBackgroundProofClose = scenario === 'native-compaction-accounting-background-proof-close';
   const compactionBackgroundPending = scenario === 'native-compaction-accounting-background-pending';
   const compactionBackgroundPreReservation = scenario === 'native-compaction-accounting-background-pre-reservation';
   const backgroundCaptureReleased = Promise.withResolvers<void>(); let backgroundCaptureEntered = false;
@@ -2295,6 +2299,7 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
       if (scheduledAutoCompaction) {
         const summary = root.query("SELECT * FROM budget_request_reservations WHERE json_extract(model_invocation_json,'$.taskKind')='pi.compaction'").all() as BudgetRequestReservation[];
         expect(summary).toHaveLength(1); expect(summary[0]!.state).toBe('settled'); expect(summary[0]!.model_id).toBe(modelB.id);
+        expect(root.query('SELECT status FROM budget_work WHERE id=(SELECT parent_work_id FROM budget_work WHERE id=?)').get(summary[0]!.work_id)).toEqual({ status: 'completed' });
         const invocation = JSON.parse(summary[0]!.model_invocation_json!);
         const occurrence = root.query('SELECT task_id,state FROM service_effect_s07_occurrences WHERE operation_id=?').get(invocation.operationId);
         expect(occurrence).toEqual({ task_id: 'native-schedule-2', state: 'completed' });
@@ -3142,6 +3147,7 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
       expect(dispatchOutcome).toBe('settled'); expect(calls).toBe(6);
       const row = root.query("SELECT * FROM budget_request_reservations WHERE json_extract(model_invocation_json,'$.taskKind')='pi.compaction'").get() as BudgetRequestReservation;
       expect(row.state).toBe('settled'); expect(row.model_id).toBe(modelB.id);
+      expect(root.query('SELECT status FROM budget_work WHERE id=(SELECT parent_work_id FROM budget_work WHERE id=?)').get(row.work_id)).toEqual({ status: 'completed' });
       const invocation = JSON.parse(row.model_invocation_json!);
       const compactTask = JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(invocation.taskId) as { record: string }).record);
       const generation = JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(compactTask.owner) as { record: string }).record);
@@ -4008,8 +4014,107 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
     const beforeModel = await first!.readModel!();
     const identity = first!.sessionId;
     inManualSummary = true;
-    if (scenario === "native-compaction-accounting-auto" || scenario === "native-compaction-accounting-background" || compactionAutoPending || compactionBackgroundPreReservation) {
+    if (scenario === "native-compaction-accounting-auto" || scenario === "native-compaction-accounting-background" || compactionAutoPending || compactionBackgroundPreReservation || compactionBackgroundProofClose) {
       backend.stop(); await backend.close(); compactionPolicySpy!.mockRestore();
+      if (compactionBackgroundProofClose) {
+        // Only the ready automatic watcher proof is held. Financial callbacks
+        // (including close's own reconciliation) must run with real owner checks.
+        const financialContext = new AsyncLocalStorage<boolean>();
+        const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+        const proofFinished = Promise.withResolvers<void>(), closeEntered = Promise.withResolvers<void>();
+        const complete = maintenanceAccountingBridge.completeMaintenanceBudgetWork;
+        const proof = HostConversationRuntime.prototype.completedMaintenance;
+        const runtimeClose = HostConversationRuntime.prototype.close;
+        let dependencySignal: AbortSignal | undefined, heldTaskId: number | undefined;
+        let harnessClosed = false, storageClosed = false, closeFinished = false, watcherProofCompleted = false;
+        let closing: Promise<void> | undefined, dispatch: Promise<unknown> | undefined;
+        const spies: { mockRestore(): void }[] = [
+          spyOn(maintenanceAccountingBridge, 'completeMaintenanceBudgetWork').mockImplementation((db, id, financialOwner, completed) =>
+            complete(db, id, financialOwner, () => financialContext.run(true, completed))),
+          spyOn(HostConversationRuntime.prototype, 'completedMaintenance').mockImplementation(async function(this: HostConversationRuntime, ...args: Parameters<typeof proof>) {
+            if (financialContext.getStore()) return proof.apply(this, args);
+            heldTaskId = args[0]; entered.resolve();
+            try { await release.promise; const completed = await proof.apply(this, args); watcherProofCompleted = completed !== null; return completed; }
+            finally { proofFinished.resolve(); }
+          }),
+          spyOn(hostModelBridge, 'createHostModels').mockImplementation((host, approved, policy) => {
+            dependencySignal = policy.signal; return originalModelFactory(host, approved, policy);
+          }),
+          spyOn(HostConversationRuntime.prototype, 'close').mockImplementation(function(this: HostConversationRuntime) {
+            closeEntered.resolve(); return runtimeClose.call(this);
+          }),
+        ];
+        try {
+          const open = Harness.open;
+          compactionPolicySpy = spyOn(Harness, 'open').mockImplementation(async (storage, options, ctx) => {
+            const storageClose = storage.close;
+            spies.push(spyOn(storage, 'close').mockImplementation((...args: Parameters<typeof storageClose>) => {
+              storageClosed = true; return storageClose.apply(storage, args);
+            }));
+            const harness = await open.call(Harness, storage, { ...options,
+              settings: { ...options.settings, compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 1000, backgroundTokens: 99000 } } }, ctx);
+            const harnessClose = harness.close;
+            spies.push(spyOn(harness, 'close').mockImplementation((...args: Parameters<typeof harnessClose>) => {
+              harnessClosed = true; return harnessClose.apply(harness, args);
+            }));
+            return harness;
+          });
+          backend = await createDefaultApplicationRuntime(owner, async () => services);
+          // Preparation owns a different Harness/storage; exclude those closes.
+          harnessClosed = false; storageClosed = false;
+          const automaticBound = backend.bind({ queue: base.queue, agentPool: pool });
+          const next = { ...message, id: 'factory-automatic-compaction', content: 'continue after automatic compaction' };
+          const row = root.transaction(() => { const rowId = storeMessage(next);
+            automaticBound.getInputSourceAdmission!(next.chat_jid)!({ message: next, rowId, database: root }); return rowId; })();
+          dispatch = automaticBound.dispatchAcceptedInput!(next.chat_jid, next.id, row!)!();
+          await entered.promise;
+          expect(await dispatch).toBe('settled'); // No parent active/settle join can mask the watcher race.
+          const request = root.query("SELECT * FROM budget_request_reservations WHERE json_extract(model_invocation_json,'$.taskKind')='pi.compaction'").get() as BudgetRequestReservation;
+          expect(request.state).toBe('settled'); expect(request.terminal_receipt_json).not.toBeNull();
+          expect(JSON.parse(request.model_invocation_json!).taskId).toBe(heldTaskId);
+          const task = JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(heldTaskId!) as { record: string }).record);
+          expect(task.background).toBe(true); expect(task.owner).toBeUndefined();
+          expect(task.state).toMatchObject({ status: 'terminal', outcome: { status: 'completed' } });
+          expect(root.query("SELECT count(*) n FROM entries WHERE json_extract(record,'$.kind')='pi.compaction'").get()).toEqual({ n: 1 });
+          expect(root.query('SELECT count(*) n FROM token_usage WHERE invocation_id=?').get(request.id)).toEqual({ n: 1 });
+          expect(root.query('SELECT state FROM service_effect_s01_sources WHERE source_id=?').get(next.id)).toEqual({ state: 'consumed' });
+          expect(root.query('SELECT terminal_disposition FROM service_effect_s01_operations ORDER BY rowid DESC LIMIT 1').get()).toEqual({ terminal_disposition: 'completed' });
+          expect(calls).toBe(beforeCalls + 2);
+          const facts = () => ({ requests: root.query('SELECT * FROM budget_request_reservations ORDER BY id').all(),
+            charges: root.query('SELECT * FROM token_usage ORDER BY id').all(), tasks: root.query('SELECT * FROM tasks ORDER BY id').all(),
+            entries: root.query('SELECT * FROM entries ORDER BY id').all() });
+          const before = facts();
+          closing = backend.close().then(() => { closeFinished = true; });
+          await closeEntered.promise;
+          // Drain runnable shutdown continuations through an event-loop barrier,
+          // not a timed sleep. The held proof is the only deliberately blocked work.
+          await new Promise<void>(resolve => setImmediate(resolve));
+          console.log('WATCHER_PROOF_CLOSE_HELD', JSON.stringify({ heldTaskId, closeFinished, harnessClosed, storageClosed, dependencyAborted: dependencySignal?.aborted }));
+          const held = { closeFinished, harnessClosed, storageClosed, dependencyAborted: dependencySignal?.aborted };
+          expect(dependencySignal).toBeDefined();
+          owner.assertCurrentOwner(); expect(facts()).toEqual(before);
+          release.resolve(); await proofFinished.promise; await closing;
+          expect(watcherProofCompleted).toBe(true);
+          expect(closeFinished).toBe(true); expect(harnessClosed).toBe(true); expect(storageClosed).toBe(true);
+          expect(dependencySignal!.aborted).toBe(true);
+          expect(facts()).toEqual(before); expect(calls).toBe(beforeCalls + 2);
+          console.log('WATCHER_PROOF_CLOSE_RELEASED', JSON.stringify({ closeFinished, harnessClosed, storageClosed,
+            dependencyAborted: dependencySignal!.aborted, calls, factsUnchanged: true }));
+          expect(held.closeFinished).toBe(false);
+          expect(held.harnessClosed).toBe(false); expect(held.storageClosed).toBe(false);
+          expect(held.dependencyAborted).toBe(false);
+        } finally {
+          release.resolve();
+          if (heldTaskId !== undefined) await proofFinished.promise;
+          if (dispatch) await dispatch;
+          backend.stop(); await (closing ?? backend.close());
+          for (const spy of spies) spy.mockRestore(); financialContext.disable();
+          compactionPolicySpy?.mockRestore(); automaticCaptureSpy?.mockRestore();
+          for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
+          closeDatabase(); owner.release();
+        }
+        return;
+      }
       const open = Harness.open;
       const background = scenario.endsWith("background") || compactionBackgroundPending || compactionBackgroundPreReservation;
       compactionPolicySpy = spyOn(Harness, "open").mockImplementation((storage, options, ctx) => open.call(Harness, storage, { ...options,
@@ -4056,6 +4161,7 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
             expect(root.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(tasks);
             expect(root.query('SELECT terminal_disposition FROM service_effect_s01_operations ORDER BY rowid DESC LIMIT 1').get()).toEqual({ terminal_disposition: 'cancelled' });
             expect(root.query('SELECT count(*) n FROM token_usage WHERE invocation_id=?').get(held.id)).toEqual({ n: 1 });
+            expect(root.query('SELECT status FROM budget_work WHERE id=(SELECT parent_work_id FROM budget_work WHERE id=?)').get(held.work_id)).toEqual({ status: 'completed' });
             expect(calls).toBe(beforeCalls + 1); return;
           }
           if (scenario.endsWith('-reopen')) {
@@ -4073,6 +4179,8 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
           expect(repaired.terminal_receipt_sha256).toBe(held.terminal_receipt_sha256); expect(repaired.terminal_received_at).toBe(held.terminal_received_at);
           expect(root.query('SELECT count(*) n FROM token_usage WHERE invocation_id=?').get(held.id)).toEqual({ n: 1 });
           expect(root.query('SELECT id FROM tasks ORDER BY id').all()).toEqual(ids);
+          expect(root.query('SELECT status FROM budget_work WHERE id=(SELECT parent_work_id FROM budget_work WHERE id=?)').get(held.work_id))
+            .toEqual({ status: 'completed' });
           for (const id of [summary.id, parent.id]) expect(JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(id) as { record: string }).record).state)
             .toMatchObject({ status: 'terminal', outcome: { status: 'completed' } });
           expect(root.query('SELECT terminal_disposition FROM service_effect_s01_operations ORDER BY rowid DESC LIMIT 1').get()).toEqual({ terminal_disposition: 'completed' });
@@ -4565,6 +4673,59 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
       backend.stop(); await backend.close();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
       closeDatabase(); owner.release(); return;
+    }
+    if (compactionStartupProofFailure) {
+      root.exec("CREATE TRIGGER startup_maintenance_close_hold BEFORE UPDATE ON budget_work WHEN OLD.id LIKE 'durable-maintenance:%' AND NEW.status='completed' BEGIN SELECT RAISE(ABORT,'hold original maintenance aggregate'); END");
+      expect(await first!.compact!('Retain the accepted decision')).toEqual({ compacted: true });
+      expect(calls).toBe(beforeCalls + 1);
+      expect(root.query("SELECT status FROM budget_work WHERE id LIKE 'durable-maintenance:%'").all()).toEqual([{status:'active'}]);
+      expect(root.query("SELECT state FROM budget_request_reservations WHERE json_extract(model_invocation_json,'$.taskKind')='pi.compaction'").all()).toEqual([{state:'settled'}]);
+      expect(root.query("SELECT count(*) n FROM entries WHERE json_extract(record,'$.kind')='pi.compaction'").get()).toEqual({n:1});
+      backend.stop(); await backend.close();
+      root.exec('DROP TRIGGER startup_maintenance_close_hold');
+      const facts = () => ({ requests: root.query('SELECT * FROM budget_request_reservations ORDER BY id').all(),
+        charges: root.query('SELECT * FROM token_usage ORDER BY id').all(), tasks: root.query('SELECT * FROM tasks ORDER BY id').all(),
+        entries: root.query('SELECT * FROM entries ORDER BY id').all() });
+      const before = facts(), primary = Error('actual startup maintenance proof failed'), cleanup = Error('constructed runtime close uncertain');
+      const uncertain = scenario.endsWith('-close-uncertain');
+      const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+      let failedRuntime: HostConversationRuntime | undefined, dependencySignal: AbortSignal | undefined, closeFinished = false;
+      const originalClose = HostConversationRuntime.prototype.close;
+      const modelSpy = spyOn(hostModelBridge,'createHostModels').mockImplementation((host,approved,policy) => {
+        dependencySignal = policy.signal; return originalModelFactory(host,approved,policy);
+      });
+      const proofSpy = spyOn(HostConversationRuntime.prototype,'completedMaintenance').mockImplementation(async function(this:HostConversationRuntime) {
+        failedRuntime = this; throw primary;
+      });
+      const closeSpy = spyOn(HostConversationRuntime.prototype,'close').mockImplementation(function(this:HostConversationRuntime) {
+        if (this !== failedRuntime) return originalClose.call(this);
+        entered.resolve();
+        if (uncertain) return Promise.reject(cleanup);
+        return (async () => { await release.promise; await originalClose.call(this); closeFinished = true; })();
+      });
+      try {
+        const opening = createDefaultApplicationRuntime(owner, async () => services);
+        const settled = opening.then(value => { value.stop(); throw Error('Startup unexpectedly succeeded'); }, error => error);
+        await Promise.race([entered.promise, settled.then(error => { throw Error('Startup did not join its constructed runtime', {cause:error}); })]);
+        expect(dependencySignal).toBeDefined(); expect(dependencySignal!.aborted).toBe(false);
+        expect(facts()).toEqual(before); owner.assertCurrentOwner();
+        release.resolve(); const failure = await settled;
+        if (uncertain) {
+          expect(failure).toBeInstanceOf(RuntimeStartupCleanupError);
+          expect(failure.errors).toEqual([primary,cleanup]); expect(dependencySignal!.aborted).toBe(false);
+          expect(closeFinished).toBe(false);
+          expect(() => acquireRuntimeLock({lockPath:join(workspace,'default-owner.lock'),strictOwnership:true,disabled:false})).toThrow('refuses existing lock');
+        } else {
+          expect(failure).toBe(primary); expect(closeFinished).toBe(true); expect(dependencySignal!.aborted).toBe(true);
+        }
+        expect(calls).toBe(beforeCalls + 1); expect(facts()).toEqual(before);
+      } finally {
+        release.resolve(); closeSpy.mockRestore(); proofSpy.mockRestore(); modelSpy.mockRestore();
+        if (failedRuntime) await originalClose.call(failedRuntime);
+        compactionPolicySpy?.mockRestore(); for (const spy of [...captureSpies,...sdkSpies]) spy.mockRestore();
+        closeDatabase(); owner.release();
+      }
+      return;
     }
     if (compactionCloseFailure) {
       root.exec("CREATE TRIGGER maintenance_close_fail BEFORE UPDATE ON budget_work WHEN OLD.parent_work_id IS NULL AND OLD.execution_kind='side_prompt' AND NEW.status='completed' BEGIN SELECT RAISE(ABORT, 'synthetic maintenance close fault'); END");
