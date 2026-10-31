@@ -98,6 +98,9 @@ export async function reserveHostRequest(options: {
     assertCurrent();assertBackground(); signal.throwIfAborted();
     if (readStoredProviderUsageAccountRef(model.provider, options.authPath) !== accountRef) throw Error("Native request account changed");
   };
+  // Unentered request writes wait under the existing caller signal/authority.
+  // The generic five-second administrative cutoff must not fail a healthy model turn.
+  const admissionTimeoutMs = Infinity;
   await admitSqliteWrite(database, () => {
     const sidePrompt = database.query(`SELECT 1 FROM service_effect_s01_operations o
       JOIN service_effect_s01_sources s ON s.chat_jid=o.chat_jid AND s.source_seq=o.primary_source_seq
@@ -106,8 +109,8 @@ export async function reserveHostRequest(options: {
     if (!background) ensureBudgetWork({ id: operationWork, chatJid: options.chatJid, executionKind: options.maintenanceWorkId || sidePrompt ? "side_prompt" : options.scheduledTaskId ? "scheduled" : "interactive",
       parentWorkId: existingSide?.parent_work_id, scheduledTaskId: options.scheduledTaskId }, database);
     ensureBudgetWork({ id: workId, chatJid: options.chatJid, executionKind: options.executionKind === "delegate" ? "delegate" : sidePrompt ? "side_prompt" : options.executionKind ?? "interactive", parentWorkId: operationWork }, database);
-  }, current, signal);
-  const accounting = modelRequestAccounting({ authorise: current, documentedFree: false, usageSource: options.usageSource ?? (options.maintenanceWorkId ? "compaction" : "assistant") }, database);
+  }, current, signal, admissionTimeoutMs, current);
+  const accounting = modelRequestAccounting({ authorise: current, admissionTimeoutMs, documentedFree: false, usageSource: options.usageSource ?? (options.maintenanceWorkId ? "compaction" : "assistant") }, database);
   const binding = { id, workId, chatJid: options.chatJid, providerId: model.provider, modelId: model.id, accountRef, amountMicros: amount.amountMicros };
   let dispatchStarted = false;
   let settled = false;

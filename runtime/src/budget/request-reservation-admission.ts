@@ -22,19 +22,21 @@ export interface BudgetRequestAdmissionOptions {
   signal: AbortSignal;
   authorise(): void;
   providerEvidence?: BudgetProviderEvidence[];
+  /** Caller-owned pre-effect wait; omitted keeps the bounded administrative policy. */
+  timeoutMs?: number;
 }
 /** Contention yields to the event loop. Snapshot the host request once. */
 export async function admitBudgetRequest(binding: BudgetRequestBinding, input: BudgetRequestAdmissionOptions) {
   const captured = structuredClone(binding), evidence = input.providerEvidence ? structuredClone(input.providerEvidence) : undefined;
-  const signal = input.signal, authorise = input.authorise;
+  const signal = input.signal, authorise = input.authorise, timeoutMs = input.timeoutMs ?? 5000;
   const {database,check} = databaseAdmission();
   return admitSqliteWrite(database, () => reserveBudgetRequest(captured,{providerEvidence:evidence},database),
-    () => { check(); authorise(); },signal,5000,check);
+    () => { check(); authorise(); },signal,timeoutMs,check);
 }
 export async function admitBudgetRequestDispatch(binding: BudgetRequestBinding, input: BudgetRequestAdmissionOptions) {
   const captured = structuredClone(binding), evidence = input.providerEvidence ? structuredClone(input.providerEvidence) : undefined;
-  const signal = input.signal, authorise = input.authorise;
+  const signal = input.signal, authorise = input.authorise, timeoutMs = input.timeoutMs ?? 5000;
   const {database,check} = databaseAdmission();
   return admitSqliteWrite(database, () => dispatchBudgetRequest(captured,{signal,authorise,providerEvidence:evidence},database),
-    () => { check(); authorise(); },signal,5000,check);
+    () => { check(); authorise(); },signal,timeoutMs,check);
 }
