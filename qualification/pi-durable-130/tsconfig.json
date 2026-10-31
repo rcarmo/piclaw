@@ -86,6 +86,15 @@
     "task-model-receipt-recovery.test.ts",
     "goal-tools.test.ts",
     "goal-queued-expiry.test.ts",
-    "host-code-review-write-admission.test.ts"
+    "host-code-review-write-admission.test.ts",
+    "host-model-controls.test.ts",
+    "model-context-bound.test.ts",
+    "model-context-recovery.test.ts",
+    "model-context-usage-framing.test.ts",
+    "model-context-duplicate.test.ts",
+    "model-context-parity.test.ts",
+    "selected-context-admission.test.ts",
+    "owned-model-context-admission.test.ts",
+    "context-selected-loadout.test.ts"
   ]
 }

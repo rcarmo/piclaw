@@ -998,7 +998,6 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   tools.push(...processControls.tools);
   tools.push(...createHostModelTools({
     assertCurrent() { assert(); lifetime.signal.throwIfAborted(); if (readAccessConfig().mode !== "single-user") throw Error("Native model controls unavailable"); },
-    readContext: call => runtime().readToolModelContext(call),
     prepareContext: (call, model, thinkingLevel) => runtime().prepareToolModelContext(call, model, thinkingLevel),
     available: () => available.filter(model => host.modelRegistry.getAvailable().some(current => current.provider === model.provider && current.id === model.id)),
     assertModel: choice => check({ provider: choice.provider, id: choice.modelId }, lifetime.signal),
