@@ -97,15 +97,47 @@ export async function refreshAgentStatusForChat(options: RefreshAgentStatusForCh
   const requestedThought = thoughtBufferRef.current;
   const requestedDraft = draftBufferRef.current;
 
+  const restorePreviews = (response: any, restoreThought: boolean, restoreDraft: boolean, missingOnly = false) => {
+    const thoughtRestore = resolveAgentPreviewRestoreState(response.thought);
+    if (thoughtRestore && restoreThought) {
+      setAgentThought((prev) => {
+        if (missingOnly && (prev?.text || prev?.fullText)) return prev;
+        if (shouldKeepExistingPreview(prev, thoughtRestore.text)) return prev;
+        thoughtBufferRef.current = thoughtRestore.text;
+        return thoughtRestore;
+      });
+    }
+    const draftRestore = resolveAgentPreviewRestoreState(response.draft);
+    if (draftRestore && restoreDraft) {
+      setAgentDraft((prev) => {
+        if (missingOnly && (prev?.text || prev?.fullText)) return prev;
+        if (shouldKeepExistingPreview(prev, draftRestore.text)) return prev;
+        draftBufferRef.current = draftRestore.text;
+        return draftRestore;
+      });
+    }
+  };
+
   try {
     const response = await getAgentStatus(targetChatJid);
     onStateAccessResult?.(false);
     if (activeChatJidRef.current !== targetChatJid
-      || options.connectionStateRef?.current.generation !== requestedConnectionGeneration
-      || options.currentTurnIdRef?.current !== requestedTurn
-      || agentStatusRef.current !== requestedStatus
-      || thoughtBufferRef.current !== requestedThought
-      || draftBufferRef.current !== requestedDraft) {
+      || options.connectionStateRef?.current.generation !== requestedConnectionGeneration) return null;
+
+    const restoreThought = thoughtBufferRef.current === requestedThought;
+    const restoreDraft = draftBufferRef.current === requestedDraft;
+    if (options.currentTurnIdRef?.current !== requestedTurn || agentStatusRef.current !== requestedStatus
+      || !restoreThought || !restoreDraft) {
+      // Live progress may supersede only the status row, not an absent preview.
+      // Recover only still-empty fields when both owners name the same live
+      // turn. Superseded snapshots still return null and leave existing panes,
+      // status and newer streamed text untouched.
+      const live = agentStatusRef.current;
+      const liveTurn = options.currentTurnIdRef?.current;
+      if (response?.status !== 'active' || !liveTurn || !live
+        || ['done', 'error', 'idle'].includes(live.type)
+        || readAgentTurnId(live) !== liveTurn || readAgentTurnId(response.data) !== liveTurn) return null;
+      restorePreviews(response, restoreThought && requestedThought === '', restoreDraft && requestedDraft === '', true);
       return null;
     }
 
@@ -145,24 +177,7 @@ export async function refreshAgentStatusForChat(options: RefreshAgentStatusForCh
     setAgentStatus(payload);
     setExtensionWorkingState(resolveExtensionWorkingRestoreState(response.extension_working));
 
-    const thoughtRestore = resolveAgentPreviewRestoreState(response.thought);
-    if (thoughtRestore) {
-      setAgentThought((prev) => {
-        if (shouldKeepExistingPreview(prev, thoughtRestore.text)) return prev;
-        thoughtBufferRef.current = thoughtRestore.text;
-        return thoughtRestore;
-      });
-    }
-
-    const draftRestore = resolveAgentPreviewRestoreState(response.draft);
-    if (draftRestore) {
-      setAgentDraft((prev) => {
-        if (shouldKeepExistingPreview(prev, draftRestore.text)) return prev;
-        draftBufferRef.current = draftRestore.text;
-        return draftRestore;
-      });
-    }
-
+    restorePreviews(response, restoreThought, restoreDraft);
     return response;
   } catch (error) {
     onStateAccessResult?.(true);

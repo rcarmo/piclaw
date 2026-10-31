@@ -679,7 +679,7 @@ class TerminalPaneInstance {
         fontFamily: getTerminalFontFamily(this.ownerDocument),
         fontSize: 13,
         lineHeight: 1.12,
-        overviewRuler: { width: 2 },
+        overviewRuler: { width: 0 },
         scrollback: 10_000,
         tabStopWidth: 8,
         theme: buildTerminalTheme(this.ownerWindow, this.ownerDocument),
