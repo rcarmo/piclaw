@@ -36,9 +36,20 @@ test('classic and visual Settings use the shared bounded master-detail catalogue
   expect(visualSource).toContain('aria-label="Search model catalogue"');
 });
 
+test('Settings leaves admission to the backend without fit filters or context fetches', () => {
+  for (const source of [classicSource, visualSource]) {
+    expect(source).not.toContain('/agent/context');
+    expect(source).not.toContain('contextUsage');
+    expect(source).not.toContain('contextFit');
+    expect(source).not.toContain('formatContextFit');
+    expect(source).not.toContain('aria-label="Context fit"');
+    expect(source).toContain('<dt>Context fit</dt><dd>Unknown until the backend checks the model switch.</dd>');
+    expect(source).toContain('Compact context</button>');
+  }
+});
+
 test('visual Settings scopes model fetches and commands to the active chat', () => {
   expect(visualSource).toContain('/agent/models?chat_jid=${encodeURIComponent(targetChatJid)}');
-  expect(visualSource).toContain('/agent/context?chat_jid=${encodeURIComponent(targetChatJid)}');
   expect(visualSource).toContain('/agent/${encodeURIComponent(targetChatJid)}/message?chat_jid=${encodeURIComponent(targetChatJid)}');
   expect(visualSource).not.toContain('const THINKING_LEVELS');
   expect(visualSource).toContain('selected?.thinkingLevels');
@@ -56,7 +67,7 @@ test('recency is recorded only inside server-confirmed model switch branches', (
   }
 });
 
-test('confirmed Settings switches synchronise badges before context refresh', () => {
+test('confirmed Settings switches synchronise badges before background refresh', () => {
   for (const source of [classicSource, visualSource]) {
     const dispatch = source.indexOf("window.dispatchEvent(new CustomEvent('piclaw:model-state-changed'") >= 0
       ? source.indexOf("window.dispatchEvent(new CustomEvent('piclaw:model-state-changed'")

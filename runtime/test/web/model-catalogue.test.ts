@@ -1,16 +1,12 @@
 import { expect, test } from "bun:test";
 
 import {
-  MODEL_CONTEXT_OVERHEAD_TOKENS,
   MODEL_PICKER_RENDER_LIMIT,
-  MODEL_TOKEN_ESTIMATE_SAFETY_MULTIPLIER,
   buildModelPickerProjection,
   buildModelSearchDocument,
-  calculateModelContextFit,
   classifyModelIdentity,
   classifyModelVariants,
   compareModelCatalogueText,
-  describeModelContextFit,
   filterAndRankModels,
   formatModelCataloguePricing,
   groupModels,
@@ -48,7 +44,6 @@ test("normaliseModelCatalogue preserves provider/model identity and structured m
       },
     ],
   }, {
-    contextUsage: { tokens: 10_000 },
     pinnedKeys: ["github-copilot/claude-sonnet-4"],
     recentByKey: { "github-copilot/claude-sonnet-4": "2026-08-28T12:00:00Z" },
   });
@@ -103,12 +98,6 @@ test("normaliseModelCatalogue supports legacy strings, missing metadata, and dup
     id: "claude-4",
     displayName: "anthropic/claude-4",
     contextWindow: null,
-    contextFit: {
-      state: "unknown",
-      currentTokens: null,
-      safetyAdjustedTokens: null,
-      effectiveContextWindow: null,
-    },
   });
   expect(entries[1]).toMatchObject({ key: "openai/gpt-5", current: true });
 });
@@ -187,33 +176,14 @@ test("classification infers encoded publishers, model families, and deterministi
   expect(classifyModelVariants({ id: "anthropic/claude-sonnet-latest" })).toEqual(["alias"]);
 });
 
-test("calculateModelContextFit preserves the 4K overhead and 1.1 estimator safety rules", () => {
-  expect(MODEL_CONTEXT_OVERHEAD_TOKENS).toBe(4_000);
-  expect(MODEL_TOKEN_ESTIMATE_SAFETY_MULTIPLIER).toBe(1.1);
-  expect(calculateModelContextFit({ contextWindow: 200_000 }, { tokens: 150_000 })).toEqual({
-    state: "fits",
-    currentTokens: 150_000,
-    safetyAdjustedTokens: 165_000,
-    effectiveContextWindow: 196_000,
-  });
-  expect(calculateModelContextFit({ contextWindow: 128_000 }, { tokens: 150_000 })).toEqual({
-    state: "blocked",
-    currentTokens: 150_000,
-    safetyAdjustedTokens: 165_000,
-    effectiveContextWindow: 124_000,
-  });
-  expect(calculateModelContextFit({ contextWindow: null }, { tokens: 150_000 })).toEqual({
-    state: "unknown",
-    currentTokens: 150_000,
-    safetyAdjustedTokens: 165_000,
-    effectiveContextWindow: null,
-  });
-  expect(calculateModelContextFit({ contextWindow: 128_000 }, null)).toEqual({
-    state: "unknown",
-    currentTokens: null,
-    safetyAdjustedTokens: null,
-    effectiveContextWindow: 124_000,
-  });
+test("catalogue metadata does not invent backend admission or context fit", () => {
+  const entries = normaliseModelCatalogue({ model_options: [
+    { provider: "test", id: "near", context_window: 100_000 },
+    { provider: "test", id: "small", context_window: 8_000 },
+    { provider: "test", id: "unknown" },
+  ] });
+  for (const entry of entries) expect(entry).not.toHaveProperty("contextFit");
+  expect(buildModelPickerProjection(entries).renderedEntries).toEqual(entries);
 });
 
 test("search matches shared name, identity, route, publisher, family, capability, variant, and context tokens", () => {
@@ -225,7 +195,7 @@ test("search matches shared name, identity, route, publisher, family, capability
       context_window: 1_000_000,
       reasoning: true,
     }],
-  }, { currentTokens: 10_000 });
+  });
   const document = buildModelSearchDocument(entry);
 
   for (const token of ["gemini 3 flash", "openrouter", "google", "gemini", "preview", "free", "reasoning", "1m context"]) {
@@ -241,7 +211,7 @@ test("search matches shared name, identity, route, publisher, family, capability
   expect(filterAndRankModels([nonReasoning], { query: "reasoning" })).toEqual([]);
 });
 
-test("filterAndRankModels applies compatibility and deterministic recommended ranking", () => {
+test("filterAndRankModels keeps catalogue choices and deterministic recommended ranking", () => {
   const entries = normaliseModelCatalogue({
     current: "openrouter/openai/gpt-5",
     model_options: [
@@ -252,7 +222,6 @@ test("filterAndRankModels applies compatibility and deterministic recommended ra
       { provider: "github-copilot", id: "claude-sonnet-4", name: "Claude Sonnet 4", context_window: 200_000, reasoning: true },
     ],
   }, {
-    currentTokens: 150_000,
     pinnedKeys: ["github-copilot/claude-sonnet-4"],
     recentByKey: { "openrouter/openai/gpt-4:free": "2026-08-28T10:00:00Z" },
   });
@@ -264,7 +233,7 @@ test("filterAndRankModels applies compatibility and deterministic recommended ra
     "openrouter/openai/gpt-4:latest",
     "openrouter/openai/gpt-5-preview",
   ]);
-  expect(filterAndRankModels(entries, { contextFit: "compatible" }).map((entry) => entry.key)).not.toContain("openrouter/openai/gpt-5-preview");
+  expect(filterAndRankModels(entries).map((entry) => entry.key)).toContain("openrouter/openai/gpt-5-preview");
   expect(filterAndRankModels(entries, { providers: " openrouter ", variants: " stable ", reasoning: false }).map((entry) => entry.key)).toEqual([
     "openrouter/openai/gpt-4:latest",
   ]);
@@ -278,19 +247,18 @@ test("groupModels groups access providers and encoded publishers with counts", (
       { provider: "openrouter", id: "auto", context_window: 200_000 },
       { provider: "github-copilot", id: "gpt-5", context_window: 200_000 },
     ],
-  }, { currentTokens: 150_000 });
+  });
 
   const groups = groupModels(entries);
   expect(groups.map((group) => group.provider)).toEqual(["github-copilot", "openrouter"]);
   expect(groups[1]).toMatchObject({
     provider: "openrouter",
-    compatibleCount: 2,
     totalCount: 3,
   });
   expect(groups[1].entries.map((entry) => entry.id)).toEqual(["auto"]);
-  expect(groups[1].publisherGroups.map((group) => ({ publisher: group.publisher, compatible: group.compatibleCount, total: group.totalCount }))).toEqual([
-    { publisher: "anthropic", compatible: 1, total: 1 },
-    { publisher: "google", compatible: 0, total: 1 },
+  expect(groups[1].publisherGroups.map((group) => ({ publisher: group.publisher, total: group.totalCount }))).toEqual([
+    { publisher: "anthropic", total: 1 },
+    { publisher: "google", total: 1 },
   ]);
 });
 
@@ -304,7 +272,7 @@ test("405-model catalogue remains distinct, searchable, groupable, and naturally
     context_window: index % 3 === 0 ? 128_000 : 200_000,
     reasoning: index % 2 === 0,
   }));
-  const entries = normaliseModelCatalogue({ model_options: modelOptions }, { currentTokens: 150_000 });
+  const entries = normaliseModelCatalogue({ model_options: modelOptions });
 
   expect(entries).toHaveLength(405);
   expect(new Set(entries.map((entry) => entry.key)).size).toBe(405);
@@ -314,7 +282,7 @@ test("405-model catalogue remains distinct, searchable, groupable, and naturally
     "qwen/model-315",
     "qwen/model-319",
   ]);
-  expect(filterAndRankModels(entries, { contextFit: "blocked" })).toHaveLength(135);
+  expect(filterAndRankModels(entries)).toHaveLength(405);
   expect(groupModels(entries).reduce((count, group) => count + group.totalCount, 0)).toBe(405);
   expect(["model-2", "model-10", "model-1"].sort(compareModelCatalogueText)).toEqual(["model-1", "model-2", "model-10"]);
 });
@@ -336,7 +304,7 @@ test("model picker projection deduplicates priority sections and bounds a 405-mo
   const entries = normaliseModelCatalogue({
     current: "openrouter/anthropic/model-404",
     model_options: modelOptions,
-  }, { currentTokens: 150_000 });
+  });
   const projection = buildModelPickerProjection(entries);
 
   expect(MODEL_PICKER_RENDER_LIMIT).toBe(100);
@@ -344,72 +312,36 @@ test("model picker projection deduplicates priority sections and bounds a 405-mo
   expect(projection.renderedEntries).toHaveLength(100);
   expect(new Set(projection.renderedEntries.map((entry) => entry.key)).size).toBe(100);
   expect(projection.renderedEntries[0].key).toBe("openrouter/anthropic/model-404");
-  expect(projection.sections.find((section) => section.key === "blocked")?.collapsed).toBe(true);
-  expect(projection.sections.find((section) => section.key === "blocked")?.entries).toEqual([]);
-  expect(projection.sections.find((section) => section.key === "compatible")?.groups.map((group) => group.label)).toEqual([
+  expect(projection.sections.find((section) => section.key === "catalogue")?.groups.map((group) => group.label)).toEqual([
     "openrouter · anthropic",
-    "openrouter · google",
   ]);
 });
 
-test("expanded blocked models reserve only the rows they need within the render cap", () => {
-  const entries = normaliseModelCatalogue({
-    model_options: Array.from({ length: 101 }, (_, index) => ({
-      provider: "test",
-      id: `model-${index}`,
-      context_window: index === 100 ? 128_000 : 200_000,
-    })),
-  }, { currentTokens: 150_000 });
-  const projection = buildModelPickerProjection(entries, { showBlocked: true });
-
-  expect(projection.renderedEntries).toHaveLength(100);
-  expect(projection.renderedEntries.some((entry) => entry.key === "test/model-100")).toBe(true);
-  expect(projection.renderedEntries.filter((entry) => entry.contextFit.state === "blocked")).toHaveLength(1);
+test("catalogue models stay searchable even when outside the initial render cap", () => {
+  const entries = normaliseModelCatalogue({ model_options: Array.from({ length: 200 }, (_, index) => ({
+    provider: "test", id: `model-${index}`, context_window: index < 150 ? 200_000 : 100_000,
+  })) });
+  expect(buildModelPickerProjection(entries).renderedEntries).toHaveLength(100);
+  expect(buildModelPickerProjection(entries, { query: "model-199" }).renderedEntries.map((entry) => entry.key)).toEqual(["test/model-199"]);
 });
 
-test("expanded blocked rows cannot be starved by oversized priority sections", () => {
-  const modelOptions = Array.from({ length: 200 }, (_, index) => ({
-    provider: "test",
-    id: `model-${index}`,
-    context_window: index < 150 ? 200_000 : 128_000,
-  }));
-  const entries = normaliseModelCatalogue({ model_options: modelOptions }, {
-    currentTokens: 150_000,
-    pinnedKeys: modelOptions.slice(0, 150).map((entry) => `test/${entry.id}`),
-  });
-  const projection = buildModelPickerProjection(entries, { showBlocked: true });
-
-  expect(projection.renderedEntries).toHaveLength(100);
-  expect(projection.renderedEntries.filter((entry) => entry.contextFit.state === "blocked")).toHaveLength(50);
-  expect(projection.sections.find((section) => section.key === "pinned")?.entries).toHaveLength(50);
-});
-
-test("unknown context fit remains selectable in a neutral picker section", () => {
+test("models without context metadata remain selectable in the catalogue section", () => {
   const entries = normaliseModelCatalogue({ models: ["openai/gpt-5"] });
   const projection = buildModelPickerProjection(entries);
 
-  expect(projection.sections.find((section) => section.key === "unknown")?.label).toBe("Context limit unknown");
+  expect(projection.sections.find((section) => section.key === "catalogue")?.label).toBe("Models");
   expect(moveModelPickerActiveKey(projection.renderedEntries, null, "first")).toBe("openai/gpt-5");
 });
 
-test("model picker search expands blocked matches and provides a concrete fit explanation", () => {
-  const entries = normaliseModelCatalogue({
-    model_options: [
-      { provider: "openai", id: "gpt-small", context_window: 128_000 },
-      { provider: "openai", id: "gpt-large", context_window: 200_000 },
-    ],
-  }, { currentTokens: 150_000 });
-  const projection = buildModelPickerProjection(entries, { query: "gpt-small" });
-  const blocked = projection.sections.find((section) => section.key === "blocked");
-
-  expect(blocked?.collapsed).toBe(false);
-  expect(blocked?.groups[0]?.entries.map((entry) => entry.key)).toEqual(["openai/gpt-small"]);
-  expect(describeModelContextFit(entries.find((entry) => entry.key === "openai/gpt-small")!)).toBe(
-    "Needs about 165K tokens with estimator safety; this model safely fits 124K (128K raw). Compact before switching.",
-  );
+test("search results remain selectable without claiming fit", () => {
+  const entries = normaliseModelCatalogue({ model_options: [{ provider: "test", id: "near", context_window: 100_000 }] });
+  const projection = buildModelPickerProjection(entries, { query: "near" });
+  expect(projection.renderedEntries).toEqual(entries);
+  expect(projection.sections[0]?.label).toBe("Models");
+  expect(moveModelPickerActiveKey(projection.renderedEntries, null, "first")).toBe("test/near");
 });
 
-test("model picker navigation supports arrows, boundaries, and page movement while skipping blocked rows", () => {
+test("model picker navigation supports arrows, boundaries, and page movement across all catalogue rows", () => {
   const entries = normaliseModelCatalogue({
     model_options: [
       { provider: "test", id: "one", context_window: 200_000 },
@@ -417,14 +349,14 @@ test("model picker navigation supports arrows, boundaries, and page movement whi
       { provider: "test", id: "three", context_window: 200_000 },
       { provider: "test", id: "four", context_window: 200_000 },
     ],
-  }, { currentTokens: 150_000 });
+  });
   const ordered = filterAndRankModels(entries, { sort: "name" });
 
   expect(moveModelPickerActiveKey(ordered, null, "first")).toBe("test/four");
   expect(moveModelPickerActiveKey(ordered, null, "next")).toBe("test/four");
-  expect(moveModelPickerActiveKey(ordered, null, "previous")).toBe("test/three");
+  expect(moveModelPickerActiveKey(ordered, null, "previous")).toBe("test/two");
   expect(moveModelPickerActiveKey(ordered, "test/four", "next")).toBe("test/one");
   expect(moveModelPickerActiveKey(ordered, "test/one", "next")).toBe("test/three");
-  expect(moveModelPickerActiveKey(ordered, "test/three", "last")).toBe("test/three");
+  expect(moveModelPickerActiveKey(ordered, "test/three", "last")).toBe("test/two");
   expect(moveModelPickerActiveKey(ordered, "test/three", "page-previous", 2)).toBe("test/four");
 });

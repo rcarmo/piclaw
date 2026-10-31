@@ -3,11 +3,9 @@ import { getChatJid } from "../../api/chat-jid";
 import { type SettingsData, type SettingsSectionProps } from "./types";
 import { registerSettingsPane } from "./pane-registry";
 import {
-  describeModelContextFit,
   formatModelCatalogueContextWindow,
   formatModelCataloguePricing,
   normaliseModelCatalogue,
-  type ModelCatalogueEntry,
 } from "../../../../../../src/ui/model-catalogue";
 import {
   MODEL_CATALOGUE_PREFERENCES_EVENT,
@@ -51,13 +49,10 @@ interface ModelsResponse {
   };
 }
 
-interface ContextResponse { tokens?: number | null }
-
 type FilterState = {
   provider: string;
   publisher: string;
   family: string;
-  contextFit: string;
   reasoning: string;
   variant: string;
   sort: "recommended" | "name" | "context" | "input-price" | "output-price";
@@ -65,7 +60,7 @@ type FilterState = {
 
 const optionId = (key: string) => `visual-settings-model-option-${encodeURIComponent(key)}`;
 const defaultFilters = (sort: FilterState["sort"]): FilterState => ({
-  provider: "", publisher: "", family: "", contextFit: "all", reasoning: "all", variant: "", sort,
+  provider: "", publisher: "", family: "", reasoning: "all", variant: "", sort,
 });
 
 async function fetchJson<T>(url: string, options: RequestInit = {}, timeoutMs = 10_000): Promise<T> {
@@ -81,16 +76,6 @@ async function fetchJson<T>(url: string, options: RequestInit = {}, timeoutMs = 
   }
 }
 
-function contextFitText(entry: ModelCatalogueEntry): string {
-  if (entry.contextFit.state === "blocked") return describeModelContextFit(entry);
-  if (entry.contextFit.state === "unknown") {
-    return entry.contextFit.currentTokens == null
-      ? "Current chat context is unavailable, so compatibility is unknown."
-      : "This model does not publish a usable context limit, so compatibility is unknown.";
-  }
-  return `Fits: about ${entry.contextFit.safetyAdjustedTokens?.toLocaleString() ?? "unknown"} safety-adjusted tokens in a ${entry.contextFit.effectiveContextWindow?.toLocaleString() ?? "unknown"}-token safe window.`;
-}
-
 function providerUsageText(usage: Record<string, unknown> | null | undefined): string | null {
   if (!usage) return null;
   return [usage.plan, usage.availability, usage.hint_short].filter((value) => typeof value === "string" && value).join(" · ") || null;
@@ -99,7 +84,6 @@ function providerUsageText(usage: Record<string, unknown> | null | undefined): s
 export function ModelsSection({ data: _data }: { data: SettingsData }) {
   const [chatJid, setChatJid] = useState(() => getChatJid());
   const [payload, setPayload] = useState<ModelsResponse | null>(null);
-  const [contextUsage, setContextUsage] = useState<ContextResponse | null>(null);
   const [preferences, setPreferences] = useState<StoredModelCataloguePreferences>(() => readModelCataloguePreferences());
   const [filters, setFilters] = useState<FilterState>(() => defaultFilters(readModelCataloguePreferences().sort));
   const [filtersExpanded, setFiltersExpanded] = useState(false);
@@ -122,18 +106,13 @@ export function ModelsSection({ data: _data }: { data: SettingsData }) {
     if (!quiet || !payload) setLoading(true);
     if (!quiet) setLoadError(null);
     try {
-      const [nextPayload, nextContext] = await Promise.all([
-        fetchJson<ModelsResponse>(`/agent/models?chat_jid=${encodeURIComponent(targetChatJid)}`),
-        fetchJson<ContextResponse>(`/agent/context?chat_jid=${encodeURIComponent(targetChatJid)}`).catch(() => null),
-      ]);
+      const nextPayload = await fetchJson<ModelsResponse>(`/agent/models?chat_jid=${encodeURIComponent(targetChatJid)}`);
       if (generation !== requestGeneration.current || targetChatJid !== chatJidRef.current) return null;
       const nextPreferences = readModelCataloguePreferences();
       const catalogue = normaliseModelCatalogue(nextPayload, {
-        contextUsage: nextContext,
         ...toModelCatalogueNormalisePreferences(nextPreferences),
       });
       setPayload(nextPayload);
-      setContextUsage(nextContext);
       setPreferences(nextPreferences);
       setSelectedKey((current) => catalogue.some((entry) => entry.key === current)
         ? current
@@ -207,16 +186,14 @@ export function ModelsSection({ data: _data }: { data: SettingsData }) {
   }, [chatJid, loadModels]);
 
   const entries = useMemo(() => normaliseModelCatalogue(payload, {
-    contextUsage,
     ...toModelCatalogueNormalisePreferences(preferences),
-  }), [payload, contextUsage, preferences]);
+  }), [payload, preferences]);
   const facets = useMemo(() => collectModelSettingsFacets(entries), [entries]);
   const projection = useMemo(() => buildModelSettingsProjection(entries, {
     query,
     providers: filters.provider || null,
     publishers: filters.publisher || null,
     families: filters.family || null,
-    contextFit: filters.contextFit as "all" | "compatible" | "fits" | "unknown" | "blocked",
     reasoning: filters.reasoning === "all" ? null : filters.reasoning === "yes",
     variants: filters.variant || null,
     sort: filters.sort,
@@ -244,10 +221,6 @@ export function ModelsSection({ data: _data }: { data: SettingsData }) {
 
   const switchModel = async () => {
     if (!selected || busyAction) return;
-    if (selected.contextFit.state === "blocked") {
-      setActionStatus({ type: "error", text: describeModelContextFit(selected) });
-      return;
-    }
     const targetChatJid = chatJid;
     const generation = ++actionGeneration.current;
     setBusyAction("switch");
@@ -259,7 +232,6 @@ export function ModelsSection({ data: _data }: { data: SettingsData }) {
       const confirmedPayload = await fetchJson<ModelsResponse>(`/agent/models?chat_jid=${encodeURIComponent(targetChatJid)}`);
       if (generation !== actionGeneration.current || targetChatJid !== chatJidRef.current) return;
       const confirmedCatalogue = normaliseModelCatalogue(confirmedPayload, {
-        contextUsage,
         ...toModelCatalogueNormalisePreferences(preferences),
       });
       const confirmed = confirmedCatalogue.find((entry) => entry.current)?.key
@@ -426,7 +398,6 @@ export function ModelsSection({ data: _data }: { data: SettingsData }) {
           <select aria-label="Provider" value={filters.provider} onChange={(event) => updateFilter("provider", event.currentTarget.value)}><option value="">All providers</option>{facets.providers.map((value) => <option key={value} value={value}>{value}</option>)}</select>
           <select aria-label="Publisher" value={filters.publisher} onChange={(event) => updateFilter("publisher", event.currentTarget.value)}><option value="">All publishers</option>{facets.publishers.map((value) => <option key={value} value={value}>{value}</option>)}</select>
           <select aria-label="Family" value={filters.family} onChange={(event) => updateFilter("family", event.currentTarget.value)}><option value="">All families</option>{facets.families.map((value) => <option key={value} value={value}>{value}</option>)}</select>
-          <select aria-label="Context fit" value={filters.contextFit} onChange={(event) => updateFilter("contextFit", event.currentTarget.value)}><option value="all">Any context fit</option><option value="compatible">Compatible or unknown</option><option value="fits">Fits current context</option><option value="unknown">Unknown fit</option><option value="blocked">Blocked</option></select>
           <select aria-label="Reasoning" value={filters.reasoning} onChange={(event) => updateFilter("reasoning", event.currentTarget.value)}><option value="all">Any reasoning</option><option value="yes">Reasoning</option><option value="no">Non-reasoning</option></select>
           <select aria-label="Variant" value={filters.variant} onChange={(event) => updateFilter("variant", event.currentTarget.value)}><option value="">All variants</option>{facets.variants.map((value) => <option key={value} value={value}>{value}</option>)}</select>
           <select aria-label="Sort models" value={filters.sort} onChange={(event) => updateFilter("sort", event.currentTarget.value as FilterState["sort"])}><option value="recommended">Recommended</option><option value="name">Name</option><option value="context">Context window</option><option value="input-price">Input price</option><option value="output-price">Output price</option></select>
@@ -469,7 +440,7 @@ export function ModelsSection({ data: _data }: { data: SettingsData }) {
                 <div><dt>Publisher</dt><dd>{selected.publisher || "Unknown"}</dd></div>
                 <div><dt>Family</dt><dd>{selected.family || "Unknown"}</dd></div>
                 <div><dt>Context window</dt><dd>{formatModelCatalogueContextWindow(selected.contextWindow) || "Unknown"}</dd></div>
-                <div><dt>Context fit</dt><dd>{contextFitText(selected)}</dd></div>
+                <div><dt>Context fit</dt><dd>Unknown until the backend checks the model switch.</dd></div>
                 <div><dt>Reasoning</dt><dd>{selected.reasoning ? "Supported" : "Not advertised"}</dd></div>
                 <div><dt>Variants</dt><dd>{selected.variants.length ? selected.variants.join(", ") : "Stable"}</dd></div>
                 <div><dt>Input / 1M</dt><dd>{formatModelCataloguePrice(selected.pricing?.inputPerMillion ?? null)}</dd></div>
@@ -482,8 +453,8 @@ export function ModelsSection({ data: _data }: { data: SettingsData }) {
               <div className="model-catalogue-settings__thinking"><strong>Thinking levels</strong>{thinkingLevels.length ? <><select aria-label="Thinking level" disabled={!selected.current || Boolean(busyAction)} value={selected.current ? payload?.thinking_level ?? "" : ""} onChange={(event) => void setThinkingLevel(event.currentTarget.value)}>{!selected.current && <option value="">Switch to this model to change thinking</option>}{thinkingLevels.map((level) => <option key={level.id} value={level.id}>{level.label}</option>)}</select><span>{thinkingLevels.map((level) => level.label).join(", ")}</span></> : <span>No server-provided thinking levels.</span>}</div>
               <div className="model-catalogue-settings__diagnostics"><strong>Provider diagnostics</strong>{selectedDiagnostic ? <span>{selectedDiagnostic.auth_configured ? "Authenticated" : "Credentials not configured"} · {selectedDiagnostic.available_model_count} available of {selectedDiagnostic.model_count} advertised{selectedDiagnostic.auth_source ? ` · ${selectedDiagnostic.auth_source}` : ""}</span> : <span>No provider diagnostics available.</span>}{payload?.provider_diagnostics?.composition_error && <span className="error">{payload.provider_diagnostics.composition_error}</span>}{usageText && <span>{usageText}</span>}</div>
               <div className="model-catalogue-settings__actions">
-                <button type="button" className="settings-panel__provider-btn settings-panel__provider-btn--primary" disabled={selected.current || Boolean(busyAction) || selected.contextFit.state === "blocked"} onClick={() => void switchModel()}>{selected.current ? "Current model" : busyAction === "switch" ? "Switching…" : "Use for current chat"}</button>
-                {selected.contextFit.state === "blocked" && <button type="button" className="settings-panel__provider-btn" disabled={Boolean(busyAction)} onClick={() => void compactContext()}>Compact context</button>}
+                <button type="button" className="settings-panel__provider-btn settings-panel__provider-btn--primary" disabled={selected.current || Boolean(busyAction)} onClick={() => void switchModel()}>{selected.current ? "Current model" : busyAction === "switch" ? "Switching…" : "Use for current chat"}</button>
+                <button type="button" className="settings-panel__provider-btn" disabled={Boolean(busyAction)} onClick={() => void compactContext()}>Compact context</button>
                 <button type="button" className="settings-panel__provider-btn" onClick={() => void navigator.clipboard?.writeText?.(selected.key)}>Copy model key</button>
                 <button type="button" className="settings-panel__provider-btn" onClick={() => window.dispatchEvent(new CustomEvent("piclaw:open-settings", { detail: { section: "providers" } }))}>Provider settings</button>
               </div>

@@ -1352,12 +1352,6 @@ body {
   color: color-mix(in srgb, var(--text-primary, #e7e9ea) 88%, var(--accent-color, #1d9bf0));
 }
 
-.model-picker__item--blocked {
-  color: var(--text-secondary, #71767b);
-  cursor: not-allowed;
-  opacity: 0.78;
-}
-
 .model-picker__item:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent-color, #1d9bf0) 55%, transparent);
   outline-offset: -2px;
@@ -1455,10 +1449,6 @@ body {
   font-size: 10px;
   line-height: 1.3;
   white-space: normal;
-}
-
-.model-picker__item__meta--blocked {
-  color: var(--warning, #f9e2af);
 }
 
 .model-picker__empty,

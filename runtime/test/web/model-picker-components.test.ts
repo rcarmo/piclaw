@@ -15,7 +15,7 @@ test("classic and visual model pickers expose the shared searchable listbox cont
     expect(source).toContain('role="listbox"');
     expect(source).toContain('role="option"');
     expect(source).toContain("aria-activedescendant");
-    expect(source).toContain("aria-disabled");
+    expect(source).not.toContain("blocked");
     expect(source).toContain("ArrowDown");
     expect(source).toContain("PageDown");
     expect(source).toContain("Open Models settings");
@@ -37,9 +37,11 @@ test("classic and visual pickers expose a separate accessible pin action", () =>
   expect(visualSource).toContain("model-picker__pin");
 });
 
-test("visual picker preserves unknown context instead of coercing it to zero", () => {
-  expect(visualContextBarSource).toContain("contextTokens={agentContext.value?.tokens ?? null}");
-  expect(visualSource).toContain("contextTokens: number | null");
+test("visual picker does not receive tokens or invent context fit", () => {
+  expect(visualContextBarSource).not.toContain("contextTokens={");
+  expect(visualSource).not.toContain("contextTokens");
+  expect(visualSource).not.toContain("contextFit");
+  expect(visualSource).not.toContain("calculateModelContextFit");
 });
 
 test("classic and visual model picker styles include bounded desktop and mobile layouts", () => {
