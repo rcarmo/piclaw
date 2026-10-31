@@ -2,7 +2,8 @@ import { expect, test } from 'bun:test';
 import { withTempWorkspaceEnv } from '../helpers.js';
 
 for (const scenario of ['schema-failure', 'restoration-failure', 'schema-and-close-failure', 'reuse-behind-writer',
-  'inspection-failure', 'replacement', 'missing', 'prepared-close', 'published-close-failure', 'registration-failure', 'disposer-failure']) {
+  'inspection-failure', 'replacement', 'missing', 'prepared-close', 'published-close-failure', 'registration-failure', 'disposer-failure',
+  'schema-lock', 'token-column-failure', 'scheduled-column-failure', 'thinking-column-failure', 'thinking-inspection-failure', 'column-and-close-failure']) {
   test(`root database publication and lifetime: ${scenario}`, async () => {
     await withTempWorkspaceEnv('database-initialization-', {}, async ws => {
       const child = Bun.spawn([process.execPath, '--no-env-file', new URL('../fixtures/db-initialization-lifecycle.ts', import.meta.url).pathname, scenario], {
