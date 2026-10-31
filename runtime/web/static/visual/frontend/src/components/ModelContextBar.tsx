@@ -70,7 +70,6 @@ export function ModelContextBar({ polling }: { polling: UseStatusPollingResult }
         <ModelPicker
           models={models.value ?? []}
           activeModel={activeModel}
-          contextTokens={agentContext.value?.tokens ?? null}
           onSelectModel={(id) => handleSelectModel(id, (m) => { currentModel.value = m; })}
           onTogglePin={handleTogglePin}
           onClose={closeModelPicker}

@@ -29,6 +29,7 @@ import { createDefaultRuntimeBootstrapDeps } from "../../runtime/src/runtime/boo
 import { storeChatMetadata, storeMessage } from "../../runtime/src/db.js";
 import { existsSync, mkdirSync, writeFileSync, readFileSync, copyFileSync, symlinkSync, cpSync, renameSync, rmSync,linkSync,chmodSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { canonicalJson } from '../../runtime/src/utils/canonical-json.js';
 import * as hostFs from "node:fs";
 import { extensionKvSet, extensionKvGet } from "../../runtime/src/db/extension-kv.js";
 import { join, resolve } from "node:path";
@@ -116,6 +117,111 @@ for(const mode of ['completed','provider','provider-hold','unsafe-tool'] as cons
   expect(()=>process.kill(results[0]!.pid,0)).toThrow();console.log('NATIVE_PROCESS_RESTART '+JSON.stringify({mode,results}));
 });
 
+const factoryReceiptRevocation = (['harness','source'] as const)
+  .find(kind => process.env.PICLAW_DEFAULT_FACTORY_CASE === `native-parent-accounting-crash-retained-${kind}-revoked`);
+const factoryReceiptWindow = factoryReceiptRevocation ? 'retained' : (['before-receipt', 'retained', 'charged'] as const)
+  .find(window => process.env.PICLAW_DEFAULT_FACTORY_CASE === `native-parent-accounting-crash-${window}`);
+const factoryReceiptCase = factoryReceiptWindow && `native-parent-accounting-crash-${factoryReceiptWindow}${factoryReceiptRevocation ? `-${factoryReceiptRevocation}-revoked` : ''}`;
+function factoryReceiptFacts(database: Database) {
+  return Object.fromEntries(['budget_request_reservations','budget_usage_events','token_usage','budget_work','service_effect_s01_chats','service_effect_s01_sources',
+    'service_effect_s01_operations','service_effect_s01_operation_sources','service_effect_s01_queued_inputs','service_effect_s02_commits',
+    'piclaw_durable_bindings_v1','tasks','submissions','entries','messages','chat_cursors']
+    .map(table => [table, database.query(`SELECT * FROM ${table} ORDER BY rowid`).all()]));
+}
+
+function assertFactoryReceiptFinance(database: Database, original: BudgetRequestReservation) {
+  const requests = database.query('SELECT * FROM budget_request_reservations ORDER BY rowid').all() as BudgetRequestReservation[];
+  expect(requests).toHaveLength(1); const row = requests[0]!;
+  const {state,settlement_sha256,updated_at,usage_event_id,...immutable} = row;
+  const {state:_oldState,settlement_sha256:_oldSettlement,updated_at:_oldTime,usage_event_id:_oldEvent,...before} = original;
+  expect(immutable).toEqual(before);
+  expect(row).toMatchObject({provider_id:'openai-codex',model_id:'approved',chat_jid:'web:default',amount_microusd:101000,
+    account_ref:'openai-codex:sha256:50a5ee17cb005388e7f31e1ed28043dda745bb3d2b65d8042afaead6fd4af575',work_id:`durable-request:${row.id}`});
+  const hash = (value:string) => createHash('sha256').update(value).digest('hex');
+  const invocation = JSON.parse(row.model_invocation_json!);
+  expect(row.binding_sha256).toBe(hash(canonicalJson({id:row.id,workId:row.work_id,chatJid:row.chat_jid,providerId:row.provider_id,
+    modelId:row.model_id,accountRef:row.account_ref,amountMicros:row.amount_microusd,modelInvocation:invocation})));
+  expect(row.terminal_receipt_json).toBe(original.terminal_receipt_json);
+  expect(row.terminal_receipt_sha256).toBe(hash(original.terminal_receipt_json!));
+  expect(JSON.parse(row.terminal_receipt_json!)).toMatchObject({version:1,requestId:row.id,requestBindingSha256:row.binding_sha256,
+    projectedOutcome:{role:'assistant',provider:'openai-codex',model:'approved',api:'openai-completions',stopReason:'stop',content:[{type:'text',text:'factory synthetic reply'}]}});
+  const usage = {chat_jid:row.chat_jid,run_at:original.terminal_received_at,input_tokens:5,output_tokens:5,cache_read_tokens:0,cache_write_tokens:0,
+    total_tokens:10,cost_input:0.000005,cost_output:0.000005,cost_cache_read:0,cost_cache_write:0,cost_total:0.00001,
+    model:'approved',response_model:'approved',provider:'openai-codex',api:'openai-completions',usage_source:'assistant',
+    api_equivalent_cost_known:true,api_equivalent_cost_microusd:10,valuation_provenance:'catalogue_estimate',provider_cost_total:null,
+    catalogue_cost_total:0.00001,cost_provenance:'catalogue_estimate',reasoning_tokens:0,cache_read_reported:null,cache_write_reported:null,
+    api_equivalent_known_subtotal_microusd:10,api_equivalent_unknown_categories:'[]',pricing_currency:'USD',
+    pricing_source:'pi-ai Usage.cost category totals',pricing_version:'pi-ai-usage-cost-v1',pricing_cache_fallbacks:'[]'};
+  const settlement = hash(canonicalJson(usage)), eventId = `usage:invocation:${row.id}`;
+  expect(state).toBe('settled'); expect(settlement_sha256).toBe(settlement); expect(usage_event_id).toBe(eventId);
+  expect(Date.parse(updated_at)).toBeGreaterThanOrEqual(Date.parse(original.terminal_received_at!));
+  const record = {...usage,api_equivalent_cost_known:1,turns:null,pricing_context_tier:null,work_id:row.work_id,invocation_id:row.id,usage_event_id:eventId};
+  const events = database.query('SELECT * FROM budget_usage_events').all() as Record<string,any>[];
+  expect(events).toHaveLength(1); const event = events[0]!;
+  const payload = {version:1,origin:{kind:'host_request',request_id:row.id,binding_sha256:row.binding_sha256,settlement_sha256:settlement},
+    execution_kind:'interactive',record};
+  expect(JSON.parse(event.report_payload_json)).toEqual(payload);
+  expect(event).toEqual({usage_event_id:eventId,token_usage_id:1,work_id:row.work_id,chat_jid:row.chat_jid,invocation_id:row.id,
+    accounted_at:original.terminal_received_at,api_usd_micros:10,api_usd_known:1,valuation_provenance:'catalogue_estimate',usage_source:'assistant',
+    report_payload_json:event.report_payload_json,report_payload_sha256:hash(event.report_payload_json)});
+  expect(database.query('SELECT * FROM token_usage').all()).toEqual([{id:1,...record}]);
+}
+
+function assertFactoryReceiptInventory(database: Database, saved: {taskId:number;request:BudgetRequestReservation;facts:Record<string,any[]>}, outcome:'pending'|'failed'|'completed', sourceState:'claimed'|'consumed') {
+  const tasks = database.query('SELECT id,record FROM tasks ORDER BY id').all() as {id:number;record:string}[];
+  expect(tasks.map(row => row.id)).toEqual(saved.facts.tasks.map(row => row.id));
+  const task = JSON.parse(tasks.find(row => row.id === saved.taskId)!.record);
+  const original = JSON.parse(saved.facts.tasks.find(row => row.id === saved.taskId).record);
+  const submissions = database.query('SELECT * FROM submissions ORDER BY rowid').all() as Record<string,any>[];
+  expect(submissions).toHaveLength(saved.facts.submissions.length);
+  for (const [index,submission] of submissions.entries()) {
+    const {status,record,...identity} = submission, {status:_oldStatus,record:priorRecord,...before} = saved.facts.submissions[index];
+    const prior = JSON.parse(priorRecord), current = JSON.parse(record);
+    expect(identity).toEqual(before); expect(prior.status).toBe('placed');
+    if (outcome === 'pending') {expect(status).toBe('placed');expect(current).toEqual(prior);}
+    else if (outcome === 'failed') {expect(status).toBe('unanswered');expect(current).toEqual({...prior,status:'unanswered',reason:'model_error',detail:task.state.outcome.error.message});}
+    else {expect(status).toBe('done');expect(current).toEqual({...prior,status:'done',answer:task.state.outcome.result.entryId});}
+  }
+  expect(database.query('SELECT * FROM piclaw_durable_bindings_v1 ORDER BY rowid').all()).toEqual(saved.facts.piclaw_durable_bindings_v1);
+  expect(database.query('SELECT * FROM service_effect_s01_operation_sources ORDER BY rowid').all()).toEqual(saved.facts.service_effect_s01_operation_sources);
+  expect(database.query('SELECT * FROM service_effect_s01_queued_inputs ORDER BY rowid').all()).toEqual(saved.facts.service_effect_s01_queued_inputs);
+  const sources = database.query('SELECT * FROM service_effect_s01_sources ORDER BY rowid').all() as Record<string,any>[];
+  expect(sources).toHaveLength(saved.facts.service_effect_s01_sources.length);
+  for (const [index,source] of sources.entries()) {
+    const {state,disposition_reason,...identity} = source;
+    const {state:_priorState,disposition_reason:_priorReason,...original} = saved.facts.service_effect_s01_sources[index];
+    expect(identity).toEqual(original); expect(state).toBe(sourceState);
+    if (sourceState === 'claimed') expect(disposition_reason).toBeNull();
+  }
+  for (const key of ['id','kind','conversationId','input','owner','background'] as const) expect(task[key]).toEqual(original[key]);
+  if (outcome === 'pending') {
+    expect(task.restarts).toBe((original.restarts??0)+1);
+    expect(task.state).toEqual({status:'pending',checkpoint:original.state.checkpoint});
+  } else {
+    expect(task.restarts).toBeUndefined();
+    expect(task.state).toMatchObject({status:'terminal',outcome:{status:outcome}});
+    if (outcome === 'failed') expect(task.state.outcome.error.detail).toEqual({reason:'model_error'});
+  }
+  const entries = database.query('SELECT * FROM entries ORDER BY rowid').all() as Record<string,any>[];
+  const originalIds = new Set(saved.facts.entries.map(row => row.id));
+  expect(entries.filter(row => originalIds.has(row.id))).toEqual(saved.facts.entries);
+  const added = entries.filter(row => !originalIds.has(row.id));
+  if (outcome === 'pending') expect(added).toEqual([]);
+  else {
+    expect(added).toHaveLength(1);
+    const entry = JSON.parse(added[0]!.record);
+    expect(entry).toMatchObject({kind:'pi.assistant',conversationId:original.conversationId,byTaskId:saved.taskId});
+    expect(entry.model).toHaveLength(1);
+    if (outcome === 'failed') expect(entry.model[0]).toMatchObject({role:'assistant',content:[],stopReason:'error',errorMessage:task.state.outcome.error.message,
+      usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}});
+    else {
+      expect(added[0]!.id).toBe(task.state.outcome.result.entryId);
+      const paid = JSON.parse(saved.request.terminal_receipt_json!).projectedOutcome;
+      for (const key of ['role','provider','model','api','timestamp','stopReason','content','usage'] as const) expect(entry.model[0][key]).toEqual(paid[key]);
+    }
+  }
+}
+
 const reviewLifecyclePhases = ["fresh", "present", "disabled", "reinstalled", "uninstalled"] as const;
 const reviewLifecycleCase = reviewLifecyclePhases.map(phase => `native-code-review-lifecycle-${phase}`)
   .find(phase => phase === process.env.PICLAW_DEFAULT_FACTORY_CASE);
@@ -197,16 +303,34 @@ const explicitDelegateCases: Record<string, { id: string; model: string | number
   "native-delegate-explicit-fuzzy": { id: "gpt-5-mini", model: "synthetic/GPT-5-mini", denied: true },
   "native-delegate-explicit-virtual": { id: "gpt-5-mini", model: "synthetic/virtual", denied: true },
 };
-for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "native-recovery-unit", "native-retention-unit", "native-runner-denial", "native-scheduled-lease-free", "native-nonweb-admission", "native-addon-admission", "native-addon-admission-rollback", "native-addon-admission-overlap", "native-addon-admission-rejected", "native-addon-admission-alias", "native-addon-admission-model-revoked", "native-addon-admission-public-model-revoked", "native-addon-execution", "native-addon-execution-accounting", "native-addon-execution-accounting-unknown", "native-addon-execution-accounting-capped", "native-addon-execution-accounting-capped-daily", "native-addon-execution-accounting-capped-exact", "native-addon-execution-accounting-capped-denied", "native-addon-execution-accounting-capped-initial-denied", "native-addon-execution-accounting-capped-auth-denied", "native-addon-execution-accounting-capped-unknown", "native-addon-execution-accounting-capped-missing-account", "native-addon-execution-accounting-capped-account-changed", "native-addon-execution-accounting-capped-tool-race", "native-addon-execution-accounting-capped-pricing-changed", "native-addon-execution-accounting-capped-small-output", "native-addon-execution-accounting-capped-cleanup-failed", "native-addon-execution-no-account-auth-cap", "native-addon-execution-revoked", "native-addon-execution-auth-revoked", "native-addon-execution-cancelled", "native-addon-execution-deadline", "native-addon-execution-quota", "native-addon-execution-ceiling", "native-addon-execution-large-result", "native-addon-execution-live-input", "native-addon-execution-recovery-terminal", "native-addon-execution-recovery-cancel-requested", "native-addon-execution-recovery-unknown", "native-addon-execution-recovery-cancelled", "native-addon-execution-recovery-unsafe", "native-addon-execution-recovery-input-ack", "native-addon-execution-recovery-budget-blocked", "native-addon-execution-recovery-owned", "native-addon-execution-recovery-no-source", "native-addon-service-execution", "native-addon-service-budget-resume", "native-addon-service-continuation", "native-addon-service-continuation-budget-gap", "native-addon-service-continuation-interrupted", "native-addon-service-continuation-staged", "native-addon-service-continuation-compaction", "native-addon-service-continuation-compaction-background", "native-addon-service-continuation-compaction-auth-revoked", "native-addon-service-continuation-compaction-auth-budget", "native-addon-service-continuation-compaction-unknown", "native-addon-service-continuation-compaction-background-held", "native-dream-runner", "native-dream-runner-model", "native-dream-runner-tools", "native-dream-runner-held-provider", "native-dream-runner-held-tool", "native-dream-runner-lock-revoked", "native-dream-runner-accounted", "native-dream-runner-budget-denied", "native-dream-runner-deadline", "native-dream-runner-original-time", "native-dream-runner-accounted-unknown", "native-dream-runner-unsafe-result", "native-dream-runner-held-provider-accounted", "native-dream-runner-recovery-unit", "native-dream-runner-scheduled-model", "native-dream-runner-scheduled-budget", "native-dream-runner-scheduled-lease-revoked", "native-dream-runner-scheduled-token-revoked", "native-dream-runner-scheduled-tool-revoked", "native-dream-runner-scheduled-reclaim", "native-dream-runner-scheduled-budget-denied", "native-dream-runner-scheduled-unknown", "native-dream-runner-scheduled-final-revoked", "native-dream-runner-scheduled-index-revoked", "native-routing-bash-active", "native-routing-control-race", "native-routing-queued-race", "native-routing-side-race", "native-routing-create-race", "native-routing-policy", "native-routing-initial-rollback", "native-routing-initial-ack", "native-usage-projection", "native-scheduler-definition", "native-plan-clear", "native-plan-initial-empty", "native-shutdown-stop-recover", "native-shutdown-close-recover", "native-process-exit", "native-process-exit-accounting", "native-process-exit-accounting-close-fail", "native-process-exit-queue-busy", "native-process-exit-shell-lease", "native-process-status", "native-compaction-accounting-auto", "native-compaction-accounting-auto-pending", "native-compaction-accounting-auto-pending-cancel", "native-compaction-accounting-auto-pending-reopen", "native-compaction-accounting-background", "native-compaction-accounting-background-proof-close", "native-compaction-accounting-background-pending", "native-compaction-accounting-background-pre-reservation", "native-events", "native-web-cursor-ack", "native-infrastructure", "native-goal", "native-goal-local-denial", "native-goal-critical-denial", "native-goal-budget", "native-codemode-plan-goal", "native-compaction-accounting-close-fail", "native-compaction-accounting-startup-proof-fail", "native-compaction-accounting-startup-proof-close-uncertain", "native-compaction-accounting-recover", "native-compaction-accounting-side-provenance", "native-compaction-accounting-side-dispatch", "native-compaction-accounting-side-auto", "native-compaction-accounting-unknown", "native-compaction-accounting", "native-scheduler-accounting-unknown", "native-scheduler-accounting", "native-scheduler-accounting-auto-compaction", "native-delegate-accounting-unknown", "native-delegate-accounting", "native-delegate-accounting-auto-compaction", "native-delegate-accounting-auto-compaction-revoked", "native-parent-accounting-event-fence", "native-parent-accounting-held-writer", "native-parent-accounting-two-turns", "native-parent-accounting-regrets", "native-parent-accounting-regrets-unknown", "native-parent-accounting-regrets-receipt-failure", "native-parent-accounting-regrets-pending", "native-parent-accounting-regrets-pending-cancel", "native-parent-accounting-regrets-pending-reopen", "native-parent-accounting-regrets-pending-reopen-held", "native-parent-accounting-two-turns-pending", "native-parent-accounting-two-turns-pending-cancel", "native-parent-accounting-two-turns-pending-reopen", "native-parent-accounting-close-work-fail", "native-parent-accounting-storage-fail", "native-parent-accounting-storage-fail-live", "native-parent-accounting-rotate", "native-parent-accounting-auth-deny", "native-parent-accounting-late-unpriced", "native-parent-accounting-late-no-account", "native-parent-accounting-unknown", "native-parent-accounting", "public-shim-compaction", "source-filter-subset", "public-admission-row-mismatch", "public-admission-chat-mismatch", "public-archived-admission", "public-thinking-reasoning", "native-mcp-cleanup-fail", "native-mcp-disconnect", "native-mcp-catalog-change", "native-mcp-error", "native-parent-budget-cap", "native-parent-budget-auth-cap", "native-mcp-concurrent", "native-mcp-config-change", "native-mcp-codemode", "native-mcp-codemode-cancel", "native-mcp-http-deny", "native-codemode-drawio", "native-codemode-drawio-cancel", "native-codemode-editable-table", "native-codemode-editable-table-cancel", "native-codemode-office-viewer", "native-codemode-office-viewer-cancel", "native-codemode-plan", "native-codemode-plan-cancel", "native-codemode-reopen", "native-codemode-cancel", "native-codemode-binding-revoked", "native-drawio", "native-drawio-cancel", "native-drawio-missing-opener", "native-drawio-prepare-held", "public-conversations", "custom-subset", "pending-host", "native-office-viewer", "native-office-viewer-cancel", "native-editable-table", "native-editable-table-missing-publisher", "native-editable-table-revoked", "native-editable-table-closed-publisher", "native-editable-table-nonweb", "native-editable-table-branch", "native-editable-table-archived", "native-editable-table-binding-revoked", "native-code-review", "native-codemode-code-review", "native-codemode-code-review-cancel", "native-plan", "native-scheduler", "native-delegate", "native-delegate-standard", "native-delegate-readonly-deny", "native-delegate-standard-revoke", "native-delegate-files", "native-delegate-images", "native-delegate-timeout", "native-delegate-denied", "native-delegate-revoke-cap", "native-delegate-revoke-provider", ...Object.keys(explicitDelegateCases)] as const) factoryTest(scenario, scenario === "native-infrastructure" ? "production factory: native infrastructure installed sources, public admission, terminal receipt and reopen" : scenario.startsWith("native-mcp-") ? `configured default factory: ${scenario}` : scenario === "custom-subset"
+for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "native-recovery-unit", "native-retention-unit", "native-runner-denial", "native-scheduled-lease-free", "native-nonweb-admission", "native-addon-admission", "native-addon-admission-rollback", "native-addon-admission-overlap", "native-addon-admission-rejected", "native-addon-admission-alias", "native-addon-admission-model-revoked", "native-addon-admission-public-model-revoked", "native-addon-execution", "native-addon-execution-accounting", "native-addon-execution-accounting-unknown", "native-addon-execution-accounting-capped", "native-addon-execution-accounting-capped-daily", "native-addon-execution-accounting-capped-exact", "native-addon-execution-accounting-capped-denied", "native-addon-execution-accounting-capped-initial-denied", "native-addon-execution-accounting-capped-auth-denied", "native-addon-execution-accounting-capped-unknown", "native-addon-execution-accounting-capped-missing-account", "native-addon-execution-accounting-capped-account-changed", "native-addon-execution-accounting-capped-tool-race", "native-addon-execution-accounting-capped-pricing-changed", "native-addon-execution-accounting-capped-small-output", "native-addon-execution-accounting-capped-cleanup-failed", "native-addon-execution-no-account-auth-cap", "native-addon-execution-revoked", "native-addon-execution-auth-revoked", "native-addon-execution-cancelled", "native-addon-execution-deadline", "native-addon-execution-quota", "native-addon-execution-ceiling", "native-addon-execution-large-result", "native-addon-execution-live-input", "native-addon-execution-recovery-terminal", "native-addon-execution-recovery-cancel-requested", "native-addon-execution-recovery-unknown", "native-addon-execution-recovery-cancelled", "native-addon-execution-recovery-unsafe", "native-addon-execution-recovery-input-ack", "native-addon-execution-recovery-budget-blocked", "native-addon-execution-recovery-owned", "native-addon-execution-recovery-no-source", "native-addon-service-execution", "native-addon-service-budget-resume", "native-addon-service-continuation", "native-addon-service-continuation-budget-gap", "native-addon-service-continuation-interrupted", "native-addon-service-continuation-staged", "native-addon-service-continuation-compaction", "native-addon-service-continuation-compaction-background", "native-addon-service-continuation-compaction-auth-revoked", "native-addon-service-continuation-compaction-auth-budget", "native-addon-service-continuation-compaction-unknown", "native-addon-service-continuation-compaction-background-held", "native-dream-runner", "native-dream-runner-model", "native-dream-runner-tools", "native-dream-runner-held-provider", "native-dream-runner-held-tool", "native-dream-runner-lock-revoked", "native-dream-runner-accounted", "native-dream-runner-budget-denied", "native-dream-runner-deadline", "native-dream-runner-original-time", "native-dream-runner-accounted-unknown", "native-dream-runner-unsafe-result", "native-dream-runner-held-provider-accounted", "native-dream-runner-recovery-unit", "native-dream-runner-scheduled-model", "native-dream-runner-scheduled-budget", "native-dream-runner-scheduled-lease-revoked", "native-dream-runner-scheduled-token-revoked", "native-dream-runner-scheduled-tool-revoked", "native-dream-runner-scheduled-reclaim", "native-dream-runner-scheduled-budget-denied", "native-dream-runner-scheduled-unknown", "native-dream-runner-scheduled-final-revoked", "native-dream-runner-scheduled-index-revoked", "native-routing-bash-active", "native-routing-control-race", "native-routing-queued-race", "native-routing-side-race", "native-routing-create-race", "native-routing-policy", "native-routing-initial-rollback", "native-routing-initial-ack", "native-usage-projection", "native-scheduler-definition", "native-plan-clear", "native-plan-initial-empty", "native-shutdown-stop-recover", "native-shutdown-close-recover", "native-process-exit", "native-process-exit-accounting", "native-process-exit-accounting-close-fail", "native-process-exit-queue-busy", "native-process-exit-shell-lease", "native-process-status", "native-compaction-accounting-auto", "native-compaction-accounting-auto-pending", "native-compaction-accounting-auto-pending-cancel", "native-compaction-accounting-auto-pending-reopen", "native-compaction-accounting-background", "native-compaction-accounting-background-proof-close", "native-compaction-accounting-background-pending", "native-compaction-accounting-background-pre-reservation", "native-events", "native-web-cursor-ack", "native-infrastructure", "native-goal", "native-goal-local-denial", "native-goal-critical-denial", "native-goal-budget", "native-codemode-plan-goal", "native-compaction-accounting-close-fail", "native-compaction-accounting-startup-proof-fail", "native-compaction-accounting-startup-proof-close-uncertain", "native-compaction-accounting-recover", "native-compaction-accounting-side-provenance", "native-compaction-accounting-side-dispatch", "native-compaction-accounting-side-auto", "native-compaction-accounting-unknown", "native-compaction-accounting", "native-scheduler-accounting-unknown", "native-scheduler-accounting", "native-scheduler-accounting-auto-compaction", "native-delegate-accounting-unknown", "native-delegate-accounting", "native-delegate-accounting-auto-compaction", "native-delegate-accounting-auto-compaction-revoked", "native-parent-accounting-event-fence", "native-parent-accounting-held-writer", "native-parent-accounting-two-turns", "native-parent-accounting-regrets", "native-parent-accounting-regrets-unknown", "native-parent-accounting-regrets-receipt-failure", "native-parent-accounting-regrets-pending", "native-parent-accounting-regrets-pending-cancel", "native-parent-accounting-regrets-pending-reopen", "native-parent-accounting-regrets-pending-reopen-held", "native-parent-accounting-two-turns-pending", "native-parent-accounting-two-turns-pending-cancel", "native-parent-accounting-two-turns-pending-reopen", "native-parent-accounting-close-work-fail", "native-parent-accounting-storage-fail", "native-parent-accounting-storage-fail-live", "native-parent-accounting-rotate", "native-parent-accounting-auth-deny", "native-parent-accounting-late-unpriced", "native-parent-accounting-late-no-account", "native-parent-accounting-unknown", "native-parent-accounting", "public-shim-compaction", "source-filter-subset", "public-admission-row-mismatch", "public-admission-chat-mismatch", "public-archived-admission", "public-thinking-reasoning", "native-mcp-cleanup-fail", "native-mcp-disconnect", "native-mcp-catalog-change", "native-mcp-error", "native-parent-budget-cap", "native-parent-budget-auth-cap", "native-mcp-concurrent", "native-mcp-config-change", "native-mcp-codemode", "native-mcp-codemode-cancel", "native-mcp-http-deny", "native-codemode-drawio", "native-codemode-drawio-cancel", "native-codemode-editable-table", "native-codemode-editable-table-cancel", "native-codemode-office-viewer", "native-codemode-office-viewer-cancel", "native-codemode-plan", "native-codemode-plan-cancel", "native-codemode-reopen", "native-codemode-cancel", "native-codemode-binding-revoked", "native-drawio", "native-drawio-cancel", "native-drawio-missing-opener", "native-drawio-prepare-held", "public-conversations", "custom-subset", "pending-host", "native-office-viewer", "native-office-viewer-cancel", "native-editable-table", "native-editable-table-missing-publisher", "native-editable-table-revoked", "native-editable-table-closed-publisher", "native-editable-table-nonweb", "native-editable-table-branch", "native-editable-table-archived", "native-editable-table-binding-revoked", "native-code-review", "native-codemode-code-review", "native-codemode-code-review-cancel", "native-plan", "native-scheduler", "native-delegate", "native-delegate-standard", "native-delegate-readonly-deny", "native-delegate-standard-revoke", "native-delegate-files", "native-delegate-images", "native-delegate-timeout", "native-delegate-denied", "native-delegate-revoke-cap", "native-delegate-revoke-provider", ...Object.keys(explicitDelegateCases)] as const) factoryTest(scenario, scenario === "native-infrastructure" ? "production factory: native infrastructure installed sources, public admission, terminal receipt and reopen" : scenario.startsWith("native-mcp-") ? `configured default factory: ${scenario}` : scenario === "custom-subset"
   ? "default factory preserves persisted custom read subset and all metadata/history/identity on reopen"
   : scenario === "pending-host"
     ? "default factory recovers pending host work without upgrading persisted tools"
     : "default factory prepares and reopens real startup-known public conversations; refuses legacy before models", async () => {
   process.env.PICLAW_DB_IN_MEMORY = "0";
   const workspace = process.env.PICLAW_WORKSPACE!;
-  const owner = acquireRuntimeLock({ lockPath: join(workspace, "default-owner.lock"), strictOwnership: true, disabled: false });
+  const factoryReceiptCrash = scenario === factoryReceiptCase;
+  const factoryReceiptPhase = factoryReceiptCrash ? process.env.PICLAW_NATIVE_RESTART_PHASE : undefined;
+  if (factoryReceiptCrash && !['write','read'].includes(factoryReceiptPhase!)) throw Error('Exact factory receipt crash phase required');
+  const factoryReceiptPath = join(workspace,'factory-receipt-crash.json');
+  const savedFactoryReceipt = factoryReceiptPhase === 'read' ? JSON.parse(readFileSync(factoryReceiptPath,'utf8')) : undefined;
+  if (savedFactoryReceipt) {
+    expect(savedFactoryReceipt.version).toBe(1); expect(savedFactoryReceipt.window).toBe(factoryReceiptWindow);
+    expect(savedFactoryReceipt.pid).not.toBe(process.pid); expect(() => process.kill(savedFactoryReceipt.pid,0)).toThrow();
+  }
+  const owner = acquireRuntimeLock({ lockPath: join(workspace, "default-owner.lock"), strictOwnership: true, disabled: false,
+    recoverStaleOwnership: !!savedFactoryReceipt });
   initDatabase();
   let root = getDb(); root.exec("PRAGMA foreign_keys=ON");
+  if (savedFactoryReceipt) {
+    expect(owner.record.nonce).not.toBe(savedFactoryReceipt.owner.nonce);
+    expect(factoryReceiptFacts(root)).toEqual(savedFactoryReceipt.facts);
+    const invocation = JSON.parse(savedFactoryReceipt.request.model_invocation_json);
+    if (factoryReceiptRevocation === 'harness') root.query("UPDATE service_effect_s01_operations SET harness_session_id=harness_session_id||'-revoked' WHERE operation_id=?").run(invocation.operationId);
+    if (factoryReceiptRevocation === 'source') root.query("UPDATE service_effect_s01_operations SET phase='cancelling' WHERE operation_id=?").run(invocation.operationId);
+  }
+  let factoryReceiptSource: { id: string; rowid: number } | undefined;
   // These fixtures revoke request/tool authority, not a canonical operator cancellation.
   // A committed SDK model_error now terminates once with a private-data-free notice.
   // Genuine lost harness authority and live/reopened work must remain pending.
@@ -562,7 +686,9 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
     }
     requested.push(physical.id);
     planRequests.push(JSON.stringify(input));
-    calls++; const stream = createAssistantMessageEventStream();
+    calls++;
+    if (factoryReceiptPhase === 'read') throw Error('Factory receipt recovery must not enter transport');
+    const stream = createAssistantMessageEventStream();
     const backgroundSummaryRequest = compactionBackgroundPending && JSON.stringify(input).includes('You are a context summarization assistant.');
     if (compactionBackgroundPending && inManualSummary && !backgroundSummaryRequest) backgroundParentEntered = true;
     if (checkpointHold) {
@@ -718,6 +844,46 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
   const pendingAdmissionCalls:string[]=[];
   let expectedToolSource = "factory-input";
   const captureSpies: { mockRestore(): void }[] = [];
+  if (factoryReceiptCrash && factoryReceiptPhase === 'write') {
+    const reserve = maintenanceAccountingBridge.reserveHostRequest;
+    captureSpies.push(spyOn(maintenanceAccountingBridge,'reserveHostRequest').mockImplementation(async options => {
+      const request = await reserve(options);
+      if (!request) throw Error('Actual funded factory request required');
+      expect(options.modelInvocation).toMatchObject({taskKind:'pi.generation',phase:'request'});
+      const pause = async (): Promise<never> => {
+        expect(calls).toBe(1); expect(factoryReceiptSource).toBeDefined();
+        const rows = root.query('SELECT * FROM budget_request_reservations').all() as BudgetRequestReservation[];
+        expect(rows).toHaveLength(1); const row = rows[0]!, invocation = JSON.parse(row.model_invocation_json!);
+        expect(row.id).toBe(request.id); expect(invocation).toEqual(options.modelInvocation);
+        expect(invocation.checkpointHash).toMatch(/^[0-9a-f]{64}$/);
+        const task = JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(invocation.taskId) as {record:string}).record);
+        expect(task.state).toMatchObject({status:'running',checkpoint:{phase:'request'}});
+        expect(root.query("SELECT state FROM service_effect_s01_sources WHERE source_id=?").get(factoryReceiptSource!.id)).toEqual({state:'claimed'});
+        expect(root.query('SELECT source_id FROM piclaw_durable_bindings_v1 WHERE operation_id=? AND submission_id IS NOT NULL').all(invocation.operationId))
+          .toEqual([{source_id:factoryReceiptSource!.id}]);
+        expect(row.state).toBe(factoryReceiptWindow === 'charged' ? 'settled' : 'dispatched');
+        expect(root.query('SELECT status FROM budget_work WHERE id=?').get(row.work_id)).toEqual({status:factoryReceiptWindow === 'charged' ? 'completed' : 'active'});
+        expect(root.query('SELECT phase FROM service_effect_s01_operations WHERE operation_id=?').get(invocation.operationId)).toEqual({phase:'executing'});
+        expect(row.terminal_receipt_json === null).toBe(factoryReceiptWindow === 'before-receipt');
+        expect(root.query('SELECT count(*) n FROM token_usage').get()).toEqual({n:factoryReceiptWindow === 'charged' ? 1 : 0});
+        expect(root.query('SELECT count(*) n FROM budget_usage_events').get()).toEqual({n:factoryReceiptWindow === 'charged' ? 1 : 0});
+        expect(root.query('SELECT content FROM messages WHERE is_bot_message=1').all()).toEqual([]);
+        const artifact = {version:1,pid:process.pid,window:factoryReceiptWindow,owner:owner.record,source:factoryReceiptSource,
+          taskId:invocation.taskId,checkpointHash:invocation.checkpointHash,request:row,facts:factoryReceiptFacts(root)};
+        writeFileSync(factoryReceiptPath+'.partial',JSON.stringify(artifact),{mode:0o600}); renameSync(factoryReceiptPath+'.partial',factoryReceiptPath);
+        await new Promise<never>(() => {}); throw Error('SIGKILL fixture must not resume');
+      };
+      return Object.freeze({...request,
+        async retainTerminal(message: AssistantMessage) {
+          if (factoryReceiptWindow === 'before-receipt') await pause();
+          const retained = await request.retainTerminal(message);
+          if (factoryReceiptWindow === 'retained') await pause();
+          return retained;
+        },
+        async settle(message: AssistantMessage) { await request.settle(message); if (factoryReceiptWindow === 'charged') await pause(); },
+      });
+    }));
+  }
   if (compactionBackgroundPreReservation) {
     const capture = HostConversationRuntime.prototype.captureAutomaticCompaction;
     captureSpies.push(spyOn(HostConversationRuntime.prototype, 'captureAutomaticCompaction').mockImplementation(async function (this: HostConversationRuntime, ...args: Parameters<typeof capture>) {
@@ -1053,6 +1219,24 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
     } finally { release(); await pending; gate.mockRestore(); }
     backend = await createDefaultApplicationRuntime(owner, async () => { modelCalls++; return services; });
     expect(modelCalls).toBe(2);
+  } else if (factoryReceiptRevocation === 'harness') {
+    let unexpected: Awaited<ReturnType<typeof createDefaultApplicationRuntime>> | undefined;
+    try {
+      await expect(createDefaultApplicationRuntime(owner,async () => services).then(value => {unexpected=value;return value;})).rejects.toThrow('Unverified recovered authority');
+      expect(calls).toBe(0);
+      assertFactoryReceiptFinance(root,savedFactoryReceipt.request);
+      assertFactoryReceiptInventory(root,savedFactoryReceipt,'pending','claimed');
+      expect(root.query('SELECT content FROM messages WHERE is_bot_message=1').all()).toEqual([]);
+      expect(root.query('SELECT * FROM piclaw_durable_bindings_v1 ORDER BY rowid').all()).toEqual(savedFactoryReceipt.facts.piclaw_durable_bindings_v1);
+      expect(root.query('SELECT harness_session_id FROM service_effect_s01_operations WHERE operation_id=?')
+        .get(JSON.parse(savedFactoryReceipt.request.model_invocation_json).operationId)).toEqual({harness_session_id:savedFactoryReceipt.facts.service_effect_s01_operations[0].harness_session_id+'-revoked'});
+    } finally {
+      if (unexpected) {unexpected.stop();await unexpected.close();}
+      for (const spy of [...captureSpies,...sdkSpies]) spy.mockRestore();closeDatabase();owner.release();
+    }
+    console.log('FACTORY_RECEIPT_RECOVERY '+JSON.stringify({window:factoryReceiptWindow,pid:process.pid,taskId:savedFactoryReceipt.taskId,
+      requestId:savedFactoryReceipt.request.id,sourceId:savedFactoryReceipt.source.id,providerCalls:calls,revocation:factoryReceiptRevocation}));
+    return;
   } else backend = await createDefaultApplicationRuntime(owner, async () => services);
   const nativeEvents: any[] = [];
   if (scenario === "native-events") backend.attachChannel!({ broadcastEvent(type, data) { if (type === "new_post") nativeEvents.push(data); } });
@@ -1063,6 +1247,80 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
   const pool = new AgentPool({ credentialStore, modelRuntime: runtime, modelRegistry, ...backend.sessionOptions });
   const bound = backend.bind({ queue: base.queue, agentPool: pool });
   const channel = new WebChannel(bound);
+  if (factoryReceiptCrash) {
+    const {admitWebUserMessage} = await import('../../runtime/src/channels/web/messaging/message-store.js');
+    try {
+      if (factoryReceiptPhase === 'write') {
+        const stored = await admitWebUserMessage(channel,{chatJid:'web:default',content:'Preserve this original paid factory answer',isBot:false,
+          mediaIds:[],agentId:'default',agentName:'Fixture'},{acceptSource:bound.getInputSourceAdmission!('web:default')},
+          () => owner.assertCurrentOwner(),new AbortController().signal);
+        assert(stored);
+        factoryReceiptSource = root.query('SELECT rowid,id FROM messages WHERE rowid=?').get(stored.id) as {rowid:number;id:string};
+        await bound.dispatchAcceptedInput!('web:default',factoryReceiptSource.id,factoryReceiptSource.rowid)!();
+        throw Error('Writer returned before its SIGKILL boundary');
+      }
+      const saved = savedFactoryReceipt;
+      expect(saved).toBeDefined();
+      const result = await bound.dispatchAcceptedInput!('web:default',saved.source.id,saved.source.rowid)!();
+      expect(calls).toBe(0);
+      const row = root.query('SELECT * FROM budget_request_reservations').get() as BudgetRequestReservation;
+      expect(root.query('SELECT count(*) n FROM budget_request_reservations').get()).toEqual({n:1});
+      expect(row.id).toBe(saved.request.id); expect(row.model_invocation_json).toBe(saved.request.model_invocation_json);
+      expect(row.terminal_receipt_json).toBe(saved.request.terminal_receipt_json);
+      expect(row.terminal_receipt_sha256).toBe(saved.request.terminal_receipt_sha256);
+      expect(row.terminal_received_at).toBe(saved.request.terminal_received_at);
+      if (factoryReceiptWindow !== 'before-receipt') assertFactoryReceiptFinance(root,saved.request);
+      assertFactoryReceiptInventory(root,saved,factoryReceiptWindow === 'before-receipt' || factoryReceiptRevocation ? 'failed' : 'completed',
+        factoryReceiptWindow === 'before-receipt' ? 'claimed' : 'consumed');
+      if (factoryReceiptRevocation === 'source') {
+        expect(result).toBe('settled');
+        expect(root.query('SELECT phase,terminal_disposition,terminal_error_code FROM service_effect_s01_operations WHERE operation_id=?')
+          .get(JSON.parse(row.model_invocation_json!).operationId)).toEqual({phase:'terminal',terminal_disposition:'failed',terminal_error_code:'model_error'});
+        const notices = root.query('SELECT content FROM messages WHERE is_bot_message=1').all() as {content:string}[];
+        expect(notices).toHaveLength(1); expect(notices[0]!.content).toStartWith('**Turn failed**');
+        expect(notices[0]!.content).toContain('will not be retried automatically');
+        expect(notices[0]!.content).not.toContain('factory synthetic reply');
+        expect(root.query('SELECT count(*) n FROM token_usage').get()).toEqual({n:1});
+        expect(root.query('SELECT count(*) n FROM budget_usage_events').get()).toEqual({n:1});
+        expect(root.query('SELECT * FROM piclaw_durable_bindings_v1 ORDER BY rowid').all()).toEqual(saved.facts.piclaw_durable_bindings_v1);
+      } else if (factoryReceiptWindow === 'before-receipt') {
+        expect(result).toBe('pending'); expect(row).toEqual(saved.request);
+        expect(root.query('SELECT * FROM budget_usage_events').all()).toEqual([]);
+        expect(root.query('SELECT * FROM token_usage').all()).toEqual([]);
+        expect(root.query('SELECT content FROM messages WHERE is_bot_message=1').all()).toEqual([]);
+      } else {
+        expect(result).toBe('settled'); expect(row.state).toBe('settled');
+        expect(root.query('SELECT count(*) n FROM budget_usage_events').get()).toEqual({n:1});
+        expect(root.query('SELECT count(*) n FROM token_usage').get()).toEqual({n:1});
+        const task = JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(saved.taskId) as {record:string}).record);
+        expect(task.state).toMatchObject({status:'terminal',outcome:{status:'completed'}});
+        expect(root.query('SELECT content FROM messages WHERE is_bot_message=1').all()).toEqual([{content:'factory synthetic reply'}]);
+        expect(root.query('SELECT * FROM piclaw_durable_bindings_v1 ORDER BY rowid').all()).toEqual(saved.facts.piclaw_durable_bindings_v1);
+        if (factoryReceiptWindow === 'charged') {
+          expect(root.query('SELECT * FROM token_usage ORDER BY rowid').all()).toEqual(saved.facts.token_usage);
+          expect(root.query('SELECT * FROM budget_usage_events ORDER BY rowid').all()).toEqual(saved.facts.budget_usage_events);
+        }
+      }
+      const settledFacts = factoryReceiptFacts(root);
+      const duplicate = await bound.dispatchAcceptedInput!('web:default',saved.source.id,saved.source.rowid)!();
+      expect(duplicate).toBe(factoryReceiptWindow === 'before-receipt' ? 'pending' : 'settled');
+      expect(calls).toBe(0); expect(factoryReceiptFacts(root)).toEqual(settledFacts);
+      if (factoryReceiptWindow !== 'before-receipt') {
+        backend.stop(); await backend.close(); backend = await createDefaultApplicationRuntime(owner,async () => services);
+        const reopened = backend.bind({queue:base.queue,agentPool:pool});
+        const afterReopen = await reopened.dispatchAcceptedInput!('web:default',saved.source.id,saved.source.rowid)!();
+        expect(afterReopen).toBe('settled');
+        expect(calls).toBe(0); expect(factoryReceiptFacts(root)).toEqual(settledFacts);
+      }
+    } finally {
+      backend.stop(); await backend.close(); await channel.stop(); await base.queue.shutdown(); await pool.shutdown();
+      for (const spy of [...captureSpies,...sdkSpies]) spy.mockRestore(); closeDatabase(); owner.release();
+    }
+    console.log('FACTORY_RECEIPT_RECOVERY '+JSON.stringify({window:factoryReceiptWindow,pid:process.pid,taskId:savedFactoryReceipt.taskId,
+      requestId:savedFactoryReceipt.request.id,sourceId:savedFactoryReceipt.source.id,providerCalls:calls,
+      ...(factoryReceiptRevocation ? {revocation:factoryReceiptRevocation} : {})}));
+    return;
+  }
   if(recoveryPackage) backend.attachChannel!({broadcastEvent(){}});
   if(scenario==='native-scheduled-lease-free'){
     const {runScheduledTask,getSchedulerMetrics}=await import('../../runtime/src/task-scheduler.js');let reads=0;

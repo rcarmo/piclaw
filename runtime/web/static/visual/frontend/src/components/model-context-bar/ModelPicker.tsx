@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "preact/hooks";
 import {
   buildModelPickerProjection,
-  calculateModelContextFit,
-  describeModelContextFit,
   formatModelCatalogueContextWindow,
   formatModelCataloguePricing,
   moveModelPickerActiveKey,
@@ -13,7 +11,6 @@ import type { VisualModelEntry } from "./types";
 interface ModelPickerProps {
   models: VisualModelEntry[];
   activeModel: string;
-  contextTokens: number | null;
   onSelectModel: (id: string) => void;
   onTogglePin: (id: string) => void;
   onClose: () => void;
@@ -26,7 +23,6 @@ const optionId = (instanceId: string, key: string) => `visual-model-option-${enc
 export function ModelPicker({
   models,
   activeModel,
-  contextTokens,
   onSelectModel,
   onTogglePin,
   onClose,
@@ -34,27 +30,25 @@ export function ModelPicker({
   onOpenSettings,
 }: ModelPickerProps) {
   const [query, setQuery] = useState("");
-  const [showBlocked, setShowBlocked] = useState(false);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const optionRefs = useRef(new Map<string, HTMLButtonElement>());
   const instanceId = useId();
   const searchId = `visual-model-search-${encodeURIComponent(instanceId)}`;
   const resultsId = `visual-model-results-${encodeURIComponent(instanceId)}`;
-  const fittedModels = useMemo(() => {
+  const currentModels = useMemo(() => {
     const hasExactActiveModel = models.some((entry) => entry.key === activeModel);
     return models.map((entry) => ({
       ...entry,
       current: hasExactActiveModel ? entry.key === activeModel : entry.current,
-      contextFit: calculateModelContextFit(entry, { tokens: contextTokens }),
     }));
-  }, [activeModel, contextTokens, models]);
+  }, [activeModel, models]);
   const projection = useMemo(
-    () => buildModelPickerProjection(fittedModels, { query, showBlocked }),
-    [fittedModels, query, showBlocked],
+    () => buildModelPickerProjection(currentModels, { query }),
+    [currentModels, query],
   );
   const selectableEntries = useMemo(
-    () => projection.renderedEntries.filter((entry) => entry.contextFit.state !== "blocked"),
+    () => projection.renderedEntries,
     [projection],
   );
 
@@ -71,7 +65,7 @@ export function ModelPicker({
   }, [activeKey]);
 
   const choose = useCallback((entry: ModelCatalogueEntry | undefined) => {
-    if (!entry || entry.contextFit.state === "blocked") return;
+    if (!entry) return;
     onSelectModel(entry.key);
   }, [onSelectModel]);
 
@@ -109,7 +103,6 @@ export function ModelPicker({
 
   const renderEntry = (entry: ModelCatalogueEntry) => {
     const visualEntry = entry as VisualModelEntry;
-    const blocked = entry.contextFit.state === "blocked";
     const selected = entry.current;
     const focused = entry.key === activeKey;
     const badges = [
@@ -126,15 +119,14 @@ export function ModelPicker({
         aria-label={`${entry.displayName}, ${entry.pinned ? "pinned" : "not pinned"}. Alt+Enter to ${entry.pinned ? "unpin" : "pin"}.`}
         aria-keyshortcuts="Alt+Enter"
         aria-selected={selected}
-        aria-disabled={blocked}
         tabIndex={-1}
-        class={`model-picker__item${selected ? " model-picker__item--active" : ""}${focused ? " model-picker__item--focused" : ""}${blocked ? " model-picker__item--blocked" : ""}`}
+        class={`model-picker__item${selected ? " model-picker__item--active" : ""}${focused ? " model-picker__item--focused" : ""}`}
         ref={(node) => {
           if (node) optionRefs.current.set(entry.key, node);
           else optionRefs.current.delete(entry.key);
         }}
         onMouseDown={(event) => event.preventDefault()}
-        onMouseEnter={() => !blocked && setActiveKey(entry.key)}
+        onMouseEnter={() => setActiveKey(entry.key)}
         onClick={() => choose(entry)}
       >
         <span
@@ -154,7 +146,7 @@ export function ModelPicker({
               {badges.map((badge) => <span key={badge} class="model-picker__badge">{badge}</span>)}
             </span>
           )}
-          {blocked && <span class="model-picker__item__meta model-picker__item__meta--blocked">{describeModelContextFit(entry)}</span>}
+
         </span>
       </button>
     );
@@ -186,7 +178,7 @@ export function ModelPicker({
         </div>
       </div>
       <div id={resultsId} class="model-picker__results" role="listbox" aria-label="Models">
-        {projection.sections.map((section) => !section.collapsed && (
+        {projection.sections.map((section) => (
           <section key={section.key} class={`model-picker__section model-picker__section--${section.key}`} role="presentation">
             <div class="model-picker__section-heading" role="presentation">
               <span>{section.label}</span><span>{section.totalCount}</span>
@@ -209,12 +201,7 @@ export function ModelPicker({
       </div>
       <div class="model-picker__footer">
         <div class="model-picker__footer-start">
-          {projection.blockedCount > 0 && (
-            <button type="button" class="model-picker__action" onClick={() => setShowBlocked((value) => !value)}>
-              {showBlocked ? "Hide" : "Show"} incompatible ({projection.blockedCount})
-            </button>
-          )}
-          {projection.blockedCount > 0 && <button type="button" class="model-picker__action" onClick={onCompact}>Compact context</button>}
+          <button type="button" class="model-picker__action" onClick={onCompact}>Compact context</button>
         </div>
         <button type="button" class="model-picker__action model-picker__action--primary" onClick={onOpenSettings}>Open Models settings</button>
       </div>
