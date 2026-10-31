@@ -46,6 +46,7 @@ import { readStoredProviderUsageAccountRef } from "../../src/agent-pool/provider
 import { createHostDreamTools } from './host-dream-tools.js';
 import { buildDreamPrompt } from '../../src/agent-memory/dream-prompt.js';
 import { getBudgetWorkContext } from '../../src/budget/context.js';
+import { boundHostRequestCost } from '../../src/budget/request-cost-bound.js';
 import type { NativeDreamRequest,AgentOutput } from '../../src/agent-pool/contracts.js';
 import { getBudgetWork,ensureBudgetWork,setBudgetWorkStatus } from '../../src/db/budget-limits.js';
 import { assertModelAccountingReady } from '../../src/budget/model-request-accounting.js';
@@ -53,7 +54,7 @@ import { BudgetRequestError, type BudgetModelInvocation } from '../../src/db/bud
 import { reserveHostRequest, reconcileOperationBudgetWork, completeMaintenanceBudgetWork,operationBudgetWorkId,assertOperationAccountingReady,assertConversationAccountingReady,prepareTaskAccounting,prepareConversationAccounting } from "./host-request-accounting.js";
 import { createHostMcp } from "./host-mcp.js";
 import { createHostFetch } from "./host-fetch.js";
-import { taskModelRequestScope, taskModelHookScope, withTaskModelRequestScope } from "./task-model-boundary-shim.js";
+import { taskModelRequestScope, taskModelHookScope, taskModelToolScope, withTaskModelRequestScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
 import { createHostBuiltinTools } from "./host-builtins.js";
 import { createHostModelTools, hostModelToolNames, nativeToolInstructions } from "./host-model-controls.js";
 import { createHostCommandPolicy } from "./host-command-policy.js";
@@ -341,10 +342,14 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     assertRegrets();
     return regretsAddon.createLateNightRegrets(regretsPorts(chat)).command();
   };
-  let regretsDecision: ((captured: Awaited<ReturnType<HostConversationRuntime["captureToolSource"]>>, authority: ReturnType<typeof createHostOperationAuthority>) => any) | undefined;
+  let regretsDecision: ((captured: Awaited<ReturnType<HostConversationRuntime["captureToolSource"]>>, authority: ReturnType<typeof createHostOperationAuthority>, scope: TaskModelRequestScope) => any) | undefined;
   const regretsTool = regrets ? createHostRegretsTool(regretsAddon, { root, runtime: () => runtime(), assertOwner: assertRegrets,
     definition: regrets.extension!.tools.get("regrets_review")!.definition as Parameters<typeof createHostRegretsTool>[1]["definition"],
-    bind(captured, authority) { return regretsPorts(captured.operation.chatJid, authority.assertCurrent, body => admitSqliteWrite(root, body, authority.assertCurrent), regretsDecision!(captured, authority)); },
+    bind(captured, authority, call) {
+      const scope = taskModelToolScope(call);
+      if (!scope?.checkpointHash) throw Error('Exact Regrets SDK tool scope required');
+      return regretsPorts(captured.operation.chatJid, authority.assertSourceCurrent, body => admitSqliteWrite(root, body, authority.assertCurrent), regretsDecision!(captured, authority, scope));
+    },
   }) : undefined;
   const regretsPrompt = regrets ? createHostRegretsPromptExtension(regretsAddon, { async bindBeforeModelRequest(input) {
     assertRegrets();
@@ -929,18 +934,34 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       preparedRequests.get(signal)?.assertCurrent(); check(model, signal, true);
     },
     async authorize(model, _kind, signal) { checkRequest(model, signal); }, assertCurrent(model, _kind, signal) { checkRequest(model, signal); } });
-  regretsDecision = (captured, authority) => createHostRegretsAccountedDecision({
+  regretsDecision = (captured, authority, scope) => createHostRegretsAccountedDecision({
+    modelInvocation: { version: 1, domain: mapping.domain, operationId: captured.operation.operationId,
+      conversationId: scope.conversationId, taskId: scope.taskId, taskKind: 'pi.tool', phase: 'call', checkpointHash: scope.checkpointHash! },
     database: root, terminalOwner, operationId: captured.operation.operationId, chatJid: captured.operation.chatJid,
     authPath: join(getPiclawAgentDir(), "auth.json"), executionKind: "side_prompt", signal: lifetime.signal,
-    assertCurrent() { assertRegrets(); authority.assertCurrent(); },
-    getAvailable() { assertRegrets(); authority.assertCurrent(); return host.modelRegistry.getAvailable().filter(model => available.some(approved => approved.provider === model.provider && approved.id === model.id)); },
-    async request(model, context, options) {
-      assertRegrets(); authority.assertCurrent(); options.signal?.throwIfAborted();
+    assertCurrent() { assertRegrets(); authority.assertSourceCurrent(); },
+    getAvailable() {
+      assertRegrets(); authority.assertSourceCurrent();
+      return host.modelRegistry.getAvailable().filter(model => {
+        const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
+        return available.some(approved => approved.provider === model.provider && approved.id === model.id) && physical?.provider === model.provider
+          && physical.id === model.id && physical.api === model.api;
+      });
+    },
+    async request(model, context, options, dispatch) {
+      const checkModel = () => {
+      assertRegrets(); authority.assertSourceCurrent(); options.signal?.throwIfAborted();
       const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
       if (!available.some(a => a.provider === model.provider && a.id === model.id) ||
           !host.modelRegistry.getAvailable().some(a => a.provider === model.provider && a.id === model.id) ||
-          physical?.provider !== model.provider || physical.id !== model.id) throw Error("Regrets model no longer approved");
-      return host.modelRuntime.completeSimple(model, context, options);
+          physical?.provider !== model.provider || physical.id !== model.id || physical.api !== model.api
+          || JSON.stringify(boundHostRequestCost(physical, options.maxTokens ?? physical.maxTokens)) !== JSON.stringify(boundHostRequestCost(model, options.maxTokens ?? model.maxTokens)))
+        throw Error("Regrets model no longer approved");
+      };
+      checkModel();
+      return host.modelRuntime.completeSimple(model, context, { ...options, transformHeaders: async headers => {
+        checkModel(); await dispatch(); checkModel(); return headers;
+      } });
     },
   });
   const registry = createRegistry();

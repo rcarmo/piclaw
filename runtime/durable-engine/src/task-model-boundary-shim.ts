@@ -13,6 +13,7 @@ export type TaskModelRequestScope = Pick<Runtime, "taskId" | "conversationId" | 
   /** Logical request identity from the real built-in task checkpoint. It is not
    * authority, dispatch evidence, or a hash of the rendered transport request. */
   readonly checkpointHash?: string;
+  readonly toolCallId?: string;
 };
 const requests = new AsyncLocalStorage<TaskModelRequestScope>();
 
@@ -28,6 +29,14 @@ export function taskModelRequestScope(signal: AbortSignal | undefined): TaskMode
 export function taskModelHookScope(api: Pick<TaskModelRequestScope, "taskId" | "conversationId">): TaskModelRequestScope | undefined {
   const scope = requests.getStore();
   return scope?.taskKind === "pi.generation" && scope.taskId === api.taskId && scope.conversationId === api.conversationId ? scope : undefined;
+}
+
+/** Match the current SDK tool body, including its actual model/nested call ID. */
+export function taskModelToolScope(api: Pick<TaskModelRequestScope, 'taskId' | 'conversationId'> & { toolCallId: string }): TaskModelRequestScope | undefined {
+  const scope = requests.getStore();
+  if (!scope || scope.taskKind !== 'pi.tool' || scope.phase !== 'call' || scope.taskId !== api.taskId
+    || scope.conversationId !== api.conversationId || scope.toolCallId !== api.toolCallId) return;
+  scope.signal.throwIfAborted(); return scope;
 }
 
 /** TEMPORARY pi-durable 1.4 phase adapter. Replace with an SDK task-bound model-request
@@ -49,16 +58,20 @@ export function withTaskModelRequestScope(registry: RegistryReader,
     const phases = Object.fromEntries(Object.entries(definition.phases).map(([phase, execute]) => [phase,
       (record: Parameters<typeof execute>[0], runtime: Runtime, context: Context) => {
         const requestPhase = definition.name === "pi.generation" && phase === "request"
-          || definition.name === "pi.compaction" && phase === "summarize";
+          || definition.name === "pi.compaction" && phase === "summarize"
+          || definition.name === 'pi.tool' && phase === 'call';
         const valid = record?.id === runtime.taskId && record.conversationId === runtime.conversationId
           && record.kind === definition.name && record.version === definition.version && record.state?.status === "running"
           && record.state.checkpoint?.phase === phase;
         const checkpointHash = requestPhase && valid
           ? createHash("sha256").update(canonicalJson({ version: 1, kind: definition.name, taskVersion: definition.version,
             input: record.input, checkpoint: record.state.checkpoint })).digest("hex") : undefined;
+        const toolCallId = definition.name === 'pi.tool' && phase === 'call' && valid
+          ? record.input.kind === 'model' ? record.input.callId : record.input.kind === 'nested' ? record.input.call?.id : undefined : undefined;
         const scope = Object.freeze({
           taskId: runtime.taskId, conversationId: runtime.conversationId, signal: runtime.signal,
           taskKind: definition.name, phase, ...(checkpointHash ? { checkpointHash } : {}),
+          ...(typeof toolCallId === 'string' && toolCallId ? { toolCallId } : {}),
         });
         if (!beforePhase) return requests.run(scope, () => execute(record, runtime, context));
         return requests.run(scope, async () => {

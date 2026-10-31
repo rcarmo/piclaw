@@ -10,7 +10,7 @@ import { ensureBudgetWork, saveBudgetCap } from '../../src/db/budget-limits.js';
 import { evaluateBudget } from '../../src/budget/evaluator.js';
 import { canonicalJson } from '../../src/utils/canonical-json.js';
 import { applyOwnedMigrations, listAppliedOwnedMigrations } from '../../src/db/migrations.js';
-import { initializeBudgetLimitsSchema, budgetTerminalReceiptMigration, budgetModelInvocationMigration, budgetAccountingScopeMigration } from '../../src/db/budget-limits-schema.js';
+import { initializeBudgetLimitsSchema, budgetTerminalReceiptMigration, budgetModelInvocationMigration, budgetAccountingScopeMigration, budgetToolInvocationMigration } from '../../src/db/budget-limits-schema.js';
 import { reserveBudgetRequest, findBudgetRequestByModelInvocation, getBudgetRequest, dispatchBudgetRequest, abandonBudgetRequest,
   recordBudgetTerminalReceipt, readBudgetTerminalReceipt, settleBudgetRequest, type BudgetRequestBinding, type BudgetModelInvocation } from '../../src/db/budget-request-reservations.js';
 
@@ -40,12 +40,20 @@ const oldTable = `CREATE TABLE budget_request_reservations (
 CREATE INDEX idx_budget_requests_work_state ON budget_request_reservations(work_id,state);
 CREATE INDEX idx_budget_requests_state ON budget_request_reservations(state);`;
 
+test('tool extension preserves all earlier owned migration bytes', () => {
+  for (const [migration, expected] of [
+    [budgetTerminalReceiptMigration, 'f5f89396b96f96ae9e191b948f6026161a1278d706d85d902585ea390ba0ee04'],
+    [budgetModelInvocationMigration, '0c05e4ef3bfe5f978d24b003471b8c3aef5ded1216eb96a38d2d7db44e1ce60c'],
+    [budgetAccountingScopeMigration, '3d011ae3dd447f0261001f78429c64546f0384b006a28170fc780dd40907daa5'],
+  ] as const) expect(createHash('sha256').update(migration.sql).digest('hex')).toBe(expected);
+});
+
 test('invocation fresh schema owns order 2 after unchanged receipt migration with a unique nullable index', () => {
   const { db } = fixture();
   const before = listAppliedOwnedMigrations(db, budgetTerminalReceiptMigration.owner);
-  expect(before.map(m => m.id)).toEqual(['terminal-receipt-v1', 'model-invocation-v1', 'accounting-scope-index-v1']);
+  expect(before.map(m => m.id)).toEqual(['terminal-receipt-v1', 'model-invocation-v1', 'accounting-scope-index-v1', 'tool-model-invocation-v1']);
   expect(db.query('SELECT migration_order FROM piclaw_schema_migrations WHERE owner=? ORDER BY migration_order').all(budgetTerminalReceiptMigration.owner))
-    .toEqual([{ migration_order: 1 }, { migration_order: 2 }, { migration_order: 3 }]);
+    .toEqual([{ migration_order: 1 }, { migration_order: 2 }, { migration_order: 3 }, { migration_order: 4 }]);
   initializeBudgetLimitsSchema(db);
   expect(listAppliedOwnedMigrations(db, budgetTerminalReceiptMigration.owner)).toEqual(before);
   expect(db.query("SELECT name,type,\"notnull\" FROM pragma_table_info('budget_request_reservations') WHERE name LIKE 'model_invocation_%'").all()).toEqual([
@@ -98,7 +106,30 @@ test('actual old shape upgrades add only NULL columns preserving legacy hashes, 
       .toEqual([{ name: 'idx_budget_requests_domain_state' }, { name: 'idx_budget_work_status' }]);
     expect(() => applyOwnedMigrations(db, [{ ...budgetAccountingScopeMigration, sql: budgetAccountingScopeMigration.sql + '\n' }])).toThrow('checksum mismatch');
     expect(allRows(db)).toEqual(facts);
+    const prior = listAppliedOwnedMigrations(db, budgetTerminalReceiptMigration.owner);
+    const trigger = db.query("SELECT sql FROM sqlite_schema WHERE name='budget_request_invocation_insert'").get();
+    expect(() => applyOwnedMigrations(db, [{ ...budgetToolInvocationMigration, sql: budgetToolInvocationMigration.sql + '\nSELECT nonexistent_scope_column;' }])).toThrow();
+    expect(db.query("SELECT sql FROM sqlite_schema WHERE name='budget_request_invocation_insert'").get()).toEqual(trigger);
+    expect(listAppliedOwnedMigrations(db, budgetTerminalReceiptMigration.owner)).toEqual(prior); expect(allRows(db)).toEqual(facts);
+    applyOwnedMigrations(db, [budgetToolInvocationMigration]); applyOwnedMigrations(db, [budgetToolInvocationMigration]);
+    expect(allRows(db)).toEqual(facts); expect(readBudgetTerminalReceipt(receiptBinding, db)).toEqual(receipt);
+    expect(listAppliedOwnedMigrations(db, budgetTerminalReceiptMigration.owner).slice(0, 3)).toEqual(prior);
+    expect(() => applyOwnedMigrations(db, [{ ...budgetToolInvocationMigration, sql: budgetToolInvocationMigration.sql + '\n' }])).toThrow('checksum mismatch');
+    expect(allRows(db)).toEqual(facts);
   } finally { db.close(); }
+});
+
+test('tool model invocation uses the same immutable indexed identity and rejects every mismatched phase', () => {
+  const { db, binding } = fixture();
+  const invocation: BudgetModelInvocation = { ...scope(), taskKind: 'pi.tool', phase: 'call' };
+  const row = reserveBudgetRequest({ ...binding, modelInvocation: invocation }, {}, db);
+  expect(findBudgetRequestByModelInvocation(invocation, db)).toEqual(row);
+  expect(() => reserveBudgetRequest({ ...binding, id: 'new-nonce', modelInvocation: { ...invocation, operationId: 'different' } }, {}, db)).toThrow('conflict');
+  for (const phase of ['request','summarize'] as const) {
+    const before = allRows(db);
+    expect(() => reserveBudgetRequest({ ...binding, id: 'invalid', modelInvocation: { ...invocation, phase } }, {}, db)).toThrow('invalid_binding');
+    expect(allRows(db)).toEqual(before);
+  }
 });
 
 test('invocation failed migration rolls back new columns/index/triggers and owner ledger atomically', () => {

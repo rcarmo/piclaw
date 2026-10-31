@@ -55,8 +55,8 @@ const oldTableSql = `CREATE TABLE budget_request_reservations (
 test('fresh schema owns ordered additive migrations; initializer is idempotent and checksum drift fails', () => {
   const { db } = fixture();
   const before = listAppliedOwnedMigrations(db, budgetTerminalReceiptMigration.owner);
-  expect(before).toHaveLength(3);
-  expect(before.map(migration => migration.id)).toEqual(['terminal-receipt-v1', 'model-invocation-v1', 'accounting-scope-index-v1']);
+  expect(before).toHaveLength(4);
+  expect(before.map(migration => migration.id)).toEqual(['terminal-receipt-v1', 'model-invocation-v1', 'accounting-scope-index-v1', 'tool-model-invocation-v1']);
   initializeBudgetLimitsSchema(db);
   expect(listAppliedOwnedMigrations(db, budgetTerminalReceiptMigration.owner)).toEqual(before);
   expect(() => applyOwnedMigrations(db, [{ ...budgetTerminalReceiptMigration, sql: budgetTerminalReceiptMigration.sql + '\n' }])).toThrow('checksum mismatch');

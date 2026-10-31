@@ -76,8 +76,9 @@ for (const outcome of ["success", "error", "cancel", "revoke"] as const) {
       const port = createHostRegretsAccountedDecision({ database: root, operationId: captured.operation.operationId,
         chatJid: captured.operation.chatJid, authPath, signal: controller.signal, assertCurrent: authority.assertCurrent,
         terminalOwner: { signal: databaseLifetime.signal, assertCurrent() { if (getDb() !== root) throw Error('Fixture database owner changed'); } },
-        getAvailable: () => [model], async request() {
-          calls++;
+        getAvailable: () => [model], async request(_model, _context, _options, dispatch) {
+          expect(root.query("SELECT state FROM budget_request_reservations").get()).toEqual({ state: "reserved" });
+          await dispatch(); calls++;
           expect(root.query("SELECT state FROM budget_request_reservations").get()).toEqual({ state: "dispatched" });
           if (outcome === "error") throw Error("synthetic provider error");
           if (outcome === "cancel") controller.abort();
@@ -118,6 +119,45 @@ for (const outcome of ["success", "error", "cancel", "revoke"] as const) {
     } finally { databaseLifetime.abort(); closeDatabase(); rmSync(dir, { recursive: true }); }
   });
 }
+
+for (const recovered of [false, true]) test(`Regrets transport checks late source authority before send; exact recovery=${recovered}`, async () => {
+  const { root, captured } = await fixture();
+  const dir = mkdtempSync(join(tmpdir(), 'regrets-boundary-')), authPath = join(dir, 'auth.json');
+  writeFileSync(authPath, JSON.stringify({ 'openai-codex': { type: 'oauth', access: 'synthetic', refresh: 'synthetic', accountId: 'boundary-fixture', expires: Date.now()+60000 } }));
+  const signal = new AbortController().signal; let current = true, calls = 0, auths = 0;
+  const model = { provider: 'openai-codex', id: 'local', api: 'openai-completions', maxTokens: 100, contextWindow: 1000,
+    cost: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 } } as any;
+  const message = { role: 'assistant', content: [{ type: 'text', text: 'synthetic paid decision' }], provider: model.provider, model: model.id, api: model.api,
+    stopReason: 'stop', timestamp: 1, usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2,
+      cost: { input: 0.000001, output: 0.000001, cacheRead: 0, cacheWrite: 0, total: 0.000002 } } } as any;
+  const source = createHostOperationAuthority(root, captured as any, () => { if (!current) throw Error('source revoked'); });
+  try {
+    const port = createHostRegretsAccountedDecision({ database: root, operationId: captured.operation.operationId, chatJid: captured.operation.chatJid,
+      authPath, signal, assertCurrent: source.assertSourceCurrent, getAvailable: () => [model],
+      // Identity DATA only; the actual SDK tool/controller provenance is tested in the factory.
+      modelInvocation: { version: 1, domain: 'unit-only', operationId: captured.operation.operationId, conversationId: 2, taskId: 3,
+        taskKind: 'pi.tool', phase: 'call', checkpointHash: 'a'.repeat(64) },
+      terminalOwner: { signal, assertCurrent() { if (getDb() !== root) throw Error('database changed'); } },
+      async request(_model, _context, _options, dispatch) {
+        auths++; expect(root.query('SELECT state FROM budget_request_reservations').get()).toEqual({ state: 'reserved' });
+        await Bun.sleep(0); if (!recovered) current = false;
+        await dispatch(); calls++; return message;
+      } });
+    if (!recovered) {
+      await expect(port.complete(model, { messages: [] }, {})).rejects.toThrow('source revoked');
+      expect(calls).toBe(0); expect(root.query('SELECT state FROM budget_request_reservations').get()).toEqual({ state: 'released' });
+      expect(root.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
+    } else {
+      expect(await port.complete(model, { messages: [] }, {})).toEqual(message);
+      const facts = root.query('SELECT * FROM budget_request_reservations').all();
+      expect(await port.complete(model, { messages: [] }, {})).toEqual(message);
+      expect(auths).toBe(1); expect(calls).toBe(1); expect(root.query('SELECT * FROM budget_request_reservations').all()).toEqual(facts);
+      expect(root.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 1 });
+      current = false; await expect(port.complete(model, { messages: [] }, {})).rejects.toThrow('source revoked');
+      expect(auths).toBe(1); expect(calls).toBe(1);
+    }
+  } finally { closeDatabase(); rmSync(dir, { recursive: true }); }
+});
 
 import { reserveHostRequest } from "../../runtime/durable-engine/src/host-request-accounting.ts";
 test("same host ledger refunds only undispatched reservation, not an uncertain provider error", async () => {

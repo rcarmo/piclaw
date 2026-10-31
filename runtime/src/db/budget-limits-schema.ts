@@ -51,17 +51,9 @@ CREATE TRIGGER main.budget_request_receipt_no_delete BEFORE DELETE ON budget_req
   BEGIN SELECT RAISE(ABORT,'terminal receipts are immutable'); END;`,
 });
 
-/** Same reservation owner, next order after receipt retention. No legacy backfill. */
-export const budgetModelInvocationMigration = Object.freeze({
-  owner: budgetTerminalReceiptMigration.owner, id: "model-invocation-v1", order: 2,
-  sql: `ALTER TABLE main.budget_request_reservations ADD COLUMN model_invocation_json TEXT;
-ALTER TABLE main.budget_request_reservations ADD COLUMN model_invocation_key_sha256 TEXT CHECK (
-  (model_invocation_json IS NULL AND model_invocation_key_sha256 IS NULL)
-  OR (model_invocation_json IS NOT NULL AND model_invocation_key_sha256 IS NOT NULL
-    AND length(CAST(model_invocation_key_sha256 AS BLOB))=64 AND model_invocation_key_sha256 NOT GLOB '*[^0-9a-f]*')
-);
-CREATE UNIQUE INDEX main.idx_budget_requests_model_invocation ON budget_request_reservations(model_invocation_key_sha256);
-CREATE TRIGGER main.budget_request_invocation_insert BEFORE INSERT ON budget_request_reservations
+/** The later tool pair shares all original validation; order2 emits identical SQL. */
+function modelInvocationInsertSql(tools: boolean): string {
+  return `CREATE TRIGGER main.budget_request_invocation_insert BEFORE INSERT ON budget_request_reservations
   WHEN NEW.model_invocation_json IS NOT NULL
   BEGIN
     SELECT CASE WHEN CASE WHEN json_valid(NEW.model_invocation_json) THEN
@@ -76,7 +68,7 @@ CREATE TRIGGER main.budget_request_invocation_insert BEFORE INSERT ON budget_req
       AND json_type(NEW.model_invocation_json,'$.taskId')='integer'
       AND json_extract(NEW.model_invocation_json,'$.taskId') BETWEEN 1 AND 9007199254740991
       AND ((json_extract(NEW.model_invocation_json,'$.taskKind')='pi.generation' AND json_extract(NEW.model_invocation_json,'$.phase')='request')
-        OR (json_extract(NEW.model_invocation_json,'$.taskKind')='pi.compaction' AND json_extract(NEW.model_invocation_json,'$.phase')='summarize'))
+        OR (json_extract(NEW.model_invocation_json,'$.taskKind')='pi.compaction' AND json_extract(NEW.model_invocation_json,'$.phase')='summarize')${tools ? "\n        OR (json_extract(NEW.model_invocation_json,'$.taskKind')='pi.tool' AND json_extract(NEW.model_invocation_json,'$.phase')='call')" : ""})
       AND json_type(NEW.model_invocation_json,'$.checkpointHash')='text'
       AND length(CAST(json_extract(NEW.model_invocation_json,'$.checkpointHash') AS BLOB))=64
       AND json_extract(NEW.model_invocation_json,'$.checkpointHash') NOT GLOB '*[^0-9a-f]*'
@@ -85,7 +77,20 @@ CREATE TRIGGER main.budget_request_invocation_insert BEFORE INSERT ON budget_req
         OR length(trim(value,char(9,10,11,12,13,32,160,5760,8192,8193,8194,8195,8196,8197,8198,8199,8200,8201,8202,8232,8233,8239,8287,12288,65279)))=0
         OR instr(value,char(0))>0 OR value GLOB ('*[' || char(1) || '-' || char(31) || char(127) || '-' || char(159) || ']*')))
     ELSE 0 END IS NOT 1 THEN RAISE(ABORT,'invalid model invocation') END;
-  END;
+  END;`;
+}
+
+/** Same reservation owner, next order after receipt retention. No legacy backfill. */
+export const budgetModelInvocationMigration = Object.freeze({
+  owner: budgetTerminalReceiptMigration.owner, id: "model-invocation-v1", order: 2,
+  sql: `ALTER TABLE main.budget_request_reservations ADD COLUMN model_invocation_json TEXT;
+ALTER TABLE main.budget_request_reservations ADD COLUMN model_invocation_key_sha256 TEXT CHECK (
+  (model_invocation_json IS NULL AND model_invocation_key_sha256 IS NULL)
+  OR (model_invocation_json IS NOT NULL AND model_invocation_key_sha256 IS NOT NULL
+    AND length(CAST(model_invocation_key_sha256 AS BLOB))=64 AND model_invocation_key_sha256 NOT GLOB '*[^0-9a-f]*')
+);
+CREATE UNIQUE INDEX main.idx_budget_requests_model_invocation ON budget_request_reservations(model_invocation_key_sha256);
+${modelInvocationInsertSql(false)}
 -- REPLACE can bypass DELETE triggers unless recursive_triggers is enabled.
 CREATE TRIGGER main.budget_request_invocation_no_replace BEFORE INSERT ON budget_request_reservations
   WHEN EXISTS (SELECT 1 FROM budget_request_reservations WHERE
@@ -117,6 +122,13 @@ export const budgetAccountingScopeMigration = Object.freeze({
     json_extract(model_invocation_json,'$.domain'),state)
     WHERE model_invocation_json IS NOT NULL;
   CREATE INDEX main.idx_budget_work_status ON budget_work(status,chat_jid);`,
+});
+
+/** Extend attribution to actual SDK tool/controller calls; no legacy backfill. */
+export const budgetToolInvocationMigration = Object.freeze({
+  owner: budgetTerminalReceiptMigration.owner, id: "tool-model-invocation-v1", order: 4,
+  sql: `DROP TRIGGER main.budget_request_invocation_insert;
+${modelInvocationInsertSql(true)}`,
 });
 
 /** Additive budget tables. Every cap is absent until the user creates one. */
@@ -285,7 +297,7 @@ export function initializeBudgetLimitsSchema(database: Database): void {
     CREATE TRIGGER IF NOT EXISTS budget_usage_events_no_delete
       BEFORE DELETE ON budget_usage_events BEGIN SELECT RAISE(ABORT, 'budget usage events are immutable'); END;
     `);
-    applyOwnedMigrations(database, [budgetTerminalReceiptMigration, budgetModelInvocationMigration, budgetAccountingScopeMigration]);
+    applyOwnedMigrations(database, [budgetTerminalReceiptMigration, budgetModelInvocationMigration, budgetAccountingScopeMigration, budgetToolInvocationMigration]);
     initializeUsageReportProjection(database);
   }).immediate();
 }

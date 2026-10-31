@@ -19,8 +19,8 @@ export interface BudgetModelInvocation {
   operationId: string;
   conversationId: number;
   taskId: number;
-  taskKind: 'pi.generation' | 'pi.compaction';
-  phase: 'request' | 'summarize';
+  taskKind: 'pi.generation' | 'pi.compaction' | 'pi.tool';
+  phase: 'request' | 'summarize' | 'call';
   checkpointHash: string;
 }
 /** Passive SDK checkpoint key; deliberately contains no host-operation authority. */
@@ -80,7 +80,8 @@ function validateModelInvocation(scope: BudgetModelInvocationIdentity & Partial<
   }
   if (![scope.conversationId, scope.taskId].every(id => Number.isSafeInteger(id) && id > 0)
     || !(scope.taskKind === 'pi.generation' && scope.phase === 'request'
-      || scope.taskKind === 'pi.compaction' && scope.phase === 'summarize')
+      || scope.taskKind === 'pi.compaction' && scope.phase === 'summarize'
+      || scope.taskKind === 'pi.tool' && scope.phase === 'call')
     || typeof scope.checkpointHash !== 'string' || scope.checkpointHash.length !== 64 || !/^[0-9a-f]{64}$/.test(scope.checkpointHash)) invalid();
 }
 function modelInvocationKey(scope: BudgetModelInvocationIdentity): string {

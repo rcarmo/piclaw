@@ -51,6 +51,7 @@ for (const readonly of [false, true]) test(`captured tool authority repeats the 
       projectedOutcome: { role: 'assistant', provider: binding.providerId, model: binding.modelId, api: 'openai-completions', stopReason: 'stop', usage: {
         input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0.00003, output: 0.00001, cacheRead: 0, cacheWrite: 0, total: 0.00004 } } } }, at, root);
     const before = root.serialize(); let entered = 0;
+    expect(() => authority.assertSourceCurrent()).not.toThrow(); // Existing outcome observation only.
     expect(() => authority.assertCurrent()).toThrow('budget_denied');
     if (!readonly) await expect(authority.admitWrite(() => { entered++; root.exec("INSERT INTO authority_probe VALUES('must not write')"); })).rejects.toThrow('budget_denied');
     expect(entered).toBe(0); expect(root.serialize()).toEqual(before);
@@ -113,6 +114,8 @@ test("host authority checks exact operation, harness and claimed source evidence
       root.exec("SAVEPOINT mutation");
       try {
         root.exec(sql);
+        expect(() => authority.assertSourceCurrent()).toThrow();
+        expect(() => readonly.assertSourceCurrent()).toThrow();
         expect(() => authority.assertCurrent()).toThrow(/Stale host (operation|source) authority/);
         expect(() => readonly.assertCurrent()).toThrow(/Stale host (operation|harness|source) authority/);
         let called = false;
