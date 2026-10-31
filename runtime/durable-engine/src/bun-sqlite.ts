@@ -1,4 +1,5 @@
-import { isSqliteContention } from '../../src/db/sqlite-async-admission.js';
+import { isSqliteContention, waitForSqliteContention } from '../../src/db/sqlite-async-admission.js';
+import { performance } from 'node:perf_hooks';
 import { prepareSqliteRead } from '../../src/db/sqlite-read.js';
 import { assertSqliteMutation, execSqliteMutation } from '../../src/db/sqlite-write.js';
 import { registerSqliteCheckpoint } from "../../src/db/sqlite-checkpoint.js";
@@ -8,6 +9,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { statSync } from "node:fs";
 import { RuntimeStartupCleanupError } from "../../src/runtime/startup-cleanup-error.js";
 import type { SqliteDatabase, SqliteExecutor, SqliteValue } from "@earendil-works/pi-durable/storage/sqlite";
+
+type SqliteWriteScope = { admission?: () => void; source?: { check(): void; persist(tx: SqliteExecutor): Promise<void> } };
 
 /** Inactive host bridge. The host must acquire ownership BEFORE construction. */
 export class BunSqliteDatabase implements SqliteDatabase {
@@ -19,21 +22,20 @@ export class BunSqliteDatabase implements SqliteDatabase {
   private failure?: Error;
 
   private idleGuard?: () => void;
-  private readonly admissionScope = new AsyncLocalStorage<() => void>();
+  private readonly writeScope = new AsyncLocalStorage<SqliteWriteScope>();
 
   /** Recheck asynchronous host admission at the actual SQL write boundaries. */
   async withAdmissionGuard<T>(check: () => void, body: () => Promise<T>): Promise<T> {
     check();
-    return this.admissionScope.run(check, body);
+    return this.writeScope.run({ ...this.writeScope.getStore(), admission: check }, body);
   }
-  private readonly sourceScope = new AsyncLocalStorage<{ check(): void; persist(tx: SqliteExecutor): Promise<void> }>();
   private allocatingSource = false;
 
   /** Compose public SDK writes and host correlation in the same physical transaction. */
   async withHostSourceGuard<T>(check: () => void, persist: (tx: SqliteExecutor) => Promise<void>, body: () => Promise<T>): Promise<T> {
     if (!this.guard || this.allocatingSource || this.idleGuard) throw Error("Host source guard unavailable");
     this.allocatingSource = true;
-    try { check(); return await this.sourceScope.run({ check, persist }, body); } finally { this.allocatingSource = false; }
+    try { check(); return await this.writeScope.run({ ...this.writeScope.getStore(), source: { check, persist } }, body); } finally { this.allocatingSource = false; }
   }
   private readonly identity?: ReturnType<typeof statSync>;
   constructor(private readonly path: string, private readonly guard?: { root: Database; assertOwner(): void; fenceTransactions?: boolean }) {
@@ -155,21 +157,28 @@ export class BunSqliteDatabase implements SqliteDatabase {
     return this.enqueue(() => this.executor(() => {}).all<T>(sql, ...params));
   }
 
+  /** Await only transaction-local executor SQL in callback/source.persist.
+   * Facade reentry is rejected; arbitrary external awaits cannot be detected and
+   * would retain the writer. Perform external work before this scope. */
   transaction<T>(callback: (tx: SqliteExecutor) => Promise<T>): Promise<T> {
-    const idle = this.idleGuard, source = this.sourceScope.getStore(), admission = this.admissionScope.getStore();
+    const idle = this.idleGuard, { source, admission } = this.writeScope.getStore() ?? {};
     return this.enqueue(async () => {
       // Yield while another host connection owns the writer lock, allowing an
       // in-process asynchronous transaction to finish without a blocking wait.
-      const deadline = Date.now() + 10_000;
+      const deadline = performance.now() + 10_000;
       for (;;) {
         if (this.guard?.fenceTransactions) this.guard.assertOwner();
+        // Captured authority can expire while acquisition yields. Check it
+        // before another attempt; no entered callback or persistence is replayed.
+        admission?.(); idle?.(); source?.check();
         // Match the public Node adapter: reserve the writer before invoking SDK
         // code, including unguarded stores. A deferred read-to-write upgrade can
         // lose to a checkpoint and cannot safely replay its callback.
         try { this.db.exec("BEGIN IMMEDIATE"); break; }
         catch (error) {
-          if (!isSqliteContention(error) || Date.now() >= deadline) throw error;
-          await new Promise(resolve => setTimeout(resolve, 25));
+          if (!isSqliteContention(error) || performance.now() >= deadline) throw error;
+          await waitForSqliteContention(deadline);
+          if (performance.now() >= deadline) throw error;
         }
       }
       let phase: "callback" | "persist" | "closed" = "callback";

@@ -139,6 +139,7 @@
     "sdk-handoff-failure.test.ts",
     "selected-context-admission.test.ts",
     "single-database.test.ts",
+    "sqlite-admission-workload.test.ts",
     "sqlite-fixture-policy.test.ts",
     "sqlite.test.ts",
     "task-model-boundary.test.ts",

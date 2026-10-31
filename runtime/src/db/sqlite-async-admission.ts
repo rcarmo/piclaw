@@ -18,6 +18,25 @@ export function isSqliteContention(error: unknown): boolean {
   } catch { return false; }
 }
 
+/** Shared acquisition pause only. Transaction ownership and callback execution
+ * remain with the synchronous host primitive or the asynchronous SDK adapter. */
+export async function waitForSqliteContention(deadline: number, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  await new Promise<void>((resolve, reject) => {
+    const abort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
+      reject(signal?.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', abort);
+      resolve();
+    }, Math.min(25, Math.max(1, deadline - performance.now())));
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) abort();
+  });
+}
+
 /** Retry writer acquisition only; never replay an entered transaction callback.
  * Keep operations/authorization synchronous and SQL-only. Rejecting async misuse
  * cannot cancel work already started. Restore connection
@@ -76,19 +95,7 @@ export async function admitSqliteWrite<T>(
       }
     }
     if (performance.now() >= deadline) throw contention;
-    await new Promise<void>((resolve, reject) => {
-      const abort = () => {
-        clearTimeout(timer);
-        signal.removeEventListener('abort', abort);
-        reject(signal.reason);
-      };
-      const timer = setTimeout(() => {
-        signal.removeEventListener('abort', abort);
-        resolve();
-      }, Math.min(25, Math.max(1, deadline - performance.now())));
-      signal.addEventListener('abort', abort, { once: true });
-      if (signal.aborted) abort();
-    });
+    await waitForSqliteContention(deadline, signal);
     if (performance.now() >= deadline) throw contention;
   }
 }
