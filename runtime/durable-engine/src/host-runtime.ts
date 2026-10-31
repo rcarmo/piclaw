@@ -1044,18 +1044,19 @@ export class HostConversationRuntime {
         const task = await this.harness.waitForTask(scope.taskId as TaskId<CompactionResult>, context);
         this.fence();
         if (task.state.outcome.status !== "completed") return;
-        const result = task.state.outcome.result;
-        let entryId = result.entryId;
-        if (result.submissionId !== undefined) {
-          const submission = await this.harness.submission(result.submissionId, context);
-          const settled = await submission?.wait(context);
-          if (settled?.type !== "write" || settled.status !== "done" || settled.conversationId !== scope.conversationId) return;
-          entryId = settled.entry;
+        const submissionId = task.state.outcome.result.submissionId;
+        if (submissionId !== undefined) {
+          const submission = await this.harness.submission(submissionId, context);
+          await submission?.wait(context); this.fence(); // Retain legacy deferred-write waiting.
         }
-        if (entryId === undefined) return;
-        const entry = await this.harness.commit(tx => tx.entry(entryId!), context);
-        this.fence();
-        if (entry?.kind === "pi.compaction" && entry.conversationId === scope.conversationId) { await this.options.onMaintenanceSettled?.(workId); this.fence(); }
+        // Join only the ready proof/callback, never the future task wait. Close
+        // seals new observations but must let this entered financial phase finish.
+        await this.observe(async () => {
+          const completed = await this.completedMaintenance(scope.taskId, withoutAbortSignal(this.context));
+          this.options.owner.assert();
+          if (completed?.conversationId === scope.conversationId) await this.options.onMaintenanceSettled?.(workId);
+          this.options.owner.assert();
+        });
       })().catch(() => { /* Uncertain closure retains its durable accounting work. */ });
       return { chatJid: parent?.operation.chatJid ?? copy!.chatJid, workId, operationId: parent?.operation.operationId,
         delegateModel: parent?.delegateModel, assertCurrent: current };
@@ -1065,6 +1066,27 @@ export class HostConversationRuntime {
     this.fence(); scope.signal.throwIfAborted();
     if (!this.maintenanceBinding || this.maintenanceBinding.conversationId !== scope.conversationId || this.maintenanceTaskId !== scope.taskId || scope.taskKind !== "pi.compaction" || scope.phase !== "summarize"
       || !this.options.existingConversationIds.some(id => id === scope.conversationId)) throw Error("Exact maintenance request required");
+  }
+
+  /** Financial observation only: callers must already join their owning phase;
+   * this read has no independent execution admission or shutdown registration.
+   * Uses the live SDK owner, never the closed preparation Harness. */
+  async completedMaintenance(taskId: number, context: Context = this.context): Promise<{ taskId: number; conversationId: number; entryId: number } | null> {
+    const check = () => this.options.owner.assert(); check();
+    const task = await this.harness.getTask(taskId as TaskId<CompactionResult>, context); check();
+    if (task?.id !== taskId || task.kind !== 'pi.compaction' || task.state.status !== 'terminal' || task.state.outcome.status !== 'completed') return null;
+    const result = task.state.outcome.result;
+    let entryId = result.entryId;
+    if (result.submissionId !== undefined) {
+      const submission = await this.harness.submission(result.submissionId, context);
+      const state = await submission?.status(context); check();
+      if (state?.type !== 'write' || state.status !== 'done' || state.conversationId !== task.conversationId) return null;
+      entryId = state.entry;
+    }
+    if (entryId === undefined) return null;
+    const entry = await this.harness.commit(tx => tx.entry(entryId!), context); check();
+    return entry?.kind === 'pi.compaction' && entry.conversationId === task.conversationId
+      ? { taskId, conversationId: task.conversationId, entryId } : null;
   }
 
   maintenanceRequestIdentity(scope: { taskId: number; conversationId: number; taskKind: string; phase: string; signal: AbortSignal }) {

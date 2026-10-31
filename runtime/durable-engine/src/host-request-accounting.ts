@@ -77,19 +77,43 @@ export function sidePromptSourceId(chatJid: string, retryId: string): string {
   return `side-prompt:${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
 }
 
-/** Reconcile only already-committed host terminals. Never clear uncertain holds. */
-export async function completeMaintenanceBudgetWork(database: Database, workId: string): Promise<void> {
-  await admitSqliteWrite(database, () => {
+/** Caller must prove the original SDK task and placed summary terminal. This
+ * financial close never proves execution and never clears unresolved holds. */
+export async function completeMaintenanceBudgetWork(database: Database, workId: string, owner: AccountingOwner,
+  completed: () => Promise<boolean>): Promise<void> {
+  const captured = captureAccountingOwner(database, owner), original = getBudgetWork(workId,database);
+  if (!original) return;
+  const sameWork = (work: ReturnType<typeof getBudgetWork>) => !!original && !!work
+    && (['id','chat_jid','execution_kind','parent_work_id','scheduled_task_id','created_at'] as const).every(key => original[key] === work[key]);
+  const eligible = () => {
+    captured.assertCurrent();
     const work = getBudgetWork(workId, database);
-    if (work?.status !== "active" || work.execution_kind !== "side_prompt") return;
+    if (!sameWork(work)) throw new BudgetRequestError('conflict');
+    if (!workId.startsWith('durable-maintenance:') || work?.status !== 'active' || work.execution_kind !== 'side_prompt') return false;
     if (work.parent_work_id !== null) {
       const parent = getBudgetWork(work.parent_work_id, database);
-      if (!workId.startsWith('durable-maintenance:') || !parent?.id.startsWith('durable-operation:') || parent.chat_jid !== work.chat_jid) return;
+      if (!parent?.id.startsWith('durable-operation:') || parent.chat_jid !== work.chat_jid) return false;
     }
-    if (database.query(`SELECT 1 FROM budget_request_reservations r JOIN budget_work w ON w.id=r.work_id
-      WHERE w.parent_work_id=? AND r.state NOT IN ('settled','released') LIMIT 1`).get(workId)) return;
-    setBudgetWorkStatus(workId, "completed", { boundary: "maintenance_settled" }, database);
-  });
+    return !database.query(`SELECT 1 FROM budget_request_reservations r JOIN budget_work w ON w.id=r.work_id
+      WHERE w.parent_work_id=? AND (r.state NOT IN ('settled','released') OR r.state='settled' AND w.status IN ('active','paused')) LIMIT 1`).get(workId);
+  };
+  if (!eligible()) return; // No SDK proof/read transaction or idle writer for held work.
+  const proven = await completed(); captured.assertCurrent();
+  if (proven !== true && proven !== false) throw Error('Maintenance proof must return completion');
+  if (!proven) return;
+  try {
+    await admitSqliteWrite(database, () => {
+      if (eligible()) setBudgetWorkStatus(workId, 'completed', { boundary: 'maintenance_settled' }, database);
+    }, captured.assertCurrent, captured.signal, Number.POSITIVE_INFINITY, captured.assertCurrent);
+  } catch (error) {
+    captured.assertCurrent();
+    if (error instanceof BudgetRequestError) throw error;
+    const work = getBudgetWork(workId, database);
+    // A lost ACK may follow close. Otherwise keep a verified, eligible financial
+    // aggregate active; public SDK proof is rediscovered by the existing owner.
+    if (!sameWork(work)) throw new BudgetRequestError('conflict');
+    if (work?.status !== 'completed' && !eligible()) throw error;
+  }
 }
 
 type AccountingOwner = { signal: AbortSignal; assertCurrent(): void };

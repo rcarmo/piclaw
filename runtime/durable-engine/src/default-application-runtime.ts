@@ -22,7 +22,7 @@ import { readNativeBackgroundContexts,readNativeBackgroundPayloads,publishNative
 import { addonBackgroundOrigin,prepareAddonBackgroundPayload,assertAddonBackgroundCurrent,assertAddonBackgroundToolBudget } from './host-addon-background.js';
 import { nativeBackgroundIdentity,nativeBackgroundSourceId,assertNativeBackgroundModel,createNativeBackgroundPayload,assertNativeBackgroundDeadline,type NativeBackgroundPayload } from '../../src/agent-pool/background-operation-contract.js';
 import { join, extname } from "node:path";
-import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
+import { BACKGROUND_CONTEXT as context, withAbortSignal } from "@earendil-works/chord/context";
 import { apply } from "@earendil-works/chord/delta";
 import { Harness, AgentDoc, configure, createRegistry, defineDoc, defineExtension, defineTool, type ToolExecutionApi, type ToolHooks, type ConversationId } from "@earendil-works/pi-durable";
 import { SqliteStorage } from "@earendil-works/pi-durable/storage/sqlite";
@@ -50,7 +50,7 @@ import { boundHostRequestCost } from '../../src/budget/request-cost-bound.js';
 import type { NativeDreamRequest,AgentOutput } from '../../src/agent-pool/contracts.js';
 import { getBudgetWork,ensureBudgetWork,setBudgetWorkStatus } from '../../src/db/budget-limits.js';
 import { assertModelAccountingReady } from '../../src/budget/model-request-accounting.js';
-import { BudgetRequestError, type BudgetModelInvocation } from '../../src/db/budget-request-reservations.js';
+import { BudgetRequestError, findBudgetRequestByModelInvocation, type BudgetModelInvocation } from '../../src/db/budget-request-reservations.js';
 import { reserveHostRequest, reconcileOperationBudgetWork, completeMaintenanceBudgetWork,operationBudgetWorkId,assertOperationAccountingReady,assertConversationAccountingReady,prepareTaskAccounting,prepareConversationAccounting } from "./host-request-accounting.js";
 import { createHostMcp } from "./host-mcp.js";
 import { createHostFetch } from "./host-fetch.js";
@@ -439,7 +439,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       : qualified.kind === "portainer" ? createHostPortainerTool(native as unknown as PortainerNativeExports, options)
       : createHostImapTool(native as unknown as ImapNativeExports, options);
   });
-  let bundle: Awaited<ReturnType<typeof createApplicationBootstrapBundle>>;
+  let bundle!: Awaited<ReturnType<typeof createApplicationBootstrapBundle>>;
   const dreamOwners=new Map<string,{payload:NativeBackgroundPayload;assertCurrent():void}>();
   const assertDreamCurrent=(payload:NativeBackgroundPayload)=>{
     const owned=dreamOwners.get(payload.policy.sourceId);if(!owned||JSON.stringify(owned.payload)!==JSON.stringify(payload))throw Error('Live Dream invocation unavailable');owned.assertCurrent();
@@ -1118,6 +1118,34 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   let primary: unknown;
   let backgroundContexts:readonly NativeBackgroundContext[]=[];
   let backgroundPayloads=new Map<string,NativeBackgroundPayload>();
+  async function closeCompletedMaintenance(workId?: string): Promise<void> {
+    terminalOwner.assertCurrent();
+    const closeContext = withAbortSignal(terminalOwner.signal, context), prefix = `durable-maintenance:${mapping.domain}:`;
+    const workItems = (workId
+      ? root.query("SELECT id,chat_jid FROM budget_work WHERE id=? AND execution_kind='side_prompt' AND status='active'").all(workId)
+      : root.query("SELECT id,chat_jid FROM budget_work INDEXED BY idx_budget_work_status WHERE status='active' AND execution_kind='side_prompt' AND substr(id,1,?)=?").all(prefix.length,prefix)) as { id: string; chat_jid: string }[];
+    for (const work of workItems) {
+      if (!work.id.startsWith(prefix)) continue;
+      const suffix = work.id.slice(prefix.length);
+      if (!/^[1-9][0-9]*$/.test(suffix) || !Number.isSafeInteger(Number(suffix))) continue;
+      await completeMaintenanceBudgetWork(root, work.id, terminalOwner, async () => {
+      if (!captureRuntime) throw Error('Host financial runtime unavailable');
+      const task = await captureRuntime.completedMaintenance(Number(suffix), closeContext);
+      terminalOwner.assertCurrent(); if (!task) return false;
+      if (!mapping.bindings.some(binding => binding.chatJid === work.chat_jid && binding.conversationId === task.conversationId)) {
+        const requests = root.query(`SELECT r.id,r.model_invocation_json FROM budget_work w INDEXED BY idx_budget_work_parent
+          JOIN budget_request_reservations r INDEXED BY idx_budget_requests_work_state ON r.work_id=w.id
+          WHERE w.parent_work_id=? AND r.chat_jid=? AND r.model_invocation_json IS NOT NULL`).all(work.id,work.chat_jid) as { id: string; model_invocation_json: string }[];
+        if (!requests.some(row => {
+          const invocation = JSON.parse(row.model_invocation_json) as BudgetModelInvocation;
+          return invocation.domain === mapping.domain && invocation.taskKind === 'pi.compaction' && invocation.taskId === task.taskId
+            && invocation.conversationId === task.conversationId && findBudgetRequestByModelInvocation(invocation,root)?.id === row.id;
+        })) return false; // Financial attribution locates private SDK evidence; it grants no execution.
+      }
+      return true;
+      });
+    }
+  }
   // Bootstrap publishes metadata even in explicit offline maintenance. Runtime
   // creation checks execution admission separately, before and after publication.
   async function publishApplicationBinding(tx: import("@earendil-works/pi-durable").Tx, domain: string, chatJid: string, branchId: string) {
@@ -1197,32 +1225,6 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       }, context));
     }
     validateApplicationMapping(root, mapping);
-    // Repair a successful maintenance task whose post-commit budget-work close
-    // was interrupted. Public SDK reads prove the task and its committed write.
-    const maintenancePrefix = `durable-maintenance:${mapping.domain}:`;
-    const maintenanceWork = root.query("SELECT id,chat_jid FROM budget_work WHERE execution_kind='side_prompt' AND parent_work_id IS NULL AND status='active' AND substr(id,1,?)=?")
-      .all(maintenancePrefix.length, maintenancePrefix) as { id: string; chat_jid: string }[];
-    for (const work of maintenanceWork) {
-      const suffix = work.id.slice(maintenancePrefix.length);
-      if (!/^[1-9][0-9]*$/.test(suffix) || !Number.isSafeInteger(Number(suffix))) continue;
-      const task = await harness.getTask(Number(suffix) as import("@earendil-works/pi-durable").TaskId, context);
-      assert();
-      if (task?.kind !== "pi.compaction" || task.state.status !== "terminal" || task.state.outcome.status !== "completed") continue;
-      if (!mapping.bindings.some(binding => binding.chatJid === work.chat_jid && binding.conversationId === task.conversationId)) continue;
-      const result = task.state.outcome.result as { entryId?: number; submissionId?: number };
-      let entryId = result.entryId;
-      if (result.submissionId !== undefined) {
-        const submission = await harness.submission(result.submissionId as import("@earendil-works/pi-durable").SubmissionId, context);
-        const state = await submission?.status(context);
-        if (state?.type !== "write" || state.status !== "done" || state.conversationId !== task.conversationId) continue;
-        entryId = state.entry;
-      }
-      if (entryId === undefined) continue;
-      const entry = await harness.commit(tx => tx.entry(entryId as import("@earendil-works/pi-durable").EntryId), context);
-      assert();
-      if (entry?.kind === "pi.compaction" && entry.conversationId === task.conversationId)
-        await completeMaintenanceBudgetWork(root, work.id);
-    }
     if (toolUpgrades.length || instructionUpgrades.size) {
       // Same-file BEGIN IMMEDIATE fences host admissions for the whole public
       // commit. Repeat global SDK/host preflight under that lock before ANY
@@ -1322,7 +1324,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         assertAdmission: input => processControls!.assertAdmission(input),
         assertInputAdmission(chat) { assertAdmission(); ensureLiveWatch(chat); },
         materializeAnswer: codex ? createHostCodexAnswerMaterializer({ root, cwd: WORKSPACE_DIR, answers, assertOwner: assert }) : undefined,
-    async onMaintenanceSettled(workId) { codexServices?.releaseTurn(workId); assert(); await completeMaintenanceBudgetWork(root, workId); },
+    async onMaintenanceSettled(workId) { codexServices?.releaseTurn(workId); assert(); await closeCompletedMaintenance(workId); },
     async onOperationSettled(operationId, processExit) {
       codexServices?.releaseTurn(operationId);
       assert();
@@ -1334,7 +1336,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         processControls!.onOperationSettled(operationId, processExit);
         return; // No Goal or queue continuation after a committed exit receipt.
       }
-      try { await reconcileOperationBudgetWork(root, operationId, terminalOwner); assert(); }
+      try { await reconcileOperationBudgetWork(root, operationId, terminalOwner); await closeCompletedMaintenance(); assert(); }
       finally {
         publishTerminal(operationId);
         const row = root.query("SELECT chat_jid FROM service_effect_s01_operations WHERE operation_id=?").get(operationId) as { chat_jid: string } | null;
@@ -1379,6 +1381,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     },
     runtime: { onStorageFailure: notifyStorageFailure, incarnation: mapping.domain, sessionId: mapping.domain, now: () => new Date().toISOString(), harnessOptions,
       codemodeExecute: tools.find(tool => tool.name === "codemode")!.execute } }, context);
+  await closeCompletedMaintenance(); // Repaired finance, using the live runtime's SDK owner.
   if (remotePeer) {
     const native = await import(pathToFileURL(join(remotePeer.source.packageDir, "native.ts")).href);
     assertRemote();
@@ -1548,6 +1551,12 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   closeForProcessControl = () => backend.close();
   return backend;
   } catch (error) {
+    // A post-construction failure still owns a live SDK scheduler/storage graph.
+    // Join it before invalidating execution dependencies or financial ownership.
+    if (typeof bundle !== 'undefined') {
+      try { bundle.stop(); await bundle.close(); }
+      catch (cleanup) { throw new RuntimeStartupCleanupError([error, cleanup], 'Application startup cleanup uncertain'); }
+    }
     terminalLifetime.abort(); lifetime.abort(); closeResources(); releaseAdminKv?.(); closeInfrastructure(); releaseReviewSource?.(); releaseObservabilityConfiguration?.();
     const cleanupFailures: unknown[] = [];
     try { await closeRemote(); } catch (cleanup) { cleanupFailures.push(cleanup); }
