@@ -102,16 +102,43 @@ function captureAccountingOwner(database: Database, owner: AccountingOwner): Acc
   };
   check(); return { signal, assertCurrent: check };
 }
-async function reconcileRetainedAccountingRow(database: Database, row: BudgetRequestReservation, owner: AccountingOwner): Promise<void> {
-  owner.assertCurrent();
-  const invocation = JSON.parse(row.model_invocation_json!) as BudgetModelInvocation;
-  if (findBudgetRequestByModelInvocation(invocation, database)?.id !== row.id) throw new BudgetRequestError('conflict');
-  try { assertModelAccountingReady(row.work_id, database); return; }
+/** One retained-fact transition/readback policy for live, phase and startup owners. */
+async function settleRetainedAccounting(database: Database, binding: BudgetRequestBinding, owner: AccountingOwner, usageSource: 'assistant' | 'compaction'): Promise<boolean> {
+  const captured = captureAccountingOwner(database, owner);
+  if (!readBudgetTerminalReceipt(binding, database)) throw new BudgetRequestError('unavailable');
+  try {
+    assertModelAccountingReady(binding.workId, database);
+    if (getBudgetRequest(binding.id, database)?.state === 'unresolved') return true; // Verified intentional unknown; preserve its hold/time.
+    // Completed charges still use the original deep event/hash verification.
+  }
   catch (pending) { if (!(pending instanceof BudgetRequestError) || pending.code !== 'budget_denied') throw pending; }
+  try {
+    await modelRequestAccounting({ authorise() { throw Error('Financial reconciliation cannot dispatch'); }, documentedFree: false,
+      usageSource }, database).settleRetainedRequest(binding, captured);
+    captured.assertCurrent(); return true;
+  } catch (error) {
+    if (error instanceof BudgetRequestError) throw error;
+    captured.assertCurrent();
+    if (!readBudgetTerminalReceipt(binding, database)) throw error;
+    // A failed ACK can follow COMMIT. Exact readback distinguishes completed
+    // money from a still-valid held receipt; neither authorises another send.
+    let ready = true;
+    try { assertModelAccountingReady(binding.workId, database); }
+    catch (pending) {
+      if (!(pending instanceof BudgetRequestError) || pending.code !== 'budget_denied') throw pending;
+      ready = false;
+    }
+    try { log.warn('Terminal accounting callback failed; exact receipt remains available', {
+      operation: 'durable_accounting.ack_failed', requestId: binding.id,
+    }); } catch { /* Optional diagnostics cannot replace durable facts. */ }
+    return ready;
+  }
+}
+async function reconcileRetainedAccountingRow(database: Database, row: BudgetRequestReservation, owner: AccountingOwner): Promise<boolean> {
+  const invocation = JSON.parse(row.model_invocation_json!) as BudgetModelInvocation; // Exact full binding is verified by the shared receipt reader.
   const binding: BudgetRequestBinding = { id: row.id, workId: row.work_id, chatJid: row.chat_jid, providerId: row.provider_id,
     modelId: row.model_id, accountRef: row.account_ref, amountMicros: row.amount_microusd, modelInvocation: invocation };
-  await modelRequestAccounting({ authorise() { throw Error('Financial reconciliation cannot dispatch'); }, documentedFree: false,
-    usageSource: invocation.taskKind === 'pi.compaction' ? 'compaction' : 'assistant' }, database).settleRetainedRequest(binding, owner);
+  return settleRetainedAccounting(database, binding, owner, invocation.taskKind === 'pi.compaction' ? 'compaction' : 'assistant');
 }
 function pendingSdkAccountingRows(database: Database, domain: string, root: number, chatJid?: string): (BudgetRequestReservation & { accounting_scope_broken: number })[] {
   // Only IDs enter the outstanding-fact/ownership walk; unrelated receipts and
@@ -168,18 +195,7 @@ export async function prepareConversationAccounting(database: Database, domain: 
     catch (pending) { if (!(pending instanceof BudgetRequestError) || pending.code !== 'budget_denied') throw pending; }
     if (rootFor(invocation.conversationId) !== root) throw new BudgetRequestError('conflict');
     if (row.terminal_receipt_json === null) return false; // Unknown send stays held; no financial guess or resend.
-    try { await reconcileRetainedAccountingRow(database, row, captured); }
-    catch (error) {
-      captured.assertCurrent();
-      if (error instanceof BudgetRequestError) throw error;
-      // A failed ACK may follow commit. Re-read exact monetary readiness before
-      // deciding to wait; never replay an entered SDK/provider/tool callback.
-      try { assertModelAccountingReady(row.work_id, database); }
-      catch (pending) {
-        if (pending instanceof BudgetRequestError && pending.code === 'budget_denied') return false;
-        throw pending;
-      }
-    }
+    if (!await reconcileRetainedAccountingRow(database, row, captured)) return false;
     captured.assertCurrent();
   }
   return true;
@@ -327,7 +343,7 @@ export async function reserveHostRequest(options: {
       parentWorkId: maintenanceParent ?? existingSide?.parent_work_id, scheduledTaskId: options.scheduledTaskId }, database);
     ensureBudgetWork({ id: workId, chatJid: options.chatJid, executionKind: options.executionKind === "delegate" ? "delegate" : sidePrompt ? "side_prompt" : options.executionKind ?? "interactive", parentWorkId: operationWork }, database);
   }, requestCurrent, signal);
-  const accounting = modelRequestAccounting({ authorise: requestCurrent, documentedFree: false, usageSource: options.usageSource ?? (options.maintenanceWorkId ? "compaction" : "assistant") }, database);
+  const accounting = modelRequestAccounting({ authorise: requestCurrent, documentedFree: false }, database);
   const binding: BudgetRequestBinding = { id, workId, chatJid: options.chatJid, providerId: model.provider, modelId: model.id, accountRef,
     amountMicros: previous ? previous.amount_microusd : amount.amountMicros, ...(modelInvocation ? { modelInvocation } : {}) };
   let dispatchStarted = false;
@@ -343,31 +359,14 @@ export async function reserveHostRequest(options: {
     }
     throw error;
   }
-  const settleRetainedTerminal = async () => {
-    try { await accounting.settleRetainedRequest(binding, terminalOwner()); }
-    catch (error) {
-      // Invalid facts/conflicting ownership are not delayed bookkeeping. Only a
-      // verified retained outcome under the same live database owner can survive
-      // a storage/commit-ack failure; this grants no next effect or terminal UI.
-      if (error instanceof BudgetRequestError) throw error;
-      terminalOwner();
-      if (getDb() !== database || !readBudgetTerminalReceipt(binding, database)) throw error;
-      try { assertModelAccountingReady(binding.workId, database); }
-      catch (pending) {
-        if (!(pending instanceof BudgetRequestError) || pending.code !== 'budget_denied') throw pending;
-      }
-      try { log.warn('Terminal accounting callback failed; exact receipt remains available', {
-        operation: 'durable_accounting.ack_failed', requestId: binding.id,
-      }); } catch { /* Diagnostics cannot replace the retained provider outcome. */ }
-    }
-  };
+  const usageSource = options.usageSource ?? (options.maintenanceWorkId ? 'compaction' : 'assistant');
   let recoveredTerminal: AssistantMessage | undefined;
   if (previous) {
     const receipt = readBudgetTerminalReceipt(binding, database);
     if (receipt) {
       const payload = JSON.parse(receipt.bodyJson) as BudgetTerminalReceiptPayload; // Bound canonical envelope verified above.
       const decoded = decodeStoredTerminalOutcome(JSON.stringify(payload.projectedOutcome), terminalPhysical);
-      await settleRetainedTerminal();
+      await settleRetainedAccounting(database, binding, terminalOwner(), usageSource);
       current();
       recoveredTerminal = JSON.parse(JSON.stringify(decoded)) as AssistantMessage; // Validated JSON crosses SDK families.
     } else if (previous.state !== 'reserved') throw new BudgetRequestError('budget_denied');
@@ -401,7 +400,7 @@ export async function reserveHostRequest(options: {
     },
     async settle(message: AssistantMessage) {
       await retainTerminal(message);
-      await settleRetainedTerminal();
+      await settleRetainedAccounting(database, binding, terminalOwner(), usageSource);
     },
     async abandon() {
       const owner = terminalOwner();

@@ -494,6 +494,37 @@ test('passive financial reconciliation preserves a valid unknown receipt/hold wi
   expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
 }, true, false, { modelInvocation: invocation() }));
 
+test('one held pricing failure does not abort passive reconciliation of another exact receipt', () => reservedTerminal(async f => {
+  installTerminalSettlementCompositionSchema(f.database);
+  const second = (await f.prepareAgain({ modelInvocation: { ...invocation(), checkpointHash: 'b'.repeat(64) } }))!;
+  await second.dispatch(); await f.request.retainTerminal(f.terminal); await second.retainTerminal(f.terminal);
+  const held = getBudgetRequest(f.request.id, f.database)!;
+  f.database.exec(`CREATE TRIGGER first_price_pending BEFORE INSERT ON token_usage WHEN NEW.invocation_id='${f.request.id}' BEGIN SELECT RAISE(ABORT,'first receipt price pending'); END`);
+  const owner = { signal: f.owner.signal, assertCurrent() { f.owner.signal.throwIfAborted(); } };
+  try {
+    await reconcileOperationBudgetWork(f.database, undefined, owner);
+    expect(getBudgetRequest(f.request.id, f.database)).toEqual(held);
+    expect(getBudgetRequest(second.id, f.database)?.state).toBe('settled');
+    expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 1 });
+    f.database.exec('DROP TRIGGER first_price_pending');
+    await reconcileOperationBudgetWork(f.database, undefined, owner);
+    const repaired = getBudgetRequest(f.request.id, f.database)!; expect(repaired.state).toBe('settled');
+    expect(repaired.terminal_receipt_json).toBe(held.terminal_receipt_json); expect(repaired.terminal_received_at).toBe(held.terminal_received_at);
+    expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 2 });
+    await reconcileOperationBudgetWork(f.database, undefined, owner);
+    expect(getBudgetRequest(f.request.id, f.database)).toEqual(repaired);
+    expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 2 });
+  } finally { f.database.exec('DROP TRIGGER IF EXISTS first_price_pending'); }
+}, true, false, { modelInvocation: invocation() }));
+
+test('passive reconciliation still rejects invalid retained facts without charging or changing the hold', () => reservedTerminal(async f => {
+  installTerminalSettlementCompositionSchema(f.database); f.terminal.usage.input = -1;
+  await f.request.retainTerminal(f.terminal); const held = getBudgetRequest(f.request.id, f.database)!;
+  await expect(reconcileOperationBudgetWork(f.database, undefined, { signal: f.owner.signal, assertCurrent() {} })).rejects.toThrow('invalid_binding');
+  expect(getBudgetRequest(f.request.id, f.database)).toEqual(held);
+  expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
+}, true, false, { modelInvocation: invocation() }));
+
 test('passive financial reconciliation refuses an async owner before reading/writing recovery state', () => reservedTerminal(async f => {
   const row = getBudgetRequest(f.request.id, f.database)!;
   await expect(reconcileOperationBudgetWork(f.database, undefined, { signal: f.owner.signal,
