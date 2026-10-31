@@ -127,16 +127,17 @@ export function assertModelAccountingReady(workId: string, database: Database = 
  * Settlement uses that captured database/work even when callback ALS differs. */
 export function modelRequestAccounting(input: {
   authorise(): void;
+  beforeAcquire?(): void;
   providerEvidence?: BudgetProviderEvidence[];
   documentedFree: boolean;
   usageSource?: "assistant" | "compaction";
 }, database: Database = getDb()) {
-  const authorise = input.authorise;
+  const authorise = input.authorise, beforeAcquire = input.beforeAcquire;
   const evidence = input.providerEvidence ? structuredClone(input.providerEvidence) : undefined;
   const documentedFree = input.documentedFree, usageSource = input.usageSource;
   const accountedAt = new Map<string, string>();
   const current = () => { if (getDb() !== database) throw Error('Model request database binding changed.'); authorise(); };
-  const options = (signal: AbortSignal) => ({ signal, authorise: current, providerEvidence: evidence });
+  const options = (signal: AbortSignal) => ({ signal, authorise: current, beforeAcquire, providerEvidence: evidence });
   return Object.freeze({
     async reserve(binding: BudgetRequestBinding, signal: AbortSignal) { await admitBudgetRequest(binding, options(signal)); },
     async dispatch(binding: BudgetRequestBinding, signal: AbortSignal) { await admitBudgetRequestDispatch(binding, options(signal)); },

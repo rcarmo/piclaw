@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { setTimeout as delay } from 'node:timers/promises';
 import type Database from "bun:sqlite";
 import type { AssistantMessage, Api, Model } from "../../src/durable-legacy-sdk.js";
 import { modelRequestAccounting, assertModelAccountingReady } from "../../src/budget/model-request-accounting.js";
@@ -296,12 +297,36 @@ export async function reserveHostRequest(options: {
   const previous = modelInvocation ? findBudgetRequestByModelInvocation(modelInvocation, database) : null;
   // Recovering an exact stored fact is not a new outbound effect. Let each
   // paid sibling reconcile; tools/new sends/S02 still require the whole scope.
+  const unenteredAccounting = new Error('Unentered request awaits retained accounting');
   const accountingReady = (excludeRequestId?: string) => {
-    assertModelAccountingReady(barrierWork, database, excludeRequestId);
-    if (modelInvocation) assertConversationAccountingReady(database, { domain: modelInvocation.domain,
-      conversationId: modelInvocation.conversationId, chatJid: options.chatJid }, excludeRequestId);
+    try {
+      assertModelAccountingReady(barrierWork, database, excludeRequestId);
+      if (modelInvocation) assertConversationAccountingReady(database, { domain: modelInvocation.domain,
+        conversationId: modelInvocation.conversationId, chatJid: options.chatJid }, excludeRequestId);
+    } catch (error) {
+      // Only the pre-acquisition check can request another admission attempt.
+      // An entered SQL callback, source failure or real cap denial is never retried.
+      if (modelInvocation && !database.inTransaction && error instanceof BudgetRequestError && error.code === 'budget_denied'
+        && hasSdkAccountingScope(database)) throw unenteredAccounting;
+      throw error;
+    }
   };
-  if (!previous?.terminal_receipt_json) accountingReady(previous?.id);
+  async function accountingAdmission<T>(attempt: () => Promise<T>): Promise<T> {
+    for (;;) {
+      try { return await attempt(); }
+      catch (error) {
+        if (error !== unenteredAccounting) throw error;
+        const observer = { signal: AbortSignal.any([terminalOwner().signal, signal]), assertCurrent() {
+          terminalOwner(); assertCurrent(); assertBackground(); signal.throwIfAborted();
+        } };
+        while (!await prepareConversationAccounting(database, modelInvocation!.domain, modelInvocation!.conversationId, observer)) {
+          observer.assertCurrent(); await delay(1000, undefined, { signal: observer.signal });
+        }
+        observer.assertCurrent();
+      }
+    }
+  }
+  if (!previous?.terminal_receipt_json) await accountingAdmission(async () => accountingReady(previous?.id));
   if (modelInvocation && !previous && database.query(`SELECT 1 FROM budget_work w JOIN budget_request_reservations r ON r.work_id=w.id
     WHERE w.parent_work_id=? AND r.model_invocation_json IS NULL AND r.state IN ('reserved','dispatched','unresolved') LIMIT 1`).get(operationWork))
     throw new BudgetRequestError('budget_denied'); // Old unknown holds have no exact attempt attribution.
@@ -330,8 +355,7 @@ export async function reserveHostRequest(options: {
     if (readStoredProviderUsageAccountRef(model.provider, options.authPath) !== accountRef) throw Error("Native request account changed");
   };
   const requestCurrent = () => { terminalOwner(); current(); accountingReady(id); };
-  if (!previous) requestCurrent(); // Invalid/missing retention owner cannot create funded work.
-  if (!previous) await admitSqliteWrite(database, () => {
+  if (!previous) await accountingAdmission(() => admitSqliteWrite(database, () => {
     const sidePrompt = database.query(`SELECT 1 FROM service_effect_s01_operations o
       JOIN service_effect_s01_sources s ON s.chat_jid=o.chat_jid AND s.source_seq=o.primary_source_seq
       WHERE o.operation_id=? AND o.chat_jid=? AND s.kind='internal' AND s.source_id LIKE 'side-prompt:%'`).get(options.operationId, options.chatJid);
@@ -342,8 +366,8 @@ export async function reserveHostRequest(options: {
     if (!background) ensureBudgetWork({ id: operationWork, chatJid: options.chatJid, executionKind: options.maintenanceWorkId || sidePrompt ? "side_prompt" : options.scheduledTaskId ? "scheduled" : "interactive",
       parentWorkId: maintenanceParent ?? existingSide?.parent_work_id, scheduledTaskId: options.scheduledTaskId }, database);
     ensureBudgetWork({ id: workId, chatJid: options.chatJid, executionKind: options.executionKind === "delegate" ? "delegate" : sidePrompt ? "side_prompt" : options.executionKind ?? "interactive", parentWorkId: operationWork }, database);
-  }, requestCurrent, signal);
-  const accounting = modelRequestAccounting({ authorise: requestCurrent, documentedFree: false }, database);
+  }, requestCurrent, signal, 5000, requestCurrent));
+  const accounting = modelRequestAccounting({ authorise: requestCurrent, beforeAcquire: requestCurrent, documentedFree: false }, database);
   const binding: BudgetRequestBinding = { id, workId, chatJid: options.chatJid, providerId: model.provider, modelId: model.id, accountRef,
     amountMicros: previous ? previous.amount_microusd : amount.amountMicros, ...(modelInvocation ? { modelInvocation } : {}) };
   let dispatchStarted = false;
@@ -351,7 +375,7 @@ export async function reserveHostRequest(options: {
   const terminalPhysical = Object.freeze({ provider: binding.providerId, id: binding.modelId, api: model.api });
   // A rejected reservation may have committed before an ACK/storage failure.
   // Keep work active; never retire authority needed to reconcile that hold.
-  try{if (!previous) await accounting.reserve(binding, signal);}
+  try{if (!previous) await accountingAdmission(() => accounting.reserve(binding, signal));}
   catch(error){
     if(background&&error instanceof BudgetRequestError&&error.code==='budget_denied'){
       try{await admitSqliteWrite(database,()=>{if(!getBudgetRequest(binding.id,database))setBudgetWorkStatus(workId,'stopped',{boundary:'request_budget_blocked'},database);});}
@@ -392,11 +416,11 @@ export async function reserveHostRequest(options: {
     assertRecoveredCurrent() { terminalOwner(); current(); },
     async dispatch() {
       if (recoveredTerminal) throw new BudgetRequestError('invalid_state');
-      requestCurrent();
+      await accountingAdmission(async () => requestCurrent());
       if (dispatchStarted) throw Error("Native request already dispatched");
       dispatchStarted = true;
-      await accounting.dispatch(binding, signal);
-      requestCurrent();
+      await accountingAdmission(() => accounting.dispatch(binding, signal));
+      await accountingAdmission(async () => requestCurrent());
     },
     async settle(message: AssistantMessage) {
       await retainTerminal(message);

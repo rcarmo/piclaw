@@ -819,7 +819,10 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   };
   const sideObservers = new Map<string, NonNullable<import("../../src/agent-pool/contracts.js").SidePromptOptions["onEvent"]>>();
   const checkRequest=(model:{provider:string;id:string},signal:AbortSignal)=>{
-    const prepared=preparedRequests.get(signal);prepared?.assertCurrent();prepared?.assertAccountingReady();
+    const prepared=preparedRequests.get(signal);prepared?.assertCurrent();
+    // Funded requests own financial admission at reserve/dispatch; a source
+    // recheck must not turn concurrently retained bookkeeping into a model error.
+    if(!prepared?.accounted)prepared?.assertAccountingReady();
     if(prepared&&!prepared.accounted&&root.query('SELECT 1 FROM budget_caps WHERE enabled=1 LIMIT 1').get())throw new BudgetRequestError('budget_denied');
     check(model,signal,prepared?.accounted===true);
   };

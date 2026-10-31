@@ -1,6 +1,7 @@
 import { admitSqliteWrite } from "../../runtime/src/db/sqlite-async-admission.js";
 import { Database } from 'bun:sqlite';
 import { modelRequestAccounting } from '../../runtime/src/budget/model-request-accounting.js';
+import * as requestAccountingBridge from '../../runtime/src/budget/model-request-accounting.js';
 import { projectTerminalOutcome } from '../../runtime/durable-engine/src/host-terminal-outcome.js';
 import type { BudgetRequestBinding, BudgetRequestReservation } from '../../runtime/src/db/budget-request-reservations.js';
 import { resolveRequestPrincipal } from "../../runtime/src/channels/web/auth/principal.js";
@@ -258,6 +259,10 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
   let inManualSummary = false;
   let privateCompactionSignal:AbortSignal|undefined,privateCompactionAuthChanged=false;
   const heldPrivateSummary=scenario==='native-addon-service-continuation-compaction-background-held';
+  const privateAdmissionRace=scenario==='native-addon-service-continuation-compaction-background';
+  const privateFundingEntered=Promise.withResolvers<void>(),privateReceiptReady=Promise.withResolvers<void>();
+  let privateRaceMatched=false,privateRaceSummaryHeld=false,privateRaceChargePaused=false,privateRaceRepairs=0,privateRaceStreamHeld=false;
+  let privateRaceBackstop: ReturnType<typeof setTimeout> | undefined,privateRaceReceipt: unknown;
   const privateSummaryEntered=Promise.withResolvers<void>(),privateSummaryReleased=Promise.withResolvers<void>(),privateMainSettled=Promise.withResolvers<void>();
   let heldSummarySignal:AbortSignal|undefined;
   const dreamWorkEntered=Promise.withResolvers<void>(),dreamWorkReleased=Promise.withResolvers<void>();
@@ -568,7 +573,7 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
     }
     if (parentAccounting && !delegateAccounting && !scheduledAccounting && !compactionAccounting && !addonCompaction) {
       const settled=scenario.startsWith('native-addon-execution-accounting')||serviceBudgetResume||serviceBudgetGap||addonRecovery||scenario==='native-dream-runner-accounted'||scenario==='native-dream-runner-scheduled-budget'?calls-1:accountingRegrets?calls-1:accountingTwoTurns&&calls>1?1:0;
-      expect(root.query("SELECT state FROM budget_request_reservations ORDER BY rowid").all()).toEqual([...Array.from({length:settled},(_,index)=>({state:regretsUnknown&&index===1?'unresolved':'settled'})), { state: "dispatched" }]);
+      expect(root.query("SELECT state FROM budget_request_reservations ORDER BY rowid").all()).toEqual([...Array.from({length:settled},(_,index)=>({state:accountingUnknown||regretsUnknown&&index===1?'unresolved':'settled'})), { state: "dispatched" }]);
     }
     const delegateSummary = delegateAutoCompaction && JSON.stringify(input).includes('You are a context summarization assistant.');
     const child = nativeDelegate && !delegateSummary && JSON.stringify(input.messages.findLast(message => message.role === "user")?.content).includes("NATIVE_DELEGATE_CHILD");
@@ -617,6 +622,7 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
     void (async () => {
       if(scenario.startsWith('native-dream-runner-held-provider')&&process.env.PICLAW_NATIVE_RESTART_PHASE!=='read'&&calls===1){dreamWorkSignal=options?.signal;dreamWorkEntered.resolve();await dreamWorkReleased.promise;}
       if(privateSummary&&heldPrivateSummary){heldSummarySignal=options?.signal;privateSummaryEntered.resolve();await privateSummaryReleased.promise;}
+      if(privateSummary&&privateAdmissionRace&&!privateRaceStreamHeld){privateRaceStreamHeld=true;await privateFundingEntered.promise;}
       if (child) await bothChildren;
       if (child && timeoutDelegate && JSON.stringify(input.messages.findLast(m => m.role === "user")?.content).includes("CHILD_A")) {
         try {
@@ -733,6 +739,44 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
     }));
   }
   if(addonCompaction){
+    if(privateAdmissionRace){
+      const original=requestAccountingBridge.modelRequestAccounting;
+      captureSpies.push(spyOn(requestAccountingBridge,'modelRequestAccounting').mockImplementation((input,database)=>{
+        const accounting=original(input,database),db=database??getDb();
+        return Object.freeze({...accounting,
+          async reserve(binding,signal){
+            const invocation=binding.modelInvocation;
+            if(!privateRaceMatched&&invocation?.taskKind==='pi.generation'&&db.query("SELECT 1 FROM tasks WHERE conversation_id=? AND kind=? AND background=1 AND status<>'terminal'").get(invocation.conversationId,JSON.stringify('pi.compaction'))){
+              privateRaceMatched=true;privateFundingEntered.resolve();await privateReceiptReady.promise;
+              await accounting.reserve(binding,signal);
+              clearTimeout(privateRaceBackstop);privateSummaryReleased.resolve();
+            }else {
+              await accounting.reserve(binding,signal);
+              if(privateRaceMatched&&invocation?.taskKind==='pi.generation'&&privateRaceChargePaused){clearTimeout(privateRaceBackstop);privateSummaryReleased.resolve();}
+            }
+          },
+          async settleRetainedRequest(binding,owner){
+            const receipt=()=>db.query('SELECT terminal_receipt_json,terminal_receipt_sha256,terminal_received_at FROM budget_request_reservations WHERE id=?').get(binding.id);
+            let repairs=false;
+            if(binding.modelInvocation?.taskKind==='pi.compaction'){
+              if(!privateRaceSummaryHeld){
+                privateRaceSummaryHeld=true;privateRaceChargePaused=true;privateRaceReceipt=receipt();
+                // Release a deliberately broken candidate too; the repair-count
+                // assertion still rejects fallback instead of certifying a hang.
+                privateRaceBackstop=setTimeout(()=>privateSummaryReleased.resolve(),3000);
+                privateReceiptReady.resolve();await privateSummaryReleased.promise;privateRaceChargePaused=false;
+              }else repairs=privateRaceChargePaused;
+            }
+            const settled=await accounting.settleRetainedRequest(binding,owner);
+            if(repairs){
+              expect(settled.state).toBe('settled');expect(receipt()).toEqual(privateRaceReceipt);
+              expect(db.query('SELECT count(*) n FROM token_usage WHERE invocation_id=?').get(binding.id)).toEqual({n:1});privateRaceRepairs++;
+            }
+            return settled;
+          },
+        });
+      }));
+    }
     if(heldPrivateSummary){
       const wait=HostConversationRuntime.prototype.wait;
       captureSpies.push(spyOn(HostConversationRuntime.prototype,'wait').mockImplementation(async function(this:HostConversationRuntime,...args:Parameters<typeof wait>){await wait.apply(this,args);if(heldSummarySignal)privateMainSettled.resolve();}));
@@ -1356,14 +1400,15 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
           }
           const final=await client.get(operationId);
           if(addonCompaction&&scenario.endsWith('-unknown')){
-            expect(final.status).toBe('failed');expect(calls).toBe(3);expect(writes).toBe(1);expect(existsSync(join(workspace,'native-addon-continuation.txt'))).toBe(false);expect(publicRows()).toEqual(before);
+            expect(final.status).toBe('budget_blocked');expect(calls).toBe(3);expect(writes).toBe(1);expect(existsSync(join(workspace,'native-addon-continuation.txt'))).toBe(false);expect(publicRows()).toEqual(before);
             expect(root.query("SELECT state FROM budget_request_reservations ORDER BY rowid").all()).toEqual([{state:'settled'},{state:'settled'},{state:'unresolved'}]);
             const current=root.query('SELECT operation_id FROM piclaw_durable_bindings_v1 WHERE chat_jid=? ORDER BY source_seq DESC LIMIT 1').get('operation:'+operationId) as {operation_id:string};
             expect(root.query("SELECT status FROM budget_work WHERE id=?").get('durable-operation:'+current.operation_id)).toEqual({status:'active'});
             expect(root.query("SELECT w.execution_kind,w.parent_work_id FROM budget_request_reservations r JOIN budget_work w ON w.id=r.work_id WHERE r.state='unresolved'").all()).toEqual([{execution_kind:'background',parent_work_id:'durable-operation:'+current.operation_id}]);
             expect(root.query("SELECT t.usage_source FROM token_usage t JOIN budget_work w ON w.id=t.work_id WHERE w.parent_work_id=?").all('durable-operation:'+current.operation_id)).toEqual([]);
             expect(root.query("SELECT amount_microusd FROM budget_request_reservations WHERE state='unresolved'").get()).toEqual({amount_microusd:101000});
-            expect(root.query("SELECT count(*) AS n FROM entries WHERE conversation_id=? AND json_extract(record,'$.kind')='pi.compaction'").get(original.conversation_id)).toEqual({n:0});
+            expect(root.query("SELECT count(*) AS n FROM entries WHERE conversation_id=? AND json_extract(record,'$.kind')='pi.compaction'").get(original.conversation_id)).toEqual({n:1});
+            unknownTerminalSnapshot(root, 1); // Original summary succeeded; only new capped effects are denied.
             expect(root.query('SELECT id FROM conversations ORDER BY id').all()).toEqual(conversations);expect(contextModule.storedBackgroundDocument(root,originalDocId)).toEqual(oldPolicy);return;
           }
           if(scenario==='native-addon-service-continuation-interrupted'){
@@ -1371,7 +1416,10 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
             expect(root.query('SELECT count(*) AS n FROM piclaw_durable_bindings_v1 WHERE chat_jid=?').get('operation:'+operationId)).toEqual({n:1});
             expect(root.query('SELECT id FROM conversations ORDER BY id').all()).toEqual(conversations);expect(contextModule.storedBackgroundDocument(root,originalDocId)).toEqual(oldPolicy);return;
           }
-          expect(final.status).toBe('completed');expect(final.output).toBe('factory synthetic reply');expect(writes).toBe(1);
+          const failureDir = join(getDataDir(), 'diagnostics/model-failures');
+          const failureDetails = final.status === 'completed' || !existsSync(failureDir) ? ''
+            : JSON.stringify(hostFs.readdirSync(failureDir).map(file => JSON.parse(readFileSync(join(failureDir,file),'utf8'))));
+          expect(final.status, failureDetails).toBe('completed');expect(final.output).toBe('factory synthetic reply');expect(writes).toBe(1);
           const bindings=root.query('SELECT source_id,conversation_id,source_seq,operation_id FROM piclaw_durable_bindings_v1 WHERE chat_jid=? ORDER BY source_seq').all('operation:'+operationId) as typeof oldBindings;
           expect(bindings).toHaveLength(2);expect(bindings[0]).toEqual(original);expect(bindings[1]!.conversation_id).toBe(original.conversation_id);expect(bindings[1]!.source_id).not.toBe(original.source_id);
           expect(root.query('SELECT id FROM conversations ORDER BY id').all()).toEqual(conversations);expect(contextModule.storedBackgroundDocument(root,originalDocId)).toEqual(oldPolicy);expect(readFileSync(oldPayloadPath)).toEqual(oldPayload);
@@ -1390,13 +1438,14 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
             expect(root.query("SELECT count(*) AS n FROM tasks WHERE conversation_id=? AND kind='\"pi.compaction\"' AND status<>'terminal'").get(original.conversation_id)).toEqual({n:0});
             expect(root.query("SELECT count(*) AS n FROM budget_work WHERE execution_kind='side_prompt'").get()).toEqual({n:0});
             expect(root.query('SELECT count(*) AS n FROM budget_request_reservations').get()).toEqual({n:calls});
+            if(privateAdmissionRace){expect(privateRaceMatched).toBe(true);expect(privateRaceSummaryHeld).toBe(true);expect(privateRaceRepairs).toBeGreaterThan(0);}
           }else{expect(planRequests.at(-1)!.split(text)).toHaveLength(2);expect(planRequests.at(-1)!.split(newPayload.prompt)).toHaveLength(2);}
           if(!addonCompaction)expect(calls).toBe(serviceBudgetResume?3:4);expect(publicRows()).toEqual(before);expect(root.query("SELECT count(*) AS n FROM submissions WHERE conversation_id=? AND json_extract(record,'$.type')='input'").get(original.conversation_id)).toEqual({n:2});
           expect(sdkSpies.every(spy=>spy.mock.calls.length===0)).toBe(true);
           nextService.shutdown();await nextService.waitForIdle();reopened.stop();await reopened.close();
           await (await import('./background-admission-recovery-fixture.ts')).backgroundAdmissionRecoveryFixture(root,workspace,getDataDir(),configuration,true,2,serviceBudgetResume?1:2);
         }finally{
-          privateSummaryReleased.resolve();
+          clearTimeout(privateRaceBackstop);privateFundingEntered.resolve();privateReceiptReady.resolve();privateSummaryReleased.resolve();
           firstService.shutdown();await firstService.waitForIdle();nextService?.shutdown();await nextService?.waitForIdle();
           if(scenario==='native-addon-service-continuation-staged')root.exec('DROP TRIGGER IF EXISTS fail_next_background_binding');
           if(damagedEntry){reopened?.stop();await reopened?.close();root.query('UPDATE entries SET record=? WHERE id=?').run(damagedEntry.record,damagedEntry.id);}
@@ -1573,18 +1622,18 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
           if(scenario==='native-addon-execution-accounting-capped-account-changed')writeFileSync(join(getPiclawAgentDir(),'auth.json'),JSON.stringify({'openai-codex':{type:'oauth',access:'synthetic',refresh:'synthetic',accountId:'changed-account',expires:Date.now()+60000}}));
         };
         const finalText=scenario==='native-addon-execution-large-result'?'é'.repeat(70_000):'factory synthetic reply';
-        const budgetBlocked=['native-addon-execution-accounting-capped-denied','native-addon-execution-accounting-capped-exact','native-addon-execution-accounting-capped-auth-denied','native-addon-execution-accounting-capped-missing-account','native-addon-execution-accounting-capped-tool-race','native-addon-execution-accounting-capped-pricing-changed','native-addon-execution-accounting-capped-small-output','native-addon-execution-no-account-auth-cap'].includes(scenario);
+        const budgetBlocked=['native-addon-execution-accounting-capped-denied','native-addon-execution-accounting-capped-exact','native-addon-execution-accounting-capped-auth-denied','native-addon-execution-accounting-capped-missing-account','native-addon-execution-accounting-capped-tool-race','native-addon-execution-accounting-capped-pricing-changed','native-addon-execution-accounting-capped-small-output','native-addon-execution-no-account-auth-cap','native-addon-execution-accounting-capped-unknown'].includes(scenario);
         const oneCappedRequest=scenario.endsWith('-capped-exact')||scenario.endsWith('-capped-tool-race');
         const accountChanged=scenario==='native-addon-execution-accounting-capped-account-changed';
         const cleanupFailed=scenario==='native-addon-execution-accounting-capped-cleanup-failed';
         const unknown=scenario.startsWith('native-addon-execution-accounting')&&scenario.endsWith('-unknown');
-        const output=await host.execute(execution),failed=budgetBlocked||unknown||accountChanged||cleanupFailed||['native-addon-execution-revoked','native-addon-execution-auth-revoked','native-addon-execution-cancelled','native-addon-execution-deadline'].includes(scenario);
+        const output=await host.execute(execution),failed=budgetBlocked||accountChanged||cleanupFailed||['native-addon-execution-revoked','native-addon-execution-auth-revoked','native-addon-execution-cancelled','native-addon-execution-deadline'].includes(scenario);
         if(scenario==='native-addon-execution-accounting-capped-small-output')expect(root.query('SELECT COALESCE(SUM(api_equivalent_cost_microusd),0) AS amount FROM token_usage').get()).toEqual({amount:0});
         expect(output).toEqual(budgetBlocked?{status:'budget_blocked',reason:'budget_boundary'}:failed?{status:scenario==='native-addon-execution-cancelled'?'cancelled':'failed',reason:scenario==='native-addon-execution-cancelled'?'executor_cancelled':scenario==='native-addon-execution-deadline'?'execution_timeout':'execution_failed'}:{status:'completed',output:finalText});
         const noWrite=failed&&scenario!=='native-addon-execution-accounting-capped-exact'||scenario==='native-addon-execution-ceiling';
         expect(existsSync(join(workspace,'native-addon-result.txt'))).toBe(!noWrite);
         if(!noWrite)expect(readFileSync(join(workspace,'native-addon-result.txt'),'utf8')).toBe('ADMITTED_NATIVE_ADDON');
-        expect(calls).toBe(scenario==='native-addon-execution-deadline'||scenario==='native-addon-execution-auth-revoked'||accountChanged||cleanupFailed||budgetBlocked&&!oneCappedRequest?0:failed?1:3);expect(publicRows()).toEqual(before);
+        expect(calls).toBe(unknown?(cap?1:3):scenario==='native-addon-execution-deadline'||scenario==='native-addon-execution-auth-revoked'||accountChanged||cleanupFailed||budgetBlocked&&!oneCappedRequest?0:failed?1:3);expect(publicRows()).toEqual(before);
         const disposition=scenario==='native-addon-execution-cancelled'||scenario==='native-addon-execution-deadline'?'cancelled':failed?'failed':'completed';
         expect(root.query('SELECT phase,terminal_disposition FROM service_effect_s01_operations WHERE operation_id=?').get(admitted.operationId)).toEqual({phase:'terminal',terminal_disposition:disposition});
         expect(root.query('SELECT disposition,message_row_id,outbox_count,media_count FROM service_effect_s02_commits WHERE operation_id=?').get(admitted.operationId)).toEqual({disposition,message_row_id:null,outbox_count:0,media_count:0});
@@ -1602,7 +1651,15 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
           expect(evidence.errors.error.errors[1].message).toContain('synthetic budget cleanup fault');expect(authRequests).toBe(0);
         }
         if(unknown){
-          expect(root.query('SELECT state FROM budget_request_reservations').all()).toEqual([{state:'unresolved'}]);
+          // Uncapped valid tool outcomes continue; an applicable cap still denies
+          // the next effect. Neither case invents a charge or clears its holds.
+          expect(root.query('SELECT state FROM budget_request_reservations').all()).toEqual(Array.from({length:cap?1:3},()=>({state:'unresolved'})));
+          expect(authRequests).toBe(cap?1:3);
+          for (const row of root.query('SELECT * FROM budget_request_reservations').all() as BudgetRequestReservation[]) {
+            expect(row.terminal_receipt_sha256).toBe(createHash('sha256').update(row.terminal_receipt_json!).digest('hex'));
+            expect(JSON.parse(row.terminal_receipt_json!)).toMatchObject({ requestId: row.id, requestBindingSha256: row.binding_sha256,
+              projectedOutcome: { role: 'assistant', provider: model.provider, model: model.id } });
+          }
           expect(root.query('SELECT count(*) AS n FROM token_usage').get()).toEqual({n:0});
           expect(root.query('SELECT status FROM budget_work WHERE id=?').get('durable-operation:'+admitted.operationId)).toEqual({status:'active'});
           if(cap){
@@ -1615,7 +1672,7 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
             }finally{service.shutdown();await service.waitForIdle();}
           }
         }
-        if(cap&&budgetBlocked||accountChanged||scenario==='native-addon-execution-no-account-auth-cap'){
+        if(cap&&budgetBlocked&&!unknown||accountChanged||scenario==='native-addon-execution-no-account-auth-cap'){
           const states=oneCappedRequest?[{state:'settled'}]:scenario.endsWith('-auth-denied')||scenario.endsWith('-pricing-changed')||accountChanged?[{state:'released'}]:[];
           expect(root.query('SELECT state FROM budget_request_reservations ORDER BY rowid').all()).toEqual(states);
           expect(authRequests).toBe(oneCappedRequest||scenario.endsWith('-auth-denied')||scenario.endsWith('-pricing-changed')||accountChanged||scenario==='native-addon-execution-no-account-auth-cap'?1:0);
