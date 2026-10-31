@@ -21,6 +21,7 @@ function ownedPaths() {
   return resolveRuntimeConfigPaths({ env: { ...process.env, PICLAW_DB_IN_MEMORY: '0' } });
 }
 beforeEach(() => {
+  closeDatabase(); // Other host files may leave the process-wide memory bootstrap open.
   workspace = createTempWorkspace('retained-settlement-');
   restore = setEnv({ PICLAW_WORKSPACE: workspace.workspace, PICLAW_STORE: workspace.store,
     PICLAW_DATA: workspace.data });
