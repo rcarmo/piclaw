@@ -3,12 +3,17 @@ import { admitSqliteWrite } from '../db/sqlite-async-admission.js';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import type { BudgetProviderEvidence } from './types.js';
 import { admitBudgetRequest, admitBudgetRequestDispatch } from './request-reservation-admission.js';
-import { abandonBudgetRequest, BudgetRequestError, getBudgetRequest, readBudgetTerminalReceipt, settleBudgetRequest, validateBudgetSettlementUsage, type BudgetRequestBinding, type BudgetRequestReservation } from '../db/budget-request-reservations.js';
+import { abandonBudgetRequest, BudgetRequestError, getBudgetRequest, readBudgetTerminalReceipt, settleBudgetRequest, validateBudgetSettlementUsage, type BudgetRequestBinding, type BudgetRequestReservation, type BudgetModelInvocation } from '../db/budget-request-reservations.js';
 import { getDb } from '../db/connection.js';
 import { getBudgetWork, setBudgetWorkStatus } from '../db/budget-limits.js';
 import type { TokenUsageRecord } from '../db/token-usage.js';
 import { decodeUsageReport, readUsageProjectionEvent } from '../db/usage-report-projection.js';
 import { valueApiEquivalentCost } from './valuation.js';
+
+/** Verified attributed expense whose local transition can still be repaired. */
+export class RetainedAccountingPending extends BudgetRequestError {
+  constructor(readonly invocation: BudgetModelInvocation) { super('budget_denied'); }
+}
 
 type UsageFacts = Pick<AssistantMessage, 'provider' | 'model' | 'responseModel' | 'stopReason' | 'usage'> & { api: string };
 type SettlementUsage = Omit<TokenUsageRecord, 'work_id' | 'invocation_id' | 'usage_event_id' | 'execution_kind'>;
@@ -116,7 +121,8 @@ export function assertModelAccountingReady(workId: string, database: Database = 
     const payload = JSON.parse(receipt.bodyJson);
     const usage = prepareUsage(binding, retainedUsageFacts(payload.projectedOutcome), false, undefined)(receipt.receivedAt, false);
     validateBudgetSettlementUsage(binding, usage);
-    if (row.state !== 'unresolved' || usage.api_equivalent_cost_known) throw new BudgetRequestError('budget_denied');
+    if (row.state !== 'unresolved' || usage.api_equivalent_cost_known) throw binding.modelInvocation
+      ? new RetainedAccountingPending(binding.modelInvocation) : new BudgetRequestError('budget_denied');
     if (row.settlement_sha256 !== null || row.usage_event_id !== null) throw new BudgetRequestError('conflict');
   }
 }

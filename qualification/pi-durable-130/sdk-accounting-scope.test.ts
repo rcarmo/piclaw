@@ -6,7 +6,7 @@ import { createSession, GenerationTask, CompactionTask, type ConversationId, typ
 import { BACKGROUND_CONTEXT as context } from "../../runtime/durable-engine/qualification/context.ts";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
 import { BunSqliteDatabase } from "../../runtime/durable-engine/src/bun-sqlite.js";
-import { assertConversationAccountingReady, operationBudgetWorkId, prepareTaskAccounting } from "../../runtime/durable-engine/src/host-request-accounting.js";
+import { assertConversationAccountingReady, operationBudgetWorkId, prepareTaskAccounting, reserveHostRequest } from "../../runtime/durable-engine/src/host-request-accounting.js";
 import { projectTerminalOutcome } from "../../runtime/durable-engine/src/host-terminal-outcome.js";
 import { modelRequestAccounting } from "../../runtime/src/budget/model-request-accounting.js";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
@@ -18,7 +18,7 @@ import { resolveRuntimeConfigPaths } from "../../runtime/src/core/config-paths.j
 import { installTerminalSettlementCompositionSchema } from '../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js';
 
 // Financial metadata/dependency units only. No Harness, scheduler, provider,
-// credential lookup, source authority, or outbound execution is exercised here.
+// real credential, source authority, or outbound execution is exercised here.
 // The default application factory tests own the real SDK/provider-flow contract.
 const domain = "sdk-accounting-scope-unit", chatJid = "web:accounting-scope-unit";
 const physical = { provider: "synthetic-accounting", id: "local-model", api: "openai-responses" };
@@ -147,6 +147,35 @@ function denied(action: () => void, code: BudgetRequestError["code"] = "budget_d
   expect(action).toThrow(BudgetRequestError);
   expect(action).toThrow(`Model request ${code}.`);
 }
+
+for (const scope of ['same-family', 'other-domain', 'other-root'] as const) test(`unentered financial wait requires original SDK namespace/family: ${scope}`, () => fixture(async f => {
+  const binding = f.reserve(f.parent); f.retain(binding);
+  const before = getBudgetRequest(binding.id, f.database);
+  const sdk = () => f.database.query('SELECT * FROM tasks ORDER BY id').all(), tasks = sdk();
+  const at = scope === 'other-root' ? f.independent : f.child;
+  const pending = reserveHostRequest({ database: f.database, operationId: binding.modelInvocation!.operationId, chatJid,
+    authPath: `${process.env.PICLAW_WORKSPACE}/no-credentials.json`, signal: new AbortController().signal,
+    assertCurrent() {}, terminalOwner: owner,
+    model: { provider: physical.provider, id: physical.id, api: 'openai-responses', name: 'Synthetic local model', baseUrl: 'https://invalid.invalid',
+      input: ['text'], reasoning: false, contextWindow: 1000, maxTokens: 1000, cost: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 } },
+    modelInvocation: { ...binding.modelInvocation!, domain: scope === 'other-domain' ? 'another-namespace' : domain,
+      conversationId: at.conversationId, taskId: at.taskId, checkpointHash: 'f'.repeat(64) } });
+  if (scope === 'same-family') {
+    expect(await pending).toBeUndefined(); // Missing credentials grant no funded send.
+    const settled = getBudgetRequest(binding.id, f.database)!;
+    expect(settled.state).toBe('settled');
+    expect(settled.terminal_receipt_json).toBe(before!.terminal_receipt_json);
+    expect(settled.terminal_receipt_sha256).toBe(before!.terminal_receipt_sha256);
+    expect(settled.terminal_received_at).toBe(before!.terminal_received_at);
+    expect(f.database.query('SELECT count(*) n FROM token_usage WHERE invocation_id=?').get(binding.id)).toEqual({n:1});
+  } else {
+    await expect(pending).rejects.toBeInstanceOf(BudgetRequestError);
+    expect(getBudgetRequest(binding.id, f.database)).toEqual(before);
+    expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({n:0});
+  }
+  expect(f.database.query('SELECT count(*) n FROM budget_request_reservations').get()).toEqual({n:1});
+  expect(sdk()).toEqual(tasks); // Financial observation never schedules/revives tasks.
+}));
 
 for (const origin of ["parent", "child", "sibling"] as const) test(`retained known facts in ${origin} block parent, child and sibling reciprocally`, () => fixture(async f => {
   const binding = f.reserve(f[origin]); f.retain(binding);

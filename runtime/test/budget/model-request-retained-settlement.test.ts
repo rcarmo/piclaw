@@ -7,8 +7,8 @@ import { resolveRuntimeConfigPaths } from '../../src/core/config-paths.js';
 import { closeDatabase, getDb, initDatabase } from '../../src/db/connection.js';
 import { ensureBudgetWork, getBudgetWork, saveBudgetCap, setBudgetWorkStatus, setBudgetWarningsOnly, grantBudgetAllowance } from '../../src/db/budget-limits.js';
 import { getBudgetRequest, recordBudgetTerminalReceipt, readBudgetTerminalReceipt, settleBudgetRequest,
-  type BudgetRequestBinding, type BudgetTerminalReceiptPayload } from '../../src/db/budget-request-reservations.js';
-import { modelRequestAccounting, assertModelAccountingReady } from '../../src/budget/model-request-accounting.js';
+  BudgetRequestError, type BudgetRequestBinding, type BudgetTerminalReceiptPayload, type BudgetModelInvocation } from '../../src/db/budget-request-reservations.js';
+import { modelRequestAccounting, assertModelAccountingReady, RetainedAccountingPending } from '../../src/budget/model-request-accounting.js';
 import { evaluateBudget } from '../../src/budget/evaluator.js';
 import { canonicalJson } from '../../src/utils/canonical-json.js';
 
@@ -43,14 +43,14 @@ function terminal(): AssistantMessage {
 }
 function owner() { return { signal: new AbortController().signal, assertCurrent() {} }; }
 function accounting() { return modelRequestAccounting({ authorise() {}, documentedFree: false, usageSource: 'compaction' }); }
-async function fixture(message = terminal(), retain = true, workId = 'durable-request:request', parentId = 'parent') {
+async function fixture(message = terminal(), retain = true, workId = 'durable-request:request', parentId = 'parent', modelInvocation?: BudgetModelInvocation) {
   const db = getDb(), helper = accounting(), signal = new AbortController().signal;
   ensureBudgetWork({ id: 'parent', chatJid: 'web:receipt', executionKind: 'interactive' });
   if (parentId !== 'parent') ensureBudgetWork({ id: parentId, chatJid: 'web:receipt', executionKind: 'delegate', parentWorkId: 'parent' });
   ensureBudgetWork({ id: workId, chatJid: 'web:receipt', executionKind: 'background', parentWorkId: parentId });
   saveBudgetCap({ scope: 'task', workId: 'parent', metric: 'api_usd_micros', amount: 100 });
   const binding: BudgetRequestBinding = { id: 'request', workId, chatJid: 'web:receipt', providerId: 'fixture',
-    modelId: 'fixture-model', accountRef: 'original-account-generation', amountMicros: 60 };
+    modelId: 'fixture-model', accountRef: 'original-account-generation', amountMicros: 60, ...(modelInvocation ? { modelInvocation } : {}) };
   await helper.reserve(binding, signal); await helper.dispatch(binding, signal);
   const payload: BudgetTerminalReceiptPayload = { version: 1, requestId: binding.id,
     requestBindingSha256: getBudgetRequest(binding.id)!.binding_sha256,
@@ -62,6 +62,27 @@ function financialRows() {
   return { tokens: getDb().query('SELECT * FROM token_usage').all(), events: getDb().query('SELECT * FROM budget_usage_events').all() };
 }
 function unchangedFinancials() { expect(financialRows()).toEqual({ tokens: [], events: [] }); }
+
+for (const mode of ['attributed', 'legacy', 'receiptless', 'invalid', 'unknown'] as const) test(`repairable denial requires exact attributed known terminal facts: ${mode}`, async () => {
+  const invocation: BudgetModelInvocation = { version: 1, domain: 'owned-financial-domain', operationId: 'original-operation',
+    conversationId: 1, taskId: 2, taskKind: 'pi.generation', phase: 'request', checkpointHash: 'a'.repeat(64) };
+  const message = terminal();
+  if (mode === 'invalid') message.usage.input = -1;
+  if (mode === 'unknown') message.usage.cost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
+  const { helper, binding } = await fixture(message, mode !== 'receiptless', undefined, undefined, mode === 'legacy' ? undefined : invocation);
+  if (mode === 'receiptless') await helper.abandon(binding);
+  if (mode === 'unknown') await helper.settleRetainedRequest(binding, owner());
+  const before = getBudgetRequest(binding.id), work = getBudgetWork(binding.workId);
+  let denied: unknown;
+  try { assertModelAccountingReady('parent'); } catch (error) { denied = error; }
+  if (mode === 'unknown') expect(denied).toBeUndefined();
+  else {
+    expect(denied).toBeInstanceOf(BudgetRequestError);
+    expect(denied instanceof RetainedAccountingPending).toBe(mode === 'attributed');
+    if (denied instanceof RetainedAccountingPending) expect(denied.invocation).toEqual(invocation);
+  }
+  expect(getBudgetRequest(binding.id)).toEqual(before); expect(getBudgetWork(binding.workId)).toEqual(work); unchangedFinancials();
+});
 
 test('pending terminal barrier follows nested work ancestry, not unrelated work or global active holds', async () => {
   const { helper, binding, receipt } = await fixture(terminal(), true, 'durable-request:request', 'delegate-owner');

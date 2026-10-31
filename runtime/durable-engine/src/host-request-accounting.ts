@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from 'node:timers/promises';
 import type Database from "bun:sqlite";
 import type { AssistantMessage, Api, Model } from "../../src/durable-legacy-sdk.js";
-import { modelRequestAccounting, assertModelAccountingReady } from "../../src/budget/model-request-accounting.js";
+import { modelRequestAccounting, assertModelAccountingReady, RetainedAccountingPending } from "../../src/budget/model-request-accounting.js";
 import { admitSqliteWrite } from "../../src/db/sqlite-async-admission.js";
 import { boundHostRequestCost } from "../../src/budget/request-cost-bound.js";
 import { ensureBudgetWork, getBudgetWork, setBudgetWorkStatus } from "../../src/db/budget-limits.js";
@@ -306,8 +306,11 @@ export async function reserveHostRequest(options: {
     } catch (error) {
       // Only the pre-acquisition check can request another admission attempt.
       // An entered SQL callback, source failure or real cap denial is never retried.
-      if (modelInvocation && !database.inTransaction && error instanceof BudgetRequestError && error.code === 'budget_denied'
-        && hasSdkAccountingScope(database)) throw unenteredAccounting;
+      if (modelInvocation && !database.inTransaction && error instanceof RetainedAccountingPending
+        && error.invocation.domain === modelInvocation.domain && hasSdkAccountingScope(database)) {
+        const rootFor = accountingConversationRoots(database);
+        if (rootFor(error.invocation.conversationId) === rootFor(modelInvocation.conversationId)) throw unenteredAccounting;
+      }
       throw error;
     }
   };
