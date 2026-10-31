@@ -381,6 +381,8 @@ export async function reserveHostRequest(options: {
     assertCurrent();assertBackground(); signal.throwIfAborted();
     if (readStoredProviderUsageAccountRef(model.provider, options.authPath) !== accountRef) throw Error("Native request account changed");
   };
+  // Pre-send writes wait under the caller lifetime; entered bodies are never replayed.
+  const admissionTimeoutMs = Infinity;
   const requestCurrent = () => { terminalOwner(); current(); accountingReady(id); };
   if (!previous) await accountingAdmission(() => admitSqliteWrite(database, () => {
     const sidePrompt = database.query(`SELECT 1 FROM service_effect_s01_operations o
@@ -393,8 +395,8 @@ export async function reserveHostRequest(options: {
     if (!background) ensureBudgetWork({ id: operationWork, chatJid: options.chatJid, executionKind: options.maintenanceWorkId || sidePrompt ? "side_prompt" : options.scheduledTaskId ? "scheduled" : "interactive",
       parentWorkId: maintenanceParent ?? existingSide?.parent_work_id, scheduledTaskId: options.scheduledTaskId }, database);
     ensureBudgetWork({ id: workId, chatJid: options.chatJid, executionKind: options.executionKind === "delegate" ? "delegate" : sidePrompt ? "side_prompt" : options.executionKind ?? "interactive", parentWorkId: operationWork }, database);
-  }, requestCurrent, signal, 5000, requestCurrent));
-  const accounting = modelRequestAccounting({ authorise: requestCurrent, beforeAcquire: requestCurrent, documentedFree: false }, database);
+  }, requestCurrent, signal, admissionTimeoutMs, requestCurrent));
+  const accounting = modelRequestAccounting({ authorise: requestCurrent, beforeAcquire: requestCurrent, admissionTimeoutMs, documentedFree: false }, database);
   const binding: BudgetRequestBinding = { id, workId, chatJid: options.chatJid, providerId: model.provider, modelId: model.id, accountRef,
     amountMicros: previous ? previous.amount_microusd : amount.amountMicros, ...(modelInvocation ? { modelInvocation } : {}) };
   let dispatchStarted = false;

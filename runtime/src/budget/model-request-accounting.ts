@@ -137,12 +137,14 @@ export function modelRequestAccounting(input: {
   providerEvidence?: BudgetProviderEvidence[];
   documentedFree: boolean;
   usageSource?: "assistant" | "compaction";
+  /** Applies to reserve/dispatch only; terminal reconciliation retains its own policy. */
+  admissionTimeoutMs?: number;
 }, database: Database = getDb()) {
   const authorise = input.authorise, beforeAcquire = input.beforeAcquire;
   const evidence = input.providerEvidence ? structuredClone(input.providerEvidence) : undefined;
-  const documentedFree = input.documentedFree, usageSource = input.usageSource;
+  const documentedFree = input.documentedFree, usageSource = input.usageSource, admissionTimeoutMs = input.admissionTimeoutMs;
   const current = () => { if (getDb() !== database) throw Error('Model request database binding changed.'); authorise(); };
-  const options = (signal: AbortSignal) => ({ signal, authorise: current, beforeAcquire, providerEvidence: evidence });
+  const options = (signal: AbortSignal) => ({ signal, authorise: current, beforeAcquire, providerEvidence: evidence, timeoutMs: admissionTimeoutMs });
   return Object.freeze({
     async reserve(binding: BudgetRequestBinding, signal: AbortSignal) { await admitBudgetRequest(binding, options(signal)); },
     async dispatch(binding: BudgetRequestBinding, signal: AbortSignal) { await admitBudgetRequestDispatch(binding, options(signal)); },
