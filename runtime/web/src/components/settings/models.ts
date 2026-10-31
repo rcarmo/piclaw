@@ -2,7 +2,6 @@ import { createVisibleInterval } from '../../ui/visible-interval.js';
 import { html, useState, useEffect, useCallback, useMemo, useRef } from '../../vendor/preact-htm.js';
 import { getAgentModels, sendAgentMessage } from '../../api.js';
 import {
-    describeModelContextFit,
     formatModelCatalogueContextWindow,
     formatModelCataloguePricing,
     normaliseModelCatalogue,
@@ -59,30 +58,18 @@ function settingsOptionId(key) {
     return `settings-model-option-${encodeURIComponent(key)}`;
 }
 
-function formatContextFit(entry) {
-    if (entry.contextFit.state === 'blocked') return describeModelContextFit(entry);
-    if (entry.contextFit.state === 'unknown') {
-        if (entry.contextFit.currentTokens == null) return 'Current chat context is unavailable, so compatibility is unknown.';
-        return 'This model does not publish a usable context limit, so compatibility is unknown.';
-    }
-    const safe = entry.contextFit.effectiveContextWindow;
-    const adjusted = entry.contextFit.safetyAdjustedTokens;
-    return `Fits: about ${adjusted?.toLocaleString() ?? 'unknown'} safety-adjusted tokens in a ${safe?.toLocaleString() ?? 'unknown'}-token safe window.`;
-}
-
 function formatProviderUsage(usage) {
     if (!usage || typeof usage !== 'object') return null;
     return [usage.plan, usage.availability, usage.hint_short].filter(Boolean).join(' · ') || null;
 }
 
 function defaultFilters(sort = 'recommended') {
-    return { provider: '', publisher: '', family: '', contextFit: 'all', reasoning: 'all', variant: '', sort };
+    return { provider: '', publisher: '', family: '', reasoning: 'all', variant: '', sort };
 }
 
 export function ModelsSection({ filter = '', onFilterChange = null }) {
     const [chatJid, setChatJid] = useState(() => resolveModelsSettingsChatJid());
     const [payload, setPayload] = useState(null);
-    const [contextUsage, setContextUsage] = useState(null);
     const [preferences, setPreferences] = useState(() => readModelCataloguePreferences());
     const [filters, setFilters] = useState(() => defaultFilters(readModelCataloguePreferences().sort));
     const [filtersExpanded, setFiltersExpanded] = useState(false);
@@ -105,18 +92,13 @@ export function ModelsSection({ filter = '', onFilterChange = null }) {
         if (!quiet || !payload) setLoading(true);
         if (!quiet) setLoadError(null);
         try {
-            const [nextPayload, nextContext] = await Promise.all([
-                getAgentModels(targetChatJid),
-                fetchJsonWithTimeout(`/agent/context?chat_jid=${encodeURIComponent(targetChatJid)}`).catch(() => null),
-            ]);
+            const nextPayload = await getAgentModels(targetChatJid);
             if (generation !== requestGeneration.current || targetChatJid !== chatJidRef.current) return null;
             const nextPreferences = readModelCataloguePreferences();
             const catalogue = normaliseModelCatalogue(nextPayload, {
-                contextUsage: nextContext,
                 ...toModelCatalogueNormalisePreferences(nextPreferences),
             });
             setPayload(nextPayload);
-            setContextUsage(nextContext);
             setPreferences(nextPreferences);
             setSelectedKey((current) => catalogue.some((entry) => entry.key === current)
                 ? current
@@ -183,16 +165,14 @@ export function ModelsSection({ filter = '', onFilterChange = null }) {
     }, [chatJid, loadModels]);
 
     const entries = useMemo(() => normaliseModelCatalogue(payload, {
-        contextUsage,
         ...toModelCatalogueNormalisePreferences(preferences),
-    }), [payload, contextUsage, preferences]);
+    }), [payload, preferences]);
     const facets = useMemo(() => collectModelSettingsFacets(entries), [entries]);
     const projection = useMemo(() => buildModelSettingsProjection(entries, {
         query: filter,
         providers: filters.provider || null,
         publishers: filters.publisher || null,
         families: filters.family || null,
-        contextFit: filters.contextFit,
         reasoning: filters.reasoning === 'all' ? null : filters.reasoning === 'yes',
         variants: filters.variant || null,
         sort: filters.sort,
@@ -233,10 +213,6 @@ export function ModelsSection({ filter = '', onFilterChange = null }) {
 
     const switchModel = async () => {
         if (!selected || busyAction) return;
-        if (selected.contextFit.state === 'blocked') {
-            setActionStatus({ type: 'error', text: describeModelContextFit(selected) });
-            return;
-        }
         const targetChatJid = chatJid;
         const generation = ++actionGeneration.current;
         setBusyAction('switch');
@@ -248,7 +224,6 @@ export function ModelsSection({ filter = '', onFilterChange = null }) {
             const confirmedPayload = await getAgentModels(targetChatJid);
             if (generation !== actionGeneration.current || targetChatJid !== chatJidRef.current) return;
             const confirmedCatalogue = normaliseModelCatalogue(confirmedPayload, {
-                contextUsage,
                 ...toModelCatalogueNormalisePreferences(preferences),
             });
             const confirmed = confirmedCatalogue.find((entry) => entry.current)?.key
@@ -409,7 +384,6 @@ export function ModelsSection({ filter = '', onFilterChange = null }) {
                     <select aria-label="Provider" value=${filters.provider} onChange=${(event) => updateFilter('provider', event.currentTarget.value)}><option value="">All providers</option>${facets.providers.map((value) => html`<option value=${value}>${value}</option>`)}</select>
                     <select aria-label="Publisher" value=${filters.publisher} onChange=${(event) => updateFilter('publisher', event.currentTarget.value)}><option value="">All publishers</option>${facets.publishers.map((value) => html`<option value=${value}>${value}</option>`)}</select>
                     <select aria-label="Family" value=${filters.family} onChange=${(event) => updateFilter('family', event.currentTarget.value)}><option value="">All families</option>${facets.families.map((value) => html`<option value=${value}>${value}</option>`)}</select>
-                    <select aria-label="Context fit" value=${filters.contextFit} onChange=${(event) => updateFilter('contextFit', event.currentTarget.value)}><option value="all">Any context fit</option><option value="compatible">Compatible or unknown</option><option value="fits">Fits current context</option><option value="unknown">Unknown fit</option><option value="blocked">Blocked</option></select>
                     <select aria-label="Reasoning" value=${filters.reasoning} onChange=${(event) => updateFilter('reasoning', event.currentTarget.value)}><option value="all">Any reasoning</option><option value="yes">Reasoning</option><option value="no">Non-reasoning</option></select>
                     <select aria-label="Variant" value=${filters.variant} onChange=${(event) => updateFilter('variant', event.currentTarget.value)}><option value="">All variants</option>${facets.variants.map((value) => html`<option value=${value}>${value}</option>`)}</select>
                     <select aria-label="Sort models" value=${filters.sort} onChange=${(event) => updateFilter('sort', event.currentTarget.value)}><option value="recommended">Recommended</option><option value="name">Name</option><option value="context">Context window</option><option value="input-price">Input price</option><option value="output-price">Output price</option></select>
@@ -450,7 +424,7 @@ export function ModelsSection({ filter = '', onFilterChange = null }) {
                             <div><dt>Publisher</dt><dd>${selected.publisher || 'Unknown'}</dd></div>
                             <div><dt>Family</dt><dd>${selected.family || 'Unknown'}</dd></div>
                             <div><dt>Context window</dt><dd>${formatModelCatalogueContextWindow(selected.contextWindow) || 'Unknown'}</dd></div>
-                            <div><dt>Context fit</dt><dd>${formatContextFit(selected)}</dd></div>
+                            <div><dt>Context fit</dt><dd>Unknown until the backend checks the model switch.</dd></div>
                             <div><dt>Reasoning</dt><dd>${selected.reasoning ? 'Supported' : 'Not advertised'}</dd></div>
                             <div><dt>Variants</dt><dd>${selected.variants.length ? selected.variants.join(', ') : 'Stable'}</dd></div>
                             <div><dt>Input / 1M</dt><dd>${formatModelCataloguePrice(selected.pricing?.inputPerMillion ?? null)}</dd></div>
@@ -477,8 +451,8 @@ export function ModelsSection({ filter = '', onFilterChange = null }) {
                             ${usageText && html`<span>${usageText}</span>`}
                         </div>
                         <div class="model-catalogue-settings__actions">
-                            <button type="button" class="settings-btn primary" disabled=${selected.current || Boolean(busyAction) || selected.contextFit.state === 'blocked'} onClick=${switchModel}>${selected.current ? 'Current model' : busyAction === 'switch' ? 'Switching…' : 'Use for current chat'}</button>
-                            ${selected.contextFit.state === 'blocked' && html`<button type="button" class="settings-btn" disabled=${Boolean(busyAction)} onClick=${compactContext}>Compact context</button>`}
+                            <button type="button" class="settings-btn primary" disabled=${selected.current || Boolean(busyAction)} onClick=${switchModel}>${selected.current ? 'Current model' : busyAction === 'switch' ? 'Switching…' : 'Use for current chat'}</button>
+                            <button type="button" class="settings-btn" disabled=${Boolean(busyAction)} onClick=${compactContext}>Compact context</button>
                             <button type="button" class="settings-btn" onClick=${() => navigator.clipboard?.writeText?.(selected.key)}>Copy model key</button>
                             <button type="button" class="settings-btn" onClick=${() => requestOpenSettingsDialog({ section: 'providers' })}>Provider settings</button>
                         </div>

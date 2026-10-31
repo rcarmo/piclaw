@@ -19,7 +19,7 @@ function catalogue(count = 405) {
       reasoning: index % 2 === 0,
       pricing: { input_per_million: index / 10, output_per_million: index / 5 },
     })),
-  }, { currentTokens: 20_000 });
+  });
 }
 
 test('Settings projection bounds 405 models and keeps a matching selected row addressable', () => {

@@ -1,8 +1,4 @@
-export const MODEL_CONTEXT_OVERHEAD_TOKENS = 4_000;
-export const MODEL_TOKEN_ESTIMATE_SAFETY_MULTIPLIER = 1.1;
-
 export type ModelVariant = "alias" | "batch" | "free" | "preview" | "fast" | "image" | "audio";
-export type ModelContextFitState = "fits" | "blocked" | "unknown";
 export type ModelCatalogueSort = "recommended" | "name" | "context" | "input-price" | "output-price";
 export type ModelVariantFilter = ModelVariant | "stable";
 
@@ -18,13 +14,6 @@ export interface ModelThinkingLevel {
   label: string;
 }
 
-export interface ModelContextFit {
-  state: ModelContextFitState;
-  currentTokens: number | null;
-  safetyAdjustedTokens: number | null;
-  effectiveContextWindow: number | null;
-}
-
 export interface ModelCatalogueEntry {
   key: string;
   provider: string;
@@ -37,7 +26,6 @@ export interface ModelCatalogueEntry {
   thinkingLevels: ModelThinkingLevel[];
   pricing: ModelCataloguePricing | null;
   variants: ModelVariant[];
-  contextFit: ModelContextFit;
   current: boolean;
   pinned: boolean;
   lastUsedAt: string | null;
@@ -48,14 +36,8 @@ export interface ModelCataloguePreferences {
   recentByKey?: ReadonlyMap<string, string> | Record<string, string> | null;
 }
 
-export interface NormaliseModelCatalogueOptions extends ModelCataloguePreferences {
-  contextUsage?: { tokens?: unknown } | null;
-  currentTokens?: unknown;
-}
-
 export interface ModelCatalogueFilterState {
   query?: string;
-  contextFit?: ModelContextFitState | "compatible" | "all";
   providers?: Iterable<string> | string | null;
   publishers?: Iterable<string> | string | null;
   families?: Iterable<string> | string | null;
@@ -70,7 +52,6 @@ export interface ModelCataloguePublisherGroup {
   provider: string;
   publisher: string | null;
   entries: ModelCatalogueEntry[];
-  compatibleCount: number;
   totalCount: number;
 }
 
@@ -80,7 +61,6 @@ export interface ModelCatalogueProviderGroup {
   provider: string;
   entries: ModelCatalogueEntry[];
   publisherGroups: ModelCataloguePublisherGroup[];
-  compatibleCount: number;
   totalCount: number;
 }
 
@@ -246,35 +226,6 @@ export function classifyModelVariants(entry: Pick<ModelCatalogueEntry, "id"> & {
   return VARIANT_ORDER.filter((variant) => variants.has(variant));
 }
 
-export function calculateModelContextFit(
-  entry: Pick<ModelCatalogueEntry, "contextWindow"> | { context_window?: unknown; contextWindow?: unknown },
-  contextUsage?: { tokens?: unknown } | unknown,
-): ModelContextFit {
-  const contextWindow = finitePositive("contextWindow" in entry ? entry.contextWindow : entry.context_window);
-  const rawTokens = contextUsage && typeof contextUsage === "object" && "tokens" in contextUsage
-    ? (contextUsage as { tokens?: unknown }).tokens
-    : contextUsage;
-  const currentTokens = finiteNonNegative(rawTokens);
-  const effectiveContextWindow = contextWindow == null
-    ? null
-    : Math.max(0, Math.floor(contextWindow - MODEL_CONTEXT_OVERHEAD_TOKENS));
-  if (currentTokens == null || effectiveContextWindow == null) {
-    return {
-      state: "unknown",
-      currentTokens,
-      safetyAdjustedTokens: currentTokens == null ? null : Math.ceil((currentTokens * MODEL_TOKEN_ESTIMATE_SAFETY_MULTIPLIER) - 1e-9),
-      effectiveContextWindow,
-    };
-  }
-  const safetyAdjustedTokens = Math.ceil((currentTokens * MODEL_TOKEN_ESTIMATE_SAFETY_MULTIPLIER) - 1e-9);
-  return {
-    state: safetyAdjustedTokens <= effectiveContextWindow ? "fits" : "blocked",
-    currentTokens,
-    safetyAdjustedTokens,
-    effectiveContextWindow,
-  };
-}
-
 function normalizePricing(value: unknown): ModelCataloguePricing | null {
   if (!value || typeof value !== "object") return null;
   const pricing = value as Record<string, unknown>;
@@ -305,20 +256,19 @@ function normalizeThinkingLevels(option: RawModelOption): ModelThinkingLevel[] {
   return levels;
 }
 
-function recentValue(source: NormaliseModelCatalogueOptions["recentByKey"], key: string): string | null {
+function recentValue(source: ModelCataloguePreferences["recentByKey"], key: string): string | null {
   const value = source instanceof Map ? source.get(key) : source?.[key];
   return cleanString(value) || null;
 }
 
 export function normaliseModelCatalogue(
   payload: ModelCataloguePayload | null | undefined,
-  options: NormaliseModelCatalogueOptions = {},
+  options: ModelCataloguePreferences = {},
 ): ModelCatalogueEntry[] {
   const structured = Array.isArray(payload?.model_options) ? payload.model_options : [];
   const legacy = Array.isArray(payload?.models) ? payload.models : [];
   const currentKey = normalizeRoutedKey(payload?.current ?? payload?.model);
   const pinnedKeys = new Set(Array.from(options.pinnedKeys ?? [], normalizeRoutedKey).filter(Boolean));
-  const contextUsage = { tokens: options.contextUsage?.tokens ?? options.currentTokens };
   const seen = new Set<string>();
   const entries: ModelCatalogueEntry[] = [];
 
@@ -348,7 +298,7 @@ export function normaliseModelCatalogue(
         pinned: pinnedKeys.has(identity.key),
         lastUsedAt: recentValue(options.recentByKey, identity.key),
       };
-      entries.push({ ...base, contextFit: calculateModelContextFit(base, contextUsage) });
+      entries.push(base);
     }
   };
 
@@ -464,9 +414,6 @@ export function filterAndRankModels(
       const document = buildModelSearchDocument(entry);
       if (!queryTerms.every((term) => document.includes(term))) return false;
     }
-    if (state.contextFit && state.contextFit !== "all") {
-      if (state.contextFit === "compatible" ? entry.contextFit.state === "blocked" : entry.contextFit.state !== state.contextFit) return false;
-    }
     if (providers.size > 0 && !providers.has(modelProviderGroupKey(entry).toLowerCase())) return false;
     if (publishers.size > 0 && !publishers.has((entry.publisher ?? "").toLowerCase())) return false;
     if (families.size > 0 && !families.has((entry.family ?? "").toLowerCase())) return false;
@@ -483,10 +430,6 @@ export function filterAndRankModels(
     if (sort === "output-price") return compareNullableNumber(left.pricing?.outputPerMillion ?? null, right.pricing?.outputPerMillion ?? null) || compareModelCatalogueText(left.key, right.key);
     return compareRecommended(left, right);
   });
-}
-
-function compatibleCount(entries: readonly ModelCatalogueEntry[]): number {
-  return entries.filter((entry) => entry.contextFit.state !== "blocked").length;
 }
 
 function modelProviderGroupKey(entry: Pick<ModelCatalogueEntry, "provider">): string {
@@ -524,7 +467,6 @@ export function groupModels(entries: readonly ModelCatalogueEntry[]): ModelCatal
           provider,
           publisher,
           entries: [...publisherEntries],
-          compatibleCount: compatibleCount(publisherEntries),
           totalCount: publisherEntries.length,
         }));
       return {
@@ -533,7 +475,6 @@ export function groupModels(entries: readonly ModelCatalogueEntry[]): ModelCatal
         provider,
         entries: directEntries,
         publisherGroups,
-        compatibleCount: compatibleCount(providerEntries),
         totalCount: providerEntries.length,
       };
     });
@@ -549,9 +490,8 @@ export interface ModelPickerProjectionGroup {
 }
 
 export interface ModelPickerProjectionSection {
-  key: "current" | "pinned" | "recent" | "compatible" | "unknown" | "blocked";
+  key: "current" | "pinned" | "recent" | "catalogue";
   label: string;
-  collapsed: boolean;
   totalCount: number;
   entries: ModelCatalogueEntry[];
   groups: ModelPickerProjectionGroup[];
@@ -562,29 +502,11 @@ export interface ModelPickerProjection {
   renderedEntries: ModelCatalogueEntry[];
   totalMatches: number;
   hiddenCount: number;
-  blockedCount: number;
 }
 
 export interface ModelPickerProjectionOptions {
   query?: string;
-  showBlocked?: boolean;
   renderLimit?: number;
-}
-
-function formatContextFitTokens(value: number | null): string {
-  if (value == null) return "unknown";
-  if (value >= 1_000_000) {
-    const millions = value / 1_000_000;
-    return `${Number.isInteger(millions) ? millions.toFixed(0) : millions.toFixed(1)}M`;
-  }
-  if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
-  return String(value);
-}
-
-export function describeModelContextFit(entry: Pick<ModelCatalogueEntry, "contextWindow" | "contextFit">): string {
-  const fit = entry.contextFit;
-  if (fit.state !== "blocked") return "";
-  return `Needs about ${formatContextFitTokens(fit.safetyAdjustedTokens)} tokens with estimator safety; this model safely fits ${formatContextFitTokens(fit.effectiveContextWindow)} (${formatContextFitTokens(entry.contextWindow)} raw). Compact before switching.`;
 }
 
 function flattenProjectionGroups(entries: readonly ModelCatalogueEntry[]): ModelPickerProjectionGroup[] {
@@ -627,14 +549,12 @@ export function buildModelPickerProjection(
     label: string,
     candidates: ModelCatalogueEntry[],
     grouped = false,
-    collapsed = false,
-    maxRows = renderLimit,
   ) => {
     const unique = candidates.filter((entry) => !seen.has(entry.key));
     if (unique.length === 0) return;
-    const visible = collapsed ? [] : unique.slice(0, Math.min(remaining, maxRows));
+    const visible = unique.slice(0, remaining);
     visible.forEach((entry) => seen.add(entry.key));
-    if (!collapsed && visible.length === 0) return;
+    if (visible.length === 0) return;
     remaining -= visible.length;
     renderedEntries.push(...visible);
     const visibleKeys = new Set(visible.map((entry) => entry.key));
@@ -647,48 +567,22 @@ export function buildModelPickerProjection(
     sections.push({
       key,
       label,
-      collapsed,
       totalCount: unique.length,
       entries: grouped ? [] : visible,
       groups,
     });
   };
 
-  const fits = matched.filter((entry) => entry.contextFit.state === "fits");
-  const unknown = matched.filter((entry) => entry.contextFit.state === "unknown");
-  const blocked = matched.filter((entry) => entry.contextFit.state === "blocked");
-  const blockedExpanded = Boolean(query || options.showBlocked);
-  const blockedTarget = blockedExpanded ? Math.min(blocked.length, Math.floor(renderLimit / 2)) : 0;
-  const unknownTarget = Math.min(unknown.length, Math.floor((renderLimit - blockedTarget) / 2));
-  let priorityBudget = Math.max(0, renderLimit - blockedTarget - unknownTarget);
-  const addPrioritySection = (
-    key: "current" | "pinned" | "recent",
-    label: string,
-    candidates: ModelCatalogueEntry[],
-  ) => {
-    const before = renderedEntries.length;
-    addSection(key, label, candidates, false, false, priorityBudget);
-    priorityBudget = Math.max(0, priorityBudget - (renderedEntries.length - before));
-  };
-
-  addPrioritySection("current", "Current", matched.filter((entry) => entry.current));
-  addPrioritySection("pinned", "Pinned", matched.filter((entry) => entry.pinned));
-  addPrioritySection("recent", "Recent", matched.filter((entry) => Boolean(entry.lastUsedAt)));
-
-  const priorityBlockedCount = renderedEntries.filter((entry) => entry.contextFit.state === "blocked").length;
-  const priorityUnknownCount = renderedEntries.filter((entry) => entry.contextFit.state === "unknown").length;
-  const blockedReserve = Math.max(0, blockedTarget - priorityBlockedCount);
-  const unknownReserve = Math.max(0, unknownTarget - priorityUnknownCount);
-  addSection("compatible", "Compatible models", fits, true, false, Math.max(0, remaining - blockedReserve - unknownReserve));
-  addSection("unknown", "Context limit unknown", unknown, true, false, Math.max(0, remaining - blockedReserve));
-  addSection("blocked", "Does not fit current context", blocked, true, !blockedExpanded);
+  addSection("current", "Current", matched.filter((entry) => entry.current));
+  addSection("pinned", "Pinned", matched.filter((entry) => entry.pinned));
+  addSection("recent", "Recent", matched.filter((entry) => Boolean(entry.lastUsedAt)));
+  addSection("catalogue", "Models", matched, true);
 
   return {
     sections,
     renderedEntries,
     totalMatches: matched.length,
     hiddenCount: Math.max(0, matched.length - renderedEntries.length),
-    blockedCount: blocked.length,
   };
 }
 
@@ -700,7 +594,7 @@ export function moveModelPickerActiveKey(
   action: ModelPickerNavigationAction,
   pageSize = 7,
 ): string | null {
-  const selectable = entries.filter((entry) => entry.contextFit.state !== "blocked");
+  const selectable = entries;
   if (selectable.length === 0) return null;
   const currentIndex = selectable.findIndex((entry) => entry.key === activeKey);
   const page = Math.max(1, Math.floor(pageSize));

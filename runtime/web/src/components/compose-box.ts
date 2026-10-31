@@ -27,7 +27,6 @@ import { requestOpenSettingsDialog } from './settings-dialog-events.js';
 import { ClassicModelPicker } from './model-picker.ts';
 import {
     buildModelSearchDocument,
-    calculateModelContextFit,
     normaliseModelCatalogue,
 } from '../ui/model-catalogue.ts';
 import {
@@ -535,47 +534,6 @@ export function resolveComposeCacheHitMeta(contextUsage) {
     return meta?.cacheHitRate == null ? null : meta;
 }
 
-function normalizeContextUsageTokens(contextUsage) {
-    const tokens = Number(contextUsage?.tokens);
-    return Number.isFinite(tokens) && tokens > 0 ? tokens : null;
-}
-
-export function getModelPickerContextLimit(modelOption, contextUsage) {
-    const contextWindow = Number(modelOption?.contextWindow ?? modelOption?.context_window);
-    const normalizedContextWindow = Number.isFinite(contextWindow) && contextWindow > 0 ? contextWindow : null;
-    const tokens = normalizeContextUsageTokens(contextUsage);
-    if (normalizedContextWindow == null || tokens == null) {
-        return {
-            blocked: false,
-            note: '',
-            title: '',
-            tokens,
-            contextWindow: normalizedContextWindow,
-        };
-    }
-    const contextFit = calculateModelContextFit({ contextWindow: normalizedContextWindow }, { tokens });
-    if (contextFit.state !== 'blocked') {
-        return {
-            blocked: false,
-            note: '',
-            title: '',
-            tokens,
-            safetyAdjustedTokens: contextFit.safetyAdjustedTokens,
-            contextWindow: normalizedContextWindow,
-            effectiveContextWindow: contextFit.effectiveContextWindow,
-        };
-    }
-    return {
-        blocked: true,
-        note: 'Compact context first',
-        title: `Current context uses ${formatK(tokens)} tokens (~${formatK(contextFit.safetyAdjustedTokens)} with estimator safety) plus app/tool overhead, but this model effectively fits about ${formatK(contextFit.effectiveContextWindow)} (${formatK(normalizedContextWindow)} raw). Compact context first, then switch.`,
-        tokens,
-        safetyAdjustedTokens: contextFit.safetyAdjustedTokens,
-        contextWindow: normalizedContextWindow,
-        effectiveContextWindow: contextFit.effectiveContextWindow,
-    };
-}
-
 export function formatModelPickerContextWindow(contextWindow) {
     const value = Number(contextWindow);
     if (!Number.isFinite(value) || value <= 0) return '';
@@ -605,10 +563,9 @@ export function formatModelPickerPricing(pricing) {
     return rates.length > 0 ? `${rates.join(' / ')} per 1M` : '';
 }
 
-function normaliseComposeModelCatalogue(payload, contextUsage, preferenceRuntime) {
+function normaliseComposeModelCatalogue(payload, preferenceRuntime) {
     const preferences = readModelCataloguePreferences(preferenceRuntime);
     return normaliseModelCatalogue(payload, {
-        contextUsage,
         ...toModelCatalogueNormalisePreferences(preferences),
     });
 }
@@ -1302,7 +1259,7 @@ export function ComposeBox({
             modelPreferenceRuntime?.removeEventListener?.(MODEL_CATALOGUE_PREFERENCES_EVENT, applyPreferences);
             if (typeof window !== 'undefined' && modelPreferenceRuntime === window) window.removeEventListener('storage', applyPreferences);
         };
-    }, [agentModelsPayload, contextUsage, modelPreferenceRuntime]);
+    }, [agentModelsPayload, modelPreferenceRuntime]);
     useEffect(() => {
         const applySessionPreferences = () => {
             setPinnedSessionChatJids(readSessionPickerPreferences(sessionPreferenceRuntime).pinnedChatJids);
@@ -1322,13 +1279,13 @@ export function ComposeBox({
             const payload = detail?.payload;
             if (!payload || typeof payload !== 'object') return;
             const modelLabel = payload.model ?? payload.current;
-            setModelOptions(normaliseComposeModelCatalogue(payload, contextUsage, modelPreferenceRuntime));
+            setModelOptions(normaliseComposeModelCatalogue(payload, modelPreferenceRuntime));
             onModelStateChange?.({ ...payload, model: modelLabel ?? null });
             if (modelLabel) onModelChange?.(modelLabel);
         };
         window.addEventListener('piclaw:model-state-changed', applyConfirmedModelState);
         return () => window.removeEventListener('piclaw:model-state-changed', applyConfirmedModelState);
-    }, [contextUsage, currentChatJid, onModelChange, onModelStateChange]);
+    }, [currentChatJid, modelPreferenceRuntime, onModelChange, onModelStateChange]);
     useEffect(() => {
         modelCommandGenerationRef.current += 1;
         modelListGenerationRef.current += 1;
@@ -2352,7 +2309,7 @@ export function ComposeBox({
                 confirmedModel = normaliseModelCatalogue(latest).find((entry) => entry.current)?.key
                     ?? normalizeModelCataloguePreferenceKey(latest?.current ?? latest?.model)
                     ?? null;
-                setModelOptions(normaliseComposeModelCatalogue(latest, contextUsage, modelPreferenceRuntime));
+                setModelOptions(normaliseComposeModelCatalogue(latest, modelPreferenceRuntime));
             });
             if (generation !== modelCommandGenerationRef.current || targetChatJid !== currentChatJidRef.current) return false;
             if (!refreshed || (expectedModel && confirmedModel !== expectedModel)) {
@@ -2418,13 +2375,6 @@ export function ComposeBox({
                 ? modelOption.key
                 : (typeof modelOption?.label === 'string' ? modelOption.label : ''));
         if (!modelLabel || switchingModel) return;
-        const blocked = modelOption?.contextFit?.state === 'blocked';
-        const contextLimit = blocked ? { blocked: true, note: 'Compact context before switching to this model.' } : getModelPickerContextLimit(modelOption, contextUsage);
-        if (contextLimit.blocked) {
-            setSubmitError(null);
-            setSubmitNotice(contextLimit.note || 'Compact context first');
-            return;
-        }
         const ok = await runModelCommand(`/model ${modelLabel}`, modelLabel);
         if (ok) {
             setShowModelPopup(false);
@@ -2478,7 +2428,7 @@ export function ComposeBox({
         setShowSessionPopup(false);
         setShowModelPopup((previous) => {
             if (!previous) {
-                setModelOptions(normaliseComposeModelCatalogue(agentModelsPayload, contextUsage, modelPreferenceRuntime));
+                setModelOptions(normaliseComposeModelCatalogue(agentModelsPayload, modelPreferenceRuntime));
             }
             return !previous;
         });
@@ -3138,7 +3088,7 @@ export function ComposeBox({
         Promise.resolve(loadModels(targetChatJid))
             .then((payload) => {
                 if (generation !== modelListGenerationRef.current || targetChatJid !== currentChatJidRef.current) return;
-                setModelOptions(normaliseComposeModelCatalogue(payload, contextUsage, modelPreferenceRuntime));
+                setModelOptions(normaliseComposeModelCatalogue(payload, modelPreferenceRuntime));
                 emitModelState(payload);
             })
             .catch((error) => {

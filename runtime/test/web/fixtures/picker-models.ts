@@ -19,5 +19,4 @@ export const pickerModels = normaliseModelCatalogue(
       },
     ],
   },
-  { contextUsage: { tokens: 32000 } },
 );
