@@ -26,7 +26,7 @@ test('context admission includes callable-only registry schemas that the resolve
     expect(registryBytes - offeredBytes).toBeGreaterThan(100000);
     const target = { contextWindow: offeredBytes + 8192 + 10000 + 1000, maxTokens: 10000 };
     expect(offeredBytes + 8192 + target.maxTokens).toBeLessThan(target.contextWindow);
-    expect(() => assertModelContextFits(messages, doc, target, f.registry.snapshot(), 0)).toThrow('Candidate context bound exceeded');
+    expect(() => assertModelContextFits(messages, doc, target, f.registry.snapshot(), 0)).toThrow('Candidate context estimate exceeded');
     expect(await f.harness.snapshot(AgentDoc, f.root.id, context)).toEqual(doc);
     expect(f.host.modelCalls).toBe(0);
   } finally { await f.harness.close(context); }
