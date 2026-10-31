@@ -46,6 +46,7 @@
     "cutover.test.ts",
     "db-tree.test.ts",
     "default-application-runtime.test.ts",
+    "default-factory-receipt-crash.test.ts",
     "delegate.test.ts",
     "extension-kv-authority.test.ts",
     "goal-queued-expiry.test.ts",
