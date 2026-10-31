@@ -70,6 +70,7 @@ async function setup(busy = false) {
   const hooks = { resolveConversation: undefined as (() => ConversationId) | undefined,
     authorize: undefined as (() => void | Promise<void>) | undefined,
     cancellation: undefined as (() => void | Promise<void>) | undefined,
+    accounting: undefined as ((operationId: string) => void) | undefined,
     prepareTerminal: undefined as ((input: AcceptedInput) => Promise<TerminalDatabaseEffect | undefined>) | undefined,
     terminalEffects: undefined as ((commit: Readonly<TerminalCommit>, assertCurrent: (expected: Readonly<TerminalCommit>) => void) => undefined) | undefined };
   const work = value(createCurrentPiclawServiceWorkStore(db, {
@@ -78,11 +79,11 @@ async function setup(busy = false) {
         loseCancellationAck = false; return true;
       }
       return false;
-    }, recordTrace() {}, validateAcceptance: () => { assert(); return true; },
+    }, recordTrace() {}, validateAcceptance: (method, operationId) => { assert(); if (method === 'finishHarness' && operationId) hooks.accounting?.(operationId); return true; },
   }));
   const payloads = new InMemoryEffectPayloadResolver();
   const terminal = value(createCurrentPiclawTerminalSettlementStore(db, payloads, {
-    hitFault: () => false, recordTrace() {}, validateOwnership: () => { assert(); expect(db.inTransaction).toBe(true); return true; },
+    hitFault: () => false, recordTrace() {}, validateOwnership: operationId => { assert(); expect(db.inTransaction).toBe(true); if (operationId) hooks.accounting?.(operationId); return true; },
     applyTerminalEffects(commit, scope) { return hooks.terminalEffects?.(commit, scope); },
   }));
   const bindings = createHostDurableBindings(db, { domain: "runtime", incarnation: "copy-A", assertOwner: assert,
@@ -93,7 +94,7 @@ async function setup(busy = false) {
       } });
   const options: RuntimeOptions = { completeInputHandoff: createInputHandoffCompletion(db, {
       domain: "runtime", incarnation: "copy-A", sessionId: "existing-host-session", bindings, work, assertCurrent: assert,
-    }), cancelOperationSource(input, expectedVersion) {
+    }), assertAccountingReady: operationId => hooks.accounting?.(operationId), cancelOperationSource(input, expectedVersion) {
       db.transaction(() => {
         assert();
         const operation = db.query("SELECT version,phase,cancellation_source_seq FROM service_effect_s01_operations WHERE operation_id=?")
@@ -159,6 +160,41 @@ async function setup(busy = false) {
   }
   return { dir, db, base, options, runtime, accept, attach, drain, work, terminal, payloads, path, hooks, stats: () => ({ opens, releases, authorizations }), setOwner: (v: boolean) => { acquired = v; }, grantKnown: () => { allowKnown = true; }, loseCancellationAck: () => { loseCancellationAck = true; } };
 }
+
+for (const disposition of ['completed', 'failed', 'cancelled'] as const) for (const stage of ['before-finish', 'inside-finish', 'inside-terminal'] as const) test(`runtime: accounting barrier precedes finish/S02 for ${disposition}; stage=${stage}`, () => fixture(async f => {
+  if (disposition === 'failed') f.base.host.modelAllowed = false;
+  const input = await f.accept(); const submission = await f.runtime.submit(input);
+  await f.runtime.close(); f.runtime = await f.drain();
+  if (disposition === 'cancelled') {
+    const operation = value(await f.work.getOperation(input.operationId))!;
+    const source = value(await f.work.acceptSource(sealed({ effect: effect('accounting-cancel-source'), chatJid: input.chatJid, sourceId: 'accounting-cancel',
+      kind: 'cancellation' as const, payloadRef: 'cancel', targetOperationId: input.operationId, parentSourceSeq: null, acceptedAt: at, createWakeIntent: false })));
+    value(await f.work.acceptCancellation(sealed({ effect: effect('accounting-cancel', input.operationId, source.sourceSeq), expectedVersion: operation.version,
+      sourceId: source.sourceId, sourceSeq: source.sourceSeq, cause: 'user', requestedAt: at })));
+  }
+  const readTasks = () => { const sdk = new Database(f.path, { readonly: true, create: false }); try { return sdk.query('SELECT * FROM tasks').all(); } finally { sdk.close(); } };
+  const before = value(await f.work.getOperation(input.operationId))!, tasks = readTasks();
+  const calls = f.base.host.modelCalls;
+  let blocked = stage === 'before-finish', repaired = false, checks = 0;
+  const transactions: boolean[] = [];
+  f.hooks.accounting = id => { expect(id).toBe(input.operationId); checks++; transactions.push(f.db.inTransaction); if (blocked || !repaired && stage === 'inside-finish' && f.db.inTransaction) throw Error('known terminal accounting pending'); };
+  if (stage === 'inside-terminal') f.hooks.terminalEffects = () => { blocked = true; return undefined; };
+  await expect(f.runtime.settle(input)).rejects.toThrow();
+  expect(checks).toBeGreaterThan(0);
+  if (stage === 'before-finish') expect(transactions).toEqual([false]);
+  if (stage === 'inside-finish') expect(transactions).toEqual([false, true]);
+  expect(value(await f.work.getOperation(input.operationId))?.phase).toBe(stage === 'inside-terminal' ? 'settling' : before.phase);
+  expect(f.db.query('SELECT * FROM service_effect_s02_commits').all()).toEqual([]);
+  expect(f.db.query('SELECT * FROM messages WHERE is_bot_message=1').all()).toEqual([]);
+  expect(f.db.query('SELECT state FROM service_effect_s01_sources WHERE source_id=?').get(input.sourceId)).toEqual({ state: 'claimed' });
+  expect(readTasks()).toEqual(tasks); expect(f.base.host.modelCalls).toBe(calls);
+  blocked = false; repaired = true; f.hooks.terminalEffects = undefined;
+  const committed = await f.runtime.settle(input);
+  expect(committed?.disposition).toBe(disposition);
+  expect(await f.runtime.settle(input)).toEqual(committed);
+  expect(f.db.query('SELECT * FROM service_effect_s02_commits').all()).toHaveLength(1);
+  expect(f.base.host.modelCalls).toBe(calls); expect((await f.runtime.reconcile(input)).submissionId).toBe(submission);
+}));
 
 test("runtime: terminal model error settles once and releases the host lane", () => fixture(async f => {
   f.base.host.modelAllowed = false;

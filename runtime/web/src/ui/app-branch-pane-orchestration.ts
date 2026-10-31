@@ -1,5 +1,5 @@
 import { buildChatWindowUrl } from './chat-window.js';
-import { clampEditorWidth } from './use-splitters.js';
+import { clampEditorWidth, occupiedPaneWidth } from './use-splitters.js';
 
 interface RefBox<T> {
   current: T;
@@ -196,7 +196,7 @@ export function applyStoredPaneLayout(options: ApplyStoredPaneLayoutOptions): vo
     const stored = readStoredNumber('editorWidth', null);
     const fallback = sidebarWidthRef.current || 280;
     const resolved = Number.isFinite(stored) ? Number(stored) : fallback;
-    editorWidthRef.current = clampEditorWidth(resolved, typeof window !== 'undefined' ? window.innerWidth : 0, sidebarWidthRef.current || 0);
+    editorWidthRef.current = clampEditorWidth(resolved, typeof window !== 'undefined' ? window.innerWidth : 0, occupiedPaneWidth(shellElement, '.workspace-sidebar'));
   }
   shellElement.style.setProperty('--editor-width', `${editorWidthRef.current}px`);
 

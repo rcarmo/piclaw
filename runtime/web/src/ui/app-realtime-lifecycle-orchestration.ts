@@ -10,8 +10,14 @@ interface RefBox<T> {
   current: T;
 }
 
-export function shouldInvalidateAgentStatusSnapshot(eventType: string): boolean {
-  return eventType === 'model_changed' || eventType === 'connected' || eventType === 'agent_status';
+export function shouldInvalidateAgentStatusSnapshot(eventType: string, data?: any, currentTurnId?: string | null): boolean {
+  if (eventType === 'model_changed' || eventType === 'connected') return true;
+  if (eventType !== 'agent_status') return false;
+  const turnId = data?.turn_id || data?.turnId;
+  // Keep ownership/terminal fences, but same-turn progress already arrives over
+  // SSE. Invalidating on every tool update can starve a pending return snapshot.
+  return !turnId || turnId !== currentTurnId || data?.type === 'intent'
+    || ['done', 'error', 'idle'].includes(data?.type) || data?.status === 'idle';
 }
 
 export function resolveBackstopIntervalMs(isAgentActive: boolean): number {
@@ -181,7 +187,7 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
     }
     // Invalidate active transitions too: a fresh cached Idle snapshot must not
     // clear a turn whose opening status and previews arrived in one frame.
-    if (shouldInvalidateAgentStatusSnapshot(eventType)) invalidateAgentUiSnapshot(data?.chat_jid || currentChatJid);
+    if (shouldInvalidateAgentStatusSnapshot(eventType, data, currentTurnIdRef.current)) invalidateAgentUiSnapshot(data?.chat_jid || currentChatJid);
     handleAppSseEvent(eventType, data, {
       currentChatJid,
       updateAgentProfile,

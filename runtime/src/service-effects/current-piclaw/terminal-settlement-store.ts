@@ -153,7 +153,7 @@ export interface TerminalSettlementAdapterRuntime {
    * and throws abort with owner_conflict and roll back all settlement effects.
    * Existing committed replay is observational and does not call this hook.
    */
-  validateOwnership?: () => boolean;
+  validateOwnership?: (operationId?: string) => boolean;
   /** Synchronous shared-database terminal effects. Runs once inside the terminal
    * transaction, after apply and before the final owner check; replay skips it.
    * Throwing rolls back ALL writes. No async work or external effects permitted. */
@@ -341,21 +341,21 @@ class CurrentPiclawTerminalSettlementStore
             if (reconciled.kind === "replay") return reconciled.commit;
             throw new SettlementAbort(reconciled.error);
           }
-          this.validateOwnership();
+          this.validateOwnership(request.effect.operationId);
           const commit = this.apply(request, resolved.value);
           if (this.runtime.applyTerminalEffects || applyEffect) {
             let active = true;
             const assertCurrent = (expected: Readonly<TerminalCommit>) => {
               if (!active || !this.database.inTransaction) throw new Error("Terminal effect scope ended");
               if (expected !== commit) throw new Error("Exact terminal effect commit required");
-              this.validateOwnership();
+              this.validateOwnership(commit.operationId);
             };
             try {
               if (this.runtime.applyTerminalEffects?.(commit, assertCurrent) !== undefined || applyEffect?.(commit, assertCurrent) !== undefined)
                 throw new SettlementAbort(settlementError("invalid_request", "not_applied", false));
             } finally { active = false; }
           }
-          this.validateOwnership();
+          this.validateOwnership(commit.operationId);
           return commit;
         });
 
@@ -1237,10 +1237,10 @@ class CurrentPiclawTerminalSettlementStore
     });
   }
 
-  private validateOwnership(): void {
+  private validateOwnership(operationId?: string): void {
     try {
       if (!this.runtime.validateOwnership) return;
-      const observed: unknown = this.runtime.validateOwnership();
+      const observed: unknown = this.runtime.validateOwnership(operationId);
       if (observed === true) return;
       // Invalid asynchronous guards must be denied, but their rejections still need an observer.
       if ((typeof observed === "object" && observed !== null) || typeof observed === "function")

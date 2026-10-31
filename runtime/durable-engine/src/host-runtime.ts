@@ -1,3 +1,4 @@
+import { BudgetRequestError } from '../../src/db/budget-request-reservations.js';
 import { createTrackedBashOperations } from "../../src/tools/tracked-bash.js";
 import { withChatContext } from "../../src/core/chat-context.js";
 import { assertModelContextFits, measureModelPromptSections, prepareModelContextAdmission, type ModelContextAdmission, type ModelToolSchema } from "./host-model-context.js";
@@ -79,6 +80,10 @@ export interface RuntimeOptions {
   readonly completeInputHandoff?: (input: AcceptedInput, submissionId: SubmissionId, capturedOperation: OperationSnapshot, intent: boolean, signal?: AbortSignal) => Promise<void>;
   readonly incarnation: string;
   readonly onOperationSettled?: (operationId: string, processExit?: NativeExitReceipt) => void | Promise<void>;
+  /** Synchronous, ancestry-scoped barrier before new effects and host settlement. */
+  readonly assertAccountingReady?: (operationId: string, terminal?: boolean) => void;
+  /** Existing receipt owner prepares facts outside SQL before terminal CAS. */
+  readonly prepareAccounting?: (operationId: string, conversationId: ConversationId) => Promise<void>;
   /** New work is sealed while an exact native shutdown request settles. */
   readonly assertAdmission?: (input?: AcceptedInput) => void;
   /** Host timeline root for this exact accepted input, including queued messages. */
@@ -207,6 +212,8 @@ function runtimeSnapshot(o: RuntimeOptions): RuntimeSnapshot {
     authorizeScheduling: authorizeScheduling.bind(o), putAnswer: putAnswer.bind(o),
     materializeAnswer: materializeAnswer?.bind(o), now: now.bind(o),
     prepareTerminalEffect: o.prepareTerminalEffect?.bind(o),
+    assertAccountingReady: o.assertAccountingReady?.bind(o),
+    prepareAccounting: o.prepareAccounting?.bind(o),
     replyThreadFor: o.replyThreadFor?.bind(o),
     onOperationSettled: o.onOperationSettled?.bind(o), onMaintenanceSettled: o.onMaintenanceSettled?.bind(o), cancelSideSource: o.cancelSideSource?.bind(o),
     cancelOperationSource: o.cancelOperationSource?.bind(o),
@@ -633,7 +640,7 @@ export class HostConversationRuntime {
   }
   async prepareToolModelContext(call: { conversationId: ConversationId; taskId: TaskId; toolCallId: string }, model: { provider: string; modelId: string }, thinkingLevel?: string): Promise<ModelContextAdmission> {
     const source = await this.captureToolSource(call.conversationId, call.taskId, call.toolCallId);
-    const guard = () => this.assertCapturedSourceCurrent(source.inputs);
+    const guard = () => this.assertCapturedSourceCurrent(source.inputs, true);
     return this.observe(async () => {
       guard();
       const conversation = await this.harness.conversation(call.conversationId, this.context); guard();
@@ -993,37 +1000,41 @@ export class HostConversationRuntime {
     this.active.add(attempt);
     return attempt;
   }
-  /** Automatic compaction is SDK-owned, not an idle manual command. Capture its
-   * exact public task/status and bound conversation before granting provider IO. */
+  /** Automatic compaction is SDK-owned, not an idle manual command. Owned
+   * compaction uses its exact generation source, including non-routed forks. */
   captureAutomaticCompaction(scope: { taskId: number; conversationId: number; taskKind: string; phase: string; signal: AbortSignal },
-    binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }) {
-    const copy = Object.freeze({ ...binding });
+    binding?: { incarnation: string; chatJid: string; branchId: string; conversationId: number }) {
+    scope = Object.freeze({ ...scope });
+    const copy = binding && Object.freeze({ ...binding });
     const assertCurrent = () => {
       this.fence(); scope.signal.throwIfAborted();
-      if (scope.taskKind !== "pi.compaction" || scope.phase !== "summarize" || copy.incarnation !== this.options.incarnation ||
+      if (scope.taskKind !== "pi.compaction" || scope.phase !== "summarize" || copy && (copy.incarnation !== this.options.incarnation ||
         copy.conversationId !== scope.conversationId || !this.options.existingConversationIds.some(id => id === copy.conversationId) ||
-        this.options.conversationFor(copy.chatJid, copy.branchId) !== copy.conversationId) throw Error("Exact automatic compaction required");
+        this.options.conversationFor(copy.chatJid, copy.branchId) !== copy.conversationId)) throw Error("Exact automatic compaction required");
     };
     assertCurrent();
     return this.observe(async () => {
-      await this.harness.commit(async tx => {
+      const generationId = await this.harness.commit(async tx => {
         const task = await tx.task(scope.taskId as TaskId);
         const live = await tx.doc(LiveDoc, scope.conversationId as ConversationId);
         const reason = (task?.input as { reason?: string } | undefined)?.reason;
         const checkpoint = task?.state.status === "running" ? task.state.checkpoint : null;
-        if (!task || task.kind !== "pi.compaction" || task.conversationId !== copy.conversationId || task.abortRequested ||
+        if (!task || task.kind !== "pi.compaction" || task.conversationId !== scope.conversationId || task.abortRequested ||
           task.state.status !== "running" || !checkpoint || typeof checkpoint !== "object" || Array.isArray(checkpoint) || checkpoint.phase !== "summarize" ||
           !["threshold", "overflow"].includes(reason ?? "") ||
           !live.compactions?.some(status => status.taskId === scope.taskId && status.reason === reason && status.blocking === (task.owner !== undefined)))
           throw Error("Exact automatic compaction task required");
         if (task.owner !== undefined) {
           const owner = await tx.task(task.owner);
-          if (!owner || owner.kind !== "pi.generation" || owner.conversationId !== copy.conversationId || owner.abortRequested ||
+          if (!owner || owner.kind !== "pi.generation" || owner.conversationId !== scope.conversationId || owner.abortRequested ||
             owner.state.status === "terminal" || live.run?.taskId !== owner.id) throw Error("Exact compaction generation required");
         } else if (!task.background || reason !== "threshold") throw Error("Exact background compaction required");
-        assertCurrent();
+        assertCurrent(); return task.owner;
       }, this.context);
-      assertCurrent();
+      const parent = generationId === undefined ? undefined : await this.captureRunSource(scope.conversationId as ConversationId, generationId);
+      if (!parent && !copy) throw Error('Exact automatic compaction source required');
+      const current = () => { assertCurrent(); if (parent) this.assertCapturedSourceCurrent(parent.inputs); };
+      current();
       const workId = "durable-maintenance:" + this.options.incarnation + ":" + scope.taskId;
       // Observation only: no resubmission, provider retry or new runtime queue.
       // Close cancels this observer; interrupted budget closure is repaired from
@@ -1033,26 +1044,49 @@ export class HostConversationRuntime {
         const task = await this.harness.waitForTask(scope.taskId as TaskId<CompactionResult>, context);
         this.fence();
         if (task.state.outcome.status !== "completed") return;
-        const result = task.state.outcome.result;
-        let entryId = result.entryId;
-        if (result.submissionId !== undefined) {
-          const submission = await this.harness.submission(result.submissionId, context);
-          const settled = await submission?.wait(context);
-          if (settled?.type !== "write" || settled.status !== "done" || settled.conversationId !== copy.conversationId) return;
-          entryId = settled.entry;
+        const submissionId = task.state.outcome.result.submissionId;
+        if (submissionId !== undefined) {
+          const submission = await this.harness.submission(submissionId, context);
+          await submission?.wait(context); this.fence(); // Retain legacy deferred-write waiting.
         }
-        if (entryId === undefined) return;
-        const entry = await this.harness.commit(tx => tx.entry(entryId!), context);
-        this.fence();
-        if (entry?.kind === "pi.compaction" && entry.conversationId === copy.conversationId) { await this.options.onMaintenanceSettled?.(workId); this.fence(); }
+        // Join only the ready proof/callback, never the future task wait. Close
+        // seals new observations but must let this entered financial phase finish.
+        await this.observe(async () => {
+          const completed = await this.completedMaintenance(scope.taskId, withoutAbortSignal(this.context));
+          this.options.owner.assert();
+          if (completed?.conversationId === scope.conversationId) await this.options.onMaintenanceSettled?.(workId);
+          this.options.owner.assert();
+        });
       })().catch(() => { /* Uncertain closure retains its durable accounting work. */ });
-      return { chatJid: copy.chatJid, workId, assertCurrent };
+      return { chatJid: parent?.operation.chatJid ?? copy!.chatJid, workId, operationId: parent?.operation.operationId,
+        delegateModel: parent?.delegateModel, assertCurrent: current };
     });
   }
   assertMaintenanceRequest(scope: { taskId: number; conversationId: number; taskKind: string; phase: string; signal: AbortSignal }): void {
     this.fence(); scope.signal.throwIfAborted();
     if (!this.maintenanceBinding || this.maintenanceBinding.conversationId !== scope.conversationId || this.maintenanceTaskId !== scope.taskId || scope.taskKind !== "pi.compaction" || scope.phase !== "summarize"
       || !this.options.existingConversationIds.some(id => id === scope.conversationId)) throw Error("Exact maintenance request required");
+  }
+
+  /** Financial observation only: callers must already join their owning phase;
+   * this read has no independent execution admission or shutdown registration.
+   * Uses the live SDK owner, never the closed preparation Harness. */
+  async completedMaintenance(taskId: number, context: Context = this.context): Promise<{ taskId: number; conversationId: number; entryId: number } | null> {
+    const check = () => this.options.owner.assert(); check();
+    const task = await this.harness.getTask(taskId as TaskId<CompactionResult>, context); check();
+    if (task?.id !== taskId || task.kind !== 'pi.compaction' || task.state.status !== 'terminal' || task.state.outcome.status !== 'completed') return null;
+    const result = task.state.outcome.result;
+    let entryId = result.entryId;
+    if (result.submissionId !== undefined) {
+      const submission = await this.harness.submission(result.submissionId, context);
+      const state = await submission?.status(context); check();
+      if (state?.type !== 'write' || state.status !== 'done' || state.conversationId !== task.conversationId) return null;
+      entryId = state.entry;
+    }
+    if (entryId === undefined) return null;
+    const entry = await this.harness.commit(tx => tx.entry(entryId!), context); check();
+    return entry?.kind === 'pi.compaction' && entry.conversationId === task.conversationId
+      ? { taskId, conversationId: task.conversationId, entryId } : null;
   }
 
   maintenanceRequestIdentity(scope: { taskId: number; conversationId: number; taskKind: string; phase: string; signal: AbortSignal }) {
@@ -1063,8 +1097,10 @@ export class HostConversationRuntime {
 
   /** Qualify a MODEL tool against its public live slot and every accepted run
    * input. Busy-chat lookup alone is never source authority. No new ledger. */
-  captureToolSource(conversationId: ConversationId, taskId: import("@earendil-works/pi-durable").TaskId, callId: string) {
-    return this.captureSource(conversationId, taskId, callId);
+  async captureToolSource(conversationId: ConversationId, taskId: import("@earendil-works/pi-durable").TaskId, callId: string): Promise<Awaited<ReturnType<HostConversationRuntime['captureRunSource']>> & { accountingBarrier?: () => void }> {
+    const captured = await this.captureSource(conversationId, taskId, callId);
+    this.assertCapturedSourceCurrent(captured.inputs, true);
+    return { ...captured, ...(this.options.assertAccountingReady ? { accountingBarrier: () => this.assertAccountingReady(captured.operation.operationId) } : {}) };
   }
   /** Read-only public SDK inspection; never starts, resumes or cancels work. */
   inspectProcessControl(call?: { conversationId: ConversationId; taskId: TaskId; callId: string }): Promise<NativeProcessSnapshot> {
@@ -1092,7 +1128,7 @@ export class HostConversationRuntime {
             taskId: tool.id, generationId: tool.owner, assistantId: assistant.id,
             singleton: calls.length === 1 && calls[0]!.id === call.callId && live.tools.length === 1 && !live.nestedTools?.length };
         }, this.context);
-        this.assertCapturedSourceCurrent(captured.inputs);
+        this.assertCapturedSourceCurrent(captured.inputs, true);
       }
       const inspection = await this.harness.inspect(this.context);
       this.fence();
@@ -1137,7 +1173,7 @@ export class HostConversationRuntime {
       this.fence();
       if (!proof) return undefined;
       const captured = await this.captureToolSource(proof.parent, proof.owner, proof.callId);
-      this.assertCapturedSourceCurrent(captured.inputs);
+      this.assertCapturedSourceCurrent(captured.inputs, true);
       return { inputs: captured.inputs, taskId: proof.taskId };
     }, true);
   }
@@ -1148,13 +1184,13 @@ export class HostConversationRuntime {
   async watchOwnedDelegateChild(conversationId: ConversationId, taskId: TaskId, callId: string, childId: ConversationId, context: Context) {
     const captured = await this.captureToolSource(conversationId, taskId, callId);
     const record = await this.harness.commit(tx => tx.conversation(childId), context);
-    this.fence(); this.assertCapturedSourceCurrent(captured.inputs);
+    this.fence(); this.assertCapturedSourceCurrent(captured.inputs, true);
     if (record?.owner?.conversationId !== conversationId || record.owner.taskId !== taskId) throw Error("Exact Delegate child ownership required");
     const child = await this.harness.conversation(childId, context);
-    this.fence(); this.assertCapturedSourceCurrent(captured.inputs);
+    this.fence(); this.assertCapturedSourceCurrent(captured.inputs, true);
     if (!child) throw Error("Missing owned Delegate child");
     const watch = await child.watch(context);
-    try { this.fence(); this.assertCapturedSourceCurrent(captured.inputs); }
+    try { this.fence(); this.assertCapturedSourceCurrent(captured.inputs, true); }
     catch (error) { await watch.stop(); throw error; }
     return watch;
   }
@@ -1183,6 +1219,7 @@ export class HostConversationRuntime {
         return { taskId: owner.id, callId: model.callId };
       }, this.context); this.fence();
       const captured = await this.captureSource(conversationId, parent.taskId, parent.callId);
+      this.assertCapturedSourceCurrent(captured.inputs, true);
       return { ...captured, runTaskId: live.run.taskId };
     }
     if (!live?.run || !live.tools?.some(slot => slot.taskId === taskId && slot.callId === callId && slot.status === "pending"))
@@ -1192,6 +1229,7 @@ export class HostConversationRuntime {
     if (task?.kind !== "pi.tool" || task.conversationId !== conversationId || task.abortRequested || task.state.status === "terminal" ||
       input?.kind !== "model" || input.callId !== callId) throw Error("Exact pending model tool required");
     const captured = await this.captureRunSource(conversationId, live.run.taskId);
+    this.assertCapturedSourceCurrent(captured.inputs, true);
     return { ...captured, runTaskId: live.run.taskId };
   }
   /** Committed terminal tool evidence after this run's accepted input boundary.
@@ -1361,12 +1399,17 @@ export class HostConversationRuntime {
     this.assertCapturedSourceCurrent(inputs);
     return texts;
   }
-  assertCapturedSourceCurrent(inputs: readonly HostInputBinding[]): void {
+  private assertAccountingReady(operationId: string, terminal = false): void {
+    const checked: unknown = this.options.assertAccountingReady?.(operationId, terminal);
+    if (checked !== undefined) { void Promise.resolve(checked).catch(() => {}); throw Error('Accounting barrier must be synchronous'); }
+  }
+  assertCapturedSourceCurrent(inputs: readonly HostInputBinding[], effectBoundary = false): void {
     this.fence();
     for (const input of inputs) {
       if (!this.routed(input)) throw Error("Host binding conflict");
       this.options.bindings.assertSourceCurrent?.(input);
     }
+    if (effectBoundary) for (const id of new Set(inputs.map(input => input.operationId))) this.assertAccountingReady(id);
   }
   preparePlanContext(conversationId: ConversationId, taskId: TaskId, inputs: readonly HostInputBinding[],
     messages: readonly import("@earendil-works/pi-ai").Message[], content: import("@earendil-works/pi-ai").UserMessage["content"],
@@ -2010,7 +2053,15 @@ export class HostConversationRuntime {
         taskId = await readAbortTask(); this.fence();
         if (taskId === abortedTask) throw Error("Aborted run has not settled");
       }
-      const terminal = await this.settleInput(copy); this.fence();
+      let terminal;
+      try { terminal = await this.settleInput(copy); this.fence(); }
+      catch (error) {
+        this.fence();
+        // Cancellation and the exact SDK abort already committed. Retained
+        // accounting debt may delay S02, not turn that accepted abort into error.
+        if (error instanceof BudgetRequestError && error.code === 'budget_denied') return true;
+        throw error;
+      }
       if (!terminal) throw Error("Abort terminal settlement pending");
       return true;
     }).catch(async error => {
@@ -2244,6 +2295,11 @@ export class HostConversationRuntime {
     // ACK-only/reopened evidence cannot create execution authority during settlement.
     // Retain the original outcome and host hold until an explicitly qualified owner can reconcile it.
     if (!operation.harness) return null;
+    if (o.prepareAccounting) {
+      const prepared: unknown = await o.prepareAccounting(input.operationId, o.operationConversationFor?.(input) ?? input.conversationId); this.fence();
+      if (prepared !== undefined) throw Error('Accounting preparation must return no effect');
+    }
+    this.assertAccountingReady(input.operationId, true);
     if (operation.phase !== "settling") {
       if (!o.work.finishHarness) throw new Error("Host settlement API required");
       if (operation.harness!.sessionId !== o.sessionId || operation.harness!.harnessOperationId !== String(primarySubmissionId))
@@ -2285,6 +2341,7 @@ export class HostConversationRuntime {
       outboxIntents: [], committedAt: o.now() });
     const terminalEffect = cancelled || modelFailed ? undefined : await o.prepareTerminalEffect?.(input, state.answer ?? undefined);
     this.fence();
+    this.assertAccountingReady(input.operationId, true);
     const terminal = value(await o.terminal.commitTerminal(request, terminalEffect)); this.fence();
     if (modelFailed) log.warn("Native turn failed; no automatic replay", { operation: "durable_turn.model_failed",
       chatJid: input.chatJid, operationId: input.operationId, conversationId: input.conversationId, submissionId: state.submissionId,

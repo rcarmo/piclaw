@@ -1180,7 +1180,7 @@ html[data-iphone-standalone-compose-inset="1"] .container {
         transition: none;
     }
 
-    .app-shell.workspace-collapsed .container {
+    .app-shell.workspace-collapsed:not(.editor-open) .container {
         max-width: var(--chat-max-width, 900px);
         min-width: var(--chat-min-width, 640px);
         margin: 0 auto;
@@ -1193,6 +1193,10 @@ html[data-iphone-standalone-compose-inset="1"] .container {
         flex: 0 1 auto;
         width: min(100%, var(--chat-max-width, 900px));
         margin: 0 auto;
+    }
+
+    .app-shell:not(.workspace-collapsed) > .editor-pane-container {
+        max-width: calc(100vw - var(--sidebar-width, 280px) - var(--chat-pane-min-width, 320px) - 8px);
     }
 
     .container {

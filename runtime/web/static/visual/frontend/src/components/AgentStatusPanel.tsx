@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "preact/hooks";
-import { getMessageUrl } from "../api/chat-jid";
+import { getMessageUrl, getChatJid } from "../api/chat-jid";
+import { getAgentUiSnapshot, invalidateAgentUiSnapshot } from "../../../../../src/ui/agent-ui-snapshot";
+import { watchReturnToApp } from "../../../../../src/ui/app-resume";
 import { safeParseJSON, safeSetItem } from "../utils/storage";
 import { extractToolContextPath, getWorkspaceBranch } from "../utils/tool-git-context";
 import {
@@ -192,8 +194,14 @@ export function AgentStatusPanel() {
   }, [tools]);
 
   useEffect(() => {
+    let statusRevision = 0, draftRevision = 0, thoughtRevision = 0, recoveryGeneration = 0;
+    let liveTurn: string | null = null, liveType: string | null = null;
+    let outputMetadataRevision = 0, outputContextPath: string | null = null;
+    const knownTools = new Set<string>();
     const handleDraft = (e: Event) => {
       const detail = (e as CustomEvent).detail;
+      if (detail?.chat_jid && detail.chat_jid !== getChatJid()) return;
+      draftRevision++;
       if (!draftStartRef.current) draftStartRef.current = Date.now();
       if (detail.reset) draftBufferRef.current = "";
       if (detail.delta) {
@@ -208,6 +216,8 @@ export function AgentStatusPanel() {
 
     const handleThought = (e: Event) => {
       const detail = (e as CustomEvent).detail;
+      if (detail?.chat_jid && detail.chat_jid !== getChatJid()) return;
+      thoughtRevision++;
       if (!thoughtStartRef.current) thoughtStartRef.current = Date.now();
       thoughtBufferRef.current = reconcileThoughtStreamText(thoughtBufferRef.current, detail);
       if (!thoughtRafRef.current) {
@@ -217,6 +227,10 @@ export function AgentStatusPanel() {
 
     const handleStatus = (e: Event) => {
       const detail = (e as CustomEvent).detail;
+      if (detail?.chat_jid && detail.chat_jid !== getChatJid()) return;
+      statusRevision++;
+      liveTurn = detail.turn_id || detail.turnId || liveTurn;
+      liveType = detail.type || liveType;
       const delegateProgress = resolveDelegateProgressRows(detail.delegate_progress);
       if (detail.delegate_progress !== undefined) setDelegates(delegateProgress);
       if (detail.type === "done" || detail.type === "idle") setDelegates([]);
@@ -225,6 +239,7 @@ export function AgentStatusPanel() {
         lastProgressTimeRef.current = Date.now();
         agentRunningRef.current = true;
         const id = detail.title || detail.tool_name || "unknown";
+        knownTools.add(id);
         setTools((prev) => {
           if (prev.some((t) => t.id === id && t.status === "running")) return prev;
           const toolName = detail.tool_name || "tool";
@@ -261,6 +276,8 @@ export function AgentStatusPanel() {
         const outputPreview = detail.output_preview ?? detail.outputPreview;
         if (delegateProgress.length > 0) {
           // Structured child rows replace the metadata-only legacy Output fallback.
+          outputMetadataRevision++;
+          outputContextPath = null;
           outputBufferRef.current = "";
           flushOutput();
         } else if (typeof outputPreview === "string" && outputPreview) {
@@ -271,11 +288,17 @@ export function AgentStatusPanel() {
           // Capture meta for output panel header
           const toolName = detail.title || detail.tool_name || "";
           const startedAt = detail.started_at || detail.startedAt || "";
-          setOutputMeta((prev) => ({ ...prev, toolName, startedAt }));
-          // Async: fetch git branch from workspace API (like classic)
-          const contextPath = extractToolContextPath(detail.tool_name, detail.tool_args);
+          const contextPath = extractToolContextPath(detail.tool_name, detail.tool_args) || null;
+          const sameContext = outputContextPath === contextPath;
+          outputContextPath = contextPath;
+          const outputRevision = ++outputMetadataRevision;
+          setOutputMeta((prev) => ({ ...prev, toolName, startedAt, gitBranch: sameContext ? prev.gitBranch : "" }));
+          // Async: fetch git branch only for the output that requested it.
           if (contextPath) {
+            const branchChat = getChatJid(), branchTurn = liveTurn, branchGeneration = recoveryGeneration;
             getWorkspaceBranch(contextPath).then((result) => {
+              if (!mounted || getChatJid() !== branchChat || liveTurn !== branchTurn || recoveryGeneration !== branchGeneration
+                || outputMetadataRevision !== outputRevision) return;
               if (result?.branch) {
                 setOutputMeta((prev) => ({ ...prev, gitBranch: result.branch }));
               }
@@ -340,6 +363,8 @@ export function AgentStatusPanel() {
     };
 
     const handleTurnEnd = () => {
+      statusRevision++; draftRevision++; thoughtRevision++;
+      liveTurn = null; liveType = null; knownTools.clear();
       draftBufferRef.current = "";
       thoughtBufferRef.current = "";
       outputBufferRef.current = "";
@@ -418,8 +443,47 @@ export function AgentStatusPanel() {
     };
     window.addEventListener("piclaw:extension-panel", handleExtensionPanel);
 
+    // Polling the model/context bar does not hydrate these event-driven panes.
+    // Reuse its shared transport on mount, reconnect and return, without
+    // replaying events globally or replacing newer live progress.
+    const restoreSnapshot = async () => {
+      const generation = ++recoveryGeneration, chatJid = getChatJid();
+      const requestedStatus = statusRevision, requestedDraft = draftRevision, requestedThought = thoughtRevision;
+      try {
+        const response = (await getAgentUiSnapshot(chatJid)).status;
+        if (!mounted || generation !== recoveryGeneration || getChatJid() !== chatJid) return;
+        const statusUnchanged = requestedStatus === statusRevision;
+        if (response?.status !== 'active' || !response.data) {
+          if (statusUnchanged && requestedDraft === draftRevision && requestedThought === thoughtRevision) handleTurnEnd();
+          return;
+        }
+        const payload = response.data, turn = payload.turn_id || payload.turnId;
+        if (!statusUnchanged && (!turn || liveTurn !== turn || ['done', 'error', 'idle'].includes(liveType || ''))) return;
+        const restoreDraft = requestedDraft === draftRevision, restoreThought = requestedThought === thoughtRevision;
+        if (statusUnchanged) {
+          if (turn && liveTurn && turn !== liveTurn) handleTurnEnd();
+          // A status snapshot may contain the current tool's progress without
+          // its original tool_call event. Seed that row before applying status.
+          if (payload.type === 'tool_status' && !knownTools.has(payload.title || payload.tool_name || 'unknown')) handleStatus(new CustomEvent('snapshot', {detail:{...payload,type:'tool_call'}}));
+          handleStatus(new CustomEvent('snapshot', {detail:payload}));
+        }
+        if (restoreDraft && typeof response.draft?.text === 'string') handleDraft(new CustomEvent('snapshot', {detail:{text:response.draft.text}}));
+        if (restoreThought && typeof response.thought?.text === 'string') handleThought(new CustomEvent('snapshot', {detail:{text:response.thought.text}}));
+      } catch (error) { if (mounted) console.warn('Failed to restore agent panels:', error); }
+    };
+    const refreshSnapshot = () => { invalidateAgentUiSnapshot(getChatJid()); void restoreSnapshot(); };
+    const changeChat = () => { handleTurnEnd(); refreshSnapshot(); };
+    const stopReturnWatch = watchReturnToApp(refreshSnapshot);
+    window.addEventListener('piclaw:sse-connected', refreshSnapshot);
+    window.addEventListener('piclaw:current-chat-changed', changeChat);
+    void restoreSnapshot();
+
     return () => {
       mounted = false;
+      recoveryGeneration++;
+      stopReturnWatch();
+      window.removeEventListener('piclaw:sse-connected', refreshSnapshot);
+      window.removeEventListener('piclaw:current-chat-changed', changeChat);
       window.removeEventListener("piclaw:agent-draft", handleDraft);
       window.removeEventListener("piclaw:agent-thought", handleThought);
       window.removeEventListener("piclaw:agent-status", handleStatus);

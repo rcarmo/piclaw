@@ -16,7 +16,7 @@ function harness(chatJid: string) {
   let applies = 0;
   const options = {
     currentChatJid: chatJid, connectionStateRef,
-    activeChatJidRef: { current: chatJid }, currentTurnIdRef: { current: null },
+    activeChatJidRef: { current: chatJid }, currentTurnIdRef: { current: null as string | null },
     wasAgentActiveRef: { current: false }, viewStateRef: { current: null },
     refreshTimeline: () => {}, clearAgentRunState: () => {},
     agentStatusRef, pendingRequestRef: { current: null }, draftBufferRef, thoughtBufferRef,
@@ -82,4 +82,54 @@ test('connection transitions invalidate cached shared UI snapshots before reconn
   h.connection('disconnected');
   h.connection('connected');
   expect((await getAgentUiSnapshot(h.options.currentChatJid)).model.current).toBe(2);
+});
+
+for (const progressed of ['draft', 'status'] as const) test(`same-turn ${progressed} progress cannot prevent restoring a missing thought pane`, async () => {
+  const h = harness(`web:return-${progressed}`);
+  h.options.currentTurnIdRef.current = 'live-turn';
+  h.agentStatusRef.current = { type: 'thinking', turn_id: 'live-turn' };
+  let release!: (value: any) => void;
+  const pending = refreshAgentStatusForChat({ ...h.options, getAgentStatus: () => new Promise(resolve => { release = resolve; }) });
+  if (progressed === 'draft') h.options.draftBufferRef.current = 'Newer live draft';
+  else h.agentStatusRef.current = { type: 'tool_call', turn_id: 'live-turn', title: 'Current tool' };
+  const liveStatus = h.agentStatusRef.current;
+  release({status:'active',data:{type:'thinking',turn_id:'live-turn'},thought:{text:'Background thought restored',totalLines:1},draft:{text:'Snapshot draft',totalLines:1}});
+  expect(await pending).toBeNull();
+  expect(h.state().thought.text).toBe('Background thought restored');
+  if (progressed === 'draft') expect(h.options.draftBufferRef.current).toBe('Newer live draft');
+  else expect(h.agentStatusRef.current).toBe(liveStatus);
+});
+
+for(const newer of ['completed','different-turn','idle-reply'] as const) test(`preview recovery still fences ${newer}`,async()=>{
+ const h=harness(`web:return-fence-${newer}`);
+ h.options.currentTurnIdRef.current='live-turn';
+ h.agentStatusRef.current={type:'thinking',turn_id:'live-turn'};
+ let release!:(value:any)=>void;
+ const pending=refreshAgentStatusForChat({...h.options,getAgentStatus:()=>new Promise(resolve=>{release=resolve;})});
+ if(newer==='completed')h.agentStatusRef.current={type:'done',turn_id:'live-turn'};
+ if(newer==='different-turn'){h.options.currentTurnIdRef.current='next-turn';h.agentStatusRef.current={type:'thinking',turn_id:'next-turn'};}
+ if(newer==='idle-reply')h.options.draftBufferRef.current='Current live draft';
+ release(newer==='idle-reply'?{status:'idle',data:null}:active);
+ expect(await pending).toBeNull();
+ expect(h.state().thought.text).toBe('');
+ if(newer==='idle-reply')expect(h.options.draftBufferRef.current).toBe('Current live draft');
+});
+
+test('thought progress preserves the newer thought while recovering a missing draft',async()=>{
+ const h=harness('web:return-thought-progress');
+ h.options.currentTurnIdRef.current='live-turn';h.agentStatusRef.current={type:'thinking',turn_id:'live-turn'};
+ let release!:(value:any)=>void;
+ const pending=refreshAgentStatusForChat({...h.options,getAgentStatus:()=>new Promise(resolve=>{release=resolve;})});
+ h.options.thoughtBufferRef.current='Newer live thought';h.options.setAgentThought({text:'Newer live thought',totalLines:1});
+ release({status:'active',data:{type:'thinking',turn_id:'live-turn'},thought:{text:'Older thought',totalLines:1},draft:{text:'Recovered draft',totalLines:1}});
+ expect(await pending).toBeNull();expect(h.state().thought.text).toBe('Newer live thought');expect(h.state().draft.text).toBe('Recovered draft');
+});
+
+test('partial recovery also leaves an existing collapsed preview untouched when its full buffer is absent',async()=>{
+ const h=harness('web:return-existing-collapsed');h.options.currentTurnIdRef.current='live-turn';h.agentStatusRef.current={type:'thinking',turn_id:'live-turn'};
+ h.options.setAgentThought({text:'Existing collapsed preview',totalLines:1});
+ let release!:(value:any)=>void;const pending=refreshAgentStatusForChat({...h.options,getAgentStatus:()=>new Promise(resolve=>{release=resolve;})});
+ h.options.draftBufferRef.current='Live draft';
+ release({status:'active',data:{type:'thinking',turn_id:'live-turn'},thought:{text:'Longer snapshot should not replace the existing pane',totalLines:2}});
+ expect(await pending).toBeNull();expect(h.state().thought.text).toBe('Existing collapsed preview');
 });

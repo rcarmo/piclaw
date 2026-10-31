@@ -169,3 +169,30 @@ for (const { compose, terminal, lateCompletion } of heldScenarios) {
     } finally { await page.close(); }
   }, 15000);
 }
+
+browserTest('return snapshot restores missing thought while current-turn draft keeps streaming', async () => {
+  const page = await browser.newPage();
+  try {
+    await page.goto(server.url.toString());
+    await page.waitForFunction(() => Boolean((window as any).statusLifecycleFixture));
+    await page.evaluate(() => { void (window as any).statusLifecycleFixture.refresh(); });
+    await page.waitForFunction(() => (window as any).statusLifecycleFixture.count() === 1);
+    await page.evaluate(() => (window as any).statusLifecycleFixture.release(0, {
+      status:'active',data:{type:'thinking',turn_id:'background-turn'},draft:{text:'Earlier draft',totalLines:1},
+    }));
+    await page.waitForFunction(() => document.querySelector('#state')!.textContent!.includes('Earlier draft'));
+    await page.evaluate(() => { void (window as any).statusLifecycleFixture.refresh(); });
+    await page.waitForFunction(() => (window as any).statusLifecycleFixture.count() === 2);
+    await page.evaluate(() => {
+      const f=(window as any).statusLifecycleFixture;
+      f.event('agent_draft_delta',{chat_jid:'web:hook-fixture',turn_id:'background-turn',reset:true,delta:'Newer live draft'});
+      f.event('agent_status',{chat_jid:'web:hook-fixture',turn_id:'background-turn',type:'tool_status',tool_name:'read',title:'Background tool',status:'running'});
+      f.release(1,{status:'active',data:{type:'thinking',turn_id:'background-turn'},draft:{text:'Earlier draft',totalLines:1},thought:{text:'Recovered background thought',totalLines:1}});
+    });
+    await page.waitForFunction(() => document.querySelector('#state')!.textContent!.includes('Recovered background thought'),undefined,{timeout:1500});
+    const state=JSON.parse((await page.locator('#state').textContent())!);
+    expect(state.draft.fullText).toBe('Newer live draft');
+    expect(state.thought.text).toBe('Recovered background thought');
+    expect(state.status.title).toBe('Background tool');
+  } finally { await page.close(); }
+},15000);

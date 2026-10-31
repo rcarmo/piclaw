@@ -22,7 +22,7 @@ import { readNativeBackgroundContexts,readNativeBackgroundPayloads,publishNative
 import { addonBackgroundOrigin,prepareAddonBackgroundPayload,assertAddonBackgroundCurrent,assertAddonBackgroundToolBudget } from './host-addon-background.js';
 import { nativeBackgroundIdentity,nativeBackgroundSourceId,assertNativeBackgroundModel,createNativeBackgroundPayload,assertNativeBackgroundDeadline,type NativeBackgroundPayload } from '../../src/agent-pool/background-operation-contract.js';
 import { join, extname } from "node:path";
-import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
+import { BACKGROUND_CONTEXT as context, withAbortSignal } from "@earendil-works/chord/context";
 import { apply } from "@earendil-works/chord/delta";
 import { Harness, AgentDoc, configure, createRegistry, defineDoc, defineExtension, defineTool, type ToolExecutionApi, type ToolHooks, type ConversationId } from "@earendil-works/pi-durable";
 import { SqliteStorage } from "@earendil-works/pi-durable/storage/sqlite";
@@ -46,13 +46,15 @@ import { readStoredProviderUsageAccountRef } from "../../src/agent-pool/provider
 import { createHostDreamTools } from './host-dream-tools.js';
 import { buildDreamPrompt } from '../../src/agent-memory/dream-prompt.js';
 import { getBudgetWorkContext } from '../../src/budget/context.js';
+import { boundHostRequestCost } from '../../src/budget/request-cost-bound.js';
 import type { NativeDreamRequest,AgentOutput } from '../../src/agent-pool/contracts.js';
 import { getBudgetWork,ensureBudgetWork,setBudgetWorkStatus } from '../../src/db/budget-limits.js';
-import { BudgetRequestError } from '../../src/db/budget-request-reservations.js';
-import { reserveHostRequest, reconcileOperationBudgetWork, completeMaintenanceBudgetWork,operationBudgetWorkId } from "./host-request-accounting.js";
+import { assertModelAccountingReady } from '../../src/budget/model-request-accounting.js';
+import { BudgetRequestError, findBudgetRequestByModelInvocation, type BudgetModelInvocation } from '../../src/db/budget-request-reservations.js';
+import { reserveHostRequest, reconcileOperationBudgetWork, completeMaintenanceBudgetWork,operationBudgetWorkId,assertOperationAccountingReady,assertConversationAccountingReady,prepareTaskAccounting,prepareConversationAccounting } from "./host-request-accounting.js";
 import { createHostMcp } from "./host-mcp.js";
 import { createHostFetch } from "./host-fetch.js";
-import { taskModelRequestScope, taskModelHookScope, withTaskModelRequestScope } from "./task-model-boundary-shim.js";
+import { taskModelRequestScope, taskModelHookScope, taskModelToolScope, withTaskModelRequestScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
 import { createHostBuiltinTools } from "./host-builtins.js";
 import { createHostModelTools, hostModelToolNames, nativeToolInstructions } from "./host-model-controls.js";
 import { createHostCommandPolicy } from "./host-command-policy.js";
@@ -293,7 +295,10 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   const editableTable = await qualifyInstalledEditableTable(catalog, WORKSPACE_DIR);
   const officeViewer = qualifyInstalledOfficeViewer(catalog, WORKSPACE_DIR);
   const drawio = await qualifyInstalledDrawio(catalog, WORKSPACE_DIR), goal = await qualifyInstalledGoal(catalog, WORKSPACE_DIR);
-  const lifetime = new AbortController();
+  const lifetime = new AbortController(), terminalLifetime = new AbortController();
+  // Fatal prompt/source errors seal execution, not the still-owned database.
+  // SDK close joins financial callbacks before the database lifetime ends.
+  const terminalOwner = { signal: terminalLifetime.signal, assertCurrent() { assert(); terminalLifetime.signal.throwIfAborted(); } };
   let notifyStorageFailure!: (error: unknown) => void;
   const storageFailure = new Promise<unknown>(resolve => { notifyStorageFailure = resolve; });
   const remotePeer = await qualifyInstalledAddon(catalog, WORKSPACE_DIR, "remote-peer");
@@ -337,10 +342,14 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     assertRegrets();
     return regretsAddon.createLateNightRegrets(regretsPorts(chat)).command();
   };
-  let regretsDecision: ((captured: Awaited<ReturnType<HostConversationRuntime["captureToolSource"]>>, authority: ReturnType<typeof createHostOperationAuthority>) => any) | undefined;
+  let regretsDecision: ((captured: Awaited<ReturnType<HostConversationRuntime["captureToolSource"]>>, authority: ReturnType<typeof createHostOperationAuthority>, scope: TaskModelRequestScope) => any) | undefined;
   const regretsTool = regrets ? createHostRegretsTool(regretsAddon, { root, runtime: () => runtime(), assertOwner: assertRegrets,
     definition: regrets.extension!.tools.get("regrets_review")!.definition as Parameters<typeof createHostRegretsTool>[1]["definition"],
-    bind(captured, authority) { return regretsPorts(captured.operation.chatJid, authority.assertCurrent, body => admitSqliteWrite(root, body, authority.assertCurrent), regretsDecision!(captured, authority)); },
+    bind(captured, authority, call) {
+      const scope = taskModelToolScope(call);
+      if (!scope?.checkpointHash) throw Error('Exact Regrets SDK tool scope required');
+      return regretsPorts(captured.operation.chatJid, authority.assertSourceCurrent, body => admitSqliteWrite(root, body, authority.assertCurrent), regretsDecision!(captured, authority, scope));
+    },
   }) : undefined;
   const regretsPrompt = regrets ? createHostRegretsPromptExtension(regretsAddon, { async bindBeforeModelRequest(input) {
     assertRegrets();
@@ -430,7 +439,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       : qualified.kind === "portainer" ? createHostPortainerTool(native as unknown as PortainerNativeExports, options)
       : createHostImapTool(native as unknown as ImapNativeExports, options);
   });
-  let bundle: Awaited<ReturnType<typeof createApplicationBootstrapBundle>>;
+  let bundle!: Awaited<ReturnType<typeof createApplicationBootstrapBundle>>;
   const dreamOwners=new Map<string,{payload:NativeBackgroundPayload;assertCurrent():void}>();
   const assertDreamCurrent=(payload:NativeBackgroundPayload)=>{
     const owned=dreamOwners.get(payload.policy.sourceId);if(!owned||JSON.stringify(owned.payload)!==JSON.stringify(payload))throw Error('Live Dream invocation unavailable');owned.assertCurrent();
@@ -441,9 +450,9 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     assertNativeBackgroundDeadline(payload.policy,Date.now());
   };
   const assertBackgroundCurrent=(payload:NativeBackgroundPayload)=>payload.policy.origin.kind==='dream'?assertDreamCurrent(payload):assertAddonBackgroundCurrent(root,payload);
-  const maintenanceRequests = new WeakMap<AbortSignal, { chatJid: string; workId: string; assertCurrent(): void; background?:{input:HostInputBinding;policy:NativeBackgroundPayload['policy']} }>();
+  const maintenanceRequests = new WeakMap<AbortSignal, { chatJid: string; workId: string; operationId?: string; assertCurrent(): void; background?:{input:HostInputBinding;policy:NativeBackgroundPayload['policy']} }>();
   const requestSources = new WeakMap<AbortSignal, Awaited<ReturnType<HostConversationRuntime["captureRunSource"]>>>();
-  const backgroundRequests=new WeakMap<AbortSignal,{accounted:boolean;assertCurrent():void}>();
+  const preparedRequests=new WeakMap<AbortSignal,{accounted:boolean;assertCurrent():void;assertAccountingReady():void}>();
   const codexNative = {} as HostCodexToolGroupAddon & NativeCodexFactories & Record<string, any>;
   for (const exports of Object.values(codex?.nativeExports ?? {})) for (const [name, value] of Object.entries(exports)) {
     if (name in codexNative && codexNative[name] !== value) throw Error("Ambiguous qualified Codex export: " + name);
@@ -810,7 +819,10 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   };
   const sideObservers = new Map<string, NonNullable<import("../../src/agent-pool/contracts.js").SidePromptOptions["onEvent"]>>();
   const checkRequest=(model:{provider:string;id:string},signal:AbortSignal)=>{
-    const prepared=backgroundRequests.get(signal);prepared?.assertCurrent();
+    const prepared=preparedRequests.get(signal);prepared?.assertCurrent();
+    // Funded requests own financial admission at reserve/dispatch; a source
+    // recheck must not turn concurrently retained bookkeeping into a model error.
+    if(!prepared?.accounted)prepared?.assertAccountingReady();
     if(prepared&&!prepared.accounted&&root.query('SELECT 1 FROM budget_caps WHERE enabled=1 LIMIT 1').get())throw new BudgetRequestError('budget_denied');
     check(model,signal,prepared?.accounted===true);
   };
@@ -848,8 +860,8 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
           maintenance={...captured,background:{input:privateInput,policy},assertCurrent(){captured.assertCurrent();runtime().assertCapturedSourceCurrent([privateInput]);}};
         }else{
           const target = bundle.sessionTargets.list().find(target => target.conversationId === scope.conversationId);
-          if (!target) throw Error("Unbound automatic compaction conversation");
-          maintenance = await runtime().captureAutomaticCompaction(scope, { incarnation: target.domain, ...target });
+          const captured = await runtime().captureAutomaticCompaction(scope, target && { incarnation: target.domain, ...target });
+          maintenance = { ...captured, assertCurrent() { captured.assertCurrent(); if (captured.delegateModel) assertDelegateModel(captured.delegateModel); } };
         }
       }
       maintenanceRequests.set(scope.signal, maintenance);
@@ -878,20 +890,34 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     async prepareRequest(model, options, signal) {
       const scope = taskModelRequestScope(options?.signal);
       if (!scope) throw Error("Native request task scope unavailable");
+      const invocation = (operationId: string): BudgetModelInvocation => {
+        if (!scope.checkpointHash || !(scope.taskKind === 'pi.generation' && scope.phase === 'request'
+          || scope.taskKind === 'pi.compaction' && scope.phase === 'summarize')) throw Error('Native request checkpoint identity unavailable');
+        return { version: 1, domain: mapping.domain, operationId, conversationId: scope.conversationId, taskId: scope.taskId,
+          taskKind: scope.taskKind, phase: scope.phase, checkpointHash: scope.checkpointHash };
+      };
       if (scope.taskKind === "pi.compaction") {
         const identity = maintenanceRequests.get(scope.signal);
         if (!identity) throw Error("Compaction request source capture unavailable");
         identity.assertCurrent();
         if(identity.background){
           const {input,policy}=identity.background;assertNativeBackgroundModel(policy,model);
-          const reservation=await reserveHostRequest({database:root,operationId:input.operationId,chatJid:input.chatJid,authPath:join(getPiclawAgentDir(),'auth.json'),model:model as any,maxTokens:options?.maxTokens,
-            executionKind:'background',backgroundPolicy:policy,usageSource:'compaction',signal,assertCurrent(){assert();identity.assertCurrent();}});
-          backgroundRequests.set(signal,{accounted:reservation!==undefined,assertCurrent:identity.assertCurrent});return reservation;
+          const reservation=await reserveHostRequest({database:root,terminalOwner,operationId:input.operationId,chatJid:input.chatJid,authPath:join(getPiclawAgentDir(),'auth.json'),model:model as any,maxTokens:options?.maxTokens,
+            executionKind:'background',backgroundPolicy:policy,modelInvocation:invocation(input.operationId),usageSource:'compaction',signal,assertCurrent(){assert();identity.assertCurrent();}});
+          preparedRequests.set(signal,{accounted:reservation!==undefined,assertCurrent:identity.assertCurrent,assertAccountingReady:()=>assertOperationAccountingReady(root,input.operationId,false,{domain:mapping.domain,incarnation:mapping.domain})});return reservation;
         }
-        return reserveHostRequest({ database: root, operationId: identity.workId, maintenanceWorkId: identity.workId,
+        const operationId = identity.operationId ?? identity.workId;
+        const scheduled = identity.operationId ? root.query('SELECT task_id FROM service_effect_s07_occurrences WHERE operation_id=?').get(identity.operationId) as { task_id: string } | null : null;
+        const reservation = await reserveHostRequest({ database: root, terminalOwner, operationId, modelInvocation: invocation(operationId), maintenanceWorkId: identity.workId,
+          maintenanceParentOperationId: identity.operationId, scheduledTaskId: scheduled?.task_id,
           chatJid: identity.chatJid, authPath: join(getPiclawAgentDir(), "auth.json"), model: model as any,
           maxTokens: options?.maxTokens, executionKind: "side_prompt", signal,
           assertCurrent() { assert(); identity.assertCurrent(); } });
+        preparedRequests.set(signal,{accounted:false,assertCurrent:identity.assertCurrent,assertAccountingReady:()=>{
+          if(identity.operationId)assertOperationAccountingReady(root,identity.operationId,false,{domain:mapping.domain,incarnation:mapping.domain});
+          else{assertModelAccountingReady(identity.workId,root);assertConversationAccountingReady(root,{domain:mapping.domain,conversationId:scope.conversationId,chatJid:identity.chatJid});}
+        }});
+        return reservation;
       }
       if (scope.taskKind !== "pi.generation") throw Error("Native request kind unavailable");
       const captured = requestSources.get(scope.signal);
@@ -899,27 +925,46 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       const scheduled = root.query("SELECT task_id FROM service_effect_s07_occurrences WHERE operation_id=?").get(captured.operation.operationId) as { task_id: string } | null;
       const background=bundle.backgroundPolicyFor(captured.inputs[0]!);
       if(background)assertNativeBackgroundModel(background,model);
-      const reservation=await reserveHostRequest({ database: root, operationId: captured.operation.operationId,
+      const reservation=await reserveHostRequest({ database: root, terminalOwner, operationId: captured.operation.operationId,
         chatJid: captured.operation.chatJid, authPath: join(getPiclawAgentDir(), "auth.json"), model: model as any,
         maxTokens: options?.maxTokens, executionKind: captured.delegateModel ? "delegate" : scheduled ? "scheduled" : background ? 'background' : "interactive",
-        backgroundPolicy:background,scheduledTaskId: scheduled?.task_id, signal,
+        backgroundPolicy:background,modelInvocation:invocation(captured.operation.operationId),scheduledTaskId: scheduled?.task_id, signal,
         assertCurrent() { assert(); scope.signal.throwIfAborted(); runtime().assertCapturedSourceCurrent(captured.inputs); if (captured.delegateModel) assertDelegateModel(captured.delegateModel); } });
-      if(background)backgroundRequests.set(signal,{accounted:reservation!==undefined,assertCurrent:()=>runtime().assertCapturedSourceCurrent(captured.inputs)});
+      preparedRequests.set(signal,{accounted:!!background&&reservation!==undefined,assertCurrent:()=>runtime().assertCapturedSourceCurrent(captured.inputs),assertAccountingReady:()=>assertOperationAccountingReady(root,captured.operation.operationId,false,{domain:mapping.domain,incarnation:mapping.domain})});
       return reservation;
     },
+    assertStoredOutcomeCurrent(model, signal) {
+      preparedRequests.get(signal)?.assertCurrent(); check(model, signal, true);
+    },
     async authorize(model, _kind, signal) { checkRequest(model, signal); }, assertCurrent(model, _kind, signal) { checkRequest(model, signal); } });
-  regretsDecision = (captured, authority) => createHostRegretsAccountedDecision({
-    database: root, operationId: captured.operation.operationId, chatJid: captured.operation.chatJid,
+  regretsDecision = (captured, authority, scope) => createHostRegretsAccountedDecision({
+    modelInvocation: { version: 1, domain: mapping.domain, operationId: captured.operation.operationId,
+      conversationId: scope.conversationId, taskId: scope.taskId, taskKind: 'pi.tool', phase: 'call', checkpointHash: scope.checkpointHash! },
+    database: root, terminalOwner, operationId: captured.operation.operationId, chatJid: captured.operation.chatJid,
     authPath: join(getPiclawAgentDir(), "auth.json"), executionKind: "side_prompt", signal: lifetime.signal,
-    assertCurrent() { assertRegrets(); authority.assertCurrent(); },
-    getAvailable() { assertRegrets(); authority.assertCurrent(); return host.modelRegistry.getAvailable().filter(model => available.some(approved => approved.provider === model.provider && approved.id === model.id)); },
-    async request(model, context, options) {
-      assertRegrets(); authority.assertCurrent(); options.signal?.throwIfAborted();
+    assertCurrent() { assertRegrets(); authority.assertSourceCurrent(); },
+    getAvailable() {
+      assertRegrets(); authority.assertSourceCurrent();
+      return host.modelRegistry.getAvailable().filter(model => {
+        const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
+        return available.some(approved => approved.provider === model.provider && approved.id === model.id) && physical?.provider === model.provider
+          && physical.id === model.id && physical.api === model.api;
+      });
+    },
+    async request(model, context, options, dispatch) {
+      const checkModel = () => {
+      assertRegrets(); authority.assertSourceCurrent(); options.signal?.throwIfAborted();
       const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
       if (!available.some(a => a.provider === model.provider && a.id === model.id) ||
           !host.modelRegistry.getAvailable().some(a => a.provider === model.provider && a.id === model.id) ||
-          physical?.provider !== model.provider || physical.id !== model.id) throw Error("Regrets model no longer approved");
-      return host.modelRuntime.completeSimple(model, context, options);
+          physical?.provider !== model.provider || physical.id !== model.id || physical.api !== model.api
+          || JSON.stringify(boundHostRequestCost(physical, options.maxTokens ?? physical.maxTokens)) !== JSON.stringify(boundHostRequestCost(model, options.maxTokens ?? model.maxTokens)))
+        throw Error("Regrets model no longer approved");
+      };
+      checkModel();
+      return host.modelRuntime.completeSimple(model, context, { ...options, transformHeaders: async headers => {
+        checkModel(); await dispatch(); checkModel(); return headers;
+      } });
     },
   });
   const registry = createRegistry();
@@ -1061,7 +1106,10 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     assertOwner() { assert(); lifetime.signal.throwIfAborted(); observability.assertCurrent(); }, failClosed(error) { lifetime.abort(error); } }));
   if (goal) registry.install(createHostGoalTerminalFence(goal.addon, { root, runtime, assertOwner: assertGoal }));
   const commandPolicy = createHostCommandPolicy(root, () => { assert(); if (readAccessConfig().mode !== "single-user") throw Error("Native controls require single-user policy"); });
-  const harnessOptions = { models, registry: withTaskModelRequestScope(registry), settings: commandPolicy.settings };
+  const harnessOptions = { models, registry: withTaskModelRequestScope(registry, async scope => {
+    if (!['pi.generation', 'pi.compaction', 'pi.tool'].includes(scope.taskKind)) return true;
+    return prepareTaskAccounting(root, mapping.domain, scope, terminalOwner);
+  }), settings: commandPolicy.settings };
   const path = (root.query("PRAGMA database_list").all() as { name: string; file: string }[]).find(row => row.name === "main")?.file;
   if (!path) throw Error("Durable default requires a file-backed application database");
   const storage = new BunSqliteDatabase(path, { root, assertOwner: assert, fenceTransactions: true });
@@ -1070,6 +1118,34 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   let primary: unknown;
   let backgroundContexts:readonly NativeBackgroundContext[]=[];
   let backgroundPayloads=new Map<string,NativeBackgroundPayload>();
+  async function closeCompletedMaintenance(workId?: string): Promise<void> {
+    terminalOwner.assertCurrent();
+    const closeContext = withAbortSignal(terminalOwner.signal, context), prefix = `durable-maintenance:${mapping.domain}:`;
+    const workItems = (workId
+      ? root.query("SELECT id,chat_jid FROM budget_work WHERE id=? AND execution_kind='side_prompt' AND status='active'").all(workId)
+      : root.query("SELECT id,chat_jid FROM budget_work INDEXED BY idx_budget_work_status WHERE status='active' AND execution_kind='side_prompt' AND substr(id,1,?)=?").all(prefix.length,prefix)) as { id: string; chat_jid: string }[];
+    for (const work of workItems) {
+      if (!work.id.startsWith(prefix)) continue;
+      const suffix = work.id.slice(prefix.length);
+      if (!/^[1-9][0-9]*$/.test(suffix) || !Number.isSafeInteger(Number(suffix))) continue;
+      await completeMaintenanceBudgetWork(root, work.id, terminalOwner, async () => {
+      if (!captureRuntime) throw Error('Host financial runtime unavailable');
+      const task = await captureRuntime.completedMaintenance(Number(suffix), closeContext);
+      terminalOwner.assertCurrent(); if (!task) return false;
+      if (!mapping.bindings.some(binding => binding.chatJid === work.chat_jid && binding.conversationId === task.conversationId)) {
+        const requests = root.query(`SELECT r.id,r.model_invocation_json FROM budget_work w INDEXED BY idx_budget_work_parent
+          JOIN budget_request_reservations r INDEXED BY idx_budget_requests_work_state ON r.work_id=w.id
+          WHERE w.parent_work_id=? AND r.chat_jid=? AND r.model_invocation_json IS NOT NULL`).all(work.id,work.chat_jid) as { id: string; model_invocation_json: string }[];
+        if (!requests.some(row => {
+          const invocation = JSON.parse(row.model_invocation_json) as BudgetModelInvocation;
+          return invocation.domain === mapping.domain && invocation.taskKind === 'pi.compaction' && invocation.taskId === task.taskId
+            && invocation.conversationId === task.conversationId && findBudgetRequestByModelInvocation(invocation,root)?.id === row.id;
+        })) return false; // Financial attribution locates private SDK evidence; it grants no execution.
+      }
+      return true;
+      });
+    }
+  }
   // Bootstrap publishes metadata even in explicit offline maintenance. Runtime
   // creation checks execution admission separately, before and after publication.
   async function publishApplicationBinding(tx: import("@earendil-works/pi-durable").Tx, domain: string, chatJid: string, branchId: string) {
@@ -1149,32 +1225,6 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       }, context));
     }
     validateApplicationMapping(root, mapping);
-    // Repair a successful maintenance task whose post-commit budget-work close
-    // was interrupted. Public SDK reads prove the task and its committed write.
-    const maintenancePrefix = `durable-maintenance:${mapping.domain}:`;
-    const maintenanceWork = root.query("SELECT id,chat_jid FROM budget_work WHERE execution_kind='side_prompt' AND parent_work_id IS NULL AND status='active' AND substr(id,1,?)=?")
-      .all(maintenancePrefix.length, maintenancePrefix) as { id: string; chat_jid: string }[];
-    for (const work of maintenanceWork) {
-      const suffix = work.id.slice(maintenancePrefix.length);
-      if (!/^[1-9][0-9]*$/.test(suffix) || !Number.isSafeInteger(Number(suffix))) continue;
-      const task = await harness.getTask(Number(suffix) as import("@earendil-works/pi-durable").TaskId, context);
-      assert();
-      if (task?.kind !== "pi.compaction" || task.state.status !== "terminal" || task.state.outcome.status !== "completed") continue;
-      if (!mapping.bindings.some(binding => binding.chatJid === work.chat_jid && binding.conversationId === task.conversationId)) continue;
-      const result = task.state.outcome.result as { entryId?: number; submissionId?: number };
-      let entryId = result.entryId;
-      if (result.submissionId !== undefined) {
-        const submission = await harness.submission(result.submissionId as import("@earendil-works/pi-durable").SubmissionId, context);
-        const state = await submission?.status(context);
-        if (state?.type !== "write" || state.status !== "done" || state.conversationId !== task.conversationId) continue;
-        entryId = state.entry;
-      }
-      if (entryId === undefined) continue;
-      const entry = await harness.commit(tx => tx.entry(entryId as import("@earendil-works/pi-durable").EntryId), context);
-      assert();
-      if (entry?.kind === "pi.compaction" && entry.conversationId === task.conversationId)
-        await completeMaintenanceBudgetWork(root, work.id);
-    }
     if (toolUpgrades.length || instructionUpgrades.size) {
       // Same-file BEGIN IMMEDIATE fences host admissions for the whole public
       // commit. Repeat global SDK/host preflight under that lock before ANY
@@ -1210,7 +1260,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   if (failed) throw primary;
   assert();
   installTerminalSettlementCompositionSchema(root);
-  assert(); await reconcileOperationBudgetWork(root);
+  assert(); await reconcileOperationBudgetWork(root, undefined, terminalOwner);
   const payloadDir = join(DATA_DIR, "durable-answers");
   const payloadPath = (ref: string) => join(payloadDir, createHash("sha256").update(ref).digest("hex"));
   const answers = { put(ref: string, text: string) {
@@ -1266,22 +1316,27 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
             check({provider:payload.policy.model.provider,id:payload.policy.model.modelId},lifetime.signal,true);assertBackgroundCurrent(payload);
           },history),
         },
+        assertAccountingReady(operationId, terminal) { assert(); assertOperationAccountingReady(root, operationId, terminal, {domain:mapping.domain,incarnation:mapping.domain}); },
+        async prepareAccounting(_operationId, conversationId) {
+          assert(); const ready = await prepareConversationAccounting(root, mapping.domain, conversationId, terminalOwner); assert();
+          if (!ready) throw new BudgetRequestError('budget_denied');
+        },
         assertAdmission: input => processControls!.assertAdmission(input),
         assertInputAdmission(chat) { assertAdmission(); ensureLiveWatch(chat); },
         materializeAnswer: codex ? createHostCodexAnswerMaterializer({ root, cwd: WORKSPACE_DIR, answers, assertOwner: assert }) : undefined,
-    async onMaintenanceSettled(workId) { codexServices?.releaseTurn(workId); assert(); await completeMaintenanceBudgetWork(root, workId); },
+    async onMaintenanceSettled(workId) { codexServices?.releaseTurn(workId); assert(); await closeCompletedMaintenance(workId); },
     async onOperationSettled(operationId, processExit) {
       codexServices?.releaseTurn(operationId);
       assert();
       if (processExit || processControls!.ownsOperation(operationId)) {
-        try { await reconcileOperationBudgetWork(root, operationId); assert(); }
+        try { await reconcileOperationBudgetWork(root, operationId, terminalOwner); assert(); }
         finally {
           publishTerminal(operationId);
         }
         processControls!.onOperationSettled(operationId, processExit);
         return; // No Goal or queue continuation after a committed exit receipt.
       }
-      try { await reconcileOperationBudgetWork(root, operationId); assert(); }
+      try { await reconcileOperationBudgetWork(root, operationId, terminalOwner); await closeCompletedMaintenance(); assert(); }
       finally {
         publishTerminal(operationId);
         const row = root.query("SELECT chat_jid FROM service_effect_s01_operations WHERE operation_id=?").get(operationId) as { chat_jid: string } | null;
@@ -1326,6 +1381,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     },
     runtime: { onStorageFailure: notifyStorageFailure, incarnation: mapping.domain, sessionId: mapping.domain, now: () => new Date().toISOString(), harnessOptions,
       codemodeExecute: tools.find(tool => tool.name === "codemode")!.execute } }, context);
+  await closeCompletedMaintenance(); // Repaired finance, using the live runtime's SDK owner.
   if (remotePeer) {
     const native = await import(pathToFileURL(join(remotePeer.source.packageDir, "native.ts")).href);
     assertRemote();
@@ -1485,7 +1541,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       // ownership; the operator's process-wide backstop still bounds shutdown.
       await bundle.close();
       const producerResults = await Promise.allSettled([closeRemote(), closeCodex()]);
-      lifetime.abort(); closeResources(); releaseAdminKv?.(); closeInfrastructure(); releaseReviewSource?.(); releaseObservabilityConfiguration?.();
+      terminalLifetime.abort(); lifetime.abort(); closeResources(); releaseAdminKv?.(); closeInfrastructure(); releaseReviewSource?.(); releaseObservabilityConfiguration?.();
       const results = [...producerResults, ...await Promise.allSettled([mcp?.close(), closeSandbox(), drawioHost?.close()])];
       const failures: unknown[] = results.filter((result): result is PromiseRejectedResult => result.status === "rejected").map(result => result.reason);
       await closeLiveViews();
@@ -1495,7 +1551,13 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   closeForProcessControl = () => backend.close();
   return backend;
   } catch (error) {
-    lifetime.abort(); closeResources(); releaseAdminKv?.(); closeInfrastructure(); releaseReviewSource?.(); releaseObservabilityConfiguration?.();
+    // A post-construction failure still owns a live SDK scheduler/storage graph.
+    // Join it before invalidating execution dependencies or financial ownership.
+    if (typeof bundle !== 'undefined') {
+      try { bundle.stop(); await bundle.close(); }
+      catch (cleanup) { throw new RuntimeStartupCleanupError([error, cleanup], 'Application startup cleanup uncertain'); }
+    }
+    terminalLifetime.abort(); lifetime.abort(); closeResources(); releaseAdminKv?.(); closeInfrastructure(); releaseReviewSource?.(); releaseObservabilityConfiguration?.();
     const cleanupFailures: unknown[] = [];
     try { await closeRemote(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     try { await closeCodex(); } catch (cleanup) { cleanupFailures.push(cleanup); }

@@ -50,7 +50,7 @@ export interface ServiceWorkAdapterRuntime {
 /** Optional host writer fence for all new mutations. Committed replays remain observational. */
 export interface ServiceWorkAcceptanceRuntime extends ServiceWorkAdapterRuntime {
   /** Synchronous, fail-closed check inside each mutation SQL transaction, before/after apply. */
-  validateAcceptance?: () => boolean;
+  validateAcceptance?: (method?: MutationMethod, operationId?: string | null) => boolean;
   /** Host-owned persisted queue order. Reorders only the leading queued-source batch;
    * normal/internal sources remain barriers. Source IDs and receipts never change. */
   pendingQueuedSourceOrder?: (chatJid: string) => readonly string[];
@@ -1111,20 +1111,20 @@ export class CurrentPiclawServiceWorkStore implements ServiceWorkStore {
     const effect = request.effect;
     const replay = this.readDecision<T>(method, effect.idempotencyKey, effect.requestHash);
     if (replay) return replay;
-    this.validateAcceptance();
+    this.validateAcceptance(method, effect.operationId);
     const value = apply(request);
     if (!value.ok) return value;
     const transactionFault = this.fault(method, "before_effect");
     if (!transactionFault.ok || transactionFault.injected) throw new RollbackFault();
     this.writeDecision(method, effect.idempotencyKey, effect.requestHash, value.value);
-    this.validateAcceptance();
+    this.validateAcceptance(method, effect.operationId);
     return value;
   }
 
-  private validateAcceptance(): void {
+  private validateAcceptance(method?: MutationMethod, operationId?: string | null): void {
     try {
       if (!this.runtime.validateAcceptance) return;
-      const observed: unknown = this.runtime.validateAcceptance();
+      const observed: unknown = this.runtime.validateAcceptance(method, operationId);
       if (observed === true) return;
       // Invalid asynchronous guards must be denied, but their rejections still need an observer.
       if ((typeof observed === "object" && observed !== null) || typeof observed === "function")

@@ -2,6 +2,7 @@ import { useRef } from '../vendor/preact-htm.js';
 import { setLocalStorageItem } from '../utils/storage.js';
 
 const MIN_CHAT_PANE_RATIO = 0.10;
+const MIN_CHAT_PANE_WIDTH = 320;
 const WORKSPACE_SPLITTER_WIDTH = 4;
 const EDITOR_SPLITTER_WIDTH = 4;
 const MIN_SIDEBAR_WIDTH = 160;
@@ -15,7 +16,7 @@ function getViewportWidth() {
 }
 
 export function getMinimumChatPaneWidth(viewportWidth = getViewportWidth()) {
-  return viewportWidth > 0 ? Math.floor(viewportWidth * MIN_CHAT_PANE_RATIO) : 0;
+  return viewportWidth > 0 ? Math.min(viewportWidth, Math.max(MIN_CHAT_PANE_WIDTH, Math.floor(viewportWidth * MIN_CHAT_PANE_RATIO))) : 0;
 }
 
 export function clampSidebarWidth(width, viewportWidth = getViewportWidth(), editorWidth = 0) {
@@ -28,6 +29,12 @@ export function clampEditorWidth(width, viewportWidth = getViewportWidth(), side
   const reserved = getMinimumChatPaneWidth(viewportWidth) + EDITOR_SPLITTER_WIDTH + (sidebarWidth > 0 ? WORKSPACE_SPLITTER_WIDTH + Math.max(0, sidebarWidth) : 0);
   const dynamicMax = viewportWidth > 0 ? Math.floor(viewportWidth - reserved) : MAX_EDITOR_WIDTH;
   return Math.min(Math.max(Number(width) || 0, MIN_EDITOR_WIDTH), Math.max(MIN_EDITOR_WIDTH, Math.min(MAX_EDITOR_WIDTH, dynamicMax)));
+}
+
+export function occupiedPaneWidth(shell, selector) {
+  const pane = shell.querySelector?.(selector);
+  if (!pane || getComputedStyle(pane).position === 'fixed') return 0;
+  return pane.getBoundingClientRect().width;
 }
 
 export function useSplitters({ appShellRef, sidebarWidthRef, editorWidthRef, dockHeightRef }) {
@@ -46,12 +53,12 @@ export function useSplitters({ appShellRef, sidebarWidthRef, editorWidthRef, doc
     let lastX = startX;
     const onMove = (me) => {
       lastX = me.clientX;
-      const w = clampSidebarWidth(startW + (me.clientX - startX), getViewportWidth(), editorWidthRef?.current || 0);
+      const w = clampSidebarWidth(startW + (me.clientX - startX), getViewportWidth(), occupiedPaneWidth(shell, '.editor-pane-container'));
       shell.style.setProperty('--sidebar-width', `${w}px`);
       sidebarWidthRef.current = w;
     };
     const onUp = () => {
-      const w = clampSidebarWidth(startW + (lastX - startX), getViewportWidth(), editorWidthRef?.current || 0);
+      const w = clampSidebarWidth(startW + (lastX - startX), getViewportWidth(), occupiedPaneWidth(shell, '.editor-pane-container'));
       sidebarWidthRef.current = w;
       splitter.classList.remove('dragging');
       shell.classList.remove('sidebar-resizing');
@@ -82,7 +89,7 @@ export function useSplitters({ appShellRef, sidebarWidthRef, editorWidthRef, doc
       const t = te.touches[0];
       if (!t) return;
       te.preventDefault();
-      const w = clampSidebarWidth(startW + (t.clientX - startX), getViewportWidth(), editorWidthRef?.current || 0);
+      const w = clampSidebarWidth(startW + (t.clientX - startX), getViewportWidth(), occupiedPaneWidth(shell, '.editor-pane-container'));
       shell.style.setProperty('--sidebar-width', `${w}px`);
       sidebarWidthRef.current = w;
     };
@@ -105,7 +112,7 @@ export function useSplitters({ appShellRef, sidebarWidthRef, editorWidthRef, doc
     const shell = appShellRef.current;
     if (!shell) return;
     const startX = e.clientX;
-    const startW = editorWidthRef.current || sidebarWidthRef.current || 280;
+    const startW = occupiedPaneWidth(shell, '.editor-pane-container') || editorWidthRef.current || 280;
     const splitter = e.currentTarget;
     splitter.classList.add('dragging');
     document.body.style.cursor = 'col-resize';
@@ -114,12 +121,12 @@ export function useSplitters({ appShellRef, sidebarWidthRef, editorWidthRef, doc
     let lastX = startX;
     const onMove = (me) => {
       lastX = me.clientX;
-      const w = clampEditorWidth(startW + (me.clientX - startX), getViewportWidth(), sidebarWidthRef?.current || 0);
+      const w = clampEditorWidth(startW + (me.clientX - startX), getViewportWidth(), occupiedPaneWidth(shell, '.workspace-sidebar'));
       shell.style.setProperty('--editor-width', `${w}px`);
       editorWidthRef.current = w;
     };
     const onUp = () => {
-      const w = clampEditorWidth(startW + (lastX - startX), getViewportWidth(), sidebarWidthRef?.current || 0);
+      const w = clampEditorWidth(startW + (lastX - startX), getViewportWidth(), occupiedPaneWidth(shell, '.workspace-sidebar'));
       editorWidthRef.current = w;
       splitter.classList.remove('dragging');
       document.body.style.cursor = '';
@@ -139,7 +146,7 @@ export function useSplitters({ appShellRef, sidebarWidthRef, editorWidthRef, doc
     const touch = e.touches[0];
     if (!touch) return;
     const startX = touch.clientX;
-    const startW = editorWidthRef.current || sidebarWidthRef.current || 280;
+    const startW = occupiedPaneWidth(shell, '.editor-pane-container') || editorWidthRef.current || 280;
     const splitter = e.currentTarget;
     splitter.classList.add('dragging');
     document.body.style.userSelect = 'none';
@@ -148,7 +155,7 @@ export function useSplitters({ appShellRef, sidebarWidthRef, editorWidthRef, doc
       const t = te.touches[0];
       if (!t) return;
       te.preventDefault();
-      const w = clampEditorWidth(startW + (t.clientX - startX), getViewportWidth(), sidebarWidthRef?.current || 0);
+      const w = clampEditorWidth(startW + (t.clientX - startX), getViewportWidth(), occupiedPaneWidth(shell, '.workspace-sidebar'));
       shell.style.setProperty('--editor-width', `${w}px`);
       editorWidthRef.current = w;
     };
