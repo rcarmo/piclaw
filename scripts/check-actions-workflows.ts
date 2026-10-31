@@ -126,7 +126,8 @@ expectEqual(nativeInstalls.map(step => [step["working-directory"], step.run]), [
   ["runtime/durable-engine", "bun install --frozen-lockfile --ignore-scripts"],
   ["qualification/pi-durable-130", "bun install --frozen-lockfile --ignore-scripts"],
   [".qualification-native-addons", "bun install --frozen-lockfile --ignore-scripts"],
-], "Setup must prepare the private engine, qualification and native add-on graphs with frozen locks and no lifecycle scripts.");
+  [".qualification-native-addons/addons/code-review", "bun install --frozen-lockfile --ignore-scripts"],
+], "Setup must prepare the private engine, qualification, native add-on and code-review parser graphs with frozen locks and no lifecycle scripts.");
 const exportPaths = nativeSteps.at(-1);
 expectTrue(exportPaths?.run?.includes('readFileSync("scripts/native-gate-contract.json"') &&
   exportPaths.run.includes("Object.entries(contract.roots)") && exportPaths.run.includes("checkouts[fixture]") &&

@@ -38,28 +38,32 @@ export function assertModelContextFits(messages: readonly Message[], agent: unkn
   if (messages.some(message => message.role === "assistant" &&
     [message.usage.input, message.usage.output, message.usage.cacheRead, message.usage.cacheWrite, message.usage.totalTokens]
       .some(value => !Number.isFinite(value) || value < 0))) throw Error("Model context usage unavailable");
-  // The SDK identifies the last applicable measured prefix, including prefix
-  // changes. Serialized metadata/signatures in that prefix are not token usage.
-  // Bound unmeasured model payload, not envelope telemetry or duplicated tool
-  // details. Preserve content blocks verbatim: opaque reasoning/signatures and
-  // nested tool arguments still need conservative accounting without measurement.
+  // Use the SDK's token units. JSON envelopes, tool telemetry and opaque
+  // reasoning signatures are not text tokens; their byte length cannot prove
+  // that the candidate context is full. The provider remains the final limit.
   const estimate = estimateContextTokens(messages);
+  if (messages.some(message => message.role === "assistant" && message.usage.totalTokens > 0 &&
+    message.usage.totalTokens < message.usage.input + message.usage.output))
+    throw Error("Model context usage unavailable");
+  const instructions = agent && typeof agent === "object" && "instructions" in agent ? (agent as { instructions?: unknown }).instructions : undefined;
+  const configurationTokens = estimateContextTokens([{ role: "user", content: JSON.stringify([instructions, tools]), timestamp: 0 }]).tokens;
+  // Providers disagree about whether totalTokens includes cache components.
+  // Accept both SDK shapes, but never use the smaller total to hide capacity.
+  const measured = estimate.lastUsageIndex === null ? undefined : messages[estimate.lastUsageIndex];
+  const usage = measured?.role === "assistant" ? measured.usage : undefined;
+  const measuredTokens = usage ? Math.max(estimate.usageTokens, usage.input + usage.output + usage.cacheRead + usage.cacheWrite) : estimate.usageTokens;
   const suffix = estimate.lastUsageIndex === null ? messages : messages.slice(estimate.lastUsageIndex + 1);
-  const payload = suffix.map(message => {
-    const { role, content } = message;
-    switch (message.role) {
-      case "system": return { role, content, sections: message.sections, toolsAdded: message.toolsAdded, toolsRemoved: message.toolsRemoved };
-      case "toolResult": return { role, content, toolCallId: message.toolCallId, toolName: message.toolName, isError: message.isError };
-      default: return { role, content };
-    }
-  });
-  const unmeasuredBytes = new TextEncoder().encode(JSON.stringify([payload, agent, tools])).length;
-  const inputBound = Math.max(estimate.tokens, estimate.usageTokens + unmeasuredBytes);
-  if (!Number.isFinite(inputBound) || inputBound < 0 || inputBound + overhead + 8192 + target.maxTokens > target.contextWindow) {
+  // The SDK text estimator omits IDs and result names. Some provider adapters
+  // forward them; count this framing conservatively, never envelope telemetry.
+  const framing = suffix.flatMap(message => message.role === "toolResult" ? [message.toolName, message.toolCallId]
+    : message.role === "assistant" ? message.content.flatMap(block => block.type === "toolCall" ? [block.id] : []) : []);
+  const framingTokens = framing.length ? estimateContextTokens([{ role: "user", content: framing.join("\n"), timestamp: 0 }]).tokens : 0;
+  const inputEstimate = Math.max(estimate.tokens, measuredTokens + estimate.trailingTokens) + configurationTokens + framingTokens;
+  // Retain the existing conservative dynamic-section allowance, full output
+  // budget and safety reserve. Only serialized-payload bytes cease being tokens.
+  if (!Number.isFinite(inputEstimate) || inputEstimate < 0 || inputEstimate + overhead + 8192 + target.maxTokens > target.contextWindow) {
     const bytes = new TextEncoder().encode(JSON.stringify([messages, agent, tools])).length;
-    // Numeric-only diagnostics explain conservative admission without exposing
-    // prompts, tool arguments, credentials or opaque reasoning signatures.
-    throw Error(`Candidate context bound exceeded; compact first (serialized input bytes=${bytes}, reported tokens=${estimate.usageTokens}, estimated context tokens=${estimate.tokens}, unmeasured input bytes=${unmeasuredBytes}, input token bound=${inputBound}, dynamic prompt bytes=${overhead}, reserve=8192, output budget=${target.maxTokens}, context window=${target.contextWindow})`);
+    throw Error(`Candidate context estimate exceeded; compact first (serialized input bytes=${bytes}, reported tokens=${estimate.usageTokens}, estimated context tokens=${estimate.tokens}, input token estimate=${inputEstimate}, dynamic prompt bytes=${overhead}, reserve=8192, output budget=${target.maxTokens}, context window=${target.contextWindow})`);
   }
 }
 

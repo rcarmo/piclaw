@@ -76,7 +76,7 @@ for (const failure of ["oversize", "render-error", "revoked"] as const) test(`dy
 
 for (const sameModel of [false, true]) test(`thinking-only controls skip model-fit work with explicit same model=${sameModel}`, async () => {
   const f = fixture([{ key: "not-needed", async render() { throw Error("must not render for thinking-only"); } }],
-    [{ role: "user", content: "x".repeat(210000), timestamp: 0 }]);
+    [{ role: "user", content: "x".repeat(2100000), timestamp: 0 }]);
   const result = await f.run("set_model", { ...(sameModel ? { model: "first/one" } : {}), thinking_level: "high" });
   expect(result.thinking_level).toBe("high"); expect(f.state().model).toEqual({ provider: "first", modelId: "one" });
   expect(f.stats().reads).toBe(0);
@@ -87,7 +87,7 @@ for (const sameModel of [false, true]) test(`thinking-only controls skip model-f
   expect(f.state().model).toEqual({ provider: "first", modelId: "one" });
 });
 test("large existing context permits a thinking-only change but still rejects a different-model fit", async () => {
-  const f = fixture([], [{role:"user", content:"x".repeat(210000),timestamp:0}]);
+  const f = fixture([], [{role:"user", content:"x".repeat(2100000),timestamp:0}]);
   expect((await f.run("switch_thinking",{level:"high"})).thinking_level).toBe("high");
   expect(f.stats().reads).toBe(0);
   await expect(f.run("set_model",{model:"second/two"})).rejects.toThrow("compact first");
