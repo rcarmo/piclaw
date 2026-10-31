@@ -34,6 +34,25 @@ describe('canonical offline native contract', () => {
     for (const required of ['default-application-runtime.test.ts', 'runtime.test.ts', 'goal-tools.test.ts', 'goal-usage.test.ts', 'goal-settlement.test.ts', 'goal-terminal-race.test.ts', 'installed-goal-catalog.test.ts', 'native-compaction-settings.test.ts', 'routing-policy.test.ts', 'native-ui-projection.test.ts']) expect(contract.tests).toContain(required);
   });
 
+  test('preflight requires the separately locked code-review parser graph', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'native-parser-prereq-'));
+    try {
+      writeFileSync(join(root, '.gitignore'), 'node_modules\n');
+      writeFileSync(join(root, 'bun.lock'), '{}');
+      mkdirSync(join(root, 'node_modules'));
+      for (const args of [['init', '-q'], ['add', '.'], ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'fixture']]) {
+        expect(Bun.spawnSync(['git', '-C', root, ...args]).exitCode).toBe(0);
+      }
+      const ref = new TextDecoder().decode(Bun.spawnSync(['git', '-C', root, 'rev-parse', 'HEAD']).stdout).trim();
+      const prepared = { ...contract, fixtures: { ...contract.fixtures, native: { ...contract.fixtures.native, ref }, contract: { ...contract.fixtures.contract, ref } } };
+      const env = { DURABLE_ADDONS_ROOT: root, DURABLE_CORE_ADDONS_ROOT: root, DURABLE_GOAL_ADDON_ROOT: root, DURABLE_CONTRACT_ADDONS_ROOT: root };
+      const problems = () => nativePreflight(prepared, env).then(() => '', error => String(error));
+      expect(await problems()).toContain('addons/code-review/node_modules');
+      mkdirSync(join(root, 'addons/code-review/node_modules'), { recursive: true });
+      expect(await problems()).not.toContain('addons/code-review/node_modules');
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }, 30_000);
+
   test('missing prerequisites and selection state fail actionably before any package or provider work', async () => {
     await expect(nativePreflight(contract, {})).rejects.toThrow('DURABLE_ADDONS_ROOT: export an existing disposable');
     await expect(nativePreflight(contract, {})).rejects.toThrow('DURABLE_CATALOG_DEPENDENCIES');
