@@ -50,7 +50,7 @@ import type { NativeDreamRequest,AgentOutput } from '../../src/agent-pool/contra
 import { getBudgetWork,ensureBudgetWork,setBudgetWorkStatus } from '../../src/db/budget-limits.js';
 import { assertModelAccountingReady } from '../../src/budget/model-request-accounting.js';
 import { BudgetRequestError, type BudgetModelInvocation } from '../../src/db/budget-request-reservations.js';
-import { reserveHostRequest, reconcileOperationBudgetWork, completeMaintenanceBudgetWork,operationBudgetWorkId,assertOperationAccountingReady } from "./host-request-accounting.js";
+import { reserveHostRequest, reconcileOperationBudgetWork, completeMaintenanceBudgetWork,operationBudgetWorkId,assertOperationAccountingReady,assertConversationAccountingReady } from "./host-request-accounting.js";
 import { createHostMcp } from "./host-mcp.js";
 import { createHostFetch } from "./host-fetch.js";
 import { taskModelRequestScope, taskModelHookScope, withTaskModelRequestScope } from "./task-model-boundary-shim.js";
@@ -896,7 +896,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
           const {input,policy}=identity.background;assertNativeBackgroundModel(policy,model);
           const reservation=await reserveHostRequest({database:root,terminalOwner,operationId:input.operationId,chatJid:input.chatJid,authPath:join(getPiclawAgentDir(),'auth.json'),model:model as any,maxTokens:options?.maxTokens,
             executionKind:'background',backgroundPolicy:policy,modelInvocation:invocation(input.operationId),usageSource:'compaction',signal,assertCurrent(){assert();identity.assertCurrent();}});
-          preparedRequests.set(signal,{accounted:reservation!==undefined,assertCurrent:identity.assertCurrent,assertAccountingReady:()=>assertOperationAccountingReady(root,input.operationId)});return reservation;
+          preparedRequests.set(signal,{accounted:reservation!==undefined,assertCurrent:identity.assertCurrent,assertAccountingReady:()=>assertOperationAccountingReady(root,input.operationId,false,{domain:mapping.domain,incarnation:mapping.domain})});return reservation;
         }
         const operationId = identity.operationId ?? identity.workId;
         const scheduled = identity.operationId ? root.query('SELECT task_id FROM service_effect_s07_occurrences WHERE operation_id=?').get(identity.operationId) as { task_id: string } | null : null;
@@ -905,7 +905,10 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
           chatJid: identity.chatJid, authPath: join(getPiclawAgentDir(), "auth.json"), model: model as any,
           maxTokens: options?.maxTokens, executionKind: "side_prompt", signal,
           assertCurrent() { assert(); identity.assertCurrent(); } });
-        preparedRequests.set(signal,{accounted:false,assertCurrent:identity.assertCurrent,assertAccountingReady:()=>identity.operationId ? assertOperationAccountingReady(root,identity.operationId) : assertModelAccountingReady(identity.workId,root)});
+        preparedRequests.set(signal,{accounted:false,assertCurrent:identity.assertCurrent,assertAccountingReady:()=>{
+          if(identity.operationId)assertOperationAccountingReady(root,identity.operationId,false,{domain:mapping.domain,incarnation:mapping.domain});
+          else{assertModelAccountingReady(identity.workId,root);assertConversationAccountingReady(root,{domain:mapping.domain,conversationId:scope.conversationId,chatJid:identity.chatJid});}
+        }});
         return reservation;
       }
       if (scope.taskKind !== "pi.generation") throw Error("Native request kind unavailable");
@@ -919,7 +922,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         maxTokens: options?.maxTokens, executionKind: captured.delegateModel ? "delegate" : scheduled ? "scheduled" : background ? 'background' : "interactive",
         backgroundPolicy:background,modelInvocation:invocation(captured.operation.operationId),scheduledTaskId: scheduled?.task_id, signal,
         assertCurrent() { assert(); scope.signal.throwIfAborted(); runtime().assertCapturedSourceCurrent(captured.inputs); if (captured.delegateModel) assertDelegateModel(captured.delegateModel); } });
-      preparedRequests.set(signal,{accounted:!!background&&reservation!==undefined,assertCurrent:()=>runtime().assertCapturedSourceCurrent(captured.inputs),assertAccountingReady:()=>assertOperationAccountingReady(root,captured.operation.operationId)});
+      preparedRequests.set(signal,{accounted:!!background&&reservation!==undefined,assertCurrent:()=>runtime().assertCapturedSourceCurrent(captured.inputs),assertAccountingReady:()=>assertOperationAccountingReady(root,captured.operation.operationId,false,{domain:mapping.domain,incarnation:mapping.domain})});
       return reservation;
     },
     assertStoredOutcomeCurrent(model, signal) {
@@ -1284,7 +1287,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
             check({provider:payload.policy.model.provider,id:payload.policy.model.modelId},lifetime.signal,true);assertBackgroundCurrent(payload);
           },history),
         },
-        assertAccountingReady(operationId, terminal) { assert(); assertOperationAccountingReady(root, operationId, terminal); },
+        assertAccountingReady(operationId, terminal) { assert(); assertOperationAccountingReady(root, operationId, terminal, {domain:mapping.domain,incarnation:mapping.domain}); },
         assertAdmission: input => processControls!.assertAdmission(input),
         assertInputAdmission(chat) { assertAdmission(); ensureLiveWatch(chat); },
         materializeAnswer: codex ? createHostCodexAnswerMaterializer({ root, cwd: WORKSPACE_DIR, answers, assertOwner: assert }) : undefined,

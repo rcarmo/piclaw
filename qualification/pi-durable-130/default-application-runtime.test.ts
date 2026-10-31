@@ -175,7 +175,7 @@ const explicitDelegateCases: Record<string, { id: string; model: string | number
   "native-delegate-explicit-fuzzy": { id: "gpt-5-mini", model: "synthetic/GPT-5-mini", denied: true },
   "native-delegate-explicit-virtual": { id: "gpt-5-mini", model: "synthetic/virtual", denied: true },
 };
-for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "native-recovery-unit", "native-retention-unit", "native-runner-denial", "native-scheduled-lease-free", "native-nonweb-admission", "native-addon-admission", "native-addon-admission-rollback", "native-addon-admission-overlap", "native-addon-admission-rejected", "native-addon-admission-alias", "native-addon-admission-model-revoked", "native-addon-admission-public-model-revoked", "native-addon-execution", "native-addon-execution-accounting", "native-addon-execution-accounting-unknown", "native-addon-execution-accounting-capped", "native-addon-execution-accounting-capped-daily", "native-addon-execution-accounting-capped-exact", "native-addon-execution-accounting-capped-denied", "native-addon-execution-accounting-capped-initial-denied", "native-addon-execution-accounting-capped-auth-denied", "native-addon-execution-accounting-capped-unknown", "native-addon-execution-accounting-capped-missing-account", "native-addon-execution-accounting-capped-account-changed", "native-addon-execution-accounting-capped-tool-race", "native-addon-execution-accounting-capped-pricing-changed", "native-addon-execution-accounting-capped-small-output", "native-addon-execution-accounting-capped-cleanup-failed", "native-addon-execution-no-account-auth-cap", "native-addon-execution-revoked", "native-addon-execution-auth-revoked", "native-addon-execution-cancelled", "native-addon-execution-deadline", "native-addon-execution-quota", "native-addon-execution-ceiling", "native-addon-execution-large-result", "native-addon-execution-live-input", "native-addon-execution-recovery-terminal", "native-addon-execution-recovery-cancel-requested", "native-addon-execution-recovery-unknown", "native-addon-execution-recovery-cancelled", "native-addon-execution-recovery-unsafe", "native-addon-execution-recovery-input-ack", "native-addon-execution-recovery-budget-blocked", "native-addon-execution-recovery-owned", "native-addon-execution-recovery-no-source", "native-addon-service-execution", "native-addon-service-budget-resume", "native-addon-service-continuation", "native-addon-service-continuation-budget-gap", "native-addon-service-continuation-interrupted", "native-addon-service-continuation-staged", "native-addon-service-continuation-compaction", "native-addon-service-continuation-compaction-background", "native-addon-service-continuation-compaction-auth-revoked", "native-addon-service-continuation-compaction-auth-budget", "native-addon-service-continuation-compaction-unknown", "native-addon-service-continuation-compaction-background-held", "native-dream-runner", "native-dream-runner-model", "native-dream-runner-tools", "native-dream-runner-held-provider", "native-dream-runner-held-tool", "native-dream-runner-lock-revoked", "native-dream-runner-accounted", "native-dream-runner-budget-denied", "native-dream-runner-deadline", "native-dream-runner-original-time", "native-dream-runner-accounted-unknown", "native-dream-runner-unsafe-result", "native-dream-runner-held-provider-accounted", "native-dream-runner-recovery-unit", "native-dream-runner-scheduled-model", "native-dream-runner-scheduled-budget", "native-dream-runner-scheduled-lease-revoked", "native-dream-runner-scheduled-token-revoked", "native-dream-runner-scheduled-tool-revoked", "native-dream-runner-scheduled-reclaim", "native-dream-runner-scheduled-budget-denied", "native-dream-runner-scheduled-unknown", "native-dream-runner-scheduled-final-revoked", "native-dream-runner-scheduled-index-revoked", "native-routing-bash-active", "native-routing-control-race", "native-routing-queued-race", "native-routing-side-race", "native-routing-create-race", "native-routing-policy", "native-routing-initial-rollback", "native-routing-initial-ack", "native-usage-projection", "native-scheduler-definition", "native-plan-clear", "native-plan-initial-empty", "native-shutdown-stop-recover", "native-shutdown-close-recover", "native-process-exit", "native-process-exit-accounting", "native-process-exit-accounting-close-fail", "native-process-exit-queue-busy", "native-process-exit-shell-lease", "native-process-status", "native-compaction-accounting-auto", "native-compaction-accounting-auto-pending", "native-compaction-accounting-background", "native-events", "native-web-cursor-ack", "native-infrastructure", "native-goal", "native-goal-local-denial", "native-goal-critical-denial", "native-goal-budget", "native-codemode-plan-goal", "native-compaction-accounting-close-fail", "native-compaction-accounting-recover", "native-compaction-accounting-side-provenance", "native-compaction-accounting-side-dispatch", "native-compaction-accounting-side-auto", "native-compaction-accounting-unknown", "native-compaction-accounting", "native-scheduler-accounting-unknown", "native-scheduler-accounting", "native-scheduler-accounting-auto-compaction", "native-delegate-accounting-unknown", "native-delegate-accounting", "native-delegate-accounting-auto-compaction", "native-delegate-accounting-auto-compaction-revoked", "native-parent-accounting-event-fence", "native-parent-accounting-held-writer", "native-parent-accounting-two-turns", "native-parent-accounting-close-work-fail", "native-parent-accounting-storage-fail", "native-parent-accounting-rotate", "native-parent-accounting-auth-deny", "native-parent-accounting-late-unpriced", "native-parent-accounting-late-no-account", "native-parent-accounting-unknown", "native-parent-accounting", "public-shim-compaction", "source-filter-subset", "public-admission-row-mismatch", "public-admission-chat-mismatch", "public-archived-admission", "public-thinking-reasoning", "native-mcp-cleanup-fail", "native-mcp-disconnect", "native-mcp-catalog-change", "native-mcp-error", "native-parent-budget-cap", "native-parent-budget-auth-cap", "native-mcp-concurrent", "native-mcp-config-change", "native-mcp-codemode", "native-mcp-codemode-cancel", "native-mcp-http-deny", "native-codemode-drawio", "native-codemode-drawio-cancel", "native-codemode-editable-table", "native-codemode-editable-table-cancel", "native-codemode-office-viewer", "native-codemode-office-viewer-cancel", "native-codemode-plan", "native-codemode-plan-cancel", "native-codemode-reopen", "native-codemode-cancel", "native-codemode-binding-revoked", "native-drawio", "native-drawio-cancel", "native-drawio-missing-opener", "native-drawio-prepare-held", "public-conversations", "custom-subset", "pending-host", "native-office-viewer", "native-office-viewer-cancel", "native-editable-table", "native-editable-table-missing-publisher", "native-editable-table-revoked", "native-editable-table-closed-publisher", "native-editable-table-nonweb", "native-editable-table-branch", "native-editable-table-archived", "native-editable-table-binding-revoked", "native-code-review", "native-codemode-code-review", "native-codemode-code-review-cancel", "native-plan", "native-scheduler", "native-delegate", "native-delegate-standard", "native-delegate-readonly-deny", "native-delegate-standard-revoke", "native-delegate-files", "native-delegate-images", "native-delegate-timeout", "native-delegate-denied", "native-delegate-revoke-cap", "native-delegate-revoke-provider", ...Object.keys(explicitDelegateCases)] as const) factoryTest(scenario, scenario === "native-infrastructure" ? "production factory: native infrastructure installed sources, public admission, terminal receipt and reopen" : scenario.startsWith("native-mcp-") ? `configured default factory: ${scenario}` : scenario === "custom-subset"
+for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "native-recovery-unit", "native-retention-unit", "native-runner-denial", "native-scheduled-lease-free", "native-nonweb-admission", "native-addon-admission", "native-addon-admission-rollback", "native-addon-admission-overlap", "native-addon-admission-rejected", "native-addon-admission-alias", "native-addon-admission-model-revoked", "native-addon-admission-public-model-revoked", "native-addon-execution", "native-addon-execution-accounting", "native-addon-execution-accounting-unknown", "native-addon-execution-accounting-capped", "native-addon-execution-accounting-capped-daily", "native-addon-execution-accounting-capped-exact", "native-addon-execution-accounting-capped-denied", "native-addon-execution-accounting-capped-initial-denied", "native-addon-execution-accounting-capped-auth-denied", "native-addon-execution-accounting-capped-unknown", "native-addon-execution-accounting-capped-missing-account", "native-addon-execution-accounting-capped-account-changed", "native-addon-execution-accounting-capped-tool-race", "native-addon-execution-accounting-capped-pricing-changed", "native-addon-execution-accounting-capped-small-output", "native-addon-execution-accounting-capped-cleanup-failed", "native-addon-execution-no-account-auth-cap", "native-addon-execution-revoked", "native-addon-execution-auth-revoked", "native-addon-execution-cancelled", "native-addon-execution-deadline", "native-addon-execution-quota", "native-addon-execution-ceiling", "native-addon-execution-large-result", "native-addon-execution-live-input", "native-addon-execution-recovery-terminal", "native-addon-execution-recovery-cancel-requested", "native-addon-execution-recovery-unknown", "native-addon-execution-recovery-cancelled", "native-addon-execution-recovery-unsafe", "native-addon-execution-recovery-input-ack", "native-addon-execution-recovery-budget-blocked", "native-addon-execution-recovery-owned", "native-addon-execution-recovery-no-source", "native-addon-service-execution", "native-addon-service-budget-resume", "native-addon-service-continuation", "native-addon-service-continuation-budget-gap", "native-addon-service-continuation-interrupted", "native-addon-service-continuation-staged", "native-addon-service-continuation-compaction", "native-addon-service-continuation-compaction-background", "native-addon-service-continuation-compaction-auth-revoked", "native-addon-service-continuation-compaction-auth-budget", "native-addon-service-continuation-compaction-unknown", "native-addon-service-continuation-compaction-background-held", "native-dream-runner", "native-dream-runner-model", "native-dream-runner-tools", "native-dream-runner-held-provider", "native-dream-runner-held-tool", "native-dream-runner-lock-revoked", "native-dream-runner-accounted", "native-dream-runner-budget-denied", "native-dream-runner-deadline", "native-dream-runner-original-time", "native-dream-runner-accounted-unknown", "native-dream-runner-unsafe-result", "native-dream-runner-held-provider-accounted", "native-dream-runner-recovery-unit", "native-dream-runner-scheduled-model", "native-dream-runner-scheduled-budget", "native-dream-runner-scheduled-lease-revoked", "native-dream-runner-scheduled-token-revoked", "native-dream-runner-scheduled-tool-revoked", "native-dream-runner-scheduled-reclaim", "native-dream-runner-scheduled-budget-denied", "native-dream-runner-scheduled-unknown", "native-dream-runner-scheduled-final-revoked", "native-dream-runner-scheduled-index-revoked", "native-routing-bash-active", "native-routing-control-race", "native-routing-queued-race", "native-routing-side-race", "native-routing-create-race", "native-routing-policy", "native-routing-initial-rollback", "native-routing-initial-ack", "native-usage-projection", "native-scheduler-definition", "native-plan-clear", "native-plan-initial-empty", "native-shutdown-stop-recover", "native-shutdown-close-recover", "native-process-exit", "native-process-exit-accounting", "native-process-exit-accounting-close-fail", "native-process-exit-queue-busy", "native-process-exit-shell-lease", "native-process-status", "native-compaction-accounting-auto", "native-compaction-accounting-auto-pending", "native-compaction-accounting-background", "native-compaction-accounting-background-pending", "native-compaction-accounting-background-pre-reservation", "native-events", "native-web-cursor-ack", "native-infrastructure", "native-goal", "native-goal-local-denial", "native-goal-critical-denial", "native-goal-budget", "native-codemode-plan-goal", "native-compaction-accounting-close-fail", "native-compaction-accounting-recover", "native-compaction-accounting-side-provenance", "native-compaction-accounting-side-dispatch", "native-compaction-accounting-side-auto", "native-compaction-accounting-unknown", "native-compaction-accounting", "native-scheduler-accounting-unknown", "native-scheduler-accounting", "native-scheduler-accounting-auto-compaction", "native-delegate-accounting-unknown", "native-delegate-accounting", "native-delegate-accounting-auto-compaction", "native-delegate-accounting-auto-compaction-revoked", "native-parent-accounting-event-fence", "native-parent-accounting-held-writer", "native-parent-accounting-two-turns", "native-parent-accounting-close-work-fail", "native-parent-accounting-storage-fail", "native-parent-accounting-rotate", "native-parent-accounting-auth-deny", "native-parent-accounting-late-unpriced", "native-parent-accounting-late-no-account", "native-parent-accounting-unknown", "native-parent-accounting", "public-shim-compaction", "source-filter-subset", "public-admission-row-mismatch", "public-admission-chat-mismatch", "public-archived-admission", "public-thinking-reasoning", "native-mcp-cleanup-fail", "native-mcp-disconnect", "native-mcp-catalog-change", "native-mcp-error", "native-parent-budget-cap", "native-parent-budget-auth-cap", "native-mcp-concurrent", "native-mcp-config-change", "native-mcp-codemode", "native-mcp-codemode-cancel", "native-mcp-http-deny", "native-codemode-drawio", "native-codemode-drawio-cancel", "native-codemode-editable-table", "native-codemode-editable-table-cancel", "native-codemode-office-viewer", "native-codemode-office-viewer-cancel", "native-codemode-plan", "native-codemode-plan-cancel", "native-codemode-reopen", "native-codemode-cancel", "native-codemode-binding-revoked", "native-drawio", "native-drawio-cancel", "native-drawio-missing-opener", "native-drawio-prepare-held", "public-conversations", "custom-subset", "pending-host", "native-office-viewer", "native-office-viewer-cancel", "native-editable-table", "native-editable-table-missing-publisher", "native-editable-table-revoked", "native-editable-table-closed-publisher", "native-editable-table-nonweb", "native-editable-table-branch", "native-editable-table-archived", "native-editable-table-binding-revoked", "native-code-review", "native-codemode-code-review", "native-codemode-code-review-cancel", "native-plan", "native-scheduler", "native-delegate", "native-delegate-standard", "native-delegate-readonly-deny", "native-delegate-standard-revoke", "native-delegate-files", "native-delegate-images", "native-delegate-timeout", "native-delegate-denied", "native-delegate-revoke-cap", "native-delegate-revoke-provider", ...Object.keys(explicitDelegateCases)] as const) factoryTest(scenario, scenario === "native-infrastructure" ? "production factory: native infrastructure installed sources, public admission, terminal receipt and reopen" : scenario.startsWith("native-mcp-") ? `configured default factory: ${scenario}` : scenario === "custom-subset"
   ? "default factory preserves persisted custom read subset and all metadata/history/identity on reopen"
   : scenario === "pending-host"
     ? "default factory recovers pending host work without upgrading persisted tools"
@@ -231,7 +231,11 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
   const compactionAccounting = scenario.startsWith("native-compaction-accounting");
   const compactionAccountingUnknown = scenario === "native-compaction-accounting-unknown";
   const compactionCloseFailure = scenario === "native-compaction-accounting-close-fail";
-  const compactionAutoPending = scenario === 'native-compaction-accounting-auto-pending';
+  const compactionBackgroundPending = scenario === 'native-compaction-accounting-background-pending';
+  const compactionBackgroundPreReservation = scenario === 'native-compaction-accounting-background-pre-reservation';
+  const backgroundCaptureReleased = Promise.withResolvers<void>(); let backgroundCaptureEntered = false;
+  const compactionAutoPending = scenario === 'native-compaction-accounting-auto-pending' || compactionBackgroundPending;
+  let backgroundExpenseObserved = false, backgroundParentEntered = false, backgroundSummarySawParent = false;
   let inManualSummary = false;
   let privateCompactionSignal:AbortSignal|undefined,privateCompactionAuthChanged=false;
   const heldPrivateSummary=scenario==='native-addon-service-continuation-compaction-background-held';
@@ -506,6 +510,8 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
     requested.push(physical.id);
     planRequests.push(JSON.stringify(input));
     calls++; const stream = createAssistantMessageEventStream();
+    const backgroundSummaryRequest = compactionBackgroundPending && JSON.stringify(input).includes('You are a context summarization assistant.');
+    if (compactionBackgroundPending && inManualSummary && !backgroundSummaryRequest) backgroundParentEntered = true;
     if (checkpointHold) {
       checkpointHold.signal = options?.signal;
       checkpointHold.entered();
@@ -578,6 +584,17 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
         terminalPulse = setInterval(() => { terminalTicks++; }, 10);
         terminalRelease = setTimeout(() => { terminalWriter!.exec('COMMIT'); terminalWriter!.close(); terminalWriter = undefined; clearInterval(terminalPulse); }, 5200);
       }
+      if (compactionBackgroundPending && inManualSummary && backgroundSummaryRequest) {
+        const deadline = Date.now() + 3000;
+        while (!backgroundParentEntered && Date.now() < deadline) await Bun.sleep(10);
+        backgroundSummarySawParent = backgroundParentEntered;
+      }
+      if (compactionBackgroundPending && inManualSummary && !backgroundSummaryRequest) {
+        const deadline = Date.now() + 3000;
+        const observed = () => !!root.query("SELECT 1 FROM budget_request_reservations WHERE state='unresolved' AND terminal_receipt_json IS NOT NULL AND json_extract(model_invocation_json,'$.taskKind')='pi.compaction'").get();
+        while (!observed() && Date.now() < deadline) await Bun.sleep(10);
+        backgroundExpenseObserved = observed();
+      }
       if (scenario === "native-compaction-accounting-side-dispatch") stream.push({ type: "text_delta", contentIndex: 0, delta: "factory synthetic reply", partial: message });
       stream.push({ type: "done", reason: message.stopReason, message }); stream.end(message);
       // The public event stream adds its own duration synchronously on push.
@@ -640,6 +657,13 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
   const pendingAdmissionCalls:string[]=[];
   let expectedToolSource = "factory-input";
   const captureSpies: { mockRestore(): void }[] = [];
+  if (compactionBackgroundPreReservation) {
+    const capture = HostConversationRuntime.prototype.captureAutomaticCompaction;
+    captureSpies.push(spyOn(HostConversationRuntime.prototype, 'captureAutomaticCompaction').mockImplementation(async function (this: HostConversationRuntime, ...args: Parameters<typeof capture>) {
+      backgroundCaptureEntered = true; await backgroundCaptureReleased.promise;
+      return capture.apply(this, args);
+    }));
+  }
   if (scenario === 'native-compaction-accounting-side-auto') {
     const capture = HostConversationRuntime.prototype.captureAutomaticCompaction;
     captureSpies.push(spyOn(HostConversationRuntime.prototype, 'captureAutomaticCompaction').mockImplementation(async function (this: HostConversationRuntime, ...args: Parameters<typeof capture>) {
@@ -3628,10 +3652,10 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
     const beforeModel = await first!.readModel!();
     const identity = first!.sessionId;
     inManualSummary = true;
-    if (scenario === "native-compaction-accounting-auto" || scenario === "native-compaction-accounting-background" || compactionAutoPending) {
+    if (scenario === "native-compaction-accounting-auto" || scenario === "native-compaction-accounting-background" || compactionAutoPending || compactionBackgroundPreReservation) {
       backend.stop(); await backend.close(); compactionPolicySpy!.mockRestore();
       const open = Harness.open;
-      const background = scenario.endsWith("background");
+      const background = scenario.endsWith("background") || compactionBackgroundPending || compactionBackgroundPreReservation;
       compactionPolicySpy = spyOn(Harness, "open").mockImplementation((storage, options, ctx) => open.call(Harness, storage, { ...options,
         settings: { ...options.settings, compaction: { enabled: true, keepRecentTokens: 1,
           reserveTokens: background ? 1000 : 99999, backgroundTokens: background ? 99000 : 0 } } }, ctx));
@@ -3641,24 +3665,79 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
       const row = root.transaction(() => { const rowId = storeMessage(next);
         automaticBound.getInputSourceAdmission!(next.chat_jid)!({ message: next, rowId, database: root }); return rowId; })();
       const automaticResult = await automaticBound.dispatchAcceptedInput!(next.chat_jid, next.id, row!)!();
+      if (compactionBackgroundPreReservation) {
+        try {
+          expect(backgroundCaptureEntered).toBe(true); expect(automaticResult).toBe('pending'); expect(calls).toBe(beforeCalls + 1);
+          expect(root.query("SELECT count(*) n FROM budget_request_reservations WHERE json_extract(model_invocation_json,'$.taskKind')='pi.compaction'").get()).toEqual({ n: 0 });
+          const operation = root.query('SELECT operation_id,phase FROM service_effect_s01_operations ORDER BY rowid DESC LIMIT 1').get() as { operation_id: string; phase: string };
+          expect(operation.phase).toBe('executing');
+          expect(root.query('SELECT 1 FROM service_effect_s02_commits WHERE operation_id=?').get(operation.operation_id)).toBeNull();
+          expect(root.query('SELECT state FROM service_effect_s01_sources WHERE source_id=?').get(next.id)).toEqual({ state: 'claimed' });
+          const ids = root.query('SELECT id FROM tasks ORDER BY id').all();
+          backgroundCaptureReleased.resolve();
+          const deadline = Date.now() + 3000;
+          while (!root.query("SELECT 1 FROM entries WHERE json_extract(record,'$.kind')='pi.compaction'").get() && Date.now() < deadline) await Bun.sleep(10);
+          expect(root.query("SELECT count(*) n FROM entries WHERE json_extract(record,'$.kind')='pi.compaction'").get()).toEqual({ n: 1 });
+          expect(await automaticBound.dispatchAcceptedInput!(next.chat_jid, next.id, row!)!()).toBe('settled');
+          expect(root.query('SELECT terminal_disposition FROM service_effect_s01_operations WHERE operation_id=?').get(operation.operation_id)).toEqual({ terminal_disposition: 'completed' });
+          expect(root.query('SELECT state FROM service_effect_s01_sources WHERE source_id=?').get(next.id)).toEqual({ state: 'consumed' });
+          expect(root.query("SELECT state FROM budget_request_reservations WHERE json_extract(model_invocation_json,'$.taskKind')='pi.compaction'").all()).toEqual([{ state: 'settled' }]);
+          expect(root.query('SELECT id FROM tasks ORDER BY id').all()).toEqual(ids); expect(calls).toBe(beforeCalls + 2);
+        } finally {
+          backgroundCaptureReleased.resolve(); backend.stop(); await backend.close(); compactionPolicySpy!.mockRestore();
+          for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); closeDatabase(); owner.release();
+        }
+        return;
+      }
       if (compactionAutoPending) {
-        expect(automaticResult).toBe('pending'); expect(calls).toBe(beforeCalls + 1);
+        if (compactionBackgroundPending) {
+          expect(backgroundParentEntered).toBe(true); expect(backgroundSummarySawParent).toBe(true); expect(backgroundExpenseObserved).toBe(true);
+          console.log('OWNERLESS_PENDING_FACT', JSON.stringify({ automaticResult, calls, expense: root.query("SELECT state,terminal_receipt_json IS NOT NULL AS receipt FROM budget_request_reservations WHERE json_extract(model_invocation_json,'$.taskKind')='pi.compaction'").get(), operation: root.query('SELECT operation_id,phase,terminal_disposition FROM service_effect_s01_operations ORDER BY rowid DESC LIMIT 1').get() }));
+        }
+        expect(automaticResult).toBe('pending'); expect(calls).toBe(beforeCalls + (background ? 2 : 1));
         const pending = root.query("SELECT r.*,w.parent_work_id AS maintenance_id FROM budget_request_reservations r JOIN budget_work w ON w.id=r.work_id WHERE json_extract(r.model_invocation_json,'$.taskKind')='pi.compaction'").get() as BudgetRequestReservation & { maintenance_id: string };
         expect(pending.state).toBe('unresolved'); expect(pending.terminal_receipt_json).not.toBeNull();
         const operation = root.query('SELECT operation_id,phase FROM service_effect_s01_operations ORDER BY rowid DESC LIMIT 1').get() as { operation_id: string; phase: string };
         expect(operation.phase).toBe('executing');
-        expect(root.query('SELECT parent_work_id FROM budget_work WHERE id=?').get(pending.maintenance_id)).toEqual({ parent_work_id: `durable-operation:${operation.operation_id}` });
+        expect(root.query('SELECT parent_work_id FROM budget_work WHERE id=?').get(pending.maintenance_id)).toEqual({ parent_work_id: background ? null : `durable-operation:${operation.operation_id}` });
+        expect(JSON.parse(pending.model_invocation_json!).operationId).toBe(background ? pending.maintenance_id : operation.operation_id);
         expect(root.query('SELECT 1 FROM service_effect_s02_commits WHERE operation_id=?').get(operation.operation_id)).toBeNull();
         expect(root.query('SELECT state FROM service_effect_s01_sources WHERE source_id=?').get(next.id)).toEqual({ state: 'claimed' });
         expect(root.query('SELECT count(*) n FROM token_usage WHERE invocation_id=?').get(pending.id)).toEqual({ n: 0 });
         root.exec('DROP TRIGGER compaction_pending_close');
+        if (compactionBackgroundPending) {
+          const tasks = root.query('SELECT * FROM tasks ORDER BY id').all();
+          const binding: BudgetRequestBinding = { id: pending.id, workId: pending.work_id, chatJid: pending.chat_jid,
+            providerId: pending.provider_id, modelId: pending.model_id, accountRef: pending.account_ref, amountMicros: pending.amount_microusd,
+            modelInvocation: JSON.parse(pending.model_invocation_json!) };
+          const accounting = modelRequestAccounting({ authorise() { throw Error('Financial repair cannot acquire new execution authority'); }, documentedFree: false, usageSource: 'compaction' }, root);
+          const factOwner = { signal: new AbortController().signal, assertCurrent() { owner.assertCurrentOwner(); } };
+          const recovered = await accounting.settleRetainedRequest(binding, factOwner);
+          expect(recovered.state).toBe('settled'); expect(await accounting.settleRetainedRequest(binding, factOwner)).toEqual(recovered);
+          expect(recovered.terminal_receipt_json).toBe(pending.terminal_receipt_json); expect(recovered.terminal_received_at).toBe(pending.terminal_received_at);
+          expect(root.query('SELECT count(*) n FROM token_usage WHERE invocation_id=?').get(pending.id)).toEqual({ n: 1 });
+          expect(root.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(tasks);
+          expect(await automaticBound.dispatchAcceptedInput!(next.chat_jid, next.id, row!)!()).toBe('settled');
+          expect(root.query('SELECT state FROM service_effect_s01_sources WHERE source_id=?').get(next.id)).toEqual({ state: 'consumed' });
+          expect(root.query('SELECT terminal_disposition FROM service_effect_s01_operations WHERE operation_id=?').get(operation.operation_id)).toEqual({ terminal_disposition: 'completed' });
+          expect(root.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(tasks); expect(calls).toBe(beforeCalls + 2);
+        }
         automaticCaptureSpy?.mockRestore(); backend.stop(); await backend.close(); compactionPolicySpy.mockRestore();
         for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); closeDatabase(); owner.release(); return;
       }
-      expect(automaticResult).toBe('settled');
+      expect(['pending', 'settled']).toContain(automaticResult);
+      const tasksBeforeObservation = root.query('SELECT * FROM tasks ORDER BY id').all();
+      if (automaticResult === 'pending') {
+        expect(root.query('SELECT state FROM service_effect_s01_sources WHERE source_id=?').get(next.id)).toEqual({ state: 'claimed' });
+        expect(root.query('SELECT count(*) n FROM service_effect_s02_commits WHERE operation_id=(SELECT operation_id FROM service_effect_s01_operations ORDER BY rowid DESC LIMIT 1)').get()).toEqual({ n: 0 });
+      }
       const deadline = Date.now() + 3000;
       while (!root.query("SELECT id FROM entries WHERE json_extract(record, '$.kind')='pi.compaction'").get() && Date.now() < deadline) await Bun.sleep(10);
       expect(root.query("SELECT id FROM entries WHERE json_extract(record, '$.kind')='pi.compaction'").all()).toHaveLength(1);
+      if (automaticResult === 'pending') {
+        expect(await automaticBound.dispatchAcceptedInput!(next.chat_jid, next.id, row!)!()).toBe('settled');
+        expect(root.query('SELECT id FROM tasks ORDER BY id').all()).toEqual(tasksBeforeObservation.map(task => ({ id: (task as { id: number }).id })));
+      }
       expect(calls).toBe(beforeCalls + 2);
       expect(root.query("SELECT terminal_disposition FROM service_effect_s01_operations ORDER BY rowid DESC LIMIT 1").get()).toEqual({ terminal_disposition: "completed" });
       expect(root.query("SELECT state FROM service_effect_s01_sources WHERE source_id=?").get(next.id)).toEqual({ state: "consumed" });

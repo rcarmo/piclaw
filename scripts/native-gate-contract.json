@@ -134,6 +134,7 @@
     "schema-convergence.test.ts",
     "schema-ownership.test.ts",
     "scoped-compaction.test.ts",
+    "sdk-accounting-scope.test.ts",
     "sdk-handoff-failure.test.ts",
     "selected-context-admission.test.ts",
     "single-database.test.ts",

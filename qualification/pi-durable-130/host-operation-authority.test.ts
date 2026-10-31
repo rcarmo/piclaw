@@ -5,6 +5,7 @@ import {join} from 'node:path';
 import {acquireRuntimeLock} from '../../runtime/src/runtime/single-instance.js';
 import { expect, test } from "bun:test";
 import { createHostOperationAuthority } from "../../runtime/durable-engine/src/host-operation-authority.js";
+import { assertOperationAccountingReady } from '../../runtime/durable-engine/src/host-request-accounting.js';
 import { createCurrentPiclawServiceWorkStore } from "../../runtime/src/service-effects/current-piclaw/service-work-store.js";
 import { installTerminalSettlementCompositionSchema } from "../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js";
 import { at, effect, sealed, value } from "./src/host-handoff.js";
@@ -36,7 +37,7 @@ async function fixture(financial = false) {
 
 for (const readonly of [false, true]) test(`captured tool authority repeats the pending accounting barrier before its effect; readonly=${readonly}`, async () => {
   const { root, captured } = await fixture(true);
-  const guarded = { ...captured, accountingBarrier: true as const };
+  const guarded = { ...captured, accountingBarrier: () => assertOperationAccountingReady(root, captured.operation.operationId) };
   const authority = createHostOperationAuthority(root, guarded, () => {}, readonly);
   try {
     authority.assertCurrent();
@@ -56,6 +57,18 @@ for (const readonly of [false, true]) test(`captured tool authority repeats the 
     // Model/prompt source capture is not a tool grant. It can still reach the
     // exact reservation recovery path rather than being denied prematurely.
     expect(() => createHostOperationAuthority(root, captured, () => {}, true).assertCurrent()).not.toThrow();
+  } finally { root.close(); }
+});
+
+for (const readonly of [false, true]) for (const invalid of ['value', 'async', 'reject'] as const) test(`captured accounting callback stays synchronous and fail closed; ${invalid}, readonly=${readonly}`, async () => {
+  const { root, captured } = await fixture(); let entered = 0;
+  try {
+    const accountingBarrier = invalid === 'value' ? () => true : invalid === 'async' ? () => Promise.resolve() : () => Promise.reject(Error('synthetic guard rejection'));
+    const authority = createHostOperationAuthority(root, { ...captured, accountingBarrier }, () => {}, readonly);
+    const before = root.serialize();
+    expect(() => authority.assertCurrent()).toThrow('Accounting barrier must be synchronous');
+    if (!readonly) await expect(authority.admitWrite(() => { entered++; })).rejects.toThrow('Accounting barrier must be synchronous');
+    expect(entered).toBe(0); expect(root.serialize()).toEqual(before); await Promise.resolve();
   } finally { root.close(); }
 });
 

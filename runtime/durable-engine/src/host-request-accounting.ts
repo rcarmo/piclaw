@@ -7,14 +7,69 @@ import { boundHostRequestCost } from "../../src/budget/request-cost-bound.js";
 import { ensureBudgetWork, getBudgetWork, setBudgetWorkStatus } from "../../src/db/budget-limits.js";
 import { readStoredProviderUsageAccountRef } from "../../src/agent-pool/provider-usage.js";
 import { abandonBudgetRequest,BudgetRequestError,findBudgetRequestByModelInvocation,getBudgetRequest,readBudgetTerminalReceipt,retainBudgetTerminalReceipt,
-  type BudgetModelInvocation,type BudgetRequestBinding,type BudgetTerminalReceiptPayload } from '../../src/db/budget-request-reservations.js';
+  type BudgetModelInvocation,type BudgetRequestBinding,type BudgetRequestReservation,type BudgetTerminalReceiptPayload } from '../../src/db/budget-request-reservations.js';
 import { getDb } from '../../src/db/connection.js';
 import { projectTerminalOutcome,decodeStoredTerminalOutcome } from './host-terminal-outcome.js';
 import { nativeBackgroundIdentity,nativeBackgroundPolicyHash,readNativeBackgroundPolicy,type NativeBackgroundPolicy } from '../../src/agent-pool/background-operation-contract.js';
 
 export const operationBudgetWorkId = (operationId: string) => `durable-operation:${operationId}`;
-export function assertOperationAccountingReady(database: Database, operationId: string, terminal = false): void {
+function hasSdkAccountingScope(database: Database): boolean {
+  const count = (database.query("SELECT count(*) n FROM sqlite_master WHERE type='table' AND name IN ('conversations','tasks')").get() as { n: number }).n;
+  if (count === 1) throw new BudgetRequestError('conflict');
+  return count === 2;
+}
+/** Denial-only dependency scope. SDK conversation ownership is not a new source
+ * grant or invented generation parent. History/fork edges never join scopes. */
+export function assertConversationAccountingReady(database: Database, scope: { domain: string; conversationId: number; chatJid: string }, excludeRequestId?: string, terminal = false): void {
+  if (!hasSdkAccountingScope(database)) return; // Generic Root accounting has no SDK work.
+  const roots = new Map<number, number>();
+  const rootFor = (id: number): number => {
+    if (!Number.isSafeInteger(id) || id < 1) throw new BudgetRequestError('conflict');
+    if (roots.has(id)) return roots.get(id)!;
+    const rows = database.query(`WITH RECURSIVE ancestry(id,owner_task_id) AS (
+      SELECT id,owner_task_id FROM conversations WHERE id=? UNION
+      SELECT c.id,c.owner_task_id FROM ancestry a JOIN tasks t ON t.id=a.owner_task_id JOIN conversations c ON c.id=t.conversation_id
+    ) SELECT id FROM ancestry WHERE owner_task_id IS NULL`).all(id) as { id: number }[];
+    if (rows.length !== 1) throw new BudgetRequestError('conflict');
+    roots.set(id, rows[0]!.id); return rows[0]!.id;
+  };
+  const root = rootFor(scope.conversationId);
+  // Existing state/work indexes bound this to outstanding facts, not all billed
+  // history. Terminal owner tasks remain valid ancestry locators after reopen.
+  const pending = database.query(`SELECT r.* FROM budget_request_reservations r INDEXED BY idx_budget_requests_state
+    WHERE r.chat_jid=? AND r.state IN ('reserved','dispatched','unresolved')
+    UNION ALL SELECT r.* FROM budget_work w INDEXED BY idx_budget_work_chat_status
+    CROSS JOIN budget_request_reservations r INDEXED BY idx_budget_requests_work_state ON r.work_id=w.id
+    WHERE w.chat_jid=? AND w.status IN ('active','paused') AND r.state='settled'`)
+    .all(scope.chatJid, scope.chatJid) as BudgetRequestReservation[];
+  for (const row of pending) {
+    if (row.id === excludeRequestId || row.model_invocation_json === null) continue;
+    const invocation = JSON.parse(row.model_invocation_json) as BudgetModelInvocation;
+    if (findBudgetRequestByModelInvocation(invocation, database)?.id !== row.id) throw new BudgetRequestError('conflict');
+    if (invocation.domain === scope.domain && rootFor(invocation.conversationId) === root)
+      assertModelAccountingReady(row.work_id, database, excludeRequestId, terminal);
+  }
+  if (terminal) {
+    const live = database.query(`SELECT conversation_id FROM tasks INDEXED BY tasks_by_status WHERE kind=? AND background=1
+      AND status IN ('pending','running','waiting','sleeping','completing') AND json_extract(record,'$.owner') IS NULL`).all(JSON.stringify('pi.compaction')) as { conversation_id: number }[];
+    if (live.some(task => rootFor(task.conversation_id) === root)) throw new BudgetRequestError('budget_denied');
+  }
+}
+export function assertOperationAccountingReady(database: Database, operationId: string, terminal = false,
+  namespace?: { domain: string; incarnation: string }): void {
   assertModelAccountingReady(operationBudgetWorkId(operationId), database, undefined, terminal);
+  if (!hasSdkAccountingScope(database)) return;
+  if (!namespace) throw new BudgetRequestError('conflict');
+  // The immutable binding locates the exact SDK namespace/conversation. Current
+  // source/version/harness authority is still checked by the original caller.
+  const rows = database.query(`SELECT b.domain,b.incarnation,b.conversation_id,b.chat_jid FROM piclaw_durable_bindings_v1 b
+    JOIN service_effect_s01_operations o ON o.operation_id=b.operation_id AND o.chat_jid=b.chat_jid AND o.primary_source_seq=b.source_seq
+    JOIN service_effect_s01_sources s ON s.chat_jid=b.chat_jid AND s.source_seq=b.source_seq AND s.source_id=b.source_id AND s.payload_ref=b.payload_ref
+    JOIN service_effect_s01_operation_sources os ON os.operation_id=o.operation_id AND os.chat_jid=s.chat_jid AND os.source_seq=s.source_seq
+    WHERE b.domain=? AND b.incarnation=? AND o.operation_id=?`).all(namespace.domain, namespace.incarnation, operationId) as { domain: string; incarnation: string; conversation_id: number; chat_jid: string }[];
+  if (rows.length !== 1) throw new BudgetRequestError('conflict');
+  const binding = rows[0]!;
+  assertConversationAccountingReady(database, { domain: binding.domain, conversationId: binding.conversation_id, chatJid: binding.chat_jid }, undefined, terminal);
 }
 export function sidePromptSourceId(chatJid: string, retryId: string): string {
   const digest = createHash("sha256").update(JSON.stringify([chatJid, retryId])).digest("hex");
@@ -116,7 +171,12 @@ export async function reserveHostRequest(options: {
   const previous = modelInvocation ? findBudgetRequestByModelInvocation(modelInvocation, database) : null;
   // Recovering an exact stored fact is not a new outbound effect. Let each
   // paid sibling reconcile; tools/new sends/S02 still require the whole scope.
-  if (!previous?.terminal_receipt_json) assertModelAccountingReady(barrierWork, database, previous?.id);
+  const accountingReady = (excludeRequestId?: string) => {
+    assertModelAccountingReady(barrierWork, database, excludeRequestId);
+    if (modelInvocation) assertConversationAccountingReady(database, { domain: modelInvocation.domain,
+      conversationId: modelInvocation.conversationId, chatJid: options.chatJid }, excludeRequestId);
+  };
+  if (!previous?.terminal_receipt_json) accountingReady(previous?.id);
   if (modelInvocation && !previous && database.query(`SELECT 1 FROM budget_work w JOIN budget_request_reservations r ON r.work_id=w.id
     WHERE w.parent_work_id=? AND r.model_invocation_json IS NULL AND r.state IN ('reserved','dispatched','unresolved') LIMIT 1`).get(operationWork))
     throw new BudgetRequestError('budget_denied'); // Old unknown holds have no exact attempt attribution.
@@ -144,7 +204,7 @@ export async function reserveHostRequest(options: {
     assertCurrent();assertBackground(); signal.throwIfAborted();
     if (readStoredProviderUsageAccountRef(model.provider, options.authPath) !== accountRef) throw Error("Native request account changed");
   };
-  const requestCurrent = () => { current(); assertModelAccountingReady(barrierWork, database, id); };
+  const requestCurrent = () => { current(); accountingReady(id); };
   if (!previous) await admitSqliteWrite(database, () => {
     const sidePrompt = database.query(`SELECT 1 FROM service_effect_s01_operations o
       JOIN service_effect_s01_sources s ON s.chat_jid=o.chat_jid AND s.source_seq=o.primary_source_seq

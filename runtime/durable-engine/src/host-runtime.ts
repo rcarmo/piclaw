@@ -1071,10 +1071,10 @@ export class HostConversationRuntime {
 
   /** Qualify a MODEL tool against its public live slot and every accepted run
    * input. Busy-chat lookup alone is never source authority. No new ledger. */
-  async captureToolSource(conversationId: ConversationId, taskId: import("@earendil-works/pi-durable").TaskId, callId: string): Promise<Awaited<ReturnType<HostConversationRuntime['captureRunSource']>> & { accountingBarrier?: true }> {
+  async captureToolSource(conversationId: ConversationId, taskId: import("@earendil-works/pi-durable").TaskId, callId: string): Promise<Awaited<ReturnType<HostConversationRuntime['captureRunSource']>> & { accountingBarrier?: () => void }> {
     const captured = await this.captureSource(conversationId, taskId, callId);
     this.assertCapturedSourceCurrent(captured.inputs, true);
-    return { ...captured, ...(this.options.assertAccountingReady ? { accountingBarrier: true as const } : {}) };
+    return { ...captured, ...(this.options.assertAccountingReady ? { accountingBarrier: () => this.assertAccountingReady(captured.operation.operationId) } : {}) };
   }
   /** Read-only public SDK inspection; never starts, resumes or cancels work. */
   inspectProcessControl(call?: { conversationId: ConversationId; taskId: TaskId; callId: string }): Promise<NativeProcessSnapshot> {

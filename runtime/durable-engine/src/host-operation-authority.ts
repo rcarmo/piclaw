@@ -1,7 +1,6 @@
 import { admitSqliteWrite } from "../../src/db/sqlite-async-admission.js";
 import type { Database } from "bun:sqlite";
 import type { HostConversationRuntime } from "./host-runtime.js";
-import { assertOperationAccountingReady } from './host-request-accounting.js';
 
 type Capture = Awaited<ReturnType<HostConversationRuntime["captureToolSource"]>>;
 /** Host-private constructor: capture MUST come from captureToolSource, not arguments. */
@@ -34,7 +33,8 @@ export function createHostOperationAuthority(root: Database, captured: Capture, 
         .get(operation.operationId, chatJid, input.sourceSeq, input.sourceId, input.payloadRef);
       if (!source) throw Error("Stale host source authority");
     }
-    if (captured.accountingBarrier) assertOperationAccountingReady(root, operation.operationId);
+    const checked: unknown = captured.accountingBarrier?.();
+    if (checked !== undefined) { void Promise.resolve(checked).catch(() => {}); throw Error('Accounting barrier must be synchronous'); }
   };
   return Object.freeze({ assertCurrent,
     async admitWrite<T>(body: () => T): Promise<T> {
