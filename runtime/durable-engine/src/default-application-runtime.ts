@@ -852,8 +852,8 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
           maintenance={...captured,background:{input:privateInput,policy},assertCurrent(){captured.assertCurrent();runtime().assertCapturedSourceCurrent([privateInput]);}};
         }else{
           const target = bundle.sessionTargets.list().find(target => target.conversationId === scope.conversationId);
-          if (!target) throw Error("Unbound automatic compaction conversation");
-          maintenance = await runtime().captureAutomaticCompaction(scope, { incarnation: target.domain, ...target });
+          const captured = await runtime().captureAutomaticCompaction(scope, target && { incarnation: target.domain, ...target });
+          maintenance = { ...captured, assertCurrent() { captured.assertCurrent(); if (captured.delegateModel) assertDelegateModel(captured.delegateModel); } };
         }
       }
       maintenanceRequests.set(scope.signal, maintenance);
