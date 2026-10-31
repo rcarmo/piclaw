@@ -6,6 +6,7 @@ import {
   formatModelCatalogueContextWindow,
   formatModelCataloguePricing,
   normaliseModelCatalogue,
+  type ModelCatalogueEntry,
 } from "../../../../../../src/ui/model-catalogue";
 import {
   MODEL_CATALOGUE_PREFERENCES_EVENT,
