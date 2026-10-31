@@ -189,7 +189,7 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
   // A committed SDK model_error now terminates once with a private-data-free notice.
   // Genuine lost harness authority and live/reopened work must remain pending.
   const expectedFailedTurn = new Set<string>([
-    "native-parent-accounting-storage-fail", "native-parent-accounting-rotate", "native-parent-accounting-auth-deny", "native-parent-accounting-unknown",
+    "native-parent-accounting-rotate", "native-parent-accounting-auth-deny",
     "native-parent-budget-cap", "native-parent-budget-auth-cap", "native-mcp-codemode-cancel", "native-codemode-plan-cancel", "native-codemode-cancel",
     "native-codemode-drawio-cancel", "native-drawio-cancel", "native-codemode-office-viewer-cancel", "native-office-viewer-cancel",
     "native-codemode-editable-table-cancel", "native-editable-table-revoked", "native-codemode-code-review-cancel",
@@ -591,7 +591,7 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
       }
       if (compactionBackgroundPending && inManualSummary && !backgroundSummaryRequest) {
         const deadline = Date.now() + 3000;
-        const observed = () => !!root.query("SELECT 1 FROM budget_request_reservations WHERE state='unresolved' AND terminal_receipt_json IS NOT NULL AND json_extract(model_invocation_json,'$.taskKind')='pi.compaction'").get();
+        const observed = () => !!root.query("SELECT 1 FROM budget_request_reservations WHERE state IN ('dispatched','unresolved') AND terminal_receipt_json IS NOT NULL AND json_extract(model_invocation_json,'$.taskKind')='pi.compaction'").get();
         while (!observed() && Date.now() < deadline) await Bun.sleep(10);
         backgroundExpenseObserved = observed();
       }
@@ -599,7 +599,7 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
       stream.push({ type: "done", reason: message.stopReason, message }); stream.end(message);
       // The public event stream adds its own duration synchronously on push.
       // Capture that actual SDK-visible terminal, before the consumer resumes.
-      if (scenario === 'native-parent-accounting-held-writer' || scenario === 'native-parent-accounting-event-fence') originalPaidTerminal = structuredClone(message);
+      if (scenario === 'native-parent-accounting-held-writer' || scenario === 'native-parent-accounting-event-fence' || parentAccounting && (accountingUnknown || accountingStorageFailure)) originalPaidTerminal = structuredClone(message);
     })(); return stream;
   };
   const credentialStore = createTestCredentialStore({ [model.provider]: { type: "api_key", key: "synthetic-only" } });
@@ -2732,6 +2732,15 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
     }
     return;
   }
+  if (parentAccounting && (accountingUnknown || accountingStorageFailure)) {
+    const row = root.query('SELECT terminal_receipt_json FROM budget_request_reservations').get() as { terminal_receipt_json: string };
+    expect(JSON.parse(row.terminal_receipt_json).projectedOutcome).toEqual(originalPaidTerminal);
+    const entries = root.query("SELECT record FROM entries WHERE json_extract(record,'$.kind')='pi.assistant'").all() as { record: string }[];
+    expect(entries).toHaveLength(1);
+    // Local accounting cannot rewrite a successful paid provider outcome into a
+    // synthetic SDK model failure. Pending finance is a separate durable fact.
+    expect(JSON.parse(entries[0]!.record).model[0]).toEqual(originalPaidTerminal);
+  }
   if (expectedFailedTurn) { expect(dispatchOutcome).toBe("settled"); assertFailedTurn(); }
   if (scenario === "native-web-cursor-ack") {
     expect(dispatchOutcome).toBe("settled"); expect(calls).toBe(1);
@@ -3074,23 +3083,42 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
     closeDatabase(); owner.release(); return;
   }
   if (parentAccounting && (accountingAuthDenied || accountingUnknown || accountingRotate || accountingStorageFailure)) {
-    expect(dispatchOutcome).toBe(expectedFailedTurn ? "settled" : "pending");
+    const published = expectedFailedTurn || accountingUnknown;
+    expect(dispatchOutcome).toBe(published ? "settled" : "pending");
     expect(calls).toBe(accountingUnknown || accountingStorageFailure ? 1 : 0);
     // Cleanup classifies the original reservation; never rebind to rotated auth
     // or replace a held expense with a free fallback request.
     expect(root.query("SELECT id,work_id,account_ref,binding_sha256,amount_microusd FROM budget_request_reservations").all()).toEqual([originalParentReservation]);
     if (accountingUnknown || accountingStorageFailure) expect((originalParentReservation as { amount_microusd: number }).amount_microusd).toBeGreaterThan(0);
-    expect(root.query("SELECT state FROM budget_request_reservations").all()).toEqual([{ state: accountingUnknown || accountingStorageFailure ? "unresolved" : "released" }]);
+    expect(root.query("SELECT state FROM budget_request_reservations").all()).toEqual([{ state: accountingStorageFailure ? 'dispatched' : accountingUnknown ? 'unresolved' : 'released' }]);
     expect(root.query("SELECT status FROM budget_work WHERE parent_work_id IS NULL").all()).toEqual([{ status: accountingUnknown || accountingStorageFailure ? "active" : "completed" }]);
-    expect(root.query("SELECT id FROM messages WHERE is_bot_message=1").all()).toHaveLength(expectedFailedTurn ? 1 : 0);
-    expect(root.query("SELECT source_id FROM service_effect_s01_sources WHERE state='claimed'").all()).toHaveLength(expectedFailedTurn ? 0 : 1);
+    expect(root.query("SELECT id FROM messages WHERE is_bot_message=1").all()).toHaveLength(published ? 1 : 0);
+    expect(root.query("SELECT source_id FROM service_effect_s01_sources WHERE state='claimed'").all()).toHaveLength(published ? 0 : 1);
     if (accountingStorageFailure) expect(root.query("SELECT invocation_id FROM token_usage WHERE invocation_id IS NOT NULL").all()).toHaveLength(0);
+    const tasksBeforeRepair = accountingStorageFailure ? root.query('SELECT * FROM tasks ORDER BY id').all() : undefined;
     backend.stop(); await backend.close();
     if (accountingStorageFailure) {
       closeDatabase(); initDatabase(); root = getDb();
-      expect(root.query("SELECT state FROM budget_request_reservations").all()).toEqual([{ state: "unresolved" }]);
+      expect(root.query("SELECT state FROM budget_request_reservations").all()).toEqual([{ state: 'dispatched' }]);
       expect(root.query("SELECT status FROM budget_work WHERE parent_work_id IS NULL").all()).toEqual([{ status: accountingUnknown || accountingStorageFailure ? "active" : "completed" }]);
       expect(root.query("SELECT invocation_id FROM token_usage WHERE invocation_id IS NOT NULL").all()).toHaveLength(0);
+      if (!tasksBeforeRepair?.length) throw Error('Missing original SDK task snapshot');
+      const held = root.query('SELECT * FROM budget_request_reservations').get() as BudgetRequestReservation;
+      root.exec('DROP TRIGGER accounting_usage_fail');
+      backend = await createDefaultApplicationRuntime(owner, async () => services);
+      const repaired = root.query('SELECT * FROM budget_request_reservations').get() as BudgetRequestReservation;
+      expect(repaired.state).toBe('settled'); expect(repaired.id).toBe(held.id);
+      expect(repaired.terminal_receipt_json).toBe(held.terminal_receipt_json);
+      expect(repaired.terminal_receipt_sha256).toBe(held.terminal_receipt_sha256); expect(repaired.terminal_received_at).toBe(held.terminal_received_at);
+      expect(root.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(tasksBeforeRepair);
+      const recovered = backend.bind({ queue: base.queue, agentPool: pool });
+      expect(await recovered.dispatchAcceptedInput!(message.chat_jid, message.id, rowId!)!()).toBe('settled');
+      expect(root.query("SELECT terminal_disposition FROM service_effect_s01_operations").all()).toEqual([{ terminal_disposition: 'completed' }]);
+      expect(root.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(tasksBeforeRepair);
+      expect(root.query('SELECT invocation_id,api_equivalent_cost_microusd FROM token_usage').all()).toEqual([{ invocation_id: held.id, api_equivalent_cost_microusd: 10 }]);
+      expect(root.query('SELECT count(*) n FROM budget_usage_events').get()).toEqual({ n: 1 });
+      expect(root.query('SELECT content FROM messages WHERE is_bot_message=1').all()).toEqual([{ content: 'factory synthetic reply' }]);
+      expect(calls).toBe(1); backend.stop(); await backend.close();
     }
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
     closeDatabase(); owner.release(); return;
@@ -3696,7 +3724,7 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
         }
         expect(automaticResult).toBe('pending'); expect(calls).toBe(beforeCalls + (background ? 2 : 1));
         const pending = root.query("SELECT r.*,w.parent_work_id AS maintenance_id FROM budget_request_reservations r JOIN budget_work w ON w.id=r.work_id WHERE json_extract(r.model_invocation_json,'$.taskKind')='pi.compaction'").get() as BudgetRequestReservation & { maintenance_id: string };
-        expect(pending.state).toBe('unresolved'); expect(pending.terminal_receipt_json).not.toBeNull();
+        expect(pending.state).toBe('dispatched'); expect(pending.terminal_receipt_json).not.toBeNull();
         const operation = root.query('SELECT operation_id,phase FROM service_effect_s01_operations ORDER BY rowid DESC LIMIT 1').get() as { operation_id: string; phase: string };
         expect(operation.phase).toBe('executing');
         expect(root.query('SELECT parent_work_id FROM budget_work WHERE id=?').get(pending.maintenance_id)).toEqual({ parent_work_id: background ? null : `durable-operation:${operation.operation_id}` });
@@ -3706,6 +3734,10 @@ for (const scenario of [...(reviewLifecycleCase ? [reviewLifecycleCase] : []), "
         expect(root.query('SELECT count(*) n FROM token_usage WHERE invocation_id=?').get(pending.id)).toEqual({ n: 0 });
         root.exec('DROP TRIGGER compaction_pending_close');
         if (compactionBackgroundPending) {
+          const taskId = JSON.parse(pending.model_invocation_json!).taskId, deadline = Date.now() + 3000;
+          while ((root.query('SELECT status FROM tasks WHERE id=?').get(taskId) as { status: string })?.status !== 'terminal' && Date.now() < deadline) await Bun.sleep(10);
+          const summary = JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(taskId) as { record: string }).record);
+          expect(summary.state).toMatchObject({ status: 'terminal', outcome: { status: 'completed' } });
           const tasks = root.query('SELECT * FROM tasks ORDER BY id').all();
           const binding: BudgetRequestBinding = { id: pending.id, workId: pending.work_id, chatJid: pending.chat_jid,
             providerId: pending.provider_id, modelId: pending.model_id, accountRef: pending.account_ref, amountMicros: pending.amount_microusd,

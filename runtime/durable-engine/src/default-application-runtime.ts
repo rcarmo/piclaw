@@ -1231,7 +1231,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   if (failed) throw primary;
   assert();
   installTerminalSettlementCompositionSchema(root);
-  assert(); await reconcileOperationBudgetWork(root);
+  assert(); await reconcileOperationBudgetWork(root, undefined, terminalOwner);
   const payloadDir = join(DATA_DIR, "durable-answers");
   const payloadPath = (ref: string) => join(payloadDir, createHash("sha256").update(ref).digest("hex"));
   const answers = { put(ref: string, text: string) {
@@ -1296,14 +1296,14 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       codexServices?.releaseTurn(operationId);
       assert();
       if (processExit || processControls!.ownsOperation(operationId)) {
-        try { await reconcileOperationBudgetWork(root, operationId); assert(); }
+        try { await reconcileOperationBudgetWork(root, operationId, terminalOwner); assert(); }
         finally {
           publishTerminal(operationId);
         }
         processControls!.onOperationSettled(operationId, processExit);
         return; // No Goal or queue continuation after a committed exit receipt.
       }
-      try { await reconcileOperationBudgetWork(root, operationId); assert(); }
+      try { await reconcileOperationBudgetWork(root, operationId, terminalOwner); assert(); }
       finally {
         publishTerminal(operationId);
         const row = root.query("SELECT chat_jid FROM service_effect_s01_operations WHERE operation_id=?").get(operationId) as { chat_jid: string } | null;

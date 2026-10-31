@@ -1,10 +1,11 @@
 import "./src/test-guard.js";
-import { expect, test } from "bun:test";
+import { expect, test, spyOn } from "bun:test";
 import { isDeepStrictEqual } from "node:util";
 import type { AssistantMessage } from "../../runtime/src/durable-legacy-sdk.js";
 import { projectTerminalOutcome, decodeStoredTerminalOutcome } from "../../runtime/durable-engine/src/host-terminal-outcome.js";
 import { parseModelFailure } from "../../runtime/durable-engine/src/host-model-failure.js";
-import { reserveHostRequest, assertOperationAccountingReady } from "../../runtime/durable-engine/src/host-request-accounting.js";
+import { reserveHostRequest, assertOperationAccountingReady, reconcileOperationBudgetWork } from "../../runtime/durable-engine/src/host-request-accounting.js";
+import { installTerminalSettlementCompositionSchema } from '../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js';
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
 import { getBudgetRequest, type BudgetModelInvocation } from "../../runtime/src/db/budget-request-reservations.js";
 import { writeFileSync, rmSync } from "node:fs";
@@ -428,7 +429,8 @@ test("actual native settlement retains safe evidence after caller/source cancell
 
 test("native status-write fault rolls charge back, preserves prior receipt and exact recovery does not reset completion", () => reservedTerminal(async f => {
   f.database.exec("CREATE TRIGGER native_work_fault BEFORE UPDATE ON budget_work WHEN NEW.id LIKE 'durable-request:%' AND NEW.status='completed' BEGIN SELECT RAISE(ABORT,'native work fault'); END");
-  await expect(f.request.settle(f.terminal)).rejects.toThrow('native work fault');
+  await expect(f.request.settle(f.terminal)).resolves.toBeUndefined();
+  expect(() => assertOperationAccountingReady(f.database, 'terminal-fixture-operation')).toThrow('budget_denied');
   const held = getBudgetRequest(f.request.id, f.database)!;
   expect(held.state).toBe('dispatched'); expect(held.terminal_receipt_json).not.toBeNull();
   expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
@@ -449,7 +451,8 @@ test("native status-write fault rolls charge back, preserves prior receipt and e
 
 test("native unknown valuation preserves original safe receipt and hold without a charge", () => reservedTerminal(async f => {
   f.terminal.usage.cost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
-  await expect(f.request.settle(f.terminal)).rejects.toThrow('settlement unresolved');
+  await expect(f.request.settle(f.terminal)).resolves.toBeUndefined();
+  expect(() => assertOperationAccountingReady(f.database, 'terminal-fixture-operation', true)).not.toThrow();
   const row = getBudgetRequest(f.request.id, f.database)!;
   expect(row.state).toBe('unresolved'); expect(row.terminal_receipt_json).not.toBeNull();
   expect(JSON.parse(row.terminal_receipt_json!).projectedOutcome.usage).toEqual(f.terminal.usage);
@@ -457,6 +460,121 @@ test("native unknown valuation preserves original safe receipt and hold without 
   expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
   expect(f.database.query('SELECT status FROM budget_work WHERE id=?').get(row.work_id)).toEqual({ status: 'active' });
 }));
+
+test('existing financial reconciler leaves unattributed holds intact and seeks active work/S02 by index', () => reservedTerminal(async f => {
+  installTerminalSettlementCompositionSchema(f.database);
+  await f.request.retainTerminal(f.terminal);
+  const row = getBudgetRequest(f.request.id, f.database)!;
+  const owner = { signal: f.owner.signal, assertCurrent() { f.owner.signal.throwIfAborted(); } };
+  const spy = spyOn(f.database, 'query'); let queries: string[];
+  try {
+    await reconcileOperationBudgetWork(f.database, undefined, owner);
+    await reconcileOperationBudgetWork(f.database, 'terminal-fixture-operation', owner);
+    queries = spy.mock.calls.map(call => call[0]);
+  } finally { spy.mockRestore(); }
+  expect(getBudgetRequest(row.id, f.database)).toEqual(row);
+  expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
+  const all = queries.find(sql => sql.startsWith('SELECT c.operation_id FROM service_effect_s01_chats'));
+  const one = queries.find(sql => sql === 'SELECT operation_id FROM service_effect_s02_commits WHERE operation_id=?');
+  if (!all || !one) throw Error('Actual financial cleanup queries not observed');
+  const plan = f.database.query('EXPLAIN QUERY PLAN ' + all).all() as { detail: string }[];
+  const point = f.database.query('EXPLAIN QUERY PLAN ' + one).all('terminal-fixture-operation') as { detail: string }[];
+  expect(plan.some(row => row.detail.includes('idx_budget_work_chat_status'))).toBe(true);
+  expect(plan.some(row => /\bSEARCH c\b/.test(row.detail))).toBe(true);
+  expect(point.some(row => /\bSEARCH service_effect_s02_commits\b/.test(row.detail))).toBe(true);
+}));
+
+test('passive financial reconciliation preserves a valid unknown receipt/hold without timestamp churn', () => reservedTerminal(async f => {
+  installTerminalSettlementCompositionSchema(f.database);
+  f.terminal.usage.cost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
+  await f.request.settle(f.terminal);
+  const row = getBudgetRequest(f.request.id, f.database)!;
+  await reconcileOperationBudgetWork(f.database, undefined, { signal: f.owner.signal, assertCurrent() {} });
+  expect(getBudgetRequest(row.id, f.database)).toEqual(row);
+  expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
+}, true, false, { modelInvocation: invocation() }));
+
+test('passive financial reconciliation refuses an async owner before reading/writing recovery state', () => reservedTerminal(async f => {
+  const row = getBudgetRequest(f.request.id, f.database)!;
+  await expect(reconcileOperationBudgetWork(f.database, undefined, { signal: f.owner.signal,
+    assertCurrent: async () => { throw Error('synthetic asynchronous owner denial'); } })).rejects.toThrow('Accounting owner must be synchronous');
+  expect(getBudgetRequest(row.id, f.database)).toEqual(row);
+}));
+
+for (const revokeOwner of [false, true]) test(`post-COMMIT lost accounting ACK is read back without replay; owner-revoked=${revokeOwner}`, () => reservedTerminal(async f => {
+  const transaction = f.database.transaction.bind(f.database); let injected = 0;
+  const spy = spyOn(f.database, 'transaction').mockImplementation(body => {
+    const tx = transaction(body);
+    return Object.assign((...args: Parameters<typeof tx>) => tx(...args), {
+      deferred: tx.deferred, exclusive: tx.exclusive,
+      immediate: (...args: Parameters<typeof tx.immediate>) => {
+        const result = tx.immediate(...args);
+        if (!f.database.inTransaction && !injected && getBudgetRequest(f.request.id, f.database)?.state === 'settled') {
+          injected++; if (revokeOwner) f.owner.abort(Error('owner revoked after committed charge'));
+          throw Error('synthetic lost accounting COMMIT acknowledgement');
+        }
+        return result;
+      },
+    });
+  });
+  try {
+    if (revokeOwner) await expect(f.request.settle(f.terminal)).rejects.toThrow('owner revoked after committed charge');
+    else await expect(f.request.settle(f.terminal)).resolves.toBeUndefined();
+    expect(injected).toBe(1);
+    const row = getBudgetRequest(f.request.id, f.database)!;
+    expect(row.state).toBe('settled'); expect(row.terminal_receipt_json).not.toBeNull();
+    const work = f.database.query('SELECT status,closed_at FROM budget_work WHERE id=?').get(row.work_id);
+    expect(work).toEqual({ status: 'completed', closed_at: row.terminal_received_at });
+    expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 1 });
+    expect(f.database.query('SELECT count(*) n FROM budget_usage_events').get()).toEqual({ n: 1 });
+    if (!revokeOwner) {
+      await f.request.settle(f.terminal);
+      expect(getBudgetRequest(row.id, f.database)).toEqual(row);
+      expect(f.database.query('SELECT status,closed_at FROM budget_work WHERE id=?').get(row.work_id)).toEqual(work);
+      expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 1 });
+    }
+  } finally { spy.mockRestore(); }
+}));
+
+test('optional accounting diagnostics cannot replace a retained terminal when stderr throws', () => reservedTerminal(async f => {
+  f.database.exec("CREATE TRIGGER diagnostic_price_fault BEFORE INSERT ON token_usage BEGIN SELECT RAISE(ABORT,'synthetic price fault'); END");
+  const write = process.stderr.write.bind(process.stderr); let attempted = 0;
+  const spy = spyOn(process.stderr, 'write').mockImplementation((chunk, ...args) => {
+    if (typeof chunk === 'string' && chunk.includes('"module":"durable.accounting"')) { attempted++; throw Error('synthetic stderr failure'); }
+    return Reflect.apply(write, process.stderr, [chunk, ...args]);
+  });
+  try {
+    await expect(f.request.settle(f.terminal)).resolves.toBeUndefined();
+    expect(attempted).toBe(1);
+    const held = getBudgetRequest(f.request.id, f.database)!;
+    expect(held.state).toBe('dispatched'); expect(held.terminal_receipt_json).not.toBeNull();
+    expect(() => assertOperationAccountingReady(f.database, 'terminal-fixture-operation')).toThrow('budget_denied');
+    expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
+  } finally { spy.mockRestore(); }
+}));
+
+test('invalid retained telemetry is not suppressed as delayed accounting', () => reservedTerminal(async f => {
+  f.terminal.usage.input = -1;
+  await expect(f.request.settle(f.terminal)).rejects.toThrow('invalid_binding');
+  const held = getBudgetRequest(f.request.id, f.database)!;
+  expect(held.state).toBe('dispatched');
+  expect(JSON.parse(held.terminal_receipt_json!).projectedOutcome.usage.input).toBe(-1);
+  expect(() => assertOperationAccountingReady(f.database, 'terminal-fixture-operation')).toThrow('invalid_binding');
+  expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
+}));
+
+test('unknown valuation can recover its exact original terminal without a charge, new hold or dispatch', () => reservedTerminal(async f => {
+  f.terminal.usage.cost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
+  await f.request.settle(f.terminal);
+  const row = getBudgetRequest(f.request.id, f.database)!;
+  const recovered = await f.prepareAgain();
+  expect(recovered?.id).toBe(row.id);
+  expect(recovered?.recoveredTerminal).toEqual(JSON.parse(row.terminal_receipt_json!).projectedOutcome);
+  await expect(recovered!.dispatch()).rejects.toThrow('invalid_state');
+  expect(getBudgetRequest(row.id, f.database)).toEqual(row);
+  expect(f.database.query('SELECT count(*) n FROM budget_request_reservations').get()).toEqual({ n: 1 });
+  expect(f.database.query('SELECT count(*) n FROM budget_usage_events').get()).toEqual({ n: 0 });
+}, true, false, { modelInvocation: invocation() }));
 
 test("native settlement survives an actual writer beyond five seconds with responsive event loop and exact original evidence", () => reservedTerminal(async f => {
   const path = (f.database.query("SELECT file FROM pragma_database_list WHERE name='main'").get() as { file: string }).file;
@@ -515,12 +633,31 @@ test("wrong physical outcome cannot populate an actual request receipt", () => r
   expect(getBudgetRequest(f.request.id, f.database)).toEqual(before);
 }));
 
-test("missing retention owner never falls back to request authority or dispatches paid work", () => reservedTerminal(async f => {
-  const before = getBudgetRequest(f.request.id, f.database);
-  await expect(f.request.dispatch()).rejects.toThrow("Terminal receipt owner unavailable");
-  await expect(f.request.retainTerminal(f.terminal)).rejects.toThrow("Terminal receipt owner unavailable");
-  expect(getBudgetRequest(f.request.id, f.database)).toEqual(before);
-}, false));
+test("missing retention owner cannot create funded work or fall back to request authority", () => reservedTerminal(async f => {
+  const before = f.database.serialize();
+  await expect(f.prepareAgain({ terminalOwner: undefined })).rejects.toThrow('Terminal receipt owner unavailable');
+  expect(f.database.serialize()).toEqual(before);
+}, true, false, { dispatch: false }));
+
+for (const invalid of ['value', 'async', 'reject'] as const) test(`terminal owner is synchronous before funding/dispatch/retention; ${invalid}`, () => reservedTerminal(async f => {
+  const before = f.database.serialize();
+  const assertCurrent = invalid === 'value' ? () => true : invalid === 'async' ? () => Promise.resolve() : () => Promise.reject(Error('synthetic asynchronous owner denial'));
+  await expect(f.prepareAgain({ terminalOwner: { signal: f.owner.signal, assertCurrent } })).rejects.toThrow('Accounting owner must be synchronous');
+  expect(f.database.serialize()).toEqual(before);
+}, true, false, { dispatch: false }));
+
+test('late asynchronous terminal-owner denial cannot dispatch, retain, settle or abandon an existing hold', () => reservedTerminal(async f => {
+  let invalid = false;
+  const request = await f.prepareAgain({ terminalOwner: { signal: f.owner.signal,
+    assertCurrent() { if (invalid) return Promise.reject(Error('synthetic late owner denial')); } } });
+  if (!request) throw Error('Missing funded fixture request');
+  invalid = true; const before = f.database.serialize();
+  await expect(request.dispatch()).rejects.toThrow('Accounting owner must be synchronous');
+  await expect(request.retainTerminal(f.terminal)).rejects.toThrow('Accounting owner must be synchronous');
+  await expect(request.settle(f.terminal)).rejects.toThrow('Accounting owner must be synchronous');
+  await expect(request.abandon()).rejects.toThrow('Accounting owner must be synchronous');
+  expect(f.database.serialize()).toEqual(before);
+}, true, false, { dispatch: false }));
 
 test("getters and proxies cannot execute at input, usage, cost, content, array or argument boundaries", () => {
   let executed = 0;

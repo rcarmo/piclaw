@@ -9,6 +9,8 @@ import { readStoredProviderUsageAccountRef } from "../../src/agent-pool/provider
 import { abandonBudgetRequest,BudgetRequestError,findBudgetRequestByModelInvocation,getBudgetRequest,readBudgetTerminalReceipt,retainBudgetTerminalReceipt,
   type BudgetModelInvocation,type BudgetRequestBinding,type BudgetRequestReservation,type BudgetTerminalReceiptPayload } from '../../src/db/budget-request-reservations.js';
 import { getDb } from '../../src/db/connection.js';
+import { createLogger } from '../../src/utils/logger.js';
+const log = createLogger('durable.accounting');
 import { projectTerminalOutcome,decodeStoredTerminalOutcome } from './host-terminal-outcome.js';
 import { nativeBackgroundIdentity,nativeBackgroundPolicyHash,readNativeBackgroundPolicy,type NativeBackgroundPolicy } from '../../src/agent-pool/background-operation-contract.js';
 
@@ -91,9 +93,41 @@ export async function completeMaintenanceBudgetWork(database: Database, workId: 
   });
 }
 
-export async function reconcileOperationBudgetWork(database: Database, operationId?: string): Promise<void> {
+export async function reconcileOperationBudgetWork(database: Database, operationId: string | undefined,
+  owner: { signal: AbortSignal; assertCurrent(): void }): Promise<void> {
+  const signal = owner.signal, assertOwner = owner.assertCurrent.bind(owner);
+  const check = () => {
+    signal.throwIfAborted();
+    const checked: unknown = assertOwner();
+    if (checked !== undefined) { void Promise.resolve(checked).catch(() => {}); throw Error('Accounting owner must be synchronous'); }
+    if (getDb() !== database) throw Error('Model request database binding changed.');
+  };
+  check();
+  // Reuse this existing financial reconciler, not a provider/task recovery queue.
+  // Only v1 attributed retained facts can reconstruct their original reporting
+  // route. Legacy unattributed/receipt-less holds are never guessed or backfilled.
+  const retained = database.query(`SELECT * FROM budget_request_reservations INDEXED BY idx_budget_requests_state
+    WHERE state IN ('dispatched','unresolved') AND terminal_receipt_json IS NOT NULL AND model_invocation_json IS NOT NULL
+    AND (? IS NULL OR json_extract(model_invocation_json,'$.operationId')=?)`).all(operationId ?? null, operationId ?? null) as BudgetRequestReservation[];
+  for (const row of retained) {
+    check();
+    const invocation = JSON.parse(row.model_invocation_json!) as BudgetModelInvocation;
+    if (findBudgetRequestByModelInvocation(invocation, database)?.id !== row.id) throw new BudgetRequestError('conflict');
+    try { assertModelAccountingReady(row.work_id, database); continue; }
+    catch (pending) { if (!(pending instanceof BudgetRequestError) || pending.code !== 'budget_denied') throw pending; }
+    const binding: BudgetRequestBinding = { id: row.id, workId: row.work_id, chatJid: row.chat_jid, providerId: row.provider_id,
+      modelId: row.model_id, accountRef: row.account_ref, amountMicros: row.amount_microusd, modelInvocation: invocation };
+    await modelRequestAccounting({ authorise() { throw Error('Financial reconciliation cannot dispatch'); }, documentedFree: false,
+      usageSource: invocation.taskKind === 'pi.compaction' ? 'compaction' : 'assistant' }, database).settleRetainedRequest(binding, { signal, assertCurrent: check });
+  }
   await admitSqliteWrite(database, () => {
-    const terminals = database.query("SELECT operation_id FROM service_effect_s02_commits WHERE (? IS NULL OR operation_id=?)").all(operationId ?? null, operationId ?? null) as { operation_id: string }[];
+    const terminals = (operationId !== undefined
+      ? database.query('SELECT operation_id FROM service_effect_s02_commits WHERE operation_id=?').all(operationId)
+      : database.query(`SELECT c.operation_id FROM service_effect_s01_chats chats
+        CROSS JOIN budget_work w INDEXED BY idx_budget_work_chat_status
+        CROSS JOIN service_effect_s02_commits c
+        WHERE w.chat_jid=chats.chat_jid AND w.status='active' AND c.operation_id=substr(w.id,length('durable-operation:')+1)
+        AND w.id='durable-operation:'||c.operation_id`).all()) as { operation_id: string }[];
     for (const terminal of terminals) {
       const id = operationBudgetWorkId(terminal.operation_id);
       if (getBudgetWork(id, database)?.status !== "active") continue;
@@ -113,7 +147,7 @@ export async function reconcileOperationBudgetWork(database: Database, operation
           setBudgetWorkStatus(parent.id, "completed", { boundary: "side_prompt_settled" }, database);
       }
     }
-  });
+  }, check, signal, Number.POSITIVE_INFINITY, check);
 }
 
 /** Stored-identity host model requests. Exact background input policy supports
@@ -142,7 +176,9 @@ export async function reserveHostRequest(options: {
   const terminalOwner = () => {
     const owner = capturedOwner;
     if (!owner) throw Error('Terminal receipt owner unavailable');
-    owner.signal.throwIfAborted(); owner.assertCurrent();
+    owner.signal.throwIfAborted();
+    const checked: unknown = owner.assertCurrent();
+    if (checked !== undefined) { void Promise.resolve(checked).catch(() => {}); throw Error('Accounting owner must be synchronous'); }
     if (getDb() !== database) throw Error('Terminal receipt database binding changed');
     return owner;
   };
@@ -204,7 +240,8 @@ export async function reserveHostRequest(options: {
     assertCurrent();assertBackground(); signal.throwIfAborted();
     if (readStoredProviderUsageAccountRef(model.provider, options.authPath) !== accountRef) throw Error("Native request account changed");
   };
-  const requestCurrent = () => { current(); accountingReady(id); };
+  const requestCurrent = () => { terminalOwner(); current(); accountingReady(id); };
+  if (!previous) requestCurrent(); // Invalid/missing retention owner cannot create funded work.
   if (!previous) await admitSqliteWrite(database, () => {
     const sidePrompt = database.query(`SELECT 1 FROM service_effect_s01_operations o
       JOIN service_effect_s01_sources s ON s.chat_jid=o.chat_jid AND s.source_seq=o.primary_source_seq
@@ -233,14 +270,31 @@ export async function reserveHostRequest(options: {
     }
     throw error;
   }
+  const settleRetainedTerminal = async () => {
+    try { await accounting.settleRetainedRequest(binding, terminalOwner()); }
+    catch (error) {
+      // Invalid facts/conflicting ownership are not delayed bookkeeping. Only a
+      // verified retained outcome under the same live database owner can survive
+      // a storage/commit-ack failure; this grants no next effect or terminal UI.
+      if (error instanceof BudgetRequestError) throw error;
+      terminalOwner();
+      if (getDb() !== database || !readBudgetTerminalReceipt(binding, database)) throw error;
+      try { assertModelAccountingReady(binding.workId, database); }
+      catch (pending) {
+        if (!(pending instanceof BudgetRequestError) || pending.code !== 'budget_denied') throw pending;
+      }
+      try { log.warn('Terminal accounting callback failed; exact receipt remains available', {
+        operation: 'durable_accounting.ack_failed', requestId: binding.id,
+      }); } catch { /* Diagnostics cannot replace the retained provider outcome. */ }
+    }
+  };
   let recoveredTerminal: AssistantMessage | undefined;
   if (previous) {
     const receipt = readBudgetTerminalReceipt(binding, database);
     if (receipt) {
       const payload = JSON.parse(receipt.bodyJson) as BudgetTerminalReceiptPayload; // Bound canonical envelope verified above.
       const decoded = decodeStoredTerminalOutcome(JSON.stringify(payload.projectedOutcome), terminalPhysical);
-      const settled = await accounting.settleRetainedRequest(binding, terminalOwner());
-      if (settled.state !== 'settled') throw new BudgetRequestError('budget_denied');
+      await settleRetainedTerminal();
       current();
       recoveredTerminal = JSON.parse(JSON.stringify(decoded)) as AssistantMessage; // Validated JSON crosses SDK families.
     } else if (previous.state !== 'reserved') throw new BudgetRequestError('budget_denied');
@@ -266,17 +320,15 @@ export async function reserveHostRequest(options: {
     assertRecoveredCurrent() { terminalOwner(); current(); },
     async dispatch() {
       if (recoveredTerminal) throw new BudgetRequestError('invalid_state');
-      terminalOwner(); requestCurrent();
+      requestCurrent();
       if (dispatchStarted) throw Error("Native request already dispatched");
       dispatchStarted = true;
       await accounting.dispatch(binding, signal);
       requestCurrent();
     },
     async settle(message: AssistantMessage) {
-      const owner = terminalOwner();
       await retainTerminal(message);
-      const row = await accounting.settleRetainedRequest(binding, owner);
-      if (row.state !== "settled") throw Error("Native request settlement unresolved");
+      await settleRetainedTerminal();
     },
     async abandon() {
       const owner = terminalOwner();
