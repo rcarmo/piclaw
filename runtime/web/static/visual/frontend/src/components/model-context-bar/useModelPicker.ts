@@ -15,8 +15,8 @@ export interface UseModelPickerResult {
   showPicker: ReturnType<typeof useSignal<boolean>>;
   showThinkingPicker: ReturnType<typeof useSignal<boolean>>;
   models: ReturnType<typeof useSignal<VisualModelEntry[]>>;
-  handleBadgeClick: (e: Event, currentModelName: string, onThinkingLevel: (l: string) => void, onCurrentModel: (m: string) => void) => Promise<void>;
-  handleSelectModel: (id: string, onCurrentModel: (m: string) => void) => Promise<void>;
+  handleBadgeClick: (e: Event) => Promise<void>;
+  handleSelectModel: (id: string) => Promise<void>;
   handleTogglePin: (id: string) => void;
   handleThinkingClick: (e: Event) => void;
   handleSelectThinking: (level: string) => Promise<void>;
@@ -57,30 +57,24 @@ export function useModelPicker(): UseModelPickerResult {
     };
   }, []);
 
-  const handleBadgeClick = useCallback(async (
-    e: Event,
-    currentModelName: string,
-    onThinkingLevel: (l: string) => void,
-    onCurrentModel: (m: string) => void,
-  ) => {
+  const handleBadgeClick = useCallback(async (e: Event) => {
     e.stopPropagation();
     if (showPicker.value) { showPicker.value = false; return; }
     showPicker.value = true;
+    const chatJid = getChatJid();
     try {
-      const res = await fetch("/agent/models?chat_jid=" + encodeURIComponent(getChatJid()));
+      const res = await fetch("/agent/models?chat_jid=" + encodeURIComponent(chatJid));
+      if (chatJid !== getChatJid()) return;
       if (res.ok) {
         const info = await res.json() as ModelInfo;
-        const catalogue = normaliseVisualModelPickerOptions(info);
-        models.value = catalogue;
-        onCurrentModel(catalogue.find((entry) => entry.current)?.key ?? info.current ?? currentModelName);
-        if (info.thinking_level_label || info.thinking_level) {
-          onThinkingLevel(info.thinking_level_label ?? info.thinking_level!);
-        }
+        if (chatJid !== getChatJid()) return;
+        models.value = normaliseVisualModelPickerOptions(info);
+        window.dispatchEvent(new CustomEvent("piclaw:model-state-changed", { detail: { chatJid, payload: info, source: "picker" } }));
       } else { flashStatus("Model fetch failed"); }
-    } catch { flashStatus("Model fetch failed"); }
+    } catch { if (chatJid === getChatJid()) flashStatus("Model fetch failed"); }
   }, []);
 
-  const handleSelectModel = useCallback(async (id: string, onCurrentModel: (m: string) => void) => {
+  const handleSelectModel = useCallback(async (id: string) => {
     const chatJid = getChatJid();
     try {
       const res = await fetch(getMessageUrl(), {
@@ -88,28 +82,30 @@ export function useModelPicker(): UseModelPickerResult {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: `/model ${id}` }),
       });
+      if (chatJid !== getChatJid()) return;
       if (!res.ok) { flashStatus("Model switch failed"); return; }
       const data = await res.json().catch(() => null);
+      if (chatJid !== getChatJid()) return;
       if (data?.command === false || data?.error || data?.command?.status === "error") {
         flashStatus(data?.error ?? data?.command?.message ?? "Model switch failed");
         return;
       }
       const confirmedResponse = await fetch("/agent/models?chat_jid=" + encodeURIComponent(chatJid));
+      if (chatJid !== getChatJid()) return;
       if (!confirmedResponse.ok) { flashStatus("Could not confirm model switch"); return; }
       const info = await confirmedResponse.json() as ModelInfo;
+      if (chatJid !== getChatJid()) return;
       const confirmed = normaliseVisualModelPickerOptions(info);
+      models.value = confirmed;
+      window.dispatchEvent(new CustomEvent("piclaw:model-state-changed", { detail: { chatJid, payload: info, source: "picker" } }));
       const confirmedCurrent = confirmed.find((entry) => entry.current)?.key ?? info.current;
       if (confirmedCurrent !== id) {
-        if (confirmed.length) models.value = confirmed;
         flashStatus("Model switch was not confirmed");
         return;
       }
-      models.value = confirmed;
       recordRecentModelKey(id);
-      onCurrentModel(confirmedCurrent);
       showPicker.value = false;
-      window.dispatchEvent(new CustomEvent("piclaw:model-state-changed", { detail: { chatJid, payload: info, source: "picker" } }));
-    } catch { flashStatus("Model switch failed"); }
+    } catch { if (chatJid === getChatJid()) flashStatus("Model switch failed"); }
   }, []);
 
   const handleTogglePin = useCallback((id: string) => {
@@ -123,6 +119,7 @@ export function useModelPicker(): UseModelPickerResult {
   }, []);
 
   const handleSelectThinking = useCallback(async (level: string) => {
+    const chatJid = getChatJid();
     try {
       const res = await fetch(getMessageUrl(), {
         method: "POST", credentials: "same-origin",
@@ -130,11 +127,12 @@ export function useModelPicker(): UseModelPickerResult {
         body: JSON.stringify({ content: `/thinking ${level}` }),
       });
       const data = await res.json().catch(() => null);
-      if (res.ok && data?.command?.status !== "error" && !data?.error) {
+      if (chatJid !== getChatJid()) return;
+      if (res.ok && data?.command !== false && data?.command?.status !== "error" && !data?.error) {
         showThinkingPicker.value = false;
-        window.dispatchEvent(new CustomEvent("piclaw:model-state-changed", { detail: { chatJid: getChatJid(), source: "picker" } }));
+        window.dispatchEvent(new CustomEvent("piclaw:model-state-changed", { detail: { chatJid, source: "picker" } }));
       } else flashStatus(data?.error ?? data?.command?.message ?? "Thinking switch failed");
-    } catch { flashStatus("Thinking switch failed"); }
+    } catch { if (chatJid === getChatJid()) flashStatus("Thinking switch failed"); }
   }, []);
 
   return { showPicker, showThinkingPicker, models, handleBadgeClick, handleSelectModel, handleTogglePin, handleThinkingClick, handleSelectThinking };

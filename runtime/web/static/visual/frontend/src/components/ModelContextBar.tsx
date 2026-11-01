@@ -71,7 +71,7 @@ export function ModelContextBar({ polling }: { polling: UseStatusPollingResult }
         <ModelPicker
           models={models.value ?? []}
           activeModel={activeModel}
-          onSelectModel={(id) => handleSelectModel(id, (m) => { currentModel.value = m; })}
+          onSelectModel={handleSelectModel}
           onTogglePin={handleTogglePin}
           onClose={closeModelPicker}
           onCompact={() => {
@@ -92,8 +92,8 @@ export function ModelContextBar({ polling }: { polling: UseStatusPollingResult }
         className={`model-badge${!modelName ? " model-badge--empty" : ""}`}
         role="button"
         tabIndex={0}
-        onClick={(e) => handleBadgeClick(e, modelName, (l) => { currentThinkingLevel.value = l; }, (m) => { currentModel.value = m; })}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleBadgeClick(e, modelName, (l) => { currentThinkingLevel.value = l; }, (m) => { currentModel.value = m; }); } }}
+        onClick={handleBadgeClick}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleBadgeClick(e); } }}
         title={modelName ? `${modelName}${thinkingLevel ? ` • ${thinkingLevel}` : ""} — click to switch model` : "No model selected — click to choose"}
       >
         {modelName ? (

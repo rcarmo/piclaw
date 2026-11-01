@@ -35,7 +35,8 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
     let refuse = true; const commands: string[] = []; const notices: string[] = [];
     const compactions: string[] = [], thinkingCommands: string[] = [];
     let thinkingLevels = ['medium', 'high', 'xhigh', 'max'];
-    let catalogueEmpty = false;
+    let catalogueEmpty = false, statusBlocked = false, failConfirmation = false;
+    const statusWaiters: (() => void)[] = [], failedConfirmations: string[] = [];
     const pins = { scope: "fixture", revision: 0, models: [] as string[], sessions: [] as string[] };
     page.on("dialog", async dialog => { notices.push(dialog.message()); await dialog.dismiss(); });
     const modelPayload = () => ({ current: model, thinking_level: thinking, thinking_level_label: thinking, supports_thinking: !catalogueEmpty, available_thinking_levels: catalogueEmpty ? [] : thinkingLevels, available_thinking_level_labels: catalogueEmpty ? [] : thinkingLevels, available_model_count: catalogueEmpty ? 0 : 2, model_options: catalogueEmpty ? [] : [{ provider: "fixture", id: "first", context_window: 200000, reasoning: true, thinking_levels: thinkingLevels }, { provider: "fixture", id: "near", context_window: 100000, reasoning: true, thinking_levels: thinkingLevels }], oobe: { provider_ready_completed_instance: true } });
@@ -85,11 +86,18 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
           thinkingCommands.push(content);
           return route.fulfill({ json: { command: { status: 'success', thinking_level: thinking } } });
         }
+        if (failConfirmation) {
+          expect(content).toBe('/model fixture/near'); failedConfirmations.push(content); catalogueEmpty = true;
+          return route.fulfill({ json: { command: { status: 'success' } } });
+        }
         commands.push(content); expect(content).toBe("/model fixture/near");
         if (!refuse) model = "fixture/near";
         body = { command: refuse ? { status: "error", message: "Native capacity refused" } : { status: "success" } };
       }
-      else if (url.pathname === "/agent/status") body = { status: { status: "idle", state: "idle", data: null }, model: modelPayload(), context: contextPayload(), metrics: { cpu_percent: 2, ram_percent: 12 }, agent_name: "Fixture", errors: [] };
+      else if (url.pathname === "/agent/status") {
+        if (statusBlocked) await new Promise<void>(resolve => statusWaiters.push(resolve));
+        body = { status: { status: "idle", state: "idle", data: null }, model: modelPayload(), context: contextPayload(), metrics: { cpu_percent: 2, ram_percent: 12 }, agent_name: "Fixture", errors: [] };
+      }
       else if (url.pathname === "/agent/models") body = modelPayload();
       else if (url.pathname === "/agent/context") body = contextPayload();
       else if (url.pathname === "/timeline") body = { posts: [], has_more: false, chat_jid: chatJid, user: { name: "Fixture User" }, agent: { name: "Fixture" } };
@@ -158,6 +166,22 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
         : page.getByLabel('Thinking level', { exact: true }).locator('option').evaluateAll(nodes => nodes.map(node => (node as HTMLOptionElement).value));
       await page.waitForFunction(skin => skin === 'visual' ? document.querySelectorAll('.thinking-picker__item').length === 4 : document.querySelectorAll('select[aria-label="Thinking level"] option').length === 4, skin);
       expect(await readThinking()).toEqual(thinkingLevels);
+      if (skin === 'visual') {
+        // Allow the existing after-paint dismissal listener to attach before Escape.
+        await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+        await page.keyboard.press('Escape');
+        await page.waitForFunction(() => !document.querySelector('.thinking-picker'));
+        // A newer catalogue GET must update the shared capability owner even when status refresh is pending.
+        statusBlocked = true; thinkingLevels = ['medium', 'high'];
+        const fresh = page.waitForResponse(response => new URL(response.url()).pathname === '/agent/models');
+        await badge.click(); await fresh;
+        await page.getByRole('combobox', { name: 'Search models' }).press('Escape');
+        await page.waitForFunction(() => !document.querySelector('.model-picker'));
+        await page.locator('.thinking-badge').filter({ visible: true }).first().click();
+        await page.waitForFunction(() => document.querySelectorAll('.thinking-picker__item').length === 2);
+        expect(await readThinking()).toEqual(thinkingLevels);
+        statusBlocked = false; statusWaiters.splice(0).forEach(resolve => resolve());
+      }
       thinkingLevels = ['medium', 'high']; await emit('model_changed', { chat_jid: chatJid, ...modelPayload() });
       await page.waitForFunction(skin => skin === 'visual' ? document.querySelectorAll('.thinking-picker__item').length === 2 : document.querySelectorAll('select[aria-label="Thinking level"] option').length === 2, skin);
       expect(await readThinking()).toEqual(thinkingLevels);
@@ -239,6 +263,18 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       model = "fixture/first";
       await emit("model_changed", { chat_jid: chatJid, ...modelPayload() });
       await waitModel("first");
+      if (skin === 'visual') {
+        // Successful POST plus an empty, different-current confirmation is a failure, never stale selectable rows.
+        failConfirmation = true;
+        await badge.click(); await search.fill('near'); await option.waitFor();
+        await option.click();
+        await page.waitForFunction(() => (window as any).capacityNotice === 'Model switch was not confirmed');
+        expect(failedConfirmations).toEqual(['/model fixture/near']);
+        expect(await page.getByRole('option').count()).toBe(0); expect(model).toBe('fixture/first');
+        await page.keyboard.press('Escape');
+        failConfirmation = false; catalogueEmpty = false;
+        await emit('model_changed', { chat_jid: chatJid, ...modelPayload() });
+      }
       await page.evaluate(() => window.dispatchEvent(new CustomEvent("piclaw:open-settings", { detail: { section: "models" } })));
       const row = page.getByRole("option").filter({ hasText: "fixture/near" });
       await row.waitFor(); await row.click();
@@ -255,6 +291,6 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
     } catch (error) {
       console.log("SHELL_FAILURE", JSON.stringify({ engineName, skin, errors, unhandled: [...unhandled], requests, body: (await page.locator("body").innerText()).slice(-2500), badges: await page.locator(".model-badge-wrapper,.compose-model-meta").evaluateAll(nodes => nodes.map(n => n.outerHTML)), scripts: await page.locator("script[src]").evaluateAll(nodes => nodes.map(n => n.getAttribute("src"))) }));
       throw error;
-    } finally { await context.close(); await browser.close(); }
+    } finally { statusBlocked = false; statusWaiters.splice(0).forEach(resolve => resolve()); await context.close(); await browser.close(); }
   }, 60000);
 }

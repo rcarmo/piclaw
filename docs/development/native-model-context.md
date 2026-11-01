@@ -28,7 +28,7 @@ Classic and Visual context meters display the backend percentage. They add no to
 
 Visual's model catalogue contains only backend results. The preset Copilot model/window table is removed, and an empty catalogue clears old rows using the existing empty-result surface.
 
-Thinking menus use the current backend model snapshot, including cold load and capability revocation. Visual no longer keeps preset levels or a per-picker thinking snapshot; Classic no longer reads thinking choices from its stale popup catalogue. The unused Visual context-window fallback signal is removed.
+Thinking menus use the current backend model snapshot, including cold load and capability revocation. Picker GETs and switch confirmations publish complete backend metadata through the existing shared model-state event rather than partial current-model/thinking callbacks. Empty confirmations clear stale rows even when a switch is not confirmed; replies for a different active chat do not update the picker. Visual no longer keeps preset levels or a per-picker thinking snapshot; Classic no longer reads thinking choices from its stale popup catalogue. The unused Visual context-window fallback signal is removed.
 
 ## Thinking capabilities
 
