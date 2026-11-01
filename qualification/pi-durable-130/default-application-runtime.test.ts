@@ -1230,7 +1230,9 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       await inside;
       await new Promise(resolve => setTimeout(resolve, 10));
       expect(finished).toBe(false); expect(modelCalls).toBe(0); expect(calls).toBe(0);
-      release(); expect(await pending).toBe(primary); expect(modelCalls).toBe(1);
+      release(); const failure = await pending;
+      expect(failure).toBeInstanceOf(RuntimePreparationError); expect(failure.cause).toBe(primary);
+      expect(failure.retryableStorage).toBe(false); expect(modelCalls).toBe(1);
       const pkg = join(workspace, ".pi/extensions/node_modules/@rcarmo/piclaw-addon-drawio-editor/index.ts");
       const addon = await import(pkg);
       expect((await addon.handleRoute(new Request("http://fixture/drawio/index.html"), "/drawio/index.html")).status).toBe(503);
