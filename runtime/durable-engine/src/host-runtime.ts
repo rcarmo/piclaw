@@ -414,14 +414,25 @@ export class HostConversationRuntime {
       return async () => { await watch.stop(); };
     }, true);
   }
-  /** Read the current public history head, never instantiate a legacy SDK session. */
-  async readSessionPosition(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<string | null> {
+  /** Atomically read persisted model/thinking choice and public history head. */
+  async readSessionState(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<import("../../src/agent-pool/durable-runtime-adapter.js").DurableSessionState> {
     const reader = this.sessionReader(binding);
     return this.observe(async () => {
       const conversation = await reader.conversation();
-      const page = await conversation.entries({ order: "descending" }, 1, undefined, this.context); reader.check();
-      return page.items[0] ? String(page.items[0].id) : null;
+      const state = await conversation.commit(async tx => {
+        reader.check();
+        const page = await tx.scanEntries({ conversationId: reader.binding.conversationId as ConversationId, order: "descending" }, 1); reader.check();
+        const agent = await tx.doc(AgentDoc, reader.binding.conversationId as ConversationId); reader.check();
+        return { position: page.items[0] ? String(page.items[0].id) : null,
+          model: agent.model ? `${agent.model.provider}/${agent.model.modelId}` : null,
+          thinkingLevel: agent.thinkingLevel ?? null };
+      }, this.context); reader.check();
+      return state;
     });
+  }
+  /** Read the current public history head, never instantiate a legacy SDK session. */
+  async readSessionPosition(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<string | null> {
+    return (await this.readSessionState(binding)).position;
   }
   readSessionMetadata(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<import("../../src/agent-pool/durable-runtime-adapter.js").DurableSessionMetadata> {
     const reader = this.sessionReader(binding);
@@ -533,16 +544,9 @@ export class HostConversationRuntime {
     });
   }
   /** Read only the public persisted agent choice, not resolved host defaults or response metadata. */
-  private readSessionChoice(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<{ model: string | null; thinkingLevel: string | null }> {
-    const reader = this.sessionReader(binding);
-    return this.observe(async () => {
-      const conversation = await reader.conversation();
-      const label = await conversation.commit(async tx => {
-        const state = await tx.doc(AgentDoc, reader.binding.conversationId as ConversationId); reader.check();
-        return { model: state.model ? `${state.model.provider}/${state.model.modelId}` : null, thinkingLevel: state.thinkingLevel ?? null };
-      }, this.context); reader.check();
-      return label;
-    });
+  private async readSessionChoice(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<{ model: string | null; thinkingLevel: string | null }> {
+    const { model, thinkingLevel } = await this.readSessionState(binding);
+    return { model, thinkingLevel };
   }
   async readSessionModel(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<string | null> {
     return (await this.readSessionChoice(binding)).model;

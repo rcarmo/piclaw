@@ -60,19 +60,17 @@ test("inactive adapter maps accepted host records, snapshots its manifest and pr
 test("session readers share one detached immutable target and cannot follow caller binding mutation", async () => {
   const f = fixture();
   const seen: unknown[] = [];
-  f.runtime.readSessionPosition = async binding => { seen.push(binding); return null; };
-  f.runtime.readSessionModel = async binding => { seen.push(binding); return null; };
-  f.runtime.readSessionThinkingLevel = async binding => { seen.push(binding); return null; };
+  f.runtime.readSessionState = async binding => { seen.push(binding); return { position: null, model: null, thinkingLevel: null }; };
   const binding = f.manifest[0]!;
   const adapter = createDurableConversationAdapter({ incarnation: 'copy-A', manifest: f.manifest,
     runtime: f.runtime, getConversationBinding: () => binding });
   const position = adapter.sessionPosition(binding.chatJid, binding.branchId, 'sdk-session');
   binding.conversationId = 999;
-  await position.readPosition(); await position.readModel!(); await position.readThinkingLevel!();
-  expect(seen).toHaveLength(3);
+  await position.readState!(); await position.readPosition(); await position.readModel!(); await position.readThinkingLevel!();
+  expect(seen).toHaveLength(4);
   expect(seen[0]).toEqual({ incarnation: 'copy-A', chatJid: 'web:adapter', branchId: 'main', conversationId: 3 });
   expect(Object.isFrozen(seen[0])).toBe(true);
-  expect(seen[1]).toBe(seen[0]); expect(seen[2]).toBe(seen[0]);
+  expect(seen[1]).toBe(seen[0]); expect(seen[2]).toBe(seen[0]); expect(seen[3]).toBe(seen[0]);
 });
 
 test("reconcile is one passive read and does not return private engine evidence", async () => {

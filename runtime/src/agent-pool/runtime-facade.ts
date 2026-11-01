@@ -531,7 +531,9 @@ export class AgentRuntimeFacade {
           ? { provider: label.slice(0, split), id: label.slice(split + 1) } : undefined);
       }
       if (command.type === "state") {
-        const [model, thinking, position] = await Promise.all([port.readModel?.(), port.readThinkingLevel?.(), port.readPosition()]);
+        const state = port.readState ? await port.readState() : undefined;
+        const [model, thinking, position] = state ? [state.model, state.thinkingLevel, state.position]
+          : await Promise.all([port.readModel?.(), port.readThinkingLevel?.(), port.readPosition()]);
         return { status: "success", message: ["**Durable session state**", `Session: ${port.sessionId}`, `Branch: ${port.branchId}`,
           `Model: ${model ?? "unavailable"}`, `Thinking: ${thinking ?? "unavailable"}`, `Position: ${position ?? "empty"}`,
           "Storage: pi-durable SQLite (no legacy session file)"].join("\n") };
@@ -689,9 +691,11 @@ export class AgentRuntimeFacade {
     // model state for the picker.
     const session = this.options.getDurableSession === undefined ? this.options.pool.get(chatJid)?.runtime.session ?? null : null;
     const durable = this.getDurableSession(chatJid);
-    if (this.options.getDurableSession !== undefined && !durable?.readModel) throw new Error("Durable session model unavailable");
+    if (this.options.getDurableSession !== undefined && !durable?.readState && !durable?.readModel) throw new Error("Durable session model unavailable");
+    const durableState = durable?.readState ? await durable.readState() : null;
     const persistedState = this.options.getDurableSession !== undefined
-      ? { current: await durable!.readModel!(), thinkingLevel: await durable!.readThinkingLevel?.() ?? null }
+      ? durableState ? { current: durableState.model, thinkingLevel: durableState.thinkingLevel }
+        : { current: await durable!.readModel!(), thinkingLevel: await durable!.readThinkingLevel?.() ?? null }
       : session ? { current: null, thinkingLevel: null } : getPersistedSessionState(chatJid);
     const registry = (session as (AgentSession & { modelRegistry?: ModelRegistry }) | null)?.modelRegistry ?? this.options.modelRegistry;
     const scopedModels = resolveModelScope(

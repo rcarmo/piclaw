@@ -25,6 +25,12 @@ export interface DurableSessionMetadata {
   tools: { name: string; description: string }[];
 }
 
+export interface DurableSessionState {
+  readonly position: string | null;
+  readonly model: string | null;
+  readonly thinkingLevel: string | null;
+}
+
 export interface DurableSessionReport {
   readonly activeEntries: number;
   readonly userMessages: number;
@@ -57,6 +63,7 @@ export interface DurableSessionPositionPort {
   readonly readReport?: () => Promise<DurableSessionReport>;
   readonly sessionId: string;
   readonly branchId: string;
+  readonly readState?: () => Promise<DurableSessionState>;
   readonly readPosition: () => Promise<string | null>;
   /** Host-owned scope for credential controls; never an SDK session or input admission. */
   readonly assertCurrent?: () => void;
@@ -111,6 +118,7 @@ export interface DurableConversationState {
  * must already be configured there. No 1.2 Models, SDK session or context crosses this port.
  * Reconciliation deliberately does not expose the engine's private answer/thinking evidence. */
 export interface DurableConversationRuntimePort {
+  readSessionState?(binding: DurableConversationBinding & { readonly incarnation: string }): Promise<DurableSessionState>;
   readSessionContextUsage?(binding: DurableConversationBinding & { readonly incarnation: string }): Promise<DurableContextUsage>;
   resetSession?(binding: DurableConversationBinding & { readonly incarnation: string }): Promise<void>;
   compactSession?(binding: DurableConversationBinding & { readonly incarnation: string }, instructions?: string): Promise<{ compacted: boolean }>;
@@ -118,11 +126,8 @@ export interface DurableConversationRuntimePort {
   readSessionMetadata?(binding: DurableConversationBinding & { readonly incarnation: string }): Promise<DurableSessionMetadata>;
   readSessionReport?(binding: DurableConversationBinding & { readonly incarnation: string }): Promise<DurableSessionReport>;
   readSessionTree?(binding: DurableConversationBinding & { readonly incarnation: string }): Promise<import("../agent-control/session-tree-snapshot.js").SessionTreeSnapshot>;
-  readSessionPosition?(binding: DurableConversationBinding & { readonly incarnation: string }): Promise<string | null>;
   setSessionThinkingLevel?(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }, level: string): Promise<void>;
   setSessionModel?(binding: DurableConversationBinding & { readonly incarnation: string }, model: { provider: string; modelId: string }): Promise<void>;
-  readSessionThinkingLevel?(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<string | null>;
-  readSessionModel?(binding: DurableConversationBinding & { readonly incarnation: string }): Promise<string | null>;
   submit(input: DurableAcceptedInput): Promise<number>;
   submitIntent?(input: DurableAcceptedInput): Promise<number>;
   reconcile(input: DurableAcceptedInput): Promise<DurableConversationState>;
@@ -161,10 +166,8 @@ export function createDurableConversationAdapter(options: {
   const cancel = runtime.cancel.bind(runtime), resume = runtime.resume.bind(runtime);
   const settle = runtime.settle.bind(runtime), close = runtime.close.bind(runtime);
   const wait = runtime.wait?.bind(runtime), submitIntent = runtime.submitIntent?.bind(runtime);
+  const readState = runtime.readSessionState?.bind(runtime);
   const readContextUsage = runtime.readSessionContextUsage?.bind(runtime);
-  const readPosition = runtime.readSessionPosition?.bind(runtime);
-  const readModel = runtime.readSessionModel?.bind(runtime);
-  const readThinkingLevel = runtime.readSessionThinkingLevel?.bind(runtime);
   const setThinkingLevel = runtime.setSessionThinkingLevel?.bind(runtime);
   const setModel = runtime.setSessionModel?.bind(runtime);
   const reset = runtime.resetSession?.bind(runtime);
@@ -192,13 +195,14 @@ export function createDurableConversationAdapter(options: {
   return Object.freeze({
     sessionPosition(chatJid: string, branchId: string, sessionId: string): DurableSessionPositionPort {
       const binding = lookup(chatJid, branchId);
-      if (!binding || !sessionId || !readPosition) throw new Error("Durable session position unavailable");
+      if (!binding || !sessionId || !readState) throw new Error("Durable session position unavailable");
       const target = Object.freeze({ incarnation, chatJid: binding.chatJid, branchId: binding.branchId, conversationId: binding.conversationId });
       return Object.freeze({ sessionId, branchId,
+        readState: () => readState(target),
         readContextUsage: readContextUsage ? () => readContextUsage(target) : undefined,
-        readPosition: () => readPosition(target),
-        readModel: readModel ? () => readModel(target) : undefined,
-        readThinkingLevel: readThinkingLevel ? () => readThinkingLevel(target) : undefined,
+        readPosition: async () => (await readState(target)).position,
+        readModel: async () => (await readState(target)).model,
+        readThinkingLevel: async () => (await readState(target)).thinkingLevel,
         setThinkingLevel: setThinkingLevel ? (level: string) => setThinkingLevel(target, level) : undefined,
         setModel: setModel ? (model: { provider: string; modelId: string }) => setModel(target, { provider: model.provider, modelId: model.modelId }) : undefined,
         reset: reset ? () => reset(target) : undefined,

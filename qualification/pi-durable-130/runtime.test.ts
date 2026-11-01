@@ -548,7 +548,7 @@ for (const failed of [false, true]) test(`runtime: unbound ACK-only settlement s
   } finally { await reopened.close(); }
 }));
 
-for (const reader of ['readSessionPosition', 'readSessionMetadata', 'readSessionModel', 'readSessionThinkingLevel', 'readSessionContextUsage', 'readSessionReport', 'readSessionTree'] as const) {
+for (const reader of ['readSessionState', 'readSessionPosition', 'readSessionMetadata', 'readSessionModel', 'readSessionThinkingLevel', 'readSessionContextUsage', 'readSessionReport', 'readSessionTree'] as const) {
   test(`runtime: checked reader ${reader} rejects route revocation across native lookup await`, () => fixture(async f => {
     const input = await f.accept();
     const binding = { incarnation: input.incarnation, chatJid: input.chatJid, branchId: input.branchId, conversationId: input.conversationId };
