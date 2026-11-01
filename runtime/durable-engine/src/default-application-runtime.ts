@@ -1,4 +1,6 @@
-import { admitSqliteWrite } from "../../src/db/sqlite-async-admission.js";
+import { admitSqliteWrite, isSqliteContention } from "../../src/db/sqlite-async-admission.js";
+import { RuntimePreparationError } from "../../src/runtime/preparation-error.js";
+import { HostEffectError } from "./host-effects.js";
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import { createNativeTurnView, type NativeTurnViewChannel } from "../../src/channels/web/agent/native-turn-view.js";
 import { createLogger } from "../../src/utils/logger.js";
@@ -1556,14 +1558,21 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       try { bundle.stop(); await bundle.close(); }
       catch (cleanup) { throw new RuntimeStartupCleanupError([error, cleanup], 'Application startup cleanup uncertain'); }
     }
-    terminalLifetime.abort(); lifetime.abort(); closeResources(); releaseAdminKv?.(); closeInfrastructure(); releaseReviewSource?.(); releaseObservabilityConfiguration?.();
     const cleanupFailures: unknown[] = [];
+    for (const release of [() => terminalLifetime.abort(), () => lifetime.abort(), closeResources, releaseAdminKv,
+      closeInfrastructure, releaseReviewSource, releaseObservabilityConfiguration]) {
+      try { release?.(); } catch (cleanup) { cleanupFailures.push(cleanup); }
+    }
     try { await closeRemote(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     try { await closeCodex(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     try { await mcp?.close(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     try { await closeSandbox(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     try { await drawioHost?.close(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     if (cleanupFailures.length) throw new RuntimeStartupCleanupError([error, ...cleanupFailures], "Native tool preparation cleanup uncertain");
-    throw error;
+    // Inner cleanup uncertainty cannot be repaired by disposing outer tools.
+    if (error instanceof RuntimeStartupCleanupError) throw error;
+    // Certify only after every partial SDK/tool/ownership resource has closed.
+    // This permits another preparation, never replay of an existing invocation.
+    throw new RuntimePreparationError(error, isSqliteContention(error) || (error instanceof HostEffectError && error.retryableStorage));
   }
 }

@@ -1,8 +1,17 @@
 import { hashCanonicalRequest, type CanonicalJsonValue } from "../../src/service-effects/contracts/common.js";
 import type { Result } from "../../src/service-effects/contracts/result.js";
 
+/** Preserve the store's structured failure without classifying arbitrary Error text. */
+export class HostEffectError extends Error {
+  readonly retryableStorage: boolean;
+  constructor(failure: unknown) {
+    super(JSON.stringify(failure), { cause: failure });
+    const detail = failure as { _tag?: unknown; certainty?: unknown; retryable?: unknown } | null;
+    this.retryableStorage = !!detail && detail._tag === 'storage_unavailable' && detail.certainty === 'not_applied' && detail.retryable === true;
+  }
+}
 export function value<T, E>(result: Result<T, E>): T {
-  if (!result.ok) throw new Error(JSON.stringify(result.error));
+  if (!result.ok) throw new HostEffectError(result.error);
   return result.value;
 }
 // Keep the original provenance label: it participates in persisted idempotency request hashes.
