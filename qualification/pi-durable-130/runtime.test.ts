@@ -11,6 +11,7 @@ import type { TerminalCommit, TerminalDatabaseEffect } from "../../runtime/src/s
 import type { AssistantMessage } from "../../runtime/durable-engine/qualification/ai.ts";
 import { HostConversationRuntime, type AcceptedInput, type RuntimeOptions, type SettledAnswer } from "../../runtime/durable-engine/src/index.js";
 import { configureHostWalFixtureDatabase, openWalFixtureDatabase } from "./src/sqlite-fixture-policy.js";
+import { configureSqliteRole } from "../../runtime/src/db/sqlite-role-policy.js";
 import { barrier, context, openFixture } from "./src/fixture.js";
 import { at, effect, sealed, value } from "./src/host-handoff.js";
 import { hashCanonicalRequest, type CanonicalJsonValue } from "../../runtime/src/service-effects/contracts/common.js";
@@ -18,6 +19,7 @@ import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connect
 import { ensureBudgetWork } from "../../runtime/src/db/budget-limits.js";
 import { reserveBudgetRequest, dispatchBudgetRequest, abandonBudgetRequest, getBudgetRequest } from "../../runtime/src/db/budget-request-reservations.js";
 import { assertModelAccountingReady } from "../../runtime/src/budget/model-request-accounting.js";
+import { assertOperationAccountingReady } from "../../runtime/durable-engine/src/host-request-accounting.js";
 import { applyOwnedMigrations } from "../../runtime/src/db/migrations.js";
 import { budgetTerminalEvidenceVersionMigration } from "../../runtime/src/db/budget-limits-schema.js";
 import { installTerminalSettlementCompositionSchema } from "../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js";
@@ -48,20 +50,21 @@ const imageBlock = { type: "image", name: "generated.png", filename: "generated.
 // @ts-expect-error ImageContent is not an AssistantMessage content variant.
 const unsupportedAssistantImage: AssistantMessage["content"][number] = { type: "image", data: "AA==", mimeType: "image/png" };
 
-async function fixture(run: (f: Awaited<ReturnType<typeof setup>>) => Promise<void>, busy = false) {
-  const f = await setup(busy);
+async function fixture(run: (f: Awaited<ReturnType<typeof setup>>) => Promise<void>, busy = false, sharedRoot = false) {
+  const f = await setup(busy, sharedRoot);
   try { await run(f); } finally { f.base.host.modelHold?.release(); await f.runtime.close(); f.db.close(); await rm(f.dir, { recursive: true, force: true }); }
 }
-async function setup(busy = false) {
+async function setup(busy = false, sharedRoot = false) {
   const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "runtime-"));
   process.env.PICLAW_DB_IN_MEMORY = "1";
   initDatabase(); getDb().query("VACUUM INTO ?").run(join(dir, "host.sqlite")); closeDatabase();
   const db = new Database(join(dir, "host.sqlite"), { strict: true });
   configureHostWalFixtureDatabase(db);
+  if (sharedRoot) configureSqliteRole(db, join(dir, 'host.sqlite'), { role: 'root' });
   db.exec("PRAGMA foreign_keys=ON"); installTerminalSettlementCompositionSchema(db);
   // Explicit qualification-only host correlation schema. Never installed by runtime.open().
   db.exec(`CREATE TABLE runtime_payloads (ref TEXT PRIMARY KEY, content TEXT NOT NULL)`);
-  const path = join(dir, "candidate.sqlite");
+  const path = join(dir, sharedRoot ? "host.sqlite" : "candidate.sqlite");
   const base = await openFixture({ acquired: true }, () => {}, async () => SqliteStorage.open(await openWalFixtureDatabase(path)));
   const id = base.root.id;
   if (busy) {
@@ -1312,6 +1315,56 @@ for (const disposition of ['completed', 'failed'] as const) test(`runtime: legac
   expect(f.db.query('SELECT * FROM service_effect_s02_commits').all()).toHaveLength(2);
   expect(getBudgetRequest(binding.id, f.db)).toEqual(hold);
 }));
+
+for (const state of ['dispatched', 'unresolved'] as const) test(`runtime: interrupted modern ${state} hold cannot strand failed publication or a distinct successor`, () => fixture(async f => {
+  f.base.host.modelAllowed = false;
+  const input = await f.accept(), submission = await f.runtime.submit(input);
+  await f.runtime.close(); f.runtime = await f.drain();
+  expect((await f.runtime.reconcile(input)).status).toMatchObject({ status: 'unanswered', reason: 'model_error' });
+  const task = f.db.query("SELECT id,conversation_id FROM tasks WHERE kind=? AND status='terminal'")
+    .get(JSON.stringify('pi.generation')) as { id: number; conversation_id: number };
+  expect(task.conversation_id).toBe(input.conversationId);
+  const parentWorkId = `durable-operation:${input.operationId}`;
+  const binding = { id: 'lost-modern-terminal', workId: 'durable-request:lost-modern-terminal', chatJid: input.chatJid,
+    providerId: 'fixture', modelId: 'fixture-model', accountRef: 'original-account', amountMicros: 60,
+    modelInvocation: { version: 1 as const, domain: 'runtime', operationId: input.operationId,
+      conversationId: task.conversation_id, taskId: task.id, taskKind: 'pi.generation' as const, phase: 'request' as const, checkpointHash: 'd'.repeat(64) } };
+  ensureBudgetWork({ id: parentWorkId, chatJid: input.chatJid, executionKind: 'interactive' }, f.db);
+  ensureBudgetWork({ id: binding.workId, chatJid: input.chatJid, executionKind: 'interactive', parentWorkId }, f.db);
+  // A dispatched request with no received terminal models process loss. No
+  // provider outcome/usage is invented, and no provider is called by recovery.
+  reserveBudgetRequest(binding, {}, f.db);
+  dispatchBudgetRequest(binding, { signal: new AbortController().signal, authorise() {} }, f.db);
+  if (state === 'unresolved') abandonBudgetRequest(binding, f.db);
+  const hold = getBudgetRequest(binding.id, f.db), calls = f.base.host.modelCalls;
+  const financial = () => ({ requests: f.db.query('SELECT * FROM budget_request_reservations').all(),
+    work: f.db.query('SELECT * FROM budget_work ORDER BY id').all(), usage: f.db.query('SELECT * FROM token_usage').all() });
+  const money = financial(), tasks = f.db.query('SELECT * FROM tasks ORDER BY id').all();
+  expect(hold?.terminal_evidence_version).toBe(1);
+  expect(hold?.terminal_receipt_json).toBeNull();
+  // A native execution outcome is not a financial terminal receipt.
+  expect(() => assertModelAccountingReady(parentWorkId, f.db, undefined, true)).toThrow('budget_denied');
+  f.hooks.accounting = id => assertOperationAccountingReady(f.db, id, true, { domain: 'runtime', incarnation: 'copy-A' });
+  const committed = await f.runtime.settle(input);
+  expect(committed?.disposition).toBe('failed');
+  expect(f.db.query('SELECT content FROM messages WHERE is_bot_message=1').all()).toHaveLength(1);
+  expect(await f.runtime.settle(input)).toEqual(committed);
+  expect(financial()).toEqual(money);
+  expect(f.db.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(tasks);
+  await f.runtime.close(); f.runtime = await f.drain();
+  expect(await f.runtime.settle(input)).toEqual(committed);
+  expect(f.base.host.modelCalls).toBe(calls);
+  expect((await f.runtime.reconcile(input)).submissionId).toBe(submission);
+  expect(financial()).toEqual(money);
+  f.base.host.modelAllowed = true;
+  const next = await f.accept('queued-steer:intent-1', 'distinct accepted successor');
+  await f.runtime.submit(next); await f.runtime.close(); f.runtime = await f.drain();
+  expect((await f.runtime.settle(next))?.disposition).toBe('completed');
+  expect(f.base.host.modelCalls).toBe(calls + 1);
+  expect(f.db.query('SELECT * FROM service_effect_s02_commits').all()).toHaveLength(2);
+  expect(financial()).toEqual(money);
+  expect(getBudgetRequest(binding.id, f.db)).toEqual(hold);
+}, false, true));
 
 for (const reopen of [false, true]) test(`runtime intents: late input after failed primary retains exact source authority; reopen=${reopen}`, () => fixture(async f => {
   f.base.host.modelAllowed = false;

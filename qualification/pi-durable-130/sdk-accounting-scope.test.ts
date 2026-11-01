@@ -10,7 +10,7 @@ import { assertConversationAccountingReady, operationBudgetWorkId, prepareTaskAc
 import { projectTerminalOutcome } from "../../runtime/durable-engine/src/host-terminal-outcome.js";
 import { modelRequestAccounting } from "../../runtime/src/budget/model-request-accounting.js";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
-import { ensureBudgetWork, setBudgetWorkStatus } from "../../runtime/src/db/budget-limits.js";
+import { ensureBudgetWork, setBudgetWorkStatus, saveBudgetCap } from "../../runtime/src/db/budget-limits.js";
 import { abandonBudgetRequest, BudgetRequestError, dispatchBudgetRequest, getBudgetRequest, recordBudgetTerminalReceipt, reserveBudgetRequest, settleBudgetRequest, type BudgetRequestBinding } from "../../runtime/src/db/budget-request-reservations.js";
 import type { AssistantMessage } from "../../runtime/src/durable-legacy-sdk.js";
 import type { TokenUsageRecord } from '../../runtime/src/db/token-usage.js';
@@ -273,6 +273,79 @@ test("unresolved receipt-less sends block normal and terminal readiness after wo
   for (const at of [f.parent, f.child, f.sibling]) {
     denied(() => f.ready(at)); denied(() => f.ready(at, undefined, true));
   }
+}));
+
+async function replaceTaskState(storage: Awaited<ReturnType<typeof SqliteStorage.open>>, at: Location, state: StoredTask['state']) {
+  const original = await storage.task(at.taskId, context);
+  if (!original) throw Error('Missing task fixture');
+  const { memos: _memos, ...record } = original;
+  const value: StoredTask = state.status === 'terminal' || state.status === 'completing' ? { ...record, state } : { ...record, state };
+  await storage.commit([{ type: 'task', value }], context);
+}
+
+for (const outcome of ['failed', 'aborted'] as const) for (const state of ['dispatched', 'unresolved'] as const)
+  test(`receipt-less ${state} request observes native ${outcome} without inventing usage, clearing holds or reviving tasks`, () => fixture(async f => {
+    const binding = f.reserve(f.child);
+    dispatchBudgetRequest(binding, { signal: owner.signal, authorise() {} }, f.database);
+    if (state === 'unresolved') abandonBudgetRequest(binding, f.database);
+    await replaceTaskState(f.storage, f.child, { status: 'terminal', outcome: outcome === 'failed'
+      ? { status: 'failed', error: { message: 'Local admission failed after process loss', detail: { reason: 'model_error' } } }
+      : { status: 'aborted', reason: 'Local cancellation after process loss' } });
+    const before = getBudgetRequest(binding.id, f.database);
+    const money = () => ({ work: f.database.query('SELECT * FROM budget_work ORDER BY id').all(),
+      usage: f.database.query('SELECT * FROM token_usage').all(), events: f.database.query('SELECT * FROM budget_usage_events').all() });
+    const snapshot = money(), tasks = f.database.query('SELECT * FROM tasks ORDER BY id').all();
+    for (const at of [f.parent, f.child, f.sibling]) {
+      expect(() => f.ready(at)).not.toThrow(); expect(() => f.ready(at, undefined, true)).not.toThrow();
+    }
+    // Preparation must not put a new accepted phase into an indefinite wait.
+    const scope = { ...f.parent, taskKind: 'pi.generation', phase: 'prepare', signal: owner.signal };
+    expect(await prepareTaskAccounting(f.database, domain, scope, owner)).toBe(true);
+    await f.reopen();
+    expect(() => f.ready(f.parent, undefined, true)).not.toThrow();
+    expect(getBudgetRequest(binding.id, f.database)).toEqual(before);
+    expect(money()).toEqual(snapshot);
+    expect(f.database.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(tasks);
+    // Completion proof is not spend permission: the entire unknown hold still
+    // consumes the cap, and a distinct request cannot overcommit that amount.
+    const operation = operationBudgetWorkId(binding.modelInvocation!.operationId);
+    saveBudgetCap({ scope: 'task', workId: operation, metric: 'api_usd_micros', amount: 15_000 }, f.database);
+    ensureBudgetWork({ id: 'next-funded-request', chatJid, executionKind: 'interactive', parentWorkId: operation }, f.database);
+    expect(() => reserveBudgetRequest({ ...binding, id: 'distinct-over-cap', workId: 'next-funded-request',
+      modelInvocation: { ...binding.modelInvocation!, checkpointHash: 'e'.repeat(64) } }, {}, f.database)).toThrow('budget_denied');
+    expect(getBudgetRequest(binding.id, f.database)).toEqual(before);
+    expect(f.database.query('SELECT count(*) n FROM budget_request_reservations').get()).toEqual({ n: 1 });
+  }));
+
+for (const state of [...liveStates, { status: 'terminal', outcome: { status: 'completed', result: null } } satisfies StoredTask['state']])
+  test(`receipt-less unknown send cannot borrow completion from native ${state.status}/${'outcome' in state ? state.outcome?.status : 'live'}`, () => fixture(async f => {
+    const binding = f.reserve(f.child);
+    dispatchBudgetRequest(binding, { signal: owner.signal, authorise() {} }, f.database);
+    abandonBudgetRequest(binding, f.database);
+    await replaceTaskState(f.storage, f.child, state);
+    const before = getBudgetRequest(binding.id, f.database);
+    for (const at of [f.parent, f.child, f.sibling]) {
+      denied(() => f.ready(at)); denied(() => f.ready(at, undefined, true));
+    }
+    expect(getBudgetRequest(binding.id, f.database)).toEqual(before);
+  }));
+
+test('native failure cannot substitute for a retained paid receipt awaiting settlement', () => fixture(async f => {
+  const binding = f.reserve(f.child); f.retain(binding);
+  await replaceTaskState(f.storage, f.child, { status: 'terminal', outcome: { status: 'failed', error: { message: 'local failure' } } });
+  denied(() => f.ready(f.parent)); denied(() => f.ready(f.parent, undefined, true));
+  await modelRequestAccounting({ authorise() {}, documentedFree: false }, f.database).settleRetainedRequest(binding, owner);
+  expect(() => f.ready(f.parent, undefined, true)).not.toThrow();
+}));
+
+test('another task failure or a definitely-unsent reservation cannot substitute for the exact dispatched task', () => fixture(async f => {
+  const binding = f.reserve(f.child);
+  await replaceTaskState(f.storage, f.sibling, { status: 'terminal', outcome: { status: 'failed', error: { message: 'unrelated failure' } } });
+  denied(() => f.ready(f.parent, undefined, true));
+  await replaceTaskState(f.storage, f.child, { status: 'terminal', outcome: { status: 'aborted' } });
+  denied(() => f.ready(f.parent, undefined, true)); // Still reserved, not a dispatched expense.
+  dispatchBudgetRequest(binding, { signal: owner.signal, authorise() {} }, f.database);
+  expect(() => f.ready(f.parent, undefined, true)).not.toThrow();
 }));
 
 test("intentional valid unknown valuation stays held but is allowed by the existing evaluator", () => fixture(async f => {
