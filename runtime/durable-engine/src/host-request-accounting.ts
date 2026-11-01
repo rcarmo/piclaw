@@ -49,7 +49,15 @@ function receiptlessExecutionEnded(database: Database, domain: string, row: Read
   if (invocation.domain !== domain) return false;
   if (findBudgetRequestByModelInvocation(invocation, database)?.id !== row.id) throw new BudgetRequestError('conflict');
   const work = getBudgetWork(row.work_id, database);
-  if (work?.chat_jid !== row.chat_jid || work.parent_work_id !== operationBudgetWorkId(invocation.operationId)) return false;
+  if (work?.chat_jid !== row.chat_jid) return false;
+  if (work.parent_work_id !== operationBudgetWorkId(invocation.operationId)) {
+    const maintenance = work.parent_work_id ? getBudgetWork(work.parent_work_id, database) : null;
+    if (invocation.taskKind !== 'pi.compaction' || maintenance?.chat_jid !== row.chat_jid
+      || maintenance.execution_kind !== 'side_prompt' || !maintenance.id.startsWith('durable-maintenance:')
+      || !maintenance.id.endsWith(`:${invocation.taskId}`)
+      || !(maintenance.id === invocation.operationId && maintenance.parent_work_id === null
+        || maintenance.parent_work_id === operationBudgetWorkId(invocation.operationId))) return false;
+  }
   const stored = database.query(`SELECT record FROM tasks WHERE id=? AND conversation_id=? AND kind=? AND status='terminal'`)
     .get(invocation.taskId, invocation.conversationId, JSON.stringify(invocation.taskKind)) as { record: string } | null;
   if (!stored) return false;
