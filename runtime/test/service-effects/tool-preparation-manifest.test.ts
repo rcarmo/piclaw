@@ -1,6 +1,6 @@
 import "../helpers.js";
 
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 
 import {
@@ -37,6 +37,12 @@ const SPEC_FIELDS = [
   "serviceEffector", "abortExpectation", "protectedFields",
 ].sort();
 const TEMPLATE_NAMES = DYNAMIC_TOOL_PREPARATION_TEMPLATES.map((row) => row.toolName);
+
+// Scan the immutable repository once; policy assertions reuse the same inventory.
+let repositoryInventory: ReturnType<typeof inventoryRepositoryToolFamilies>;
+beforeAll(() => {
+  repositoryInventory = inventoryRepositoryToolFamilies();
+}, 30_000);
 
 interface TestMcpCacheEntry {
   readonly configHash?: unknown;
@@ -98,7 +104,7 @@ function compositionTree(optionalFiles: readonly string[] = ["one.ts"], builtinE
 
 describe("WP-3C production-root coverage oracle", () => {
   test("matches exact repository rows from authoritative production composition", () => {
-    const inventory = inventoryRepositoryToolFamilies();
+    const inventory = repositoryInventory;
     expect(inventory.unresolvedRegistrations).toEqual([]);
     expect(TOOL_PREPARATION_MANIFEST.map((row) => row.toolName).sort()).toEqual([...inventory.names]);
     expect(inventory.registrationSites.cdp_browser).toEqual(["extensions/browser/cdp-browser-tool/index.ts"]);
@@ -230,7 +236,7 @@ describe("WP-3C production-root coverage oracle", () => {
 
 describe("WP-3C closed manifest policy and hostile-safe normalization", () => {
   test("normalizes and freezes every exact row and conservative template", () => {
-    const inventory = inventoryRepositoryToolFamilies();
+    const inventory = repositoryInventory;
     const combined = [...TOOL_PREPARATION_MANIFEST, ...DYNAMIC_TOOL_PREPARATION_TEMPLATES];
     const result = normalizeToolPreparationManifest(combined, {
       knownToolNames: inventory.names,
@@ -434,7 +440,7 @@ describe("WP-3C closed manifest policy and hostile-safe normalization", () => {
   test("a dynamic template cannot satisfy a missing repository-owned exact name", () => {
     const withoutRead = TOOL_PREPARATION_MANIFEST.filter((row) => row.toolName !== "read");
     const issues = validateToolPreparationManifest([...withoutRead, ...DYNAMIC_TOOL_PREPARATION_TEMPLATES], {
-      knownToolNames: inventoryRepositoryToolFamilies().names,
+      knownToolNames: repositoryInventory.names,
       dynamicTemplateNames: TEMPLATE_NAMES,
     });
     expect(issues).toContainEqual(expect.objectContaining({ code: "missing_known_tool", toolName: "read" }));

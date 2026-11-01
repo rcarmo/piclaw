@@ -48,9 +48,13 @@ git -C "$NATIVE_FIXTURE" cat-file -e "$native_ref^{commit}"
 git -C "$CONTRACT_FIXTURE" cat-file -e "$contract_ref^{commit}"
 test "$(git -C "$NATIVE_FIXTURE" rev-parse HEAD)" = "$native_ref"
 test "$(git -C "$CONTRACT_FIXTURE" rev-parse HEAD)" = "$contract_ref"
-test -z "$(git -C "$NATIVE_FIXTURE" status --porcelain --untracked-files=no)"
-test -z "$(git -C "$CONTRACT_FIXTURE" status --porcelain --untracked-files=no)"
+test -z "$(git -C "$NATIVE_FIXTURE" status --porcelain --untracked-files=normal)"
+test -z "$(git -C "$CONTRACT_FIXTURE" status --porcelain --untracked-files=normal)"
+# These fixture packages have independent frozen locks; provision both outside the gate.
+(cd "$NATIVE_FIXTURE" && bun install --frozen-lockfile --ignore-scripts)
+(cd "$NATIVE_FIXTURE/addons/code-review" && bun install --frozen-lockfile --ignore-scripts)
 test -d "$NATIVE_FIXTURE/node_modules"
+test -d "$NATIVE_FIXTURE/addons/code-review/node_modules"
 test -d runtime/durable-engine/node_modules
 test -d qualification/pi-durable-130/node_modules
 

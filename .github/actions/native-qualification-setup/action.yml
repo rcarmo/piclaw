@@ -64,6 +64,11 @@ runs:
       working-directory: .qualification-native-addons
       run: bun install --frozen-lockfile --ignore-scripts
 
+    - name: Install pinned code-review parser dependencies
+      shell: bash
+      working-directory: .qualification-native-addons/addons/code-review
+      run: bun install --frozen-lockfile --ignore-scripts
+
     - name: Export all five prepared fixture paths
       shell: bash
       run: |

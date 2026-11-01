@@ -16,7 +16,7 @@ for (const cancellation of ["invocation", "lifetime", "overflow"] as const) test
   const before = listTrackedProcesses();
   const controller = new AbortController();
   const pidFile = join(cwd, "fd.pid");
-  writeFileSync(join(cwd, "fd"), `#!${process.execPath}\nimport { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(pidFile)}, String(process.pid));\n${cancellation === "overflow" ? "setInterval(() => process.stdout.write('x'.repeat(65536)), 1);" : "setInterval(() => {}, 1000);"}\n`);
+  writeFileSync(join(cwd, "fd"), `#!${process.execPath}\nimport { writeFileSync, renameSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(pidFile + '.tmp')}, String(process.pid));\nrenameSync(${JSON.stringify(pidFile + '.tmp')}, ${JSON.stringify(pidFile)});\n${cancellation === "overflow" ? "setInterval(() => process.stdout.write('x'.repeat(65536)), 1);" : "setInterval(() => {}, 1000);"}\n`);
   chmodSync(join(cwd, "fd"), 0o700);
   process.env.PATH = cwd;
   const [tool] = createHostBuiltinTools({ cwd, names: ["find"], signal: cancellation === "lifetime" ? controller.signal : undefined, authority: { assertAllowed() {} } });
@@ -25,6 +25,7 @@ for (const cancellation of ["invocation", "lifetime", "overflow"] as const) test
   try {
     const execution = tool!.execute({ pattern: "*.txt" } as never, api as never,
       cancellation === "invocation" ? withAbortSignal(controller.signal, context) : context).then(() => null, error => error);
+    // The child atomically publishes the complete PID; file existence is readiness.
     // This timer cannot run with the former spawnSync implementation.
     for (let i = 0; i < 200 && !existsSync(pidFile); i++) await Bun.sleep(5);
     expect(existsSync(pidFile)).toBe(true);
