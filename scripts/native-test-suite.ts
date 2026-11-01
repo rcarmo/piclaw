@@ -103,7 +103,9 @@ export async function nativePreflight(contract: NativeContract, env: Record<stri
       if (realpathSync(git(path, 'rev-parse', '--show-toplevel')) !== path || git(path, 'rev-parse', 'HEAD') !== pin.ref) throw Error(`expected checkout root at ${pin.ref}`);
       const changed = git(path, 'status', '--porcelain', '--untracked-files=normal');
       if (changed) throw Error('fixture has modified/untracked source; prepare a clean disposable checkout, never reset another working tree');
-      if (fixtureName === 'native' && !existsSync(join(path, 'node_modules'))) throw Error('native add-on frozen dependencies are missing; provision outside the offline gate');
+      if (fixtureName === 'native') for (const dependencyRoot of ['node_modules', 'addons/code-review/node_modules']) {
+        if (!existsSync(join(path, dependencyRoot))) throw Error(`native add-on frozen dependencies are missing at ${dependencyRoot}; provision outside the offline gate`);
+      }
       fixtures[key] = { path, repository: pin.repository, commit: pin.ref, lockSha256: digest(join(path, 'bun.lock')) };
     } catch (error) { problems.push(`${key}: ${String(error)}`); }
   }

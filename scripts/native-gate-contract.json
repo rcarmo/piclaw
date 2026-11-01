@@ -106,6 +106,8 @@
     "installed-tool-catalog.test.ts",
     "migration.test.ts",
     "model-context-bound.test.ts",
+    "model-context-recovery.test.ts",
+    "model-context-usage-framing.test.ts",
     "model-failure.test.ts",
     "models.test.ts",
     "native-admission-boundary.test.ts",

@@ -19,19 +19,19 @@ async function fixture() {
   return { ...f, prepare, revoke() { current = false; }, defaults(value: typeof defaults) { defaults = value; } };
 }
 
-test('selected admission measures offered schemas and preserves the conservative byte/output bound', async () => {
+test('selected admission measures offered schemas and retains SDK token and full-output allowances', async () => {
   const f = await fixture();
   try {
     const admission = await f.prepare();
     expect(admission.tools.map(t => t.name)).toEqual(['visible']);
     const state = await f.harness.snapshot(AgentDoc, f.root.id, context);
     const target = { contextWindow: 25000, maxTokens: 1000 };
-    expect(() => assertModelContextFits(admission.messages, state, target, f.registry.snapshot(), 0)).toThrow('bound exceeded');
+    expect(() => assertModelContextFits(admission.messages, state, target, f.registry.snapshot(), 0)).toThrow('estimate exceeded');
     await f.root.commit(async tx => {
       const current = await tx.doc(AgentDoc, f.root.id);
       await admission.assertCurrent(tx, current);
       expect(() => assertModelContextFits(admission.messages, current, target, f.registry.snapshot(), 0, admission.tools)).not.toThrow();
-      expect(() => assertModelContextFits(admission.messages, current, { ...target, contextWindow: 100 }, f.registry.snapshot(), 0, admission.tools)).toThrow('bound exceeded');
+      expect(() => assertModelContextFits(admission.messages, current, { ...target, contextWindow: 100 }, f.registry.snapshot(), 0, admission.tools)).toThrow('estimate exceeded');
     }, context);
     expect(f.host.modelCalls).toBe(0);
   } finally { await f.harness.close(context); }
