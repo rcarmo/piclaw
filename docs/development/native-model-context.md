@@ -22,6 +22,12 @@ Scheduled allocation checks the inherited parent snapshot. Sections render with 
 
 Remove the projection when a public SDK facility provides equivalent rendered contributions, selected declarations, baseline/provenance semantics and applicable-usage accounting. Do not replace it with private package imports or silently change SDK/storage versions. Monetary request reservations and terminal accounting remain separate owners under #1817.
 
+## Thinking capabilities
+
+The root/private bridge copies `thinkingLevelMap` as detached, frozen JSON, limited to the SDK's public thinking-level keys. Null-disabled and extended levels retain their native meaning. Physical reasoning/map changes refuse new transport rather than silently changing the selected effort.
+
+Transport receives a detached physical-model snapshot. Source, lifetime, policy and current physical compatibility are checked again after awaited dispatch admission. The public SDK still awaits the final header hook before provider entry; revocation queued after its final synchronous check remains a documented limitation. Tests retain that counterexample alongside the earlier-gap zero-dispatch regression. Paid-terminal retention and stored-outcome recovery are unchanged.
+
 ## Evidence
 
 - `model-context-duplicate.test.ts`: original unchanged-section, instructions and measured-schema regressions; real compaction boundary.
