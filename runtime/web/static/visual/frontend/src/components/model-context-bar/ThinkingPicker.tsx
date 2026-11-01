@@ -1,5 +1,3 @@
-import { FALLBACK_THINKING_LEVELS } from "./types";
-
 interface ThinkingPickerProps {
   thinkingLevels: string[];
   currentLevel: string;
@@ -7,13 +5,13 @@ interface ThinkingPickerProps {
 }
 
 export function ThinkingPicker({ thinkingLevels, currentLevel, onSelectThinking }: ThinkingPickerProps) {
-  const levels = thinkingLevels.length ? thinkingLevels : FALLBACK_THINKING_LEVELS;
   return (
     <div
       data-model-picker
       className="thinking-picker"
     >
-      {levels.map((level) => {
+      {thinkingLevels.length === 0 && <div className="model-picker__empty">Thinking levels unavailable.</div>}
+      {thinkingLevels.map((level) => {
         const isActive = level === currentLevel;
         return (
           <div

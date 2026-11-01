@@ -378,20 +378,30 @@ export class HostConversationRuntime {
     if (this.closed) throw new Error("Runtime closed");
     this.options.owner.assert();
   }
+  /** Per-read binding snapshot and checked lookup; never memoise an SDK handle. */
+  private sessionReader(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }) {
+    const copy = Object.freeze({ incarnation: binding.incarnation, chatJid: binding.chatJid,
+      branchId: binding.branchId, conversationId: binding.conversationId });
+    const check = () => {
+      this.fence();
+      if (copy.incarnation !== this.options.incarnation || !this.options.existingConversationIds.includes(copy.conversationId as ConversationId) ||
+        this.options.conversationFor(copy.chatJid, copy.branchId) !== copy.conversationId) throw Error("Host binding conflict");
+    };
+    const conversation = async (missing = "Missing existing conversation") => {
+      check();
+      const value = await this.harness.conversation(copy.conversationId as ConversationId, this.context);
+      check();
+      if (!value) throw Error(missing);
+      return value;
+    };
+    return { binding: copy, check, conversation };
+  }
   /** Public committed conversation view, including pi.live; display-only subscription. */
   watchSession(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number },
     listener: (view: import("@earendil-works/pi-durable").ConversationView) => void): Promise<() => Promise<void>> {
-    binding = Object.freeze({ ...binding });
-    const check = () => {
-      this.fence();
-      if (binding.incarnation !== this.options.incarnation || !this.options.existingConversationIds.includes(binding.conversationId as ConversationId) ||
-        this.options.conversationFor(binding.chatJid, binding.branchId) !== binding.conversationId) throw Error("Host binding conflict");
-    };
+    const reader = this.sessionReader(binding), check = reader.check;
     return this.observe(async () => {
-      check();
-      const conversation = await this.harness.conversation(binding.conversationId as ConversationId, this.context);
-      check();
-      if (!conversation) throw Error("Unknown conversation");
+      const conversation = await reader.conversation("Unknown conversation");
       const watch = await conversation.watch(this.context);
       check();
       const publish = async (view: import("@earendil-works/pi-durable").ConversationView) => {
@@ -404,31 +414,34 @@ export class HostConversationRuntime {
       return async () => { await watch.stop(); };
     }, true);
   }
-  /** Read the current public history head, never instantiate a legacy SDK session. */
-  async readSessionPosition(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<string | null> {
+  /** Atomically read persisted model/thinking choice and public history head. */
+  async readSessionState(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<import("../../src/agent-pool/durable-runtime-adapter.js").DurableSessionState> {
+    const reader = this.sessionReader(binding);
     return this.observe(async () => {
-      const o = this.options;
-      const id = o.existingConversationIds.find(id => id === binding.conversationId);
-      if (binding.incarnation !== o.incarnation || id === undefined ||
-        o.conversationFor(binding.chatJid, binding.branchId) !== id) throw new Error("Host binding conflict");
-      const conversation = await this.harness.conversation(id, this.context); this.fence();
-      if (!conversation) throw new Error("Missing existing conversation");
-      const page = await conversation.entries({ order: "descending" }, 1, undefined, this.context); this.fence();
-      return page.items[0] ? String(page.items[0].id) : null;
+      const conversation = await reader.conversation();
+      const state = await conversation.commit(async tx => {
+        reader.check();
+        const page = await tx.scanEntries({ conversationId: reader.binding.conversationId as ConversationId, order: "descending" }, 1); reader.check();
+        const agent = await tx.doc(AgentDoc, reader.binding.conversationId as ConversationId); reader.check();
+        return { position: page.items[0] ? String(page.items[0].id) : null,
+          model: agent.model ? `${agent.model.provider}/${agent.model.modelId}` : null,
+          thinkingLevel: agent.thinkingLevel ?? null };
+      }, this.context); reader.check();
+      return state;
     });
   }
+  /** Read the current public history head, never instantiate a legacy SDK session. */
+  async readSessionPosition(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<string | null> {
+    return (await this.readSessionState(binding)).position;
+  }
   readSessionMetadata(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<import("../../src/agent-pool/durable-runtime-adapter.js").DurableSessionMetadata> {
-    const copy = Object.freeze({ ...binding });
+    const reader = this.sessionReader(binding);
     return this.observe(async () => {
-      const o = this.options;
-      if (copy.incarnation !== o.incarnation || !o.existingConversationIds.some(id => id === copy.conversationId) ||
-        o.conversationFor(copy.chatJid, copy.branchId) !== copy.conversationId) throw Error("Host binding conflict");
-      const conversation = await this.harness.conversation(copy.conversationId as ConversationId, this.context); this.fence();
-      if (!conversation) throw Error("Missing existing conversation");
-      const agent = await conversation.agent(this.context); this.fence();
+      const conversation = await reader.conversation();
+      const agent = await conversation.agent(this.context); reader.check();
       const tools = [...new Map([...agent.tools, ...agent.callable, ...agent.deferred].map(tool => [tool.name,
         { name: tool.name, description: tool.description }])).values()];
-      return { backend: "durable", conversationId: copy.conversationId, extensions: agent.extensions.map(extension => extension.name), tools };
+      return { backend: "durable", conversationId: reader.binding.conversationId, extensions: agent.extensions.map(extension => extension.name), tools };
     });
   }
   /** Read-only current-head context estimate for the compose tracker. The SDK
@@ -436,43 +449,29 @@ export class HostConversationRuntime {
    * drops usage that predates a reset/compaction prefix. No generation occurs.
    */
   async readSessionContextUsage(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<import("../../src/agent-pool/durable-runtime-adapter.js").DurableContextUsage> {
-    const copy = Object.freeze({ ...binding });
+    const reader = this.sessionReader(binding);
     return this.observe(async () => {
-      const assertBinding = () => {
-        this.fence();
-        if (copy.incarnation !== this.options.incarnation || !this.options.existingConversationIds.includes(copy.conversationId as ConversationId) ||
-          this.options.conversationFor(copy.chatJid, copy.branchId) !== copy.conversationId) throw Error("Host binding conflict");
-      };
-      assertBinding();
-      const conversation = await this.harness.conversation(copy.conversationId as ConversationId, this.context); assertBinding();
-      if (!conversation) throw Error("Missing existing conversation");
-      const view = await conversation.context(this.context); assertBinding();
-      const agent = await conversation.agent(this.context); assertBinding();
+      const conversation = await reader.conversation();
+      const view = await conversation.context(this.context); reader.check();
+      const agent = await conversation.agent(this.context); reader.check();
       const model = agent.model && currentHarnessModels(this.options.harnessOptions).getModel(agent.model.provider, agent.model.modelId);
       const measured = estimateContextTokens(view.messages).tokens;
       const tokens = Number.isFinite(measured) && measured >= 0 ? measured : null;
       const window = model?.contextWindow;
       const contextWindow = typeof window === "number" && Number.isFinite(window) && window > 0 ? window : null;
-      assertBinding();
+      reader.check();
       return { tokens, contextWindow };
     });
   }
   /** Read-only native reporting. No model calls, estimates, or legacy session hydration. */
   readSessionReport(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<import("../../src/agent-pool/durable-runtime-adapter.js").DurableSessionReport> {
-    const copy = Object.freeze({ ...binding });
+    const reader = this.sessionReader(binding);
     return this.observe(async () => {
       const o = this.options;
-      const assertBinding = () => {
-        this.fence();
-        if (copy.incarnation !== o.incarnation || !o.existingConversationIds.includes(copy.conversationId as ConversationId) ||
-            o.conversationFor(copy.chatJid, copy.branchId) !== copy.conversationId) throw Error("Host binding conflict");
-      };
-      assertBinding();
-      const conversation = await this.harness.conversation(copy.conversationId as ConversationId, this.context); assertBinding();
-      if (!conversation) throw Error("Missing existing conversation");
-      const view = await conversation.context(this.context); assertBinding();
-      const agent = await conversation.agent(this.context); assertBinding();
-      const ledger = await this.harness.snapshot(UsageDoc, copy.conversationId as ConversationId, this.context); assertBinding();
+      const conversation = await reader.conversation();
+      const view = await conversation.context(this.context); reader.check();
+      const agent = await conversation.agent(this.context); reader.check();
+      const ledger = await this.harness.snapshot(UsageDoc, reader.binding.conversationId as ConversationId, this.context); reader.check();
       const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
       for (const bucket of [...Object.values(ledger?.models ?? {}), ...Object.values(ledger?.tools ?? {})]) {
         usage.input += bucket.input; usage.output += bucket.output;
@@ -493,39 +492,36 @@ export class HostConversationRuntime {
         if (text) lastAnswer = text;
       }
       const model = agent.model ? currentHarnessModels(o.harnessOptions).getModel(agent.model.provider, agent.model.modelId) : undefined;
-      assertBinding();
+      reader.check();
       return { activeEntries: view.entries.length, userMessages, assistantMessages,
         contextWindow: model?.contextWindow ?? null, observedTokens, observedModel, lastAnswer, usage };
     });
   }
   /** Fork-aware public history across the explicit imported host-session bindings only. */
   readSessionTree(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<SessionTreeSnapshot> {
-    const copy = Object.freeze({ incarnation: binding.incarnation, chatJid: binding.chatJid,
-      branchId: binding.branchId, conversationId: binding.conversationId });
+    const reader = this.sessionReader(binding), copy = reader.binding;
     return this.observe(async () => {
       const o = this.options;
-      if (copy.incarnation !== o.incarnation || !o.existingConversationIds.some(id => id === copy.conversationId) ||
-        o.conversationFor(copy.chatJid, copy.branchId) !== copy.conversationId) throw new Error("Host binding conflict");
-      this.fence();
-      const active = await this.harness.snapshot(LegacyImportManifest, copy.conversationId as unknown as ConversationId, this.context); this.fence();
+      reader.check();
+      const active = await this.harness.snapshot(LegacyImportManifest, copy.conversationId as unknown as ConversationId, this.context); reader.check();
       const source = active?.binding;
       const all = new Map<string, RootSessionTreeNode>();
       let leafId: string | null = null;
       let visibleLeafId: string | null = null;
       for (const id of o.existingConversationIds) {
-        this.fence();
-        const manifest = await this.harness.snapshot(LegacyImportManifest, id, this.context); this.fence();
+        reader.check();
+        const manifest = await this.harness.snapshot(LegacyImportManifest, id, this.context); reader.check();
         const imported = manifest?.binding ?? null;
         if (id !== copy.conversationId && (!source || imported?.sourceSessionId !== source.sourceSessionId || imported.sourceHash !== source.sourceHash)) continue;
         // Imported host identities are provenance, not the current host routing keys.
         if (imported && imported.engineConversationId !== id) throw new Error("Host binding conflict");
-        const conversation = await this.harness.conversation(id, this.context); this.fence();
+        const conversation = await this.harness.conversation(id, this.context); reader.check();
         if (!conversation) throw new Error("Missing existing conversation");
         const rows: import("@earendil-works/pi-durable").EntryRecord[] = [];
         let cursor: import("@earendil-works/pi-durable").Cursor | undefined;
         do {
-          this.fence();
-          const page = await conversation.entries({ order: "ascending" }, 100, cursor, this.context); this.fence();
+          reader.check();
+          const page = await conversation.entries({ order: "ascending" }, 100, cursor, this.context); reader.check();
           rows.push(...page.items); cursor = page.next;
         } while (cursor);
         if (id === copy.conversationId) leafId = rows.length ? String(rows[rows.length - 1]!.id) : null;
@@ -543,27 +539,14 @@ export class HostConversationRuntime {
         if (node.entry.parentId !== null && !parent) throw new Error("Missing durable tree parent");
         if (parent) parent.children.push(node); else roots.push(node);
       }
-      this.fence();
+      reader.check();
       return buildSessionTreeSnapshot({ getLeafId: () => leafId, getTree: () => roots }, { visibleLeafId });
     });
   }
   /** Read only the public persisted agent choice, not resolved host defaults or response metadata. */
-  private readSessionChoice(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<{ model: string | null; thinkingLevel: string | null }> {
-    const copy = Object.freeze({ incarnation: binding.incarnation, chatJid: binding.chatJid,
-      branchId: binding.branchId, conversationId: binding.conversationId });
-    return this.observe(async () => {
-      const o = this.options;
-      const id = o.existingConversationIds.find(id => id === copy.conversationId);
-      if (copy.incarnation !== o.incarnation || id === undefined ||
-        o.conversationFor(copy.chatJid, copy.branchId) !== id) throw new Error("Host binding conflict");
-      const conversation = await this.harness.conversation(id, this.context); this.fence();
-      if (!conversation) throw new Error("Missing existing conversation");
-      const label = await conversation.commit(async tx => {
-        const state = await tx.doc(AgentDoc, id);
-        return { model: state.model ? `${state.model.provider}/${state.model.modelId}` : null, thinkingLevel: state.thinkingLevel ?? null };
-      }, this.context); this.fence();
-      return label;
-    });
+  private async readSessionChoice(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<{ model: string | null; thinkingLevel: string | null }> {
+    const { model, thinkingLevel } = await this.readSessionState(binding);
+    return { model, thinkingLevel };
   }
   async readSessionModel(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<string | null> {
     return (await this.readSessionChoice(binding)).model;

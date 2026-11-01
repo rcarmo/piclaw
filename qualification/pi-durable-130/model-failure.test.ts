@@ -2,7 +2,7 @@ import "./src/test-guard.js";
 import { expect, test } from "bun:test";
 import { classifyModelFailure, modelFailureDetail, modelFailureNotice, parseModelFailure } from "../../runtime/durable-engine/src/host-model-failure.js";
 
-import { isRetryableAssistantError } from "../../runtime/durable-engine/node_modules/@earendil-works/pi-ai/dist/utils/retry.js";
+import { isRetryableAssistantError, isContextOverflow } from "../../runtime/durable-engine/qualification/ai.ts";
 
 const secret = "SYNTHETIC-PRIVATE-CREDENTIAL";
 const {BudgetRequestError}=await import('../../runtime/src/db/budget-request-reservations.js');
@@ -172,7 +172,6 @@ test("bounded classification preserves SDK transient wording and quota codes", (
 });
 
 test("context rejection remains visible to SDK overflow recovery", async () => {
-  const {isContextOverflow}=await import("../../runtime/durable-engine/node_modules/@earendil-works/pi-ai/dist/utils/overflow.js");
   const failure=classifyModelFailure("provider","context_length_exceeded");
   const message={stopReason:"error",errorMessage:modelFailureDetail(failure)} as any;
   expect(isContextOverflow(message)).toBe(true);

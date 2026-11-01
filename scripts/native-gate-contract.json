@@ -111,6 +111,7 @@
     "model-context-recovery.test.ts",
     "model-context-usage-framing.test.ts",
     "model-failure.test.ts",
+    "model-thinking-contract.test.ts",
     "models.test.ts",
     "native-admission-boundary.test.ts",
     "native-compaction-settings.test.ts",

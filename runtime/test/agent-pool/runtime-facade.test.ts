@@ -1126,6 +1126,20 @@ test('durable model picker reads persisted thinking level without legacy hydrati
   expect(await facade.getAvailableModels('web:thinking', { includeProviderUsage: false, includeProviderDiagnostics: false })).toMatchObject({ current: 'synthetic/reasoning', thinking_level: 'high' });
 });
 
+test('durable state and model picker reuse one coherent native state read', async () => {
+  let reads = 0;
+  const port = { sessionId: 'coherent', branchId: 'main',
+    async readState() { reads++; return { position: '42', model: 'synthetic/reasoning', thinkingLevel: 'high' }; },
+    async readPosition() { throw Error('split position read'); } };
+  const { facade } = createFacade({ getDurableSession: () => port,
+    modelRegistry: { getAvailable: () => [{ provider: 'synthetic', id: 'reasoning', reasoning: true }] } as any });
+  expect(await facade.applyControlCommand('web:coherent', { type: 'state' })).toMatchObject({ status: 'success', message: expect.stringContaining('Position: 42') });
+  expect(reads).toBe(1);
+  expect(await facade.getAvailableModels('web:coherent', { includeProviderUsage: false, includeProviderDiagnostics: false }))
+    .toMatchObject({ current: 'synthetic/reasoning', thinking_level: 'high' });
+  expect(reads).toBe(2);
+});
+
 test('durable thinking query reads persisted level and rejects mutation before reading', async () => {
   let reads = 0, protections = 0;
   const { facade } = createFacade({ getDurableSession: () => ({ sessionId: 'thinking-query', branchId: 'main', readPosition: async () => null,

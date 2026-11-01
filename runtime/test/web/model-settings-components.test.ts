@@ -77,7 +77,9 @@ test('confirmed Settings switches synchronise badges before background refresh',
     expect(backgroundRefresh).toBeGreaterThan(dispatch);
   }
   expect(visualStatusSource).toContain('mergeModelStatePayload(previous, payload)');
-  expect(visualStatusSource).toContain('modelContextWindow.value = windowSize');
+  expect(visualStatusSource).toContain('modelInfo.value = info');
+  expect(visualStatusSource).toContain('agentContext.value = { tokens: null, percent: null, contextWindow: windowSize ?? 0');
+  expect(visualStatusSource).not.toContain('modelContextWindow');
   expect(visualStatusSource).toContain('invalidateAgentUiSnapshot(getChatJid())');
   expect(visualStatusSource).toContain('statusVersion.current += 1');
 });
