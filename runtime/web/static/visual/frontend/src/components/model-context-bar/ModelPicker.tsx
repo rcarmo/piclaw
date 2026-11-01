@@ -194,7 +194,7 @@ export function ModelPicker({
             ))}
           </section>
         ))}
-        {projection.totalMatches === 0 && <div class="model-picker__empty">No models match “{query}”.</div>}
+        {projection.totalMatches === 0 && <div class="model-picker__empty">{query ? `No models match “${query}”.` : 'No models available.'}</div>}
         {projection.hiddenCount > 0 && (
           <div class="model-picker__limit-note">Showing {projection.renderedEntries.length} of {projection.totalMatches}; refine your search to see more.</div>
         )}

@@ -26,9 +26,15 @@ Remove the projection when a public SDK facility provides equivalent rendered co
 
 Classic and Visual context meters display the backend percentage. They add no token margin or local percentage fallback. Unknown counts and percentages remain unavailable; a reported zero stays zero. Classic session metrics also omit an unknown percentage. Existing explicit compaction controls remain separate from rendering and model selection.
 
+Visual's model catalogue contains only backend results. The preset Copilot model/window table is removed, and an empty catalogue clears old rows using the existing empty-result surface.
+
+Thinking menus use the current backend model snapshot, including cold load and capability revocation. Visual no longer keeps preset levels or a per-picker thinking snapshot; Classic no longer reads thinking choices from its stale popup catalogue. The unused Visual context-window fallback signal is removed.
+
 ## Thinking capabilities
 
 The root/private bridge copies `thinkingLevelMap` as detached, frozen JSON, limited to the SDK's public thinking-level keys. Null-disabled and extended levels retain their native meaning. Physical reasoning/map changes refuse new transport rather than silently changing the selected effort.
+
+Native API discovery, cycling and commands use the public SDK's canonical capability keys. An explicitly disabled `max` is not a request for legacy `xhigh`; an empty SDK capability list does not invent `off`. Historical label adapters remain on the separate legacy-session/extension path. Original off tests are retained alongside owned-tool rejection, next-request max/xhigh and SQLite reopen checks.
 
 Transport receives a detached physical-model snapshot. Source, lifetime, policy and current physical compatibility are checked again after awaited dispatch admission. The public SDK still awaits the final header hook before provider entry; revocation queued after its final synchronous check remains a documented limitation. Tests retain that counterexample alongside the earlier-gap zero-dispatch regression. Paid-terminal retention and stored-outcome recovery are unchanged.
 

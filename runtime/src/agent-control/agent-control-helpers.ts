@@ -15,13 +15,14 @@
 
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { getSupportedThinkingLevels, type Api, type Model } from "@earendil-works/pi-ai";
+import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
 import { existsSync } from "fs";
 import { getConfigPath, WORKSPACE_DIR } from "../core/config.js";
 import { readJsonConfig, writeJsonConfig } from "../core/config-store.js";
 import type { AgentControlCommand, AgentControlResult } from "./agent-control-types.js";
 
 /** Ordered list of supported thinking levels from off to max. */
-export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+const THINKING_LEVELS = MODEL_THINKING_LEVELS;
 
 type ThinkingLevelMapWithFutureLevels = Record<string, string | null | undefined>;
 type ThinkingModelDescriptor = Pick<Model<Api>, "provider" | "reasoning" | "thinkingLevelMap">;

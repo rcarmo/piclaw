@@ -33,10 +33,12 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
     let model = "fixture/first", thinking = "high";
     let usage: { tokens: number | null; contextWindow: number | null; percent: number | null } = { tokens: 90000, contextWindow: 200000, percent: 45 };
     let refuse = true; const commands: string[] = []; const notices: string[] = [];
-    const compactions: string[] = [];
+    const compactions: string[] = [], thinkingCommands: string[] = [];
+    let thinkingLevels = ['medium', 'high', 'xhigh', 'max'];
+    let catalogueEmpty = false;
     const pins = { scope: "fixture", revision: 0, models: [] as string[], sessions: [] as string[] };
     page.on("dialog", async dialog => { notices.push(dialog.message()); await dialog.dismiss(); });
-    const modelPayload = () => ({ current: model, thinking_level: thinking, thinking_level_label: thinking, supports_thinking: true, available_model_count: 2, model_options: [{ provider: "fixture", id: "first", context_window: 200000 }, { provider: "fixture", id: "near", context_window: 100000 }], oobe: { provider_ready_completed_instance: true } });
+    const modelPayload = () => ({ current: model, thinking_level: thinking, thinking_level_label: thinking, supports_thinking: !catalogueEmpty, available_thinking_levels: catalogueEmpty ? [] : thinkingLevels, available_thinking_level_labels: catalogueEmpty ? [] : thinkingLevels, available_model_count: catalogueEmpty ? 0 : 2, model_options: catalogueEmpty ? [] : [{ provider: "fixture", id: "first", context_window: 200000, reasoning: true, thinking_levels: thinkingLevels }, { provider: "fixture", id: "near", context_window: 100000, reasoning: true, thinking_levels: thinkingLevels }], oobe: { provider_ready_completed_instance: true } });
     const contextPayload = () => ({ ...usage, contextUpdate: "replace", sessionGeneration: "fixture-generation" });
     await page.addInitScript(({ chatJid }) => {
       localStorage.setItem("piclaw_wizard_dismissed", "1");
@@ -77,6 +79,11 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
         if (content === "/compact") {
           compactions.push(content);
           return route.fulfill({ json: { command: { status: "success", message: "Compacted" } } });
+        }
+        if (content.startsWith('/thinking ')) {
+          thinking = content.slice('/thinking '.length); expect(thinkingLevels).toContain(thinking);
+          thinkingCommands.push(content);
+          return route.fulfill({ json: { command: { status: 'success', thinking_level: thinking } } });
         }
         commands.push(content); expect(content).toBe("/model fixture/near");
         if (!refuse) model = "fixture/near";
@@ -134,6 +141,44 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       await waitModel("first");
       expect(await badge.getAttribute("title")).toContain("high");
       await waitContext(90000);
+      // An authoritative empty SDK catalogue must not display preset or stale models.
+      catalogueEmpty = true;
+      const emptyReply = page.waitForResponse(response => new URL(response.url()).pathname === '/agent/models');
+      await badge.click(); expect((await (await emptyReply).json()).available_model_count).toBe(0);
+      await page.waitForFunction(() => document.querySelectorAll('[role="option"]').length === 0);
+      expect(await page.getByRole('option').count()).toBe(0);
+      await page.keyboard.press('Escape');
+      catalogueEmpty = false; await emit('model_changed', { chat_jid: chatJid, ...modelPayload() });
+      if (skin === 'classic') await page.waitForFunction(() => document.activeElement?.matches('.compose-model-hint-btn'));
+      // Cold thinking UI uses the shared backend snapshot before any model-picker fetch.
+      if (skin === 'visual') await page.locator('.thinking-badge').filter({ visible: true }).first().click();
+      else await badge.click();
+      const readThinking = async () => skin === 'visual'
+        ? page.locator('.thinking-picker__item').evaluateAll(nodes => nodes.map(node => node.lastElementChild?.textContent))
+        : page.getByLabel('Thinking level', { exact: true }).locator('option').evaluateAll(nodes => nodes.map(node => (node as HTMLOptionElement).value));
+      await page.waitForFunction(skin => skin === 'visual' ? document.querySelectorAll('.thinking-picker__item').length === 4 : document.querySelectorAll('select[aria-label="Thinking level"] option').length === 4, skin);
+      expect(await readThinking()).toEqual(thinkingLevels);
+      thinkingLevels = ['medium', 'high']; await emit('model_changed', { chat_jid: chatJid, ...modelPayload() });
+      await page.waitForFunction(skin => skin === 'visual' ? document.querySelectorAll('.thinking-picker__item').length === 2 : document.querySelectorAll('select[aria-label="Thinking level"] option').length === 2, skin);
+      expect(await readThinking()).toEqual(thinkingLevels);
+      thinkingLevels = []; await emit('model_changed', { chat_jid: chatJid, ...modelPayload() });
+      if (skin === 'visual') {
+        await page.getByText('Thinking levels unavailable.', { exact: true }).waitFor();
+        expect(await page.locator('.thinking-picker__item').count()).toBe(0);
+      } else { await page.waitForFunction(() => !document.querySelector('select[aria-label="Thinking level"]')); }
+      expect(thinkingCommands).toEqual([]);
+      thinkingLevels = ['medium', 'high', 'xhigh', 'max']; await emit('model_changed', { chat_jid: chatJid, ...modelPayload() });
+      await page.waitForFunction(skin => skin === 'visual' ? document.querySelectorAll('.thinking-picker__item').length === 4 : document.querySelectorAll('select[aria-label="Thinking level"] option').length === 4, skin);
+      const thinkingResponse = page.waitForResponse(response => response.request().postData()?.includes('/thinking xhigh') === true);
+      if (skin === 'visual') {
+        const extended = page.getByRole('button', { name: 'xhigh', exact: true }); await extended.focus(); await extended.press('Enter');
+      } else await page.getByLabel('Thinking level', { exact: true }).selectOption('xhigh');
+      await thinkingResponse; expect(thinkingCommands).toEqual(['/thinking xhigh']);
+      if (skin === 'classic') await page.waitForFunction(() => !document.querySelector('.compose-model-hint-btn[disabled]'));
+      await page.keyboard.press('Escape');
+      if (skin === 'classic') await page.waitForFunction(() => document.activeElement?.matches('.compose-model-hint-btn'));
+      thinking = 'high'; await emit('model_changed', { chat_jid: chatJid, ...modelPayload() });
+      expect(commands).toEqual([]); expect(compactions).toEqual([]);
       // Same backend snapshot, in the shipped shells: never apply 1.1 + 4000 again.
       const project = async (next: typeof usage, title: string) => {
         usage = next;

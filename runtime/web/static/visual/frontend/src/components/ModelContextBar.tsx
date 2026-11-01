@@ -14,20 +14,24 @@ export function ModelContextBar({ polling }: { polling: UseStatusPollingResult }
   const {
     agentStatus, agentContext, isStale,
     currentModel, currentThinkingLevel,
-    providerUsage, modelSelectionKnown,
+    providerUsage, modelSelectionKnown, modelInfo,
     fetchContext,
   } = polling;
 
   const { isCompacting, compactElapsed, handleCompact } = useCompaction(fetchContext);
 
   const {
-    showPicker, showThinkingPicker, models, thinkingLevels,
+    showPicker, showThinkingPicker, models,
     handleBadgeClick, handleSelectModel, handleTogglePin, handleThinkingClick, handleSelectThinking,
   } = useModelPicker();
 
   const contextTokens = useComputed(() => agentContext.value?.tokens ?? null);
   const contextWindow = useComputed(() => agentContext.value?.contextWindow ?? null);
   const contextPercent = useComputed(() => agentContext.value?.percent ?? null);
+  const thinkingLevels = useComputed(() => {
+    const levels = modelInfo.value?.available_thinking_levels;
+    return Array.isArray(levels) ? levels.filter((level): level is string => typeof level === 'string') : [];
+  });
 
   const modelName = modelSelectionKnown.value ? currentModel.value ?? "" : agentStatus.value?.data?.model ?? "";
   const thinkingLevel = modelSelectionKnown.value ? currentThinkingLevel.value : agentStatus.value?.data?.thinking_level || "";
@@ -116,7 +120,7 @@ export function ModelContextBar({ polling }: { polling: UseStatusPollingResult }
           {showThinkingPicker.value && (
             <ThinkingPicker
               thinkingLevels={thinkingLevels.value ?? []}
-              currentLevel={thinkingLevel}
+              currentLevel={modelInfo.value?.thinking_level ?? thinkingLevel}
               onSelectThinking={handleSelectThinking}
             />
           )}

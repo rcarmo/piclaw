@@ -1553,8 +1553,8 @@ export function ComposeBox({
     const routedModelStatus = resolveComposeRoutedModelStatus(activeModel, agentModelsPayload);
     const runUsageMeta = resolveComposeRunUsageMeta(contextUsage, activeModel);
     const modelUsageLabel = typeof modelUsage?.hint_short === 'string' ? modelUsage.hint_short.trim() : '';
-    const activeModelOption = normalizeModelPickerOptions(agentModelsPayload)
-        .find((option) => areRequestedModelLabelsSame(option.label, activeModel));
+    const activeModelOption = normaliseModelCatalogue(agentModelsPayload)
+        .find((option) => areRequestedModelLabelsSame(option.key, activeModel));
     const activeModelPricingLabel = formatModelPickerPricing(activeModelOption?.pricing);
     const openRouterKeyTitle = formatOpenRouterKeyUsageTitle(modelUsage);
     const modelUsageSectionLabel = [
@@ -3624,7 +3624,7 @@ export function ComposeBox({
                                 requestOpenSettingsDialog({ section: 'models' });
                             } : undefined}
                             thinkingLevel=${thinkingLevel}
-                            thinkingLevels=${modelOptions.find((entry) => entry.current)?.thinkingLevels ?? []}
+                            thinkingLevels=${activeModelOption?.thinkingLevels ?? []}
                             onSelectThinking=${(level) => { void handleSelectThinking(level); }}
                             rootRef=${modelPopupRef}
                         />
