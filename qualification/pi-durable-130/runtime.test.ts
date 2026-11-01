@@ -1311,3 +1311,39 @@ for (const disposition of ['completed', 'failed'] as const) test(`runtime: legac
   expect(f.db.query('SELECT * FROM service_effect_s02_commits').all()).toHaveLength(2);
   expect(getBudgetRequest(binding.id, f.db)).toEqual(hold);
 }));
+
+for (const reopen of [false, true]) test(`runtime intents: late input after failed primary retains exact source authority; reopen=${reopen}`, () => fixture(async f => {
+  f.base.host.modelAllowed = false;
+  const input = await f.accept(), id = await f.runtime.submit(input); f.grantKnown();
+  await f.runtime.wait(input, id);
+  if (reopen) { await f.runtime.close(); f.runtime = await f.drain(); }
+  const readOriginal = () => { const sdk = new Database(f.path, { readonly: true, create: false }); try { return sdk.query('SELECT * FROM submissions WHERE id=?').get(id); } finally { sdk.close(); } };
+  const original = readOriginal(), calls = f.base.host.modelCalls;
+  f.base.host.modelAllowed = true;
+  f.base.host.modelHold = barrier(); const entered = barrier(); f.base.host.onModelEnter = () => entered.release();
+  const intent = await f.attach(input, id);
+  const intentId = await f.runtime.submitIntent(intent); await entered.promise;
+  const live = await f.runtime.inspectAuthority();
+  const generation = live.inspection.tasks.find(task => task.record.conversationId === input.conversationId && task.record.kind === 'pi.generation' && task.state.kind === 'running');
+  if (!generation) throw Error('Actual late generation required');
+  // Actual captureSource, reached through the public committed-usage reader.
+  // It must bind the new accepted intent to its exact failed (not replayed) primary.
+  await f.runtime.readCommittedRunUsage(input.conversationId, generation.record.id);
+  f.base.host.modelHold.release(); f.base.host.onModelEnter = undefined;
+  let terminal = await f.runtime.settle(input);
+  for (let n = 0; !terminal && n < 100; n++) { await Bun.sleep(10); terminal = await f.runtime.settle(input); }
+  // The failed original is reported honestly; its fresh intent must nevertheless drain.
+  expect(terminal?.disposition).toBe('failed');
+  const sdk = new Database(f.path, { readonly: true, create: false });
+  try { expect(sdk.query("SELECT status FROM submissions WHERE id=?").get(intentId)).toEqual({ status: 'done' }); } finally { sdk.close(); }
+  expect(f.base.host.modelCalls).toBe(calls + 1);
+  expect(readOriginal()).toEqual(original);
+  expect(f.db.query('SELECT phase FROM service_effect_s01_operations WHERE operation_id=?').get(input.operationId)).toEqual({ phase: 'terminal' });
+  await f.runtime.close(); f.runtime = await f.drain();
+  expect(await f.runtime.settle(input)).toEqual(terminal); expect(f.base.host.modelCalls).toBe(calls + 1);
+  expect(readOriginal()).toEqual(original);
+  const next = await f.accept('queued-steer:intent-2', 'fresh next operation');
+  await f.runtime.submit(next); await f.runtime.close(); f.runtime = await f.drain();
+  expect((await f.runtime.settle(next))?.disposition).toBe('completed');
+  expect(f.base.host.modelCalls).toBe(calls + 2); expect(readOriginal()).toEqual(original);
+}));
