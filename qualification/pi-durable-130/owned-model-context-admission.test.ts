@@ -14,14 +14,15 @@ import { hashCanonicalRequest } from '../../runtime/src/service-effects/contract
 import { storeChatMetadata } from '../../runtime/src/db.ts';
 import type { AcceptedInput } from '../../runtime/durable-engine/src/host-runtime.ts';
 
-test('real owned model tool uses current selected schemas and switches only the next request', async () => {
+for(const extended of [false,true]) test('real owned model tool uses current selected schemas and switches only the next request'+(extended?' [extended max and disabled minimal]':''), async () => {
   const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, 'owned-context-'));
   const f = await acceptedSteerFixture(dir, 'committed-ack-lost');
   const release = barrier(), entered = barrier();
   const requests: string[] = [];
   let preparations = 0;
   const original = f.base.models.getModel('qualification', 'synthetic')!;
-  const models = [original, { ...original, id: 'alternate', name: 'Alternate' }];
+  const descriptor=extended?{...original,reasoning:true,thinkingLevelMap:{off:'off',minimal:null,low:null,medium:'medium',high:'high',xhigh:'xhigh',max:'max'}}:original;
+  const models = [descriptor, { ...descriptor, id: 'alternate', name: 'Alternate' }];
   const tools = createHostModelTools({ assertCurrent() { f.owner.assert(); }, available: () => models,
     assertModel(choice) { if (!models.some(m => m.provider === choice.provider && m.id === choice.modelId)) throw Error('unapproved'); },
     async captureSourceGuard(call) { const captured = await f.runtime!.captureToolSource(call.conversationId, call.taskId, call.toolCallId); return () => f.runtime!.assertCapturedSourceCurrent(captured.inputs); },
@@ -35,17 +36,25 @@ test('real owned model tool uses current selected schemas and switches only the 
     const raw = await Harness.open(await SqliteStorage.open(new OwnedSqlite(f.owner)), { models: f.base.models, registry: f.base.registry }, context);
     try { await (await raw.conversation(f.base.root.id, context))!.configure({ extensions: [extension], tools, modelTools: [tools.find(t => t.name === 'set_model')!] }, context); }
     finally { await raw.close(context); }
-    const stream = (model: typeof original, _input: unknown, options?: { signal?: AbortSignal }) => {
+    const stream = (model: typeof original, input: {messages:readonly import('../../runtime/durable-engine/qualification/ai.ts').Message[]}, options?: { signal?: AbortSignal; reasoning?: unknown }) => {
       requests.push(model.id); const ordinal = requests.length;
+      const choosing=ordinal===1||(extended&&ordinal===2);
+      if(extended&&ordinal>1){
+        const result=input.messages.findLast(message=>message.role==='toolResult');
+        const block=result?.role==='toolResult'?result.content.find(block=>block.type==='text'):undefined;
+        const choice=JSON.parse(block?.type==='text'?block.text:'{}');
+        if(ordinal===2){expect(choice.error).toContain('Unsupported');expect(choice.thinking_levels).not.toContain('minimal');}
+        else {expect(choice.thinking_level).toBe('max');expect(options?.reasoning).toBe('max');}
+      }
       const output = createAssistantMessageEventStream();
-      const content: AssistantMessage['content'] = ordinal === 1
-        ? [{ type: 'toolCall', id: 'choose-next-model', name: 'set_model', arguments: { model: 'qualification/alternate' } }]
+      const content: AssistantMessage['content'] = choosing
+        ? [{ type: 'toolCall', id: ordinal===1?'choose-next-model':'choose-next-model-2', name: 'set_model', arguments: { model: 'qualification/alternate', ...(extended?{thinking_level:ordinal===1?'minimal':'max'}:{}) } }]
         : [{ type: 'text', text: 'OWNED_MODEL_DONE' }];
       const message: AssistantMessage = { role: 'assistant', api: model.api, provider: model.provider, model: model.id,
-        timestamp: Date.now(), stopReason: ordinal === 1 ? 'toolUse' : 'stop', content,
+        timestamp: Date.now(), stopReason: choosing ? 'toolUse' : 'stop', content,
         usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
       void (async () => { if (ordinal === 1) { entered.release(); await release.promise; } options?.signal?.throwIfAborted();
-        output.push({ type: 'done', reason: ordinal === 1 ? 'toolUse' : 'stop', message }); output.end(message); })();
+        output.push({ type: 'done', reason: choosing ? 'toolUse' : 'stop', message }); output.end(message); })();
       return output;
     };
     f.base.models.setProvider(createProvider({ id: original.provider, models, auth: { apiKey: { name: 'synthetic', resolve: async () => ({ auth: {}, source: 'fixture' }) } }, api: { stream, streamSimple: stream } }));
@@ -68,9 +77,10 @@ test('real owned model tool uses current selected schemas and switches only the 
     await f.runtime!.wait(primary, primaryId);
     for (let i = 0; i < 300; i++) { if (!(await f.runtime!.inspectAuthority()).inspection.tasks.length) break; await Bun.sleep(5); }
     expect((await f.runtime!.inspectAuthority()).inspection.tasks).toHaveLength(0);
-    expect(preparations).toBe(1);
+    expect(preparations).toBe(extended?2:1);
     const binding = { incarnation: f.incarnation, chatJid: f.chatJid, branchId: 'main', conversationId: f.base.root.id };
     expect(await f.runtime!.readSessionModel(binding)).toBe('qualification/alternate');
-    expect(requests).toEqual(['synthetic', 'alternate']);
+    expect(requests).toEqual(extended?['synthetic','synthetic','alternate']:['synthetic', 'alternate']);
+    if(extended) expect(await f.runtime!.readSessionThinkingLevel(binding)).toBe('max');
   } finally { release.release(); await f.close(); await rm(dir, { recursive: true, force: true }); }
 }, 10000);

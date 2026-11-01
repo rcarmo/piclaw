@@ -13,23 +13,24 @@ import { formatVisualLatestRunUsage, formatVisualProviderUsage } from "./model-c
 export function ModelContextBar({ polling }: { polling: UseStatusPollingResult }) {
   const {
     agentStatus, agentContext, isStale,
-    currentModel, currentThinkingLevel, modelContextWindow,
-    providerUsage, modelSelectionKnown,
+    currentModel, currentThinkingLevel,
+    providerUsage, modelSelectionKnown, modelInfo,
     fetchContext,
   } = polling;
 
   const { isCompacting, compactElapsed, handleCompact } = useCompaction(fetchContext);
 
   const {
-    showPicker, showThinkingPicker, models, thinkingLevels,
+    showPicker, showThinkingPicker, models,
     handleBadgeClick, handleSelectModel, handleTogglePin, handleThinkingClick, handleSelectThinking,
   } = useModelPicker();
 
-  const contextTokens = useComputed(() => agentContext.value?.tokens ?? 0);
-  const contextWindow = useComputed(() => agentContext.value?.contextWindow ?? modelContextWindow.value ?? 0);
-  const contextPercent = useComputed(() => {
-    const w = contextWindow.value, t = contextTokens.value;
-    return agentContext.value?.percent ?? (w > 0 ? (t / w) * 100 : 0);
+  const contextTokens = useComputed(() => agentContext.value?.tokens ?? null);
+  const contextWindow = useComputed(() => agentContext.value?.contextWindow ?? null);
+  const contextPercent = useComputed(() => agentContext.value?.percent ?? null);
+  const thinkingLevels = useComputed(() => {
+    const levels = modelInfo.value?.available_thinking_levels;
+    return Array.isArray(levels) ? levels.filter((level): level is string => typeof level === 'string') : [];
   });
 
   const modelName = modelSelectionKnown.value ? currentModel.value ?? "" : agentStatus.value?.data?.model ?? "";
@@ -70,7 +71,7 @@ export function ModelContextBar({ polling }: { polling: UseStatusPollingResult }
         <ModelPicker
           models={models.value ?? []}
           activeModel={activeModel}
-          onSelectModel={(id) => handleSelectModel(id, (m) => { currentModel.value = m; })}
+          onSelectModel={handleSelectModel}
           onTogglePin={handleTogglePin}
           onClose={closeModelPicker}
           onCompact={() => {
@@ -91,8 +92,8 @@ export function ModelContextBar({ polling }: { polling: UseStatusPollingResult }
         className={`model-badge${!modelName ? " model-badge--empty" : ""}`}
         role="button"
         tabIndex={0}
-        onClick={(e) => handleBadgeClick(e, modelName, (l) => { currentThinkingLevel.value = l; }, (m) => { currentModel.value = m; })}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleBadgeClick(e, modelName, (l) => { currentThinkingLevel.value = l; }, (m) => { currentModel.value = m; }); } }}
+        onClick={handleBadgeClick}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleBadgeClick(e); } }}
         title={modelName ? `${modelName}${thinkingLevel ? ` • ${thinkingLevel}` : ""} — click to switch model` : "No model selected — click to choose"}
       >
         {modelName ? (
@@ -119,7 +120,7 @@ export function ModelContextBar({ polling }: { polling: UseStatusPollingResult }
           {showThinkingPicker.value && (
             <ThinkingPicker
               thinkingLevels={thinkingLevels.value ?? []}
-              currentLevel={thinkingLevel}
+              currentLevel={modelInfo.value?.thinking_level ?? thinkingLevel}
               onSelectThinking={handleSelectThinking}
             />
           )}

@@ -9,7 +9,7 @@ import { revokeAddonLocalAgent } from "../addons/local-context.js";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentSession, ModelRegistry, ModelRuntime, SettingsManager } from "@earendil-works/pi-coding-agent";
-import type { Api, Model, Provider } from "@earendil-works/pi-ai";
+import { getSupportedThinkingLevels, type Api, type Model, type Provider } from "@earendil-works/pi-ai";
 
 import type { AgentControlCommand, AgentControlResult } from "../agent-control/index.js";
 import { getNativeCommandCatalogue } from "../agent-control/native-control-capabilities.js";
@@ -546,11 +546,10 @@ export class AgentRuntimeFacade {
         return this.applyControlCommand(chatJid, { type: "model", provider: models[next]!.provider, modelId: models[next]!.id, raw: command.raw });
       }
       if (command.type === "cycle_thinking") {
-        const { getAvailableThinkingLevelsForModel } = await import("../agent-control/agent-control-helpers.js");
         const label = await port.readModel?.();
         const model = this.options.modelRegistry.getAvailable().find(model => `${model.provider}/${model.id}` === label);
         if (!model) return { status: "error", message: "No available native thinking model." };
-        const levels = getAvailableThinkingLevelsForModel(model);
+        const levels = getSupportedThinkingLevels(model);
         const current = await port.readThinkingLevel?.();
         const next = levels[(levels.findIndex(level => level === current) + 1) % levels.length];
         if (!next) return { status: "error", message: "No available thinking levels." };
@@ -627,7 +626,6 @@ export class AgentRuntimeFacade {
         } finally { release?.(); }
       }
       if (command.type === "thinking") {
-        const { formatThinkingLevelForDisplay, getAvailableThinkingLevelsForModel, resolveThinkingAlias, THINKING_LEVELS } = await import("../agent-control/agent-control-helpers.js");
         requireSingleUserDirectExecution("Direct thinking commands");
         if (command.level !== undefined && !port.setThinkingLevel) throw new Error("Durable thinking mutation unavailable");
         if (!port.readModel || !port.readThinkingLevel) throw new Error("Durable thinking reader unavailable");
@@ -636,27 +634,25 @@ export class AgentRuntimeFacade {
         const model = this.options.modelRegistry.getAvailable().find(model => `${model.provider}/${model.id}` === current);
         if (!model) throw new Error("Durable thinking model unavailable");
         if (command.level !== undefined) {
-          const level = resolveThinkingAlias(command.level.trim().toLowerCase(), model);
-          if (!THINKING_LEVELS.includes(level as never) || !getAvailableThinkingLevelsForModel(model).includes(level))
+          const level = command.level.trim().toLowerCase();
+          if (!getSupportedThinkingLevels(model).some(supported => supported === level))
             return { status: "error", message: "Thinking level is not available for this model." };
           revokeAddonLocalAgent(chatJid);
           const release = this.options.acquireCommandProtection?.(chatJid);
           try {
             await port.setThinkingLevel!(level);
-            const display = formatThinkingLevelForDisplay(level, model);
-            return { status: "success", message: `Thinking level set to ${display}.`, thinking_level: level, thinking_level_label: display };
+            return { status: "success", message: `Thinking level set to ${level}.`, thinking_level: level, thinking_level_label: level };
           } catch (error) {
             return { status: "error", message: error instanceof Error ? error.message : "Thinking selection failed." };
           } finally { release?.(); }
         }
         const level = await port.readThinkingLevel();
-        const display = level ? formatThinkingLevelForDisplay(level, model) : null;
-        const levels = getAvailableThinkingLevelsForModel(model);
+        const levels = getSupportedThinkingLevels(model);
         return { status: "success", message: [
-          `Model: ${current}`, `Thinking level: ${display ?? "unknown"}`,
-          `Available levels: ${levels.map(value => formatThinkingLevelForDisplay(value, model)).join(", ")}`,
+          `Model: ${current}`, `Thinking level: ${level ?? "unknown"}`,
+          `Available levels: ${levels.join(", ")}`,
           ...(!model.reasoning ? ["This model does not support thinking."] : []),
-        ].join("\n"), thinking_level: level, thinking_level_label: display };
+        ].join("\n"), thinking_level: level, thinking_level_label: level };
       }
       if (command.type !== "tree" || command.targetId) return { status: "error", message: `Native command '${command.type}' is unavailable. No legacy session was opened.` };
       if (!port.readTree) throw new Error("Durable session tree unavailable");
@@ -686,7 +682,9 @@ export class AgentRuntimeFacade {
     chatJid: string,
     options: { includeProviderUsage?: boolean; includeProviderDiagnostics?: boolean; includeCatalogue?: boolean } = {},
   ): Promise<AvailableModelsResult> {
-    const { formatThinkingLevelForDisplay, getAvailableThinkingLevelsForModel } = await import("../agent-control/agent-control-helpers.js");
+    // Legacy-session metadata retains its old label projection. Native handles
+    // use the pinned SDK's canonical capability keys without aliases.
+    const legacy = this.options.getDurableSession === undefined ? await import('../agent-control/agent-control-helpers.js') : null;
     // Passive UI refreshes should not hydrate a cold runtime just to render
     // model state for the picker.
     const session = this.options.getDurableSession === undefined ? this.options.pool.get(chatJid)?.runtime.session ?? null : null;
@@ -707,7 +705,7 @@ export class AgentRuntimeFacade {
       ? available.filter(model => `${model.provider}/${model.id}` === currentModel)
       : available;
     const modelOptions = selected.map((model) => {
-      const thinkingLevels = getAvailableThinkingLevelsForModel(model as Model<any>);
+      const thinkingLevels = legacy ? legacy.getAvailableThinkingLevelsForModel(model as Model<any>) : getSupportedThinkingLevels(model as Model<any>);
       return {
         label: `${model.provider}/${model.id}`,
         provider: model.provider,
@@ -727,7 +725,7 @@ export class AgentRuntimeFacade {
           : null,
         reasoning: Boolean(model.reasoning),
         thinking_levels: thinkingLevels,
-        thinking_level_labels: thinkingLevels.map((level) => formatThinkingLevelForDisplay(level, model as Model<any>)),
+        thinking_level_labels: legacy ? thinkingLevels.map(level => legacy.formatThinkingLevelForDisplay(level, model)) : thinkingLevels,
       };
     });
     const models = modelOptions.map((model) => model.label);
@@ -738,12 +736,11 @@ export class AgentRuntimeFacade {
     const supportsThinking = session && typeof (session as AgentSession & { supportsThinking?: () => boolean }).supportsThinking === "function"
       ? (session as AgentSession & { supportsThinking: () => boolean }).supportsThinking()
       : Boolean(currentModelDescriptor?.reasoning);
-    const baseThinkingLevels: string[] | undefined = session && typeof (session as AgentSession & { getAvailableThinkingLevels?: () => string[] }).getAvailableThinkingLevels === "function"
-      ? (session as AgentSession & { getAvailableThinkingLevels: () => string[] }).getAvailableThinkingLevels()
-      : undefined;
+    const baseThinkingLevels = session && typeof (session as AgentSession & { getAvailableThinkingLevels?: () => string[] }).getAvailableThinkingLevels === 'function'
+      ? (session as AgentSession & { getAvailableThinkingLevels: () => string[] }).getAvailableThinkingLevels() : undefined;
     const availableThinkingLevels: string[] = currentModelDescriptor
-      ? getAvailableThinkingLevelsForModel(currentModelDescriptor, baseThinkingLevels)
-      : baseThinkingLevels ?? ["off"];
+      ? legacy ? legacy.getAvailableThinkingLevelsForModel(currentModelDescriptor, baseThinkingLevels) : getSupportedThinkingLevels(currentModelDescriptor)
+      : legacy ? baseThinkingLevels ?? ['off'] : [];
     const activeProvider = session?.model?.provider ?? currentModelOption?.provider ?? null;
     const includeProviderUsage = options.includeProviderUsage !== false;
     const providerUsage = includeProviderUsage && activeProvider
@@ -752,12 +749,6 @@ export class AgentRuntimeFacade {
     if (includeProviderUsage && activeProvider && !peekProviderUsage(activeProvider)) {
       this.warmProviderUsage(activeProvider);
     }
-    const thinkingLevelLabel = thinkingLevel && currentModelDescriptor
-      ? formatThinkingLevelForDisplay(thinkingLevel, currentModelDescriptor)
-      : thinkingLevel;
-    const availableThinkingLevelLabels = availableThinkingLevels.map((level) => currentModelDescriptor
-      ? formatThinkingLevelForDisplay(level, currentModelDescriptor)
-      : level);
     const latestUsageModel = getLatestTokenUsageModelForStatus(chatJid);
     const latestRequestedModel = latestUsageModel
       ? formatLatestRequestedModel(latestUsageModel.provider, latestUsageModel.model)
@@ -769,11 +760,11 @@ export class AgentRuntimeFacade {
       models,
       model_options: modelOptions,
       thinking_level: thinkingLevel,
-      thinking_level_label: thinkingLevelLabel,
+      thinking_level_label: legacy && thinkingLevel ? legacy.formatThinkingLevelForDisplay(thinkingLevel, currentModelDescriptor) : thinkingLevel,
       thinking_policy: session ? getSessionThinkingPolicy(session) : null,
       supports_thinking: supportsThinking,
       available_thinking_levels: availableThinkingLevels,
-      available_thinking_level_labels: availableThinkingLevelLabels,
+      available_thinking_level_labels: legacy ? availableThinkingLevels.map(level => legacy.formatThinkingLevelForDisplay(level, currentModelDescriptor)) : availableThinkingLevels,
       provider_usage: providerUsage,
       latest_requested_model: latestRequestedModel,
       latest_response_model: latestResponseModel,

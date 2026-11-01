@@ -6,6 +6,7 @@
  */
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import type { Api, Model } from "@earendil-works/pi-ai";
+import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { Type } from "typebox";
 import { findModel, parseModelInput } from "../utils/model-utils.js";
@@ -23,9 +24,7 @@ import { updateSessionModel } from "./session-status.js";
 // Constants
 // ---------------------------------------------------------------------------
 
-const THINKING_LEVELS: readonly string[] = [
-  "off", "minimal", "low", "medium", "high", "xhigh", "max",
-];
+const THINKING_LEVELS: readonly string[] = MODEL_THINKING_LEVELS;
 
 const TOOL_HINT = [
   "You can manage your own model and thinking level.",
