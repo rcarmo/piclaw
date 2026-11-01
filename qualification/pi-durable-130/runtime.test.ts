@@ -1,3 +1,4 @@
+import { createHostCommandPolicy } from "../../runtime/durable-engine/src/host-command-policy.js";
 import "./src/test-guard.js";
 import { createInputHandoffCompletion } from "../../runtime/durable-engine/src/host-bindings.js";
 import { test, expect } from "bun:test";
@@ -1347,3 +1348,74 @@ for (const reopen of [false, true]) test(`runtime intents: late input after fail
   expect((await f.runtime.settle(next))?.disposition).toBe('completed');
   expect(f.base.host.modelCalls).toBe(calls + 2); expect(readOriginal()).toEqual(original);
 }));
+
+test("runtime: public SDK boundary drains kept steers without replaying failed input", () => fixture(async f => {
+  f.grantKnown();
+  const entered = barrier();
+  f.base.host.modelHold = barrier();
+  f.base.host.onModelEnter = () => entered.release();
+  const primary = await f.accept();
+  const original = await f.runtime.submit(primary);
+  const observation = new AbortController();
+  const waiting = f.runtime.wait(primary, original, observation.signal).catch(error => error);
+  await entered.promise;
+  const intent = await f.attach(primary, original);
+  const late = await f.runtime.submitIntent(intent);
+  f.base.host.modelAllowed = false;
+  f.base.host.modelHold.release();
+  for (let i = 0; i < 200; i++) {
+    if ((await f.runtime.reconcile(primary)).status?.status === "unanswered") break;
+    await Bun.sleep(10);
+  }
+  expect((await f.runtime.reconcile(primary)).status?.status).toBe("unanswered");
+  expect((await f.runtime.reconcileIntent(intent)).status?.status).toBe("queued");
+  observation.abort(); await waiting;
+  await f.runtime.close();
+  f.base.host.modelAllowed = true; f.base.host.modelHold = undefined; f.base.host.onModelEnter = undefined;
+  const storage = await SqliteStorage.open(await openWalFixtureDatabase(f.path));
+  const harness = await Harness.open(storage, f.options.harnessOptions, context);
+  try {
+    const conversation = (await harness.conversation(primary.conversationId, context))!;
+    const boundary = await conversation.submit({ type: "write", requestId: "exact-kept-boundary", entry: {
+      kind: "host.accepted-queue-resume", data: { operationId: primary.operationId, submissionIds: [late] }, model: []
+    } }, context);
+    expect((await boundary.wait(context)).status).toBe("done");
+    expect((await (await harness.submission(late, context))!.wait(context)).status).toBe("done");
+    expect((await (await harness.submission(original, context))!.status(context)).status).toBe("unanswered");
+    expect(f.base.host.modelCalls).toBe(1);
+  } finally { await harness.close(context); }
+  f.setOwner(true); f.runtime = await HostConversationRuntime.open(f.options, context);
+  await f.runtime.wait(primary, original, AbortSignal.timeout(5000));
+  expect((await f.runtime.settle(primary))?.disposition).toBe("failed");
+  expect(value(await f.work.getOperation(primary.operationId))?.phase).toBe("terminal");
+}), 20_000);
+
+test("runtime: production failure policy continues exact queued input, never retries failed input", () => fixture(async f => {
+  f.grantKnown();
+  await f.runtime.close(); f.setOwner(true);
+  const policy = createHostCommandPolicy(f.db, () => {});
+  f.runtime = await HostConversationRuntime.open({ ...f.options, harnessOptions: { ...f.options.harnessOptions,
+    settings: { ...policy.settings, retry: { enabled: false }, compaction: { enabled: false } }
+  } }, context);
+  const entered = barrier(); let calls = 0;
+  f.base.host.modelHold = barrier();
+  f.base.host.onModelEnter = async () => {
+    if (++calls === 1) entered.release();
+    else { f.base.host.modelAllowed = true; f.base.host.modelHold = undefined; }
+  };
+  const primary = await f.accept(); const original = await f.runtime.submit(primary);
+  const waiting = f.runtime.wait(primary, original, AbortSignal.timeout(5000));
+  const caught = waiting.catch(error => error);
+  await entered.promise;
+  const intent = await f.attach(primary, original);
+  const late = await f.runtime.submitIntent(intent);
+  f.base.host.modelAllowed = false; f.base.host.modelHold!.release();
+  const result = await caught;
+  if (result instanceof Error) throw result;
+  expect((await f.runtime.reconcile(primary)).status?.status).toBe("unanswered");
+  expect((await f.runtime.reconcileIntent(intent)).status?.status).toBe("done");
+  expect((await f.runtime.settle(primary))?.disposition).toBe("failed");
+  expect(f.base.host.modelCalls).toBe(1); expect(calls).toBe(2);
+  expect(late).not.toBe(original);
+  expect(value(await f.work.getOperation(primary.operationId))?.phase).toBe("terminal");
+}), 15_000);
