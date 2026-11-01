@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { createRecoverableRuntimeBackend, type RuntimeBackend } from "../../src/runtime/bootstrap.js";
 import type { DurableAbortScope, DurableSessionPositionPort } from "../../src/agent-pool/durable-runtime-adapter.js";
-import { RuntimeStorageReopenError } from "../../src/runtime/storage-reopen-error.js";
+import { RuntimePreparationError } from "../../src/runtime/preparation-error.js";
 import { RuntimeStartupCleanupError } from "../../src/runtime/startup-cleanup-error.js";
 
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(yes => { resolve = yes; }); return { promise, resolve }; }
@@ -33,7 +33,7 @@ test('transient replacement failure retries only clean preparation, with no auto
     prepares++;
     if (prepares === 1) return old.backend;
     expect(trace).toContain('old:closed');
-    if (prepares === 2) { entered.resolve(); await release.promise; throw new RuntimeStorageReopenError(Error('writer still locked')); }
+    if (prepares === 2) { entered.resolve(); await release.promise; throw new RuntimePreparationError(Error('writer still locked'), true); }
     return next.backend;
   });
   old.failure.resolve(Error('storage failed')); await entered.promise;
@@ -48,7 +48,7 @@ test('transient replacement failure retries only clean preparation, with no auto
 });
 
 test('clean preparation failure does not poison graceful shutdown', async () => {
-  const old = fixture('old', []), failure = Error('invalid replacement configuration'); let prepares = 0;
+  const old = fixture('old', []), failure = new RuntimePreparationError(Error('invalid replacement configuration')); let prepares = 0;
   const backend = await createRecoverableRuntimeBackend(async () => { if (++prepares === 1) return old.backend; throw failure; });
   old.failure.resolve(Error('storage failed')); await tick();
   await expect(backend.sessionOptions.dispatchHostCommand!('web:test', 'accepted')).rejects.toBe(failure);
@@ -77,7 +77,7 @@ test('shutdown cancels a certified preparation retry without reopening', async (
   const old = fixture('old', []), attempted = deferred<void>(); let prepares = 0;
   const backend = await createRecoverableRuntimeBackend(async () => {
     if (++prepares === 1) return old.backend;
-    attempted.resolve(); throw new RuntimeStorageReopenError(Error('writer held'));
+    attempted.resolve(); throw new RuntimePreparationError(Error('writer held'), true);
   });
   old.failure.resolve(Error('storage failed')); await attempted.promise; await tick();
   await backend.close(); expect(prepares).toBe(2);
@@ -124,11 +124,19 @@ test('successive failed generations each close before opening the next', async (
 
 test('error names and JSON text cannot forge a clean-storage retry certificate', async () => {
   const old = fixture('old', []); let prepares = 0;
-  const forged = Object.assign(Error('{"_tag":"storage_unavailable","certainty":"not_applied","retryable":true}'), { name: 'RuntimeStorageReopenError' });
+  const forged = Object.assign(Error('{"_tag":"storage_unavailable","certainty":"not_applied","retryable":true}'), { name: 'RuntimePreparationError' });
   const backend = await createRecoverableRuntimeBackend(async () => { if (++prepares === 1) return old.backend; throw forged; });
   old.failure.resolve(Error('storage failed')); await tick();
   await expect(backend.sessionOptions.dispatchHostCommand!('web:test', 'accepted')).rejects.toBe(forged);
-  expect(prepares).toBe(2); await backend.close();
+  expect(prepares).toBe(2); await expect(backend.close()).rejects.toBe(forged);
+});
+
+test('unclassified preparation failure cannot certify graceful disposal', async () => {
+  const old = fixture('old', []), failure = Error('unknown partial preparation state'); let prepares = 0;
+  const backend = await createRecoverableRuntimeBackend(async () => { if (++prepares === 1) return old.backend; throw failure; });
+  old.failure.resolve(Error('storage failed')); await tick();
+  await expect(backend.sessionOptions.dispatchHostCommand!('web:test', 'accepted')).rejects.toBe(failure);
+  await expect(backend.close()).rejects.toBe(failure); expect(prepares).toBe(2);
 });
 
 const preparedBackground = {incarnation:'native-domain',conversationId:7,chatJid:'operation:accepted',branchId:'background:'+'a'.repeat(64),operationId:'operation:background:'+'a'.repeat(64),sourceSeq:1,

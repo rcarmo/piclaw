@@ -1,6 +1,6 @@
 import { hasUnsettledLegacyCursorEvidence } from "../db/chat-cursor-storage.js";
 import { setTimeout as storageRetryDelay } from "node:timers/promises";
-import { RuntimeStorageReopenError } from "./storage-reopen-error.js";
+import { RuntimePreparationError } from "./preparation-error.js";
 import type { NativeTurnViewChannel } from "../channels/web/agent/native-turn-view.js";
 /**
  * runtime/bootstrap.ts – Runtime bootstrap orchestration and default dependency wiring.
@@ -72,7 +72,7 @@ export async function createRecoverableRuntimeBackend(prepare: () => Promise<Run
           catch (error) {
             // Only preparation's explicit disposal certificate permits another
             // attempt. Never retry an uncertain invocation or cleanup failure.
-            if (!(error instanceof RuntimeStorageReopenError)) throw error;
+            if (!(error instanceof RuntimePreparationError) || !error.retryableStorage) throw error;
             if (stopping) return;
             log.warn("Native storage reopen deferred after clean preparation failure", { operation: "native_storage.retry", retryMs, err: error });
             await storageRetryDelay(retryMs, undefined, { signal: retryLifetime.signal }).catch(error => { if (!stopping) throw error; });
@@ -88,7 +88,7 @@ export async function createRecoverableRuntimeBackend(prepare: () => Promise<Run
           } catch (error) {
             try { await dispose(next); }
             catch (cleanup) { throw new RuntimeStartupCleanupError([error, cleanup], "Native recovery cleanup uncertain"); }
-            throw error;
+            throw new RuntimePreparationError(error);
           }
           if (stopping) { await dispose(next); return; }
           // Publish only the fully initialized generation and its matching bindings.
@@ -198,7 +198,7 @@ export async function createRecoverableRuntimeBackend(prepare: () => Promise<Run
       if (recovery) await recovery.catch(error => {
         // A rejected reopen is not a failed close. Retain failure only when
         // a backend or a preparation still has uncertified cleanup.
-        if (owned || error instanceof RuntimeStartupCleanupError) throw error;
+        if (owned || !(error instanceof RuntimePreparationError)) throw error;
       });
       if (owned) await dispose(owned);
     })(); },

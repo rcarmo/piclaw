@@ -3,7 +3,7 @@ import './src/test-guard.js';
 import {expect,spyOn} from 'bun:test';
 import {Database} from 'bun:sqlite';
 import {createRecoverableRuntimeBackend,type RuntimeBackend} from '../../runtime/src/runtime/bootstrap.js';
-import {RuntimeStorageReopenError} from '../../runtime/src/runtime/storage-reopen-error.js';
+import {RuntimePreparationError} from '../../runtime/src/runtime/preparation-error.js';
 import {isSqliteContention} from '../../runtime/src/db/sqlite-async-admission.js';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {join} from 'node:path';
@@ -53,7 +53,7 @@ for(const scenario of ['idle','busy','retry','storage-recovery','storage-reopen-
     // recovery fixture which releases it on the failure notification.
     if(scenario!=='storage-reopen-retry'||!isSqliteContention(error))throw error;
     reopenFailures++;expect(prepares).toBe(2);expect(writer?.inTransaction).toBe(true);
-    writer!.exec('ROLLBACK');throw new RuntimeStorageReopenError(error);
+    writer!.exec('ROLLBACK');throw new RuntimePreparationError(error,true);
    }
    const native=latest;
    return {...native,storageFailure,async attachChannel(){
