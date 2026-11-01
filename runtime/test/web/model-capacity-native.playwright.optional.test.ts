@@ -30,12 +30,14 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
     const errors: string[] = [], unhandled = new Set<string>(), requests: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     const chatJid = "web:default:branch:cold-start";
-    let model = "fixture/first", thinking = "high", tokens = 90000;
+    let model = "fixture/first", thinking = "high";
+    let usage: { tokens: number | null; contextWindow: number | null; percent: number | null } = { tokens: 90000, contextWindow: 200000, percent: 45 };
     let refuse = true; const commands: string[] = []; const notices: string[] = [];
+    const compactions: string[] = [];
     const pins = { scope: "fixture", revision: 0, models: [] as string[], sessions: [] as string[] };
     page.on("dialog", async dialog => { notices.push(dialog.message()); await dialog.dismiss(); });
     const modelPayload = () => ({ current: model, thinking_level: thinking, thinking_level_label: thinking, supports_thinking: true, available_model_count: 2, model_options: [{ provider: "fixture", id: "first", context_window: 200000 }, { provider: "fixture", id: "near", context_window: 100000 }], oobe: { provider_ready_completed_instance: true } });
-    const contextPayload = () => ({ tokens, percent: tokens / 2000, contextWindow: 200000, sessionGeneration: "fixture-generation" });
+    const contextPayload = () => ({ ...usage, contextUpdate: "replace", sessionGeneration: "fixture-generation" });
     await page.addInitScript(({ chatJid }) => {
       localStorage.setItem("piclaw_wizard_dismissed", "1");
       localStorage.setItem("piclaw-active-panel", "chat");
@@ -72,6 +74,10 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       if (req.method() === "POST" && /\/agent\/[^/]+\/message$/.test(url.pathname)) {
         expect(url.searchParams.get("chat_jid")).toBe(chatJid);
         const content = req.postDataJSON().content;
+        if (content === "/compact") {
+          compactions.push(content);
+          return route.fulfill({ json: { command: { status: "success", message: "Compacted" } } });
+        }
         commands.push(content); expect(content).toBe("/model fixture/near");
         if (!refuse) model = "fixture/near";
         body = { command: refuse ? { status: "error", message: "Native capacity refused" } : { status: "success" } };
@@ -128,6 +134,33 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       await waitModel("first");
       expect(await badge.getAttribute("title")).toContain("high");
       await waitContext(90000);
+      // Same backend snapshot, in the shipped shells: never apply 1.1 + 4000 again.
+      const project = async (next: typeof usage, title: string) => {
+        usage = next;
+        await emit("agent_status", { chat_jid: chatJid, type: "context_usage", context_usage: contextPayload() });
+        await page.waitForFunction(({ skin, title }) => Array.from(document.querySelectorAll(skin === "classic" ? ".compose-context-pie" : ".context-ring")).some(el => el.getAttribute("title") === title), { skin, title });
+        expect(await ring.getAttribute("title")).toBe(title);
+        expect(await ring.getAttribute("aria-label")).toBe(title);
+      };
+      const title = (counts: string, percent: string) => `Context: ${counts} tokens (${percent})\nCompact context`;
+      await project({ tokens: 80000, contextWindow: 100000, percent: 80 }, title(skin === "classic" ? "80K / 100K" : "80k / 100k", "80%"));
+      await project({ tokens: 80000, contextWindow: 100000, percent: null }, title(skin === "classic" ? "80K / 100K" : "80k / 100k", "unavailable"));
+      await project({ tokens: null, contextWindow: null, percent: null }, title(skin === "classic" ? "? / ?" : "-- / --", "unavailable"));
+      await project({ tokens: 0, contextWindow: 100000, percent: 0 }, title(skin === "classic" ? "0 / 100K" : "0k / 100k", "0%"));
+      expect(commands).toEqual([]); expect(compactions).toEqual([]);
+      // Keep the existing compact control, native button/keyboard semantics and touch target.
+      const compactResponse = () => page.waitForResponse(response => response.url().includes("/agent/") && response.request().postData()?.includes("/compact") === true);
+      for (const key of ["Enter", "Space"]) {
+        await ring.focus(); expect(await ring.evaluate(el => el === document.activeElement)).toBe(true);
+        const response = compactResponse(); await ring.press(key); await response;
+        await page.waitForFunction(() => !document.querySelector('.compose-context-pie[disabled],.compaction-badge'));
+      }
+      const response = compactResponse();
+      if (touch) await ring.tap(); else await ring.click();
+      await response;
+      expect(compactions).toEqual(["/compact", "/compact", "/compact"]);
+      expect(commands).toEqual([]);
+      await project({ tokens: 90000, contextWindow: 200000, percent: 45 }, title(skin === "classic" ? "90K / 200K" : "90k / 200k", "45%"));
       // Candidate is selectable by keyboard despite the old browser false veto.
       await badge.click();
       const search = page.getByRole("combobox", { name: "Search models" });

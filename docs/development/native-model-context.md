@@ -22,6 +22,10 @@ Scheduled allocation checks the inherited parent snapshot. Sections render with 
 
 Remove the projection when a public SDK facility provides equivalent rendered contributions, selected declarations, baseline/provenance semantics and applicable-usage accounting. Do not replace it with private package imports or silently change SDK/storage versions. Monetary request reservations and terminal accounting remain separate owners under #1817.
 
+## Browser projection
+
+Classic and Visual context meters display the backend percentage. They add no token margin or local percentage fallback. Unknown counts and percentages remain unavailable; a reported zero stays zero. Classic session metrics also omit an unknown percentage. Existing explicit compaction controls remain separate from rendering and model selection.
+
 ## Thinking capabilities
 
 The root/private bridge copies `thinkingLevelMap` as detached, frozen JSON, limited to the SDK's public thinking-level keys. Null-disabled and extended levels retain their native meaning. Physical reasoning/map changes refuse new transport rather than silently changing the selected effort.

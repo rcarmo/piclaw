@@ -13,7 +13,7 @@ import { formatVisualLatestRunUsage, formatVisualProviderUsage } from "./model-c
 export function ModelContextBar({ polling }: { polling: UseStatusPollingResult }) {
   const {
     agentStatus, agentContext, isStale,
-    currentModel, currentThinkingLevel, modelContextWindow,
+    currentModel, currentThinkingLevel,
     providerUsage, modelSelectionKnown,
     fetchContext,
   } = polling;
@@ -25,12 +25,9 @@ export function ModelContextBar({ polling }: { polling: UseStatusPollingResult }
     handleBadgeClick, handleSelectModel, handleTogglePin, handleThinkingClick, handleSelectThinking,
   } = useModelPicker();
 
-  const contextTokens = useComputed(() => agentContext.value?.tokens ?? 0);
-  const contextWindow = useComputed(() => agentContext.value?.contextWindow ?? modelContextWindow.value ?? 0);
-  const contextPercent = useComputed(() => {
-    const w = contextWindow.value, t = contextTokens.value;
-    return agentContext.value?.percent ?? (w > 0 ? (t / w) * 100 : 0);
-  });
+  const contextTokens = useComputed(() => agentContext.value?.tokens ?? null);
+  const contextWindow = useComputed(() => agentContext.value?.contextWindow ?? null);
+  const contextPercent = useComputed(() => agentContext.value?.percent ?? null);
 
   const modelName = modelSelectionKnown.value ? currentModel.value ?? "" : agentStatus.value?.data?.model ?? "";
   const thinkingLevel = modelSelectionKnown.value ? currentThinkingLevel.value : agentStatus.value?.data?.thinking_level || "";

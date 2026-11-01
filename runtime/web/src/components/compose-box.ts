@@ -353,17 +353,16 @@ export function resolveComposeExtensionWorkingDisplay(workingState, frameIndex =
 
 /**
  * Tiny SVG pie chart showing context window usage.
- * Green when <75%, amber 75–90%, red >90%. Tooltip shows exact numbers.
+ * Green through 75%, amber through 90%, red above 90%. Unknown usage is neutral.
  */
 function ContextPie({ usage, onCompact, compactionLabel = '', compactionTitle = '' }) {
-    const pct = Math.min(100, Math.max(0, usage.percent || 0));
-    const tokens = usage.tokens;
-    const window = usage.contextWindow;
+    const pct = Number.isFinite(usage.percent) ? Math.min(100, Math.max(0, usage.percent)) : null;
+    const tokens = Number.isFinite(usage.tokens) && usage.tokens >= 0 ? usage.tokens : null;
+    const window = Number.isFinite(usage.contextWindow) && usage.contextWindow > 0 ? usage.contextWindow : null;
     const canCompact = typeof onCompact === 'function';
     const compactLabel = canCompact ? 'Compact context' : 'Context usage';
-    const label = tokens != null
-        ? `Context: ${formatK(tokens)} / ${formatK(window)} tokens (${pct.toFixed(0)}%)`
-        : `Context: ${pct.toFixed(0)}%`;
+    const percentLabel = pct == null ? 'unavailable' : `${pct.toFixed(0)}%`;
+    const label = `Context: ${formatK(tokens)} / ${formatK(window)} tokens (${percentLabel})`;
     const activeCompactionLabel = typeof compactionLabel === 'string' ? compactionLabel.trim() : '';
     const activeCompactionTitle = typeof compactionTitle === 'string' ? compactionTitle.trim() : '';
     const title = activeCompactionLabel
@@ -374,9 +373,10 @@ function ContextPie({ usage, onCompact, compactionLabel = '', compactionTitle = 
     // Circle circumference = 2πr = 2π×9 ≈ 56.55
     const r = 9;
     const circ = 2 * Math.PI * r;
-    const filled = (pct / 100) * circ;
+    const filled = ((pct ?? 0) / 100) * circ;
 
-    const color = pct > 90 ? 'var(--context-red, #ef4444)'
+    const color = pct == null ? 'var(--text-secondary)'
+                : pct > 90 ? 'var(--context-red, #ef4444)'
                 : pct > 75 ? 'var(--context-amber, #f59e0b)'
                 : 'var(--context-green, #22c55e)';
 
@@ -1583,7 +1583,7 @@ export function ComposeBox({
         : (modelUsageTitleParts.join(' • ') || (showModelPickerHint
             ? 'Select a model (tap to open model picker)'
             : `Current model: ${modelHintLabel}${modelHintSuffix} (tap to open model picker)`));
-    const showComposeMetaRow = !searchMode && (showModelPickerHint || runUsageMeta || (contextUsage && contextUsage.percent != null));
+    const showComposeMetaRow = !searchMode && (showModelPickerHint || runUsageMeta || contextUsage);
 
     const emitModelState = (payload) => {
         if (!payload || typeof payload !== 'object') return;
@@ -3923,7 +3923,7 @@ export function ComposeBox({
                                 </div>
                             </div>
                         `}
-                        ${!searchMode && contextUsage && contextUsage.percent != null && html`
+                        ${!searchMode && contextUsage && html`
                             <${ContextPie}
                                 usage=${contextUsage}
                                 onCompact=${allowModelCompaction ? handleContextCompact : undefined}

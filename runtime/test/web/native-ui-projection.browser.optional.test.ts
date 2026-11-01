@@ -102,6 +102,9 @@ for (const engine of ['chromium', 'webkit']) for (const skin of ['classic', 'vis
     }
     await page.waitForFunction(selector => JSON.parse(document.querySelector(selector)!.textContent!).context?.tokens === null, skin === 'classic' ? '#state' : '#status-state');
     expect((await state()).context.tokens).toBeNull();
+    const indicator = page.locator(skin === 'classic' ? '.compose-context-pie' : '.context-ring').first();
+    await page.waitForFunction(skin => document.querySelector(skin === 'classic' ? '.compose-context-pie' : '.context-ring')?.getAttribute('title')?.includes('(unavailable)'), skin);
+    expect(await indicator.getAttribute('title')).toContain(skin === 'classic' ? 'Context: ? / ? tokens (unavailable)' : 'Context: -- / -- tokens (unavailable)');
     expect(await input.inputValue()).toBe('unsent private words — keep across reconnect');
     expect(await page.evaluate(() => (window as any).projectionStorage.accesses)).toEqual([]);
     expect(await page.evaluate(() => (window as any).projectionStorage.historical())).toBe(history === 'valid' ? JSON.stringify(stale) : '{malformed');
