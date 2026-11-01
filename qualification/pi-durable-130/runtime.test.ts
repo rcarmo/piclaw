@@ -548,6 +548,23 @@ for (const failed of [false, true]) test(`runtime: unbound ACK-only settlement s
   } finally { await reopened.close(); }
 }));
 
+for (const reader of ['readSessionPosition', 'readSessionMetadata', 'readSessionModel', 'readSessionThinkingLevel', 'readSessionContextUsage', 'readSessionReport', 'readSessionTree'] as const) {
+  test(`runtime: checked reader ${reader} rejects route revocation across native lookup await`, () => fixture(async f => {
+    const input = await f.accept();
+    const binding = { incarnation: input.incarnation, chatJid: input.chatJid, branchId: input.branchId, conversationId: input.conversationId };
+    let current = true;
+    f.hooks.resolveConversation = () => {
+      if (current) queueMicrotask(() => { current = false; });
+      return current ? binding.conversationId : -1 as ConversationId;
+    };
+    try {
+      await expect(f.runtime[reader](binding)).rejects.toThrow('Host binding conflict');
+      expect(current).toBe(false);
+      expect(f.base.host.modelCalls).toBe(0);
+    } finally { f.hooks.resolveConversation = undefined; }
+  }), 20000);
+}
+
 test("runtime: read-only session report uses committed native context and usage without model replay", () => fixture(async f => {
   const input = await f.accept();
   const binding = { incarnation: input.incarnation, chatJid: input.chatJid, branchId: input.branchId, conversationId: input.conversationId };

@@ -193,19 +193,20 @@ export function createDurableConversationAdapter(options: {
     sessionPosition(chatJid: string, branchId: string, sessionId: string): DurableSessionPositionPort {
       const binding = lookup(chatJid, branchId);
       if (!binding || !sessionId || !readPosition) throw new Error("Durable session position unavailable");
+      const target = Object.freeze({ incarnation, chatJid: binding.chatJid, branchId: binding.branchId, conversationId: binding.conversationId });
       return Object.freeze({ sessionId, branchId,
-        readContextUsage: readContextUsage ? () => readContextUsage({ ...binding, incarnation }) : undefined,
-        readPosition: () => readPosition({ ...binding, incarnation }),
-        readModel: readModel ? () => readModel({ ...binding, incarnation }) : undefined,
-        readThinkingLevel: readThinkingLevel ? () => readThinkingLevel({ ...binding, incarnation }) : undefined,
-        setThinkingLevel: setThinkingLevel ? (level: string) => setThinkingLevel({ ...binding, incarnation }, level) : undefined,
-        setModel: setModel ? (model: { provider: string; modelId: string }) => setModel({ ...binding, incarnation }, { provider: model.provider, modelId: model.modelId }) : undefined,
-        reset: reset ? () => reset({ ...binding, incarnation }) : undefined,
-        compact: compact ? (instructions?: string) => compact({ ...binding, incarnation }, instructions) : undefined,
-        reconcileMaintenance: reconcileMaintenance ? () => reconcileMaintenance({ ...binding, incarnation }) : undefined,
-        readTree: readTree ? () => readTree({ ...binding, incarnation }) : undefined,
-        readMetadata: readMetadata ? () => readMetadata({ ...binding, incarnation }) : undefined,
-        readReport: readReport ? () => readReport({ ...binding, incarnation }) : undefined });
+        readContextUsage: readContextUsage ? () => readContextUsage(target) : undefined,
+        readPosition: () => readPosition(target),
+        readModel: readModel ? () => readModel(target) : undefined,
+        readThinkingLevel: readThinkingLevel ? () => readThinkingLevel(target) : undefined,
+        setThinkingLevel: setThinkingLevel ? (level: string) => setThinkingLevel(target, level) : undefined,
+        setModel: setModel ? (model: { provider: string; modelId: string }) => setModel(target, { provider: model.provider, modelId: model.modelId }) : undefined,
+        reset: reset ? () => reset(target) : undefined,
+        compact: compact ? (instructions?: string) => compact(target, instructions) : undefined,
+        reconcileMaintenance: reconcileMaintenance ? () => reconcileMaintenance(target) : undefined,
+        readTree: readTree ? () => readTree(target) : undefined,
+        readMetadata: readMetadata ? () => readMetadata(target) : undefined,
+        readReport: readReport ? () => readReport(target) : undefined });
     },
     supportsIntent: !!submitIntent,
     validateIntent(work: DurableConversationOperation) { input(work, true); },
