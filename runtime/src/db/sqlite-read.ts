@@ -1,8 +1,8 @@
 import type { Database } from "bun:sqlite";
 
-/** Prepare an SDK read without letting PRAGMA change policy during preparation.
- * SDK 1.4 read callers use SELECT; pragma table functions retain schema reads. */
-export function prepareSqliteRead(database: Database, sql: string) {
+/** Leading SQLite command, including EXPLAIN, before fallible preparation.
+ * SQLite comments end at LF, not JavaScript's broader line separators. */
+export function sqliteCommand(sql: string): string {
   if (sql.includes("\0")) throw new Error("Read-only SQLite query contains NUL");
   let position = 0;
   const word = () => {
@@ -24,8 +24,16 @@ export function prepareSqliteRead(database: Database, sql: string) {
   if (command === "EXPLAIN") {
     command = word();
     if (command === "QUERY" && word() === "PLAN") command = word();
+    if (!command) throw new Error('Incomplete SQLite EXPLAIN command');
   }
-  if (command === "PRAGMA") throw new Error("Read-only SQLite queries cannot prepare PRAGMA");
+  if (!command && position < sql.length) throw new Error('Unsupported SQLite command');
+  return command;
+}
+
+/** Prepare an SDK read without letting PRAGMA change policy during preparation.
+ * SDK 1.4 read callers use SELECT; pragma table functions retain schema reads. */
+export function prepareSqliteRead(database: Database, sql: string) {
+  if (sqliteCommand(sql) === "PRAGMA") throw new Error("Read-only SQLite queries cannot prepare PRAGMA");
   const statement = database.query(sql);
   if (!("readonly" in statement) || statement.readonly !== true || !("reader" in statement) || statement.reader !== true)
     throw new Error("Read-only SQLite query required");
