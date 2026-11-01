@@ -132,6 +132,32 @@ ${modelInvocationInsertSql(true)}`,
 });
 
 /** Additive budget tables. Every cap is absent until the user creates one. */
+/** Persist the pre-retention boundary, not a terminal outcome or a financial release.
+ * Existing migration checksums and every reservation/charge/hold remain unchanged. */
+export const budgetTerminalEvidenceVersionMigration = Object.freeze({
+  owner: "host.budget-request-reservations", id: "terminal-evidence-version-v1", order: 5,
+  sql: `ALTER TABLE main.budget_request_reservations ADD COLUMN terminal_evidence_version INTEGER NOT NULL DEFAULT 1
+  CHECK(terminal_evidence_version IN (0,1));
+UPDATE main.budget_request_reservations SET terminal_evidence_version=0
+WHERE model_invocation_json IS NULL AND model_invocation_key_sha256 IS NULL
+  AND terminal_receipt_json IS NULL AND terminal_receipt_sha256 IS NULL AND terminal_received_at IS NULL
+  AND strftime('%Y-%m-%dT%H:%M:%fZ',created_at)=created_at
+  AND created_at < (SELECT applied_at FROM main.piclaw_schema_migrations
+    WHERE owner='host.budget-request-reservations' AND id='terminal-receipt-v1');
+CREATE TRIGGER main.budget_request_evidence_version_insert BEFORE INSERT ON budget_request_reservations
+  WHEN NEW.terminal_evidence_version<>1 OR EXISTS (SELECT 1 FROM budget_request_reservations
+    WHERE (id=NEW.id OR rowid=NEW.rowid) AND terminal_evidence_version<>NEW.terminal_evidence_version)
+  BEGIN SELECT RAISE(ABORT,'terminal evidence version is immutable'); END;
+CREATE TRIGGER main.budget_request_evidence_version_update BEFORE UPDATE ON budget_request_reservations
+  WHEN NEW.terminal_evidence_version IS NOT OLD.terminal_evidence_version
+    OR OLD.terminal_evidence_version=0 AND (
+      NEW.id IS NOT OLD.id OR NEW.work_id IS NOT OLD.work_id OR NEW.chat_jid IS NOT OLD.chat_jid
+      OR NEW.provider_id IS NOT OLD.provider_id OR NEW.model_id IS NOT OLD.model_id
+      OR NEW.account_ref IS NOT OLD.account_ref OR NEW.binding_sha256 IS NOT OLD.binding_sha256
+      OR NEW.amount_microusd IS NOT OLD.amount_microusd OR NEW.created_at IS NOT OLD.created_at)
+  BEGIN SELECT RAISE(ABORT,'terminal evidence version is immutable'); END;`,
+});
+
 export function initializeBudgetLimitsSchema(database: Database): void {
   database.transaction(() => {
     verifyExistingUsageReportProjection(database);
@@ -297,7 +323,7 @@ export function initializeBudgetLimitsSchema(database: Database): void {
     CREATE TRIGGER IF NOT EXISTS budget_usage_events_no_delete
       BEFORE DELETE ON budget_usage_events BEGIN SELECT RAISE(ABORT, 'budget usage events are immutable'); END;
     `);
-    applyOwnedMigrations(database, [budgetTerminalReceiptMigration, budgetModelInvocationMigration, budgetAccountingScopeMigration, budgetToolInvocationMigration]);
+    applyOwnedMigrations(database, [budgetTerminalReceiptMigration, budgetModelInvocationMigration, budgetAccountingScopeMigration, budgetToolInvocationMigration, budgetTerminalEvidenceVersionMigration]);
     initializeUsageReportProjection(database);
   }).immediate();
 }

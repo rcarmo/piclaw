@@ -101,12 +101,17 @@ function retainedUsageFacts(value: unknown): UsageFacts {
 /** Read-only, ancestry-scoped effect barrier. A known paid terminal whose local
  * charge/status transition is incomplete cannot authorise the next effect.
  * Intentional unknown valuation remains held, not charged or relabelled as free.
+ * Pre-retention holds retain their financial effect but cannot prove a contract that did not exist.
+ * Their immutable migration provenance exempts only absence of new-format evidence.
  * Only exact invocation recovery may exclude its own already-bound request. */
 export function assertModelAccountingReady(workId: string, database: Database = getDb(), excludeRequestId?: string, terminal = false): void {
   const pending = database.query(`WITH RECURSIVE scope(id) AS (
     SELECT id FROM budget_work WHERE id=? UNION SELECT w.id FROM budget_work w JOIN scope s ON w.parent_work_id=s.id
   ) SELECT r.* FROM budget_request_reservations r JOIN scope s ON s.id=r.work_id JOIN budget_work w ON w.id=r.work_id
-    WHERE r.state<>'released' AND (? OR r.terminal_receipt_json IS NOT NULL OR r.state='unresolved')
+    WHERE r.state<>'released'
+    AND (r.terminal_evidence_version<>0 OR r.model_invocation_json IS NOT NULL OR r.model_invocation_key_sha256 IS NOT NULL
+      OR r.terminal_receipt_json IS NOT NULL OR r.terminal_receipt_sha256 IS NOT NULL OR r.terminal_received_at IS NOT NULL)
+    AND (? OR r.terminal_receipt_json IS NOT NULL OR r.state='unresolved')
     AND (r.state<>'settled' OR w.status IN ('active','paused'))
     AND (? IS NULL OR r.id<>?)`).all(workId, terminal ? 1 : 0, excludeRequestId ?? null, excludeRequestId ?? null) as BudgetRequestReservation[];
   for (const row of pending) {

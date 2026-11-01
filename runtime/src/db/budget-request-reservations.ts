@@ -52,6 +52,8 @@ export interface BudgetRequestReservation {
   usage_event_id: string | null;
   model_invocation_json: string | null;
   model_invocation_key_sha256: string | null;
+  /** 0: immutable pre-retention provenance; 1: terminal evidence is required. */
+  terminal_evidence_version: 0 | 1;
   terminal_receipt_json: string | null;
   terminal_receipt_sha256: string | null;
   terminal_received_at: string | null;

@@ -51,9 +51,9 @@ test('tool extension preserves all earlier owned migration bytes', () => {
 test('invocation fresh schema owns order 2 after unchanged receipt migration with a unique nullable index', () => {
   const { db } = fixture();
   const before = listAppliedOwnedMigrations(db, budgetTerminalReceiptMigration.owner);
-  expect(before.map(m => m.id)).toEqual(['terminal-receipt-v1', 'model-invocation-v1', 'accounting-scope-index-v1', 'tool-model-invocation-v1']);
+  expect(before.map(m => m.id)).toEqual(['terminal-receipt-v1', 'model-invocation-v1', 'accounting-scope-index-v1', 'tool-model-invocation-v1', 'terminal-evidence-version-v1']);
   expect(db.query('SELECT migration_order FROM piclaw_schema_migrations WHERE owner=? ORDER BY migration_order').all(budgetTerminalReceiptMigration.owner))
-    .toEqual([{ migration_order: 1 }, { migration_order: 2 }, { migration_order: 3 }, { migration_order: 4 }]);
+    .toEqual([{ migration_order: 1 }, { migration_order: 2 }, { migration_order: 3 }, { migration_order: 4 }, { migration_order: 5 }]);
   initializeBudgetLimitsSchema(db);
   expect(listAppliedOwnedMigrations(db, budgetTerminalReceiptMigration.owner)).toEqual(before);
   expect(db.query("SELECT name,type,\"notnull\" FROM pragma_table_info('budget_request_reservations') WHERE name LIKE 'model_invocation_%'").all()).toEqual([

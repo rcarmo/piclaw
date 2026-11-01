@@ -55,13 +55,13 @@ const oldTableSql = `CREATE TABLE budget_request_reservations (
 test('fresh schema owns ordered additive migrations; initializer is idempotent and checksum drift fails', () => {
   const { db } = fixture();
   const before = listAppliedOwnedMigrations(db, budgetTerminalReceiptMigration.owner);
-  expect(before).toHaveLength(4);
-  expect(before.map(migration => migration.id)).toEqual(['terminal-receipt-v1', 'model-invocation-v1', 'accounting-scope-index-v1', 'tool-model-invocation-v1']);
+  expect(before).toHaveLength(5);
+  expect(before.map(migration => migration.id)).toEqual(['terminal-receipt-v1', 'model-invocation-v1', 'accounting-scope-index-v1', 'tool-model-invocation-v1', 'terminal-evidence-version-v1']);
   initializeBudgetLimitsSchema(db);
   expect(listAppliedOwnedMigrations(db, budgetTerminalReceiptMigration.owner)).toEqual(before);
   expect(() => applyOwnedMigrations(db, [{ ...budgetTerminalReceiptMigration, sql: budgetTerminalReceiptMigration.sql + '\n' }])).toThrow('checksum mismatch');
   expect(db.query("SELECT name,type FROM pragma_table_info('budget_request_reservations') WHERE name LIKE 'terminal_%'").all()).toEqual([
-    { name: 'terminal_receipt_json', type: 'TEXT' }, { name: 'terminal_receipt_sha256', type: 'TEXT' }, { name: 'terminal_received_at', type: 'TEXT' },
+    { name: 'terminal_receipt_json', type: 'TEXT' }, { name: 'terminal_receipt_sha256', type: 'TEXT' }, { name: 'terminal_received_at', type: 'TEXT' }, { name: 'terminal_evidence_version', type: 'INTEGER' },
   ]);
 });
 
