@@ -1,7 +1,7 @@
 import { BudgetRequestError } from '../../src/db/budget-request-reservations.js';
 import { createTrackedBashOperations } from "../../src/tools/tracked-bash.js";
 import { withChatContext } from "../../src/core/chat-context.js";
-import { assertModelContextFits, measureModelPromptSections, prepareModelContextAdmission, type ModelContextAdmission, type ModelToolSchema } from "./host-model-context.js";
+import { assertModelContextFits, projectModelContext, prepareModelContextAdmission, type ModelContextAdmission } from "./host-model-context.js";
 import { readNativeExitReceipt, nativeExitNotice, type NativeExitReceipt } from "./host-process-receipt.js";
 import { modelFailureNotice, parseModelFailure } from "./host-model-failure.js";
 import { createLogger } from "../../src/utils/logger.js";
@@ -341,25 +341,22 @@ export class HostConversationRuntime {
       if (choice && !target) throw Error("Model context unavailable");
       const parent = await this.harness.conversation(parentId, this.context); this.fence();
       if (!parent) throw Error("Unknown scheduled root");
-      const position = choice && (await parent.entries({ order: "descending" }, 1, undefined, this.context)).items[0]?.id;
-      const view = choice && await parent.context(this.context); this.fence();
-      const promptSectionBytes = view ? await this.measurePromptSections(parent, view.messages, choice) : undefined; this.fence();
+      const admission = choice ? await this.prepareContextAdmission(parent, choice) : undefined; this.fence();
       return this.harness.commit(async tx => {
       this.fence();
       if (!this.options.existingConversationIds.includes(parentId)) throw Error("Unknown scheduled root");
       const page = await tx.scanEntries({ conversationId: parentId, order: "descending" }, 1);
       const head = page.items[0];
       if (requireHistory && !head) throw Error("Side prompt history unavailable");
-      if (choice && head?.id !== position) throw Error("Scheduled parent changed");
       const agent = await tx.doc(AgentDoc, parentId);
-      if (target && view) this.assertContextFitsModel(view.messages, agent, target, promptSectionBytes);
+      if (target && admission) { await admission.assertCurrent(tx, agent); this.fence(); assertModelContextFits(admission.messages, target); }
       const fork = head ? await tx.forkConversation(parentId, head.id, { ownership: { kind: "ownerless" } })
         : await tx.createConversation({ ownership: { kind: "ownerless" } });
       // Empty roots have no public fork point. Copy only configuration, never fabricate an entry.
       const isolated = await tx.doc(AgentDoc, fork.id);
       Object.assign(isolated, JSON.parse(JSON.stringify(agent)));
       if (choice) await configure(tx, fork.id, { model: choice });
-      this.fence(); allocated(fork.id);
+      admission?.assertScopeCurrent(); this.fence(); allocated(fork.id);
       return fork.id;
       }, this.context);
     });
@@ -568,15 +565,6 @@ export class HostConversationRuntime {
       return label;
     });
   }
-  async readToolModelContext(call: { conversationId: ConversationId; taskId: TaskId; toolCallId: string }): Promise<readonly import("@earendil-works/pi-ai").Message[]> {
-    await this.captureToolSource(call.conversationId, call.taskId, call.toolCallId);
-    return this.observe(async () => {
-      const conversation = await this.harness.conversation(call.conversationId, this.context); this.fence();
-      if (!conversation) throw Error("Missing tool conversation");
-      const view = await conversation.context(this.context); this.fence();
-      return view.messages;
-    });
-  }
   async readSessionModel(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<string | null> {
     return (await this.readSessionChoice(binding)).model;
   }
@@ -618,7 +606,7 @@ export class HostConversationRuntime {
         if (selectingModel && changesModel) {
           if (!admission) throw new Error("Host model changed");
           await admission.assertCurrent(tx, agent); check();
-          this.assertContextFitsModel(admission.messages, agent, target, admission.promptSectionBytes, admission.tools);
+          assertModelContextFits(admission.messages, target);
         }
         if (thinkingLevel !== undefined) {
           if (agent.model?.provider !== choice.provider || agent.model.modelId !== choice.modelId) throw new Error("Thinking model changed");
@@ -634,7 +622,7 @@ export class HostConversationRuntime {
       registry: this.options.harnessOptions.registry,
       defaultExtensions: () => currentHarnessSettings(this.options.harnessOptions)?.extensions,
       readAgentState: () => this.harness.snapshot(AgentDoc, conversation.id, this.context),
-      measure: (messages, agent) => this.measurePromptSections(conversation, messages, model, thinkingLevel, agent),
+      project: (view, agent) => this.projectContext(conversation, view, agent, model, thinkingLevel),
       assertCurrent: () => this.fence(),
     });
   }
@@ -650,16 +638,12 @@ export class HostConversationRuntime {
         async assertCurrent(tx, current) { guard(); await admission.assertCurrent(tx, current); guard(); } };
     });
   }
-  private async measurePromptSections(conversation: import("@earendil-works/pi-durable").Conversation, messages: readonly import("@earendil-works/pi-ai").Message[], model?: { provider: string; modelId: string }, thinkingLevel?: string, resolved?: import("@earendil-works/pi-durable").Agent): Promise<number> {
-    const current = resolved ?? await conversation.agent(this.context); this.fence();
+  private async projectContext(conversation: import("@earendil-works/pi-durable").Conversation, view: import("@earendil-works/pi-durable").ContextView, current: import("@earendil-works/pi-durable").Agent, model: { provider: string; modelId: string }, thinkingLevel?: string): Promise<readonly import("@earendil-works/pi-ai").Message[]> {
     const agent = { ...current, ...(model ? { model } : {}), ...(thinkingLevel !== undefined ? { thinkingLevel: thinkingLevel as ModelThinkingLevel } : {}) };
     const read = { snapshot: this.harness.snapshot.bind(this.harness), snapshotAsOf: this.harness.snapshotAsOf.bind(this.harness) };
     const env = await this.options.harnessOptions.env?.({ conversationId: conversation.id, cwd: agent.cwd, read }, this.context); this.fence();
-    const bytes = await measureModelPromptSections(messages, { conversationId: conversation.id, agent, env, read }, this.context); this.fence();
-    return bytes;
-  }
-  private assertContextFitsModel(messages: readonly import("@earendil-works/pi-ai").Message[], agent: unknown, target: { contextWindow: number; maxTokens: number }, promptSectionBytes?: number, tools?: readonly ModelToolSchema[]): void {
-    assertModelContextFits(messages, agent, target, this.options.harnessOptions.registry.snapshot(), promptSectionBytes, tools);
+    const messages = await projectModelContext(view, { conversationId: conversation.id, agent, env, read }, this.context); this.fence();
+    return messages;
   }
   /** Persist next-request selection without mutating the prepared request. */
   async setSessionModel(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }, model: { provider: string; modelId: string }): Promise<void> {

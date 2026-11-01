@@ -33,8 +33,8 @@ test("busy native model/thinking choices persist for next request without stoppi
     const binding={incarnation:f.incarnation,chatJid:f.chatJid,branchId:'main',conversationId:f.base.root.id};
     const before=f.snapshot();const oldRequest={...requests[1]};
     await f.runtime!.setSessionModel(binding,{provider:'qualification',modelId:'alternate'});
-    const runtime=f.runtime! as any, measure=runtime.measurePromptSections;
-    runtime.measurePromptSections=async()=>original.contextWindow*2;
+    const runtime=f.runtime! as any, measure=runtime.projectContext;
+    runtime.projectContext=async()=>[{role:"user", content:"x".repeat(original.contextWindow*7), timestamp:Date.now()}];
     // Existing requests already fit. Same-model choices must not run a new
     // candidate fit/render; genuinely different models still must.
     await f.runtime!.setSessionModel(binding,{provider:'qualification',modelId:'alternate'});
@@ -45,7 +45,7 @@ test("busy native model/thinking choices persist for next request without stoppi
     expect(await f.runtime!.readSessionThinkingLevel(binding)).toBe('off');
     await expect(f.runtime!.setSessionModel(binding,{provider:'qualification',modelId:'synthetic'})).rejects.toThrow('compact first');
     expect(await f.runtime!.readSessionModel(binding)).toBe('qualification/alternate');
-    runtime.measurePromptSections=measure;
+    runtime.projectContext=measure;
     expect(requests).toHaveLength(2);expect(requests[1]).toEqual(oldRequest);expect(requests[1]!.model).toBe('synthetic');
     expect(f.snapshot()).toEqual(before);
     expect((await f.runtime!.inspectAuthority()).inspection.tasks.length).toBeGreaterThan(0);

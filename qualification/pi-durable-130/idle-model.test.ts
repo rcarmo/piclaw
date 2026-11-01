@@ -66,7 +66,7 @@ test("shared DB next-request model controls persist while destructive reset reta
     expect(childId).toBeDefined();
     // An installed, unselected tool must not inflate model-switch admission.
     // Its declaration alone exceeds the candidate model window.
-    const excluded = defineTool({ name: "excluded-schema", description: "x".repeat(original.contextWindow + 10000),
+    const excluded = defineTool({ name: "excluded-schema", description: "x".repeat(original.contextWindow * 4 + 10000),
       parameters: Type.Object({}), callers: ["tools"], execute: async () => ({}) });
     f.registry.install(defineExtension({ name: "excluded-context-schema", tools: [excluded] }));
     expect(Buffer.byteLength(excluded.description)).toBeGreaterThan(original.contextWindow);
@@ -76,7 +76,11 @@ test("shared DB next-request model controls persist while destructive reset reta
     expect((await app.applyControlCommand("web:idle", other)).status).toBe("success");
     expect(await app.getCurrentModelLabel("web:idle")).toBe("alternate/other");
     expect(promptRenders).toBeGreaterThan(0);
+    // Dense Unicode is measured in native SDK token units, not UTF-8 bytes.
     promptText = "界".repeat(100000);
+    expect((await app.applyControlCommand("web:idle", command)).status).toBe("success");
+    expect((await app.applyControlCommand("web:idle", other)).status).toBe("success");
+    promptText = "界".repeat(original.contextWindow * 4);
     expect(await app.applyControlCommand("web:idle", command)).toMatchObject({ status: "error", message: expect.stringContaining("estimate exceeded") });
     expect(await app.getCurrentModelLabel("web:idle")).toBe("alternate/other");
     promptText = "";

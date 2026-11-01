@@ -25,7 +25,6 @@ test('real owned model tool uses current selected schemas and switches only the 
   const tools = createHostModelTools({ assertCurrent() { f.owner.assert(); }, available: () => models,
     assertModel(choice) { if (!models.some(m => m.provider === choice.provider && m.id === choice.modelId)) throw Error('unapproved'); },
     async captureSourceGuard(call) { const captured = await f.runtime!.captureToolSource(call.conversationId, call.taskId, call.toolCallId); return () => f.runtime!.assertCapturedSourceCurrent(captured.inputs); },
-    async readContext() { throw Error('Prepared admission must supply current context'); },
     async prepareContext(call, model, level) { preparations++; return f.runtime!.prepareToolModelContext(call, model, level); },
   });
   const extension = defineExtension({ name: 'owned-model-controls', tools });
