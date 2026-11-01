@@ -565,6 +565,25 @@ for (const reader of ['readSessionState', 'readSessionPosition', 'readSessionMet
   }), 20000);
 }
 
+test("runtime: coherent session state preserves empty values, persisted choice and reopen without scheduling", () => fixture(async f => {
+  const binding = { incarnation: 'copy-A', chatJid: 'web:runtime', branchId: 'existing-main', conversationId: f.options.existingConversationIds[0]! };
+  const empty = await f.runtime.readSessionState(binding);
+  expect(empty.position).toBeNull();
+  expect(empty.model).toBe('qualification/synthetic');
+  expect(empty.thinkingLevel).toBeNull();
+  const position = await f.runtime.readSessionPosition(binding);
+  expect(position).toBe(empty.position);
+  await f.runtime.close(); f.setOwner(true);
+  const harness = await Harness.open(await SqliteStorage.open(await openWalFixtureDatabase(f.path)), f.options.harnessOptions, context);
+  const conversation = (await harness.conversation(binding.conversationId, context))!;
+  await conversation.configure({ thinkingLevel: 'high' }, context);
+  const entry = await conversation.commit(tx => tx.appendEntry(binding.conversationId, { kind: 'state-proof', data: {} }), context);
+  await harness.close(context);
+  f.runtime = await HostConversationRuntime.open(f.options, context);
+  expect(await f.runtime.readSessionState(binding)).toEqual({ position: String(entry.id), model: 'qualification/synthetic', thinkingLevel: 'high' });
+  expect(f.base.host.modelCalls).toBe(0);
+}), 20000);
+
 test("runtime: read-only session report uses committed native context and usage without model replay", () => fixture(async f => {
   const input = await f.accept();
   const binding = { incarnation: input.incarnation, chatJid: input.chatJid, branchId: input.branchId, conversationId: input.conversationId };
