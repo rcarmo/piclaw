@@ -24,6 +24,9 @@ import { AgentPool } from "../../runtime/src/agent-pool.js";
 import { WebChannel } from "../../runtime/src/channels/web.js";
 import { createRuntimeBaseServices } from "../../runtime/src/runtime/composition.js";
 import { RuntimeStartupCleanupError } from "../../runtime/src/runtime/startup-cleanup-error.js";
+import { RuntimePreparationError } from "../../runtime/src/runtime/preparation-error.js";
+import * as addonConfigApi from "../../runtime/src/channels/web/handlers/addon-config-api.js";
+import { HostEffectError } from "../../runtime/durable-engine/src/host-effects.js";
 import { main } from "../../runtime/src/runtime.js";
 import { createDefaultRuntimeBootstrapDeps } from "../../runtime/src/runtime/bootstrap.js";
 import { storeChatMetadata, storeMessage } from "../../runtime/src/db.js";
@@ -246,21 +249,31 @@ factoryTest("native-code-review-lifecycle", "default factory Code Review persist
   }
 });
 
-for (const uncertain of [false, true]) factoryTest(`cleanup-${uncertain}`, `actual preparation → bootstrap → main retains owner only for uncertain close=${uncertain}`, async () => {
+for (const failureKind of ['ordinary', 'sqlite-busy', 'store-busy', 'unknown-certainty', 'nested-uncertainty'] as const)
+for (const uncertain of [false, true, 'synchronous'] as const) factoryTest(`cleanup-${uncertain}${failureKind === 'ordinary' ? '' : '-' + failureKind}`, `actual preparation → bootstrap → main retains owner only for uncertain close=${uncertain}, failure=${failureKind}`, async () => {
   process.env.PICLAW_DB_IN_MEMORY = "0";
   initDatabase();
   const workspace = process.env.PICLAW_WORKSPACE!;
   const acquire = () => acquireRuntimeLock({ lockPath: join(workspace, "preparation-owner.lock"), strictOwnership: true, disabled: false });
   const owner = acquire();
-  const primary = Error("storage initialization failed"), cleanup = Error("application close failed before close");
+  const primary = failureKind === 'nested-uncertainty' ? new RuntimeStartupCleanupError([Error('inner disposal unconfirmed')])
+    : failureKind === 'sqlite-busy' ? Object.assign(Error('database is locked'), { code: 'SQLITE_BUSY' })
+    : failureKind === 'store-busy' || failureKind === 'unknown-certainty' ? new HostEffectError({ _tag: 'storage_unavailable', certainty: failureKind === 'store-busy' ? 'not_applied' : 'unknown', retryable: true })
+    : Error("storage initialization failed");
+  const cleanup = Error("application close failed before close");
   const model = { provider: "synthetic", id: "approved", name: "Approved", api: "openai-completions", baseUrl: "https://invalid.invalid", input: ["text"], reasoning: false, contextWindow: 10000, maxTokens: 1000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
   const services = { modelRuntime: { getPhysicalModel: () => model }, modelRegistry: { getAvailable: () => [model] } } as unknown as RuntimeModelServices;
   const originalClose = BunSqliteDatabase.prototype.close;
   let captured: BunSqliteDatabase | undefined;
   const close = spyOn(BunSqliteDatabase.prototype, "close").mockImplementation(function (this: BunSqliteDatabase) {
     captured = this;
-    return uncertain ? Promise.reject(cleanup) : originalClose.call(this);
+    return uncertain === true ? Promise.reject(cleanup) : originalClose.call(this);
   });
+  const originalRegister = addonConfigApi.registerAddonConfigKvAuthority;
+  const registration = uncertain === 'synchronous' ? spyOn(addonConfigApi, 'registerAddonConfigKvAuthority').mockImplementation((...args) => {
+    const release = originalRegister(...args);
+    return () => { release(); throw cleanup; };
+  }) : undefined;
   const transaction = spyOn(BunSqliteDatabase.prototype, "transaction").mockRejectedValue(primary);
   const deps = createDefaultRuntimeBootstrapDeps({ queue: {}, state: {} } as any,
     actual => createDefaultApplicationRuntime(actual, async () => services));
@@ -277,12 +290,17 @@ for (const uncertain of [false, true]) factoryTest(`cleanup-${uncertain}`, `actu
       expect((thrown as AggregateError).errors[0]).toBe(primary);
       expect((thrown as AggregateError).errors[1]).toBe(cleanup);
       owner.assertCurrentOwner(); expect(acquire).toThrow("refuses existing lock");
-    } else {
+    } else if (failureKind === 'nested-uncertainty') {
       expect(thrown).toBe(primary);
+      owner.assertCurrentOwner(); expect(acquire).toThrow('refuses existing lock');
+    } else {
+      expect(thrown).toBeInstanceOf(RuntimePreparationError);
+      expect((thrown as Error).cause).toBe(primary);
+      expect((thrown as RuntimePreparationError).retryableStorage).toBe(failureKind === 'sqlite-busy' || failureKind === 'store-busy');
       acquire().release();
     }
   } finally {
-    transaction.mockRestore(); close.mockRestore(); pool.mockRestore();
+    transaction.mockRestore(); close.mockRestore(); pool.mockRestore(); registration?.mockRestore();
     if (captured) await originalClose.call(captured);
     owner.release(); closeDatabase();
   }
@@ -1212,7 +1230,9 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       await inside;
       await new Promise(resolve => setTimeout(resolve, 10));
       expect(finished).toBe(false); expect(modelCalls).toBe(0); expect(calls).toBe(0);
-      release(); expect(await pending).toBe(primary); expect(modelCalls).toBe(1);
+      release(); const failure = await pending;
+      expect(failure).toBeInstanceOf(RuntimePreparationError); expect(failure.cause).toBe(primary);
+      expect(failure.retryableStorage).toBe(false); expect(modelCalls).toBe(1);
       const pkg = join(workspace, ".pi/extensions/node_modules/@rcarmo/piclaw-addon-drawio-editor/index.ts");
       const addon = await import(pkg);
       expect((await addon.handleRoute(new Request("http://fixture/drawio/index.html"), "/drawio/index.html")).status).toBe(503);
@@ -4974,7 +4994,8 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
           expect(closeFinished).toBe(false);
           expect(() => acquireRuntimeLock({lockPath:join(workspace,'default-owner.lock'),strictOwnership:true,disabled:false})).toThrow('refuses existing lock');
         } else {
-          expect(failure).toBe(primary); expect(closeFinished).toBe(true); expect(dependencySignal!.aborted).toBe(true);
+          expect(failure).toBeInstanceOf(RuntimePreparationError); expect(failure.cause).toBe(primary);
+          expect(failure.retryableStorage).toBe(false); expect(closeFinished).toBe(true); expect(dependencySignal!.aborted).toBe(true);
         }
         expect(calls).toBe(beforeCalls + 1); expect(facts()).toEqual(before);
       } finally {

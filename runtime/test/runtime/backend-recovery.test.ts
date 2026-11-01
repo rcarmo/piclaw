@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { createRecoverableRuntimeBackend, type RuntimeBackend } from "../../src/runtime/bootstrap.js";
 import type { DurableAbortScope, DurableSessionPositionPort } from "../../src/agent-pool/durable-runtime-adapter.js";
+import { RuntimePreparationError } from "../../src/runtime/preparation-error.js";
+import { RuntimeStartupCleanupError } from "../../src/runtime/startup-cleanup-error.js";
 
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(yes => { resolve = yes; }); return { promise, resolve }; }
 const tick = () => new Promise<void>(resolve => setTimeout(resolve, 0));
@@ -24,6 +26,132 @@ function fixture(name: string, trace: string[]) {
   };
   return { failure, state, port, backend };
 }
+test('transient replacement failure retries only clean preparation, with no automatic dispatch replay', async () => {
+  const trace: string[] = [], old = fixture('old', trace), next = fixture('new', trace);
+  const entered = deferred<void>(), release = deferred<void>(); let prepares = 0;
+  const backend = await createRecoverableRuntimeBackend(async () => {
+    prepares++;
+    if (prepares === 1) return old.backend;
+    expect(trace).toContain('old:closed');
+    if (prepares === 2) { entered.resolve(); await release.promise; throw new RuntimePreparationError(Error('writer still locked'), true); }
+    return next.backend;
+  });
+  old.failure.resolve(Error('storage failed')); await entered.promise;
+  const callers = Array.from({ length: 3 }, () => backend.sessionOptions.dispatchHostCommand!('web:test', 'accepted'));
+  // Observe the old implementation's rejection without leaking an unhandled promise.
+  const results = Promise.allSettled(callers);
+  release.resolve();
+  expect(await results).toEqual(Array.from({ length: 3 }, () => ({ status: 'fulfilled', value: true })));
+  expect(prepares).toBe(3);
+  expect(trace.filter(value => value.endsWith(':command'))).toEqual(['new:command', 'new:command', 'new:command']);
+  await backend.close();
+});
+
+test('clean preparation failure does not poison graceful shutdown', async () => {
+  const old = fixture('old', []), failure = new RuntimePreparationError(Error('invalid replacement configuration')); let prepares = 0;
+  const backend = await createRecoverableRuntimeBackend(async () => { if (++prepares === 1) return old.backend; throw failure; });
+  old.failure.resolve(Error('storage failed')); await tick();
+  await expect(backend.sessionOptions.dispatchHostCommand!('web:test', 'accepted')).rejects.toBe(failure);
+  await expect(backend.close()).resolves.toBeUndefined(); expect(prepares).toBe(2);
+});
+
+test('uncertain replacement preparation cleanup is neither retried nor hidden on shutdown', async () => {
+  const old = fixture('old', []), failure = new RuntimeStartupCleanupError([Error('close uncertain')]); let prepares = 0;
+  const backend = await createRecoverableRuntimeBackend(async () => { if (++prepares === 1) return old.backend; throw failure; });
+  old.failure.resolve(Error('storage failed')); await tick();
+  await expect(backend.sessionOptions.dispatchHostCommand!('web:test', 'accepted')).rejects.toBe(failure);
+  await expect(backend.close()).rejects.toBe(failure); expect(prepares).toBe(2);
+});
+
+test('synchronous channel and session facades fail closed while replacement is unavailable', async () => {
+  const old = fixture('old', []), gate = deferred<void>(); old.state.closeGate = gate.promise;
+  const backend = await createRecoverableRuntimeBackend(async () => old.backend);
+  const bound = backend.bind({} as Parameters<RuntimeBackend['bind']>[0]);
+  old.failure.resolve(Error('storage failed')); await tick();
+  expect(() => backend.sessionOptions.getDurableSession!('web:test')).toThrow('Native runtime recovering');
+  expect(() => bound.prepareInputSourceAdmission!('web:test')).toThrow('Native runtime recovering');
+  backend.stop(); gate.resolve(); await backend.close();
+});
+
+test('shutdown cancels a certified preparation retry without reopening', async () => {
+  const old = fixture('old', []), attempted = deferred<void>(); let prepares = 0;
+  const backend = await createRecoverableRuntimeBackend(async () => {
+    if (++prepares === 1) return old.backend;
+    attempted.resolve(); throw new RuntimePreparationError(Error('writer held'), true);
+  });
+  old.failure.resolve(Error('storage failed')); await attempted.promise; await tick();
+  await backend.close(); expect(prepares).toBe(2);
+});
+
+test('shutdown joins a late preparation and disposes its unpublished candidate', async () => {
+  const trace: string[] = [], old = fixture('old', trace), next = fixture('new', trace);
+  const entered = deferred<void>(), release = deferred<void>(); let prepares = 0;
+  const backend = await createRecoverableRuntimeBackend(async () => {
+    if (++prepares === 1) return old.backend;
+    entered.resolve(); await release.promise; return next.backend;
+  });
+  old.failure.resolve(Error('storage failed')); await entered.promise;
+  const closing = backend.close(); release.resolve(); await closing;
+  expect(trace).toEqual(['old:stop', 'old:close', 'old:closed', 'new:stop', 'new:close', 'new:closed']);
+});
+
+for (const uncertain of [false, true]) test('failed candidate attachment retains no published bindings; cleanup uncertain=' + uncertain, async () => {
+  const trace: string[] = [], old = fixture('old', trace), next = fixture('new', trace);
+  const failure = Error('attachment failed'); let prepares = 0;
+  next.backend.attachChannel = async () => { throw failure; };
+  if (uncertain) next.state.closeError = Error('candidate close uncertain');
+  const backend = await createRecoverableRuntimeBackend(async () => ++prepares === 1 ? old.backend : next.backend);
+  const bound = backend.bind({} as Parameters<RuntimeBackend['bind']>[0]);
+  await backend.attachChannel!({} as Parameters<NonNullable<RuntimeBackend['attachChannel']>>[0]);
+  old.failure.resolve(Error('storage failed')); await tick();
+  expect(() => bound.prepareInputSourceAdmission!('web:test')).toThrow('Native runtime recovering');
+  expect(trace).not.toContain('new:prepare');
+  if (uncertain) await expect(backend.close()).rejects.toBeInstanceOf(RuntimeStartupCleanupError);
+  else await expect(backend.close()).resolves.toBeUndefined();
+  expect(prepares).toBe(2);
+});
+
+test('candidate disposal cannot certify nested attachment cleanup uncertainty', async () => {
+  const trace: string[] = [], old = fixture('old', trace), next = fixture('new', trace); let prepares = 0;
+  const failure = new RuntimeStartupCleanupError([Error('attachment owns an unclosed resource')]);
+  next.backend.attachChannel = async () => { throw failure; };
+  const backend = await createRecoverableRuntimeBackend(async () => ++prepares === 1 ? old.backend : next.backend);
+  backend.bind({} as Parameters<RuntimeBackend['bind']>[0]);
+  await backend.attachChannel!({} as Parameters<NonNullable<RuntimeBackend['attachChannel']>>[0]);
+  old.failure.resolve(Error('storage failed')); await tick();
+  expect(trace).toContain('new:closed');
+  await expect(backend.sessionOptions.dispatchHostCommand!('web:test', 'accepted')).rejects.toBe(failure);
+  await expect(backend.close()).rejects.toBe(failure); expect(prepares).toBe(2);
+});
+
+test('successive failed generations each close before opening the next', async () => {
+  const trace: string[] = [], generations = [fixture('first', trace), fixture('second', trace), fixture('third', trace)]; let prepares = 0;
+  const backend = await createRecoverableRuntimeBackend(async () => generations[prepares++]!.backend);
+  generations[0]!.failure.resolve(Error('first storage failed')); await tick();
+  await backend.sessionOptions.dispatchHostCommand!('web:test', 'accepted');
+  generations[1]!.failure.resolve(Error('second storage failed')); await tick();
+  await backend.sessionOptions.dispatchHostCommand!('web:test', 'accepted');
+  expect(prepares).toBe(3); expect(trace.filter(value => value.endsWith(':command'))).toEqual(['second:command', 'third:command']);
+  expect(trace.indexOf('second:closed')).toBeGreaterThan(trace.indexOf('second:command')); await backend.close();
+});
+
+test('error names and JSON text cannot forge a clean-storage retry certificate', async () => {
+  const old = fixture('old', []); let prepares = 0;
+  const forged = Object.assign(Error('{"_tag":"storage_unavailable","certainty":"not_applied","retryable":true}'), { name: 'RuntimePreparationError' });
+  const backend = await createRecoverableRuntimeBackend(async () => { if (++prepares === 1) return old.backend; throw forged; });
+  old.failure.resolve(Error('storage failed')); await tick();
+  await expect(backend.sessionOptions.dispatchHostCommand!('web:test', 'accepted')).rejects.toBe(forged);
+  expect(prepares).toBe(2); await expect(backend.close()).rejects.toBe(forged);
+});
+
+test('unclassified preparation failure cannot certify graceful disposal', async () => {
+  const old = fixture('old', []), failure = Error('unknown partial preparation state'); let prepares = 0;
+  const backend = await createRecoverableRuntimeBackend(async () => { if (++prepares === 1) return old.backend; throw failure; });
+  old.failure.resolve(Error('storage failed')); await tick();
+  await expect(backend.sessionOptions.dispatchHostCommand!('web:test', 'accepted')).rejects.toBe(failure);
+  await expect(backend.close()).rejects.toBe(failure); expect(prepares).toBe(2);
+});
+
 const preparedBackground = {incarnation:'native-domain',conversationId:7,chatJid:'operation:accepted',branchId:'background:'+'a'.repeat(64),operationId:'operation:background:'+'a'.repeat(64),sourceSeq:1,
   sourceId:'background:'+'a'.repeat(64),payloadRef:'background:'+'a'.repeat(64),requestId:'background:'+'a'.repeat(64),requestHash:'0'.repeat(64)};
 test('background admission facade: waits for confirmed cleanup and never replays an uncertain call',async()=>{
