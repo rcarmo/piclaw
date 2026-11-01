@@ -1,4 +1,6 @@
-import { admitSqliteWrite } from "../../src/db/sqlite-async-admission.js";
+import { admitSqliteWrite, isSqliteContention } from "../../src/db/sqlite-async-admission.js";
+import { RuntimeStorageReopenError } from "../../src/runtime/storage-reopen-error.js";
+import { HostEffectError } from "./host-effects.js";
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import { createNativeTurnView, type NativeTurnViewChannel } from "../../src/channels/web/agent/native-turn-view.js";
 import { createLogger } from "../../src/utils/logger.js";
@@ -1564,6 +1566,9 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     try { await closeSandbox(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     try { await drawioHost?.close(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     if (cleanupFailures.length) throw new RuntimeStartupCleanupError([error, ...cleanupFailures], "Native tool preparation cleanup uncertain");
+    // Certify only after every partial SDK/tool/ownership resource has closed.
+    // This permits another preparation, never replay of an existing invocation.
+    if (isSqliteContention(error) || (error instanceof HostEffectError && error.retryableStorage)) throw new RuntimeStorageReopenError(error);
     throw error;
   }
 }

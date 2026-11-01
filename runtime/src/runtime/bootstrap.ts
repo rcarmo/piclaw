@@ -1,4 +1,6 @@
 import { hasUnsettledLegacyCursorEvidence } from "../db/chat-cursor-storage.js";
+import { setTimeout as storageRetryDelay } from "node:timers/promises";
+import { RuntimeStorageReopenError } from "./storage-reopen-error.js";
 import type { NativeTurnViewChannel } from "../channels/web/agent/native-turn-view.js";
 /**
  * runtime/bootstrap.ts – Runtime bootstrap orchestration and default dependency wiring.
@@ -26,6 +28,9 @@ export interface RuntimeBackend {
 /** Recreate only a backend whose public SDK session has finished failed-storage cleanup. */
 export async function createRecoverableRuntimeBackend(prepare: () => Promise<RuntimeBackend>): Promise<RuntimeBackend> {
   let current = await prepare();
+  let owned: RuntimeBackend | undefined = current;
+  let unavailable = false;
+  const retryLifetime = new AbortController();
   let recovery: Promise<void> | undefined;
   let failed: RuntimeBackend | undefined;
   let stopping = false;
@@ -35,38 +40,72 @@ export async function createRecoverableRuntimeBackend(prepare: () => Promise<Run
   let channel: Parameters<NonNullable<RuntimeBackend["attachChannel"]>>[0] | undefined;
   const log = createLogger("runtime.storage-recovery");
   const assertLive = () => { if (stopping) throw Error("Native runtime closing"); };
-  const ready = async () => { assertLive(); if (recovery) await recovery; assertLive(); };
+  const assertAvailable = () => { assertLive(); if (unavailable) throw Error("Native runtime recovering"); };
+  const ready = async () => {
+    for (;;) {
+      assertLive();
+      const pending = recovery;
+      if (pending) await pending;
+      assertLive();
+      if (pending === recovery && !unavailable) return;
+    }
+  };
+  const dispose = async (backend: RuntimeBackend) => {
+    backend.stop();
+    await backend.close();
+    if (owned === backend) owned = undefined;
+  };
   const observe = (backend: RuntimeBackend) => {
     if (!backend.storageFailure) return;
     void backend.storageFailure.then(error => {
       if (stopping || current !== backend) return;
       failed = backend;
+      unavailable = true;
       log.error("Native session failed; reopening after confirmed storage closure", { operation: "native_storage.recover", err: error });
       recovery = Promise.resolve().then(async () => {
-        backend.stop();
         // Cleanup uncertainty retains ownership and prevents a replacement from opening.
-        await backend.close();
-        if (stopping) return;
-        const next = await prepare();
-        if (stopping) { next.stop(); await next.close(); return; }
-        current = next;
-        try {
-          if (binding) channelBindings = next.bind(binding);
-          if (channel) await next.attachChannel?.(channel);
-        } catch (error) {
-          next.stop();
-          try { await next.close(); } catch (cleanup) { throw new AggregateError([error, cleanup], "Native recovery cleanup uncertain"); }
-          throw error;
+        await dispose(backend);
+        let retryMs = 250;
+        while (!stopping) {
+          let next: RuntimeBackend;
+          try { next = await prepare(); }
+          catch (error) {
+            // Only preparation's explicit disposal certificate permits another
+            // attempt. Never retry an uncertain invocation or cleanup failure.
+            if (!(error instanceof RuntimeStorageReopenError)) throw error;
+            if (stopping) return;
+            log.warn("Native storage reopen deferred after clean preparation failure", { operation: "native_storage.retry", retryMs, err: error });
+            await storageRetryDelay(retryMs, undefined, { signal: retryLifetime.signal }).catch(error => { if (!stopping) throw error; });
+            retryMs = Math.min(5000, retryMs * 2);
+            continue;
+          }
+          owned = next;
+          if (stopping) { await dispose(next); return; }
+          let nextBindings: Readonly<WebChannelOpts> | undefined;
+          try {
+            if (binding) nextBindings = next.bind(binding);
+            if (channel) await next.attachChannel?.(channel);
+          } catch (error) {
+            try { await dispose(next); }
+            catch (cleanup) { throw new RuntimeStartupCleanupError([error, cleanup], "Native recovery cleanup uncertain"); }
+            throw error;
+          }
+          if (stopping) { await dispose(next); return; }
+          // Publish only the fully initialized generation and its matching bindings.
+          current = next;
+          channelBindings = nextBindings;
+          unavailable = false;
+          observe(next);
+          log.info("Native session reopened from persisted work", { operation: "native_storage.recovered" });
+          return;
         }
-        observe(next);
-        log.info("Native session reopened from persisted work", { operation: "native_storage.recovered" });
       });
       void recovery.catch(error => log.error("Native recovery failed; automatic retry disabled", { operation: "native_storage.recovery_failed", err: error }));
     }).catch(error => log.error("Invalid native storage-failure notification", { operation: "native_storage.notification_failed", err: error }));
   };
   observe(current);
   const getDurableSession: NonNullable<RuntimeBackend["sessionOptions"]["getDurableSession"]> = chat => {
-    assertLive();
+    assertAvailable();
     const backend = current;
     const port = backend.sessionOptions.getDurableSession?.(chat);
     if (!port) return undefined;
@@ -128,12 +167,12 @@ export async function createRecoverableRuntimeBackend(prepare: () => Promise<Run
   });
   return Object.freeze({ sessionOptions,
     bind(options: Parameters<RuntimeBackend["bind"]>[0]) {
-      assertLive(); binding = { queue: options.queue, agentPool: options.agentPool };
+      assertAvailable(); binding = { queue: options.queue, agentPool: options.agentPool };
       channelBindings = current.bind(binding);
       // The channel captures callbacks during construction. Future calls must use
       // freshly prepared admission scopes, never the closed backend callbacks.
       const forward = (key: string, member?: "waitForPending") => (...args: unknown[]) => {
-        assertLive();
+        assertAvailable();
         const callback = (channelBindings as unknown as Record<string, unknown>)[key];
         if (typeof callback !== "function") throw Error("Native channel binding unavailable: " + key);
         if (member) {
@@ -153,11 +192,15 @@ export async function createRecoverableRuntimeBackend(prepare: () => Promise<Run
       }))) as Readonly<WebChannelOpts>;
     },
     async attachChannel(value: Parameters<NonNullable<RuntimeBackend["attachChannel"]>>[0]) { await ready(); channel = value; await current.attachChannel?.(value); },
-    stop() { if (stopping) return; stopping = true; current.stop(); },
+    stop() { if (stopping) return; stopping = true; retryLifetime.abort(); owned?.stop(); },
     close() { return closing ??= (async () => {
-      stopping = true; current.stop();
-      if (recovery) await recovery;
-      await current.close();
+      stopping = true; retryLifetime.abort(); owned?.stop();
+      if (recovery) await recovery.catch(error => {
+        // A rejected reopen is not a failed close. Retain failure only when
+        // a backend or a preparation still has uncertified cleanup.
+        if (owned || error instanceof RuntimeStartupCleanupError) throw error;
+      });
+      if (owned) await dispose(owned);
     })(); },
   });
 }
