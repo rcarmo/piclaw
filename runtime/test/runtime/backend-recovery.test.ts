@@ -111,6 +111,19 @@ for (const uncertain of [false, true]) test('failed candidate attachment retains
   expect(prepares).toBe(2);
 });
 
+test('candidate disposal cannot certify nested attachment cleanup uncertainty', async () => {
+  const trace: string[] = [], old = fixture('old', trace), next = fixture('new', trace); let prepares = 0;
+  const failure = new RuntimeStartupCleanupError([Error('attachment owns an unclosed resource')]);
+  next.backend.attachChannel = async () => { throw failure; };
+  const backend = await createRecoverableRuntimeBackend(async () => ++prepares === 1 ? old.backend : next.backend);
+  backend.bind({} as Parameters<RuntimeBackend['bind']>[0]);
+  await backend.attachChannel!({} as Parameters<NonNullable<RuntimeBackend['attachChannel']>>[0]);
+  old.failure.resolve(Error('storage failed')); await tick();
+  expect(trace).toContain('new:closed');
+  await expect(backend.sessionOptions.dispatchHostCommand!('web:test', 'accepted')).rejects.toBe(failure);
+  await expect(backend.close()).rejects.toBe(failure); expect(prepares).toBe(2);
+});
+
 test('successive failed generations each close before opening the next', async () => {
   const trace: string[] = [], generations = [fixture('first', trace), fixture('second', trace), fixture('third', trace)]; let prepares = 0;
   const backend = await createRecoverableRuntimeBackend(async () => generations[prepares++]!.backend);

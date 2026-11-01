@@ -88,6 +88,7 @@ export async function createRecoverableRuntimeBackend(prepare: () => Promise<Run
           } catch (error) {
             try { await dispose(next); }
             catch (cleanup) { throw new RuntimeStartupCleanupError([error, cleanup], "Native recovery cleanup uncertain"); }
+            if (error instanceof RuntimeStartupCleanupError) throw error;
             throw new RuntimePreparationError(error);
           }
           if (stopping) { await dispose(next); return; }
