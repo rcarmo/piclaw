@@ -16,7 +16,6 @@ import { getAppAssetVersion, serveDocsStatic, serveStatic } from "../../../src/c
 import { getWebRuntimeConfig } from "../../../src/core/config.js";
 import { computeAssetContentVersion } from "../../../src/utils/asset-content-version.js";
 import { UiBridge } from "../../../src/channels/web/theming/ui-bridge.js";
-import { createUiContext } from "../../../src/channels/web/ui-context.js";
 import { handleMedia, handleMediaInfo, handleMediaUpload } from "../../../src/channels/web/handlers/media.js";
 import { getTestWorkspace, setEnv, waitFor } from "../../helpers.js";
 
@@ -209,8 +208,6 @@ test("static helpers reject same-prefix sibling traversal paths", async () => {
 test("ui bridge stop clears pending requests even when a pending reject throws", () => {
   const channel = { broadcastEvent: () => undefined } as any;
   const uiBridge = new UiBridge(channel);
-  uiBridge.editorTextByChat.set("web:default", "draft");
-  uiBridge.themeByChat.set("web:default", { theme: "tango" });
   uiBridge.pendingUiRequests.set("req-1", {
     chatJid: "web:default",
     kind: "input",
@@ -221,32 +218,23 @@ test("ui bridge stop clears pending requests even when a pending reject throws",
 
   expect(() => uiBridge.stop()).not.toThrow();
   expect(uiBridge.pendingUiRequests.size).toBe(0);
-  expect(uiBridge.editorTextByChat.size).toBe(0);
-  expect(uiBridge.themeByChat.size).toBe(0);
 });
 
-test("ui context emits requests and resolves", async () => {
+test("workspace opener emits its browser request and resolves", async () => {
   const events: Array<{ type: string; payload: any }> = [];
   const channel = {
     broadcastEvent: (type: string, payload: any) => events.push({ type, payload }),
   } as any;
   const uiBridge = new UiBridge(channel);
-  channel.uiBridge = uiBridge;
-
-  const ui = createUiContext(channel, "web:default");
-  const selectPromise = ui.select("Pick", ["a", "b"]);
+  const opened = uiBridge.openWorkspaceFile("web:default", "notes/index.md", "Notes");
   const [requestId] = uiBridge.pendingUiRequests.keys();
   const pending = uiBridge.pendingUiRequests.get(requestId)!;
   clearTimeout(pending.timeoutId);
   uiBridge.pendingUiRequests.delete(requestId);
-  pending.resolve("a");
-  expect(await selectPromise).toBe("a");
-
-  ui.notify("Hello", "info");
-  expect(events.some((event) => event.type === "extension_ui_notify")).toBe(true);
-
-  ui.pasteToEditor("test");
-  expect(uiBridge.editorTextByChat.get("web:default")).toBe("test");
+  pending.resolve({ ok: true, opened: true });
+  expect(await opened).toEqual({ ok: true, opened: true });
+  expect(events[0]?.type).toBe("extension_ui_request");
+  expect(events[0]?.payload.options.action).toBe("open_workspace_file");
 });
 
 test("media handlers store and retrieve files", async () => {
