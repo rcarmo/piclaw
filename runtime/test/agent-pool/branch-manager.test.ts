@@ -56,6 +56,98 @@ function createManager(overrides: Partial<ConstructorParameters<typeof AgentBran
   return { manager, pool, activeForkBaseLeafByChat, warns };
 }
 
+for (const operation of ['rename', 'merge', 'purge', 'rename-rollback', 'rename-active-child'] as const) {
+  test(`branch cleanup preserves sessions and artifacts after DB rejection: ${operation}`, async () => {
+    const ws = createTempWorkspace('branch-cleanup-rejected-');
+    restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+    const db = await importFresh<typeof import('../src/db.js')>('../src/db.js');
+    db.initDatabase();
+    const jid = `web:cleanup-rejected-${operation}`, child = `${jid}:child`, target = `${jid}-target`;
+    db.storeChatMetadata(jid, new Date().toISOString(), 'Source');
+    const root = db.getChatBranchByChatJid(jid)!;
+    db.storeChatMetadata(child, new Date().toISOString(), 'Child');
+    db.ensureChatBranch({ chat_jid: child, root_chat_jid: jid, parent_branch_id: root.branch_id, agent_name: 'child' });
+    if (operation === 'rename') db.storeChatMetadata(target, new Date().toISOString(), 'Collision');
+    if (operation === 'rename-rollback') db.getDb().exec(`CREATE TRIGGER reject_address_rename BEFORE UPDATE OF jid ON chats
+      BEGIN SELECT RAISE(ABORT, 'injected rename rollback'); END`);
+    let disposed = 0;
+    const cancelled: string[] = [];
+    const fixture = createManager({ cancelSessionWarmup: key => { cancelled.push(key); } });
+    const session = { isStreaming: false, isCompacting: false, isRetrying: false, isBashRunning: false,
+      dispose() { disposed++; } };
+    const entry = { runtime: createRuntime(session), lastUsed: 1 };
+    const childEntry = { runtime: createRuntime({ ...session, isStreaming: operation === 'rename-active-child' }), lastUsed: 2 };
+    fixture.pool.set(jid, entry); fixture.pool.set(child, childEntry);
+    fixture.activeForkBaseLeafByChat.set(jid, 'retained-leaf');
+    const dir = ensureSessionDir(jid), marker = join(dir, 'retained.txt');
+    writeFileSync(marker, 'retained');
+    try {
+      const pending = operation === 'merge' ? fixture.manager.mergeChatBranchIntoParent(jid)
+        : operation === 'purge' ? fixture.manager.permanentPurgeChatBranch(jid)
+          : fixture.manager.renameChatJid(jid, target);
+      const message = operation === 'merge' ? 'Cannot merge a root chat session'
+        : operation === 'purge' ? 'not archived'
+          : operation === 'rename-rollback' ? 'injected rename rollback'
+            : operation === 'rename-active-child' ? 'active turn' : 'Target JID already exists';
+      await expect(pending).rejects.toThrow(message);
+      expect(disposed).toBe(0); expect(cancelled).toEqual([]);
+      expect(fixture.pool.get(jid)).toBe(entry); expect(fixture.pool.get(child)).toBe(childEntry);
+      expect(fixture.activeForkBaseLeafByChat.get(jid)).toBe('retained-leaf');
+      expect(existsSync(marker)).toBe(true);
+      expect(db.getChatBranchByChatJid(jid)?.branch_id).toBe(root.branch_id);
+      expect(db.getChatBranchByChatJid(child)?.parent_branch_id).toBe(root.branch_id);
+      expect(db.getDb().inTransaction).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true }); ws.cleanup();
+    }
+  });
+}
+
+for (const operation of ['rename', 'merge', 'purge', 'prune'] as const) {
+  test(`branch cleanup sees committed DB and retains replacement sessions: ${operation}`, async () => {
+    const ws = createTempWorkspace('branch-cleanup-replaced-');
+    restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+    const db = await importFresh<typeof import('../src/db.js')>('../src/db.js');
+    db.initDatabase();
+    const parent = `web:cleanup-replaced-${operation}`, jid = `${parent}:source`, child = `${jid}:child`, target = `${parent}:renamed`;
+    db.storeChatMetadata(parent, new Date().toISOString(), 'Parent');
+    const root = db.getChatBranchByChatJid(parent)!;
+    db.storeChatMetadata(jid, new Date().toISOString(), 'Source');
+    const source = db.ensureChatBranch({ chat_jid: jid, root_chat_jid: parent, parent_branch_id: root.branch_id, agent_name: 'source' });
+    if (operation === 'purge') db.archiveChatBranch(jid);
+    if (operation === 'rename') {
+      db.storeChatMetadata(child, new Date().toISOString(), 'Child');
+      db.ensureChatBranch({ chat_jid: child, root_chat_jid: parent, parent_branch_id: source.branch_id, agent_name: 'child' });
+    }
+    const fixture = createManager();
+    const observedCommitted: boolean[] = [];
+    let childDisposed = 0, replacementDisposed = 0;
+    const replacement = { runtime: createRuntime({ dispose() { replacementDisposed++; } }), lastUsed: 3 };
+    const replacementChild = { runtime: createRuntime({ dispose() { replacementDisposed++; } }), lastUsed: 4 };
+    const entry = { runtime: { ...createRuntime({}), async dispose() {
+      const current = db.getChatBranchByChatJid(jid);
+      observedCommitted.push((operation === 'prune' ? current?.archived_at != null : current === null) && !db.getDb().inTransaction &&
+        (operation !== 'rename' || db.getChatBranchByChatJid(target)?.branch_id === source.branch_id));
+      fixture.pool.set(jid, replacement);
+      fixture.activeForkBaseLeafByChat.set(jid, 'replacement-leaf');
+      if (operation === 'rename') fixture.pool.set(child, replacementChild);
+    } }, lastUsed: 1 };
+    fixture.pool.set(jid, entry);
+    if (operation === 'rename') fixture.pool.set(child, { runtime: createRuntime({ dispose() { childDisposed++; } }), lastUsed: 2 });
+    try {
+      if (operation === 'rename') await fixture.manager.renameChatJid(jid, target);
+      else if (operation === 'merge') await fixture.manager.mergeChatBranchIntoParent(jid);
+      else if (operation === 'prune') await fixture.manager.pruneChatBranch(jid);
+      else await fixture.manager.permanentPurgeChatBranch(jid);
+      expect(observedCommitted).toEqual([true]);
+      expect(fixture.pool.get(jid)).toBe(replacement);
+      expect(fixture.activeForkBaseLeafByChat.get(jid)).toBe('replacement-leaf');
+      expect(replacementDisposed).toBe(0);
+      if (operation === 'rename') { expect(childDisposed).toBe(1); expect(fixture.pool.get(child)).toBe(replacementChild); }
+    } finally { ws.cleanup(); }
+  });
+}
+
 test("AgentBranchManager registers active chats and resolves agent handles", async () => {
   const ws = createTempWorkspace("piclaw-branch-manager-");
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
