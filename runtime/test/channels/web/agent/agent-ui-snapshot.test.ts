@@ -100,7 +100,10 @@ test("failed optional sections do not discard healthy status or leak exception t
   expect(p.project_repository).toBeNull();
 });
 
-test("endpoint facade opts into the snapshot and leaves ordinary status synchronous", async () => {
+test("public status handler opts into the snapshot and leaves ordinary status synchronous", async () => {
+  const { initDatabase, closeDatabase } = await import("../../../../src/db.js");
+  initDatabase();
+  try {
   const { WebChannel } = await import("../../../../src/channels/web.js");
   const ctx = context();
   const facade = Object.assign(Object.create(WebChannel.prototype), {
@@ -120,4 +123,6 @@ test("endpoint facade opts into the snapshot and leaves ordinary status synchron
   expect(body.status.status).toBe("idle");
   expect(body.metrics).toBeTruthy();
   expect(body.model.current).toBe("fixture/one");
+  expect(body.project_repository).toBeNull();
+  } finally { closeDatabase(); }
 });
