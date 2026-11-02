@@ -5,8 +5,6 @@ import { WebChannelRuntimeFollowupFacadeService } from "../../../../src/channels
 describe("WebChannel runtime/follow-up facade service", () => {
   test("delegates queued-followup, runtime-state, and panel/buffer access through injected services", async () => {
     const calls: string[] = [];
-    const placeholder = { id: 11, timestamp: "t", data: { type: "agent_response" } };
-    const replaced = { id: 12, timestamp: "t", data: { type: "agent_response" } };
     const queuedItem = { rowId: 41, queuedContent: "queued", threadId: 7, queuedAt: "2026-03-28T00:00:00.000Z" };
     const buffer = { text: "draft line", totalLines: 2 };
     const status = { type: "intent", title: "Thinking" };
@@ -17,22 +15,6 @@ describe("WebChannel runtime/follow-up facade service", () => {
       },
       postDashboardWidget: async (chatJid: string, options?: { threadId?: number | null; text?: string; widgetId?: string }) => {
         calls.push(`widget:${chatJid}:${options?.threadId ?? "null"}:${options?.widgetId ?? ""}`);
-      },
-      queueFollowupPlaceholder: (chatJid: string, text: string, threadId?: number, queuedContent?: string) => {
-        calls.push(`placeholder:${chatJid}:${text}:${threadId ?? "null"}:${queuedContent ?? ""}`);
-        return placeholder;
-      },
-      replaceQueuedFollowupPlaceholder: (
-        chatJid: string,
-        rowId: number,
-        text: string,
-        mediaIds: number[],
-        _contentBlocks: Array<Record<string, unknown>> | undefined,
-        threadId?: number,
-        isTerminalAgentReply?: boolean,
-      ) => {
-        calls.push(`replace:${chatJid}:${rowId}:${text}:${mediaIds.join(",")}:${threadId ?? "null"}:${isTerminalAgentReply ? 1 : 0}`);
-        return replaced;
       },
     };
 
@@ -62,10 +44,6 @@ describe("WebChannel runtime/follow-up facade service", () => {
       replaceQueuedFollowupItem: (chatJid: string, item: typeof queuedItem) => {
         calls.push(`replace-item:${chatJid}:${item.rowId}`);
         return true;
-      },
-      consumeQueuedFollowupPlaceholder: (chatJid: string) => {
-        calls.push(`consume-placeholder:${chatJid}`);
-        return 77;
       },
       getQueuedFollowupCount: (chatJid: string) => {
         calls.push(`count:${chatJid}`);
@@ -132,19 +110,16 @@ describe("WebChannel runtime/follow-up facade service", () => {
 
     await service.sendMessage("web:test", "hello", { threadId: 9 });
     await service.postDashboardWidget("web:test", { threadId: 8, widgetId: "widget-runtime" });
-    expect(service.queueFollowupPlaceholder("web:test", "queued", 7, "later")).toBe(placeholder);
     expect(service.enqueueQueuedFollowupItem("web:test", 0, "queued", 6, "2026-03-28T00:00:00.000Z", { mediaIds: [1, 2] })).toBe(99);
     expect(service.peekQueuedFollowupItem("web:test")).toBe(queuedItem);
     expect(service.consumeQueuedFollowupItem("web:test")).toBe(queuedItem);
     service.prependQueuedFollowupItem("web:test", queuedItem);
     expect(service.replaceQueuedFollowupItem("web:test", queuedItem)).toBe(true);
-    expect(service.consumeQueuedFollowupPlaceholder("web:test")).toBe(77);
     expect(service.getQueuedFollowupCount("web:test")).toBe(3);
     expect(service.getQueuedFollowupItems("web:test")).toEqual([queuedItem]);
     expect(service.removeQueuedFollowupItem("web:test", 41)).toBe(queuedItem);
     service.updateAgentStatus("web:test", status);
     expect(service.getAgentStatus("web:test")).toEqual(status);
-    expect(service.replaceQueuedFollowupPlaceholder("web:test", 12, "updated", [1, 2], [{ type: "text" }], 6, true)).toBe(replaced);
     expect(service.getThreadRootId("web:test", "m-1")).toBe(55);
     service.resumeChat("web:test", 12);
     service.resumePendingChats("web:test");
@@ -168,19 +143,16 @@ describe("WebChannel runtime/follow-up facade service", () => {
     expect(calls).toEqual([
       "send:web:test:hello:9",
       "widget:web:test:8:widget-runtime",
-      "placeholder:web:test:queued:7:later",
       "enqueue:web:test:0:queued:6:2026-03-28T00:00:00.000Z:1,2",
       "peek-item:web:test",
       "consume-item:web:test",
       "prepend:web:test:41",
       "replace-item:web:test:41",
-      "consume-placeholder:web:test",
       "count:web:test",
       "items:web:test",
       "remove:web:test:41",
       "status-update:web:test:Thinking",
       "status-get:web:test",
-      "replace:web:test:12:updated:1,2:6:1",
       "thread-root:web:test:m-1",
       "resume:web:test:12",
       "resume-pending:web:test",

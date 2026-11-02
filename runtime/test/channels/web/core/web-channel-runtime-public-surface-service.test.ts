@@ -129,7 +129,6 @@ describe("web channel runtime public surface service", () => {
     const calls: string[] = [];
     const sse = { kind: "sse-hub" };
     const uiBridge = { kind: "ui-bridge" };
-    const placeholder = interaction(1);
     const stored = interaction(2);
     const queuedItem = { rowId: 3, queuedContent: "queued", threadId: 4, queuedAt: "2026-03-28T00:00:00.000Z" };
     const buffer = { text: "draft", totalLines: 5 };
@@ -142,10 +141,6 @@ describe("web channel runtime public surface service", () => {
         },
         postDashboardWidget: async (chatJid, options) => {
           calls.push(`widget:${chatJid}:${options?.threadId ?? "null"}:${options?.widgetId ?? ""}`);
-        },
-        queueFollowupPlaceholder: (chatJid, text, threadId, queuedContent) => {
-          calls.push(`queue:${chatJid}:${text}:${threadId ?? "null"}:${queuedContent ?? ""}`);
-          return placeholder;
         },
         enqueueQueuedFollowupItem: (chatJid, rowId, queuedContent, threadId, queuedAt) => {
           calls.push(`enqueue:${chatJid}:${rowId}:${queuedContent}:${threadId ?? "null"}:${queuedAt ?? ""}`);
@@ -165,10 +160,6 @@ describe("web channel runtime public surface service", () => {
         replaceQueuedFollowupItem: (chatJid, item) => {
           calls.push(`replace-item:${chatJid}:${item.rowId}`);
           return true;
-        },
-        consumeQueuedFollowupPlaceholder: (chatJid) => {
-          calls.push(`consume-placeholder:${chatJid}`);
-          return 42;
         },
         getQueuedFollowupCount: (chatJid) => {
           calls.push(`count:${chatJid}`);
@@ -195,10 +186,6 @@ describe("web channel runtime public surface service", () => {
         getContextUsage: (chatJid) => {
           calls.push(`context-get:${chatJid}`);
           return { percent: 42 };
-        },
-        replaceQueuedFollowupPlaceholder: (chatJid, rowId, text, mediaIds, _contentBlocks, threadId, isTerminalAgentReply) => {
-          calls.push(`replace:${chatJid}:${rowId}:${text}:${mediaIds.join(",")}:${threadId ?? "null"}:${isTerminalAgentReply ? 1 : 0}`);
-          return interaction(4);
         },
         getThreadRootId: (chatJid, messageId) => {
           calls.push(`thread-root:${chatJid}:${messageId}`);
@@ -256,13 +243,11 @@ describe("web channel runtime public surface service", () => {
     expect(service.uiBridge).toBe(uiBridge);
     await service.sendMessage("web:test", "hello", { threadId: 9 });
     await service.postDashboardWidget("web:test", { threadId: 8, widgetId: "widget-runtime" });
-    expect(service.queueFollowupPlaceholder("web:test", "queued", 7, "later")).toBe(placeholder);
     expect(service.enqueueQueuedFollowupItem("web:test", 11, "queued", 6, "2026-03-28T00:00:00.000Z")).toBe(41);
     expect(service.peekQueuedFollowupItem("web:test")).toBe(queuedItem);
     expect(service.consumeQueuedFollowupItem("web:test")).toBe(queuedItem);
     service.prependQueuedFollowupItem("web:test", queuedItem);
     expect(service.replaceQueuedFollowupItem("web:test", queuedItem)).toBe(true);
-    expect(service.consumeQueuedFollowupPlaceholder("web:test")).toBe(42);
     expect(service.getQueuedFollowupCount("web:test")).toBe(2);
     expect(service.getQueuedFollowupItems("web:test")).toEqual([queuedItem]);
     expect(service.removeQueuedFollowupItem("web:test", 3)).toBe(queuedItem);
@@ -278,7 +263,6 @@ describe("web channel runtime public surface service", () => {
     });
     service.broadcastEvent("agent_response", { chat_jid: "web:test" });
     expect(service.getExtensionWorkingState("web:test")).toBeNull();
-    expect(service.replaceQueuedFollowupPlaceholder("web:test", 22, "updated", [1, 2], [{ type: "text" }], 6, true)?.id).toBe(4);
     expect(service.getThreadRootId("web:test", "m-1")).toBe(43);
     service.resumeChat("web:test", 12);
     service.resumePendingChats("web:test");
@@ -295,13 +279,11 @@ describe("web channel runtime public surface service", () => {
     expect(calls).toEqual([
       "send:web:test:hello:9",
       "widget:web:test:8:widget-runtime",
-      "queue:web:test:queued:7:later",
       "enqueue:web:test:11:queued:6:2026-03-28T00:00:00.000Z",
       "peek-item:web:test",
       "consume-item:web:test",
       "prepend:web:test:3",
       "replace-item:web:test:3",
-      "consume-placeholder:web:test",
       "count:web:test",
       "items:web:test",
       "remove:web:test:3",
@@ -310,7 +292,6 @@ describe("web channel runtime public surface service", () => {
       "broadcast:extension_ui_working:{\"chat_jid\":\"web:test\",\"message\":\"Compacting context…\"}",
       "broadcast:extension_ui_working_indicator:{\"chat_jid\":\"web:test\",\"frames\":[\"a\",\"b\"],\"interval_ms\":80}",
       "broadcast:agent_response:{\"chat_jid\":\"web:test\"}",
-      "replace:web:test:22:updated:1,2:6:1",
       "thread-root:web:test:m-1",
       "resume:web:test:12",
       "resume-pending:web:test",
