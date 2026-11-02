@@ -1,4 +1,4 @@
-import { admitSqliteWrite } from "../../src/db/sqlite-async-admission.js";
+import { admitSqliteWrite, type SyncSqliteOperation } from "../../src/db/sqlite-async-admission.js";
 import type { Database } from "bun:sqlite";
 import type { HostConversationRuntime } from "./host-runtime.js";
 
@@ -40,9 +40,9 @@ export function createHostOperationAuthority(root: Database, captured: Capture, 
     if (checked !== undefined) { void Promise.resolve(checked).catch(() => {}); throw Error('Accounting barrier must be synchronous'); }
   };
   return Object.freeze({ assertCurrent, assertSourceCurrent,
-    async admitWrite<T>(body: () => T): Promise<T> {
+    async admitWrite<T>(body: SyncSqliteOperation<T>): Promise<T> {
       if (readonly) throw Error("Read-only host operation authority");
-      return admitSqliteWrite(root, body, assertCurrent, signal);
+      return admitSqliteWrite<T>(root, body, assertCurrent, signal);
     },
     write: <T>(body: () => T): T => {
       if (readonly) throw Error("Read-only host operation authority");
