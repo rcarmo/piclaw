@@ -2318,6 +2318,8 @@ export class HostConversationRuntime {
   /** Rollback-only shutdown: seal before yielding, join host calls, then reject ANY live
    * public task/submission before Harness.close can cancel work. Failure stays sealed.
    * This proves quiescence, NOT absence of historical candidate-only commits. */
+  quiesceForRollback(beforeStorageClose: () => Promise<never>): Promise<never>;
+  quiesceForRollback(beforeStorageClose?: () => Promise<void>): Promise<void>;
   quiesceForRollback(beforeStorageClose?: () => Promise<void>): Promise<void> {
     if (this.closed) return Promise.reject(new Error("Runtime already closing"));
     return this.shutdown(true, beforeStorageClose);

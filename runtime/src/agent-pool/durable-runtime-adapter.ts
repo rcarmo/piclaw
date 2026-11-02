@@ -148,6 +148,9 @@ export function createDurableConversationAdapter(options: {
   readonly manifest: readonly DurableConversationBinding[];
   readonly getConversationBinding?: (chat: string, branch: string) => DurableConversationBinding | undefined;
   readonly runtime: DurableConversationRuntimePort;
+  /** Host wait/maintenance policy, captured once with the real runtime receiver. */
+  readonly wait?: DurableConversationRuntimePort["wait"];
+  readonly reconcileMaintenance?: DurableConversationRuntimePort["reconcileMaintenance"];
 }) {
   const { incarnation, runtime } = options;
   if (!incarnation || !options.manifest.length) throw new Error("Explicit durable identity and manifest required");
@@ -165,14 +168,14 @@ export function createDurableConversationAdapter(options: {
   const submit = runtime.submit.bind(runtime), reconcile = runtime.reconcile.bind(runtime);
   const cancel = runtime.cancel.bind(runtime), resume = runtime.resume.bind(runtime);
   const settle = runtime.settle.bind(runtime), close = runtime.close.bind(runtime);
-  const wait = runtime.wait?.bind(runtime), submitIntent = runtime.submitIntent?.bind(runtime);
+  const wait = (options.wait ?? runtime.wait)?.bind(runtime), submitIntent = runtime.submitIntent?.bind(runtime);
   const readState = runtime.readSessionState?.bind(runtime);
   const readContextUsage = runtime.readSessionContextUsage?.bind(runtime);
   const setThinkingLevel = runtime.setSessionThinkingLevel?.bind(runtime);
   const setModel = runtime.setSessionModel?.bind(runtime);
   const reset = runtime.resetSession?.bind(runtime);
   const compact = runtime.compactSession?.bind(runtime);
-  const reconcileMaintenance = runtime.reconcileMaintenance?.bind(runtime);
+  const reconcileMaintenance = (options.reconcileMaintenance ?? runtime.reconcileMaintenance)?.bind(runtime);
   const readTree = runtime.readSessionTree?.bind(runtime);
   const readMetadata = runtime.readSessionMetadata?.bind(runtime);
   const readReport = runtime.readSessionReport?.bind(runtime);

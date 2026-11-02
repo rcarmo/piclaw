@@ -73,6 +73,38 @@ test("session readers share one detached immutable target and cannot follow call
   expect(seen[1]).toBe(seen[0]); expect(seen[2]).toBe(seen[0]); expect(seen[3]).toBe(seen[0]);
 });
 
+test("adapter captures explicit wait and maintenance operations without a runtime forwarding object", async () => {
+  const f = fixture(), seen: unknown[][] = [], signal = new AbortController().signal;
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  f.runtime.wait = async () => { throw Error("default wait must not run"); };
+  f.runtime.reconcileMaintenance = async () => { throw Error("default maintenance must not run"); };
+  f.runtime.readSessionState = async function () {
+    expect(this).toBe(f.runtime);
+    return { position: null, model: null, thinkingLevel: null };
+  };
+  const options = { incarnation: "copy-A", manifest: f.manifest, runtime: f.runtime,
+    wait(this: DurableConversationRuntimePort, input: DurableAcceptedInput, id: number, observation?: AbortSignal) {
+      expect(this).toBe(f.runtime); seen.push(["wait", input, id, observation]); return pending;
+    },
+    reconcileMaintenance(this: DurableConversationRuntimePort, binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }) {
+      expect(this).toBe(f.runtime); seen.push(["maintenance", binding]); return pending;
+    } };
+  const adapter = createDurableConversationAdapter(options);
+  options.wait = () => { throw Error("replaced wait override"); };
+  options.reconcileMaintenance = () => { throw Error("replaced maintenance override"); };
+  f.runtime.wait = async () => { throw Error("replaced runtime wait"); };
+  const position = adapter.sessionPosition("web:adapter", "main", "sdk-session");
+  await position.readState!();
+  const waiting = adapter.wait(operation(), 7, signal);
+  const maintenance = position.reconcileMaintenance!();
+  expect(maintenance).toBe(pending);
+  expect(seen[0]![2]).toBe(7); expect(seen[0]![3]).toBe(signal);
+  expect(seen[1]![1]).toEqual({ incarnation: "copy-A", chatJid: "web:adapter", branchId: "main", conversationId: 3 });
+  expect(Object.isFrozen(seen[1]![1])).toBe(true);
+  release(); await waiting; await maintenance;
+});
+
 test("reconcile is one passive read and does not return private engine evidence", async () => {
   const f = fixture();
   const state = await f.adapter.reconcile(operation());
