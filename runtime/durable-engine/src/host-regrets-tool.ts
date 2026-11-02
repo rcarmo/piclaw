@@ -1,4 +1,3 @@
-import { admitSqliteWrite } from "../../src/db/sqlite-async-admission.js";
 import type { Database } from "bun:sqlite";
 import { createHostTool, type HostToolEffectPort } from "./host-tools.js";
 import { createHostOperationAuthority } from "./host-operation-authority.js";
@@ -7,7 +6,9 @@ import type { ToolDefinition } from "../../src/durable-legacy-sdk.js";
 import type { JsonValue } from "@earendil-works/chord";
 
 export interface RegretsNativeExports<P> {
-  createLateNightRegrets(ports: P): { tool: ToolDefinition<any, JsonValue> };
+  createLateNightRegrets(ports: P): { tool: {
+    execute(id: string, args: unknown, signal?: AbortSignal): ReturnType<ToolDefinition<any, JsonValue>["execute"]>;
+  } };
 }
 /** Binding must supply real scoped history, RootKV and accounted model ports.
  * No SDK session/context or callback emulation is constructed here. */
@@ -27,37 +28,17 @@ export function createHostRegretsTool<P>(addon: RegretsNativeExports<P>, options
       const authority = createHostOperationAuthority(options.root, captured, () => { call.assertAllowed(); options.assertOwner(); });
       authority.assertCurrent();
       const native = addon.createLateNightRegrets(options.bind(captured, authority, call));
-      const result = await native.tool.execute(call.toolCallId, args, call.signal, undefined, undefined as never);
+      const result = await native.tool.execute(call.toolCallId, args, call.signal);
       authority.assertSourceCurrent(); // Reading this entered controller's result grants no next effect.
       return result;
     },
   });
 }
 
-import { createHostRegretsBindings, type HostRegretsBindingOptions } from "./host-regrets-bindings.js";
-/** Concrete tool wiring. Commands/settings/prompt use separately supplied current
- * request authority with createHostRegretsBindings; never reuse a tool snapshot. */
-export function createBoundHostRegretsTool<E>(addon: RegretsNativeExports<ReturnType<typeof createHostRegretsBindings<E>>> & {
-  readExchanges: HostRegretsBindingOptions<E>["readExchanges"];
-}, options: Omit<Parameters<typeof createHostRegretsTool<ReturnType<typeof createHostRegretsBindings<E>>>>[1], "bind"> & {
-  bindings: Omit<HostRegretsBindingOptions<E>, "root" | "chat" | "assertCurrent" | "readExchanges" | "accountedDecision" | "transactionalWrite">;
-  /** Per captured operation: parent may supply controller-owned accounting. */
-  accountedDecision?(operation: Awaited<ReturnType<HostConversationRuntime["captureToolSource"]>>, authority: ReturnType<typeof createHostOperationAuthority>): HostRegretsBindingOptions<E>["accountedDecision"];
-}) {
-  return createHostRegretsTool(addon, { ...options,
-    bind(operation, authority) {
-      return createHostRegretsBindings({ ...options.bindings, root: options.root,
-        chat: operation.operation.chatJid, assertCurrent: authority.assertCurrent, transactionalWrite: body => admitSqliteWrite(options.root, body, authority.assertCurrent),
-        readExchanges: addon.readExchanges, accountedDecision: options.accountedDecision?.(operation, authority) });
-    },
-  });
-}
-
-
 import type { Extension, PromptInput } from "@earendil-works/pi-durable";
 import type { Context } from "@earendil-works/chord";
 /** Per-request native API. Parent supplies currentOperation + Root bindings, not
- * discovery-time ports. In public SDK 1.3 the before-model surface is a section's
+ * discovery-time ports. In public SDK 1.4 the before-model surface is a section's
  * render(PromptInput, Context), not an Extension.beforeModelRequest property. */
 export function createHostRegretsPromptExtension<P>(addon: {
   createLateNightRegrets(ports: P): { prompt(systemPrompt: string): string };
@@ -70,13 +51,6 @@ export function createHostRegretsPromptExtension<P>(addon: {
       return nativeApi.prompt("") || undefined;
     },
   }] };
-}
-/** Accepted host commands only. `bind` must derive chat/authority from the
- * accepted command; admission is bundle.dispatch, never pi.sendUserMessage. */
-export function createHostRegretsCommand<P, AcceptedCommand>(addon: {
-  createLateNightRegrets(ports: P): { command(): Promise<unknown> };
-}, bind: (command: AcceptedCommand) => Promise<P>) {
-  return async (accepted: AcceptedCommand) => addon.createLateNightRegrets(await bind(accepted)).command();
 }
 /** Fixed-source exports let the parent bind all surfaces without importing the
  * legacy default extension or retaining a mutable invocation-local native API. */

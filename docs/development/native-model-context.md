@@ -16,11 +16,21 @@ Initial baseline placement includes existing dialogue and edited or omitted old 
 
 The existing source, owner, abort, registry/default-extension, configuration and append-frontier fences remain active through selection commit. Context order after compaction is not the append frontier. Owned model tools require prepared admission; their messages-only fallback is removed.
 
-The SDK estimator supplies text/token interpretation. Cache-exclusive and cache-inclusive provider totals retain conservative coherence checks; metadata and opaque signatures do not become text tokens. Existing framing allowances, image refusal, full output allowance and reserve remain separate admission limits. A refusal leaves history and the persisted choice unchanged. Selection does not compact or replay accepted input.
+The SDK estimator supplies text/token interpretation. Cache-exclusive and cache-inclusive provider totals retain conservative coherence checks; metadata and opaque signatures do not become text tokens. Framing allowances, image refusal and genuine input overflow remain admission checks. The invented full nominal output plus8192 reserve veto is removed. A refusal leaves history and the persisted choice unchanged. Selection does not compact or replay accepted input.
 
 Scheduled allocation checks the inherited parent snapshot. Sections render with the parent conversation ID and environment. This does not establish an exact child-ID-dependent request preview. Likewise, arbitrary later renderer/document changes and write-capable `beforeRequest` hooks are outside the captured snapshot. Plan, Goal and Observability request hooks require separate qualification under epic #1857.
 
-Remove the projection when a public SDK facility provides equivalent rendered contributions, selected declarations, baseline/provenance semantics and applicable-usage accounting. Do not replace it with private package imports or silently change SDK/storage versions. Monetary request reservations and terminal accounting remain separate owners under #1817.
+Remove the projection when a public SDK facility provides equivalent rendered contributions, selected declarations, baseline/provenance semantics and applicable-usage accounting. Public `GenerationTask.prepare` commits system/task state and can invoke compaction, so it cannot supply this read-only observation. No private package imports, fake planner runtime or SDK/storage version changes are needed. Expense enforcement retirement belongs to #1875; token/pricing/provider-cost observation and exact terminal recovery remain required.
+
+## Stock SDK output boundary
+
+The Root `model-request-preview.ts` boundary calls the fixed public OpenAI Completions, Responses or Azure Responses adapter with its own `onPayload` interceptor. It observes the final cap after sampling/minimum/omission rules, then stops before send. The public clamp supplies the allowance; its private constant is not copied. Synthetic noncredentials, empty headers/environment and fail-closed fetch/preconnect prevent provider traffic. Caller hooks are refused, not executed. Only detached bounded metadata returns across the Root/private boundary.
+
+Public runtime/catalogue inspection identifies eligible builtins. Native/custom/extension producers, auth-dependent modes and unsupported APIs remain unknown. Their model selection checks input only, without claiming full request fit. Physical/provider identity and abort checks fence awaited metadata. The existing admission owner captures this observation before SQL; no provider decorator, preview registry, second ledger or cached request state is introduced.
+
+Remove this87-line boundary when an approved public SDK operation supplies equivalent auth-independent final request bounds. It replaces the host's invented output veto; the separate instruction/tool projection remains necessary.
+
+Regrets0.3 uses the SDK text estimator on the final compact packet and removes its bytes/2 decision veto. The durable host owns configuration, history, approval, prompt and execution. The SDK entry registers declarations/resources and rejects unbound execution. Ambient KV/memory fallback, access parsing, registry-based completion and duplicate SDK handlers are deleted. Core also deletes two unused host forwarding helpers and the old prompt lifecycle adapter. The source gate admits only the exact repaired0.3 backend; the native fixture is an immutable public commit. Dashboard0.2.6's previously accepted manifest is pinned alongside it.
 
 ## Browser projection
 
@@ -45,4 +55,16 @@ Transport receives a detached physical-model snapshot. Source, lifetime, policy 
 - `selected-context-admission.test.ts`: source/configuration/registry/history races, rollback and ambiguous provenance.
 - `idle-model.test.ts`, `owned-model-context-admission.test.ts`, `native-model-choice.test.ts`, `scheduled-allocation.test.ts`: public caller journeys, dense Unicode, genuinely oversized changes, next-request persistence and unchanged accepted work.
 
-Full epic acceptance still requires output-budget alignment, capability/discovery lifecycle checks, hook-inclusive overflow recovery, installed add-on qualification, final profiling and separately authorised live verification.
+## Offline output-preview profile
+
+Ten warm samples per workload on Smith's LXC, stock SDK1.4, showed the following boundary-only timings. No provider traffic or durable state was used; inputs remained unchanged. Individual samples were discarded.
+
+| Workload | Median | Maximum (10 samples) | Output cap / reserve |
+|---|---:|---:|---:|
+|256-character input|0.081ms|0.243ms|32000 /36096|
+|80000-token text input|0.253ms|0.340ms|15904 /20000|
+|Assistant with500KB opaque signature|0.302ms|0.342ms|32000 /36096|
+
+These measurements do not cover complete model selection, cold imports or generation. The metadata-heavy input retained the small request bound; no additional cache or wrapper layer was needed.
+
+Full epic acceptance still requires final capability/discovery and hook-inclusive overflow/recovery audits, the remaining installed add-on/profile census and separately authorised live verification. Source tests and these timings do not qualify deployment.

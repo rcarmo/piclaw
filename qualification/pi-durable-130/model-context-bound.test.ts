@@ -2,18 +2,21 @@ import "./src/test-guard.js";
 import {expect, test} from "bun:test";
 import {estimateContextTokens, type Message} from "../../runtime/durable-engine/qualification/ai.ts";
 import {assertModelContextFits} from "../../runtime/durable-engine/src/host-model-context.ts";
+import {outputPreview} from './src/output-preview.ts';
 
 const message = {role: "user", content: "PRIVATE_PROMPT_MUST_NOT_BE_LOGGED", timestamp: 0} as const;
 const registry = {sections: () => [], tools: () => []} as any;
 const target = {contextWindow: 100000, maxTokens: 10000};
 
-test("context-fit refusal explains numeric conservative budgets without prompt contents", () => {
+test("context-fit refusal explains the actual producer allowance without prompt contents", async () => {
   expect(() => assertModelContextFits([message], target)).not.toThrow();
+  const small = { ...target, contextWindow: 100 };
+  const output = await outputPreview([message], small);
   let error: Error | undefined;
-  try { assertModelContextFits([message], { ...target, contextWindow: 100 }); } catch(e) { error=e as Error; }
+  try { assertModelContextFits([message], small, output); } catch(e) { error=e as Error; }
   expect(error).toBeInstanceOf(Error);
   const bytes=Buffer.byteLength(JSON.stringify([message]));
-  expect(error!.message).toBe(`Candidate context estimate exceeded; compact first (serialized input bytes=${bytes}, reported tokens=0, estimated context tokens=${estimateContextTokens([message]).tokens}, input token estimate=${estimateContextTokens([message]).tokens}, reserve=8192, output budget=10000, context window=100)`);
+  expect(error!.message).toBe(`Candidate context estimate exceeded; compact first (serialized input bytes=${bytes}, reported tokens=0, estimated context tokens=${estimateContextTokens([message]).tokens}, input token estimate=${estimateContextTokens([message]).tokens}, producer output reserve=${output.status === 'bounded' ? output.reserveTokens : 'unknown'}, context window=100)`);
   expect(error!.message).not.toContain(message.content);
 });
 
@@ -29,20 +32,29 @@ function measuredAssistant(tokens: number, signature = "") {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } } as any;
 }
 
-test("reported model-switch rejection admits the larger window without treating measured metadata bytes as tokens", () => {
+test("reported model-switch rejection follows producer clamping, not a full-output veto or measured metadata bytes", async () => {
   const measured = measuredAssistant(459016);
   const agent = {}, tools: any[] = [];
   const targetBytes = 3430762;
   measured.content[0].thinkingSignature = "x".repeat(targetBytes - new TextEncoder().encode(JSON.stringify([[measured], agent, tools])).length);
   expect(new TextEncoder().encode(JSON.stringify([[measured], agent, tools])).length).toBe(targetBytes);
-  expect(() => assertModelContextFits([...[measured], { role: "system", content: "", toolsAdded: tools, timestamp: 2 }] as any, { contextWindow: 1050000, maxTokens: 128000 })).not.toThrow();
-  expect(() => assertModelContextFits([...[measured], { role: "system", content: "", toolsAdded: tools, timestamp: 2 }] as any, { contextWindow: 500000, maxTokens: 128000 })).toThrow("Candidate context estimate exceeded");
+  const messages = [measured, { role: 'system', content: '', toolsAdded: tools, timestamp: 2 }] as Message[];
+  const large = { contextWindow: 1050000, maxTokens: 128000 }, small = { contextWindow: 500000, maxTokens: 128000 };
+  const largeOutput = await outputPreview(messages, large), smallOutput = await outputPreview(messages, small);
+  expect(() => assertModelContextFits(messages, large, largeOutput)).not.toThrow();
+  expect(() => assertModelContextFits(messages, small, smallOutput)).not.toThrow();
+  // An actual sampling override can defeat clamping; that producer-bound case must still refuse.
+  const fixedOutput = await outputPreview(messages, small, 'openai-completions', { samplingParams: { max_completion_tokens: 128000 } });
+  expect(() => assertModelContextFits(messages, small, fixedOutput)).toThrow('Candidate context estimate exceeded');
 });
 
-test("unmeasured suffix keeps a conservative bound after reported usage", () => {
+test("unmeasured suffix uses the SDK allowance without a second margin and still refuses true overflow", async () => {
   const measured = measuredAssistant(459016);
   const trailing = { role: "user", content: "x".repeat(1600000), timestamp: 2 } as const;
-  expect(() => assertModelContextFits([measured, trailing], { contextWindow: 1050000, maxTokens: 128000 })).toThrow("Candidate context estimate exceeded");
+  const target = { contextWindow: 1050000, maxTokens: 128000 };
+  const output = await outputPreview([measured, trailing], target);
+  expect(() => assertModelContextFits([measured, trailing], target, output)).not.toThrow();
+  expect(() => assertModelContextFits([measured, { ...trailing, content: 'x'.repeat(2400000) }], target)).toThrow('Candidate context estimate exceeded');
 });
 
 test("latest applicable usage replaces older historical high-water marks", () => {
@@ -77,13 +89,18 @@ function unmeasuredMetadataFixture(): Message[] {
   (messages[1] as any).details.raw = "z".repeat(693468 - bytes);
   return messages;
 }
-test("zero-usage mid-turn metadata does not turn 693468 serialized bytes into tokens", () => {
+test("zero-usage mid-turn metadata does not turn 693468 serialized bytes into tokens", async () => {
   const messages = unmeasuredMetadataFixture(), before = JSON.stringify(messages);
   expect(new TextEncoder().encode(JSON.stringify([messages, {}, []])).length).toBe(693468);
   expect(estimateContextTokens(messages)).toMatchObject({ tokens: 61799, usageTokens: 0, lastUsageIndex: null });
   expect(() => assertModelContextFits(messages, { contextWindow: 500000, maxTokens: 128000 })).not.toThrow();
   expect(JSON.stringify(messages)).toBe(before);
-  expect(() => assertModelContextFits([...messages, { role: "system", content: "x".repeat(115395), timestamp: 3 }], { contextWindow: 230000, maxTokens: 128000 })).toThrow("Candidate context estimate exceeded");
+  const extended = [...messages, { role: 'system', content: 'x'.repeat(115395), timestamp: 3 }] as Message[];
+  const small = { contextWindow: 230000, maxTokens: 128000 };
+  const output = await outputPreview(extended, small);
+  expect(() => assertModelContextFits(extended, small, output)).not.toThrow();
+  const fixedOutput = await outputPreview(extended, small, 'openai-completions', { samplingParams: { max_completion_tokens: 132000 } });
+  expect(() => assertModelContextFits(extended, small, fixedOutput)).toThrow('Candidate context estimate exceeded');
 });
 test("unmeasured metadata after a measured prefix is not model text", () => {
   const tool = unmeasuredMetadataFixture()[1]!;

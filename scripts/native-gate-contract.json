@@ -3,7 +3,7 @@
   "fixtures": {
     "native": {
       "repository": "rcarmo/piclaw-addons",
-      "ref": "ad7ad0a4b63ee37090b6bee4309fa5c458ec6510"
+      "ref": "6726c1b6fda85e20a8e6cb58202196d99cb1ed6e"
     },
     "contract": {
       "repository": "rcarmo/piclaw-addons",
@@ -111,6 +111,8 @@
     "model-context-recovery.test.ts",
     "model-context-usage-framing.test.ts",
     "model-failure.test.ts",
+    "model-output-preview.test.ts",
+    "model-request-output.test.ts",
     "model-thinking-contract.test.ts",
     "models.test.ts",
     "native-admission-boundary.test.ts",
@@ -143,6 +145,8 @@
     "scoped-compaction.test.ts",
     "sdk-accounting-scope.test.ts",
     "sdk-handoff-failure.test.ts",
+    "sdk-prompt-wrapper.test.ts",
+    "sdk-request-wrapper.test.ts",
     "selected-context-admission.test.ts",
     "single-database.test.ts",
     "sqlite-admission-workload.test.ts",
