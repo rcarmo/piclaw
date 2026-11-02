@@ -36,6 +36,36 @@ function accountingConversationRoots(database: Database) {
   };
   return rootFor;
 }
+/** SDK failure/abort proves execution ended, never a provider response or usage.
+ * Keep the original financial row/work byte-for-byte; exact request recovery
+ * still refuses to resend without its provider receipt. No elapsed-time or
+ * disappearing-live-run heuristic can establish this proof. */
+function receiptlessExecutionEnded(database: Database, domain: string, row: Readonly<BudgetRequestReservation>): boolean {
+  if (row.terminal_evidence_version !== 1 || !['dispatched', 'unresolved'].includes(row.state)
+    || row.terminal_receipt_json !== null || row.terminal_receipt_sha256 !== null || row.terminal_received_at !== null
+    || row.settlement_sha256 !== null || row.usage_event_id !== null || row.model_invocation_json === null
+    || row.work_id !== `durable-request:${row.id}`) return false;
+  const invocation = JSON.parse(row.model_invocation_json) as BudgetModelInvocation;
+  if (invocation.domain !== domain) return false;
+  if (findBudgetRequestByModelInvocation(invocation, database)?.id !== row.id) throw new BudgetRequestError('conflict');
+  const work = getBudgetWork(row.work_id, database);
+  if (work?.chat_jid !== row.chat_jid) return false;
+  if (work.parent_work_id !== operationBudgetWorkId(invocation.operationId)) {
+    const maintenance = work.parent_work_id ? getBudgetWork(work.parent_work_id, database) : null;
+    if (invocation.taskKind !== 'pi.compaction' || maintenance?.chat_jid !== row.chat_jid
+      || maintenance.execution_kind !== 'side_prompt' || !maintenance.id.startsWith('durable-maintenance:')
+      || !maintenance.id.endsWith(`:${invocation.taskId}`)
+      || !(maintenance.id === invocation.operationId && maintenance.parent_work_id === null
+        || maintenance.parent_work_id === operationBudgetWorkId(invocation.operationId))) return false;
+  }
+  const stored = database.query(`SELECT record FROM tasks WHERE id=? AND conversation_id=? AND kind=? AND status='terminal'`)
+    .get(invocation.taskId, invocation.conversationId, JSON.stringify(invocation.taskKind)) as { record: string } | null;
+  if (!stored) return false;
+  const task = JSON.parse(stored.record);
+  return task.id === invocation.taskId && task.conversationId === invocation.conversationId && task.kind === invocation.taskKind
+    && task.state?.status === 'terminal' && ['failed', 'aborted'].includes(task.state.outcome?.status);
+}
+
 /** Denial-only dependency scope. SDK conversation ownership is not a new source
  * grant or invented generation parent. History/fork edges never join scopes. */
 export function assertConversationAccountingReady(database: Database, scope: { domain: string; conversationId: number; chatJid: string }, excludeRequestId?: string, terminal = false): void {
@@ -48,7 +78,8 @@ export function assertConversationAccountingReady(database: Database, scope: { d
     const invocation = JSON.parse(row.model_invocation_json) as BudgetModelInvocation;
     if (findBudgetRequestByModelInvocation(invocation, database)?.id !== row.id) throw new BudgetRequestError('conflict');
     if (invocation.domain === scope.domain && rootFor(invocation.conversationId) === root)
-      assertModelAccountingReady(row.work_id, database, excludeRequestId, terminal);
+      assertModelAccountingReady(row.work_id, database, excludeRequestId, terminal,
+        request => receiptlessExecutionEnded(database, scope.domain, request));
   }
   if (terminal) {
     const live = database.query(`SELECT conversation_id FROM tasks INDEXED BY tasks_by_status WHERE kind=? AND background=1
@@ -58,8 +89,10 @@ export function assertConversationAccountingReady(database: Database, scope: { d
 }
 export function assertOperationAccountingReady(database: Database, operationId: string, terminal = false,
   namespace?: { domain: string; incarnation: string }): void {
-  assertModelAccountingReady(operationBudgetWorkId(operationId), database, undefined, terminal);
-  if (!hasSdkAccountingScope(database)) return;
+  const sdkScope = hasSdkAccountingScope(database);
+  assertModelAccountingReady(operationBudgetWorkId(operationId), database, undefined, terminal,
+    sdkScope && namespace ? request => receiptlessExecutionEnded(database, namespace.domain, request) : undefined);
+  if (!sdkScope) return;
   if (!namespace) throw new BudgetRequestError('conflict');
   // The immutable binding locates the exact SDK namespace/conversation. Current
   // source/version/harness authority is still checked by the original caller.
@@ -216,7 +249,8 @@ export async function prepareConversationAccounting(database: Database, domain: 
     const invocation = JSON.parse(row.model_invocation_json!) as BudgetModelInvocation;
     if (invocation.domain !== domain) continue;
     if (findBudgetRequestByModelInvocation(invocation, database)?.id !== row.id) throw new BudgetRequestError('conflict');
-    try { assertModelAccountingReady(row.work_id, database); continue; }
+    try { assertModelAccountingReady(row.work_id, database, undefined, false,
+      request => receiptlessExecutionEnded(database, domain, request)); continue; }
     catch (pending) { if (!(pending instanceof BudgetRequestError) || pending.code !== 'budget_denied') throw pending; }
     if (rootFor(invocation.conversationId) !== root) throw new BudgetRequestError('conflict');
     if (row.terminal_receipt_json === null) return false; // Unknown send stays held; no financial guess or resend.
@@ -324,7 +358,8 @@ export async function reserveHostRequest(options: {
   const unenteredAccounting = new Error('Unentered request awaits retained accounting');
   const accountingReady = (excludeRequestId?: string) => {
     try {
-      assertModelAccountingReady(barrierWork, database, excludeRequestId);
+      assertModelAccountingReady(barrierWork, database, excludeRequestId, false,
+        modelInvocation && hasSdkAccountingScope(database) ? request => receiptlessExecutionEnded(database, modelInvocation.domain, request) : undefined);
       if (modelInvocation) assertConversationAccountingReady(database, { domain: modelInvocation.domain,
         conversationId: modelInvocation.conversationId, chatJid: options.chatJid }, excludeRequestId);
     } catch (error) {

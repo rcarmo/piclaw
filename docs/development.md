@@ -360,16 +360,15 @@ Use the `mermaid-fixup.js` helper for any artifact that renders Mermaid diagrams
 
 ## Adding new HTTP endpoints
 
-New `GET /agent/*` or `POST /agent/*` endpoints follow this chain:
+New `GET /agent/*` or `POST /agent/*` endpoints use explicit public wiring:
 
-1. `runtime/src/channels/web/http/dispatch-agent.ts` — register the route
-2. `runtime/src/channels/web/endpoints/channel-endpoint-facade-service.ts` — add handler method
-3. `runtime/src/channels/web/core/web-channel-http-surface-service.ts` — delegate from surface
-4. `runtime/src/channels/web/core/web-channel-contracts.ts` — declare the interface
-5. `runtime/src/channels/web/core/web-channel-prototype.ts` — bind the prototype method
+1. `runtime/src/channels/web/http/dispatch-agent.ts` — register the route.
+2. `runtime/src/channels/web.ts` — implement the public method using the existing focused handler or control/lifecycle service.
+3. `runtime/src/channels/web/core/web-channel-contracts.ts` — declare its public contract.
 
-See `runtime/src/channels/web/agent/agent-commands.ts` (`GET /agent/commands`)
-as the canonical simple example.
+Model/context reads call the existing handlers in `agent/agent-status.ts` with `endpointContexts.agentStatus()`. The redundant HTTP surface service, lazy factory and dynamic HTTP prototype forwarding have been retired; do not recreate them. Activity comes from current native status and known chat identities, never the legacy AgentSession pool.
+
+Keep authentication/CSRF/security headers in the request router and admission/drain/resource ownership in the server lifecycle gateway. Public URLs, response shapes and control/SSE/terminal arguments remain stable across both skins.
 
 ## Documentation updates
 

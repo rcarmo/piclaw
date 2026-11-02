@@ -93,6 +93,8 @@ export function applicationOwnership(lock: RuntimeLockHandle) {
 export interface ApplicationBootstrapOptions {
   root: Database;
   path: string;
+  /** Live acquisition follows this caller lifetime; preparation retains its finite cap. */
+  contentionSignal?: AbortSignal;
   background?: {
     contexts:readonly NativeBackgroundContext[];
     payloads:ReadonlyMap<string,NativeBackgroundPayload>;
@@ -146,6 +148,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
   const lease = config.ownership.borrow(), assert = () => lease.assertCurrentOwner();
   assert();
   const root = config.root, path = config.path, r = { ...config.runtime };
+  const contentionSignal = config.contentionSignal, shutdown = new AbortController();
   const wrapWait = config.wrapWait;
   const createConversation = config.createConversation?.bind(config);
   const resolveScheduledModel = config.resolveScheduledModel?.bind(config);
@@ -196,7 +199,8 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
   if (root.inTransaction || (root.query("PRAGMA foreign_keys").get() as { foreign_keys: number }).foreign_keys !== 1)
     throw Error("Open idle FK-enabled root connection required");
   // Verify physical identity BEFORE any optional host schema mutation.
-  database = new BunSqliteDatabase(path, { root, assertOwner: assert, fenceTransactions: true });
+  const databaseGuard = { root, assertOwner: assert, fenceTransactions: true, contentionSignal: undefined as AbortSignal | undefined };
+  database = new BunSqliteDatabase(path, databaseGuard);
   const candidateDatabase = database;
     await prepareHostSchema(root, assert, config.offlineInitialize === true, context.abortSignal, () => candidateDatabase.assertApplicationRoot(root));
     const hostFollowups = new QueuedFollowupLifecycleService();
@@ -337,11 +341,13 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
     }, context);
     const activeController = controller;
     const runtime = activeController.runtime;
+    // Controller/Harness construction is paused and finite. Activate only after
+    // its internal failure drains finish, before runtime exposure or recovery.
+    databaseGuard.contentionSignal = contentionSignal ? AbortSignal.any([contentionSignal, shutdown.signal]) : undefined;
     config.onRuntime?.(runtime);
-    const wait = wrapWait?.(runtime.wait.bind(runtime));
-    const runtimePort = new Proxy(runtime, { get(target, key) {
-      if (key === "wait" && wait) return wait;
-      if (key === "reconcileMaintenance") return (binding: Parameters<typeof runtime.reconcileMaintenance>[0]) => {
+    const adapter = createDurableConversationAdapter({ incarnation: r.incarnation, manifest, getConversationBinding: lookup, runtime,
+      wait: wrapWait?.(runtime.wait.bind(runtime)),
+      reconcileMaintenance(binding) {
         assertLive();
         if (activeController.recoveredMaintenanceChat === binding.chatJid) {
           const current = lookup(binding.chatJid, binding.branchId);
@@ -349,12 +355,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
           return activeController.resumeRecoveredMaintenance().then(() => {});
         }
         return runtime.reconcileMaintenance(binding);
-      };
-      const member = Reflect.get(target, key, target);
-      return typeof member === "function" ? member.bind(target) : member;
-    } });
-    const adapter = createDurableConversationAdapter({ incarnation: r.incarnation, manifest, getConversationBinding: lookup, runtime: runtimePort });
-    const shutdown = new AbortController();
+      } });
     const hostControls = new Map<Promise<unknown>, string>();
     const backgroundPreparing = new Map<string,Promise<AcceptedInput>>();
     const recovery = createDurableRecoveryDispatch({ assertCurrentWriter: assert, submitIntent: input => adapter.submitIntent(input),
@@ -1187,6 +1188,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       onPendingIntent: typeof recovery.onPendingIntent;
     });
   } catch (error) {
+    shutdown.abort(error);
     try {
       if (controller) await controller.close();
       else await database?.close();

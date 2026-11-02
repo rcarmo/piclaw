@@ -1,3 +1,4 @@
+import type { SyncSqliteOperation } from "../../src/db/sqlite-async-admission.js";
 import type { Database } from 'bun:sqlite';
 import { createHash } from 'node:crypto';
 import { readFile, realpath } from 'node:fs/promises';
@@ -16,7 +17,7 @@ export interface CodexArtifactBinding {
   readonly hostOperationId: string;
   readonly chatJid: string;
   assertCurrent(): void;
-  write<T>(body: () => T): T | Promise<T>;
+  write<T>(body: SyncSqliteOperation<T>): T | Promise<T>;
 }
 export interface CodexImageActivity {
   kind: 'image';

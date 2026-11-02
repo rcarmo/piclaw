@@ -16,8 +16,10 @@ function walk(dir: string, out: string[] = []): string[] {
 
 test("runtime tests no longer import automatic-recovery compatibility barrel", () => {
   const files = walk(testsRoot);
+  // scanImports is stateless; do not initialise a parser for every test file.
+  const scanner = new Bun.Transpiler({ loader: "ts" });
   const importers = files
-    .filter((file) => new Bun.Transpiler({ loader: "ts" })
+    .filter((file) => scanner
       .scanImports(readFileSync(file, "utf8").replace(/^#![^\n]*\n/, ""))
       .some((specifier) => specifier.kind === "import-statement"
         && specifier.path.includes("automatic-recovery.js")))

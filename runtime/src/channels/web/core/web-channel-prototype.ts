@@ -5,12 +5,6 @@ import type { WebAgentBufferEntry } from "../agent/agent-buffers.js";
 import type { WebSessionBroadcastService } from "../sse/session-broadcast-service.js";
 import type { WebChannelLike } from "./web-channel-contracts.js";
 import {
-  getWebChannelHttpSurfaceService,
-  type WebChannelHttpSurfaceChannel,
-  type WebChannelHttpSurfaceService,
-  type WebChannelHttpSurfaceServiceCarrier,
-} from "./web-channel-http-surface-service.js";
-import {
   getWebChannelRuntimePublicSurfaceService,
   type RuntimeAgentMessageRequest,
   type RuntimeAgentMessageResult,
@@ -47,12 +41,6 @@ export interface WebChannelPrototypeMembers extends WebChannelLike {
   processChat(chatJid: string, agentId: string, threadRootId?: number | null): Promise<void>;
 }
 
-function getHttpSurfaceService(channel: object): WebChannelHttpSurfaceService {
-  return getWebChannelHttpSurfaceService(
-    channel as WebChannelHttpSurfaceChannel & WebChannelHttpSurfaceServiceCarrier,
-  );
-}
-
 function getRuntimePublicSurfaceService(channel: object): WebChannelRuntimePublicSurfaceService {
   return getWebChannelRuntimePublicSurfaceService(
     channel as WebChannelRuntimePublicSurfaceChannel & WebChannelRuntimePublicSurfaceServiceCarrier,
@@ -67,14 +55,6 @@ function getLifecycleSpecialSurfaceService(
     channel as WebChannelLifecycleSpecialSurfaceChannel & WebChannelLifecycleSpecialSurfaceServiceCarrier,
     defaults,
   );
-}
-
-function withHttpSurface<Args extends unknown[], Result>(
-  callback: (service: WebChannelHttpSurfaceService, ...args: Args) => Result,
-): (this: object, ...args: Args) => Result {
-  return function delegateHttpSurface(this: object, ...args: Args): Result {
-    return callback(getHttpSurfaceService(this), ...args);
-  };
 }
 
 function withRuntimePublicSurface<Args extends unknown[], Result>(
@@ -343,118 +323,6 @@ export function installWebChannelPrototype(
       value: withRuntimePublicSurface((service, turnId: string, panel: "thought" | "draft"): WebAgentBufferEntry | undefined =>
         service.getBuffer(turnId, panel)),
     },
-    handleFetch: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, req: Request, server?: Bun.Server<WebSocketSessionData>) =>
-        service.handleFetch(req, server)),
-    },
-    handleRequest: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, req: Request) => service.handleRequest(req)),
-    },
-    handleAgents: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service) => await service.handleAgents()),
-    },
-    handleManifest: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleManifest(req)),
-    },
-    handleAvatar: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, kind: "agent" | "user", req: Request) => await service.handleAvatar(kind, req)),
-    },
-    handleWorkspaceVisibility: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleWorkspaceVisibility(req)),
-    },
-    handleHashtag: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, tag: string, limit: number, offset: number, chatJid?: string) =>
-        service.handleHashtag(tag, limit, offset, chatJid)),
-    },
-    handleSearch: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((
-        service,
-        query: string,
-        limit: number,
-        offset: number,
-        chatJid?: string,
-        searchScope?: "current" | "root" | "all",
-        rootChatJid?: string,
-        filters?: { images?: boolean; attachments?: boolean } | null,
-      ) => service.handleSearch(query, limit, offset, chatJid, searchScope, rootChatJid, filters)),
-    },
-    handleThread: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, id: number | null, chatJid?: string) => service.handleThread(id, chatJid)),
-    },
-    handleThought: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, panel: string | null, turnId: string | null) => service.handleThought(panel, turnId)),
-    },
-    handleThoughtVisibility: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleThoughtVisibility(req)),
-    },
-    handleDeletePost: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, req: Request, id: number | null, cascade: boolean = false) =>
-        service.handleDeletePost(req, id, cascade)),
-    },
-    handleUpdatePost: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request, id: number | null) => await service.handleUpdatePost(req, id)),
-    },
-    handleUpdatePostAnnotations: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request, id: number) => await service.handleUpdatePostAnnotations(req, id)),
-    },
-    handleInternalPost: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleInternalPost(req)),
-    },
-    handleSse: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, req: Request, authorisation?: import("../sse/sse.js").SseAuthorisation) => service.handleSse(req, authorisation)),
-    },
-    handleTerminalSession: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, req: Request) => service.handleTerminalSession(req)),
-    },
-    handleTerminalHandoff: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, req: Request) => service.handleTerminalHandoff(req)),
-    },
-    handleVncSession: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, req: Request) => service.handleVncSession(req)),
-    },
-    handleVncHandoff: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, req: Request) => service.handleVncHandoff(req)),
-    },
     broadcastEvent: {
       configurable: true,
       writable: true,
@@ -462,165 +330,10 @@ export function installWebChannelPrototype(
         service.broadcastEvent(eventType, data);
       }),
     },
-    handlePost: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request, isReply: boolean) => await service.handlePost(req, isReply)),
-    },
-    handleAgentStatus: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, req: Request) => service.handleAgentStatus(req)),
-    },
-    handleAgentContext: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentContext(req)),
-    },
-    handleAgentDebug: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentDebug(req)),
-    },
-    handleAgentCommands: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentCommands(req)),
-    },
-    handleAutoresearchStatus: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAutoresearchStatus(req)),
-    },
-    handleAutoresearchStop: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAutoresearchStop(req)),
-    },
-    handleAutoresearchDismiss: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAutoresearchDismiss(req)),
-    },
-    handleAgentOobeComplete: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentOobeComplete(req)),
-    },
-    handleAgentQueueState: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentQueueState(req)),
-    },
-    handleAgentRuns: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentRuns(req)),
-    },
-    handleAgentRunAbort: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentRunAbort(req)),
-    },
-    handleAgentRunClearStale: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentRunClearStale(req)),
-    },
-    handleAgentRunDrainQueue: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentRunDrainQueue(req)),
-    },
-    handleAgentQueueRemove: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentQueueRemove(req)),
-    },
-    handleAgentQueueSteer: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentQueueSteer(req)),
-    },
-    handleAgentQueueReorder: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentQueueReorder(req)),
-    },
-    handleAgentModels: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentModels(req)),
-    },
-    handleSystemMetrics: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, req: Request) => service.handleSystemMetrics(req)),
-    },
-    handleAgentActiveChats: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentActiveChats(req)),
-    },
-    handleAgentBranches: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentBranches(req)),
-    },
-    handleAgentBranchFork: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentBranchFork(req)),
-    },
-    handleAgentRootSessionCreate: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentRootSessionCreate(req)),
-    },
-    handleAgentBranchRename: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentBranchRename(req)),
-    },
-    handleAgentRenameJid: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentRenameJid(req)),
-    },
-    handleAgentBranchMergeParent: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentBranchMergeParent(req)),
-    },
-    handleAgentBranchPrune: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentBranchPrune(req)),
-    },
-    handleAgentBranchDownload: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, req: Request) => service.handleAgentBranchDownload(req)),
-    },
-    handleAgentBranchPurge: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentBranchPurge(req)),
-    },
-    handleAgentBranchRestore: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentBranchRestore(req)),
-    },
     handleAgentPeerMessage: {
       configurable: true,
       writable: true,
       value: withLifecycleSpecialSurface(defaults, async (service, req: Request) => await service.handleAgentPeerMessage(req)),
-    },
-    handleAgentRespond: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleAgentRespond(req)),
     },
     handleAdaptiveCardAction: {
       configurable: true,
@@ -679,32 +392,6 @@ export function installWebChannelPrototype(
       configurable: true,
       writable: true,
       value: withRuntimePublicSurface((service, ...args: Parameters<WebChannelRuntimePublicSurfaceService['admitUserMessage']>) => service.admitUserMessage(...args)),
-    },
-    serveStatic: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, relPath: string, req?: Request) => await service.serveStatic(relPath, req)),
-    },
-    serveDocsStatic: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, relPath: string) => await service.serveDocsStatic(relPath)),
-    },
-    json: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, data: unknown, status: number = 200) => service.json(data, status)),
-    },
-    clampInt: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, value: string | null, fallback: number, min: number, max: number) =>
-        service.clampInt(value, fallback, min, max)),
-    },
-    parseOptionalInt: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, value: string | null): number | null => service.parseOptionalInt(value)),
     },
   });
 }

@@ -69,10 +69,6 @@ import { VncSessionService } from "../vnc/vnc-session-service.js";
 import type { WebChannelLike } from "./web-channel-contracts.js";
 import { WebauthnChallengeTracker } from "../auth/webauthn-challenges.js";
 
-type AgentPoolWithKnownChats = AgentPool & {
-  listKnownChats?: (rootChatJid?: string | null, options?: { includeArchived?: boolean }) => unknown[];
-};
-
 export interface WebChannelConstructorFactoryChannel {
   queue: AgentQueue;
   agentPool: AgentPool;
@@ -249,12 +245,6 @@ const defaultDeps: WebChannelConstructorFactoryDeps = {
     handlePostRequest(channel as unknown as WebChannelLike, req, isReply, chatJid),
 };
 
-function resolveListKnownChats(agentPool: AgentPool): WebChannelEndpointFacadeOptions["listKnownChats"] {
-  return typeof (agentPool as AgentPoolWithKnownChats).listKnownChats === "function"
-    ? (rootChatJid, options) => (agentPool as AgentPoolWithKnownChats).listKnownChats!(rootChatJid, options)
-    : undefined;
-}
-
 export function initializeWebChannelConstructor(
   channel: WebChannelConstructorFactoryChannel,
   runtimeOpts: WebChannelConstructorFactoryRuntimeOpts,
@@ -369,8 +359,7 @@ export function createWebChannelConstructorFactory(
     json: (payload, status = 200) => channel.json(payload, status),
     broadcastEvent: (eventType, data) => channel.broadcastEvent(eventType, data),
     handlePostRequest: (req, isReply, chatJid) => deps.handlePostRequest(channel, req, isReply, chatJid),
-    listActiveChats: () => channel.agentPool.listActiveChats(),
-    listKnownChats: resolveListKnownChats(channel.agentPool),
+    listKnownChats: (rootChatJid, options) => channel.agentPool.listKnownChats(rootChatJid, options),
     getProjectRepository: (chatJid) => getChatProject(chatJid),
   });
 

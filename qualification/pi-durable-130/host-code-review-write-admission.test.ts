@@ -4,7 +4,7 @@ import { Database } from 'bun:sqlite';
 import { mkdtemp,rm,writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { repoRoot } from './src/repo-root.js';
-import { admitSqliteWrite } from '../../runtime/src/db/sqlite-async-admission.js';
+import { admitSqliteWrite, type SyncSqliteOperation } from '../../runtime/src/db/sqlite-async-admission.js';
 import { getExtensionKvStore,requireExtensionKvAuthority,resetExtensionKvStoreForTests,withExtensionKvAuthority } from '../../runtime/src/extension-kv-registry.js';
 
 for(const revoke of [false,true]) test(`native review preparation and UI mutation yield to the shared writer; revoke=${revoke}`,async()=>{
@@ -14,7 +14,7 @@ for(const revoke of [false,true]) test(`native review preparation and UI mutatio
  const addon=await import(repoRoot('ADDONS')+'/addons/code-review/runtime.ts');
  let current=true;
  const check=()=>{if(!current)throw Error('revoked');};
- const releaseSource=addon.setReviewDatabaseSource({database:root,assertOwner:check,admitWrite:<T>(body:()=>T)=>admitSqliteWrite(root,body,check)});
+ const releaseSource=addon.setReviewDatabaseSource({database:root,assertOwner:check,admitWrite:<T>(body:SyncSqliteOperation<T>)=>admitSqliteWrite<T>(root,body,check)});
  try{
   blocker.exec('BEGIN IMMEDIATE');
   const pending=addon.prepareReviewService();
@@ -28,7 +28,7 @@ for(const revoke of [false,true]) test(`native review preparation and UI mutatio
   const context={version:1,accessMode:'single-user',kind:'operator',ownerId:'owner',actorId:'operator',workspaceRoot:dir,workspaceId:'fixture-workspace',
    async listTargets(){check();return[target];},async resolveTarget(){check();return target;},async enqueue(){throw Error('No delivery in this fixture');}};
   const authority={extensionId:'code-review',chatJid:'',globalRead:true,globalWrite:true,assertCurrent:check,
-   admitWrite:<T>(body:()=>T)=>admitSqliteWrite(root,body,check),write<T>(body:()=>T){if(!root.inTransaction)throw Error('Writer required');check();const result=body();check();return result;}};
+   admitWrite:<T>(body:SyncSqliteOperation<T>)=>admitSqliteWrite<T>(root,body,check),write<T>(body:()=>T){if(!root.inTransaction)throw Error('Writer required');check();const result=body();check();return result;}};
   blocker.exec('BEGIN IMMEDIATE');let done=false;
   const mutation=withExtensionKvAuthority(authority,()=>addon.reviewAction(context,'create',{path:'file.ts',title:'Fixture',target:{agentName:'fixture'},requestId:'create-fixture'},service))
    .then((value:unknown)=>{done=true;return{ok:true as const,value};},(error:unknown)=>{done=true;return{ok:false as const,error};});

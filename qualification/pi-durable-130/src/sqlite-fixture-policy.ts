@@ -29,7 +29,8 @@ export async function openWalFixtureDatabase(path: string): Promise<BunSqliteDat
   try {
     const before = await db.get<{ synchronous: number }>("SELECT * FROM pragma_synchronous");
     if (before?.synchronous !== 2) throw new Error("Candidate fixture requires existing synchronous=FULL (2)");
-    await db.exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL");
+    // The SDK connection role owns setup; this facade verifies but cannot
+    // mutate connection policy through its public SQL executors.
     const journal = await db.get<{ journal_mode: string }>("SELECT * FROM pragma_journal_mode");
     const after = await db.get<{ synchronous: number }>("SELECT * FROM pragma_synchronous");
     if (journal?.journal_mode.toLowerCase() !== "wal" || after?.synchronous !== 2)

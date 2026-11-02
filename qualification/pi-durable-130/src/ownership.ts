@@ -70,8 +70,11 @@ export class OwnedSqlite implements SqliteDatabase {
   constructor(private readonly owner: TestOwner, options: { foreignKeys?: boolean } = {}) {
     owner.assert(); // before constructing candidate storage connection
     this.base = new BunSqliteDatabase(owner.path);
-    // PRAGMA must run outside a transaction, before SDK schema initialization.
-    this.ready = options.foreignKeys ? this.base.exec("PRAGMA foreign_keys=ON") : Promise.resolve();
+    // The SDK role owns connection policy. Verify the requested fixture
+    // invariant without giving SDK SQL a connection-policy mutation port.
+    this.ready = options.foreignKeys ? this.base.get<{ foreign_keys: number }>("SELECT * FROM pragma_foreign_keys").then(row => {
+      if (row?.foreign_keys !== 1) throw new Error("Owned fixture requires foreign_keys=ON");
+    }) : Promise.resolve();
   }
   async transaction<T>(callback: (tx: SqliteExecutor) => Promise<T>): Promise<T> {
     await this.ready;

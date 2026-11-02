@@ -72,6 +72,21 @@ export async function runNoteIndexPhase(options: { rebuild?: boolean; signal?: A
     let chunkCount=Number(aggregate.chunks),contentBytes=Number(aggregate.bytes),exclusions=0,unavailable=0;
     const seen=new Set<string>();
     const excludedPaths: string[] = [];
+    // Staging is unpublished: amortise FULL commits without holding a writer
+    // across asynchronous reads. Bound retained source data and lock duration.
+    const staged: Array<{ verify: () => void; write: () => void }> = [];
+    let stagedBytes=0;
+    const flush=()=>{
+      if(!staged.length)return;
+      db.transaction(()=>{
+        check();if(state().dirty!==captured.dirty)throw new Error('superseded');
+        for(const source of staged){check();source.verify();source.write();}
+        // A later insert must not conceal a change to an earlier batch member.
+        for(const source of staged){check();source.verify();}
+        check();
+      }).immediate();
+      staged.length=0;stagedBytes=0;
+    };
     const processSource=async(relative:string)=>{
       check();
       seen.add(relative);
@@ -94,8 +109,8 @@ export async function runNoteIndexPhase(options: { rebuild?: boolean; signal?: A
         // Re-read immediately before staging; metadata alone never proves equality.
         const again=await readNote(admission.binding.workspace,relative,check);check();
         if(again.revision!==source.revision)throw new Error('source_unavailable');
-        db.transaction(()=>{
-          check();again.verify();if(state().dirty!==captured.dirty)throw new Error('superseded');
+        const retainedBytes=source.bytes.length+addedContent;
+        staged.push({verify:again.verify,write:()=>{
           // This writer exclusively owns the generation; source/chunks/FTS stage atomically.
           // A path absent from the existing lookup has nothing to replace (notably a full build).
           if(previousSource)deleteStagedPath(generation,relative);
@@ -104,8 +119,7 @@ export async function runNoteIndexPhase(options: { rebuild?: boolean; signal?: A
           // and CAST to TEXT so stored content still matches the hashed byte range.
           for(const c of parsed.chunks){check();db.query('INSERT INTO note_retrieval_chunks(generation,path,chunk_id,revision,chunker,first_byte,after_last_byte,line_start,line_end,heading,kind,content) VALUES(?,?,?,?,?,?,?,?,?,?,?,CAST(? AS TEXT))').run(generation,relative,c.chunkId,parsed.sourceRevision,CHUNKER_VERSION,c.firstByte,c.afterLastByte,c.lineStart,c.lineEnd,JSON.stringify(c.headingPath),c.kind,Buffer.from(c.text,'utf8'));
             db.query('INSERT INTO note_retrieval_fts(content,heading,path,generation,chunk_id) VALUES(CAST(? AS TEXT),?,?,?,?)').run(Buffer.from(c.text,'utf8'),JSON.stringify(c.headingPath),relative,generation,c.chunkId);}
-          check();again.verify();
-        }).immediate();
+        }});stagedBytes+=retainedBytes;
       } catch(error){
         if(addedSource)sourceCount--;sourceBytes-=addedSource;chunkCount-=addedChunks;contentBytes-=addedContent;
         check();if(error instanceof NoteScanLimited||error instanceof NoteIndexDenied||(error as Error).message==='superseded')throw error;
@@ -119,10 +133,12 @@ export async function runNoteIndexPhase(options: { rebuild?: boolean; signal?: A
           db.query('UPDATE note_retrieval_state SET coverage=coverage+1 WHERE id=1').run();check();
         }).immediate();
       }
+      // A failed batch is fatal, not an exclusion attributed to the next path.
+      if(staged.length>=16||stagedBytes>=1024*1024)flush();
     };
     if(incremental){for(const relative of dirtyPaths){check();await processSource(relative);}}
     else await walkNotes(admission.binding.workspace,check,processSource);
-    check();
+    check();flush();
     // An unavailable source is not evidence for deletion; retain the prior publication.
     if(unavailable)throw new Error('source_unavailable');
     db.transaction(()=>{

@@ -44,13 +44,12 @@ test("native broadcast retains SSE/UI/provider events without legacy session bin
 
   expect(legacyAccesses).toBe(0);
   expect("bindSession" in service.uiBridge).toBe(false);
-  const ui = service.uiBridge.createUiContext("web:branch-a");
-  const input = ui.input("Question", "Answer", { timeout: 1000 });
+  const opened = service.uiBridge.openWorkspaceFile("web:branch-a", "notes/index.md", "Notes");
   const request = broadcastCalls.at(-1)!;
   expect(request.eventType).toBe("extension_ui_request");
   const requestId = (request.data as { request_id: string }).request_id;
-  expect(service.uiBridge.handleUiResponse(requestId, "Confirmed", "web:branch-a")).toEqual({ status: "ok" });
-  expect(await input).toBe("Confirmed");
+  expect(service.uiBridge.handleUiResponse(requestId, { ok: true, opened: true }, "web:branch-a")).toEqual({ status: "ok" });
+  expect(await opened).toEqual({ ok: true, opened: true });
   providerUsageListener?.({
     chat_jid: "web:branch-a",
     current: "zai/glm-4",

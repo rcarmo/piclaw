@@ -104,6 +104,36 @@ test('nested callback contention rolls back only its savepoint and preserves the
   } finally {db.exec('ROLLBACK');}
   expect(count(db)).toBe(0);
 }));
+test('nested compensation is rejected before authorization or callback entry',async()=>fixture(async(db)=>{
+  db.exec("BEGIN IMMEDIATE;INSERT INTO input VALUES('outer')");
+  let operations=0,authorizations=0,compensations=0;
+  try {
+    await expect(admitSqliteWrite(db,()=>{operations++;db.exec("INSERT INTO input VALUES('inner')");},()=>{authorizations++;},
+      new AbortController().signal,5000,()=>{},()=>{compensations++;})).rejects.toThrow('Nested SQLite admission');
+    expect(operations).toBe(0);expect(authorizations).toBe(0);expect(compensations).toBe(0);
+    expect(db.inTransaction).toBe(true);expect(timeout(db)).toBe(5000);
+    expect(db.query('SELECT value FROM input').all()).toEqual([{value:'outer'}]);
+  } finally {db.exec('ROLLBACK');}
+  expect(count(db)).toBe(0);
+}));
+
+test('compensation cannot join an outer transaction started during acquisition backoff',async()=>fixture(async(db,blocker)=>{
+  blocker.exec('BEGIN IMMEDIATE');
+  let operations=0,authorizations=0,compensations=0;
+  const pending=admitSqliteWrite(db,()=>{operations++;db.exec("INSERT INTO input VALUES('inner')");},()=>{authorizations++;},
+    new AbortController().signal,5000,()=>{},()=>{compensations++;});
+  // The initial failed BEGIN retains the existing standalone cleanup contract.
+  expect(compensations).toBe(1);
+  blocker.exec('ROLLBACK');db.exec("BEGIN IMMEDIATE;INSERT INTO input VALUES('outer')");
+  try {
+    await expect(pending).rejects.toThrow('Nested SQLite admission');
+    expect(operations).toBe(0);expect(authorizations).toBe(0);expect(compensations).toBe(1);
+    expect(db.inTransaction).toBe(true);expect(timeout(db)).toBe(5000);
+    expect(db.query('SELECT value FROM input').all()).toEqual([{value:'outer'}]);
+  } finally {db.exec('ROLLBACK');}
+  expect(count(db)).toBe(0);
+}));
+
 test('a changed binding while awaiting acquisition prevents callback entry without touching the stale handle',async()=>fixture(async(db,blocker)=>{
   blocker.exec('BEGIN IMMEDIATE');let valid=true,operations=0;
   const pending=admitSqliteWrite(db,()=>{operations++;},()=>{},new AbortController().signal,5000,()=>{if(!valid)throw Error('binding revoked');});
@@ -114,6 +144,7 @@ test('a changed binding while awaiting acquisition prevents callback entry witho
 
 test("admission rejects async callbacks before their SQL prefix executes", () => fixture(async (db) => {
   let entered = false;
+  // @ts-expect-error Deliberate runtime misuse: async work must be rejected before entry.
   await expect(admitSqliteWrite(db, async () => {
     entered = true; db.run("INSERT INTO input(value) VALUES ('async-prefix')");
   })).rejects.toThrow("synchronous");
@@ -122,6 +153,7 @@ test("admission rejects async callbacks before their SQL prefix executes", () =>
 
 test("admission rolls back SQL when a synchronous callback returns a thenable", () => fixture(async (db) => {
   let entered = 0;
+  // @ts-expect-error Deliberate runtime misuse: a thenable result must roll back its SQL prefix.
   await expect(admitSqliteWrite(db, () => {
     entered++; db.run("INSERT INTO input(value) VALUES ('thenable-prefix')");
     return { then() { throw new Error("thenable must not execute"); } };
@@ -178,6 +210,7 @@ test("nested successful admission preserves outer durability ownership despite r
 
 test("rejected Promise returned by a synchronous wrapper is contained without executing it again", () => fixture(async (db) => {
   let calls = 0;
+  // @ts-expect-error Deliberate runtime misuse: an already rejected Promise must remain contained.
   await expect(admitSqliteWrite(db, () => {
     calls++; db.run("INSERT INTO input VALUES ('prefix')");
     return Promise.reject(new Error("already rejected async work"));

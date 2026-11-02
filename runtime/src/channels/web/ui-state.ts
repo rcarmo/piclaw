@@ -102,11 +102,6 @@ function writeServerUiThemeConfig(patch: { theme?: string; tint?: string | null 
   return next;
 }
 
-/** The legacy SDK setTheme API is synchronous; native/HTTP callers use admission below. */
-export function setServerUiThemeConfig(patch: { theme?: string; tint?: string | null }): ServerUiThemeConfig {
-  const next = writeServerUiThemeConfig(patch); setLegacyUiThemeConfig(next); return next;
-}
-
 export async function admitServerUiThemeConfig(patch: { theme?: string; tint?: string | null }, authorise: () => void = () => {}, signal?: AbortSignal): Promise<ServerUiThemeConfig> {
   patch = structuredClone(patch);
   const next = await admitSqliteWrite(getDb(), () => writeServerUiThemeConfig(patch), authorise, signal);

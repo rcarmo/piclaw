@@ -1,7 +1,7 @@
 import { lstatSync, realpathSync, readSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Database } from 'bun:sqlite';
-import { getDataDir, getStoreDir, getWorkspaceDir } from '../core/config-context.js';
+import { getRuntimeConfigPaths } from '../core/config-context.js';
 import { readAccessConfig } from '../core/config-access.js';
 import { getExecutionIdentity } from '../core/execution-context.js';
 import { getChatJid } from '../core/chat-context.js';
@@ -11,16 +11,20 @@ export class NoteIndexDenied extends Error { constructor() { super('Note index a
 export interface NoteBinding { version: 1; mode: 'single-user'; workspace: string; store: string; data: string; database: string; databaseIdentity: string; identities: string[] }
 const identityOf = (path: string) => { const stat = lstatSync(path); if (stat.isSymbolicLink()) throw new NoteIndexDenied(); return `${stat.dev}:${stat.ino}`; };
 function expectedRoots(): Omit<NoteBinding, 'identities' | 'databaseIdentity'> {
-  const [workspace, store, data] = [getWorkspaceDir(), getStoreDir(), getDataDir()].map(p => realpathSync(p));
+  const paths = getRuntimeConfigPaths();
+  const [workspace, store, data] = [paths.workspaceDir, paths.storeDir, paths.dataDir].map(p => realpathSync(p));
   return { version: 1, mode: 'single-user', workspace, store, data, database: realpathSync(resolve(store, 'messages.db')) };
 }
 export function admitNoteIndexMetadata() {
   const identity = getExecutionIdentity(); let revoked = false;
-  const roots = [getWorkspaceDir(), getStoreDir(), getDataDir()];
+  const paths = getRuntimeConfigPaths();
+  const roots = [paths.workspaceDir, paths.storeDir, paths.dataDir];
   const validate = () => {
     try {
-      if (revoked || readAccessConfig().mode !== 'single-user' || getExecutionIdentity() !== identity
-        || roots.some((root, i) => root !== [getWorkspaceDir(), getStoreDir(), getDataDir()][i])
+      const current = getRuntimeConfigPaths();
+      const currentRoots = [current.workspaceDir, current.storeDir, current.dataDir];
+      if (revoked || readAccessConfig(current.configPath).mode !== 'single-user' || getExecutionIdentity() !== identity
+        || roots.some((root, i) => root !== currentRoots[i])
         || (identity && (identity.mode !== 'single-user' || !Object.isFrozen(identity) || !Object.isFrozen(identity.provenance)
           || identity.provenance.ownerUserId !== 'default' || identity.provenance.actorUserId !== 'default'
           || identity.rootChatJid !== 'web:default' || identity.provenance.chatJid !== getChatJid('')))) throw new NoteIndexDenied();

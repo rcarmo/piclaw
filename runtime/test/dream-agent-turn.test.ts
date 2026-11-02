@@ -47,9 +47,9 @@ test("runDreamAgentTurn forwards its explicit model to native private dispatch w
   db.initDatabase();
 
   const fixedNow = Date.parse("2026-01-02T03:04:05.000Z");
-  const expectedDreamChatJid = `dream:manual:web_default:${fixedNow}`;
   const applied: Array<{ chatJid: string; raw: string | undefined }> = [];
   const runChats: string[] = [];
+  const legacyDisposals: string[] = [];
 
   Date.now = () => fixedNow;
   try {
@@ -69,19 +69,20 @@ test("runDreamAgentTurn forwards its explicit model to native private dispatch w
           runChats.push(request.chatJid);
           return { status: "success", result: "Dream complete." };
         },
-        disposeChatSession: async () => {},
+        disposeChatSession: async (jid: string) => { legacyDisposals.push(jid); },
       } as any,
     });
 
     expect(result.skipped).toBe(false);
     expect(applied).toEqual([]);
     expect(runChats).toEqual(["web:default"]);
+    expect(legacyDisposals).toEqual([]);
   } finally {
     Date.now = realDateNow;
   }
 });
 
-test("runDreamAgentTurn reaps a stale dream lock and materializes memory files after the model pass", { timeout: 15000 }, async () => {
+test("runDreamAgentTurn reaps only a stale lock and preserves legacy artifacts while refreshing memory", { timeout: 15000 }, async () => {
   const config = await import("../src/core/config.js");
   resetDreamDestructiveFixture(config);
   mkdirSync(join(config.DATA_DIR, "dream-backups"), { recursive: true });
@@ -143,11 +144,11 @@ test("runDreamAgentTurn reaps a stale dream lock and materializes memory files a
       .toContain("recovery: complete");
     expect(result.result).toContain("Memory refreshed after Dream: yes");
 
-    expect(rawDb.prepare("SELECT COUNT(*) AS count FROM chats WHERE jid = ?").get(dreamChatJid)).toEqual({ count: 0 });
-    expect(rawDb.prepare("SELECT COUNT(*) AS count FROM chat_cursors WHERE chat_jid = ?").get(dreamChatJid)).toEqual({ count: 0 });
-    expect(rawDb.prepare("SELECT COUNT(*) AS count FROM chat_branches WHERE chat_jid = ?").get(dreamChatJid)).toEqual({ count: 0 });
-    expect(rawDb.prepare("SELECT COUNT(*) AS count FROM token_usage WHERE chat_jid = ?").get(dreamChatJid)).toEqual({ count: 0 });
-    expect(existsSync(dreamSessionDir)).toBe(false);
+    expect(rawDb.prepare("SELECT COUNT(*) AS count FROM chats WHERE jid = ?").get(dreamChatJid)).toEqual({ count: 1 });
+    expect(rawDb.prepare("SELECT COUNT(*) AS count FROM chat_cursors WHERE chat_jid = ?").get(dreamChatJid)).toEqual({ count: 1 });
+    expect(rawDb.prepare("SELECT COUNT(*) AS count FROM chat_branches WHERE chat_jid = ?").get(dreamChatJid)).toEqual({ count: 1 });
+    expect(rawDb.prepare("SELECT COUNT(*) AS count FROM token_usage WHERE chat_jid = ?").get(dreamChatJid)).toEqual({ count: 1 });
+    expect(readFileSync(join(dreamSessionDir, 'session.json'), 'utf8')).toBe('{}');
 
     const backups = readdirSync(join(config.DATA_DIR, "dream-backups")).sort();
     expect(backups).toHaveLength(10);
@@ -381,7 +382,7 @@ test("Dream failed execution: a thrown agent outcome still refreshes notes/index
   for(const name of ['MEMORY.md','current-state.md','recent-context.md'])expect(existsSync(join(config.WORKSPACE_DIR,'notes/memory',name))).toBe(true);
   expect(db.getDb().query("SELECT path FROM workspace_files WHERE path='notes/memory/MEMORY.md'").get()).toEqual({path:'notes/memory/MEMORY.md'});
   expect(startup.dreamStartupBackfillRequired(config.WORKSPACE_DIR)).toBe(true);
-  expect(existsSync(join(config.WORKSPACE_DIR,'notes/memory/.dream.lock'))).toBe(false);expect(disposed).toBe(1);
+  expect(existsSync(join(config.WORKSPACE_DIR,'notes/memory/.dream.lock'))).toBe(false);expect(disposed).toBe(0);
 });
 
 test("Dream failed execution: deterministic refresh failure retains the original agent uncertainty", async () => {
@@ -461,4 +462,22 @@ test("runDreamAgentTurn falls back to deterministic refresh when the model pass 
   expect(capturedTimeoutMs).toBeGreaterThan(0);
   expect(existsSync(join(config.WORKSPACE_DIR, "notes", "memory", "MEMORY.md"))).toBe(true);
   expect(existsSync(join(config.WORKSPACE_DIR, "notes", "memory", ".dream.lock"))).toBe(false);
+});
+
+test('runDreamAgentTurn rejects legacy execution without creating or deleting artifacts', async () => {
+  const config = await import('../src/core/config.js'); resetDreamDestructiveFixture(config);
+  const db = await import('../src/db.js'); db.initDatabase();
+  const directory = join(config.SESSIONS_DIR, 'dream_manual_legacy_retained');
+  mkdirSync(directory,{recursive:true});writeFileSync(join(directory,'session.json'),'original');
+  db.storeChatMetadata('dream:manual:legacy:retained','2026-01-01T00:00:00Z','Retained');
+  const before = db.getDb().query("SELECT * FROM chats WHERE jid='dream:manual:legacy:retained'").get();
+  let dispatched=0,disposed=0;
+  const dream = await importFresh<typeof import('../src/dream.js')>('../src/dream.js');
+  await expect(dream.runDreamAgentTurn({chatJid:'web:default',mode:'manual',agentPool:{
+    isDurableRuntime:()=>false,dispatchDreamOperation:async()=>{dispatched++;},disposeChatSession:async()=>{disposed++;},
+  } as any})).rejects.toThrow('Native Dream dispatcher unavailable');
+  expect({dispatched,disposed}).toEqual({dispatched:0,disposed:0});
+  expect(readFileSync(join(directory,'session.json'),'utf8')).toBe('original');
+  expect(db.getDb().query("SELECT * FROM chats WHERE jid='dream:manual:legacy:retained'").get()).toEqual(before);
+  expect(existsSync(join(config.WORKSPACE_DIR,'notes/memory/.dream.lock'))).toBe(false);
 });

@@ -26,6 +26,7 @@ export function createHostCommandPolicy(root: Database, assertCurrent: () => voi
     assertCurrent();
   };
   return {read, set, settings: {
+    afterFailedRun: "continue" as const, // Drain distinct accepted inputs; never retry the failed run.
     get retry() { return {enabled: read().autoRetry}; },
     get compaction() { return {enabled: read().autoCompact}; },
   }};

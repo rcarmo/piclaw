@@ -103,7 +103,7 @@
     "ci:fast": "bun run check:silent-swallows && bun run check:structured-logging && bun run check:dependency-pins && bun run check:actions-workflows && bun run check:vendor-inventory && bun run check:env-surface && bun run check:circular-dependencies && bun run check:local-test-entrypoints && bun run ci:fast:tests && bun run ci:fast:features && make build-web",
     "ci:native": "bun scripts/native-test-suite.ts",
     "ci:full": "bun run ci:fast && bun run ci:native",
-    "ci:fast:tests": "bun run test:local --cwd runtime --env PICLAW_DB_IN_MEMORY=1 -- bun test --max-concurrency=1 --path-ignore-patterns='**/features/**' --path-ignore-patterns='**/scripts/**' --path-ignore-patterns='**/*.optional.test.ts'",
+    "ci:fast:tests": "bun run test:local --cwd runtime --env PICLAW_DB_IN_MEMORY=1 -- bun test --isolate --max-concurrency=1 --path-ignore-patterns='**/features/**' --path-ignore-patterns='**/scripts/**' --path-ignore-patterns='**/*.optional.test.ts'",
     "ci:fast:features": "bun run test:local -- bun run runtime/test/features/run-feature-tests.ts",
     "ci:integration": "bun run scripts/integration-test-suite.ts",
     "ci:publish-smoke": "./scripts/docker/publish-smoke-test.sh \"$IMAGE_REF\" \"$PLATFORM\" \"$EXPECTED_BUN_VERSION\" \"$EXPECTED_RESTIC_VERSION\"",

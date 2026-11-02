@@ -1579,7 +1579,8 @@ export class HostConversationRuntime {
       }
       if (!operation) throw Error("Host primary input required");
       if (!inputs.some(input => input.sourceSeq === operation!.primarySourceSeq)) {
-        // A late accepted intent starts a new SDK run after its primary completed.
+        // A late accepted intent may start a new SDK run after a terminal primary.
+        // An unanswered primary grants no replay: require the already-proven later input.
         // The run contains only the intent; prove the original primary through
         // its exact durable binding and public SDK evidence, never ancestry.
         const primaryId = Number(operation.harness?.harnessOperationId);
@@ -1587,7 +1588,9 @@ export class HostConversationRuntime {
           throw Error("Exact host primary binding required");
         const submission = await this.harness.submission(primaryId as SubmissionId, this.context); this.fence();
         const status = await submission?.status(this.context); this.fence();
-        if (!status || status.type !== "input" || status.status !== "done" || status.conversationId !== conversationId ||
+        const terminalPrimary = status?.status === "done" || (status?.status === "unanswered" &&
+          inputs.some(input => input.sourceSeq > operation!.primarySourceSeq));
+        if (!status || status.type !== "input" || !terminalPrimary || status.conversationId !== conversationId ||
           status.entry === undefined) throw Error("Completed host primary required");
         const entry = await this.harness.commit(tx => tx.entry(status.entry!), this.context); this.fence();
         const data = entry?.data as Record<string, unknown> | undefined;
@@ -1599,7 +1602,7 @@ export class HostConversationRuntime {
         if (!bound || bound.submissionId !== primaryId) throw Error("Exact host primary binding required");
         const checked = await this.checked(primary); this.fence();
         const record = await this.record(primary); this.fence();
-        if (checked.operation.version !== operation.version || record?.status !== "done" || record.id !== primaryId)
+        if (checked.operation.version !== operation.version || record?.status !== status.status || record.id !== primaryId)
           throw Error("Completed host primary required");
         inputs.unshift(bound);
       }
@@ -2332,6 +2335,8 @@ export class HostConversationRuntime {
   /** Rollback-only shutdown: seal before yielding, join host calls, then reject ANY live
    * public task/submission before Harness.close can cancel work. Failure stays sealed.
    * This proves quiescence, NOT absence of historical candidate-only commits. */
+  quiesceForRollback(beforeStorageClose: () => Promise<never>): Promise<never>;
+  quiesceForRollback(beforeStorageClose?: () => Promise<void>): Promise<void>;
   quiesceForRollback(beforeStorageClose?: () => Promise<void>): Promise<void> {
     if (this.closed) return Promise.reject(new Error("Runtime already closing"));
     return this.shutdown(true, beforeStorageClose);

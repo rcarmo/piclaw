@@ -1,3 +1,4 @@
+import { createHostCommandPolicy } from "../../runtime/durable-engine/src/host-command-policy.js";
 import "./src/test-guard.js";
 import { createInputHandoffCompletion } from "../../runtime/durable-engine/src/host-bindings.js";
 import { test, expect } from "bun:test";
@@ -10,10 +11,17 @@ import type { TerminalCommit, TerminalDatabaseEffect } from "../../runtime/src/s
 import type { AssistantMessage } from "../../runtime/durable-engine/qualification/ai.ts";
 import { HostConversationRuntime, type AcceptedInput, type RuntimeOptions, type SettledAnswer } from "../../runtime/durable-engine/src/index.js";
 import { configureHostWalFixtureDatabase, openWalFixtureDatabase } from "./src/sqlite-fixture-policy.js";
+import { configureSqliteRole } from "../../runtime/src/db/sqlite-role-policy.js";
 import { barrier, context, openFixture } from "./src/fixture.js";
 import { at, effect, sealed, value } from "./src/host-handoff.js";
 import { hashCanonicalRequest, type CanonicalJsonValue } from "../../runtime/src/service-effects/contracts/common.js";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
+import { ensureBudgetWork } from "../../runtime/src/db/budget-limits.js";
+import { reserveBudgetRequest, dispatchBudgetRequest, abandonBudgetRequest, getBudgetRequest } from "../../runtime/src/db/budget-request-reservations.js";
+import { assertModelAccountingReady } from "../../runtime/src/budget/model-request-accounting.js";
+import { assertOperationAccountingReady } from "../../runtime/durable-engine/src/host-request-accounting.js";
+import { applyOwnedMigrations } from "../../runtime/src/db/migrations.js";
+import { budgetTerminalEvidenceVersionMigration } from "../../runtime/src/db/budget-limits-schema.js";
 import { installTerminalSettlementCompositionSchema } from "../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js";
 import { createCurrentPiclawServiceWorkStore } from "../../runtime/src/service-effects/current-piclaw/service-work-store.js";
 import { createCurrentPiclawTerminalSettlementStore } from "../../runtime/src/service-effects/current-piclaw/terminal-settlement-store.js";
@@ -42,20 +50,21 @@ const imageBlock = { type: "image", name: "generated.png", filename: "generated.
 // @ts-expect-error ImageContent is not an AssistantMessage content variant.
 const unsupportedAssistantImage: AssistantMessage["content"][number] = { type: "image", data: "AA==", mimeType: "image/png" };
 
-async function fixture(run: (f: Awaited<ReturnType<typeof setup>>) => Promise<void>, busy = false) {
-  const f = await setup(busy);
+async function fixture(run: (f: Awaited<ReturnType<typeof setup>>) => Promise<void>, busy = false, sharedRoot = false) {
+  const f = await setup(busy, sharedRoot);
   try { await run(f); } finally { f.base.host.modelHold?.release(); await f.runtime.close(); f.db.close(); await rm(f.dir, { recursive: true, force: true }); }
 }
-async function setup(busy = false) {
+async function setup(busy = false, sharedRoot = false) {
   const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "runtime-"));
   process.env.PICLAW_DB_IN_MEMORY = "1";
   initDatabase(); getDb().query("VACUUM INTO ?").run(join(dir, "host.sqlite")); closeDatabase();
   const db = new Database(join(dir, "host.sqlite"), { strict: true });
   configureHostWalFixtureDatabase(db);
+  if (sharedRoot) configureSqliteRole(db, join(dir, 'host.sqlite'), { role: 'root' });
   db.exec("PRAGMA foreign_keys=ON"); installTerminalSettlementCompositionSchema(db);
   // Explicit qualification-only host correlation schema. Never installed by runtime.open().
   db.exec(`CREATE TABLE runtime_payloads (ref TEXT PRIMARY KEY, content TEXT NOT NULL)`);
-  const path = join(dir, "candidate.sqlite");
+  const path = join(dir, sharedRoot ? "host.sqlite" : "candidate.sqlite");
   const base = await openFixture({ acquired: true }, () => {}, async () => SqliteStorage.open(await openWalFixtureDatabase(path)));
   const id = base.root.id;
   if (busy) {
@@ -1298,3 +1307,204 @@ test("runtime: native context reader fails closed on stale incarnation, binding 
   f.setOwner(true); f.hooks.resolveConversation = undefined;
   expect(f.base.host.modelCalls).toBe(0);
 }));
+
+for (const disposition of ['completed', 'failed'] as const) test(`runtime: legacy hold cannot strand ${disposition} finalization, reopen, or successor`, () => fixture(async f => {
+  if (disposition === 'failed') f.base.host.modelAllowed = false;
+  const input = await f.accept(), submission = await f.runtime.submit(input);
+  await f.runtime.close(); f.runtime = await f.drain();
+  // Upgrade a real v4 financial hold while the SDK submission is already terminal.
+  f.db.exec(`DROP TRIGGER budget_request_evidence_version_insert;
+    DROP TRIGGER budget_request_evidence_version_update;
+    ALTER TABLE budget_request_reservations DROP COLUMN terminal_evidence_version;
+    DELETE FROM piclaw_schema_migrations WHERE owner='host.budget-request-reservations' AND id='terminal-evidence-version-v1';`);
+  const workId = `durable-operation:${input.operationId}`;
+  ensureBudgetWork({ id: workId, chatJid: input.chatJid, executionKind: 'interactive' }, f.db);
+  const binding = { id: 'legacy-finishing', workId: 'durable-request:legacy-finishing', chatJid: input.chatJid,
+    providerId: 'fixture', modelId: 'fixture-model', accountRef: 'old-account', amountMicros: 60 };
+  ensureBudgetWork({ id: binding.workId, chatJid: input.chatJid, executionKind: 'interactive', parentWorkId: workId }, f.db);
+  reserveBudgetRequest(binding, { now: new Date('2020-01-01T00:00:00.000Z') }, f.db);
+  dispatchBudgetRequest(binding, { signal: new AbortController().signal, authorise() {} }, f.db);
+  abandonBudgetRequest(binding, f.db); applyOwnedMigrations(f.db, [budgetTerminalEvidenceVersionMigration]);
+  f.hooks.accounting = id => assertModelAccountingReady(`durable-operation:${id}`, f.db, undefined, true);
+  const hold = getBudgetRequest(binding.id, f.db), calls = f.base.host.modelCalls;
+  expect(hold?.terminal_evidence_version).toBe(0); expect(hold?.state).toBe('unresolved');
+  const readTasks = () => { const sdk = new Database(f.path, { readonly: true, create: false }); try { return sdk.query('SELECT * FROM tasks').all(); } finally { sdk.close(); } };
+  const tasks = readTasks(), settled = await f.runtime.settle(input);
+  if (!settled) throw Error('Terminal publication missing');
+  expect(settled.disposition).toBe(disposition);
+  expect(value(await f.work.getOperation(input.operationId))!.harness?.harnessOperationId).toBe(String(submission));
+  expect(f.db.query('SELECT phase FROM service_effect_s01_operations WHERE operation_id=?').get(input.operationId)).toEqual({ phase: 'terminal' });
+  expect(f.db.query('SELECT * FROM service_effect_s02_commits').all()).toHaveLength(1);
+  expect(await f.runtime.settle(input)).toEqual(settled);
+  await f.runtime.close(); f.runtime = await f.drain();
+  expect(await f.runtime.settle(input)).toEqual(settled);
+  expect(readTasks()).toEqual(tasks); expect(f.base.host.modelCalls).toBe(calls);
+  expect(getBudgetRequest(binding.id, f.db)).toEqual(hold);
+  // A fresh accepted successor advances; the old provider request is never retried.
+  f.base.host.modelAllowed = true;
+  const next = await f.accept('queued-steer:intent-1', 'fresh successor');
+  await f.runtime.submit(next); await f.runtime.close(); f.runtime = await f.drain();
+  const nextSettled = await f.runtime.settle(next);
+  if (!nextSettled) throw Error('Successor publication missing');
+  expect(nextSettled.disposition).toBe('completed');
+  expect(f.base.host.modelCalls).toBe(calls + 1);
+  expect(f.db.query('SELECT * FROM service_effect_s02_commits').all()).toHaveLength(2);
+  expect(getBudgetRequest(binding.id, f.db)).toEqual(hold);
+}));
+
+for (const state of ['dispatched', 'unresolved'] as const) test(`runtime: interrupted modern ${state} hold cannot strand failed publication or a distinct successor`, () => fixture(async f => {
+  f.base.host.modelAllowed = false;
+  const input = await f.accept(), submission = await f.runtime.submit(input);
+  await f.runtime.close(); f.runtime = await f.drain();
+  expect((await f.runtime.reconcile(input)).status).toMatchObject({ status: 'unanswered', reason: 'model_error' });
+  const task = f.db.query("SELECT id,conversation_id FROM tasks WHERE kind=? AND status='terminal'")
+    .get(JSON.stringify('pi.generation')) as { id: number; conversation_id: number };
+  expect(task.conversation_id).toBe(input.conversationId);
+  const parentWorkId = `durable-operation:${input.operationId}`;
+  const binding = { id: 'lost-modern-terminal', workId: 'durable-request:lost-modern-terminal', chatJid: input.chatJid,
+    providerId: 'fixture', modelId: 'fixture-model', accountRef: 'original-account', amountMicros: 60,
+    modelInvocation: { version: 1 as const, domain: 'runtime', operationId: input.operationId,
+      conversationId: task.conversation_id, taskId: task.id, taskKind: 'pi.generation' as const, phase: 'request' as const, checkpointHash: 'd'.repeat(64) } };
+  ensureBudgetWork({ id: parentWorkId, chatJid: input.chatJid, executionKind: 'interactive' }, f.db);
+  ensureBudgetWork({ id: binding.workId, chatJid: input.chatJid, executionKind: 'interactive', parentWorkId }, f.db);
+  // A dispatched request with no received terminal models process loss. No
+  // provider outcome/usage is invented, and no provider is called by recovery.
+  reserveBudgetRequest(binding, {}, f.db);
+  dispatchBudgetRequest(binding, { signal: new AbortController().signal, authorise() {} }, f.db);
+  if (state === 'unresolved') abandonBudgetRequest(binding, f.db);
+  const hold = getBudgetRequest(binding.id, f.db), calls = f.base.host.modelCalls;
+  const financial = () => ({ requests: f.db.query('SELECT * FROM budget_request_reservations').all(),
+    work: f.db.query('SELECT * FROM budget_work ORDER BY id').all(), usage: f.db.query('SELECT * FROM token_usage').all() });
+  const money = financial(), tasks = f.db.query('SELECT * FROM tasks ORDER BY id').all();
+  expect(hold?.terminal_evidence_version).toBe(1);
+  expect(hold?.terminal_receipt_json).toBeNull();
+  // A native execution outcome is not a financial terminal receipt.
+  expect(() => assertModelAccountingReady(parentWorkId, f.db, undefined, true)).toThrow('budget_denied');
+  f.hooks.accounting = id => assertOperationAccountingReady(f.db, id, true, { domain: 'runtime', incarnation: 'copy-A' });
+  const committed = await f.runtime.settle(input);
+  expect(committed?.disposition).toBe('failed');
+  expect(f.db.query('SELECT content FROM messages WHERE is_bot_message=1').all()).toHaveLength(1);
+  expect(await f.runtime.settle(input)).toEqual(committed);
+  expect(financial()).toEqual(money);
+  expect(f.db.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(tasks);
+  await f.runtime.close(); f.runtime = await f.drain();
+  expect(await f.runtime.settle(input)).toEqual(committed);
+  expect(f.base.host.modelCalls).toBe(calls);
+  expect((await f.runtime.reconcile(input)).submissionId).toBe(submission);
+  expect(financial()).toEqual(money);
+  f.base.host.modelAllowed = true;
+  const next = await f.accept('queued-steer:intent-1', 'distinct accepted successor');
+  await f.runtime.submit(next); await f.runtime.close(); f.runtime = await f.drain();
+  expect((await f.runtime.settle(next))?.disposition).toBe('completed');
+  expect(f.base.host.modelCalls).toBe(calls + 1);
+  expect(f.db.query('SELECT * FROM service_effect_s02_commits').all()).toHaveLength(2);
+  expect(financial()).toEqual(money);
+  expect(getBudgetRequest(binding.id, f.db)).toEqual(hold);
+}, false, true));
+
+for (const reopen of [false, true]) test(`runtime intents: late input after failed primary retains exact source authority; reopen=${reopen}`, () => fixture(async f => {
+  f.base.host.modelAllowed = false;
+  const input = await f.accept(), id = await f.runtime.submit(input); f.grantKnown();
+  await f.runtime.wait(input, id);
+  if (reopen) { await f.runtime.close(); f.runtime = await f.drain(); }
+  const readOriginal = () => { const sdk = new Database(f.path, { readonly: true, create: false }); try { return sdk.query('SELECT * FROM submissions WHERE id=?').get(id); } finally { sdk.close(); } };
+  const original = readOriginal(), calls = f.base.host.modelCalls;
+  f.base.host.modelAllowed = true;
+  f.base.host.modelHold = barrier(); const entered = barrier(); f.base.host.onModelEnter = () => entered.release();
+  const intent = await f.attach(input, id);
+  const intentId = await f.runtime.submitIntent(intent); await entered.promise;
+  const live = await f.runtime.inspectAuthority();
+  const generation = live.inspection.tasks.find(task => task.record.conversationId === input.conversationId && task.record.kind === 'pi.generation' && task.state.kind === 'running');
+  if (!generation) throw Error('Actual late generation required');
+  // Actual captureSource, reached through the public committed-usage reader.
+  // It must bind the new accepted intent to its exact failed (not replayed) primary.
+  await f.runtime.readCommittedRunUsage(input.conversationId, generation.record.id);
+  f.base.host.modelHold.release(); f.base.host.onModelEnter = undefined;
+  let terminal = await f.runtime.settle(input);
+  for (let n = 0; !terminal && n < 100; n++) { await Bun.sleep(10); terminal = await f.runtime.settle(input); }
+  // The failed original is reported honestly; its fresh intent must nevertheless drain.
+  expect(terminal?.disposition).toBe('failed');
+  const sdk = new Database(f.path, { readonly: true, create: false });
+  try { expect(sdk.query("SELECT status FROM submissions WHERE id=?").get(intentId)).toEqual({ status: 'done' }); } finally { sdk.close(); }
+  expect(f.base.host.modelCalls).toBe(calls + 1);
+  expect(readOriginal()).toEqual(original);
+  expect(f.db.query('SELECT phase FROM service_effect_s01_operations WHERE operation_id=?').get(input.operationId)).toEqual({ phase: 'terminal' });
+  await f.runtime.close(); f.runtime = await f.drain();
+  expect(await f.runtime.settle(input)).toEqual(terminal); expect(f.base.host.modelCalls).toBe(calls + 1);
+  expect(readOriginal()).toEqual(original);
+  const next = await f.accept('queued-steer:intent-2', 'fresh next operation');
+  await f.runtime.submit(next); await f.runtime.close(); f.runtime = await f.drain();
+  expect((await f.runtime.settle(next))?.disposition).toBe('completed');
+  expect(f.base.host.modelCalls).toBe(calls + 2); expect(readOriginal()).toEqual(original);
+}));
+
+test("runtime: public SDK boundary drains kept steers without replaying failed input", () => fixture(async f => {
+  f.grantKnown();
+  const entered = barrier();
+  f.base.host.modelHold = barrier();
+  f.base.host.onModelEnter = () => entered.release();
+  const primary = await f.accept();
+  const original = await f.runtime.submit(primary);
+  const observation = new AbortController();
+  const waiting = f.runtime.wait(primary, original, observation.signal).catch(error => error);
+  await entered.promise;
+  const intent = await f.attach(primary, original);
+  const late = await f.runtime.submitIntent(intent);
+  f.base.host.modelAllowed = false;
+  f.base.host.modelHold.release();
+  for (let i = 0; i < 200; i++) {
+    if ((await f.runtime.reconcile(primary)).status?.status === "unanswered") break;
+    await Bun.sleep(10);
+  }
+  expect((await f.runtime.reconcile(primary)).status?.status).toBe("unanswered");
+  expect((await f.runtime.reconcileIntent(intent)).status?.status).toBe("queued");
+  observation.abort(); await waiting;
+  await f.runtime.close();
+  f.base.host.modelAllowed = true; f.base.host.modelHold = undefined; f.base.host.onModelEnter = undefined;
+  const storage = await SqliteStorage.open(await openWalFixtureDatabase(f.path));
+  const harness = await Harness.open(storage, f.options.harnessOptions, context);
+  try {
+    const conversation = (await harness.conversation(primary.conversationId, context))!;
+    const boundary = await conversation.submit({ type: "write", requestId: "exact-kept-boundary", entry: {
+      kind: "host.accepted-queue-resume", data: { operationId: primary.operationId, submissionIds: [late] }, model: []
+    } }, context);
+    expect((await boundary.wait(context)).status).toBe("done");
+    expect((await (await harness.submission(late, context))!.wait(context)).status).toBe("done");
+    expect((await (await harness.submission(original, context))!.status(context)).status).toBe("unanswered");
+    expect(f.base.host.modelCalls).toBe(1);
+  } finally { await harness.close(context); }
+  f.setOwner(true); f.runtime = await HostConversationRuntime.open(f.options, context);
+  await f.runtime.wait(primary, original, AbortSignal.timeout(5000));
+  expect((await f.runtime.settle(primary))?.disposition).toBe("failed");
+  expect(value(await f.work.getOperation(primary.operationId))?.phase).toBe("terminal");
+}), 20_000);
+
+test("runtime: production failure policy continues exact queued input, never retries failed input", () => fixture(async f => {
+  f.grantKnown();
+  await f.runtime.close(); f.setOwner(true);
+  const policy = createHostCommandPolicy(f.db, () => {});
+  f.runtime = await HostConversationRuntime.open({ ...f.options, harnessOptions: { ...f.options.harnessOptions,
+    settings: { ...policy.settings, retry: { enabled: false }, compaction: { enabled: false } }
+  } }, context);
+  const entered = barrier(); let calls = 0;
+  f.base.host.modelHold = barrier();
+  f.base.host.onModelEnter = async () => {
+    if (++calls === 1) entered.release();
+    else { f.base.host.modelAllowed = true; f.base.host.modelHold = undefined; }
+  };
+  const primary = await f.accept(); const original = await f.runtime.submit(primary);
+  const waiting = f.runtime.wait(primary, original, AbortSignal.timeout(5000));
+  const caught = waiting.catch(error => error);
+  await entered.promise;
+  const intent = await f.attach(primary, original);
+  const late = await f.runtime.submitIntent(intent);
+  f.base.host.modelAllowed = false; f.base.host.modelHold!.release();
+  const result = await caught;
+  if (result instanceof Error) throw result;
+  expect((await f.runtime.reconcile(primary)).status?.status).toBe("unanswered");
+  expect((await f.runtime.reconcileIntent(intent)).status?.status).toBe("done");
+  expect((await f.runtime.settle(primary))?.disposition).toBe("failed");
+  expect(f.base.host.modelCalls).toBe(1); expect(calls).toBe(2);
+  expect(late).not.toBe(original);
+  expect(value(await f.work.getOperation(primary.operationId))?.phase).toBe("terminal");
+}), 15_000);
