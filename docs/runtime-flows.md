@@ -44,56 +44,15 @@ sequenceDiagram
 
 ### Follow‑up queueing and steering
 
-When the agent is streaming a response, the user can submit additional messages. These are automatically queued as follow‑ups rather than interrupting the active turn:
+Queued follow-ups have one storage owner: `QueuedFollowupLifecycleService` persists them in `chat_cursors.queued_followups_json`. Newly allocated negative row IDs identify queue actions; host-generated `source_id` values identify durable input. Existing positive-row records remain readable. Reading queue state does not adopt a source or rewrite historical timeline rows.
 
-```mermaid
-sequenceDiagram
-  participant User
-  participant Web as Web UI
-  participant API as WebChannel
-  participant Queue as Deferred Queue
-  participant Placeholder as Placeholder Store
-  participant Pool as AgentPool
+Materialisation reads the persisted head, writes its user timeline row and consumes the queued record in the same SQL transaction. Accepted sources keep their native binding and payload identity. Deferred controls settle before later ordinary input is admitted. There is no parallel in-memory placeholder queue or placeholder replacement API.
 
-  User->>Web: Submit while agent is streaming
-  Web->>API: POST /agent
-  API->>API: isStreaming(chatJid) = true
+The compose-area queue keeps its existing controls:
 
-  alt Deferred follow‑up (queue full path)
-    API->>Queue: Append to queued_followups_json
-    API-->>Web: { queued: "followup" }
-    Web->>Web: Add to queue stack UI
-  end
-
-  Note over Pool: Active turn completes
-  API->>Queue: Peek next deferred item
-  Queue-->>API: { rowId, content, threadId }
-  API->>Placeholder: Move to placeholder store
-  API->>Pool: processChat(content)
-  Pool->>Pool: Run agent turn
-  Note over Web: Queue stack item disappears
-```
-
-There are two queue storage layers:
-
-1. **Deferred Queue** — persisted in `queued_followups_json` column of `chat_cursors`. Uses negative synthetic row IDs. Survives restarts.
-2. **Placeholder Store** — in‑memory FIFO (`FollowupPlaceholderStore`). Uses positive real row IDs (from the stored message). Lost on restart but recovered via the deferred queue.
-
-`getQueuedFollowupItems()` merges both stores, deduplicating by `rowId`.
-
-The user can interact with queued items in the compose area:
-
-- **Cancel (×)** — calls `removeAgentQueueItem(rowId)`, which splices the item from the server‑side queue array and broadcasts `agent_followup_removed`.
-- **Steer (→)** — calls `steerAgentQueueItem(rowId)`, which injects the item's content as steering into the active agent session. The agent sees it as mid‑turn user input.
-- **Move up / move down** — calls `POST /agent/queue-reorder` with `from_index` / `to_index`, which reorders the deferred queue in `queued_followups_json` and persists the new order on the backend instead of leaving the stack at the mercy of timestamp sorting.
-
-Queue reorder now preserves deliberate user ordering all the way through execution:
-
-- the backend control-plane surface exposes `handleAgentQueueReorder()`
-- the queued-followup lifecycle service mutates the persisted deferred queue order in place
-- the old timestamp-based re-sort that used to quietly undo user moves has been removed
-
-The client tracks a `dismissedQueueRowIdsRef` (Set) to prevent `refreshQueueState` from re‑adding items that were just cancelled or steered. The set is cleared when the agent turn completes or when the server queue empties.
+- **Cancel (×)** calls `removeAgentQueueItem(rowId)`. Accepted sources require the host withdrawal callback in the removal transaction; successful removal publishes `agent_followup_removed`.
+- **Steer (→)** calls `steerAgentQueueItem(rowId)` through the captured native intent port. Unaccepted historical/manual items return409 without changing queue state or timeline rows.
+- **Move up / move down** calls `POST /agent/queue-reorder` with `from_index` and `to_index`. The persisted order and accepted-source priority survive subsequent execution; protected continuations keep their ordering constraints.
 
 ### Turn state machine
 

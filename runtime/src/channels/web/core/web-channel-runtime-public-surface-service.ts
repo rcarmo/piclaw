@@ -4,8 +4,8 @@ import { readAccessConfig } from '../../../core/config-access.js';
 import { getExecutionIdentity } from '../../../core/execution-context.js';
 import type { InteractionRow } from "../../../db.js";
 import type { WebAgentBufferEntry } from "../agent/agent-buffers.js";
-import type { QueuedFollowupItem, QueuedFollowupSourceMetadata } from "../runtime/followup-placeholders.js";
-import type { SendMessageOptions } from "../messaging/message-write-flows.js";
+import type { QueuedFollowupItem, QueuedFollowupSourceMetadata } from "../../../queued-followups.js";
+import type { SendMessageOptions } from "../message-write-service.js";
 import type { WebMessageProcessingStorageService } from "../messaging/message-processing-storage-service.js";
 import type { WebChannelRuntimeFollowupFacadeService } from "../runtime/runtime-followup-facade-service.js";
 import type { WebSessionBroadcastService } from "../sse/session-broadcast-service.js";
@@ -14,20 +14,17 @@ type WebChannelRuntimePublicSurfaceFollowupFacade = Pick<
   WebChannelRuntimeFollowupFacadeService,
   | "sendMessage"
   | "postDashboardWidget"
-  | "queueFollowupPlaceholder"
   | "enqueueQueuedFollowupItem"
   | "admitQueuedFollowupItem"
   | "peekQueuedFollowupItem"
   | "consumeQueuedFollowupItem"
   | "prependQueuedFollowupItem"
   | "replaceQueuedFollowupItem"
-  | "consumeQueuedFollowupPlaceholder"
   | "getQueuedFollowupCount"
   | "getQueuedFollowupItems"
   | "removeQueuedFollowupItem"
   | "updateAgentStatus"
   | "getAgentStatus"
-  | "replaceQueuedFollowupPlaceholder"
   | "getThreadRootId"
   | "resumeChat"
   | "resumePendingChats"
@@ -366,10 +363,6 @@ export class WebChannelRuntimePublicSurfaceService {
     throw new Error("Runtime agent messages require the host input handler.");
   }
 
-  queueFollowupPlaceholder(chatJid: string, text: string, threadId?: number, queuedContent?: string): InteractionRow | null {
-    return this.channel.runtimeFollowupFacade.queueFollowupPlaceholder(chatJid, text, threadId, queuedContent);
-  }
-
   enqueueQueuedFollowupItem(
     chatJid: string,
     rowId: number,
@@ -408,10 +401,6 @@ export class WebChannelRuntimePublicSurfaceService {
     return this.channel.runtimeFollowupFacade.replaceQueuedFollowupItem(chatJid, item);
   }
 
-  consumeQueuedFollowupPlaceholder(chatJid: string): number | null {
-    return this.channel.runtimeFollowupFacade.consumeQueuedFollowupPlaceholder(chatJid);
-  }
-
   getQueuedFollowupCount(chatJid: string): number {
     return this.channel.runtimeFollowupFacade.getQueuedFollowupCount(chatJid);
   }
@@ -433,26 +422,6 @@ export class WebChannelRuntimePublicSurfaceService {
 
   getAgentStatus(chatJid: string): Record<string, unknown> | null {
     return this.channel.runtimeFollowupFacade.getAgentStatus(chatJid);
-  }
-
-  replaceQueuedFollowupPlaceholder(
-    chatJid: string,
-    rowId: number,
-    text: string,
-    mediaIds: number[],
-    contentBlocks: Array<Record<string, unknown>> | undefined,
-    threadId?: number,
-    isTerminalAgentReply?: boolean,
-  ): InteractionRow | null {
-    return this.channel.runtimeFollowupFacade.replaceQueuedFollowupPlaceholder(
-      chatJid,
-      rowId,
-      text,
-      mediaIds,
-      contentBlocks,
-      threadId,
-      isTerminalAgentReply,
-    );
   }
 
   getThreadRootId(chatJid: string, messageId: string): number | null {

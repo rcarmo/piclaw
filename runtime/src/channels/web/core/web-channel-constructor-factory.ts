@@ -6,7 +6,7 @@ import {
   getWebRuntimeConfig,
   getWebServerConfig,
 } from "../../../core/config.js";
-import { getDb, replaceMessageContent } from "../../../db.js";
+import { getDb } from "../../../db.js";
 import { getChatProject } from "../../../db/chat-project.js";
 import { handlePost as handlePostRequest } from "../handlers/posts.js";
 import { handleAgentMessage as handleAgentMessageRequest } from "../handlers/agent.js";
@@ -205,7 +205,6 @@ export interface WebChannelConstructorFactoryDeps {
     channel: WebChannelConstructorFactoryChannel,
     defaults: { defaultAgentId: string },
   ): WebAgentPeerMessageRelayService;
-  replaceMessageContent: typeof replaceMessageContent;
   getDb: typeof getDb;
   ensureAvatarCache: typeof ensureAvatarCache;
   handlePostRequest(
@@ -238,7 +237,6 @@ const defaultDeps: WebChannelConstructorFactoryDeps = {
   createAdaptiveCardSidePromptService: (options) => new WebAdaptiveCardSidePromptService(options),
   createPeerMessageRelayService: (channel, defaults) =>
     createWebAgentPeerMessageRelayService(channel as unknown as WebAgentPeerMessageRelayChannelLike, defaults),
-  replaceMessageContent,
   getDb,
   ensureAvatarCache,
   handlePostRequest: (channel, req, isReply, chatJid) =>
@@ -323,15 +321,9 @@ export function createWebChannelConstructorFactory(
   });
 
   const messageWriteService = deps.createMessageWriteService({
-    defaultAgentId: options.defaultAgentId,
     storeMessage: (chatJid, content, isBot, mediaIds, writeOptions) =>
       channel.storeMessage(chatJid, content, isBot, mediaIds, writeOptions),
-    replaceMessageContent: (chatJid, rowId, text, mediaIds, contentBlocks, isTerminalAgentReply) =>
-      deps.replaceMessageContent(chatJid, rowId, text, { contentBlocks, mediaIds, isTerminalAgentReply }) ?? null,
     broadcastAgentResponse: (interaction) => interactionBroadcaster.broadcastAgentResponse(interaction),
-    broadcastInteractionUpdated: (interaction) => interactionBroadcaster.broadcastInteractionUpdated(interaction),
-    enqueueFollowupPlaceholder: (chatJid, rowId, queuedContent, threadId, queuedAt) =>
-      channel.queuedFollowupLifecycle.enqueuePlaceholder(chatJid, rowId, queuedContent, threadId, queuedAt),
   });
 
   const runtimeFollowupFacade = deps.createRuntimeFollowupFacade({

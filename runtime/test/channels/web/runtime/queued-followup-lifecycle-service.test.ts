@@ -183,7 +183,7 @@ describe("queued follow-up lifecycle service", () => {
     } finally { restore?.(); }
     expect(service.getQueuedFollowupItems('web:binding')).toEqual([]);
   });
-  test("combines deferred and placeholder items into queue-state payloads without duplicate row ids", async () => {
+  test("projects persisted negative/positive rows without duplicate row ids or timeline mutation", async () => {
     const { db, service } = await createServiceFixture();
 
     const placeholderTimestamp = "2024-01-01T00:00:03.000Z";
@@ -213,7 +213,7 @@ describe("queued follow-up lifecycle service", () => {
       21,
       "2024-01-01T00:00:02.000Z"
     );
-    service.enqueuePlaceholder(
+    service.enqueueQueuedFollowupItem(
       "web:default",
       placeholderRowId,
       "placeholder survives",
@@ -245,7 +245,7 @@ describe("queued follow-up lifecycle service", () => {
     ]);
   });
 
-  test("removes only the exact placeholder row and timeline, leaving same-text siblings", async () => {
+  test("removes only the exact historical positive deferred row and timeline, leaving same-text siblings", async () => {
     const { db, service } = await createServiceFixture();
 
     const placeholderRowId = db.storeMessage({
@@ -259,27 +259,27 @@ describe("queued follow-up lifecycle service", () => {
       is_bot_message: true,
       thread_id: 31,
     });
-    service.enqueuePlaceholder("web:default", placeholderRowId, "queued placeholder", 31, "2024-01-01T00:00:00.000Z");
+    service.enqueueQueuedFollowupItem("web:default", placeholderRowId, "queued placeholder", 31, "2024-01-01T00:00:00.000Z");
 
     const siblingRowId = db.storeMessage({
       id: "placeholder-sibling", chat_jid: "web:default", sender: "web-agent", sender_name: "Pi",
       content: "\u2063", timestamp: "2024-01-01T00:00:01.000Z", is_from_me: false, is_bot_message: true,
     });
-    service.enqueuePlaceholder("web:default", siblingRowId, "queued placeholder", 31);
+    service.enqueueQueuedFollowupItem("web:default", siblingRowId, "queued placeholder", 31);
     const deferredRowId = service.enqueueQueuedFollowupItem("web:default", 0, "queued placeholder");
     const siblings = service.getQueuedFollowupItems("web:default").filter(item => item.rowId !== placeholderRowId);
     const timeline = db.getMessageByRowId("web:default", siblingRowId);
     const result = await service.removeQueuedFollowupForAction("web:default", placeholderRowId);
 
-    expect(result.source).toBe("placeholder");
+    expect(result.source).toBe("deferred");
     expect(result.removed?.rowId).toBe(placeholderRowId);
     expect(result.removed?.queuedContent).toBe("queued placeholder");
     expect(service.getQueuedFollowupCount("web:default")).toBe(2);
     expect(service.getQueuedFollowupItems("web:default")).toEqual(siblings);
     expect(db.getMessageByRowId("web:default", placeholderRowId)).toBeUndefined();
     expect(db.getMessageByRowId("web:default", siblingRowId)).toEqual(timeline);
+    expect(service.consumeQueuedFollowupItem("web:default")?.rowId).toBe(siblingRowId);
     expect(service.consumeQueuedFollowupItem("web:default")?.rowId).toBe(deferredRowId);
-    expect(service.consumeQueuedFollowupPlaceholder("web:default")).toBe(siblingRowId);
   });
 
   test("persists deferred queued follow-ups with canonical metadata projection and mutation isolation", async () => {
