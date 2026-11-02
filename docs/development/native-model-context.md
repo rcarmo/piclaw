@@ -67,4 +67,27 @@ Ten warm samples per workload on Smith's LXC, stock SDK1.4, showed the following
 
 These measurements do not cover complete model selection, cold imports or generation. The metadata-heavy input retained the small request bound; no additional cache or wrapper layer was needed.
 
-Full epic acceptance still requires final capability/discovery and hook-inclusive overflow/recovery audits, the remaining installed add-on/profile census and separately authorised live verification. Source tests and these timings do not qualify deployment.
+## Hook overflow and recovery
+
+Plan and Goal materialise source/task-owned hidden snapshots through public commits before dispatch. They repair only their owned trailing suffix at the SDK's pinned cutoff. Goal's request-only rules and Observability's system contribution remain request hooks. Moving those snapshots into mutable sections would change historical ordering and recovery authority.
+
+Actual offline Codex-adapter regressions send oversized hook contributions, observe a real HTTP400 context rejection and require one provider call, an exact unanswered/model-error terminal and unchanged history/terminal after SQLite reopen. Retry and automatic compaction are disabled in those controls. A separate rejection control proves that the test bridge settles its private stream and retains the original producer failure. Existing explicit native compaction, changed/cleared Plan, Goal identity and source-revocation cases remain.
+
+Observability's source-bound request hook is separately exercised through real controller/Delegate late-ack recovery. Actual default-factory Plan, Goal and infrastructure cases verify the installed native exports and reopen. These are bounded compositional checks; selection still cannot predict arbitrary future write-capable hook changes.
+
+## Retained model/context boundaries
+
+| Surface | Current owner and caller | Retained exception / removal condition |
+|---|---|---|
+|Discovery and physical availability|Public Root `ModelRuntime`; native Regrets calls its snapshot directly|SDK `ModelRegistry` references elsewhere delegate to this same runtime; they do not own a second catalogue.|
+|Idle choice and persistence|Public private-engine conversation configuration through checked host admission|Chat/source/incarnation/config/history fences remain application policy.|
+|Selected prompt/schema preparation|Read-only `host-model-context.ts`, using public transcript types/helpers|Remove when a public non-persisting operation covers rendered sections, selected declarations and baseline provenance.|
+|Final output metadata|Root's87-line fixed public-adapter boundary|Remove when an approved public SDK operation supplies equivalent final auth-independent bounds. Unsupported producers stay unknown.|
+|Offline catalogue refresh|`PiclawModelRegistry` delegates refresh to the canonical runtime, forces offline and coalesces concurrent reloads|Stock1.4 `ModelRuntime.refresh` reloads configuration and does not supply this single-flight/offline enforcement. Remove the local wrapper when the SDK or retirement of its callers covers both guarantees.|
+|Legacy affinity/session metadata|Explicit legacy-capture composition; native construction requires a durable lookup and forbids mixed capture|Native missing handles refuse instead of creating legacy sessions. Legacy read decorators are installed only during legacy session creation; broader retirement belongs to#1650.|
+|Installed native add-ons|One exact source profile per accepted backend; immutable native fixture|All23 backend profiles, aliases, shadows, escaped roots and retired Regrets negatives remain checked before evaluation. SDK lifecycle declarations are not execution authority.|
+|Client context/thinking/catalogue|Existing shared backend model state in Classic/Visual|No client fit arithmetic, preset catalogue or independent capability owner. Manual commands use admitted incoming storage and retain their existing lifecycle/status surface.|
+
+This census retains passive token/pricing/provider-cost reporting. Expense-policy deletion remains#1875's separate delivery and earns no reduction credit here. Additional source retirement requires a demonstrated native caller replacement, not relocation or a new facade.
+
+Separately authorised deployed native verification remains required. Source tests, the census and these timings do not qualify installation, restart, credentials, live provider requests or history migration.

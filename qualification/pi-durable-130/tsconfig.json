@@ -95,6 +95,7 @@
     "sdk-prompt-wrapper.test.ts",
     "newregrets-enabled-default-factory.test.ts",
     "model-context-recovery.test.ts",
+    "host-plan-context.test.ts",
     "model-context-usage-framing.test.ts",
     "model-context-duplicate.test.ts",
     "model-context-parity.test.ts",
