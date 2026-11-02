@@ -345,10 +345,9 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
     // its internal failure drains finish, before runtime exposure or recovery.
     databaseGuard.contentionSignal = contentionSignal ? AbortSignal.any([contentionSignal, shutdown.signal]) : undefined;
     config.onRuntime?.(runtime);
-    const wait = wrapWait?.(runtime.wait.bind(runtime));
-    const runtimePort = new Proxy(runtime, { get(target, key) {
-      if (key === "wait" && wait) return wait;
-      if (key === "reconcileMaintenance") return (binding: Parameters<typeof runtime.reconcileMaintenance>[0]) => {
+    const adapter = createDurableConversationAdapter({ incarnation: r.incarnation, manifest, getConversationBinding: lookup, runtime,
+      wait: wrapWait?.(runtime.wait.bind(runtime)),
+      reconcileMaintenance(binding) {
         assertLive();
         if (activeController.recoveredMaintenanceChat === binding.chatJid) {
           const current = lookup(binding.chatJid, binding.branchId);
@@ -356,11 +355,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
           return activeController.resumeRecoveredMaintenance().then(() => {});
         }
         return runtime.reconcileMaintenance(binding);
-      };
-      const member = Reflect.get(target, key, target);
-      return typeof member === "function" ? member.bind(target) : member;
-    } });
-    const adapter = createDurableConversationAdapter({ incarnation: r.incarnation, manifest, getConversationBinding: lookup, runtime: runtimePort });
+      } });
     const hostControls = new Map<Promise<unknown>, string>();
     const backgroundPreparing = new Map<string,Promise<AcceptedInput>>();
     const recovery = createDurableRecoveryDispatch({ assertCurrentWriter: assert, submitIntent: input => adapter.submitIntent(input),
