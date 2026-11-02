@@ -80,14 +80,6 @@ describe("WebChannel endpoint facade delegation", () => {
         calls.push(`status:${req.method}`);
         return response("status");
       },
-      handleAgentContext: async (req: Request) => {
-        calls.push(`context:${req.method}`);
-        return response("context");
-      },
-      handleAgentModels: async (req: Request) => {
-        calls.push(`models:${req.method}`);
-        return response("models");
-      },
       handleAgentActiveChats: () => {
         calls.push("active-chats");
         return response("active-chats");
@@ -121,8 +113,6 @@ describe("WebChannel endpoint facade delegation", () => {
     expect((await fixture.channel.handleUpdatePost(new Request("https://example.com/post/9", { method: "PATCH" }), 9)).status).toBe(204);
     expect((await fixture.channel.handleInternalPost(new Request("https://example.com/internal/post", { method: "POST" }))).status).toBe(201);
     expect(await fixture.channel.handleAgentStatus(new Request("https://example.com/agent/status")).text()).toBe("status");
-    expect(await (await fixture.channel.handleAgentContext(new Request("https://example.com/agent/context"))).text()).toBe("context");
-    expect(await (await fixture.channel.handleAgentModels(new Request("https://example.com/agent/models"))).text()).toBe("models");
     expect(await (await fixture.channel.handleAgentActiveChats(new Request("https://example.com/agent/active-chats"))).text()).toBe("active-chats");
     expect(await (await fixture.channel.handleAgentBranches(new Request("https://example.com/agent/branches?include_archived=1"))).text()).toBe("branches");
     expect((await fixture.channel.handleAgentRespond(new Request("https://example.com/agent/respond", { method: "POST" }))).status).toBe(205);
@@ -142,8 +132,6 @@ describe("WebChannel endpoint facade delegation", () => {
       "update:9",
       "internal:POST",
       "status:GET",
-      "context:GET",
-      "models:GET",
       "active-chats",
       "branches:GET:1",
       "respond:POST",

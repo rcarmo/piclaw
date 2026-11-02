@@ -13,6 +13,7 @@ function createDefaultAgentPool() {
     setSessionBinder: () => {},
     runAgent: async () => ({ status: "success", result: "ok", attachments: [] }),
     getContextUsageForChat: async () => null,
+    listKnownChats: () => [],
   };
 }
 

@@ -4,8 +4,6 @@
 
 import {
   buildAgentStatusSnapshot,
-  handleAgentContextRequest,
-  handleAgentModelsRequest,
   handleAgentStatusRequest,
   handleAgentUiSnapshotRequest,
 } from "../agent/agent-status.js";
@@ -45,8 +43,7 @@ export interface WebChannelEndpointFacadeOptions {
   json(payload: unknown, status?: number): Response;
   broadcastEvent(eventType: string, data: unknown): void;
   handlePostRequest(req: Request, isReply: boolean, chatJid: string): Promise<Response>;
-  listActiveChats(): unknown[];
-  listKnownChats?(rootChatJid?: string | null, options?: { includeArchived?: boolean }): unknown[];
+  listKnownChats(rootChatJid?: string | null, options?: { includeArchived?: boolean }): unknown[];
   getProjectRepository?(chatJid: string): unknown;
 }
 
@@ -154,14 +151,6 @@ export class WebChannelEndpointFacadeService {
     return handleAgentStatusRequest(req, this.options.endpointContexts.agentStatus());
   }
 
-  async handleAgentContext(req: Request): Promise<Response> {
-    return await handleAgentContextRequest(req, this.options.endpointContexts.agentStatus());
-  }
-
-  async handleAgentModels(req: Request): Promise<Response> {
-    return await handleAgentModelsRequest(req, this.options.endpointContexts.agentStatus());
-  }
-
   async handleAgentDebug(req: Request): Promise<Response> {
     return await handleAgentDebugRequest(req, {
       defaultChatJid: this.options.defaultChatJid,
@@ -187,11 +176,10 @@ export class WebChannelEndpointFacadeService {
 
   handleAgentActiveChats(): Response {
     const { result, durationMs } = measureSync(() => {
-      if (this.options.agentPool.isDurableRuntime?.() !== true) return this.options.json({ chats: this.options.listActiveChats() }, 200);
       // Native sessions do not populate the legacy AgentSession pool. Use known
       // chat identities and the same authoritative lifecycle as /agent/status;
       // never construct SDK sessions or claim/recover work for this read.
-      const rows = this.options.listKnownChats?.() ?? this.options.listActiveChats();
+      const rows = this.options.listKnownChats();
       const context = this.options.endpointContexts.agentStatus();
       const chats = rows.flatMap((row): Record<string, unknown>[] => {
         if (!row || typeof row !== "object") return [];
@@ -229,9 +217,7 @@ export class WebChannelEndpointFacadeService {
       const includeArchived = ["1", "true", "yes", "on"].includes(
         String(url.searchParams.get("include_archived") || "").trim().toLowerCase(),
       );
-      const chats = typeof this.options.listKnownChats === "function"
-        ? this.options.listKnownChats(rootChatJid || null, { includeArchived })
-        : this.options.listActiveChats();
+      const chats = this.options.listKnownChats(rootChatJid || null, { includeArchived });
       return this.options.json({ chats }, 200);
     });
     return appendServerTiming(result, {
