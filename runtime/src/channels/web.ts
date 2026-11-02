@@ -42,12 +42,16 @@ import type { InteractionRow } from "../db.js";
 import type { QueuedFollowupItem } from "../queued-followups.js";
 import type { SendMessageOptions } from "./web/message-write-service.js";
 import type { WebAgentBufferEntry } from "./web/agent/agent-buffers.js";
-import { handleAgentMessage as handleAgentMessageRequest } from "./web/handlers/agent.js";
+import { handleAgentMessage as handleAgentMessageRequest, processChat as processAgentChat } from "./web/handlers/agent.js";
 import { handlePost as handlePostRequest } from "./web/handlers/posts.js";
 import { TerminalSessionService } from "./web/terminal/terminal-session-service.js";
 import { VncSessionService } from "./web/vnc/vnc-session-service.js";
 import { createLazyTerminalService, createLazyVncService } from "./web/lazy-session-services.js";
-import type { WebMessageProcessingStorageService } from "./web/messaging/message-processing-storage-service.js";
+import { admitWebMessage, type StoreWebMessageOptions } from "./web/messaging/message-store.js";
+import { getIdentityConfig } from "../core/config.js";
+import { isSlashCommandInvocation } from "../agent-control/agent-control-parser.js";
+import { recordTimelineInteraction } from "../session-recordings/session-recordings.js";
+import { createLogger, debugSuppressedError } from "../utils/logger.js";
 import { initializeWebChannelConstructor } from "./web/core/web-channel-constructor-factory.js";
 import { handleAgentContextRequest, handleAgentModelsRequest } from "./web/agent/agent-status.js";
 import {
@@ -80,6 +84,7 @@ import { ensureAvatarCache } from "./web/media/avatar-service.js";
 
 const DEFAULT_CHAT_JID = "web:default";
 const DEFAULT_AGENT_ID = "default";
+const messageLog = createLogger("web.message-processing-storage");
 
 /** Construction options for WebChannel: queue and agentPool references. */
 export interface WebChannelOpts {
@@ -260,11 +265,24 @@ export class WebChannel implements WebChannelLike {
   }
 
   async processChat(chatJid: string, agentId: string, threadRootId?: number | null): Promise<void> {
-    return this.messageProcessingStorageService.processChat(chatJid, agentId, threadRootId);
+    return processAgentChat(this, chatJid, agentId, threadRootId ?? undefined);
   }
 
-  admitMessage(...args: Parameters<WebMessageProcessingStorageService["admitMessage"]>): Promise<InteractionRow | null> {
-    return this.messageProcessingStorageService.admitMessage(...args);
+  async admitMessage(chatJid: string, content: string, isBot: boolean, mediaIds: number[], options: StoreWebMessageOptions,
+    authorise?: (phase?: 'before' | 'after') => void, signal?: AbortSignal, deferBeforeInsert?: () => boolean): Promise<InteractionRow | null> {
+    if (!isBot && typeof options.consumeDeferredFollowupRowId === "number") {
+      options = { ...options, materializeQueuedSource: this.getQueuedInputMaterialization?.(chatJid),
+        acceptMaterializedSource: !isSlashCommandInvocation(content.trim()) ? this.getInputSourceAdmission?.(chatJid) : undefined };
+    }
+    const identity = getIdentityConfig();
+    const interaction = await admitWebMessage(this, {
+      chatJid, content, isBot, mediaIds, agentId: DEFAULT_AGENT_ID,
+      agentName: identity.assistantName, userName: identity.userName ?? null,
+    }, options, authorise, signal, deferBeforeInsert);
+    if (!interaction) return null;
+    try { recordTimelineInteraction(interaction); }
+    catch (error) { debugSuppressedError(messageLog, 'Optional recording failed after message commit.', error, { operation: 'web_message_storage.record_after_commit', rowId: interaction.id }); }
+    return interaction;
   }
 
   requestWorkspaceFileOpen(chatJid: string, path: string, label: string): Promise<unknown> {
@@ -589,7 +607,6 @@ export class WebChannel implements WebChannelLike {
   private readonly adaptiveCardSidePromptService!: WebAdaptiveCardSidePromptService;
   private readonly peerMessageRelayService!: WebAgentPeerMessageRelayService;
   private readonly runtimePublicSurfaceService!: WebChannelRuntimePublicSurfaceService;
-  private readonly messageProcessingStorageService!: WebMessageProcessingStorageService;
   private readonly messageWriteService!: WebMessageWriteService;
   private readonly controlPlaneService!: WebAgentControlPlaneService;
 
