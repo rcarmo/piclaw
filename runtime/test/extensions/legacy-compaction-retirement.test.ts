@@ -27,6 +27,8 @@ test('legacy execution modules and session stream API are absent while offline s
   const remote=await import('../../src/extensions/smart-compaction/remote-compaction.js');
   for(const name of ['attemptRemoteCompaction','injectRemoteCompactionPayload','prependRemoteCompactionPayload','resolveRemoteCompactionCapability'])expect(remote).not.toHaveProperty(name);
   expect(await import('../../src/extensions/smart-compaction/result-details.js')).not.toHaveProperty('createSmartCompactionResultDetails');
+  expect(await Bun.file(new URL('../../src/agent-pool/compaction-cancel-reason.ts',import.meta.url)).exists()).toBe(false);
+  expect(Object.keys(await import('../../src/agent-pool/compaction-trigger-context.js'))).toEqual([]);
 });
 
 test('retired stored execution settings are inert and survive supported native policy writes',async()=>{
