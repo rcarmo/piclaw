@@ -7,13 +7,6 @@ import { updateMessagePost } from "../../../db/messages.js";
 import { resolveAvatarUrl } from "../media/avatar-service.js";
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
 import type { AuthEndpointsContext } from "../auth/auth-endpoints.js";
-import {
-  createAgentStatusContext,
-  createAgentsEndpointContext,
-  createAvatarEndpointContext,
-  createContentEndpointsContext,
-  createUiEndpointsContext,
-} from "./endpoint-contexts.js";
 import { isProviderReadyOobeCompletedForInstance } from "../oobe-instance-state.js";
 import type { AgentStatusContext, AgentTokenUsageContext } from "../agent/agent-status.js";
 import type { ContentEndpointsContext } from "./content-endpoints.js";
@@ -110,7 +103,7 @@ export function createWebChannelEndpointContexts(
 
     agentStatus: () => {
       if (!agentStatusContext) {
-        agentStatusContext = createAgentStatusContext({
+        agentStatusContext = {
           defaultChatJid: options.defaultChatJid,
           json: (payload, status = 200) => channel.json(payload, status),
           getAgentStatus: (chatJid) => channel.getAgentStatus(chatJid),
@@ -132,14 +125,14 @@ export function createWebChannelEndpointContexts(
           getTokenUsageForChat,
           getAvailableModels: (chatJid, modelOptions) => channel.agentPool.getAvailableModels(chatJid, modelOptions),
           getProviderReadyCompletedForInstance: () => isProviderReadyOobeCompletedForInstance(),
-        });
+        };
       }
       return agentStatusContext;
     },
 
     content: () => {
       if (!contentContext) {
-        contentContext = createContentEndpointsContext({
+        contentContext = {
           defaultChatJid: options.defaultChatJid,
           json: (payload, status = 200) => channel.json(payload, status),
           getBuffer: (turnId, panel) => channel.getBuffer(turnId, panel),
@@ -153,14 +146,14 @@ export function createWebChannelEndpointContexts(
               userAvatarBackground: identity.userAvatarBackground,
             };
           },
-        });
+        };
       }
       return contentContext;
     },
 
     ui: () => {
       if (!uiContext) {
-        uiContext = createUiEndpointsContext({
+        uiContext = {
           json: (payload, status = 200) => channel.json(payload, status),
           getWorkspaceVisible: () => channel.workspaceVisible,
           setWorkspaceVisible: (value) => {
@@ -176,14 +169,14 @@ export function createWebChannelEndpointContexts(
             channel.setPanelExpanded(turnId, panel, expanded);
           },
           handleUiResponse: (requestId, outcome, chatJid) => channel.uiBridge.handleUiResponse(requestId, outcome, chatJid),
-        });
+        };
       }
       return uiContext;
     },
 
     agents: () => {
       const identity = options.getIdentitySnapshot();
-      return createAgentsEndpointContext({
+      return {
         agentPool: channel.agentPool,
         defaultChatJid: options.defaultChatJid,
         defaultAgentId: options.defaultAgentId,
@@ -193,16 +186,16 @@ export function createWebChannelEndpointContexts(
         userAvatar: identity.userAvatarUrl,
         userAvatarBackground: identity.userAvatarBackground,
         json: (payload, status = 200) => channel.json(payload, status),
-      });
+      };
     },
 
     avatar: () => {
       const identity = options.getIdentitySnapshot();
-      return createAvatarEndpointContext({
+      return {
         assistantAvatar: identity.assistantAvatarRaw,
         userAvatar: identity.userAvatarRaw,
         json: (payload, status = 200) => channel.json(payload, status),
-      });
+      };
     },
 
     auth: () => {
