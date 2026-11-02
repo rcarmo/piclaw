@@ -263,24 +263,17 @@ export async function createHostController(config: HostControllerOptions, contex
     /** Explicit inactive composition, one attempt only. Seal/join/inspect under the actual
      * owner, then fail BEFORE closing storage if historical proof is unavailable.
      * The independent host-only controller remains usable by its existing fixtures. */
-    function rollback(cutover: Pick<HostCutoverController, "prepareRollback" | "rollback">, revision: number) {
+    function rollback(cutover: Pick<HostCutoverController, "prepareRollback" | "rollback">, _revision: number) {
       if (rollbackAttempt || closing) return Promise.reject(new Error("Controller already closing"));
-      const prepare = cutover.prepareRollback.bind(cutover), restore = cutover.rollback.bind(cutover);
+      // Preserve entry-time getter/bind validation before sealing or consuming the attempt.
+      cutover.prepareRollback.bind(cutover); cutover.rollback.bind(cutover);
       retainOwner = true; // Synchronous: even a concurrent runtime.close cannot release the lease.
       return rollbackAttempt = (async () => {
         assert();
-        await activeRuntime.quiesceForRollback(async () => {
+        return activeRuntime.quiesceForRollback(async () => {
           assert();
           throw new Error("Candidate progress proof unavailable: public storage identity and historical commit frontier required");
         });
-        assert();
-        if (!closedStorage) throw Error("Candidate storage not closed");
-        if (prepare(revision).disposition !== "safe_to_restore") throw Error("Reconciliation required");
-        assert();
-        const result = restore(revision);
-        assert();
-        await releaseOwner();
-        return result;
       })();
     }
     function close(): Promise<void> {

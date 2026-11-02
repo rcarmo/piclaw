@@ -314,7 +314,30 @@ for (const mode of ([["committed-answer"], ["unavailable-reply-thread"], ["unrel
             held.release();
             return;
           }
+          const captured: string[] = [];
+          if (mode === "rollback") {
+            // Invalid entry callbacks fail synchronously before sealing or consuming the attempt.
+            expect(() => controller!.rollback(undefined as never, m.revision)).toThrow(TypeError);
+            for (const key of ["prepareRollback", "rollback"] as const) {
+              const invalid = { prepareRollback: cutover.prepareRollback, rollback: cutover.rollback, [key]: undefined };
+              expect(() => controller!.rollback(invalid as never, m.revision)).toThrow(TypeError);
+            }
+            expect((await controller.runtime.reconcile(primary)).status?.status).toBe("done");
+            const prepare = cutover.prepareRollback, restore = cutover.rollback;
+            Object.defineProperties(cutover, {
+              prepareRollback: { configurable: true, get() { captured.push("prepare"); return prepare; } },
+              rollback: { configurable: true, get() { captured.push("restore"); return restore; } },
+            });
+          }
           const attempt = controller.rollback(cutover, m.revision);
+          if (mode === "rollback") {
+            expect(captured).toEqual(["prepare", "restore"]);
+            // Late mutation cannot redirect the captured callbacks or turn refusal into a flip.
+            Object.defineProperties(cutover, {
+              prepareRollback: { value() { throw Error("late prepare"); } },
+              rollback: { value() { throw Error("late restore"); } },
+            });
+          }
           if (observer) {
             if (mode === "rollback-held-close") { concurrentClose = controller.close(); void concurrentClose.catch(() => {}); }
             await expect(observer).rejects.toThrow();
