@@ -123,6 +123,6 @@ test("public status handler opts into the snapshot and leaves ordinary status sy
   expect(body.status.status).toBe("idle");
   expect(body.metrics).toBeTruthy();
   expect(body.model.current).toBe("fixture/one");
-  expect(body.project_repository).toBeNull();
+  expect(body.project_repository).toMatchObject({ chat_jid: "web:default", mode: "inherit", repository_url: null });
   } finally { closeDatabase(); }
 });
