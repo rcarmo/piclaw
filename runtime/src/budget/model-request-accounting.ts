@@ -32,7 +32,7 @@ function prepareUsage(binding: BudgetRequestBinding, message: UsageFacts, docume
   const extra = usage as typeof usage & { providerCost?: unknown; provider_cost?: unknown; reasoningTokens?: unknown; reasoning_tokens?: unknown; cacheReadReported?: unknown; cacheWriteReported?: unknown };
   const providerCost = [extra.providerCost,extra.provider_cost].find(value => typeof value === 'number' && Number.isFinite(value) && value >= 0) as number | undefined;
   const catalogueCost = usage.cost.total > 0 ? usage.cost.total : null;
-  const reasoning = [extra.reasoningTokens,extra.reasoning_tokens].find(value => Number.isSafeInteger(value) && Number(value) >= 0) as number | undefined;
+  const reasoning = [extra.reasoningTokens,extra.reasoning_tokens,usage.reasoning].find(value => Number.isSafeInteger(value) && Number(value) >= 0) as number | undefined;
   const responseModel = message.responseModel ?? message.model;
   if (message.provider !== binding.providerId || message.model !== binding.modelId
     || responseModel !== binding.modelId && responseModel !== `${binding.providerId}/${binding.modelId}`) throw Error('Model request response identity changed.');
@@ -86,7 +86,7 @@ function retainedUsageFacts(value: unknown): UsageFacts {
         cacheWrite: number(cost.cacheWrite), total: number(cost.total) } },
   };
   if (source.responseModel !== undefined) facts.responseModel = text(source.responseModel);
-  for (const key of ['providerCost', 'provider_cost', 'reasoningTokens', 'reasoning_tokens'] as const) {
+  for (const key of ['providerCost', 'provider_cost', 'reasoningTokens', 'reasoning_tokens', 'reasoning'] as const) {
     if (usage[key] !== undefined) Object.assign(facts.usage, { [key]: number(usage[key]) });
   }
   for (const key of ['cacheReadReported', 'cacheWriteReported'] as const) {
@@ -207,6 +207,8 @@ export function modelRequestAccounting(input: {
         // A concurrent/legacy charge retains its own original time and mapping.
         // Selecting an already prepared template is not new valuation under SQL.
         const usage = event ? { ...(prior && prior.origin.kind !== 'legacy_projection_capture' ? modernUsage : legacyUsage), run_at: event.accounted_at } : modernUsage;
+        // New SDK decoding cannot rewrite a committed reasoning total or its hash.
+        if (event && prior && prior.origin.kind !== 'legacy_projection_capture') usage.reasoning_tokens = Number(prior.record.reasoning_tokens);
         const settled = settleBudgetRequest(binding, usage, database);
         // Never retire parent/shared work, reopen cancelled/stopped work, or
         // replace an existing completion timestamp. No other work is written.

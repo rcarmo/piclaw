@@ -66,6 +66,51 @@ function financialRows() {
 }
 function unchangedFinancials() { expect(financialRows()).toEqual({ tokens: [], events: [] }); }
 
+test('retained SDK reasoning survives current projection and exact database reopen without adding to output', async () => {
+  const message = terminal();
+  delete (message.usage as typeof message.usage & { reasoningTokens?: number }).reasoningTokens;
+  message.usage.reasoning = 1;
+  const { helper, binding, receipt } = await fixture(message);
+  await helper.settleRetainedRequest(binding, owner());
+  expect(getDb().query('SELECT input_tokens,output_tokens,reasoning_tokens,total_tokens FROM token_usage').get())
+    .toEqual({ input_tokens: 1, output_tokens: 1, reasoning_tokens: 1, total_tokens: 2 });
+  const original = financialRows(), request = getBudgetRequest(binding.id);
+  closeDatabase(); initDatabase(ownedPaths());
+  await accounting().settleRetainedRequest(binding, owner());
+  expect(financialRows()).toEqual(original); expect(getBudgetRequest(binding.id)).toEqual(request);
+  expect(readBudgetTerminalReceipt(binding)).toEqual(receipt);
+});
+
+test('already committed alias-only reporting retains its original hash and numbers when an SDK reasoning receipt reopens', async () => {
+  const message = terminal();
+  delete (message.usage as typeof message.usage & { reasoningTokens?: number }).reasoningTokens;
+  message.usage.reasoning = 1;
+  const { helper, binding, receipt } = await fixture(message);
+  // Exact pre-1882 modern mapping: the receipt already retained SDK reasoning,
+  // but the then-current report mapper recorded zero. Commit that original
+  // mapping through the real ledger; replay must never rewrite its history.
+  const originalUsage = {
+    chat_jid: binding.chatJid, run_at: receivedAt, input_tokens: 1, output_tokens: 1, cache_read_tokens: 0, cache_write_tokens: 0,
+    total_tokens: 2, cost_input: 0.00003, cost_output: 0.00001, cost_cache_read: 0, cost_cache_write: 0,
+    cost_total: 0.00005, model: binding.modelId, response_model: binding.modelId, provider: binding.providerId,
+    api: 'openai-completions', usage_source: 'compaction', api_equivalent_cost_known: true, api_equivalent_cost_microusd: 40,
+    valuation_provenance: 'catalogue_estimate' as const, provider_cost_total: 0.00005, catalogue_cost_total: 0.00004,
+    cost_provenance: 'provider_reported' as const, reasoning_tokens: 0, cache_read_reported: true, cache_write_reported: false,
+    api_equivalent_known_subtotal_microusd: 40, api_equivalent_unknown_categories: '[]', pricing_currency: 'USD',
+    pricing_source: 'pi-ai Usage.cost category totals', pricing_version: 'pi-ai-usage-cost-v1', pricing_cache_fallbacks: '[]',
+  };
+  settleBudgetRequest(binding, originalUsage);
+  setBudgetWorkStatus(binding.workId, 'completed', { now: receivedAt, boundary: 'request_settled' });
+  const original = financialRows(), request = getBudgetRequest(binding.id), work = getBudgetWork(binding.workId);
+  getDb().query('UPDATE token_usage SET reasoning_tokens=999').run(); // Mutable projection cannot replace the canonical report.
+  await helper.settleRetainedRequest(binding, owner());
+  closeDatabase(); initDatabase(ownedPaths());
+  await accounting().settleRetainedRequest(binding, owner());
+  expect(financialRows()).toEqual(original); expect(getBudgetRequest(binding.id)).toEqual(request);
+  expect(getBudgetWork(binding.workId)).toEqual(work); expect(readBudgetTerminalReceipt(binding)).toEqual(receipt);
+  expect(getDb().query('SELECT reasoning_tokens FROM token_usage').get()).toEqual({ reasoning_tokens: 0 });
+});
+
 for (const mode of ['attributed', 'legacy', 'receiptless', 'invalid', 'unknown'] as const) test(`repairable denial requires exact attributed known terminal facts: ${mode}`, async () => {
   const invocation: BudgetModelInvocation = { version: 1, domain: 'owned-financial-domain', operationId: 'original-operation',
     conversationId: 1, taskId: 2, taskKind: 'pi.generation', phase: 'request', checkpointHash: 'a'.repeat(64) };

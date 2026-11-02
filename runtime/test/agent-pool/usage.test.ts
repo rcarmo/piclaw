@@ -131,6 +131,24 @@ describe("recordMessageUsage", () => {
     expect(row.cost_provenance).toBe("provider_reported");
   });
 
+  for (const actualField of ["providerCost", "provider_cost"]) test(`retains an attributed all-zero terminal with explicit ${actualField}`, () => {
+    initDatabase();
+    const db = getDb(), chat = `test:usage-zero-terminal:${actualField}`;
+    const message = {
+      id: `zero-terminal:${actualField}`, role: "assistant", stopReason: "stop", timestamp: "2026-11-02T12:00:00Z",
+      provider: "fixture", model: "zero-model", api: "openai-completions",
+      usage: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+        [actualField]: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+    };
+    recordMessageUsage(chat, message);
+    recordMessageUsage(chat, structuredClone(message));
+    const rows = db.query(`SELECT provider,model,total_tokens,reasoning_tokens,provider_cost_total,catalogue_cost_total,
+      cost_total,cost_provenance,api_equivalent_cost_known,valuation_provenance FROM token_usage WHERE chat_jid=?`).all(chat);
+    expect(rows).toEqual([{ provider: "fixture", model: "zero-model", total_tokens: 0, reasoning_tokens: 0,
+      provider_cost_total: 0, catalogue_cost_total: null, cost_total: 0, cost_provenance: "provider_reported",
+      api_equivalent_cost_known: 0, valuation_provenance: "unavailable" }]);
+  });
+
   test("computes totals when not provided", () => {
     initDatabase();
     const db = getDb();
