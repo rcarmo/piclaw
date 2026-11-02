@@ -10,7 +10,8 @@ import { ensureBudgetWork, saveBudgetCap } from '../../src/db/budget-limits.js';
 import { evaluateBudget } from '../../src/budget/evaluator.js';
 import { canonicalJson } from '../../src/utils/canonical-json.js';
 import { applyOwnedMigrations, listAppliedOwnedMigrations } from '../../src/db/migrations.js';
-import { initializeBudgetLimitsSchema, budgetTerminalReceiptMigration, budgetModelInvocationMigration, budgetAccountingScopeMigration, budgetToolInvocationMigration } from '../../src/db/budget-limits-schema.js';
+import { initializeBudgetLimitsSchema, budgetTerminalReceiptMigration, budgetModelInvocationMigration, budgetAccountingScopeMigration, budgetToolInvocationMigration,
+  budgetTerminalEvidenceVersionMigration, budgetInvocationConflictIndexMigration } from '../../src/db/budget-limits-schema.js';
 import { reserveBudgetRequest, findBudgetRequestByModelInvocation, getBudgetRequest, dispatchBudgetRequest, abandonBudgetRequest,
   recordBudgetTerminalReceipt, readBudgetTerminalReceipt, settleBudgetRequest, type BudgetRequestBinding, type BudgetModelInvocation } from '../../src/db/budget-request-reservations.js';
 
@@ -27,6 +28,55 @@ function fixture() {
   return { db, binding };
 }
 const allRows = (db: Database) => db.query('SELECT * FROM budget_request_reservations ORDER BY id').all();
+
+test('insertion immutability guards probe conflict keys without scanning retained reservations', () => {
+  const { db, binding } = fixture();
+  reserveBudgetRequest(binding, {}, db);
+  const before = allRows(db);
+  const root = (db.query("SELECT rootpage FROM sqlite_schema WHERE name='budget_request_reservations'").get() as { rootpage: number }).rootpage;
+  // EXPLAIN compiles the actual trigger programs without executing the INSERT.
+  const steps = db.query(`EXPLAIN INSERT INTO budget_request_reservations
+    (id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,amount_microusd,state,created_at,updated_at,model_invocation_json,model_invocation_key_sha256)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).all('probe', binding.workId, binding.chatJid, binding.providerId, binding.modelId,
+      binding.accountRef, 'f'.repeat(64), 60, 'reserved', time, time, null, null) as { addr: number; opcode: string; p1: number; p2: number; p4: string | null }[];
+  let program = '', tableCursors = new Set<number>();
+  const scans: string[] = [];
+  for (const step of steps) {
+    if (step.addr === 0) { program = step.p4 ?? 'statement'; tableCursors = new Set(); }
+    if (step.opcode === 'OpenRead' && step.p2 === root) tableCursors.add(step.p1);
+    if (step.opcode === 'Rewind' && tableCursors.has(step.p1)) scans.push(program);
+  }
+  expect(scans).toEqual([]);
+  expect(allRows(db)).toEqual(before);
+});
+
+test('indexed conflict guard matches the original NULL and key-collision predicate', () => {
+  const { db, binding } = fixture();
+  reserveBudgetRequest(binding, {}, db);
+  reserveBudgetRequest({ ...binding, id: 'legacy', modelInvocation: undefined }, {}, db);
+  dispatchBudgetRequest(binding, { authorise() {}, signal: new AbortController().signal }, db);
+  settleBudgetRequest(binding, { chat_jid: binding.chatJid, run_at: time, input_tokens: 1, output_tokens: 0,
+    cache_read_tokens: 0, cache_write_tokens: 0, total_tokens: 1, cost_input: 0.00001, cost_output: 0,
+    cost_cache_read: 0, cost_cache_write: 0, cost_total: 0.00001, provider: binding.providerId, model: binding.modelId,
+    api_equivalent_cost_known: true, api_equivalent_cost_microusd: 10, valuation_provenance: 'catalogue_estimate' }, db);
+  const before = allRows(db), stored = getBudgetRequest(binding.id, db)!;
+  const rowids = db.query('SELECT rowid FROM budget_request_reservations ORDER BY id').all() as { rowid: number }[];
+  const original = budgetModelInvocationMigration.sql.match(/CREATE TRIGGER main\.budget_request_invocation_no_replace[\s\S]*?\bWHEN\b([\s\S]*?)\bBEGIN\b/)![1]!;
+  const current = (db.query("SELECT sql FROM sqlite_schema WHERE name='budget_request_invocation_no_replace'").get() as { sql: string }).sql.match(/\bWHEN\b([\s\S]*?)\bBEGIN\b/)![1]!;
+  const comparison = db.query(`SELECT (${original.replaceAll('NEW.', 'n.')}) expected, (${current.replaceAll('NEW.', 'n.')}) actual
+    FROM (SELECT ? id, ? rowid, ? usage_event_id, ? model_invocation_json, ? model_invocation_key_sha256) n`);
+  let cases = 0;
+  for (const id of [null, 'absent', binding.id, 'legacy'])
+    for (const rowid of [null, -1, ...rowids.map(row => row.rowid)])
+      for (const usage of [null, 'absent', stored.usage_event_id])
+        for (const invocation of [null, stored.model_invocation_json])
+          for (const key of [null, 'absent', stored.model_invocation_key_sha256]) {
+            const result = comparison.get(id, rowid, usage, invocation, key) as { expected: number; actual: number };
+            expect(result.actual).toBe(result.expected); cases++;
+          }
+  expect(cases).toBe(288);
+  expect(allRows(db)).toEqual(before);
+});
 
 // Exact pre-receipt table shape; not derived from the candidate DDL.
 const oldTable = `CREATE TABLE budget_request_reservations (
@@ -51,9 +101,9 @@ test('tool extension preserves all earlier owned migration bytes', () => {
 test('invocation fresh schema owns order 2 after unchanged receipt migration with a unique nullable index', () => {
   const { db } = fixture();
   const before = listAppliedOwnedMigrations(db, budgetTerminalReceiptMigration.owner);
-  expect(before.map(m => m.id)).toEqual(['terminal-receipt-v1', 'model-invocation-v1', 'accounting-scope-index-v1', 'tool-model-invocation-v1', 'terminal-evidence-version-v1']);
+  expect(before.map(m => m.id)).toEqual(['terminal-receipt-v1', 'model-invocation-v1', 'accounting-scope-index-v1', 'tool-model-invocation-v1', 'terminal-evidence-version-v1', 'indexed-invocation-conflicts-v1']);
   expect(db.query('SELECT migration_order FROM piclaw_schema_migrations WHERE owner=? ORDER BY migration_order').all(budgetTerminalReceiptMigration.owner))
-    .toEqual([{ migration_order: 1 }, { migration_order: 2 }, { migration_order: 3 }, { migration_order: 4 }, { migration_order: 5 }]);
+    .toEqual([{ migration_order: 1 }, { migration_order: 2 }, { migration_order: 3 }, { migration_order: 4 }, { migration_order: 5 }, { migration_order: 6 }]);
   initializeBudgetLimitsSchema(db);
   expect(listAppliedOwnedMigrations(db, budgetTerminalReceiptMigration.owner)).toEqual(before);
   expect(db.query("SELECT name,type,\"notnull\" FROM pragma_table_info('budget_request_reservations') WHERE name LIKE 'model_invocation_%'").all()).toEqual([
@@ -116,6 +166,20 @@ test('actual old shape upgrades add only NULL columns preserving legacy hashes, 
     expect(listAppliedOwnedMigrations(db, budgetTerminalReceiptMigration.owner).slice(0, 3)).toEqual(prior);
     expect(() => applyOwnedMigrations(db, [{ ...budgetToolInvocationMigration, sql: budgetToolInvocationMigration.sql + '\n' }])).toThrow('checksum mismatch');
     expect(allRows(db)).toEqual(facts);
+    applyOwnedMigrations(db, [budgetTerminalEvidenceVersionMigration]);
+    const financialBefore = allRows(db), ledgerBefore = listAppliedOwnedMigrations(db);
+    const guardBefore = db.query("SELECT sql FROM sqlite_schema WHERE name='budget_request_invocation_no_replace'").get();
+    expect(() => applyOwnedMigrations(db, [{ ...budgetInvocationConflictIndexMigration,
+      sql: budgetInvocationConflictIndexMigration.sql + '\nSELECT nonexistent_conflict_column;' }])).toThrow();
+    expect(db.query("SELECT sql FROM sqlite_schema WHERE name='budget_request_invocation_no_replace'").get()).toEqual(guardBefore);
+    expect(listAppliedOwnedMigrations(db)).toEqual(ledgerBefore);
+    expect(allRows(db)).toEqual(financialBefore);
+    applyOwnedMigrations(db, [budgetInvocationConflictIndexMigration]); applyOwnedMigrations(db, [budgetInvocationConflictIndexMigration]);
+    expect(listAppliedOwnedMigrations(db).slice(0, 5)).toEqual(ledgerBefore);
+    expect(allRows(db)).toEqual(financialBefore);
+    expect(readBudgetTerminalReceipt(receiptBinding, db)).toEqual(receipt);
+    expect(() => applyOwnedMigrations(db, [{ ...budgetInvocationConflictIndexMigration,
+      sql: budgetInvocationConflictIndexMigration.sql + '\n' }])).toThrow('checksum mismatch');
   } finally { db.close(); }
 });
 

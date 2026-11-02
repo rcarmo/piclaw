@@ -158,6 +158,22 @@ CREATE TRIGGER main.budget_request_evidence_version_update BEFORE UPDATE ON budg
   BEGIN SELECT RAISE(ABORT,'terminal evidence version is immutable'); END;`,
 });
 
+/** Point probes preserve the original replacement guard without a ledger scan. */
+export const budgetInvocationConflictIndexMigration = Object.freeze({
+  owner: budgetTerminalReceiptMigration.owner, id: 'indexed-invocation-conflicts-v1', order: 6,
+  sql: `DROP TRIGGER main.budget_request_invocation_no_replace;
+CREATE TRIGGER main.budget_request_invocation_no_replace BEFORE INSERT ON budget_request_reservations
+  WHEN EXISTS (SELECT 1 FROM budget_request_reservations WHERE id=NEW.id
+    AND (model_invocation_json IS NOT NULL OR NEW.model_invocation_json IS NOT NULL))
+    OR EXISTS (SELECT 1 FROM budget_request_reservations WHERE rowid=NEW.rowid
+      AND (model_invocation_json IS NOT NULL OR NEW.model_invocation_json IS NOT NULL))
+    OR EXISTS (SELECT 1 FROM budget_request_reservations WHERE usage_event_id=NEW.usage_event_id
+      AND (model_invocation_json IS NOT NULL OR NEW.model_invocation_json IS NOT NULL))
+    OR EXISTS (SELECT 1 FROM budget_request_reservations
+      WHERE model_invocation_key_sha256=NEW.model_invocation_key_sha256)
+  BEGIN SELECT RAISE(ABORT,'model invocation conflict'); END;`,
+});
+
 export function initializeBudgetLimitsSchema(database: Database): void {
   database.transaction(() => {
     verifyExistingUsageReportProjection(database);
@@ -323,7 +339,7 @@ export function initializeBudgetLimitsSchema(database: Database): void {
     CREATE TRIGGER IF NOT EXISTS budget_usage_events_no_delete
       BEFORE DELETE ON budget_usage_events BEGIN SELECT RAISE(ABORT, 'budget usage events are immutable'); END;
     `);
-    applyOwnedMigrations(database, [budgetTerminalReceiptMigration, budgetModelInvocationMigration, budgetAccountingScopeMigration, budgetToolInvocationMigration, budgetTerminalEvidenceVersionMigration]);
+    applyOwnedMigrations(database, [budgetTerminalReceiptMigration, budgetModelInvocationMigration, budgetAccountingScopeMigration, budgetToolInvocationMigration, budgetTerminalEvidenceVersionMigration, budgetInvocationConflictIndexMigration]);
     initializeUsageReportProjection(database);
   }).immediate();
 }
