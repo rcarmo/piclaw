@@ -245,8 +245,6 @@ export function removeSessionArtifacts(chatJid: string): string[] {
 }
 
 export class AgentBranchManager {
-  private readonly ownedLifecycleInFlight = new Set<string>();
-
   constructor(private readonly options: AgentBranchManagerOptions) {}
 
   ensureBranchRegistration(chatJid: string, session?: AgentSession | null): ChatBranchRecord {
@@ -303,9 +301,8 @@ export class AgentBranchManager {
   /**
    * Rename a chat's JID across DB and session directories.
    *
-   * The session is evicted from the in-memory pool first, then the DB is
-   * migrated in a single transaction, and finally session directories are
-   * renamed on disk.
+   * Commit the DB migration before disposing or evicting cached sessions,
+   * then rename session directories on disk.
    */
   async renameChatJid(
     oldJid: string,
@@ -319,31 +316,24 @@ export class AgentBranchManager {
     if (old === next) throw new Error("Old and new JID are identical.");
 
     requireLegacyRoutingMutation(getDb(), "address rename");
-    if (this.options.isActive(old)) {
+    const activeChild = [...this.options.pool.keys()].some(jid => isDescendantChatJid(old, jid) && this.options.isActive(jid));
+    if (this.options.isActive(old) || activeChild) {
       throw new Error("Cannot rename a chat while it has an active turn.");
     }
 
-    // 1. Evict from the in-memory pool.
-    const mainEntry = this.options.pool.get(old);
-    if (mainEntry) {
-    try { await mainEntry.runtime.dispose(); } catch (e) { log.debug("best-effort dispose failed for main session", { jid: old, err: e }); }
-      this.options.pool.delete(old);
-    }
+    const result = renameChatJidDb(old, next);
+    // Snapshot descendants before any disposal await; replacements are not
+    // cleanup targets, even when inserted while the main session is closing.
+    const entries = [...this.options.pool].filter(([jid]) => jid === old || isDescendantChatJid(old, jid));
     this.options.activeForkBaseLeafByChat.delete(old);
     this.options.cancelSessionWarmup?.(old);
-
-    // Also evict any child branches that live under old + ":".
-    for (const [jid, entry] of this.options.pool) {
-      if (isDescendantChatJid(old, jid)) {
-        try { await entry.runtime.dispose(); } catch (e) { debugSuppressedError(log, "best-effort dispose failed for child pool session", e, { jid }); }
-        this.options.pool.delete(jid);
-      }
+    for (const [jid, entry] of entries) {
+      try { await entry.runtime.dispose(); }
+      catch (e) { debugSuppressedError(log, "best-effort dispose failed for renamed session", e, { jid }); }
+      if (this.options.pool.get(jid) === entry) this.options.pool.delete(jid);
     }
 
-    // 2. Migrate all DB tables in a single transaction.
-    const result = renameChatJidDb(old, next);
-
-    // 3. Rename session directories on disk.
+    // Rename session directories only after the DB migration committed.
     const oldDir = join(SESSIONS_DIR, sanitiseJid(old));
     const newDir = join(SESSIONS_DIR, sanitiseJid(next));
     if (existsSync(oldDir) && !existsSync(newDir)) {
@@ -401,15 +391,14 @@ export class AgentBranchManager {
       throw new Error("Cannot merge a chat branch while it has an active turn.");
     }
 
+    const result = mergeChatBranchIntoParentDb(normalizedChatJid);
     const mainEntry = this.options.pool.get(normalizedChatJid);
-    if (mainEntry) {
-      try { await mainEntry.runtime.dispose(); } catch (e) { debugSuppressedError(log, "best-effort dispose failed for merged session", e, { jid: normalizedChatJid }); }
-      this.options.pool.delete(normalizedChatJid);
-    }
     this.options.activeForkBaseLeafByChat.delete(normalizedChatJid);
     this.options.cancelSessionWarmup?.(normalizedChatJid);
-
-    const result = mergeChatBranchIntoParentDb(normalizedChatJid);
+    if (mainEntry) {
+      try { await mainEntry.runtime.dispose(); } catch (e) { debugSuppressedError(log, "best-effort dispose failed for merged session", e, { jid: normalizedChatJid }); }
+      if (this.options.pool.get(normalizedChatJid) === mainEntry) this.options.pool.delete(normalizedChatJid);
+    }
     try {
       removeSessionArtifacts(normalizedChatJid);
     } catch (err) {
@@ -439,6 +428,9 @@ export class AgentBranchManager {
       return archiveChatBranch(chatJid);
     }, () => { if (getDb() !== database || readAccessConfig().mode !== "single-user") throw new ChatAccessDenied(); });
     const mainEntry = this.options.pool.get(chatJid);
+    this.options.activeForkBaseLeafByChat.delete(chatJid);
+    // Cancel prewarm only after archival committed and before disposal yields.
+    this.options.cancelSessionWarmup?.(chatJid);
     if (mainEntry) {
       try {
         await mainEntry.runtime.dispose();
@@ -449,13 +441,8 @@ export class AgentBranchManager {
           err,
         });
       }
-      this.options.pool.delete(chatJid);
+      if (this.options.pool.get(chatJid) === mainEntry) this.options.pool.delete(chatJid);
     }
-    this.options.activeForkBaseLeafByChat.delete(chatJid);
-    // Cancel any queued prewarm so a background realization does not
-    // materialize a blank runtime (or realize the deferred seed) for an
-    // archived chat between prune and restore.
-    this.options.cancelSessionWarmup?.(chatJid);
     // Keep .branch-seed.json here: it is the only persisted copy of the
     // forked context until the session is realized,
     // and a subsequent restoreChatBranch() must be able to pick it back up.
@@ -479,7 +466,10 @@ export class AgentBranchManager {
       throw new Error(`Unknown chat branch: ${normalizedChatJid}`);
     }
 
+    const result = permanentDeleteArchivedBranch(normalizedChatJid);
     const mainEntry = this.options.pool.get(normalizedChatJid);
+    this.options.activeForkBaseLeafByChat.delete(normalizedChatJid);
+    this.options.cancelSessionWarmup?.(normalizedChatJid);
     if (mainEntry) {
       try {
         await mainEntry.runtime.dispose();
@@ -490,12 +480,8 @@ export class AgentBranchManager {
           err,
         });
       }
-      this.options.pool.delete(normalizedChatJid);
+      if (this.options.pool.get(normalizedChatJid) === mainEntry) this.options.pool.delete(normalizedChatJid);
     }
-
-    this.options.activeForkBaseLeafByChat.delete(normalizedChatJid);
-    this.options.cancelSessionWarmup?.(normalizedChatJid);
-    const result = permanentDeleteArchivedBranch(normalizedChatJid);
 
     let removedSessionArtifacts: string[] = [];
     try {
