@@ -30,9 +30,11 @@ function createFacade(getIdentitySnapshot: () => WebChannelIdentitySnapshot) {
     postMutations: () => {
       throw new Error("postMutations context not used in this test");
     },
-    agentStatus: () => {
-      throw new Error("agentStatus context not used in this test");
-    },
+    agentStatus: () => ({
+      defaultChatJid: "web:default", json, getAgentStatus: () => null, getExtensionWorkingState: () => null,
+      getBuffer: () => undefined, getContextUsageForChat: async () => null, getTokenUsageForChat: () => null,
+      getAvailableModels: async () => ({ models: [] }), getProviderReadyCompletedForInstance: () => false,
+    }),
     content: () => {
       throw new Error("content context not used in this test");
     },
@@ -101,7 +103,6 @@ function createFacade(getIdentitySnapshot: () => WebChannelIdentitySnapshot) {
       postCalls.push({ isReply, chatJid });
       return new Response(JSON.stringify({ ok: true, chat_jid: chatJid, is_reply: isReply }), { status: 201 });
     },
-    listActiveChats: () => activeChats,
     listKnownChats: () => knownChats,
   };
 
@@ -185,11 +186,13 @@ describe("web channel endpoint facade service", () => {
   });
 
   test("serves active chats and known branches through facade helpers", async () => {
-    const { facade, activeChats, knownChats } = createFacade(() => createIdentitySnapshot());
+    const { facade, knownChats } = createFacade(() => createIdentitySnapshot());
 
     const activeResponse = facade.handleAgentActiveChats();
     expect(activeResponse.status).toBe(200);
-    expect(await activeResponse.json()).toEqual({ chats: activeChats });
+    expect((await activeResponse.json()).chats).toEqual(knownChats.map(chat => ({ ...chat, session_id: null,
+      is_active: false, is_streaming: false, is_compacting: false, is_retrying: false, is_bash_running: false,
+      activity_status: "idle", activity_label: "Idle" })));
 
     const branchesResponse = facade.handleAgentBranches(
       new Request("https://example.com/agent/branches?root_chat_jid=web%3Aroot&include_archived=1")
@@ -234,8 +237,8 @@ function nativeActiveFixture() {
     getExtensionWorkingState() { throw Error("unrelated extension worker is not native activity"); },
     getBuffer() { return undefined; } };
   const facade = new WebChannelEndpointFacadeService({ ...base.options,
-    listActiveChats() { throw Error("legacy pool must not be read"); }, listKnownChats: () => known,
-    agentPool: { isDurableRuntime: () => true, getSessionGenerationForChat: (jid: string) => "native:" + jid } as any,
+    listKnownChats: () => known,
+    agentPool: { isDurableRuntime: () => true, listActiveChats() { throw Error("legacy pool must not be read"); }, getSessionGenerationForChat: (jid: string) => "native:" + jid } as any,
     endpointContexts: { ...base.options.endpointContexts, agentStatus: () => context } });
   return { facade, statuses, known, stats: () => ({ recoveries, reads }), revoke() { stale = true; } };
 }
@@ -269,6 +272,15 @@ test("native active-chats reads fresh terminal state and does not revive retaine
     expect(row).toMatchObject({ is_active: false, activity_status: "idle" });
   }
   expect(f.stats().recoveries).toBe(0);
+});
+
+test("active-chats has one native authority without consulting the retired engine-mode switch", async () => {
+  const f = nativeActiveFixture();
+  Reflect.get(f.facade, "options").agentPool.isDurableRuntime = () => false;
+  f.statuses.set("web:tool", { type: "tool", title: "Actual native task" });
+  const body = await f.facade.handleAgentActiveChats().json();
+  expect(body.chats.find((row: any) => row.chat_jid === "web:tool")).toMatchObject({ is_active: true, activity_status: "working" });
+  expect(f.stats()).toEqual({ recoveries: 0, reads: 6 });
 });
 
 test("native active-chats rejects owner loss rather than returning all-idle or stale activity", () => {
