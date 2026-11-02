@@ -47,7 +47,7 @@ async function fixture() {
   return { root, before, captured: { operation, inputs } };
 }
 
-const addon = await import((process.env.DURABLE_REGRETS_QUALIFICATION_ROOT ?? repoRoot("ADDONS")) + "/addons/late-night-regrets/native.ts");
+const addon = await import(repoRoot("ADDONS") + "/addons/late-night-regrets/native.ts");
 import { createHostRegretsTool } from "../../runtime/durable-engine/src/host-regrets-tool.ts";
 import { admitSqliteWrite } from "../../runtime/src/db/sqlite-async-admission.ts";
 import { createHostRegretsBindings } from "../../runtime/durable-engine/src/host-regrets-bindings.ts";

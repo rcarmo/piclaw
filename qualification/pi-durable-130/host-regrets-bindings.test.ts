@@ -2,7 +2,7 @@ import { repoRoot } from "./src/repo-root.js";
 import { test, expect } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createHostRegretsBindings } from "../../runtime/durable-engine/src/host-regrets-bindings.ts";
-const { createLateNightRegrets, readExchanges } = await import((process.env.DURABLE_REGRETS_QUALIFICATION_ROOT ?? repoRoot("ADDONS")) + "/addons/late-night-regrets/native.ts");
+const { createLateNightRegrets, readExchanges } = await import(repoRoot("ADDONS") + "/addons/late-night-regrets/native.ts");
 function fixture(revokeDuringWrite = false) {
   const root = new Database(":memory:");
   root.exec(`CREATE TABLE extension_kv(extension_id TEXT,scope TEXT,scope_key TEXT,key TEXT,value TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(extension_id,scope,scope_key,key));

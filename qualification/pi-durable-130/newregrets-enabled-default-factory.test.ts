@@ -26,8 +26,7 @@ import { initializeBudgetLimitsSchema } from "../../runtime/src/db/budget-limits
 applicationTest("enabled Regrets actual factory uses public Root and separately accounts decision", async () => {
   const workspace = process.env.PICLAW_WORKSPACE!;
   const pkg = join(workspace, ".pi/extensions/node_modules/@rcarmo/piclaw-addon-late-night-regrets");
-  // An explicit owned candidate can be qualified without editing pinned fixture provenance.
-  cpSync(join(process.env.DURABLE_REGRETS_QUALIFICATION_ROOT ?? process.env.DURABLE_ADDONS_ROOT!, "addons/late-night-regrets"), pkg, { recursive: true, filter: p => !p.split("/").includes("node_modules") });
+  cpSync(join(process.env.DURABLE_ADDONS_ROOT!, "addons/late-night-regrets"), pkg, { recursive: true, filter: p => !p.split("/").includes("node_modules") });
   symlinkSync(join(import.meta.dir, "../../node_modules"), join(pkg, "node_modules"));
   process.env.PICLAW_DB_IN_MEMORY = "0"; initDatabase(); initializeBudgetLimitsSchema(getDb());
   mkdirSync(getPiclawAgentDir(), { recursive: true });

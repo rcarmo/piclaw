@@ -945,12 +945,12 @@ export const installedAddonProfiles = {
   "session-dashboard": {
     "label": "session-dashboard",
     "name": "@rcarmo/piclaw-addon-session-dashboard",
-    "version": "0.2.5",
+    "version": "0.2.6",
     "entry": "index.ts",
     "files": {
       "index.ts": "bb314505ad8f63e80f6e9bf85d098177bdb0bedff59332166c3f734a0c4b7451",
       "native-resources.ts": "c40972a235924717f939b5b672e804728856570392c2c46f92a7416ff176b3d7",
-      "package.json": "b40878203bf79200e80342130a78e8eb24dd52eddada313f1de30ce4380e6448"
+      "package.json": "9daa053e17a8b56713de452b300de7df86c036c9100ad2857d52a6f3c1a7b964"
     },
     "shadows": [
       "index.js",

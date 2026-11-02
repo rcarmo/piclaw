@@ -504,7 +504,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     ];
   }
   if (accountingRegrets) {
-    const source = process.env.DURABLE_REGRETS_QUALIFICATION_ROOT ?? process.env.DURABLE_ADDONS_ROOT; assert(source, 'Explicit qualified Regrets source required');
+    const source = process.env.DURABLE_ADDONS_ROOT; assert(source, 'Pinned qualified Regrets source required');
     const addon = join(source, 'addons/late-night-regrets'), pkg = join(workspace, '.pi/extensions/node_modules/@rcarmo/piclaw-addon-late-night-regrets');
     for (const [file, hash] of Object.entries(applicationAddonSourceProfiles['late-night-regrets'].files)) expect(createHash('sha256').update(readFileSync(join(addon, file))).digest('hex')).toBe(hash);
     cpSync(addon, pkg, { recursive: true, filter: path => !path.split('/').includes('node_modules') });

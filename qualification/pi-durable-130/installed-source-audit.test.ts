@@ -6,10 +6,9 @@ function fixture(){
   // This gate proves every pinned backend byte; browser/vendor assets are not execution proof.
   for(const profile of Object.values(applicationAddonSourceProfiles)){
     const dir=profile.name.replace('@rcarmo/piclaw-addon-','');
-    const from=profile.name==='@rcarmo/piclaw-addon-late-night-regrets'?process.env.DURABLE_REGRETS_QUALIFICATION_ROOT??source!:source!;
     for(const file of new Set(['package.json',...Object.keys(profile.files)])){
       const target=join(cwd,'.pi/extensions/node_modules',profile.name,file);
-      mkdirSync(dirname(target),{recursive:true});cpSync(resolve(from,'addons',dir,file),target);
+      mkdirSync(dirname(target),{recursive:true});cpSync(resolve(source!,'addons',dir,file),target);
     }
   }
   mkdirSync(join(cwd,'agent'));return{cwd,expected};
