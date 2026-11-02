@@ -822,7 +822,7 @@ export interface RenameChatJidResult {
  * Rename a chat JID across *all* DB tables in a single transaction.
  *
  * The caller is responsible for:
- *   - evicting the session from the in-memory agent pool *before* calling this
+ *   - disposing/evicting cached sessions only *after* this commits successfully
  *   - renaming the session directory on disk *after* this succeeds
  *
  * Child branches whose `chat_jid` starts with `oldJid + ":"` are
