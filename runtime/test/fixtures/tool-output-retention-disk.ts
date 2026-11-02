@@ -8,7 +8,10 @@ assertPathWithinTestFilesystemIsolation(process.env.PICLAW_STORE!, process.env, 
 assert.equal(process.env.PICLAW_DB_IN_MEMORY, "0");
 try {
   initDatabase(); const db = getDb();
-  for (let n = 0; n < 205; n++) storeToolOutputWithChunks({ id: `expired-${n}`, created_at: "2000-01-01T00:00:00.000Z" }, ["needle"]);
+  // Seed atomically; the probe measures retention rollback, not 205 FULL flushes.
+  db.transaction(() => {
+    for (let n = 0; n < 205; n++) storeToolOutputWithChunks({ id: `expired-${n}`, created_at: "2000-01-01T00:00:00.000Z" }, ["needle"]);
+  })();
   const snapshot = () => JSON.stringify({ metadata: db.query("SELECT * FROM tool_outputs ORDER BY id").all(), fts: db.query("SELECT rowid,* FROM tool_outputs_fts ORDER BY rowid").all() });
   const before = snapshot(); let checks = 0;
   assert.throws(() => deleteToolOutputsBefore("2026-01-01", null, () => { if (++checks === 2) throw Error("revoked"); }), /revoked/);
