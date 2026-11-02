@@ -100,7 +100,9 @@ Examples:
 
 `WebSessionBroadcastService` owns SSE fanout, chat-scoped `UiBridge` requests and provider-usage refresh notifications. Native agent/tool status uses runtime watch projections; history actions use native control routes.
 
-`UiBridge.createUiContext`, `createUiContext` from `channels/web/ui-context.ts`, workspace-file requests, responses, themes, editor state and expiry/shutdown cleanup remain available. SSE construction performs no legacy session lookup or binder installation.
+`UiBridge` retains workspace-file requests, browser acknowledgements, 15-second request expiry and shutdown rejection. Completed requests leave no per-chat adapter state. SSE construction performs no legacy session lookup or binder installation.
+
+The earlier retention of `UiBridge.createUiContext` and `channels/web/ui-context.ts` is superseded by the durable-convergence retirement under #1824. The unused Core `ExtensionUIContext` constructor, fallback Theme, editor/theme caches, cache TTL and synchronous theme writer are removed without a compatibility shim. Theme commands/settings keep their admitted HTTP paths; native browser tools use their existing opener/widget ports. Add-on-owned `ctx.ui` APIs, SSE names and browser rendering are unchanged.
 
 The private `agent-pool-binder.ts` helper, `UiBridge.bindSession`, `bindSessionUiContext` wrapper and `bindSessionBinder` construction option are retired. Their session-bound `waitForIdle`, `newSession`, `fork`, `navigateTree`, `switchSession` and `reload` callbacks are removed. No identified repository or supported add-on consumer requires a compatibility shim.
 
