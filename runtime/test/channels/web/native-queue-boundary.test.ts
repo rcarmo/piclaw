@@ -17,7 +17,7 @@ function fixture() {
     getInputSourceAdmission: () => accept,
     getQueuedInputSourceAdmission: () => accept,
     getAcceptedQueuedSteering: () => undefined,
-    admitUserMessage: unexpected,
+    admitMessage: unexpected,
     async admitQueuedFollowupItem(args: any[], check: () => void, _signal: unknown, admission: unknown) {
       check(); expect(admission).toBe(accept); calls.push("queue-write"); queued.push(args); return -75;
     },
@@ -37,7 +37,7 @@ const payloads = [
   { content: "queued input", mode: "queue" }, { content: "steered input", mode: "steer", persist_steer: true },
   { content: "ordinary input", mode: "auto" }, { content: "/queue explicit input" }, { content: "/steer explicit input" },
 ];
-for (const missing of ["getInputSourceAdmission", "getQueuedInputSourceAdmission", "admitUserMessage", "admitQueuedFollowupItem", "getAcceptedQueuedSteering"]) {
+for (const missing of ["getInputSourceAdmission", "getQueuedInputSourceAdmission", "admitMessage", "admitQueuedFollowupItem", "getAcceptedQueuedSteering"]) {
   for (const payload of payloads) test(`native queue ingress rejects missing ${missing} before effects: ${payload.mode ?? payload.content}`, async () => {
     const f = fixture(); delete f.channel[missing];
     expect((await f.send(payload)).status).toBe(503);
@@ -105,7 +105,7 @@ test("native steer startup race accepts the same queued source in the original S
     setDeferredQueuedFollowups(chat, [{ rowId: -75, queuedContent: args[2], queuedAt: args[4], threadId: args[3], retryCount: 0, source: args[5].source }]);
     return -75;
   };
-  f.channel.admitUserMessage = async (_chat: string, _text: string, _media: unknown, _options: unknown, check: () => void, _signal: unknown, defer: () => boolean) => {
+  f.channel.admitMessage = async (_chat: string, _text: string, _isBot: boolean, _media: unknown, _options: unknown, check: () => void, _signal: unknown, defer: () => boolean) => {
     return getDb().transaction(() => { busy = true; check(); expect(defer()).toBe(true); return null; }).immediate();
   };
   const response = await f.send({ content: "explicit input", mode: "steer", thread_id: 17, persist_steer: true }, undefined, chat);

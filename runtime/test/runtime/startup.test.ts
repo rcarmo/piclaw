@@ -380,13 +380,11 @@ export {};
       resumePendingChats: () => {
         events.push({ kind: "resume" });
       },
-    }, () => {
-      events.push({ kind: "handoff" });
     }, (resume) => {
       resumePending = resume;
     });
 
-    expect(events).toHaveLength(4);
+    expect(events).toHaveLength(3);
     expect(events[0]).toMatchObject({
       kind: "status",
       chatJid: STARTUP_STATUS_CHAT_JID,
@@ -397,8 +395,7 @@ export {};
         turn_id: STARTUP_STATUS_TURN_ID,
       },
     });
-    expect(events[1]).toEqual({ kind: "handoff" });
-    expect(events[2]).toMatchObject({
+    expect(events[1]).toMatchObject({
       kind: "status",
       chatJid: STARTUP_STATUS_CHAT_JID,
       status: {
@@ -408,7 +405,7 @@ export {};
         turn_id: STARTUP_STATUS_TURN_ID,
       },
     });
-    expect(events[3]).toMatchObject({
+    expect(events[2]).toMatchObject({
       kind: "status",
       chatJid: STARTUP_STATUS_CHAT_JID,
       status: {
@@ -419,10 +416,10 @@ export {};
       },
     });
 
-    expect(events).toHaveLength(4);
+    expect(events).toHaveLength(3);
     expect(resumePending).toBeFunction();
     (resumePending as () => void)();
-    expect(events[4]).toEqual({ kind: "resume" });
+    expect(events[3]).toEqual({ kind: "resume" });
   });
 });
 

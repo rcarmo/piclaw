@@ -11,6 +11,7 @@ import { getPiclawAgentDir } from "../core/agent-dir.js";
 import { FileCredentialStore, type PiclawCredentialStore } from "./credential-store.js";
 import { createRuntimeCredentialStore } from "./runtime-credential-store.js";
 import { installOpenAICompletionsUsageCompatibility } from "./openai-completions-usage-compat.js";
+import { registerGitHubCopilotDynamicModels } from "../extensions/github-copilot-dynamic-models.js";
 
 export class PiclawModelRegistry extends ModelRegistry {
   private refreshInFlight: Promise<ModelsRefreshResult> | null = null;
@@ -58,6 +59,10 @@ export async function createRuntimeModelServices(
     allowModelNetwork: false,
   });
   installOpenAICompletionsUsageCompatibility(modelRuntime);
+  registerGitHubCopilotDynamicModels(modelRuntime);
   const modelRegistry = new PiclawModelRegistry(modelRuntime);
+  // The native backend snapshots this catalogue before AgentPool exists.
+  const prepared = await modelRegistry.refresh();
+  if (prepared.aborted || prepared.errors.size) throw new AggregateError([...prepared.errors.values()], "Model catalogue preparation failed");
   return { credentialStore, modelRuntime, modelRegistry, agentDir };
 }

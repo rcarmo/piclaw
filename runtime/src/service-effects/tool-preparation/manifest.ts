@@ -351,15 +351,6 @@ export const TOOL_PREPARATION_MANIFEST: readonly ToolPreparationSpec[] = Object.
     abortExpectation: "may_finish_late",
     protectedFields: ["params.name", "params.value", "result.content", "result.details"],
   }),
-  ...rows(["exit_process"], {
-    currentSource: "runtime/src/extensions/exit-process.ts",
-    effectClass: "mutation",
-    replay: "never",
-    contextFields: ["chatJid", "operationId"],
-    serviceEffector: "EF-S05",
-    abortExpectation: "may_finish_late",
-    protectedFields: ["params.reason", "params.resume_message"],
-  }),
   ...rows(["image_process"], {
     currentSource: "runtime/src/extensions/image-processing.ts",
     effectClass: "mixed",

@@ -30,7 +30,7 @@ describe("web post handler", () => {
         status,
         headers: { "Content-Type": "application/json" },
       }),
-      admitUserMessage: async (_chat: string, _text: string, _media: number[], _options: unknown, check: (phase: 'before' | 'after') => void) => {
+      admitMessage: async (_chat: string, _text: string, _isBot: boolean, _media: number[], _options: unknown, check: (phase: 'before' | 'after') => void) => {
         return getDb().transaction(() => {
           check('before'); const interaction = makeInteraction(41, 41); check('after'); return interaction;
         }).immediate();
@@ -61,7 +61,7 @@ describe("web post handler", () => {
         status,
         headers: { "Content-Type": "application/json" },
       }),
-      admitUserMessage: async (_chatJid: string, _content: string, _mediaIds: number[], options: { threadId?: number }, check: (phase: 'before' | 'after') => void) => {
+      admitMessage: async (_chatJid: string, _content: string, _isBot: boolean, _mediaIds: number[], options: { threadId?: number }, check: (phase: 'before' | 'after') => void) => {
         return getDb().transaction(() => {
           check('before'); storeCalls.push({ threadId: options.threadId });
           const interaction = makeInteraction(52, options.threadId ?? null); check('after'); return interaction;

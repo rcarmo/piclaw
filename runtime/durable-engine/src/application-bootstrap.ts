@@ -47,7 +47,7 @@ import { nativeBackgroundIdentity,readNativeBackgroundPayload,type NativeBackgro
 import { backgroundPolicyProvenance,type NativeBackgroundContext,type NativeBackgroundInputHistory } from "./host-background-context.js";
 
 import { createDurableQueuedSteering } from "../../src/agent-pool/durable-queued-steering.js";
-import { storeWebMessage } from "../../src/channels/web/messaging/message-store.js";
+import { admitWebMessage } from "../../src/channels/web/messaging/message-store.js";
 import { createApplicationHostInput } from "./host-application-input.js";
 import { registerNativeBranchControlGuard } from "../../src/db/native-routing-policy.js";
 
@@ -1076,7 +1076,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       if (!await runtime.settle(input)) throw Error("Scheduled settlement pending");
       return { status: "success", result: state.answer.text };
     }
-    let inputProjection: Parameters<typeof storeWebMessage>[0] | undefined;
+    let inputProjection: Parameters<typeof admitWebMessage>[0] | undefined;
     const getAcceptedQueuedSteering = (chat: string, check = assertLive) => {
       assertLive(); check();
       const projection = inputProjection, scope = routeIndex.get(chat);
@@ -1090,10 +1090,10 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
         assertCurrentWriter: checkProjection, runningBinding: { sessionId: r.sessionId },
         readQueued: id => hostFollowups.getQueuedFollowupItems(chat).find(item => item.rowId === id),
         validatePayload: stored => { checkProjection(); getQueuedInputMaterialization(chat)!(stored); checkProjection(); },
-        materialize: (item, accept) => storeWebMessage(projection,
+        materialize: (item, accept) => admitWebMessage(projection,
           { chatJid: chat, content: item.queuedContent, isBot: false, mediaIds: item.mediaIds ?? [], agentId: "default", agentName: "User" },
           { consumeDeferredFollowupRowId: item.rowId, materializeQueuedSource: accept, isSteeringMessage: true,
-            contentBlocks: item.contentBlocks, linkPreviews: item.linkPreviews, threadId: item.threadId, screenHint: item.screenHint }),
+            contentBlocks: item.contentBlocks, linkPreviews: item.linkPreviews, threadId: item.threadId, screenHint: item.screenHint }, checkProjection),
         onPendingIntent: recovery.onPendingIntent });
     };
     const applicationInput = createApplicationHostInput({ root, domain: r.incarnation, assertCurrent: assertLive,
@@ -1125,7 +1125,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       assertProcessControlIdle() {
         if (preparing.size || hostControls.size || backgroundPreparing.size || backgroundRuns.size) throw Error("Host admission or credential/control work is active or uncertain");
       },
-      bindInputProjection(projection: Parameters<typeof storeWebMessage>[0] | undefined) {
+      bindInputProjection(projection: Parameters<typeof admitWebMessage>[0] | undefined) {
         if (projection) { assertLive(); if (inputProjection) throw Error("Application input projection already bound"); }
         inputProjection = projection;
       },
@@ -1176,7 +1176,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       backgroundCompactionInput(conversationId:number):Promise<HostInputBinding|undefined>;
       dispatchAddonOperation(operationId:string,signal:AbortSignal,expectedInputSequence?:number):Promise<AgentOutput>;
       reconcileAddonOperation(operationId:string,expectedInputSequence?:number):Promise<AgentOutput|null>;
-      bindInputProjection(projection: Parameters<typeof storeWebMessage>[0] | undefined): void;
+      bindInputProjection(projection: Parameters<typeof admitWebMessage>[0] | undefined): void;
       dispatchAcceptedInput: typeof dispatch;
       admitHostFollowup(input: { sourceId: string; chatJid: string; text: string; queuedAt: string }, onlyIfIdle?: boolean): number | null;
       allocateScheduledConversation(lease: ScheduledRunLease): Promise<AcceptedInput>;

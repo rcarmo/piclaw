@@ -8,7 +8,7 @@ import { createAddonMessagingRuntimeHandlers } from '../../src/addons/runtime-me
 import { addonLocalContextApi } from '../../src/addons/local-context.js';
 import { WebChannelRuntimePublicSurfaceService } from '../../src/channels/web/core/web-channel-runtime-public-surface-service.js';
 import { readInputRequestAuthority } from '../../src/channels/web/messaging/input-request-authority.js';
-import { admitWebUserMessage } from '../../src/channels/web/messaging/message-store.js';
+import { admitWebMessage } from '../../src/channels/web/messaging/message-store.js';
 import { QueuedFollowupLifecycleService } from '../../src/channels/web/runtime/queued-followup-lifecycle-service.js';
 
 let cleanup = () => {};
@@ -34,7 +34,7 @@ function fixture(beforeCommit: () => Promise<void> = async () => {}, afterMutati
         await queue.admitQueuedFollowupItem([body.chat_jid, 0, body.content, body.thread_id, undefined, { contentBlocks: body.content_blocks, mediaIds: body.media_ids, source: body.source, queuedBy: body.queued_by }], validate, req.signal);
         return Response.json({ status: 'ok', chat_jid: body.chat_jid, queued: 'followup' });
       }
-      const row = await admitWebUserMessage({ broadcastEvent() {} }, { chatJid: body.chat_jid, content: body.content, isBot: false, mediaIds: body.media_ids ?? [], agentId: 'default', agentName: 'Fixture' }, { contentBlocks: body.content_blocks, threadId: body.thread_id }, validate, req.signal);
+      const row = await admitWebMessage({ broadcastEvent() {} }, { chatJid: body.chat_jid, content: body.content, isBot: false, mediaIds: body.media_ids ?? [], agentId: 'default', agentName: 'Fixture' }, { contentBlocks: body.content_blocks, threadId: body.thread_id }, validate, req.signal);
       return Response.json({ status: 'ok', chat_jid: body.chat_jid, user_message: row });
     },
   } as any);

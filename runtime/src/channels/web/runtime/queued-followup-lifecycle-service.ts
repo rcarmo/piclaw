@@ -231,23 +231,6 @@ export class QueuedFollowupLifecycleService {
     this.setDeferredQueuedFollowupItems(chatJid, queued);
   }
 
-  replaceQueuedFollowupItem(chatJid: string, item: QueuedFollowupItem): boolean {
-    const queued = this.getDeferredQueuedFollowupItems(chatJid);
-    const index = queued.findIndex((entry) => entry.rowId === item.rowId);
-    if (index < 0) return false;
-    const existing = queued[index]!;
-    if (existing.source_accepted && (
-      item.materializeRetries !== (existing.materializeRetries ?? 0) + 1
-      || !isDeepStrictEqual({ ...item, materializeRetries: existing.materializeRetries }, existing)
-    )) {
-      throw new Error('Accepted input only permits a materialization retry increment');
-    }
-    // Unaccepted edits retain the host-owned identity; accepted payloads are immutable.
-    queued[index] = cloneQueuedFollowupItem({ ...item, source_id: existing.source_id, source_accepted: existing.source_accepted });
-    this.setDeferredQueuedFollowupItems(chatJid, queued);
-    return true;
-  }
-
   getQueuedFollowupCount(chatJid: string): number {
     return this.getDeferredQueuedFollowupItems(chatJid).length;
   }

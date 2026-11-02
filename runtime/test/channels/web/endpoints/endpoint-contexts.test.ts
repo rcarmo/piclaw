@@ -4,40 +4,10 @@ import {
   createAgentsEndpointContext,
   createAvatarEndpointContext,
   createContentEndpointsContext,
-  createPostMutationsContext,
   createUiEndpointsContext,
 } from "../../../../src/channels/web/endpoints/endpoint-contexts.js";
 
 describe("web endpoint context builders", () => {
-  test("createPostMutationsContext captures current command interaction id and delegates calls", () => {
-    let storedThreadId: { messageId: number; threadId: number } | null = null;
-    let broadcastedId: number | null = null;
-
-    const postCtx = createPostMutationsContext({
-      defaultChatJid: "web:default",
-      getLastCommandInteractionId: () => 42,
-      json: (payload, status = 200) => new Response(JSON.stringify(payload), { status }),
-      replaceMessageContent: (_chatJid, id, content, threadId) => {
-        storedThreadId = { messageId: id, threadId: threadId! };
-        return { id, timestamp: new Date().toISOString(), data: { type: "agent_response", content } };
-      },
-      broadcastInteractionUpdated: (interaction) => {
-        broadcastedId = interaction.id;
-      },
-      storeMessage: () => null,
-      broadcastAgentResponse: () => {},
-    });
-
-    expect(postCtx.defaultChatJid).toBe("web:default");
-    expect(postCtx.lastCommandInteractionId).toBe(42);
-
-    const replaced = postCtx.replaceMessageContent("web:default", 9, "updated", 100)!;
-    postCtx.broadcastInteractionUpdated(replaced);
-
-    expect(storedThreadId).toEqual({ messageId: 9, threadId: 100 });
-    expect(broadcastedId).toBe(9);
-  });
-
   test("createAgentStatusContext and createContentEndpointsContext preserve shared buffer access", async () => {
     const expectedBuffer = { text: "draft", totalLines: 3 };
 

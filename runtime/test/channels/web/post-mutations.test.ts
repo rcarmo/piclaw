@@ -24,7 +24,7 @@ function createContext(overrides: Partial<PostMutationsContext> = {}): PostMutat
     json: (payload, status = 200) => jsonResponse(payload, status),
     replaceMessageContent: () => interaction(10),
     broadcastInteractionUpdated: () => {},
-    storeMessage: () => interaction(20),
+    admitMessage: async () => interaction(20),
     broadcastAgentResponse: () => {},
     ...overrides,
   };
@@ -96,7 +96,7 @@ describe("web post mutation helpers", () => {
     let broadcasted = false;
     const ctx = createContext({
       lastCommandInteractionId: 99,
-      storeMessage: (chatJid, _content, _isBot, _mediaIds, options) => {
+      admitMessage: async (chatJid, _content, _isBot, _mediaIds, options) => {
         usedChatJid = chatJid;
         usedThreadId = options?.threadId;
         return interaction(55);
@@ -119,4 +119,41 @@ describe("web post mutation helpers", () => {
     expect(usedThreadId).toBe(99);
     expect(broadcasted).toBeTrue();
   });
+});
+
+for (const publicationFails of [false, true]) test(`internal post pins storage/default/thread before JSON and keeps committed acceptance: publication failure=${publicationFails}`, async () => {
+  let admitted = 0, replacement = 0, broadcasts = 0;
+  const ctx = createContext({ lastCommandInteractionId: 99,
+    admitMessage: async function(chat, text, bot, media, options, check, signal) {
+      expect(this).toBe(ctx); check?.('before');
+      expect([chat, text, bot, media, options]).toEqual(['web:default', 'accepted', true, [], { threadId: 99 }]);
+      expect(signal).toBe(req.signal); admitted++; check?.('after'); return interaction(55);
+    },
+    broadcastAgentResponse() { broadcasts++; if (publicationFails) throw Error('publication failed'); },
+  });
+  const req = new Request('https://fixture/internal/post', { method: 'POST' });
+  req.json = async () => { ctx.admitMessage = async () => { replacement++; throw Error('replacement'); };
+    ctx.defaultChatJid = 'web:replacement'; ctx.lastCommandInteractionId = 777; return { content: 'accepted' }; };
+  const res = await handleInternalPostRequest(req, ctx);
+  expect(res.status).toBe(201); expect(await res.json()).toEqual({ status: 'ok', ok: true, id: 55 });
+  expect([admitted, replacement, broadcasts]).toEqual([1, 0, 1]);
+});
+
+test('internal post revocation is checked at the admitted write rather than adopted after JSON', async () => {
+  let principal: any = { kind: 'user', userId: 'fixture-user', mode: 'single-user', role: 'admin', authentication: { method: 'cookie' } };
+  let writes = 0;
+  const ctx = createContext({ authGateway: { isAuthEnabled: () => true, getPrincipal: () => principal } as any,
+    admitMessage: async (_chat, _text, _bot, _media, _options, check) => { check?.('before'); writes++; return interaction(55); },
+  });
+  const req = new Request('https://fixture/internal/post', { method: 'POST' });
+  req.json = async () => { principal = null; return { content: 'must not commit' }; };
+  await expect(handleInternalPostRequest(req, ctx)).rejects.toThrow('principal changed'); expect(writes).toBe(0);
+});
+
+test('internal post fails closed without admission and never parses or uses a raw storage fallback', async () => {
+  const req = new Request('https://fixture/internal/post', { method: 'POST' });
+  req.json = async () => { throw Error('must not parse'); };
+  const ctx = createContext({ admitMessage: undefined as any });
+  (ctx as any).storeMessage = () => { throw Error('must not store synchronously'); };
+  expect((await handleInternalPostRequest(req, ctx)).status).toBe(503);
 });

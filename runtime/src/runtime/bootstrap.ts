@@ -230,7 +230,6 @@ export interface RuntimeBootstrapContext {
 }
 import { createRuntimeModelServices } from "../agent-pool/model-services.js";
 import { installRuntimeModelExecutor } from "../extensions/model-execution-runtime.js";
-import { registerGitHubCopilotDynamicModels } from "../extensions/github-copilot-dynamic-models.js";
 import {
   getIdentityConfig,
   getRoutingConfig,
@@ -387,7 +386,6 @@ export function createDefaultRuntimeBootstrapDeps(
     createAgentPool: async (sessionOptions, legacyCapture) => {
       const modelServices = await models();
       installRuntimeModelExecutor(modelServices.modelRuntime);
-      registerGitHubCopilotDynamicModels(modelServices.modelRuntime);
       const agentPool = new AgentPool({
         credentialStore: modelServices.credentialStore,
         modelRuntime: modelServices.modelRuntime,

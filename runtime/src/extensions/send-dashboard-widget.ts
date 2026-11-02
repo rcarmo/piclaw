@@ -116,7 +116,7 @@ export const sendDashboardWidget: ExtensionFactory = (pi: ExtensionAPI) => {
     // Keep the schema permissive: optional widget metadata does not satisfy
     // Codex's closed-object requirements for strict function schemas.
     parameters: SendDashboardWidgetSchema,
-    async execute(_toolCallId, params: Params) {
+    async execute(_toolCallId, params: Params, signal?: AbortSignal) {
       const html = typeof params.html === "string" ? params.html.trim() : "";
       if (!html) return err("Provide html with the widget content.");
 
@@ -134,9 +134,10 @@ export const sendDashboardWidget: ExtensionFactory = (pi: ExtensionAPI) => {
       });
 
       const content = params.content?.trim() || "Widget ready — open to interact.";
-      const result = postMessagesToolMessage(
+      const result = await postMessagesToolMessage(
         { action: "post", type: "agent", chat_jid: chatJid, content, content_blocks: [block] },
         chatJid,
+        signal,
       );
 
       return {

@@ -135,7 +135,7 @@ test("native startup and live draft buffers preserve historical payloads without
   web.updateDraftBuffer("new-turn", "Current transient draft", 1);
   const { runWebStartupRecoveryBootstrap } = await import("../../../src/runtime/startup.js");
   const scheduled: (() => void)[] = [];
-  runWebStartupRecoveryBootstrap(web, undefined, resume => scheduled.push(resume));
+  runWebStartupRecoveryBootstrap(web, resume => scheduled.push(resume));
   expect(scheduled).toHaveLength(1);
   expect(web.getBuffer("new-turn", "draft")).toEqual({ text: "Current transient draft", totalLines: 1, updatedAt: expect.any(Number) });
   expect(db.getDb().serialize()).toEqual(before);

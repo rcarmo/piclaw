@@ -152,6 +152,7 @@ export interface PiclawRuntimeAddonApi {
   operations: PiclawRuntimeOperationsApiV1;
   createMedia: typeof createMedia;
   getMediaById: typeof getMediaById;
+  /** Await the committed timeline receipt; an unavailable admission port rejects without a raw insert. */
   postMessage: typeof postMessagesToolMessage;
   streamSessions: typeof runtimeStreamSessions;
 }

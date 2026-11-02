@@ -23,7 +23,7 @@ function replace(target: any, method: string, implementation: (...args: any[]) =
 test("runtime public calls bypass displaced forwarding methods and retain every argument", async () => {
   const f = await fixture(), calls: unknown[][] = [];
   const surface = Reflect.get(f.channel, "runtimePublicSurfaceService");
-  for (const key of ["sendMessage", "postDashboardWidget", "enqueueQueuedFollowupItem", "admitQueuedFollowupItem", "getBuffer", "storeMessage", "admitUserMessage"]) {
+  for (const key of ["sendMessage", "postDashboardWidget", "enqueueQueuedFollowupItem", "admitQueuedFollowupItem", "getBuffer", "storeMessage", "admitUserMessage", "admitMessage"]) {
     Object.defineProperty(surface, key, { get() { throw Error("Retired runtime forwarding method was accessed: " + key); } });
   }
   const writer = Reflect.get(f.channel, "messageWriteService"), queue = f.channel.queuedFollowupLifecycle, storage = Reflect.get(f.channel, "messageProcessingStorageService");
@@ -31,26 +31,26 @@ test("runtime public calls bypass displaced forwarding methods and retain every 
     replace(["sendMessage", "postDashboardWidget"].includes(key) ? writer : key === "getBuffer" ? Reflect.get(surface, "runtimeState") : queue, key, (...args) => { calls.push([key, ...args]); return key === "enqueueQueuedFollowupItem" ? 41 : key === "admitQueuedFollowupItem" ? Promise.resolve(42) : undefined; });
   }
   const row = { id: 77 };
-  replace(storage, "storeMessage", (...args) => { calls.push(["storeMessage", ...args]); return row; });
-  replace(storage, "admitUserMessage", (...args) => { calls.push(["admitUserMessage", ...args]); return Promise.resolve(row); });
+  replace(storage, "admitMessage", (...args) => { calls.push(["admitMessage", ...args]); return Promise.resolve(row); });
   const options = { threadId: 9 }, extras = { queuedBy: { agent: "fixture" }, contentBlocks: [{ type: "text", text: "kept" }] } as any;
   const args = ["web:branch", 7, "queued", null, undefined, extras] as const;
-  const authorise = () => {}, source = { validate() {} } as any, signal = new AbortController().signal;
+  const authorise = () => {}, source = { validate() {} } as any, signal = new AbortController().signal, defer = () => false;
   await f.channel.sendMessage("web:branch", "reply", options);
   await f.channel.postDashboardWidget("web:branch", { widgetId: "existing-widget" });
   expect(f.channel.enqueueQueuedFollowupItem(...args)).toBe(41);
   expect(await f.channel.admitQueuedFollowupItem([...args], authorise, signal, source)).toBe(42);
   expect(f.channel.getBuffer("native-turn", "draft")).toBeUndefined();
-  expect(f.channel.storeMessage("web:branch", "stored", false, [3], options)).toBe(row);
-  expect(await f.channel.admitUserMessage("web:branch", "accepted", [3], options, authorise, signal)).toBe(row);
+  expect(await f.channel.admitMessage("web:branch", "stored", true, [3], options)).toBe(row);
+  expect(await f.channel.admitMessage("web:branch", "accepted", false, [3], options, authorise, signal, defer)).toBe(row);
+  for (const name of ['storeMessage', 'admitUserMessage', 'replaceQueuedFollowupItem']) expect(f.channel).not.toHaveProperty(name);
   expect(calls).toEqual([
     ["sendMessage", "web:branch", "reply", options],
     ["postDashboardWidget", "web:branch", { widgetId: "existing-widget" }],
     ["enqueueQueuedFollowupItem", ...args],
     ["admitQueuedFollowupItem", [...args], authorise, signal, source],
     ["getBuffer", "native-turn", "draft"],
-    ["storeMessage", "web:branch", "stored", false, [3], options],
-    ["admitUserMessage", "web:branch", "accepted", [3], options, authorise, signal],
+    ["admitMessage", "web:branch", "stored", true, [3], options],
+    ["admitMessage", "web:branch", "accepted", false, [3], options, authorise, signal, defer],
   ]);
 });
 
@@ -91,5 +91,5 @@ test("runtime input still enters the real gateway and draining joins the entered
     result.resolve(value);
     expect(await pending).toBe(value);
     await drain; expect(drained).toBe(true);
-  } finally { result.resolve(null); await pending?.catch(() => {}); }
+  } finally { result.resolve(null); await Promise.allSettled(pending ? [pending] : []); }
 });

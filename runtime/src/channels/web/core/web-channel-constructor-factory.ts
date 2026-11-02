@@ -77,22 +77,8 @@ export interface WebChannelConstructorFactoryChannel {
   broadcastEvent(eventType: string, data: unknown): void;
   handleRequest(req: Request): Promise<Response>;
   sendMessage: WebChannelLike["sendMessage"];
+  admitMessage: WebChannelLike["admitMessage"];
   processChat(chatJid: string, agentId: string, threadRootId?: number | null): Promise<void>;
-  storeMessage(
-    chatJid: string,
-    content: string,
-    isBot: boolean,
-    mediaIds: number[],
-    options?: {
-      contentBlocks?: unknown[];
-      linkPreviews?: unknown[];
-      threadId?: number;
-      isTerminalAgentReply?: boolean;
-      isSteeringMessage?: boolean;
-      removeProtectedContinuationForSourceMessageId?: string | null;
-      consumeDeferredFollowupRowId?: number | null;
-    },
-  ): ReturnType<WebChannelLike["storeMessage"]>;
 }
 
 export interface WebChannelConstructorFactoryDefaults {
@@ -296,8 +282,8 @@ export function createWebChannelConstructorFactory(
   });
 
   const messageWriteService = deps.createMessageWriteService({
-    storeMessage: (chatJid, content, isBot, mediaIds, writeOptions) =>
-      channel.storeMessage(chatJid, content, isBot, mediaIds, writeOptions),
+    admitMessage: (chatJid, content, isBot, mediaIds, writeOptions, authorise, signal) =>
+      channel.admitMessage(chatJid, content, isBot, mediaIds, writeOptions, authorise, signal),
     broadcastAgentResponse: (interaction) => interactionBroadcaster.broadcastAgentResponse(interaction),
   });
 

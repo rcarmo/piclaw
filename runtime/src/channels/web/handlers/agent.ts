@@ -215,7 +215,7 @@ export async function handleAgentMessage(
   const nativeRuntime = channel.agentPool?.isDurableRuntime?.() === true;
   const selectSteering = channel.getAcceptedQueuedSteering?.bind(channel);
   const admitQueuedInput = channel.admitQueuedFollowupItem?.bind(channel);
-  const admitUserInput = channel.admitUserMessage?.bind(channel);
+  const admitUserInput = channel.admitMessage?.bind(channel);
   const prepareAdmission = channel.prepareInputSourceAdmission?.bind(channel);
   const prepareInputText = channel.prepareInputText?.bind(channel);
   const lookupAdmission = channel.getInputSourceAdmission?.bind(channel);
@@ -383,7 +383,7 @@ export async function handleAgentMessage(
     try {
       // Mentions commit the source before forwarding, but creation and its
       // authority proof still belong to that source's own admission TX.
-      sourceInteraction = await admitUserInput(chatJid, sourceContent, normalized.mediaIds, sourceOptions, revalidateInputAuthority, req.signal);
+      sourceInteraction = await admitUserInput(chatJid, sourceContent, false, normalized.mediaIds, sourceOptions, revalidateInputAuthority, req.signal);
     } catch (error) {
       if (req.signal.aborted) return channel.json({ error: 'Input submission was cancelled before acceptance.' }, 400);
       if (isSqliteContention(error)) return channel.json({ error: 'Message storage is busy; this input was not accepted.' }, 503);
@@ -559,7 +559,7 @@ export async function handleAgentMessage(
       try {
         // Keep /theme purely UI-scope but still surface the command output to the
         // timeline so users can see the theme list/output immediately.
-        await channel.sendMessage(chatJid, formattedThemeMessage, { forceRoot: true, requirePersistence: true });
+        await channel.sendMessage(chatJid, formattedThemeMessage, { forceRoot: true, requirePersistence: true, authorise: revalidateInputAuthority, signal: req.signal });
       } catch (error) {
         themeResponseDelivered = false;
         log.error("Failed to send /theme response", {
@@ -590,7 +590,7 @@ export async function handleAgentMessage(
     const formattedMetersMessage = formatOutbound(metersCommand.message, "web");
     if (formattedMetersMessage) {
       try {
-        await channel.sendMessage(chatJid, formattedMetersMessage, { forceRoot: true });
+        await channel.sendMessage(chatJid, formattedMetersMessage, { forceRoot: true, authorise: revalidateInputAuthority, signal: req.signal });
       } catch (error) {
         log.error("Failed to send /meters response", {
           operation: "handle_agent_message.meters_response",
@@ -661,7 +661,7 @@ export async function handleAgentMessage(
       const formattedMessage = formatOutbound(result.message, "web");
       if (formattedMessage) {
         try {
-          await channel.sendMessage(chatJid, formattedMessage, { forceRoot: true });
+          await channel.sendMessage(chatJid, formattedMessage, { forceRoot: true, authorise: revalidateInputAuthority, signal: req.signal });
         } catch (error) {
           log.error("Failed to send model/thinking list response", {
             operation: "handle_agent_message.model_list_response",
@@ -735,7 +735,7 @@ export async function handleAgentMessage(
   // Only ordinary input creates SDK sources or defers into the input queue.
   // Control rows share SQL admission without becoming model input.
   try {
-    interaction = await admitUserInput(chatJid, content, normalized.mediaIds, {
+    interaction = await admitUserInput(chatJid, content, false, normalized.mediaIds, {
       contentBlocks: normalized.contentBlocks, linkPreviews: normalized.linkPreviews,
       threadId: normalized.threadId ?? undefined, screenHint: normalized.screenHint,
       acceptSource: ordinaryInput ? acceptSource : undefined,
@@ -997,7 +997,7 @@ export async function handleAgentMessage(
     let responseDelivery: "not_needed" | "persisted" | "failed" = "not_needed";
 
     if (formatted || result.contentBlocks?.length) {
-      const sendOptions: Record<string, unknown> = { threadId: interaction.id };
+      const sendOptions: Record<string, unknown> = { threadId: interaction.id, authorise: revalidateInputAuthority, signal: req.signal };
       if (result.mediaIds?.length) {
         sendOptions.mediaIds = result.mediaIds;
       }
@@ -1099,7 +1099,7 @@ export async function handleAgentMessage(
     }
     try {
       const formatted = formatOutbound(cmdResult.message || "", "web");
-      if (formatted) await channel.sendMessage(chatJid, formatted, interaction.id);
+      if (formatted) await channel.sendMessage(chatJid, formatted, { threadId: interaction.id, authorise: revalidateInputAuthority, signal: req.signal });
     } catch (e) {
       log.error("Failed to send slash command response", {
         operation: "handle_agent_message.slash_command_response",

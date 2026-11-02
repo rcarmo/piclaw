@@ -27,7 +27,7 @@ const log = createLogger("web.posts");
  */
 export async function handlePost(channel: WebChannelLike, req: Request, isReply: boolean, chatJid: string): Promise<Response> {
   const requestAuthority = captureWebRequestAuthority(channel.authGateway, req);
-  const admit = channel.admitUserMessage?.bind(channel);
+  const admit = channel.admitMessage?.bind(channel);
   if (!admit) return channel.json({ error: "Input admission is unavailable." }, 503);
   const target = captureInputTarget(chatJid);
   const authorise = (phase?: "before" | "after") => { requestAuthority(); target(phase); };
@@ -43,7 +43,7 @@ export async function handlePost(channel: WebChannelLike, req: Request, isReply:
 
   const data = parsed.data;
   if (isReply && !data.thread_id) return channel.json({ error: "Missing 'thread_id' field" }, 400);
-  const interaction = await admit(chatJid, data.content || "", normalizeMediaIds(data.media_ids), {
+  const interaction = await admit(chatJid, data.content || "", false, normalizeMediaIds(data.media_ids), {
     contentBlocks: sanitizePublicInboundContentBlocks(data.content_blocks),
     linkPreviews: Array.isArray(data.link_previews) ? data.link_previews : undefined,
     threadId: isReply && data.thread_id ? Number(data.thread_id) : undefined,

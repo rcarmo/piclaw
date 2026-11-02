@@ -33,7 +33,7 @@ function modelLookupFixture(getCurrentModelLabel: () => Promise<string | null>) 
     getAgentStatus: (jid: string) => statuses.get(jid),
     updateAgentStatus: (jid: string, payload: Record<string, unknown>) => statuses.update(jid, payload),
     broadcastEvent: (event: string, payload: any) => { events.push({ event, payload }); },
-    admitUserMessage: async () => ({ id: ++row, timestamp: `2026-10-15T00:00:0${row}Z`, data: { thread_id: null } }),
+    admitMessage: async () => ({ id: ++row, timestamp: `2026-10-15T00:00:0${row}Z`, data: { thread_id: null } }),
     sendMessage: async (_jid: string, content: string) => { responses.push(content); },
     json: (body: unknown, status = 200) => Response.json(body, { status }),
   } as any;
@@ -162,7 +162,7 @@ describe("web agent message handler", () => {
       const queued: any[][] = [], events: any[] = [];
       const channel = {
         agentPool: { isStreaming: () => busy, isActive: () => busy }, getQueuedFollowupCount: () => 0,
-        async admitUserMessage(_chat: string, _content: string, _media: unknown, _options: unknown, check: () => void, _signal: unknown, defer: () => boolean) {
+        async admitMessage(_chat: string, _content: string, _isBot: boolean, _media: unknown, _options: unknown, check: () => void, _signal: unknown, defer: () => boolean) {
           busy = true; check(); expect(defer()).toBe(true); return null;
         },
         enqueueQueuedFollowupItem(...args: any[]) { queued.push(args); return -42; },
@@ -183,7 +183,7 @@ describe("web agent message handler", () => {
     let busy=false,committed=false,scheduled=0;const queued:any[]=[];const events:string[]=[];
     let release!:()=>void;const gate=new Promise<void>(resolve=>{release=resolve;});
     const channel={agentPool:{isStreaming:()=>busy,isActive:()=>busy},getQueuedFollowupCount:()=>queued.length,
-      async admitUserMessage(_jid:string,_text:string,_media:unknown,_options:unknown,check:()=>void,_signal:unknown,defer:()=>boolean){await gate;check();const queued=defer();committed=true;expect(queued).toBe(true);return null;},
+      async admitMessage(_jid:string,_text:string, _isBot: boolean,_media:unknown,_options:unknown,check:()=>void,_signal:unknown,defer:()=>boolean){await gate;check();const queued=defer();committed=true;expect(queued).toBe(true);return null;},
       enqueueQueuedFollowupItem:(...args:any[])=>{expect(committed).toBe(false);queued.push(args);return -42;},broadcastEvent:(type:string)=>{expect(committed).toBe(true);events.push(type);},queue:{enqueue:()=>{scheduled++;}},resumeChat:()=>{scheduled++;},json:(value:unknown,status=200)=>Response.json(value,{status})} as any;
     const pending=handleAgentMessage(channel,new Request('https://fixture/agent/default/message',{method:'POST',body:JSON.stringify({content:'idle input'})}),'/agent/default/message','web:test','default');await Bun.sleep(0);expect(events).toEqual([]);busy=true;release();
     const response=await pending;expect(response.status).toBe(201);const body=await response.json();expect(body.queued).toBe('followup');expect(body.user_message).toBeUndefined();expect(queued[0].slice(0,4)).toEqual(['web:test',0,'idle input',null]);expect(events).toEqual(['agent_followup_queued']);expect(scheduled).toBe(0);
@@ -191,11 +191,11 @@ describe("web agent message handler", () => {
   test('idle input acknowledgement and scheduling wait for successful atomic storage',async()=>{
     let committed=false,scheduled=0;const events:string[]=[];
     const channel={agentPool:{isStreaming:()=>false,isActive:()=>false},getQueuedFollowupCount:()=>0,
-      async admitUserMessage(_jid:string,_text:string,_media:unknown,_options:unknown,check:()=>void,_signal:unknown,defer:()=>boolean){check();expect(defer()).toBe(false);committed=true;return{id:43,chat_jid:'web:test',timestamp:'2026-10-04T13:00:01Z',data:{content:'idle input',thread_id:43}};},
+      async admitMessage(_jid:string,_text:string, _isBot: boolean,_media:unknown,_options:unknown,check:()=>void,_signal:unknown,defer:()=>boolean){check();expect(defer()).toBe(false);committed=true;return{id:43,chat_jid:'web:test',timestamp:'2026-10-04T13:00:01Z',data:{content:'idle input',thread_id:43}};},
       broadcastEvent:(type:string)=>{expect(committed).toBe(true);events.push(type);},queue:{enqueue:()=>{expect(committed).toBe(true);scheduled++;}},json:(value:unknown,status=200)=>Response.json(value,{status})} as any;
     const request=()=>new Request('https://fixture/agent/default/message',{method:'POST',body:JSON.stringify({content:'idle input'})});
     expect((await handleAgentMessage(channel,request(),'/agent/default/message','web:test','default')).status).toBe(201);expect(events).toEqual(['new_post']);expect(scheduled).toBe(1);
-    channel.admitUserMessage=async()=>{throw Error('write rejected');};events.length=0;expect((await handleAgentMessage(channel,request(),'/agent/default/message','web:test','default')).status).toBe(503);expect(events).toEqual([]);expect(scheduled).toBe(1);
+    channel.admitMessage=async()=>{throw Error('write rejected');};events.length=0;expect((await handleAgentMessage(channel,request(),'/agent/default/message','web:test','default')).status).toBe(503);expect(events).toEqual([]);expect(scheduled).toBe(1);
   });
   test('fresh streaming state prevents a compose wake even if the active flag is false',async()=>{
     let wakes=0,admissions=0;
@@ -232,7 +232,7 @@ describe("web agent message handler", () => {
         json: (body: unknown, status = 200) => Response.json(body,{status}),
         getQueuedFollowupCount: () => 0, getAgentStatus: () => status,
         broadcastEvent: (event: string,payload: any) => broadcasts.push({event,payload}), updateAgentStatus: (_jid: string, next: Record<string, unknown>) => { status = next; },
-        admitUserMessage: async () => ({id:456,timestamp:'2026-09-22T00:00:00Z',data:{thread_id:null},content:'/agent-avatar clear'}), sendMessage: async () => {},
+        admitMessage: async () => ({id:456,timestamp:'2026-09-22T00:00:00Z',data:{thread_id:null},content:'/agent-avatar clear'}), sendMessage: async () => {},
       } as any;
       const response = await handleAgentMessage(channel,new Request('https://fixture/agent/default/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:'/agent-avatar clear'})}),'/agent/default/message','web:default','default');
       expect(response.status).toBe(201);
@@ -474,7 +474,7 @@ describe("web agent message handler", () => {
       broadcastEvent: (event: string, payload: any) => broadcasts.push({ event, payload }),
       updateAgentStatus: (chatJid: string, status: any) => statusUpdates.push({ chatJid, status }),
       setContextUsage: (chatJid: string, usage: any) => contextUsages.push({ chatJid, usage }),
-      admitUserMessage: async () => {
+      admitMessage: async () => {
         storeMessageCalls += 1;
         return {
           id: 456,
@@ -661,7 +661,7 @@ describe("web agent message handler", () => {
       },
       updateAgentStatus: () => {},
       skipFailedOnModelSwitch: () => {},
-      admitUserMessage: async (_chatJid: string, content: string) => ({
+      admitMessage: async (_chatJid: string, content: string) => ({
         id: 321,
         timestamp: "2026-03-14T21:10:00.000Z",
         data: { thread_id: null },
@@ -726,7 +726,7 @@ describe("web agent message handler", () => {
         broadcasts.push({ event, payload });
       },
       updateAgentStatus: () => {},
-      admitUserMessage: async () => ({
+      admitMessage: async () => ({
         id: 987,
         timestamp: "2026-03-14T21:05:00.000Z",
         data: { thread_id: null },
@@ -789,7 +789,7 @@ describe("web agent message handler", () => {
         broadcasts.push({ event, payload });
       },
       updateAgentStatus: () => {},
-      admitUserMessage: async () => {
+      admitMessage: async () => {
         storeMessageCalls += 1;
         return {
           id: 222,
@@ -876,7 +876,7 @@ describe("web agent message handler", () => {
       updateAgentStatus: (_chatJid: string, status: Record<string, any>) => { statusUpdates.push(status); },
       setContextUsage: (_chatJid: string, usage: Record<string, any>) => { contextUsages.push(usage); },
       skipFailedOnModelSwitch: () => {},
-      admitUserMessage: async (_chatJid: string, content: string) => ({
+      admitMessage: async (_chatJid: string, content: string) => ({
         id: 654,
         timestamp: "2026-03-14T21:20:00.000Z",
         data: { thread_id: null },
