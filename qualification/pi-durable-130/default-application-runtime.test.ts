@@ -5266,6 +5266,16 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
   expect(base.queue.getMetrics().succeeded - queueBefore.succeeded).toBe(3);
   expect(base.queue.getMetrics().retriesScheduled - queueBefore.retriesScheduled).toBe(0);
   expect(backend.sessionOptions.getDurableSession!(httpChat)).toBeDefined();
+  if (scenario === "public-conversations") {
+    const sourcesBeforeControl = root.query("SELECT * FROM service_effect_s01_sources WHERE chat_jid=? ORDER BY source_seq").all(httpChat);
+    const callsBeforeControl = calls;
+    const control = await post(httpChat, "/stats");
+    expect(control.status).toBe(201);
+    expect((await control.json() as any).command.status).toBe("success");
+    expect(root.query("SELECT * FROM service_effect_s01_sources WHERE chat_jid=? ORDER BY source_seq").all(httpChat)).toEqual(sourcesBeforeControl);
+    expect(channel.getQueuedFollowupCount(httpChat)).toBe(0);
+    expect(calls).toBe(callsBeforeControl);
+  }
   const before = (root.query("SELECT count(*) AS n FROM conversations").get() as { n: number }).n;
   await Promise.all([bound.prepareInputSourceAdmission!(newcomer), bound.prepareInputSourceAdmission!(newcomer)]);
   const newPort = backend.sessionOptions.getDurableSession!(newcomer)!;
