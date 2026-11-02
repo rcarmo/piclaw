@@ -10,13 +10,14 @@ import { awaitWithContext, withAbortSignal } from "../../runtime/durable-engine/
 import { acceptedSteerFixture } from "./src/accepted-steer-recovery-fixture.ts";
 import { barrier, context } from "./src/fixture.ts";
 
-test("busy native model/thinking choices persist for next request without stopping, replaying or rewriting accepted work", async () => {
+for(const finalLevel of ['off','max'] as const) test("busy native model/thinking choices persist for next request without stopping, replaying or rewriting accepted work"+(finalLevel==='off'?'':' [extended max]'), async () => {
   const dir=await mkdtemp(join(process.env.PICLAW_WORKSPACE!,"model-choice-"));
   const f=await acceptedSteerFixture(dir,"committed-ack-lost");
   const entered=barrier(),release=barrier();
   const requests:{model:string;thinking:unknown}[]=[];
   const original=f.base.models.getModel('qualification','synthetic')!;
-  const models=[{...original,reasoning:true},{...original,id:'alternate',name:'Alternate',reasoning:true}];
+  const thinkingLevelMap={off:'off',minimal:null,low:null,medium:'medium',high:'high',xhigh:'xhigh',max:'max'};
+  const models=[{...original,reasoning:true,thinkingLevelMap},{...original,id:'alternate',name:'Alternate',reasoning:true,thinkingLevelMap}];
   const stream=(model:typeof original,_input:TranscriptContext,options?:{signal?:AbortSignal;reasoning?:unknown})=>{
     requests.push({model:model.id,thinking:options?.reasoning});const hold=requests.length===2;
     const output=createAssistantMessageEventStream();
@@ -41,8 +42,14 @@ test("busy native model/thinking choices persist for next request without stoppi
     await f.runtime!.setSessionThinkingLevel(binding,'high');
     expect(await f.runtime!.readSessionModel(binding)).toBe('qualification/alternate');
     expect(await f.runtime!.readSessionThinkingLevel(binding)).toBe('high');
-    await f.runtime!.setSessionThinkingLevel(binding,'off');
-    expect(await f.runtime!.readSessionThinkingLevel(binding)).toBe('off');
+    await expect(f.runtime!.setSessionThinkingLevel(binding,'minimal')).rejects.toThrow('Unsupported thinking');
+    expect(await f.runtime!.readSessionThinkingLevel(binding)).toBe('high');
+    for(const level of ['xhigh','max']){
+      await f.runtime!.setSessionThinkingLevel(binding,level);
+      expect(await f.runtime!.readSessionThinkingLevel(binding)).toBe(level);
+    }
+    await f.runtime!.setSessionThinkingLevel(binding,finalLevel);
+    expect(await f.runtime!.readSessionThinkingLevel(binding)).toBe(finalLevel);
     await expect(f.runtime!.setSessionModel(binding,{provider:'qualification',modelId:'synthetic'})).rejects.toThrow('compact first');
     expect(await f.runtime!.readSessionModel(binding)).toBe('qualification/alternate');
     runtime.projectContext=measure;
@@ -57,10 +64,10 @@ test("busy native model/thinking choices persist for next request without stoppi
     await f.runtime!.close();
     raw=await Harness.open(await SqliteStorage.open(new OwnedSqlite(f.owner)),{models:f.base.models,registry:f.base.registry,settings:{retry:{enabled:false},compaction:{enabled:false}}},context);
     const conversation=(await raw.conversation(binding.conversationId,context))!;
-    expect((await conversation.agent(context)).thinkingLevel).toBe('off');
+    expect((await conversation.agent(context)).thinkingLevel).toBe(finalLevel);
     const follow=await conversation.submit({type:'input',content:'next request',requestId:'after-choice'},context);
     expect((await follow.wait(context)).status).toBe('done');
-    expect(requests).toHaveLength(3);expect(requests[2]!.model).toBe('alternate');
+    expect(requests).toHaveLength(3);expect(requests[2]!.model).toBe('alternate');expect(requests[2]!.thinking).toBe(finalLevel==='off'?undefined:finalLevel);
     const rows=(await conversation.entries({},100,undefined,context)).items;
     expect(rows.flatMap(e=>e.model??[]).filter(m=>m.role==='user')).toHaveLength(3);
   }finally{release.release();await raw?.close(context);await f.close();await rm(dir,{recursive:true,force:true});}

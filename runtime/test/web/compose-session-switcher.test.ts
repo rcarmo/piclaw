@@ -78,6 +78,9 @@ test('session picker formats model and bounded context metrics without inventing
     context_percent: 32.8125,
   })).toBe('openai/gpt-5 · 42K / 128K (33% context)');
   expect(formatSessionPickerMetrics({ model: 'local/qwen' })).toBe('local/qwen');
+  expect(formatSessionPickerMetrics({ context_tokens: 80000, context_window: 100000, context_percent: null })).toBe('80K / 100K');
+  expect(formatSessionPickerMetrics({ context_usage: { tokens: null, contextWindow: 100000, percent: null } })).toBe('');
+  expect(formatSessionPickerMetrics({ context_usage: { tokens: 0, contextWindow: 100000, percent: 0 } })).toBe('0 / 100K (0% context)');
   expect(formatSessionPickerMetrics({ context_percent: 140 })).toBe('100% context');
   expect(formatSessionPickerMetrics({ context_tokens: -1, context_window: 0 })).toBe('');
 });

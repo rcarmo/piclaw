@@ -20,11 +20,11 @@ export interface UseStatusPollingResult {
   isStale: ReturnType<typeof useComputed<boolean>>;
   currentModel: ReturnType<typeof useSignal<string | null>>;
   currentThinkingLevel: ReturnType<typeof useSignal<string>>;
-  modelContextWindow: ReturnType<typeof useSignal<number>>;
   providerUsage: ReturnType<typeof useSignal<ProviderUsage | null>>;
   systemMetrics: ReturnType<typeof useSignal<any>>;
   metricsError: ReturnType<typeof useSignal<boolean>>;
   modelSelectionKnown: ReturnType<typeof useSignal<boolean>>;
+  modelInfo: ReturnType<typeof useSignal<Record<string, any> | null>>;
   fetchStatus: () => Promise<void>;
   fetchContext: () => Promise<void>;
 }
@@ -41,29 +41,26 @@ export function useStatusPolling(): UseStatusPollingResult {
   });
   const currentModel = useSignal<string | null>(null);
   const currentThinkingLevel = useSignal<string>("");
-  // #60: store model's context_window from /agent/models as fallback
-  const modelContextWindow = useSignal<number>(0);
   const providerUsage = useSignal<ProviderUsage | null>(null);
   const systemMetrics = useSignal<any>(null);
   const metricsError = useSignal(false);
   const modelSelectionKnown = useSignal(false);
-  const modelInfo = useRef<Record<string, any> | null>(null);
+  const modelInfo = useSignal<Record<string, any> | null>(null);
   const contextVersion = useRef(0);
 
   const applyModel = (payload: Record<string, any>) => {
-    const previous = modelInfo.current;
+    const previous = modelInfo.value;
     const info = mergeModelStatePayload(previous, payload)!;
-    modelInfo.current = info;
+    modelInfo.value = info;
     if (info.current !== undefined) modelSelectionKnown.value = true;
     const changed = previous && info.current !== previous.current;
     currentModel.value = info.current ?? null;
     currentThinkingLevel.value = info.supports_thinking === false ? "" : info.thinking_level_label ?? info.thinking_level ?? "";
-    const option = info.model_options?.find((m: any) => m.label === info.current || m.id === info.current || `${m.provider}/${m.id}` === info.current);
-    const windowSize = typeof option?.context_window === "number" ? option.context_window : null;
     if (changed || info.current === null) {
-      modelContextWindow.value = windowSize ?? 0;
+      const option = info.model_options?.find((m: any) => m.label === info.current || m.id === info.current || `${m.provider}/${m.id}` === info.current);
+      const windowSize = typeof option?.context_window === "number" ? option.context_window : null;
       agentContext.value = { tokens: null, percent: null, contextWindow: windowSize ?? 0, ...(agentContext.value?.cacheUsage ? {cacheUsage: agentContext.value.cacheUsage} : {}) };
-    } else if (windowSize !== null) modelContextWindow.value = windowSize;
+    }
     const ready = info.oobe?.provider_ready_completed_instance;
     if (ready !== undefined || info.current !== undefined) providerConfigured.value = ready !== undefined ? !!ready : !!info.current;
     providerUsage.value = info.provider_usage ?? null;
@@ -81,9 +78,9 @@ export function useStatusPolling(): UseStatusPollingResult {
     if (activeChat.current === chatJid) return;
     activeChat.current = chatJid;
     statusVersion.current++; contextVersion.current++;
-    modelInfo.current = null; modelSelectionKnown.value = false;
+    modelInfo.value = null; modelSelectionKnown.value = false;
     agentStatus.value = null; currentModel.value = null; currentThinkingLevel.value = '';
-    modelContextWindow.value = 0; providerUsage.value = null;
+    providerUsage.value = null;
     agentContext.value = null;
     lastSuccessAt.value = 0; error.value = false;
     clearTimeout(statusRefresh.current); clearTimeout(contextRefresh.current);
@@ -213,11 +210,11 @@ export function useStatusPolling(): UseStatusPollingResult {
     isStale,
     currentModel,
     currentThinkingLevel,
-    modelContextWindow,
     providerUsage,
     systemMetrics,
     metricsError,
     modelSelectionKnown,
+    modelInfo,
     fetchStatus,
     fetchContext,
   };

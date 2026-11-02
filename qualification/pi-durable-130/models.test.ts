@@ -838,13 +838,26 @@ test("image capability: authorization, real post-auth fence, and accepted SQLite
   } finally { await harness.close(durableContext); await rm(directory, { recursive: true, force: true }); }
 });
 
-test("accepted limitation: public transformHeaders is awaited, not an atomic dispatch fence", async () => {
+test("post-admission fence observes revocation queued during header preparation", async () => {
   const f = await fixture();
   f.onFence(() => queueMicrotask(() => { f.revoke(); f.abort(); }));
+  const result = await f.models.completeSimple(f.model, context);
+  expect(result.stopReason).toBe("error");
+  expect(f.calls()).toBe(0);
+});
+
+test("accepted limitation: public transformHeaders is awaited, not an atomic dispatch fence", async () => {
+  const f = await fixture();
+  const current = f.policy.assertCurrent;
+  let checks = 0;
+  f.policy.assertCurrent = (owner, kind, signal) => {
+    current(owner, kind, signal);
+    if (++checks === 3) queueMicrotask(() => { f.revoke(); f.abort(); });
+  };
   await f.models.completeSimple(f.model, context);
-  // The runtime still calls the provider after revocation in this await gap.
-  // A cooperative transport sees an aborted signal, but strict zero-dispatch
-  // requires a public synchronous guard at provider invocation in host 1.2.
+  // Revocation after the final bridge fence still precedes root provider entry.
+  // A cooperative transport sees abort; no asynchronous hook makes SDK entry atomic.
+  expect(checks).toBeGreaterThanOrEqual(3);
   expect(f.calls()).toBe(1);
   expect(f.captured().options.signal.aborted).toBe(true);
 });

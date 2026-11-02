@@ -95,6 +95,7 @@
     "model-context-parity.test.ts",
     "selected-context-admission.test.ts",
     "owned-model-context-admission.test.ts",
-    "context-selected-loadout.test.ts"
+    "context-selected-loadout.test.ts",
+    "model-thinking-contract.test.ts"
   ]
 }

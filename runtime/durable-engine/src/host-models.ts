@@ -16,6 +16,7 @@ import {
   type DeferredHandle, type DeferredFetchOptions, type DeferredCancelOptions,
 } from "@earendil-works/pi-ai";
 import type { ModelRuntime } from "../../src/durable-legacy-sdk.js";
+import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
 
 export interface ModelRef { provider: string; id: string; type?: ModelType }
 type Operation = "chat" | "generateImages" | "classify";
@@ -184,6 +185,9 @@ export function createHostModels(
       return mode;
     }) } : model.type === "classifier" ? { ...base, type: "classifier", contextWindow: model.contextWindow }
       : { ...base, type: "chat", reasoning: model.reasoning,
+        thinkingLevelMap: model.thinkingLevelMap && Object.fromEntries(MODEL_THINKING_LEVELS
+          .filter(level => model.thinkingLevelMap?.[level] !== undefined)
+          .map(level => [level, model.thinkingLevelMap![level]])),
         contextWindow: model.contextWindow, maxTokens: model.maxTokens }));
   });
   const validatedChatModel = (model: Model<Api>): Model<Api> => {
@@ -354,12 +358,13 @@ export function createHostModels(
         const assertPhysicalCompatible = () => {
           const current = hostModelRuntime120.getPhysicalModel(ref.provider, ref.id);
           if (!current || (current.type ?? "chat") !== "chat" || current.provider !== ref.provider ||
-            current.id !== ref.id || current.api !== listed.api ||
+            current.id !== ref.id || current.api !== listed.api || current.reasoning !== (listed as Model<Api>).reasoning ||
+            MODEL_THINKING_LEVELS.some(level => current.thinkingLevelMap?.[level] !== (listed as Model<Api>).thinkingLevelMap?.[level]) ||
             (hasImages && !current.input.includes("image"))) throw new Error("Model owner changed");
           if(requestCeilingFrame(current)!==requestCeilingFrame(listed as Model<Api>))throw new BudgetRequestError('budget_denied');
           return current;
         };
-        const physical = assertPhysicalCompatible();
+        const physical = freeze(data(assertPhysicalCompatible()));
         phase = "conversion";
         codex = await policy.codex?.bind(physical, signal, options?.signal);
         const hostOptions = { ...safeOptions, ...codex?.options, signal, transformHeaders: async (headers: Record<string, string | null>) => {
@@ -369,6 +374,7 @@ export function createHostModels(
             policy.assertCurrent(ref, "chat", signal);
             assertPhysicalCompatible();
             await request?.dispatch();
+            signal.throwIfAborted(); assertSource(); policy.assertCurrent(ref, "chat", signal); assertPhysicalCompatible();
             return codex ? codex.headers(headers) : headers; // Host-only closure: never sent to 1.3 or a caller callback.
           }catch(error){
             // Host admission may be serialised into an ordinary provider error

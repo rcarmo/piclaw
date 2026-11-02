@@ -3,6 +3,7 @@
  */
 
 import type { Api, Model } from "@earendil-works/pi-ai";
+import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
 
 import { getScopedModelsOnly } from "../core/config.js";
 
@@ -10,7 +11,7 @@ export interface EnabledModelsSettingsProvider {
   getEnabledModels?: () => string[] | undefined;
 }
 
-const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
+const THINKING_LEVELS = new Set<string>(MODEL_THINKING_LEVELS);
 
 function modelKey(model: Model<Api>): string {
   return `${model.provider}/${model.id}`;

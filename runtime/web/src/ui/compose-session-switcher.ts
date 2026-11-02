@@ -26,6 +26,7 @@ const SECTION_LABELS: Record<SessionPickerSectionKey, string> = {
 function clean(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
 
 function finiteNonNegative(value: unknown): number | null {
+  if (value == null) return null;
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
 }
@@ -44,9 +45,7 @@ export function formatSessionPickerMetrics(chat: any): string {
   const tokens = finiteNonNegative(chat?.context_tokens ?? chat?.contextTokens ?? chat?.context_usage?.tokens);
   const contextWindow = finiteNonNegative(chat?.context_window ?? chat?.contextWindow ?? chat?.context_usage?.contextWindow);
   const rawPercent = finiteNonNegative(chat?.context_percent ?? chat?.contextPercent ?? chat?.context_usage?.percent);
-  const percent = rawPercent == null
-    ? tokens != null && contextWindow != null && contextWindow > 0 ? (tokens / contextWindow) * 100 : null
-    : Math.min(100, rawPercent);
+  const percent = rawPercent == null ? null : Math.min(100, rawPercent);
   const context = tokens != null && contextWindow != null && contextWindow > 0
     ? `${formatCompactTokens(tokens)} / ${formatCompactTokens(contextWindow)}${percent == null ? '' : ` (${Math.round(percent)}% context)`}`
     : percent == null ? '' : `${Math.round(percent)}% context`;

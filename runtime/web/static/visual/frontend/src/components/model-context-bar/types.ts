@@ -106,15 +106,6 @@ export interface ModelEntry {
 
 export type VisualModelEntry = ModelCatalogueEntry & { reasoningKnown: boolean };
 
-export const FALLBACK_MODELS: ModelEntry[] = [
-  { id: "github-copilot/claude-sonnet-4.6", context_window: 200000 },
-  { id: "github-copilot/claude-opus-4.6", context_window: 1000000 },
-  { id: "github-copilot/gpt-5.3-codex", context_window: 1000000 },
-  { id: "github-copilot/o4-mini", context_window: 200000 },
-  { id: "github-copilot/gemini-2.5-pro", context_window: 1048576 },
-];
-
-export const FALLBACK_THINKING_LEVELS = ["none", "low", "medium", "high", "max"];
 
 export const fmtTokens = (n: number) =>
   n >= 1000000 ? `${(n / 1000000).toFixed(1)}M` : `${(n / 1000).toFixed(0)}k`;
