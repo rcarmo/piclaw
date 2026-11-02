@@ -2,64 +2,13 @@
  * channels/web/agent-status.ts – Agent status/context/models endpoint helpers.
  */
 
-import type { WebChannelLike } from "../core/web-channel-contracts.js";
-import type { WebAgentBufferEntry } from "./agent-buffers.js";
+import type { WebChannelLike, AgentStatusContext, TokenUsageCounterSummary, LatestTokenUsageCounterSummary, AgentTokenUsageContext } from "../core/web-channel-contracts.js";
+export type { AgentStatusContext, TokenUsageCounterSummary, LatestTokenUsageCounterSummary, AgentTokenUsageContext } from "../core/web-channel-contracts.js";
 import { getAddonApiHealthSnapshot } from "../../../addons/addon-api-health.js";
 import { getMcpStartupDiagnostics } from "../../../secure/mcp-keychain.js";
 import { appendServerTiming, measureAsync, measureSync } from "../http/server-timing.js";
 import { publicContextUsage } from "../context-usage.js";
 
-export interface TokenUsageCounterSummary {
-  input_tokens: number;
-  output_tokens: number;
-  reasoning_tokens?: number;
-  cache_read_tokens: number;
-  cache_write_tokens: number;
-  total_tokens: number;
-  cost_total: number;
-  runs: number;
-  provider_reported_cost_runs?: number;
-  catalogue_estimate_cost_runs?: number;
-  unavailable_cost_runs?: number;
-  legacy_cost_runs?: number;
-}
-
-export interface LatestTokenUsageCounterSummary extends TokenUsageCounterSummary {
-  cache_read_reported?: number | null;
-  cache_write_reported?: number | null;
-  provider_cost_total?: number | null;
-  catalogue_cost_total?: number | null;
-  cost_provenance?: string | null;
-  model?: string | null;
-  response_model?: string | null;
-  provider?: string | null;
-  api?: string | null;
-  turns?: number | null;
-  run_at?: string | null;
-}
-
-export interface AgentTokenUsageContext {
-  latest: LatestTokenUsageCounterSummary | null;
-  totals: TokenUsageCounterSummary | null;
-}
-
-/** Context contract used by web agent status/context/model endpoint handlers. */
-export interface AgentStatusContext {
-  defaultChatJid: string;
-  json(payload: unknown, status?: number): Response;
-  getAgentStatus(chatJid: string): Record<string, unknown> | null;
-  getExtensionWorkingState(chatJid: string): Record<string, unknown> | null;
-  getBuffer(turnId: string, panel: "thought" | "draft"): WebAgentBufferEntry | undefined;
-  getContextUsageForChat(
-    chatJid: string
-  ): Promise<{ tokens: number | null; contextWindow: number | null; percent: number | null; sessionGeneration?: string } | null>;
-  getSessionTreeSummaryForChat?(chatJid: string): Promise<{ leafId: string | null; total: number } | null>;
-  getTokenUsageForChat(chatJid: string): AgentTokenUsageContext | null;
-  getAvailableModels(chatJid: string, options?: { includeProviderDiagnostics?: boolean; includeCatalogue?: boolean }): Promise<unknown>;
-  getProviderReadyCompletedForInstance(): boolean;
-  getAddonApiHealthSnapshot?: typeof getAddonApiHealthSnapshot;
-  getMcpStartupDiagnostics?: typeof getMcpStartupDiagnostics;
-}
 
 function resolveChatJid(req: Request, defaultChatJid: string): string {
   const url = new URL(req.url);
