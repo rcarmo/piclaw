@@ -1393,16 +1393,17 @@ function validateConstruction(database: Database): void {
     throw new Error("triggers");
   }
   for (const sql of REQUIRED_SCHEMA_PROBES) database.query(sql).get();
-  // Validate required tables, not unrelated historical application data.
-  const foreignKeyViolations = database
-    .query("PRAGMA foreign_key_check")
-    .all()
-    .filter((row) => tables.has((row as { table: string }).table));
-  if (foreignKeyViolations.length !== 0) throw new Error("foreign key state");
-  const quickCheck = database.query("PRAGMA quick_check").get() as
-    | { quick_check?: unknown }
-    | undefined;
-  if (quickCheck?.quick_check !== "ok") throw new Error("database state");
+  // Inspect every required table, including FTS shadow tables, without a
+  // database-wide scan of unrelated SDK/history tables. Names are static, not
+  // caller input. Keep FK and structural/CHECK validation fail-closed.
+  for (const table of REQUIRED_SCHEMA) {
+    if (database.query(`PRAGMA foreign_key_check("${table}")`).all().length !== 0)
+      throw new Error("foreign key state");
+    const checks = database.query(`PRAGMA quick_check("${table}")`).all() as
+      { quick_check?: unknown }[];
+    if (checks.length !== 1 || checks[0]?.quick_check !== "ok")
+      throw new Error("database state");
+  }
 }
 
 function closeOperation(row: OperationRow): ClosedOperation {
