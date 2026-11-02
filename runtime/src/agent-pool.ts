@@ -442,10 +442,6 @@ export class AgentPool {
     catch { return { status: "error", result: null, thinking: null, model: null, error: "Native side prompt unavailable or failed" }; }
   }
 
-  async probeCompactionModel(modelLabel: string) {
-    return await this.runtimeFacade.probeCompactionModel(modelLabel);
-  }
-
   /** Return available model labels and current model for a chat session. */
   async getAvailableModels(chatJid: string, options: { includeProviderUsage?: boolean; includeProviderDiagnostics?: boolean; includeCatalogue?: boolean } = {}): Promise<AvailableModelsResult> {
     return this.runtimeFacade.getAvailableModels(chatJid, options);

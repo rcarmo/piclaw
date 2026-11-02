@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { withTempWorkspaceEnv } from '../../../helpers.js';
 import { initDatabase, closeDatabase } from '../../../../src/db/connection.js';
 
+import { WebChannel } from "../../../../src/channels/web.js";
 import type { InteractionRow } from "../../../../src/db.js";
 import {
-  createWebChannelRuntimePublicSurfaceService,
-  getWebChannelRuntimePublicSurfaceService,
+  WebChannelRuntimePublicSurfaceService,
 } from "../../../../src/channels/web/core/web-channel-runtime-public-surface-service.js";
 
 function interaction(id: number): InteractionRow {
@@ -19,7 +19,7 @@ function interaction(id: number): InteractionRow {
 
 describe("web channel runtime public surface service", () => {
   test("stores only plain text extension working-indicator frames", () => {
-    const service = createWebChannelRuntimePublicSurfaceService({
+    const service = new WebChannelRuntimePublicSurfaceService({
       messageWriteService: {} as any, queuedFollowupLifecycle: {} as any, runtimeState: {} as any,
       messageProcessingStorageService: {} as any,
       sessionBroadcast: {
@@ -48,7 +48,7 @@ describe("web channel runtime public surface service", () => {
     try {
     const calls: string[] = [];
     let body: Record<string, unknown> | null = null;
-    const service = createWebChannelRuntimePublicSurfaceService({
+    const service = new WebChannelRuntimePublicSurfaceService({
       handleAgentMessage: async (req, pathname) => {
         const url = new URL(req.url);
         calls.push(`handler:${pathname}:${url.searchParams.get("chat_jid")}`);
@@ -100,7 +100,7 @@ describe("web channel runtime public surface service", () => {
           expect(this).toBe(channel); original++;
           return Response.json({ queued: "followup", thread_id: null }, { status: 201 });
         } };
-        const service = createWebChannelRuntimePublicSurfaceService(channel);
+        const service = new WebChannelRuntimePublicSurfaceService(channel);
         const result = await service.enqueueAgentMessage({ chatJid: "web:goal", content: "captured input", mode: "queue",
           admission: { validate() { channel.handleAgentMessage = async () => { redirected++; throw Error("replacement must not run"); }; } } });
         expect(result.queued).toBe("followup"); expect(original).toBe(1); expect(redirected).toBe(0);
@@ -112,7 +112,7 @@ describe("web channel runtime public surface service", () => {
     test("missing host input handler rejects without legacy queue/storage effects: " + mode, async () => {
       const calls:string[]=[];
       const unexpected=()=>{calls.push("unexpected");throw Error("must not touch a fallback");};
-      const service=createWebChannelRuntimePublicSurfaceService({
+      const service=new WebChannelRuntimePublicSurfaceService({
         get agentPool(){return unexpected();},
         get messageWriteService(){return unexpected();}, get queuedFollowupLifecycle(){return unexpected();},
         runtimeState: { resumeChat: unexpected, updateAgentStatus: unexpected },
@@ -130,12 +130,11 @@ describe("web channel runtime public surface service", () => {
     const calls: string[] = [];
     const sse = { kind: "sse-hub" };
     const uiBridge = { kind: "ui-bridge" };
-    const stored = interaction(2);
     const queuedItem = { rowId: 3, queuedContent: "queued", threadId: 4, queuedAt: "2026-03-28T00:00:00.000Z" };
     const buffer = { text: "draft", totalLines: 5 };
     const status = { type: "intent", title: "Thinking" };
 
-    const service = createWebChannelRuntimePublicSurfaceService({
+    const service = Object.assign(Object.create(WebChannel.prototype), {
       messageWriteService: {
         sendMessage: async (chatJid, text, options) => {
           calls.push(`send:${chatJid}:${text}:${options?.threadId ?? "null"}`);
@@ -226,10 +225,6 @@ describe("web channel runtime public surface service", () => {
         processChat: async (chatJid, agentId, threadRootId) => {
           calls.push(`process:${chatJid}:${agentId}:${threadRootId ?? "undefined"}`);
         },
-        admitMessage: async (chatJid, content, isBot, mediaIds, options) => {
-          calls.push(`store:${chatJid}:${content}:${isBot ? 1 : 0}:${mediaIds.join(",")}:${options?.threadId ?? "undefined"}`);
-          return stored;
-        },
       },
       sessionBroadcast: {
         sse,
@@ -239,6 +234,7 @@ describe("web channel runtime public surface service", () => {
         },
       },
     });
+    service.runtimePublicSurfaceService = new WebChannelRuntimePublicSurfaceService(service);
 
     expect(service.sse).toBe(sse);
     expect(service.uiBridge).toBe(uiBridge);
@@ -248,7 +244,7 @@ describe("web channel runtime public surface service", () => {
     expect(service.peekQueuedFollowupItem("web:test")).toBe(queuedItem);
     expect(service.consumeQueuedFollowupItem("web:test")).toBe(queuedItem);
     service.prependQueuedFollowupItem("web:test", queuedItem);
-    expect(service).not.toHaveProperty('replaceQueuedFollowupItem');
+    expect(service).not.toHaveProperty("replaceQueuedFollowupItem");
     expect(service.getQueuedFollowupCount("web:test")).toBe(2);
     expect(service.getQueuedFollowupItems("web:test")).toEqual([queuedItem]);
     expect(service.removeQueuedFollowupItem("web:test", 3)).toBe(queuedItem);
@@ -274,8 +270,7 @@ describe("web channel runtime public surface service", () => {
     service.updateDraftBuffer("turn-1", "draft text", 4);
     expect(service.getBuffer("turn-1", "thought")).toEqual(buffer);
     service.broadcastEvent("agent_status", { chat_jid: "web:test", type: "thinking" });
-    expect(await service.admitMessage("web:test", "stored", true, [7], { threadId: 55 })).toBe(stored);
-    expect(service).not.toHaveProperty('storeMessage');
+    expect(service).not.toHaveProperty("storeMessage");
     await service.processChat("web:test", "default", null);
 
     expect(calls).toEqual([
@@ -302,20 +297,16 @@ describe("web channel runtime public surface service", () => {
       "draft:turn-1:draft text:4",
       "buffer:turn-1:thought",
       "broadcast:agent_status:{\"chat_jid\":\"web:test\",\"type\":\"thinking\"}",
-      "store:web:test:stored:1:7:55",
       "process:web:test:default:undefined",
     ]);
   });
 
-  test("reuses a pre-wired runtime public surface service when present", () => {
-    const existing = { kind: "existing" } as unknown as ReturnType<typeof getWebChannelRuntimePublicSurfaceService>;
-    const carrier = {
-      runtimePublicSurfaceService: existing,
-      messageWriteService: {} as never, queuedFollowupLifecycle: {} as never, runtimeState: {} as never,
-      messageProcessingStorageService: {} as never,
-      sessionBroadcast: {} as never,
-    };
-
-    expect(getWebChannelRuntimePublicSurfaceService(carrier as any)).toBe(existing);
+  test("retains one working-state owner and detached snapshots", () => {
+    const channel = Object.assign(Object.create(WebChannel.prototype), { runtimeState: { updateAgentStatus() {} }, sessionBroadcast: { broadcastEvent() {} } });
+    const owner = new WebChannelRuntimePublicSurfaceService(channel); channel.runtimePublicSurfaceService = owner;
+    channel.broadcastEvent("extension_ui_working", { chat_jid: "web:test", message: "Still working" });
+    const snapshot = channel.getExtensionWorkingState("web:test"); snapshot.message = "reader mutation";
+    expect(channel.runtimePublicSurfaceService).toBe(owner); expect(channel.getExtensionWorkingState("web:test").message).toBe("Still working");
+    channel.updateAgentStatus("web:test", { type: "done" }); expect(channel.getExtensionWorkingState("web:test")).toBeNull();
   });
 });

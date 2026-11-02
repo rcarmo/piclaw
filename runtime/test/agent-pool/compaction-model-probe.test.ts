@@ -1,117 +1,57 @@
-import { afterEach, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
+import { AgentPool } from "../../src/agent-pool.js";
+import { AgentRuntimeFacade } from "../../src/agent-pool/runtime-facade.js";
+import * as estimates from "../../src/agent-pool/compaction-prefill-estimate.js";
+import { handleAgentRoutes } from "../../src/channels/web/http/dispatch-agent.js";
 
-import { probeCompactionModel } from "../../src/agent-pool/compaction-model-probe.js";
-import { resetCompactionRuntimeConfigForTests, setCompactionRuntimeConfigForTests } from "../../src/core/config.js";
-
-process.env.PICLAW_DB_IN_MEMORY = "1";
-afterEach(resetCompactionRuntimeConfigForTests);
-
-const model = { provider: "local", id: "probe", contextWindow: 64_000 };
-const resultMessage = {
-  role: "assistant",
-  content: [{ type: "text", text: "compaction probe ready" }],
-  stopReason: "stop",
-  usage: { input: 1, output: 1 },
-  timestamp: Date.now(),
-};
-
-function stream(events: unknown[], result = resultMessage) {
-  return {
-    async *[Symbol.asyncIterator]() { for (const event of events) yield event; },
-    async result() { return result; },
-  };
-}
-
-test("probe returns bounded metadata and does not expose provider output", async () => {
-  setCompactionRuntimeConfigForTests({ timeoutMs: 45_000 });
-  const calls: any[] = [];
-  const probe = await probeCompactionModel({
-    getModel: () => model,
-    streamSimple: async (_model: any, context: any, options: any) => {
-      calls.push({ context, options });
-      await options.onResponse?.({ status: 200, headers: new Headers() }, model);
-      return stream([{ type: "text_delta", delta: "ready" }]);
-    },
-  } as any, "local/probe");
-
-  expect(probe).toMatchObject({
-    ok: true,
-    model: "local/probe",
-    contextWindow: 64_000,
-    timeoutMs: 30_000,
-    responseReceived: true,
-    credentialStatus: "verified",
-    stage: "completed",
-    timeToFirstTokenMs: expect.any(Number),
-    durationMs: expect.any(Number),
-    compactionLatencyEstimate: null,
-    error: null,
-  });
-  expect(probe).not.toHaveProperty("output");
-  expect(calls).toHaveLength(1);
-  expect(calls[0].options).toMatchObject({ maxTokens: 32, maxRetries: 0, timeoutMs: 30_000, cacheRetention: "none" });
-  expect(calls[0].context.messages).toHaveLength(1);
+// The separate-model feature was retired by the native settings contract. Keep
+// its negative/public boundary covered without executing a provider probe.
+test("AgentPool and its runtime expose no separate compaction-model execution API", () => {
+  expect(AgentPool.prototype).not.toHaveProperty("probeCompactionModel");
+  expect(AgentRuntimeFacade.prototype).not.toHaveProperty("probeCompactionModel");
 });
 
-test("probe rejects malformed and unavailable exact model labels", async () => {
-  await expect(probeCompactionModel({ getModel: () => undefined } as any, "ambiguous"))
-    .rejects.toThrow("exact provider/model");
-  await expect(probeCompactionModel({ getModel: () => undefined } as any, "local/missing"))
-    .rejects.toThrow("unavailable");
+test("the retired provider probe runner is absent rather than hidden behind another wrapper", async () => {
+  const path = new URL("../../src/agent-pool/compaction-model-probe.ts", import.meta.url);
+  expect(await Bun.file(path).exists()).toBe(false);
 });
 
-test("probe attributes connect, first-token, and streaming failures", async () => {
-  const run = async (mode: "connect" | "first" | "stream") => await probeCompactionModel({
-    getModel: () => model,
-    streamSimple: async (_model: any, _context: any, options: any) => {
-      if (mode === "connect") throw new Error("apiKey=secret-token connection failed");
-      await options.onResponse?.({ status: 200, headers: new Headers() }, model);
-      if (mode === "first") return stream([], { ...resultMessage, stopReason: "error", errorMessage: "token=private timeout" });
-      return stream([{ type: "text_delta", delta: "partial" }], { ...resultMessage, stopReason: "error", errorMessage: "stream timeout" });
-    },
-  } as any, "local/probe");
-
-  const connect = await run("connect");
-  expect(connect).toMatchObject({ ok: false, stage: "provider_connect", credentialStatus: "unverified", responseReceived: false });
-  expect(connect.error).not.toContain("secret-token");
-  const first = await run("first");
-  expect(first).toMatchObject({ ok: false, stage: "first_token", responseReceived: true, timeToFirstTokenMs: null });
-  expect(first.error).not.toContain("private");
-  const streaming = await run("stream");
-  expect(streaming).toMatchObject({ ok: false, stage: "streaming", responseReceived: true, timeToFirstTokenMs: expect.any(Number) });
+test("probe-only latest-selector is gone while the historical estimator and bucket reader remain", () => {
+  expect(estimates).not.toHaveProperty("buildLatestCompactionLatencyEstimate");
+  expect(estimates.buildCompactionLatencyEstimate).toBeFunction();
+  expect(estimates.compactionInputTokenBucket(48_000)).toEqual({ min: 32_768, max: 65_536 });
 });
 
-test("probe remains hard-bounded when a provider ignores cancellation", async () => {
-  setCompactionRuntimeConfigForTests({ timeoutMs: 20 });
-  const startedAt = Date.now();
-  const result = await probeCompactionModel({
-    getModel: () => model,
-    streamSimple: async () => await new Promise(() => {}),
-  } as any, "local/probe");
-  expect(Date.now() - startedAt).toBeLessThan(500);
-  expect(result).toMatchObject({ ok: false, stage: "provider_connect", timeoutMs: 20 });
-  expect(result.error).toContain("timed out after 20ms");
+test("retired probe HTTP requests stay 410 without looking up a pool or consuming any input", async () => {
+  let effects = 0;
+  const channel = { json: (payload: unknown, status = 200) => Response.json(payload, { status }),
+    get agentPool() { effects++; throw Error("No model, credential, session, history or provider lookup is permitted"); } };
+  const path = "/agent/settings/compaction/probe";
+  for (const body of ["{", "{}", JSON.stringify({ model: "local/obsolete", chatJid: "web:historical" })]) {
+    const aborted = new AbortController(); aborted.abort();
+    const req = new Request("https://fixture.invalid" + path, { method: "POST", body, signal: aborted.signal });
+    const response = await handleAgentRoutes(channel as any, req, path, new URL(req.url));
+    expect(response?.status).toBe(410);
+    expect(await response?.json()).toEqual({ error: "Native compaction uses the active conversation model; separate compaction-model probes are unsupported." });
+    expect(req.bodyUsed).toBe(false);
+  }
+  expect(effects).toBe(0);
 });
 
-test("facade probe does not hydrate or mutate a chat session", async () => {
-  let sessionHydrations = 0;
-  const { AgentRuntimeFacade } = await import("../../src/agent-pool/runtime-facade.js");
-  const facade = new AgentRuntimeFacade({
-    pool: new Map(),
-    getOrCreateRuntime: async () => { sessionHydrations += 1; throw new Error("must not hydrate"); },
-    modelRegistry: { getAvailable: () => [] } as any,
-    modelRuntime: {
-      getModel: () => model,
-      streamSimple: async (_model: any, _context: any, options: any) => {
-        await options.onResponse?.({ status: 200, headers: new Headers() }, model);
-        return stream([{ type: "text_delta", delta: "ok" }]);
-      },
-    } as any,
-    authPath: "/tmp/auth.json",
-    clearAttachments: () => {},
-    refreshRuntime: async () => {},
-  } as any);
-
-  expect((await facade.probeCompactionModel("local/probe")).ok).toBe(true);
-  expect(sessionHydrations).toBe(0);
+test("native current-model reads stay on their bound port and fail closed without probe/session fallback", async () => {
+  let providerReads = 0, hydrations = 0;
+  const unexpected = () => { providerReads++; throw Error("must not execute provider/model lookup"); };
+  let available = true;
+  const options = { pool: new Map(), authPath: "/workspace/tmp/probe-retirement-unused-auth.json",
+    getOrCreateRuntime: () => { hydrations++; throw Error("must not hydrate"); },
+    modelRuntime: new Proxy({}, { get: unexpected }), modelRegistry: {},
+    getDurableSession(chat: string) {
+      expect(this).toBe(options); expect(chat).toBe("web:active");
+      return available ? { sessionId: "native-session", branchId: "native-branch", readPosition: () => ({ sessionId: "native-session", branchId: "native-branch", headId: null }), readModel: async () => "local/active" } : undefined;
+    } };
+  const facade = new AgentRuntimeFacade(options as any);
+  expect(await facade.getCurrentModelLabel("web:active")).toBe("local/active");
+  available = false;
+  await expect(facade.getCurrentModelLabel("web:active")).rejects.toThrow("Durable session model unavailable");
+  expect(providerReads).toBe(0); expect(hydrations).toBe(0);
 });

@@ -2,6 +2,7 @@
  * channels/web/agent-status.ts – Agent status/context/models endpoint helpers.
  */
 
+import type { WebChannelLike } from "../core/web-channel-contracts.js";
 import type { WebAgentBufferEntry } from "./agent-buffers.js";
 import { getAddonApiHealthSnapshot } from "../../../addons/addon-api-health.js";
 import { getMcpStartupDiagnostics } from "../../../secure/mcp-keychain.js";
@@ -371,4 +372,56 @@ export async function handleAgentUiSnapshotRequest(req: Request, ctx: AgentStatu
     });
   });
   return appendServerTiming(result, { name: 'agent_ui_snapshot', durationMs });
+}
+
+export function handleAgentActiveChatsRequest(channel: Pick<WebChannelLike, "agentPool" | "endpointContexts" | "json">): Response {
+  const { result, durationMs } = measureSync(() => {
+    // Native sessions do not populate the legacy AgentSession pool. Use known
+    // chat identities and the same authoritative lifecycle as /agent/status;
+    // never construct SDK sessions or claim/recover work for this read.
+    const rows: unknown[] = channel.agentPool.listKnownChats();
+    const context = channel.endpointContexts.agentStatus();
+    const chats = rows.flatMap((row): Record<string, unknown>[] => {
+      if (!row || typeof row !== "object") return [];
+      const chat = row as Record<string, unknown>;
+      const chatJid = typeof chat.chat_jid === "string" ? chat.chat_jid.trim() : "";
+      if (!chatJid || chat.archived_at) return [];
+      const snapshot = buildAgentStatusSnapshot(chatJid, context,
+        { includeDiagnostics: false, includeExtensionWorking: false, });
+      const data = snapshot.data as Record<string, unknown> | null;
+      const active = snapshot.status === "active";
+      const compacting = active && data?.type === "compaction";
+      const retrying = active && data?.type === "retry";
+      const shell = active && data?.type === "bash";
+      const streaming = active && (data?.type === "thinking" || data?.type === "draft");
+      return [{ ...chat,
+        session_id: channel.agentPool.getSessionGenerationForChat?.(chatJid) ?? chat.session_id ?? null,
+        is_active: active, is_streaming: streaming, is_compacting: compacting, is_retrying: retrying, is_bash_running: shell,
+        activity_status: !active ? "idle" : compacting ? "compacting" : retrying ? "retrying" : shell ? "bash_running" : streaming ? "streaming" : "working",
+        activity_label: active ? (typeof data?.title === "string" && data.title ? data.title : "Active") : "Idle" }];
+    }).sort((a, b) => Number(b.is_active) - Number(a.is_active) || String(a.chat_jid).localeCompare(String(b.chat_jid)));
+    return channel.json({ chats }, 200);
+  });
+  return appendServerTiming(result, {
+    name: "agent_active_chats",
+    durationMs,
+  });
+}
+
+export function handleAgentBranchesRequest(req: Request, channel: Pick<WebChannelLike, "agentPool" | "json">): Response {
+  const { result, durationMs } = measureSync(() => {
+    const url = new URL(req.url);
+    const rootChatJid = typeof url.searchParams.get("root_chat_jid") === "string"
+      ? url.searchParams.get("root_chat_jid")!.trim()
+      : "";
+    const includeArchived = ["1", "true", "yes", "on"].includes(
+      String(url.searchParams.get("include_archived") || "").trim().toLowerCase(),
+    );
+    const chats = channel.agentPool.listKnownChats(rootChatJid || null, { includeArchived });
+    return channel.json({ chats }, 200);
+  });
+  return appendServerTiming(result, {
+    name: "agent_branches",
+    durationMs,
+  });
 }

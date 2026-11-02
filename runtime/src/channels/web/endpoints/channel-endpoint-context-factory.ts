@@ -21,7 +21,7 @@ import type { AgentsEndpointContext, AvatarEndpointContext } from "./identity-en
 import type { PostMutationsContext } from "../post-mutations.js";
 import type { UiEndpointsContext } from "./ui-endpoints.js";
 
-/** Live identity/avatar snapshot consumed by endpoint facade/context builders. */
+/** Live identity/avatar snapshot consumed by endpoint context builders. */
 export interface WebChannelIdentitySnapshot {
   assistantName: string;
   assistantAvatarRaw: string | null;
@@ -71,6 +71,7 @@ function getTokenUsageForChat(chatJid: string): AgentTokenUsageContext | null {
 
 /** Lazily built endpoint contexts consumed by WebChannel handlers. */
 export interface WebChannelEndpointContexts {
+  identity(): WebChannelIdentitySnapshot;
   postMutations(): PostMutationsContext;
   agentStatus(): AgentStatusContext;
   content(): ContentEndpointsContext;
@@ -91,6 +92,7 @@ export function createWebChannelEndpointContexts(
   let authContext: AuthEndpointsContext | null = null;
 
   return {
+    identity: () => options.getIdentitySnapshot(),
     postMutations: () => ({
       defaultChatJid: options.defaultChatJid,
       lastCommandInteractionId: channel.lastCommandInteractionId,

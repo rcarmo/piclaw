@@ -7,8 +7,6 @@ import {
   getWebServerConfig,
 } from "../../../core/config.js";
 import { getDb } from "../../../db.js";
-import { getChatProject } from "../../../db/chat-project.js";
-import { handlePost as handlePostRequest } from "../handlers/posts.js";
 import { handleAgentMessage as handleAgentMessageRequest } from "../handlers/agent.js";
 import {
   WebAdaptiveCardSidePromptService,
@@ -23,7 +21,6 @@ import {
   type WebAgentPeerMessageRelayChannelLike,
   type WebAgentPeerMessageRelayService,
 } from "../agent/agent-peer-message-relay-service.js";
-import { ensureAvatarCache } from "../media/avatar-service.js";
 import { WebAuthGateway } from "../auth/auth-gateway.js";
 import { readAccessConfig } from "../../../core/config-access.js";
 import {
@@ -32,10 +29,6 @@ import {
   type WebChannelEndpointContexts,
   type WebChannelEndpointFactoryOptions,
 } from "../endpoints/channel-endpoint-context-factory.js";
-import {
-  WebChannelEndpointFacadeService,
-  type WebChannelEndpointFacadeOptions,
-} from "../endpoints/channel-endpoint-facade-service.js";
 import type { InteractionBroadcaster, InteractionBroadcasterProfile } from "../interaction-broadcaster.js";
 import { createInteractionBroadcaster } from "../interaction-broadcaster.js";
 import {
@@ -135,7 +128,6 @@ export interface WebChannelConstructorFactoryResult {
   messageWriteService: WebMessageWriteService;
   requestRouter: RequestRouterService;
   endpointContexts: WebChannelEndpointContexts;
-  endpointFacade: WebChannelEndpointFacadeService;
   controlPlaneService: WebAgentControlPlaneService;
   serverLifecycleGateway: WebServerLifecycleGatewayService;
   terminalVncHttpService: WebTerminalVncHttpServiceSurface;
@@ -169,7 +161,6 @@ export interface WebChannelConstructorFactoryDeps {
     channel: WebChannelConstructorFactoryChannel,
     options: WebChannelEndpointFactoryOptions,
   ): WebChannelEndpointContexts;
-  createEndpointFacade(options: WebChannelEndpointFacadeOptions): WebChannelEndpointFacadeService;
   createControlPlaneService(
     channel: WebChannelConstructorFactoryChannel,
     defaults: { defaultChatJid: string; defaultAgentId: string },
@@ -188,13 +179,6 @@ export interface WebChannelConstructorFactoryDeps {
     defaults: { defaultAgentId: string },
   ): WebAgentPeerMessageRelayService;
   getDb: typeof getDb;
-  ensureAvatarCache: typeof ensureAvatarCache;
-  handlePostRequest(
-    channel: WebChannelConstructorFactoryChannel,
-    req: Request,
-    isReply: boolean,
-    chatJid: string,
-  ): Promise<Response>;
 }
 
 const defaultDeps: WebChannelConstructorFactoryDeps = {
@@ -210,7 +194,6 @@ const defaultDeps: WebChannelConstructorFactoryDeps = {
   createRequestRouter: (channel) => new RequestRouterService(channel as unknown as WebChannelLike),
   createEndpointContexts: (channel, options) =>
     createWebChannelEndpointContexts(channel as unknown as WebChannelLike, options),
-  createEndpointFacade: (options) => new WebChannelEndpointFacadeService(options),
   createControlPlaneService: (channel, defaults) =>
     createWebAgentControlPlaneService(channel as unknown as Parameters<typeof createWebAgentControlPlaneService>[0], defaults),
   createServerLifecycleGateway: (channel, configs) => createWebServerLifecycleGateway(channel, configs),
@@ -219,9 +202,6 @@ const defaultDeps: WebChannelConstructorFactoryDeps = {
   createPeerMessageRelayService: (channel, defaults) =>
     createWebAgentPeerMessageRelayService(channel as unknown as WebAgentPeerMessageRelayChannelLike, defaults),
   getDb,
-  ensureAvatarCache,
-  handlePostRequest: (channel, req, isReply, chatJid) =>
-    handlePostRequest(channel as unknown as WebChannelLike, req, isReply, chatJid),
 };
 
 export function initializeWebChannelConstructor(
@@ -312,19 +292,6 @@ export function createWebChannelConstructorFactory(
     defaultChatJid: options.defaultChatJid,
     defaultAgentId: options.defaultAgentId,
     getIdentitySnapshot,
-  });
-
-  const endpointFacade = deps.createEndpointFacade({
-    endpointContexts,
-    defaultChatJid: options.defaultChatJid,
-    agentPool: channel.agentPool,
-    getIdentitySnapshot,
-    ensureAvatarCache: deps.ensureAvatarCache,
-    json: (payload, status = 200) => channel.json(payload, status),
-    broadcastEvent: (eventType, data) => channel.broadcastEvent(eventType, data),
-    handlePostRequest: (req, isReply, chatJid) => deps.handlePostRequest(channel, req, isReply, chatJid),
-    listKnownChats: (rootChatJid, options) => channel.agentPool.listKnownChats(rootChatJid, options),
-    getProjectRepository: (chatJid) => getChatProject(chatJid),
   });
 
   const controlPlaneService = deps.createControlPlaneService(channel, {
@@ -422,7 +389,6 @@ export function createWebChannelConstructorFactory(
     messageWriteService,
     requestRouter,
     endpointContexts,
-    endpointFacade,
     controlPlaneService,
     serverLifecycleGateway,
     terminalVncHttpService,

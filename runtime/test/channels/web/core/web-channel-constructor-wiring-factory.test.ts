@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 
 import type { AgentPool } from "../../../../src/agent-pool.js";
 import type { InteractionRow } from "../../../../src/db.js";
-import type { WebChannelEndpointFacadeOptions } from "../../../../src/channels/web/endpoints/channel-endpoint-facade-service.js";
 import type { InteractionBroadcasterProfile } from "../../../../src/channels/web/interaction-broadcaster.js";
 import type { WebMessageWriteServiceDeps } from "../../../../src/channels/web/message-write-service.js";
 import type { WebChannelRuntimeStateCallbacks } from "../../../../src/channels/web/runtime/runtime-state-service.js";
@@ -63,7 +62,6 @@ describe("web channel constructor wiring factory", () => {
     const messageWriteService = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createMessageWriteService"]>>("message-write");
     const requestRouter = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createRequestRouter"]>>("request-router");
     const endpointContexts = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createEndpointContexts"]>>("endpoint-contexts");
-    const endpointFacade = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createEndpointFacade"]>>("endpoint-facade");
     const controlPlaneService = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createControlPlaneService"]>>("control-plane");
     const serverLifecycleGateway = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createServerLifecycleGateway"]>>("server-lifecycle");
     const terminalVncHttpService = {
@@ -83,7 +81,6 @@ describe("web channel constructor wiring factory", () => {
     let authDeps: ConstructorParameters<WebChannelConstructorFactoryDeps["createAuthGateway"]>[1] | null = null;
     let messageWriteDeps: WebMessageWriteServiceDeps | null = null;
     let endpointContextOptions: Parameters<WebChannelConstructorFactoryDeps["createEndpointContexts"]>[1] | null = null;
-    let endpointFacadeOptions: WebChannelEndpointFacadeOptions | null = null;
 
     const channel: WebChannelConstructorFactoryChannel = {
       queue: {
@@ -198,11 +195,6 @@ describe("web channel constructor wiring factory", () => {
         endpointContextOptions = factoryOptions;
         return endpointContexts;
       },
-      createEndpointFacade: (facadeOptions) => {
-        creationOrder.push("endpointFacade");
-        endpointFacadeOptions = facadeOptions;
-        return endpointFacade;
-      },
       createControlPlaneService: (seenChannel, defaults) => {
         creationOrder.push("controlPlaneService");
         expect(seenChannel).toBe(channel);
@@ -256,11 +248,7 @@ describe("web channel constructor wiring factory", () => {
           },
         }),
       }) as unknown as ReturnType<WebChannelConstructorFactoryDeps["getDb"]>,
-      ensureAvatarCache: async () => null,
-      handlePostRequest: async (_seenChannel, req, isReply, chatJid) => {
-        postRequestCalls.push({ isReply, chatJid, url: req.url });
-        return new Response("post");
-      },
+
     };
 
     const result = createWebChannelConstructorFactory(channel, options, deps);
@@ -274,7 +262,6 @@ describe("web channel constructor wiring factory", () => {
       "messageWriteService",
       "requestRouter",
       "endpointContexts",
-      "endpointFacade",
       "controlPlaneService",
       "serverLifecycleGateway",
       "adaptiveCardSidePromptService",
@@ -292,7 +279,7 @@ describe("web channel constructor wiring factory", () => {
     expect(result.messageWriteService).toBe(messageWriteService);
     expect(result.requestRouter).toBe(requestRouter);
     expect(result.endpointContexts).toBe(endpointContexts);
-    expect(result.endpointFacade).toBe(endpointFacade);
+    expect(result).not.toHaveProperty("endpointFacade");
     expect(result.controlPlaneService).toBe(controlPlaneService);
     expect(result.serverLifecycleGateway).toBe(serverLifecycleGateway);
     expect(result.terminalVncHttpService).not.toBe(terminalVncHttpService);
@@ -338,20 +325,6 @@ describe("web channel constructor wiring factory", () => {
 
     expect(endpointContextOptions?.defaultChatJid).toBe("web:default");
     expect(endpointContextOptions?.defaultAgentId).toBe("default");
-    expect(endpointFacadeOptions?.endpointContexts).toBe(endpointContexts);
-    expect(endpointFacadeOptions).not.toHaveProperty("listActiveChats");
-    expect(endpointFacadeOptions?.listKnownChats("web:root", { includeArchived: true })).toEqual(["web:root", true]);
-    const handlePostRequest = endpointFacadeOptions?.handlePostRequest;
-    expect(handlePostRequest).toBeDefined();
-    if (!handlePostRequest) throw new Error("Expected endpoint facade handlePostRequest");
-    expect(await (await handlePostRequest(new Request("https://example.com/post"), false, "web:branch")).text()).toBe("post");
-    expect(postRequestCalls).toEqual([
-      { isReply: false, chatJid: "web:branch", url: "https://example.com/post" },
-    ]);
-
-    expect(creationOrder).not.toContain("terminalVncHttpService");
-    expect(await result.terminalVncHttpService.handleTerminalSession(new Request("https://example.com/terminal/session")).text()).toBe("terminal-session");
-    expect(creationOrder.filter((entry) => entry === "terminalVncHttpService")).toEqual(["terminalVncHttpService"]);
 
     identity = {
       assistantName: "Nova",
