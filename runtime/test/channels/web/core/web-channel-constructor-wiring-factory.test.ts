@@ -22,6 +22,8 @@ describe("web channel constructor wiring factory", () => {
     const creationOrder: string[] = [];
     const broadcastCalls: string[] = [];
     const queueCalls: Array<{ key: string; laneKey?: string }> = [];
+    const sends: unknown[][] = [];
+    let sidePromptOptions: Parameters<WebChannelConstructorFactoryDeps["createAdaptiveCardSidePromptService"]>[0] | undefined;
     const processCalls: Array<{ chatJid: string; agentId: string; threadRootId?: number | null }> = [];
     const storeCalls: Array<{
       chatJid: string;
@@ -59,7 +61,6 @@ describe("web channel constructor wiring factory", () => {
       "message-processing-storage",
     );
     const messageWriteService = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createMessageWriteService"]>>("message-write");
-    const runtimeFollowupFacade = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createRuntimeFollowupFacade"]>>("runtime-followup");
     const requestRouter = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createRequestRouter"]>>("request-router");
     const endpointContexts = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createEndpointContexts"]>>("endpoint-contexts");
     const endpointFacade = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createEndpointFacade"]>>("endpoint-facade");
@@ -81,7 +82,6 @@ describe("web channel constructor wiring factory", () => {
     let authConfig: ConstructorParameters<WebChannelConstructorFactoryDeps["createAuthGateway"]>[0] | null = null;
     let authDeps: ConstructorParameters<WebChannelConstructorFactoryDeps["createAuthGateway"]>[1] | null = null;
     let messageWriteDeps: WebMessageWriteServiceDeps | null = null;
-    let runtimeFollowupDeps: ConstructorParameters<WebChannelConstructorFactoryDeps["createRuntimeFollowupFacade"]>[0] | null = null;
     let endpointContextOptions: Parameters<WebChannelConstructorFactoryDeps["createEndpointContexts"]>[1] | null = null;
     let endpointFacadeOptions: WebChannelEndpointFacadeOptions | null = null;
 
@@ -108,6 +108,7 @@ describe("web channel constructor wiring factory", () => {
       broadcastEvent: () => {},
       handleRequest: async (req) => new Response(new URL(req.url).pathname),
       loadState: () => {},
+      async sendMessage(...args) { expect(this).toBe(channel); sends.push(args); },
       processChat: async (chatJid, agentId, threadRootId) => {
         processCalls.push({ chatJid, agentId, threadRootId });
       },
@@ -186,11 +187,6 @@ describe("web channel constructor wiring factory", () => {
         messageWriteDeps = writeDeps;
         return messageWriteService;
       },
-      createRuntimeFollowupFacade: (facadeDeps) => {
-        creationOrder.push("runtimeFollowupFacade");
-        runtimeFollowupDeps = facadeDeps;
-        return runtimeFollowupFacade;
-      },
       createRequestRouter: (seenChannel) => {
         creationOrder.push("requestRouter");
         expect(seenChannel).toBe(channel);
@@ -238,6 +234,7 @@ describe("web channel constructor wiring factory", () => {
       },
       createAdaptiveCardSidePromptService: (serviceOptions) => {
         creationOrder.push("adaptiveCardSidePromptService");
+        sidePromptOptions = serviceOptions;
         expect(serviceOptions.defaultChatJid).toBe("web:default");
         expect(serviceOptions.defaultAgentId).toBe("default");
         expect(serviceOptions.webRuntimeConfig).toEqual(options.webRuntimeConfig);
@@ -275,7 +272,6 @@ describe("web channel constructor wiring factory", () => {
       "authGateway",
       "messageProcessingStorageService",
       "messageWriteService",
-      "runtimeFollowupFacade",
       "requestRouter",
       "endpointContexts",
       "endpointFacade",
@@ -287,11 +283,13 @@ describe("web channel constructor wiring factory", () => {
 
     expect(result.sessionBroadcast).toBe(sessionBroadcast);
     expect(result.runtimeState).toBe(runtimeState);
+    expect(result).not.toHaveProperty("runtimeFollowupFacade");
+    await sidePromptOptions?.sendMessage?.("web:side-prompt", "reply", { threadId: 4 });
+    expect(sends).toEqual([["web:side-prompt", "reply", { threadId: 4 }]]);
     expect(result.interactionBroadcaster).toBe(interactionBroadcaster);
     expect(result.authGateway).toBe(authGateway);
     expect(result.messageProcessingStorageService).toBe(messageProcessingStorageService);
     expect(result.messageWriteService).toBe(messageWriteService);
-    expect(result.runtimeFollowupFacade).toBe(runtimeFollowupFacade);
     expect(result.requestRouter).toBe(requestRouter);
     expect(result.endpointContexts).toBe(endpointContexts);
     expect(result.endpointFacade).toBe(endpointFacade);
@@ -337,9 +335,6 @@ describe("web channel constructor wiring factory", () => {
     ]);
     expect(dbRuns).toEqual([]);
 
-    expect(runtimeFollowupDeps?.getMessageWriteService()).toBe(messageWriteService);
-    expect(runtimeFollowupDeps?.getQueuedFollowupLifecycle()).toBe(channel.queuedFollowupLifecycle);
-    expect(runtimeFollowupDeps?.getRuntimeState()).toBe(runtimeState);
 
     expect(endpointContextOptions?.defaultChatJid).toBe("web:default");
     expect(endpointContextOptions?.defaultAgentId).toBe("default");

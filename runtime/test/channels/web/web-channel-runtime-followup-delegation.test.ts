@@ -9,8 +9,8 @@ afterEach(() => {
   cleanup = null;
 });
 
-describe("WebChannel runtime/follow-up facade delegation", () => {
-  test("delegates remaining queued-followup and runtime-state wrapper methods to the extracted facade service", async () => {
+describe("WebChannel concrete-owner delegation", () => {
+  test("routes every public queue/runtime/write method to its existing owner", async () => {
     const fixture = await createWebChannelTestFixture({ workspace: "temp" });
     cleanup = fixture.cleanup;
 
@@ -19,13 +19,15 @@ describe("WebChannel runtime/follow-up facade delegation", () => {
     const buffer = { text: "buffer text", totalLines: 5 };
     const status = { type: "intent", title: "Thinking" };
 
-    (fixture.channel as unknown as { runtimeFollowupFacade: unknown }).runtimeFollowupFacade = {
+    Object.assign((fixture.channel as any).messageWriteService, {
       sendMessage: async (chatJid: string, text: string, options?: { threadId?: number | null }) => {
         calls.push(`send:${chatJid}:${text}:${options?.threadId ?? "null"}`);
       },
       postDashboardWidget: async (chatJid: string, options?: { threadId?: number | null; text?: string; widgetId?: string }) => {
         calls.push(`widget:${chatJid}:${options?.threadId ?? "null"}:${options?.widgetId ?? ""}`);
       },
+    });
+    Object.assign(fixture.channel.queuedFollowupLifecycle, {
       enqueueQueuedFollowupItem: (
         chatJid: string,
         rowId: number,
@@ -64,6 +66,8 @@ describe("WebChannel runtime/follow-up facade delegation", () => {
         calls.push(`remove:${chatJid}:${rowId}`);
         return queuedItem;
       },
+    });
+    Object.assign((fixture.channel as any).runtimeState, {
       updateAgentStatus: (chatJid: string, nextStatus: Record<string, unknown>) => {
         calls.push(`status-update:${chatJid}:${String(nextStatus.title ?? "")}`);
       },
@@ -104,7 +108,7 @@ describe("WebChannel runtime/follow-up facade delegation", () => {
         calls.push(`buffer:${turnId}:${panel}`);
         return buffer;
       },
-    };
+    });
 
     await fixture.channel.sendMessage("web:test", "hello", { threadId: 9 });
     await fixture.channel.postDashboardWidget("web:test", { threadId: 8, widgetId: "widget-facade" });

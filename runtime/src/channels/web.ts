@@ -51,7 +51,6 @@ import { TerminalSessionService } from "./web/terminal/terminal-session-service.
 import { VncSessionService } from "./web/vnc/vnc-session-service.js";
 import { createLazyTerminalService, createLazyVncService } from "./web/lazy-session-services.js";
 import type { WebMessageProcessingStorageService } from "./web/messaging/message-processing-storage-service.js";
-import type { WebChannelRuntimeFollowupFacadeService } from "./web/runtime/runtime-followup-facade-service.js";
 import { initializeWebChannelConstructor } from "./web/core/web-channel-constructor-factory.js";
 import { handleTimelineRequest } from "./web/endpoints/content-endpoints.js";
 import { handleAgentContextRequest, handleAgentModelsRequest } from "./web/agent/agent-status.js";
@@ -353,7 +352,6 @@ export class WebChannel implements WebChannelLike {
   private readonly lifecycleSpecialSurfaceService!: WebChannelLifecycleSpecialSurfaceService;
   private readonly messageProcessingStorageService!: WebMessageProcessingStorageService;
   private readonly messageWriteService!: WebMessageWriteService;
-  private readonly runtimeFollowupFacade!: WebChannelRuntimeFollowupFacadeService;
   private readonly endpointFacade!: WebChannelEndpointFacadeService;
   private readonly controlPlaneService!: WebAgentControlPlaneService;
 

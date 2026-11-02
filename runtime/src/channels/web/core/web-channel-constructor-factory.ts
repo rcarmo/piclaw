@@ -45,7 +45,6 @@ import {
 import { WebMessageWriteService, type WebMessageWriteServiceDeps } from "../message-write-service.js";
 import { QueuedFollowupLifecycleService } from "../runtime/queued-followup-lifecycle-service.js";
 import { RequestRouterService } from "../request-router-service.js";
-import { WebChannelRuntimeFollowupFacadeService } from "../runtime/runtime-followup-facade-service.js";
 import {
   WebChannelRuntimeStateService,
   type WebChannelRuntimeStateCallbacks,
@@ -84,6 +83,7 @@ export interface WebChannelConstructorFactoryChannel {
   json(payload: unknown, status?: number): Response;
   broadcastEvent(eventType: string, data: unknown): void;
   handleRequest(req: Request): Promise<Response>;
+  sendMessage: WebChannelLike["sendMessage"];
   processChat(chatJid: string, agentId: string, threadRootId?: number | null): Promise<void>;
   storeMessage(
     chatJid: string,
@@ -147,7 +147,6 @@ export interface WebChannelConstructorFactoryResult {
   authGateway: WebAuthGateway;
   messageProcessingStorageService: WebMessageProcessingStorageService;
   messageWriteService: WebMessageWriteService;
-  runtimeFollowupFacade: WebChannelRuntimeFollowupFacadeService;
   requestRouter: RequestRouterService;
   endpointContexts: WebChannelEndpointContexts;
   endpointFacade: WebChannelEndpointFacadeService;
@@ -179,9 +178,6 @@ export interface WebChannelConstructorFactoryDeps {
     defaults: { defaultAgentId: string; getAssistantName(): string; getUserName?(): string | null | undefined },
   ): WebMessageProcessingStorageService;
   createMessageWriteService(deps: WebMessageWriteServiceDeps): WebMessageWriteService;
-  createRuntimeFollowupFacade(
-    deps: ConstructorParameters<typeof WebChannelRuntimeFollowupFacadeService>[0],
-  ): WebChannelRuntimeFollowupFacadeService;
   createRequestRouter(channel: WebChannelConstructorFactoryChannel): RequestRouterService;
   createEndpointContexts(
     channel: WebChannelConstructorFactoryChannel,
@@ -225,7 +221,6 @@ const defaultDeps: WebChannelConstructorFactoryDeps = {
   createMessageProcessingStorageService: (channel, defaults) =>
     createWebMessageProcessingStorageService(channel as unknown as Parameters<typeof createWebMessageProcessingStorageService>[0], defaults),
   createMessageWriteService: (deps) => new WebMessageWriteService(deps),
-  createRuntimeFollowupFacade: (deps) => new WebChannelRuntimeFollowupFacadeService(deps),
   createRequestRouter: (channel) => new RequestRouterService(channel as unknown as WebChannelLike),
   createEndpointContexts: (channel, options) =>
     createWebChannelEndpointContexts(channel as unknown as WebChannelLike, options),
@@ -326,15 +321,6 @@ export function createWebChannelConstructorFactory(
     broadcastAgentResponse: (interaction) => interactionBroadcaster.broadcastAgentResponse(interaction),
   });
 
-  const runtimeFollowupFacade = deps.createRuntimeFollowupFacade({
-    getMessageWriteService: () => {
-      const dynamicChannel = channel as typeof channel & { messageWriteService?: typeof messageWriteService };
-      return dynamicChannel.messageWriteService ?? messageWriteService;
-    },
-    getQueuedFollowupLifecycle: () => channel.queuedFollowupLifecycle,
-    getRuntimeState: () => runtimeState,
-  });
-
   const requestRouter = deps.createRequestRouter(channel);
   const endpointContexts = deps.createEndpointContexts(channel, {
     defaultChatJid: options.defaultChatJid,
@@ -424,7 +410,7 @@ export function createWebChannelConstructorFactory(
     agentPool: channel.agentPool,
     authGateway,
     interactionBroadcaster,
-    sendMessage: (chatJid, text, sendOptions) => runtimeFollowupFacade.sendMessage(chatJid, text, sendOptions),
+    sendMessage: (chatJid, text, sendOptions) => channel.sendMessage(chatJid, text, sendOptions),
     broadcastEvent: (eventType, data) => channel.broadcastEvent(eventType, data),
     forwardAgentMessage: async (req, pathname, chatJid, agentId) => {
       return await handleAgentMessageRequest(
@@ -448,7 +434,6 @@ export function createWebChannelConstructorFactory(
     authGateway,
     messageProcessingStorageService,
     messageWriteService,
-    runtimeFollowupFacade,
     requestRouter,
     endpointContexts,
     endpointFacade,
