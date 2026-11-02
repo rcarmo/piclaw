@@ -39,7 +39,7 @@ function queueRuntime(chatJid:string) {
     consumeQueuedFollowupItem:(jid:string)=>queued.consumeQueuedFollowupItem(jid),
     broadcastEvent:()=>{},
     resumeChat:(jid:string,threadRootId?:number|null)=>{ expect(jid).toBe(chatJid); resumed.push(threadRootId ?? 0); },
-    storeMessage:(jid:string,content:string,_isBot:boolean,_mediaIds:number[],options:any={})=>{
+    admitMessage:async(jid:string,content:string,_isBot:boolean,_mediaIds:number[],options:any={})=>{
       expect(jid).toBe(chatJid);
       const queuedRowId=options.consumeDeferredFollowupRowId;
       if (typeof queuedRowId === 'number') {
