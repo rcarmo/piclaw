@@ -21,7 +21,6 @@ describe("web channel runtime public surface service", () => {
   test("stores only plain text extension working-indicator frames", () => {
     const service = new WebChannelRuntimePublicSurfaceService({
       messageWriteService: {} as any, queuedFollowupLifecycle: {} as any, runtimeState: {} as any,
-      messageProcessingStorageService: {} as any,
       sessionBroadcast: {
         sse: {},
         uiBridge: {},
@@ -59,7 +58,6 @@ describe("web channel runtime public surface service", () => {
         }, { status: 201 });
       },
       messageWriteService: {} as any, queuedFollowupLifecycle: {} as any, runtimeState: {} as any,
-      messageProcessingStorageService: {} as any,
       sessionBroadcast: { sse: {}, uiBridge: {}, broadcastEvent: () => undefined } as any,
     });
 
@@ -116,7 +114,6 @@ describe("web channel runtime public surface service", () => {
         get agentPool(){return unexpected();},
         get messageWriteService(){return unexpected();}, get queuedFollowupLifecycle(){return unexpected();},
         runtimeState: { resumeChat: unexpected, updateAgentStatus: unexpected },
-        get messageProcessingStorageService(){return unexpected();},
         get sessionBroadcast(){return unexpected();},
       } as any);
       await expect(service.enqueueAgentMessage({chatJid:"web:goal",content:"preserved input",mode,
@@ -126,7 +123,7 @@ describe("web channel runtime public surface service", () => {
     });
   }
 
-  test("delegates runtime/session/storage surfaces to the extracted collaborators", async () => {
+  test("delegates runtime/session surfaces to their existing collaborators", async () => {
     const calls: string[] = [];
     const sse = { kind: "sse-hub" };
     const uiBridge = { kind: "ui-bridge" };
@@ -221,11 +218,6 @@ describe("web channel runtime public surface service", () => {
           return buffer;
         },
       },
-      messageProcessingStorageService: {
-        processChat: async (chatJid, agentId, threadRootId) => {
-          calls.push(`process:${chatJid}:${agentId}:${threadRootId ?? "undefined"}`);
-        },
-      },
       sessionBroadcast: {
         sse,
         uiBridge,
@@ -271,7 +263,6 @@ describe("web channel runtime public surface service", () => {
     expect(service.getBuffer("turn-1", "thought")).toEqual(buffer);
     service.broadcastEvent("agent_status", { chat_jid: "web:test", type: "thinking" });
     expect(service).not.toHaveProperty("storeMessage");
-    await service.processChat("web:test", "default", null);
 
     expect(calls).toEqual([
       "send:web:test:hello:9",
@@ -297,7 +288,6 @@ describe("web channel runtime public surface service", () => {
       "draft:turn-1:draft text:4",
       "buffer:turn-1:thought",
       "broadcast:agent_status:{\"chat_jid\":\"web:test\",\"type\":\"thinking\"}",
-      "process:web:test:default:undefined",
     ]);
   });
 

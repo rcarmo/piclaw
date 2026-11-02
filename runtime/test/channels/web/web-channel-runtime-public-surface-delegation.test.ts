@@ -21,11 +21,6 @@ describe("web channel runtime public surface delegation", () => {
           return 2;
         },
       },
-      messageProcessingStorageService: {
-        processChat: async (chatJid: string, agentId: string, threadRootId?: number | null) => {
-          calls.push(`process:${chatJid}:${agentId}:${threadRootId ?? "undefined"}`);
-        },
-      },
       sessionBroadcast: {
         sse,
         uiBridge,
@@ -46,13 +41,11 @@ describe("web channel runtime public surface delegation", () => {
     expect(WebChannel.prototype.getQueuedFollowupCount.call(stub, "web:test")).toBe(2);
     WebChannel.prototype.broadcastEvent.call(stub, "agent_status", { chat_jid: "web:test", type: "thinking" });
     expect(WebChannel.prototype).not.toHaveProperty("storeMessage");
-    await WebChannel.prototype.processChat.call(stub, "web:test", "default", null);
 
     expect(calls).toEqual([
       "send:web:test:hello:9",
       "count:web:test",
       "broadcast:agent_status:{\"chat_jid\":\"web:test\",\"type\":\"thinking\"}",
-      "process:web:test:default:undefined",
     ]);
   });
 });

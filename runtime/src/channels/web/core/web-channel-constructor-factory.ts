@@ -31,10 +31,6 @@ import {
 } from "../endpoints/channel-endpoint-context-factory.js";
 import type { InteractionBroadcaster, InteractionBroadcasterProfile } from "../interaction-broadcaster.js";
 import { createInteractionBroadcaster } from "../interaction-broadcaster.js";
-import {
-  createWebMessageProcessingStorageService,
-  type WebMessageProcessingStorageService,
-} from "../messaging/message-processing-storage-service.js";
 import { WebMessageWriteService, type WebMessageWriteServiceDeps } from "../message-write-service.js";
 import { QueuedFollowupLifecycleService } from "../runtime/queued-followup-lifecycle-service.js";
 import { RequestRouterService } from "../request-router-service.js";
@@ -124,7 +120,6 @@ export interface WebChannelConstructorFactoryResult {
   runtimeState: WebChannelRuntimeStateService;
   interactionBroadcaster: InteractionBroadcaster;
   authGateway: WebAuthGateway;
-  messageProcessingStorageService: WebMessageProcessingStorageService;
   messageWriteService: WebMessageWriteService;
   requestRouter: RequestRouterService;
   endpointContexts: WebChannelEndpointContexts;
@@ -151,10 +146,6 @@ export interface WebChannelConstructorFactoryDeps {
     config: ConstructorParameters<typeof WebAuthGateway>[0],
     deps: ConstructorParameters<typeof WebAuthGateway>[1],
   ): WebAuthGateway;
-  createMessageProcessingStorageService(
-    channel: WebChannelConstructorFactoryChannel,
-    defaults: { defaultAgentId: string; getAssistantName(): string; getUserName?(): string | null | undefined },
-  ): WebMessageProcessingStorageService;
   createMessageWriteService(deps: WebMessageWriteServiceDeps): WebMessageWriteService;
   createRequestRouter(channel: WebChannelConstructorFactoryChannel): RequestRouterService;
   createEndpointContexts(
@@ -188,8 +179,6 @@ const defaultDeps: WebChannelConstructorFactoryDeps = {
   createIdentitySnapshot: (identity) => createWebChannelIdentitySnapshot(identity),
   createInteractionBroadcaster,
   createAuthGateway: (config, deps) => new WebAuthGateway(config, deps),
-  createMessageProcessingStorageService: (channel, defaults) =>
-    createWebMessageProcessingStorageService(channel as unknown as Parameters<typeof createWebMessageProcessingStorageService>[0], defaults),
   createMessageWriteService: (deps) => new WebMessageWriteService(deps),
   createRequestRouter: (channel) => new RequestRouterService(channel as unknown as WebChannelLike),
   createEndpointContexts: (channel, options) =>
@@ -274,12 +263,6 @@ export function createWebChannelConstructorFactory(
       failureTracker: channel.totpFailureTracker,
     },
   );
-
-  const messageProcessingStorageService = deps.createMessageProcessingStorageService(channel, {
-    defaultAgentId: options.defaultAgentId,
-    getAssistantName: () => deps.getIdentityConfig().assistantName,
-    getUserName: () => deps.getIdentityConfig().userName,
-  });
 
   const messageWriteService = deps.createMessageWriteService({
     admitMessage: (chatJid, content, isBot, mediaIds, writeOptions, authorise, signal) =>
@@ -385,7 +368,6 @@ export function createWebChannelConstructorFactory(
     runtimeState,
     interactionBroadcaster,
     authGateway,
-    messageProcessingStorageService,
     messageWriteService,
     requestRouter,
     endpointContexts,

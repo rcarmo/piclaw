@@ -56,9 +56,6 @@ describe("web channel constructor wiring factory", () => {
       },
     } as unknown as ReturnType<WebChannelConstructorFactoryDeps["createInteractionBroadcaster"]>;
     const authGateway = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createAuthGateway"]>>("auth-gateway");
-    const messageProcessingStorageService = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createMessageProcessingStorageService"]>>(
-      "message-processing-storage",
-    );
     const messageWriteService = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createMessageWriteService"]>>("message-write");
     const requestRouter = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createRequestRouter"]>>("request-router");
     const endpointContexts = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createEndpointContexts"]>>("endpoint-contexts");
@@ -172,13 +169,6 @@ describe("web channel constructor wiring factory", () => {
         authDeps = gatewayDeps;
         return authGateway;
       },
-      createMessageProcessingStorageService: (seenChannel, defaults) => {
-        creationOrder.push("messageProcessingStorageService");
-        expect(seenChannel).toBe(channel);
-        expect(defaults.defaultAgentId).toBe("default");
-        expect(defaults.getAssistantName()).toBe("Pi");
-        return messageProcessingStorageService;
-      },
       createMessageWriteService: (writeDeps) => {
         creationOrder.push("messageWriteService");
         messageWriteDeps = writeDeps;
@@ -258,7 +248,6 @@ describe("web channel constructor wiring factory", () => {
       "runtimeState",
       "interactionBroadcaster",
       "authGateway",
-      "messageProcessingStorageService",
       "messageWriteService",
       "requestRouter",
       "endpointContexts",
@@ -275,7 +264,7 @@ describe("web channel constructor wiring factory", () => {
     expect(sends).toEqual([["web:side-prompt", "reply", { threadId: 4 }]]);
     expect(result.interactionBroadcaster).toBe(interactionBroadcaster);
     expect(result.authGateway).toBe(authGateway);
-    expect(result.messageProcessingStorageService).toBe(messageProcessingStorageService);
+    expect(result).not.toHaveProperty("messageProcessingStorageService");
     expect(result.messageWriteService).toBe(messageWriteService);
     expect(result.requestRouter).toBe(requestRouter);
     expect(result.endpointContexts).toBe(endpointContexts);

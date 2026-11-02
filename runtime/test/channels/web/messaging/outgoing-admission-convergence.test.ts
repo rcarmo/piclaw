@@ -73,8 +73,6 @@ test('publication admission rejects inherited transactions instead of acknowledg
 
 test('the synchronous web writer and public forwarding chain are retired', async () => {
   const { WebChannel } = await import('../../../../src/channels/web.js');
-  const { WebMessageProcessingStorageService } = await import('../../../../src/channels/web/messaging/message-processing-storage-service.js');
   expect(messages).not.toHaveProperty('storeWebMessage');
   expect(WebChannel.prototype).not.toHaveProperty('storeMessage');
-  expect(WebMessageProcessingStorageService.prototype).not.toHaveProperty('storeMessage');
 });
