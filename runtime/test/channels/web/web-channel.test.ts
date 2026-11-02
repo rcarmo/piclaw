@@ -1895,7 +1895,9 @@ for (const streaming of [false, true]) for (const placeholder of [false, true]) 
   installNativeQueuePorts(web, { onIntent: input => intents.push(input) });
 
   web.broadcastEvent = (type: string) => events.push(type);
-  const historical = placeholder ? web.queueFollowupPlaceholder("web:default", "\u2063", undefined, "queued send me now") : null;
+  // Seed a persisted historical row, not the retired in-memory producer.
+  const historical = placeholder ? web.storeMessage("web:default", "\u2063", true, []) : null;
+  if (historical) web.enqueueQueuedFollowupItem("web:default", historical.id, "queued send me now");
   const rowId = placeholder ? historical.id : web.enqueueQueuedFollowupItem("web:default", 0, "queued send me now");
   web.enqueueQueuedFollowupItem("web:default", 0, "keep sibling");
   const beforeQueue = await (await web.handleRequest(new Request("http://test/agent/queue-state"))).json();
