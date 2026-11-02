@@ -77,12 +77,13 @@ test("admission flip after SQL mutation rolls back immediately before COMMIT", (
   }));
   try {
     await mutated.promise;
-    expect(checks).toBe(2);
+    // Initial scope, pre-BEGIN acquisition, then acquired-writer admission.
+    expect(checks).toBe(3);
     expect(rows(root)).toEqual([]); // Separate WAL reader cannot see the mutation.
     sealed = true;
     release.release();
     await expect(pending).rejects.toBe(denied);
-    expect(checks).toBe(3);
+    expect(checks).toBe(4);
     expect(rows(root)).toEqual([]);
     expect(await db.all("SELECT * FROM settlements")).toEqual([]);
   } finally { release.release(); await pending.catch(() => {}); }
@@ -116,13 +117,13 @@ test("concurrent distinct async admission scopes retain their own guards", () =>
     releaseA.release();
     await expect(a).rejects.toBe(deniedA);
     await bEntered.promise;
-    expect(checksA).toBe(3);
-    expect(checksB).toBe(2);
+    expect(checksA).toBe(4);
+    expect(checksB).toBe(3);
     expect(rows(root)).toEqual([]);
     releaseB.release();
     await b;
-    expect(checksA).toBe(3);
-    expect(checksB).toBe(3);
+    expect(checksA).toBe(4);
+    expect(checksB).toBe(4);
     expect(rows(root)).toEqual([{ operation_id: "b", value: "committed" }]);
   } finally {
     releaseA.release(); releaseB.release();
@@ -139,13 +140,13 @@ test("failed and exited admission scope does not poison later unguarded settleme
     await tx.run("INSERT INTO settlements VALUES ('failed', 'rolled back')");
     sealed = true;
   }))).rejects.toBe(denied);
-  expect(checks).toBe(3);
+  expect(checks).toBe(4);
   expect(rows(root)).toEqual([]);
   // Outside the removed ALS scope: normal completion must not inherit its sealed guard.
   await db.transaction(async tx => {
     await tx.run("INSERT INTO settlements VALUES ('legitimate', 'settled')");
   });
-  expect(checks).toBe(3);
+  expect(checks).toBe(4);
   expect(rows(root)).toEqual([{ operation_id: "legitimate", value: "settled" }]);
   // Both connections enforce the real operation FK, not an orphan fixture owner.
   await expect(db.run("INSERT INTO settlements VALUES ('missing', 'invalid')")).rejects.toThrow("FOREIGN KEY");

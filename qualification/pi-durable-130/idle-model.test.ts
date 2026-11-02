@@ -129,9 +129,9 @@ test("shared DB next-request model controls persist while destructive reset reta
     }
     root.query("UPDATE service_effect_s01_sources SET state='disposed'").run();
     expect(root.inTransaction).toBe(false);
-    // A root transaction opened during any check must also fail closed, including
-    // the initial/final checks under the candidate's BEGIN IMMEDIATE write lock.
-    for (const target of [1, 2, 3]) {
+    // Cover initial, pre-acquisition, acquired and pre-commit checks. A root
+    // snapshot opened at any boundary must fail closed, including under the lock.
+    for (const target of [1, 2, 3, 4]) {
       let checks = 0;
       guardHook = () => {
         if (++checks === target) {
@@ -162,12 +162,13 @@ test("shared DB next-request model controls persist while destructive reset reta
     // at the final guard must roll back reset, not just report failure.
     let checks = 0;
     guardHook = () => {
-      if (++checks === 2) expect(() => root.query("UPDATE service_effect_s01_sources SET state='pending'").run()).toThrow();
-      if (checks === 3) throw Error("final guard lost owner");
+      // Check 2 precedes BEGIN IMMEDIATE; check 3 must hold the writer.
+      if (++checks === 3) expect(() => root.query("UPDATE service_effect_s01_sources SET state='pending'").run()).toThrow();
+      if (checks === 4) throw Error("final guard lost owner");
     };
     expect(await app.applyControlCommand("web:idle", resetCommand)).toMatchObject({ status: "error", message: expect.stringContaining("final guard lost owner") });
     guardHook = undefined;
-    expect(checks).toBe(3);
+    expect(checks).toBe(4);
     // Candidate deliberately seals a session after any storage commit failure.
     await runtime.close(); runtime = await HostConversationRuntime.open(config, context);
     app = appFor();
@@ -258,10 +259,10 @@ test("scoped reset preserves sibling SDK inbox and host sources while refusing i
     await expect(runtime.resetSession(binding)).rejects.toThrow("Root connection transaction active");
     root.exec("ROLLBACK");
     let checks = 0;
-    ownerHook = () => { if (++checks === 3) throw Error("scoped final guard lost owner"); };
+    ownerHook = () => { if (++checks === 4) throw Error("scoped final guard lost owner"); };
     await expect(runtime.resetSession(binding)).rejects.toThrow("scoped final guard lost owner");
     ownerHook = undefined;
-    expect(checks).toBe(3);
+    expect(checks).toBe(4);
     await runtime.close();
     runtime = await HostConversationRuntime.open(config, context);
     expect(await runtime.readSessionPosition(binding)).toBe(afterReset);
