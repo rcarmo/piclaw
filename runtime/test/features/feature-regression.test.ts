@@ -339,11 +339,12 @@ describe("feature: tool catalog", () => {
       "activate_tools", "reset_active_tools", "introspect_sql",
       "search_workspace", "refresh_workspace_index",
       "send_adaptive_card", "send_dashboard_widget", "session_control",
-      "open_workspace_file", "env", "exit_process",
+      "open_workspace_file", "env",
       "image_process",
     ];
     const missing = required.filter((n) => !registered.has(n));
     expect(missing, `Missing: ${missing.join(", ")}`).toEqual([]);
+    expect(registered.has("exit_process")).toBe(false);
   });
 
   featureTest("bootstrap tools in default active baseline", async () => {
