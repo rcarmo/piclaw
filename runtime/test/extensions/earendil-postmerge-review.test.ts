@@ -1,32 +1,8 @@
 import { expect, test } from 'bun:test';
-import { convertResponsesMessages } from '@earendil-works/pi-ai/api/openai-responses-shared';
-import { prepareCompactionSource } from '../../src/extensions/smart-compaction/source';
-import { buildSelectiveMethodPrompt } from '../../src/extensions/smart-compaction/selective-method';
-import { streamComplete } from '../../src/extensions/smart-compaction/stream-complete';
-import { prependRemoteCompactionPayload, REMOTE_COMPACTION_SUMMARY_SENTINEL } from '../../src/extensions/smart-compaction/remote-compaction';
 import { adoptedJsonl } from '../agent-pool/adopted-session-fixture';
 import { inspectAdoptedSession } from '../../src/agent-pool/adopted-session';
 import { buildSessionContext } from '@earendil-works/pi-coding-agent';
 import { createHash } from 'node:crypto';
-const model = { provider: 'openai', id: 'gpt-5.1', api: 'openai-responses', baseUrl: 'https://api.openai.com/v1', input: ['text'], reasoning: false } as any;
-
-test('review: local compaction keeps source prompt when the user quotes the marker', async () => {
-  const text = `Investigate the literal ${REMOTE_COMPACTION_SUMMARY_SENTINEL} in our logs. KEEP_THIS_USER_INSTRUCTION`;
-  const messages = [{ role: 'user', content: text, timestamp: 1 }] as any;
-  const fileOps = { read: new Set<string>(), written: new Set<string>(), edited: new Set<string>() };
-  const source = prepareCompactionSource({ rawMessages: messages, rawSourceEntryIds: ['user'], modelSafeSourceMessages: messages, modelSafeSourceIndexes: [0], previousSummary: 'Native state is supplied separately.', fileOps });
-  const prompt = buildSelectiveMethodPrompt({ source, tokensBefore: 100, fileOps, topicShift: null });
-  expect(prompt.text).toContain('KEEP_THIS_USER_INSTRUCTION');
-  let before: any, after: any;
-  const details = { output: [{ type: 'compaction', encrypted_content: 'opaque' }] } as any;
-  await streamComplete({ model, systemPrompt: 'Summarize', userPrompt: prompt.text, signal: new AbortController().signal, onPayload: payload => prependRemoteCompactionPayload(payload, details), streamFn: async (_model, context, options) => {
-    before = { input: convertResponsesMessages(model, context as any, new Set<string>(), { includeSystemPrompt: false }) };
-    after = await options?.onPayload?.(before, model);
-    return { result: async () => ({ role:'assistant', content:[{type:'text',text:'summary'}], stopReason:'stop' }) } as any;
-  } });
-  console.log('REVIEW_LOCAL_PROMPT', JSON.stringify({ beforeItems: before.input.length, afterItems: after.input.length, beforeHasSource: JSON.stringify(before).includes('KEEP_THIS_USER_INSTRUCTION'), afterHasSource: JSON.stringify(after).includes('KEEP_THIS_USER_INSTRUCTION') }));
-  expect(JSON.stringify(after)).toContain('KEEP_THIS_USER_INSTRUCTION');
-});
 
 test('review: an SDK-valid content edit can remove tool calls without changing stopReason', () => {
   const {rows}=adoptedJsonl('/tmp/adopt', '/tmp/parent');

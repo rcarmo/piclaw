@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 
 import { buildCompactionLatencyEstimate, compactionInputTokenBucket } from "../../src/agent-pool/compaction-prefill-estimate.js";
 import { initDatabase, storeCompactionTelemetry } from "../../src/db.js";
-import { getCompactionRuntimeConfig, resetCompactionRuntimeConfigForTests, setCompactionRuntimeConfigForTests } from "../../src/core/config.js";
+import { getCompactionRuntimeConfig, resetCompactionRuntimeConfigForTests } from "../../src/core/config.js";
 
 process.env.PICLAW_DB_IN_MEMORY = "1";
 beforeEach(() => { initDatabase(); resetCompactionRuntimeConfigForTests(); });
@@ -57,12 +57,11 @@ test("requires three fresh successful/partial exact-model samples", () => {
 test("warning uses conservative p90 at eighty percent without changing deadline", () => {
   const model = "summary-threshold";
   for (const [index, duration] of [20_000, 30_000, 79_999].entries()) sample(index + 10, 48_000, duration, `2026-08-30T0${index + 7}:00:00Z`, "success", model);
-  setCompactionRuntimeConfigForTests({ timeoutMs: 100_000 });
-  const before = getCompactionRuntimeConfig().timeoutMs;
-  const safe = buildCompactionLatencyEstimate({ provider: "local", model, inputTokens: 48_000, deadlineMs: before, now });
+  const deadlineMs = 100_000, before = getCompactionRuntimeConfig();
+  const safe = buildCompactionLatencyEstimate({ provider: "local", model, inputTokens: 48_000, deadlineMs, now });
   expect(safe?.warning).toBe(false);
   sample(20, 48_000, 80_000, "2026-08-30T11:55:00Z", "success", model);
-  const warning = buildCompactionLatencyEstimate({ provider: "local", model, inputTokens: 48_000, deadlineMs: before, now });
+  const warning = buildCompactionLatencyEstimate({ provider: "local", model, inputTokens: 48_000, deadlineMs, now });
   expect(warning).toMatchObject({ warning: true, medianDurationMs: 54_999.5, p90DurationMs: 80_000 });
-  expect(getCompactionRuntimeConfig().timeoutMs).toBe(before);
+  expect(getCompactionRuntimeConfig()).toEqual(before);
 });
