@@ -270,8 +270,9 @@ test("canonical usage projection: orphan chat cleanup keeps canonical reporting 
   expect(database.query("SELECT usage_event_id FROM token_usage WHERE chat_jid=?").all(chat)).toEqual([{ usage_event_id: "ghost-accounted-event" }]);
   expect(database.query("PRAGMA foreign_key_check").all()).toEqual([]);
 });
-test("canonical usage projection: stale and completed Dream cleanup preserve accounted usage", async () => {
+test("canonical usage projection: durable Dream leaves legacy and accounted reporting bytes untouched", async () => {
   const database = getDb(), stale = "dream:manual:stale:0";
+  let reports: unknown[] = [];
   const restore = setEnv({ PICLAW_DREAM_MODEL: "", PICLAW_DISABLE_BACKGROUND_WORKSPACE_INDEX: "1" });
   try {
     storeChatMetadata(stale, usage().run_at); ensureChatBranch({ chat_jid: stale, agent_name: "stale" });
@@ -283,13 +284,14 @@ test("canonical usage projection: stale and completed Dream cleanup preserve acc
         const chat='dream:manual:fixture:completed';
         storeTokenUsage({ ...usage(), chat_jid: chat, usage_event_id: "completed-dream-event" });
         storeTokenUsage({ ...usage(), chat_jid: chat, usage_event_id: null });
+        reports = database.query("SELECT * FROM token_usage WHERE chat_jid LIKE 'dream:%' ORDER BY id").all();
         return { status: "success", result: "fixture Dream complete" };
       }, disposeChatSession: async () => {},
     } as any });
     expect(result.skipped).toBe(false);
-    expect(database.query("SELECT usage_event_id FROM token_usage WHERE chat_jid LIKE 'dream:%' ORDER BY usage_event_id").all())
-      .toEqual([{ usage_event_id: "completed-dream-event" }, { usage_event_id: "stale-dream-event" }]);
-    expect(database.query("SELECT jid FROM chats WHERE jid LIKE 'dream:%'").all()).toEqual([]);
+    expect(reports).toHaveLength(4);
+    expect(database.query("SELECT * FROM token_usage WHERE chat_jid LIKE 'dream:%' ORDER BY id").all()).toEqual(reports);
+    expect(database.query("SELECT jid FROM chats WHERE jid LIKE 'dream:%'").all()).toEqual([{jid:stale}]);
     expect(database.query("PRAGMA foreign_key_check").all()).toEqual([]);
   } finally { restore(); }
 });

@@ -1,5 +1,3 @@
-import { unlinkedUsageReportPredicate } from "./db/usage-report-projection.js";
-import { hasNativeRouting } from "./db/native-routing-policy.js";
 import { closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, rmSync, writeFileSync } from "fs";
 import { join, relative, resolve } from "path";
 
@@ -12,10 +10,9 @@ import { inspectDailyNoteSummaryBacklog, refreshDailyNotesFromMessages } from ".
 import { refreshAgentMemoryFromDailyNotes, type RefreshAgentMemoryResult } from "./agent-memory/refresh.js";
 import { dreamStartupBackfillRequired, recordDreamConsolidationResult } from "./agent-memory/startup-state.js";
 import { AUTO_DREAM_DEFAULT_DAYS, MANUAL_DREAM_DEFAULT_DAYS } from "./dream-defaults.js";
-import { DATA_DIR, SESSIONS_DIR, WORKSPACE_DIR, getDreamConfig } from "./core/config.js";
+import { DATA_DIR, WORKSPACE_DIR, getDreamConfig } from "./core/config.js";
 import { createDreamAccessGuard } from "./core/dream-access.js";
 import { getTaskById, createTask, getDb, updateTask } from "./db.js";
-import { deleteThinkingContentByChatJid, deleteThinkingContentByChatJidPattern } from "./db/thinking-cleanup.js";
 import { refreshWorkspaceIndex } from "./workspace-search.js";
 import { launchWorkspaceIndexProcess, waitForWorkspaceIndexProcess } from "./workspace-index-process.js";
 import { withWorkspaceIndexAuthority } from './core/workspace-index-access.js';
@@ -185,92 +182,6 @@ export function shouldRunAutoDream(
     return { ok: false, reason: "No sessions since last consolidation." };
   }
   return { ok: true, reason: null };
-}
-
-function buildDreamChatJid(chatJid: string, mode: "manual" | "auto"): string {
-  return `dream:${mode}:${sanitiseJid(chatJid)}:${Date.now()}`;
-}
-
-/**
- * Reap stale dream artifacts from prior crashed or incomplete dream runs.
- * Cleans up dream chat rows, messages, media, cursors, branches, token-usage
- * rows, and session directories that were not properly removed by
- * cleanupDreamChat. Optionally excludes a single dream chat JID (the current
- * active one).
- */
-function reapDreamArtifacts(excludeDreamChatJid?: string | null): void {
-  // Native identities and accepted inputs are not disposable legacy Dream artifacts.
-  if (hasNativeRouting(getDb())) return;
-  const excluded = new Set<string>();
-  if (excludeDreamChatJid) {
-    const base = sanitiseJid(excludeDreamChatJid);
-    excluded.add(base);
-    excluded.add(`${base}__btw-side`);
-  }
-
-  try {
-    const db = getDb();
-    if (excludeDreamChatJid) {
-      db.prepare("DELETE FROM message_media WHERE message_rowid IN (SELECT rowid FROM messages WHERE chat_jid LIKE 'dream:%' AND chat_jid != ?)").run(excludeDreamChatJid);
-      // Purge thinking_content for messages we're about to delete. Defensive:
-      // dream sessions don't currently persist thinking (excluded in agent.ts)
-      // but if exclusion is ever removed or bypassed, this prevents orphans.
-      deleteThinkingContentByChatJidPattern('dream:%', excludeDreamChatJid);
-      db.prepare("DELETE FROM messages WHERE chat_jid LIKE 'dream:%' AND chat_jid != ?").run(excludeDreamChatJid);
-      db.prepare("DELETE FROM chat_cursors WHERE chat_jid LIKE 'dream:%' AND chat_jid != ?").run(excludeDreamChatJid);
-      db.prepare("DELETE FROM chat_branches WHERE chat_jid LIKE 'dream:%' AND chat_jid != ?").run(excludeDreamChatJid);
-      db.prepare("DELETE FROM chats WHERE jid LIKE 'dream:%' AND jid != ?").run(excludeDreamChatJid);
-      db.prepare(`DELETE FROM token_usage WHERE chat_jid LIKE 'dream:%' AND chat_jid != ? AND ${unlinkedUsageReportPredicate("token_usage")}`).run(excludeDreamChatJid);
-    } else {
-      db.prepare("DELETE FROM message_media WHERE message_rowid IN (SELECT rowid FROM messages WHERE chat_jid LIKE 'dream:%')").run();
-      deleteThinkingContentByChatJidPattern('dream:%');
-      db.prepare("DELETE FROM messages WHERE chat_jid LIKE 'dream:%'").run();
-      db.prepare("DELETE FROM chat_cursors WHERE chat_jid LIKE 'dream:%'").run();
-      db.prepare("DELETE FROM chat_branches WHERE chat_jid LIKE 'dream:%'").run();
-      db.prepare("DELETE FROM chats WHERE jid LIKE 'dream:%'").run();
-      db.prepare(`DELETE FROM token_usage WHERE chat_jid LIKE 'dream:%' AND ${unlinkedUsageReportPredicate("token_usage")}`).run();
-    }
-  } catch (error) {
-    debugSuppressedError(log, "failed to reap Dream chat records", error, { excludeDreamChatJid: excludeDreamChatJid || null });
-  }
-
-  try {
-    for (const name of readdirSync(SESSIONS_DIR, { withFileTypes: true })) {
-      if (!name.isDirectory()) continue;
-      if (!/^dream_(auto|manual)_/.test(name.name)) continue;
-      if (excluded.has(name.name)) continue;
-      rmSync(join(SESSIONS_DIR, name.name), { recursive: true, force: true });
-    }
-  } catch (error) {
-    debugSuppressedError(log, "failed to reap Dream session directories", error, { sessionsDir: SESSIONS_DIR, excludeDreamChatJid: excludeDreamChatJid || null });
-  }
-}
-
-async function cleanupDreamChat(agentPool: AgentPool, dreamChatJid: string, checkAccess: () => void): Promise<void> {
-  if (hasNativeRouting(getDb())) return;
-  try {
-    await agentPool.disposeChatSession(dreamChatJid);
-  } catch (error) {
-    debugSuppressedError(log, "failed to dispose Dream chat session", error, { dreamChatJid });
-  }
-  checkAccess();
-
-  try {
-    const db = getDb();
-    db.prepare("DELETE FROM message_media WHERE message_rowid IN (SELECT rowid FROM messages WHERE chat_jid = ?)").run(dreamChatJid);
-    deleteThinkingContentByChatJid(dreamChatJid);
-    db.prepare("DELETE FROM messages WHERE chat_jid = ?").run(dreamChatJid);
-    db.prepare("DELETE FROM chat_cursors WHERE chat_jid = ?").run(dreamChatJid);
-    db.prepare("DELETE FROM chat_branches WHERE chat_jid = ?").run(dreamChatJid);
-    db.prepare("DELETE FROM chats WHERE jid = ?").run(dreamChatJid);
-    db.prepare(`DELETE FROM token_usage WHERE chat_jid = ? AND ${unlinkedUsageReportPredicate("token_usage")}`).run(dreamChatJid);
-  } catch (error) {
-    debugSuppressedError(log, "failed to delete Dream chat artifacts", error, { dreamChatJid });
-  }
-
-  rmSync(join(SESSIONS_DIR, sanitiseJid(dreamChatJid)), { recursive: true, force: true });
-  rmSync(join(SESSIONS_DIR, `${sanitiseJid(dreamChatJid)}__btw-side`), { recursive: true, force: true });
-  reapDreamArtifacts(null);
 }
 
 type DreamLockSnapshot = { dev: bigint; ino: bigint; text: string };
@@ -520,8 +431,6 @@ export async function runDreamAgentTurn(options: { chatJid: string; days?: numbe
 
   if(options.agentPool.isDurableRuntime?.()!==true || typeof options.agentPool.dispatchDreamOperation!=="function")
     throw Error("Native Dream dispatcher unavailable");
-  let shouldCleanupDreamChat = false;
-  const dreamChatJid = buildDreamChatJid(chatJid, mode);
   const requestedDreamModel = typeof options.model === "string" && options.model.trim()
     ? options.model.trim()
     : getDreamConfig().model || null;
@@ -537,8 +446,6 @@ export async function runDreamAgentTurn(options: { chatJid: string; days?: numbe
       };
     }
     lockLease = lock.lease;
-    shouldCleanupDreamChat = true;
-    reapDreamArtifacts(null);
     const backupPath = await createDreamBackup(chatJid, mode, days, checkAccess);
     checkAccess();
     const dailyNotesRefreshed = refreshDailyNotes(chatJid, days);
@@ -630,9 +537,6 @@ export async function runDreamAgentTurn(options: { chatJid: string; days?: numbe
         days,
         durationMs: Date.now() - dreamStartTime,
       });
-      if (shouldCleanupDreamChat) {
-        await cleanupDreamChat(options.agentPool, dreamChatJid, checkAccess);
-      }
     } catch (error) {
       if (primaryFailure && error !== primaryFailure.error) throw new AggregateError([primaryFailure.error, error], "Dream outcome and cleanup failed");
       throw error;
