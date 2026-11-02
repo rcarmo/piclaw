@@ -104,6 +104,36 @@ test('nested callback contention rolls back only its savepoint and preserves the
   } finally {db.exec('ROLLBACK');}
   expect(count(db)).toBe(0);
 }));
+test('nested compensation is rejected before authorization or callback entry',async()=>fixture(async(db)=>{
+  db.exec("BEGIN IMMEDIATE;INSERT INTO input VALUES('outer')");
+  let operations=0,authorizations=0,compensations=0;
+  try {
+    await expect(admitSqliteWrite(db,()=>{operations++;db.exec("INSERT INTO input VALUES('inner')");},()=>{authorizations++;},
+      new AbortController().signal,5000,()=>{},()=>{compensations++;})).rejects.toThrow('Nested SQLite admission');
+    expect(operations).toBe(0);expect(authorizations).toBe(0);expect(compensations).toBe(0);
+    expect(db.inTransaction).toBe(true);expect(timeout(db)).toBe(5000);
+    expect(db.query('SELECT value FROM input').all()).toEqual([{value:'outer'}]);
+  } finally {db.exec('ROLLBACK');}
+  expect(count(db)).toBe(0);
+}));
+
+test('compensation cannot join an outer transaction started during acquisition backoff',async()=>fixture(async(db,blocker)=>{
+  blocker.exec('BEGIN IMMEDIATE');
+  let operations=0,authorizations=0,compensations=0;
+  const pending=admitSqliteWrite(db,()=>{operations++;db.exec("INSERT INTO input VALUES('inner')");},()=>{authorizations++;},
+    new AbortController().signal,5000,()=>{},()=>{compensations++;});
+  // The initial failed BEGIN retains the existing standalone cleanup contract.
+  expect(compensations).toBe(1);
+  blocker.exec('ROLLBACK');db.exec("BEGIN IMMEDIATE;INSERT INTO input VALUES('outer')");
+  try {
+    await expect(pending).rejects.toThrow('Nested SQLite admission');
+    expect(operations).toBe(0);expect(authorizations).toBe(0);expect(compensations).toBe(1);
+    expect(db.inTransaction).toBe(true);expect(timeout(db)).toBe(5000);
+    expect(db.query('SELECT value FROM input').all()).toEqual([{value:'outer'}]);
+  } finally {db.exec('ROLLBACK');}
+  expect(count(db)).toBe(0);
+}));
+
 test('a changed binding while awaiting acquisition prevents callback entry without touching the stale handle',async()=>fixture(async(db,blocker)=>{
   blocker.exec('BEGIN IMMEDIATE');let valid=true,operations=0;
   const pending=admitSqliteWrite(db,()=>{operations++;},()=>{},new AbortController().signal,5000,()=>{if(!valid)throw Error('binding revoked');});

@@ -48,7 +48,7 @@ export async function admitSqliteWrite<T>(
   signal: AbortSignal = new AbortController().signal,
   timeoutMs = 5000,
   assertBinding: () => void = () => {},
-  afterRollback: () => void = () => {},
+  afterRollback?: () => void,
 ): Promise<T> {
   signal.throwIfAborted(); assertBinding();
   const file = (database.query('PRAGMA database_list').all() as { name: string; file: string }[]).find(row => row.name === 'main')?.file;
@@ -61,6 +61,10 @@ export async function admitSqliteWrite<T>(
     signal.throwIfAborted();
     // No access to a captured handle until its current binding is confirmed.
     assertBinding(); checkFile();
+    // A savepoint cannot certify full rollback for attempt-local compensation.
+    // Recheck after every wait: another caller may have opened an outer scope.
+    if (database.inTransaction && afterRollback !== undefined)
+      throw new TypeError('Nested SQLite admission cannot use afterRollback');
     const previous = (database.query('PRAGMA busy_timeout').get() as { timeout: number }).timeout;
     let contention: unknown;
     let callbackEntered = false, completed = false;
@@ -82,7 +86,7 @@ export async function admitSqliteWrite<T>(
       }).immediate();
       completed = true; return result;
     } catch (error) {
-      afterRollback(); // Synchronous: restore attempt-local memory on terminal failures too.
+      afterRollback?.(); // Synchronous: restore attempt-local memory on terminal failures too.
       if (callbackEntered || !isSqliteContention(error)) throw error;
       contention = error;
     } finally {
