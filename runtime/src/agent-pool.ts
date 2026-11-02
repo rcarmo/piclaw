@@ -28,7 +28,7 @@ import { readAccessConfig } from "./core/config-access.js";
 import { getChatChannel, getChatJid } from "./core/chat-context.js";
 import { registerChannelDetector } from "./router.js";
 import { createTrackedBashOperations } from "./tools/tracked-bash.js";
-import { type ActiveChatAgent } from "./agent-pool/branch-manager.js";
+import { type ActiveChatAgent, type BranchMutationContext } from "./agent-pool/branch-manager.js";
 import {
   type AgentOutput,
   type AgentPoolOptions,
@@ -534,36 +534,41 @@ export class AgentPool {
 
   async renameChatBranch(
     chatJid: string,
-    options: { agentName?: string | null } = {},
+    options: BranchMutationContext & { agentName?: string | null } = {},
   ): Promise<ChatBranchRecord> {
     return this.branchManager.renameChatBranch(chatJid, options);
   }
 
-  async pruneChatBranch(chatJid: string): Promise<ChatBranchRecord> {
-    return this.branchManager.pruneChatBranch(chatJid);
+  async pruneChatBranch(chatJid: string, context: BranchMutationContext = {}): Promise<ChatBranchRecord> {
+    return this.branchManager.pruneChatBranch(chatJid, context);
   }
 
-  async mergeChatBranchIntoParent(chatJid: string): Promise<MergeChatBranchIntoParentResult> {
+  async mergeChatBranchIntoParent(chatJid: string, context: BranchMutationContext = {}): Promise<MergeChatBranchIntoParentResult> {
     if (this.durableApplication) throw new Error("Durable branch rollup unavailable");
-    return this.branchManager.mergeChatBranchIntoParent(chatJid);
+    return this.branchManager.mergeChatBranchIntoParent(chatJid, context);
   }
 
   async renameChatJid(
     oldJid: string,
     newJid: string,
+    context: BranchMutationContext = {},
   ): Promise<{ oldJid: string; newJid: string; branch: ChatBranchRecord }> {
     if (this.durableApplication) throw new Error("Durable chat identity rename unavailable");
-    return this.branchManager.renameChatJid(oldJid, newJid);
+    return this.branchManager.renameChatJid(oldJid, newJid, context);
   }
 
   async restoreChatBranch(
     chatJid: string,
-    options: { agentName?: string | null } = {},
+    options: BranchMutationContext & { agentName?: string | null } = {},
   ): Promise<ChatBranchRecord> {
     if (this.durableApplication) {
       if (readAccessConfig().mode !== "single-user") throw Error("Native restore requires single-user policy");
       const database = getDb();
-      const agentName = options.agentName;
+      const agentName = options.agentName, { signal, authorise } = options;
+      const check = () => {
+        if (readAccessConfig().mode !== "single-user" || getDb() !== database) throw Error("Native restore authority changed");
+        authorise?.();
+      };
       return admitSqliteWrite(database, () => {
         const restored = restoreChatBranchIdentity({ chat_jid: chatJid,
           ...(agentName !== undefined ? { agent_name: agentName } : {}) });
@@ -574,19 +579,24 @@ export class AgentPool {
         }
         position.assertCurrent?.();
         return restored;
-      }, () => { if (readAccessConfig().mode !== "single-user" || getDb() !== database) throw Error("Native restore authority changed"); });
+      }, check, signal, undefined, () => {
+        if (getDb() !== database) throw Error("Native restore database changed");
+        if (database.inTransaction) throw Error("Native restore requires an outermost transaction");
+        check();
+      });
     }
     return this.branchManager.restoreChatBranch(chatJid, options);
   }
 
   async permanentPurgeChatBranch(
     chatJid: string,
+    context: BranchMutationContext = {},
   ): Promise<{ branch: ChatBranchRecord; removedSessionArtifacts: string[] }> {
     if (this.durableApplication) {
       requireLegacyRoutingMutation(getDb(), "legacy purge");
       throw new Error("Durable branch purge unavailable");
     }
-    return this.branchManager.permanentPurgeChatBranch(chatJid);
+    return this.branchManager.permanentPurgeChatBranch(chatJid, context);
   }
 
   async createForkedChatBranch(
@@ -600,9 +610,9 @@ export class AgentPool {
     return this.branchManager.createForkedChatBranch(sourceChatJid, options);
   }
 
-  async createRootChatSession(agentName: string): Promise<ChatBranchRecord> {
+  async createRootChatSession(agentName: string, context: BranchMutationContext = {}): Promise<ChatBranchRecord> {
     if (this.durableApplication && !hasNativeRouting(getDb())) throw new Error("Durable root session creation unavailable");
-    return this.branchManager.createRootChatSession(agentName);
+    return this.branchManager.createRootChatSession(agentName, context);
   }
 
   listActiveChats(): ActiveChatAgent[] {
