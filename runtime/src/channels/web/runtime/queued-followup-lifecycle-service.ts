@@ -1,8 +1,8 @@
 /**
  * web/queued-followup-lifecycle-service.ts – queued follow-up lifecycle state.
  *
- * Owns the web channel's deferred queued follow-up persistence, placeholder
- * queue bookkeeping, queue-state payload shaping, and queue action removal
+ * Owns the web channel's persisted deferred follow-ups,
+ * queue-state payload shaping, and queue action removal
  * behavior. Extracted from `channels/web.ts` to keep WebChannel focused on
  * transport/orchestration while preserving the existing public API.
  */
@@ -20,7 +20,6 @@ import {
   projectQueuedFollowupItem,
   type QueuedFollowupItem,
 } from "../../../queued-followups.js";
-import { FollowupPlaceholderStore } from "./followup-placeholders.js";
 import { getDb, getDatabaseBinding } from '../../../db/connection.js';
 import { getRouterState, setRouterState } from '../../../db/router-state.js';
 import { admitSqliteWrite } from '../../../db/sqlite-async-admission.js';
@@ -82,7 +81,7 @@ export interface RemoveQueuedFollowupForActionOptions extends QueuedFollowupWrit
 
 export interface RemoveQueuedFollowupForActionResult {
   removed: QueuedFollowupItem | null;
-  source: "deferred" | "placeholder" | null;
+  source: "deferred" | null;
 }
 
 function toDeferredQueuedFollowupRecord(item: QueuedFollowupItem): DeferredQueuedFollowupRecord {
@@ -101,27 +100,7 @@ function captureQueueBinding(database: ReturnType<typeof getDb>): () => void {
 }
 
 export class QueuedFollowupLifecycleService {
-  private readonly placeholderStore: FollowupPlaceholderStore;
   private readonly nextDeferredRowIdByChat = new Map<string, number>();
-
-  constructor(placeholderStore = new FollowupPlaceholderStore()) {
-    this.placeholderStore = placeholderStore;
-  }
-
-  enqueuePlaceholder(
-    chatJid: string,
-    rowId: number,
-    queuedContent: string,
-    threadId?: number | null,
-    queuedAt?: string,
-    extras?: Pick<QueuedFollowupItem, "mediaIds" | "contentBlocks" | "linkPreviews" | "screenHint" | "source" | "queuedBy">
-  ): void {
-    this.placeholderStore.enqueue(chatJid, rowId, queuedContent, threadId, queuedAt, extras);
-  }
-
-  consumeQueuedFollowupPlaceholder(chatJid: string): number | null {
-    return this.placeholderStore.consume(chatJid);
-  }
 
   enqueueQueuedFollowupItem(
     chatJid: string,
@@ -270,14 +249,11 @@ export class QueuedFollowupLifecycleService {
   }
 
   getQueuedFollowupCount(chatJid: string): number {
-    return this.getDeferredQueuedFollowupItems(chatJid).length + this.placeholderStore.count(chatJid);
+    return this.getDeferredQueuedFollowupItems(chatJid).length;
   }
 
   getQueuedFollowupItems(chatJid: string): QueuedFollowupItem[] {
-    const rows = [
-      ...this.getDeferredQueuedFollowupItems(chatJid),
-      ...this.placeholderStore.peek(chatJid).map((item) => cloneQueuedFollowupItem(item)),
-    ];
+    const rows = this.getDeferredQueuedFollowupItems(chatJid);
     const seen = new Set<number>();
     return rows
       .filter((row) => {
@@ -296,8 +272,7 @@ export class QueuedFollowupLifecycleService {
       this.setDeferredQueuedFollowupItems(chatJid, queued);
       return removed ? cloneQueuedFollowupItem(removed) : null;
     }
-    const removed = this.placeholderStore.remove(chatJid, rowId);
-    return removed ? cloneQueuedFollowupItem(removed) : null;
+    return null;
   }
 
   listQueuedStateItems(chatJid: string): QueuedFollowupStateItem[] {
@@ -350,24 +325,7 @@ export class QueuedFollowupLifecycleService {
         return { removed: cloneQueuedFollowupItem(item), source: 'deferred' as const };
       }, check, options.signal, 5000, assertBinding);
     }
-    const placeholder = this.placeholderStore.peek(chatJid).find(item => item.rowId === rowId);
-    if (!placeholder) return { removed: null, source: null };
-    // Legacy placeholder memory and its timeline row share rollback, without
-    // moving a failed middle-item removal to the front of the queue.
-    let previous: QueuedFollowupItem[] | undefined;
-    return admitSqliteWrite(database, () => {
-      const current = this.placeholderStore.peek(chatJid).find(item => item.rowId === rowId);
-      if (!isDeepStrictEqual(current, placeholder)) throw Error('Queued placeholder identity changed.');
-      previous = this.placeholderStore.peek(chatJid);
-      const removed = this.placeholderStore.remove(chatJid, rowId)!;
-      if (removed.rowId > 0) deleteMessageByRowId(chatJid, removed.rowId);
-      return { removed, source: 'placeholder' as const };
-    }, check, options.signal, 5000, assertBinding, () => {
-      if (!previous) return;
-      this.placeholderStore.drain(chatJid);
-      for (const item of previous.slice().reverse()) this.placeholderStore.prepend(chatJid, item);
-      previous = undefined;
-    });
+    return { removed: null, source: null };
   }
 
   private getDeferredQueuedFollowupItems(chatJid: string): QueuedFollowupItem[] {

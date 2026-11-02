@@ -26,9 +26,9 @@ test("runtime public calls bypass displaced forwarding methods and retain every 
   for (const key of ["sendMessage", "postDashboardWidget", "enqueueQueuedFollowupItem", "admitQueuedFollowupItem", "getBuffer", "storeMessage", "admitUserMessage"]) {
     Object.defineProperty(surface, key, { get() { throw Error("Retired runtime forwarding method was accessed: " + key); } });
   }
-  const followup = Reflect.get(f.channel, "runtimeFollowupFacade"), storage = Reflect.get(f.channel, "messageProcessingStorageService");
+  const writer = Reflect.get(f.channel, "messageWriteService"), queue = f.channel.queuedFollowupLifecycle, storage = Reflect.get(f.channel, "messageProcessingStorageService");
   for (const key of ["sendMessage", "postDashboardWidget", "enqueueQueuedFollowupItem", "admitQueuedFollowupItem", "getBuffer"]) {
-    replace(followup, key, (...args) => { calls.push([key, ...args]); return key === "enqueueQueuedFollowupItem" ? 41 : key === "admitQueuedFollowupItem" ? Promise.resolve(42) : undefined; });
+    replace(["sendMessage", "postDashboardWidget"].includes(key) ? writer : key === "getBuffer" ? Reflect.get(surface, "runtimeState") : queue, key, (...args) => { calls.push([key, ...args]); return key === "enqueueQueuedFollowupItem" ? 41 : key === "admitQueuedFollowupItem" ? Promise.resolve(42) : undefined; });
   }
   const row = { id: 77 };
   replace(storage, "storeMessage", (...args) => { calls.push(["storeMessage", ...args]); return row; });

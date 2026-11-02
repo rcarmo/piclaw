@@ -333,7 +333,7 @@ describe("WebAgentControlPlaneService", () => {
     ]);
   });
 
-  test("manual, historical and placeholder steering conflicts preserve visibility, identity and FIFO", async () => {
+  test("manual and historical negative/positive steering conflicts preserve visibility, identity and FIFO", async () => {
     await withQueueFixture(async f => {
       const chat = "web:unaccepted";
       storeChatMetadata(chat, "2026-08-14T09:00:00.000Z", "Fixture");
@@ -344,7 +344,7 @@ describe("WebAgentControlPlaneService", () => {
       }]);
       const placeholder = storeMessage({ id: "local-placeholder", chat_jid: chat, sender: "agent", sender_name: "Pi",
         content: "\u2063", timestamp: "2026-08-14T09:00:00.000Z", is_from_me: false, is_bot_message: true });
-      f.lifecycle.enqueuePlaceholder(chat, placeholder, "  unchanged input  ");
+      f.lifecycle.enqueueQueuedFollowupItem(chat, placeholder, "  unchanged input  ");
       const before = f.snapshot(), queued = f.lifecycle.getQueuedFollowupItems(chat);
       let effects = 0;
       const forbidden = () => { effects++; throw Error("must not enter submission/removal/publication"); };
@@ -367,7 +367,7 @@ describe("WebAgentControlPlaneService", () => {
       expect(f.lifecycle.listQueuedStateItems(chat).map(item => item.row_id)).toEqual([manual, historical, placeholder]);
       expect(f.lifecycle.consumeQueuedFollowupItem(chat)).toEqual(queued[0]);
       expect(f.lifecycle.consumeQueuedFollowupItem(chat)).toEqual(queued[1]);
-      expect(f.lifecycle.consumeQueuedFollowupPlaceholder(chat)).toBe(placeholder);
+      expect(f.lifecycle.consumeQueuedFollowupItem(chat)?.rowId).toBe(placeholder);
       expect(f.database.query("SELECT * FROM service_effect_s01_sources").all()).toEqual([]);
     });
   });
@@ -481,7 +481,7 @@ describe("WebAgentControlPlaneService", () => {
       const manual = f.lifecycle.enqueueQueuedFollowupItem(chat, 0, "manual first");
       const placeholder = storeMessage({ id: "drain-placeholder", chat_jid: chat, sender: "agent", sender_name: "Pi",
         content: "\u2063", timestamp: "2026-08-14T09:00:00.000Z", is_from_me: false, is_bot_message: true });
-      f.lifecycle.enqueuePlaceholder(chat, placeholder, "placeholder first");
+      f.lifecycle.enqueueQueuedFollowupItem(chat, placeholder, "placeholder first");
       const accepted = await f.enqueue(chat, "accepted last");
       const before = f.snapshot(), queued = f.lifecycle.getQueuedFollowupItems(chat);
       let effects = 0;

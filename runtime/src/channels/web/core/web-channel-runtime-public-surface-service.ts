@@ -3,8 +3,8 @@ import { bindInputRequestAuthority, releaseInputRequestAuthority, captureInputTa
 import { readAccessConfig } from '../../../core/config-access.js';
 import { getExecutionIdentity } from '../../../core/execution-context.js';
 import type { InteractionRow } from "../../../db.js";
-import type { QueuedFollowupSourceMetadata } from "../runtime/followup-placeholders.js";
-import type { WebChannelRuntimeFollowupFacadeService } from "../runtime/runtime-followup-facade-service.js";
+import type { QueuedFollowupSourceMetadata } from "../../../queued-followups.js";
+import type { WebChannelRuntimeStateService } from "../runtime/runtime-state-service.js";
 import type { WebSessionBroadcastService } from "../sse/session-broadcast-service.js";
 
 type WebChannelRuntimePublicSurfaceAgentPool = {
@@ -174,7 +174,9 @@ async function readRuntimeHandlerError(response: Response): Promise<string> {
 
 export interface WebChannelRuntimePublicSurfaceChannel {
   handleAgentMessage?: (req: Request, pathname: string) => Promise<Response>;
-  runtimeFollowupFacade: Pick<WebChannelRuntimeFollowupFacadeService, "updateAgentStatus">;
+  readonly runtimeState: Pick<WebChannelRuntimeStateService,
+    "updateAgentStatus" | "getAgentStatus" | "getThreadRootId" | "resumeChat" | "resumePendingChats" |
+    "setPanelExpanded" | "isPanelExpanded" | "updateThoughtBuffer" | "updateDraftBuffer" | "getBuffer">;
   sessionBroadcast: Pick<WebSessionBroadcastService, "broadcastEvent">;
   agentPool?: WebChannelRuntimePublicSurfaceAgentPool;
 }
@@ -182,7 +184,11 @@ export interface WebChannelRuntimePublicSurfaceChannel {
 export class WebChannelRuntimePublicSurfaceService {
   private readonly extensionWorkingStates = new Map<string, ExtensionWorkingStateSnapshot>();
 
-  constructor(private readonly channel: WebChannelRuntimePublicSurfaceChannel) {}
+  readonly runtimeState: WebChannelRuntimePublicSurfaceChannel["runtimeState"];
+
+  constructor(private readonly channel: WebChannelRuntimePublicSurfaceChannel) {
+    this.runtimeState = channel.runtimeState;
+  }
 
   private updateExtensionWorkingStateFromEvent(eventType: string, data: unknown): void {
     const chatJid = readEventChatJid(data);
@@ -302,7 +308,7 @@ export class WebChannelRuntimePublicSurfaceService {
     if (status?.type === "done" || status?.type === "error") {
       this.extensionWorkingStates.delete(chatJid);
     }
-    this.channel.runtimeFollowupFacade.updateAgentStatus(chatJid, status);
+    this.runtimeState.updateAgentStatus(chatJid, status);
   }
 
   broadcastEvent(eventType: string, data: unknown): void {

@@ -6,7 +6,7 @@ import {
   getWebRuntimeConfig,
   getWebServerConfig,
 } from "../../../core/config.js";
-import { getDb, replaceMessageContent } from "../../../db.js";
+import { getDb } from "../../../db.js";
 import { getChatProject } from "../../../db/chat-project.js";
 import { handlePost as handlePostRequest } from "../handlers/posts.js";
 import { handleAgentMessage as handleAgentMessageRequest } from "../handlers/agent.js";
@@ -45,7 +45,6 @@ import {
 import { WebMessageWriteService, type WebMessageWriteServiceDeps } from "../message-write-service.js";
 import { QueuedFollowupLifecycleService } from "../runtime/queued-followup-lifecycle-service.js";
 import { RequestRouterService } from "../request-router-service.js";
-import { WebChannelRuntimeFollowupFacadeService } from "../runtime/runtime-followup-facade-service.js";
 import {
   WebChannelRuntimeStateService,
   type WebChannelRuntimeStateCallbacks,
@@ -84,6 +83,7 @@ export interface WebChannelConstructorFactoryChannel {
   json(payload: unknown, status?: number): Response;
   broadcastEvent(eventType: string, data: unknown): void;
   handleRequest(req: Request): Promise<Response>;
+  sendMessage: WebChannelLike["sendMessage"];
   processChat(chatJid: string, agentId: string, threadRootId?: number | null): Promise<void>;
   storeMessage(
     chatJid: string,
@@ -147,7 +147,6 @@ export interface WebChannelConstructorFactoryResult {
   authGateway: WebAuthGateway;
   messageProcessingStorageService: WebMessageProcessingStorageService;
   messageWriteService: WebMessageWriteService;
-  runtimeFollowupFacade: WebChannelRuntimeFollowupFacadeService;
   requestRouter: RequestRouterService;
   endpointContexts: WebChannelEndpointContexts;
   endpointFacade: WebChannelEndpointFacadeService;
@@ -179,9 +178,6 @@ export interface WebChannelConstructorFactoryDeps {
     defaults: { defaultAgentId: string; getAssistantName(): string; getUserName?(): string | null | undefined },
   ): WebMessageProcessingStorageService;
   createMessageWriteService(deps: WebMessageWriteServiceDeps): WebMessageWriteService;
-  createRuntimeFollowupFacade(
-    deps: ConstructorParameters<typeof WebChannelRuntimeFollowupFacadeService>[0],
-  ): WebChannelRuntimeFollowupFacadeService;
   createRequestRouter(channel: WebChannelConstructorFactoryChannel): RequestRouterService;
   createEndpointContexts(
     channel: WebChannelConstructorFactoryChannel,
@@ -205,7 +201,6 @@ export interface WebChannelConstructorFactoryDeps {
     channel: WebChannelConstructorFactoryChannel,
     defaults: { defaultAgentId: string },
   ): WebAgentPeerMessageRelayService;
-  replaceMessageContent: typeof replaceMessageContent;
   getDb: typeof getDb;
   ensureAvatarCache: typeof ensureAvatarCache;
   handlePostRequest(
@@ -226,7 +221,6 @@ const defaultDeps: WebChannelConstructorFactoryDeps = {
   createMessageProcessingStorageService: (channel, defaults) =>
     createWebMessageProcessingStorageService(channel as unknown as Parameters<typeof createWebMessageProcessingStorageService>[0], defaults),
   createMessageWriteService: (deps) => new WebMessageWriteService(deps),
-  createRuntimeFollowupFacade: (deps) => new WebChannelRuntimeFollowupFacadeService(deps),
   createRequestRouter: (channel) => new RequestRouterService(channel as unknown as WebChannelLike),
   createEndpointContexts: (channel, options) =>
     createWebChannelEndpointContexts(channel as unknown as WebChannelLike, options),
@@ -238,7 +232,6 @@ const defaultDeps: WebChannelConstructorFactoryDeps = {
   createAdaptiveCardSidePromptService: (options) => new WebAdaptiveCardSidePromptService(options),
   createPeerMessageRelayService: (channel, defaults) =>
     createWebAgentPeerMessageRelayService(channel as unknown as WebAgentPeerMessageRelayChannelLike, defaults),
-  replaceMessageContent,
   getDb,
   ensureAvatarCache,
   handlePostRequest: (channel, req, isReply, chatJid) =>
@@ -323,24 +316,9 @@ export function createWebChannelConstructorFactory(
   });
 
   const messageWriteService = deps.createMessageWriteService({
-    defaultAgentId: options.defaultAgentId,
     storeMessage: (chatJid, content, isBot, mediaIds, writeOptions) =>
       channel.storeMessage(chatJid, content, isBot, mediaIds, writeOptions),
-    replaceMessageContent: (chatJid, rowId, text, mediaIds, contentBlocks, isTerminalAgentReply) =>
-      deps.replaceMessageContent(chatJid, rowId, text, { contentBlocks, mediaIds, isTerminalAgentReply }) ?? null,
     broadcastAgentResponse: (interaction) => interactionBroadcaster.broadcastAgentResponse(interaction),
-    broadcastInteractionUpdated: (interaction) => interactionBroadcaster.broadcastInteractionUpdated(interaction),
-    enqueueFollowupPlaceholder: (chatJid, rowId, queuedContent, threadId, queuedAt) =>
-      channel.queuedFollowupLifecycle.enqueuePlaceholder(chatJid, rowId, queuedContent, threadId, queuedAt),
-  });
-
-  const runtimeFollowupFacade = deps.createRuntimeFollowupFacade({
-    getMessageWriteService: () => {
-      const dynamicChannel = channel as typeof channel & { messageWriteService?: typeof messageWriteService };
-      return dynamicChannel.messageWriteService ?? messageWriteService;
-    },
-    getQueuedFollowupLifecycle: () => channel.queuedFollowupLifecycle,
-    getRuntimeState: () => runtimeState,
   });
 
   const requestRouter = deps.createRequestRouter(channel);
@@ -432,7 +410,7 @@ export function createWebChannelConstructorFactory(
     agentPool: channel.agentPool,
     authGateway,
     interactionBroadcaster,
-    sendMessage: (chatJid, text, sendOptions) => runtimeFollowupFacade.sendMessage(chatJid, text, sendOptions),
+    sendMessage: (chatJid, text, sendOptions) => channel.sendMessage(chatJid, text, sendOptions),
     broadcastEvent: (eventType, data) => channel.broadcastEvent(eventType, data),
     forwardAgentMessage: async (req, pathname, chatJid, agentId) => {
       return await handleAgentMessageRequest(
@@ -456,7 +434,6 @@ export function createWebChannelConstructorFactory(
     authGateway,
     messageProcessingStorageService,
     messageWriteService,
-    runtimeFollowupFacade,
     requestRouter,
     endpointContexts,
     endpointFacade,

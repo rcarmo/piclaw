@@ -16,7 +16,7 @@ import {
 } from "../../../db.js";
 import { createLogger } from "../../../utils/logger.js";
 import { queuedSteeringRejectionReason } from "./queued-steering-diagnostics.js";
-import type { QueuedFollowupItem } from "../runtime/followup-placeholders.js";
+import type { QueuedFollowupItem } from "../../../queued-followups.js";
 import { parseJsonObjectRequest } from "../json-body.js";
 import { settledAbortStatus } from "./agent-abort-status.js";
 import type { QueuedFollowupLifecycleService } from "../runtime/queued-followup-lifecycle-service.js";

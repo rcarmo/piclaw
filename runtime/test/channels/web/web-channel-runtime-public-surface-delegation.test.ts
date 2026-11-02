@@ -17,18 +17,15 @@ describe("web channel runtime public surface delegation", () => {
     const calls: string[] = [];
     const sse = { kind: "sse-hub" };
     const uiBridge = { kind: "ui-bridge" };
-    const placeholder = responseInteraction(1);
     const stored = responseInteraction(2);
 
     const stub = {
-      runtimeFollowupFacade: {
+      messageWriteService: {
         sendMessage: async (chatJid: string, text: string, options?: { threadId?: number | null }) => {
           calls.push(`send:${chatJid}:${text}:${options?.threadId ?? "null"}`);
         },
-        queueFollowupPlaceholder: (chatJid: string, text: string, threadId?: number, queuedContent?: string) => {
-          calls.push(`queue:${chatJid}:${text}:${threadId ?? "null"}:${queuedContent ?? ""}`);
-          return placeholder;
-        },
+      },
+      queuedFollowupLifecycle: {
         getQueuedFollowupCount: (chatJid: string) => {
           calls.push(`count:${chatJid}`);
           return 2;
@@ -60,7 +57,6 @@ describe("web channel runtime public surface delegation", () => {
     expect(uiBridgeGetter?.call(stub)).toBe(uiBridge);
 
     await WebChannel.prototype.sendMessage.call(stub, "web:test", "hello", { threadId: 9 });
-    expect(WebChannel.prototype.queueFollowupPlaceholder.call(stub, "web:test", "queued", 7, "later")).toBe(placeholder);
     expect(WebChannel.prototype.getQueuedFollowupCount.call(stub, "web:test")).toBe(2);
     WebChannel.prototype.broadcastEvent.call(stub, "agent_status", { chat_jid: "web:test", type: "thinking" });
     expect(WebChannel.prototype.storeMessage.call(stub, "web:test", "stored", true, [7])).toBe(stored);
@@ -68,7 +64,6 @@ describe("web channel runtime public surface delegation", () => {
 
     expect(calls).toEqual([
       "send:web:test:hello:9",
-      "queue:web:test:queued:7:later",
       "count:web:test",
       "broadcast:agent_status:{\"chat_jid\":\"web:test\",\"type\":\"thinking\"}",
       "store:web:test:stored:1:7",

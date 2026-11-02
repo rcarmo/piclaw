@@ -3,7 +3,7 @@ import { expect, test as bunTest } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { Harness, createRegistry, defineExtension, defineTool, type Conversation, type TaskId, type GenerationHooks } from "../../runtime/durable-engine/qualification/durable.ts";
-import { createModels, createProvider, Type, type AssistantMessage, type Message, type Model } from "../../runtime/durable-engine/qualification/ai.ts";
+import { createModels, createProvider, estimateContextTokens, Type, type AssistantMessage, type Message, type Model } from "../../runtime/durable-engine/qualification/ai.ts";
 import { AssistantMessageEventStream } from "../../runtime/durable-engine/qualification/event-stream.ts";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
 import { BunSqliteDatabase } from "../../runtime/durable-engine/src/bun-sqlite.js";
@@ -30,7 +30,8 @@ const answer = (plan?: string, index = 0): AssistantMessage => ({ role: "assista
   stopReason: plan === undefined ? "stop" : "toolUse", usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0,
     totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } });
 
-async function fixture(variant: {goal?:boolean; mixed?:boolean; identity?:()=>GoalContextIdentity; keepRecentTokens?:number} = {}) {
+async function fixture(variant: {goal?:boolean; mixed?:boolean; identity?:()=>GoalContextIdentity; keepRecentTokens?:number;
+  respond?:(messages:readonly Message[])=>Promise<AssistantMessage>} = {}) {
   const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "plan-context-"));
   const requests: Message[][] = [], failures: unknown[] = [];
   const state = { plan: "- [ ] ORIGINAL", allowed: true, prepared: false, maintenance: false,
@@ -75,8 +76,17 @@ async function fixture(variant: {goal?:boolean; mixed?:boolean; identity?:()=>Go
     if (!state.maintenance && !state.prepared) throw Error("Plan dispatch was not prepared");
     state.prepared = false;
     requests.push(structuredClone([...request.messages]));
-    const message = answer(state.maintenance ? undefined : state.replies.shift(), requests.length);
     const result = new AssistantMessageEventStream();
+    if (variant.respond) {
+      // Only detached message data crosses the Root/private SDK boundary.
+      void variant.respond(request.messages).then(message => { result.push({ type: "error", reason: "error", error: message }); result.end(); }, error => {
+        failures.push(error);
+        const message: AssistantMessage = { ...answer(), stopReason: "error", errorMessage: String(error) };
+        result.push({ type: "error", reason: "error", error: message }); result.end();
+      });
+      return result;
+    }
+    const message = answer(state.maintenance ? undefined : state.replies.shift(), requests.length);
     result.push({ type: "done", reason: message.stopReason as "stop" | "toolUse", message }); result.end(); return result;
   };
   models.setProvider(createProvider({ id: model.provider, models: [model], api: { stream, streamSimple: stream },
@@ -488,4 +498,54 @@ test("request-local Goal instructions survive shallow copies but reject forged, 
     await expect(materializePlanContext(conversation, 13 as TaskId, "web:plan", request,
       [{ type: "text", text: "Current Plan" }], () => {}, context)).rejects.toThrow("Unknown Plan request cutoff");
   }
+});
+
+for (const goal of [false, true]) test(`${goal ? 'Goal' : 'Plan'} hook overflow: real SDK rejection settles accepted input once and survives reopen without replay`, async () => {
+  let wires = 0;
+  const jwt = 'e30.' + Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: 'synthetic-only' } })).toString('base64url') + '.synthetic';
+  const f = await fixture({ goal, async respond(messages) {
+    expect(estimateContextTokens(messages).tokens).toBeGreaterThan(model.contextWindow);
+    const transport = Object.assign(async (_url: unknown, init?: RequestInit) => {
+      let bytes = typeof init?.body === 'string' ? new TextEncoder().encode(init.body) : init?.body as Uint8Array;
+      if (new Headers(init?.headers).get('content-encoding') === 'zstd') bytes = Bun.zstdDecompressSync(bytes);
+      const body = JSON.parse(new TextDecoder().decode(bytes));
+      expect(JSON.stringify(body.input)).toContain('OVERFLOW-PROMPT');
+      wires++;
+      return new Response(JSON.stringify({ error: { message: 'context_length_exceeded', code: 'context_length_exceeded' } }),
+        { status: 400, headers: { 'content-type': 'application/json' } });
+    }, { preconnect() {} }) as typeof fetch;
+    const response = await codexStream({ ...model, provider: 'openai-codex', api: 'openai-codex-responses' },
+      normalizeRootContext({ messages: structuredClone([...messages]) }),
+      { apiKey: jwt, fetch: transport, transport: 'sse', maxRetries: 0 }).result();
+    expect(response.stopReason).toBe('error');
+    expect(response.errorMessage).toContain('context_length_exceeded');
+    return { ...structuredClone(response), api: model.api, provider: model.provider };
+  } });
+  try {
+    f.state.plan = 'OVERFLOW-PROMPT ' + 'x'.repeat(400000);
+    const submission = await f.submit('Accepted input must remain terminal');
+    const terminal = await submission.wait(context);
+    expect(terminal).toMatchObject({ status: 'unanswered', reason: 'model_error' });
+    expect(wires).toBe(1); expect(f.requests).toHaveLength(1);
+    const rows = await f.entries();
+    expect(rows.filter(row => row.kind === (goal ? hostGoalContextKind : hostPlanContextKind))).toHaveLength(1);
+    expect(rows.flatMap(row => row.model ?? []).filter(message => message.role === 'assistant')).toHaveLength(1);
+    expect(JSON.stringify(rows)).toContain('Accepted input must remain terminal');
+    await f.reopen();
+    const retained = (await f.harness.submission(submission.id, context))!;
+    expect(await retained.wait(context)).toEqual(terminal);
+    expect(await f.entries()).toEqual(rows);
+    expect(wires).toBe(1); expect(f.requests).toHaveLength(1);
+    expect(f.failures).toEqual([]);
+  } finally { await f.close(); }
+});
+
+test('a rejected Root fixture producer settles its private stream and retains the original failure', async () => {
+  const failure = Error('Root adapter fixture failed');
+  const f = await fixture({ async respond() { throw failure; } });
+  try {
+    expect(await f.run()).toMatchObject({ status: 'unanswered', reason: 'model_error' });
+    expect(f.failures).toEqual([failure]);
+    expect(f.requests).toHaveLength(1);
+  } finally { await f.close(); }
 });

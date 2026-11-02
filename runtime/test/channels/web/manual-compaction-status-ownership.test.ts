@@ -43,7 +43,7 @@ function fixture(terminalTtlMs = 15_000) {
       events.push({ event, payload });
     },
     setContextUsage: (_jid: string, usage: unknown) => usages.push(usage),
-    storeMessage: () => ({ id: ++row, timestamp: `2026-10-15T00:00:0${row}Z`, data: { thread_id: null } }),
+    admitUserMessage: async () => ({ id: ++row, timestamp: `2026-10-15T00:00:0${row}Z`, data: { thread_id: null } }),
     sendMessage: async (_jid: string, content: string) => { responses.push(content); },
     saveState() {},
     json: (body: unknown, status = 200) => Response.json(body, { status }),
