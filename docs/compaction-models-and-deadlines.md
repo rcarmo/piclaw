@@ -17,7 +17,7 @@ A valid deprecated `PICLAW_AUTO_COMPACTION_ENABLED` override still takes precede
 | `compactionTimeoutSec` | Unsupported. No legacy wall-clock deadline is translated into native task policy. |
 | `compactionBackoffBaseMin`, `compactionBackoffMaxMin`, `compactionBackoffDecayFactor` | Unsupported. Native tasks own their lifecycle; legacy per-chat suppression does not control them. |
 
-Any retired field in a save request returns HTTP 400 naming the unsupported fields, even when its value is unchanged. The request writes none of its settings. Reads omit retired fields, legacy latency estimates and backoff lists. Old clients must stop sending those fields. The retired `/agent/settings/compaction/probe` and `/reset-backoff` POST routes return HTTP 410 without provider calls or database changes.
+Any retired field in a save request returns HTTP 400 naming the unsupported fields, even when its value is unchanged. The request writes none of its settings. Reads omit retired fields, legacy latency estimates and backoff lists. Old clients must stop sending those fields. The retired `/agent/settings/compaction/probe` and `/reset-backoff` POST routes return HTTP 410 without provider calls or database changes. The obsolete provider-probe runner, AgentPool forwarding methods and probe-only latest-latency selector are removed; historical telemetry and the shared offline estimator remain intact.
 
 With SDK 1.4.0, the native defaults are `reserveTokens: 16384`, `keepRecentTokens: 20000` and `backgroundTokens: 32768`. The SDK selects a summarisation range before admitting threshold work; model context size determines the blocking and background boundaries. These token counts are SDK defaults, not editable percentage settings.
 

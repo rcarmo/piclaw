@@ -1,4 +1,4 @@
-import { getCompactionTelemetrySamples, getLatestCompactionTelemetryInput } from "../db.js";
+import { getCompactionTelemetrySamples } from "../db.js";
 
 const MIN_SAMPLES = 3;
 const FRESHNESS_MS = 14 * 24 * 60 * 60_000;
@@ -44,22 +44,6 @@ function percentile(values: number[], quantile: number): number {
 function duration(seconds: number): string {
   if (seconds < 90) return `${Math.max(1, Math.round(seconds))}s`;
   return `${Math.round(seconds / 60)}m`;
-}
-
-export function buildLatestCompactionLatencyEstimate(input: {
-  provider: string;
-  model: string;
-  deadlineMs: number;
-  now?: number;
-}): CompactionLatencyEstimate | null {
-  const now = input.now ?? Date.now();
-  try {
-    const latest = getLatestCompactionTelemetryInput(input.provider, input.model, new Date(now - FRESHNESS_MS).toISOString());
-    return latest ? buildCompactionLatencyEstimate({ ...input, inputTokens: latest.input_tokens, now }) : null;
-  } catch (error) {
-    if (error instanceof Error && /Database not initialized|closed database|no such table/i.test(error.message)) return null;
-    throw error;
-  }
 }
 
 export function buildCompactionLatencyEstimate(input: {

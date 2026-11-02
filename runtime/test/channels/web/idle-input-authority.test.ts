@@ -13,7 +13,7 @@ import {resetRateLimiterStateForTests} from '../../../src/channels/web/http/rate
 import {handleAgentMessage} from '../../../src/channels/web/handlers/agent.js';
 import {storeWebMessage,admitWebUserMessage} from '../../../src/channels/web/messaging/message-store.js';
 import {QueuedFollowupLifecycleService} from '../../../src/channels/web/runtime/queued-followup-lifecycle-service.js';
-import {createWebChannelRuntimePublicSurfaceService} from '../../../src/channels/web/core/web-channel-runtime-public-surface-service.js';
+import {WebChannelRuntimePublicSurfaceService} from '../../../src/channels/web/core/web-channel-runtime-public-surface-service.js';
 import {createDirectChatToolRelayHandler} from '../../../src/extensions/chat-tool-runtime.js';
 import {bindInputRequestAuthority,releaseInputRequestAuthority} from '../../../src/channels/web/messaging/input-request-authority.js';
 import {ensureChatBranch,getChatBranchByChatJid} from '../../../src/db/chat-branches.js';
@@ -63,7 +63,7 @@ test('verified internal secret busy target creates one negative intent and mater
 });
 for(const revoke of [false,true])test(`actual operator localContext queue validates its active scope during held delivery: revoked ${revoke}`,async()=>{
  const f=fixture();const target=ensureChatBranch({chat_jid:'web:local-target',agent_name:'local-target'});
- const service=createWebChannelRuntimePublicSurfaceService({handleAgentMessage:(req:Request,path:string)=>handleAgentMessage(f.channel,req,path,new URL(req.url).searchParams.get('chat_jid')!,'default'),messageWriteService:{} as any,queuedFollowupLifecycle:{} as any,runtimeState:{} as any,messageProcessingStorageService:{} as any,sessionBroadcast:{} as any});
+ const service=new WebChannelRuntimePublicSurfaceService({handleAgentMessage:(req:Request,path:string)=>handleAgentMessage(f.channel,req,path,new URL(req.url).searchParams.get('chat_jid')!,'default'),messageWriteService:{} as any,queuedFollowupLifecycle:{} as any,runtimeState:{} as any,messageProcessingStorageService:{} as any,sessionBroadcast:{} as any});
  setAddonLocalContextHost({enqueue:request=>service.enqueueAgentMessage(request)});
  const origin=new Request('https://fixture/agent/addons/api/test/send',{method:'POST',headers:{Cookie:'piclaw_session=synthetic-cookie',Origin:'https://fixture'}});
  let valid=true;const principal=f.auth.getPrincipal(origin,true)!;admitAddonLocalRequest(origin,principal,()=>valid&&!!f.auth.getPrincipal(origin,true));
@@ -85,21 +85,21 @@ for(const change of ['abort','source','target'] as const)test(`direct trusted re
  if(change==='abort')abort.abort(Error('cancelled tool'));else f.branches[change==='source'?0:1].branch_id='replacement';release();expect(await observed).toBe(true);expect(rows('web:target')).toBe(0);expect(f.scheduled).toBe(0);
 });
 test('trusted public host enqueue and direct relay retain scoped in-process admission with auth enabled',async()=>{
- const f=fixture();const service=createWebChannelRuntimePublicSurfaceService({handleAgentMessage:(req:Request,path:string)=>handleAgentMessage(f.channel,req,path,new URL(req.url).searchParams.get('chat_jid')!,'default'),messageWriteService:{} as any,queuedFollowupLifecycle:{} as any,runtimeState:{} as any,messageProcessingStorageService:{} as any,sessionBroadcast:{} as any});
+ const f=fixture();const service=new WebChannelRuntimePublicSurfaceService({handleAgentMessage:(req:Request,path:string)=>handleAgentMessage(f.channel,req,path,new URL(req.url).searchParams.get('chat_jid')!,'default'),messageWriteService:{} as any,queuedFollowupLifecycle:{} as any,runtimeState:{} as any,messageProcessingStorageService:{} as any,sessionBroadcast:{} as any});
  expect((await service.enqueueAgentMessage({chatJid:'web:target',content:'host delivery',mode:'queue'})).status).toBe('ok');expect(rows('web:target')).toBe(1);
  const relay=createDirectChatToolRelayHandler(f.channel.agentPool,{handleAgentMessage:(req,path)=>handleAgentMessage(f.channel,req,path,new URL(req.url).searchParams.get('chat_jid')!,'default')},{getChatBranchByChatJid:jid=>f.branches.find(b=>b.chat_jid===jid)??null});
  expect((await relay({source_chat_jid:'web:source',target_chat_jid:'web:target',content:'trusted relay',mode:'auto'})).status).toBe('ok');expect(rows('web:target')).toBe(2);
 });
 for(const busy of [false,true])test(`generic host mention from a new source admits its own lifetime before forwarding: busy ${busy}`,async()=>{
  const f=fixture();f.busy(busy);expect(getChatBranchByChatJid('web:source')).toBeNull();
- const service=createWebChannelRuntimePublicSurfaceService({handleAgentMessage:(req:Request,path:string)=>handleAgentMessage(f.channel,req,path,new URL(req.url).searchParams.get('chat_jid')!,'default'),messageWriteService:{} as any,queuedFollowupLifecycle:{} as any,runtimeState:{} as any,messageProcessingStorageService:{} as any,sessionBroadcast:{} as any});
+ const service=new WebChannelRuntimePublicSurfaceService({handleAgentMessage:(req:Request,path:string)=>handleAgentMessage(f.channel,req,path,new URL(req.url).searchParams.get('chat_jid')!,'default'),messageWriteService:{} as any,queuedFollowupLifecycle:{} as any,runtimeState:{} as any,messageProcessingStorageService:{} as any,sessionBroadcast:{} as any});
  const result=await service.enqueueAgentMessage({chatJid:'web:source',content:'@target composed host input',mode:'queue'});
  expect(result.status).toBe('ok');expect(rows('web:source')).toBe(1);expect(getChatBranchByChatJid('web:source')?.branch_id).toBeTruthy();expect(rows('web:target')).toBe(busy?0:1);expect(f.queue.getQueuedFollowupCount('web:target')).toBe(busy?1:0);expect(f.scheduled).toBe(busy?0:1);
 });
 test('host mention cancelled after source commit reports that receipt without accepting the target',async()=>{
  const f=fixture(),admit=f.channel.admitUserMessage.bind(f.channel);let release!:()=>void,entered!:()=>void;const held=new Promise<void>(resolve=>{release=resolve;}),waiting=new Promise<void>(resolve=>{entered=resolve;});
  f.channel.admitUserMessage=async(...args:any[])=>{if(args[0]==='web:target'){entered();await held;}return admit(...args);};
- let response!:Response;const service=createWebChannelRuntimePublicSurfaceService({handleAgentMessage:async(req:Request,path:string)=>response=await handleAgentMessage(f.channel,req,path,new URL(req.url).searchParams.get('chat_jid')!,'default'),messageWriteService:{} as any,queuedFollowupLifecycle:{} as any,runtimeState:{} as any,messageProcessingStorageService:{} as any,sessionBroadcast:{} as any});
+ let response!:Response;const service=new WebChannelRuntimePublicSurfaceService({handleAgentMessage:async(req:Request,path:string)=>response=await handleAgentMessage(f.channel,req,path,new URL(req.url).searchParams.get('chat_jid')!,'default'),messageWriteService:{} as any,queuedFollowupLifecycle:{} as any,runtimeState:{} as any,messageProcessingStorageService:{} as any,sessionBroadcast:{} as any});
  const abort=new AbortController();const observed=service.enqueueAgentMessage({chatJid:'web:source',content:'@target cancelled host input',signal:abort.signal}).then(()=>null,error=>error);
  await waiting;expect(rows('web:source')).toBe(1);abort.abort(Error('host cancelled'));release();expect(await observed).toBeTruthy();expect(response.status).toBe(400);const payload=await response.json();expect(payload.source_committed).toBe(true);expect(payload.relayed).toBe(false);expect(payload.user_message.id).toBeGreaterThan(0);expect(rows('web:target')).toBe(0);expect(f.scheduled).toBe(0);expect(getChatBranchByChatJid('web:target')).toBeNull();
 });
@@ -127,7 +127,7 @@ test('arbitrary internal Requests, identity headers or markers cannot mint host 
  expect(rows('web:source')).toBe(0);expect(rows('web:target')).toBe(0);
 });
 test('trusted host admission rejects both foreign execution modes and bounded-body overflow',async()=>{
- const f=fixture();const service=createWebChannelRuntimePublicSurfaceService({handleAgentMessage:(req:Request,path:string)=>handleAgentMessage(f.channel,req,path,new URL(req.url).searchParams.get('chat_jid')!,'default'),messageWriteService:{} as any,queuedFollowupLifecycle:{} as any,runtimeState:{} as any,messageProcessingStorageService:{} as any,sessionBroadcast:{} as any});
+ const f=fixture();const service=new WebChannelRuntimePublicSurfaceService({handleAgentMessage:(req:Request,path:string)=>handleAgentMessage(f.channel,req,path,new URL(req.url).searchParams.get('chat_jid')!,'default'),messageWriteService:{} as any,queuedFollowupLifecycle:{} as any,runtimeState:{} as any,messageProcessingStorageService:{} as any,sessionBroadcast:{} as any});
  for(const mode of ['family-shared','isolated-containers'])await expect(withExecutionIdentity({mode} as any,()=>service.enqueueAgentMessage({chatJid:'web:target',content:'denied foreign host'}))).rejects.toThrow();
  const body=JSON.stringify({content:'x'.repeat(512*1024)});const req=new Request('http://internal/agent/default/message',{method:'POST',body});bindInputRequestAuthority(req,'web:source',body,()=>{});try{expect((await handleAgentMessage(f.channel,req,'/agent/default/message','web:source','default')).status).toBe(403);}finally{releaseInputRequestAuthority(req);}
  expect(rows('web:source')).toBe(0);expect(rows('web:target')).toBe(0);

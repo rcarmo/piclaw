@@ -14,10 +14,7 @@ async function fixture() {
   Object.defineProperty(f.channel, "httpSurfaceService", {
     get() { throw Error("Retired HTTP forwarding service was accessed"); },
   });
-  const facade = Reflect.get(f.channel, "endpointFacade");
-  for (const name of ["handleAgentModels", "handleAgentContext"]) Object.defineProperty(facade, name, {
-    get() { throw Error("Retired read facade was accessed: " + name); },
-  });
+  Object.defineProperty(f.channel, "endpointFacade", { get() { throw Error("Retired endpoint facade was accessed"); } });
   return { ...f, ctx: f.channel.endpointContexts.agentStatus() };
 }
 

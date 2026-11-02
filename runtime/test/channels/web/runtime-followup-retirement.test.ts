@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from 'bun:test';
 import { createWebChannelTestFixture } from './helpers/web-channel-fixture.js';
-import { createWebChannelRuntimePublicSurfaceService } from '../../../src/channels/web/core/web-channel-runtime-public-surface-service.js';
+
+import { WebChannel } from '../../../src/channels/web.js';
 
 let cleanup: (() => void) | undefined;
 afterEach(() => { cleanup?.(); cleanup = undefined; });
@@ -43,10 +44,10 @@ test('public methods retain owner receivers, dynamic writer/queue replacement an
 test('the public surface calls owners directly and never consults the retired facade', async () => {
   let sends = 0;
   const writer = { async sendMessage() { expect(this).toBe(writer); sends++; } };
-  const service = createWebChannelRuntimePublicSurfaceService({
-    get runtimeFollowupFacade() { throw Error('retired forwarding layer'); },
+  const service = Object.assign(Object.create(WebChannel.prototype), {
     messageWriteService: writer, queuedFollowupLifecycle: {}, runtimeState: {},
   } as any);
+  Object.defineProperty(service, 'runtimeFollowupFacade', { get() { throw Error('retired forwarding layer'); } });
   await service.sendMessage('web:owners', 'reply');
   expect(sends).toBe(1);
 });

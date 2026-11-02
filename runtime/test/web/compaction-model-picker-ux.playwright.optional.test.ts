@@ -1,115 +1,109 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { chromium, type Browser, type Page } from "playwright";
+import { build } from "esbuild";
+import { chromium, webkit, type Browser, type Page } from "playwright";
 
-const optionalBrowserTest = process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS === "1" ? test : test.skip;
-let browser: Browser | null = null;
-let server: ReturnType<typeof Bun.serve> | null = null;
-let baseUrl = "";
+const enabled = process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS === "1";
+const browserTest = enabled ? test : test.skip;
+const runtimeRoot = join(import.meta.dir, "../..");
+const browsers = new Map<string, Browser>();
+let server: ReturnType<typeof Bun.serve> | undefined, baseUrl = "";
+const fixtures = new Map<string, string>();
 
 beforeAll(async () => {
-  if (process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS !== "1") return;
-  browser = await chromium.launch({ headless: true });
-  server = Bun.serve({
-    port: 0,
-    async fetch(req) {
-      const url = new URL(req.url);
-      if (url.pathname === "/") {
-        return new Response(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/classic/dist/app.bundle.css"></head><body><div id="settings-widget-fixture-root"></div><script type="module" src="/static/classic/dist/settings-widget-fixture.bundle.js"></script></body></html>`, { headers: { "content-type": "text/html" } });
-      }
-      if (!url.pathname.startsWith("/static/") || url.pathname.includes("..")) return new Response("not found", { status: 404 });
-      try {
-        const body = await readFile(join(import.meta.dir, "../../web/static", url.pathname.slice("/static/".length)));
-        return new Response(body, { headers: { "content-type": url.pathname.endsWith(".css") ? "text/css" : "text/javascript" } });
-      } catch {
-        return new Response("not found", { status: 404 });
-      }
-    },
-  });
+  if (!enabled) return;
+  // Build current source in memory: the tracked dev bundle may still contain
+  // the retired separate-model picker. Never update shipped assets in this test.
+  const classic = await Bun.build({ entrypoints: [join(runtimeRoot, "web/src/dev/settings-widget-fixture.ts")],
+    target: "browser", format: "esm", external: ["#editor-vendor/codemirror"], write: false });
+  if (!classic.success) throw Error(JSON.stringify(classic.logs));
+  fixtures.set("classic", await classic.outputs[0]!.text());
+  const visual = await build({ entryPoints: [join(runtimeRoot, "test/web/fixtures/visual-compaction-settings-fixture.tsx")],
+    bundle: true, write: false, format: "esm", platform: "browser", target: "es2022", jsx: "automatic", jsxImportSource: "preact" });
+  fixtures.set("visual", visual.outputFiles[0]!.text);
+  server = Bun.serve({ port: 0, async fetch(req) {
+    const url = new URL(req.url), skin = url.pathname === "/visual" ? "visual" : "classic";
+    if (url.pathname === "/classic" || url.pathname === "/visual") return new Response(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/${skin}/dist/app.bundle.css"></head><body><div id="${skin === "classic" ? "settings-widget" : "visual-compaction-settings"}-fixture-root"></div><script type="module" src="/${skin}.js"></script></body></html>`, { headers: { "content-type": "text/html" } });
+    if (url.pathname === "/classic.js" || url.pathname === "/visual.js") return new Response(fixtures.get(url.pathname.slice(1, -3)), { headers: { "content-type": "text/javascript" } });
+    if (!url.pathname.startsWith("/static/") || url.pathname.includes("..")) return new Response("not found", { status: 404 });
+    try { return new Response(await readFile(join(runtimeRoot, "web/static", url.pathname.slice(8))), { headers: { "content-type": url.pathname.endsWith(".css") ? "text/css" : "text/javascript" } }); }
+    catch { return new Response("not found", { status: 404 }); }
+  } });
   baseUrl = `http://127.0.0.1:${server.port}`;
 });
 
-afterAll(async () => {
-  await browser?.close();
-  browser = null;
-  server?.stop(true);
-  server = null;
-});
+beforeAll(async () => { if (enabled) browsers.set("chromium", await chromium.launch({ headless: true })); });
+beforeAll(async () => { if (enabled) browsers.set("webkit", await webkit.launch({ headless: true })); });
+afterAll(async () => { for (const browser of browsers.values()) await browser.close(); browsers.clear(); server?.stop(true); });
 
-async function openCompaction(width: number, height: number, configuredModel = ""): Promise<Page> {
-  if (!browser) throw new Error("browser not started");
-  const page = await browser.newPage({ viewport: { width, height } });
-  const query = new URLSearchParams({ section: "compaction", width: String(Math.min(width - 40, 1100)), height: String(Math.min(height - 40, 850)), compaction_model: configuredModel });
-  await page.goto(`${baseUrl}/?${query}`, { waitUntil: "networkidle" });
-  await page.waitForSelector("#compactionModel", { state: "visible" });
-  await page.waitForFunction(() => ((document.querySelector("#compactionModel") as HTMLSelectElement | null)?.options.length ?? 0) >= 100);
+async function open(engine: "chromium" | "webkit", skin: "classic" | "visual", width: number, legacyModel = ""): Promise<Page> {
+  const page = await browsers.get(engine)!.newPage({ viewport: { width, height: 760 }, hasTouch: width <= 520, colorScheme: "dark" });
+  await page.goto(`${baseUrl}/${skin}?section=compaction&width=${Math.min(width - 32, 1100)}&height=700&compaction_model=${encodeURIComponent(legacyModel)}`, { waitUntil: "networkidle" });
+  const root = skin === "classic" ? ".settings-content" : ".settings-panel__content";
+  await page.locator(root).waitFor({ state: "visible" });
+  await page.evaluate(() => {
+    const prior = window.fetch.bind(window); (window as any).__compactionRequests = [];
+    window.fetch = async (input, init) => {
+      const path = new URL(typeof input === "string" ? input : input instanceof Request ? input.url : String(input), location.href).pathname;
+      (window as any).__compactionRequests.push({ path, method: init?.method || "GET", body: init?.body ? JSON.parse(String(init.body)) : null });
+      return prior(input, init);
+    };
+  });
   return page;
 }
 
-optionalBrowserTest("desktop compaction model selector is constrained, keyboard-operable, and probes without changing selection", async () => {
-  const page = await openCompaction(1200, 760);
-  try {
-    const selector = page.locator("#compactionModel");
-    expect(await selector.evaluate((node: HTMLSelectElement) => node.tagName)).toBe("SELECT");
-    expect(await selector.locator("option").count()).toBeGreaterThanOrEqual(100);
-    expect(await selector.locator("option").first().textContent()).toContain("Use active model");
-    expect(await page.locator(".compaction-latency-estimate").textContent()).toContain("5 recent comparable samples");
-    const box = await selector.boundingBox();
-    expect(box?.width ?? 0).toBeGreaterThan(300);
-    expect(box?.height ?? 0).toBeGreaterThanOrEqual(28);
-
-    await selector.focus();
-    await page.keyboard.press("ArrowDown");
-    const selected = await selector.inputValue();
-    expect(selected.length).toBeGreaterThan(0);
-    await page.getByRole("button", { name: "Test compaction model" }).click();
-    await page.waitForSelector(".compaction-model-probe-result.success");
-    expect(await page.locator(".compaction-model-probe-result").textContent()).toContain("TTFT 42ms");
-    expect(await page.locator(".compaction-model-probe-result").textContent()).toContain("p90 290s");
-    expect(await selector.inputValue()).toBe(selected);
-  } finally {
-    await page.close();
+function controls(page: Page, skin: "classic" | "visual") {
+  const root = page.locator(skin === "classic" ? ".settings-content" : ".settings-panel__content");
+  const row = root.locator(skin === "classic" ? ".settings-row" : ".settings-panel__field").filter({ has: page.locator("label", { hasText: "Enable automatic compaction" }) });
+  return { root, row, toggle: row.locator('input[type="checkbox"]') };
+}
+async function waitSaves(page: Page, count: number) {
+  await page.waitForFunction(n => (window as any).__compactionRequests.filter((r: any) => r.path === "/agent/settings/compaction" && r.method === "POST").length === n, count);
+}
+async function assertNativeOnly(page: Page, skin: "classic" | "visual") {
+  const { root } = controls(page, skin);
+  expect(await root.locator("select").count()).toBe(0);
+  expect(await root.locator("#compactionModel,.compaction-model-probe-result,.compaction-latency-estimate").count()).toBe(0);
+  expect(await root.innerText()).toContain("active conversation model and SDK thresholds");
+  expect(await root.innerText()).toContain("already accepted maintenance is not cancelled");
+  const requests = await page.evaluate(() => (window as any).__compactionRequests);
+  expect(requests.some((r: any) => r.path.endsWith("/compaction/probe"))).toBe(false);
+  for (const request of requests.filter((r: any) => r.path === "/agent/settings/compaction" && r.method === "POST")) {
+    for (const field of ["compactionModel", "smartCompactionMethod", "compactionLatencyEstimate", "remoteCompactionEnabled", "compactionTimeoutSec"]) expect(request.body).not.toHaveProperty(field);
   }
-});
+}
 
-optionalBrowserTest("invalid configured model remains visible and explicitly repairable", async () => {
-  const page = await openCompaction(900, 700, "missing/retired-model");
-  try {
-    const selector = page.locator("#compactionModel");
-    expect(await selector.inputValue()).toBe("missing/retired-model");
-    expect(await selector.locator('option[value="missing/retired-model"]').textContent()).toContain("Unavailable");
-    expect(await page.getByText("Configured model is not currently available.", { exact: false }).textContent()).toContain("not currently available");
-    await selector.selectOption("");
-    expect(await selector.inputValue()).toBe("");
-  } finally {
-    await page.close();
-  }
-});
+for (const engine of ["chromium", "webkit"] as const) for (const skin of ["classic", "visual"] as const) {
+  browserTest(`${engine}/${skin}: desktop compaction is keyboard-operable and never offers a provider probe`, async () => {
+    const page = await open(engine, skin, 1200);
+    try {
+      const { toggle } = controls(page, skin); expect(await toggle.isChecked()).toBe(true);
+      await toggle.press("Space"); await waitSaves(page, 1); expect(await toggle.isChecked()).toBe(false);
+      await toggle.press("Space"); await waitSaves(page, 2); expect(await toggle.isChecked()).toBe(true);
+      const saves = await page.evaluate(() => (window as any).__compactionRequests.filter((r: any) => r.path === "/agent/settings/compaction" && r.method === "POST"));
+      expect(saves.map((r: any) => r.body.autoCompactionEnabled)).toEqual([false, true]);
+      await assertNativeOnly(page, skin);
+    } finally { await page.close(); }
+  });
 
-optionalBrowserTest("phone compaction selector and probe stay inside the viewport with touch-sized controls", async () => {
-  const page = await openCompaction(520, 720);
-  try {
-    const metrics = await page.evaluate(() => {
-      const selector = document.querySelector("#compactionModel") as HTMLElement;
-      const button = Array.from(document.querySelectorAll("button")).find((node) => node.textContent?.includes("Test compaction model")) as HTMLElement;
-      const s = selector.getBoundingClientRect();
-      const b = button.getBoundingClientRect();
-      const advisory = document.querySelector(".compaction-latency-estimate") as HTMLElement;
-      const a = advisory.getBoundingClientRect();
-      return { viewport: innerWidth, selector: { left: s.left, right: s.right, height: s.height }, button: { left: b.left, right: b.right, height: b.height }, advisory: { left: a.left, right: a.right, height: a.height }, bodyScrollWidth: document.body.scrollWidth };
-    });
-    expect(metrics.selector.left).toBeGreaterThanOrEqual(0);
-    expect(metrics.selector.right).toBeLessThanOrEqual(metrics.viewport);
-    expect(metrics.button.left).toBeGreaterThanOrEqual(0);
-    expect(metrics.button.right).toBeLessThanOrEqual(metrics.viewport);
-    expect(metrics.selector.height).toBeGreaterThanOrEqual(28);
-    expect(metrics.button.height).toBeGreaterThanOrEqual(28);
-    expect(metrics.advisory.left).toBeGreaterThanOrEqual(0);
-    expect(metrics.advisory.right).toBeLessThanOrEqual(metrics.viewport);
-    expect(metrics.advisory.height).toBeGreaterThan(0);
-    expect(metrics.bodyScrollWidth).toBeLessThanOrEqual(metrics.viewport);
-  } finally {
-    await page.close();
-  }
-});
+  browserTest(`${engine}/${skin}: an obsolete separate-model query cannot revive the retired selector`, async () => {
+    const page = await open(engine, skin, 900, "missing/retired-model");
+    try {
+      const { toggle } = controls(page, skin); expect(await toggle.isChecked()).toBe(true);
+      await assertNativeOnly(page, skin);
+      expect(await page.evaluate(() => (window as any).__compactionRequests.filter((r: any) => r.path === "/agent/settings/compaction").length)).toBe(0);
+    } finally { await page.close(); }
+  });
+
+  browserTest(`${engine}/${skin}: phone native compaction controls stay in the viewport and accept touch`, async () => {
+    const page = await open(engine, skin, 520);
+    try {
+      const { row, toggle } = controls(page, skin), box = await row.boundingBox();
+      expect(box).not.toBeNull(); expect(box!.x).toBeGreaterThanOrEqual(0); expect(box!.x + box!.width).toBeLessThanOrEqual(521); expect(box!.height).toBeGreaterThanOrEqual(28);
+      await toggle.tap(); await waitSaves(page, 1); expect(await toggle.isChecked()).toBe(false);
+      await toggle.tap(); await waitSaves(page, 2); expect(await toggle.isChecked()).toBe(true);
+      await assertNativeOnly(page, skin);
+    } finally { await page.close(); }
+  });
+}

@@ -1,5 +1,7 @@
 # Direct timeline endpoint wiring
 
+The counts and retained structures below describe the original #1273 slice. PR #1909 later retired the shared HTTP surface; #1888 removes the remaining prototype installer and lifecycle/message-entry adapters.
+
 The public synchronous `WebChannel.handleTimeline(limit, before?, chatJid?)` calls the existing content handler with the channel's existing typed content context. The HTTP-surface and endpoint-facade timeline methods are removed. Other endpoint families retain their existing paths.
 
 ## Call path and removed stages

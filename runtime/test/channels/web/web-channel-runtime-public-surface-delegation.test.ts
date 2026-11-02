@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { WebChannel } from "../../../src/channels/web.ts";
+import { WebChannelRuntimePublicSurfaceService } from "../../../src/channels/web/core/web-channel-runtime-public-surface-service.js";
 
 function responseInteraction(id: number) {
   return {
@@ -47,6 +48,7 @@ describe("web channel runtime public surface delegation", () => {
         },
       },
     } as any;
+    stub.runtimePublicSurfaceService = new WebChannelRuntimePublicSurfaceService(stub);
 
     const sseGetter = Object.getOwnPropertyDescriptor(WebChannel.prototype, "sse")?.get;
     const uiBridgeGetter = Object.getOwnPropertyDescriptor(WebChannel.prototype, "uiBridge")?.get;

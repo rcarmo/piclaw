@@ -27,7 +27,6 @@ import { resolveModelScope } from "../utils/scoped-models.js";
 import { withChatContext } from "../core/chat-context.js";
 import { sanitiseJid } from "./session-paths.js";
 import type { PoolEntry } from "./session-manager.js";
-import { probeCompactionModel, type CompactionModelProbeResult } from "./compaction-model-probe.js";
 import { readAccessConfig } from "../core/config-access.js";
 import { getExecutionIdentity } from "../core/execution-context.js";
 import { createLogger } from "../utils/logger.js";
@@ -674,10 +673,6 @@ export class AgentRuntimeFacade {
       return durable.readModel();
     }
     throw new Error("Durable session model unavailable");
-  }
-
-  async probeCompactionModel(modelLabel: string): Promise<CompactionModelProbeResult> {
-    return await probeCompactionModel(this.options.modelRuntime, modelLabel);
   }
 
   async getAvailableModels(
