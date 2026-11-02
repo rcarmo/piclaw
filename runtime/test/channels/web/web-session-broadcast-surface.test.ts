@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import "../../helpers.ts";
 import { WebChannel } from "../../../src/channels/web.ts";
+import { WebChannelRuntimePublicSurfaceService } from "../../../src/channels/web/core/web-channel-runtime-public-surface-service.js";
 
 describe("web channel session broadcast surface", () => {
   test("public sse/uiBridge/handleSse/broadcastEvent surfaces delegate through sessionBroadcast", () => {
@@ -23,6 +24,7 @@ describe("web channel session broadcast surface", () => {
         },
       },
     } as any;
+    channel.runtimePublicSurfaceService = new WebChannelRuntimePublicSurfaceService(channel);
 
     const sseGetter = Object.getOwnPropertyDescriptor(WebChannel.prototype, "sse")?.get;
     const uiBridgeGetter = Object.getOwnPropertyDescriptor(WebChannel.prototype, "uiBridge")?.get;

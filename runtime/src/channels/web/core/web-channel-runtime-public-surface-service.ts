@@ -3,54 +3,9 @@ import { bindInputRequestAuthority, releaseInputRequestAuthority, captureInputTa
 import { readAccessConfig } from '../../../core/config-access.js';
 import { getExecutionIdentity } from '../../../core/execution-context.js';
 import type { InteractionRow } from "../../../db.js";
-import type { WebAgentBufferEntry } from "../agent/agent-buffers.js";
-import type { QueuedFollowupItem, QueuedFollowupSourceMetadata } from "../runtime/followup-placeholders.js";
-import type { SendMessageOptions } from "../messaging/message-write-flows.js";
-import type { WebMessageProcessingStorageService } from "../messaging/message-processing-storage-service.js";
+import type { QueuedFollowupSourceMetadata } from "../runtime/followup-placeholders.js";
 import type { WebChannelRuntimeFollowupFacadeService } from "../runtime/runtime-followup-facade-service.js";
 import type { WebSessionBroadcastService } from "../sse/session-broadcast-service.js";
-
-type WebChannelRuntimePublicSurfaceFollowupFacade = Pick<
-  WebChannelRuntimeFollowupFacadeService,
-  | "sendMessage"
-  | "postDashboardWidget"
-  | "queueFollowupPlaceholder"
-  | "enqueueQueuedFollowupItem"
-  | "admitQueuedFollowupItem"
-  | "peekQueuedFollowupItem"
-  | "consumeQueuedFollowupItem"
-  | "prependQueuedFollowupItem"
-  | "replaceQueuedFollowupItem"
-  | "consumeQueuedFollowupPlaceholder"
-  | "getQueuedFollowupCount"
-  | "getQueuedFollowupItems"
-  | "removeQueuedFollowupItem"
-  | "updateAgentStatus"
-  | "getAgentStatus"
-  | "replaceQueuedFollowupPlaceholder"
-  | "getThreadRootId"
-  | "resumeChat"
-  | "resumePendingChats"
-  | "setPanelExpanded"
-  | "isPanelExpanded"
-  | "updateThoughtBuffer"
-  | "updateDraftBuffer"
-  | "getBuffer"
->;
-
-type WebChannelRuntimePublicSurfaceStorage = Pick<
-  WebMessageProcessingStorageService,
-  "processChat" | "storeMessage" | "admitUserMessage" | "admitMessage"
->;
-
-type WebChannelRuntimePublicSurfaceBroadcast = Pick<
-  WebSessionBroadcastService,
-  "sse" | "uiBridge" | "broadcastEvent"
->;
-
-type WebChannelRuntimePublicSurfaceAgentMessageEntry = {
-  handleAgentMessage?: (req: Request, pathname: string) => Promise<Response>;
-};
 
 type WebChannelRuntimePublicSurfaceAgentPool = {
   getSessionGenerationForChat?: (chatJid: string) => string | null;
@@ -217,15 +172,11 @@ async function readRuntimeHandlerError(response: Response): Promise<string> {
   return text.trim().slice(0, 500);
 }
 
-export interface WebChannelRuntimePublicSurfaceChannel extends WebChannelRuntimePublicSurfaceAgentMessageEntry {
-  runtimeFollowupFacade: WebChannelRuntimePublicSurfaceFollowupFacade;
-  messageProcessingStorageService: WebChannelRuntimePublicSurfaceStorage;
-  sessionBroadcast: WebChannelRuntimePublicSurfaceBroadcast;
+export interface WebChannelRuntimePublicSurfaceChannel {
+  handleAgentMessage?: (req: Request, pathname: string) => Promise<Response>;
+  runtimeFollowupFacade: Pick<WebChannelRuntimeFollowupFacadeService, "updateAgentStatus">;
+  sessionBroadcast: Pick<WebSessionBroadcastService, "broadcastEvent">;
   agentPool?: WebChannelRuntimePublicSurfaceAgentPool;
-}
-
-export interface WebChannelRuntimePublicSurfaceServiceCarrier {
-  runtimePublicSurfaceService?: WebChannelRuntimePublicSurfaceService;
 }
 
 export class WebChannelRuntimePublicSurfaceService {
@@ -285,25 +236,6 @@ export class WebChannelRuntimePublicSurfaceService {
   getExtensionWorkingState(chatJid: string): ExtensionWorkingStateSnapshot | null {
     const state = this.extensionWorkingStates.get(chatJid);
     return state ? { ...state, indicator: state.indicator ? { ...state.indicator } : null } : null;
-  }
-
-  get sse(): WebSessionBroadcastService["sse"] {
-    return this.channel.sessionBroadcast.sse;
-  }
-
-  get uiBridge(): WebSessionBroadcastService["uiBridge"] {
-    return this.channel.sessionBroadcast.uiBridge;
-  }
-
-  async sendMessage(chatJid: string, text: string, options?: SendMessageOptions): Promise<void> {
-    await this.channel.runtimeFollowupFacade.sendMessage(chatJid, text, options);
-  }
-
-  async postDashboardWidget(
-    chatJid: string,
-    options?: { threadId?: number | null; text?: string; widgetId?: string },
-  ): Promise<void> {
-    await this.channel.runtimeFollowupFacade.postDashboardWidget(chatJid, options);
   }
 
   async enqueueAgentMessage(request: RuntimeAgentMessageRequest): Promise<RuntimeAgentMessageResult> {
@@ -366,125 +298,11 @@ export class WebChannelRuntimePublicSurfaceService {
     throw new Error("Runtime agent messages require the host input handler.");
   }
 
-  queueFollowupPlaceholder(chatJid: string, text: string, threadId?: number, queuedContent?: string): InteractionRow | null {
-    return this.channel.runtimeFollowupFacade.queueFollowupPlaceholder(chatJid, text, threadId, queuedContent);
-  }
-
-  enqueueQueuedFollowupItem(
-    chatJid: string,
-    rowId: number,
-    queuedContent: string,
-    threadId?: number | null,
-    queuedAt?: string,
-    extras?: { mediaIds?: number[]; contentBlocks?: unknown[]; linkPreviews?: unknown[]; screenHint?: string; source?: string; queuedBy?: QueuedFollowupItem["queuedBy"] },
-  ): number {
-    return this.channel.runtimeFollowupFacade.enqueueQueuedFollowupItem(
-      chatJid,
-      rowId,
-      queuedContent,
-      threadId,
-      queuedAt,
-      extras,
-    );
-  }
-
-  peekQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null {
-    return this.channel.runtimeFollowupFacade.peekQueuedFollowupItem(chatJid);
-  }
-
-  admitQueuedFollowupItem(args: Parameters<import('../runtime/queued-followup-lifecycle-service.js').QueuedFollowupLifecycleService['enqueueQueuedFollowupItem']>, authorise: () => void, signal: AbortSignal, acceptSource?: import('../runtime/queued-followup-lifecycle-service.js').QueuedInputSourceAdmission): Promise<number> {
-    return this.channel.runtimeFollowupFacade.admitQueuedFollowupItem(args, authorise, signal, acceptSource);
-  }
-
-  consumeQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null {
-    return this.channel.runtimeFollowupFacade.consumeQueuedFollowupItem(chatJid);
-  }
-
-  prependQueuedFollowupItem(chatJid: string, item: QueuedFollowupItem): void {
-    this.channel.runtimeFollowupFacade.prependQueuedFollowupItem(chatJid, item);
-  }
-
-  replaceQueuedFollowupItem(chatJid: string, item: QueuedFollowupItem): boolean {
-    return this.channel.runtimeFollowupFacade.replaceQueuedFollowupItem(chatJid, item);
-  }
-
-  consumeQueuedFollowupPlaceholder(chatJid: string): number | null {
-    return this.channel.runtimeFollowupFacade.consumeQueuedFollowupPlaceholder(chatJid);
-  }
-
-  getQueuedFollowupCount(chatJid: string): number {
-    return this.channel.runtimeFollowupFacade.getQueuedFollowupCount(chatJid);
-  }
-
-  getQueuedFollowupItems(chatJid: string): QueuedFollowupItem[] {
-    return this.channel.runtimeFollowupFacade.getQueuedFollowupItems(chatJid);
-  }
-
-  removeQueuedFollowupItem(chatJid: string, rowId: number): QueuedFollowupItem | null {
-    return this.channel.runtimeFollowupFacade.removeQueuedFollowupItem(chatJid, rowId);
-  }
-
   updateAgentStatus(chatJid: string, status: Record<string, unknown>): void {
     if (status?.type === "done" || status?.type === "error") {
       this.extensionWorkingStates.delete(chatJid);
     }
     this.channel.runtimeFollowupFacade.updateAgentStatus(chatJid, status);
-  }
-
-  getAgentStatus(chatJid: string): Record<string, unknown> | null {
-    return this.channel.runtimeFollowupFacade.getAgentStatus(chatJid);
-  }
-
-  replaceQueuedFollowupPlaceholder(
-    chatJid: string,
-    rowId: number,
-    text: string,
-    mediaIds: number[],
-    contentBlocks: Array<Record<string, unknown>> | undefined,
-    threadId?: number,
-    isTerminalAgentReply?: boolean,
-  ): InteractionRow | null {
-    return this.channel.runtimeFollowupFacade.replaceQueuedFollowupPlaceholder(
-      chatJid,
-      rowId,
-      text,
-      mediaIds,
-      contentBlocks,
-      threadId,
-      isTerminalAgentReply,
-    );
-  }
-
-  getThreadRootId(chatJid: string, messageId: string): number | null {
-    return this.channel.runtimeFollowupFacade.getThreadRootId(chatJid, messageId);
-  }
-
-  resumeChat(chatJid: string, threadRootId?: number | null): void {
-    this.channel.runtimeFollowupFacade.resumeChat(chatJid, threadRootId);
-  }
-
-  resumePendingChats(chatJid?: string): void {
-    this.channel.runtimeFollowupFacade.resumePendingChats(chatJid);
-  }
-
-  setPanelExpanded(turnId: string, panel: "thought" | "draft", expanded: boolean): void {
-    this.channel.runtimeFollowupFacade.setPanelExpanded(turnId, panel, expanded);
-  }
-
-  isPanelExpanded(turnId: string, panel: "thought" | "draft"): boolean {
-    return this.channel.runtimeFollowupFacade.isPanelExpanded(turnId, panel);
-  }
-
-  updateThoughtBuffer(turnId: string, text: string, totalLines: number): void {
-    this.channel.runtimeFollowupFacade.updateThoughtBuffer(turnId, text, totalLines);
-  }
-
-  updateDraftBuffer(turnId: string, text: string, totalLines: number): void {
-    this.channel.runtimeFollowupFacade.updateDraftBuffer(turnId, text, totalLines);
-  }
-
-  getBuffer(turnId: string, panel: "thought" | "draft"): WebAgentBufferEntry | undefined {
-    return this.channel.runtimeFollowupFacade.getBuffer(turnId, panel);
   }
 
   broadcastEvent(eventType: string, data: unknown): void {
@@ -500,47 +318,4 @@ export class WebChannelRuntimePublicSurfaceService {
     this.updateExtensionWorkingStateFromEvent(eventType, payload);
     this.channel.sessionBroadcast.broadcastEvent(eventType, payload);
   }
-
-  async processChat(chatJid: string, agentId: string, threadRootId?: number | null): Promise<void> {
-    return this.channel.messageProcessingStorageService.processChat(chatJid, agentId, threadRootId);
-  }
-
-  admitMessage(...args: Parameters<WebMessageProcessingStorageService["admitMessage"]>): Promise<InteractionRow | null> {
-    return this.channel.messageProcessingStorageService.admitMessage(...args);
-  }
-
-  admitUserMessage(...args: Parameters<WebMessageProcessingStorageService['admitUserMessage']>): Promise<InteractionRow | null> {
-    return this.channel.messageProcessingStorageService.admitUserMessage(...args);
-  }
-
-  storeMessage(
-    chatJid: string,
-    content: string,
-    isBot: boolean,
-    mediaIds: number[],
-    options: {
-      contentBlocks?: unknown[];
-      linkPreviews?: unknown[];
-      threadId?: number;
-      screenHint?: string | null;
-      isTerminalAgentReply?: boolean;
-      isSteeringMessage?: boolean;
-      removeProtectedContinuationForSourceMessageId?: string | null;
-      consumeDeferredFollowupRowId?: number | null;
-    } = {},
-  ): InteractionRow | null {
-    return this.channel.messageProcessingStorageService.storeMessage(chatJid, content, isBot, mediaIds, options);
-  }
-}
-
-export function createWebChannelRuntimePublicSurfaceService(
-  channel: WebChannelRuntimePublicSurfaceChannel,
-): WebChannelRuntimePublicSurfaceService {
-  return new WebChannelRuntimePublicSurfaceService(channel);
-}
-
-export function getWebChannelRuntimePublicSurfaceService(
-  channel: WebChannelRuntimePublicSurfaceChannel & WebChannelRuntimePublicSurfaceServiceCarrier,
-): WebChannelRuntimePublicSurfaceService {
-  return channel.runtimePublicSurfaceService ?? createWebChannelRuntimePublicSurfaceService(channel);
 }

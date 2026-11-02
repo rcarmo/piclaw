@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
+import * as handlers from '../../../src/channels/web/handlers/agent.js';
 import { createTempWorkspace, setEnv } from '../../helpers.js';
 import { initDatabase, closeDatabase } from '../../../src/db/connection.js';
 
@@ -8,7 +9,8 @@ beforeEach(() => {
   restore = setEnv({ PICLAW_WORKSPACE: workspace.workspace, PICLAW_STORE: workspace.store, PICLAW_DATA: workspace.data, PICLAW_DB_IN_MEMORY: '1' });
   initDatabase();
 });
-afterEach(() => { closeDatabase(); restore(); workspace.cleanup(); });
+const handlerRestores: (() => void)[] = [];
+afterEach(() => { for (const restoreHandler of handlerRestores.splice(0)) restoreHandler(); closeDatabase(); restore(); workspace.cleanup(); });
 import { WebChannel } from '../../../src/channels/web.js';
 
 function channel() {
@@ -19,10 +21,11 @@ for (const path of ['direct-relay', 'addon-enqueue', 'internal-control'] as cons
   const web = channel();
   const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
   let calls = 0, joined = false;
-  (web as any).agentMessageEntryService = { handleAgentMessage: async (req: Request) => {
+  const handler = spyOn(handlers, 'handleAgentMessage').mockImplementation(async (_channel, req) => {
     entered.resolve(); await release.promise; await req.text(); calls++;
     return Response.json({ status: 'ok', thread_id: null });
-  } };
+  });
+  handlerRestores.push(() => handler.mockRestore());
   const invoke = () => path === 'internal-control'
     ? web.runInternalDispatch(async () => { entered.resolve(); await release.promise; calls++; })
     : path === 'addon-enqueue'
@@ -50,7 +53,8 @@ test('accepted HTTP tail can finish nested direct dispatch after seal, but detac
   const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
   const detached = Promise.withResolvers<void>();
   let late!: Promise<unknown>, calls = 0;
-  (web as any).agentMessageEntryService = { handleAgentMessage: async () => { calls++; return Response.json({ ok: true }); } };
+  const handler = spyOn(handlers, 'handleAgentMessage').mockImplementation(async () => { calls++; return Response.json({ ok: true }); });
+  handlerRestores.push(() => handler.mockRestore());
   web.requestRouter.handle = async () => {
     late = (async () => { await detached.promise; return web.runInternalDispatch(() => { calls++; }); })();
     entered.resolve(); await release.promise;

@@ -21,7 +21,7 @@ import type { WebChannelLike } from "./web/core/web-channel-contracts.js";
 import type { RequestRouterService } from "./web/request-router-service.js";
 import type { WebSessionBroadcastService } from "./web/sse/session-broadcast-service.js";
 import { ResponseService } from "./web/http/response-service.js";
-import { QueuedFollowupLifecycleService } from "./web/runtime/queued-followup-lifecycle-service.js";
+import { QueuedFollowupLifecycleService, type QueuedInputSourceAdmission } from "./web/runtime/queued-followup-lifecycle-service.js";
 import type { WebMessageWriteService } from "./web/message-write-service.js";
 import type { WebChannelRuntimeStateService } from "./web/runtime/runtime-state-service.js";
 import type { WebChannelEndpointContexts } from "./web/endpoints/channel-endpoint-context-factory.js";
@@ -34,19 +34,16 @@ import type { WebTerminalVncHttpServiceSurface } from "./web/terminal-vnc-http-s
 import type { WebAdaptiveCardSidePromptService } from "./web/cards/adaptive-card-side-prompt-service.js";
 import type { WebAgentPeerMessageRelayService } from "./web/agent/agent-peer-message-relay-service.js";
 import {
-  createWebChannelRuntimePublicSurfaceService,
+  WebChannelRuntimePublicSurfaceService,
   type WebChannelRuntimePublicSurfaceChannel,
-  type WebChannelRuntimePublicSurfaceService,
+  type RuntimeAgentMessageRequest,
+  type RuntimeAgentMessageResult,
 } from "./web/core/web-channel-runtime-public-surface-service.js";
-import {
-  createWebChannelLifecycleSpecialSurfaceService,
-  type WebChannelLifecycleSpecialSurfaceChannel,
-  type WebChannelLifecycleSpecialSurfaceService,
-} from "./web/core/web-channel-lifecycle-special-surface-service.js";
-import {
-  installWebChannelPrototype,
-  type WebChannelPrototypeMembers,
-} from "./web/core/web-channel-prototype.js";
+import type { InteractionRow } from "../db.js";
+import type { QueuedFollowupItem } from "./web/runtime/followup-placeholders.js";
+import type { SendMessageOptions } from "./web/messaging/message-write-flows.js";
+import type { WebAgentBufferEntry } from "./web/agent/agent-buffers.js";
+import { handleAgentMessage as handleAgentMessageRequest } from "./web/handlers/agent.js";
 import { TerminalSessionService } from "./web/terminal/terminal-session-service.js";
 import { VncSessionService } from "./web/vnc/vnc-session-service.js";
 import { createLazyTerminalService, createLazyVncService } from "./web/lazy-session-services.js";
@@ -76,8 +73,231 @@ export interface WebChannelOpts {
 }
 
 /** Web channel: HTTP/SSE server, API endpoints, and agent event bridge. */
-// eslint-disable-next-line typescript/no-unsafe-declaration-merging, no-redeclare
 export class WebChannel implements WebChannelLike {
+  get sse(): WebSessionBroadcastService["sse"] {
+    return this.sessionBroadcast.sse;
+  }
+
+  get uiBridge(): WebSessionBroadcastService["uiBridge"] {
+    return this.sessionBroadcast.uiBridge;
+  }
+
+  get server(): Bun.Server<WebSocketSessionData> | null {
+    return this.serverLifecycleGateway.server;
+  }
+
+  async start(): Promise<void> {
+    await this.serverLifecycleGateway.start();
+  }
+
+  stop(): Promise<void> {
+    return this.serverLifecycleGateway.stop();
+  }
+
+  sealAdmissions(): Promise<void> {
+    return this.serverLifecycleGateway.sealAdmissions();
+  }
+
+  runInternalDispatch<T>(dispatch: () => T | Promise<T>): Promise<T> {
+    return this.serverLifecycleGateway.runInternalDispatch(dispatch);
+  }
+
+  async sendMessage(chatJid: string, text: string, options?: SendMessageOptions): Promise<void> {
+    await this.runtimeFollowupFacade.sendMessage(chatJid, text, options);
+  }
+
+  async postDashboardWidget(
+    chatJid: string,
+    options?: { threadId?: number | null; text?: string; widgetId?: string },
+  ): Promise<void> {
+    await this.runtimeFollowupFacade.postDashboardWidget(chatJid, options);
+  }
+
+  enqueueAgentMessage(request: RuntimeAgentMessageRequest): Promise<RuntimeAgentMessageResult> {
+    return this.runInternalDispatch(() => this.runtimePublicSurfaceService.enqueueAgentMessage(request));
+  }
+
+  queueFollowupPlaceholder(chatJid: string, text: string, threadId?: number, queuedContent?: string): InteractionRow | null {
+    return this.runtimeFollowupFacade.queueFollowupPlaceholder(chatJid, text, threadId, queuedContent);
+  }
+
+  enqueueQueuedFollowupItem(
+    chatJid: string,
+    rowId: number,
+    queuedContent: string,
+    threadId?: number | null,
+    queuedAt?: string,
+    extras?: { mediaIds?: number[]; contentBlocks?: unknown[]; linkPreviews?: unknown[]; screenHint?: string; source?: string; queuedBy?: QueuedFollowupItem["queuedBy"] },
+  ): number {
+    return this.runtimeFollowupFacade.enqueueQueuedFollowupItem(
+      chatJid,
+      rowId,
+      queuedContent,
+      threadId,
+      queuedAt,
+      extras,
+    );
+  }
+
+  peekQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null {
+    return this.runtimeFollowupFacade.peekQueuedFollowupItem(chatJid);
+  }
+
+  admitQueuedFollowupItem(args: Parameters<WebChannel["enqueueQueuedFollowupItem"]>, authorise: () => void, signal: AbortSignal, acceptSource?: QueuedInputSourceAdmission): Promise<number> {
+    return this.runtimeFollowupFacade.admitQueuedFollowupItem(args, authorise, signal, acceptSource);
+  }
+
+  consumeQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null {
+    return this.runtimeFollowupFacade.consumeQueuedFollowupItem(chatJid);
+  }
+
+  prependQueuedFollowupItem(chatJid: string, item: QueuedFollowupItem): void {
+    this.runtimeFollowupFacade.prependQueuedFollowupItem(chatJid, item);
+  }
+
+  replaceQueuedFollowupItem(chatJid: string, item: QueuedFollowupItem): boolean {
+    return this.runtimeFollowupFacade.replaceQueuedFollowupItem(chatJid, item);
+  }
+
+  consumeQueuedFollowupPlaceholder(chatJid: string): number | null {
+    return this.runtimeFollowupFacade.consumeQueuedFollowupPlaceholder(chatJid);
+  }
+
+  getQueuedFollowupCount(chatJid: string): number {
+    return this.runtimeFollowupFacade.getQueuedFollowupCount(chatJid);
+  }
+
+  getQueuedFollowupItems(chatJid: string): QueuedFollowupItem[] {
+    return this.runtimeFollowupFacade.getQueuedFollowupItems(chatJid);
+  }
+
+  removeQueuedFollowupItem(chatJid: string, rowId: number): QueuedFollowupItem | null {
+    return this.runtimeFollowupFacade.removeQueuedFollowupItem(chatJid, rowId);
+  }
+
+  updateAgentStatus(chatJid: string, status: Record<string, unknown>): void {
+    this.runtimePublicSurfaceService.updateAgentStatus(chatJid, status);
+  }
+
+  getAgentStatus(chatJid: string): Record<string, unknown> | null {
+    return this.runtimeFollowupFacade.getAgentStatus(chatJid);
+  }
+
+  getExtensionWorkingState(chatJid: string): Record<string, unknown> | null {
+    const state = this.runtimePublicSurfaceService.getExtensionWorkingState(chatJid);
+    return state as unknown as Record<string, unknown> | null;
+  }
+
+  replaceQueuedFollowupPlaceholder(
+    chatJid: string,
+    rowId: number,
+    text: string,
+    mediaIds: number[],
+    contentBlocks: Array<Record<string, unknown>> | undefined,
+    threadId?: number,
+    isTerminalAgentReply?: boolean,
+  ): InteractionRow | null {
+    return this.runtimeFollowupFacade.replaceQueuedFollowupPlaceholder(
+      chatJid,
+      rowId,
+      text,
+      mediaIds,
+      contentBlocks,
+      threadId,
+      isTerminalAgentReply,
+    );
+  }
+
+  getThreadRootId(chatJid: string, messageId: string): number | null {
+    return this.runtimeFollowupFacade.getThreadRootId(chatJid, messageId);
+  }
+
+  resumeChat(chatJid: string, threadRootId?: number | null): void {
+    this.runtimeFollowupFacade.resumeChat(chatJid, threadRootId);
+  }
+
+  resumePendingChats(chatJid?: string): void {
+    this.runtimeFollowupFacade.resumePendingChats(chatJid);
+  }
+
+  setPanelExpanded(turnId: string, panel: "thought" | "draft", expanded: boolean): void {
+    this.runtimeFollowupFacade.setPanelExpanded(turnId, panel, expanded);
+  }
+
+  isPanelExpanded(turnId: string, panel: "thought" | "draft"): boolean {
+    return this.runtimeFollowupFacade.isPanelExpanded(turnId, panel);
+  }
+
+  updateThoughtBuffer(turnId: string, text: string, totalLines: number): void {
+    this.runtimeFollowupFacade.updateThoughtBuffer(turnId, text, totalLines);
+  }
+
+  updateDraftBuffer(turnId: string, text: string, totalLines: number): void {
+    this.runtimeFollowupFacade.updateDraftBuffer(turnId, text, totalLines);
+  }
+
+  getBuffer(turnId: string, panel: "thought" | "draft"): WebAgentBufferEntry | undefined {
+    return this.runtimeFollowupFacade.getBuffer(turnId, panel);
+  }
+
+  broadcastEvent(eventType: string, data: unknown): void {
+    this.runtimePublicSurfaceService.broadcastEvent(eventType, data);
+  }
+
+  async handleAgentPeerMessage(req: Request): Promise<Response> {
+    return await this.peerMessageRelayService.handleAgentPeerMessage(req);
+  }
+
+  async handleAdaptiveCardAction(req: Request): Promise<Response> {
+    return await this.adaptiveCardSidePromptService.handleAdaptiveCardAction(req);
+  }
+
+  async handleAgentSidePrompt(req: Request): Promise<Response> {
+    return await this.adaptiveCardSidePromptService.handleAgentSidePrompt(req);
+  }
+
+  async handleAgentSidePromptStream(req: Request): Promise<Response> {
+    return await this.adaptiveCardSidePromptService.handleAgentSidePromptStream(req);
+  }
+
+  handleAgentMessage(req: Request, pathname: string): Promise<Response> {
+    return this.serverLifecycleGateway.handleRequest(req, () => handleAgentMessageRequest(
+      this, req, pathname, new URL(req.url).searchParams.get("chat_jid")?.trim() || DEFAULT_CHAT_JID, DEFAULT_AGENT_ID,
+    ));
+  }
+
+  async processChat(chatJid: string, agentId: string, threadRootId?: number | null): Promise<void> {
+    return this.messageProcessingStorageService.processChat(chatJid, agentId, threadRootId);
+  }
+
+  storeMessage(
+    chatJid: string,
+    content: string,
+    isBot: boolean,
+    mediaIds: number[],
+    options: {
+      contentBlocks?: unknown[];
+      linkPreviews?: unknown[];
+      threadId?: number;
+      threadToSelf?: boolean;
+      screenHint?: string | null;
+      isTerminalAgentReply?: boolean;
+      isSteeringMessage?: boolean;
+      removeProtectedContinuationForSourceMessageId?: string | null;
+      consumeDeferredFollowupRowId?: number | null;
+    } = {},
+  ): InteractionRow | null {
+    return this.messageProcessingStorageService.storeMessage(chatJid, content, isBot, mediaIds, options);
+  }
+
+  admitMessage(...args: Parameters<WebMessageProcessingStorageService["admitMessage"]>): Promise<InteractionRow | null> {
+    return this.messageProcessingStorageService.admitMessage(...args);
+  }
+
+  admitUserMessage(...args: Parameters<WebMessageProcessingStorageService['admitUserMessage']>): Promise<InteractionRow | null> {
+    return this.messageProcessingStorageService.admitUserMessage(...args);
+  }
+
   requestWorkspaceFileOpen(chatJid: string, path: string, label: string): Promise<unknown> {
     return this.uiBridge.openWorkspaceFile(chatJid, path, label);
   }
@@ -323,6 +543,15 @@ export class WebChannel implements WebChannelLike {
 
   queue!: AgentQueue;
   agentPool!: AgentPool;
+  declare prepareInputSourceAdmission?: WebChannelOpts["prepareInputSourceAdmission"];
+  declare prepareInputText?: WebChannelOpts["prepareInputText"];
+  declare expireQueuedInput?: WebChannelOpts["expireQueuedInput"];
+  declare getInputSourceAdmission?: WebChannelOpts["getInputSourceAdmission"];
+  declare getQueuedInputSourceAdmission?: WebChannelOpts["getQueuedInputSourceAdmission"];
+  declare getQueuedInputSourceWithdrawal?: WebChannelOpts["getQueuedInputSourceWithdrawal"];
+  declare getAcceptedQueuedSteering?: WebChannelOpts["getAcceptedQueuedSteering"];
+  declare getQueuedInputMaterialization?: WebChannelOpts["getQueuedInputMaterialization"];
+  declare dispatchAcceptedInput?: WebChannelOpts["dispatchAcceptedInput"];
   responses = new ResponseService();
   requestRouter!: RequestRouterService;
   endpointContexts!: WebChannelEndpointContexts;
@@ -350,7 +579,6 @@ export class WebChannel implements WebChannelLike {
   private readonly adaptiveCardSidePromptService!: WebAdaptiveCardSidePromptService;
   private readonly peerMessageRelayService!: WebAgentPeerMessageRelayService;
   private readonly runtimePublicSurfaceService!: WebChannelRuntimePublicSurfaceService;
-  private readonly lifecycleSpecialSurfaceService!: WebChannelLifecycleSpecialSurfaceService;
   private readonly messageProcessingStorageService!: WebMessageProcessingStorageService;
   private readonly messageWriteService!: WebMessageWriteService;
   private readonly runtimeFollowupFacade!: WebChannelRuntimeFollowupFacadeService;
@@ -366,20 +594,8 @@ export class WebChannel implements WebChannelLike {
       defaultChatJid: DEFAULT_CHAT_JID,
       defaultAgentId: DEFAULT_AGENT_ID,
     });
-    this.runtimePublicSurfaceService = createWebChannelRuntimePublicSurfaceService(
+    this.runtimePublicSurfaceService = new WebChannelRuntimePublicSurfaceService(
       this as unknown as WebChannelRuntimePublicSurfaceChannel,
-    );
-    this.lifecycleSpecialSurfaceService = createWebChannelLifecycleSpecialSurfaceService(
-      this as unknown as WebChannelLifecycleSpecialSurfaceChannel,
-      { defaultChatJid: DEFAULT_CHAT_JID, defaultAgentId: DEFAULT_AGENT_ID },
     );
   }
 }
-
-// eslint-disable-next-line typescript/no-unsafe-declaration-merging, no-redeclare, typescript/no-empty-object-type
-export interface WebChannel extends WebChannelPrototypeMembers {}
-
-installWebChannelPrototype(WebChannel.prototype, {
-  defaultChatJid: DEFAULT_CHAT_JID,
-  defaultAgentId: DEFAULT_AGENT_ID,
-});
