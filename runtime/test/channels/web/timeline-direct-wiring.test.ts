@@ -13,12 +13,13 @@ async function fixture() {
   cleanup = f.cleanup;
   // Timeline must not consult either policy-free stage; other endpoints keep
   // their existing collaborators. This is a dependency assertion, not a mock API.
-  for (const name of ["httpSurfaceService", "endpointFacade"]) {
-    Object.defineProperty(Reflect.get(f.channel, name), "handleTimeline", {
-      configurable: true,
-      get() { throw Error(`Timeline still enters retired forwarding stage: ${name}`); },
-    });
-  }
+  Object.defineProperty(f.channel, "httpSurfaceService", {
+    get() { throw Error("Timeline still enters retired HTTP surface"); },
+  });
+  Object.defineProperty(Reflect.get(f.channel, "endpointFacade"), "handleTimeline", {
+    configurable: true,
+    get() { throw Error("Timeline still enters retired endpoint facade"); },
+  });
   return f;
 }
 

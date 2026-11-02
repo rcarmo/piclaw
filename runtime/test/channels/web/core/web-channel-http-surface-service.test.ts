@@ -1,23 +1,20 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  createWebChannelHttpSurfaceService,
-  getWebChannelHttpSurfaceService,
-} from "../../../../src/channels/web/core/web-channel-http-surface-service.js";
+import { WebChannel } from "../../../../src/channels/web.js";
 
 function response(label: string, status = 200): Response {
   return new Response(label, { status });
 }
 
-describe("web channel http surface service", () => {
+describe("web channel public HTTP wiring", () => {
   test("delegates request-router, wrapper, and response helpers to the existing collaborators", async () => {
     const calls: string[] = [];
     const fetchResponse = response("fetch", 206);
     const requestResponse = response("request", 207);
     const jsonResponse = response("json", 208);
-    const service = createWebChannelHttpSurfaceService({
+    const service = Object.assign(Object.create(WebChannel.prototype), {
       serverLifecycleGateway: {
-        handleRequest: (_req, dispatch) => dispatch(),
+        handleRequest: (_req: Request, dispatch: () => Promise<Response>) => dispatch(),
         handleFetch: async (req: Request) => {
           calls.push(`fetch:${new URL(req.url).pathname}`);
           return fetchResponse;
@@ -92,14 +89,6 @@ describe("web channel http surface service", () => {
         handleAgentStatus: (req: Request) => {
           calls.push(`status:${req.method}`);
           return response("status");
-        },
-        handleAgentContext: async (req: Request) => {
-          calls.push(`context:${req.method}`);
-          return response("context");
-        },
-        handleAgentModels: async (req: Request) => {
-          calls.push(`models:${req.method}`);
-          return response("models");
         },
         handleAgentActiveChats: () => {
           calls.push("active-chats");
@@ -221,7 +210,7 @@ describe("web channel http surface service", () => {
     expect(await (await service.handleManifest(new Request("https://example.test/manifest.json", { method: "HEAD" }))).text()).toBe("manifest");
     expect(await (await service.handleAvatar("user", getReq)).text()).toBe("avatar");
     expect(await (await service.handleWorkspaceVisibility(postReq)).text()).toBe("workspace");
-    expect(service).not.toHaveProperty("handleTimeline");
+    expect(service.handleTimeline).toBeFunction();
     expect(await service.handleHashtag("tag", 6, 2, "web:branch").text()).toBe("hashtag");
     expect(await service.handleSearch("query", 7, 3, "web:branch", "root", "web:root").text()).toBe("search");
     expect(await service.handleThread(9, "web:branch").text()).toBe("thread");
@@ -237,14 +226,12 @@ describe("web channel http surface service", () => {
     expect(await (await service.handleVncHandoff(postReq)).text()).toBe("handoff");
     expect(await (await service.handlePost(postReq, true)).text()).toBe("post");
     expect(await service.handleAgentStatus(getReq).text()).toBe("status");
-    expect(await (await service.handleAgentContext(getReq)).text()).toBe("context");
     expect(await (await service.handleAutoresearchStatus(getReq)).text()).toBe("autoresearch-status");
     expect(await (await service.handleAutoresearchStop(postReq)).text()).toBe("autoresearch-stop");
     expect(await (await service.handleAutoresearchDismiss(postReq)).text()).toBe("autoresearch-dismiss");
     expect(await (await service.handleAgentQueueState(getReq)).text()).toBe("queue-state");
     expect(await (await service.handleAgentQueueRemove(postReq)).text()).toBe("queue-remove");
     expect(await (await service.handleAgentQueueSteer(postReq)).text()).toBe("queue-steer");
-    expect(await (await service.handleAgentModels(getReq)).text()).toBe("models");
     expect(await (await service.handleAgentActiveChats(getReq)).text()).toBe("active-chats");
     expect(await (await service.handleAgentBranches(getReq)).text()).toBe("branches");
     expect(await (await service.handleAgentBranchFork(postReq)).text()).toBe("branch-fork");
@@ -282,14 +269,12 @@ describe("web channel http surface service", () => {
       "handoff:POST",
       "post:POST:1",
       "status:GET",
-      "context:GET",
       "autoresearch-status:GET",
       "autoresearch-stop:POST",
       "autoresearch-dismiss:POST",
       "queue-state:GET",
       "queue-remove:POST",
       "queue-steer:POST",
-      "models:GET",
       "active-chats",
       "branches:GET",
       "branch-fork:POST",
@@ -307,19 +292,4 @@ describe("web channel http surface service", () => {
     ]);
   });
 
-  test("reuses a pre-wired http surface service when present", () => {
-    const existing = { kind: "existing" } as unknown as ReturnType<typeof getWebChannelHttpSurfaceService>;
-    const carrier = {
-      httpSurfaceService: existing,
-      requestRouter: { handle: async () => response("unused") },
-      endpointFacade: {} as never,
-      controlPlaneService: {} as never,
-      serverLifecycleGateway: {} as never,
-      terminalVncHttpService: {} as never,
-      sessionBroadcast: {} as never,
-      responses: {} as never,
-    };
-
-    expect(getWebChannelHttpSurfaceService(carrier as any)).toBe(existing);
-  });
 });

@@ -108,7 +108,7 @@ describe("web channel constructor wiring factory", () => {
         },
       } as WebChannelConstructorFactoryChannel["queue"],
       agentPool: {
-        listActiveChats: () => ["web:default"],
+        listActiveChats: () => { throw Error("Legacy pool activity must not be read by HTTP wiring"); },
         listKnownChats: (rootChatJid?: string | null, options?: { includeArchived?: boolean }) => [
           rootChatJid ?? null,
           Boolean(options?.includeArchived),
@@ -396,8 +396,8 @@ describe("web channel constructor wiring factory", () => {
     expect(endpointContextOptions?.defaultChatJid).toBe("web:default");
     expect(endpointContextOptions?.defaultAgentId).toBe("default");
     expect(endpointFacadeOptions?.endpointContexts).toBe(endpointContexts);
-    expect(endpointFacadeOptions?.listActiveChats()).toEqual(["web:default"]);
-    expect(endpointFacadeOptions?.listKnownChats?.("web:root", { includeArchived: true })).toEqual(["web:root", true]);
+    expect(endpointFacadeOptions).not.toHaveProperty("listActiveChats");
+    expect(endpointFacadeOptions?.listKnownChats("web:root", { includeArchived: true })).toEqual(["web:root", true]);
     const handlePostRequest = endpointFacadeOptions?.handlePostRequest;
     expect(handlePostRequest).toBeDefined();
     if (!handlePostRequest) throw new Error("Expected endpoint facade handlePostRequest");

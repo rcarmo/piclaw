@@ -29,15 +29,10 @@ import type { WebChannelEndpointFacadeService } from "./web/endpoints/channel-en
 import type { WebAgentControlPlaneService } from "./web/agent/agent-control-plane-service.js";
 import type { InteractionBroadcaster } from "./web/interaction-broadcaster.js";
 import type { WebAuthGateway } from "./web/auth/auth-gateway.js";
-import type { WebServerLifecycleGatewayService } from "./web/server-lifecycle-gateway-service.js";
+import type { WebServerLifecycleGatewayService, WebSocketSessionData } from "./web/server-lifecycle-gateway-service.js";
 import type { WebTerminalVncHttpServiceSurface } from "./web/terminal-vnc-http-service.js";
 import type { WebAdaptiveCardSidePromptService } from "./web/cards/adaptive-card-side-prompt-service.js";
 import type { WebAgentPeerMessageRelayService } from "./web/agent/agent-peer-message-relay-service.js";
-import {
-  createWebChannelHttpSurfaceService,
-  type WebChannelHttpSurfaceChannel,
-  type WebChannelHttpSurfaceService,
-} from "./web/core/web-channel-http-surface-service.js";
 import {
   createWebChannelRuntimePublicSurfaceService,
   type WebChannelRuntimePublicSurfaceChannel,
@@ -59,6 +54,7 @@ import type { WebMessageProcessingStorageService } from "./web/messaging/message
 import type { WebChannelRuntimeFollowupFacadeService } from "./web/runtime/runtime-followup-facade-service.js";
 import { initializeWebChannelConstructor } from "./web/core/web-channel-constructor-factory.js";
 import { handleTimelineRequest } from "./web/endpoints/content-endpoints.js";
+import { handleAgentContextRequest, handleAgentModelsRequest } from "./web/agent/agent-status.js";
 
 const DEFAULT_CHAT_JID = "web:default";
 const DEFAULT_AGENT_ID = "default";
@@ -88,6 +84,238 @@ export class WebChannel implements WebChannelLike {
 
   handleTimeline(limit: number, before?: number, chatJid?: string): Response {
     return handleTimelineRequest(limit, before, chatJid, this.endpointContexts.content());
+  }
+
+  async handleFetch(req: Request, server?: Bun.Server<WebSocketSessionData>): Promise<Response | undefined> {
+    return this.serverLifecycleGateway.handleFetch(req, server);
+  }
+
+  async handleRequest(req: Request): Promise<Response> {
+    return this.serverLifecycleGateway.handleRequest(req, () => this.requestRouter.handle(req));
+  }
+
+  async handleAgents(): Promise<Response> {
+    return await this.endpointFacade.handleAgents();
+  }
+
+  async handleManifest(req: Request): Promise<Response> {
+    return await this.endpointFacade.handleManifest(req);
+  }
+
+  async handleAvatar(kind: "agent" | "user", req: Request): Promise<Response> {
+    return await this.endpointFacade.handleAvatar(kind, req);
+  }
+
+  async handleWorkspaceVisibility(req: Request): Promise<Response> {
+    return await this.endpointFacade.handleWorkspaceVisibility(req);
+  }
+
+  handleHashtag(tag: string, limit: number, offset: number, chatJid?: string): Response {
+    return this.endpointFacade.handleHashtag(tag, limit, offset, chatJid);
+  }
+
+  handleSearch(
+    query: string,
+    limit: number,
+    offset: number,
+    chatJid?: string,
+    searchScope?: "current" | "root" | "all",
+    rootChatJid?: string,
+    filters?: { images?: boolean; attachments?: boolean } | null,
+  ): Response {
+    return this.endpointFacade.handleSearch(query, limit, offset, chatJid, searchScope, rootChatJid, filters);
+  }
+
+  handleThread(id: number | null, chatJid?: string): Response {
+    return this.endpointFacade.handleThread(id, chatJid);
+  }
+
+  handleThought(panel: string | null, turnId: string | null): Response {
+    return this.endpointFacade.handleThought(panel, turnId);
+  }
+
+  async handleThoughtVisibility(req: Request): Promise<Response> {
+    return await this.endpointFacade.handleThoughtVisibility(req);
+  }
+
+  handleDeletePost(req: Request, id: number | null, cascade = false): Response {
+    return this.endpointFacade.handleDeletePost(req, id, cascade);
+  }
+
+  async handleUpdatePost(req: Request, id: number | null): Promise<Response> {
+    return await this.endpointFacade.handleUpdatePost(req, id);
+  }
+
+  async handleUpdatePostAnnotations(req: Request, id: number): Promise<Response> {
+    return await this.endpointFacade.handleUpdatePostAnnotations(req, id);
+  }
+
+  async handleInternalPost(req: Request): Promise<Response> {
+    return await this.endpointFacade.handleInternalPost(req);
+  }
+
+  handleSse(req: Request, authorisation?: import("./web/sse/sse.js").SseAuthorisation): Response {
+    return this.sessionBroadcast.handleSse(req, authorisation);
+  }
+
+  handleTerminalSession(req: Request): Response {
+    return this.terminalVncHttpService.handleTerminalSession(req);
+  }
+
+  handleTerminalHandoff(req: Request): Promise<Response> {
+    return this.terminalVncHttpService.handleTerminalHandoff(req);
+  }
+
+  handleVncSession(req: Request): Promise<Response> {
+    return this.terminalVncHttpService.handleVncSession(req);
+  }
+
+  handleVncHandoff(req: Request): Promise<Response> {
+    return this.terminalVncHttpService.handleVncHandoff(req);
+  }
+
+  async handlePost(req: Request, isReply: boolean): Promise<Response> {
+    return await this.endpointFacade.handlePost(req, isReply);
+  }
+
+  handleAgentStatus(req: Request): Response | Promise<Response> {
+    return this.endpointFacade.handleAgentStatus(req);
+  }
+
+  async handleAgentContext(req: Request): Promise<Response> {
+    return await handleAgentContextRequest(req, this.endpointContexts.agentStatus());
+  }
+
+  async handleAgentDebug(req: Request): Promise<Response> {
+    return await this.endpointFacade.handleAgentDebug(req);
+  }
+
+  async handleAgentCommands(req: Request): Promise<Response> {
+    return await this.endpointFacade.handleAgentCommands(req);
+  }
+
+  async handleAutoresearchStatus(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAutoresearchStatus(req);
+  }
+
+  async handleAutoresearchStop(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAutoresearchStop(req);
+  }
+
+  async handleAutoresearchDismiss(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAutoresearchDismiss(req);
+  }
+
+  async handleAgentOobeComplete(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentOobeComplete(req);
+  }
+
+  async handleAgentQueueState(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentQueueState(req);
+  }
+
+  async handleAgentRuns(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentRuns(req);
+  }
+
+  async handleAgentRunAbort(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentRunAbort(req);
+  }
+
+  async handleAgentRunClearStale(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentRunClearStale(req);
+  }
+
+  async handleAgentRunDrainQueue(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentRunDrainQueue(req);
+  }
+
+  async handleAgentQueueRemove(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentQueueRemove(req);
+  }
+
+  async handleAgentQueueSteer(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentQueueSteer(req);
+  }
+
+  async handleAgentQueueReorder(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentQueueReorder(req);
+  }
+
+  async handleAgentModels(req: Request): Promise<Response> {
+    return await handleAgentModelsRequest(req, this.endpointContexts.agentStatus());
+  }
+
+  handleSystemMetrics(_req: Request): Response {
+    return this.endpointFacade.handleSystemMetrics();
+  }
+
+  async handleAgentActiveChats(_req: Request): Promise<Response> {
+    return this.endpointFacade.handleAgentActiveChats();
+  }
+
+  async handleAgentBranches(req: Request): Promise<Response> {
+    return await this.endpointFacade.handleAgentBranches(req);
+  }
+
+  async handleAgentBranchFork(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentBranchFork(req);
+  }
+
+  async handleAgentRootSessionCreate(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentRootSessionCreate(req);
+  }
+
+  async handleAgentBranchRename(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentBranchRename(req);
+  }
+
+  async handleAgentRenameJid(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentRenameJid(req);
+  }
+
+  async handleAgentBranchMergeParent(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentBranchMergeParent(req);
+  }
+
+  async handleAgentBranchPrune(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentBranchPrune(req);
+  }
+
+  handleAgentBranchDownload(req: Request): Response {
+    return this.controlPlaneService.handleAgentBranchDownload(req);
+  }
+
+  async handleAgentBranchPurge(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentBranchPurge(req);
+  }
+
+  async handleAgentBranchRestore(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentBranchRestore(req);
+  }
+
+  async handleAgentRespond(req: Request): Promise<Response> {
+    return await this.endpointFacade.handleAgentRespond(req);
+  }
+
+  async serveStatic(relPath: string, req?: Request): Promise<Response> {
+    return this.responses.serveStatic(relPath, req);
+  }
+
+  async serveDocsStatic(relPath: string): Promise<Response> {
+    return this.responses.serveDocsStatic(relPath);
+  }
+
+  json(data: unknown, status = 200): Response {
+    return this.responses.json(data, status);
+  }
+
+  clampInt(value: string | null, fallback: number, min: number, max: number): number {
+    return this.responses.clampInt(value, fallback, min, max);
+  }
+
+  parseOptionalInt(value: string | null): number | null {
+    return this.responses.parseOptionalInt(value);
   }
 
   private _terminalService: TerminalSessionService | null = null;
@@ -121,7 +349,6 @@ export class WebChannel implements WebChannelLike {
   private readonly terminalVncHttpService!: WebTerminalVncHttpServiceSurface;
   private readonly adaptiveCardSidePromptService!: WebAdaptiveCardSidePromptService;
   private readonly peerMessageRelayService!: WebAgentPeerMessageRelayService;
-  private readonly httpSurfaceService!: WebChannelHttpSurfaceService;
   private readonly runtimePublicSurfaceService!: WebChannelRuntimePublicSurfaceService;
   private readonly lifecycleSpecialSurfaceService!: WebChannelLifecycleSpecialSurfaceService;
   private readonly messageProcessingStorageService!: WebMessageProcessingStorageService;
@@ -139,7 +366,6 @@ export class WebChannel implements WebChannelLike {
       defaultChatJid: DEFAULT_CHAT_JID,
       defaultAgentId: DEFAULT_AGENT_ID,
     });
-    this.httpSurfaceService = createWebChannelHttpSurfaceService(this as unknown as WebChannelHttpSurfaceChannel);
     this.runtimePublicSurfaceService = createWebChannelRuntimePublicSurfaceService(
       this as unknown as WebChannelRuntimePublicSurfaceChannel,
     );
