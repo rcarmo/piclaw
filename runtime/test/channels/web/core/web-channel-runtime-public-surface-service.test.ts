@@ -20,7 +20,7 @@ function interaction(id: number): InteractionRow {
 describe("web channel runtime public surface service", () => {
   test("stores only plain text extension working-indicator frames", () => {
     const service = createWebChannelRuntimePublicSurfaceService({
-      runtimeFollowupFacade: {} as any,
+      messageWriteService: {} as any, queuedFollowupLifecycle: {} as any, runtimeState: {} as any,
       messageProcessingStorageService: {} as any,
       sessionBroadcast: {
         sse: {},
@@ -58,7 +58,7 @@ describe("web channel runtime public surface service", () => {
           thread_id: 77,
         }, { status: 201 });
       },
-      runtimeFollowupFacade: {} as any,
+      messageWriteService: {} as any, queuedFollowupLifecycle: {} as any, runtimeState: {} as any,
       messageProcessingStorageService: {} as any,
       sessionBroadcast: { sse: {}, uiBridge: {}, broadcastEvent: () => undefined } as any,
     });
@@ -114,7 +114,8 @@ describe("web channel runtime public surface service", () => {
       const unexpected=()=>{calls.push("unexpected");throw Error("must not touch a fallback");};
       const service=createWebChannelRuntimePublicSurfaceService({
         get agentPool(){return unexpected();},
-        get runtimeFollowupFacade(){return unexpected();},
+        get messageWriteService(){return unexpected();}, get queuedFollowupLifecycle(){return unexpected();},
+        runtimeState: { resumeChat: unexpected, updateAgentStatus: unexpected },
         get messageProcessingStorageService(){return unexpected();},
         get sessionBroadcast(){return unexpected();},
       } as any);
@@ -135,13 +136,15 @@ describe("web channel runtime public surface service", () => {
     const status = { type: "intent", title: "Thinking" };
 
     const service = createWebChannelRuntimePublicSurfaceService({
-      runtimeFollowupFacade: {
+      messageWriteService: {
         sendMessage: async (chatJid, text, options) => {
           calls.push(`send:${chatJid}:${text}:${options?.threadId ?? "null"}`);
         },
         postDashboardWidget: async (chatJid, options) => {
           calls.push(`widget:${chatJid}:${options?.threadId ?? "null"}:${options?.widgetId ?? ""}`);
         },
+      },
+      queuedFollowupLifecycle: {
         enqueueQueuedFollowupItem: (chatJid, rowId, queuedContent, threadId, queuedAt) => {
           calls.push(`enqueue:${chatJid}:${rowId}:${queuedContent}:${threadId ?? "null"}:${queuedAt ?? ""}`);
           return 41;
@@ -173,6 +176,8 @@ describe("web channel runtime public surface service", () => {
           calls.push(`remove:${chatJid}:${rowId}`);
           return queuedItem;
         },
+      },
+      runtimeState: {
         updateAgentStatus: (chatJid, nextStatus) => {
           calls.push(`status-update:${chatJid}:${String(nextStatus.title ?? "")}`);
         },
@@ -310,7 +315,7 @@ describe("web channel runtime public surface service", () => {
     const existing = { kind: "existing" } as unknown as ReturnType<typeof getWebChannelRuntimePublicSurfaceService>;
     const carrier = {
       runtimePublicSurfaceService: existing,
-      runtimeFollowupFacade: {} as never,
+      messageWriteService: {} as never, queuedFollowupLifecycle: {} as never, runtimeState: {} as never,
       messageProcessingStorageService: {} as never,
       sessionBroadcast: {} as never,
     };

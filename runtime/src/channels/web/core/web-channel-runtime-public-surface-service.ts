@@ -5,35 +5,11 @@ import { getExecutionIdentity } from '../../../core/execution-context.js';
 import type { InteractionRow } from "../../../db.js";
 import type { WebAgentBufferEntry } from "../agent/agent-buffers.js";
 import type { QueuedFollowupItem, QueuedFollowupSourceMetadata } from "../../../queued-followups.js";
-import type { SendMessageOptions } from "../message-write-service.js";
+import type { SendMessageOptions, WebMessageWriteService } from "../message-write-service.js";
 import type { WebMessageProcessingStorageService } from "../messaging/message-processing-storage-service.js";
-import type { WebChannelRuntimeFollowupFacadeService } from "../runtime/runtime-followup-facade-service.js";
+import type { QueuedFollowupLifecycleService } from "../runtime/queued-followup-lifecycle-service.js";
+import type { WebChannelRuntimeStateService } from "../runtime/runtime-state-service.js";
 import type { WebSessionBroadcastService } from "../sse/session-broadcast-service.js";
-
-type WebChannelRuntimePublicSurfaceFollowupFacade = Pick<
-  WebChannelRuntimeFollowupFacadeService,
-  | "sendMessage"
-  | "postDashboardWidget"
-  | "enqueueQueuedFollowupItem"
-  | "admitQueuedFollowupItem"
-  | "peekQueuedFollowupItem"
-  | "consumeQueuedFollowupItem"
-  | "prependQueuedFollowupItem"
-  | "replaceQueuedFollowupItem"
-  | "getQueuedFollowupCount"
-  | "getQueuedFollowupItems"
-  | "removeQueuedFollowupItem"
-  | "updateAgentStatus"
-  | "getAgentStatus"
-  | "getThreadRootId"
-  | "resumeChat"
-  | "resumePendingChats"
-  | "setPanelExpanded"
-  | "isPanelExpanded"
-  | "updateThoughtBuffer"
-  | "updateDraftBuffer"
-  | "getBuffer"
->;
 
 type WebChannelRuntimePublicSurfaceStorage = Pick<
   WebMessageProcessingStorageService,
@@ -215,7 +191,13 @@ async function readRuntimeHandlerError(response: Response): Promise<string> {
 }
 
 export interface WebChannelRuntimePublicSurfaceChannel extends WebChannelRuntimePublicSurfaceAgentMessageEntry {
-  runtimeFollowupFacade: WebChannelRuntimePublicSurfaceFollowupFacade;
+  messageWriteService: Pick<WebMessageWriteService, "sendMessage" | "postDashboardWidget">;
+  queuedFollowupLifecycle: Pick<QueuedFollowupLifecycleService,
+    "enqueueQueuedFollowupItem" | "admitQueuedFollowupItem" | "peekQueuedFollowupItem" | "consumeQueuedFollowupItem" |
+    "prependQueuedFollowupItem" | "replaceQueuedFollowupItem" | "getQueuedFollowupCount" | "getQueuedFollowupItems" | "removeQueuedFollowupItem">;
+  readonly runtimeState: Pick<WebChannelRuntimeStateService,
+    "updateAgentStatus" | "getAgentStatus" | "getThreadRootId" | "resumeChat" | "resumePendingChats" |
+    "setPanelExpanded" | "isPanelExpanded" | "updateThoughtBuffer" | "updateDraftBuffer" | "getBuffer">;
   messageProcessingStorageService: WebChannelRuntimePublicSurfaceStorage;
   sessionBroadcast: WebChannelRuntimePublicSurfaceBroadcast;
   agentPool?: WebChannelRuntimePublicSurfaceAgentPool;
@@ -228,7 +210,11 @@ export interface WebChannelRuntimePublicSurfaceServiceCarrier {
 export class WebChannelRuntimePublicSurfaceService {
   private readonly extensionWorkingStates = new Map<string, ExtensionWorkingStateSnapshot>();
 
-  constructor(private readonly channel: WebChannelRuntimePublicSurfaceChannel) {}
+  private readonly runtimeState: WebChannelRuntimePublicSurfaceChannel["runtimeState"];
+
+  constructor(private readonly channel: WebChannelRuntimePublicSurfaceChannel) {
+    this.runtimeState = channel.runtimeState;
+  }
 
   private updateExtensionWorkingStateFromEvent(eventType: string, data: unknown): void {
     const chatJid = readEventChatJid(data);
@@ -293,14 +279,14 @@ export class WebChannelRuntimePublicSurfaceService {
   }
 
   async sendMessage(chatJid: string, text: string, options?: SendMessageOptions): Promise<void> {
-    await this.channel.runtimeFollowupFacade.sendMessage(chatJid, text, options);
+    await this.channel.messageWriteService.sendMessage(chatJid, text, options);
   }
 
   async postDashboardWidget(
     chatJid: string,
     options?: { threadId?: number | null; text?: string; widgetId?: string },
   ): Promise<void> {
-    await this.channel.runtimeFollowupFacade.postDashboardWidget(chatJid, options);
+    await this.channel.messageWriteService.postDashboardWidget(chatJid, options);
   }
 
   async enqueueAgentMessage(request: RuntimeAgentMessageRequest): Promise<RuntimeAgentMessageResult> {
@@ -371,7 +357,7 @@ export class WebChannelRuntimePublicSurfaceService {
     queuedAt?: string,
     extras?: { mediaIds?: number[]; contentBlocks?: unknown[]; linkPreviews?: unknown[]; screenHint?: string; source?: string; queuedBy?: QueuedFollowupItem["queuedBy"] },
   ): number {
-    return this.channel.runtimeFollowupFacade.enqueueQueuedFollowupItem(
+    return this.channel.queuedFollowupLifecycle.enqueueQueuedFollowupItem(
       chatJid,
       rowId,
       queuedContent,
@@ -382,78 +368,78 @@ export class WebChannelRuntimePublicSurfaceService {
   }
 
   peekQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null {
-    return this.channel.runtimeFollowupFacade.peekQueuedFollowupItem(chatJid);
+    return this.channel.queuedFollowupLifecycle.peekQueuedFollowupItem(chatJid);
   }
 
   admitQueuedFollowupItem(args: Parameters<import('../runtime/queued-followup-lifecycle-service.js').QueuedFollowupLifecycleService['enqueueQueuedFollowupItem']>, authorise: () => void, signal: AbortSignal, acceptSource?: import('../runtime/queued-followup-lifecycle-service.js').QueuedInputSourceAdmission): Promise<number> {
-    return this.channel.runtimeFollowupFacade.admitQueuedFollowupItem(args, authorise, signal, acceptSource);
+    return this.channel.queuedFollowupLifecycle.admitQueuedFollowupItem(args, authorise, signal, acceptSource);
   }
 
   consumeQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null {
-    return this.channel.runtimeFollowupFacade.consumeQueuedFollowupItem(chatJid);
+    return this.channel.queuedFollowupLifecycle.consumeQueuedFollowupItem(chatJid);
   }
 
   prependQueuedFollowupItem(chatJid: string, item: QueuedFollowupItem): void {
-    this.channel.runtimeFollowupFacade.prependQueuedFollowupItem(chatJid, item);
+    this.channel.queuedFollowupLifecycle.prependQueuedFollowupItem(chatJid, item);
   }
 
   replaceQueuedFollowupItem(chatJid: string, item: QueuedFollowupItem): boolean {
-    return this.channel.runtimeFollowupFacade.replaceQueuedFollowupItem(chatJid, item);
+    return this.channel.queuedFollowupLifecycle.replaceQueuedFollowupItem(chatJid, item);
   }
 
   getQueuedFollowupCount(chatJid: string): number {
-    return this.channel.runtimeFollowupFacade.getQueuedFollowupCount(chatJid);
+    return this.channel.queuedFollowupLifecycle.getQueuedFollowupCount(chatJid);
   }
 
   getQueuedFollowupItems(chatJid: string): QueuedFollowupItem[] {
-    return this.channel.runtimeFollowupFacade.getQueuedFollowupItems(chatJid);
+    return this.channel.queuedFollowupLifecycle.getQueuedFollowupItems(chatJid);
   }
 
   removeQueuedFollowupItem(chatJid: string, rowId: number): QueuedFollowupItem | null {
-    return this.channel.runtimeFollowupFacade.removeQueuedFollowupItem(chatJid, rowId);
+    return this.channel.queuedFollowupLifecycle.removeQueuedFollowupItem(chatJid, rowId);
   }
 
   updateAgentStatus(chatJid: string, status: Record<string, unknown>): void {
     if (status?.type === "done" || status?.type === "error") {
       this.extensionWorkingStates.delete(chatJid);
     }
-    this.channel.runtimeFollowupFacade.updateAgentStatus(chatJid, status);
+    this.runtimeState.updateAgentStatus(chatJid, status);
   }
 
   getAgentStatus(chatJid: string): Record<string, unknown> | null {
-    return this.channel.runtimeFollowupFacade.getAgentStatus(chatJid);
+    return this.runtimeState.getAgentStatus(chatJid);
   }
 
   getThreadRootId(chatJid: string, messageId: string): number | null {
-    return this.channel.runtimeFollowupFacade.getThreadRootId(chatJid, messageId);
+    return this.runtimeState.getThreadRootId(chatJid, messageId);
   }
 
   resumeChat(chatJid: string, threadRootId?: number | null): void {
-    this.channel.runtimeFollowupFacade.resumeChat(chatJid, threadRootId);
+    this.runtimeState.resumeChat(chatJid, threadRootId);
   }
 
   resumePendingChats(chatJid?: string): void {
-    this.channel.runtimeFollowupFacade.resumePendingChats(chatJid);
+    this.runtimeState.resumePendingChats(chatJid);
   }
 
   setPanelExpanded(turnId: string, panel: "thought" | "draft", expanded: boolean): void {
-    this.channel.runtimeFollowupFacade.setPanelExpanded(turnId, panel, expanded);
+    this.runtimeState.setPanelExpanded(turnId, panel, expanded);
   }
 
   isPanelExpanded(turnId: string, panel: "thought" | "draft"): boolean {
-    return this.channel.runtimeFollowupFacade.isPanelExpanded(turnId, panel);
+    return this.runtimeState.isPanelExpanded(turnId, panel);
   }
 
   updateThoughtBuffer(turnId: string, text: string, totalLines: number): void {
-    this.channel.runtimeFollowupFacade.updateThoughtBuffer(turnId, text, totalLines);
+    this.runtimeState.updateThoughtBuffer(turnId, text, totalLines);
   }
 
   updateDraftBuffer(turnId: string, text: string, totalLines: number): void {
-    this.channel.runtimeFollowupFacade.updateDraftBuffer(turnId, text, totalLines);
+    this.runtimeState.updateDraftBuffer(turnId, text, totalLines);
   }
 
   getBuffer(turnId: string, panel: "thought" | "draft"): WebAgentBufferEntry | undefined {
-    return this.channel.runtimeFollowupFacade.getBuffer(turnId, panel);
+    return this.runtimeState.getBuffer(turnId, panel);
   }
 
   broadcastEvent(eventType: string, data: unknown): void {

@@ -19,10 +19,12 @@ describe("web channel runtime public surface delegation", () => {
     const stored = responseInteraction(2);
 
     const stub = {
-      runtimeFollowupFacade: {
+      messageWriteService: {
         sendMessage: async (chatJid: string, text: string, options?: { threadId?: number | null }) => {
           calls.push(`send:${chatJid}:${text}:${options?.threadId ?? "null"}`);
         },
+      },
+      queuedFollowupLifecycle: {
         getQueuedFollowupCount: (chatJid: string) => {
           calls.push(`count:${chatJid}`);
           return 2;
