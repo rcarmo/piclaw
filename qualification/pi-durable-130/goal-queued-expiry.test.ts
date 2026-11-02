@@ -93,8 +93,6 @@ async function fixture(goalPreparationAvailable = true) {
   bundle.bindInputProjection(projection);
   const channel: QueuedFollowupMaterializationRuntime & { expireQueuedInput?: Expire } = {
     peekQueuedFollowupItem: id => queue.peekQueuedFollowupItem(id),
-    consumeQueuedFollowupItem: id => queue.consumeQueuedFollowupItem(id),
-    prependQueuedFollowupItem: (id, item) => queue.prependQueuedFollowupItem(id, item),
     expireQueuedInput: ports.expireQueuedInput,
     async admitMessage(id, content, isBot, mediaIds, options, authorise, signal) {
       const row = await admitWebMessage(projection,

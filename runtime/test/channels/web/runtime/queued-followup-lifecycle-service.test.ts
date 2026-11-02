@@ -43,7 +43,7 @@ async function createServiceFixture(fileBacked = false) {
 
 describe("queued follow-up lifecycle service", () => {
   test('input behind deferred control stays queued until normal materialisation', async () => {
-    const { service } = await createServiceFixture();
+    const { service, db } = await createServiceFixture();
     const signal = new AbortController().signal;
     let admissions = 0;
     const accept = () => { admissions++; };
@@ -55,8 +55,9 @@ describe("queued follow-up lifecycle service", () => {
     expect(items.map(item => item.queuedContent)).toEqual(['before compact', '/compact', 'after compact']);
     expect(items[0]!.source_accepted).toBe(true);
     expect(items[2]!.source_accepted).toBeUndefined();
-    service.consumeQueuedFollowupItem('web:default');
-    expect(service.consumeQueuedFollowupItem('web:default')!.rowId).toBe(compact);
+    expect(items[1]!.rowId).toBe(compact);
+    // Fixture-only completed-prefix simulation; production drains through admitted SQL materialisation.
+    db.setDeferredQueuedFollowups('web:default', items.slice(2));
     await service.admitQueuedFollowupItem(['web:default', 0, 'new input'], () => {}, signal, accept);
     expect(admissions).toBe(2);
   });
@@ -75,9 +76,9 @@ describe("queued follow-up lifecycle service", () => {
       db.initDatabase();
       const restored = new QueuedFollowupLifecycleService();
       expect(restored.peekQueuedFollowupItem("web:default")).toEqual(original);
-      const consumed = restored.consumeQueuedFollowupItem("web:default")!;
-      restored.prependQueuedFollowupItem("web:default", consumed);
-      expect(restored.peekQueuedFollowupItem("web:default")!.source_id).toBe(original.source_id);
+      const detached = restored.peekQueuedFollowupItem("web:default")!;
+      detached.queuedContent = "only a detached snapshot";
+      expect(restored.peekQueuedFollowupItem("web:default")).toEqual(original);
       const removed = await restored.removeQueuedFollowupForAction("web:default", rowId);
       expect(removed.removed!.source_id).toBe(original.source_id);
       const restartedEmpty = new QueuedFollowupLifecycleService();
@@ -278,8 +279,7 @@ describe("queued follow-up lifecycle service", () => {
     expect(service.getQueuedFollowupItems("web:default")).toEqual(siblings);
     expect(db.getMessageByRowId("web:default", placeholderRowId)).toBeUndefined();
     expect(db.getMessageByRowId("web:default", siblingRowId)).toEqual(timeline);
-    expect(service.consumeQueuedFollowupItem("web:default")?.rowId).toBe(siblingRowId);
-    expect(service.consumeQueuedFollowupItem("web:default")?.rowId).toBe(deferredRowId);
+    expect(service.getQueuedFollowupItems("web:default").map(item => item.rowId)).toEqual([siblingRowId, deferredRowId]);
   });
 
   test("persists deferred queued follow-ups with canonical metadata projection and mutation isolation", async () => {
@@ -352,7 +352,7 @@ describe("queued follow-up lifecycle service", () => {
     await service.admitQueuedFollowupItem(["web:default", rowId, "accepted"], () => {}, new AbortController().signal, () => {});
     const before = db.getDeferredQueuedFollowups("web:default");
     const timelineBefore = db.getMessageByRowId("web:default", rowId);
-    expect(() => service.removeQueuedFollowupItem("web:default", rowId)).toThrow("Accepted input requires host cancellation");
+    await expect(service.removeQueuedFollowupForAction("web:default", rowId)).rejects.toThrow("Accepted input requires host cancellation");
     let sideEffects = 0;
     const { WebAgentControlPlaneService } = await import("../../../../src/channels/web/agent/agent-control-plane-service.js");
     const control = new WebAgentControlPlaneService({
@@ -489,7 +489,11 @@ describe("queued follow-up lifecycle service", () => {
       expect(await service.reorderQueuedFollowupItems('web:default',1,0)).toBe(true);
       expect(service.getQueuedFollowupItems('web:default')).toEqual([before[1],before[0]]);
       expect(service.getPendingQueuedSourceOrder('web:default')).toEqual([before[1]!.source_id!,before[0]!.source_id!]);
-      expect(service.consumeQueuedFollowupItem('web:default')).toEqual(before[1]);
+      const { admitWebMessage } = await import('../../../../src/channels/web/messaging/message-store.js');
+      const materialized = await admitWebMessage({ broadcastEvent() {} }, { chatJid: 'web:default', content: before[1]!.queuedContent,
+        isBot: false, mediaIds: [], agentId: 'default', agentName: 'Fixture' }, { consumeDeferredFollowupRowId: before[1]!.rowId,
+        materializeQueuedSource({ database, message }) { expect(database.inTransaction).toBe(true); expect(message.id).toBe(before[1]!.source_id); } });
+      expect(materialized).not.toBeNull();
       db.closeDatabase(); db.initDatabase();
       const { QueuedFollowupLifecycleService } = await import('../../../../src/channels/web/runtime/queued-followup-lifecycle-service.js');
       const reopened = new QueuedFollowupLifecycleService();

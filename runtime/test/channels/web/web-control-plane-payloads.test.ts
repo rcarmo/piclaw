@@ -16,14 +16,13 @@ function jsonResponse(payload: unknown, status = 200): Response {
 
 type QueueLifecycleStub = Pick<
   QueuedFollowupLifecycleService,
-  "getQueuedFollowupCount" | "listQueuedStateItems" | "prependQueuedFollowupItem" | "removeQueuedFollowupForAction"
+  "getQueuedFollowupCount" | "listQueuedStateItems" | "removeQueuedFollowupForAction"
 >;
 
 function createControlPlaneChannel() {
   const queuedFollowupLifecycle: QueueLifecycleStub = {
     getQueuedFollowupCount: () => 0,
     listQueuedStateItems: () => [],
-    prependQueuedFollowupItem: () => {},
     removeQueuedFollowupForAction: async () => ({ removed: null, source: null }),
   };
 

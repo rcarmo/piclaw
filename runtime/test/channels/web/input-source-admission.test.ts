@@ -517,8 +517,8 @@ for (const failure of ["throw", "owner-after", "abort"] as const) test(`idle-rac
   ]);
   expect(f.db.query("SELECT * FROM service_effect_s01_wake_intents").all()).toEqual([]);
   expect(f.db.query("SELECT * FROM messages").all()).toEqual([]);
-  expect(f.channel.removeQueuedFollowupItem("web:default", -1)).toBeNull();
-  expect(() => f.channel.removeQueuedFollowupItem("web:default", accepted.rowId)).toThrow("host cancellation");
+  expect((await f.channel.queuedFollowupLifecycle.removeQueuedFollowupForAction("web:default", -1)).removed).toBeNull();
+  await expect(f.channel.queuedFollowupLifecycle.removeQueuedFollowupForAction("web:default", accepted.rowId)).rejects.toThrow("host cancellation");
   expect(f.channel.peekQueuedFollowupItem("web:default")).toEqual(accepted);
 });
 
@@ -535,7 +535,13 @@ test("persisted queue replay keeps source identity while reconstructed empty que
   expect(restored.peekQueuedFollowupItem("web:default")).toEqual(before);
   f.db.transaction(() => acceptQueuedInputSource("web:default", rowId, f.db, f.acceptQueued)).immediate();
   expect(f.db.query("SELECT * FROM service_effect_s01_sources").all()).toHaveLength(1);
-  expect(restored.consumeQueuedFollowupItem("web:default")).toEqual(before);
+  const materialized = await admitWebMessage(f.channel, { chatJid: 'web:default', content: before.queuedContent,
+    isBot: false, mediaIds: [], agentId: 'default', agentName: 'Fixture' }, { consumeDeferredFollowupRowId: rowId,
+    materializeQueuedSource({ database, item, message }) {
+      expect(database).toBe(f.db); expect(database.inTransaction).toBe(true); expect(item).toEqual(before);
+      expect(message.id).toBe(before.source_id); expect(f.work.getAcceptedSource('web:default', message.id)?.state).toBe('pending');
+    } });
+  expect(materialized).not.toBeNull(); expect(restored.peekQueuedFollowupItem('web:default')).toBeNull();
   const restartedEmpty = new QueuedFollowupLifecycleService();
   const reused = await restartedEmpty.admitQueuedFollowupItem(["web:default", 0, "same input", null, stamp], () => {}, signal, f.acceptQueued);
   const after = restartedEmpty.peekQueuedFollowupItem("web:default")!;

@@ -89,8 +89,6 @@ export interface DeferredControlCommandRuntime {
 export interface QueuedFollowupMaterializationRuntime extends DeferredControlCommandRuntime {
   expireQueuedInput?: WebChannelLike["expireQueuedInput"];
   peekQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null;
-  consumeQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null;
-  prependQueuedFollowupItem(chatJid: string, item: QueuedFollowupItem): void;
   admitMessage: WebChannelLike["admitMessage"];
 }
 

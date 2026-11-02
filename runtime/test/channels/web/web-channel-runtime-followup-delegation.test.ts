@@ -43,13 +43,6 @@ describe("WebChannel concrete-owner delegation", () => {
         calls.push(`peek-item:${chatJid}`);
         return queuedItem;
       },
-      consumeQueuedFollowupItem: (chatJid: string) => {
-        calls.push(`consume-item:${chatJid}`);
-        return queuedItem;
-      },
-      prependQueuedFollowupItem: (chatJid: string, item: typeof queuedItem) => {
-        calls.push(`prepend:${chatJid}:${item.rowId}`);
-      },
       getQueuedFollowupCount: (chatJid: string) => {
         calls.push(`count:${chatJid}`);
         return 2;
@@ -57,10 +50,6 @@ describe("WebChannel concrete-owner delegation", () => {
       getQueuedFollowupItems: (chatJid: string) => {
         calls.push(`items:${chatJid}`);
         return [queuedItem];
-      },
-      removeQueuedFollowupItem: (chatJid: string, rowId: number) => {
-        calls.push(`remove:${chatJid}:${rowId}`);
-        return queuedItem;
       },
     });
     Object.assign((fixture.channel as any).runtimeState, {
@@ -110,12 +99,9 @@ describe("WebChannel concrete-owner delegation", () => {
     await fixture.channel.postDashboardWidget("web:test", { threadId: 8, widgetId: "widget-facade" });
     expect(fixture.channel.enqueueQueuedFollowupItem("web:test", 0, "queued", 6, "2026-03-28T00:00:00.000Z", { mediaIds: [1, 2] })).toBe(44);
     expect(fixture.channel.peekQueuedFollowupItem("web:test")).toBe(queuedItem);
-    expect(fixture.channel.consumeQueuedFollowupItem("web:test")).toBe(queuedItem);
-    fixture.channel.prependQueuedFollowupItem("web:test", queuedItem);
     expect(fixture.channel).not.toHaveProperty('replaceQueuedFollowupItem');
     expect(fixture.channel.getQueuedFollowupCount("web:test")).toBe(2);
     expect(fixture.channel.getQueuedFollowupItems("web:test")).toEqual([queuedItem]);
-    expect(fixture.channel.removeQueuedFollowupItem("web:test", 31)).toBe(queuedItem);
     fixture.channel.updateAgentStatus("web:test", status);
     expect(fixture.channel.getAgentStatus("web:test")).toEqual(status);
     expect(fixture.channel.getThreadRootId("web:test", "m-1")).toBe(52);
@@ -133,11 +119,8 @@ describe("WebChannel concrete-owner delegation", () => {
       "widget:web:test:8:widget-facade",
       "enqueue:web:test:0:queued:6:2026-03-28T00:00:00.000Z:1,2",
       "peek-item:web:test",
-      "consume-item:web:test",
-      "prepend:web:test:31",
       "count:web:test",
       "items:web:test",
-      "remove:web:test:31",
       "status-update:web:test:Thinking",
       "status-get:web:test",
       "thread-root:web:test:m-1",

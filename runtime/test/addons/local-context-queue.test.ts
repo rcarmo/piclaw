@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { getMessageByRowId, storeChatMetadata, storeMessage, closeDatabase, initDatabase } from '../../src/db.js';
+import { getDb, storeChatMetadata, closeDatabase, initDatabase } from '../../src/db.js';
 import { ensureChatBranch } from '../../src/db/chat-branches.js';
 import { withChatContext } from '../../src/core/chat-context.js';
 import { addonLocalContextApi as api, withAddonLocalPrompt, withVerifiedAddonMessage } from '../../src/addons/local-context.js';
 import { bindAddonLocalDispatchRequest, getAddonLocalDispatchBlock, withAddonLocalDispatch, type AddonLocalAuthorityReference } from '../../src/addons/local-dispatch.js';
+import { admitWebMessage } from '../../src/channels/web/messaging/message-store.js';
 import { materializeDeferredFollowups } from '../../src/channels/web/runtime/process-chat-control-runtime.js';
 import { QueuedFollowupLifecycleService } from '../../src/channels/web/runtime/queued-followup-lifecycle-service.js';
 import { withTempWorkspaceEnv } from '../helpers.js';
@@ -31,37 +32,17 @@ function queueRuntime(chatJid:string) {
   const queued=new QueuedFollowupLifecycleService();
   const persistedByRowId=new Map<number,NewMessage>();
   const resumed:number[]=[];
-  let nextMessageId=0;
-  let nextTimestamp=Date.now();
   const channel={
     peekQueuedFollowupItem:(jid:string)=>queued.peekQueuedFollowupItem(jid),
-    replaceQueuedFollowupItem:(jid:string,item:any)=>queued.replaceQueuedFollowupItem(jid,item),
-    consumeQueuedFollowupItem:(jid:string)=>queued.consumeQueuedFollowupItem(jid),
     broadcastEvent:()=>{},
     resumeChat:(jid:string,threadRootId?:number|null)=>{ expect(jid).toBe(chatJid); resumed.push(threadRootId ?? 0); },
-    admitMessage:async(jid:string,content:string,_isBot:boolean,_mediaIds:number[],options:any={})=>{
+    admitMessage:async(jid:string,content:string,isBot:boolean,mediaIds:number[],options:any={},authorise?:any,signal?:AbortSignal)=>{
       expect(jid).toBe(chatJid);
-      const queuedRowId=options.consumeDeferredFollowupRowId;
-      if (typeof queuedRowId === 'number') {
-        const consumed=queued.consumeQueuedFollowupItem(jid);
-        expect(consumed?.rowId).toBe(queuedRowId);
-      }
-      nextMessageId+=1;
-      nextTimestamp+=1;
-      const id=`materialised-${nextMessageId}`;
-      const timestamp=new Date(nextTimestamp).toISOString();
-      const rowId=storeMessage({
-        id,
-        chat_jid:jid,
-        sender:'web-user',
-        sender_name:'Web User',
-        content,
-        timestamp,
-        thread_id:options.threadId ?? null,
-        content_blocks:Array.isArray(options.contentBlocks)?options.contentBlocks:undefined,
-        link_previews:Array.isArray(options.linkPreviews)?options.linkPreviews:undefined,
-        screen_hint:options.screenHint,
-      });
+      const stored = await admitWebMessage(channel, { chatJid: jid, content, isBot, mediaIds,
+        agentId: 'default', agentName: 'Fixture' }, options, authorise, signal);
+      if (!stored) throw Error('Fixture materialisation missing');
+      const rowId=stored.id, timestamp=stored.timestamp;
+      const id=(getDb().query('SELECT id FROM messages WHERE rowid=?').get(rowId) as {id:string}).id;
       const message:NewMessage={
         id,
         chat_jid:jid,
@@ -75,7 +56,7 @@ function queueRuntime(chatJid:string) {
         screen_hint:options.screenHint,
       };
       persistedByRowId.set(rowId,message);
-      return getMessageByRowId(jid,rowId)!;
+      return stored;
     },
   };
   return {queued,persistedByRowId,resumed,channel};

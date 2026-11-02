@@ -365,9 +365,8 @@ describe("WebAgentControlPlaneService", () => {
       expect(missing.status).toBe(200);
       expect(await missing.json()).toEqual({ status: "ok", removed: false, count: 3 });
       expect(f.lifecycle.listQueuedStateItems(chat).map(item => item.row_id)).toEqual([manual, historical, placeholder]);
-      expect(f.lifecycle.consumeQueuedFollowupItem(chat)).toEqual(queued[0]);
-      expect(f.lifecycle.consumeQueuedFollowupItem(chat)).toEqual(queued[1]);
-      expect(f.lifecycle.consumeQueuedFollowupItem(chat)?.rowId).toBe(placeholder);
+      expect(f.lifecycle.getQueuedFollowupItems(chat)).toEqual(queued);
+      expect(queued.map(item => item.rowId)).toEqual([manual, historical, placeholder]);
       expect(f.database.query("SELECT * FROM service_effect_s01_sources").all()).toEqual([]);
     });
   });
@@ -378,7 +377,10 @@ describe("WebAgentControlPlaneService", () => {
         const chat = "web:native-steer";
         storeChatMetadata(chat, "2026-08-14T09:00:00.000Z", "Fixture");
         await f.enqueue(chat, "primary");
-        const primary = f.lifecycle.consumeQueuedFollowupItem(chat)!;
+        const primary = f.lifecycle.peekQueuedFollowupItem(chat)!;
+        await admitWebMessage({ broadcastEvent() {} }, { chatJid: chat, content: primary.queuedContent, isBot: false,
+          mediaIds: [], agentId: 'default', agentName: 'Fixture' }, { consumeDeferredFollowupRowId: primary.rowId,
+          materializeQueuedSource({ database, message }) { expect(database.inTransaction).toBe(true); expect(message.id).toBe(primary.source_id); } });
         const claim = await f.work.claimNext(seal({ effect: f.effect("claim"), chatJid: chat, expectedFrontier: 0,
           newOperationId: "running-operation", claimedAt: "2026-08-14T09:00:00.000Z" }));
         expect(claim.ok && claim.value?.source.sourceId).toBe(primary.source_id);
