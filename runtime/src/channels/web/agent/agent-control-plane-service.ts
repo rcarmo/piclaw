@@ -16,7 +16,6 @@ import {
 } from "../../../db.js";
 import { createLogger } from "../../../utils/logger.js";
 import { queuedSteeringRejectionReason } from "./queued-steering-diagnostics.js";
-import type { AgentControlCommand, AgentControlResult } from "../../../agent-control/agent-control-types.js";
 import type { QueuedFollowupItem } from "../runtime/followup-placeholders.js";
 import { parseJsonObjectRequest } from "../json-body.js";
 import { settledAbortStatus } from "./agent-abort-status.js";
@@ -76,19 +75,7 @@ type StoreMessageOptions = {
   isSteeringMessage?: boolean;
 };
 
-type ControlPlaneAgentPool = AgentPool & {
-  createForkedChatBranch?: (chatJid: string, options?: { agentName?: string | null }) => Promise<unknown>;
-  createRootChatSession?: (agentName: string) => Promise<unknown>;
-  renameChatBranch?: (chatJid: string, options?: { agentName?: string | null }) => Promise<unknown>;
-  renameChatJid?: (oldJid: string, newJid: string) => Promise<unknown>;
-  mergeChatBranchIntoParent?: (chatJid: string) => Promise<unknown>;
-  pruneChatBranch?: (chatJid: string) => Promise<unknown>;
-  permanentPurgeChatBranch?: (chatJid: string) => Promise<unknown>;
-  restoreChatBranch?: (chatJid: string, options?: { agentName?: string | null }) => Promise<unknown>;
-  applySlashCommand?: (chatJid: string, rawText: string) => Promise<{ status: string; message?: string }>;
-  applyControlCommand?: (chatJid: string, command: AgentControlCommand) => Promise<AgentControlResult>;
-  listActiveChats?: () => unknown[];
-};
+type ControlPlaneAgentPool = AgentPool;
 
 type ControlPlaneQueuedLifecycle = Pick<
   QueuedFollowupLifecycleService,
@@ -545,6 +532,8 @@ export class WebAgentControlPlaneService {
   }
 
   async handleAgentRootSessionCreate(req: Request): Promise<Response> {
+    const authorise = this.options.captureWriteAuthority?.(req);
+    const context = { signal: req.signal, authorise };
     const parsed = await parseJsonObjectRequest(req);
     if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
 
@@ -555,7 +544,7 @@ export class WebAgentControlPlaneService {
     if (!agentName) return this.options.json({ error: "Missing agent_name" }, 400);
 
     try {
-      const branch = await this.options.agentPool.createRootChatSession?.(agentName);
+      const branch = await this.options.agentPool.createRootChatSession?.(agentName, context);
       if (!branch) {
         return this.options.json({ error: "Root session creation is not available." }, 501);
       }
@@ -567,6 +556,8 @@ export class WebAgentControlPlaneService {
   }
 
   async handleAgentBranchRename(req: Request): Promise<Response> {
+    const authorise = this.options.captureWriteAuthority?.(req);
+    const context = { signal: req.signal, authorise };
     const parsed = await parseJsonObjectRequest(req);
     if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
 
@@ -579,6 +570,7 @@ export class WebAgentControlPlaneService {
 
     try {
       const branch = await this.options.agentPool.renameChatBranch?.(chatJid, {
+        ...context,
         agentName: payload.agent_name ?? null,
       });
       if (!branch) {
@@ -598,6 +590,8 @@ export class WebAgentControlPlaneService {
   }
 
   async handleAgentRenameJid(req: Request): Promise<Response> {
+    const authorise = this.options.captureWriteAuthority?.(req);
+    const context = { signal: req.signal, authorise };
     const parsed = await parseJsonObjectRequest(req);
     if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
 
@@ -608,7 +602,7 @@ export class WebAgentControlPlaneService {
     if (!newJid) return this.options.json({ error: "Missing new_jid" }, 400);
 
     try {
-      const result = await this.options.agentPool.renameChatJid?.(oldJid, newJid);
+      const result = await this.options.agentPool.renameChatJid?.(oldJid, newJid, context);
       if (!result) {
         return this.options.json({ error: "JID renaming is not available." }, 501);
       }
@@ -625,6 +619,8 @@ export class WebAgentControlPlaneService {
   }
 
   async handleAgentBranchMergeParent(req: Request): Promise<Response> {
+    const authorise = this.options.captureWriteAuthority?.(req);
+    const context = { signal: req.signal, authorise };
     const parsed = await parseJsonObjectRequest(req);
     if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
 
@@ -635,7 +631,7 @@ export class WebAgentControlPlaneService {
     }
 
     try {
-      const result = await this.options.agentPool.mergeChatBranchIntoParent?.(chatJid);
+      const result = await this.options.agentPool.mergeChatBranchIntoParent?.(chatJid, context);
       if (!result) {
         return this.options.json({ error: "Branch merge is not available." }, 501);
       }
@@ -647,6 +643,8 @@ export class WebAgentControlPlaneService {
   }
 
   async handleAgentBranchPrune(req: Request): Promise<Response> {
+    const authorise = this.options.captureWriteAuthority?.(req);
+    const context = { signal: req.signal, authorise };
     const parsed = await parseJsonObjectRequest(req);
     if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
 
@@ -657,7 +655,7 @@ export class WebAgentControlPlaneService {
     }
 
     try {
-      const branch = await this.options.agentPool.pruneChatBranch?.(chatJid);
+      const branch = await this.options.agentPool.pruneChatBranch?.(chatJid, context);
       if (!branch) {
         return this.options.json({ error: "Branch pruning is not available." }, 501);
       }
@@ -696,6 +694,8 @@ export class WebAgentControlPlaneService {
   }
 
   async handleAgentBranchPurge(req: Request): Promise<Response> {
+    const authorise = this.options.captureWriteAuthority?.(req);
+    const context = { signal: req.signal, authorise };
     const parsed = await parseJsonObjectRequest(req);
     if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
 
@@ -706,7 +706,7 @@ export class WebAgentControlPlaneService {
     }
 
     try {
-      const result = await this.options.agentPool.permanentPurgeChatBranch?.(chatJid);
+      const result = await this.options.agentPool.permanentPurgeChatBranch?.(chatJid, context);
       if (!result) {
         return this.options.json({ error: "Archived-branch purge is not available." }, 501);
       }
@@ -718,6 +718,8 @@ export class WebAgentControlPlaneService {
   }
 
   async handleAgentBranchRestore(req: Request): Promise<Response> {
+    const authorise = this.options.captureWriteAuthority?.(req);
+    const context = { signal: req.signal, authorise };
     const parsed = await parseJsonObjectRequest(req);
     if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
 
@@ -729,6 +731,7 @@ export class WebAgentControlPlaneService {
 
     try {
       const branch = await this.options.agentPool.restoreChatBranch?.(chatJid, {
+        ...context,
         ...(typeof payload.agent_name === "string" ? { agentName: payload.agent_name } : {}),
       });
       if (!branch) {

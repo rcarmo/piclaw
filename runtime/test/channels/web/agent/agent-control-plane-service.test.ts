@@ -99,6 +99,55 @@ function createService(overrides: Partial<ConstructorParameters<typeof WebAgentC
   });
 }
 
+for (const [handler, method, payload, contextIndex] of [
+  ['handleAgentRootSessionCreate', 'createRootChatSession', { agent_name: 'new-root' }, 1],
+  ['handleAgentBranchRename', 'renameChatBranch', { chat_jid: 'web:control', agent_name: 'renamed' }, 1],
+  ['handleAgentRenameJid', 'renameChatJid', { old_jid: 'web:control', new_jid: 'web:renamed' }, 2],
+  ['handleAgentBranchMergeParent', 'mergeChatBranchIntoParent', { chat_jid: 'web:control' }, 1],
+  ['handleAgentBranchPrune', 'pruneChatBranch', { chat_jid: 'web:control' }, 1],
+  ['handleAgentBranchPurge', 'permanentPurgeChatBranch', { chat_jid: 'web:control' }, 1],
+  ['handleAgentBranchRestore', 'restoreChatBranch', { chat_jid: 'web:control', agent_name: 'restored' }, 1],
+] as const) for (const revoked of [false, true]) {
+  test(`branch HTTP captures original authority before JSON and forwards request cancellation: ${method}/${revoked}`, async () => {
+    const events: string[] = [];
+    let current = 1, captures = 0, applied = 0;
+    let release!: () => void;
+    const parsed = new Promise<void>(resolve => { release = resolve; });
+    const req = abortRequest(payload), read = req.json.bind(req);
+    req.json = async () => { events.push('parse'); await parsed; return read(); };
+    let captured!: () => void;
+    const branch = { chat_jid: 'web:control', agent_name: 'fixture' };
+    const service = createService({
+      captureWriteAuthority(request) {
+        expect(request).toBe(req); events.push('capture'); captures++;
+        const version = current;
+        captured = () => { if (current !== version) throw Error('original request revoked'); };
+        return captured;
+      },
+      agentPool: { [method]: async (...args: unknown[]) => {
+        events.push('pool');
+        const context = args[contextIndex] as { signal: AbortSignal; authorise: () => void };
+        expect(context.signal).toBe(req.signal); expect(context.authorise).toBe(captured);
+        context.authorise(); applied++;
+        return method === 'renameChatJid' ? { oldJid: 'web:control', newJid: 'web:renamed', branch }
+          : method === 'mergeChatBranchIntoParent' ? { source: branch, parent: branch, counts: {} }
+            : method === 'permanentPurgeChatBranch' ? { branch, removedSessionArtifacts: [] } : branch;
+      } } as any,
+    });
+    const pending = service[handler](req);
+    try {
+      expect(events).toEqual(['capture', 'parse']);
+      if (revoked) current++;
+      release();
+      const response = await pending;
+      expect(response.status).toBe(revoked ? 400 : method === 'createRootChatSession' ? 201 : 200);
+      if (revoked) expect((await response.json() as { error: string }).error).toContain('original request revoked');
+      expect(captures).toBe(1); expect(applied).toBe(revoked ? 0 : 1);
+      expect(events).toEqual(['capture', 'parse', 'pool']);
+    } finally { release(); await pending; }
+  });
+}
+
 describe("native abort terminal status ownership", () => {
   for (const scenario of ["idle", "successor", "failure", "compaction"] as const) {
     test(`${scenario}: only a settled abort may clear its captured status`, async () => {

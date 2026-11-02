@@ -1,4 +1,5 @@
-import { admitSqliteWrite } from "../db/sqlite-async-admission.js";
+import { admitSqliteWrite, type SyncSqliteOperation } from "../db/sqlite-async-admission.js";
+import type { Database } from "bun:sqlite";
 import { hasNativeRouting, requireLegacyRoutingMutation, assertNativeRootCreation } from "../db/native-routing-policy.js";
 /**
  * agent-pool/branch-manager.ts – Branch identity, listing, and fork lifecycle helpers.
@@ -63,6 +64,12 @@ export interface ActiveChatAgent {
   activity_status: "idle" | "streaming" | "compacting" | "retrying" | "bash_running";
   activity_label: string;
   has_side_session: boolean;
+}
+
+/** Captured server request authority. Checks must be synchronous, read-only and repeatable. */
+export interface BranchMutationContext {
+  readonly signal?: AbortSignal;
+  readonly authorise?: () => void;
 }
 
 /** Dependencies required for branch/session coordination. */
@@ -247,6 +254,21 @@ export function removeSessionArtifacts(chatJid: string): string[] {
 export class AgentBranchManager {
   constructor(private readonly options: AgentBranchManagerOptions) {}
 
+  /** Lifecycle publication requires this admission to own the physical commit. */
+  private admitMutation<T>(database: Database, operation: SyncSqliteOperation<T>,
+    context: BranchMutationContext, checkAction: () => void): Promise<T> {
+    const { signal, authorise } = context;
+    const check = () => {
+      if (getDb() !== database) throw new ChatAccessDenied();
+      authorise?.(); checkAction();
+    };
+    return admitSqliteWrite<T>(database, operation, check, signal, undefined, () => {
+      if (getDb() !== database) throw new ChatAccessDenied();
+      if (database.inTransaction) throw Error('Branch mutation requires an outermost transaction');
+      check();
+    });
+  }
+
   ensureBranchRegistration(chatJid: string, session?: AgentSession | null): ChatBranchRecord {
     try {
       const existing = getChatBranchByChatJid(chatJid);
@@ -269,11 +291,11 @@ export class AgentBranchManager {
 
   async renameChatBranch(
     chatJid: string,
-    options: { agentName?: string | null } = {},
+    options: BranchMutationContext & { agentName?: string | null } = {},
   ): Promise<ChatBranchRecord> {
     const session = this.options.pool.get(chatJid)?.runtime.session ?? null;
     const database = getDb(), agentName = options.agentName;
-    const renamed = await admitSqliteWrite(database, () => {
+    const renamed = await this.admitMutation(database, () => {
       const owner = requireOwnedSessionExecution(chatJid);
       if (owner) {
         renameOwnedSessionHandle(database, owner, chatJid, agentName ?? "");
@@ -281,7 +303,7 @@ export class AgentBranchManager {
       }
       this.ensureBranchRegistration(chatJid, session);
       return renameChatBranchIdentity({ chat_jid: chatJid, agent_name: agentName });
-    }, () => { if (getDb() !== database) throw new ChatAccessDenied(); });
+    }, options, () => { requireOwnedSessionExecution(chatJid); });
 
     if (session && !hasNativeRouting(getDb())) {
       try {
@@ -307,6 +329,7 @@ export class AgentBranchManager {
   async renameChatJid(
     oldJid: string,
     newJid: string,
+    context: BranchMutationContext = {},
   ): Promise<{ oldJid: string; newJid: string; branch: ChatBranchRecord }> {
     if (readAccessConfig().mode !== "single-user") throw new ChatAccessDenied();
     const old = String(oldJid || "").trim();
@@ -321,12 +344,23 @@ export class AgentBranchManager {
       throw new Error("Cannot rename a chat while it has an active turn.");
     }
 
-    const result = renameChatJidDb(old, next);
-    // Snapshot descendants before any disposal await; replacements are not
-    // cleanup targets, even when inserted while the main session is closing.
-    const entries = [...this.options.pool].filter(([jid]) => jid === old || isDescendantChatJid(old, jid));
-    this.options.activeForkBaseLeafByChat.delete(old);
-    this.options.cancelSessionWarmup?.(old);
+    const database = getDb();
+    const { result, entries } = await this.admitMutation(database, () => ({
+      result: renameChatJidDb(old, next),
+      entries: [...this.options.pool].filter(([jid]) => jid === old || isDescendantChatJid(old, jid)),
+    }), context, () => {
+      if (readAccessConfig().mode !== 'single-user') throw new ChatAccessDenied();
+      requireLegacyRoutingMutation(database, 'address rename');
+      if (this.options.isActive(old) || [...this.options.pool.keys()].some(jid => isDescendantChatJid(old, jid) && this.options.isActive(jid)))
+        throw Error('Cannot rename a chat while it has an active turn.');
+    });
+    // Entries were captured in SQL scope, before admission can yield after
+    // commit. Do not adopt a replacement or clear its freshly published state.
+    const mainEntry = entries.find(([jid]) => jid === old)?.[1];
+    if (this.options.pool.get(old) === mainEntry) {
+      this.options.activeForkBaseLeafByChat.delete(old);
+      this.options.cancelSessionWarmup?.(old);
+    }
     for (const [jid, entry] of entries) {
       try { await entry.runtime.dispose(); }
       catch (e) { debugSuppressedError(log, "best-effort dispose failed for renamed session", e, { jid }); }
@@ -360,9 +394,9 @@ export class AgentBranchManager {
     return result;
   }
 
-  async createRootChatSession(agentName: string): Promise<ChatBranchRecord> {
+  async createRootChatSession(agentName: string, context: BranchMutationContext = {}): Promise<ChatBranchRecord> {
     const database = getDb();
-    const branch = await admitSqliteWrite(database, () => {
+    const branch = await this.admitMutation(database, () => {
       const native = hasNativeRouting(database);
       if (native) assertNativeRootCreation(database);
       if (readAccessConfig().mode !== "single-user") throw new ChatAccessDenied();
@@ -375,13 +409,14 @@ export class AgentBranchManager {
       if (byHandle && !byHandle.archived_at) throw new Error(`Session handle already exists: @${normalized}`);
       storeChatMetadata(chatJid, new Date().toISOString(), normalized);
       return ensureChatBranch({chat_jid:chatJid, root_chat_jid:chatJid, parent_branch_id:null, agent_name:normalized});
-    }, () => { if (getDb() !== database || readAccessConfig().mode !== "single-user") throw new ChatAccessDenied(); });
+    }, context, () => { if (readAccessConfig().mode !== "single-user") throw new ChatAccessDenied(); });
     if (!hasNativeRouting(database)) this.options.scheduleSessionWarmup?.(branch.chat_jid);
     return branch;
   }
 
   async mergeChatBranchIntoParent(
     chatJid: string,
+    context: BranchMutationContext = {},
   ): Promise<ReturnType<typeof mergeChatBranchIntoParentDb>> {
     requireLegacyRoutingMutation(getDb(), "legacy merge");
     if (readAccessConfig().mode !== "single-user") throw new ChatAccessDenied();
@@ -391,10 +426,19 @@ export class AgentBranchManager {
       throw new Error("Cannot merge a chat branch while it has an active turn.");
     }
 
-    const result = mergeChatBranchIntoParentDb(normalizedChatJid);
-    const mainEntry = this.options.pool.get(normalizedChatJid);
-    this.options.activeForkBaseLeafByChat.delete(normalizedChatJid);
-    this.options.cancelSessionWarmup?.(normalizedChatJid);
+    const database = getDb();
+    const { result, mainEntry } = await this.admitMutation(database, () => ({
+      result: mergeChatBranchIntoParentDb(normalizedChatJid),
+      mainEntry: this.options.pool.get(normalizedChatJid),
+    }), context, () => {
+      if (readAccessConfig().mode !== 'single-user') throw new ChatAccessDenied();
+      requireLegacyRoutingMutation(database, 'legacy merge');
+      if (this.options.isActive(normalizedChatJid)) throw Error('Cannot merge a chat branch while it has an active turn.');
+    });
+    if (this.options.pool.get(normalizedChatJid) === mainEntry) {
+      this.options.activeForkBaseLeafByChat.delete(normalizedChatJid);
+      this.options.cancelSessionWarmup?.(normalizedChatJid);
+    }
     if (mainEntry) {
       try { await mainEntry.runtime.dispose(); } catch (e) { debugSuppressedError(log, "best-effort dispose failed for merged session", e, { jid: normalizedChatJid }); }
       if (this.options.pool.get(normalizedChatJid) === mainEntry) this.options.pool.delete(normalizedChatJid);
@@ -411,9 +455,9 @@ export class AgentBranchManager {
     return result;
   }
 
-  async pruneChatBranch(chatJid: string): Promise<ChatBranchRecord> {
+  async pruneChatBranch(chatJid: string, context: BranchMutationContext = {}): Promise<ChatBranchRecord> {
     const database = getDb();
-    const archived = await admitSqliteWrite(database, () => {
+    const { archived, mainEntry } = await this.admitMutation(database, () => {
       if (readAccessConfig().mode !== "single-user") throw new ChatAccessDenied();
       const session = this.options.pool.get(chatJid)?.runtime.session ?? null;
       const existing = this.ensureBranchRegistration(chatJid, session);
@@ -425,12 +469,13 @@ export class AgentBranchManager {
         throw new Error(isRootChat ? "Cannot archive a session while it is active." : "Cannot prune a branch while it is active.");
       }
 
-      return archiveChatBranch(chatJid);
-    }, () => { if (getDb() !== database || readAccessConfig().mode !== "single-user") throw new ChatAccessDenied(); });
-    const mainEntry = this.options.pool.get(chatJid);
-    this.options.activeForkBaseLeafByChat.delete(chatJid);
-    // Cancel prewarm only after archival committed and before disposal yields.
-    this.options.cancelSessionWarmup?.(chatJid);
+      return { archived: archiveChatBranch(chatJid), mainEntry: this.options.pool.get(chatJid) };
+    }, context, () => { if (readAccessConfig().mode !== "single-user") throw new ChatAccessDenied(); });
+    if (this.options.pool.get(chatJid) === mainEntry) {
+      this.options.activeForkBaseLeafByChat.delete(chatJid);
+      // Cancel prewarm only for the generation captured before commit.
+      this.options.cancelSessionWarmup?.(chatJid);
+    }
     if (mainEntry) {
       try {
         await mainEntry.runtime.dispose();
@@ -452,6 +497,7 @@ export class AgentBranchManager {
 
   async permanentPurgeChatBranch(
     chatJid: string,
+    context: BranchMutationContext = {},
   ): Promise<{ branch: ChatBranchRecord; removedSessionArtifacts: string[] }> {
     if (readAccessConfig().mode !== "single-user") throw new ChatAccessDenied();
     requireLegacyRoutingMutation(getDb(), "legacy purge");
@@ -466,10 +512,19 @@ export class AgentBranchManager {
       throw new Error(`Unknown chat branch: ${normalizedChatJid}`);
     }
 
-    const result = permanentDeleteArchivedBranch(normalizedChatJid);
-    const mainEntry = this.options.pool.get(normalizedChatJid);
-    this.options.activeForkBaseLeafByChat.delete(normalizedChatJid);
-    this.options.cancelSessionWarmup?.(normalizedChatJid);
+    const database = getDb();
+    const { result, mainEntry } = await this.admitMutation(database, () => ({
+      result: permanentDeleteArchivedBranch(normalizedChatJid),
+      mainEntry: this.options.pool.get(normalizedChatJid),
+    }), context, () => {
+      if (readAccessConfig().mode !== 'single-user') throw new ChatAccessDenied();
+      requireLegacyRoutingMutation(database, 'legacy purge');
+      if (this.options.isActive(normalizedChatJid)) throw Error('Cannot permanently delete a branch while it is active.');
+    });
+    if (this.options.pool.get(normalizedChatJid) === mainEntry) {
+      this.options.activeForkBaseLeafByChat.delete(normalizedChatJid);
+      this.options.cancelSessionWarmup?.(normalizedChatJid);
+    }
     if (mainEntry) {
       try {
         await mainEntry.runtime.dispose();
@@ -502,12 +557,16 @@ export class AgentBranchManager {
 
   async restoreChatBranch(
     chatJid: string,
-    options: { agentName?: string | null } = {},
+    options: BranchMutationContext & { agentName?: string | null } = {},
   ): Promise<ChatBranchRecord> {
     if (readAccessConfig().mode !== "single-user") throw new ChatAccessDenied();
-    const restored = restoreChatBranchIdentity({
+    const database = getDb(), agentName = options.agentName;
+    const restored = await this.admitMutation(database, () => restoreChatBranchIdentity({
       chat_jid: chatJid,
-      ...(options.agentName !== undefined ? { agent_name: options.agentName } : {}),
+      ...(agentName !== undefined ? { agent_name: agentName } : {}),
+    }), options, () => {
+      if (readAccessConfig().mode !== 'single-user') throw new ChatAccessDenied();
+      requireLegacyRoutingMutation(database, 'legacy restore');
     });
 
     try {

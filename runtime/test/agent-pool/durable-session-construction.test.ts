@@ -290,7 +290,7 @@ test("durable shutdown remains host-only without legacy session construction", a
   }
 });
 
-for (const binding of ["missing", "foreign", "stale", "current"] as const) {
+for (const binding of ["missing", "foreign", "stale", "current", "cancelled", "revoked"] as const) {
   test(`native restore ${binding} binding retains metadata atomicity without legacy construction`, async () => {
     initDatabase();
     const chat = `web:native-restore-${binding}`;
@@ -315,15 +315,19 @@ for (const binding of ["missing", "foreign", "stale", "current"] as const) {
       const databaseBefore = getDb().serialize();
       const snapshot = () => { try { return readdirSync(SESSIONS_DIR, { recursive: true }).sort(); } catch { return []; } };
       const filesBefore = snapshot();
+      const controller = new AbortController();
+      if (binding === 'cancelled') controller.abort(Error('native restore stopped'));
+      const context = { signal: controller.signal, authorise() { if (binding === 'revoked') throw Error('native request revoked'); } };
       if (binding === "current") {
-        const restored = await pool.restoreChatBranch(chat, { agentName: "restored-native-handle" });
+        const restored = await pool.restoreChatBranch(chat, { agentName: "restored-native-handle", ...context });
         expect(restored).toMatchObject({ branch_id: archived.branch_id, chat_jid: chat, root_chat_jid: archived.root_chat_jid,
           parent_branch_id: archived.parent_branch_id, archived_at: null, agent_name: "restored-native-handle" });
         expect(getChatBranchByChatJid(chat)).toEqual(restored);
         expect(ownerChecks).toBe(1);
       } else {
-        await expect(pool.restoreChatBranch(chat, { agentName: "must-rollback" })).rejects.toThrow(
-          binding === "stale" ? "fixture native owner stale" : "Exact native restore binding unavailable");
+        await expect(pool.restoreChatBranch(chat, { agentName: "must-rollback", ...context })).rejects.toThrow(
+          binding === 'cancelled' ? 'native restore stopped' : binding === 'revoked' ? 'native request revoked'
+            : binding === "stale" ? "fixture native owner stale" : "Exact native restore binding unavailable");
         expect(getDb().serialize()).toEqual(databaseBefore);
         expect(getChatBranchByChatJid(chat)).toEqual(archived);
         expect(ownerChecks).toBe(binding === "stale" ? 1 : 0);
