@@ -31,11 +31,9 @@ describe("process chat control runtime", () => {
     let drops = 0, broadcasts = 0;
     const channel = { peekQueuedFollowupItem: () => item, admitMessage: async () => null,
       consumeQueuedFollowupItem() { drops++; return item; },
-      replaceQueuedFollowupItem(_chat: string, replacement: QueuedFollowupItem) { item = replacement; return true; },
       broadcastEvent() { broadcasts++; } } as unknown as QueuedFollowupMaterializationRuntime;
-    const result = await materializeDeferredFollowups({ channel, chatJid: 'web:test', agentId: 'default' });
-    expect(result.status).toBe('retried');
-    expect(item.materializeRetries).toBe(6);
+    await expect(materializeDeferredFollowups({ channel, chatJid: 'web:test', agentId: 'default' })).rejects.toThrow('committed row');
+    expect(item.materializeRetries).toBe(5);
     expect(item.source_accepted).toBe(true);
     expect(drops).toBe(0);
     expect(broadcasts).toBe(0);
@@ -321,13 +319,6 @@ describe("process chat control runtime", () => {
       prependQueuedFollowupItem: (chatJid, item) => {
         expect(chatJid).toBe("web:test");
         queued.unshift(item);
-      },
-      replaceQueuedFollowupItem: (chatJid, item) => {
-        expect(chatJid).toBe("web:test");
-        const index = queued.findIndex((entry) => entry.rowId === item.rowId);
-        if (index < 0) return false;
-        queued[index] = item;
-        return true;
       },
       admitMessage: async (_chatJid, content, _isBot, _mediaIds, options) => {
         const queuedIndex = queued.findIndex((item) => item.rowId === options?.consumeDeferredFollowupRowId);

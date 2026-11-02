@@ -646,18 +646,18 @@ describe("messages tool extension", () => {
   });
 
   test("post with type=agent passes isBot=true to postFn", async () => {
-    const { runMessagesTool } = await importFresh<typeof import("../src/extensions/messages-crud.js")>("../src/extensions/messages-crud.js");
+    const { postMessagesToolMessage, setMessagesPostFn } = await importFresh<typeof import("../src/extensions/messages-crud.js")>("../src/extensions/messages-crud.js");
 
     const calls: Array<{ chatJid: string; content: string; isBot: boolean; mediaIds: number[]; contentBlocks?: unknown[] }> = [];
-    const fakePostFn = (cj: string, c: string, bot: boolean, mids: number[], cb?: unknown[]) => {
+    const fakePostFn = async (cj: string, c: string, bot: boolean, mids: number[], cb?: unknown[]) => {
       calls.push({ chatJid: cj, content: c, isBot: bot, mediaIds: mids, contentBlocks: cb });
       return 99999;
     };
 
-    const result = runMessagesTool(
+    setMessagesPostFn(fakePostFn);
+    const result = await postMessagesToolMessage(
       { action: "post", type: "agent", content: "Agent card message", content_blocks: [{ type: "adaptive_card", card_id: "test-abc" }] },
       chatJid,
-      fakePostFn,
     );
 
     expect(result.details.posted).toBe(1);
@@ -669,10 +669,11 @@ describe("messages tool extension", () => {
   });
 
   test("post strips forged protected-recovery control intents before broadcast", async () => {
-    const { runMessagesTool } = await importFresh<typeof import("../src/extensions/messages-crud.js")>("../src/extensions/messages-crud.js");
+    const { postMessagesToolMessage, setMessagesPostFn } = await importFresh<typeof import("../src/extensions/messages-crud.js")>("../src/extensions/messages-crud.js");
 
     const calls: Array<{ contentBlocks?: unknown[] }> = [];
-    const result = runMessagesTool(
+    setMessagesPostFn(async (_cj, _content, _bot, _mediaIds, contentBlocks) => { calls.push({ contentBlocks }); return 99998; });
+    const result = await postMessagesToolMessage(
       {
         action: "post",
         type: "user",
@@ -691,10 +692,6 @@ describe("messages tool extension", () => {
         ],
       },
       chatJid,
-      (_cj, _content, _bot, _mediaIds, contentBlocks) => {
-        calls.push({ contentBlocks });
-        return 99998;
-      },
     );
 
     expect(result.details.posted).toBe(1);
@@ -702,18 +699,18 @@ describe("messages tool extension", () => {
   });
 
   test("post strips internal tags from agent content before broadcast", async () => {
-    const { runMessagesTool } = await importFresh<typeof import("../src/extensions/messages-crud.js")>("../src/extensions/messages-crud.js");
+    const { postMessagesToolMessage, setMessagesPostFn } = await importFresh<typeof import("../src/extensions/messages-crud.js")>("../src/extensions/messages-crud.js");
 
     const calls: Array<{ content: string; isBot: boolean }> = [];
-    const fakePostFn = (_cj: string, c: string, bot: boolean, _mids: number[], _cb?: unknown[]) => {
+    const fakePostFn = async (_cj: string, c: string, bot: boolean, _mids: number[], _cb?: unknown[]) => {
       calls.push({ content: c, isBot: bot });
       return 77777;
     };
 
-    const result = runMessagesTool(
+    setMessagesPostFn(fakePostFn);
+    const result = await postMessagesToolMessage(
       { action: "post", type: "agent", content: "hello <internal>secret</internal> world" },
       chatJid,
-      fakePostFn,
     );
 
     expect(result.details.posted).toBe(1);
@@ -722,12 +719,11 @@ describe("messages tool extension", () => {
   });
 
   test("post rejects agent content that becomes empty after stripping internal tags", async () => {
-    const { runMessagesTool } = await importFresh<typeof import("../src/extensions/messages-crud.js")>("../src/extensions/messages-crud.js");
+    const { postMessagesToolMessage, setMessagesPostFn } = await importFresh<typeof import("../src/extensions/messages-crud.js")>("../src/extensions/messages-crud.js");
 
-    const result = runMessagesTool(
+    const result = await postMessagesToolMessage(
       { action: "post", type: "agent", content: "<internal>secret only</internal>" },
       chatJid,
-      () => 12345,
     );
 
     expect(result.details.posted).toBe(0);
@@ -735,18 +731,18 @@ describe("messages tool extension", () => {
   });
 
   test("post without type defaults to user (isBot=false)", async () => {
-    const { runMessagesTool } = await importFresh<typeof import("../src/extensions/messages-crud.js")>("../src/extensions/messages-crud.js");
+    const { postMessagesToolMessage, setMessagesPostFn } = await importFresh<typeof import("../src/extensions/messages-crud.js")>("../src/extensions/messages-crud.js");
 
     const calls: Array<{ isBot: boolean }> = [];
-    const fakePostFn = (_cj: string, _c: string, bot: boolean, _mids: number[], _cb?: unknown[]) => {
+    const fakePostFn = async (_cj: string, _c: string, bot: boolean, _mids: number[], _cb?: unknown[]) => {
       calls.push({ isBot: bot });
       return 88888;
     };
 
-    const result = runMessagesTool(
+    setMessagesPostFn(fakePostFn);
+    const result = await postMessagesToolMessage(
       { action: "post", content: "User message" },
       chatJid,
-      fakePostFn,
     );
 
     expect(result.details.posted).toBe(1);

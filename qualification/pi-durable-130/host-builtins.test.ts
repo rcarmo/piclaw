@@ -193,7 +193,8 @@ test('private Dream tools: message post awaits committed storage before the regi
   const {initDatabase,getDb,closeDatabase}=await import('../../runtime/src/db/connection.js');initDatabase();
   const {admitSqliteWrite}=await import('../../runtime/src/db/sqlite-async-admission.js');
   const {storeChatMetadata,storeMessage}=await import('../../runtime/src/db.js');const chat='dream:private-broadcast-fixture';storeChatMetadata(chat,new Date().toISOString());
-  let broadcasts=0;setMessagesPostFn(()=>{throw Error('Legacy synchronous post must not enter native SQL');},async(chatJid,content,isBot,_media,_blocks,authorise,signal)=>{
+  let broadcasts=0;setMessagesPostFn(async(chatJid,content,isBot,_media,_blocks,authorise,signal)=>{
+    if (!authorise) throw Error('Native source authority missing');
     const row=await admitSqliteWrite(getDb(),()=>storeMessage({id:'dream-broadcast-fixture',chat_jid:chatJid,sender:'fixture',sender_name:'Fixture',content,timestamp:new Date().toISOString(),is_from_me:isBot,is_bot_message:isBot}),authorise,signal);
     expect(getDb().inTransaction).toBe(false);broadcasts++;return row;
   });

@@ -13,7 +13,7 @@ import type { WebSessionBroadcastService } from "../sse/session-broadcast-servic
 
 type WebChannelRuntimePublicSurfaceStorage = Pick<
   WebMessageProcessingStorageService,
-  "processChat" | "storeMessage" | "admitMessage"
+  "processChat" | "admitMessage"
 >;
 
 type WebChannelRuntimePublicSurfaceBroadcast = Pick<
@@ -194,7 +194,7 @@ export interface WebChannelRuntimePublicSurfaceChannel extends WebChannelRuntime
   messageWriteService: Pick<WebMessageWriteService, "sendMessage" | "postDashboardWidget">;
   queuedFollowupLifecycle: Pick<QueuedFollowupLifecycleService,
     "enqueueQueuedFollowupItem" | "admitQueuedFollowupItem" | "peekQueuedFollowupItem" | "consumeQueuedFollowupItem" |
-    "prependQueuedFollowupItem" | "replaceQueuedFollowupItem" | "getQueuedFollowupCount" | "getQueuedFollowupItems" | "removeQueuedFollowupItem">;
+    "prependQueuedFollowupItem" | "getQueuedFollowupCount" | "getQueuedFollowupItems" | "removeQueuedFollowupItem">;
   readonly runtimeState: Pick<WebChannelRuntimeStateService,
     "updateAgentStatus" | "getAgentStatus" | "getThreadRootId" | "resumeChat" | "resumePendingChats" |
     "setPanelExpanded" | "isPanelExpanded" | "updateThoughtBuffer" | "updateDraftBuffer" | "getBuffer">;
@@ -383,10 +383,6 @@ export class WebChannelRuntimePublicSurfaceService {
     this.channel.queuedFollowupLifecycle.prependQueuedFollowupItem(chatJid, item);
   }
 
-  replaceQueuedFollowupItem(chatJid: string, item: QueuedFollowupItem): boolean {
-    return this.channel.queuedFollowupLifecycle.replaceQueuedFollowupItem(chatJid, item);
-  }
-
   getQueuedFollowupCount(chatJid: string): number {
     return this.channel.queuedFollowupLifecycle.getQueuedFollowupCount(chatJid);
   }
@@ -464,24 +460,6 @@ export class WebChannelRuntimePublicSurfaceService {
     return this.channel.messageProcessingStorageService.admitMessage(...args);
   }
 
-  storeMessage(
-    chatJid: string,
-    content: string,
-    isBot: boolean,
-    mediaIds: number[],
-    options: {
-      contentBlocks?: unknown[];
-      linkPreviews?: unknown[];
-      threadId?: number;
-      screenHint?: string | null;
-      isTerminalAgentReply?: boolean;
-      isSteeringMessage?: boolean;
-      removeProtectedContinuationForSourceMessageId?: string | null;
-      consumeDeferredFollowupRowId?: number | null;
-    } = {},
-  ): InteractionRow | null {
-    return this.channel.messageProcessingStorageService.storeMessage(chatJid, content, isBot, mediaIds, options);
-  }
 }
 
 export function createWebChannelRuntimePublicSurfaceService(

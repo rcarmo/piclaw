@@ -1,14 +1,7 @@
 import { getExecutionIdentity } from "../../../core/execution-context.js";
 import { bindAddonLocalMessage } from "../../../addons/local-dispatch.js";
-/**
- * web/message-store.ts – Database operations for web-channel messages.
- *
- * Wraps db/messages.ts with web-channel-specific logic: generating message
- * IDs, attaching media, and handling content blocks. Serves as the data
- * access layer for all web-channel message CRUD operations.
- *
- * Consumers: web/posts-service.ts, web/agent-message-service.ts.
- */
+/** Admitted web timeline writes. Message, media, source attachment and queue
+ * consumption share one synchronous SQL body after asynchronous acquisition. */
 
 import {
   attachMediaToMessage,
@@ -84,7 +77,7 @@ export interface StoreWebMessageOptions {
   acceptSource?: (stored: Readonly<{ message: Readonly<NewMessage>; rowId: number; database: Database }>) => void;
 }
 
-/** Resolved parameters for storeWebMessage (after defaults applied). */
+/** Resolved timeline message parameters (after defaults applied). */
 export interface StoreWebMessageParams {
   chatJid: string;
   content: string;
@@ -267,19 +260,6 @@ function writePreparedWebMessage(prepared: PreparedWebMessage): CommittedWebMess
   const committed = { params, options, msg, rowId, contentBlocks, allMediaIds };
   const interaction = buildWebInteraction(committed);
   return { ...committed, interaction };
-}
-
-/** Store a web channel message synchronously for existing internal callers. */
-export function storeWebMessage(channel: LinkPreviewChannel, params: StoreWebMessageParams, options: StoreWebMessageOptions = {}): InteractionRow | null {
-  if (readAccessConfig().mode !== "single-user") {
-    if (!params.isBot) return null;
-    try { requireOwnedSessionExecution(params.chatJid); } catch { return null; }
-  }
-  const prepared = prepareWebMessage(params, options);
-  let committed: CommittedWebMessage;
-  try { committed = getDb().transaction(() => writePreparedWebMessage(prepared)).immediate(); }
-  catch { return null; }
-  return finishWebMessage(channel, committed);
 }
 
 /** One admitted timeline writer. Source/queue callbacks remain SQL-only and atomic. */

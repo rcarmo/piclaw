@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { admitWebMessage, storeWebMessage } from '../../../../src/channels/web/messaging/message-store.js';
+import { admitWebMessage } from '../../../../src/channels/web/messaging/message-store.js';
 import { handleAgentMessage } from '../../../../src/channels/web/handlers/agent.js';
 import { initDatabase, getDb, getDeferredQueuedFollowups, createMedia, getMessagesSince } from '../../../../src/db.js';
 import { QueuedFollowupLifecycleService } from '../../../../src/channels/web/runtime/queued-followup-lifecycle-service.js';
@@ -25,7 +25,7 @@ function fixture(queue: AgentQueue) {
     resumeChat: () => { state.wakes++; },
     queuePendingSteering: (_chat: string, timestamp: string) => state.pendingSteering.push(timestamp),
     admitQueuedFollowupItem: queued.admitQueuedFollowupItem.bind(queued),
-    storeMessage: (chat: string, content: string, isBot: boolean, media: number[], options: any) => storeWebMessage(channel, { chatJid: chat, content, isBot, mediaIds: media, agentId: 'default', agentName: 'Fixture', agentAvatar: '', userName: null, userAvatar: '', userAvatarBackground: null }, options),
+
     admitMessage: (chat: string, content: string, _isBot: boolean, media: number[], options: any, validate: () => void, signal: AbortSignal, defer: () => boolean) => admitWebMessage(channel, { chatJid: chat, content, isBot: false, mediaIds: media, agentId: 'default', agentName: 'Fixture', agentAvatar: '', userName: null, userAvatar: '', userAvatarBackground: null }, options, validate, signal, defer),
   };
   installNativeQueuePorts(channel, { available: () => state.streaming && state.intentAvailable,

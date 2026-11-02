@@ -422,22 +422,31 @@ for (const [failWait, forks, deferred] of [[false, false, undefined], [false, tr
     }
     if (!failWait && !forks && !deferred) {
       const { QueuedFollowupLifecycleService } = await import("../../runtime/src/channels/web/runtime/queued-followup-lifecycle-service.js");
-      const { storeWebMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
+      const { admitWebMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
       const service = new QueuedFollowupLifecycleService();
       const admission = channel.getQueuedInputSourceAdmission!(chat)!;
       const materialize = channel.getQueuedInputMaterialization!(chat)!;
-      expect(() => db.transaction(() => {
-        const queuedAt = new Date().toISOString(), sourceId = "application-test:materialize";
-        // This fixture has no Goal owner: exercise generic host input, not a
-        // Goal control whose lifecycle cannot be proved here.
-        const queuedRow = service.enqueueAcceptedFollowupOnce(sourceId, chat, "Queued application input", queuedAt, { source: "application.test" }, admission)!;
-        const stored = storeWebMessage(channel, { chatJid: chat, content: "Queued application input", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" },
-          { consumeDeferredFollowupRowId: queuedRow, materializeQueuedSource: materialize });
-        expect(stored).not.toBeNull();
-        expect(db.query("SELECT id FROM messages WHERE id=?").get(sourceId)).toMatchObject({ id: sourceId });
-        throw Error("rollback queued application probe");
-      }).immediate()).toThrow("rollback queued application probe");
-      expect(db.query("SELECT * FROM service_effect_s01_sources WHERE source_id=?").all("application-test:materialize")).toHaveLength(0);
+      const queuedSource = "application-test:materialize";
+      // Acceptance precedes asynchronous materialisation. Its committed source
+      // and intent must survive a failed SQL-only materialisation callback.
+      const queuedRow = db.transaction(() => service.enqueueAcceptedFollowupOnce(queuedSource, chat, "Queued application input",
+        new Date().toISOString(), { source: "application.test" }, admission)).immediate()!;
+      const { getDeferredQueuedFollowups: readQueue } = await import("../../runtime/src/db.js");
+      const acceptedBefore = db.query("SELECT * FROM service_effect_s01_sources WHERE source_id=?").get(queuedSource);
+      const queuedBefore = readQueue(chat);
+      await expect(admitWebMessage(channel, { chatJid: chat, content: "Queued application input", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" },
+        { consumeDeferredFollowupRowId: queuedRow, materializeQueuedSource(stored) {
+          materialize(stored);
+          expect(db.inTransaction).toBe(true);
+          expect(db.query("SELECT id FROM messages WHERE id=?").get(queuedSource)).toMatchObject({ id: queuedSource });
+          throw Error("rollback queued application probe");
+        } })).rejects.toThrow("rollback queued application probe");
+      expect(db.query("SELECT * FROM service_effect_s01_sources WHERE source_id=?").get(queuedSource)).toEqual(acceptedBefore);
+      expect(readQueue(chat)).toEqual(queuedBefore);
+      expect(db.query("SELECT id FROM messages WHERE id=?").get(queuedSource)).toBeNull();
+      expect((await service.removeQueuedFollowupForAction(chat, queuedRow,
+        { withdrawAcceptedSource: channel.getQueuedInputSourceWithdrawal!(chat)! })).removed).not.toBeNull();
+      expect(db.query("SELECT state FROM service_effect_s01_sources WHERE source_id=?").get(queuedSource)).toEqual({ state: "disposed" });
       const sourceId = "application-test:withdraw";
       const rowId = db.transaction(() => service.enqueueAcceptedFollowupOnce(sourceId, chat, "Remove queued input", new Date().toISOString(),
         { source: "application.test" }, admission)).immediate()!;

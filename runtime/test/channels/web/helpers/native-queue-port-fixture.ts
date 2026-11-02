@@ -1,5 +1,5 @@
 import { getDb, getDeferredQueuedFollowups } from "../../../../src/db.js";
-import { storeWebMessage, type QueuedInputMaterialization } from "../../../../src/channels/web/messaging/message-store.js";
+import { admitWebMessage, type QueuedInputMaterialization } from "../../../../src/channels/web/messaging/message-store.js";
 
 /** Host-port double for HTTP/queue UI tests. Real message/queue transactions and
  * source identities, no SDK queues or model effects. Durable integration tests
@@ -30,7 +30,7 @@ export function installNativeQueuePorts(channel: any, options: {
       if (!available(chat)) throw Error("Fixture running binding ended");
       const item = getDeferredQueuedFollowups(chat).find(item => item.rowId === rowId);
       if (!item?.source_accepted || !item.source_id) throw Error("Fixture requires accepted input");
-      const interaction = storeWebMessage(channel, { chatJid: chat, content: item.queuedContent,
+      const interaction = await admitWebMessage(channel, { chatJid: chat, content: item.queuedContent,
         isBot: false, mediaIds: item.mediaIds ?? [], agentId: "default", agentName: "Fixture" }, {
         contentBlocks: item.contentBlocks, linkPreviews: item.linkPreviews, threadId: item.threadId,
         screenHint: item.screenHint, isSteeringMessage: true, consumeDeferredFollowupRowId: rowId,

@@ -2,15 +2,15 @@ import {afterEach,expect,test} from 'bun:test';
 import {createTempWorkspace,setEnv} from '../../../helpers.js';
 import {initDatabase,getDb,closeDatabase} from '../../../../src/db/connection.js';
 import {getMessagesSince} from '../../../../src/db/messages.js';
-import {admitWebMessage,storeWebMessage} from '../../../../src/channels/web/messaging/message-store.js';
+import {admitWebMessage} from '../../../../src/channels/web/messaging/message-store.js';
 import {QueuedFollowupLifecycleService} from '../../../../src/channels/web/runtime/queued-followup-lifecycle-service.js';
 import {materializeDeferredFollowups,selectProcessChatMessage} from '../../../../src/channels/web/runtime/process-chat-control-runtime.js';
 import {handleAgentMessage} from '../../../../src/channels/web/handlers/agent.js';
 let cleanup:()=>void=()=>{};afterEach(()=>{closeDatabase();cleanup();});
 function fixture(){const ws=createTempWorkspace('idle-routing-');const restore=setEnv({PICLAW_WORKSPACE:ws.workspace,PICLAW_STORE:ws.store,PICLAW_DATA:ws.data});cleanup=()=>{restore();ws.cleanup();};initDatabase();const queue=new QueuedFollowupLifecycleService();let busy=false,gates:Promise<void>[]=[],afterCommit:(()=>void)|undefined;const events:string[]=[];let wakes=0;
-const channel={agentPool:{isStreaming:()=>busy,isActive:()=>busy},getQueuedFollowupCount:queue.getQueuedFollowupCount.bind(queue),enqueueQueuedFollowupItem:queue.enqueueQueuedFollowupItem.bind(queue),peekQueuedFollowupItem:queue.peekQueuedFollowupItem.bind(queue),consumeQueuedFollowupItem:queue.consumeQueuedFollowupItem.bind(queue),prependQueuedFollowupItem:queue.prependQueuedFollowupItem.bind(queue),replaceQueuedFollowupItem:queue.replaceQueuedFollowupItem.bind(queue),
+const channel={agentPool:{isStreaming:()=>busy,isActive:()=>busy},getQueuedFollowupCount:queue.getQueuedFollowupCount.bind(queue),enqueueQueuedFollowupItem:queue.enqueueQueuedFollowupItem.bind(queue),peekQueuedFollowupItem:queue.peekQueuedFollowupItem.bind(queue),consumeQueuedFollowupItem:queue.consumeQueuedFollowupItem.bind(queue),prependQueuedFollowupItem:queue.prependQueuedFollowupItem.bind(queue),
 async admitMessage(jid:string,text:string, _isBot: boolean,media:number[],options:unknown,check:()=>void,signal:AbortSignal,defer:()=>boolean){const gate=gates.shift();if(gate)await gate;const result=await admitWebMessage(channel as any,{chatJid:jid,content:text,isBot:false,mediaIds:media,agentId:'default',agentName:'Fixture'},options as any,check,signal,defer);afterCommit?.();return result;},
-storeMessage(jid:string,text:string,isBot:boolean,media:number[],options:unknown){return storeWebMessage(channel as any,{chatJid:jid,content:text,isBot,mediaIds:media,agentId:'default',agentName:'Fixture'},options as any);},broadcastEvent:(type:string)=>events.push(type),resumeChat:()=>{wakes++;},queue:{enqueue:()=>{wakes++;}},json:(value:unknown,status=200)=>Response.json(value,{status})} as any;
+broadcastEvent:(type:string)=>events.push(type),resumeChat:()=>{wakes++;},queue:{enqueue:()=>{wakes++;}},json:(value:unknown,status=200)=>Response.json(value,{status})} as any;
 return{channel,queue,events,get wakes(){return wakes;},busy(value:boolean){busy=value;},gate(promise:Promise<void>){gates.push(promise);},afterCommit(fn:()=>void){afterCommit=fn;}};}
 const request=(content:string)=>new Request('https://fixture/agent/default/message',{method:'POST',body:JSON.stringify({content})});
 const messages=()=>(getDb().query('SELECT count(*) AS n FROM messages').get() as {n:number}).n;

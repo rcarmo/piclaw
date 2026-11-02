@@ -18,7 +18,7 @@ import { nativeBindingRecoveryIndex, nativeBindingRecoveryMigration } from "../.
 
 const cleanup: (() => void)[] = [];
 afterEach(() => { for (const fn of cleanup.splice(0).reverse()) fn(); });
-function fixture(externalAlias = false, persistedBaseline = false, quiescent = false) {
+function fixture(externalAlias = false, persistedBaseline = false, quiescent = false, historicalExit = false) {
   initDatabase();
   const dir = mkdtempSync(join(tmpdir(), "resident-capture-"));
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
@@ -41,15 +41,25 @@ function fixture(externalAlias = false, persistedBaseline = false, quiescent = f
         usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } } : { role: "user", content: id, timestamp: 2 } }))];
   let leaves = ["left", "right"];
-  if (persistedBaseline) {
+  if (persistedBaseline || historicalExit) {
     // Fixture creation ONLY. Capture must never invent or persist this baseline.
     const original = SessionManager.inMemory(dir, { id: "original" });
     original.appendMessage({ role: "system", content: "exact resident dynamic tools baseline", timestamp: 1 });
     const base = original.appendMessage({ role: "user", content: "base", timestamp: 2 });
-    const answer = () => original.appendMessage({ role: "assistant", api: "openai-completions", provider: "never", model: "never",
+    const answer = () => {
+      if (historicalExit) {
+        const toolCallId = crypto.randomUUID();
+        original.appendMessage({ role: "assistant", api: "openai-completions", provider: "never", model: "never",
+          content: [{ type: "toolCall", id: toolCallId, name: "exit_process", arguments: { reason: "historical", resume_message: "preserve only" } }],
+          stopReason: "toolUse", timestamp: 3, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } });
+        return original.appendMessage({ role: "toolResult", toolCallId, toolName: "exit_process", content: [{ type: "text", text: "historical receipt" }], isError: false, timestamp: 4 });
+      }
+      return original.appendMessage({ role: "assistant", api: "openai-completions", provider: "never", model: "never",
       content: [{ type: "text", text: "historical" }], stopReason: "stop", timestamp: 3,
       usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } });
+    };
     const left = answer(); original.branch(base); leaves = [left, answer()];
     writeFileSync(file, [original.getHeader(), ...original.getEntries()].map(record => JSON.stringify(record)).join("\n") + "\n");
   } else writeFileSync(file, records.map(record => JSON.stringify(record)).join("\n") + "\n");
@@ -251,3 +261,15 @@ for (const [field, changed] of [["owner","other.owner"], ["id","other-step"], ["
     } finally { db.close(); }
   });
 }
+
+test('retired exit_process declarations are unnecessary to capture complete historical tool receipts', async () => {
+  const f = fixture(false, false, false, true), bytes = readFileSync(f.file), db = f.root.serialize();
+  const result = await f.capture();
+  expect(result.inputs).toHaveLength(1);
+  expect(result.inputs[0]!.sourceJSONL).toBe(bytes.toString());
+  expect(result.inputs[0]!.sourceJSONL).toContain('"name":"exit_process"');
+  expect(result.inputs[0]!.sourceJSONL).toContain('"resume_message":"preserve only"');
+  expect(result.inputs[0]!.sourceJSONL).toContain('"toolName":"exit_process"');
+  expect(result.identities).toHaveLength(2);
+  result.revalidate(); expect(readFileSync(f.file)).toEqual(bytes); expect(f.root.serialize()).toEqual(db);
+});

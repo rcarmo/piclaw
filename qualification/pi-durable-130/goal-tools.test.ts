@@ -164,7 +164,7 @@ for (const mode of [false, true, "snapshot-replace", "snapshot-stop", "snapshot-
       const { createDurableConversationAdapter } = await import("../../runtime/src/agent-pool/durable-runtime-adapter.js");
       const { createDurableQueuedSteering } = await import("../../runtime/src/agent-pool/durable-queued-steering.js");
       const { setDeferredQueuedFollowups, getDeferredQueuedFollowups } = await import("../../runtime/src/db.js");
-      const { storeWebMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
+      const { admitWebMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
       const source = value(await f.ports.work.acceptSource(sealed({ effect: effect(`${f.incarnation}:goal-steer-usage`), chatJid: f.chatJid,
         sourceId: f.intentSourceId, kind: "message", payloadRef: `queued-source:${f.intentSourceId}`,
         targetOperationId: null, parentSourceSeq: null, acceptedAt: at, createWakeIntent: false })));
@@ -176,7 +176,7 @@ for (const mode of [false, true, "snapshot-replace", "snapshot-stop", "snapshot-
         assertCurrentWriter: () => f.owner.assert(), runningBinding: { sessionId: f.incarnation },
         readQueued: id => getDeferredQueuedFollowups(f.chatJid).find(item => item.rowId === id),
         validatePayload({ item }) { expect(item.queuedContent).toBe(steerText); },
-        materialize: (item, accept) => storeWebMessage({} as any, { chatJid: f.chatJid, content: item.queuedContent,
+        materialize: (item, accept) => admitWebMessage({} as any, { chatJid: f.chatJid, content: item.queuedContent,
           isBot: false, mediaIds: [], agentId: "default", agentName: "Fixture" },
           { consumeDeferredFollowupRowId: item.rowId, materializeQueuedSource: accept, isSteeringMessage: true }),
       });
@@ -399,8 +399,8 @@ for (const mode of [false, true, "snapshot-replace", "snapshot-stop", "snapshot-
       await f.open();
       expect(getDeferredQueuedFollowups(f.chatJid)).toEqual(queued);
       const item = getDeferredQueuedFollowups(f.chatJid)[0]!;
-      const { storeWebMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
-      const stored = storeWebMessage({} as any, { chatJid: f.chatJid, content: item.queuedContent, isBot: false, mediaIds: [], agentId: "default", agentName: "Fixture" }, {
+      const { admitWebMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
+      const stored = await admitWebMessage({} as any, { chatJid: f.chatJid, content: item.queuedContent, isBot: false, mediaIds: [], agentId: "default", agentName: "Fixture" }, {
         consumeDeferredFollowupRowId: item.rowId,
         materializeQueuedSource({ database, message }) {
           const source = f.ports.work.getAcceptedSource(f.chatJid, message.id);

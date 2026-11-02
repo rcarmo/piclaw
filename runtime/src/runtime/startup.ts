@@ -37,7 +37,6 @@ import { createLogger } from "../utils/logger.js";
 import { seedFreshWorkspaceCoreAddons } from "./core-addon-defaults.js";
 import { patchConsoleTimestamps } from "./console-timestamps.js";
 import { startExternalProgressWatchdogMonitor } from "./progress-watchdog-supervisor.js";
-import { recoverPendingRestartHandoffs } from "./restart-handoff.js";
 import type { RuntimeState } from "./state.js";
 import { launchWorkspaceIndexProcess, startWorkspaceIndexReconciliation } from "../workspace-index-process.js";
 import { SystemMetricsSampler } from "../channels/web/agent/system-metrics.js";
@@ -448,18 +447,16 @@ function registerSessionControlHandler(agentPool: AgentPool, web: WebChannel): v
 
 export function runWebStartupRecoveryBootstrap(
   web: StartupRecoveryWebChannel,
-  recoverRestartHandoffs?: () => void,
   scheduleResumePending: (resume: () => void) => void = (resume) => { setTimeout(resume, 0); },
 ): void {
   const startedAt = new Date().toISOString();
   web.updateAgentStatus(STARTUP_STATUS_CHAT_JID, buildStartupAgentStatus({
     phase: "recovering_native",
-    detail: "Restoring native runtime state and accepted restart handoffs.",
+    detail: "Restoring native runtime state.",
     startedAt,
   }));
 
   try {
-    recoverRestartHandoffs?.();
     web.updateAgentStatus(STARTUP_STATUS_CHAT_JID, buildStartupAgentStatus({
       phase: "resuming_pending",
       detail: "Resuming pending chats and queued follow-ups.",
@@ -512,17 +509,11 @@ export async function startWebChannel(
   // message storage/queue/run path. Add-ons should use this instead of
   // synthesizing authenticated localhost HTTP requests to /agent/:id/message.
   // Wire the messages tool post action to use the web channel for broadcast.
-  setMessagesPostFn((chatJid, content, isBot, mediaIds, contentBlocks) => {
-    const interaction = web.storeMessage(chatJid, content, isBot, mediaIds, {
-      contentBlocks,
-    });
-    if (!interaction) return null;
-    web.broadcastEvent(isBot ? "agent_response" : "new_post", interaction);
-    return interaction.id;
-  }, async (chatJid, content, isBot, mediaIds, contentBlocks, authorise, signal) => {
+  setMessagesPostFn(async (chatJid, content, isBot, mediaIds, contentBlocks, authorise, signal) => {
     const interaction = await web.admitMessage(chatJid,content,isBot,mediaIds,{contentBlocks},authorise,signal);
     if (!interaction) return null;
-    web.broadcastEvent(isBot ? "agent_response" : "new_post", interaction);
+    try { web.broadcastEvent(isBot ? "agent_response" : "new_post", interaction); }
+    catch (error) { log.warn("Committed message post publication failed", { operation: "messages.post.publish", err: error }); }
     return interaction.id;
   });
 
@@ -539,9 +530,7 @@ export async function startWebChannel(
   await initializeWebAddonMessagingRuntime(agentPool, web);
 
   captureStartupMemorySnapshot(agentPool, { label: "post-web-start" });
-  runWebStartupRecoveryBootstrap(web, () => {
-    recoverPendingRestartHandoffs(web);
-  }, (resume) => {
+  runWebStartupRecoveryBootstrap(web, (resume) => {
     setTimeout(() => {
       void web.runInternalDispatch(resume).catch((error) => {
         log.info("Deferred startup recovery not admitted", { error: String(error) });

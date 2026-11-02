@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createDurableQueuedSteering } from '../../../src/agent-pool/durable-queued-steering.js';
 import { createDurableRecoveryDispatch } from '../../../src/agent-pool/durable-recovery-dispatch.js';
-import { storeWebMessage } from '../../../src/channels/web/messaging/message-store.js';
+import { admitWebMessage } from '../../../src/channels/web/messaging/message-store.js';
 import { createDurableQueueDispatch } from "../../../src/agent-pool/durable-queue-dispatch.js";
 import { createDurableConversationAdapter } from "../../../src/agent-pool/durable-runtime-adapter.js";
 import { join } from "node:path";
@@ -820,7 +820,7 @@ for (const [queuedInput, pending, steering] of [[false,false,false], [false,true
           const { source_accepted: _sourceAccepted, materializeRetries: _materializeRetries, ...immutable } = item;
           expect(f.work.getAcceptedSource('web:default', item.source_id)?.provenanceRef).toBe(`engine:host-selected:${hashCanonicalRequest(JSON.parse(JSON.stringify(immutable)) as CanonicalJsonValue)}`);
         },
-        materialize: (item, accept) => storeWebMessage(f.channel as any, { chatJid: 'web:default', content: item.queuedContent,
+        materialize: (item, accept) => admitWebMessage(f.channel as any, { chatJid: 'web:default', content: item.queuedContent,
           isBot: false, mediaIds: item.mediaIds ?? [], agentId: 'default', agentName: 'Fixture' }, {
           contentBlocks: item.contentBlocks, linkPreviews: item.linkPreviews, threadId: item.threadId,
           screenHint: item.screenHint, isSteeringMessage: true, consumeDeferredFollowupRowId: item.rowId,
@@ -1088,13 +1088,24 @@ test("prepared input text reaches direct and queued admissions with the same syn
   expect(queuedItem.queuedContent).toBe("prepared:queued text");
   expect(preparations).toBe(2);
   f.channel.prepareInputText = () => { throw Error("Materialisation must not prepare input again"); };
-  const materialized = await f.channel.storeMessage("web:default", queuedItem.queuedContent, false, queuedItem.mediaIds,
-    queuedItem.contentBlocks, queuedItem.linkPreviews, queuedItem.threadId, undefined, undefined,
-    { consumeDeferredFollowupRowId: queuedItem.rowId });
+  f.channel.getQueuedInputMaterialization = () => ({ database, item, message, rowId }) => {
+    expect(database).toBe(f.db); expect(database.inTransaction).toBe(true);
+    expect(message.id).toBe(item.source_id);
+    const source = f.work.getAcceptedSource('web:default', item.source_id);
+    const { source_accepted: _accepted, materializeRetries: _retries, ...immutable } = item;
+    expect(source?.state).toBe('pending'); expect(source?.payloadRef).toBe(`queued-source:${message.id}`);
+    expect(source?.provenanceRef).toBe(`engine:host-selected:${hashCanonicalRequest(JSON.parse(JSON.stringify(immutable)) as CanonicalJsonValue)}`);
+    expect(database.query('SELECT id FROM messages WHERE rowid=?').get(rowId)).toEqual({ id: item.source_id });
+  };
+  const materialized = await f.channel.admitMessage("web:default", queuedItem.queuedContent, false, queuedItem.mediaIds ?? [],
+    { contentBlocks: queuedItem.contentBlocks, linkPreviews: queuedItem.linkPreviews, threadId: queuedItem.threadId,
+      consumeDeferredFollowupRowId: queuedItem.rowId });
   expect(materialized?.id).toBeGreaterThan(0);
   expect((getDb().query("SELECT content FROM messages WHERE rowid=?").get(materialized!.id) as { content: string }).content).toBe("prepared:queued text");
   expect(preparations).toBe(2);
-  // The queue worker owns in-memory removal; storeMessage only materialises SQL.
+  expect(f.channel.getQueuedFollowupItems("web:default").some(item => item.rowId === queuedItem.rowId)).toBe(false);
+  expect(getDb().query('SELECT id FROM messages WHERE rowid=?').get(materialized!.id)).toEqual({ id: queuedItem.source_id });
+  // Materialisation consumes the persisted intent in the same source transaction.
   const before = f.snapshot();
   const queueBefore = f.channel.getQueuedFollowupItems("web:default");
   f.channel.prepareInputText = () => ({ text: "must not be accepted", assertCurrent() { throw Error("Goal lifecycle revoked"); } });
@@ -1207,7 +1218,7 @@ test.skipIf(!hasEngine)('reordered native queue executes second accepted source 
     let index=0;
     while(queueService.peekQueuedFollowupItem('web:default')) {
       const item=queueService.peekQueuedFollowupItem('web:default')!;
-      const interaction=storeWebMessage(f.channel as any,{chatJid:'web:default',content:item.queuedContent,isBot:false,mediaIds:[],agentId:'default',agentName:'Fixture'},
+      const interaction=await admitWebMessage(f.channel as any,{chatJid:'web:default',content:item.queuedContent,isBot:false,mediaIds:[],agentId:'default',agentName:'Fixture'},
         {consumeDeferredFollowupRowId:item.rowId,threadToSelf:true,materializeQueuedSource:({message})=>{expect(message.id).toBe(item.source_id);}});
       const row=f.db.query('SELECT rowid,id FROM messages WHERE id=?').get(item.source_id!) as {rowid:number,id:string};
       expect(interaction.id).toBe(row.rowid);

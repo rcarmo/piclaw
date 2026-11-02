@@ -74,7 +74,7 @@ export const sendAdaptiveCard: ExtensionFactory = (pi: ExtensionAPI) => {
     // Adaptive Card payloads are intentionally open-ended. Marking this tool
     // strict makes Codex reject the function schema before the turn starts.
     parameters: SendAdaptiveCardSchema,
-    async execute(_toolCallId, params: SendAdaptiveCardParams) {
+    async execute(_toolCallId, params: SendAdaptiveCardParams, signal?: AbortSignal) {
       const content = params.content?.trim();
       if (!content) return buildResultError("Provide content.");
 
@@ -108,7 +108,7 @@ export const sendAdaptiveCard: ExtensionFactory = (pi: ExtensionAPI) => {
       if (!chatJid) {
         return buildResultError("Cannot determine the active web chat. Provide chat_jid explicitly.");
       }
-      const result = postMessagesToolMessage(
+      const result = await postMessagesToolMessage(
         {
           action: "post",
           type: "agent",
@@ -117,6 +117,7 @@ export const sendAdaptiveCard: ExtensionFactory = (pi: ExtensionAPI) => {
           content_blocks: [block],
         },
         chatJid,
+        signal,
       );
 
       return {

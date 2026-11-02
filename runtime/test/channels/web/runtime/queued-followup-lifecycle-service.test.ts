@@ -69,12 +69,12 @@ describe("queued follow-up lifecycle service", () => {
       } as any);
       const original = service.peekQueuedFollowupItem("web:default")!;
       expect(original.source_id).toMatch(/^source-[0-9a-f-]{36}$/);
-      expect(service.replaceQueuedFollowupItem("web:default", { ...original, source_id: "replacement", materializeRetries: 1 })).toBe(true);
+      expect(service).not.toHaveProperty("replaceQueuedFollowupItem");
       expect(service.peekQueuedFollowupItem("web:default")!.source_id).toBe(original.source_id);
       db.closeDatabase();
       db.initDatabase();
       const restored = new QueuedFollowupLifecycleService();
-      expect(restored.peekQueuedFollowupItem("web:default")).toEqual({ ...original, materializeRetries: 1 });
+      expect(restored.peekQueuedFollowupItem("web:default")).toEqual(original);
       const consumed = restored.consumeQueuedFollowupItem("web:default")!;
       restored.prependQueuedFollowupItem("web:default", consumed);
       expect(restored.peekQueuedFollowupItem("web:default")!.source_id).toBe(original.source_id);
@@ -343,17 +343,6 @@ describe("queued follow-up lifecycle service", () => {
     ]);
   });
 
-  test("replaces retry metadata in one persisted queue mutation", async () => {
-    const { service } = await createServiceFixture();
-    const rowId = service.enqueueQueuedFollowupItem("web:default", 0, "retry me", 10, "2024-01-01T00:00:00.000Z");
-    const original = service.getQueuedFollowupItems("web:default")[0]!;
-
-    expect(service.replaceQueuedFollowupItem("web:default", { ...original, materializeRetries: 1 })).toBe(true);
-    expect(service.getQueuedFollowupItems("web:default")).toEqual([
-      expect.objectContaining({ rowId, materializeRetries: 1 }),
-    ]);
-  });
-
   test("accepted input removal fails before queue, timeline, or HTTP action side effects", async () => {
     const { service, db } = await createServiceFixture();
     const rowId = db.storeMessage({
@@ -463,7 +452,7 @@ describe("queued follow-up lifecycle service", () => {
     });
   }
 
-  test("accepted replacement permits only a retry increment with deeply equal immutable input", async () => {
+  test("accepted queue snapshots are detached and no replacement API can mutate their identity", async () => {
     const { service, db } = await createServiceFixture();
     await service.admitQueuedFollowupItem([
       "web:default", 0, "immutable", 11, "2024-01-01T00:00:00.000Z", {
@@ -481,19 +470,13 @@ describe("queued follow-up lifecycle service", () => {
       ...Object.keys(original.queuedBy!).map(key => ({ queuedBy: { ...original.queuedBy, [key]: "changed" } })),
       { source_id: "forged" }, { source_accepted: undefined }, { tracing: "extra" },
     ];
+    expect(service).not.toHaveProperty('replaceQueuedFollowupItem');
     for (const change of changes) {
-      expect(() => service.replaceQueuedFollowupItem("web:default", { ...original, materializeRetries: 1, ...change })).toThrow("Accepted input only permits a materialization retry increment");
+      const snapshot = service.peekQueuedFollowupItem("web:default")!;
+      Object.assign(snapshot, change, { materializeRetries: 100 });
       expect(db.getDeferredQueuedFollowups("web:default")).toEqual([original]);
+      expect(service.peekQueuedFollowupItem("web:default")).toEqual(original);
     }
-    for (const materializeRetries of [-1, 0, 2, 0.5, NaN]) {
-      expect(() => service.replaceQueuedFollowupItem("web:default", { ...original, materializeRetries })).toThrow("Accepted input only permits a materialization retry increment");
-    }
-    // Object key order is not payload identity; nested arrays and metadata still compare in full.
-    expect(service.replaceQueuedFollowupItem("web:default", {
-      ...original, materializeRetries: 1, contentBlocks: [{ text: "original", type: "text" }],
-      queuedBy: { clientId: "client", sourceMessageId: "msg", sessionId: "session", userId: "user", source: "web" },
-    })).toBe(true);
-    expect(service.peekQueuedFollowupItem("web:default")).toEqual({ ...original, materializeRetries: 1 });
   });
 
   test("accepted queue reorder preserves immutable identities and priority after materialization/reopen", async () => {

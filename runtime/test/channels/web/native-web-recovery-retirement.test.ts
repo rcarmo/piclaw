@@ -52,11 +52,11 @@ test("model selection cannot rewind a native cursor or consume historical failed
 });
 
 test("web startup never consults a legacy inflight-recovery capability", () => {
-  let nativeHandoff=0,resumed=0; const scheduled:(()=>void)[]=[];
+  let resumed=0; const scheduled:(()=>void)[]=[];
   const web={updateAgentStatus(){},resumePendingChats(){resumed++;},
     get recoverInflightRuns(){throw Error("Legacy startup recovery accessed");}};
-  expect(()=>runWebStartupRecoveryBootstrap(web as any,()=>{nativeHandoff++;},resume=>scheduled.push(resume))).not.toThrow();
-  expect(nativeHandoff).toBe(1);expect(scheduled).toHaveLength(1);expect(resumed).toBe(0);
+  expect(()=>runWebStartupRecoveryBootstrap(web as any,resume=>scheduled.push(resume))).not.toThrow();
+  expect(scheduled).toHaveLength(1);expect(resumed).toBe(0);
   scheduled[0]();expect(resumed).toBe(1);
 });
 

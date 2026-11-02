@@ -1896,7 +1896,7 @@ for (const streaming of [false, true]) for (const placeholder of [false, true]) 
 
   web.broadcastEvent = (type: string) => events.push(type);
   // Seed a persisted historical row, not the retired in-memory producer.
-  const historical = placeholder ? web.storeMessage("web:default", "\u2063", true, []) : null;
+  const historical = placeholder ? await web.admitMessage("web:default", "\u2063", true, [], {}) : null;
   if (historical) web.enqueueQueuedFollowupItem("web:default", historical.id, "queued send me now");
   const rowId = placeholder ? historical.id : web.enqueueQueuedFollowupItem("web:default", 0, "queued send me now");
   web.enqueueQueuedFollowupItem("web:default", 0, "keep sibling");
@@ -2642,13 +2642,13 @@ test("processChat preserves a deferred queued follow-up if materialization fails
   });
 
   web.enqueueQueuedFollowupItem("web:default", 0, "queued idle item");
-  const originalStoreMessage = web.storeMessage.bind(web);
+  const originalAdmission = web.admitMessage.bind(web);
   web.admitMessage = async (chatJid: string, content: string, isBot: boolean, mediaIds: number[], options?: any) => {
     if (!isBot) return null;
-    return originalStoreMessage(chatJid, content, isBot, mediaIds, options);
+    return originalAdmission(chatJid, content, isBot, mediaIds, options);
   };
 
-  await web.processChat("web:default", "default");
+  await expect(web.processChat("web:default", "default")).rejects.toThrow("committed row");
 
   expect(web.getQueuedFollowupCount("web:default")).toBe(1);
   const queueItems = web.getQueuedFollowupItems("web:default");
@@ -2658,7 +2658,7 @@ test("processChat preserves a deferred queued follow-up if materialization fails
   expect(contents).not.toContain("queued idle item");
 });
 
-test("deferred queued follow-up materialize retry count survives a new WebChannel instance", async () => {
+test("deferred queued follow-up identity survives admission failure and a new WebChannel instance", async () => {
   const ws = createTempWorkspace("piclaw-web-channel-");
   cleanupWorkspace = ws.cleanup;
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
@@ -2680,27 +2680,28 @@ test("deferred queued follow-up materialize retry count survives a new WebChanne
 
   const first = createWeb();
   first.enqueueQueuedFollowupItem("web:default", 0, "queued idle item");
-  const firstStoreMessage = first.storeMessage.bind(first);
+  const firstAdmission = first.admitMessage.bind(first);
   first.admitMessage = async (chatJid: string, content: string, isBot: boolean, mediaIds: number[], options?: any) => {
     if (!isBot) return null;
-    return firstStoreMessage(chatJid, content, isBot, mediaIds, options);
+    return firstAdmission(chatJid, content, isBot, mediaIds, options);
   };
 
-  await first.processChat("web:default", "default");
-  expect(db.getDeferredQueuedFollowups("web:default")[0]?.materializeRetries).toBe(1);
+  const queuedBefore = db.getDeferredQueuedFollowups("web:default");
+  await expect(first.processChat("web:default", "default")).rejects.toThrow("committed row");
+  expect(db.getDeferredQueuedFollowups("web:default")).toEqual(queuedBefore);
 
   const second = createWeb();
-  const secondStoreMessage = second.storeMessage.bind(second);
+  const secondAdmission = second.admitMessage.bind(second);
   second.admitMessage = async (chatJid: string, content: string, isBot: boolean, mediaIds: number[], options?: any) => {
     if (!isBot) return null;
-    return secondStoreMessage(chatJid, content, isBot, mediaIds, options);
+    return secondAdmission(chatJid, content, isBot, mediaIds, options);
   };
 
-  await second.processChat("web:default", "default");
-  expect(db.getDeferredQueuedFollowups("web:default")[0]?.materializeRetries).toBe(2);
+  await expect(second.processChat("web:default", "default")).rejects.toThrow("committed row");
+  expect(db.getDeferredQueuedFollowups("web:default")).toEqual(queuedBefore);
 });
 
-test("processChat drops a deferred queued follow-up after repeated materialize failures", async () => {
+test("processChat preserves historical retry metadata and never drops input after admission failure", async () => {
   const ws = createTempWorkspace("piclaw-web-channel-");
   cleanupWorkspace = ws.cleanup;
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
@@ -2734,17 +2735,17 @@ test("processChat drops a deferred queued follow-up after repeated materialize f
     broadcasts.push({ event, payload });
     return originalBroadcast(event, payload);
   };
-  const originalStoreMessage = web.storeMessage.bind(web);
+  const originalAdmission = web.admitMessage.bind(web);
   web.admitMessage = async (chatJid: string, content: string, isBot: boolean, mediaIds: number[], options?: any) => {
     if (!isBot) return null;
-    return originalStoreMessage(chatJid, content, isBot, mediaIds, options);
+    return originalAdmission(chatJid, content, isBot, mediaIds, options);
   };
 
-  await web.processChat("web:default", "default");
-
-  expect(web.getQueuedFollowupCount("web:default")).toBe(0);
-  expect(db.getDeferredQueuedFollowups("web:default")).toEqual([]);
-  expect(broadcasts.some((entry) => entry.event === "agent_followup_consumed" && entry.payload?.row_id === -1)).toBe(true);
+  const queuedBefore = db.getDeferredQueuedFollowups("web:default");
+  await expect(web.processChat("web:default", "default")).rejects.toThrow("committed row");
+  expect(web.getQueuedFollowupCount("web:default")).toBe(1);
+  expect(db.getDeferredQueuedFollowups("web:default")).toEqual(queuedBefore);
+  expect(broadcasts.some((entry) => entry.event === "agent_followup_consumed" && entry.payload?.row_id === -1)).toBe(false);
 });
 
 test("processChat handles persisted user messages one at a time", async () => {

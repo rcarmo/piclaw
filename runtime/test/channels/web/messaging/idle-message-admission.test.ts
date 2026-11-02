@@ -1,7 +1,7 @@
 import {afterEach,expect,test} from 'bun:test';
 import {createTempWorkspace,setEnv} from '../../../helpers.js';
 import {initDatabase,getDb,closeDatabase} from '../../../../src/db/connection.js';
-import {admitWebMessage,storeWebMessage} from '../../../../src/channels/web/messaging/message-store.js';
+import {admitWebMessage} from '../../../../src/channels/web/messaging/message-store.js';
 import {createMedia,getMediaById} from '../../../../src/db/media.js';
 import {setDeferredQueuedFollowups,getDeferredQueuedFollowups} from '../../../../src/db/chat-cursors.js';
 let cleanup:()=>void=()=>{};
@@ -31,9 +31,9 @@ test('cancelled or missing incoming media has no durable side effects',async()=>
   await expect(admitWebMessage(channel,params(),{},()=>{},abort.signal)).rejects.toThrow('cancelled');
   await expect(admitWebMessage(channel,params('missing',[99999]),{},()=>{},new AbortController().signal)).rejects.toThrow('unavailable');expect(count('messages')).toBe(0);expect(count('media')).toBe(0);
 });
-test('synchronous internal storage also rolls back spill media when its transaction fails',()=>{
+test('admitted storage rolls back spill media when its transaction fails',async()=>{
   fixture();getDb().exec("CREATE TRIGGER deny_message BEFORE INSERT ON messages BEGIN SELECT RAISE(ABORT,'denied');END");
-  expect(storeWebMessage(channel,params('spill fail '.repeat(14000)))).toBeNull();expect(count('messages')).toBe(0);expect(count('media')).toBe(0);
+  await expect(admitWebMessage(channel,params('spill fail '.repeat(14000)),{})).rejects.toThrow('denied');expect(count('messages')).toBe(0);expect(count('media')).toBe(0);
 });
 test('callback contention is terminal and rolls back its one message ID and generated spill rows',async()=>{
   const db=fixture(),insert=db.prepare.bind(db);let attempts=0;const ids:string[]=[];

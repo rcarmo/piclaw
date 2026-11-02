@@ -190,12 +190,6 @@ export function installWebChannelPrototype(
         service.prependQueuedFollowupItem(chatJid, item);
       }),
     },
-    replaceQueuedFollowupItem: {
-      configurable: true,
-      writable: true,
-      value: withRuntimePublicSurface((service, chatJid: string, item: QueuedFollowupItem): boolean =>
-        service.replaceQueuedFollowupItem(chatJid, item)),
-    },
     getQueuedFollowupCount: {
       configurable: true,
       writable: true,
@@ -324,28 +318,6 @@ export function installWebChannelPrototype(
       writable: true,
       value: withRuntimePublicSurface(async (service, chatJid: string, agentId: string, threadRootId?: number | null) =>
         await service.processChat(chatJid, agentId, threadRootId)),
-    },
-    storeMessage: {
-      configurable: true,
-      writable: true,
-      value: withRuntimePublicSurface((
-        service,
-        chatJid: string,
-        content: string,
-        isBot: boolean,
-        mediaIds: number[],
-        options: {
-          contentBlocks?: unknown[];
-          linkPreviews?: unknown[];
-          threadId?: number;
-          threadToSelf?: boolean;
-          screenHint?: string | null;
-          isTerminalAgentReply?: boolean;
-          isSteeringMessage?: boolean;
-          removeProtectedContinuationForSourceMessageId?: string | null;
-          consumeDeferredFollowupRowId?: number | null;
-        } = {},
-      ): InteractionRow | null => service.storeMessage(chatJid, content, isBot, mediaIds, options)),
     },
     admitMessage: {
       configurable: true, writable: true,

@@ -11,7 +11,7 @@ import {enforceRequestGuards} from '../../../src/channels/web/http/request-guard
 import {getRouteFlags} from '../../../src/channels/web/http/route-flags.js';
 import {resetRateLimiterStateForTests} from '../../../src/channels/web/http/rate-limit.js';
 import {handleAgentMessage} from '../../../src/channels/web/handlers/agent.js';
-import {storeWebMessage,admitWebMessage} from '../../../src/channels/web/messaging/message-store.js';
+import {admitWebMessage} from '../../../src/channels/web/messaging/message-store.js';
 import {QueuedFollowupLifecycleService} from '../../../src/channels/web/runtime/queued-followup-lifecycle-service.js';
 import {createWebChannelRuntimePublicSurfaceService} from '../../../src/channels/web/core/web-channel-runtime-public-surface-service.js';
 import {createDirectChatToolRelayHandler} from '../../../src/extensions/chat-tool-runtime.js';
@@ -34,7 +34,7 @@ function fixture(){
  getQueuedFollowupCount:queue.getQueuedFollowupCount.bind(queue),enqueueQueuedFollowupItem:queue.enqueueQueuedFollowupItem.bind(queue),
  async admitQueuedFollowupItem(args:any,check:()=>void,signal:AbortSignal){if(hold&&(!heldJid||args[0]===heldJid))await hold;return queue.admitQueuedFollowupItem(args,check,signal);},
  async admitMessage(jid:string,text:string, _isBot: boolean,media:number[],options:any,check:()=>void,signal:AbortSignal,defer?:()=>boolean){if(hold&&(!heldJid||jid===heldJid))await hold;return admitWebMessage(channel as any,{chatJid:jid,content:text,isBot:false,mediaIds:media,agentId:'default',agentName:'Fixture'},options,check,signal,defer);},
- storeMessage(jid:string,text:string,isBot:boolean,media:number[],options:any){return storeWebMessage(channel as any,{chatJid:jid,content:text,isBot,mediaIds:media,agentId:'default',agentName:'Fixture'},options);},broadcastEvent:(type:string,payload:any)=>events.push({type,payload}),queue:{enqueue:()=>{scheduled++;}},resumeChat:()=>{scheduled++;}} as any;
+ broadcastEvent:(type:string,payload:any)=>events.push({type,payload}),queue:{enqueue:()=>{scheduled++;}},resumeChat:()=>{scheduled++;}} as any;
  const route=async(req:Request)=>{const url=new URL(req.url);return await enforceRequestGuards(channel,req,url.pathname,getRouteFlags(req,url.pathname))??await handleAgentMessage(channel,req,url.pathname,url.searchParams.get('chat_jid')||'web:source','default');};
  return{channel,auth,config,queue,events,branches,route,get scheduled(){return scheduled;},busy(value:boolean){busy=value;},hold(value:Promise<void>,jid?:string){hold=value;heldJid=jid;}};
 }
@@ -58,7 +58,7 @@ test('verified internal admission still obeys family-mode deny and original canc
 });
 test('verified internal secret busy target creates one negative intent and materializes once',async()=>{
  const f=fixture();f.busy(true);const response=await f.route(request('busy internal',{cookie:false,secret:'synthetic-internal',target:'web:target'}));expect(response.status).toBe(201);expect(rows('web:target')).toBe(0);expect(f.queue.peekQueuedFollowupItem('web:target')!.rowId).toBeLessThan(0);f.busy(false);
- Object.assign(f.channel,{peekQueuedFollowupItem:f.queue.peekQueuedFollowupItem.bind(f.queue),consumeQueuedFollowupItem:f.queue.consumeQueuedFollowupItem.bind(f.queue),prependQueuedFollowupItem:f.queue.prependQueuedFollowupItem.bind(f.queue),replaceQueuedFollowupItem:f.queue.replaceQueuedFollowupItem.bind(f.queue)});
+ Object.assign(f.channel,{peekQueuedFollowupItem:f.queue.peekQueuedFollowupItem.bind(f.queue),consumeQueuedFollowupItem:f.queue.consumeQueuedFollowupItem.bind(f.queue),prependQueuedFollowupItem:f.queue.prependQueuedFollowupItem.bind(f.queue)});
  expect((await materializeDeferredFollowups({channel:f.channel,chatJid:'web:target',agentId:'default'})).status).toBe('resumed');expect(rows('web:target')).toBe(1);expect(f.queue.getQueuedFollowupCount('web:target')).toBe(0);expect(f.scheduled).toBe(1);
 });
 for(const revoke of [false,true])test(`actual operator localContext queue validates its active scope during held delivery: revoked ${revoke}`,async()=>{

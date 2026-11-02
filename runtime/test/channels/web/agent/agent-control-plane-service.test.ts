@@ -15,7 +15,7 @@ import { createCurrentPiclawServiceWorkStore } from "../../../../src/service-eff
 import { hashCanonicalRequest, type CanonicalJsonValue } from "../../../../src/service-effects/contracts/common.js";
 import { createDurableQueuedSteering } from "../../../../src/agent-pool/durable-queued-steering.js";
 import { createDurableConversationAdapter, type DurableAcceptedInput } from "../../../../src/agent-pool/durable-runtime-adapter.js";
-import { storeWebMessage } from "../../../../src/channels/web/messaging/message-store.js";
+import { admitWebMessage } from "../../../../src/channels/web/messaging/message-store.js";
 
 function seal<T extends { effect: { requestHash: string } }>(request: T): T {
   request.effect.requestHash = hashCanonicalRequest(request as unknown as CanonicalJsonValue);
@@ -406,7 +406,7 @@ describe("WebAgentControlPlaneService", () => {
           assertCurrentWriter() { if (failure === "fenced") throw Error("PRIVATE_FENCED_ENGINE"); },
           readQueued: id => getDeferredQueuedFollowups(chat).find(item => item.rowId === id),
           validatePayload: ({ item }) => expect(f.work.getAcceptedSource(chat, item.source_id)?.provenanceRef).toBe(f.digest(item)),
-          materialize: (item, accept) => storeWebMessage({} as any, { chatJid: chat, content: item.queuedContent, isBot: false,
+          materialize: (item, accept) => admitWebMessage({} as any, { chatJid: chat, content: item.queuedContent, isBot: false,
             mediaIds: item.mediaIds ?? [], agentId: "default", agentName: "Pi" }, {
             threadId: item.threadId, contentBlocks: item.contentBlocks, linkPreviews: item.linkPreviews, screenHint: item.screenHint,
             isSteeringMessage: true, consumeDeferredFollowupRowId: item.rowId, materializeQueuedSource: accept,

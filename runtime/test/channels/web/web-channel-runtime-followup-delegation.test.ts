@@ -50,10 +50,6 @@ describe("WebChannel concrete-owner delegation", () => {
       prependQueuedFollowupItem: (chatJid: string, item: typeof queuedItem) => {
         calls.push(`prepend:${chatJid}:${item.rowId}`);
       },
-      replaceQueuedFollowupItem: (chatJid: string, item: typeof queuedItem) => {
-        calls.push(`replace-item:${chatJid}:${item.rowId}`);
-        return true;
-      },
       getQueuedFollowupCount: (chatJid: string) => {
         calls.push(`count:${chatJid}`);
         return 2;
@@ -116,7 +112,7 @@ describe("WebChannel concrete-owner delegation", () => {
     expect(fixture.channel.peekQueuedFollowupItem("web:test")).toBe(queuedItem);
     expect(fixture.channel.consumeQueuedFollowupItem("web:test")).toBe(queuedItem);
     fixture.channel.prependQueuedFollowupItem("web:test", queuedItem);
-    expect(fixture.channel.replaceQueuedFollowupItem("web:test", queuedItem)).toBe(true);
+    expect(fixture.channel).not.toHaveProperty('replaceQueuedFollowupItem');
     expect(fixture.channel.getQueuedFollowupCount("web:test")).toBe(2);
     expect(fixture.channel.getQueuedFollowupItems("web:test")).toEqual([queuedItem]);
     expect(fixture.channel.removeQueuedFollowupItem("web:test", 31)).toBe(queuedItem);
@@ -139,7 +135,6 @@ describe("WebChannel concrete-owner delegation", () => {
       "peek-item:web:test",
       "consume-item:web:test",
       "prepend:web:test:31",
-      "replace-item:web:test:31",
       "count:web:test",
       "items:web:test",
       "remove:web:test:31",

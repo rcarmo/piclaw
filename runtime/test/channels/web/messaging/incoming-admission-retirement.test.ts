@@ -5,7 +5,7 @@ import {withTempWorkspaceEnv,importFresh} from '../../../helpers.js';
 import {getRuntimeConfigPaths} from '../../../../src/core/config.js';
 import {handleAgentMessage} from '../../../../src/channels/web/handlers/agent.js';
 import {handlePost} from '../../../../src/channels/web/handlers/posts.js';
-import {admitWebMessage,storeWebMessage} from '../../../../src/channels/web/messaging/message-store.js';
+import {admitWebMessage} from '../../../../src/channels/web/messaging/message-store.js';
 
 type Store=typeof import('../../../../src/db.js');
 const jid='web:incoming-contract';
@@ -68,7 +68,7 @@ test('incoming control admission yields and cancels while a foreign WAL writer r
     store.storeChatMetadata(jid,'2026-11-01T00:00:00Z','Fixture');
     const {channel,effects}=fixtureChannel(),controller=new AbortController();
     channel.storeMessage=(chatJid:string,content:string,isBot:boolean,mediaIds:number[],options:any)=>{
-      effects.legacy++;return storeWebMessage(channel,{chatJid,content,isBot,mediaIds,agentId:'default',agentName:'Fixture'},options);
+      effects.legacy++;throw Error('Retired synchronous writer entered');
     };
     channel.admitMessage=(chatJid:string,content:string, _isBot: boolean,mediaIds:number[],options:any,check:()=>void,signal:AbortSignal,defer?:()=>boolean)=>{
       effects.admitted++;return admitWebMessage(channel,{chatJid,content,isBot:false,mediaIds,agentId:'default',agentName:'Fixture'},options,check,signal,defer);

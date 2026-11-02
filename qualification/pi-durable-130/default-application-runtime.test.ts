@@ -2331,7 +2331,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(prepared.text).toBe("A fresh ordinary input");
     expect(() => prepared.assertCurrent()).not.toThrow();
     const { getDeferredQueuedFollowups } = await import("../../runtime/src/db.js");
-    const { storeWebMessage, admitWebMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
+    const { admitWebMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
     const { handleRegisteredAddonConfigApiRequest } = await import("../../runtime/src/channels/web/handlers/addon-config-api.js");
     backend.attachChannel!({ broadcastEvent() {}, resumePendingChats() { expect(getDb().inTransaction).toBe(false); } });
     expect(await pool.applySlashCommand("web:default", "/goal Budget wrap-up")).toMatchObject({ status: "success" });
@@ -2344,10 +2344,10 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(settings!.status, await settings!.clone().text()).toBe(200);
     expect(await settings!.json()).toMatchObject({ continuationQueued: false });
     const initial = getDeferredQueuedFollowups("web:default")[0]!;
-    const firstMessage = storeWebMessage(channel, { chatJid: "web:default", content: initial.queuedContent,
+    const firstMessage = (await admitWebMessage(channel, { chatJid: "web:default", content: initial.queuedContent,
       mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" }, {
       consumeDeferredFollowupRowId: initial.rowId, materializeQueuedSource: bound.getQueuedInputMaterialization!("web:default"),
-    })!;
+    }))!;
     const human = await admitWebMessage(channel, { chatJid: "web:default", content: "Ordinary human input before budget wrap-up",
       mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" },
       { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
@@ -2378,10 +2378,10 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(calls).toBe(1);
     expect(getDeferredQueuedFollowups("web:default")).toEqual(queued);
     const wrap = queued[0]!;
-    const wrapMessage = storeWebMessage(reopenedChannel, { chatJid: "web:default", content: wrap.queuedContent,
+    const wrapMessage = (await admitWebMessage(reopenedChannel, { chatJid: "web:default", content: wrap.queuedContent,
       mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" }, {
       consumeDeferredFollowupRowId: wrap.rowId, materializeQueuedSource: reopened.getQueuedInputMaterialization!("web:default"),
-    })!;
+    }))!;
     const dispatchWrap = reopened.dispatchAcceptedInput!("web:default", wrap.source_id!, wrapMessage.id)!;
     expect(await dispatchWrap()).toBe("pending"); // The older human source owns the next frontier.
     expect(calls).toBe(1);
@@ -2416,7 +2416,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       const control = getDeferredQueuedFollowups("web:default")[0]!;
       // It was valid when materialised, then revoked before its SDK request.
       // This intentionally crosses the later execution fence, not queue expiry.
-      const materialized = channel.storeMessage("web:default", control.queuedContent, false, [], { consumeDeferredFollowupRowId: control.rowId });
+      const materialized = await channel.admitMessage("web:default", control.queuedContent, false, [], { consumeDeferredFollowupRowId: control.rowId });
       expect(materialized).not.toBeNull();
       if (!critical) expect(await pool.applySlashCommand("web:default", "/goal pause")).toMatchObject({ status: "success" });
       expect(await bound.dispatchAcceptedInput!("web:default", control.source_id!, materialized!.id)!()).toBe("settled");
@@ -2463,9 +2463,9 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(wakes).toEqual(["web:default"]);
     expect(queued[0]!.source_accepted).toBe(true);
     expect(queued[0]!.queuedContent).toContain("<piclaw_goal_input>");
-    const { storeWebMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
+    const { admitWebMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
     const item = queued[0]!;
-    const stored = storeWebMessage(channel, { chatJid: "web:default", content: item.queuedContent, mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" }, {
+    const stored = await admitWebMessage(channel, { chatJid: "web:default", content: item.queuedContent, mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" }, {
       consumeDeferredFollowupRowId: item.rowId, materializeQueuedSource: bound.getQueuedInputMaterialization!("web:default"),
     });
     expect(stored).not.toBeNull();
@@ -3448,7 +3448,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       nextChannel = new WebChannel(backend.bind({ queue: nextBase.queue, agentPool: nextPool }));
       const { runWebStartupRecoveryBootstrap } = await import("../../runtime/src/runtime/startup.js");
       const resumes: (() => void)[] = [];
-      runWebStartupRecoveryBootstrap(nextChannel, undefined, resume => resumes.push(resume));
+      runWebStartupRecoveryBootstrap(nextChannel, resume => resumes.push(resume));
       expect(resumes).toHaveLength(1); expect(cursorColumns()).toEqual(expectedColumns);
       resumes[0](); resumes[0](); // Repeated startup wakeups share one queue key.
       const until = Date.now() + 5000;

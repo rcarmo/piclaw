@@ -43,22 +43,22 @@ describe("atomic deferred follow-up materialization", () => {
     db.getDb().exec('CREATE TEMP TABLE materialized_fixture (source_id TEXT, message_id TEXT, row_id INTEGER)');
     const options = { consumeDeferredFollowupRowId: -1 };
     // No host port must fail closed, not silently become a legacy timeline input.
-    expect(store.storeWebMessage(channel, params, options)).toBeNull();
+    await expect(store.admitWebMessage(channel, params, options)).rejects.toThrow('host materialization binding');
     for (const asyncResult of [false, true]) {
-      expect(store.storeWebMessage(channel, params, { ...options, materializeQueuedSource: ({ item, message, rowId, database }) => {
+      await expect(store.admitWebMessage(channel, params, { ...options, materializeQueuedSource: ({ item, message, rowId, database }) => {
         expect(database.inTransaction).toBe(true);
         expect(item.source_id).toBe(source_id);
         expect(message.id).toBe(source_id);
         database.query('INSERT INTO materialized_fixture VALUES (?, ?, ?)').run(source_id, message.id, rowId);
         if (asyncResult) return Promise.resolve() as any;
         throw Error('binding fault');
-      } })).toBeNull();
+      } })).rejects.toThrow(asyncResult ? 'must be synchronous' : 'binding fault');
       expect(db.getDb().query('SELECT * FROM materialized_fixture').all()).toEqual([]);
       expect(db.getDb().query('SELECT * FROM messages').all()).toEqual([]);
       expect(db.getDeferredQueuedFollowups(params.chatJid)[0]?.source_id).toBe(source_id);
     }
-    expect(store.storeWebMessage(channel, { ...params, content: 'different payload' }, { ...options, materializeQueuedSource() {} })).toBeNull();
-    const result = store.storeWebMessage(channel, params, { ...options, materializeQueuedSource: ({ message, rowId, database }) => {
+    await expect(store.admitWebMessage(channel, { ...params, content: 'different payload' }, { ...options, materializeQueuedSource() {} })).rejects.toThrow('payload conflict');
+    const result = await store.admitWebMessage(channel, params, { ...options, materializeQueuedSource: ({ message, rowId, database }) => {
       database.query('INSERT INTO materialized_fixture VALUES (?, ?, ?)').run(source_id, message.id, rowId);
     } });
     expect(result).not.toBeNull();
@@ -66,7 +66,7 @@ describe("atomic deferred follow-up materialization", () => {
     expect(db.getDeferredQueuedFollowups(params.chatJid)).toEqual([]);
     // Restored/stale queue intent must not invoke the upsert and overwrite a committed row.
     db.setDeferredQueuedFollowups(params.chatJid, [{ ...item, queuedContent: 'collision' }]);
-    expect(store.storeWebMessage(channel, { ...params, content: 'collision' }, { ...options, materializeQueuedSource() {} })).toBeNull();
+    await expect(store.admitWebMessage(channel, { ...params, content: 'collision' }, { ...options, materializeQueuedSource() {} })).rejects.toThrow('identity collision');
     expect(db.getDb().query('SELECT content FROM messages WHERE id=?').get(source_id)).toEqual({ content: params.content });
   });
   test("fault before queue consume rolls back the user row and preserves durable intent", async () => {
@@ -80,13 +80,11 @@ describe("atomic deferred follow-up materialization", () => {
       queuedBy: { source: "runtime", sourceMessageId: "source-1" },
     }]);
 
-    const result = store.storeWebMessage(channel, params, {
+    await expect(store.admitWebMessage(channel, params, {
       threadId: 77,
       consumeDeferredFollowupRowId: -1,
       beforeDeferredFollowupConsume: () => { throw new Error("simulated process interruption"); },
-    });
-
-    expect(result).toBeNull();
+    })).rejects.toThrow('simulated process interruption');
     expect(db.getDeferredQueuedFollowups("web:default").map((item) => item.rowId)).toEqual([-1]);
     expect(db.getDb().prepare("SELECT COUNT(*) AS count FROM messages WHERE chat_jid = ? AND is_bot_message = 0 AND content = ?").get("web:default", params.content)).toEqual({ count: 0 });
   });
@@ -94,7 +92,7 @@ describe("atomic deferred follow-up materialization", () => {
   test("null consume id is treated as absent and does not roll back an ordinary user row", async () => {
     const { db, store, channel, params } = await fixture();
 
-    const result = store.storeWebMessage(channel, params, {
+    const result = await store.admitWebMessage(channel, params, {
       threadId: 77,
       consumeDeferredFollowupRowId: null,
     });
@@ -114,7 +112,7 @@ describe("atomic deferred follow-up materialization", () => {
       queuedBy: { source: "runtime", sourceMessageId: "source-1" },
     }]);
 
-    const result = store.storeWebMessage(channel, params, {
+    const result = await store.admitWebMessage(channel, params, {
       threadId: 77,
       consumeDeferredFollowupRowId: -1,
     });
@@ -123,11 +121,10 @@ describe("atomic deferred follow-up materialization", () => {
     expect(db.getDeferredQueuedFollowups("web:default")).toEqual([]);
     expect(db.getDb().prepare("SELECT COUNT(*) AS count FROM messages WHERE chat_jid = ? AND is_bot_message = 0 AND content = ?").get("web:default", params.content)).toEqual({ count: 1 });
 
-    const replay = store.storeWebMessage(channel, params, {
+    await expect(store.admitWebMessage(channel, params, {
       threadId: 77,
       consumeDeferredFollowupRowId: -1,
-    });
-    expect(replay).toBeNull();
+    })).rejects.toThrow('intent disappeared');
     expect(db.getDb().prepare("SELECT COUNT(*) AS count FROM messages WHERE chat_jid = ? AND is_bot_message = 0 AND content = ?").get("web:default", params.content)).toEqual({ count: 1 });
   });
 });

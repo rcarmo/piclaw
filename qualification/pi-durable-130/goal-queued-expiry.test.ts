@@ -95,7 +95,6 @@ async function fixture(goalPreparationAvailable = true) {
     peekQueuedFollowupItem: id => queue.peekQueuedFollowupItem(id),
     consumeQueuedFollowupItem: id => queue.consumeQueuedFollowupItem(id),
     prependQueuedFollowupItem: (id, item) => queue.prependQueuedFollowupItem(id, item),
-    replaceQueuedFollowupItem: (id, item) => queue.replaceQueuedFollowupItem(id, item),
     expireQueuedInput: ports.expireQueuedInput,
     async admitMessage(id, content, isBot, mediaIds, options, authorise, signal) {
       const row = await admitWebMessage(projection,

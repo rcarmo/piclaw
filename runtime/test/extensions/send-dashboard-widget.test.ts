@@ -10,7 +10,7 @@ describe("send_dashboard_widget tool", () => {
     const tools = new Map<string, any>();
     const calls: Array<{ chatJid: string; content: string; isBot: boolean; mediaIds: number[]; contentBlocks?: unknown[] }> = [];
 
-    setMessagesPostFn((chatJid, content, isBot, mediaIds, contentBlocks) => {
+    setMessagesPostFn(async (chatJid, content, isBot, mediaIds, contentBlocks) => {
       calls.push({ chatJid, content, isBot, mediaIds, contentBlocks });
       return 321;
     });

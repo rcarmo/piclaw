@@ -85,24 +85,6 @@ export interface WebChannelLike
   uiBridge: UiBridge;
   interactionBroadcaster: InteractionBroadcasterLike;
 
-  /** Message persistence and thread state. */
-  storeMessage(
-    chatJid: string,
-    content: string,
-    isBot: boolean,
-    mediaIds: number[],
-    options?: {
-      contentBlocks?: unknown[];
-      linkPreviews?: unknown[];
-      threadId?: number;
-      screenHint?: string | null;
-      isTerminalAgentReply?: boolean;
-      isSteeringMessage?: boolean;
-      removeProtectedContinuationForSourceMessageId?: string | null;
-      consumeDeferredFollowupRowId?: number | null;
-    }
-  ): InteractionRow | null;
-
   sendMessage(chatJid: string, text: string, options?: SendMessageOptions): Promise<void>;
   postDashboardWidget(chatJid: string, options?: { threadId?: number | null; text?: string; widgetId?: string }): Promise<void>;
   updateAgentStatus(chatJid: string, status: Record<string, unknown>): void;
@@ -131,7 +113,6 @@ export interface WebChannelLike
   peekQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null;
   consumeQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null;
   prependQueuedFollowupItem(chatJid: string, item: QueuedFollowupItem): void;
-  replaceQueuedFollowupItem(chatJid: string, item: QueuedFollowupItem): boolean;
   /** UI/runtime state consumed by endpoint contexts. */
   workspaceVisible: boolean;
   workspaceShowHidden: boolean;

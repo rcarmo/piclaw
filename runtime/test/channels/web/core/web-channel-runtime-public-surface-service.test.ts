@@ -160,10 +160,6 @@ describe("web channel runtime public surface service", () => {
         prependQueuedFollowupItem: (chatJid, item) => {
           calls.push(`prepend:${chatJid}:${item.rowId}`);
         },
-        replaceQueuedFollowupItem: (chatJid, item) => {
-          calls.push(`replace-item:${chatJid}:${item.rowId}`);
-          return true;
-        },
         getQueuedFollowupCount: (chatJid) => {
           calls.push(`count:${chatJid}`);
           return 2;
@@ -230,7 +226,7 @@ describe("web channel runtime public surface service", () => {
         processChat: async (chatJid, agentId, threadRootId) => {
           calls.push(`process:${chatJid}:${agentId}:${threadRootId ?? "undefined"}`);
         },
-        storeMessage: (chatJid, content, isBot, mediaIds, options) => {
+        admitMessage: async (chatJid, content, isBot, mediaIds, options) => {
           calls.push(`store:${chatJid}:${content}:${isBot ? 1 : 0}:${mediaIds.join(",")}:${options?.threadId ?? "undefined"}`);
           return stored;
         },
@@ -252,7 +248,7 @@ describe("web channel runtime public surface service", () => {
     expect(service.peekQueuedFollowupItem("web:test")).toBe(queuedItem);
     expect(service.consumeQueuedFollowupItem("web:test")).toBe(queuedItem);
     service.prependQueuedFollowupItem("web:test", queuedItem);
-    expect(service.replaceQueuedFollowupItem("web:test", queuedItem)).toBe(true);
+    expect(service).not.toHaveProperty('replaceQueuedFollowupItem');
     expect(service.getQueuedFollowupCount("web:test")).toBe(2);
     expect(service.getQueuedFollowupItems("web:test")).toEqual([queuedItem]);
     expect(service.removeQueuedFollowupItem("web:test", 3)).toBe(queuedItem);
@@ -278,7 +274,8 @@ describe("web channel runtime public surface service", () => {
     service.updateDraftBuffer("turn-1", "draft text", 4);
     expect(service.getBuffer("turn-1", "thought")).toEqual(buffer);
     service.broadcastEvent("agent_status", { chat_jid: "web:test", type: "thinking" });
-    expect(service.storeMessage("web:test", "stored", true, [7], { threadId: 55 })).toBe(stored);
+    expect(await service.admitMessage("web:test", "stored", true, [7], { threadId: 55 })).toBe(stored);
+    expect(service).not.toHaveProperty('storeMessage');
     await service.processChat("web:test", "default", null);
 
     expect(calls).toEqual([
@@ -288,7 +285,6 @@ describe("web channel runtime public surface service", () => {
       "peek-item:web:test",
       "consume-item:web:test",
       "prepend:web:test:3",
-      "replace-item:web:test:3",
       "count:web:test",
       "items:web:test",
       "remove:web:test:3",

@@ -90,7 +90,7 @@ describe("send_adaptive_card extension", () => {
     const { tool, messagesCrud } = await getTool();
 
     const calls: Array<{ chatJid: string; content: string; isBot: boolean; mediaIds: number[]; contentBlocks?: unknown[] }> = [];
-    messagesCrud.setMessagesPostFn((cj: string, c: string, bot: boolean, mids: number[], cb?: unknown[]) => {
+    messagesCrud.setMessagesPostFn(async (cj: string, c: string, bot: boolean, mids: number[], cb?: unknown[]) => {
       calls.push({ chatJid: cj, content: c, isBot: bot, mediaIds: mids, contentBlocks: cb });
       return 424242;
     });

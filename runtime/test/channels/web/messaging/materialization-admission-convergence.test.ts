@@ -71,3 +71,14 @@ test('a failed secondary expiry check cannot replace the original admission fail
     .then(() => null, error => error);
   expect(observed).toBe(primary); expect(checks).toBe(2); expect(f.events).toEqual([]); expect(f.written()).toBe(0);
 });
+
+for (const accepted of [false, true]) test(`missing committed row cannot spend a retry counter or discard queued input; accepted ${accepted}`, async () => {
+  const f = fixture();
+  f.rows[0] = { ...f.first, materializeRetries: 100, ...(accepted ? { source_accepted: true, source_id: 'original-accepted' } : {}) } as any;
+  const before = structuredClone(f.rows);
+  f.channel.admitMessage = async () => null;
+  f.channel.consumeQueuedFollowupItem = () => f.rows.shift();
+  f.channel.replaceQueuedFollowupItem = (_chat: string, item: any) => { f.rows[0] = item; return true; };
+  await expect(materializeDeferredFollowups({ channel: f.channel, chatJid: 'web:materialize', agentId: 'default' })).rejects.toThrow('committed row');
+  expect(f.rows).toEqual(before); expect(f.events).toEqual([]); expect(f.resumed).toEqual([]);
+});

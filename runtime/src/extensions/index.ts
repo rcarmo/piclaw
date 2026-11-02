@@ -59,7 +59,6 @@ import { chatProjectTool } from "./chat-project.js";
 import { sessionControl } from "./session-control.js";
 import { openWorkspaceFile } from "./open-workspace-file.js";
 import { envTools } from "./env-tools.js";
-import { exitProcess } from "./exit-process.js";
 import { imageProcessing } from "./image-processing.js";
 import { sessionStatus } from "./session-status.js";
 import { providerResponseDiagnostics } from "./provider-response-diagnostics.js";
@@ -103,7 +102,6 @@ export function createBuiltinExtensionFactories(options?: {
     sessionControl,
     openWorkspaceFile,
     envTools,
-    exitProcess,
     imageProcessing,
     sessionStatus,
     providerRequestSanitizer,

@@ -86,21 +86,6 @@ export interface WebChannelConstructorFactoryChannel {
   sendMessage: WebChannelLike["sendMessage"];
   admitMessage: WebChannelLike["admitMessage"];
   processChat(chatJid: string, agentId: string, threadRootId?: number | null): Promise<void>;
-  storeMessage(
-    chatJid: string,
-    content: string,
-    isBot: boolean,
-    mediaIds: number[],
-    options?: {
-      contentBlocks?: unknown[];
-      linkPreviews?: unknown[];
-      threadId?: number;
-      isTerminalAgentReply?: boolean;
-      isSteeringMessage?: boolean;
-      removeProtectedContinuationForSourceMessageId?: string | null;
-      consumeDeferredFollowupRowId?: number | null;
-    },
-  ): ReturnType<WebChannelLike["storeMessage"]>;
 }
 
 export interface WebChannelConstructorFactoryDefaults {
