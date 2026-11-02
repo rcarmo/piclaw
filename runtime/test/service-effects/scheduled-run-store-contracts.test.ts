@@ -738,3 +738,56 @@ test('terminal reconciliation rejects altered request bytes before any mutation'
     expect(f.snapshot()).toEqual(before);
   }finally{f.dispose();}
 });
+
+for (const busy of [false, true]) test(`scheduled admission regression: throwing post-commit hook retains unknown completion and exact receipt, busy=${busy}`, async () => {
+  const subject = isolated();
+  try {
+    subject.authority.create(authorityTask(`task:throwing-ack-${busy}`));
+    const claimed = await subject.store.claimDue(dueClaim(`throwing-ack-${busy}`));
+    expect(claimed.ok).toBe(true); if (!claimed.ok) return;
+    const lease = claimed.value[0]!, request = completion(lease, `complete:throwing-ack-${busy}`);
+    const original = subject.runtime.hitFault.bind(subject.runtime);
+    let throws = 0;
+    subject.runtime.hitFault = (point, method) => {
+      if (point === 'effect_then_lost_acknowledgement' && method === 'complete' && throws++ === 0)
+        throw Object.assign(new Error('lost completion acknowledgement'), busy ? {code:'SQLITE_BUSY'} : {});
+      return original(point, method);
+    };
+    const outcome = await subject.store.complete(request);
+    expect(outcome).toMatchObject({ok:false,error:{_tag:'storage_unavailable',certainty:'unknown',retryable:true}});
+    const observed = await subject.store.get(lease.record.runId);
+    expect(observed.ok && observed.value).toMatchObject({state:'completed',status:'success',resultRef:request.resultRef,attempt:lease.record.attempt});
+    expect(subject.inspect()).toMatchObject({occurrences:1,runLogs:1,nextDecisions:1});
+    // Retry only the sealed completion identity, never shell/model/tool execution.
+    const replay = await subject.peerStore().complete(request);
+    expect(replay.ok && replay.value).toEqual(observed.ok && observed.value);
+    expect(subject.inspect()).toMatchObject({occurrences:1,runLogs:1,nextDecisions:1});
+  } finally {subject.dispose?.();}
+});
+
+test('scheduled admission regression: each competing WAL wait owns its existing five-second deadline', {timeout:15000}, async () => {
+  const subject = isolated(), writer = new Database(subject.path);
+  let ticks = 0, releaseTimer:ReturnType<typeof setTimeout>|undefined;
+  const pulse = setInterval(()=>{ticks++;},10);
+  try {
+    subject.authority.create(authorityTask('task:bounded-acquisition'));
+    writer.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE');
+    const released = Promise.withResolvers<void>();
+    releaseTimer = setTimeout(()=>{writer.exec('ROLLBACK');released.resolve();},6000);
+    const started = performance.now();
+    const outcomes = await Promise.all(['first','second'].map(prefix=>subject.store.claimDue(dueClaim(`bounded:${prefix}`))));
+    const completedAfter = performance.now()-started;
+    for (const result of outcomes) expect(result).toMatchObject({ok:false,error:{_tag:'storage_unavailable',certainty:'not_applied',retryable:true}});
+    expect(completedAfter).toBeLessThan(5750);
+    expect(ticks).toBeGreaterThan(50);
+    expect(subject.inspect()).toMatchObject({occurrences:0,runLogs:0,nextDecisions:0});
+    await released.promise; // Keep the real writer held beyond both five-second budgets.
+    expect(subject.inspect()).toMatchObject({occurrences:0,runLogs:0,nextDecisions:0});
+    expect(subject.database.query('PRAGMA busy_timeout').get()).toEqual({timeout:1000});
+  } finally {
+    if (releaseTimer) clearTimeout(releaseTimer);
+    clearInterval(pulse);
+    if (writer.inTransaction) writer.exec('ROLLBACK');
+    writer.close(); subject.dispose?.();
+  }
+});
