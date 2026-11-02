@@ -6,6 +6,7 @@ import { chromium, webkit, type Browser } from 'playwright';
 import { withTempWorkspaceEnv } from '../helpers.js';
 import { initDatabase, closeDatabase } from '../../src/db/connection.js';
 import { QueuedFollowupLifecycleService } from '../../src/channels/web/runtime/queued-followup-lifecycle-service.js';
+import { admitWebMessage } from '../../src/channels/web/messaging/message-store.js';
 import { handleAgentMessage } from '../../src/channels/web/handlers/agent.js';
 
 const enabled = process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS === '1' && process.env.PICLAW_E2E_DISPOSABLE === '1';
@@ -39,7 +40,7 @@ for (const name of ['chromium', 'webkit']) browserTest(`Visual queued input is v
     let stateRequests = 0;
     let denyAction = false;
     const actions: Array<{path:string;chatJid:string|null}> = [];
-    const channel = { agentPool: { isStreaming: () => true, isActive: () => true }, getQueuedFollowupCount: (jid: string) => queue.getQueuedFollowupCount(jid), enqueueQueuedFollowupItem: (...args: any[]) => (queue.enqueueQueuedFollowupItem as any)(...args), broadcastEvent() {}, json: (value: unknown, status = 200) => Response.json(value, { status }) } as any;
+    const channel = { admitQueuedFollowupItem: queue.admitQueuedFollowupItem.bind(queue), agentPool: { isStreaming: () => true, isActive: () => true }, getQueuedFollowupCount: (jid: string) => queue.getQueuedFollowupCount(jid), enqueueQueuedFollowupItem: (...args: any[]) => (queue.enqueueQueuedFollowupItem as any)(...args), broadcastEvent() {}, json: (value: unknown, status = 200) => Response.json(value, { status }) } as any;
     const server = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(req) {
       const url = new URL(req.url);
       if (url.pathname === '/') return new Response('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"><div id="root"></div><script type="module" src="/fixture.js"></script>', { headers: { 'Content-Type': 'text/html' } });
@@ -55,7 +56,7 @@ for (const name of ['chromium', 'webkit']) browserTest(`Visual queued input is v
       if (['/agent/queue-remove','/agent/queue-steer'].includes(url.pathname)) {
         actions.push({path:url.pathname,chatJid:url.searchParams.get('chat_jid')});
         if (denyAction) return Response.json({error:'denied'},{status:403});
-        const {row_id}=await req.json(); const removed=queue.removeQueuedFollowupItem(url.searchParams.get('chat_jid')!,row_id);
+        const {row_id}=await req.json(); const {removed}=await queue.removeQueuedFollowupForAction(url.searchParams.get('chat_jid')!,row_id);
         return Response.json({removed:Boolean(removed)});
       }
       return Response.json({});
@@ -79,7 +80,9 @@ for (const name of ['chromium', 'webkit']) browserTest(`Visual queued input is v
       holdSnapshot = true;
       await page.evaluate(() => window.dispatchEvent(new CustomEvent('piclaw:sse-connected')));
       const deadline = Date.now() + 3000; while (!release && Date.now() < deadline) await Bun.sleep(5); expect(release).toBeTruthy();
-      const consumed = queue.consumeQueuedFollowupItem(chatJid)!;
+      const consumed = queue.peekQueuedFollowupItem(chatJid)!;
+      await admitWebMessage(channel, { chatJid, content: consumed.queuedContent, isBot: false, mediaIds: [], agentId: 'default', agentName: 'Fixture' },
+        { consumeDeferredFollowupRowId: consumed.rowId });
       await page.evaluate(payload => window.dispatchEvent(new CustomEvent('piclaw:followup-consumed', { detail: payload })), { row_id: consumed.rowId, chat_jid: chatJid });
       release!();
       await page.getByText('Pre-existing durable input', { exact: true }).waitFor({ state: 'detached' });

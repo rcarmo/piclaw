@@ -10,6 +10,7 @@
 import {
   deleteMessageByRowId,
   getDeferredQueuedFollowups,
+  getChatBranchByChatJid,
   getMessageByRowId,
   setDeferredQueuedFollowups,
 } from "../../../db.js";
@@ -183,9 +184,18 @@ export class QueuedFollowupLifecycleService {
     signal: AbortSignal,
     acceptSource?: QueuedInputSourceAdmission,
   ): Promise<number> {
-    const database = getDb();
+    args = [...args]; // Pin positional input before acquisition can yield.
+    const chatJid = args[0], database = getDb();
+    const targetKey = () => { const branch = getChatBranchByChatJid(chatJid); return JSON.stringify(branch && [branch.branch_id, branch.chat_jid, branch.archived_at]); };
+    const originalTarget = targetKey();
+    let writtenTarget = originalTarget;
     const assertBinding = captureQueueBinding(database);
-    const check = (phase: 'before' | 'after') => { assertBinding(); authorise(phase); };
+    const check = (phase: 'before' | 'after') => {
+      assertBinding();
+      if ((phase === 'before' && targetKey() !== originalTarget) || getChatBranchByChatJid(chatJid)?.archived_at) throw Error('Queued input target lifetime changed.');
+      authorise(phase);
+      if (phase === 'after' && targetKey() !== writtenTarget) throw Error('Queued input target lifetime changed.');
+    };
     let attempted = false;
     let previousSeed: number | undefined;
     return admitSqliteWrite(database, () => {
@@ -202,6 +212,7 @@ export class QueuedFollowupLifecycleService {
         const command = parseControlCommand(item.queuedContent, getRoutingConfig().triggerPattern);
         return command && DEFERRED_CONTROL_COMMAND_TYPES.has(command.type);
       });
+      writtenTarget = targetKey();
       if (!controlAhead) acceptQueuedInputSource(args[0], rowId, database, acceptSource);
       return rowId;
     }, check, signal, 5000, assertBinding, () => {
@@ -218,19 +229,6 @@ export class QueuedFollowupLifecycleService {
     return next ? cloneQueuedFollowupItem(next) : null;
   }
 
-  consumeQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null {
-    const queued = this.getDeferredQueuedFollowupItems(chatJid);
-    const next = queued.shift() ?? null;
-    this.setDeferredQueuedFollowupItems(chatJid, queued);
-    return next ? cloneQueuedFollowupItem(next) : null;
-  }
-
-  prependQueuedFollowupItem(chatJid: string, item: QueuedFollowupItem): void {
-    const queued = this.getDeferredQueuedFollowupItems(chatJid);
-    queued.unshift(cloneQueuedFollowupItem(item));
-    this.setDeferredQueuedFollowupItems(chatJid, queued);
-  }
-
   getQueuedFollowupCount(chatJid: string): number {
     return this.getDeferredQueuedFollowupItems(chatJid).length;
   }
@@ -244,18 +242,6 @@ export class QueuedFollowupLifecycleService {
         seen.add(row.rowId);
         return true;
       });
-  }
-
-  removeQueuedFollowupItem(chatJid: string, rowId: number): QueuedFollowupItem | null {
-    const queued = this.getDeferredQueuedFollowupItems(chatJid);
-    const queuedIndex = queued.findIndex((item) => item.rowId === rowId);
-    if (queuedIndex >= 0) {
-      if (queued[queuedIndex]!.source_accepted) throw new Error('Accepted input requires host cancellation');
-      const [removed] = queued.splice(queuedIndex, 1);
-      this.setDeferredQueuedFollowupItems(chatJid, queued);
-      return removed ? cloneQueuedFollowupItem(removed) : null;
-    }
-    return null;
   }
 
   listQueuedStateItems(chatJid: string): QueuedFollowupStateItem[] {

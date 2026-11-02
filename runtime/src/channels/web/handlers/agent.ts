@@ -451,6 +451,7 @@ export async function handleAgentMessage(
     queuedContent: string,
     extras: QueueDeferredFollowupExtras = {}
   ): Promise<Response> => {
+    if (!admitQueuedInput) return channel.json({ error: "Queued input admission is unavailable." }, 503);
     const queuedAt = new Date().toISOString();
     // Never inherit the active turn's root. Preserve an explicitly selected
     // thread; ordinary compose input remains self-rooted when materialized.
@@ -476,13 +477,10 @@ export async function handleAgentMessage(
         && (extras.source === "web.compose" || extras.source === "web.steer_startup_fallback");
       const accept = acceptedInput ? acceptQueuedSource : undefined;
       if ((nativeRuntime && acceptedInput) || extras.steering) {
-        if (!accept || !admitQueuedInput || (extras.steering && !selectSteering))
+        if (!accept || (extras.steering && !selectSteering))
           throw Error("Atomic native queue admission is unavailable.");
       }
-      if (accept && !admitQueuedInput) throw Error("Atomic queued admission is unavailable.");
-      queuedRowId = admitQueuedInput
-        ? await admitQueuedInput(args, revalidateQueuedAdmission, req.signal, accept)
-        : channel.enqueueQueuedFollowupItem(...args);
+      queuedRowId = await admitQueuedInput(args, revalidateQueuedAdmission, req.signal, accept);
     } catch (error) {
       if (isSqliteContention(error)) return channel.json({ error: 'Queue storage is busy; this input was not accepted.' }, 503);
       if (req.signal.aborted) return channel.json({ error: 'Input submission was cancelled before acceptance.' }, 400);
@@ -688,11 +686,8 @@ export async function handleAgentMessage(
     );
   }
 
-  // Check early whether this message should be deferred as a queued followup.
-  // If so, skip DB persistence entirely — the message will be stored when
-  // materialised from the in-memory queue after the current turn completes.
-  // This prevents the cursor from advancing past queued messages during
-  // finalizeSuccessfulRun, which would cause them to be silently consumed.
+  // Defer before publishing a timeline row. Queue acceptance is persisted here;
+  // materialisation admits the timeline row and source in their shared transaction.
   const shouldDeferQueuedFollowup =
     !command &&
     !themeCommand &&
@@ -868,51 +863,6 @@ export async function handleAgentMessage(
       type: "context_usage",
       context_usage: statusUsage,
     });
-  };
-
-  const queueFollowupMessage = async (): Promise<Response | null> => {
-    // Web queued follow-ups are managed by the web channel itself rather than
-    // AgentSession's internal follow-up queue. This guarantees the current turn
-    // finalizes and publishes before the next queued user message begins.
-    // Treat non-streaming compaction/retry phases as active too: submitting
-    // during compaction must queue behind the current session instead of
-    // starting a competing processChat run.
-    if (!isActive) {
-      return null;
-    }
-
-    channel.enqueueQueuedFollowupItem(
-      chatJid,
-      interaction.id,
-      content,
-      interaction.id,
-      interaction.timestamp,
-      {
-        source: "web.compose_persisted",
-        queuedBy: {
-          ...(browserObservability.userId ? { userId: browserObservability.userId } : {}),
-          ...(browserObservability.sessionId ? { sessionId: browserObservability.sessionId } : {}),
-          ...(browserObservability.clientId ? { clientId: browserObservability.clientId } : {}),
-        },
-      }
-    );
-    channel.broadcastEvent("agent_followup_queued", {
-      chat_jid: chatJid,
-      thread_id: interaction.data?.thread_id ?? interaction.id ?? null,
-      row_id: interaction.id,
-      content,
-      timestamp: interaction.timestamp,
-      source: "web.compose_persisted",
-    });
-
-    return channel.json(
-      {
-        user_message: interaction,
-        thread_id: threadId,
-        queued: "followup",
-      },
-      201
-    );
   };
 
   if (command) {
@@ -1133,13 +1083,6 @@ export async function handleAgentMessage(
       { user_message: interaction, thread_id: threadId, command: cmdResult },
       201
     );
-  }
-
-  if (requestMode === "queue" || requestMode === "auto") {
-    const followupResponse = await queueFollowupMessage();
-    if (followupResponse) {
-      return followupResponse;
-    }
   }
 
   // Normal (non-queued) message processing — broadcast to timeline now

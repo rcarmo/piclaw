@@ -161,12 +161,9 @@ export interface WebChannelLike
     extras?: { mediaIds?: number[]; contentBlocks?: unknown[]; linkPreviews?: unknown[]; screenHint?: string; source?: string; queuedBy?: QueuedFollowupItem["queuedBy"] }
   ): number;
   getQueuedFollowupCount(chatJid: string): number;
-  admitQueuedFollowupItem?(args: Parameters<WebChannelLike['enqueueQueuedFollowupItem']>, authorise: () => void, signal: AbortSignal, acceptSource?: import("../runtime/queued-followup-lifecycle-service.js").QueuedInputSourceAdmission): Promise<number>;
+  admitQueuedFollowupItem(args: Parameters<WebChannelLike['enqueueQueuedFollowupItem']>, authorise: () => void, signal: AbortSignal, acceptSource?: import("../runtime/queued-followup-lifecycle-service.js").QueuedInputSourceAdmission): Promise<number>;
   getQueuedFollowupItems(chatJid: string): QueuedFollowupItem[];
-  removeQueuedFollowupItem(chatJid: string, rowId: number): QueuedFollowupItem | null;
   peekQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null;
-  consumeQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null;
-  prependQueuedFollowupItem(chatJid: string, item: QueuedFollowupItem): void;
   /** UI/runtime state consumed by endpoint contexts. */
   workspaceVisible: boolean;
   workspaceShowHidden: boolean;

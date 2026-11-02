@@ -943,7 +943,7 @@ describe("web agent message handler", () => {
 
   test("defers a normal user turn while the chat is still active even if streaming already settled", async () => {
     const queuedFollowups: Array<{ chatJid: string; content: string }> = [];
-    let storeMessageCalls = 0;
+    let timelineAdmissions = 0;
 
     const channel = {
       agentPool: {
@@ -955,14 +955,14 @@ describe("web agent message handler", () => {
           status,
           headers: { "Content-Type": "application/json" },
         }),
-      enqueueQueuedFollowupItem: (chatJid: string, _rowId: number, content: string) => {
-        queuedFollowups.push({ chatJid, content });
+      admitQueuedFollowupItem: async ([chatJid, _rowId, content]: [string, number, string], check: (phase: string) => void, signal: AbortSignal) => {
+        signal.throwIfAborted(); check('before'); queuedFollowups.push({ chatJid, content }); check('after');
         return 777;
       },
       getQueuedFollowupCount: () => 0,
       broadcastEvent: () => {},
-      storeMessage: () => {
-        storeMessageCalls += 1;
+      admitMessage: async () => {
+        timelineAdmissions += 1;
         return null;
       },
       sendMessage: async () => {},
@@ -979,7 +979,7 @@ describe("web agent message handler", () => {
     const body = await response.json();
     expect(body.queued).toBe("followup");
     expect(queuedFollowups).toEqual([{ chatJid: "web:default", content: "follow up while compacting" }]);
-    expect(storeMessageCalls).toBe(0);
+    expect(timelineAdmissions).toBe(0);
   });
 
   test("returns typed 400s for malformed agent message payload classes", async () => {

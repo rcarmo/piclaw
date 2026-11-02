@@ -58,7 +58,7 @@ test('verified internal admission still obeys family-mode deny and original canc
 });
 test('verified internal secret busy target creates one negative intent and materializes once',async()=>{
  const f=fixture();f.busy(true);const response=await f.route(request('busy internal',{cookie:false,secret:'synthetic-internal',target:'web:target'}));expect(response.status).toBe(201);expect(rows('web:target')).toBe(0);expect(f.queue.peekQueuedFollowupItem('web:target')!.rowId).toBeLessThan(0);f.busy(false);
- Object.assign(f.channel,{peekQueuedFollowupItem:f.queue.peekQueuedFollowupItem.bind(f.queue),consumeQueuedFollowupItem:f.queue.consumeQueuedFollowupItem.bind(f.queue),prependQueuedFollowupItem:f.queue.prependQueuedFollowupItem.bind(f.queue)});
+ Object.assign(f.channel,{peekQueuedFollowupItem:f.queue.peekQueuedFollowupItem.bind(f.queue)});
  expect((await materializeDeferredFollowups({channel:f.channel,chatJid:'web:target',agentId:'default'})).status).toBe('resumed');expect(rows('web:target')).toBe(1);expect(f.queue.getQueuedFollowupCount('web:target')).toBe(0);expect(f.scheduled).toBe(1);
 });
 for(const revoke of [false,true])test(`actual operator localContext queue validates its active scope during held delivery: revoked ${revoke}`,async()=>{

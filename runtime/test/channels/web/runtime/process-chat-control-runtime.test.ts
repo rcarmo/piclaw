@@ -26,16 +26,14 @@ function makeMessage(id: string, timestamp: string, threadId?: number | null): N
 
 describe("process chat control runtime", () => {
   test('accepted input remains queued beyond the legacy terminal retry limit', async () => {
-    let item: QueuedFollowupItem = { rowId: -1, queuedContent: 'accepted', queuedAt: '2026-01-01T00:00:00Z',
+    const item: QueuedFollowupItem = { rowId: -1, queuedContent: 'accepted', queuedAt: '2026-01-01T00:00:00Z',
       source_id: 'source-00000000-0000-4000-8000-000000000001', source_accepted: true, materializeRetries: 5 };
-    let drops = 0, broadcasts = 0;
+    let broadcasts = 0;
     const channel = { peekQueuedFollowupItem: () => item, admitMessage: async () => null,
-      consumeQueuedFollowupItem() { drops++; return item; },
       broadcastEvent() { broadcasts++; } } as unknown as QueuedFollowupMaterializationRuntime;
     await expect(materializeDeferredFollowups({ channel, chatJid: 'web:test', agentId: 'default' })).rejects.toThrow('committed row');
     expect(item.materializeRetries).toBe(5);
     expect(item.source_accepted).toBe(true);
-    expect(drops).toBe(0);
     expect(broadcasts).toBe(0);
   });
   test("selectProcessChatMessage returns no_messages when the persisted frontier is empty", () => {
@@ -315,11 +313,6 @@ describe("process chat control runtime", () => {
         resumeCalls.push({ chatJid, threadRootId });
       },
       peekQueuedFollowupItem: () => queued[0] ?? null,
-      consumeQueuedFollowupItem: () => queued.shift() ?? null,
-      prependQueuedFollowupItem: (chatJid, item) => {
-        expect(chatJid).toBe("web:test");
-        queued.unshift(item);
-      },
       admitMessage: async (_chatJid, content, _isBot, _mediaIds, options) => {
         const queuedIndex = queued.findIndex((item) => item.rowId === options?.consumeDeferredFollowupRowId);
         if (queuedIndex < 0) return null;

@@ -173,24 +173,12 @@ export class WebChannel implements WebChannelLike {
     return this.queuedFollowupLifecycle.admitQueuedFollowupItem(args, authorise, signal, acceptSource);
   }
 
-  consumeQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null {
-    return this.queuedFollowupLifecycle.consumeQueuedFollowupItem(chatJid);
-  }
-
-  prependQueuedFollowupItem(chatJid: string, item: QueuedFollowupItem): void {
-    this.queuedFollowupLifecycle.prependQueuedFollowupItem(chatJid, item);
-  }
-
   getQueuedFollowupCount(chatJid: string): number {
     return this.queuedFollowupLifecycle.getQueuedFollowupCount(chatJid);
   }
 
   getQueuedFollowupItems(chatJid: string): QueuedFollowupItem[] {
     return this.queuedFollowupLifecycle.getQueuedFollowupItems(chatJid);
-  }
-
-  removeQueuedFollowupItem(chatJid: string, rowId: number): QueuedFollowupItem | null {
-    return this.queuedFollowupLifecycle.removeQueuedFollowupItem(chatJid, rowId);
   }
 
   updateAgentStatus(chatJid: string, status: Record<string, unknown>): void {

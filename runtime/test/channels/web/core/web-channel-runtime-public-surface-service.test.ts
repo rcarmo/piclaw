@@ -149,13 +149,6 @@ describe("web channel runtime public surface service", () => {
           calls.push(`peek-item:${chatJid}`);
           return queuedItem;
         },
-        consumeQueuedFollowupItem: (chatJid) => {
-          calls.push(`consume-item:${chatJid}`);
-          return queuedItem;
-        },
-        prependQueuedFollowupItem: (chatJid, item) => {
-          calls.push(`prepend:${chatJid}:${item.rowId}`);
-        },
         getQueuedFollowupCount: (chatJid) => {
           calls.push(`count:${chatJid}`);
           return 2;
@@ -163,10 +156,6 @@ describe("web channel runtime public surface service", () => {
         getQueuedFollowupItems: (chatJid) => {
           calls.push(`items:${chatJid}`);
           return [queuedItem];
-        },
-        removeQueuedFollowupItem: (chatJid, rowId) => {
-          calls.push(`remove:${chatJid}:${rowId}`);
-          return queuedItem;
         },
       },
       runtimeState: {
@@ -234,12 +223,9 @@ describe("web channel runtime public surface service", () => {
     await service.postDashboardWidget("web:test", { threadId: 8, widgetId: "widget-runtime" });
     expect(service.enqueueQueuedFollowupItem("web:test", 11, "queued", 6, "2026-03-28T00:00:00.000Z")).toBe(41);
     expect(service.peekQueuedFollowupItem("web:test")).toBe(queuedItem);
-    expect(service.consumeQueuedFollowupItem("web:test")).toBe(queuedItem);
-    service.prependQueuedFollowupItem("web:test", queuedItem);
     expect(service).not.toHaveProperty("replaceQueuedFollowupItem");
     expect(service.getQueuedFollowupCount("web:test")).toBe(2);
     expect(service.getQueuedFollowupItems("web:test")).toEqual([queuedItem]);
-    expect(service.removeQueuedFollowupItem("web:test", 3)).toBe(queuedItem);
     service.updateAgentStatus("web:test", status);
     expect(service.getAgentStatus("web:test")).toEqual(status);
     expect(service).not.toHaveProperty('setContextUsage');expect(service).not.toHaveProperty('getContextUsage');
@@ -269,11 +255,8 @@ describe("web channel runtime public surface service", () => {
       "widget:web:test:8:widget-runtime",
       "enqueue:web:test:11:queued:6:2026-03-28T00:00:00.000Z",
       "peek-item:web:test",
-      "consume-item:web:test",
-      "prepend:web:test:3",
       "count:web:test",
       "items:web:test",
-      "remove:web:test:3",
       "status-update:web:test:Thinking",
       "status-get:web:test",
       "broadcast:extension_ui_working:{\"chat_jid\":\"web:test\",\"message\":\"Compacting context…\"}",
