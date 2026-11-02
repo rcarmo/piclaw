@@ -53,7 +53,6 @@ const CURRENT_AUTHORITY_PATHS: Readonly<Record<string, string>> = Object.freeze(
   memory_get: "runtime/src/extensions/memory-search.ts reads the admitted SQLite note index and source filesystem; stale files dirty index metadata and enqueue a background refresh.",
   memory_query: "runtime/src/extensions/memory-search.ts searches the bounded admitted SQLite note index and source filesystem; stale candidates dirty index metadata and enqueue a background refresh.",
   open_workspace_file: "runtime/src/extensions/open-workspace-file.ts addresses the active web client and waits for the current SSE/browser acknowledgement path.",
-  exit_process: "runtime/src/extensions/exit-process.ts writes restart handoff/timeline state, consults the session registry, and marks the shutdown registry.",
   schedule_task: "runtime/src/extensions/scheduled-tasks.ts writes the scheduled-task SQLite store and wakes the in-process task scheduler.",
   scheduled_tasks: "runtime/src/extensions/scheduled-tasks.ts reads or mutates the scheduled-task SQLite store and in-process task scheduler.",
   budget_status: "runtime/src/extensions/budget-limits.ts reads the current chat's budget caps, usage, provider evidence, work state, and blockers without granting spending authority.",
@@ -311,11 +310,6 @@ const entries = Object.freeze([
     effectClass: "mutation", replay: "never", contextFields: ["chatJid", "operationId", "localEnv"], abortExpectation: "may_finish_late", serviceEffector: "EF-S05",
     authorityRationale: "ServiceOutboxStore owns the browser UI open request.", idempotencyIdentity: "effect/outbox ID plus request hash",
     certainty: "Driver records applied, not-applied or unknown; stale UI completion is fenced.", activationPrerequisites: ["EF-S05 enqueue API", "browser UI driver", "selected tagged Harness v3"],
-  }),
-  ...servicePolicy(["exit_process"], {
-    effectClass: "mutation", replay: "never", contextFields: ["chatJid", "operationId"], abortExpectation: "may_finish_late", serviceEffector: "EF-S05",
-    authorityRationale: "ServiceOutboxStore owns the maintenance/shutdown request before the external driver exits.", idempotencyIdentity: "effect/outbox ID plus request hash",
-    certainty: "Driver records applied, not-applied or unknown; shutdown is never replayed automatically.", activationPrerequisites: ["EF-S05 enqueue API", "external shutdown driver", "selected tagged Harness v3"],
   }),
   ...servicePolicy(["schedule_task"], {
     effectClass: "mutation", replay: "never", contextFields: ["chatJid", "operationId"], abortExpectation: "may_finish_late", serviceEffector: "EF-S07",

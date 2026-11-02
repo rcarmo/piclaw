@@ -28,7 +28,7 @@ describe("runtime model services", () => {
   test("creates the runtime cache-first with canonical agent paths", async () => {
     const agentDir = tempAgentDir();
     let captured: CreateModelRuntimeOptions | null = null;
-    const fakeRuntime = { refresh: async () => ({ aborted: false, errors: new Map() }) } as unknown as ModelRuntime;
+    const fakeRuntime = { getProvider: () => undefined, refresh: async () => ({ aborted: false, errors: new Map() }) } as unknown as ModelRuntime;
 
     const services = await createRuntimeModelServices({
       agentDir,
@@ -59,7 +59,7 @@ describe("runtime model services", () => {
     process.env.PICLAW_PI_AGENT_DIR = piclawAgentDir;
     process.env.PI_CODING_AGENT_DIR = join(root, "upstream-agent");
     let captured: CreateModelRuntimeOptions | null = null;
-    const fakeRuntime = { refresh: async () => ({ aborted: false, errors: new Map() }) } as unknown as ModelRuntime;
+    const fakeRuntime = { getProvider: () => undefined, refresh: async () => ({ aborted: false, errors: new Map() }) } as unknown as ModelRuntime;
 
     const services = await createRuntimeModelServices({
       createModelRuntime: async (options) => {
@@ -75,6 +75,31 @@ describe("runtime model services", () => {
       modelsPath: join(piclawAgentDir, "models.json"),
       modelsStorePath: join(piclawAgentDir, "models-store.json"),
     });
+  });
+
+  test("provider composition and cache-only refresh finish before the native catalogue can be captured", async () => {
+    const events: string[] = [];
+    const fakeRuntime = {
+      getProvider: () => ({ id: "github-copilot", getModels: () => [] }),
+      registerNativeProvider: () => { events.push("register"); },
+      refresh: async (options: unknown) => {
+        expect(options).toEqual({ allowNetwork: false });
+        events.push("refresh");
+        return { aborted: false, errors: new Map() };
+      },
+    } as unknown as ModelRuntime;
+    const services = await createRuntimeModelServices({ agentDir: tempAgentDir(), createModelRuntime: async () => fakeRuntime });
+    events.push("capture-native-catalogue");
+    expect(services.modelRuntime).toBe(fakeRuntime);
+    expect(events).toEqual(["register", "refresh", "capture-native-catalogue"]);
+  });
+
+  for (const aborted of [false, true]) test(`catalogue preparation fails closed before backend capture: aborted=${aborted}`, async () => {
+    const fakeRuntime = { getProvider: () => undefined,
+      refresh: async () => ({ aborted, errors: aborted ? new Map() : new Map([["fixture", new Error("catalogue unavailable")]]) }),
+    } as unknown as ModelRuntime;
+    await expect(createRuntimeModelServices({ agentDir: tempAgentDir(), createModelRuntime: async () => fakeRuntime }))
+      .rejects.toThrow("Model catalogue preparation failed");
   });
 
   test("compat registry propagates aborted refresh state and provider errors", async () => {

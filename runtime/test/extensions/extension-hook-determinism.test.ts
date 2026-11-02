@@ -27,7 +27,6 @@ describe("built-in extension hook determinism", () => {
       "sessionControl",
       "openWorkspaceFile",
       "envTools",
-      "exitProcess",
       "imageProcessing",
       "localLitePromptProfile",
     ]);

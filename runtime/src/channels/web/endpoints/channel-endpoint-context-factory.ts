@@ -7,7 +7,6 @@ import { updateMessagePost } from "../../../db/messages.js";
 import { resolveAvatarUrl } from "../media/avatar-service.js";
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
 import type { AuthEndpointsContext } from "../auth/auth-endpoints.js";
-import { createPostMutationsContext } from "./endpoint-contexts.js";
 import { isProviderReadyOobeCompletedForInstance } from "../oobe-instance-state.js";
 import type { AgentStatusContext, AgentTokenUsageContext } from "../agent/agent-status.js";
 import type { ContentEndpointsContext } from "./content-endpoints.js";
@@ -87,16 +86,16 @@ export function createWebChannelEndpointContexts(
 
   return {
     identity: () => options.getIdentitySnapshot(),
-    postMutations: () => createPostMutationsContext({
+    postMutations: () => ({
       defaultChatJid: options.defaultChatJid,
-      getLastCommandInteractionId: () => channel.lastCommandInteractionId,
+      lastCommandInteractionId: channel.lastCommandInteractionId,
+      authGateway: channel.authGateway,
       json: (payload, status = 200) => channel.json(payload, status),
       replaceMessageContent: (chatJid, id, content, threadId) => updateMessagePost(chatJid, id, content, threadId) ?? null,
       broadcastInteractionUpdated: (interaction) => {
         channel.interactionBroadcaster.broadcastInteractionUpdated(interaction);
       },
-      storeMessage: (chatJid, content, isBot, mediaIds, storeOptions = {}) =>
-        channel.storeMessage(chatJid, content, isBot, mediaIds, storeOptions),
+      admitMessage: channel.admitMessage.bind(channel),
       broadcastAgentResponse: (interaction) => {
         channel.interactionBroadcaster.broadcastAgentResponse(interaction);
       },

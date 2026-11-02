@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import type { InteractionRow } from "../../../../src/db.js";
+import { initDatabase, getDb, closeDatabase, createMedia } from '../../../../src/db.js';
+import { withTempWorkspaceEnv } from '../../../helpers.js';
 import {
   WebMessageProcessingStorageService,
   type WebMessageProcessingStorageChannel,
@@ -24,7 +25,6 @@ describe("WebMessageProcessingStorageService", () => {
             ...(threadRootId !== undefined ? { threadRootId } : {}),
           });
         },
-        storeWebMessage: () => null,
       },
     );
 
@@ -37,116 +37,29 @@ describe("WebMessageProcessingStorageService", () => {
     ]);
   });
 
-  test("shapes default agent identity and persistence options for storeMessage", () => {
-    const calls: Array<{
-      params: {
-        chatJid: string;
-        content: string;
-        isBot: boolean;
-        mediaIds: number[];
-        agentId: string;
-        agentName: string;
-        userName?: string | null;
-      };
-      options: {
-        contentBlocks?: unknown[];
-        linkPreviews?: unknown[];
-        threadId?: number | null;
-        isTerminalAgentReply?: boolean;
-        isSteeringMessage?: boolean;
-        removeProtectedContinuationForSourceMessageId?: string | null;
-        consumeDeferredFollowupRowId?: number | null;
-      };
-    }> = [];
-    let assistantName = "Pi";
-    let userName = "Rui";
-    const firstInteraction: InteractionRow = {
-      id: 11,
-      chat_jid: "web:default",
-      timestamp: "2026-01-01T00:00:00.000Z",
-      data: { type: "agent_response", content: "stored" },
-    };
-    const secondInteraction: InteractionRow = {
-      id: 12,
-      chat_jid: "web:default",
-      timestamp: "2026-01-01T00:01:00.000Z",
-      data: { type: "user_message", content: "stored again" },
-    };
-
-    const service = new WebMessageProcessingStorageService(
-      {
-        pendingLinkPreviews: new Set<number>(),
-        broadcastEvent: () => {},
-      } as unknown as WebMessageProcessingStorageChannel,
-      {
-        defaultAgentId: "default",
-        getAssistantName: () => assistantName,
-        getUserName: () => userName,
-        processChat: async () => {},
-        storeWebMessage: (_channel, params, options) => {
-          calls.push({ params, options });
-          return calls.length === 1 ? firstInteraction : secondInteraction;
-        },
-      },
-    );
-
-    const storedBot = service.storeMessage("web:default", "hello", true, [5, 6], {
-      contentBlocks: [{ type: "text" }],
-      linkPreviews: [{ url: "https://example.com" }],
-      threadId: 42,
-      isTerminalAgentReply: true,
-      isSteeringMessage: true,
-      removeProtectedContinuationForSourceMessageId: "source-1",
-      consumeDeferredFollowupRowId: -1,
-    });
-
-    assistantName = "Pi Prime";
-    userName = "Rui Carmo";
-    const storedUser = service.storeMessage("web:default", "follow-up", false, [], {});
-
-    expect(storedBot).toBe(firstInteraction);
-    expect(storedUser).toBe(secondInteraction);
-    expect(calls).toEqual([
-      {
-        params: {
-          chatJid: "web:default",
-          content: "hello",
-          isBot: true,
-          mediaIds: [5, 6],
-          agentId: "default",
-          agentName: "Pi",
-          userName: "Rui",
-        },
-        options: {
-          contentBlocks: [{ type: "text" }],
-          linkPreviews: [{ url: "https://example.com" }],
-          threadId: 42,
-          isTerminalAgentReply: true,
-          isSteeringMessage: true,
-          removeProtectedContinuationForSourceMessageId: "source-1",
-          consumeDeferredFollowupRowId: -1,
-        },
-      },
-      {
-        params: {
-          chatJid: "web:default",
-          content: "follow-up",
-          isBot: false,
-          mediaIds: [],
-          agentId: "default",
-          agentName: "Pi Prime",
-          userName: "Rui Carmo",
-        },
-        options: {
-          contentBlocks: undefined,
-          linkPreviews: undefined,
-          threadId: null,
-          isTerminalAgentReply: undefined,
-          isSteeringMessage: undefined,
-          removeProtectedContinuationForSourceMessageId: undefined,
-          consumeDeferredFollowupRowId: undefined,
-        },
-      },
-    ]);
-  });
+  test("admission resolves live identity getters and persists options through the real writer", () =>
+    withTempWorkspaceEnv('storage-identity-', {}, async () => {
+      initDatabase(); let assistant = 'Pi', user = 'Operator';
+      const service = new WebMessageProcessingStorageService({ broadcastEvent() {} } as any, {
+        defaultAgentId: 'chosen', getAssistantName: () => assistant, getUserName: () => user, processChat: async () => {},
+      });
+      try {
+        const media = createMedia('identity.txt', 'text/plain', new TextEncoder().encode('identity attachment'));
+        const bot = await service.admitMessage('web:identity', 'hello', true, [media], {
+          contentBlocks: [{ type: 'text', text: 'identity' }], threadId: 42, isTerminalAgentReply: true, isSteeringMessage: true,
+        });
+        assistant = 'Pi Prime'; user = 'Operator Two';
+        const next = await service.admitMessage('web:identity', 'follow-up', false, [], {});
+        const later = await service.admitMessage('web:identity', 'later', true, [], {});
+        expect(bot!.data.agent_id).toBe('chosen'); expect(bot!.data.thread_id).toBe(42);
+        expect(bot!.data.content_blocks).toEqual([{ type: 'text', text: 'identity' }]); expect(bot!.data.media_ids).toContain(media);
+        expect(next!.data.thread_id).toBe(next!.id);
+        expect(getDb().query('SELECT sender_name FROM messages ORDER BY rowid').all()).toEqual([
+          { sender_name: 'Pi' }, { sender_name: 'Operator Two' }, { sender_name: 'Pi Prime' },
+        ]);
+        expect(getDb().query('SELECT is_terminal_agent_reply,is_steering_message FROM messages WHERE rowid=?').get(bot!.id))
+          .toEqual({ is_terminal_agent_reply: 1, is_steering_message: 1 });
+        expect(later!.id).toBeGreaterThan(next!.id);
+      } finally { closeDatabase(); }
+    }));
 });

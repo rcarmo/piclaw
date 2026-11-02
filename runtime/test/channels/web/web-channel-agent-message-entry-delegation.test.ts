@@ -1,44 +1,20 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
+import { WebChannel } from "../../../src/channels/web.ts";
 
-import { createWebChannelTestFixture } from "./helpers/web-channel-fixture.ts";
-
-let cleanup: (() => void) | null = null;
-
-afterEach(() => {
-  cleanup?.();
-  cleanup = null;
-});
-
-type AgentMessageEntryServiceStub = {
-  handleAgentMessage(req: Request, pathname: string): Promise<Response>;
-};
-
-describe("WebChannel agent-message entry delegation", () => {
-  test("delegates the public agent-message wrapper to the extracted entry service", async () => {
-    const fixture = await createWebChannelTestFixture({ workspace: "temp" });
-    cleanup = fixture.cleanup;
-
-    const calls: string[] = [];
-    const service: AgentMessageEntryServiceStub = {
-      handleAgentMessage: async (req, pathname) => {
-        const url = new URL(req.url);
-        calls.push(`agent-message:${req.method}:${pathname}:${url.searchParams.get("chat_jid") ?? ""}`);
-        return new Response(JSON.stringify({ pathname, chat_jid: url.searchParams.get("chat_jid") }), {
-          status: 211,
-          headers: { "Content-Type": "application/json" },
-        });
-      },
-    };
-
-    (fixture.channel as unknown as { agentMessageEntryService: AgentMessageEntryServiceStub }).agentMessageEntryService = service;
-
-    const response = await fixture.channel.handleAgentMessage(
-      new Request("https://example.com/agent/default/message?chat_jid=web%3Abranch", { method: "POST" }),
-      "/agent/default/message",
-    );
-
-    expect(response.status).toBe(211);
-    expect(await response.json()).toEqual({ pathname: "/agent/default/message", chat_jid: "web:branch" });
-    expect(calls).toEqual(["agent-message:POST:/agent/default/message:web:branch"]);
+test("agent-message entry uses the lifecycle gateway and focused request handler", async () => {
+  const request = new Request("https://example.test/agent/default/message?chat_jid=web:test", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "null",
   });
+  let entered = false;
+  const channel = {
+    json: (body: unknown, status = 200) => Response.json(body, { status }),
+    serverLifecycleGateway: { handleRequest: async (req: Request, handler: () => Promise<Response>) => {
+      expect(req).toBe(request); entered = true;
+      return handler();
+    } },
+    get agentMessageEntryService() { throw Error("Retired entry owner reached"); },
+  };
+  const response = await WebChannel.prototype.handleAgentMessage.call(channel, request, "/agent/default/message");
+  expect(entered).toBe(true); expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ error: "JSON body must be an object" });
 });

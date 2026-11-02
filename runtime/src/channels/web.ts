@@ -176,10 +176,6 @@ export class WebChannel implements WebChannelLike {
     this.queuedFollowupLifecycle.prependQueuedFollowupItem(chatJid, item);
   }
 
-  replaceQueuedFollowupItem(chatJid: string, item: QueuedFollowupItem): boolean {
-    return this.queuedFollowupLifecycle.replaceQueuedFollowupItem(chatJid, item);
-  }
-
   getQueuedFollowupCount(chatJid: string): number {
     return this.queuedFollowupLifecycle.getQueuedFollowupCount(chatJid);
   }
@@ -267,32 +263,8 @@ export class WebChannel implements WebChannelLike {
     return this.messageProcessingStorageService.processChat(chatJid, agentId, threadRootId);
   }
 
-  storeMessage(
-    chatJid: string,
-    content: string,
-    isBot: boolean,
-    mediaIds: number[],
-    options: {
-      contentBlocks?: unknown[];
-      linkPreviews?: unknown[];
-      threadId?: number;
-      threadToSelf?: boolean;
-      screenHint?: string | null;
-      isTerminalAgentReply?: boolean;
-      isSteeringMessage?: boolean;
-      removeProtectedContinuationForSourceMessageId?: string | null;
-      consumeDeferredFollowupRowId?: number | null;
-    } = {},
-  ): InteractionRow | null {
-    return this.messageProcessingStorageService.storeMessage(chatJid, content, isBot, mediaIds, options);
-  }
-
   admitMessage(...args: Parameters<WebMessageProcessingStorageService["admitMessage"]>): Promise<InteractionRow | null> {
     return this.messageProcessingStorageService.admitMessage(...args);
-  }
-
-  admitUserMessage(...args: Parameters<WebMessageProcessingStorageService['admitUserMessage']>): Promise<InteractionRow | null> {
-    return this.messageProcessingStorageService.admitUserMessage(...args);
   }
 
   requestWorkspaceFileOpen(chatJid: string, path: string, label: string): Promise<unknown> {

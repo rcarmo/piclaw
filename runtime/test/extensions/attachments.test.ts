@@ -177,7 +177,7 @@ test("accepted web publisher stores attachment content blocks through the curren
     // Publisher double only; native source identity/settlement is separately qualified.
     dispatchAcceptedInput: (chatJid:string,messageId:string,rowId:number)=>async()=>{
       expect(db.getMessageRowIdById(chatJid,messageId)).toBe(rowId);
-      const stored = web.storeMessage(chatJid, "Here is the report.", true, [mediaId], {
+      const stored = await web.admitMessage(chatJid, "Here is the report.", true, [mediaId], {
         threadId: rowId, isTerminalAgentReply: true,
         contentBlocks: [{ type: "file", name: "report.txt", filename: "report.txt", mime_type: "text/plain", size: 6 }],
       });

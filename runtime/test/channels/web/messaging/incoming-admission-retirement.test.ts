@@ -5,7 +5,7 @@ import {withTempWorkspaceEnv,importFresh} from '../../../helpers.js';
 import {getRuntimeConfigPaths} from '../../../../src/core/config.js';
 import {handleAgentMessage} from '../../../../src/channels/web/handlers/agent.js';
 import {handlePost} from '../../../../src/channels/web/handlers/posts.js';
-import {admitWebUserMessage,storeWebMessage} from '../../../../src/channels/web/messaging/message-store.js';
+import {admitWebMessage} from '../../../../src/channels/web/messaging/message-store.js';
 
 type Store=typeof import('../../../../src/db.js');
 const jid='web:incoming-contract';
@@ -32,7 +32,7 @@ test('incoming control rows use only captured admission, without SDK input accep
   channel.agentPool.isDurableRuntime=()=>true;
   channel.getInputSourceAdmission=()=>()=>{effects.source++;};
   channel.getQueuedInputSourceAdmission=()=>()=>{effects.source++;};
-  channel.admitUserMessage=async(_jid:string,_text:string,_media:unknown,options:any,check:(phase:string)=>void,_signal:unknown,defer:unknown)=>{
+  channel.admitMessage=async(_jid:string,_text:string, _isBot: boolean,_media:unknown,options:any,check:(phase:string)=>void,_signal:unknown,defer:unknown)=>{
     check('before');effects.admitted++;expect(options.acceptSource).toBeUndefined();expect(defer).toBeUndefined();check('after');return row();
   };
   expect((await send(channel,'/stats')).status).toBe(201);
@@ -68,10 +68,10 @@ test('incoming control admission yields and cancels while a foreign WAL writer r
     store.storeChatMetadata(jid,'2026-11-01T00:00:00Z','Fixture');
     const {channel,effects}=fixtureChannel(),controller=new AbortController();
     channel.storeMessage=(chatJid:string,content:string,isBot:boolean,mediaIds:number[],options:any)=>{
-      effects.legacy++;return storeWebMessage(channel,{chatJid,content,isBot,mediaIds,agentId:'default',agentName:'Fixture'},options);
+      effects.legacy++;throw Error('Retired synchronous writer entered');
     };
-    channel.admitUserMessage=(chatJid:string,content:string,mediaIds:number[],options:any,check:()=>void,signal:AbortSignal,defer?:()=>boolean)=>{
-      effects.admitted++;return admitWebUserMessage(channel,{chatJid,content,isBot:false,mediaIds,agentId:'default',agentName:'Fixture'},options,check,signal,defer);
+    channel.admitMessage=(chatJid:string,content:string, _isBot: boolean,mediaIds:number[],options:any,check:()=>void,signal:AbortSignal,defer?:()=>boolean)=>{
+      effects.admitted++;return admitWebMessage(channel,{chatJid,content,isBot:false,mediaIds,agentId:'default',agentName:'Fixture'},options,check,signal,defer);
     };
     const blocker=new Database(path);blocker.exec('BEGIN IMMEDIATE');let beats=0;
     const heartbeat=setInterval(()=>{beats++;},5),started=performance.now();
@@ -90,8 +90,8 @@ for (const publishFailure of [false,true]) {
     withTempWorkspaceEnv('incoming-post-contract-',{},async()=>{
       const store=await importFresh<Store>('../src/db.js');store.closeDatabase();store.initDatabase(getRuntimeConfigPaths());
       const {channel,effects}=fixtureChannel();let replacement=0,attemptedBroadcast=0,attemptedWake=0;
-      channel.admitUserMessage=(chatJid:string,content:string,mediaIds:number[],options:any,check:()=>void,signal:AbortSignal)=>{
-        effects.admitted++;return admitWebUserMessage(channel,{chatJid,content,isBot:false,mediaIds,agentId:'default',agentName:'Fixture'},options,check,signal);
+      channel.admitMessage=(chatJid:string,content:string, _isBot: boolean,mediaIds:number[],options:any,check:()=>void,signal:AbortSignal)=>{
+        effects.admitted++;return admitWebMessage(channel,{chatJid,content,isBot:false,mediaIds,agentId:'default',agentName:'Fixture'},options,check,signal);
       };
       channel.broadcastEvent=()=>{
         expect(store.getDb().inTransaction).toBe(false);expect(store.getDb().query('SELECT id FROM messages WHERE chat_jid=?').all(jid)).toHaveLength(1);
@@ -100,7 +100,7 @@ for (const publishFailure of [false,true]) {
       channel.resumeChat=()=>{attemptedWake++;if(publishFailure)throw Error('fixture wake failed');};
       const request=new Request('https://fixture/post',{method:'POST'});
       request.json=async()=>{
-        channel.admitUserMessage=async()=>{replacement++;throw Error('replacement port must not run');};
+        channel.admitMessage=async()=>{replacement++;throw Error('replacement port must not run');};
         return {content:'accepted post',media_ids:[],content_blocks:[{type:'restart_handoff',source:'exit_process'},{type:'text',text:'safe'}]};
       };
       try {

@@ -17,7 +17,7 @@ import {AssistantMessageEventStream} from '../../runtime/durable-engine/qualific
 import {applicationOwnership,createApplicationBootstrapBundle} from '../../runtime/durable-engine/src/application-bootstrap.js';
 import {createHostCommandPolicy} from '../../runtime/durable-engine/src/host-command-policy.js';
 import {installTerminalSettlementCompositionSchema} from '../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js';
-import {admitWebUserMessage} from '../../runtime/src/channels/web/messaging/message-store.js';
+import {admitWebMessage} from '../../runtime/src/channels/web/messaging/message-store.js';
 import {InMemoryEffectPayloadResolver} from '../../runtime/src/service-effects/testing/in-memory-payload-resolver.js';
 import {openFixture,context} from './src/fixture.js';
 const applicationTest=isolatedApplicationTest(import.meta.url);
@@ -79,7 +79,7 @@ for(const scenario of ['idle','busy','retry','storage-recovery','storage-reopen-
   const bound=bundle.bind({queue:{} as any,agentPool:{} as any});
   const coordinator=bound.dispatchAcceptedInput!;
   const waitForPending=coordinator.waitForPending.bind(coordinator);
-  await admitWebUserMessage({pendingLinkPreviews:new Set<number>(),broadcastEvent(){}},{chatJid:chat,content:'Critical native fixture',isBot:false,mediaIds:[],agentId:'default',agentName:'Fixture'},{acceptSource:bound.getInputSourceAdmission!(chat)},assert,new AbortController().signal);
+  await admitWebMessage({pendingLinkPreviews:new Set<number>(),broadcastEvent(){}},{chatJid:chat,content:'Critical native fixture',isBot:false,mediaIds:[],agentId:'default',agentName:'Fixture'},{acceptSource:bound.getInputSourceAdmission!(chat)},assert,new AbortController().signal);
   const message=root.query('SELECT rowid,id FROM messages WHERE chat_jid=? AND is_bot_message=0').get(chat) as any;
   const dispatch=coordinator(chat,message.id,message.rowid)!;const running=dispatch();void running.catch(()=>{});
   for(let i=0;;i++){

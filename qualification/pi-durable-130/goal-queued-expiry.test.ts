@@ -22,7 +22,7 @@ import { installTerminalSettlementCompositionSchema } from "../../runtime/src/se
 import { createCurrentPiclawServiceWorkStore } from "../../runtime/src/service-effects/current-piclaw/service-work-store.js";
 import { QueuedFollowupLifecycleService } from "../../runtime/src/channels/web/runtime/queued-followup-lifecycle-service.js";
 import { materializeDeferredFollowups, type QueuedFollowupMaterializationRuntime } from "../../runtime/src/channels/web/runtime/process-chat-control-runtime.js";
-import { storeWebMessage } from "../../runtime/src/channels/web/messaging/message-store.js";
+import { admitWebMessage } from "../../runtime/src/channels/web/messaging/message-store.js";
 import type { QueuedFollowupItem } from "../../runtime/src/queued-followups.js";
 import { openFixture, context, barrier } from "./src/fixture.js";
 import { value, effect, sealed } from "./src/host-handoff.js";
@@ -89,18 +89,17 @@ async function fixture(goalPreparationAvailable = true) {
   const work = value(createCurrentPiclawServiceWorkStore(root, { hitFault: () => false, recordTrace() {},
     validateAcceptance() { assertAdmission(chat); return true; }, pendingQueuedSourceOrder: id => queue.getPendingQueuedSourceOrder(id) }));
   const events: { type: string; data: unknown }[] = [], resumed: number[] = [], stored: number[] = [];
-  const projection = { broadcastEvent() {}, pendingLinkPreviews: new Set<number>() } as Parameters<typeof storeWebMessage>[0];
+  const projection = { broadcastEvent() {}, pendingLinkPreviews: new Set<number>() } as Parameters<typeof admitWebMessage>[0];
   bundle.bindInputProjection(projection);
   const channel: QueuedFollowupMaterializationRuntime & { expireQueuedInput?: Expire } = {
     peekQueuedFollowupItem: id => queue.peekQueuedFollowupItem(id),
     consumeQueuedFollowupItem: id => queue.consumeQueuedFollowupItem(id),
     prependQueuedFollowupItem: (id, item) => queue.prependQueuedFollowupItem(id, item),
-    replaceQueuedFollowupItem: (id, item) => queue.replaceQueuedFollowupItem(id, item),
     expireQueuedInput: ports.expireQueuedInput,
-    storeMessage(id, content, isBot, mediaIds, options) {
-      const row = storeWebMessage(projection,
+    async admitMessage(id, content, isBot, mediaIds, options, authorise, signal) {
+      const row = await admitWebMessage(projection,
         { chatJid: id, content, isBot, mediaIds: mediaIds ?? [], agentId: "default", agentName: "Fixture" },
-        { ...options, materializeQueuedSource: ports.getQueuedInputMaterialization!(id), acceptMaterializedSource: ports.getInputSourceAdmission!(id) });
+        { ...options, materializeQueuedSource: ports.getQueuedInputMaterialization!(id), acceptMaterializedSource: ports.getInputSourceAdmission!(id) }, authorise, signal);
       if (row) stored.push(row.id);
       return row;
     },
@@ -245,8 +244,8 @@ applicationTest("68142: unavailable Goal lifecycle owner preserves queued input 
     await f.stop();
     const host = f.hostRows(), sdk = f.sdkRows(), goal = f.state();
     expect(f.ports.expireQueuedInput).toBeUndefined();
-    expect((await f.drain()).status).toBe("retried");
-    expect(f.items()).toEqual([{ ...queued, materializeRetries: 1 }]);
+    await expect(f.drain()).rejects.toThrow("Queued Goal input authority unavailable");
+    expect(f.items()).toEqual([queued]);
     expect(f.work.getAcceptedSource(f.chat, queued.source_id!)?.state).toBe("pending");
     expect(f.hostRows()).toEqual(host); expect(f.sdkRows()).toEqual(sdk); expect(f.state()).toEqual(goal);
     expect(f.base.host.modelCalls).toBe(0); expect(f.events).toEqual([]); expect(f.resumed).toEqual([]);
@@ -406,7 +405,7 @@ applicationTest("68142: goal_stop after fresh expiry false rolls back materializ
     const human = await f.human("First ordinary input after the racing stop");
     const tail = await f.human("Second ordinary input must remain queued");
     const sdk = f.sdkRows();
-    const actualExpire = f.channel.expireQueuedInput!, actualStore = f.channel.storeMessage.bind(f.channel);
+    const actualExpire = f.channel.expireQueuedInput!, actualStore = f.channel.admitMessage.bind(f.channel);
     expect(typeof actualExpire).toBe("function");
     const checks: { sourceId: string | undefined; expired: boolean }[] = [];
     const attempts: { content: string; rowId: number | null }[] = [];
@@ -423,19 +422,23 @@ applicationTest("68142: goal_stop after fresh expiry false rolls back materializ
       }
       return expired;
     };
-    f.channel.storeMessage = (...args) => {
-      const row = actualStore(...args);
-      attempts.push({ content: args[1], rowId: row?.id ?? null });
-      if (args[1] === stale.queuedContent) {
-        // The late Root Goal assertion, not a fake null store, must roll back
-        // the attempted timeline insert before the second expiry check.
-        expect(row).toBeNull();
-        expect(f.root.query("SELECT * FROM messages WHERE chat_jid=?").all(f.chat)).toEqual([]);
-        expect(f.items()).toEqual([stale, human, tail]);
-        expect(f.work.getAcceptedSource(f.chat, stale.source_id!)?.state).toBe("pending");
-        expect(f.sdkRows()).toEqual(sdk); expect(f.events).toEqual([]); expect(f.resumed).toEqual([]);
+    f.channel.admitMessage = async (...args) => {
+      try {
+        const row = await actualStore(...args);
+        attempts.push({ content: args[1], rowId: row?.id ?? null });
+        return row;
+      } catch (error) {
+        attempts.push({ content: args[1], rowId: null });
+        if (args[1] === stale.queuedContent) {
+          // The real late Root assertion rejects; never turn it into a fake null store.
+          expect(String(error)).toContain("Goal input lifecycle changed");
+          expect(f.root.query("SELECT * FROM messages WHERE chat_jid=?").all(f.chat)).toEqual([]);
+          expect(f.items()).toEqual([stale, human, tail]);
+          expect(f.work.getAcceptedSource(f.chat, stale.source_id!)?.state).toBe("pending");
+          expect(f.sdkRows()).toEqual(sdk); expect(f.events).toEqual([]); expect(f.resumed).toEqual([]);
+        }
+        throw error;
       }
-      return row;
     };
     expect((await f.drain()).status).toBe("resumed");
     expect(stopped).toBe(true);
@@ -479,7 +482,7 @@ applicationTest("68142: reorder after fresh expiry false re-peeks the actual hea
     const human = await f.human("Human moved ahead of the current Goal");
     const tail = await f.human("FIFO tail after the valid Goal");
     const sdk = f.sdkRows();
-    const actualExpire = f.channel.expireQueuedInput!, actualStore = f.channel.storeMessage.bind(f.channel);
+    const actualExpire = f.channel.expireQueuedInput!, actualStore = f.channel.admitMessage.bind(f.channel);
     expect(typeof actualExpire).toBe("function");
     const checks: { sourceId: string | undefined; expired: boolean }[] = [], attempts: string[] = [];
     let reordered = false;
@@ -496,7 +499,7 @@ applicationTest("68142: reorder after fresh expiry false re-peeks the actual hea
       }
       return expired;
     };
-    f.channel.storeMessage = (...args) => { attempts.push(args[1]); return actualStore(...args); };
+    f.channel.admitMessage = (...args) => { attempts.push(args[1]); return actualStore(...args); };
     expect((await f.drain()).status).toBe("resumed");
     expect(reordered).toBe(true);
     expect(checks).toEqual([{ sourceId: goal.source_id, expired: false }, { sourceId: human.source_id, expired: false }]);
@@ -525,7 +528,7 @@ applicationTest("68142: owned user DELETE and negative row-ID reuse during expir
     const old = await f.human("Goal stopped? Deleted ordinary human bytes must never be broadcast.");
     expect(old.rowId).toBeLessThan(0); expect(old.source_accepted).toBe(true);
     const sdk = f.sdkRows();
-    const actualExpire = f.channel.expireQueuedInput!, actualStore = f.channel.storeMessage.bind(f.channel);
+    const actualExpire = f.channel.expireQueuedInput!, actualStore = f.channel.admitMessage.bind(f.channel);
     expect(typeof actualExpire).toBe("function");
     const checks: { sourceId: string | undefined; expired: boolean }[] = [], attempts: string[] = [];
     let deleted = false, replacement!: typeof old, tail!: typeof old;
@@ -556,7 +559,7 @@ applicationTest("68142: owned user DELETE and negative row-ID reuse during expir
       }
       return expired;
     };
-    f.channel.storeMessage = (...args) => { attempts.push(args[1]); return actualStore(...args); };
+    f.channel.admitMessage = (...args) => { attempts.push(args[1]); return actualStore(...args); };
     expect((await f.drain()).status).toBe("resumed");
     expect(deleted).toBe(true);
     expect(checks).toEqual([{ sourceId: old.source_id, expired: false }, { sourceId: replacement.source_id, expired: false }]);

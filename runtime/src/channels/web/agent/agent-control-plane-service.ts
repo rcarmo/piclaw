@@ -12,7 +12,6 @@ import type { AgentPool } from "../../../agent-pool.js";
 import {
   getDeferredQueuedFollowups,
   exportArchivedBranchDownloadData,
-  type InteractionRow,
 } from "../../../db.js";
 import { createLogger } from "../../../utils/logger.js";
 import { queuedSteeringRejectionReason } from "./queued-steering-diagnostics.js";
@@ -67,14 +66,6 @@ interface AgentQueueLike {
   enqueue(task: () => unknown, key: string, laneKey?: string): unknown;
 }
 
-type StoreMessageOptions = {
-  contentBlocks?: unknown[];
-  linkPreviews?: unknown[];
-  threadId?: number;
-  screenHint?: string | null;
-  isSteeringMessage?: boolean;
-};
-
 type ControlPlaneAgentPool = AgentPool;
 
 type ControlPlaneQueuedLifecycle = Pick<
@@ -93,13 +84,6 @@ export interface WebAgentControlPlaneServiceOptions {
   queue: AgentQueueLike;
   agentPool: ControlPlaneAgentPool;
   queuedFollowupLifecycle: ControlPlaneQueuedLifecycle;
-  storeMessage(
-    chatJid: string,
-    content: string,
-    isBot: boolean,
-    mediaIds: number[],
-    options?: StoreMessageOptions,
-  ): InteractionRow | null;
   processChat(chatJid: string, agentId: string, threadRootId?: number | null): Promise<void> | void;
   getAgentStatus?: (chatJid: string) => Record<string, unknown> | null;
   updateAgentStatus?: (chatJid: string, status: Record<string, unknown>) => void;
@@ -117,13 +101,6 @@ export interface WebAgentControlPlaneChannelLike {
   queue: AgentQueueLike;
   agentPool: ControlPlaneAgentPool;
   queuedFollowupLifecycle: ControlPlaneQueuedLifecycle;
-  storeMessage(
-    chatJid: string,
-    content: string,
-    isBot: boolean,
-    mediaIds: number[],
-    options?: StoreMessageOptions,
-  ): InteractionRow | null;
   processChat(chatJid: string, agentId: string, threadRootId?: number | null): Promise<void> | void;
   getAgentStatus?(chatJid: string): Record<string, unknown> | null;
   updateAgentStatus?(chatJid: string, status: Record<string, unknown>): void;
@@ -144,8 +121,6 @@ export function createWebAgentControlPlaneService(
     queuedFollowupLifecycle: channel.queuedFollowupLifecycle,
     get getAcceptedQueuedSteering() { return channel.getAcceptedQueuedSteering?.bind(channel); },
     get getQueuedInputSourceWithdrawal() { return channel.getQueuedInputSourceWithdrawal?.bind(channel); },
-    storeMessage: (chatJid, content, isBot, mediaIds, options) =>
-      channel.storeMessage(chatJid, content, isBot, mediaIds, options),
     processChat: (chatJid, agentId, threadRootId) => channel.processChat(chatJid, agentId, threadRootId),
     getAgentStatus: (chatJid) => channel.getAgentStatus?.(chatJid) ?? null,
     updateAgentStatus: (chatJid, status) => channel.updateAgentStatus?.(chatJid, status),

@@ -10,7 +10,7 @@ import { BunSqliteDatabase } from '../../runtime/durable-engine/src/bun-sqlite.j
 import { SqliteStorage } from '../../runtime/durable-engine/qualification/sqlite.ts';
 import { applicationOwnership, createApplicationBootstrapBundle } from '../../runtime/durable-engine/src/application-bootstrap.js';
 import { installTerminalSettlementCompositionSchema } from '../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js';
-import { admitWebUserMessage } from '../../runtime/src/channels/web/messaging/message-store.js';
+import { admitWebMessage } from '../../runtime/src/channels/web/messaging/message-store.js';
 import { QueuedFollowupLifecycleService } from '../../runtime/src/channels/web/runtime/queued-followup-lifecycle-service.js';
 import { InMemoryEffectPayloadResolver } from '../../runtime/src/service-effects/testing/in-memory-payload-resolver.js';
 import { openFixture, context, barrier } from './src/fixture.js';
@@ -40,7 +40,7 @@ for (const variant of ['plain', 'thread', 'screen', 'both', 'tampered'] as const
   let settling: Promise<unknown> | undefined;
   try {
     const ports = bundle.bind({ queue: {} as any, agentPool: {} as any }); bundle.bindInputProjection(projection);
-    const stored = await admitWebUserMessage(projection, { chatJid: chat, content: 'Primary input', isBot: false, mediaIds: [], agentId: 'default', agentName: 'Fixture' },
+    const stored = await admitWebMessage(projection, { chatJid: chat, content: 'Primary input', isBot: false, mediaIds: [], agentId: 'default', agentName: 'Fixture' },
       { acceptSource: ports.getInputSourceAdmission!(chat) }, () => lock.assertCurrentOwner(), new AbortController().signal);
     expect(stored).not.toBeNull();
     const primary = root.query('SELECT rowid,id FROM messages WHERE chat_jid=? AND content=?').get(chat, 'Primary input') as any;

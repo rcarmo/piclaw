@@ -13,7 +13,7 @@ import { createTestCredentialStore } from "../../runtime/test/model-services-fix
 import { AgentPool } from "../../runtime/src/agent-pool.js";
 import { createRuntimeBaseServices } from "../../runtime/src/runtime/composition.js";
 import { WebChannel } from "../../runtime/src/channels/web.js";
-import { admitWebUserMessage } from "../../runtime/src/channels/web/messaging/message-store.js";
+import { admitWebMessage } from "../../runtime/src/channels/web/messaging/message-store.js";
 import type { Model, AssistantMessage, CredentialStore } from "../../node_modules/@earendil-works/pi-ai";
 import { applicationAddonSourceProfiles } from "../../runtime/durable-engine/src/host-extension-catalog.js";
 const rootUrl = new URL("../../package.json", import.meta.url).href;
@@ -89,7 +89,7 @@ applicationTest("all 23 installed: actual default factory public provider termin
     const bound = backend.bind({ queue: base.queue, agentPool: pool });
     const channel = new WebChannel(bound);
     const priorReservations = new Set((getDb().query("SELECT id FROM budget_request_reservations").all() as {id:string}[]).map(r=>r.id));
-    const admitted = await admitWebUserMessage(channel, { chatJid: "web:default", content: "Reply with a short synthetic result", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" }, { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
+    const admitted = await admitWebMessage(channel, { chatJid: "web:default", content: "Reply with a short synthetic result", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" }, { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
     expect(admitted).not.toBeNull();
     const row = getDb().query("SELECT id FROM messages WHERE rowid=?").get(admitted!.id) as { id: string };
     const outcome = await bound.dispatchAcceptedInput!("web:default", row.id, admitted!.id)!();

@@ -69,8 +69,6 @@ const EXPECTED_BUILTIN_TOOL_NAMES = [
   "open_workspace_file",
   // env-tools
   "env",
-  // exit-process
-  "exit_process",
   // image-processing
   "image_process",
 ];
@@ -86,7 +84,6 @@ const BOOTSTRAP_CRITICAL_ACTIVE_TOOLS = [
   "reset_active_tools",
   "attach_file",
   "messages",
-  "exit_process",
   "set_model",
   "provider_quota",
 ];
@@ -205,6 +202,7 @@ describe("built-in extension tool catalog regression", () => {
       "office_read", "office_write",                  // packaged office tools
       "start_autoresearch", "stop_autoresearch", "autoresearch_status", // addon-provided experiment tools
       "schedule_task",                                // registered by task scheduler, not extension factory
+      "exit_process",                                 // native process-control owner, not legacy extension factory
     ]);
 
     const toolsetToolNames = TOOLSETS.flatMap((ts) => ts.toolNames);

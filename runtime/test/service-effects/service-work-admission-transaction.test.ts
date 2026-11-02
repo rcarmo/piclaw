@@ -3,7 +3,7 @@ import { afterEach, expect, test } from "bun:test";
 import { createTempWorkspace, setEnv } from "../helpers.js";
 import { closeDatabase, getDb, initDatabase } from "../../src/db/connection.js";
 import { getWebPreviewMaxChars } from "../../src/db/web-content.js";
-import { admitWebUserMessage, type WebUserMessageStoreOptions } from "../../src/channels/web/messaging/message-store.js";
+import { admitWebMessage, type StoreWebMessageOptions } from "../../src/channels/web/messaging/message-store.js";
 import { hashCanonicalRequest, type CanonicalJsonValue } from "../../src/service-effects/contracts/common.js";
 import type { AcceptSourceRequest, ClaimNextSourceRequest } from "../../src/service-effects/contracts/service-work-store.js";
 import { installServiceWorkSchema } from "../../src/service-effects/current-piclaw/service-work-schema.js";
@@ -35,14 +35,14 @@ function request(id = "host-source"): AcceptSourceRequest {
 }
 const channel = { broadcastEvent() {} };
 const params = { chatJid: "web:atomic", content: "private ordinary input", isBot: false, mediaIds: [], agentId: "default", agentName: "Fixture" };
-function admit(options: WebUserMessageStoreOptions, authorise: (phase?: "before" | "after") => void = () => {}) {
-  return admitWebUserMessage(channel, params, options, authorise, new AbortController().signal);
+function admit(options: StoreWebMessageOptions, authorise: (phase?: "before" | "after") => void = () => {}) {
+  return admitWebMessage(channel, params, options, authorise, new AbortController().signal);
 }
 function snapshot(db: Database) {
   return ["messages", "chats", "media", "message_media", "sqlite_sequence", "service_effect_s01_chats", "service_effect_s01_sources",
     "service_effect_s01_decisions", "service_effect_s01_wake_intents"].map(table => db.query(`SELECT * FROM ${table}`).all());
 }
-function coordinator(store: ReturnType<typeof fixture>["store"], after?: () => void): WebUserMessageStoreOptions {
+function coordinator(store: ReturnType<typeof fixture>["store"], after?: () => void): StoreWebMessageOptions {
   return { acceptSource({ message, rowId, database }) {
     expect(database.inTransaction).toBe(true);
     const input = seal({ ...request(message.id), chatJid: message.chat_jid, acceptedAt: message.timestamp,
@@ -157,18 +157,18 @@ test("callback contention after source and wake acceptance is terminal and rolls
 test("cancellation after source and wake writes rolls back all effects; preflight never calls coordinator", async () => {
   const { db, store } = fixture(); const before = snapshot(db);
   const abort = new AbortController(); let calls = 0;
-  const options: WebUserMessageStoreOptions = { acceptSource({ message, rowId, database }) {
+  const options: StoreWebMessageOptions = { acceptSource({ message, rowId, database }) {
     calls++;
     store.acceptSourceInTransaction(seal({ ...request(message.id), acceptedAt: message.timestamp,
       payloadRef: `message-row:${rowId}`, createWakeIntent: true }), database);
     expect(db.query("SELECT * FROM service_effect_s01_wake_intents").all()).toHaveLength(1);
     abort.abort(Error("cancel after SQL"));
   } };
-  await expect(admitWebUserMessage(channel, params, options, () => {}, abort.signal)).rejects.toThrow("cancel after SQL");
+  await expect(admitWebMessage(channel, params, options, () => {}, abort.signal)).rejects.toThrow("cancel after SQL");
   expect(calls).toBe(1); expect(snapshot(db)).toEqual(before);
-  await expect(admitWebUserMessage(channel, { ...params, mediaIds: [999999] }, options, () => {}, new AbortController().signal)).rejects.toThrow("unavailable");
+  await expect(admitWebMessage(channel, { ...params, mediaIds: [999999] }, options, () => {}, new AbortController().signal)).rejects.toThrow("unavailable");
   expect(calls).toBe(1); expect(snapshot(db)).toEqual(before);
-  const deferred = await admitWebUserMessage(channel, params, options, () => {}, new AbortController().signal, () => true);
+  const deferred = await admitWebMessage(channel, params, options, () => {}, new AbortController().signal, () => true);
   expect(deferred).toBeNull(); expect(calls).toBe(1); expect(snapshot(db)).toEqual(before);
 });
 
@@ -181,7 +181,7 @@ for (const denial of ["async", "true", "object", "resolved", "rejected", "throwi
     const thenableTransactions: boolean[] = [];
     process.on("unhandledRejection", onUnhandled);
     try {
-      const options: WebUserMessageStoreOptions = { acceptSource(stored) {
+      const options: StoreWebMessageOptions = { acceptSource(stored) {
         store.acceptSourceInTransaction(seal({ ...request(stored.message.id),
           payloadRef: `message-row:${stored.rowId}`, createWakeIntent: true }), stored.database);
         expect(db.query("SELECT * FROM media").all()).toHaveLength(1);
@@ -204,7 +204,7 @@ for (const denial of ["async", "true", "object", "resolved", "rejected", "throwi
       }
       let failure: unknown;
       try {
-        await admitWebUserMessage(channel, { ...params, content: "x".repeat(getWebPreviewMaxChars() + 1) },
+        await admitWebMessage(channel, { ...params, content: "x".repeat(getWebPreviewMaxChars() + 1) },
           options, () => {}, new AbortController().signal);
       } catch (error) { failure = error; }
       expect(failure).toBeInstanceOf(Error);

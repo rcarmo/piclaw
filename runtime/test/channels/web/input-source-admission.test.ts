@@ -2,14 +2,14 @@ import { afterEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createDurableQueuedSteering } from '../../../src/agent-pool/durable-queued-steering.js';
 import { createDurableRecoveryDispatch } from '../../../src/agent-pool/durable-recovery-dispatch.js';
-import { storeWebMessage } from '../../../src/channels/web/messaging/message-store.js';
+import { admitWebMessage } from '../../../src/channels/web/messaging/message-store.js';
 import { createDurableQueueDispatch } from "../../../src/agent-pool/durable-queue-dispatch.js";
 import { createDurableConversationAdapter } from "../../../src/agent-pool/durable-runtime-adapter.js";
 import { join } from "node:path";
 import { createTempWorkspace, setEnv } from "../../helpers.js";
 import { closeDatabase, getDb, initDatabase } from "../../../src/db/connection.js";
 import { WebChannel, type WebChannelOpts } from "../../../src/channels/web.js";
-import type { WebUserMessageStoreOptions } from "../../../src/channels/web/messaging/message-store.js";
+import type { StoreWebMessageOptions } from "../../../src/channels/web/messaging/message-store.js";
 import { installServiceWorkSchema } from "../../../src/service-effects/current-piclaw/service-work-schema.js";
 import { createCurrentPiclawServiceWorkStore } from "../../../src/service-effects/current-piclaw/service-work-store.js";
 import { hashCanonicalRequest, type CanonicalJsonValue } from "../../../src/service-effects/contracts/common.js";
@@ -49,7 +49,7 @@ function fixture(select?: WebChannelOpts["getInputSourceAdmission"], validateAcc
     expect(db.query("SELECT * FROM service_effect_s01_sources").all()).toHaveLength(expectedSources);
     events.push(type);
   };
-  const accept: NonNullable<WebUserMessageStoreOptions["acceptSource"]> = ({ message, rowId, database }) => {
+  const accept: NonNullable<StoreWebMessageOptions["acceptSource"]> = ({ message, rowId, database }) => {
     expect(database).toBe(db);
     expect(database.inTransaction).toBe(true);
     const input: AcceptSourceRequest = {
@@ -297,7 +297,7 @@ test("HTTP default is off, including forged engine and callback fields", async (
 });
 
 test("actual HTTP + prototype + storage wrapper commit source and timeline before publication/wake", async () => {
-  let callback: WebUserMessageStoreOptions["acceptSource"];
+  let callback: StoreWebMessageOptions["acceptSource"];
   const routes: string[] = [];
   const f = fixture(jid => { routes.push(jid); return callback; });
   callback = f.accept;
@@ -318,7 +318,7 @@ test("actual HTTP + prototype + storage wrapper commit source and timeline befor
 });
 
 for (const failure of ["selection", "after-write", "async"] as const) test(`HTTP ${failure} failure exposes no private detail or accepted side effects`, async () => {
-  let callback: WebUserMessageStoreOptions["acceptSource"];
+  let callback: StoreWebMessageOptions["acceptSource"];
   const f = fixture(() => { if (failure === "selection") throw Error("private selector detail"); return callback; });
   callback = stored => { f.accept(stored); if (failure === "async") return Promise.reject(Error("private callback detail")) as never; throw Error("private callback detail"); };
   const before = f.snapshot();
@@ -352,7 +352,7 @@ test("selection is captured before awaited HTTP body, even if coordinator is rep
 });
 
 for (const mutation of ["owner-before", "owner-after", "abort"] as const) test(`HTTP ${mutation} rejects atomically before acknowledgement`, async () => {
-  let callback: WebUserMessageStoreOptions["acceptSource"], checks = 0;
+  let callback: StoreWebMessageOptions["acceptSource"], checks = 0;
   const abort = new AbortController();
   const f = fixture(() => callback, () => ++checks !== (mutation === "owner-before" ? 1 : mutation === "owner-after" ? 2 : -1));
   callback = stored => {
@@ -368,7 +368,7 @@ for (const mutation of ["owner-before", "owner-after", "abort"] as const) test(`
 });
 
 test("HTTP callback contention rolls back without replaying admission", async () => {
-  let callback: WebUserMessageStoreOptions["acceptSource"], selections = 0, attempts = 0;
+  let callback: StoreWebMessageOptions["acceptSource"], selections = 0, attempts = 0;
   const f = fixture(() => { selections++; return callback; });
   callback = stored => {
     f.accept(stored);
@@ -395,8 +395,8 @@ for (const duringAdmission of [false, true]) test(`HTTP queued input preserves o
   let calls = 0;
   const f = fixture(() => () => { calls++; });
   if (duringAdmission) {
-    const admit = f.channel.admitUserMessage!.bind(f.channel);
-    f.channel.admitUserMessage = async (...args) => { f.busy(true); return admit(...args); };
+    const admit = f.channel.admitMessage!.bind(f.channel);
+    f.channel.admitMessage = async (...args) => { f.busy(true); return admit(...args); };
   } else f.busy(true);
   expect((await f.route({ content: "first follow-up" })).status).toBe(201);
   expect((await f.route({ content: "second follow-up" })).status).toBe(201);
@@ -417,8 +417,8 @@ for (const mode of ["active", "backlog", "race"] as const) test(`HTTP queued sou
   if (mode === "active") f.busy(true);
   if (mode === "backlog") f.channel.enqueueQueuedFollowupItem("web:default", 0, "older backlog");
   if (mode === "race") {
-    const admit = f.channel.admitUserMessage!.bind(f.channel);
-    f.channel.admitUserMessage = async (...args) => { f.busy(true); return admit(...args); };
+    const admit = f.channel.admitMessage!.bind(f.channel);
+    f.channel.admitMessage = async (...args) => { f.busy(true); return admit(...args); };
   }
   for (let n = 1; n <= 2; n++) {
     f.expectSources(n);
@@ -450,10 +450,10 @@ test("idle steer becoming active inside admission accepts a durable startup fall
   const published: unknown[] = [];
   const broadcast = f.channel.broadcastEvent.bind(f.channel);
   f.channel.broadcastEvent = (type, data) => { published.push(data); broadcast(type, data); };
-  const admit = f.channel.admitUserMessage!.bind(f.channel);
-  f.channel.admitUserMessage = (...args) => {
-    const validate = args[4];
-    args[4] = phase => { validate(phase); if (phase === "before") f.busy(true); };
+  const admit = f.channel.admitMessage!.bind(f.channel);
+  f.channel.admitMessage = (...args) => {
+    const validate = args[5];
+    args[5] = phase => { validate(phase); if (phase === "before") f.busy(true); };
     return admit(...args);
   };
   f.expectSources(1);
@@ -478,10 +478,10 @@ test("idle steer becoming active inside admission accepts a durable startup fall
 for (const failure of ["throw", "owner-after", "abort"] as const) test(`idle-race ${failure} rollback leaves only a harmless public allocator gap`, async () => {
   const f = fixture();
   const abort = new AbortController();
-  const admit = f.channel.admitUserMessage!.bind(f.channel);
-  f.channel.admitUserMessage = (...args) => {
-    const validate = args[4];
-    args[4] = phase => {
+  const admit = f.channel.admitMessage!.bind(f.channel);
+  f.channel.admitMessage = (...args) => {
+    const validate = args[5];
+    args[5] = phase => {
       validate(phase);
       if (phase === "before") f.busy(true);
       if (phase === "after" && failure === "owner-after") throw Error("authority lost");
@@ -504,7 +504,7 @@ for (const failure of ["throw", "owner-after", "abort"] as const) test(`idle-rac
   expect(f.jobs).toEqual([]);
   // Public action IDs need uniqueness, not contiguous numbering. Durable source
   // identity/sequence come from accepted UUIDs, never this in-memory allocator.
-  f.channel.admitUserMessage = admit;
+  f.channel.admitMessage = admit;
   f.channel.getQueuedInputSourceAdmission = () => f.acceptQueued;
   f.expectSources(1);
   expect((await f.route({ content: "accepted after idle race" })).status).toBe(201);
@@ -694,7 +694,7 @@ for (const [queuedInput, pending, steering] of [[false,false,false], [false,true
   const { installTerminalSettlementCompositionSchema } = await import("../../../src/service-effects/current-piclaw/terminal-settlement-schema.js");
   const { createCurrentPiclawTerminalSettlementStore } = await import("../../../src/service-effects/current-piclaw/terminal-settlement-store.js");
   const { InMemoryEffectPayloadResolver } = await import("../../../src/service-effects/testing/in-memory-payload-resolver.js");
-  let callback: WebUserMessageStoreOptions["acceptSource"];
+  let callback: StoreWebMessageOptions["acceptSource"];
   const f = fixture(() => callback, () => true);
   callback = f.accept;
   installTerminalSettlementCompositionSchema(f.db);
@@ -820,7 +820,7 @@ for (const [queuedInput, pending, steering] of [[false,false,false], [false,true
           const { source_accepted: _sourceAccepted, materializeRetries: _materializeRetries, ...immutable } = item;
           expect(f.work.getAcceptedSource('web:default', item.source_id)?.provenanceRef).toBe(`engine:host-selected:${hashCanonicalRequest(JSON.parse(JSON.stringify(immutable)) as CanonicalJsonValue)}`);
         },
-        materialize: (item, accept) => storeWebMessage(f.channel as any, { chatJid: 'web:default', content: item.queuedContent,
+        materialize: (item, accept) => admitWebMessage(f.channel as any, { chatJid: 'web:default', content: item.queuedContent,
           isBot: false, mediaIds: item.mediaIds ?? [], agentId: 'default', agentName: 'Fixture' }, {
           contentBlocks: item.contentBlocks, linkPreviews: item.linkPreviews, threadId: item.threadId,
           screenHint: item.screenHint, isSteeringMessage: true, consumeDeferredFollowupRowId: item.rowId,
@@ -1088,13 +1088,24 @@ test("prepared input text reaches direct and queued admissions with the same syn
   expect(queuedItem.queuedContent).toBe("prepared:queued text");
   expect(preparations).toBe(2);
   f.channel.prepareInputText = () => { throw Error("Materialisation must not prepare input again"); };
-  const materialized = await f.channel.storeMessage("web:default", queuedItem.queuedContent, false, queuedItem.mediaIds,
-    queuedItem.contentBlocks, queuedItem.linkPreviews, queuedItem.threadId, undefined, undefined,
-    { consumeDeferredFollowupRowId: queuedItem.rowId });
+  f.channel.getQueuedInputMaterialization = () => ({ database, item, message, rowId }) => {
+    expect(database).toBe(f.db); expect(database.inTransaction).toBe(true);
+    expect(message.id).toBe(item.source_id);
+    const source = f.work.getAcceptedSource('web:default', item.source_id);
+    const { source_accepted: _accepted, materializeRetries: _retries, ...immutable } = item;
+    expect(source?.state).toBe('pending'); expect(source?.payloadRef).toBe(`queued-source:${message.id}`);
+    expect(source?.provenanceRef).toBe(`engine:host-selected:${hashCanonicalRequest(JSON.parse(JSON.stringify(immutable)) as CanonicalJsonValue)}`);
+    expect(database.query('SELECT id FROM messages WHERE rowid=?').get(rowId)).toEqual({ id: item.source_id });
+  };
+  const materialized = await f.channel.admitMessage("web:default", queuedItem.queuedContent, false, queuedItem.mediaIds ?? [],
+    { contentBlocks: queuedItem.contentBlocks, linkPreviews: queuedItem.linkPreviews, threadId: queuedItem.threadId,
+      consumeDeferredFollowupRowId: queuedItem.rowId });
   expect(materialized?.id).toBeGreaterThan(0);
   expect((getDb().query("SELECT content FROM messages WHERE rowid=?").get(materialized!.id) as { content: string }).content).toBe("prepared:queued text");
   expect(preparations).toBe(2);
-  // The queue worker owns in-memory removal; storeMessage only materialises SQL.
+  expect(f.channel.getQueuedFollowupItems("web:default").some(item => item.rowId === queuedItem.rowId)).toBe(false);
+  expect(getDb().query('SELECT id FROM messages WHERE rowid=?').get(materialized!.id)).toEqual({ id: queuedItem.source_id });
+  // Materialisation consumes the persisted intent in the same source transaction.
   const before = f.snapshot();
   const queueBefore = f.channel.getQueuedFollowupItems("web:default");
   f.channel.prepareInputText = () => ({ text: "must not be accepted", assertCurrent() { throw Error("Goal lifecycle revoked"); } });
@@ -1151,7 +1162,7 @@ test.skipIf(!hasEngine)('reordered native queue executes second accepted source 
   const { installTerminalSettlementCompositionSchema } = await import("../../../src/service-effects/current-piclaw/terminal-settlement-schema.js");
   const { createCurrentPiclawTerminalSettlementStore } = await import("../../../src/service-effects/current-piclaw/terminal-settlement-store.js");
   const { InMemoryEffectPayloadResolver } = await import("../../../src/service-effects/testing/in-memory-payload-resolver.js");
-  let callback: WebUserMessageStoreOptions["acceptSource"];
+  let callback: StoreWebMessageOptions["acceptSource"];
   const queueService = new QueuedFollowupLifecycleService();
   const f = fixture(() => callback, () => true, chat => queueService.getPendingQueuedSourceOrder(chat));
   callback = f.accept;
@@ -1207,7 +1218,7 @@ test.skipIf(!hasEngine)('reordered native queue executes second accepted source 
     let index=0;
     while(queueService.peekQueuedFollowupItem('web:default')) {
       const item=queueService.peekQueuedFollowupItem('web:default')!;
-      const interaction=storeWebMessage(f.channel as any,{chatJid:'web:default',content:item.queuedContent,isBot:false,mediaIds:[],agentId:'default',agentName:'Fixture'},
+      const interaction=await admitWebMessage(f.channel as any,{chatJid:'web:default',content:item.queuedContent,isBot:false,mediaIds:[],agentId:'default',agentName:'Fixture'},
         {consumeDeferredFollowupRowId:item.rowId,threadToSelf:true,materializeQueuedSource:({message})=>{expect(message.id).toBe(item.source_id);}});
       const row=f.db.query('SELECT rowid,id FROM messages WHERE id=?').get(item.source_id!) as {rowid:number,id:string};
       expect(interaction.id).toBe(row.rowid);

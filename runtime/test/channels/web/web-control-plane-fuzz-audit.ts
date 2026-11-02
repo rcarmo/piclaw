@@ -3,7 +3,8 @@ import "../../helpers.ts";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 
-import { WebChannel } from "../../../src/channels/web.ts";
+import { WebAgentPeerMessageRelayService } from "../../../src/channels/web/agent/agent-peer-message-relay-service.js";
+import { WebAdaptiveCardSidePromptService } from "../../../src/channels/web/cards/adaptive-card-side-prompt-service.js";
 import { WebAgentControlPlaneService } from "../../../src/channels/web/agent/agent-control-plane-service.js";
 import { handleAgentMessage } from "../../../src/channels/web/handlers/agent.ts";
 import {
@@ -113,7 +114,6 @@ function createControlPlaneService(): WebAgentControlPlaneService {
       removeQueuedFollowupForAction: async () => ({ removed: null, source: null }),
       reorderQueuedFollowupItems: async () => false,
     },
-    storeMessage: () => null,
     processChat: async () => {},
   });
 }
@@ -412,10 +412,8 @@ function buildAuditCase(caseId: number, seed: number): AuditCase {
       payloadClass: spec.payloadClass,
       requestBody: spec.bodyText,
       expectedError: spec.expectedError,
-      execute: async () => WebChannel.prototype.handleAgentPeerMessage.call(
-        { json: jsonResponse },
-        createRequest("/agent/peer-message", spec.bodyText),
-      ),
+      execute: async () => new WebAgentPeerMessageRelayService({ json: jsonResponse } as any)
+        .handleAgentPeerMessage(createRequest("/agent/peer-message", spec.bodyText)),
     };
   }
 
@@ -426,10 +424,8 @@ function buildAuditCase(caseId: number, seed: number): AuditCase {
       payloadClass: spec.payloadClass,
       requestBody: spec.bodyText,
       expectedError: spec.expectedError,
-      execute: async () => WebChannel.prototype.handleAgentSidePrompt.call(
-        { json: jsonResponse },
-        createRequest("/agent/side-prompt", spec.bodyText),
-      ),
+      execute: async () => new WebAdaptiveCardSidePromptService({ json: jsonResponse } as any)
+        .handleAgentSidePrompt(createRequest("/agent/side-prompt", spec.bodyText)),
     };
   }
 
@@ -440,10 +436,8 @@ function buildAuditCase(caseId: number, seed: number): AuditCase {
       payloadClass: spec.payloadClass,
       requestBody: spec.bodyText,
       expectedError: spec.expectedError,
-      execute: async () => WebChannel.prototype.handleAgentSidePromptStream.call(
-        { json: jsonResponse },
-        createRequest("/agent/side-prompt/stream", spec.bodyText),
-      ),
+      execute: async () => new WebAdaptiveCardSidePromptService({ json: jsonResponse } as any)
+        .handleAgentSidePromptStream(createRequest("/agent/side-prompt/stream", spec.bodyText)),
     };
   }
 
@@ -479,10 +473,8 @@ function buildAuditCase(caseId: number, seed: number): AuditCase {
     payloadClass: spec.payloadClass,
     requestBody: spec.bodyText,
     expectedError: spec.expectedError,
-    execute: async () => WebChannel.prototype.handleAdaptiveCardAction.call(
-      { json: jsonResponse },
-      createRequest("/agent/card-action", spec.bodyText),
-    ),
+    execute: async () => new WebAdaptiveCardSidePromptService({ json: jsonResponse } as any)
+      .handleAdaptiveCardAction(createRequest("/agent/card-action", spec.bodyText)),
   };
 }
 

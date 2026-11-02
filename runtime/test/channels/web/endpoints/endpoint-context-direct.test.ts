@@ -6,7 +6,7 @@ function fixture() {
   const channel: any = {
     lastCommandInteractionId: null, workspaceVisible: false, workspaceShowHidden: false,
     json(payload: unknown, status = 200) { return new Response(JSON.stringify(payload), { status }); },
-    agentPool: {},
+    agentPool: {}, authGateway: {}, admitMessage: async () => null,
   };
   const options = { defaultChatJid: "web:default", defaultAgentId: "default", getIdentitySnapshot() { return identity; } };
   return { channel, options, contexts: createWebChannelEndpointContexts(channel, options) };
@@ -15,7 +15,7 @@ function fixture() {
 test("six context projections retain exact own keys and allocation policy", () => {
   const { contexts } = fixture();
   const shapes = {
-    postMutations: ["defaultChatJid", "lastCommandInteractionId", "json", "replaceMessageContent", "broadcastInteractionUpdated", "storeMessage", "broadcastAgentResponse"],
+    postMutations: ["defaultChatJid", "lastCommandInteractionId", "authGateway", "json", "replaceMessageContent", "broadcastInteractionUpdated", "admitMessage", "broadcastAgentResponse"],
     agentStatus: ["defaultChatJid", "json", "getAgentStatus", "getExtensionWorkingState", "getBuffer", "getContextUsageForChat", "getSessionTreeSummaryForChat", "getTokenUsageForChat", "getAvailableModels", "getProviderReadyCompletedForInstance"],
     content: ["defaultChatJid", "json", "getBuffer", "getIdentity"],
     ui: ["json", "getWorkspaceVisible", "setWorkspaceVisible", "getWorkspaceShowHidden", "setWorkspaceShowHidden", "setPanelExpanded", "handleUiResponse"],
@@ -66,7 +66,25 @@ test("optional summary presence remains captured at context creation but its own
   await expect(present.getSessionTreeSummaryForChat!("web:default")).resolves.toEqual({ leafId: "second", total: 2 });
 });
 
-test("five policy-free copy builders are retired; concurrent post scope stays untouched", async () => {
-  const remaining = await import("../../../../src/channels/web/endpoints/endpoint-contexts.js");
-  expect(Object.keys(remaining)).toEqual(["createPostMutationsContext"]);
+test("accepted post context captures auth and exact bound async admission without a raw-storage fallback", async () => {
+  const f = fixture(), pending = Promise.withResolvers<any>(), gateway = f.channel.authGateway;
+  const check = () => {}, signal = new AbortController().signal;
+  f.channel.admitMessage = function(...args: unknown[]) {
+    expect(this).toBe(f.channel);
+    expect(args).toEqual(["web:default", "accepted", true, [], { threadId: 42 }, check, signal]);
+    return pending.promise;
+  };
+  const post = f.contexts.postMutations();
+  f.channel.admitMessage = () => { throw new Error("replacement must not run"); };
+  f.channel.authGateway = {};
+  expect(post.authGateway).toBe(gateway);
+  expect(post).not.toHaveProperty("storeMessage");
+  const result = post.admitMessage("web:default", "accepted", true, [], { threadId: 42 }, check, signal);
+  expect(result).toBe(pending.promise);
+  const row: any = { id: 17 }; pending.resolve(row);
+  expect(await result).toBe(row);
+});
+
+test("the now-unused endpoint context copy-builder module is retired", async () => {
+  expect(await Bun.file(new URL("../../../../src/channels/web/endpoints/endpoint-contexts.ts", import.meta.url)).exists()).toBe(false);
 });

@@ -13,7 +13,7 @@ import { createTestCredentialStore } from "../../runtime/test/model-services-fix
 import { AgentPool } from "../../runtime/src/agent-pool.js";
 import { createRuntimeBaseServices } from "../../runtime/src/runtime/composition.js";
 import { WebChannel } from "../../runtime/src/channels/web.js";
-import { admitWebUserMessage } from "../../runtime/src/channels/web/messaging/message-store.js";
+import { admitWebMessage } from "../../runtime/src/channels/web/messaging/message-store.js";
 import type { Model, AssistantMessage, CredentialStore } from "../../node_modules/@earendil-works/pi-ai";
 import { HostConversationRuntime } from "../../runtime/durable-engine/src/host-runtime.js";
 import { HostCodexModelServices } from "../../runtime/durable-engine/src/host-codex-model-services.js";
@@ -170,7 +170,7 @@ for (const scenario of ["write", "model", "sse", "broken-sse"] as const) applica
     const channel = new WebChannel(bound);
     const priorReservations = new Set((getDb().query("SELECT id FROM budget_request_reservations").all() as {id:string}[]).map(r=>r.id));
     const priorBotCount = (getDb().query("SELECT count(*) AS n FROM messages WHERE is_bot_message=1").get() as {n:number}).n;
-    const admitted = await admitWebUserMessage(channel, { chatJid: "web:default", content: "Reply with a short synthetic result", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" }, { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
+    const admitted = await admitWebMessage(channel, { chatJid: "web:default", content: "Reply with a short synthetic result", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" }, { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
     expect(admitted).not.toBeNull();
     const row = getDb().query("SELECT id FROM messages WHERE rowid=?").get(admitted!.id) as { id: string };
     const outcome = await bound.dispatchAcceptedInput!("web:default", row.id, admitted!.id)!();
@@ -246,7 +246,7 @@ for (const scenario of ["write", "model", "sse", "broken-sse"] as const) applica
       expect(routingTokens).toEqual([null, "ROUTING_TOKEN_1"]);
       const firstOperation = getDb().query("SELECT operation_id FROM service_effect_s01_operations WHERE chat_jid=? ORDER BY primary_source_seq DESC LIMIT 1").get("web:default") as { operation_id: string };
       expect(routingRelease).toHaveBeenCalledWith(firstOperation.operation_id);
-      const second = await admitWebUserMessage(channel, { chatJid: "web:default", content: "A new synthetic user turn", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" }, { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
+      const second = await admitWebMessage(channel, { chatJid: "web:default", content: "A new synthetic user turn", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" }, { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
       expect(second).not.toBeNull();
       const next = getDb().query("SELECT id FROM messages WHERE rowid=?").get(second!.id) as { id: string };
       expect(await bound.dispatchAcceptedInput!("web:default", next.id, second!.id)!()).toBe("settled");

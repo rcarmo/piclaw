@@ -1,4 +1,4 @@
-// INACTIVE host-only composition. No default registration or legacy dispatch.
+// Native accepted queued steering; source attachment stays inside the materialisation transaction.
 import { hashCanonicalRequest, type CanonicalJsonValue } from '../service-effects/contracts/common.js';
 import type { CurrentPiclawServiceWorkStore } from '../service-effects/current-piclaw/service-work-store.js';
 import type { createDurableConversationAdapter, DurableConversationOperation } from './durable-runtime-adapter.js';
@@ -20,7 +20,7 @@ export function createDurableQueuedSteering(options: {
   assertCurrentWriter(): void;
   runningBinding: Readonly<{ sessionId: string }>;
   readQueued(rowId: number): QueuedFollowupItem | undefined;
-  materialize(item: QueuedFollowupItem, accept: QueuedInputMaterialization): InteractionRow | null;
+  materialize(item: QueuedFollowupItem, accept: QueuedInputMaterialization): Promise<InteractionRow | null>;
   /** Verify the original accepted immutable input digest, not just current queue bytes. */
   validatePayload: QueuedInputMaterialization;
   /** Host controller owns retry/settlement and must retain this committed identity on uncertainty. */
@@ -50,7 +50,7 @@ export function createDurableQueuedSteering(options: {
     if (!item?.source_accepted || !item.source_id) throw Error('Accepted queue item unavailable');
     const expected = structuredClone(item);
     let accepted: DurableConversationOperation | undefined;
-    const interaction = materialize(expected, stored => {
+    const interaction = await materialize(expected, stored => {
       assert();
       if (stored.database !== work.database || !stored.database.inTransaction || stored.chatJid !== chatJid ||
         stored.item.rowId !== rowId || JSON.stringify(stored.item) !== JSON.stringify(expected) ||

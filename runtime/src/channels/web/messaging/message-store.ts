@@ -1,13 +1,7 @@
+import { getExecutionIdentity } from "../../../core/execution-context.js";
 import { bindAddonLocalMessage } from "../../../addons/local-dispatch.js";
-/**
- * web/message-store.ts – Database operations for web-channel messages.
- *
- * Wraps db/messages.ts with web-channel-specific logic: generating message
- * IDs, attaching media, and handling content blocks. Serves as the data
- * access layer for all web-channel message CRUD operations.
- *
- * Consumers: web/posts-service.ts, web/agent-message-service.ts.
- */
+/** Admitted web timeline writes. Message, media, source attachment and queue
+ * consumption share one synchronous SQL body after asynchronous acquisition. */
 
 import {
   attachMediaToMessage,
@@ -70,11 +64,8 @@ export interface StoreWebMessageOptions {
   /** Captured host callback only; never sourced from request/content blocks. */
   materializeQueuedSource?: QueuedInputMaterialization;
   /** Admit a legacy queued row atomically when it becomes durable normal input. */
-  acceptMaterializedSource?: WebUserMessageStoreOptions["acceptSource"];
-}
+  acceptMaterializedSource?: StoreWebMessageOptions["acceptSource"];
 
-/** Host-only incoming admission options; never populated from HTTP fields. */
-export interface WebUserMessageStoreOptions extends StoreWebMessageOptions {
   /**
    * Runs after row/media writes on the SAME owned SQL connection, before commit.
    * Trusted SQL-only, synchronous, retry-safe callback; return exactly undefined
@@ -86,7 +77,7 @@ export interface WebUserMessageStoreOptions extends StoreWebMessageOptions {
   acceptSource?: (stored: Readonly<{ message: Readonly<NewMessage>; rowId: number; database: Database }>) => void;
 }
 
-/** Resolved parameters for storeWebMessage (after defaults applied). */
+/** Resolved timeline message parameters (after defaults applied). */
 export interface StoreWebMessageParams {
   chatJid: string;
   content: string;
@@ -271,36 +262,17 @@ function writePreparedWebMessage(prepared: PreparedWebMessage): CommittedWebMess
   return { ...committed, interaction };
 }
 
-/** Store a web channel message synchronously for existing internal callers. */
-export function storeWebMessage(channel: LinkPreviewChannel, params: StoreWebMessageParams, options: StoreWebMessageOptions = {}): InteractionRow | null {
-  if (readAccessConfig().mode !== "single-user") {
-    if (!params.isBot) return null;
-    try { requireOwnedSessionExecution(params.chatJid); } catch { return null; }
-  }
-  const prepared = prepareWebMessage(params, options);
-  let committed: CommittedWebMessage;
-  try { committed = getDb().transaction(() => writePreparedWebMessage(prepared)).immediate(); }
-  catch { return null; }
-  return finishWebMessage(channel, committed);
-}
-
-/** Internal posts share the existing preparation/commit/publication split. */
+/** One admitted timeline writer. Source/queue callbacks remain SQL-only and atomic. */
 export async function admitWebMessage(channel: LinkPreviewChannel, params: StoreWebMessageParams, options: StoreWebMessageOptions,
-  authorise: () => void, signal?: AbortSignal): Promise<InteractionRow | null> {
-  const database = getDb(), prepared = prepareWebMessage(params, options);
-  const check = () => {
-    authorise();
-    if (getDb() !== database || readAccessConfig().mode !== "single-user") throw Error("Message post authority changed");
-  };
-  const committed = await admitSqliteWrite(database, () => writePreparedWebMessage(prepared), check, signal);
-  return finishWebMessage(channel, committed);
-}
-
-/** Single-user incoming messages only; every retry owns a complete atomic write. */
-export async function admitWebUserMessage(channel: LinkPreviewChannel, params: StoreWebMessageParams, options: WebUserMessageStoreOptions,
-  authorise: (phase?: 'before' | 'after') => void, signal: AbortSignal, deferBeforeInsert?: () => boolean): Promise<InteractionRow | null> {
-  if (params.isBot || readAccessConfig().mode !== 'single-user') throw Error('Incoming web admission requires single-user authority.');
+  authorise?: (phase?: 'before' | 'after') => void, signal?: AbortSignal, deferBeforeInsert?: () => boolean): Promise<InteractionRow | null> {
+  if (readAccessConfig().mode !== 'single-user') throw Error('Web message admission requires single-user authority.');
+  if (params.isBot && (options.acceptSource || deferBeforeInsert)) throw Error('Agent replies cannot admit or defer model input.');
+  const identity = getExecutionIdentity(), chatJid = params.chatJid;
+  const targetKey = () => { const branch = getChatBranchByChatJid(chatJid); return JSON.stringify(branch && [branch.branch_id, branch.chat_jid, branch.archived_at]); };
+  const originalTarget = targetKey();
+  let writtenTarget = originalTarget;
   const database = getDb(), binding = getDatabaseBinding();
+  if (database.inTransaction) throw new TypeError('Web message admission requires its own transaction.');
   const paths = JSON.stringify([getWorkspaceDir(), getStoreDir(), getConfigPath()]);
   const assertBinding = () => {
     if (getDb() !== database || JSON.stringify(getDatabaseBinding()) !== JSON.stringify(binding)
@@ -309,15 +281,19 @@ export async function admitWebUserMessage(channel: LinkPreviewChannel, params: S
   };
   const check = (phase: 'before' | 'after') => {
     assertBinding();
-    if (readAccessConfig().mode !== 'single-user') throw Error('Incoming message authority changed.');
-    authorise(phase);
+    if (readAccessConfig().mode !== 'single-user' || getExecutionIdentity() !== identity) throw Error('Message authority changed.');
+    requireOwnedSessionExecution(chatJid);
+    if ((phase === "before" && targetKey() !== originalTarget) || getChatBranchByChatJid(chatJid)?.archived_at) throw Error("Message target lifetime changed.");
+    authorise?.(phase);
+    if (phase === "after" && targetKey() !== writtenTarget) throw Error("Message target lifetime changed.");
   };
   const prepared = prepareWebMessage(params, options);
   const acceptSource = options.acceptSource;
   const committed = await admitSqliteWrite(database, () => {
     for (const mediaId of prepared.params.mediaIds) if (!getMediaInfoById(mediaId)) throw Error('Incoming media is unavailable.');
-    if (deferBeforeInsert?.()) return null;
+    if (deferBeforeInsert?.()) { writtenTarget = targetKey(); return null; }
     const stored = writePreparedWebMessage(prepared);
+    writtenTarget = targetKey();
     const result: unknown = acceptSource?.({ message: stored.msg, rowId: stored.rowId, database });
     if (result !== undefined) {
       // Observe rejected promises/thenables without awaiting or exposing their payloads.

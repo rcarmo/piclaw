@@ -11,7 +11,7 @@ afterEach(() => {
 });
 
 describe("WebChannel message processing/storage delegation", () => {
-  test("delegates processChat and storeMessage through the extracted seam", async () => {
+  test("delegates processChat and admitMessage through the extracted seam", async () => {
     const fixture = await createWebChannelTestFixture({ workspace: "temp" });
     cleanup = fixture.cleanup;
 
@@ -27,7 +27,7 @@ describe("WebChannel message processing/storage delegation", () => {
       fixture.channel as unknown as {
         messageProcessingStorageService: {
           processChat(chatJid: string, agentId: string, threadRootId?: number | null): Promise<void>;
-          storeMessage(
+          admitMessage(
             chatJid: string,
             content: string,
             isBot: boolean,
@@ -39,14 +39,14 @@ describe("WebChannel message processing/storage delegation", () => {
               isTerminalAgentReply?: boolean;
               isSteeringMessage?: boolean;
             },
-          ): InteractionRow | null;
+          ): Promise<InteractionRow | null>;
         };
       }
     ).messageProcessingStorageService = {
       processChat: async (chatJid, agentId, threadRootId) => {
         calls.push(`process:${chatJid}:${agentId}:${threadRootId ?? "undefined"}`);
       },
-      storeMessage: (chatJid, content, isBot, mediaIds, options) => {
+      admitMessage: async (chatJid, content, isBot, mediaIds, options) => {
         calls.push(
           `store:${chatJid}:${content}:${isBot ? 1 : 0}:${mediaIds.join(",")}:${options?.threadId ?? "undefined"}:${options?.isTerminalAgentReply ? 1 : 0}:${options?.isSteeringMessage ? 1 : 0}`,
         );
@@ -54,7 +54,7 @@ describe("WebChannel message processing/storage delegation", () => {
       },
     };
 
-    const interaction = fixture.channel.storeMessage("web:default", "hello", true, [7], {
+    const interaction = await fixture.channel.admitMessage("web:default", "hello", true, [7], {
       threadId: 55,
       isTerminalAgentReply: true,
       isSteeringMessage: true,

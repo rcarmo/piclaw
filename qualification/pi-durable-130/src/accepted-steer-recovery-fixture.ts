@@ -17,7 +17,7 @@ import { InMemoryEffectPayloadResolver } from "../../../runtime/src/service-effe
 import { hashCanonicalRequest } from "../../../runtime/src/service-effects/contracts/common.js";
 import { createDurableConversationAdapter, type DurableConversationOperation } from "../../../runtime/src/agent-pool/durable-runtime-adapter.js";
 import { createDurableQueuedSteering } from "../../../runtime/src/agent-pool/durable-queued-steering.js";
-import { storeWebMessage } from "../../../runtime/src/channels/web/messaging/message-store.js";
+import { admitWebMessage } from "../../../runtime/src/channels/web/messaging/message-store.js";
 
 
 // Test-only forensic reads of the actual SDK tables; never write lifecycle state.
@@ -171,7 +171,7 @@ async function prepare(intentContent = "accepted B") {
         } },
         readQueued: id => getDeferredQueuedFollowups(chatJid).find(x => x.rowId === id),
         validatePayload({ item }) { check.equal(item.source_id, b.sourceId); check.equal(item.queuedContent, intentContent); },
-        materialize: (item, accept) => storeWebMessage({ broadcastEvent() {}, pendingLinkPreviews: new Set<number>() } as Parameters<typeof storeWebMessage>[0],
+        materialize: (item, accept) => admitWebMessage({ broadcastEvent() {}, pendingLinkPreviews: new Set<number>() } as Parameters<typeof admitWebMessage>[0],
           { chatJid, content: item.queuedContent, isBot: false, mediaIds: [], agentId: "default", agentName: "Fixture" },
           { consumeDeferredFollowupRowId: item.rowId, materializeQueuedSource: accept, isSteeringMessage: true }) });
       const accepted = await coordinator.accept(1650);

@@ -1296,60 +1296,19 @@ function preparePost(params: MessagesParams, defaultChat: string): AgentToolResu
   return { isBot, content, chatJid, mediaIds, contentBlocks };
 }
 
-function executePost(
-  params: MessagesParams,
-  defaultChat: string,
-  postFn?: (chatJid: string, content: string, isBot: boolean, mediaIds: number[], contentBlocks?: unknown[]) => number | null,
-): AgentToolResult<Record<string, unknown>> {
+async function executePost(
+  params: MessagesParams, defaultChat: string, post: MessagePostAdmissionFn | undefined,
+  authorise?: () => void, signal?: AbortSignal,
+): Promise<AgentToolResult<Record<string, unknown>>> {
   const prepared = preparePost(params, defaultChat);
   if (!("chatJid" in prepared)) return prepared;
+  if (!post) throw Error("Message post admission unavailable");
+  signal?.throwIfAborted();
   const { isBot, content, chatJid, mediaIds, contentBlocks } = prepared;
-
-  if (postFn) {
-    const rowId = postFn(chatJid, content, isBot, mediaIds, contentBlocks);
-    if (!rowId) {
-      return {
-        content: [{ type: "text", text: "Failed to post message." }],
-        details: { action: "post", posted: 0 },
-      };
-    }
-    return {
-      content: [{ type: "text", text: `Posted message ${rowId} to ${chatJid} (broadcast).` }],
-      details: { action: "post", posted: 1, row_id: rowId, chat_jid: chatJid, broadcast: true },
-    };
-  }
-
-  // Fallback: plain DB insert without broadcast (same as add but with content_blocks)
-  const timestamp = new Date().toISOString();
-  const rowId = storeMessage({
-    id: createUuid("msg"),
-    chat_jid: chatJid,
-    sender: isBot ? "web-agent" : "web-user",
-    sender_name: isBot ? "Pi" : "You",
-    content,
-    timestamp,
-    is_from_me: false,
-    is_bot_message: isBot,
-    content_blocks: contentBlocks,
-    link_previews: undefined,
-    thread_id: null,
-  });
-
-  if (rowId <= 0) {
-    return {
-      content: [{ type: "text", text: "Failed to post message." }],
-      details: { action: "post", posted: 0 },
-    };
-  }
-
-  if (mediaIds.length > 0) {
-    attachMediaToMessage(rowId, mediaIds);
-  }
-
-  return {
-    content: [{ type: "text", text: `Posted message ${rowId} to ${chatJid} (no broadcast — channel not available).` }],
-    details: { action: "post", posted: 1, row_id: rowId, chat_jid: chatJid, broadcast: false },
-  };
+  const rowId = await post(chatJid, content, isBot, mediaIds, contentBlocks, authorise, signal);
+  if (!rowId) return { content: [{ type: "text", text: "Failed to post message." }], details: { action: "post", posted: 0 } };
+  return { content: [{ type: "text", text: `Posted message ${rowId} to ${chatJid} (broadcast).` }],
+    details: { action: "post", posted: 1, row_id: rowId, chat_jid: chatJid, broadcast: true } };
 }
 
 function normalizeTargetChatJid(input: string | undefined): string | null {
@@ -1672,17 +1631,14 @@ function executeMove(params: MessagesParams, defaultChat: string): AgentToolResu
  * Shared helper for external callers that want direct access to message-tool
  * semantics without an agent extension context.
  *
- * @param postFn Optional callback for action=post that stores + broadcasts
- *               a message through the web channel pipeline. If not provided,
- *               action=post falls back to a plain DB insert (like add).
+ * Posts use the asynchronous registered admission entry instead of this SQL-only body.
  */
 export function runMessagesTool(
   params: MessagesParams,
   defaultChat: string = "web:default",
-  postFn?: MessagePostFn,
 ): AgentToolResult<Record<string, unknown>> {
   try {
-    if (readAccessConfig().mode === "single-user") return ownedReadScope.run(null, () => runMessagesToolUnscoped(params, defaultChat, postFn));
+    if (readAccessConfig().mode === "single-user") return ownedReadScope.run(null, () => runMessagesToolUnscoped(params, defaultChat));
     const actor = requireOwnedSource();
     if (!["search", "get", "grep", "extract", "diff"].includes(params.action || "search")) return deniedMessages();
     const chats = listCurrentOwnerSessions().map(branch => branch.chat_jid);
@@ -1695,7 +1651,7 @@ export function runMessagesTool(
       }
     }
     // get without a chat may select owned IDs across roots; other actions default to active source.
-    return ownedReadScope.run(chats, () => runMessagesToolUnscoped(params, getChatJid(""), postFn));
+    return ownedReadScope.run(chats, () => runMessagesToolUnscoped(params, getChatJid("")));
   } catch (error) {
     if (error instanceof ChatAccessDenied) return deniedMessages();
     throw error;
@@ -1705,7 +1661,6 @@ export function runMessagesTool(
 function runMessagesToolUnscoped(
   params: MessagesParams,
   defaultChat: string = "web:default",
-  postFn?: (chatJid: string, content: string, isBot: boolean, mediaIds: number[], contentBlocks?: unknown[]) => number | null,
 ): AgentToolResult<Record<string, unknown>> {
   const action = params.action || "search";
 
@@ -1715,7 +1670,7 @@ function runMessagesToolUnscoped(
   if (action === "extract") return executeExtract(params, defaultChat);
   if (action === "diff") return executeDiff(params, defaultChat);
   if (action === "add") return executeAdd(params, defaultChat);
-  if (action === "post") return executePost(params, defaultChat, postFn);
+  if (action === "post") throw new TypeError("Messages posts require asynchronous admission");
   if (action === "delete") return executeDelete(params, defaultChat);
   if (action === "move") return executeMove(params, defaultChat);
 
@@ -1732,12 +1687,11 @@ function runMessagesToolUnscoped(
  * Helper for extensions that want the messages tool's post semantics using the
  * globally registered broadcast callback.
  */
-export function postMessagesToolMessage(
-  params: MessagesParams,
-  defaultChat: string = "web:default",
-): AgentToolResult<Record<string, unknown>> {
+export async function postMessagesToolMessage(
+  params: MessagesParams, defaultChat: string = "web:default", signal?: AbortSignal,
+): Promise<AgentToolResult<Record<string, unknown>>> {
   if (readAccessConfig().mode !== "single-user") return deniedMessages();
-  return executePost(params, defaultChat, registeredPostFn);
+  return executePost(params, defaultChat, registeredPostAdmission, undefined, signal);
 }
 
 const MESSAGES_TOOL_HINT = [
@@ -1758,29 +1712,13 @@ const MESSAGES_TOOL_HINT = [
   "- delete: { action: \"delete\", row_ids: [123, 124], dry_run: true, force: true }",
 ].join("\n");
 
-/** Post function type for broadcasting messages via the web channel. */
-export type MessagePostFn = (
-  chatJid: string,
-  content: string,
-  isBot: boolean,
-  mediaIds: number[],
-  contentBlocks?: unknown[],
-) => number | null;
-
-/** Optional post function injected by the web channel for broadcast support. */
-let registeredPostFn: MessagePostFn | undefined;
 type MessagePostAdmissionFn = (chatJid: string, content: string, isBot: boolean, mediaIds: number[], contentBlocks: unknown[] | undefined,
-  authorise: () => void, signal?: AbortSignal) => Promise<number | null>;
+  authorise?: () => void, signal?: AbortSignal) => Promise<number | null>;
 let registeredPostAdmission: MessagePostAdmissionFn | undefined;
 
-/** Set the post function for the messages tool. Called by web channel wiring. */
-export function setMessagesPostFn(fn: MessagePostFn | undefined, admission?: MessagePostAdmissionFn): void {
-  registeredPostFn = fn; registeredPostAdmission = admission;
-}
-
-/** Shared execution entry retains the current synchronous post/broadcast port. */
-export function runRegisteredMessagesTool(params:MessagesParams,defaultChat:string){
-  return runMessagesTool(params,defaultChat,registeredPostFn);
+/** The web channel supplies the only timeline post admission port. */
+export function setMessagesPostFn(admission: MessagePostAdmissionFn | undefined): void {
+  registeredPostAdmission = admission;
 }
 
 /** Async tool boundary: reserve the writer only for mutations; publish posts after commit. */
@@ -1788,17 +1726,9 @@ export async function admitRegisteredMessagesTool(params: MessagesParams, defaul
   const captured = structuredClone(params), action = captured.action || "search", post = registeredPostAdmission;
   authorise(); signal?.throwIfAborted();
   if (action === "post" && readAccessConfig().mode !== "single-user") return deniedMessages();
-  if (action === "post" && post) {
-    const prepared = preparePost(captured, defaultChat);
-    if (!("chatJid" in prepared)) return prepared;
-    const {chatJid,content,isBot,mediaIds,contentBlocks} = prepared;
-    const rowId = await post(chatJid,content,isBot,mediaIds,contentBlocks,authorise,signal);
-    if (!rowId) return {content:[{type:"text" as const,text:"Failed to post message."}],details:{action:"post",posted:0}};
-    return {content:[{type:"text" as const,text:`Posted message ${rowId} to ${chatJid} (broadcast).`}],details:{action:"post",posted:1,row_id:rowId,chat_jid:chatJid,broadcast:true}};
-  }
-  if (action === "post" && registeredPostFn) throw Error("Asynchronous message post admission unavailable");
+  if (action === "post") return executePost(captured, defaultChat, post, authorise, signal);
   const run = () => { authorise(); const result = runMessagesTool(captured,defaultChat); authorise(); return result; };
-  if (!["add","post","delete","move"].includes(action) || (captured.dry_run === true && ["delete","move"].includes(action))) return run();
+  if (!["add","delete","move"].includes(action) || (captured.dry_run === true && ["delete","move"].includes(action))) return run();
   const database = getDb();
   return admitSqliteWrite(database,run,authorise,signal,undefined,()=>{if(getDb()!==database)throw Error("Messages database changed");});
 }
