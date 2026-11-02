@@ -52,8 +52,6 @@ import { sanitizePersistedSessionMessage } from "../extensions/persisted-tool-re
 import { freezeExtensionRoutes } from "../channels/web/http/extension-routes.js";
 import { ensureExtensionNodeModulesLink } from "./session-node-modules-link.js";
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
-import type { CompactionStreamFn } from "../extensions/smart-compaction/stream-complete.js";
-import { normalizeLlmContext } from "./llm-context-normalizer.js";
 import { writeMergedSessionArchive } from "../session-archive.js";
 import {
   getInstalledAddonExtensionPaths,
@@ -522,18 +520,6 @@ export function trimPreCompactionEntries(sessionDir: string): void {
  * Loads workspace resources (AGENTS.md, skills, extensions, prompt templates)
  * and resumes the most recent session tree.
  */
-export function createCompactionStreamFn(modelRuntime: ModelRuntime, settingsManager: SettingsManager): CompactionStreamFn {
-  return (model, context, options) => {
-    const providerRetrySettings = settingsManager.getProviderRetrySettings();
-    return modelRuntime.streamSimple(model, normalizeLlmContext(context), {
-      ...options,
-      timeoutMs: options?.timeoutMs ?? providerRetrySettings.timeoutMs,
-      maxRetries: options?.maxRetries ?? providerRetrySettings.maxRetries,
-      maxRetryDelayMs: options?.maxRetryDelayMs ?? providerRetrySettings.maxRetryDelayMs,
-    });
-  };
-}
-
 export async function createSessionInDir(
   sessionDir: string,
   options: {
@@ -585,7 +571,6 @@ export async function createSessionInDir(
     try {
     const builtinExtensionFactories = operationProfile ? [] : [
       ...createBuiltinExtensionFactories({
-        compactionStreamFn: createCompactionStreamFn(options.modelRuntime, options.settingsManager),
         modelRuntime: options.modelRuntime,
         chatJid: options.chatJid,
       }),
@@ -657,10 +642,8 @@ export async function createSessionInDir(
 
     installSessionThinkingPolicy(result.session, restoredThinkingPreference);
 
-    // Disable upstream auto-compaction — piclaw manages compaction at safe
-    // boundaries via maybeAutoCompactSessionBeforePrompt and recovery paths.
-    // Upstream auto-compaction fires at agent_end which can interfere with
-    // multi-step tool sequences and break generated file context.
+    // Explicit legacy/offline session construction must not start automatic
+    // compaction. Normal application compaction belongs to the native Harness.
     if (typeof result.session.setAutoCompactionEnabled === "function") {
       result.session.setAutoCompactionEnabled(false);
     }

@@ -107,10 +107,10 @@ test('native compaction rejects every retired field before any supported setting
     const config = await import('../../src/core/config.js');
     const beforeRuntime = config.getCompactionRuntimeConfig();
     try {
-      config.setCompactionRuntimeConfig({ smartCompactionMethod: 'pipelined', compactionModel: 'local/historical', autoCompactionEnabled: true });
+      config.setCompactionRuntimeConfig({ autoCompactionEnabled: true });
       const handler = await importFresh<typeof import('../../src/channels/web/handlers/compaction-settings.js')>('../src/channels/web/handlers/compaction-settings.js');
       const file = join(workspace.workspace, '.piclaw', 'config.json');
-      const historical=JSON.parse(readFileSync(file,'utf8'));historical.domains.compaction.thresholdPercent=73;writeFileSync(file,JSON.stringify(historical));
+      const historical=JSON.parse(readFileSync(file,'utf8'));Object.assign(historical.domains.compaction,{smartCompactionMethod:'pipelined',model:'local/historical',thresholdPercent:73});writeFileSync(file,JSON.stringify(historical));
       const beforeFile = readFileSync(file, 'utf8'), before = handler.getCompactionSettingsData();
       for (const field of handler.UNSUPPORTED_NATIVE_COMPACTION_FIELDS) {
         for (const value of ['pipelined', false, null, undefined]) {
@@ -129,7 +129,8 @@ test('native compaction rejects every retired field before any supported setting
       const saved = await handler.saveCompactionSettings({autoCompactionEnabled: false});
       expect(saved.compactionPolicy).toBe('pi-durable'); expect(saved.autoCompactionEnabled).toBe(false);
       for (const field of [...handler.UNSUPPORTED_NATIVE_COMPACTION_FIELDS, 'compactionLatencyEstimate', 'remoteCompactionSupportedProviders', 'compactionBackoffs']) expect(saved).not.toHaveProperty(field);
-      expect(config.getCompactionRuntimeConfig()).toMatchObject({smartCompactionMethod:'pipelined',compactionModel:'local/historical'});
+      expect(config.getCompactionRuntimeConfig()).not.toHaveProperty('smartCompactionMethod');
+      expect(config.getCompactionRuntimeConfig()).not.toHaveProperty('compactionModel');
       expect(config.getCompactionRuntimeConfig()).not.toHaveProperty('thresholdPercent');
       expect(JSON.parse(readFileSync(file,'utf8')).domains.compaction).toMatchObject({smartCompactionMethod:'pipelined',model:'local/historical',thresholdPercent:73,autoCompactionEnabled:false});
     } finally { config.setCompactionRuntimeConfigForTests({...beforeRuntime}); }

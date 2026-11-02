@@ -51,7 +51,6 @@ import { createMemorySearchExtension } from "./memory-search.js";
 import { workspaceMemoryBootstrap } from "./workspace-memory-bootstrap.js";
 import { dreamMaintenance } from "./dream-maintenance.js";
 import { uiThemeExtension } from "./ui-theme.js";
-import { createSmartCompactionExtension, type CompactionStreamFn } from "./smart-compaction.js";
 import { sendAdaptiveCard } from "./send-adaptive-card.js";
 import { sendDashboardWidget } from "./send-dashboard-widget.js";
 import { chatTool } from "./chat-tool.js";
@@ -75,7 +74,6 @@ import { createBudgetLimitsExtension } from "./budget-limits.js";
 /** Build the built-in extension factory list used for session creation. */
 export function createBuiltinExtensionFactories(options?: {
   attachmentRegistry?: AttachmentRegistry;
-  compactionStreamFn?: CompactionStreamFn;
   modelRuntime?: ModelRuntime;
   chatJid?: string;
 }): ExtensionFactory[] {
@@ -94,7 +92,6 @@ export function createBuiltinExtensionFactories(options?: {
     workspaceMemoryBootstrap,
     dreamMaintenance,
     uiThemeExtension,
-    createSmartCompactionExtension({ streamFn: options?.compactionStreamFn, modelRuntime: options?.modelRuntime }),
     sendAdaptiveCard,
     sendDashboardWidget,
     chatTool,

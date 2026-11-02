@@ -633,12 +633,16 @@ describe("core config", () => {
         PICLAW_MID_TURN_TOOL_EXECUTION_HARD_CEILING: undefined,
       } }).snapshot;
       expect(persisted["call:getCompactionRuntimeConfig"]).toMatchObject({
-        autoCompactionEnabled: false, smartCompactionMethod: "pipelined", timeoutMs: 400000,
-        backoffBaseMs: 120000, backoffMaxMs: 600000,
+        autoCompactionEnabled: false,
         systemPromptOverheadTokens: 5000, compactionRequestOverheadTokens: 1200,
-        tokenEstimateSafetyMultiplier: 1.25, progressiveCompaction: true,
-        smartCompactionReasoning: "low",
+        tokenEstimateSafetyMultiplier: 1.25,
       });
+      expect(persisted["call:getCompactionRuntimeConfig"]).not.toHaveProperty("smartCompactionMethod");
+      expect(persisted["call:getCompactionRuntimeConfig"]).not.toHaveProperty("timeoutMs");
+      expect(persisted["call:getCompactionRuntimeConfig"]).not.toHaveProperty("backoffBaseMs");
+      expect(persisted["call:getCompactionRuntimeConfig"]).not.toHaveProperty("backoffMaxMs");
+      expect(persisted["call:getCompactionRuntimeConfig"]).not.toHaveProperty("progressiveCompaction");
+      expect(persisted["call:getCompactionRuntimeConfig"]).not.toHaveProperty("smartCompactionReasoning");
       expect(persisted["call:getMidTurnToolExecutionHardCeiling"]).toBe(72);
 
       const { snapshot, stderr } = runConfigSubprocess(workspace, names, { env: {
@@ -661,12 +665,16 @@ describe("core config", () => {
         PICLAW_MID_TURN_TOOL_EXECUTION_HARD_CEILING: "9999",
       } });
       expect(snapshot["call:getCompactionRuntimeConfig"]).toMatchObject({
-        autoCompactionEnabled: true, smartCompactionMethod: "pipelined", timeoutMs: 450000,
-        backoffBaseMs: 900000, backoffMaxMs: 900000,
+        autoCompactionEnabled: true,
         systemPromptOverheadTokens: 6000, compactionRequestOverheadTokens: 1500,
-        tokenEstimateSafetyMultiplier: 1.5, progressiveCompaction: true,
-        smartCompactionReasoning: "high",
+        tokenEstimateSafetyMultiplier: 1.5,
       });
+      expect(snapshot["call:getCompactionRuntimeConfig"]).not.toHaveProperty("smartCompactionMethod");
+      expect(snapshot["call:getCompactionRuntimeConfig"]).not.toHaveProperty("timeoutMs");
+      expect(snapshot["call:getCompactionRuntimeConfig"]).not.toHaveProperty("backoffBaseMs");
+      expect(snapshot["call:getCompactionRuntimeConfig"]).not.toHaveProperty("backoffMaxMs");
+      expect(snapshot["call:getCompactionRuntimeConfig"]).not.toHaveProperty("progressiveCompaction");
+      expect(snapshot["call:getCompactionRuntimeConfig"]).not.toHaveProperty("smartCompactionReasoning");
       expect(snapshot["call:getMidTurnToolExecutionHardCeiling"]).toBe(512);
       for (const envKey of [
         "PICLAW_AUTO_COMPACTION_ENABLED", "PICLAW_SMART_COMPACTION_METHOD", "PICLAW_COMPACTION_TIMEOUT_MS",
@@ -674,7 +682,10 @@ describe("core config", () => {
         "PICLAW_COMPACTION_REQUEST_OVERHEAD_TOKENS", "PICLAW_TOKEN_ESTIMATE_SAFETY_MULTIPLIER",
         "PICLAW_PROGRESSIVE_COMPACTION", "PICLAW_SMART_COMPACTION_REASONING",
         "PICLAW_MID_TURN_TOOL_EXECUTION_HARD_CEILING",
-      ]) expectCompatWarningOnce(stderr, envKey);
+      ]) {
+        if (/PICLAW_(SMART_COMPACTION|PROGRESSIVE_COMPACTION|COMPACTION_(TIMEOUT|BACKOFF))/.test(envKey)) expect(stderr).not.toContain('"envKey":"' + envKey + '"');
+        else expectCompatWarningOnce(stderr, envKey);
+      }
       expect(stderr).not.toContain('"envKey":"PICLAW_COMPACTION_THRESHOLD_PERCENT"');
     } finally {
       workspace.cleanup();
@@ -727,9 +738,9 @@ describe("core config", () => {
         systemPromptOverheadTokens: 6000,
         compactionRequestOverheadTokens: 1500,
         tokenEstimateSafetyMultiplier: 2,
-        progressiveCompaction: true,
-        smartCompactionReasoning: "medium",
       });
+      expect(snapshot["call:getCompactionRuntimeConfig"]).not.toHaveProperty("progressiveCompaction");
+      expect(snapshot["call:getCompactionRuntimeConfig"]).not.toHaveProperty("smartCompactionReasoning");
       expect(snapshot["env:PICLAW_SYSTEM_PROMPT_OVERHEAD_TOKENS"]).toBeNull();
       expect(snapshot["env:PICLAW_COMPACTION_REQUEST_OVERHEAD_TOKENS"]).toBeNull();
       expect(snapshot["env:PICLAW_TOKEN_ESTIMATE_SAFETY_MULTIPLIER"]).toBe("2");
@@ -746,7 +757,10 @@ describe("core config", () => {
         "PICLAW_TOKEN_ESTIMATE_SAFETY_MULTIPLIER",
         "PICLAW_PROGRESSIVE_COMPACTION",
         "PICLAW_SMART_COMPACTION_REASONING",
-      ]) expectCompatWarningOnce(stderr, envKey);
+      ]) {
+        if (/PICLAW_(SMART_COMPACTION|PROGRESSIVE_COMPACTION|COMPACTION_(TIMEOUT|BACKOFF))/.test(envKey)) expect(stderr).not.toContain('"envKey":"' + envKey + '"');
+        else expectCompatWarningOnce(stderr, envKey);
+      }
     } finally {
       workspace.cleanup();
     }
@@ -777,14 +791,13 @@ describe("core config", () => {
         systemPromptOverheadTokens: 5_000,
         compactionRequestOverheadTokens: 1_200,
         tokenEstimateSafetyMultiplier: 1.25,
-        // Legacy env semantics were exact enabled flag: only "1" means forced.
-        progressiveCompaction: false,
-        smartCompactionReasoning: "low",
       });
+      expect(snapshot["call:getCompactionRuntimeConfig"]).not.toHaveProperty("progressiveCompaction");
+      expect(snapshot["call:getCompactionRuntimeConfig"]).not.toHaveProperty("smartCompactionReasoning");
       expect(stderr).not.toContain('"envKey":"PICLAW_SYSTEM_PROMPT_OVERHEAD_TOKENS"');
       expect(stderr).not.toContain('"envKey":"PICLAW_COMPACTION_REQUEST_OVERHEAD_TOKENS"');
       expect(stderr).not.toContain('"envKey":"PICLAW_TOKEN_ESTIMATE_SAFETY_MULTIPLIER"');
-      expectCompatWarningOnce(stderr, "PICLAW_PROGRESSIVE_COMPACTION");
+      expect(stderr).not.toContain('"envKey":"PICLAW_PROGRESSIVE_COMPACTION"');
       expect(stderr).not.toContain('"envKey":"PICLAW_SMART_COMPACTION_REASONING"');
     } finally {
       workspace.cleanup();
@@ -1065,7 +1078,7 @@ describe("core config", () => {
     });
   });
 
-  test("provider-native compaction settings persist in the compaction domain without compatibility env", () => {
+  test("historical provider-native compaction settings remain stored but are not effective policy", () => {
     const workspace = createTempWorkspace("piclaw-domain-config-provider-compaction-");
     try {
       writeWorkspaceConfig(workspace.workspace, { domains: { compaction: {
@@ -1073,7 +1086,9 @@ describe("core config", () => {
         remoteCompactionTimeoutMs: 45000,
       } } });
       const snapshot = runConfigSubprocess(workspace, ["call:getCompactionRuntimeConfig"]).snapshot;
-      expect(snapshot["call:getCompactionRuntimeConfig"]).toMatchObject({ remoteCompactionEnabled: true, remoteCompactionTimeoutMs: 45000 });
+
+      expect(snapshot["call:getCompactionRuntimeConfig"]).not.toHaveProperty("remoteCompactionEnabled");
+      expect(snapshot["call:getCompactionRuntimeConfig"]).not.toHaveProperty("remoteCompactionTimeoutMs");
     } finally { workspace.cleanup(); }
   });
 
