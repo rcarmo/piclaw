@@ -1,4 +1,4 @@
-import { admitSqliteWrite } from "../../src/db/sqlite-async-admission.js";
+import { admitSqliteWrite, type SyncSqliteOperation } from "../../src/db/sqlite-async-admission.js";
 import type Database from "bun:sqlite";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { JsonValue } from "@earendil-works/chord";
@@ -8,7 +8,7 @@ import { createHostOperationAuthority } from "./host-operation-authority.js";
 import { withExtensionKvAuthority } from "../../src/extension-kv-registry.js";
 import type { HostConversationRuntime } from "./host-runtime.js";
 
-type GoalFactory = (resolveChat: (context: ExtensionContext) => string, policy?: { write<T>(body: () => T): Promise<T> }) => ToolDefinition<any, JsonValue>[];
+type GoalFactory = (resolveChat: (context: ExtensionContext) => string, policy?: { write<T>(body: SyncSqliteOperation<T>): Promise<T> }) => ToolDefinition<any, JsonValue>[];
 const names = ["get_goal", "create_goal", "goal_complete", "goal_stop", "update_goal"];
 
 /** The caller must qualify the exact installed factory before application adoption. */

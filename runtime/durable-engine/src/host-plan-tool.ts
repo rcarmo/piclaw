@@ -1,4 +1,4 @@
-import { admitSqliteWrite } from "../../src/db/sqlite-async-admission.js";
+import { admitSqliteWrite, type SyncSqliteOperation } from "../../src/db/sqlite-async-admission.js";
 import type { Database } from "bun:sqlite";
 import type { ToolDefinition } from "../../src/durable-legacy-sdk.js";
 import type { TSchema } from "@earendil-works/pi-ai";
@@ -22,7 +22,7 @@ export function createHostPlanTool(definition: ToolDefinition<TSchema, JsonValue
   root: Database;
   assertOwner(): void;
   runtime(): Pick<HostConversationRuntime, "captureToolSource">;
-  createTool: (write: <T>(body: () => T) => Promise<T>) => ToolDefinition<any, any, any>;
+  createTool: (write: <T>(body: SyncSqliteOperation<T>) => Promise<T>) => ToolDefinition<any, any, any>;
 }) {
   if (definition.name !== "plan") throw Error("Expected registered Plan tool");
   return createHostTool(definition, {

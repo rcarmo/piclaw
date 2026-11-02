@@ -2,7 +2,7 @@ import { expect,test } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { join } from 'node:path';
 import { createTempWorkspace } from '../helpers.js';
-import { admitSqliteWrite } from '../../src/db/sqlite-async-admission.js';
+import { admitSqliteWrite, type SyncSqliteOperation } from '../../src/db/sqlite-async-admission.js';
 import { getExtensionKvStore,registerExtensionKvStore,resetExtensionKvStoreForTests,requireExtensionKvAuthority,withExtensionKvAuthority } from '../../src/extension-kv-registry.js';
 
 for(const revoke of [false,true]) test(`KV write admission yields to a real writer and rechecks authority; revoke=${revoke}`,async()=>{
@@ -10,12 +10,12 @@ for(const revoke of [false,true]) test(`KV write admission yields to a real writ
  const db=new Database(path);db.exec('PRAGMA journal_mode=WAL;PRAGMA busy_timeout=731;CREATE TABLE values_store(id TEXT PRIMARY KEY,value TEXT)');
  const blocker=new Database(path);let current=true,entered=0;
  const check=()=>{if(!current)throw Error('revoked');};
- registerExtensionKvStore({get<T>(_id,key){const row=db.query('SELECT value FROM values_store WHERE id=?').get(key) as {value:string}|null;return row?JSON.parse(row.value) as T:null;},
+ registerExtensionKvStore({get<T>(_id:string,key:string){const row=db.query('SELECT value FROM values_store WHERE id=?').get(key) as {value:string}|null;return row?JSON.parse(row.value) as T:null;},
   set(_id,key,value){db.query('INSERT OR REPLACE INTO values_store VALUES (?,?)').run(key,JSON.stringify(value));},
   delete(_id,key){return db.query('DELETE FROM values_store WHERE id=?').run(key).changes>0;},list(){return[];},query(){return[];},clear(){return 0;}});
  requireExtensionKvAuthority();const store=getExtensionKvStore();
  const authority={extensionId:'fixture',chatJid:'web:fixture',globalWrite:true,assertCurrent:check,
-  admitWrite:<T>(body:()=>T)=>admitSqliteWrite(db,body,check),
+  admitWrite:<T>(body:SyncSqliteOperation<T>)=>admitSqliteWrite<T>(db,body,check),
   write<T>(body:()=>T){check();if(!db.inTransaction)throw Error('outer writer required');const value=body();check();return value;}};
  try{
   blocker.exec('BEGIN IMMEDIATE');
@@ -31,7 +31,7 @@ for(const revoke of [false,true]) test(`KV write admission yields to a real writ
 test('KV admission denies missing/wrong authority and rolls back an entered callback without retry',async()=>{
  resetExtensionKvStoreForTests();requireExtensionKvAuthority();const store=getExtensionKvStore();
  const db=new Database(':memory:');db.exec('CREATE TABLE marker(value TEXT)');let entered=0;
- const authority={extensionId:'fixture',chatJid:'web:fixture',assertCurrent(){},write<T>(body:()=>T){return body();},admitWrite:<T>(body:()=>T)=>admitSqliteWrite(db,body)};
+ const authority={extensionId:'fixture',chatJid:'web:fixture',assertCurrent(){},write<T>(body:()=>T){return body();},admitWrite:<T>(body:SyncSqliteOperation<T>)=>admitSqliteWrite<T>(db,body)};
  try{
   await expect(store.write!('fixture',()=>{entered++;})).rejects.toThrow('authority required');
   await expect(withExtensionKvAuthority(authority,()=>store.write!('other',()=>{entered++;}))).rejects.toThrow('admission unavailable');

@@ -16,7 +16,7 @@
  */
 
 import { statSync } from "node:fs";
-import { admitSqliteWrite } from "./db/sqlite-async-admission.js";
+import { admitSqliteWrite, type SyncSqliteOperation } from "./db/sqlite-async-admission.js";
 import { randomUUID,createHash } from "node:crypto";
 import { withBudgetWorkContext } from './budget/context.js';
 import { ensureBudgetWork,getBudgetWork,setBudgetWorkStatus } from './db/budget-limits.js';
@@ -502,9 +502,9 @@ function productionScheduledRunStore(): { store: ScheduledRunStore & Interrupted
 }
 
 /** Recheck the captured scheduler/database before and after the SQL-only body. */
-async function scheduledSourceWrite<T>(database: Database, operation: () => T, mayWrite: () => boolean = canRunLegacyScheduledWork): Promise<T> {
+async function scheduledSourceWrite<T>(database: Database, operation: SyncSqliteOperation<T>, mayWrite: () => boolean = canRunLegacyScheduledWork): Promise<T> {
   const binding = getDatabaseBinding();
-  return admitSqliteWrite(database, operation, () => {
+  return admitSqliteWrite<T>(database, operation, () => {
     if (getDb() !== database || !mayWrite()) throw Error("Scheduled source write revoked");
     if (binding) {
       const current = statSync(binding.path);
