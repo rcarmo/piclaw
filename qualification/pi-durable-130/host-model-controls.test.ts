@@ -2,8 +2,9 @@ import "./src/test-guard.js";
 import { test, expect } from "bun:test";
 import { projectModelContext } from "../../runtime/durable-engine/src/host-model-context.ts";
 import { createHostModelTools, hostModelToolNames, nativeToolInstructions } from "../../runtime/durable-engine/src/host-model-controls.js";
-import { BACKGROUND_CONTEXT as context, withAbortSignal } from "../../runtime/durable-engine/qualification/context.ts";
+import { BACKGROUND_CONTEXT as context, withAbortSignal, awaitWithContext } from "../../runtime/durable-engine/qualification/context.ts";
 import type { ConversationId, TaskId } from "../../runtime/durable-engine/qualification/durable.ts";
+import { outputPreview } from './src/output-preview.ts';
 
 const conversationId = 7 as ConversationId, taskId = 9 as TaskId;
 
@@ -19,7 +20,9 @@ function fixture(sections: any[] = [], messages: any[] = [], prepareContext?: Pa
       expect(call.conversationId).toBe(conversationId); reads++;
       const projected = await projectModelContext({ messages, entries: [], contributions: [] } as any,
         { conversationId, agent: { ...state, model, thinkingLevel, sections, tools: [] }, env: undefined, read: api }, context);
-      return { messages: projected, assertScopeCurrent() {}, async assertCurrent() {} };
+      const target = catalog.find(candidate => candidate.provider === model.provider && candidate.id === model.modelId)!;
+      const output = await outputPreview(projected, target, 'openai-responses');
+      return { messages: projected, output, assertScopeCurrent() {}, async assertCurrent() {} };
     }),
     async captureSourceGuard(call) { expect(call).toEqual({ conversationId, taskId, toolCallId: "owned" }); return () => { guards++; if (!valid) throw Error("revoked"); }; },
   });
@@ -52,7 +55,7 @@ test("owned model and thinking selection persists only the conversation and pres
   await f.run("switch_thinking", { level: "medium" }); expect(f.state().thinkingLevel).toBe("medium");
   expect(f.stats().reads).toBe(2);
 });
-test("invalid model/thinking leaves state unchanged and small-context targets retain the existing admission bound", async () => {
+test("invalid model/thinking leaves state unchanged and small-context targets retain the producer admission bound", async () => {
   const f = fixture(), before = structuredClone(f.state());
   expect((await f.run("set_model", { model: "missing/model" })).error).toContain("not available");
   expect((await f.run("set_model", { model: "second/two", thinking_level: "invalid" })).error).toContain("Unsupported");
@@ -83,6 +86,25 @@ for (const phase of ["before", "after-await"] as const) test(`model controls pre
   f.duringDoc(() => {});
   expect((await f.run("set_model", { model: "second/two" })).model).toBe("second/two");
   expect(f.state().model).toEqual({ provider: "second", modelId: "two" });
+});
+
+test('owned model control forwards cancellation to a pending producer preview without committing', async () => {
+  const controller = new AbortController();
+  let entered!: () => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const f = fixture([], [], async (_call, _model, _level, signal) => {
+    expect(signal).toBe(controller.signal);
+    entered();
+    await awaitWithContext(new Promise<void>(() => {}), withAbortSignal(signal!, context));
+    throw Error('unreachable producer result');
+  });
+  const before = structuredClone(f.state());
+  const pending = f.run('set_model', { model: 'second/two' }, withAbortSignal(controller.signal, context));
+  const reason = Error('cancel pending model preview');
+  await started;
+  controller.abort(reason);
+  await expect(pending).rejects.toBe(reason);
+  expect(f.state()).toEqual(before);
 });
 
 test("registered prompt sections are measured before configuration; empty optional section does not disable model controls", async () => {

@@ -8,20 +8,23 @@ import type { ModelFailureEvidence } from "./host-model-failure-evidence.js";
 const log = createLogger("durable.models");
 import {
   createModels, createProvider, createAssistantMessageEventStream, normalizeContext,
-  type Api, type Model, type Models, type SimpleStreamOptions,
+  type Api, type Model, type SimpleStreamOptions,
   type TranscriptContext, type AssistantMessage, type AssistantMessageEvent, type AnyModel, type ModelType,
   type ImageModel, type ImageApi, type ClassifierModel, type ClassifierApi,
   type ImagesContext, type ImagesOptions, type AssistantImages,
   type ClassifierContext, type ClassifierOptions, type ClassifierResult, type Usage,
   type DeferredHandle, type DeferredFetchOptions, type DeferredCancelOptions,
 } from "@earendil-works/pi-ai";
-import type { ModelRuntime } from "../../src/durable-legacy-sdk.js";
+import { normalizeContext as normalizeHostContext, type ModelRuntime } from "../../src/durable-legacy-sdk.js";
+import type { previewSdkRequest, SimpleRequestPreview } from "../../src/agent-pool/model-request-preview.js";
+import { awaitWithContext, BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
+import type { PreviewModels } from "./host-model-context.js";
 import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
 
 export interface ModelRef { provider: string; id: string; type?: ModelType }
 type Operation = "chat" | "generateImages" | "classify";
 type HostPort = Pick<ModelRuntime, "getPhysicalModel" | "stream" | "streamSimple"> &
-  Partial<Pick<ModelRuntime, "getModelOfType" | "generateImages" | "classify" | "streamDeferred" | "cancelDeferred">>;
+  Partial<Pick<ModelRuntime, "getProvider" | "getModelOfType" | "generateImages" | "classify" | "streamDeferred" | "cancelDeferred">>;
 type DeferredOperation = "fetchDeferred" | "cancelDeferred";
 export interface HostModelEventObserver {
   /** Mandatory synchronous authority fence, independent of observer health. */
@@ -30,6 +33,8 @@ export interface HostModelEventObserver {
   onEvent(event: AssistantMessageEvent): void;
 }
 export interface HostModelPolicy {
+  /** Optional host-owned preview for a known SDK producer; never an execution grant. */
+  previewRequest?: typeof previewSdkRequest;
   /** Invocation-local source fence retained through asynchronous credential resolution. */
   captureSourceGuard?(signal: AbortSignal | undefined): (() => void) | Promise<() => void>;
   /** Resolve once after source capture; ordinary requests without observers do
@@ -154,7 +159,7 @@ export function createHostModels(
   hostModelRuntime120: HostPort,
   approved: readonly ModelRef[],
   policy: HostModelPolicy,
-): Models {
+): PreviewModels {
   const backing = createModels({ authContext: {
     env: async () => undefined, fileExists: async () => false,
   } });
@@ -199,6 +204,31 @@ export function createHostModels(
       throw new Error("Model not approved");
     }
     return listed as Model<Api>;
+  };
+  const previewSimple = async (model: Model<Api>, context: Pick<TranscriptContext, "messages">, options?: SimpleStreamOptions): Promise<SimpleRequestPreview> => {
+    model = validatedChatModel(model);
+    const safe = requestOptions(options);
+    const signal = options?.signal ? AbortSignal.any([options.signal, policy.signal]) : policy.signal;
+    signal.throwIfAborted();
+    // Selection readers own route/source fences. Do not enter the execution-only
+    // request-source capture: an idle selection has no generation request grant.
+    const provider = hostModelRuntime120.getProvider?.(model.provider);
+    const physical = hostModelRuntime120.getPhysicalModel(model.provider, model.id);
+    if (!physical || (physical.type ?? "chat") !== "chat" || physical.api !== model.api || physical.provider !== model.provider || physical.id !== model.id ||
+      physical.contextWindow !== model.contextWindow || physical.maxTokens !== model.maxTokens || physical.reasoning !== model.reasoning ||
+      MODEL_THINKING_LEVELS.some(level => physical.thinkingLevelMap?.[level] !== model.thinkingLevelMap?.[level])) throw Error("Model owner changed");
+    if (!policy.previewRequest) return Object.freeze({ status: "unknown", reason: "unsupported" });
+    const snapshot = freeze(data(physical)), frame = JSON.stringify(snapshot);
+    const transcript = normalizeHostContext({ messages: data(context.messages) });
+    const result = await awaitWithContext(Promise.resolve().then(() => {
+      signal.throwIfAborted();
+      return policy.previewRequest!(snapshot, transcript, { ...safe, signal });
+    }), withAbortSignal(signal, BACKGROUND_CONTEXT));
+    signal.throwIfAborted();
+    const current = hostModelRuntime120.getPhysicalModel(model.provider, model.id);
+    if (!current || hostModelRuntime120.getProvider?.(model.provider) !== provider ||
+      JSON.stringify(data(current)) !== frame) throw Error("Model owner changed");
+    return freeze(data(result.status === "bounded" && !result.authIndependent ? { status: "unknown", reason: "auth_dependent" } as const : result));
   };
   const publicHandle = (handle: DeferredHandle, model: Model<Api>) => {
     const safe = data(handle);
@@ -611,6 +641,7 @@ export function createHostModels(
   const chatMethods = new Set(["stream", "streamSimple", "complete", "completeSimple"]);
   return new Proxy(backing, {
     get(target, key) {
+      if (key === "previewSimple") return previewSimple;
       if (["login", "logout", "setProvider", "deleteProvider", "clearProviders"].includes(String(key))) {
         return () => { throw new Error("Host auth UI/mutation is a separate scope"); };
       }

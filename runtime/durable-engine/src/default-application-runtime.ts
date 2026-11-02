@@ -31,7 +31,8 @@ import { SqliteStorage } from "@earendil-works/pi-durable/storage/sqlite";
 import { createCodemodeTool } from "@earendil-works/pi-durable/codemode";
 import { CodemodeSandbox } from "@earendil-works/pi-codemode";
 import { accessSync, constants } from "node:fs";
-import { createReadToolDefinition, SettingsManager } from "../../src/durable-legacy-sdk.js";
+import { createReadToolDefinition, SettingsManager, normalizeContext } from "../../src/durable-legacy-sdk.js";
+import { assertModelContextFits } from "./host-model-context.js";
 import type { RuntimeModelServices } from "../../src/agent-pool/model-services.js";
 import type { RuntimeLockHandle } from "../../src/runtime/single-instance.js";
 import type { RuntimeBackend } from "../../src/runtime/bootstrap.js";
@@ -43,6 +44,7 @@ import { getPiclawAgentDir } from "../../src/core/agent-dir.js";
 import { installTerminalSettlementCompositionSchema } from "../../src/service-effects/current-piclaw/terminal-settlement-schema.js";
 import { BunSqliteDatabase } from "./bun-sqlite.js";
 import { applicationOwnership, createApplicationBootstrapBundle } from "./application-bootstrap.js";
+import { previewHostRequest } from "../../src/agent-pool/model-request-preview.js";
 import { createHostModels } from "./host-models.js";
 import { readStoredProviderUsageAccountRef } from "../../src/agent-pool/provider-usage.js";
 import { createHostDreamTools } from './host-dream-tools.js';
@@ -361,7 +363,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     return { chat: target.chatJid, assertCurrent: assertRegrets, config: { get() { assertRegrets(); return extensionKvGet("late-night-regrets", "config", "global") ?? {}; } } };
   } }) : undefined;
   const regretsReceipt = regrets ? bindInstalledAddon(regrets, { tools: [regretsTool!],
-    lifecycle: { resources_discover: () => ({ skillPaths: regrets.skillPaths }), before_agent_start: regretsPrompt!.sections![0]!.render! },
+    lifecycle: { resources_discover: () => ({ skillPaths: regrets.skillPaths }) },
     commands: { regrets: regretsCommand } }) : undefined;
   let workspaceFileOpener: WorkspaceFileOpener | undefined;
   let widgetPublisher: WidgetPublisher | undefined;
@@ -832,6 +834,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   // expected Goal denials on the exact task-owned signal, never on the app lifetime.
   const goalRequestDenials = new WeakMap<AbortSignal, GoalRequestDenied>();
   const models = createHostModels(host.modelRuntime, available.map(model => ({ provider: model.provider, id: model.id })), { signal: lifetime.signal, codex: codexServices,
+    previewRequest: (model, transcript, options) => previewHostRequest(host.modelRuntime, model, transcript, options ?? {}),
     async captureSourceGuard(signal) {
       const scope = taskModelRequestScope(signal);
       if (!scope) throw Error("Native model request source unavailable");
@@ -947,23 +950,30 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     assertCurrent() { assertRegrets(); authority.assertSourceCurrent(); },
     getAvailable() {
       assertRegrets(); authority.assertSourceCurrent();
-      return host.modelRegistry.getAvailable().filter(model => {
+      return host.modelRuntime.getAvailableSnapshot().filter(model => {
         const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
         return available.some(approved => approved.provider === model.provider && approved.id === model.id) && physical?.provider === model.provider
           && physical.id === model.id && physical.api === model.api;
       });
     },
     async request(model, context, options, dispatch) {
+      const producer = host.modelRuntime.getProvider?.(model.provider);
       const checkModel = () => {
       assertRegrets(); authority.assertSourceCurrent(); options.signal?.throwIfAborted();
       const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
       if (!available.some(a => a.provider === model.provider && a.id === model.id) ||
-          !host.modelRegistry.getAvailable().some(a => a.provider === model.provider && a.id === model.id) ||
+          !host.modelRuntime.getAvailableSnapshot().some(a => a.provider === model.provider && a.id === model.id) ||
           physical?.provider !== model.provider || physical.id !== model.id || physical.api !== model.api
+          || physical.contextWindow !== model.contextWindow || physical.maxTokens !== model.maxTokens
+          || host.modelRuntime.getProvider?.(model.provider) !== producer
           || JSON.stringify(boundHostRequestCost(physical, options.maxTokens ?? physical.maxTokens)) !== JSON.stringify(boundHostRequestCost(model, options.maxTokens ?? model.maxTokens)))
         throw Error("Regrets model no longer approved");
       };
       checkModel();
+      const normalized = normalizeContext(context);
+      const output = await models.previewSimple?.(model, normalized, options);
+      checkModel();
+      assertModelContextFits(normalized.messages, model, output);
       return host.modelRuntime.completeSimple(model, context, { ...options, transformHeaders: async headers => {
         checkModel(); await dispatch(); checkModel(); return headers;
       } });
@@ -1000,7 +1010,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   tools.push(...processControls.tools);
   tools.push(...createHostModelTools({
     assertCurrent() { assert(); lifetime.signal.throwIfAborted(); if (readAccessConfig().mode !== "single-user") throw Error("Native model controls unavailable"); },
-    prepareContext: (call, model, thinkingLevel) => runtime().prepareToolModelContext(call, model, thinkingLevel),
+    prepareContext: (call, model, thinkingLevel, signal) => runtime().prepareToolModelContext(call, model, thinkingLevel, signal),
     available: () => available.filter(model => host.modelRegistry.getAvailable().some(current => current.provider === model.provider && current.id === model.id)),
     assertModel: choice => check({ provider: choice.provider, id: choice.modelId }, lifetime.signal),
     captureSourceGuard: captureSource,
@@ -1418,7 +1428,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     const settings = createHostRegretsSettings(regretsAddon, async () => {
       assertRegrets(); const target = bundle.sessionTargets.list()[0];
       if (!target) throw Error("Regrets application configuration unavailable");
-      return regretsPorts(target.chatJid, assertRegrets, configWrite, { getAvailable: () => host.modelRegistry.getAvailable().filter(model => available.some(a => a.provider === model.provider && a.id === model.id)) });
+      return regretsPorts(target.chatJid, assertRegrets, configWrite, { getAvailable: () => host.modelRuntime.getAvailableSnapshot().filter(model => available.some(a => a.provider === model.provider && a.id === model.id)) });
     });
     registerAddonConfigApi("late-night-regrets", "config", { get: () => settings.getConfig(), set: patch => settings.setConfig(patch) }, regrets.source.packageDir);
     registerAddonConfigApi("late-night-regrets", "models", { get: () => settings.getModels() }, regrets.source.packageDir);

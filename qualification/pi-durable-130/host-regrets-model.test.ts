@@ -48,7 +48,8 @@ async function fixture() {
 }
 
 const addon = await import(repoRoot("ADDONS") + "/addons/late-night-regrets/native.ts");
-import { createBoundHostRegretsTool } from "../../runtime/durable-engine/src/host-regrets-tool.ts";
+import { createHostRegretsTool } from "../../runtime/durable-engine/src/host-regrets-tool.ts";
+import { admitSqliteWrite } from "../../runtime/src/db/sqlite-async-admission.ts";
 import { createHostRegretsBindings } from "../../runtime/durable-engine/src/host-regrets-bindings.ts";
 import { initializeBudgetLimitsSchema } from "../../runtime/src/db/budget-limits-schema.ts";
 import { createHostOperationAuthority } from "../../runtime/durable-engine/src/host-operation-authority.ts";
@@ -93,10 +94,13 @@ for (const outcome of ["success", "error", "cancel", "revoke"] as const) {
       root.query("INSERT INTO chats(jid) VALUES(?)").run(captured.operation.chatJid);
       root.query("INSERT INTO messages(id,chat_jid,sender,sender_name,content,timestamp,is_bot_message) VALUES('regrets-human',?,'human','Human','Please be concise',?,0)").run(captured.operation.chatJid,new Date(Date.now()-1000).toISOString());
       let captures = 0;
-      const tool = createBoundHostRegretsTool(addon, { root, definition: nativeApi.tool as any, bindings,
+      const tool = createHostRegretsTool(addon, { root, definition: nativeApi.tool as any,
         runtime: () => ({ async captureToolSource(conversation, task, call) { captures++; expect([conversation,task,call]).toEqual([2,3,"call"]); return captured as any; } }),
-        assertOwner() { if (!owned) throw Error("revoked"); }, accountedDecision(operation, actualAuthority) {
-          expect(operation).toEqual(captured); actualAuthority.assertCurrent(); return port;
+        assertOwner() { if (!owned) throw Error("revoked"); }, bind(operation, actualAuthority) {
+          expect(operation).toEqual(captured); actualAuthority.assertCurrent();
+          return createHostRegretsBindings({ ...bindings, root, chat: operation.operation.chatJid,
+            assertCurrent: actualAuthority.assertCurrent, transactionalWrite: body => admitSqliteWrite(root, body, actualAuthority.assertCurrent),
+            readExchanges: addon.readExchanges, accountedDecision: port });
         } });
       const request = tool.execute({}, { callId: "call", conversationId: 2, taskId: 3, output() {}, async details() {} } as any, BACKGROUND_CONTEXT);
       if (outcome === "revoke") await expect(request).rejects.toThrow();
