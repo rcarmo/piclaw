@@ -1,14 +1,8 @@
 /**
- * web/agent-message-service.ts – Stores agent responses as timeline posts.
- *
- * After an agent run completes, this service persists the response as a
- * message in the database and broadcasts it to SSE clients.
- *
- * Consumers: channels/web.ts calls this after agent runs complete.
+ * Agent message request parsing and normalization.
+ * Consumers: channels/web/handlers/agent.ts.
  */
 
-import type { WebChannelLike } from "../core/web-channel-contracts.js";
-import type { InteractionRow } from "../../../db.js";
 import { parseJsonObjectRequest } from "../json-body.js";
 import { normalizeMediaIds } from "../posts-service.js";
 import { sanitizePublicInboundContentBlocks } from "./content-block-safety.js";
@@ -107,27 +101,4 @@ export function normalizeAgentMessagePayload(payload: AgentMessagePayload): {
     mode: payload.mode,
     screenHint: normalizeScreenHint(payload.screen_hint),
   };
-}
-
-/** Store the user portion of an agent interaction in the database. */
-export function storeAgentUserMessage(
-  channel: WebChannelLike,
-  chatJid: string,
-  payload: {
-    content: string;
-    mediaIds: number[];
-    contentBlocks?: unknown[];
-    linkPreviews?: unknown[];
-    threadId?: number | null;
-    screenHint?: string;
-    isSteeringMessage?: boolean;
-  }
-): InteractionRow | null {
-  return channel.storeMessage(chatJid, payload.content, false, payload.mediaIds, {
-    contentBlocks: payload.contentBlocks,
-    linkPreviews: payload.linkPreviews,
-    threadId: payload.threadId ?? undefined,
-    screenHint: payload.screenHint,
-    isSteeringMessage: payload.isSteeringMessage,
-  });
 }

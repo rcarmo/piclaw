@@ -33,7 +33,7 @@ function modelLookupFixture(getCurrentModelLabel: () => Promise<string | null>) 
     getAgentStatus: (jid: string) => statuses.get(jid),
     updateAgentStatus: (jid: string, payload: Record<string, unknown>) => statuses.update(jid, payload),
     broadcastEvent: (event: string, payload: any) => { events.push({ event, payload }); },
-    storeMessage: () => ({ id: ++row, timestamp: `2026-10-15T00:00:0${row}Z`, data: { thread_id: null } }),
+    admitUserMessage: async () => ({ id: ++row, timestamp: `2026-10-15T00:00:0${row}Z`, data: { thread_id: null } }),
     sendMessage: async (_jid: string, content: string) => { responses.push(content); },
     json: (body: unknown, status = 200) => Response.json(body, { status }),
   } as any;
@@ -232,7 +232,7 @@ describe("web agent message handler", () => {
         json: (body: unknown, status = 200) => Response.json(body,{status}),
         getQueuedFollowupCount: () => 0, getAgentStatus: () => status,
         broadcastEvent: (event: string,payload: any) => broadcasts.push({event,payload}), updateAgentStatus: (_jid: string, next: Record<string, unknown>) => { status = next; },
-        storeMessage: () => ({id:456,timestamp:'2026-09-22T00:00:00Z',data:{thread_id:null},content:'/agent-avatar clear'}), sendMessage: async () => {},
+        admitUserMessage: async () => ({id:456,timestamp:'2026-09-22T00:00:00Z',data:{thread_id:null},content:'/agent-avatar clear'}), sendMessage: async () => {},
       } as any;
       const response = await handleAgentMessage(channel,new Request('https://fixture/agent/default/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:'/agent-avatar clear'})}),'/agent/default/message','web:default','default');
       expect(response.status).toBe(201);
@@ -474,7 +474,7 @@ describe("web agent message handler", () => {
       broadcastEvent: (event: string, payload: any) => broadcasts.push({ event, payload }),
       updateAgentStatus: (chatJid: string, status: any) => statusUpdates.push({ chatJid, status }),
       setContextUsage: (chatJid: string, usage: any) => contextUsages.push({ chatJid, usage }),
-      storeMessage: () => {
+      admitUserMessage: async () => {
         storeMessageCalls += 1;
         return {
           id: 456,
@@ -661,7 +661,7 @@ describe("web agent message handler", () => {
       },
       updateAgentStatus: () => {},
       skipFailedOnModelSwitch: () => {},
-      storeMessage: (_chatJid: string, content: string) => ({
+      admitUserMessage: async (_chatJid: string, content: string) => ({
         id: 321,
         timestamp: "2026-03-14T21:10:00.000Z",
         data: { thread_id: null },
@@ -726,7 +726,7 @@ describe("web agent message handler", () => {
         broadcasts.push({ event, payload });
       },
       updateAgentStatus: () => {},
-      storeMessage: () => ({
+      admitUserMessage: async () => ({
         id: 987,
         timestamp: "2026-03-14T21:05:00.000Z",
         data: { thread_id: null },
@@ -789,7 +789,7 @@ describe("web agent message handler", () => {
         broadcasts.push({ event, payload });
       },
       updateAgentStatus: () => {},
-      storeMessage: () => {
+      admitUserMessage: async () => {
         storeMessageCalls += 1;
         return {
           id: 222,
@@ -876,7 +876,7 @@ describe("web agent message handler", () => {
       updateAgentStatus: (_chatJid: string, status: Record<string, any>) => { statusUpdates.push(status); },
       setContextUsage: (_chatJid: string, usage: Record<string, any>) => { contextUsages.push(usage); },
       skipFailedOnModelSwitch: () => {},
-      storeMessage: (_chatJid: string, content: string) => ({
+      admitUserMessage: async (_chatJid: string, content: string) => ({
         id: 654,
         timestamp: "2026-03-14T21:20:00.000Z",
         data: { thread_id: null },
