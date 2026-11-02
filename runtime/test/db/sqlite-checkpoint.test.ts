@@ -127,7 +127,7 @@ test("mismatched paths, hardlink WAL names and non-FULL writers keep their origi
   } finally { other.close(); f.close(); }
 });
 
-test("structured checkpoint observations bound pinned-reader stalls and report resume without confusing allocation", async () => {
+test("real pinned-reader checkpoint reports stall and resume without confusing allocation", async () => {
   const f = fixture(), reader = new Database(f.path), records: LogRecord[] = [];
   const sink = (record: LogRecord) => {
     if (record.path === f.path && record.operation === "sqlite_checkpoint.progress") records.push(record);
@@ -142,15 +142,40 @@ test("structured checkpoint observations bound pinned-reader stalls and report r
     const stalled = records.find(r => r.state === "stalled")!;
     expect(stalled.pendingFrames).toBeGreaterThan(0);
     expect(stalled.activeConnectionCount).toBe(1);
-    const count = records.length;
-    await Bun.sleep(1200);
-    expect(records).toHaveLength(count);
     reader.exec("ROLLBACK");
     await waitFor(() => records.some(r => r.state === "complete" && r.pendingFrames === 0), 3000);
     const complete = records.find(r => r.state === "complete" && r.pendingFrames === 0)!;
     expect(complete.walBytes).toBeGreaterThan(4 * 1024 * 1024);
     expect(statSync(f.path + "-wal").size).toBeGreaterThan(4 * 1024 * 1024);
   } finally { stop(); removeLogSink(sink); reader.close(); f.close(); }
+});
+
+test("structured checkpoint observations suppress duplicate heartbeats until the reporting bound", async () => {
+  const f = fixture(), records: LogRecord[] = [], RealWorker = globalThis.Worker, realNow = Date.now;
+  let worker: EventTarget, now = realNow();
+  const sink = (record: LogRecord) => { if (record.path === f.path && record.operation === "sqlite_checkpoint.progress") records.push(record); };
+  let stop: (() => void) | undefined;
+  try {
+    globalThis.Worker = class extends EventTarget {
+      constructor() { super(); worker = this; }
+      postMessage() { queueMicrotask(() => this.dispatchEvent(new MessageEvent("message", { data: { type: "ready" } }))); }
+      terminate() {}
+    } as unknown as typeof Worker;
+    Date.now = () => now;
+    addLogSink(sink); stop = registerSqliteCheckpoint(f.db, f.path, true)!;
+    await Promise.resolve();
+    expect(f.db.query("PRAGMA wal_autocheckpoint").get()).toEqual({ wal_autocheckpoint: 0 });
+    const report = (checkpointed: number) => worker.dispatchEvent(new MessageEvent("message", {
+      data: { type: "checkpoint", result: { busy: 0, log: 1225, checkpointed }, walBytes: 5_047_032 },
+    }));
+    report(2); now += 1000; report(2);
+    expect(records.map(r => r.state)).toEqual(["progress", "stalled"]);
+    now += 1200; report(2); expect(records).toHaveLength(2);
+    now += 28_799; report(2); expect(records).toHaveLength(2);
+    now++; report(2); expect(records).toHaveLength(3);
+    report(1225); expect(records.map(r => r.state)).toEqual(["progress", "stalled", "stalled", "complete"]);
+    expect(records.at(-1)).toMatchObject({ pendingFrames: 0, walBytes: 5_047_032, activeConnectionCount: 1 });
+  } finally { stop?.(); removeLogSink(sink); Date.now = realNow; globalThis.Worker = RealWorker; f.close(); }
 });
 
 test("failed groups restore custom policies and never restart for late writers", async () => {

@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { createCurrentPiclawServiceOutboxStore, createServiceOutboxEnqueueInserter } from "../../src/service-effects/current-piclaw/service-outbox-store.js";
 import { installServiceOutboxSchema } from "../../src/service-effects/current-piclaw/service-outbox-schema.js";
 import { installServiceWorkSchema } from "../../src/service-effects/current-piclaw/service-work-schema.js";
@@ -157,6 +157,49 @@ describe("EF-S02 composition schema and construction hardening", () => {
     } finally {
       database.close();
     }
+  });
+
+  test("construction checks every owned table without scanning unrelated SDK history", () => {
+    const database = new Database(":memory:", { strict: true });
+    try {
+      installTerminalSettlementCompositionSchema(database);
+      const owned = (database.query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name<>'piclaw_schema_migrations'").all() as { name: string }[]).map(row => row.name).sort();
+      database.exec("CREATE TABLE unrelated_sdk_history(payload TEXT)");
+      const query = database.query.bind(database);
+      const observed: string[] = [];
+      const probe = spyOn(database, "query").mockImplementation((sql: string) => {
+        observed.push(sql);
+        if (/^PRAGMA (foreign_key_check|quick_check)\s*$/i.test(sql)) throw Error("Unscoped database scan");
+        return query(sql);
+      });
+      try {
+        expect(createCurrentPiclawTerminalSettlementStore(database, new Payloads(), new Runtime()).ok).toBeTrue();
+        for (const pragma of ["foreign_key_check", "quick_check"]) {
+          const checked = observed.flatMap(sql => {
+            const match = sql.match(new RegExp(`^PRAGMA ${pragma}\\("([a-z_0-9]+)"\\)$`));
+            return match ? [match[1]!] : [];
+          }).sort();
+          expect(checked).toEqual(owned);
+        }
+      } finally { probe.mockRestore(); }
+    } finally { database.close(); }
+  });
+
+  test("owned table CHECK corruption still rejects terminal construction", () => {
+    const database = new Database(":memory:", { strict: true });
+    try {
+      installTerminalSettlementCompositionSchema(database);
+      database.exec(`
+        ALTER TABLE chats ADD COLUMN integrity_guard INTEGER CHECK(integrity_guard>0);
+        PRAGMA ignore_check_constraints=ON;
+        INSERT INTO chats(jid,name,last_message_time,integrity_guard) VALUES('corrupt','corrupt','2026-11-02T00:00:00.000Z',-1);
+        PRAGMA ignore_check_constraints=OFF;
+      `);
+      expect(database.query('PRAGMA foreign_key_check("chats")').all()).toEqual([]);
+      expect(database.query('PRAGMA quick_check("chats")').all()).not.toEqual([{ quick_check: "ok" }]);
+      expect(createCurrentPiclawTerminalSettlementStore(database, new Payloads(), new Runtime()).ok).toBeFalse();
+      expect(database.query("SELECT integrity_guard FROM chats WHERE jid='corrupt'").get()).toEqual({ integrity_guard: -1 });
+    } finally { database.close(); }
   });
 
   test("required S02 and S05 table FK violations still reject terminal construction", () => {

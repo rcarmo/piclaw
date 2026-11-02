@@ -131,7 +131,7 @@ test('entered postcommit cleanup finishes once after request cancellation or rev
     await pending;
     expect(state.disposed).toBe(1); expect(pool.has(child)).toBe(false);
     expect(store.getChatBranchByChatJid(child)).toBeNull();
-  } finally { release(); await pending.catch(() => {}); }
+  } finally { release(); await Promise.allSettled([pending]); }
 }));
 
 for (const reason of ['cancel', 'revoke', 'replace'] as const) {

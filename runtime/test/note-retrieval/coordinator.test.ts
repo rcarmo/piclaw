@@ -76,6 +76,19 @@ test('new paths skip staged deletes; incremental replacements still delete all t
  expect(sql("SELECT count(*) n FROM note_retrieval_fts WHERE path='notes/a.md'")).toEqual({n:1});
  expect(sql("SELECT count(*) n FROM note_retrieval_fts WHERE note_retrieval_fts MATCH 'alpha'")).toEqual({n:0});
 });
+test('staging commits bounded source batches rather than one durable commit per note',async()=>{
+ for(let i=0;i<33;i++)put(`batch-${String(i).padStart(2,'0')}.md`,`# Note ${i}\nbody`);
+ const code=`const {Database}=await import('bun:sqlite');const query=Database.prototype.query,transaction=Database.prototype.transaction;let inserts=0;const batches=[];Database.prototype.query=function(sql,...args){if(sql.startsWith('INSERT INTO note_retrieval_sources VALUES'))inserts++;return query.call(this,sql,...args)};Database.prototype.transaction=function(body,...args){return transaction.call(this,function(...values){const before=inserts;const result=body.apply(this,values);if(inserts>before)batches.push(inserts-before);return result},...args)};const {runNoteIndexPhase}=await import('./src/note-retrieval/coordinator.ts');await runNoteIndexPhase();console.log('SOURCE_BATCHES='+JSON.stringify(batches));`;
+ const p=spawn(process.execPath,['-e',code],{cwd:resolve(import.meta.dir,'../..'),env:process.env,stdio:['ignore','pipe','pipe','pipe']});let output='',errors='';p.stdout!.on('data',b=>output+=b);p.stderr!.on('data',b=>errors+=b);(p.stdio[3] as any).end(JSON.stringify(binding()));const [exit]=await once(p,'exit');
+ expect(exit,errors).toBe(0);expect(JSON.parse(/SOURCE_BATCHES=(\[[^\n]+\])/.exec(output)![1])).toEqual([16,16,1]);expect(chunks()).toHaveLength(33);expect(snapshot().state).toBe('ready');
+});
+test('a source changed during a later batched insert rolls back the whole batch and keeps publication',async()=>{
+ put('a.md','original a');put('b.md','original b');expect((await run()).code).toBe(0);const previous=chunks(),published=snapshot().published;
+ put('a.md','updated a');put('b.md','updated b');
+ const code=`const {Database}=await import('bun:sqlite');const fs=await import('node:fs');const query=Database.prototype.query;let firstPath=null;Database.prototype.query=function(sql,...args){const stmt=query.call(this,sql,...args);if(sql.startsWith('INSERT INTO note_retrieval_sources VALUES')){const run=stmt.run;Object.defineProperty(stmt,'run',{configurable:true,value:function(...values){if(firstPath===null)firstPath=values[1];else fs.writeFileSync(${JSON.stringify(ws.workspace)}+'/'+firstPath,'changed during staging');return run.apply(this,values)}})}return stmt};const {runNoteIndexPhase}=await import('./src/note-retrieval/coordinator.ts');try{await runNoteIndexPhase();process.exitCode=2}catch(error){if(error.message!=='source_unavailable')throw error}`;
+ const p=spawn(process.execPath,['-e',code],{cwd:resolve(import.meta.dir,'../..'),env:process.env,stdio:['ignore','ignore','pipe','pipe']});let errors='';p.stderr!.on('data',b=>errors+=b);(p.stdio[3] as any).end(JSON.stringify(binding()));const [exit]=await once(p,'exit');
+ expect(exit,errors).toBe(0);expect(chunks()).toEqual(previous);expect(snapshot()).toMatchObject({published,staging:null,state:'stale'});
+});
 test('independent WAL reader keeps one published generation across dirty refresh and commit',async()=>{
  put('a.md','# Entry\nold source');expect((await run()).code).toBe(0);
  const original=chunks()[0],published=snapshot().published;

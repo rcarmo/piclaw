@@ -1,11 +1,11 @@
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import { isolateBudgetTestDatabase } from './fixture.js';
 import { ensureBudgetWork, getBudgetWork, saveBudgetCap } from '../../src/db/budget-limits.js';
 import { getDb } from '../../src/db/connection.js';
 import { evaluateBudget } from '../../src/budget/evaluator.js';
 import { abandonBudgetRequest, getBudgetRequest, readBudgetTerminalReceipt, recordBudgetTerminalReceipt } from '../../src/db/budget-request-reservations.js';
-import { modelRequestAccounting } from '../../src/budget/model-request-accounting.js';
+import { assertModelAccountingReady, modelRequestAccounting } from '../../src/budget/model-request-accounting.js';
 isolateBudgetTestDatabase();
 
 function seed() {
@@ -101,4 +101,26 @@ test('definitely unsent native request releases its hold without a usage event',
   expect(getBudgetRequest(request.id)?.state).toBe('released');
   expect(getDb().query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
   expect(getDb().query('SELECT count(*) n FROM budget_usage_events').get()).toEqual({ n: 0 });
+});
+
+test('readiness uses the request-work index without scanning unrelated holds', async () => {
+  seed();
+  ensureBudgetWork({ id: 'outside', chatJid: 'web:fixture', executionKind: 'interactive' });
+  const accounting = modelRequestAccounting({ authorise() {}, documentedFree: false });
+  const request = binding('unrelated', 'outside'), signal = new AbortController().signal;
+  await accounting.reserve(request, signal);
+  await accounting.dispatch(request, signal);
+  const database = getDb();
+  const before = database.query('SELECT * FROM budget_request_reservations ORDER BY id').all();
+  const observed = spyOn(database, 'query');
+  let sql: string | undefined;
+  try {
+    expect(() => assertModelAccountingReady('parent', database, undefined, true)).not.toThrow();
+    sql = observed.mock.calls.find(([query]) => query.startsWith('WITH RECURSIVE scope(id)'))?.[0];
+  } finally { observed.mockRestore(); }
+  expect(sql).toBeDefined();
+  const plan = database.query(`EXPLAIN QUERY PLAN ${sql}`).all('parent', 1, null, null) as { detail: string }[];
+  expect(plan.some(row => row.detail.startsWith('SEARCH r USING INDEX idx_budget_requests_work_state '))).toBe(true);
+  expect(plan.some(row => /^SCAN r(?: |$)/.test(row.detail))).toBe(false);
+  expect(database.query('SELECT * FROM budget_request_reservations ORDER BY id').all()).toEqual(before);
 });
