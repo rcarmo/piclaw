@@ -84,6 +84,8 @@ const ALLOWED_UNUSED_EXPORTS = new Map<string, string>([
   ["src/extensions/keychain-tools.ts - keychainTools", "extension entrypoint/runtime-discovered API for keychain-tools.ts packaged integration consumers"],
   ["src/extensions/model-execution-runtime.ts - __setRuntimeModelExecutorForTests", "test-only API for focused extensions/model-execution-runtime.ts regression harnesses"],
   ["src/extensions/model-execution-runtime.ts - getRuntimeModelExecutor", "runtime model-executor API used by context/smart-compaction integrations and focused tests"],
+  ["src/extensions/smart-compaction/remote-compaction.ts - getLatestRemoteCompactionDetails", "data-only historical branch selector retained for explicit offline readers; no execution or replay"],
+  ["src/extensions/smart-compaction/remote-compaction.ts - extractRemoteCompactionReadableCheckpoint", "data-only marked checkpoint decoder retained for historical readers; never exposes opaque provider state"],
   ["src/extensions/request-batch.ts - BatchedRequestItem", "request-batch compatibility API for packaged batch-request extension consumers"],
   ["src/extensions/request-batch.ts - RequestBatchControls", "request-batch compatibility API for packaged batch-request extension consumers"],
   ["src/extensions/request-batch.ts - appendOutputFileNote", "request-batch compatibility API for packaged batch-request extension consumers"],

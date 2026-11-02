@@ -39,6 +39,12 @@ describe("check-unused-exports", () => {
     expect(findUnexpectedUnusedExports(["src/durable-legacy-sdk.ts:99 - unusedFutureExport"])).toEqual(["src/durable-legacy-sdk.ts:99 - unusedFutureExport"]);
   });
 
+  test("historical decoder retention is a closed data-only surface, not a legacy execution exemption", () => {
+    expect(getAllowedUnusedExportReason("src/extensions/smart-compaction/remote-compaction.ts:164 - getLatestRemoteCompactionDetails")).toContain("data-only");
+    expect(getAllowedUnusedExportReason("src/extensions/smart-compaction/remote-compaction.ts:171 - extractRemoteCompactionReadableCheckpoint")).toContain("data-only");
+    expect(findUnexpectedUnusedExports(["src/extensions/smart-compaction/remote-compaction.ts:999 - attemptRemoteCompaction"])).toEqual(["src/extensions/smart-compaction/remote-compaction.ts:999 - attemptRemoteCompaction"]);
+  });
+
   test("allowlist is line-number independent and records a reason", () => {
     expect(getAllowedUnusedExportReason("src/runtime/progress-watchdog.ts:126 - setProgressWatchdogTimeoutForTests")).toContain("test");
     expect(getAllowedUnusedExportReason("src/runtime/progress-watchdog.ts:999 - setProgressWatchdogTimeoutForTests")).toContain("test");
