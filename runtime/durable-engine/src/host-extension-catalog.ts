@@ -1,3 +1,4 @@
+import type { SyncSqliteOperation } from "../../src/db/sqlite-async-admission.js";
 import { assertHostToolDeclaration } from "./host-tools.js";
 import { installedAddonProfiles, type InstalledAddonProfile } from "./host-installed-addon-profiles.js";
 import { DefaultResourceLoader, type LoadExtensionsResult, type SettingsManager, type ToolDefinition, type RegisteredCommand } from "../../src/durable-legacy-sdk.js";
@@ -10,7 +11,7 @@ import type { CodeReviewNativeExports } from "./host-code-review-tool.js";
 import type { EditableTableNativeExports } from "./host-editable-table-tool.js";
 import type { DrawioNativeExports } from "./host-drawio-tool.js";
 export interface PlanPromptExports {
-  createPlanTool(write?: <T>(body: () => T) => Promise<T>): ToolDefinition<any, any, any>;
+  createPlanTool(write?: <T>(body: SyncSqliteOperation<T>) => Promise<T>): ToolDefinition<any, any, any>;
   parsePlanMarkdown(markdown: string): { plan: { step: string; status: "pending" | "in_progress" | "completed" }[] };
   loadSessionPlan(chatJid: string): { chat_jid: string; markdown: string; updated_at: string | null };
   buildPlanSystemPrompt(plan: ReturnType<PlanPromptExports["loadSessionPlan"]>): string;

@@ -1,4 +1,4 @@
-import { admitSqliteWrite, isSqliteContention } from "../../src/db/sqlite-async-admission.js";
+import { admitSqliteWrite, type SyncSqliteOperation, isSqliteContention } from "../../src/db/sqlite-async-admission.js";
 import { RuntimePreparationError } from "../../src/runtime/preparation-error.js";
 import { HostEffectError } from "./host-effects.js";
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
@@ -323,7 +323,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   const regretsAddon = regrets?.nativeExports["native.ts"] as any;
   const assertRegrets = () => { assert(); lifetime.signal.throwIfAborted(); regrets?.assertCurrent();
     if (readAccessConfig().mode !== "single-user") throw Error("Regrets requires single-user mode"); };
-  const configWrite = <T>(body: () => T): Promise<T> => admitSqliteWrite(root, body, assertRegrets);
+  const configWrite = <T>(body: SyncSqliteOperation<T>): Promise<T> => admitSqliteWrite<T>(root, body, assertRegrets);
   const regretsPorts = (chat: string, assertCurrent = assertRegrets, transactionalWrite = configWrite, accountedDecision?: any) => createHostRegretsBindings({
     root, historyDatabase: root, cwd: WORKSPACE_DIR, chat, assertCurrent, transactionalWrite,
     accessMode: () => readAccessConfig().mode, allowAllChats: () => true,

@@ -7,6 +7,7 @@
  * fall back to an in-memory Map.
  */
 
+import type { SyncSqliteOperation } from "./db/sqlite-async-admission.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { KvScope, KvQueryOptions } from "./db/extension-kv.js";
 
@@ -18,7 +19,7 @@ export interface ExtensionKvAuthority {
   readonly globalWrite?: boolean;
   assertCurrent(): void;
   write<T>(body: () => T): T;
-  admitWrite?<T>(body: () => T): Promise<T>;
+  admitWrite?<T>(body: SyncSqliteOperation<T>): Promise<T>;
 }
 const operationAuthority = new AsyncLocalStorage<ExtensionKvAuthority>();
 let requireAuthority = false;
@@ -28,7 +29,7 @@ export function withExtensionKvAuthority<T>(authority: ExtensionKvAuthority, bod
 }
 
 export interface ExtensionKvStore {
-  write?<T>(extensionId: string, body: () => T): Promise<T>;
+  write?<T>(extensionId: string, body: SyncSqliteOperation<T>): Promise<T>;
   get<T = unknown>(extensionId: string, key: string, scope?: KvScope, scopeKey?: string): T | null;
   set(extensionId: string, key: string, value: unknown, scope?: KvScope, scopeKey?: string): void;
   delete(extensionId: string, key: string, scope?: KvScope, scopeKey?: string): boolean;
@@ -128,7 +129,7 @@ function effect<T>(extensionId: string, scope: KvScope | undefined, scopeKey: st
   return write ? authority.write(invoke) : invoke();
 }
 const router: ExtensionKvStore = Object.freeze({
-  async write<T>(extensionId: string, body: () => T): Promise<T> {
+  async write<T>(extensionId: string, body: SyncSqliteOperation<T>): Promise<T> {
     const authority = operationAuthority.getStore();
     if (!authority) {
       if (requireAuthority) throw Error("Extension KV operation authority required");
@@ -136,7 +137,7 @@ const router: ExtensionKvStore = Object.freeze({
     }
     authority.assertCurrent();
     if (extensionId !== authority.extensionId || !authority.admitWrite) throw Error("Extension KV write admission unavailable");
-    return authority.admitWrite(() => { authority.assertCurrent(); const result = body(); authority.assertCurrent(); return result; });
+    return authority.admitWrite<T>(() => { authority.assertCurrent(); const result = body(); authority.assertCurrent(); return result; });
   },
   get: <T>(id: string, key: string, scope?: KvScope, chat?: string) => effect(id, scope, chat, false, () => registeredStore.get<T>(id, key, scope, chat)),
   set: (id: string, key: string, value: unknown, scope?: KvScope, chat?: string) => effect(id, scope, chat, true, () => registeredStore.set(id, key, value, scope, chat)),

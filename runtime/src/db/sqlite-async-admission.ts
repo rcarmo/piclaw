@@ -37,13 +37,16 @@ export async function waitForSqliteContention(deadline: number, signal?: AbortSi
   });
 }
 
+/** Unknown/erased result types still require the runtime thenable check. */
+export type SyncSqliteOperation<T> = () => T & (Extract<T, { then: (...args: never[]) => unknown }> extends never ? unknown : never);
+
 /** Retry writer acquisition only; never replay an entered transaction callback.
  * Keep operations/authorization synchronous and SQL-only. Rejecting async misuse
  * cannot cancel work already started. Restore connection
  * policy before yielding and run rollback cleanup before returning any failure. */
 export async function admitSqliteWrite<T>(
   database: Database,
-  operation: () => T,
+  operation: SyncSqliteOperation<T>,
   authorise: (phase: 'before' | 'after') => void = () => {},
   signal: AbortSignal = new AbortController().signal,
   timeoutMs = 5000,

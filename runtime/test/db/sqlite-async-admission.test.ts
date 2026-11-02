@@ -144,6 +144,7 @@ test('a changed binding while awaiting acquisition prevents callback entry witho
 
 test("admission rejects async callbacks before their SQL prefix executes", () => fixture(async (db) => {
   let entered = false;
+  // @ts-expect-error Deliberate runtime misuse: async work must be rejected before entry.
   await expect(admitSqliteWrite(db, async () => {
     entered = true; db.run("INSERT INTO input(value) VALUES ('async-prefix')");
   })).rejects.toThrow("synchronous");
@@ -152,6 +153,7 @@ test("admission rejects async callbacks before their SQL prefix executes", () =>
 
 test("admission rolls back SQL when a synchronous callback returns a thenable", () => fixture(async (db) => {
   let entered = 0;
+  // @ts-expect-error Deliberate runtime misuse: a thenable result must roll back its SQL prefix.
   await expect(admitSqliteWrite(db, () => {
     entered++; db.run("INSERT INTO input(value) VALUES ('thenable-prefix')");
     return { then() { throw new Error("thenable must not execute"); } };
@@ -208,6 +210,7 @@ test("nested successful admission preserves outer durability ownership despite r
 
 test("rejected Promise returned by a synchronous wrapper is contained without executing it again", () => fixture(async (db) => {
   let calls = 0;
+  // @ts-expect-error Deliberate runtime misuse: an already rejected Promise must remain contained.
   await expect(admitSqliteWrite(db, () => {
     calls++; db.run("INSERT INTO input VALUES ('prefix')");
     return Promise.reject(new Error("already rejected async work"));

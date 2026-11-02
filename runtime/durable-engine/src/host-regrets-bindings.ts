@@ -1,3 +1,4 @@
+import type { SyncSqliteOperation } from "../../src/db/sqlite-async-admission.js";
 import type { Database } from "bun:sqlite";
 import type { Api, Model, AssistantMessage } from "../../src/durable-legacy-sdk.js";
 import type { Context, ModelsSimpleStreamOptions } from "@earendil-works/pi-ai";
@@ -21,7 +22,7 @@ export interface HostRegretsBindingOptions<E> {
   chat: string;
   assertCurrent(): void;
   /** Awaited Root write admission; checks and SQL mutation roll back together. */
-  transactionalWrite<T>(body: () => T): T | Promise<T>;
+  transactionalWrite<T>(body: SyncSqliteOperation<T>): T | Promise<T>;
   accessMode(): string;
   allowAllChats(): boolean;
   readExchanges(db: Database, window: Window): { exchanges: E[]; excluded: Record<string, number> };
