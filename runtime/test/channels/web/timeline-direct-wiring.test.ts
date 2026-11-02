@@ -16,7 +16,7 @@ async function fixture() {
   Object.defineProperty(f.channel, "httpSurfaceService", {
     get() { throw Error("Timeline still enters retired HTTP surface"); },
   });
-  Object.defineProperty(Reflect.get(f.channel, "endpointFacade"), "handleTimeline", {
+  Object.defineProperty(f.channel, "endpointFacade", {
     configurable: true,
     get() { throw Error("Timeline still enters retired endpoint facade"); },
   });

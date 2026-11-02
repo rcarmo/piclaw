@@ -101,15 +101,12 @@ test("failed optional sections do not discard healthy status or leak exception t
 });
 
 test("endpoint facade opts into the snapshot and leaves ordinary status synchronous", async () => {
-  const { WebChannelEndpointFacadeService } =
-    await import("../../../../src/channels/web/endpoints/channel-endpoint-facade-service");
+  const { WebChannel } = await import("../../../../src/channels/web.js");
   const ctx = context();
-  const facade = new WebChannelEndpointFacadeService({
-    endpointContexts: { agentStatus: () => ctx },
-    getIdentitySnapshot: () => ({ assistantName: "Facade Fixture" }),
-    json: Response.json,
-    agentPool: { getMemoryInstrumentationSnapshot: () => null },
-  } as any);
+  const facade = Object.assign(Object.create(WebChannel.prototype), {
+    endpointContexts: { agentStatus: () => ctx, identity: () => ({ assistantName: "Facade Fixture" }) },
+    json: Response.json, agentPool: { getMemoryInstrumentationSnapshot: () => null },
+  });
   const ordinary = facade.handleAgentStatus(
     new Request("http://fixture/agent/status"),
   );

@@ -25,7 +25,6 @@ import { QueuedFollowupLifecycleService, type QueuedInputSourceAdmission } from 
 import type { WebMessageWriteService } from "./web/message-write-service.js";
 import type { WebChannelRuntimeStateService } from "./web/runtime/runtime-state-service.js";
 import type { WebChannelEndpointContexts } from "./web/endpoints/channel-endpoint-context-factory.js";
-import type { WebChannelEndpointFacadeService } from "./web/endpoints/channel-endpoint-facade-service.js";
 import type { WebAgentControlPlaneService } from "./web/agent/agent-control-plane-service.js";
 import type { InteractionBroadcaster } from "./web/interaction-broadcaster.js";
 import type { WebAuthGateway } from "./web/auth/auth-gateway.js";
@@ -44,13 +43,40 @@ import type { QueuedFollowupItem } from "../queued-followups.js";
 import type { SendMessageOptions } from "./web/message-write-service.js";
 import type { WebAgentBufferEntry } from "./web/agent/agent-buffers.js";
 import { handleAgentMessage as handleAgentMessageRequest } from "./web/handlers/agent.js";
+import { handlePost as handlePostRequest } from "./web/handlers/posts.js";
 import { TerminalSessionService } from "./web/terminal/terminal-session-service.js";
 import { VncSessionService } from "./web/vnc/vnc-session-service.js";
 import { createLazyTerminalService, createLazyVncService } from "./web/lazy-session-services.js";
 import type { WebMessageProcessingStorageService } from "./web/messaging/message-processing-storage-service.js";
 import { initializeWebChannelConstructor } from "./web/core/web-channel-constructor-factory.js";
-import { handleTimelineRequest } from "./web/endpoints/content-endpoints.js";
 import { handleAgentContextRequest, handleAgentModelsRequest } from "./web/agent/agent-status.js";
+import {
+  handleAgentActiveChatsRequest,
+  handleAgentBranchesRequest,
+  handleAgentStatusRequest,
+  handleAgentUiSnapshotRequest,
+} from "./web/agent/agent-status.js";
+import { handleAgentDebugRequest } from "./web/agent/agent-debug.js";
+import { handleAgentCommandsRequest } from "./web/agent/agent-commands.js";
+import { handleSystemMetricsRequest } from "./web/agent/system-metrics.js";
+import {
+  handleTimelineRequest,
+  handleHashtagRequest,
+  handleSearchRequest,
+  handleThoughtRequest,
+  handleThreadRequest,
+} from "./web/endpoints/content-endpoints.js";
+import { deletePostResponse } from "./web/timeline-service.js";
+import { handleAgentsRequest, handleAvatarRequest } from "./web/endpoints/identity-endpoints.js";
+import { handleManifestRequest } from "./web/manifest.js";
+import { handleInternalPostRequest, handleUpdatePostAnnotationsRequest, handleUpdatePostRequest } from "./web/post-mutations.js";
+import {
+  handleAgentRespondRequest,
+  handleThoughtVisibilityRequest,
+  handleWorkspaceVisibilityRequest,
+} from "./web/endpoints/ui-endpoints.js";
+import { getChatProject } from "../db/chat-project.js";
+import { ensureAvatarCache } from "./web/media/avatar-service.js";
 
 const DEFAULT_CHAT_JID = "web:default";
 const DEFAULT_AGENT_ID = "default";
@@ -286,23 +312,28 @@ export class WebChannel implements WebChannelLike {
   }
 
   async handleAgents(): Promise<Response> {
-    return await this.endpointFacade.handleAgents();
+    return await handleAgentsRequest(this.endpointContexts.agents());
   }
 
   async handleManifest(req: Request): Promise<Response> {
-    return await this.endpointFacade.handleManifest(req);
+    const identity = this.endpointContexts.identity();
+    return await handleManifestRequest(req, {
+      assistantName: identity.assistantName,
+      assistantAvatar: identity.assistantAvatarRaw,
+      ensureAvatarCache: ensureAvatarCache,
+    });
   }
 
   async handleAvatar(kind: "agent" | "user", req: Request): Promise<Response> {
-    return await this.endpointFacade.handleAvatar(kind, req);
+    return await handleAvatarRequest(kind, req, this.endpointContexts.avatar());
   }
 
   async handleWorkspaceVisibility(req: Request): Promise<Response> {
-    return await this.endpointFacade.handleWorkspaceVisibility(req);
+    return await handleWorkspaceVisibilityRequest(req, this.endpointContexts.ui());
   }
 
   handleHashtag(tag: string, limit: number, offset: number, chatJid?: string): Response {
-    return this.endpointFacade.handleHashtag(tag, limit, offset, chatJid);
+    return handleHashtagRequest(tag, limit, offset, chatJid, this.endpointContexts.content());
   }
 
   handleSearch(
@@ -314,35 +345,50 @@ export class WebChannel implements WebChannelLike {
     rootChatJid?: string,
     filters?: { images?: boolean; attachments?: boolean } | null,
   ): Response {
-    return this.endpointFacade.handleSearch(query, limit, offset, chatJid, searchScope, rootChatJid, filters);
+    return handleSearchRequest(
+      query,
+      limit,
+      offset,
+      chatJid,
+      searchScope,
+      rootChatJid,
+      this.endpointContexts.content(),
+      filters,
+    );
   }
 
   handleThread(id: number | null, chatJid?: string): Response {
-    return this.endpointFacade.handleThread(id, chatJid);
+    return handleThreadRequest(id, chatJid, this.endpointContexts.content());
   }
 
   handleThought(panel: string | null, turnId: string | null): Response {
-    return this.endpointFacade.handleThought(panel, turnId);
+    return handleThoughtRequest(panel, turnId, this.endpointContexts.content());
   }
 
   async handleThoughtVisibility(req: Request): Promise<Response> {
-    return await this.endpointFacade.handleThoughtVisibility(req);
+    return await handleThoughtVisibilityRequest(req, this.endpointContexts.ui());
   }
 
   handleDeletePost(req: Request, id: number | null, cascade = false): Response {
-    return this.endpointFacade.handleDeletePost(req, id, cascade);
+    const url = new URL(req.url);
+    const chatJid = url.searchParams.get("chat_jid")?.trim() || DEFAULT_CHAT_JID;
+    const result = deletePostResponse(chatJid, id, cascade);
+    if (result.deletedIds.length > 0) {
+      this.broadcastEvent("interaction_deleted", { chat_jid: chatJid, ids: result.deletedIds });
+    }
+    return this.json(result.body, result.status);
   }
 
   async handleUpdatePost(req: Request, id: number | null): Promise<Response> {
-    return await this.endpointFacade.handleUpdatePost(req, id);
+    return await handleUpdatePostRequest(req, id, this.endpointContexts.postMutations());
   }
 
   async handleUpdatePostAnnotations(req: Request, id: number): Promise<Response> {
-    return await this.endpointFacade.handleUpdatePostAnnotations(req, id);
+    return await handleUpdatePostAnnotationsRequest(req, id, this.endpointContexts.postMutations());
   }
 
   async handleInternalPost(req: Request): Promise<Response> {
-    return await this.endpointFacade.handleInternalPost(req);
+    return await handleInternalPostRequest(req, this.endpointContexts.postMutations());
   }
 
   handleSse(req: Request, authorisation?: import("./web/sse/sse.js").SseAuthorisation): Response {
@@ -366,11 +412,21 @@ export class WebChannel implements WebChannelLike {
   }
 
   async handlePost(req: Request, isReply: boolean): Promise<Response> {
-    return await this.endpointFacade.handlePost(req, isReply);
+    const url = new URL(req.url);
+    const chatJid = url.searchParams.get("chat_jid")?.trim() || DEFAULT_CHAT_JID;
+    return await handlePostRequest(this, req, isReply, chatJid);
   }
 
   handleAgentStatus(req: Request): Response | Promise<Response> {
-    return this.endpointFacade.handleAgentStatus(req);
+    if (new URL(req.url).searchParams.get("ui") === "1") {
+      return handleAgentUiSnapshotRequest(req, this.endpointContexts.agentStatus(), {
+        getSystemMetrics: async () => handleSystemMetricsRequest({ json: (payload, status = 200) => this.json(payload, status),
+          getRuntimeMemorySnapshot: () => this.agentPool.getMemoryInstrumentationSnapshot() }, undefined, null).json(),
+        getAgentName: () => this.endpointContexts.identity().assistantName,
+        getProjectRepository: getChatProject,
+      });
+    }
+    return handleAgentStatusRequest(req, this.endpointContexts.agentStatus());
   }
 
   async handleAgentContext(req: Request): Promise<Response> {
@@ -378,11 +434,19 @@ export class WebChannel implements WebChannelLike {
   }
 
   async handleAgentDebug(req: Request): Promise<Response> {
-    return await this.endpointFacade.handleAgentDebug(req);
+    return await handleAgentDebugRequest(req, {
+      defaultChatJid: DEFAULT_CHAT_JID,
+      agentPool: this.agentPool,
+      json: (payload: unknown, status = 200) => this.json(payload, status),
+    });
   }
 
   async handleAgentCommands(req: Request): Promise<Response> {
-    return await this.endpointFacade.handleAgentCommands(req);
+    return await handleAgentCommandsRequest(req, {
+      defaultChatJid: DEFAULT_CHAT_JID,
+      agentPool: this.agentPool,
+      json: (payload: unknown, status = 200) => this.json(payload, status),
+    });
   }
 
   async handleAutoresearchStatus(req: Request): Promise<Response> {
@@ -438,15 +502,18 @@ export class WebChannel implements WebChannelLike {
   }
 
   handleSystemMetrics(_req: Request): Response {
-    return this.endpointFacade.handleSystemMetrics();
+    return handleSystemMetricsRequest({
+      json: (payload, status = 200) => this.json(payload, status),
+      getRuntimeMemorySnapshot: () => this.agentPool.getMemoryInstrumentationSnapshot(),
+    }, undefined, undefined);
   }
 
   async handleAgentActiveChats(_req: Request): Promise<Response> {
-    return this.endpointFacade.handleAgentActiveChats();
+    return handleAgentActiveChatsRequest(this);
   }
 
   async handleAgentBranches(req: Request): Promise<Response> {
-    return await this.endpointFacade.handleAgentBranches(req);
+    return handleAgentBranchesRequest(req, this);
   }
 
   async handleAgentBranchFork(req: Request): Promise<Response> {
@@ -486,7 +553,7 @@ export class WebChannel implements WebChannelLike {
   }
 
   async handleAgentRespond(req: Request): Promise<Response> {
-    return await this.endpointFacade.handleAgentRespond(req);
+    return await handleAgentRespondRequest(req, this.endpointContexts.ui());
   }
 
   async serveStatic(relPath: string, req?: Request): Promise<Response> {
@@ -552,7 +619,6 @@ export class WebChannel implements WebChannelLike {
   private readonly runtimePublicSurfaceService!: WebChannelRuntimePublicSurfaceService;
   private readonly messageProcessingStorageService!: WebMessageProcessingStorageService;
   private readonly messageWriteService!: WebMessageWriteService;
-  private readonly endpointFacade!: WebChannelEndpointFacadeService;
   private readonly controlPlaneService!: WebAgentControlPlaneService;
 
   syncWorkspaceWatcher(): Promise<void> {
