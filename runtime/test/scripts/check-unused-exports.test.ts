@@ -42,6 +42,7 @@ describe("check-unused-exports", () => {
   test("allowlist is line-number independent and records a reason", () => {
     expect(getAllowedUnusedExportReason("src/runtime/progress-watchdog.ts:126 - setProgressWatchdogTimeoutForTests")).toContain("test");
     expect(getAllowedUnusedExportReason("src/runtime/progress-watchdog.ts:999 - setProgressWatchdogTimeoutForTests")).toContain("test");
-    expect(getAllowedUnusedExportReason("src/extensions/smart-compaction.ts:999 - buildTrimmedCompactionRetryPrompt")).toContain("smart-compaction");
+    expect(getAllowedUnusedExportReason("src/extensions/smart-compaction.ts:999 - buildTrimmedCompactionRetryPrompt")).toBeUndefined();
+    expect(findUnexpectedUnusedExports(["src/extensions/smart-compaction.ts:999 - buildTrimmedCompactionRetryPrompt"])).toEqual(["src/extensions/smart-compaction.ts:999 - buildTrimmedCompactionRetryPrompt"]);
   });
 });

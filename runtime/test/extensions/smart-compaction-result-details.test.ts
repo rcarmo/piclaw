@@ -1,23 +1,22 @@
 import { expect, test } from "bun:test";
 
 import {
-  createSmartCompactionResultDetails,
   parseSmartCompactionResultDetails,
 } from "../../src/extensions/smart-compaction/result-details.js";
 
-test("smart compaction result details preserve provider timing and model attribution", () => {
-  const details = createSmartCompactionResultDetails({
+test("historical smart compaction details preserve provider timing and model attribution", () => {
+  const details = {
+    kind: "piclaw.smart_compaction", version: 1,
     method: "selective",
     execution: "single_pass",
-    remoteOutcome: "disabled",
-    remoteReason: "not enabled",
+    remoteCompaction: { outcome: "disabled", reason: "not enabled" },
     modelCallCount: 1,
     model: "local/fast-summary",
     providerRequestCount: 1,
     timeToFirstTokenMs: 12_345,
     durationMs: 45_678,
     timeoutStage: "first_token",
-  });
+  };
 
   expect(details).toMatchObject({
     model: "local/fast-summary",

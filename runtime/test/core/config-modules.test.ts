@@ -176,7 +176,8 @@ test("config runtime module preserves grouped session and recovery contracts", (
   expect(getAgentRuntimeConfig().timeoutMs).toBeGreaterThan(0);
   expect(getDreamConfig().agentTimeoutMs).toBeGreaterThan(0);
   expect(getSessionPoolConfig().cleanupIntervalMs).toBeGreaterThan(0);
-  expect(getCompactionRuntimeConfig().backoffMaxMs).toBeGreaterThanOrEqual(getCompactionRuntimeConfig().backoffBaseMs);
+  expect(getCompactionRuntimeConfig()).not.toHaveProperty("backoffMaxMs");
+  expect(typeof getCompactionRuntimeConfig().autoCompactionEnabled).toBe("boolean");
   expect(getProgressWatchdogConfig().timeoutMs).toBeGreaterThanOrEqual(0);
 });
 

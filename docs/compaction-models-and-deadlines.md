@@ -25,6 +25,12 @@ With SDK 1.4.0, the native defaults are `reserveTokens: 16384`, `keepRecentToken
 
 Settings writes grant no model/tool authority and do not create, replace, abort or replay tasks. Existing native maintenance admission, source checks, immutable task/request identity, checkpoint recovery and usage accounting still apply. A paused or accepted task retains its identity when the automatic enable flag changes.
 
-Persisted legacy compaction values, imported provenance, latency observations and backoff records remain intact. Their configuration parsers and legacy session consumers remain compatibility surfaces until the separate legacy-policy/composition retirement (#1672/#1673). They do not configure the native Harness. The earlier [model/deadline guide](archive/legacy-compaction-models-and-deadlines.md) describes that legacy implementation.
+Persisted legacy compaction values, imported provenance, latency observations and backoff records remain intact. Legacy model/method/remote/deadline/backoff/progressive settings are inert historical keys; direct stale configuration writes reject before changing supported policy. The earlier [model/deadline guide](archive/legacy-compaction-models-and-deadlines.md) describes the removed implementation.
+
+## Legacy execution retirement
+
+The Selective/Pipelined/Progressive runners, remote provider pre-pass and payload replay, `createSmartCompactionExtension`, its facade/compatibility aliases and the `compactionStreamFn` option are removed. Built-in factory selection no longer registers a `session_before_compact` hook. There is no fallback compaction engine.
+
+Explicit offline `createSessionInDir` construction, source/media/history import and resident capture remain. Automatic compaction stays disabled on those legacy sessions; normal application compaction uses the native Harness. Two data-only modules retain historical result parsing, opaque records, file facts and readable checkpoint decoding without provider requests or replay. The shared historical latency estimator and telemetry database APIs remain unchanged. Reading an opaque historical record grants no authority to send it to a provider.
 
 Local-lite prompt options, tool-result compression, semantic summaries and watchdog fields keep their separate controls and consumers (`config-tools`, `context-mode-api`, `local-lite-prompt-profile`, and the progress-watchdog supervisor). They are independent of native conversation compaction and are not mapped into its SDK policy.
