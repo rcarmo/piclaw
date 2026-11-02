@@ -1,3 +1,4 @@
+import { applicationAddonSourceProfiles } from '../../runtime/durable-engine/src/host-extension-catalog.js';
 import { admitSqliteWrite } from "../../runtime/src/db/sqlite-async-admission.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 import * as maintenanceAccountingBridge from "../../runtime/durable-engine/src/host-request-accounting.js";
@@ -497,15 +498,9 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     ];
   }
   if (accountingRegrets) {
-    const source = process.env.DURABLE_ADDONS_ROOT; assert(source, 'Frozen add-on source required');
+    const source = process.env.DURABLE_REGRETS_QUALIFICATION_ROOT ?? process.env.DURABLE_ADDONS_ROOT; assert(source, 'Explicit qualified Regrets source required');
     const addon = join(source, 'addons/late-night-regrets'), pkg = join(workspace, '.pi/extensions/node_modules/@rcarmo/piclaw-addon-late-night-regrets');
-    for (const [file, hash] of Object.entries({
-      'index.ts': 'fda811e0b9ebb6f7ca514fb4d65474488ed66230d89df64477ea9c09d09b11fa',
-      'native.ts': 'facdec734b4d8185465d197c9db1cda742c549075703c6b238bd8099397db293',
-      'decision.ts': '9e23deebea9508ac49bd7172f81134420336a0734cc99757d3524a5993b58f96',
-      'review.ts': 'a85a2715cdc24d94a75eaa6c800a42fb15ea7d770cd6cc633d893b22a34c29ec',
-      'package.json': '993afa80055b23b82c690860648572bdb47997909e5a4cd589f5f49ad3f4f18c',
-    })) expect(createHash('sha256').update(readFileSync(join(addon, file))).digest('hex')).toBe(hash);
+    for (const [file, hash] of Object.entries(applicationAddonSourceProfiles['late-night-regrets'].files)) expect(createHash('sha256').update(readFileSync(join(addon, file))).digest('hex')).toBe(hash);
     cpSync(addon, pkg, { recursive: true, filter: path => !path.split('/').includes('node_modules') });
     symlinkSync(join(import.meta.dir, '../../node_modules'), join(pkg, 'node_modules'));
     extensionKvSet('late-night-regrets', 'config', { enabled: true, review_scope: 'current', decision_model: `${model.provider}/${model.id}` }, 'global');

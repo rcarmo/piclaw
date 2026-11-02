@@ -16,7 +16,9 @@ import { WebChannel } from "../../runtime/src/channels/web.js";
 import { admitWebUserMessage } from "../../runtime/src/channels/web/messaging/message-store.js";
 
 import { ModelRuntime } from "../../node_modules/@earendil-works/pi-coding-agent/dist/index.js";
-import { createProvider } from "../../node_modules/@earendil-works/pi-ai/dist/index.js";
+import { createProvider, normalizeContext, type Model } from "../../node_modules/@earendil-works/pi-ai/dist/index.js";
+import { streamSimple as sdkStreamSimple } from "../../node_modules/@earendil-works/pi-ai/dist/api/openai-completions.js";
+import { previewHostRequest } from "../../runtime/src/agent-pool/model-request-preview.ts";
 import { getPiclawAgentDir } from "../../runtime/src/core/agent-dir.js";
 import { getExtensionKvStore, withExtensionKvAuthority } from "../../runtime/src/extension-kv-registry.ts";
 import { initializeBudgetLimitsSchema } from "../../runtime/src/db/budget-limits-schema.ts";
@@ -24,7 +26,8 @@ import { initializeBudgetLimitsSchema } from "../../runtime/src/db/budget-limits
 applicationTest("enabled Regrets actual factory uses public Root and separately accounts decision", async () => {
   const workspace = process.env.PICLAW_WORKSPACE!;
   const pkg = join(workspace, ".pi/extensions/node_modules/@rcarmo/piclaw-addon-late-night-regrets");
-  cpSync(join(process.env.DURABLE_ADDONS_ROOT!, "addons/late-night-regrets"), pkg, { recursive: true, filter: p => !p.split("/").includes("node_modules") });
+  // An explicit owned candidate can be qualified without editing pinned fixture provenance.
+  cpSync(join(process.env.DURABLE_REGRETS_QUALIFICATION_ROOT ?? process.env.DURABLE_ADDONS_ROOT!, "addons/late-night-regrets"), pkg, { recursive: true, filter: p => !p.split("/").includes("node_modules") });
   symlinkSync(join(import.meta.dir, "../../node_modules"), join(pkg, "node_modules"));
   process.env.PICLAW_DB_IN_MEMORY = "0"; initDatabase(); initializeBudgetLimitsSchema(getDb());
   mkdirSync(getPiclawAgentDir(), { recursive: true });
@@ -32,10 +35,11 @@ applicationTest("enabled Regrets actual factory uses public Root and separately 
   const owner = acquireRuntimeLock({ lockPath: join(workspace, "enabled-regrets.lock"), strictOwnership: true, disabled: false });
   const model: any = { provider: "openai-codex", id: "synthetic", name: "Synthetic", type: "chat", api: "openai-completions", baseUrl: "https://synthetic.invalid", input: ["text"], reasoning: false, contextWindow: 100000, maxTokens: 4096, cost: { input: 1, output: 1, cacheRead: 1, cacheWrite: 1 } };
   const root = await ModelRuntime.create({ modelsPath: null, refreshOnCreate: false, credentials: { read: async () => undefined, get: async () => undefined, set: async () => {}, delete: async () => {}, list: async () => [] } as any });
-  let mainCalls = 0, decisionCalls = 0, nativeToolResult = "";
+  let mainCalls = 0, decisionCalls = 0, nativeToolResult = "", decisionWires = 0;
   const dispatchEvidence: any[] = [];
   let publicCompleteCalls = 0;
   const complete = root.completeSimple.bind(root);
+  let decisionUsage: Awaited<ReturnType<typeof complete>>["usage"] | undefined;
   root.completeSimple = ((...args: any[]) => {
     publicCompleteCalls++;
     expect(args[0]).toMatchObject({ provider: "openai-codex", id: "synthetic" });
@@ -43,7 +47,9 @@ applicationTest("enabled Regrets actual factory uses public Root and separately 
     expect(args[1].messages).toHaveLength(1);
     expect(args[1].messages[0].role).toBe("user");
     expect(args[2]).toMatchObject({ maxTokens: 1024, maxRetries: 0, timeoutMs: 60000 });
-    return complete(...args as Parameters<typeof complete>);
+    return complete(...args as Parameters<typeof complete>).then(message => {
+      decisionUsage = structuredClone(message.usage); return message;
+    });
   }) as typeof root.completeSimple;
   const stream = (_model: any, context: any) => {
     const decision = context.messages.some((m: any) => m.role === "system" && typeof m.content === "string" && m.content.includes("Return only JSON:"));
@@ -63,7 +69,25 @@ applicationTest("enabled Regrets actual factory uses public Root and separately 
     const message: any = { role: "assistant", api: model.api, provider: model.provider, model: model.id, timestamp: Date.now(), content, stopReason: content[0].type === "toolCall" ? "toolUse" : "stop", usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 15, cost: { input: 0.00001, output: 0.000005, cacheRead: 0, cacheWrite: 0, total: 0.000015 } } };
     const out = createAssistantMessageEventStream(); queueMicrotask(() => { out.push({ type: "done", reason: message.stopReason, message }); out.end(message); }); return out;
   };
-  root.registerNativeProvider(createProvider({ id: model.provider, models: [model], auth: { apiKey: { name: "synthetic", resolve: async () => ({ auth: { apiKey: "synthetic" }, source: "fixture" }) } }, api: { stream, streamSimple: stream } }));
+  const native = createProvider({ id: model.provider, models: [model], auth: { apiKey: { name: "synthetic", resolve: async () => ({ auth: { apiKey: "synthetic" }, source: "fixture" }) } }, api: {
+    stream,
+    streamSimple(owner, context, options) {
+      if (!context.messages.some(m => m.role === "system" && typeof m.content === "string" && m.content.includes("Return only JSON:"))) return stream(owner, context);
+      // Actual SDK output lowering, serialization and SSE parser; no provider network.
+      expect(owner.api).toBe('openai-completions');
+      return sdkStreamSimple(owner as Model<'openai-completions'>, context, { ...options, fetch: Object.assign(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        decisionWires++;
+        const body = JSON.parse(String(init?.body));
+        expect(body.max_tokens ?? body.max_completion_tokens).toBe(1024);
+        const terminal = await stream(owner, context).result();
+        const text = terminal.content.filter(c => c.type === "text").map(c => c.text).join("");
+        const chunks = [{ id: "offline-regrets", choices: [{ index: 0, delta: { role: "assistant", content: text }, finish_reason: null }] },
+          { id: "offline-regrets", choices: [{ index: 0, delta: {}, finish_reason: "stop" }], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } }];
+        return new Response(chunks.map(chunk => `data: ${JSON.stringify(chunk)}\n\n`).join("") + "data: [DONE]\n\n", { headers: { "content-type": "text/event-stream" } });
+      }, { preconnect() { throw Error('Fixture network preconnect forbidden'); } }) });
+    },
+  } });
+  root.registerNativeProvider(native);
   const physical = root.getPhysicalModel(model.provider, model.id)!;
   const services: any = { modelRuntime: root, modelRegistry: { getAvailable: () => [physical] } };
   let backend: Awaited<ReturnType<typeof createDefaultApplicationRuntime>> | undefined;
@@ -86,9 +110,15 @@ applicationTest("enabled Regrets actual factory uses public Root and separately 
     const usage = getDb().query("SELECT * FROM budget_usage_events ORDER BY rowid").all() as any[];
     const work = getDb().query("SELECT * FROM budget_work ORDER BY rowid").all() as any[];
     expect(publicCompleteCalls).toBe(1);
+    expect(decisionWires).toBe(1);
+    // Custom native transports are honestly unknown; no extra preview/decorator layer.
+    expect(await previewHostRequest(root, model, normalizeContext({ messages: [] }), {})).toEqual({ status: "unknown", reason: "unsupported" });
     const tokens = getDb().query("SELECT * FROM token_usage ORDER BY id").all() as any[];
     expect(tokens).toHaveLength(4);
-    for (const token of tokens) expect(token).toMatchObject({ input_tokens: 10, output_tokens: 5, total_tokens: 15, cost_total: 0.000015, provider: "openai-codex", model: "synthetic", chat_jid: "web:default" });
+    for (const [index, token] of tokens.entries()) expect(token).toMatchObject({ input_tokens: 10, output_tokens: 5, total_tokens: 15,
+      // The real SDK sums input/output categories; retain its exact numeric evidence.
+      cost_total: index === 2 ? decisionUsage!.cost.total : 0.000015,
+      provider: "openai-codex", model: "synthetic", chat_jid: "web:default" });
     for (let i = 0; i < usage.length; i++) {
       expect(usage[i]).toMatchObject({ api_usd_micros: 15, api_usd_known: 1, chat_jid: "web:default", work_id: (rows[i] as any).work_id, invocation_id: (rows[i] as any).id });
       expect((rows[i] as any).usage_event_id).toBe(usage[i].usage_event_id);

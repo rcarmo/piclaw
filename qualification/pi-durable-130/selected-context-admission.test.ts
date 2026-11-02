@@ -3,6 +3,7 @@ import { expect, test } from 'bun:test';
 import { AgentDoc, defineExtension, defineTool } from '../../runtime/durable-engine/qualification/durable.ts';
 import { Type } from '../../runtime/durable-engine/qualification/ai.ts';
 import { openFixture, context } from './src/fixture.js';
+import { outputPreview } from './src/output-preview.ts';
 import { assertModelContextFits, prepareModelContextAdmission, projectModelContext } from '../../runtime/durable-engine/src/host-model-context.ts';
 
 async function fixture() {
@@ -13,25 +14,28 @@ async function fixture() {
   await f.root.configure({ extensions: null, tools: null, modelTools: [visible] }, context);
   let current = true;
   let defaults: { name: string }[] | undefined;
-  const prepare = (measure = async () => {}) => prepareModelContextAdmission({ conversation: f.root, registry: f.registry,
-    context, defaultExtensions: () => defaults, readAgentState: () => f.harness.snapshot(AgentDoc, f.root.id, context),
+  const prepare = (measure = async () => {}, preview?: Parameters<typeof prepareModelContextAdmission>[0]['preview']) => prepareModelContextAdmission({ conversation: f.root, registry: f.registry,
+    context, preview, defaultExtensions: () => defaults, readAgentState: () => f.harness.snapshot(AgentDoc, f.root.id, context),
     async project(view, agent) { await measure(); return projectModelContext(view, { conversationId: f.root.id, agent, env: undefined, read: f.harness }, context); }, assertCurrent() { if (!current) throw Error('owner revoked'); } });
   return { ...f, prepare, revoke() { current = false; }, defaults(value: typeof defaults) { defaults = value; } };
 }
 
-test('selected admission measures offered schemas and retains SDK token and full-output allowances', async () => {
+test('selected admission measures offered schemas and uses the actual producer allowance', async () => {
   const f = await fixture();
   try {
     const admission = await f.prepare();
     expect(admission.messages.flatMap(m => m.role === 'system' ? m.toolsAdded ?? [] : []).map(t => t.name)).toEqual(['visible']);
     const state = await f.harness.snapshot(AgentDoc, f.root.id, context);
     const target = { contextWindow: 25000, maxTokens: 1000 };
-    expect(() => assertModelContextFits(admission.messages, target)).not.toThrow();
+    const small = { ...target, contextWindow: 100 };
+    const output = await outputPreview(admission.messages, target);
+    const smallOutput = await outputPreview(admission.messages, small);
+    expect(() => assertModelContextFits(admission.messages, target, output)).not.toThrow();
     await f.root.commit(async tx => {
       const current = await tx.doc(AgentDoc, f.root.id);
       await admission.assertCurrent(tx, current);
-      expect(() => assertModelContextFits(admission.messages, target)).not.toThrow();
-      expect(() => assertModelContextFits(admission.messages, { ...target, contextWindow: 100 })).toThrow('estimate exceeded');
+      expect(() => assertModelContextFits(admission.messages, target, output)).not.toThrow();
+      expect(() => assertModelContextFits(admission.messages, small, smallOutput)).toThrow('estimate exceeded');
     }, context);
     expect(f.host.modelCalls).toBe(0);
   } finally { await f.harness.close(context); }
@@ -66,6 +70,47 @@ test('selected admission refuses scope changes during asynchronous prompt measur
     await expect(f.prepare(async () => {
       f.registry.install(defineExtension({ name: 'changed-during-render' })); return;
     })).rejects.toThrow('registry changed');
+    expect(f.host.modelCalls).toBe(0);
+  } finally { await f.harness.close(context); }
+});
+
+for (const race of ['configuration', 'registry', 'defaults', 'history', 'owner'] as const) {
+  test(`selected admission refuses ${race} changes across awaited output preview`, async () => {
+    const f = await fixture();
+    try {
+      const prepare = f.prepare(async () => {}, async () => {
+        await Promise.resolve();
+        if (race === 'configuration') await f.root.configure({ cwd: '/changed-during-output-preview' }, context);
+        if (race === 'registry') f.registry.install(defineExtension({ name: 'changed-during-output-preview' }));
+        if (race === 'defaults') f.defaults([{ name: 'changed-output-default' }]);
+        if (race === 'history') await (await f.root.submit({ type: 'write', entry: { kind: 'output-preview-history', data: null } }, context)).wait(context);
+        if (race === 'owner') f.revoke();
+        return { status: 'unknown', reason: 'unsupported' };
+      });
+      if (['registry', 'defaults', 'owner'].includes(race)) await expect(prepare).rejects.toThrow();
+      else {
+        const admission = await prepare;
+        const before = await f.harness.snapshot(AgentDoc, f.root.id, context);
+        await expect(f.root.commit(async tx => {
+          const current = await tx.doc(AgentDoc, f.root.id);
+          await admission.assertCurrent(tx, current);
+          current.model = { provider: 'forbidden', modelId: 'must-not-commit' };
+        }, context)).rejects.toThrow(race === 'history' ? 'history changed' : 'configuration changed');
+        expect(await f.harness.snapshot(AgentDoc, f.root.id, context)).toEqual(before);
+      }
+      expect(f.host.modelCalls).toBe(0);
+    } finally { await f.harness.close(context); }
+  });
+}
+
+test('prepared producer output is detached and frozen before the selection transaction', async () => {
+  const f = await fixture();
+  try {
+    const raw = { status: 'bounded' as const, maxOutputTokens: 1000, reserveTokens: 5096, authIndependent: true };
+    const admission = await f.prepare(async () => {}, async () => raw);
+    raw.reserveTokens = 1;
+    expect(admission.output).toEqual({ status: 'bounded', maxOutputTokens: 1000, reserveTokens: 5096, authIndependent: true });
+    expect(Object.isFrozen(admission.output)).toBe(true);
     expect(f.host.modelCalls).toBe(0);
   } finally { await f.harness.close(context); }
 });

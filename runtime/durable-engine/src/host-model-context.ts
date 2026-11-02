@@ -1,7 +1,10 @@
-import type { Message, Tool } from "@earendil-works/pi-ai";
+import type { Api, Message, Model, Models, SimpleStreamOptions, Tool, TranscriptContext } from "@earendil-works/pi-ai";
+import type { SimpleRequestPreview } from "../../src/agent-pool/model-request-preview.js";
+export interface PreviewModels extends Models { previewSimple?(model: Model<Api>, context: Pick<TranscriptContext, "messages">, options?: SimpleStreamOptions): Promise<SimpleRequestPreview> }
 import { estimateContextTokens } from "@earendil-works/pi-ai/utils/estimate";
 import { SystemEntry, type ContextView, type PromptInput } from "@earendil-works/pi-durable";
 import { declarationsEqual, getCurrentTools, toToolDeclaration } from "@earendil-works/pi-ai/utils/transcript";
+import { awaitWithContext } from "@earendil-works/chord/context";
 import type { Context } from "@earendil-works/chord";
 
 /** Ephemeral admitted-snapshot projection only. The SDK has no public preview
@@ -18,7 +21,10 @@ export async function projectModelContext(view: ContextView, input: Omit<PromptI
   const desired = new Map<string, string>();
   for (const section of input.agent.sections) {
     context.abortSignal?.throwIfAborted();
-    const value = await section.render({ ...input, shown: Object.fromEntries(shown) }, context);
+    const value = await awaitWithContext(Promise.resolve().then(() => {
+      context.abortSignal?.throwIfAborted();
+      return section.render({ ...input, shown: Object.fromEntries(shown) }, context);
+    }), context);
     context.abortSignal?.throwIfAborted();
     if (value === undefined) continue;
     if (typeof value !== "string") throw Error("Dynamic prompt overhead unavailable");
@@ -86,9 +92,13 @@ export async function projectModelContext(view: ContextView, input: Omit<PromptI
   return leading([...view.messages, ...additions], initial ? additions[0] : undefined);
 }
 
-/** Candidate-only bound shared by idle operator and owned in-turn model controls. */
-export function assertModelContextFits(messages: readonly Message[], target: { contextWindow: number; maxTokens: number }): void {
-  if (!Number.isFinite(target.contextWindow) || target.contextWindow <= 0 || !Number.isFinite(target.maxTokens) || target.maxTokens < 0) throw Error("Model context unavailable");
+/** Selection preflight, not dispatch authority. Refuse oversized input and known
+ * producer bounds; unknown output stays unknown and is left to the SDK/provider.
+ */
+export function assertModelContextFits(messages: readonly Message[], target: { contextWindow: number; maxTokens: number }, output?: SimpleRequestPreview): void {
+  if (!Number.isFinite(target.contextWindow) || target.contextWindow <= 0 || !Number.isFinite(target.maxTokens) || target.maxTokens <= 0) throw Error("Model context unavailable");
+  if (output?.status === "bounded" && (output.authIndependent !== true || !Number.isSafeInteger(output.maxOutputTokens) || output.maxOutputTokens <= 0 ||
+    !Number.isSafeInteger(output.reserveTokens) || output.reserveTokens < output.maxOutputTokens)) throw Error("Model context unavailable");
   if (messages.some(message => typeof message.content !== "string" && message.content.some(block => block.type === "image"))) throw Error("Non-text context overhead unavailable");
   if (messages.some(message => message.role === "assistant" &&
     [message.usage.input, message.usage.output, message.usage.cacheRead, message.usage.cacheWrite, message.usage.totalTokens]
@@ -112,14 +122,16 @@ export function assertModelContextFits(messages: readonly Message[], target: { c
     : message.role === "assistant" ? message.content.flatMap(block => block.type === "toolCall" ? [block.id] : []) : []);
   const framingTokens = framing.length ? estimateContextTokens([{ role: "user", content: framing.join("\n"), timestamp: 0 }]).tokens : 0;
   const inputEstimate = Math.max(estimate.tokens, measuredTokens + estimate.trailingTokens) + framingTokens;
-  if (!Number.isFinite(inputEstimate) || inputEstimate < 0 || inputEstimate + 8192 + target.maxTokens > target.contextWindow) {
+  if (!Number.isFinite(inputEstimate) || inputEstimate < 0 || inputEstimate > target.contextWindow ||
+    (output?.status === "bounded" && inputEstimate + output.reserveTokens > target.contextWindow)) {
     const bytes = new TextEncoder().encode(JSON.stringify(messages)).length;
-    throw Error(`Candidate context estimate exceeded; compact first (serialized input bytes=${bytes}, reported tokens=${estimate.usageTokens}, estimated context tokens=${estimate.tokens}, input token estimate=${inputEstimate}, reserve=8192, output budget=${target.maxTokens}, context window=${target.contextWindow})`);
+    throw Error(`Candidate context estimate exceeded; compact first (serialized input bytes=${bytes}, reported tokens=${estimate.usageTokens}, estimated context tokens=${estimate.tokens}, input token estimate=${inputEstimate}, producer output reserve=${output?.status === "bounded" ? output.reserveTokens : "unknown"}, context window=${target.contextWindow})`);
   }
 }
 
 export interface ModelContextAdmission {
-  messages: readonly Message[];
+  readonly messages: readonly Message[];
+  readonly output?: SimpleRequestPreview;
   assertScopeCurrent(): void;
   assertCurrent(tx: import('@earendil-works/pi-durable').Tx, current: unknown): Promise<void>;
 }
@@ -132,6 +144,7 @@ export async function prepareModelContextAdmission(options: {
   defaultExtensions(): readonly { name: string }[] | undefined;
   readAgentState(): Promise<unknown>;
   project(view: ContextView, agent: import('@earendil-works/pi-durable').Agent): Promise<readonly Message[]>;
+  preview?(messages: readonly Message[], agent: import('@earendil-works/pi-durable').Agent): Promise<SimpleRequestPreview | undefined>;
   assertCurrent(): void;
   context: Context;
 }): Promise<ModelContextAdmission> {
@@ -157,8 +170,10 @@ export async function prepareModelContextAdmission(options: {
   const resolved = await conversation.agent(context); checkScope();
   const view = await conversation.context(context); checkScope();
   const messages = await options.project(view, resolved); checkScope();
+  const preview = await options.preview?.(messages, resolved); checkScope();
+  const output = preview && Object.freeze({ ...preview });
   return {
-    messages, assertScopeCurrent: checkScope,
+    messages, output, assertScopeCurrent: checkScope,
     async assertCurrent(tx, current) {
       checkScope();
       if (JSON.stringify(current) !== expectedState) throw Error('Model context configuration changed; retry the command.');

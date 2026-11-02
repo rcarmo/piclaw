@@ -11,7 +11,8 @@ import { installServiceWorkSchema } from "../../runtime/src/service-effects/curr
 import { createDurableConversationAdapter } from "../../runtime/src/agent-pool/durable-runtime-adapter.js";
 import { AgentRuntimeFacade } from "../../runtime/src/agent-pool/runtime-facade.js";
 import { Harness, defineExtension, defineTool } from "../../runtime/durable-engine/qualification/durable.ts";
-import { createProvider, Type } from "../../runtime/durable-engine/qualification/ai.ts";
+import { createProvider, Type, type Message, type SimpleStreamOptions } from "../../runtime/durable-engine/qualification/ai.ts";
+import { outputPreview } from './src/output-preview.ts';
 
 test("shared DB next-request model controls persist while destructive reset retains global idle/owner/transaction guards", async () => {
   const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "idle-model-"));
@@ -25,9 +26,14 @@ test("shared DB next-request model controls persist while destructive reset reta
   const f = await openFixture({ get acquired() { return owner.acquired; } }, () => {}, openStorage);
   const id = f.root.id;
   const original = f.models.getModels()[0]!;
-  f.models.setProvider(createProvider({ id: "alternate", api: { stream() { throw Error("provider execution forbidden"); }, streamSimple() { throw Error("provider execution forbidden"); } }, models: [{ ...original, provider: "alternate", id: "other" },
+  f.models.setProvider(createProvider({ id: "alternate", api: {
+    stream() { throw Error("provider execution forbidden"); }, streamSimple() { throw Error("provider execution forbidden"); } }, models: [{ ...original, provider: "alternate", id: "other" },
     { ...original, provider: "alternate", id: "tiny", contextWindow: 100 }],
     auth: { apiKey: { name: "keyless", resolve: async () => ({ auth: {}, source: "synthetic" }) } } }));
+  // Fixture-owned metadata wrapper, independent of the stock SDK Models surface.
+  Object.assign(f.models, { previewSimple(model: typeof original, transcript: { messages: Message[] }, options?: SimpleStreamOptions) {
+    return outputPreview(transcript.messages, model, 'openai-completions', options);
+  } });
   let promptText = "measured optional prompt", promptRenders = 0;
   const promptExtension = defineExtension({name:"optional-prompt",sections:[{key:"optional-prompt",async render(){promptRenders++;return promptText || undefined;}}]});
   f.registry.install(promptExtension);

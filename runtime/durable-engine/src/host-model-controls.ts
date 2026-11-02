@@ -11,7 +11,7 @@ Codemode is available as the codemode tool with {code: "raw JavaScript"}. It run
 interface Options {
   assertCurrent(): void;
   available(): readonly Model<Api>[];
-  prepareContext(call: { conversationId: ConversationId; taskId: TaskId; toolCallId: string }, model: { provider: string; modelId: string }, thinkingLevel?: string): Promise<ModelContextAdmission>;
+  prepareContext(call: { conversationId: ConversationId; taskId: TaskId; toolCallId: string }, model: { provider: string; modelId: string }, thinkingLevel?: string, signal?: AbortSignal): Promise<ModelContextAdmission>;
   assertModel(choice: { provider: string; modelId: string }): void;
   captureSourceGuard(call: { conversationId: ConversationId; taskId: TaskId; toolCallId: string }): Promise<() => void>;
 }
@@ -61,7 +61,7 @@ export function createHostModelTools(options: Options) {
       const needsContextCheck = !!choice && (resolved?.model?.provider !== choice.provider || resolved?.model?.modelId !== choice.modelId);
       // Only a different model needs candidate context admission. Level-only
       // changes, including an explicit unchanged model, preserve current limits.
-      const admission = needsContextCheck ? await options.prepareContext({ conversationId: api.conversationId, taskId: api.taskId, toolCallId: api.callId }, choice!, requestedLevel) : undefined;
+      const admission = needsContextCheck ? await options.prepareContext({ conversationId: api.conversationId, taskId: api.taskId, toolCallId: api.callId }, choice!, requestedLevel, context.abortSignal) : undefined;
       check();
       const result = await api.commit(async tx => {
         check();
@@ -79,7 +79,7 @@ export function createHostModelTools(options: Options) {
           if (changesModel) {
             if (!needsContextCheck) throw Error("Model selection changed; retry the command.");
             if (admission) { await admission.assertCurrent(tx, current); check(); }
-            assertModelContextFits(admission!.messages, model);
+            assertModelContextFits(admission!.messages, model, admission!.output);
           }
           // Public SDK commit keeps this atomic with the owned tool result. Recheck
           // model policy and source after every await, including immediately before commit.

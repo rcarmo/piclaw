@@ -2,7 +2,7 @@ import { repoRoot } from "./src/repo-root.js";
 import { test, expect } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createHostRegretsBindings } from "../../runtime/durable-engine/src/host-regrets-bindings.ts";
-const { createLateNightRegrets, readExchanges } = await import(repoRoot("ADDONS") + "/addons/late-night-regrets/native.ts");
+const { createLateNightRegrets, readExchanges } = await import((process.env.DURABLE_REGRETS_QUALIFICATION_ROOT ?? repoRoot("ADDONS")) + "/addons/late-night-regrets/native.ts");
 function fixture(revokeDuringWrite = false) {
   const root = new Database(":memory:");
   root.exec(`CREATE TABLE extension_kv(extension_id TEXT,scope TEXT,scope_key TEXT,key TEXT,value TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(extension_id,scope,scope_key,key));
@@ -72,8 +72,8 @@ test("normal input callback and prompt/resource/config parity", async () => {
   } finally { f.root.close(); }
 });
 
-import { createHostRegretsPromptExtension, createHostRegretsCommand, createHostRegretsSettings } from "../../runtime/durable-engine/src/host-regrets-tool.ts";
-test("SDK 1.3 request section rebinds current chat/config; accepted command uses normal admission", async () => {
+import { createHostRegretsPromptExtension, createHostRegretsSettings } from "../../runtime/durable-engine/src/host-regrets-tool.ts";
+test("SDK 1.4 request section rebinds current chat/config; accepted command uses normal admission", async () => {
   const f = fixture(); const addon = { createLateNightRegrets };
   let binds = 0;
   try {
@@ -92,9 +92,9 @@ test("SDK 1.3 request section rebinds current chat/config; accepted command uses
     expect(await settings.getConfig()).toHaveProperty("config");
     expect(await settings.getModels()).toEqual({ ok: true, models: [] });
     const accepted = { chat: "chat:a", sourceId: "accepted-command" };
-    const command = createHostRegretsCommand(addon, async (event: typeof accepted) => {
-      expect(event).toBe(accepted); return f.ports;
-    });
+    const command = async (event: typeof accepted) => {
+      expect(event).toBe(accepted); return addon.createLateNightRegrets(f.ports).command();
+    };
     expect(await command(accepted)).toHaveProperty("accepted");
     expect(f.counts().admissions).toBe(1);
     f.revoke(); await expect(render(input, {} as any)).rejects.toThrow("revoked");

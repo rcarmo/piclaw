@@ -189,7 +189,7 @@ type RuntimeSnapshot = Omit<RuntimeOptions, "work" | "terminal"> & {
   readonly work: Pick<ServiceWorkStore, "getOperation" | "acceptCancellation"> & Partial<Pick<CurrentPiclawServiceWorkStore, "finishHarness">>;
   readonly terminal: Pick<TerminalSettlementStore, "getTerminal" | "commitTerminal">;
 };
-function currentHarnessModels(options: HarnessOptions) {
+function currentHarnessModels(options: HarnessOptions): import("./host-model-context.js").PreviewModels {
   return typeof options.models === "function" ? options.models() : options.models;
 }
 function currentHarnessSettings(options: HarnessOptions) {
@@ -349,7 +349,7 @@ export class HostConversationRuntime {
       const head = page.items[0];
       if (requireHistory && !head) throw Error("Side prompt history unavailable");
       const agent = await tx.doc(AgentDoc, parentId);
-      if (target && admission) { await admission.assertCurrent(tx, agent); this.fence(); assertModelContextFits(admission.messages, target); }
+      if (target && admission) { await admission.assertCurrent(tx, agent); this.fence(); assertModelContextFits(admission.messages, target, admission.output); }
       const fork = head ? await tx.forkConversation(parentId, head.id, { ownership: { kind: "ownerless" } })
         : await tx.createConversation({ ownership: { kind: "ownerless" } });
       // Empty roots have no public fork point. Copy only configuration, never fabricate an entry.
@@ -589,7 +589,7 @@ export class HostConversationRuntime {
         if (selectingModel && changesModel) {
           if (!admission) throw new Error("Host model changed");
           await admission.assertCurrent(tx, agent); check();
-          assertModelContextFits(admission.messages, target);
+          assertModelContextFits(admission.messages, target, admission.output);
         }
         if (thinkingLevel !== undefined) {
           if (agent.model?.provider !== choice.provider || agent.model.modelId !== choice.modelId) throw new Error("Thinking model changed");
@@ -600,33 +600,47 @@ export class HostConversationRuntime {
       check();
     });
   }
-  private async prepareContextAdmission(conversation: import("@earendil-works/pi-durable").Conversation, model: { provider: string; modelId: string }, thinkingLevel?: string): Promise<ModelContextAdmission> {
-    return prepareModelContextAdmission({ conversation, context: this.context,
+  private async prepareContextAdmission(conversation: import("@earendil-works/pi-durable").Conversation, model: { provider: string; modelId: string }, thinkingLevel?: string, context = this.context): Promise<ModelContextAdmission> {
+    context = withAbortSignal(context.abortSignal ? AbortSignal.any([context.abortSignal, this.observations.signal]) : this.observations.signal, context);
+    context.abortSignal?.throwIfAborted();
+    const models = currentHarnessModels(this.options.harnessOptions);
+    const target = models.getModel(model.provider, model.modelId);
+    if (!target) throw Error("Model context unavailable");
+    return prepareModelContextAdmission({ conversation, context,
       registry: this.options.harnessOptions.registry,
       defaultExtensions: () => currentHarnessSettings(this.options.harnessOptions)?.extensions,
-      readAgentState: () => this.harness.snapshot(AgentDoc, conversation.id, this.context),
-      project: (view, agent) => this.projectContext(conversation, view, agent, model, thinkingLevel),
+      readAgentState: () => this.harness.snapshot(AgentDoc, conversation.id, context),
+      project: (view, agent) => this.projectContext(conversation, view, agent, model, thinkingLevel, context),
+      preview: (messages, agent) => {
+        const level = thinkingLevel ?? agent.thinkingLevel;
+        return models.previewSimple?.(target, { messages: [...messages] }, {
+          signal: context.abortSignal, ...(level && level !== "off" ? { reasoning: level as Exclude<ModelThinkingLevel, "off"> } : {}),
+        }) ?? Promise.resolve(undefined);
+      },
       assertCurrent: () => this.fence(),
     });
   }
-  async prepareToolModelContext(call: { conversationId: ConversationId; taskId: TaskId; toolCallId: string }, model: { provider: string; modelId: string }, thinkingLevel?: string): Promise<ModelContextAdmission> {
+  async prepareToolModelContext(call: { conversationId: ConversationId; taskId: TaskId; toolCallId: string }, model: { provider: string; modelId: string }, thinkingLevel?: string, signal?: AbortSignal): Promise<ModelContextAdmission> {
+    const context = signal ? withAbortSignal(this.context.abortSignal ? AbortSignal.any([signal, this.context.abortSignal]) : signal, this.context) : this.context;
+    context.abortSignal?.throwIfAborted();
     const source = await this.captureToolSource(call.conversationId, call.taskId, call.toolCallId);
-    const guard = () => this.assertCapturedSourceCurrent(source.inputs, true);
+    const guard = () => { context.abortSignal?.throwIfAborted(); this.assertCapturedSourceCurrent(source.inputs, true); };
     return this.observe(async () => {
       guard();
-      const conversation = await this.harness.conversation(call.conversationId, this.context); guard();
+      const conversation = await this.harness.conversation(call.conversationId, context); guard();
       if (!conversation) throw Error("Missing existing conversation");
-      const admission = await this.prepareContextAdmission(conversation, model, thinkingLevel); guard();
+      const admission = await this.prepareContextAdmission(conversation, model, thinkingLevel, context); guard();
       return { ...admission, assertScopeCurrent() { guard(); admission.assertScopeCurrent(); },
         async assertCurrent(tx, current) { guard(); await admission.assertCurrent(tx, current); guard(); } };
     });
   }
-  private async projectContext(conversation: import("@earendil-works/pi-durable").Conversation, view: import("@earendil-works/pi-durable").ContextView, current: import("@earendil-works/pi-durable").Agent, model: { provider: string; modelId: string }, thinkingLevel?: string): Promise<readonly import("@earendil-works/pi-ai").Message[]> {
+  private async projectContext(conversation: import("@earendil-works/pi-durable").Conversation, view: import("@earendil-works/pi-durable").ContextView, current: import("@earendil-works/pi-durable").Agent, model: { provider: string; modelId: string }, thinkingLevel?: string, context = this.context): Promise<readonly import("@earendil-works/pi-ai").Message[]> {
     const agent = { ...current, ...(model ? { model } : {}), ...(thinkingLevel !== undefined ? { thinkingLevel: thinkingLevel as ModelThinkingLevel } : {}) };
     const read = { snapshot: this.harness.snapshot.bind(this.harness), snapshotAsOf: this.harness.snapshotAsOf.bind(this.harness) };
-    const env = await this.options.harnessOptions.env?.({ conversationId: conversation.id, cwd: agent.cwd, read }, this.context); this.fence();
-    const messages = await projectModelContext(view, { conversationId: conversation.id, agent, env, read }, this.context); this.fence();
-    return messages;
+    const env = await this.options.harnessOptions.env?.({ conversationId: conversation.id, cwd: agent.cwd, read }, context); this.fence();
+    const messages = await projectModelContext(view, { conversationId: conversation.id, agent, env, read }, context); this.fence();
+    // The SDK preserves contribution identities; admission keeps a data-only snapshot.
+    return freezeTree(structuredClone(messages));
   }
   /** Persist next-request selection without mutating the prepared request. */
   async setSessionModel(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }, model: { provider: string; modelId: string }): Promise<void> {

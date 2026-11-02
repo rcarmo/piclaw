@@ -7,7 +7,7 @@ type DecisionPort = {
   complete(model: Model<Api>, context: Context, options: ModelsSimpleStreamOptions): Promise<AssistantMessage>;
 };
 type Window = { start: string; end: string; chat_jid: string };
-type Config = { enabled: boolean; cron_schedule: string; confidence_threshold: number; reflections_path: string; exports_dir: string; recent_hours_for_reflection: number; review_budget_tokens: number; decision_model: string; review_scope: "current" | "all" };
+type Config = { enabled: boolean; cron_schedule: string; reflections_path: string; exports_dir: string; recent_hours_for_reflection: number; review_budget_tokens: number; decision_model: string; review_scope: "current" | "all" };
 /** Root is application-owned and must already have the canonical extension_kv schema.
  * Admission is the application's accepted normal-input path, not sendUserMessage.
  * accountedDecision is deliberately explicit: the parent owns controller reservation,

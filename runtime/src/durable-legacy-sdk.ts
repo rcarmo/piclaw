@@ -10,4 +10,5 @@ export {
   type ModelRuntime, type RegisteredCommand, type SessionEntry, type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 export type { AssistantMessage, Api, Model } from "@earendil-works/pi-ai";
+export { normalizeContext } from "@earendil-works/pi-ai";
 export { McpClient } from "@earendil-works/pi-mcp";

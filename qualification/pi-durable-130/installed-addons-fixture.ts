@@ -13,7 +13,7 @@ export function installApprovedAddonsFixture(workspace: string) {
   for (const [kind, profile] of Object.entries(applicationAddonSourceProfiles)) {
     const slug = profile.name.replace("@rcarmo/piclaw-addon-", "");
     const pkg = join(workspace, ".pi/extensions/node_modules", profile.name);
-    cpSync(join(source, "addons", slug), pkg, { recursive: true, filter: path => !path.split("/").includes("node_modules") });
+    cpSync(join(kind === "late-night-regrets" ? process.env.DURABLE_REGRETS_QUALIFICATION_ROOT ?? source : source, "addons", slug), pkg, { recursive: true, filter: path => !path.split("/").includes("node_modules") });
     const dependencies = join(pkg, "node_modules");
     mkdirSync(dependencies, { recursive: true });
     const graphs = [rootModules, catalogModules, ...Object.values(applicationAddonSourceProfiles).map(profile => join(source, "addons", profile.name.replace("@rcarmo/piclaw-addon-", ""), "node_modules")).filter(path => existsSync(path))];

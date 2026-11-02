@@ -20,7 +20,7 @@ applicationTest("Regrets-only actual factory executes default decision-off revie
   const workspace = process.env.PICLAW_WORKSPACE!;
   const source = process.env.DURABLE_ADDONS_ROOT!;
   const pkg = join(workspace, ".pi/extensions/node_modules/@rcarmo/piclaw-addon-late-night-regrets");
-  cpSync(join(source, "addons/late-night-regrets"), pkg, { recursive: true, filter: p => !p.split("/").includes("node_modules") });
+  cpSync(join(process.env.DURABLE_REGRETS_QUALIFICATION_ROOT ?? source, "addons/late-night-regrets"), pkg, { recursive: true, filter: p => !p.split("/").includes("node_modules") });
   symlinkSync(join(import.meta.dir, "../../node_modules"), join(pkg, "node_modules"));
   process.env.PICLAW_DB_IN_MEMORY = "0"; initDatabase();
   const owner = acquireRuntimeLock({ lockPath: join(workspace, "regrets-owner.lock"), strictOwnership: true, disabled: false });
