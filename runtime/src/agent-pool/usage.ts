@@ -131,7 +131,7 @@ function normalizeRunAt(timestamp: unknown): string {
 
 function hasUsageTokensOrCost(usage: Record<string, unknown>): boolean {
   const cost = asRecord(usage.cost) ?? {};
-  return [
+  return asOptionalNonNegativeNumber(usage.providerCost, usage.provider_cost) !== null || [
     usage.input,
     usage.output,
     usage.cacheRead,
