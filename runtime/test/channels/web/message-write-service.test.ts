@@ -1,114 +1,75 @@
 import { describe, expect, test } from "bun:test";
 import {
   WebMessageWriteService,
-  createMessageWriteContext,
   type WebMessageWriteServiceDeps,
 } from "../../../src/channels/web/message-write-service.js";
 
 function createDeps(overrides: Partial<WebMessageWriteServiceDeps> = {}): WebMessageWriteServiceDeps {
   return {
-    defaultAgentId: "default",
     storeMessage: () => null,
-    replaceMessageContent: () => null,
     broadcastAgentResponse: () => {},
-    broadcastInteractionUpdated: () => {},
-    enqueueFollowupPlaceholder: () => {},
     ...overrides,
   };
 }
 
 describe("web message write service", () => {
-  test("createMessageWriteContext wires store, broadcaster, and follow-up callbacks", () => {
-    const calls: string[] = [];
-    const deps = createDeps({
-      storeMessage: () => {
-        calls.push("store");
-        return { id: 1, timestamp: "t", data: {} };
+  test("sendMessage stores before broadcasting and preserves force-root metadata", async () => {
+    const events: string[] = [];
+    const interaction = { id: 42, timestamp: "t", data: { type: "agent_response", thread_id: null as number | null } };
+    const service = new WebMessageWriteService(createDeps({
+      storeMessage: (chat, text, bot, media, options) => {
+        expect([chat, text, bot, media, options]).toEqual(["web:test", "hello", true, [], { threadToSelf: true }]);
+        events.push("store"); return interaction;
       },
-      replaceMessageContent: () => {
-        calls.push("replace");
-        return { id: 2, timestamp: "t", data: {} };
-      },
-      broadcastAgentResponse: (interaction) => calls.push(`agent:${interaction.id}`),
-      broadcastInteractionUpdated: (interaction) => calls.push(`updated:${interaction.id}`),
-      enqueueFollowupPlaceholder: (chatJid, rowId, queuedContent, threadId, queuedAt) =>
-        calls.push(`followup:${chatJid}:${rowId}:${queuedContent}:${threadId ?? "null"}:${queuedAt ?? "null"}`),
+      broadcastAgentResponse: row => { expect(row).toBe(interaction); events.push(`broadcast:${row.data.thread_id}`); },
+    }));
+    await service.sendMessage("web:test", "hello", { forceRoot: true });
+    expect(events).toEqual(["store", "broadcast:42"]);
+  });
+
+  for (const [options, expected] of [[9, { threadId: 9 }], [null, {}], [undefined, {}],
+    [{ threadId: 0, forceRoot: true }, { threadId: 0, threadToSelf: true }]] as const) {
+    test(`live send options remain compatible: ${JSON.stringify(options)}`, async () => {
+      let writes = 0, broadcasts = 0;
+      const service = new WebMessageWriteService(createDeps({
+        storeMessage: (_chat, _text, _bot, media, actual) => {
+          writes++; expect(media).toEqual([]); expect(actual).toEqual(expected);
+          return { id: 42, timestamp: "t", data: {} };
+        },
+        broadcastAgentResponse: () => { broadcasts++; },
+      }));
+      await service.sendMessage("web:test", "reply", options);
+      expect(writes).toBe(1); expect(broadcasts).toBe(1);
     });
+  }
 
-    const context = createMessageWriteContext(deps);
-
-    context.store.storeMessage("web:default", "hello", true, [], undefined);
-    context.store.replaceMessageContent("web:default", 2, "updated", [], undefined, true);
-    context.broadcaster.broadcastAgentResponse({ id: 3, timestamp: "t", data: {} });
-    context.broadcaster.broadcastInteractionUpdated({ id: 4, timestamp: "t", data: {} });
-    context.followups.enqueue("web:default", 5, "queued", 6, "2026-01-01T00:00:00.000Z");
-
-    expect(calls).toEqual([
-      "store",
-      "replace",
-      "agent:3",
-      "updated:4",
-      "followup:web:default:5:queued:6:2026-01-01T00:00:00.000Z",
-    ]);
-  });
-
-  test("queueFollowupPlaceholder preserves queued content and suppresses agent-response broadcasts", () => {
-    const calls: string[] = [];
+  test("media/block filtering and explicit threading do not mutate caller options", async () => {
+    const options = { threadId: 7, forceRoot: true, mediaIds: [2, NaN, 0, -1, Infinity, 3],
+      contentBlocks: [null, "bad", { type: "text", text: "reply" }, { type: "file" }] as any };
+    const before = structuredClone(options);
     const service = new WebMessageWriteService(createDeps({
-      storeMessage: (_chatJid, content, _isBot, _mediaIds, options) => {
-        calls.push(`store:${content}:thread=${options?.threadId ?? "undefined"}`);
-        return {
-          id: 7,
-          timestamp: "2026-01-01T00:00:00.000Z",
-          data: { type: "agent_response", content },
-        };
-      },
-      broadcastAgentResponse: (interaction) => calls.push(`agent:${interaction.id}`),
-      enqueueFollowupPlaceholder: (chatJid, rowId, queuedContent, threadId, queuedAt) => {
-        calls.push(`followup:${chatJid}:${rowId}:${queuedContent}:${threadId ?? "null"}:${queuedAt}`);
+      storeMessage: (_chat, _text, _bot, media, actual) => {
+        expect(media).toEqual([2, 3]);
+        expect(actual).toEqual({ threadId: 7, contentBlocks: options.contentBlocks.slice(2) });
+        return { id: 42, timestamp: "t", data: {} };
       },
     }));
-
-    const interaction = service.queueFollowupPlaceholder("web:default", "queued", 99, " queued later ");
-
-    expect(interaction?.id).toBe(7);
-    expect(calls).toEqual([
-      "store:queued:thread=99",
-      "followup:web:default:7:queued later:99:2026-01-01T00:00:00.000Z",
-    ]);
+    await service.sendMessage("web:test", "reply", options);
+    expect(options).toEqual(before);
   });
 
-  test("replaceQueuedFollowupPlaceholder updates metadata and broadcasts interaction updates", () => {
-    const calls: string[] = [];
-    const service = new WebMessageWriteService(createDeps({
-      replaceMessageContent: (_chatJid, rowId, text, mediaIds, _contentBlocks, isTerminalAgentReply) => {
-        calls.push(`replace:${rowId}:${text}:${mediaIds.join(",")}:terminal=${isTerminalAgentReply ? 1 : 0}`);
-        return {
-          id: rowId,
-          timestamp: "2026-01-01T00:00:00.000Z",
-          data: { type: "agent_response", content: text },
-        };
-      },
-      broadcastInteractionUpdated: (interaction) => calls.push(`updated:${interaction.id}`),
-    }));
-
-    const interaction = service.replaceQueuedFollowupPlaceholder(
-      "web:default",
-      55,
-      "updated",
-      [8, 9],
-      [{ type: "text" }],
-      123,
-      true,
-    );
-
-    expect(interaction?.data.agent_id).toBe("default");
-    expect(interaction?.data.thread_id).toBe(123);
-    expect(calls).toEqual([
-      "replace:55:updated:8,9:terminal=1",
-      "updated:55",
-    ]);
-  });
+  for (const failure of ["store", "broadcast"] as const) {
+    test(`${failure} failure propagates without replaying storage/publication`, async () => {
+      let writes = 0, broadcasts = 0;
+      const fault = Error(failure);
+      const service = new WebMessageWriteService(createDeps({
+        storeMessage: () => { writes++; if (failure === "store") throw fault; return { id: 42, timestamp: "t", data: {} }; },
+        broadcastAgentResponse: () => { broadcasts++; throw fault; },
+      }));
+      await expect(service.sendMessage("web:test", "reply", { requirePersistence: true })).rejects.toBe(fault);
+      expect(writes).toBe(1); expect(broadcasts).toBe(failure === "store" ? 0 : 1);
+    });
+  }
 
   test("postDashboardWidget delegates through the sendMessage write path", async () => {
     const writes: Array<{ chatJid: string; text: string; blocks: unknown[] | undefined }> = [];

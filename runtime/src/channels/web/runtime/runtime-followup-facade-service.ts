@@ -1,22 +1,20 @@
 /**
  * channels/web/runtime-followup-facade-service.ts – extracted WebChannel runtime/follow-up facade seam.
  *
- * Keeps the remaining queued-followup, runtime-state, and queued-placeholder
+ * Keeps the remaining queued-followup and runtime-state
  * facade methods behind a narrower service so `channels/web.ts` can stay a thin
  * coordinator without changing its public method signatures.
  */
 
-import type { InteractionRow } from "../../../db.js";
 import type { WebAgentBufferEntry } from "../agent/agent-buffers.js";
-import type { QueuedFollowupItem } from "./followup-placeholders.js";
-import type { SendMessageOptions } from "../messaging/message-write-flows.js";
-import type { WebMessageWriteService } from "../message-write-service.js";
+import type { QueuedFollowupItem } from "../../../queued-followups.js";
+import type { SendMessageOptions, WebMessageWriteService } from "../message-write-service.js";
 import type { QueuedFollowupLifecycleService } from "./queued-followup-lifecycle-service.js";
 import type { WebChannelRuntimeStateService } from "./runtime-state-service.js";
 
 type RuntimeFollowupMessageWriteService = Pick<
   WebMessageWriteService,
-  "sendMessage" | "postDashboardWidget" | "queueFollowupPlaceholder" | "replaceQueuedFollowupPlaceholder"
+  "sendMessage" | "postDashboardWidget"
 >;
 
 type RuntimeFollowupQueuedLifecycle = Pick<
@@ -27,7 +25,6 @@ type RuntimeFollowupQueuedLifecycle = Pick<
   | "consumeQueuedFollowupItem"
   | "prependQueuedFollowupItem"
   | "replaceQueuedFollowupItem"
-  | "consumeQueuedFollowupPlaceholder"
   | "getQueuedFollowupCount"
   | "getQueuedFollowupItems"
   | "removeQueuedFollowupItem"
@@ -65,15 +62,6 @@ export class WebChannelRuntimeFollowupFacadeService {
     options?: { threadId?: number | null; text?: string; widgetId?: string },
   ): Promise<void> {
     await this.deps.getMessageWriteService().postDashboardWidget(chatJid, options);
-  }
-
-  queueFollowupPlaceholder(
-    chatJid: string,
-    text: string,
-    threadId?: number,
-    queuedContent?: string,
-  ): InteractionRow | null {
-    return this.deps.getMessageWriteService().queueFollowupPlaceholder(chatJid, text, threadId, queuedContent);
   }
 
   enqueueQueuedFollowupItem(
@@ -114,10 +102,6 @@ export class WebChannelRuntimeFollowupFacadeService {
     return this.deps.getQueuedFollowupLifecycle().replaceQueuedFollowupItem(chatJid, item);
   }
 
-  consumeQueuedFollowupPlaceholder(chatJid: string): number | null {
-    return this.deps.getQueuedFollowupLifecycle().consumeQueuedFollowupPlaceholder(chatJid);
-  }
-
   getQueuedFollowupCount(chatJid: string): number {
     return this.deps.getQueuedFollowupLifecycle().getQueuedFollowupCount(chatJid);
   }
@@ -136,26 +120,6 @@ export class WebChannelRuntimeFollowupFacadeService {
 
   getAgentStatus(chatJid: string): Record<string, unknown> | null {
     return this.deps.getRuntimeState().getAgentStatus(chatJid);
-  }
-
-  replaceQueuedFollowupPlaceholder(
-    chatJid: string,
-    rowId: number,
-    text: string,
-    mediaIds: number[],
-    contentBlocks: Array<Record<string, unknown>> | undefined,
-    threadId?: number,
-    isTerminalAgentReply?: boolean,
-  ): InteractionRow | null {
-    return this.deps.getMessageWriteService().replaceQueuedFollowupPlaceholder(
-      chatJid,
-      rowId,
-      text,
-      mediaIds,
-      contentBlocks,
-      threadId,
-      isTerminalAgentReply,
-    );
   }
 
   getThreadRootId(chatJid: string, messageId: string): number | null {

@@ -1,6 +1,6 @@
 import type { InteractionRow } from "../../../db.js";
-import type { QueuedFollowupItem } from "../runtime/followup-placeholders.js";
-import type { SendMessageOptions } from "../messaging/message-write-flows.js";
+import type { QueuedFollowupItem } from "../../../queued-followups.js";
+import type { SendMessageOptions } from "../message-write-service.js";
 import type { WebAgentBufferEntry } from "../agent/agent-buffers.js";
 import type { WebSessionBroadcastService } from "../sse/session-broadcast-service.js";
 import type { WebChannelLike } from "./web-channel-contracts.js";
@@ -151,14 +151,6 @@ export function installWebChannelPrototype(
         return this.runInternalDispatch(() => getRuntimePublicSurfaceService(this).enqueueAgentMessage(request));
       },
     },
-    queueFollowupPlaceholder: {
-      configurable: true,
-      writable: true,
-      value: withRuntimePublicSurface(
-        (service, chatJid: string, text: string, threadId?: number, queuedContent?: string): InteractionRow | null =>
-          service.queueFollowupPlaceholder(chatJid, text, threadId, queuedContent),
-      ),
-    },
     enqueueQueuedFollowupItem: {
       configurable: true,
       writable: true,
@@ -204,12 +196,6 @@ export function installWebChannelPrototype(
       value: withRuntimePublicSurface((service, chatJid: string, item: QueuedFollowupItem): boolean =>
         service.replaceQueuedFollowupItem(chatJid, item)),
     },
-    consumeQueuedFollowupPlaceholder: {
-      configurable: true,
-      writable: true,
-      value: withRuntimePublicSurface((service, chatJid: string): number | null =>
-        service.consumeQueuedFollowupPlaceholder(chatJid)),
-    },
     getQueuedFollowupCount: {
       configurable: true,
       writable: true,
@@ -246,29 +232,6 @@ export function installWebChannelPrototype(
         const state = service.getExtensionWorkingState(chatJid);
         return state as unknown as Record<string, unknown> | null;
       }),
-    },
-    replaceQueuedFollowupPlaceholder: {
-      configurable: true,
-      writable: true,
-      value: withRuntimePublicSurface((
-        service,
-        chatJid: string,
-        rowId: number,
-        text: string,
-        mediaIds: number[],
-        contentBlocks: Array<Record<string, unknown>> | undefined,
-        threadId?: number,
-        isTerminalAgentReply?: boolean,
-      ): InteractionRow | null =>
-        service.replaceQueuedFollowupPlaceholder(
-          chatJid,
-          rowId,
-          text,
-          mediaIds,
-          contentBlocks,
-          threadId,
-          isTerminalAgentReply,
-        )),
     },
     getThreadRootId: {
       configurable: true,

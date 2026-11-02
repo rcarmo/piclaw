@@ -12,7 +12,7 @@ import {
 import { setWebTotpSecret } from "../../../core/config.js";
 import { isSingleUserAccess } from "../../../core/config-access.js";
 import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
-import type { SendMessageOptions } from "../messaging/message-write-flows.js";
+import type { SendMessageOptions } from "../message-write-service.js";
 import {
   buildAdaptiveCardSubmissionText,
   buildAdaptiveCardSubmitBlock,

@@ -30,21 +30,6 @@ describe("web channel constructor wiring factory", () => {
       mediaIds: number[];
       options?: { threadId?: number; contentBlocks?: unknown[]; isTerminalAgentReply?: boolean };
     }> = [];
-    const replaceCalls: Array<{
-      chatJid: string;
-      rowId: number;
-      text: string;
-      mediaIds: number[];
-      contentBlocks: Array<Record<string, unknown>> | undefined;
-      isTerminalAgentReply?: boolean;
-    }> = [];
-    const queuedPlaceholderCalls: Array<{
-      chatJid: string;
-      rowId: number;
-      queuedContent: string;
-      threadId?: number | null;
-      queuedAt?: string;
-    }> = [];
     const dbRuns: Array<{ sql: string; args: unknown[] }> = [];
     const postRequestCalls: Array<{ isReply: boolean; chatJid: string; url: string }> = [];
 
@@ -114,11 +99,7 @@ describe("web channel constructor wiring factory", () => {
           Boolean(options?.includeArchived),
         ],
       } as unknown as AgentPool,
-      queuedFollowupLifecycle: {
-        enqueuePlaceholder: (chatJid, rowId, queuedContent, threadId, queuedAt) => {
-          queuedPlaceholderCalls.push({ chatJid, rowId, queuedContent, threadId, queuedAt });
-        },
-      } as unknown as WebChannelConstructorFactoryChannel["queuedFollowupLifecycle"],
+      queuedFollowupLifecycle: {} as WebChannelConstructorFactoryChannel["queuedFollowupLifecycle"],
       terminalService: sentinel<WebChannelConstructorFactoryChannel["terminalService"]>("terminal-service"),
       vncService: sentinel<WebChannelConstructorFactoryChannel["vncService"]>("vnc-service"),
       webauthnChallenges: sentinel<WebChannelConstructorFactoryChannel["webauthnChallenges"]>("webauthn-challenges"),
@@ -271,17 +252,6 @@ describe("web channel constructor wiring factory", () => {
         expect(defaults).toEqual({ defaultAgentId: "default" });
         return peerMessageRelayService;
       },
-      replaceMessageContent: (chatJid, rowId, text, writeOptions) => {
-        replaceCalls.push({
-          chatJid,
-          rowId,
-          text,
-          mediaIds: writeOptions.mediaIds ?? [],
-          contentBlocks: writeOptions.contentBlocks,
-          isTerminalAgentReply: writeOptions.isTerminalAgentReply,
-        });
-        return null;
-      },
       getDb: () => ({
         prepare: (sql: string) => ({
           run: (...args: unknown[]) => {
@@ -353,12 +323,9 @@ describe("web channel constructor wiring factory", () => {
     expect(messageWriteDeps).not.toBeNull();
     const interaction = { id: 1 } as unknown as InteractionRow;
     messageWriteDeps?.broadcastAgentResponse(interaction);
-    messageWriteDeps?.broadcastInteractionUpdated(interaction);
     messageWriteDeps?.storeMessage("web:test", "hello", false, [1, 2], { threadId: 7 });
-    messageWriteDeps?.replaceMessageContent("web:test", 9, "updated", [4], [{ type: "text" }], true);
-    messageWriteDeps?.enqueueFollowupPlaceholder("web:test", 13, "queued", 7, "2026-03-28T00:00:00.000Z");
 
-    expect(broadcastCalls).toEqual(["agent-response", "interaction-updated"]);
+    expect(broadcastCalls).toEqual(["agent-response"]);
     expect(storeCalls).toEqual([
       {
         chatJid: "web:test",
@@ -366,25 +333,6 @@ describe("web channel constructor wiring factory", () => {
         isBot: false,
         mediaIds: [1, 2],
         options: { threadId: 7 },
-      },
-    ]);
-    expect(replaceCalls).toEqual([
-      {
-        chatJid: "web:test",
-        rowId: 9,
-        text: "updated",
-        mediaIds: [4],
-        contentBlocks: [{ type: "text" }],
-        isTerminalAgentReply: true,
-      },
-    ]);
-    expect(queuedPlaceholderCalls).toEqual([
-      {
-        chatJid: "web:test",
-        rowId: 13,
-        queuedContent: "queued",
-        threadId: 7,
-        queuedAt: "2026-03-28T00:00:00.000Z",
       },
     ]);
     expect(dbRuns).toEqual([]);
