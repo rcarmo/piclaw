@@ -91,5 +91,5 @@ test("runtime input still enters the real gateway and draining joins the entered
     result.resolve(value);
     expect(await pending).toBe(value);
     await drain; expect(drained).toBe(true);
-  } finally { result.resolve(null); await pending?.catch(() => {}); }
+  } finally { result.resolve(null); await Promise.allSettled(pending ? [pending] : []); }
 });

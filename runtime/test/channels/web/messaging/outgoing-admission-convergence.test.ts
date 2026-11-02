@@ -68,7 +68,7 @@ test('publication admission rejects inherited transactions instead of acknowledg
       }).immediate()).toThrow('outer rollback');
       await expect(pending).rejects.toThrow('own transaction');
       expect(store.getDb().query('SELECT id FROM messages WHERE chat_jid=?').all(chat)).toEqual([]);
-    } finally { await pending?.catch(() => {}); store.closeDatabase(); }
+    } finally { await Promise.allSettled(pending ? [pending] : []); store.closeDatabase(); }
   }));
 
 test('the synchronous web writer and public forwarding chain are retired', async () => {
