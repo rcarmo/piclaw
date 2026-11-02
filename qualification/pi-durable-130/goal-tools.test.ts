@@ -610,7 +610,7 @@ test("actual web message admission runs Goal lifecycle guard inside its owned tr
   const { BunSqliteDatabase } = await import("../../runtime/durable-engine/src/bun-sqlite.js");
   const { SqliteStorage } = await import("../../runtime/durable-engine/qualification/sqlite.ts");
   const { openFixture, context } = await import("./src/fixture.js");
-  const { admitWebUserMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
+  const { admitWebMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
   const { storeChatMetadata } = await import("../../runtime/src/db.js");
   process.env.PICLAW_DB_IN_MEMORY = "0";
   mkdirSync(join(process.env.PICLAW_WORKSPACE!, ".piclaw"), { recursive: true });
@@ -656,11 +656,11 @@ test("actual web message admission runs Goal lifecycle guard inside its owned tr
     const acceptSource = bound.getInputSourceAdmission!(chat)!;
     const input = { chatJid: chat, content: prepared.decision.text, isBot: false, mediaIds: [], agentId: "default", agentName: "Fixture" };
     const channel = { broadcastEvent() {}, pendingLinkPreviews: new Set<number>() };
-    await admitWebUserMessage(channel, input, { acceptSource }, () => {}, new AbortController().signal);
+    await admitWebMessage(channel, input, { acceptSource }, () => {}, new AbortController().signal);
     expect(guardCalls).toBe(2);
     const before = ["messages", "service_effect_s01_sources", "service_effect_s01_decisions", "extension_kv"].map(table => root.query(`SELECT * FROM ${table}`).all());
     failAfterSource = true;
-    await expect(admitWebUserMessage(channel, input, { acceptSource }, () => {}, new AbortController().signal)).rejects.toThrow("Goal input lifecycle changed");
+    await expect(admitWebMessage(channel, input, { acceptSource }, () => {}, new AbortController().signal)).rejects.toThrow("Goal input lifecycle changed");
     expect(guardCalls).toBe(4);
     expect(["messages", "service_effect_s01_sources", "service_effect_s01_decisions", "extension_kv"].map(table => root.query(`SELECT * FROM ${table}`).all())).toEqual(before);
     failAfterSource = false; asyncGuard = true;
@@ -668,7 +668,7 @@ test("actual web message admission runs Goal lifecycle guard inside its owned tr
     const onUnhandled = (error: unknown) => { unhandled.push(error); };
     process.on("unhandledRejection", onUnhandled);
     try {
-      await expect(admitWebUserMessage(channel, input, { acceptSource }, () => {}, new AbortController().signal)).rejects.toThrow("Input admission guard must be synchronous");
+      await expect(admitWebMessage(channel, input, { acceptSource }, () => {}, new AbortController().signal)).rejects.toThrow("Input admission guard must be synchronous");
       await Bun.sleep(0);
       expect(unhandled).toEqual([]);
       expect(["messages", "service_effect_s01_sources", "service_effect_s01_decisions", "extension_kv"].map(table => root.query(`SELECT * FROM ${table}`).all())).toEqual(before);

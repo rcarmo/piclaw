@@ -20,7 +20,7 @@ import type { TotpAuthContext } from "../auth/totp-auth.js";
 import type { WebauthnAuthContext } from "../auth/webauthn-auth.js";
 import type { WebauthnEnrolPageContext } from "../auth/webauthn-enrol-page.js";
 import type { AgentStatusContext } from "../agent/agent-status.js";
-import type { WebUserMessageStoreOptions } from "../messaging/message-store.js";
+import type { StoreWebMessageOptions } from "../messaging/message-store.js";
 
 interface AuthGatewayLike {
   isAuthEnabled(): boolean;
@@ -70,17 +70,15 @@ export interface WebChannelLike
   prepareInputText?(chatJid: string, text: string): PreparedInputText;
   /** Trusted host lifecycle retirement; never selected from request fields. */
   expireQueuedInput?(chatJid: string, item: Readonly<QueuedFollowupItem>): Promise<boolean>;
-  getInputSourceAdmission?(chatJid: string): WebUserMessageStoreOptions["acceptSource"];
+  getInputSourceAdmission?(chatJid: string): StoreWebMessageOptions["acceptSource"];
   /** Default-off trusted SQL materialization binding; not an HTTP selection. */
   getAcceptedQueuedSteering?(chatJid: string, assertCurrent?: () => void): import('../../../agent-pool/durable-queued-steering.js').AcceptedQueuedSteering | undefined;
   getQueuedInputMaterialization?(chatJid: string): import('../messaging/message-store.js').QueuedInputMaterialization | undefined;
   getQueuedInputSourceWithdrawal?(chatJid: string): import("../runtime/queued-followup-lifecycle-service.js").QueuedInputSourceAdmission | undefined;
   getQueuedInputSourceAdmission?(chatJid: string): import("../runtime/queued-followup-lifecycle-service.js").QueuedInputSourceAdmission | undefined;
   dispatchAcceptedInput?: import("../../../agent-pool/durable-queue-dispatch.js").AcceptedQueueDispatch;
-  admitMessage?(chatJid: string, content: string, isBot: boolean, mediaIds: number[], contentBlocks: unknown[] | undefined,
-    authorise: () => void, signal?: AbortSignal): Promise<InteractionRow | null>;
-  admitUserMessage(chatJid: string, content: string, mediaIds: number[], options: WebUserMessageStoreOptions,
-    authorise: () => void, signal: AbortSignal, deferBeforeInsert?: () => boolean): Promise<InteractionRow | null>;
+  admitMessage(chatJid: string, content: string, isBot: boolean, mediaIds: number[], options: StoreWebMessageOptions,
+    authorise?: (phase?: "before" | "after") => void, signal?: AbortSignal, deferBeforeInsert?: () => boolean): Promise<InteractionRow | null>;
   agentPool: AgentPool & {
     resolveBudgetProviderAccountRef?(providerId: string): Promise<string | null>;
   };

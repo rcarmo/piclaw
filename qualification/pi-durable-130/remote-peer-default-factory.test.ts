@@ -16,7 +16,7 @@ import { createTestCredentialStore } from "../../runtime/test/model-services-fix
 import { AgentPool } from "../../runtime/src/agent-pool.js";
 import { createRuntimeBaseServices } from "../../runtime/src/runtime/composition.js";
 import { WebChannel } from "../../runtime/src/channels/web.js";
-import { admitWebUserMessage } from "../../runtime/src/channels/web/messaging/message-store.js";
+import { admitWebMessage } from "../../runtime/src/channels/web/messaging/message-store.js";
 
 applicationTest("Remote Peer actual factory uses network-free transport, executes status and closes/reopens", async () => {
   const workspace = process.env.PICLAW_WORKSPACE!;
@@ -84,7 +84,7 @@ applicationTest("Remote Peer actual factory uses network-free transport, execute
     const realBroadcast = channel.broadcastEvent.bind(channel);
     channel.broadcastEvent = (event, data) => { broadcasts.push({ event, data }); realBroadcast(event, data); };
     backend.attachChannel!(channel as any);
-    const admitted = await admitWebUserMessage(channel, { chatJid: "web:default", content: "Review recent exchanges", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" },
+    const admitted = await admitWebMessage(channel, { chatJid: "web:default", content: "Review recent exchanges", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" },
       { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
     expect(admitted).not.toBeNull();
     const id = (getDb().query("SELECT id FROM messages WHERE rowid=?").get(admitted!.id) as any).id;
@@ -94,7 +94,7 @@ applicationTest("Remote Peer actual factory uses network-free transport, execute
     expect(calls).toBe(2);
     await ingress(remoteId.toString(), { op: "pair", body: { request: "fixture-pair", epoch: "fixture-epoch", name: "Synthetic peer", ticket: remoteTicket, expires: Date.now() + 60000 } }, new Uint8Array());
     params = { action: "accept", peer: remoteId.toString(), confirmation: remoteId.toString() };
-    const accepted = await admitWebUserMessage(channel, { chatJid: "web:default", content: "Accept synthetic peer", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" },
+    const accepted = await admitWebMessage(channel, { chatJid: "web:default", content: "Accept synthetic peer", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" },
       { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
     const acceptedId = (getDb().query("SELECT id FROM messages WHERE rowid=?").get(accepted!.id) as any).id;
     expect(await bound.dispatchAcceptedInput!("web:default", acceptedId, accepted!.id)!()).toBe("settled");
@@ -108,7 +108,7 @@ applicationTest("Remote Peer actual factory uses network-free transport, execute
     const entry = new Promise<void>(resolve => { modelEntered = resolve; });
     entered = modelEntered;
     hold = new Promise<void>(resolve => { releaseHold = resolve; });
-    const primary = await admitWebUserMessage(channel, { chatJid: "web:default", content: "Active primary A", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" },
+    const primary = await admitWebMessage(channel, { chatJid: "web:default", content: "Active primary A", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" },
       { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
     const primaryId = (getDb().query("SELECT id FROM messages WHERE rowid=?").get(primary!.id) as any).id;
     const running = bound.dispatchAcceptedInput!("web:default", primaryId, primary!.id)!();

@@ -13,7 +13,7 @@ import type { WebSessionBroadcastService } from "../sse/session-broadcast-servic
 
 type WebChannelRuntimePublicSurfaceStorage = Pick<
   WebMessageProcessingStorageService,
-  "processChat" | "storeMessage" | "admitUserMessage" | "admitMessage"
+  "processChat" | "storeMessage" | "admitMessage"
 >;
 
 type WebChannelRuntimePublicSurfaceBroadcast = Pick<
@@ -462,10 +462,6 @@ export class WebChannelRuntimePublicSurfaceService {
 
   admitMessage(...args: Parameters<WebMessageProcessingStorageService["admitMessage"]>): Promise<InteractionRow | null> {
     return this.channel.messageProcessingStorageService.admitMessage(...args);
-  }
-
-  admitUserMessage(...args: Parameters<WebMessageProcessingStorageService['admitUserMessage']>): Promise<InteractionRow | null> {
-    return this.channel.messageProcessingStorageService.admitUserMessage(...args);
   }
 
   storeMessage(

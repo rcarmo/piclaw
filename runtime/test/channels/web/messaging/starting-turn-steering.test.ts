@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { admitWebUserMessage, storeWebMessage } from '../../../../src/channels/web/messaging/message-store.js';
+import { admitWebMessage, storeWebMessage } from '../../../../src/channels/web/messaging/message-store.js';
 import { handleAgentMessage } from '../../../../src/channels/web/handlers/agent.js';
 import { initDatabase, getDb, getDeferredQueuedFollowups, createMedia, getMessagesSince } from '../../../../src/db.js';
 import { QueuedFollowupLifecycleService } from '../../../../src/channels/web/runtime/queued-followup-lifecycle-service.js';
@@ -26,7 +26,7 @@ function fixture(queue: AgentQueue) {
     queuePendingSteering: (_chat: string, timestamp: string) => state.pendingSteering.push(timestamp),
     admitQueuedFollowupItem: queued.admitQueuedFollowupItem.bind(queued),
     storeMessage: (chat: string, content: string, isBot: boolean, media: number[], options: any) => storeWebMessage(channel, { chatJid: chat, content, isBot, mediaIds: media, agentId: 'default', agentName: 'Fixture', agentAvatar: '', userName: null, userAvatar: '', userAvatarBackground: null }, options),
-    admitUserMessage: (chat: string, content: string, media: number[], options: any, validate: () => void, signal: AbortSignal, defer: () => boolean) => admitWebUserMessage(channel, { chatJid: chat, content, isBot: false, mediaIds: media, agentId: 'default', agentName: 'Fixture', agentAvatar: '', userName: null, userAvatar: '', userAvatarBackground: null }, options, validate, signal, defer),
+    admitMessage: (chat: string, content: string, _isBot: boolean, media: number[], options: any, validate: () => void, signal: AbortSignal, defer: () => boolean) => admitWebMessage(channel, { chatJid: chat, content, isBot: false, mediaIds: media, agentId: 'default', agentName: 'Fixture', agentAvatar: '', userName: null, userAvatar: '', userAvatarBackground: null }, options, validate, signal, defer),
   };
   installNativeQueuePorts(channel, { available: () => state.streaming && state.intentAvailable,
     beforeAccept() { state.intentAttempts++; state.beforeIntent?.(); },
@@ -63,8 +63,8 @@ for (const idleAfterCommit of [false, true]) test(`steering admission rechecks a
     const admissionGate = new Promise<void>(resolve => { releaseAdmission = resolve; });
     const enteredGate = new Promise<void>(resolve => { entered = resolve; });
     const runGate = new Promise<void>(resolve => { releaseRun = resolve; });
-    const admit = f.channel.admitUserMessage;
-    f.channel.admitUserMessage = async (...args: any[]) => {
+    const admit = f.channel.admitMessage;
+    f.channel.admitMessage = async (...args: any[]) => {
       entered(); await admissionGate;
       const result = await admit(...args);
       if (idleAfterCommit) { releaseRun(); await queue.shutdown(); }

@@ -12,10 +12,8 @@ import { processChat as processAgentChat } from "../handlers/agent.js";
 import type { LinkPreviewChannel } from "../media/link-previews.js";
 import {
   storeWebMessage as persistWebMessage,
-  admitWebUserMessage,
   admitWebMessage,
   type StoreWebMessageOptions,
-  type WebUserMessageStoreOptions,
   type StoreWebMessageParams,
 } from "./message-store.js";
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
@@ -118,24 +116,20 @@ export class WebMessageProcessingStorageService {
     return interaction;
   }
 
-  async admitMessage(chatJid: string, content: string, isBot: boolean, mediaIds: number[], contentBlocks: unknown[] | undefined,
-    authorise: () => void, signal?: AbortSignal): Promise<InteractionRow | null> {
+  async admitMessage(chatJid: string, content: string, isBot: boolean, mediaIds: number[], options: StoreWebMessageOptions,
+    authorise?: (phase?: 'before' | 'after') => void, signal?: AbortSignal, deferBeforeInsert?: () => boolean): Promise<InteractionRow | null> {
+    if (!isBot && typeof options.consumeDeferredFollowupRowId === "number") {
+      options = { ...options, materializeQueuedSource: this.channel.getQueuedInputMaterialization?.(chatJid),
+        acceptMaterializedSource: !isSlashCommandInvocation(content.trim()) ? this.channel.getInputSourceAdmission?.(chatJid) : undefined };
+    }
     const interaction = await admitWebMessage(this.channel, {
       chatJid, content, isBot, mediaIds, agentId: this.options.defaultAgentId,
       agentName: this.options.getAssistantName(), userName: this.options.getUserName?.() ?? null,
-    }, { contentBlocks }, authorise, signal);
-    recordTimelineInteraction(interaction); return interaction;
-  }
-
-  async admitUserMessage(chatJid: string, content: string, mediaIds: number[], options: WebUserMessageStoreOptions,
-    authorise: () => void, signal: AbortSignal, deferBeforeInsert?: () => boolean): Promise<InteractionRow | null> {
-    const interaction = await admitWebUserMessage(this.channel, {
-      chatJid, content, isBot: false, mediaIds,
-      agentId: this.options.defaultAgentId, agentName: this.options.getAssistantName(), userName: this.options.getUserName?.() ?? null,
     }, options, authorise, signal, deferBeforeInsert);
     if (!interaction) return null;
     try { recordTimelineInteraction(interaction); }
-    catch (error) { debugSuppressedError(log, 'Optional recording failed after incoming message commit.', error, { operation: 'web_message_storage.record_after_commit', rowId: interaction.id }); }
+    catch (error) { debugSuppressedError(log, 'Optional recording failed after message commit.', error, { operation: 'web_message_storage.record_after_commit', rowId: interaction.id }); }
     return interaction;
   }
+
 }

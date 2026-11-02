@@ -2643,7 +2643,7 @@ test("processChat preserves a deferred queued follow-up if materialization fails
 
   web.enqueueQueuedFollowupItem("web:default", 0, "queued idle item");
   const originalStoreMessage = web.storeMessage.bind(web);
-  web.storeMessage = (chatJid: string, content: string, isBot: boolean, mediaIds: number[], options?: any) => {
+  web.admitMessage = async (chatJid: string, content: string, isBot: boolean, mediaIds: number[], options?: any) => {
     if (!isBot) return null;
     return originalStoreMessage(chatJid, content, isBot, mediaIds, options);
   };
@@ -2681,7 +2681,7 @@ test("deferred queued follow-up materialize retry count survives a new WebChanne
   const first = createWeb();
   first.enqueueQueuedFollowupItem("web:default", 0, "queued idle item");
   const firstStoreMessage = first.storeMessage.bind(first);
-  first.storeMessage = (chatJid: string, content: string, isBot: boolean, mediaIds: number[], options?: any) => {
+  first.admitMessage = async (chatJid: string, content: string, isBot: boolean, mediaIds: number[], options?: any) => {
     if (!isBot) return null;
     return firstStoreMessage(chatJid, content, isBot, mediaIds, options);
   };
@@ -2691,7 +2691,7 @@ test("deferred queued follow-up materialize retry count survives a new WebChanne
 
   const second = createWeb();
   const secondStoreMessage = second.storeMessage.bind(second);
-  second.storeMessage = (chatJid: string, content: string, isBot: boolean, mediaIds: number[], options?: any) => {
+  second.admitMessage = async (chatJid: string, content: string, isBot: boolean, mediaIds: number[], options?: any) => {
     if (!isBot) return null;
     return secondStoreMessage(chatJid, content, isBot, mediaIds, options);
   };
@@ -2735,7 +2735,7 @@ test("processChat drops a deferred queued follow-up after repeated materialize f
     return originalBroadcast(event, payload);
   };
   const originalStoreMessage = web.storeMessage.bind(web);
-  web.storeMessage = (chatJid: string, content: string, isBot: boolean, mediaIds: number[], options?: any) => {
+  web.admitMessage = async (chatJid: string, content: string, isBot: boolean, mediaIds: number[], options?: any) => {
     if (!isBot) return null;
     return originalStoreMessage(chatJid, content, isBot, mediaIds, options);
   };

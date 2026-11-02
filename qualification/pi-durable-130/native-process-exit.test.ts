@@ -16,7 +16,7 @@ import { createHostProcessControls } from "../../runtime/durable-engine/src/host
 import { nativeExitNotice } from "../../runtime/durable-engine/src/host-process-receipt.js";
 import type { HostConversationRuntime } from "../../runtime/durable-engine/src/host-runtime.js";
 import { installTerminalSettlementCompositionSchema } from "../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js";
-import { admitWebUserMessage } from "../../runtime/src/channels/web/messaging/message-store.js";
+import { admitWebMessage } from "../../runtime/src/channels/web/messaging/message-store.js";
 import { InMemoryEffectPayloadResolver } from "../../runtime/src/service-effects/testing/in-memory-payload-resolver.js";
 import { openFixture, context } from "./src/fixture.js";
 
@@ -97,7 +97,7 @@ for (const scenario of ["success", "siblings", "materialization-recovery", "alte
     try {
       await boot(true);
       const bound = bundle!.bind({ queue: {} as any, agentPool: {} as any });
-      const stored = await admitWebUserMessage({ pendingLinkPreviews: new Set<number>(), broadcastEvent() {} },
+      const stored = await admitWebMessage({ pendingLinkPreviews: new Set<number>(), broadcastEvent() {} },
         { chatJid: chat, content: "Request the approved restart", isBot: false, mediaIds: [], agentId: "default", agentName: "Fixture" },
         { acceptSource: bound.getInputSourceAdmission!(chat) }, () => owner.assertCurrentOwner(), new AbortController().signal);
       expect(stored).not.toBeNull();

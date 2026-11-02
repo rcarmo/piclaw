@@ -13,7 +13,7 @@ import { applicationOwnership, createApplicationBootstrapBundle } from "../../ru
 import { installTerminalSettlementCompositionSchema } from "../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js";
 import { openFixture, context, barrier } from "./src/fixture.js";
 
-import { admitWebUserMessage } from "../../runtime/src/channels/web/messaging/message-store.js";
+import { admitWebMessage } from "../../runtime/src/channels/web/messaging/message-store.js";
 import { InMemoryEffectPayloadResolver } from "../../runtime/src/service-effects/testing/in-memory-payload-resolver.js";
 
 // Owned SDK13 primitive proof, not a Root SDK12 bridge qualification.
@@ -50,7 +50,7 @@ applicationTest("owned application peer steer joins active native operation and 
       principal: { id: "verified-fixture-peer", revision: "policy-1" }, target,
       assertCurrent() { checks++; guardContexts.add(root.inTransaction); lock.assertCurrentOwner(); } });
     const ports = bundle.bind({ queue: {} as any, agentPool: {} as any });
-    const stored = await admitWebUserMessage(projection, { chatJid: chat, content: "A primary native input", isBot: false, mediaIds: [], agentId: "default", agentName: "Fixture" },
+    const stored = await admitWebMessage(projection, { chatJid: chat, content: "A primary native input", isBot: false, mediaIds: [], agentId: "default", agentName: "Fixture" },
       { acceptSource: ports.getInputSourceAdmission!(chat) }, () => lock.assertCurrentOwner(), new AbortController().signal);
     expect(stored).not.toBeNull();
     const message = root.query("SELECT rowid,id FROM messages WHERE chat_jid=? AND content=?").get(chat, "A primary native input") as any;

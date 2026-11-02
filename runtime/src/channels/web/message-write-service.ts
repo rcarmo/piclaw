@@ -11,19 +11,23 @@ export type SendMessageOptions =
       forceRoot?: boolean;
       /** Truthful reply-delivery failure; does not change command acceptance. */
       requirePersistence?: boolean;
+      /** Host-only authority and cancellation; never copied from request JSON. */
+      authorise?: (phase?: "before" | "after") => void;
+      signal?: AbortSignal;
       source?: string;
       mediaIds?: number[];
       contentBlocks?: Array<Record<string, unknown>>;
     };
 
 export interface WebMessageWriteServiceDeps {
-  storeMessage(
+  admitMessage(
     chatJid: string,
     content: string,
     isBot: boolean,
     mediaIds: number[],
-    options?: { threadId?: number; threadToSelf?: boolean; contentBlocks?: unknown[]; isTerminalAgentReply?: boolean }
-  ): InteractionRow | null;
+    options: { threadId?: number; threadToSelf?: boolean; contentBlocks?: unknown[]; isTerminalAgentReply?: boolean },
+    authorise?: (phase?: "before" | "after") => void, signal?: AbortSignal
+  ): Promise<InteractionRow | null>;
   broadcastAgentResponse(interaction: InteractionRow): void;
 }
 
@@ -37,11 +41,11 @@ export class WebMessageWriteService {
     const mediaIds = Array.isArray(normalized.mediaIds) ? normalized.mediaIds.filter(id => Number.isFinite(id) && id > 0) : [];
     const contentBlocks = Array.isArray(normalized.contentBlocks)
       ? normalized.contentBlocks.filter(block => block && typeof block === "object") : undefined;
-    const interaction = this.deps.storeMessage(chatJid, text, true, mediaIds, {
+    const interaction = await this.deps.admitMessage(chatJid, text, true, mediaIds, {
       ...(threadId !== null ? { threadId } : {}),
       ...(forceRoot && !threadId ? { threadToSelf: true } : {}),
       ...(contentBlocks && contentBlocks.length ? { contentBlocks } : {}),
-    });
+    }, normalized.authorise, normalized.signal);
     if (!interaction) {
       if (typeof options === "object" && options?.requirePersistence) throw new Error("Agent reply could not be persisted.");
       return;

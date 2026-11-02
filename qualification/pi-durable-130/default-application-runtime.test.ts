@@ -1324,10 +1324,10 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
   const bound = backend.bind({ queue: base.queue, agentPool: pool });
   const channel = new WebChannel(bound);
   if (factoryReceiptCrash) {
-    const {admitWebUserMessage} = await import('../../runtime/src/channels/web/messaging/message-store.js');
+    const {admitWebMessage} = await import('../../runtime/src/channels/web/messaging/message-store.js');
     try {
       if (factoryReceiptPhase === 'write') {
-        const stored = await admitWebUserMessage(channel,{chatJid:'web:default',content:'Preserve this original paid factory answer',isBot:false,
+        const stored = await admitWebMessage(channel,{chatJid:'web:default',content:'Preserve this original paid factory answer',isBot:false,
           mediaIds:[],agentId:'default',agentName:'Fixture'},{acceptSource:bound.getInputSourceAdmission!('web:default')},
           () => owner.assertCurrentOwner(),new AbortController().signal);
         assert(stored);
@@ -2198,14 +2198,14 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     return;
   }
   if (scenario.startsWith("native-shutdown-")) {
-    const { admitWebUserMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
+    const { admitWebMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
     const marker = join(workspace, "shutdown-tool-once.txt");
     let entered!: () => void;
     const held = new Promise<void>(resolve => { entered = resolve; });
     toolSequence = [{ name: "bash", arguments: { command: `printf X >> '${marker}'` } }];
     onProviderResponse = () => { if (calls === 1) checkpointHold = { entered }; };
     try {
-      const stored = await admitWebUserMessage(channel, { chatJid: "web:default", content: "Complete one tool before restart", isBot: false,
+      const stored = await admitWebMessage(channel, { chatJid: "web:default", content: "Complete one tool before restart", isBot: false,
         mediaIds: [], agentId: "default", agentName: "Fixture" }, { acceptSource: bound.getInputSourceAdmission!("web:default") },
         () => owner.assertCurrentOwner(), new AbortController().signal);
       assert(stored);
@@ -2250,7 +2250,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     return;
   }
   if (scenario.startsWith("native-process-")) {
-    const { admitWebUserMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
+    const { admitWebMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
     const { nativeExitNotice } = await import("../../runtime/durable-engine/src/host-process-receipt.js");
     const { createScheduledTaskAuthority } = await import("../../runtime/src/service-effects/current-piclaw/scheduled-task-authority.js");
     const reason = "production factory qualified exit";
@@ -2284,7 +2284,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
         expect(leases.ok && leases.value.length).toBe(1); // No shell is executed in this test.
       }
       toolSequence = [{ name: scenario === "native-process-status" ? "session_status" : "exit_process", arguments: scenario === "native-process-status" ? { action: "check" } : { reason } }];
-      const stored = await admitWebUserMessage(channel, { chatJid: "web:default", content: "Approve the native restart", isBot: false,
+      const stored = await admitWebMessage(channel, { chatJid: "web:default", content: "Approve the native restart", isBot: false,
         mediaIds: [], agentId: "default", agentName: "Fixture" }, { acceptSource: bound.getInputSourceAdmission!("web:default") },
         () => owner.assertCurrentOwner(), new AbortController().signal);
       assert(stored);
@@ -2331,7 +2331,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(prepared.text).toBe("A fresh ordinary input");
     expect(() => prepared.assertCurrent()).not.toThrow();
     const { getDeferredQueuedFollowups } = await import("../../runtime/src/db.js");
-    const { storeWebMessage, admitWebUserMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
+    const { storeWebMessage, admitWebMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
     const { handleRegisteredAddonConfigApiRequest } = await import("../../runtime/src/channels/web/handlers/addon-config-api.js");
     backend.attachChannel!({ broadcastEvent() {}, resumePendingChats() { expect(getDb().inTransaction).toBe(false); } });
     expect(await pool.applySlashCommand("web:default", "/goal Budget wrap-up")).toMatchObject({ status: "success" });
@@ -2348,7 +2348,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" }, {
       consumeDeferredFollowupRowId: initial.rowId, materializeQueuedSource: bound.getQueuedInputMaterialization!("web:default"),
     })!;
-    const human = await admitWebUserMessage(channel, { chatJid: "web:default", content: "Ordinary human input before budget wrap-up",
+    const human = await admitWebMessage(channel, { chatJid: "web:default", content: "Ordinary human input before budget wrap-up",
       mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" },
       { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
     expect(human).not.toBeNull();

@@ -40,7 +40,7 @@ for (const terminal of ['success', 'error', 'cancelled'] as const) {
       getQueuedFollowupCount: () => 0, broadcastEvent() {},
       getAgentStatus: (chat: string) => store.get(chat),
       updateAgentStatus: (chat: string, payload: any) => store.update(chat, payload),
-      admitUserMessage: async () => ({ id: 456, timestamp: '2026-10-15T12:00:00.000Z', data: { thread_id: null }, content: '/compact' }),
+      admitMessage: async () => ({ id: 456, timestamp: '2026-10-15T12:00:00.000Z', data: { thread_id: null }, content: '/compact' }),
       sendMessage: async () => { publishing.release(); await publish.promise; },
     } as any;
     const context = {

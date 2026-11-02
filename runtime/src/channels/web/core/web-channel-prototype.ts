@@ -351,10 +351,5 @@ export function installWebChannelPrototype(
       configurable: true, writable: true,
       value: withRuntimePublicSurface((service, ...args: Parameters<WebChannelRuntimePublicSurfaceService["admitMessage"]>) => service.admitMessage(...args)),
     },
-    admitUserMessage: {
-      configurable: true,
-      writable: true,
-      value: withRuntimePublicSurface((service, ...args: Parameters<WebChannelRuntimePublicSurfaceService['admitUserMessage']>) => service.admitUserMessage(...args)),
-    },
   });
 }

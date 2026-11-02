@@ -12,7 +12,6 @@ import {
   createAgentsEndpointContext,
   createAvatarEndpointContext,
   createContentEndpointsContext,
-  createPostMutationsContext,
   createUiEndpointsContext,
 } from "./endpoint-contexts.js";
 import { isProviderReadyOobeCompletedForInstance } from "../oobe-instance-state.js";
@@ -92,16 +91,16 @@ export function createWebChannelEndpointContexts(
   let authContext: AuthEndpointsContext | null = null;
 
   return {
-    postMutations: () => createPostMutationsContext({
+    postMutations: () => ({
       defaultChatJid: options.defaultChatJid,
-      getLastCommandInteractionId: () => channel.lastCommandInteractionId,
+      lastCommandInteractionId: channel.lastCommandInteractionId,
+      authGateway: channel.authGateway,
       json: (payload, status = 200) => channel.json(payload, status),
       replaceMessageContent: (chatJid, id, content, threadId) => updateMessagePost(chatJid, id, content, threadId) ?? null,
       broadcastInteractionUpdated: (interaction) => {
         channel.interactionBroadcaster.broadcastInteractionUpdated(interaction);
       },
-      storeMessage: (chatJid, content, isBot, mediaIds, storeOptions = {}) =>
-        channel.storeMessage(chatJid, content, isBot, mediaIds, storeOptions),
+      admitMessage: channel.admitMessage.bind(channel),
       broadcastAgentResponse: (interaction) => {
         channel.interactionBroadcaster.broadcastAgentResponse(interaction);
       },

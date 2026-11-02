@@ -8,40 +8,10 @@ import type { WebAgentBufferEntry } from "../agent/agent-buffers.js";
 import type { AgentStatusContext, AgentTokenUsageContext } from "../agent/agent-status.js";
 import type { ContentEndpointsContext } from "./content-endpoints.js";
 import type { AgentsEndpointContext, AvatarEndpointContext } from "./identity-endpoints.js";
-import type { PostMutationsContext } from "../post-mutations.js";
 import type { UiEndpointsContext } from "./ui-endpoints.js";
 
 interface JsonLike {
   json(payload: unknown, status?: number): Response;
-}
-
-/** Dependencies required to assemble the post-mutation endpoint context. */
-export interface PostMutationsContextDeps extends JsonLike {
-  defaultChatJid: string;
-  getLastCommandInteractionId(): number | null;
-  replaceMessageContent(chatJid: string, id: number, content: string, threadId?: number): InteractionRow | null;
-  broadcastInteractionUpdated(interaction: InteractionRow): void;
-  storeMessage(
-    chatJid: string,
-    content: string,
-    isBot: boolean,
-    mediaIds: number[],
-    options?: { threadId?: number }
-  ): InteractionRow | null;
-  broadcastAgentResponse(interaction: InteractionRow): void;
-}
-
-/** Build the post-mutation endpoint context from live channel dependencies. */
-export function createPostMutationsContext(deps: PostMutationsContextDeps): PostMutationsContext {
-  return {
-    defaultChatJid: deps.defaultChatJid,
-    lastCommandInteractionId: deps.getLastCommandInteractionId(),
-    json: deps.json,
-    replaceMessageContent: deps.replaceMessageContent,
-    broadcastInteractionUpdated: deps.broadcastInteractionUpdated,
-    storeMessage: deps.storeMessage,
-    broadcastAgentResponse: deps.broadcastAgentResponse,
-  };
 }
 
 /** Dependencies required to assemble the agent-status endpoint context. */

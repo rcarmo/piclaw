@@ -14,7 +14,7 @@ import { createTestCredentialStore } from "../../runtime/test/model-services-fix
 import { AgentPool } from "../../runtime/src/agent-pool.js";
 import { createRuntimeBaseServices } from "../../runtime/src/runtime/composition.js";
 import { WebChannel } from "../../runtime/src/channels/web.js";
-import { admitWebUserMessage } from "../../runtime/src/channels/web/messaging/message-store.js";
+import { admitWebMessage } from "../../runtime/src/channels/web/messaging/message-store.js";
 
 applicationTest("Regrets-only actual factory executes default decision-off review, queues command and reopens", async () => {
   const workspace = process.env.PICLAW_WORKSPACE!;
@@ -47,7 +47,7 @@ applicationTest("Regrets-only actual factory executes default decision-off revie
     const pool = new AgentPool({ credentialStore: createTestCredentialStore({}), modelRuntime: services.modelRuntime, modelRegistry: services.modelRegistry, ...backend.sessionOptions } as any);
     const bound = backend.bind({ queue: base.queue, agentPool: pool });
     const channel = new WebChannel(bound);
-    const admitted = await admitWebUserMessage(channel, { chatJid: "web:default", content: "Review recent exchanges", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" },
+    const admitted = await admitWebMessage(channel, { chatJid: "web:default", content: "Review recent exchanges", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" },
       { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
     expect(admitted).not.toBeNull();
     const id = (getDb().query("SELECT id FROM messages WHERE rowid=?").get(admitted!.id) as any).id;

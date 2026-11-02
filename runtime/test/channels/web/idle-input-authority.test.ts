@@ -11,7 +11,7 @@ import {enforceRequestGuards} from '../../../src/channels/web/http/request-guard
 import {getRouteFlags} from '../../../src/channels/web/http/route-flags.js';
 import {resetRateLimiterStateForTests} from '../../../src/channels/web/http/rate-limit.js';
 import {handleAgentMessage} from '../../../src/channels/web/handlers/agent.js';
-import {storeWebMessage,admitWebUserMessage} from '../../../src/channels/web/messaging/message-store.js';
+import {storeWebMessage,admitWebMessage} from '../../../src/channels/web/messaging/message-store.js';
 import {QueuedFollowupLifecycleService} from '../../../src/channels/web/runtime/queued-followup-lifecycle-service.js';
 import {createWebChannelRuntimePublicSurfaceService} from '../../../src/channels/web/core/web-channel-runtime-public-surface-service.js';
 import {createDirectChatToolRelayHandler} from '../../../src/extensions/chat-tool-runtime.js';
@@ -33,7 +33,7 @@ function fixture(){
  const channel={authGateway:auth,json,endpointContexts:{auth:()=>({})},agentPool:{isStreaming:(jid:string)=>jid==='web:target'&&busy,isActive:(jid:string)=>jid==='web:target'&&busy,findChatByAgentName:(name:string)=>branches.find(b=>b.agent_name===name)??null,getAgentHandleForChat:(jid:string)=>branches.find(b=>b.chat_jid===jid)?.agent_name??'fixture',listActiveChats:()=>branches,listKnownChats:()=>branches},
  getQueuedFollowupCount:queue.getQueuedFollowupCount.bind(queue),enqueueQueuedFollowupItem:queue.enqueueQueuedFollowupItem.bind(queue),
  async admitQueuedFollowupItem(args:any,check:()=>void,signal:AbortSignal){if(hold&&(!heldJid||args[0]===heldJid))await hold;return queue.admitQueuedFollowupItem(args,check,signal);},
- async admitUserMessage(jid:string,text:string,media:number[],options:any,check:()=>void,signal:AbortSignal,defer?:()=>boolean){if(hold&&(!heldJid||jid===heldJid))await hold;return admitWebUserMessage(channel as any,{chatJid:jid,content:text,isBot:false,mediaIds:media,agentId:'default',agentName:'Fixture'},options,check,signal,defer);},
+ async admitMessage(jid:string,text:string, _isBot: boolean,media:number[],options:any,check:()=>void,signal:AbortSignal,defer?:()=>boolean){if(hold&&(!heldJid||jid===heldJid))await hold;return admitWebMessage(channel as any,{chatJid:jid,content:text,isBot:false,mediaIds:media,agentId:'default',agentName:'Fixture'},options,check,signal,defer);},
  storeMessage(jid:string,text:string,isBot:boolean,media:number[],options:any){return storeWebMessage(channel as any,{chatJid:jid,content:text,isBot,mediaIds:media,agentId:'default',agentName:'Fixture'},options);},broadcastEvent:(type:string,payload:any)=>events.push({type,payload}),queue:{enqueue:()=>{scheduled++;}},resumeChat:()=>{scheduled++;}} as any;
  const route=async(req:Request)=>{const url=new URL(req.url);return await enforceRequestGuards(channel,req,url.pathname,getRouteFlags(req,url.pathname))??await handleAgentMessage(channel,req,url.pathname,url.searchParams.get('chat_jid')||'web:source','default');};
  return{channel,auth,config,queue,events,branches,route,get scheduled(){return scheduled;},busy(value:boolean){busy=value;},hold(value:Promise<void>,jid?:string){hold=value;heldJid=jid;}};
@@ -97,8 +97,8 @@ for(const busy of [false,true])test(`generic host mention from a new source admi
  expect(result.status).toBe('ok');expect(rows('web:source')).toBe(1);expect(getChatBranchByChatJid('web:source')?.branch_id).toBeTruthy();expect(rows('web:target')).toBe(busy?0:1);expect(f.queue.getQueuedFollowupCount('web:target')).toBe(busy?1:0);expect(f.scheduled).toBe(busy?0:1);
 });
 test('host mention cancelled after source commit reports that receipt without accepting the target',async()=>{
- const f=fixture(),admit=f.channel.admitUserMessage.bind(f.channel);let release!:()=>void,entered!:()=>void;const held=new Promise<void>(resolve=>{release=resolve;}),waiting=new Promise<void>(resolve=>{entered=resolve;});
- f.channel.admitUserMessage=async(...args:any[])=>{if(args[0]==='web:target'){entered();await held;}return admit(...args);};
+ const f=fixture(),admit=f.channel.admitMessage.bind(f.channel);let release!:()=>void,entered!:()=>void;const held=new Promise<void>(resolve=>{release=resolve;}),waiting=new Promise<void>(resolve=>{entered=resolve;});
+ f.channel.admitMessage=async(...args:any[])=>{if(args[0]==='web:target'){entered();await held;}return admit(...args);};
  let response!:Response;const service=createWebChannelRuntimePublicSurfaceService({handleAgentMessage:async(req:Request,path:string)=>response=await handleAgentMessage(f.channel,req,path,new URL(req.url).searchParams.get('chat_jid')!,'default'),messageWriteService:{} as any,queuedFollowupLifecycle:{} as any,runtimeState:{} as any,messageProcessingStorageService:{} as any,sessionBroadcast:{} as any});
  const abort=new AbortController();const observed=service.enqueueAgentMessage({chatJid:'web:source',content:'@target cancelled host input',signal:abort.signal}).then(()=>null,error=>error);
  await waiting;expect(rows('web:source')).toBe(1);abort.abort(Error('host cancelled'));release();expect(await observed).toBeTruthy();expect(response.status).toBe(400);const payload=await response.json();expect(payload.source_committed).toBe(true);expect(payload.relayed).toBe(false);expect(payload.user_message.id).toBeGreaterThan(0);expect(rows('web:target')).toBe(0);expect(f.scheduled).toBe(0);expect(getChatBranchByChatJid('web:target')).toBeNull();

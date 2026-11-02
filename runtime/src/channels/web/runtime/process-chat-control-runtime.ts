@@ -92,7 +92,7 @@ export interface QueuedFollowupMaterializationRuntime extends DeferredControlCom
   consumeQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null;
   prependQueuedFollowupItem(chatJid: string, item: QueuedFollowupItem): void;
   replaceQueuedFollowupItem(chatJid: string, item: QueuedFollowupItem): boolean;
-  storeMessage: WebChannelLike["storeMessage"];
+  admitMessage: WebChannelLike["admitMessage"];
 }
 
 export interface ExecuteDeferredControlCommandOptions {
@@ -366,26 +366,6 @@ function broadcastConsumedFollowup(
   });
 }
 
-function materializeQueuedFollowup(
-  channel: Pick<QueuedFollowupMaterializationRuntime, "storeMessage">,
-  chatJid: string,
-  item: QueuedFollowupItem,
-): InteractionRow | null {
-  return channel.storeMessage(
-    chatJid,
-    item.queuedContent,
-    false,
-    item.mediaIds ?? [],
-    {
-      contentBlocks: Array.isArray(item.contentBlocks) ? item.contentBlocks : undefined,
-      linkPreviews: Array.isArray(item.linkPreviews) ? item.linkPreviews : undefined,
-      threadId: item.threadId ?? undefined,
-      screenHint: item.screenHint,
-      consumeDeferredFollowupRowId: item.rowId,
-    },
-  );
-}
-
 export async function materializeDeferredFollowups(
   options: MaterializeDeferredFollowupsOptions,
 ): Promise<MaterializeDeferredFollowupsResult> {
@@ -400,6 +380,7 @@ export async function materializeDeferredFollowups(
   const maxMaterializeRetries = options.maxMaterializeRetries ?? 5;
   let consumedAny = false;
   const expire = channel.expireQueuedInput?.bind(channel);
+  const admit = channel.admitMessage.bind(channel);
 
   while (true) {
     const nextQueued = channel.peekQueuedFollowupItem(chatJid);
@@ -418,7 +399,25 @@ export async function materializeDeferredFollowups(
       if (!isDeepStrictEqual(channel.peekQueuedFollowupItem(chatJid), nextQueued)) continue;
     }
     const retries = nextQueued.materializeRetries ?? 0;
-    const queuedInteraction = materializeQueuedFollowup(channel, chatJid, nextQueued);
+    let queuedInteraction: InteractionRow | null, headChanged: Error | undefined;
+    try {
+      queuedInteraction = await admit(chatJid, nextQueued.queuedContent, false, nextQueued.mediaIds ?? [], {
+        contentBlocks: Array.isArray(nextQueued.contentBlocks) ? nextQueued.contentBlocks : undefined,
+        linkPreviews: Array.isArray(nextQueued.linkPreviews) ? nextQueued.linkPreviews : undefined,
+        threadId: nextQueued.threadId ?? undefined, screenHint: nextQueued.screenHint,
+        consumeDeferredFollowupRowId: nextQueued.rowId,
+      }, phase => {
+        if (phase === "before" && !isDeepStrictEqual(channel.peekQueuedFollowupItem(chatJid), nextQueued))
+          throw (headChanged ??= Error("Queued materialization head changed."));
+      });
+    } catch (error) {
+      if (headChanged && error === headChanged) continue;
+      let expired: boolean;
+      try { expired = expire ? await expire(chatJid, nextQueued) : false; }
+      catch { throw error; } // A secondary expiry failure cannot replace the admission failure.
+      if (expired) { consumedAny = true; broadcastConsumedFollowup(channel, chatJid, nextQueued); continue; }
+      throw error;
+    }
 
     if (!queuedInteraction) {
       // A lifecycle change between expiry preparation and the row transaction
@@ -432,6 +431,7 @@ export async function materializeDeferredFollowups(
         }
         if (!isDeepStrictEqual(channel.peekQueuedFollowupItem(chatJid), nextQueued)) continue;
       }
+      if (!isDeepStrictEqual(channel.peekQueuedFollowupItem(chatJid), nextQueued)) continue;
       // Accepted engine input cannot be discarded by the legacy retry budget.
       // Retain the existing queue/recovery surface until its binding can commit.
       if (retries >= maxMaterializeRetries && !nextQueued.source_accepted) {

@@ -83,7 +83,7 @@ try {
 
   let publications = 0;
   setMessagesPostFn(()=>{throw Error('Legacy post must not enter native transaction');},async(chat,content,isBot,mediaIds,blocks,authorise,signal)=>{
-    const interaction = await web.admitMessage(chat,content,isBot,mediaIds,blocks,authorise,signal);
+    const interaction = await web.admitMessage(chat,content,isBot,mediaIds,{contentBlocks:blocks},authorise,signal);
     assert.equal(db.inTransaction,false); if(interaction)publications++; return interaction?.id??null;
   });
   try {

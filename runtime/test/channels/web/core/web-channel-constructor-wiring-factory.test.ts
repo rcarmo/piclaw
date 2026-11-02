@@ -112,7 +112,7 @@ describe("web channel constructor wiring factory", () => {
       processChat: async (chatJid, agentId, threadRootId) => {
         processCalls.push({ chatJid, agentId, threadRootId });
       },
-      storeMessage: (chatJid, content, isBot, mediaIds, options) => {
+      admitMessage: async (chatJid, content, isBot, mediaIds, options) => {
         storeCalls.push({ chatJid, content, isBot, mediaIds, options });
         return null;
       },
@@ -321,7 +321,7 @@ describe("web channel constructor wiring factory", () => {
     expect(messageWriteDeps).not.toBeNull();
     const interaction = { id: 1 } as unknown as InteractionRow;
     messageWriteDeps?.broadcastAgentResponse(interaction);
-    messageWriteDeps?.storeMessage("web:test", "hello", false, [1, 2], { threadId: 7 });
+    await messageWriteDeps?.admitMessage("web:test", "hello", false, [1, 2], { threadId: 7 });
 
     expect(broadcastCalls).toEqual(["agent-response"]);
     expect(storeCalls).toEqual([

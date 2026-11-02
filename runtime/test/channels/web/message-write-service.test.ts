@@ -6,7 +6,7 @@ import {
 
 function createDeps(overrides: Partial<WebMessageWriteServiceDeps> = {}): WebMessageWriteServiceDeps {
   return {
-    storeMessage: () => null,
+    admitMessage: async () => null,
     broadcastAgentResponse: () => {},
     ...overrides,
   };
@@ -17,7 +17,7 @@ describe("web message write service", () => {
     const events: string[] = [];
     const interaction = { id: 42, timestamp: "t", data: { type: "agent_response", thread_id: null as number | null } };
     const service = new WebMessageWriteService(createDeps({
-      storeMessage: (chat, text, bot, media, options) => {
+      admitMessage: async (chat, text, bot, media, options) => {
         expect([chat, text, bot, media, options]).toEqual(["web:test", "hello", true, [], { threadToSelf: true }]);
         events.push("store"); return interaction;
       },
@@ -32,7 +32,7 @@ describe("web message write service", () => {
     test(`live send options remain compatible: ${JSON.stringify(options)}`, async () => {
       let writes = 0, broadcasts = 0;
       const service = new WebMessageWriteService(createDeps({
-        storeMessage: (_chat, _text, _bot, media, actual) => {
+        admitMessage: async (_chat, _text, _bot, media, actual) => {
           writes++; expect(media).toEqual([]); expect(actual).toEqual(expected);
           return { id: 42, timestamp: "t", data: {} };
         },
@@ -48,7 +48,7 @@ describe("web message write service", () => {
       contentBlocks: [null, "bad", { type: "text", text: "reply" }, { type: "file" }] as any };
     const before = structuredClone(options);
     const service = new WebMessageWriteService(createDeps({
-      storeMessage: (_chat, _text, _bot, media, actual) => {
+      admitMessage: async (_chat, _text, _bot, media, actual) => {
         expect(media).toEqual([2, 3]);
         expect(actual).toEqual({ threadId: 7, contentBlocks: options.contentBlocks.slice(2) });
         return { id: 42, timestamp: "t", data: {} };
@@ -63,7 +63,7 @@ describe("web message write service", () => {
       let writes = 0, broadcasts = 0;
       const fault = Error(failure);
       const service = new WebMessageWriteService(createDeps({
-        storeMessage: () => { writes++; if (failure === "store") throw fault; return { id: 42, timestamp: "t", data: {} }; },
+        admitMessage: async () => { writes++; if (failure === "store") throw fault; return { id: 42, timestamp: "t", data: {} }; },
         broadcastAgentResponse: () => { broadcasts++; throw fault; },
       }));
       await expect(service.sendMessage("web:test", "reply", { requirePersistence: true })).rejects.toBe(fault);
@@ -74,7 +74,7 @@ describe("web message write service", () => {
   test("postDashboardWidget delegates through the sendMessage write path", async () => {
     const writes: Array<{ chatJid: string; text: string; blocks: unknown[] | undefined }> = [];
     const service = new WebMessageWriteService(createDeps({
-      storeMessage: (chatJid, text, _isBot, _mediaIds, options) => {
+      admitMessage: async (chatJid, text, _isBot, _mediaIds, options) => {
         writes.push({
           chatJid,
           text,
