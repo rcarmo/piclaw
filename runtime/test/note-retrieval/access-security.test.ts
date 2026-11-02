@@ -1,4 +1,5 @@
-import {test,expect} from 'bun:test';
+import {test,expect,spyOn} from 'bun:test';
+import * as configContext from '../../src/core/config-context.js';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {withTempWorkspaceEnv} from '../helpers.js';
@@ -21,5 +22,16 @@ test('forked writer validation rereads root filesystem identity after await and 
   const script=`const fs=await import('node:fs');const {initDatabase}=await import('./src/db/connection.ts');const {admitNoteIndexStore}=await import('./src/note-retrieval/access.ts');initDatabase();const {validate}=admitNoteIndexStore();validate();await Bun.sleep(0);const root=process.env.PICLAW_DATA;fs.renameSync(root,root+'-old');fs.mkdirSync(root);let denied=false,latched=false;try{validate()}catch{denied=true}fs.rmdirSync(root);fs.renameSync(root+'-old',root);try{validate()}catch{latched=true}if(!denied||!latched)throw Error('root replacement did not revoke');`;
   const child=Bun.spawn([process.execPath,'-e',script],{cwd:join(import.meta.dir,'../..'),env:{...process.env,PICLAW_WORKSPACE:workspace,PICLAW_STORE:store,PICLAW_DATA:data,PICLAW_DB_IN_MEMORY:'0'},stdout:'ignore',stderr:'pipe'});
   const [errors,code]=await Promise.all([new Response(child.stderr).text(),child.exited]);expect(code,errors).toBe(0);
+ });
+});
+
+test("metadata resolves one coherent fresh root snapshot per validation",async()=>{
+ await withTempWorkspaceEnv("note-access-snapshot-",{},async()=>{
+  const snapshot=spyOn(configContext,"getRuntimeConfigPaths");
+  try {
+   const validate=admitNoteIndexMetadata();
+   snapshot.mockClear();validate();expect(snapshot).toHaveBeenCalledTimes(1);
+   snapshot.mockClear();validate();expect(snapshot).toHaveBeenCalledTimes(1);
+  } finally { snapshot.mockRestore(); }
  });
 });

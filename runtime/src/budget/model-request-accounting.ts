@@ -101,18 +101,31 @@ function retainedUsageFacts(value: unknown): UsageFacts {
 /** Read-only, ancestry-scoped effect barrier. A known paid terminal whose local
  * charge/status transition is incomplete cannot authorise the next effect.
  * Intentional unknown valuation remains held, not charged or relabelled as free.
+ * Pre-retention holds retain their financial effect but cannot prove a contract that did not exist.
+ * Their immutable migration provenance exempts only absence of new-format evidence.
  * Only exact invocation recovery may exclude its own already-bound request. */
-export function assertModelAccountingReady(workId: string, database: Database = getDb(), excludeRequestId?: string, terminal = false): void {
+export function assertModelAccountingReady(workId: string, database: Database = getDb(), excludeRequestId?: string, terminal = false,
+  executionEnded?: (request: Readonly<BudgetRequestReservation>) => boolean): void {
+  // Keep the work scope outermost so each ID probes the reservation-work index
+  // instead of scanning every retained receipt for each readiness check.
   const pending = database.query(`WITH RECURSIVE scope(id) AS (
     SELECT id FROM budget_work WHERE id=? UNION SELECT w.id FROM budget_work w JOIN scope s ON w.parent_work_id=s.id
-  ) SELECT r.* FROM budget_request_reservations r JOIN scope s ON s.id=r.work_id JOIN budget_work w ON w.id=r.work_id
-    WHERE r.state<>'released' AND (? OR r.terminal_receipt_json IS NOT NULL OR r.state='unresolved')
+  ) SELECT r.* FROM scope s CROSS JOIN budget_request_reservations r ON r.work_id=s.id JOIN budget_work w ON w.id=r.work_id
+    WHERE r.state<>'released'
+    AND (r.terminal_evidence_version<>0 OR r.model_invocation_json IS NOT NULL OR r.model_invocation_key_sha256 IS NOT NULL
+      OR r.terminal_receipt_json IS NOT NULL OR r.terminal_receipt_sha256 IS NOT NULL OR r.terminal_received_at IS NOT NULL)
+    AND (? OR r.terminal_receipt_json IS NOT NULL OR r.state='unresolved')
     AND (r.state<>'settled' OR w.status IN ('active','paused'))
     AND (? IS NULL OR r.id<>?)`).all(workId, terminal ? 1 : 0, excludeRequestId ?? null, excludeRequestId ?? null) as BudgetRequestReservation[];
   for (const row of pending) {
-    // Unresolved receipt-less sends include hard retention failures. They are
-    // not readiness. Terminal publication additionally waits for in-flight holds.
-    if (row.terminal_receipt_json === null) throw new BudgetRequestError('budget_denied');
+    // Financial certainty and execution completion are different facts. Only
+    // a trusted execution owner may prove a receipt-less task failed/aborted.
+    // This neither settles its expense nor releases its reservation; subsequent
+    // request admission still evaluates that entire hold against applicable caps.
+    if (row.terminal_receipt_json === null) {
+      if (executionEnded?.(row) === true) continue;
+      throw new BudgetRequestError('budget_denied');
+    }
     const binding: BudgetRequestBinding = { id: row.id, workId: row.work_id, chatJid: row.chat_jid, providerId: row.provider_id,
       modelId: row.model_id, accountRef: row.account_ref, amountMicros: row.amount_microusd,
       ...(row.model_invocation_json === null ? {} : { modelInvocation: JSON.parse(row.model_invocation_json) }) };

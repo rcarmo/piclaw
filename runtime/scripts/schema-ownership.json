@@ -2363,7 +2363,8 @@
     "table:budget_request_reservations": {
       "owner": "core:budget_request_reservations",
       "fingerprints": [
-        "0f4122e34d1c9b32875480272a960d9888e4d59afde348ec22bfd4c3e8cceb3d"
+        "0f4122e34d1c9b32875480272a960d9888e4d59afde348ec22bfd4c3e8cceb3d",
+        "620510c4f43e61dcb383c648eb7ca98b966cfe3b45fadcff8b19902483daf4eb"
       ],
       "requiredIn": [
         "core",
@@ -4803,7 +4804,8 @@
     "trigger:budget_request_invocation_no_replace": {
       "owner": "core:budget_request_reservations",
       "fingerprints": [
-        "20ba08ab93da55e7f02ddab62345f94d37614a9c9abfd6d0e078d5210abd3ee3"
+        "20ba08ab93da55e7f02ddab62345f94d37614a9c9abfd6d0e078d5210abd3ee3",
+        "0a0ce3e65d9c97e8a80f390adce04e4b515e4f18606c3aab28a833e72f3366dd"
       ],
       "requiredIn": [
         "core",
@@ -4876,6 +4878,30 @@
       "owner": "core:budget_request_reservations",
       "fingerprints": [
         "950ba7377a98d9fb303c0a2d5c02b21c2c2b0d9e47597da1cf59b98088d09310"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "budget_request_reservations"
+    },
+    "trigger:budget_request_evidence_version_insert": {
+      "owner": "core:budget_request_reservations",
+      "fingerprints": [
+        "7a5589ffc0e4aeef81dad415e6e0fa8dcd0eebef84593b91bddb89e99b094ffd"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "budget_request_reservations"
+    },
+    "trigger:budget_request_evidence_version_update": {
+      "owner": "core:budget_request_reservations",
+      "fingerprints": [
+        "f1b7a57d084cee4204745b18f8094fd9ed886fd559c1d4132fdace91089d33d7"
       ],
       "requiredIn": [
         "core",

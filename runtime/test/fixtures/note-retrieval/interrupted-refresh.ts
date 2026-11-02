@@ -32,10 +32,10 @@ export async function interruptRefreshes(binding: NoteBinding, cwd: string): Pro
   for(let round=0;round<3;round++){
     const ready=join(binding.data,`release-crash-ready-${round}`);
     assertPathWithinTestFilesystemIsolation(ready);
-    // Pause before the 17th open: 16 completed opens have allowed eight
-    // source read/reread pairs to stage, without completing publication.
+    // Pause before the 33rd open: 32 completed opens have allowed sixteen
+    // source read/reread pairs to commit one bounded staging batch, not publication.
     const script=`const fs=await import('node:fs/promises');const sync=await import('node:fs');let opened=0;const open=fs.default.open;
-      fs.default.open=async(...args)=>{if(++opened===17){setInterval(()=>{},1000);sync.writeFileSync(${JSON.stringify(ready)},'ready');await new Promise(()=>{});}return open(...args);};
+      fs.default.open=async(...args)=>{if(++opened===33){setInterval(()=>{},1000);sync.writeFileSync(${JSON.stringify(ready)},'ready');await new Promise(()=>{});}return open(...args);};
       const {runNoteIndexPhase}=await import('./src/note-retrieval/coordinator.ts');await runNoteIndexPhase();`;
     const child=spawn(process.execPath,['-e',script],{cwd,env:process.env,stdio:['ignore','ignore','pipe','pipe']});
     const exited=once(child,'exit');let errors='';child.stderr!.on('data',b=>errors+=b);

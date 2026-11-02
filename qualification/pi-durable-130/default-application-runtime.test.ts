@@ -1351,8 +1351,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(row.terminal_receipt_sha256).toBe(saved.request.terminal_receipt_sha256);
       expect(row.terminal_received_at).toBe(saved.request.terminal_received_at);
       if (factoryReceiptWindow !== 'before-receipt') assertFactoryReceiptFinance(root,saved.request);
-      assertFactoryReceiptInventory(root,saved,factoryReceiptWindow === 'before-receipt' || factoryReceiptRevocation ? 'failed' : 'completed',
-        factoryReceiptWindow === 'before-receipt' ? 'claimed' : 'consumed');
+      assertFactoryReceiptInventory(root,saved,factoryReceiptWindow === 'before-receipt' || factoryReceiptRevocation ? 'failed' : 'completed','consumed');
       if (factoryReceiptRevocation === 'source') {
         expect(result).toBe('settled');
         expect(root.query('SELECT phase,terminal_disposition,terminal_error_code FROM service_effect_s01_operations WHERE operation_id=?')
@@ -1365,10 +1364,21 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
         expect(root.query('SELECT count(*) n FROM budget_usage_events').get()).toEqual({n:1});
         expect(root.query('SELECT * FROM piclaw_durable_bindings_v1 ORDER BY rowid').all()).toEqual(saved.facts.piclaw_durable_bindings_v1);
       } else if (factoryReceiptWindow === 'before-receipt') {
-        expect(result).toBe('pending'); expect(row).toEqual(saved.request);
+        // SIGKILL lost the provider outcome. Publish the exact SDK failure,
+        // keeping the dispatched expense and its financial work unchanged.
+        expect(result).toBe('settled'); expect(row).toEqual(saved.request);
+        expect(root.query('SELECT * FROM budget_work ORDER BY rowid').all()).toEqual(saved.facts.budget_work);
         expect(root.query('SELECT * FROM budget_usage_events').all()).toEqual([]);
         expect(root.query('SELECT * FROM token_usage').all()).toEqual([]);
-        expect(root.query('SELECT content FROM messages WHERE is_bot_message=1').all()).toEqual([]);
+        const operationId = JSON.parse(row.model_invocation_json!).operationId;
+        expect(root.query('SELECT phase,terminal_disposition,terminal_error_code FROM service_effect_s01_operations WHERE operation_id=?')
+          .get(operationId)).toEqual({phase:'terminal',terminal_disposition:'failed',terminal_error_code:'model_error'});
+        expect(root.query('SELECT disposition FROM service_effect_s02_commits WHERE operation_id=?').all(operationId)).toEqual([{disposition:'failed'}]);
+        const notices = root.query('SELECT content FROM messages WHERE is_bot_message=1').all() as {content:string}[];
+        expect(notices).toHaveLength(1);
+        expect(notices[0]!.content).toStartWith('**Turn failed**');
+        expect(notices[0]!.content).toContain('will not be retried automatically');
+        expect(notices[0]!.content).not.toContain('factory synthetic reply');
       } else {
         expect(result).toBe('settled'); expect(row.state).toBe('settled');
         expect(root.query('SELECT count(*) n FROM budget_usage_events').get()).toEqual({n:1});
@@ -1384,15 +1394,13 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       }
       const settledFacts = factoryReceiptFacts(root);
       const duplicate = await bound.dispatchAcceptedInput!('web:default',saved.source.id,saved.source.rowid)!();
-      expect(duplicate).toBe(factoryReceiptWindow === 'before-receipt' ? 'pending' : 'settled');
+      expect(duplicate).toBe('settled');
       expect(calls).toBe(0); expect(factoryReceiptFacts(root)).toEqual(settledFacts);
-      if (factoryReceiptWindow !== 'before-receipt') {
-        backend.stop(); await backend.close(); backend = await createDefaultApplicationRuntime(owner,async () => services);
-        const reopened = backend.bind({queue:base.queue,agentPool:pool});
-        const afterReopen = await reopened.dispatchAcceptedInput!('web:default',saved.source.id,saved.source.rowid)!();
-        expect(afterReopen).toBe('settled');
-        expect(calls).toBe(0); expect(factoryReceiptFacts(root)).toEqual(settledFacts);
-      }
+      backend.stop(); await backend.close(); backend = await createDefaultApplicationRuntime(owner,async () => services);
+      const reopened = backend.bind({queue:base.queue,agentPool:pool});
+      const afterReopen = await reopened.dispatchAcceptedInput!('web:default',saved.source.id,saved.source.rowid)!();
+      expect(afterReopen).toBe('settled');
+      expect(calls).toBe(0); expect(factoryReceiptFacts(root)).toEqual(settledFacts);
     } finally {
       backend.stop(); await backend.close(); await channel.stop(); await base.queue.shutdown(); await pool.shutdown();
       for (const spy of [...captureSpies,...sdkSpies]) spy.mockRestore(); closeDatabase(); owner.release();
