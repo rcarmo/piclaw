@@ -1,6 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import type { InteractionRow } from "../../../src/db.js";
+import { initDatabase, closeDatabase, getDb, type InteractionRow } from "../../../src/db.js";
+
+beforeEach(() => initDatabase());
+afterEach(() => closeDatabase());
 import { handlePost } from "../../../src/channels/web/handlers/posts.js";
 
 function makeInteraction(id: number, threadId?: number | null): InteractionRow {
@@ -27,7 +30,11 @@ describe("web post handler", () => {
         status,
         headers: { "Content-Type": "application/json" },
       }),
-      storeMessage: () => makeInteraction(41, 41),
+      admitUserMessage: async (_chat: string, _text: string, _media: number[], _options: unknown, check: (phase: 'before' | 'after') => void) => {
+        return getDb().transaction(() => {
+          check('before'); const interaction = makeInteraction(41, 41); check('after'); return interaction;
+        }).immediate();
+      },
       broadcastEvent: () => {},
       resumeChat: (chatJid: string, threadRootId?: number | null) => {
         resumed.push({ chatJid, threadRootId });
@@ -54,9 +61,11 @@ describe("web post handler", () => {
         status,
         headers: { "Content-Type": "application/json" },
       }),
-      storeMessage: (_chatJid: string, _content: string, _isBot: boolean, _mediaIds: number[], options?: { threadId?: number }) => {
-        storeCalls.push({ threadId: options?.threadId });
-        return makeInteraction(52, options?.threadId ?? null);
+      admitUserMessage: async (_chatJid: string, _content: string, _mediaIds: number[], options: { threadId?: number }, check: (phase: 'before' | 'after') => void) => {
+        return getDb().transaction(() => {
+          check('before'); storeCalls.push({ threadId: options.threadId });
+          const interaction = makeInteraction(52, options.threadId ?? null); check('after'); return interaction;
+        }).immediate();
       },
       broadcastEvent: () => {},
       resumeChat: (chatJid: string, threadRootId?: number | null) => {

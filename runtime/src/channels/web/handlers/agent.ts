@@ -28,12 +28,11 @@ import { publicContextUsage } from "../context-usage.js";
 import {
   normalizeAgentMessagePayload,
   parseAgentMessageRequest,
-  storeAgentUserMessage,
 } from "../messaging/agent-message-service.js";
 import { handleUiThemeCommand } from "../theming/ui-theme-commands.js";
 import { handleUiMetersCommand } from "../ui-meters-commands.js";
 import { getServerUiMetersConfig, admitServerUiMetersConfig, admitServerUiThemeConfig } from "../ui-state.js";
-import { getChatCursor, getMessageRowIdById, getDb, setChatCursor } from "../../../db.js";
+import { getChatCursor, getMessageRowIdById, getDb, setChatCursor, type InteractionRow } from "../../../db.js";
 import { formatOutbound } from "../../../router.js";
 import { isSqliteContention } from '../../../db/sqlite-async-admission.js';
 import { bindInputRequestAuthority, readInputRequestAuthority, releaseInputRequestAuthority, captureInputTarget, type ValidateInputAuthority } from '../messaging/input-request-authority.js';
@@ -199,11 +198,7 @@ function captureInputAuthority(channel: WebChannelLike, req: Request): () => voi
  * @param defaultAgentId Fallback agent id when the route does not include one explicitly.
  * @returns A JSON response describing created messages, queueing, or routing failures.
  */
-export function handleAgentMessage(channel: WebChannelLike, req: Request, pathname: string, chatJid: string, defaultAgentId: string): Promise<Response> {
-  return handleAgentMessageInScope(channel, req, pathname, chatJid, defaultAgentId);
-}
-
-async function handleAgentMessageInScope(
+export async function handleAgentMessage(
   channel: WebChannelLike,
   req: Request,
   pathname: string,
@@ -384,13 +379,11 @@ async function handleAgentMessageInScope(
       // to the same commit, before publication can cancel/revoke the request.
       acceptSource: ({ message }: { message: { timestamp: string } }) => setChatCursor(chatJid, message.timestamp),
     };
-    let sourceInteraction: ReturnType<typeof storeAgentUserMessage>;
+    let sourceInteraction: InteractionRow | null;
     try {
       // Mentions commit the source before forwarding, but creation and its
       // authority proof still belong to that source's own admission TX.
-      sourceInteraction = channel.admitUserMessage
-        ? await channel.admitUserMessage(chatJid, sourceContent, normalized.mediaIds, sourceOptions, revalidateInputAuthority, req.signal)
-        : storeAgentUserMessage(channel, chatJid, { content: sourceContent, mediaIds: normalized.mediaIds, ...sourceOptions });
+      sourceInteraction = await admitUserInput(chatJid, sourceContent, normalized.mediaIds, sourceOptions, revalidateInputAuthority, req.signal);
     } catch (error) {
       if (req.signal.aborted) return channel.json({ error: 'Input submission was cancelled before acceptance.' }, 400);
       if (isSqliteContention(error)) return channel.json({ error: 'Message storage is busy; this input was not accepted.' }, 503);
@@ -398,8 +391,6 @@ async function handleAgentMessageInScope(
     }
     if (!sourceInteraction) return channel.json({ error: "Failed to store message" }, 500);
 
-    // Synchronous legacy-only channels retain their old storage contract.
-    if (!channel.admitUserMessage) setChatCursor(chatJid, sourceInteraction.timestamp);
     channel.broadcastEvent("new_post", sourceInteraction);
 
     const sourceAgentName = typeof (channel.agentPool as { getAgentHandleForChat?: (chatJid: string) => string }).getAgentHandleForChat === "function"
@@ -740,43 +731,35 @@ async function handleAgentMessageInScope(
   let deferredRowId = 0;
   let deferredAt = '';
   const deferredSource = requestMode === 'steer' ? 'web.steer_startup_fallback' : 'web.compose';
-  let interaction: ReturnType<typeof storeAgentUserMessage>;
-  // Ordinary input admitted while idle can become a follow-up while waiting
-  // for storage. Decide against fresh in-memory state inside the same commit.
-  if (admitUserInput && ordinaryInput) {
-    try {
-      interaction = await admitUserInput(chatJid, content, normalized.mediaIds, {
-        contentBlocks: normalized.contentBlocks, linkPreviews: normalized.linkPreviews,
-        threadId: normalized.threadId, screenHint: normalized.screenHint, acceptSource,
-      }, revalidateQueuedAdmission, req.signal, () => {
-        const busy = isChatActive();
-        queuedDuringAdmission = busy || channel.getQueuedFollowupCount(chatJid) > 0;
-        if (!queuedDuringAdmission) return false;
-        deferredAt = new Date().toISOString();
-        deferredRowId = channel.enqueueQueuedFollowupItem(chatJid, 0, content,
-          normalized.threadId ?? null, deferredAt, {
-            source: deferredSource, mediaIds: normalized.mediaIds, contentBlocks: normalized.contentBlocks,
-            linkPreviews: normalized.linkPreviews, screenHint: normalized.screenHint,
-            queuedBy: { ...(browserObservability.userId ? { userId: browserObservability.userId } : {}),
-              ...(browserObservability.sessionId ? { sessionId: browserObservability.sessionId } : {}),
-              ...(browserObservability.clientId ? { clientId: browserObservability.clientId } : {}) },
-          });
-        if (acceptQueuedSource)
-          acceptQueuedInputSource(chatJid, deferredRowId, getDb(), acceptQueuedSource);
-        return true;
-      });
-    } catch (error) {
-      if (isSqliteContention(error)) return channel.json({ error: 'Message storage is busy; this input was not accepted.' }, 503);
-      if (req.signal.aborted) return channel.json({ error: 'Input submission was cancelled before acceptance.' }, 400);
-      return channel.json({ error: 'Input admission could not be confirmed.' }, 503);
-    }
-  } else {
-    // Legacy synchronous storage still needs the host fence after async parsing/attachments.
-    revalidateInputAuthority();
-    interaction = storeAgentUserMessage(channel, chatJid, {
-      content, mediaIds: normalized.mediaIds, contentBlocks: normalized.contentBlocks,
-      linkPreviews: normalized.linkPreviews, threadId: normalized.threadId, screenHint: normalized.screenHint,
-    });
+  let interaction: InteractionRow | null;
+  // Only ordinary input creates SDK sources or defers into the input queue.
+  // Control rows share SQL admission without becoming model input.
+  try {
+    interaction = await admitUserInput(chatJid, content, normalized.mediaIds, {
+      contentBlocks: normalized.contentBlocks, linkPreviews: normalized.linkPreviews,
+      threadId: normalized.threadId ?? undefined, screenHint: normalized.screenHint,
+      acceptSource: ordinaryInput ? acceptSource : undefined,
+    }, revalidateQueuedAdmission, req.signal, ordinaryInput ? () => {
+      const busy = isChatActive();
+      queuedDuringAdmission = busy || channel.getQueuedFollowupCount(chatJid) > 0;
+      if (!queuedDuringAdmission) return false;
+      deferredAt = new Date().toISOString();
+      deferredRowId = channel.enqueueQueuedFollowupItem(chatJid, 0, content,
+        normalized.threadId ?? null, deferredAt, {
+          source: deferredSource, mediaIds: normalized.mediaIds, contentBlocks: normalized.contentBlocks,
+          linkPreviews: normalized.linkPreviews, screenHint: normalized.screenHint,
+          queuedBy: { ...(browserObservability.userId ? { userId: browserObservability.userId } : {}),
+            ...(browserObservability.sessionId ? { sessionId: browserObservability.sessionId } : {}),
+            ...(browserObservability.clientId ? { clientId: browserObservability.clientId } : {}) },
+        });
+      if (acceptQueuedSource)
+        acceptQueuedInputSource(chatJid, deferredRowId, getDb(), acceptQueuedSource);
+      return true;
+    } : undefined);
+  } catch (error) {
+    if (isSqliteContention(error)) return channel.json({ error: 'Message storage is busy; this input was not accepted.' }, 503);
+    if (req.signal.aborted) return channel.json({ error: 'Input submission was cancelled before acceptance.' }, 400);
+    return channel.json({ error: 'Input admission could not be confirmed.' }, 503);
   }
 
   if (queuedDuringAdmission) {
