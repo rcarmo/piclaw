@@ -57,7 +57,7 @@ async function fixture(run: (f: Awaited<ReturnType<typeof setup>>) => Promise<vo
 async function setup(busy = false, sharedRoot = false) {
   const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "runtime-"));
   process.env.PICLAW_DB_IN_MEMORY = "1";
-  initDatabase(); getDb().query("VACUUM INTO ?").run(join(dir, "host.sqlite")); closeDatabase();
+  initDatabase(); getDb().query("VACUUM INTO ?").run(join(dir, "host.sqlite")); await closeDatabase();
   const db = new Database(join(dir, "host.sqlite"), { strict: true });
   configureHostWalFixtureDatabase(db);
   if (sharedRoot) configureSqliteRole(db, join(dir, 'host.sqlite'), { role: 'root' });

@@ -15,7 +15,7 @@ import { reserveBudgetRequest, dispatchBudgetRequest, recordBudgetTerminalReceip
 
 async function fixture(financial = false) {
   let root: Database;
-  if (financial) { initDatabase(); root = Database.deserialize(getDb().serialize()); closeDatabase(); }
+  if (financial) { initDatabase(); root = Database.deserialize(getDb().serialize()); await closeDatabase(); }
   else root = new Database(":memory:");
   installTerminalSettlementCompositionSchema(root);
   const work = value(createCurrentPiclawServiceWorkStore(root, { hitFault: () => false, recordTrace() {} }));

@@ -27,7 +27,7 @@ async function checkSharedFiles(dir: string, hostPath: string) {
 
 async function crashChild(dir: string, boundary: string, sharedDatabase = false) {
   if (sharedDatabase) {
-    closeDatabase(); // The parent must not initialize host/SDK before replacement ownership.
+    await closeDatabase(); // The parent must not initialize host/SDK before replacement ownership.
     expect(() => getDb()).toThrow("Database not initialized");
   }
   const env: Record<string,string> = {};
@@ -74,7 +74,7 @@ for (const { mode, sharedDatabase } of [
     if (!checkpoint) {
       expect(() => TestOwner.acquire(f.path)).toThrow("owner busy");
       await f.runtime!.close(); // Public close aborts cooperative active generation; pending input remains durable.
-      closeDatabase(); f.owner.releaseAfterClose(); f.owner.closeConnection();
+      await closeDatabase(); f.owner.releaseAfterClose(); f.owner.closeConnection();
       f.owner = TestOwner.acquire(f.path);
       expect(f.owner.token.generation).toBe(f.generation + 1);
       initDatabase(); f.db = getDb(); f.ports = f.stores(); f.permit = false;
