@@ -277,7 +277,7 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
     if(plan.rows.length===0)return Result.ok(Object.freeze({removed:0,runIds:Object.freeze([])})); // No effect and no receipt growth for held/empty pages.
     const requestHash=canonicalRequestHash(plan),key=`retention-v1:${requestHash}`;
     this.trace("cleanupTerminal",key,null,null,"call",null);
-    return this.mutate("cleanupTerminal",key,null,null,()=>this.database.transaction(()=>{
+    return this.mutate("cleanupTerminal",key,null,null,()=>{
       assertProcessAdmission();this.assertRetentionSchema();
       const replay=this.replay(key,requestHash,"cleanupTerminal",null);
       if(replay!==undefined){const result=decodeCleanupResult(replay);if(!result)throw new CorruptState();return Result.ok(result);}
@@ -290,7 +290,7 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
       this.writeDecision(key,"cleanupTerminal",requestHash,null,result,plan.settledBefore);
       const saved=this.replay(key,requestHash,"cleanupTerminal",null);if(saved===undefined||canonicalRequestHash(saved)!==canonicalRequestHash(result))throw new CorruptState();
       return Result.ok(result);
-    }).immediate());
+    });
   }
 
   private assertRetentionSchema(){
@@ -338,7 +338,6 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
     const prefixHash = hashScheduledLeaseToken(request.leaseTokenPrefix);
     const key = `claim:${prefixHash}`;
     const requestHash = canonicalRequestHash(request);
-    const transaction = this.database.transaction(() => {
       // Check inside SQLite writer admission, including replay.
       assertProcessAdmission();
       const replay = this.replay(key, requestHash, "claimDue", null);
@@ -417,8 +416,6 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
       }
       this.writeDecision(key, "claimDue", requestHash, null, replayRows, request.now);
       return Result.ok(Object.freeze(leases));
-    });
-    return transaction.immediate();
   }
 
   private restoreClaimReplay(request: ClaimDueRunsRequest, value: unknown): readonly ScheduledRunLease[] {
@@ -444,7 +441,6 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
     const tokenHash = hashScheduledLeaseToken(request.leaseToken);
     const key = `renew:${request.runId}:${request.expectedAttempt}:${tokenHash}:${request.leaseExpiresAt}`;
     const requestHash = canonicalRequestHash(request);
-    return this.database.transaction(() => {
       const replay = this.replay(key, requestHash, "renew", request.runId);
       if (replay !== undefined) {
         const saved = decodeScheduledRunRecord(replay);
@@ -479,12 +475,10 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
       const lease = this.lease(record, this.readSnapshot(run.task_id, run.task_revision), request.leaseToken);
       this.writeDecision(key, "renew", requestHash, request.runId, lease.record, request.now);
       return Result.ok(lease);
-    }).immediate();
   }
 
   private bind(request: BindScheduledSourceRequest): ResultValue<ScheduledRunRecord, ScheduledRunStoreError> {
     const key = `effect:${request.effect.idempotencyKey}`;
-    return this.database.transaction(() => {
       const replay = this.replayRecordOrRetained(key, "bindAcceptedSource", request.effect.requestHash, request.runId);
       if (replay) return Result.ok(replay);
       const run = this.requireFencedRun(request, hashScheduledLeaseToken(request.leaseToken));
@@ -509,12 +503,10 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
       const record = this.readRecord(request.runId)!;
       this.writeDecision(key, "bindAcceptedSource", request.effect.requestHash, request.runId, record, request.boundAt);
       return Result.ok(record);
-    }).immediate();
   }
 
   private completeRun(request: CompleteScheduledRunRequest): ResultValue<ScheduledRunRecord, ScheduledRunStoreError> {
     const key=`effect:${request.effect.idempotencyKey}`;
-    return this.database.transaction(()=>{
       const replay=this.replayRecordOrRetained(key,'complete',request.effect.requestHash,request.runId);
       if(replay){
         projectScheduledTask(this.database,replay.taskId,replay.runId);
@@ -535,11 +527,9 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
         projectScheduledTask(this.database,run.task_id,run.run_id);
       }
       return completed;
-    }).immediate();
   }
 
   private reconcileInterruptedRun(request: ReconcileInterruptedScheduledRunRequest): ResultValue<ScheduledRunRecord, ScheduledRunStoreError> {
-    return this.database.transaction(()=>{
       assertProcessAdmission();
       const replay=this.replayRecordOrRetained(`effect:${request.effect.idempotencyKey}`,'complete',request.effect.requestHash,request.runId);
       if(replay)return Result.ok(replay);
@@ -554,7 +544,6 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
       const durationMs=Date.parse(proof.committedAt)-Date.parse(run.claimed_at);
       if(!Number.isSafeInteger(durationMs)||durationMs<0)throw new CorruptState();
       return this.finishCompletion({effect:request.effect,status:'error',durationMs,resultRef:null,errorCode:'scheduled_run_interrupted',completedAt:request.now,outboxIntents:[]},run,snapshot,true);
-    }).immediate();
   }
 
   /** Immutable host evidence only; never claim, submit or replay the agent source. */
@@ -605,7 +594,6 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
 
   private abandonRun(request: AbandonScheduledRunRequest): ResultValue<ScheduledRunRecord, ScheduledRunStoreError> {
     const key = `effect:${request.effect.idempotencyKey}`;
-    return this.database.transaction(() => {
       const replay = this.replayRecordOrRetained(key, "abandon", request.effect.requestHash, request.runId);
       if (replay) { projectScheduledTask(this.database,replay.taskId,replay.runId); return Result.ok(replay); }
       const run = this.requireFencedRun(request, hashScheduledLeaseToken(request.leaseToken));
@@ -626,13 +614,11 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
       this.writeDecision(key, "abandon", request.effect.requestHash, run.run_id, record, request.abandonedAt);
       projectScheduledTask(this.database,run.task_id,run.run_id);
       return Result.ok(record);
-    }).immediate();
   }
 
   private cleanup(request: CleanupScheduledRunsRequest): ResultValue<CleanupScheduledRunsResult, ScheduledRunStoreError> {
     const key = `cleanupTerminal:${request.settledBefore}:${request.limit}`;
     const requestHash = canonicalRequestHash(request);
-    return this.database.transaction(() => {
       assertProcessAdmission();this.assertRetentionSchema();
       const replay = this.replay(key, requestHash, "cleanupTerminal", null);
       if (replay !== undefined) {
@@ -665,7 +651,6 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
       const result = Object.freeze({ removed: runIds.length, runIds: Object.freeze(runIds) });
       this.writeDecision(key, "cleanupTerminal", requestHash, null, result, request.settledBefore);
       return Result.ok(result);
-    }).immediate();
   }
 
   private retireRun(row:RunRow):void {
