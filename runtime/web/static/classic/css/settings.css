@@ -3246,50 +3246,6 @@
     color: var(--text-secondary);
 }
 
-/* Budget Settings */
-.settings-budget-intro,
-.settings-budget-cap-header,
-.settings-budget-actions {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-}
-.settings-budget-intro h3 { margin-bottom: 4px; }
-.settings-budget-intro p { margin: 0; color: var(--text-secondary); font-size: .86em; }
-.settings-budget-cap-list { display: grid; gap: 12px; margin-bottom: 24px; }
-.settings-budget-cap-card,
-.settings-budget-work-card,
-.settings-budget-form {
-    padding: 14px;
-    border: 1px solid var(--border-color, rgba(128,128,128,.25));
-    border-radius: 10px;
-    background: color-mix(in srgb, var(--bg-secondary) 68%, transparent);
-}
-.settings-budget-cap-card.disabled { opacity: .7; }
-.settings-budget-cap-header > div { display: grid; gap: 3px; }
-.settings-budget-cap-header span { color: var(--text-secondary); font-size: .82em; }
-.settings-budget-cap-card dl { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin: 12px 0; }
-.settings-budget-cap-card dl div { min-width: 0; }
-.settings-budget-cap-card dt { color: var(--text-secondary); font-size: .78em; }
-.settings-budget-cap-card dd { margin: 3px 0 0; overflow-wrap: anywhere; }
-.settings-budget-pill { display: inline-flex; width: fit-content; padding: 2px 8px; border-radius: 999px; font-size: .76em; background: var(--bg-hover); }
-.settings-budget-pill-active,.settings-budget-pill-fresh { color: #15803d; background: rgba(34,197,94,.14); }
-.settings-budget-pill-paused,.settings-budget-pill-warning,.settings-budget-pill-stale { color: #a16207; background: rgba(234,179,8,.14); }
-.settings-budget-pill-unknown { color: #b45309; background: rgba(245,158,11,.14); }
-.settings-budget-pill-cancelled,.settings-budget-pill-error { color: #b91c1c; background: rgba(239,68,68,.14); }
-.settings-budget-form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
-.settings-budget-form-grid label,.settings-budget-allowance label { display: grid; gap: 5px; color: var(--text-secondary); font-size: .84em; }
-.settings-budget-form input,.settings-budget-form select,.settings-budget-allowance input,.settings-budget-allowance select { min-height: 34px; padding: 6px 9px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); }
-.settings-budget-actions { justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
-.settings-budget-actions button,.settings-budget-form button,.settings-budget-allowance button { padding: 7px 12px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-hover); color: var(--text-primary); cursor: pointer; }
-.settings-budget-actions .danger { color: var(--error-color,#dc2626); }
-.settings-budget-allowance { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)) auto; gap: 10px; align-items: end; margin-top: 12px; }
-@media (max-width: 720px) {
-    .settings-budget-intro { align-items: stretch; }
-    .settings-budget-cap-card dl,.settings-budget-form-grid,.settings-budget-allowance { grid-template-columns: 1fr; }
-    .settings-budget-actions button,.settings-budget-intro button { min-height: 44px; }
-}
 .settings-task-budget-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(100px,160px) auto auto; gap:8px; align-items:end; margin:14px 0 0; }
 .settings-task-budget-row label { display:grid; gap:5px; color:var(--text-secondary); font-size:.84em; }
 .settings-task-budget-row input { min-height:34px; padding:6px 9px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-primary); color:var(--text-primary); }

@@ -133,28 +133,6 @@ const mockAddonsPayload = {
   ],
 };
 
-const mockBudgetPayload = {
-  ok: true,
-  message: 'Budget policy and current work loaded.',
-  timezone: 'Europe/Lisbon',
-  enforcement: 'best_effort_boundaries',
-  pricing_notice: 'API-equivalent USD is an estimate, not an invoice or subscription balance.',
-  reservation_notice: 'Budget limits v1 does not reserve spend and never selects a cheaper model automatically.',
-  caps: [
-    { id: 'daily-fixture', scope: 'instance_daily', metric: 'api_usd_micros', amount: 10_000_000, enabled: true, timezone: 'Europe/Lisbon', revision: 2, known_usage: 3_250_000, remaining: 6_750_000, unknown_events: 0, window: { id: 'daily:Europe/Lisbon:2026-09-09', ends_at: '2026-09-10T23:00:00Z' }, evidence: null },
-    { id: 'codex-fixture', scope: 'provider_window', metric: 'provider_percent_used_micros', amount: 80_000_000, enabled: true, provider_id: 'openai-codex', quota_dimension: 'primary.percent_used', revision: 1, known_usage: 62_000_000, remaining: 18_000_000, unknown_events: 0, window: { id: 'codex:5h', ends_at: '2026-09-10T01:00:00Z' }, evidence: { fetched_at: new Date().toISOString(), resets_at: '2026-09-10T01:00:00Z', stale: false, availability: 'available', source: 'fixture', value_micros: 62_000_000 } },
-  ],
-  work: { id: 'fixture-work', chat_jid: 'web:default', execution_kind: 'interactive', status: 'paused', last_boundary: 'model_call', updated_at: new Date().toISOString() },
-  decision: { action: 'pause', blockers: [{ capId: 'daily-fixture', capRevision: 2, windowId: 'daily:Europe/Lisbon:2026-09-09' }] },
-  override: null,
-  allowances: [],
-  provider_capabilities: [
-    { provider_id: 'openai-codex', dimensions: ['primary.percent_used', 'secondary.percent_used', 'credits.remaining'] },
-    { provider_id: 'openrouter', dimensions: ['key.usd.used'] },
-  ],
-  scheduled_task_settings_section: 'scheduled-tasks',
-};
-
 const mockScheduledTasksPayload = {
   ok: true,
   counts: { active: 1, paused: 0, completed: 0 },
@@ -195,8 +173,6 @@ function installMockFetch() {
       if (method === 'POST') return json({ ok: true, ...mockKeychainPayload });
     }
     if (url.pathname === '/agent/settings/general') return json({ ok: true, settings: mockSettingsData });
-    if (url.pathname === '/agent/settings/budget') return json(mockBudgetPayload);
-    if (url.pathname === '/agent/settings/budget/action') return json({ ...mockBudgetPayload, continuation_required: true });
     if (url.pathname === '/agent/scheduled-tasks') return json(mockScheduledTasksPayload);
     if (url.pathname === '/agent/scheduled-tasks/action') return json({ ok: true, action: 'fixture', task: mockScheduledTasksPayload.tasks[0] });
     if (url.pathname === '/agent/settings/widget-token/regenerate') return json({ ok: true, settings: { ...mockSettingsData, widgetToken: `piclaw_widget_fixture_regenerated_${Date.now()}` } });
@@ -243,7 +219,7 @@ function FixtureApp() {
   const [renderKey, setRenderKey] = useState(0);
 
   const sections = useMemo(() => [
-    'general', 'sessions', 'compaction', 'budget', 'keyboard', 'workspace', 'environment', 'providers', 'models', 'theme', 'scheduled-tasks', 'quick-actions', 'keychain', 'tools', 'addons',
+    'general', 'sessions', 'compaction', 'keyboard', 'workspace', 'environment', 'providers', 'models', 'theme', 'scheduled-tasks', 'quick-actions', 'keychain', 'tools', 'addons',
     'fixture-b-cheapskate', 'fixture-z-observability', 'fixture-a-portainer', 'fixture-m-proxmox',
   ], []);
 

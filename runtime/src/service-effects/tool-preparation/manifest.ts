@@ -22,7 +22,6 @@ const source = {
   activation: "runtime/src/extensions/tool-activation.ts",
   attachments: "runtime/src/extensions/file-attachments.ts",
   models: "runtime/src/extensions/model-control.ts",
-  budget: "runtime/src/extensions/budget-limits.ts",
   scheduling: "runtime/src/extensions/scheduled-tasks.ts",
   workspace: "runtime/src/extensions/workspace-search.ts",
   contextPrune: "runtime/src/extensions/context-prune.ts; runtime/src/extensions/context-prune/query-tool.ts",
@@ -215,15 +214,6 @@ export const TOOL_PREPARATION_MANIFEST: readonly ToolPreparationSpec[] = Object.
     serviceEffector: null,
     abortExpectation: "may_finish_late",
     protectedFields: [],
-  }),
-  ...rows(["budget_status"], {
-    currentSource: source.budget,
-    effectClass: "query",
-    replay: "safe",
-    contextFields: ["chatJid"],
-    serviceEffector: null,
-    abortExpectation: "may_finish_late",
-    protectedFields: ["params.work_id", "result.content", "result.details"],
   }),
   ...rows(["introspect_sql"], {
     currentSource: "runtime/src/extensions/sql-introspect.ts",
