@@ -23,6 +23,9 @@ export function isZfsFilesystem(path: string): boolean {
 interface HandlePolicy { refs: number; original: number; }
 interface CheckpointGroup {
   worker?: Worker;
+  shutdown: ReturnType<typeof Promise.withResolvers<void>>;
+  closing: boolean;
+  closed: boolean;
   file: string;
   handles: Map<Database, HandlePolicy>;
   ready: boolean;
@@ -59,18 +62,20 @@ function restore(database: Database, original: number) {
       { operation: "sqlite_checkpoint.restore_unavailable_handle" });
   }
 }
-function terminate(group: CheckpointGroup) {
+function requestClose(group: CheckpointGroup): void {
   clearTimeout(group.startupTimer);
-  try { group.worker?.terminate(); } catch (error) {
-    debugSuppressedError(log, "Could not terminate checkpoint worker.", error, { operation: "sqlite_checkpoint.terminate" });
-  }
+  if (group.closing || group.closed) return;
+  group.closing = true;
+  if (!group.worker) { group.closed = true; group.shutdown.resolve(); return; }
+  try { group.worker.postMessage({ type: "close" }); }
+  catch (error) { group.shutdown.reject(error); }
 }
 function fail(group: CheckpointGroup, error?: unknown) {
   if (group.failed) return;
   group.failed = true;
   group.ready = false;
   for (const [handle, policy] of group.handles) restore(handle, policy.original > 0 ? policy.original : 1000);
-  terminate(group);
+  requestClose(group);
   log.warn("SQLite checkpoint worker failed; restored safe built-in checkpoint policies", {
     operation: "sqlite_checkpoint.fallback", path: group.file, activeConnectionCount: group.handles.size, err: error,
   });
@@ -97,7 +102,7 @@ function observe(group: CheckpointGroup, data: any) {
   }
 }
 
-export function registerSqliteCheckpoint(database: Database, path: string, enabled = isZfsFilesystem(path)): (() => void) | undefined {
+export function registerSqliteCheckpoint(database: Database, path: string, enabled = isZfsFilesystem(path)): (() => void | Promise<void>) | undefined {
   if (!enabled || path === ":memory:") return;
   let identity: ReturnType<typeof mainFile>, original: number;
   try {
@@ -112,9 +117,13 @@ export function registerSqliteCheckpoint(database: Database, path: string, enabl
   const { file, key, dev, ino } = identity;
   let group = groups.get(key);
   if (group && group.file !== file) return;
+  if (group?.closing && !group.closed) throw Error("Checkpoint SQLite connection is closing");
   const fresh = !group;
   if (!group) {
-    group = { file, handles: new Map(), ready: false, failed: false };
+    const shutdown = Promise.withResolvers<void>();
+    // Observe ignored release callers without converting a failed close into success.
+    void shutdown.promise.catch(error => debugSuppressedError(log, "Checkpoint SQLite cleanup remains uncertain", error));
+    group = { file, handles: new Map(), ready: false, failed: false, shutdown, closing: false, closed: false };
     groups.set(key, group);
   }
   const current = group;
@@ -126,7 +135,13 @@ export function registerSqliteCheckpoint(database: Database, path: string, enabl
       const worker = new Worker(new URL("./sqlite-checkpoint-worker.ts", import.meta.url).href, { smol: true, ref: false });
       current.worker = worker;
       worker.addEventListener("message", event => {
-        if (groups.get(key) !== current || current.failed) return;
+        if (event.data?.type === "closed") {
+          current.closed = true; current.ready = false; current.shutdown.resolve();
+          if (!current.handles.size && groups.get(key) === current) groups.delete(key);
+          return;
+        }
+        if (event.data?.type === "close-error") { current.shutdown.reject(Error(event.data.error)); return; }
+        if (groups.get(key) !== current || current.failed || current.closing || current.closed) return;
         if (event.data?.type === "checkpoint") { if (current.ready) observe(current, event.data); return; }
         if (event.data?.type !== "ready" || current.ready) return;
         try {
@@ -147,7 +162,8 @@ export function registerSqliteCheckpoint(database: Database, path: string, enabl
         if (groups.get(key) === current) fail(current, event.message);
       });
       worker.addEventListener("close", () => {
-        if (groups.get(key) === current) fail(current, "Worker closed");
+        if (!current.closed) current.shutdown.reject(Error("Checkpoint worker closed without confirmed SQLite cleanup"));
+        if (groups.get(key) === current && !current.closing) fail(current, "Worker closed");
       });
       current.startupTimer = setTimeout(() => fail(current, "Worker readiness timed out"), 5000);
       current.startupTimer.unref();
@@ -160,9 +176,9 @@ export function registerSqliteCheckpoint(database: Database, path: string, enabl
     const previous = policy?.original ?? original;
     restore(database, previous > 0 ? previous : 1000);
   }
-  let stopped = false;
+  let stopped = false, completion: Promise<void> | undefined;
   return () => {
-    if (stopped) return;
+    if (stopped) return completion;
     stopped = true;
     const policy = current.handles.get(database);
     if (policy && --policy.refs === 0) {
@@ -170,8 +186,10 @@ export function registerSqliteCheckpoint(database: Database, path: string, enabl
       restore(database, policy.original);
     }
     if (!current.handles.size && groups.get(key) === current) {
-      groups.delete(key);
-      terminate(current);
+      requestClose(current);
+      if (current.closed) groups.delete(key);
+      else completion = current.shutdown.promise;
+      return completion;
     }
   };
 }

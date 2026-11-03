@@ -69,7 +69,6 @@ import { createContextPruneExtension } from "./context-prune.js";
 import { mcpTimeoutPatch } from "./mcp-timeout-patch.js";
 import { localLitePromptProfile } from "./local-lite-prompt-profile.js";
 import { createUiPromptWatchdogExtension } from "./ui-prompt-watchdog.js";
-import { createBudgetLimitsExtension } from "./budget-limits.js";
 
 /** Build the built-in extension factory list used for session creation. */
 export function createBuiltinExtensionFactories(options?: {
@@ -110,7 +109,6 @@ export function createBuiltinExtensionFactories(options?: {
     mcpTimeoutPatch,
     localLitePromptProfile,
     createUiPromptWatchdogExtension(options?.chatJid),
-    createBudgetLimitsExtension({ modelRuntime: options?.modelRuntime, chatJid: options?.chatJid }),
   ];
 }
 

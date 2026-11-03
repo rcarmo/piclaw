@@ -571,3 +571,10 @@ test('poll reconciles an expired disposed scheduled source once without dispatch
   expect(database.query('SELECT * FROM service_effect_s01_sources WHERE chat_jid=?').all(chat)).toEqual(sourceBefore);expect(database.query('SELECT * FROM service_effect_s01_operations WHERE operation_id=?').all(operation)).toEqual(operationBefore);expect(database.query('SELECT * FROM service_effect_s07_leases WHERE run_id=?').all(lease.record.runId)).toEqual(leasesBefore);
   expect(database.query('SELECT COUNT(*) n FROM service_effect_s07_run_logs WHERE run_id=?').get(lease.record.runId)).toEqual({n:1});expect(database.query('SELECT COUNT(*) n FROM service_effect_s07_next_decisions WHERE run_id=?').get(lease.record.runId)).toEqual({n:1});
 });
+
+test('scheduler exposes no raw execution entry or parallel direct history/recurrence mode',async()=>{
+  const api=await import('../../src/task-scheduler.js');
+  expect(api).not.toHaveProperty('runScheduledTask');
+  const source=await Bun.file(new URL('../../src/task-scheduler.ts',import.meta.url)).text();
+  for(const name of ['advanceTask','deferHistory','taskRunLogId','logTaskRun(','updateTaskAfterRun('])expect(source).not.toContain(name);
+});

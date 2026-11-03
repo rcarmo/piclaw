@@ -322,9 +322,9 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
       if (this.runtime.hitFault("before_effect", method)) return this.failed(method, effectId, operationId, version, errorOf("storage_unavailable"), sourceSeq);
       const result = await admitSqliteWrite(this.database, action);
       if (!result.ok) return this.failed(method, effectId, operationId, version, result.error, sourceSeq);
-      let lostAcknowledgement = true;
+      let lostAcknowledgement: boolean;
       try { lostAcknowledgement = this.runtime.hitFault("effect_then_lost_acknowledgement", method); }
-      catch { /* The SQL already committed; a hook failure cannot mean not_applied. */ }
+      catch { lostAcknowledgement = true; } // A committed hook failure is unknown, never not_applied.
       if (lostAcknowledgement) return this.failed(method, effectId, operationId, version, errorOf("storage_unavailable", "unknown", true), sourceSeq);
       this.trace(method, effectId, operationId, version, "applied", "applied", sourceSeq);
       return result;

@@ -100,7 +100,7 @@ test("single physical database: accepted primary + attached intent, terminal ide
     const generation = f.owner.token.generation;
     const calls = f.base.host.modelCalls;
     await f.runtime!.close();
-    closeDatabase(); f.owner.releaseAfterClose(); f.owner.closeConnection();
+    await closeDatabase(); f.owner.releaseAfterClose(); f.owner.closeConnection();
     f.owner = TestOwner.acquire(f.hostPath); // Same file, fresh exclusive owner; no live-writer takeover.
     expect(f.owner.token.generation).toBe(generation + 1);
     f.owner.assert(); initDatabase(); f.db = getDb(); f.ports = f.stores();

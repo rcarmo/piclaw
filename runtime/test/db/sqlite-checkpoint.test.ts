@@ -22,11 +22,11 @@ test("checkpoint coordinator retains FULL durability and shares a worker across 
     expect(second.query("PRAGMA synchronous").get()).toEqual({ synchronous: 2 });
     f.db.query("INSERT INTO fixture VALUES (zeroblob(5000000))").run();
     expect(second.query("SELECT length(value) n FROM fixture").get()).toEqual({ n: 5000000 });
-    stop(); f.db.close();
+    await stop(); f.db.close();
     expect(second.query("PRAGMA wal_autocheckpoint").get()).toEqual({ wal_autocheckpoint: 0 });
     await Bun.sleep(1200);
     expect(second.query("SELECT length(value) n FROM fixture").get()).toEqual({ n: 5000000 });
-  } finally { stop(); stopSecond(); second.close(); f.close(); }
+  } finally { await stop(); await stopSecond(); second.close(); f.close(); }
 });
 test("checkpoint worker performs PASSIVE IO off-thread and preserves a live reader", async () => {
   const f = fixture(), identity = statSync(f.path), reader = new Database(f.path);
@@ -58,15 +58,15 @@ test("worker failure restores safe checkpointing despite an already closed peer"
     renameSync(f.path, f.path + ".moved"); moved = true;
     await waitFor(() => (f.db.query("PRAGMA wal_autocheckpoint").get() as any).wal_autocheckpoint === 1000, 3000);
     expect(f.db.query("PRAGMA synchronous").get()).toEqual({ synchronous: 2 });
-  } finally { if (moved) renameSync(f.path + ".moved", f.path); stopSecond(); stop(); second.close(); f.close(); }
+  } finally { if (moved) renameSync(f.path + ".moved", f.path); await stopSecond(); await stop(); second.close(); f.close(); }
 });
-test("non-ZFS policy leaves built-in checkpoint unchanged", () => {
+test("non-ZFS policy leaves built-in checkpoint unchanged", async () => {
   const f = fixture(); try { expect(registerSqliteCheckpoint(f.db, f.path, false)).toBeUndefined();
     expect(f.db.query("PRAGMA wal_autocheckpoint").get()).toEqual({ wal_autocheckpoint: 1000 });
   } finally { f.close(); }
 });
 
-test("non-WAL databases never start a checkpoint reader", () => {
+test("non-WAL databases never start a checkpoint reader", async () => {
   const f = fixture();
   try {
     f.db.exec("PRAGMA journal_mode=DELETE");
@@ -84,7 +84,7 @@ test("unregistering a closed writer is safe and repeatable", async () => {
     f.db.close();
     expect(stop).not.toThrow();
     expect(stop).not.toThrow();
-  } finally { stop(); f.close(); }
+  } finally { await stop(); f.close(); }
 });
 
 
@@ -102,18 +102,18 @@ test("canonical symlink writers share one worker and repeated registrations reta
   try {
     await waitFor(() => (peer.query("PRAGMA wal_autocheckpoint").get() as any).wal_autocheckpoint === 0, 3000);
     const lateRepeat = registerSqliteCheckpoint(f.db, alias, true)!;
-    stop(); stop(); repeat();
+    await stop(); await stop(); await repeat();
     expect(f.db.query("PRAGMA wal_autocheckpoint").get()).toEqual({ wal_autocheckpoint: 0 });
     lateRepeat();
     expect(f.db.query("PRAGMA wal_autocheckpoint").get()).toEqual({ wal_autocheckpoint: 37 });
     expect(peer.query("PRAGMA wal_autocheckpoint").get()).toEqual({ wal_autocheckpoint: 0 });
     expect(records.filter(r => r.operation === "sqlite_checkpoint.ready")).toHaveLength(1);
-    stopPeer();
+    await stopPeer();
     expect(peer.query("PRAGMA wal_autocheckpoint").get()).toEqual({ wal_autocheckpoint: 81 });
-  } finally { stop(); repeat(); stopPeer(); removeLogSink(sink); peer.close(); f.close(); }
+  } finally { await stop(); await repeat(); await stopPeer(); removeLogSink(sink); peer.close(); f.close(); }
 });
 
-test("mismatched paths, hardlink WAL names and non-FULL writers keep their original policy", () => {
+test("mismatched paths, hardlink WAL names and non-FULL writers keep their original policy", async () => {
   const f = fixture(), other = fixture();
   try {
     f.db.exec("PRAGMA wal_autocheckpoint=19");
@@ -147,7 +147,7 @@ test("real pinned-reader checkpoint reports stall and resume without confusing a
     const complete = records.find(r => r.state === "complete" && r.pendingFrames === 0)!;
     expect(complete.walBytes).toBeGreaterThan(4 * 1024 * 1024);
     expect(statSync(f.path + "-wal").size).toBeGreaterThan(4 * 1024 * 1024);
-  } finally { stop(); removeLogSink(sink); reader.close(); f.close(); }
+  } finally { await stop(); removeLogSink(sink); reader.close(); f.close(); }
 });
 
 test("structured checkpoint observations suppress duplicate heartbeats until the reporting bound", async () => {
@@ -158,7 +158,7 @@ test("structured checkpoint observations suppress duplicate heartbeats until the
   try {
     globalThis.Worker = class extends EventTarget {
       constructor() { super(); worker = this; }
-      postMessage() { queueMicrotask(() => this.dispatchEvent(new MessageEvent("message", { data: { type: "ready" } }))); }
+      postMessage(data: any) { queueMicrotask(() => this.dispatchEvent(new MessageEvent("message", { data: { type: data.type === "close" ? "closed" : "ready" } }))); }
       terminate() {}
     } as unknown as typeof Worker;
     Date.now = () => now;
@@ -175,7 +175,7 @@ test("structured checkpoint observations suppress duplicate heartbeats until the
     now++; report(2); expect(records).toHaveLength(3);
     report(1225); expect(records.map(r => r.state)).toEqual(["progress", "stalled", "stalled", "complete"]);
     expect(records.at(-1)).toMatchObject({ pendingFrames: 0, walBytes: 5_047_032, activeConnectionCount: 1 });
-  } finally { stop?.(); removeLogSink(sink); Date.now = realNow; globalThis.Worker = RealWorker; f.close(); }
+  } finally { await stop?.(); removeLogSink(sink); Date.now = realNow; globalThis.Worker = RealWorker; f.close(); }
 });
 
 test("failed groups restore custom policies and never restart for late writers", async () => {
@@ -199,35 +199,37 @@ test("failed groups restore custom policies and never restart for late writers",
     expect(records.filter(r => r.operation === "sqlite_checkpoint.fallback")).toHaveLength(1);
   } finally {
     if (moved) renameSync(f.path + ".moved", f.path);
-    stopLate?.(); late?.close(); stopPeer(); stop(); peer.close(); removeLogSink(sink); f.close();
+    await stopLate?.(); late?.close(); await stopPeer(); await stop(); peer.close(); removeLogSink(sink); f.close();
   }
 });
 
-test("startup and postMessage failures retain custom built-in policies without leaking workers", () => {
+test("failed checkpoint construction restores built-in policy without an allocated SQLite worker", async () => {
   const f = fixture(), RealWorker = globalThis.Worker;
-  let terminated = 0;
   try {
     f.db.exec("PRAGMA wal_autocheckpoint=43");
-    for (const stage of ["construct", "post"]) {
-      globalThis.Worker = class extends EventTarget {
-        constructor() { super(); if (stage === "construct") throw Error("startup failure"); }
-        postMessage() { throw Error("post failure"); }
-        terminate() { terminated++; }
-      } as any;
-      const stop = registerSqliteCheckpoint(f.db, f.path, true)!;
-      expect(f.db.query("PRAGMA wal_autocheckpoint").get()).toEqual({ wal_autocheckpoint: 43 });
-      stop(); stop();
-    }
-    expect(terminated).toBeGreaterThan(0);
+    globalThis.Worker = class { constructor() { throw Error("startup failure"); } } as any;
+    const stop = registerSqliteCheckpoint(f.db, f.path, true)!;
+    expect(f.db.query("PRAGMA wal_autocheckpoint").get()).toEqual({ wal_autocheckpoint: 43 });
+    await stop(); await stop();
   } finally { globalThis.Worker = RealWorker; f.close(); }
 });
 
-test("a ready-time closed peer triggers sticky fallback and a late ready cannot disable writers", () => {
+test("failed checkpoint close delivery retains the uncertain worker and refuses a replacement", async () => {
+  const f = fixture(), RealWorker = globalThis.Worker;
+  try {
+    globalThis.Worker = class extends EventTarget { postMessage() { throw Error("post failure"); } } as any;
+    const stop = registerSqliteCheckpoint(f.db, f.path, true)!;
+    await expect(Promise.resolve(stop())).rejects.toThrow("post failure");
+    expect(() => registerSqliteCheckpoint(f.db, f.path, true)).toThrow("closing");
+  } finally { globalThis.Worker = RealWorker; f.close(); }
+});
+
+test("a ready-time closed peer triggers sticky fallback and a late ready cannot disable writers", async () => {
   const f = fixture(), peer = new Database(f.path), RealWorker = globalThis.Worker;
   let worker: EventTarget;
   globalThis.Worker = class extends EventTarget {
     constructor() { super(); worker = this; }
-    postMessage() {}
+    postMessage(data: any) { if (data.type === "close") this.dispatchEvent(new MessageEvent("message", { data: { type: "closed" } })); }
     terminate() {}
   } as any;
   f.db.exec("PRAGMA wal_autocheckpoint=53");
@@ -238,16 +240,16 @@ test("a ready-time closed peer triggers sticky fallback and a late ready cannot 
     expect(f.db.query("PRAGMA wal_autocheckpoint").get()).toEqual({ wal_autocheckpoint: 53 });
     worker!.dispatchEvent(new MessageEvent("message", { data: { type: "ready" } }));
     expect(f.db.query("PRAGMA wal_autocheckpoint").get()).toEqual({ wal_autocheckpoint: 53 });
-  } finally { stopPeer(); stop(); globalThis.Worker = RealWorker; peer.close(); f.close(); }
+  } finally { await stopPeer(); await stop(); globalThis.Worker = RealWorker; peer.close(); f.close(); }
 });
 
 
-test("frame-counter resets do not fabricate stalls and unavailable counters are not zero pending work", () => {
+test("frame-counter resets do not fabricate stalls and unavailable counters are not zero pending work", async () => {
   const f=fixture(), RealWorker=globalThis.Worker, records:LogRecord[]=[];
   let worker:EventTarget;
   const sink=(record:LogRecord)=>{if(record.path===f.path&&record.operation==='sqlite_checkpoint.progress')records.push(record);};
   addLogSink(sink);
-  globalThis.Worker=class extends EventTarget {constructor(){super();worker=this;}postMessage(){}terminate(){}} as any;
+  globalThis.Worker=class extends EventTarget {constructor(){super();worker=this;}postMessage(data:any){if(data.type==='close')this.dispatchEvent(new MessageEvent('message',{data:{type:'closed'}}))}terminate(){}} as any;
   const stop=registerSqliteCheckpoint(f.db,f.path,true)!;
   try {
     worker!.dispatchEvent(new MessageEvent('message',{data:{type:'ready'}}));
@@ -258,10 +260,10 @@ test("frame-counter resets do not fabricate stalls and unavailable counters are 
     expect(records.map(record=>record.state)).toEqual(['complete','progress','stalled','busy']);
     expect(records.at(-1)!.pendingFrames).toBeNull();
     expect(records.at(-1)!.activeConnectionCount).toBe(1);
-  } finally {stop();globalThis.Worker=RealWorker;removeLogSink(sink);f.close();}
+  } finally {await stop();globalThis.Worker=RealWorker;removeLogSink(sink);f.close();}
 });
 
-test("a failed worker enables safe fallback for an originally disabled built-in checkpoint", () => {
+test("a failed worker enables safe fallback for an originally disabled built-in checkpoint", async () => {
   const f=fixture(),RealWorker=globalThis.Worker;
   globalThis.Worker=class {constructor(){throw Error('fixture startup failure');}} as any;
   f.db.exec('PRAGMA wal_autocheckpoint=0');
@@ -269,13 +271,13 @@ test("a failed worker enables safe fallback for an originally disabled built-in 
   try {
     stop=registerSqliteCheckpoint(f.db,f.path,true);
     expect(f.db.query('PRAGMA wal_autocheckpoint').get()).toEqual({wal_autocheckpoint:1000});
-    stop!();
+    await stop!();
     expect(f.db.query('PRAGMA wal_autocheckpoint').get()).toEqual({wal_autocheckpoint:0});
-  } finally {stop?.();globalThis.Worker=RealWorker;f.close();}
+  } finally {await stop?.();globalThis.Worker=RealWorker;f.close();}
 });
 
 
-test("late zero-policy writers joining a failed group receive safe fallback without spawning another worker", () => {
+test("late zero-policy writers joining a failed group receive safe fallback without spawning another worker", async () => {
   const f=fixture(),late=new Database(f.path),RealWorker=globalThis.Worker;let attempts=0;
   globalThis.Worker=class {constructor(){attempts++;throw Error('fixture startup failure');}} as any;
   f.db.exec('PRAGMA wal_autocheckpoint=17');late.exec('PRAGMA wal_autocheckpoint=0');
@@ -285,10 +287,36 @@ test("late zero-policy writers joining a failed group receive safe fallback with
     stopLate=registerSqliteCheckpoint(late,f.path,true);
     expect(late.query('PRAGMA wal_autocheckpoint').get()).toEqual({wal_autocheckpoint:1000});
     repeat=registerSqliteCheckpoint(late,f.path,true);
-    expect(attempts).toBe(1);stopLate!();
+    expect(attempts).toBe(1);await stopLate!();
     expect(late.query('PRAGMA wal_autocheckpoint').get()).toEqual({wal_autocheckpoint:1000});
-    repeat!();
+    await repeat!();
     expect(late.query('PRAGMA wal_autocheckpoint').get()).toEqual({wal_autocheckpoint:0});
     expect(f.db.query('PRAGMA wal_autocheckpoint').get()).toEqual({wal_autocheckpoint:17});
-  } finally {repeat?.();stopLate?.();stop?.();globalThis.Worker=RealWorker;late.close();f.close();}
+  } finally {await repeat?.();await stopLate?.();await stop?.();globalThis.Worker=RealWorker;late.close();f.close();}
+});
+
+test('last checkpoint release waits for confirmed SQLite closure and excludes a replacement worker', async () => {
+  const f = fixture(), RealWorker = globalThis.Worker; let peer: Database | undefined, confirm!: () => void, created = 0;
+  class ClosingWorker extends EventTarget {
+    constructor(..._args: unknown[]) { super(); created++; }
+    postMessage(data: any) {
+      if (data.type === 'close') this.beginClose();
+      else { peer = new Database(data.path); queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', { data: { type: 'ready' } }))); }
+    }
+    beginClose() {
+      peer!.exec('BEGIN IMMEDIATE');
+      confirm = () => { peer!.exec('ROLLBACK'); peer!.close(); peer = undefined; this.dispatchEvent(new MessageEvent('message', { data: { type: 'closed' } })); this.dispatchEvent(new Event('close')); };
+    }
+    terminate() { this.beginClose(); }
+  }
+  globalThis.Worker = ClosingWorker as any;
+  const stop = registerSqliteCheckpoint(f.db, f.path, true)!;
+  try {
+    await waitFor(() => (f.db.query('PRAGMA wal_autocheckpoint').get() as any).wal_autocheckpoint === 0, 3000);
+    let released = false; const closing = Promise.resolve(stop()).then(() => { released = true; });
+    await Bun.sleep(15); expect(released).toBe(false);
+    expect(() => registerSqliteCheckpoint(f.db, f.path, true)).toThrow('closing'); expect(created).toBe(1);
+    confirm(); await closing; expect(released).toBe(true);
+    f.db.exec('BEGIN IMMEDIATE; ROLLBACK'); expect(f.db.query('PRAGMA synchronous').get()).toEqual({ synchronous: 2 });
+  } finally { if (peer) confirm(); globalThis.Worker = RealWorker; f.close(); }
 });

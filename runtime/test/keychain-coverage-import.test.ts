@@ -98,9 +98,9 @@ test("plain import covers keychain file-key, CRUD, resolution, and disabled-stat
           restoreKeyFileAgain();
         }
 
-        expect(keychain.deleteKeychainEntry("plain/service")).toBe(true);
+        expect(await keychain.deleteKeychainEntry("plain/service")).toBe(true);
         expect(keychain.listKeychainEntries()).toEqual([]);
-        expect(keychain.deleteKeychainEntry("plain/service")).toBe(false);
+        expect(await keychain.deleteKeychainEntry("plain/service")).toBe(false);
         const restoreKeyFileFinal = setEnv({ PICLAW_KEYCHAIN_KEY: undefined, PICLAW_KEYCHAIN_KEY_FILE: keyFile });
         try {
           await expect(keychain.getKeychainEntry("plain/service")).rejects.toThrow("Keychain entry not found");

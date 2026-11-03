@@ -22,7 +22,8 @@
  *   - cli.ts exposes keychain sub-commands.
  */
 
-import { getDb } from "../db/connection.js";
+import { getDb, captureHostDatabaseBinding } from "../db/connection.js";
+import { admitSqliteWrite } from "../db/sqlite-async-admission.js";
 import { readKeychainBootstrapKeyMaterial, getKeychainBootstrapConfig } from "../core/config.js";
 // External provider fallback — see docs/keychain.md#external-keychain-providers
 import { getFromExternalProviders, listFromExternalProviders } from "./keychain-providers.js";
@@ -171,18 +172,21 @@ async function decryptPayload(name: string, row: KeychainRow): Promise<{ secret:
 }
 
 /** Encrypt and store (or update) a keychain entry in the database. */
-export async function setKeychainEntry(entry: KeychainEntry): Promise<void> {
+export async function setKeychainEntry(input: KeychainEntry, authorise: () => void = () => {}, signal?: AbortSignal): Promise<void> {
+  const entry = structuredClone(input);
   if (!entry.name) {
     throw new Error("Keychain entry name is required.");
   }
   if (!entry.secret) {
     throw new Error("Keychain entry secret is required.");
   }
+  const db = getDb(), binding = captureHostDatabaseBinding(db);
+  const check = (phase?: 'before' | 'after') => { binding(); authorise(); if (phase === undefined && db.inTransaction) throw Error("Keychain mutation requires its own transaction"); };
+  check(); signal?.throwIfAborted();
   const payload = await encryptPayload(entry.name, entry.secret, entry.username ?? null);
   const hasUserNote = entry.userNote !== undefined;
   const hasAgentNote = entry.agentNote !== undefined;
-  const db = getDb();
-  db.prepare(
+  await admitSqliteWrite(db, () => { db.prepare(
     `INSERT INTO keychain_entries (
         name,
         type,
@@ -216,7 +220,7 @@ export async function setKeychainEntry(entry: KeychainEntry): Promise<void> {
     String(entry.agentNote ?? ""),
     hasUserNote ? 1 : 0,
     hasAgentNote ? 1 : 0,
-  );
+  ); }, check, signal, undefined, check);
 }
 
 /**
@@ -279,16 +283,17 @@ export function listKeychainEntriesForUi(): KeychainEntryUiMetadata[] {
 }
 
 /** Update non-secret notes for an existing keychain entry. */
-export function updateKeychainEntryNotes(name: string, notes: { userNote?: string | null; agentNote?: string | null }): boolean {
+export async function updateKeychainEntryNotes(name: string, notes: { userNote?: string | null; agentNote?: string | null }, authorise: () => void = () => {}, signal?: AbortSignal): Promise<boolean> {
   const userNote = typeof notes.userNote === "string" ? notes.userNote : "";
   const agentNote = typeof notes.agentNote === "string" ? notes.agentNote : "";
-  const db = getDb();
-  const result = db.prepare(
+  const db = getDb(), binding = captureHostDatabaseBinding(db);
+  const check = (phase?: 'before' | 'after') => { binding(); authorise(); if (phase === undefined && db.inTransaction) throw Error("Keychain mutation requires its own transaction"); };
+  return admitSqliteWrite(db, () => { const result = db.prepare(
     `UPDATE keychain_entries
      SET user_note = ?, agent_note = ?, updated_at = CURRENT_TIMESTAMP
      WHERE name = ?`
   ).run(userNote, agentNote, name);
-  return result.changes > 0;
+  return result.changes > 0; }, check, signal, undefined, check);
 }
 
 /**
@@ -313,10 +318,10 @@ export async function listAllKeychainEntries(): Promise<KeychainEntryMetadata[]>
 }
 
 /** Delete a keychain entry by name. Returns true if the entry existed. */
-export function deleteKeychainEntry(name: string): boolean {
-  const db = getDb();
-  const result = db.prepare("DELETE FROM keychain_entries WHERE name = ?").run(name);
-  return result.changes > 0;
+export async function deleteKeychainEntry(name: string, authorise: () => void = () => {}, signal?: AbortSignal): Promise<boolean> {
+  const db = getDb(), binding = captureHostDatabaseBinding(db);
+  const check = (phase?: 'before' | 'after') => { binding(); authorise(); if (phase === undefined && db.inTransaction) throw Error("Keychain mutation requires its own transaction"); };
+  return admitSqliteWrite(db, () => db.prepare("DELETE FROM keychain_entries WHERE name = ?").run(name).changes > 0, check, signal, undefined, check);
 }
 
 function parseKeychainReference(value: string): { name: string; field: "secret" | "username" } {

@@ -143,7 +143,7 @@ for (const window of windows.filter(value => !crashPhase || value === process.en
       expect(summaries).toHaveLength(1);
       expect(summaries[0]!.model).toEqual([{ role: 'user', content: [{ type: 'text', text: 'The conversation history before this point was compacted into the following summary:\n\n<summary>\nOriginal paid summary\n</summary>' }], timestamp: summaries[0]!.model![0]!.timestamp }]);
     }
-  } finally { hold.release(); await harness?.close(context); lifetime.abort(); closeDatabase(); restore(); workspace.cleanup(); }
+  } finally { hold.release(); await harness?.close(context); lifetime.abort(); await closeDatabase(); restore(); workspace.cleanup(); }
 }, 10000);
 
 if (!crashPhase) for (const window of windows) test(`SIGKILL then separate-process SDK receipt recovery: ${window}`, async () => {

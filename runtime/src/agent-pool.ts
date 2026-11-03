@@ -1,3 +1,4 @@
+import { captureHostDatabaseBinding } from "./db/connection.js";
 import { admitSqliteWrite } from "./db/sqlite-async-admission.js";
 /**
  * Host facade for admitted native dispatch, models/auth, metadata and resources.
@@ -40,15 +41,13 @@ import { createAgentPoolServices, type AgentPoolServices } from "./agent-pool/se
 import { MemoryReclamationGate } from "./agent-pool/memory-reclamation.js";
 import { type AgentSessionManagerInstrumentationSnapshot, type PoolEntry } from "./agent-pool/session-manager.js";
 import type { PiclawCredentialStore } from "./agent-pool/credential-store.js";
-import { type ChatBranchRecord, type MergeChatBranchIntoParentResult, type SshConfig, type SshConfigApplyTiming, type SshConfigClearResult, type SshConfigSetResult, deleteSshConfig, getDb, getSshConfig, pruneOldTokenUsage, reclaimFreelistPages, restoreChatBranchIdentity, shrinkDatabaseMemory, upsertSshConfig } from "./db.js";
+import { type ChatBranchRecord, type MergeChatBranchIntoParentResult, type SshConfig, type SshConfigClearResult, type SshConfigSetResult, deleteSshConfig, getDb, getSshConfig, pruneOldTokenUsage, reclaimFreelistPages, restoreChatBranchIdentity, shrinkDatabaseMemory, upsertSshConfig } from "./db.js";
 import { migrateProxmoxPortainerToKv } from "./db.js";
 import { registerRootExtensionKvStore } from "./db/register-extension-kv.js";
 import { setSshToolHandlers } from "./extensions/ssh.js";
-import { applyLiveSshConfig, clearLiveSshConfig, hasLiveChatSshConnection, hasLiveChatSshSession, resolveSshCoreConfigFromChatConfig } from "./extensions/ssh-core.js";
+import { hasLiveChatSshConnection } from "./extensions/ssh-core.js";
 import { getKeychainEntry } from "./secure/keychain.js";
 import { addLogSink, createLogger, debugSuppressedError, removeLogSink } from "./utils/logger.js";
-
-import { resolveProviderUsageAccountRef } from "./agent-pool/provider-usage.js";
 
 const log = createLogger("agent-pool");
 const requireLegacyCapture = createRequire(import.meta.url);
@@ -250,7 +249,6 @@ export class AgentPool {
   }
   private mcpSettings: AgentPoolServices["mcpSettings"];
   private pool = new Map<string, PoolEntry>();
-  private activeForkBaseLeafByChat = new Map<string, string | null>();
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   private shuttingDown = false;
   private memoryPressureActive = false;
@@ -330,7 +328,6 @@ export class AgentPool {
       branchManager: this.branchManager,
     } = createAgentPoolServices({
       pool: this.pool,
-      activeForkBaseLeafByChat: this.activeForkBaseLeafByChat,
       authStorage: this.credentialStore,
       modelRuntime: this.modelRuntime,
       modelRegistry: this.modelRegistry,
@@ -350,8 +347,8 @@ export class AgentPool {
     this.releaseSshHandlers = setSshToolHandlers({
       get: (chatJid) => this.getSshConfig(chatJid),
       isActive: (chatJid) => hasLiveChatSshConnection(chatJid),
-      set: (chatJid, config) => this.setSshConfig(chatJid, config),
-      clear: (chatJid) => this.clearSshConfig(chatJid),
+      set: (chatJid, config, signal) => this.setSshConfig(chatJid, config, signal),
+      clear: (chatJid, signal) => this.clearSshConfig(chatJid, signal),
     });
     registerRootExtensionKvStore();
     const runtimeInterop = ((globalThis as { __piclawRuntimeInterop?: RuntimeInteropBridge }).__piclawRuntimeInterop ||= {});
@@ -447,10 +444,6 @@ export class AgentPool {
     return this.runtimeFacade.getAvailableModels(chatJid, options);
   }
 
-  resolveBudgetProviderAccountRef(providerId: string): Promise<string | null> {
-    return resolveProviderUsageAccountRef(this.modelRuntime, providerId);
-  }
-
   setProviderUsageRefreshListener(
     listener: Parameters<AgentRuntimeFacade["setProviderUsageRefreshListener"]>[0],
   ): () => void {
@@ -524,10 +517,6 @@ export class AgentPool {
     return this.sessionManager?.hasProtectedRun(chatJid) || this.runtimeFacade.isActive(chatJid);
   }
 
-  private ensureBranchRegistration(chatJid: string, session?: AgentSession | null): ChatBranchRecord {
-    return this.branchManager.ensureBranchRegistration(chatJid, session);
-  }
-
   async renameChatBranch(
     chatJid: string,
     options: BranchMutationContext & { agentName?: string | null } = {},
@@ -540,8 +529,7 @@ export class AgentPool {
   }
 
   async mergeChatBranchIntoParent(chatJid: string, context: BranchMutationContext = {}): Promise<MergeChatBranchIntoParentResult> {
-    if (this.durableApplication) throw new Error("Durable branch rollup unavailable");
-    return this.branchManager.mergeChatBranchIntoParent(chatJid, context);
+    throw new Error("Durable branch rollup unavailable");
   }
 
   async renameChatJid(
@@ -549,39 +537,36 @@ export class AgentPool {
     newJid: string,
     context: BranchMutationContext = {},
   ): Promise<{ oldJid: string; newJid: string; branch: ChatBranchRecord }> {
-    if (this.durableApplication) throw new Error("Durable chat identity rename unavailable");
-    return this.branchManager.renameChatJid(oldJid, newJid, context);
+    throw new Error("Durable chat identity rename unavailable");
   }
 
   async restoreChatBranch(
     chatJid: string,
     options: BranchMutationContext & { agentName?: string | null } = {},
   ): Promise<ChatBranchRecord> {
-    if (this.durableApplication) {
-      if (readAccessConfig().mode !== "single-user") throw Error("Native restore requires single-user policy");
-      const database = getDb();
-      const agentName = options.agentName, { signal, authorise } = options;
-      const check = () => {
-        if (readAccessConfig().mode !== "single-user" || getDb() !== database) throw Error("Native restore authority changed");
-        authorise?.();
-      };
-      return admitSqliteWrite(database, () => {
-        const restored = restoreChatBranchIdentity({ chat_jid: chatJid,
-          ...(agentName !== undefined ? { agent_name: agentName } : {}) });
-        const position = this.durableSessionLookup?.(restored.chat_jid);
-        if (!position || position.branchId !== restored.branch_id) throw Error("Exact native restore binding unavailable");
-        if (position.assertCurrent !== undefined && typeof position.assertCurrent !== "function") {
-          throw Error("Exact native restore binding invalid");
-        }
-        position.assertCurrent?.();
-        return restored;
-      }, check, signal, undefined, () => {
-        if (getDb() !== database) throw Error("Native restore database changed");
-        if (database.inTransaction) throw Error("Native restore requires an outermost transaction");
-        check();
-      });
-    }
-    return this.branchManager.restoreChatBranch(chatJid, options);
+    if (!this.durableApplication) throw Error("Legacy branch restore unavailable");
+    if (readAccessConfig().mode !== "single-user") throw Error("Native restore requires single-user policy");
+    const database = getDb(), assertBinding = captureHostDatabaseBinding(database);
+    const agentName = options.agentName, { signal, authorise } = options;
+    const check = () => {
+      assertBinding();
+      if (readAccessConfig().mode !== "single-user") throw Error("Native restore authority changed");
+      authorise?.();
+    };
+    return admitSqliteWrite(database, () => {
+      const restored = restoreChatBranchIdentity({ chat_jid: chatJid,
+        ...(agentName !== undefined ? { agent_name: agentName } : {}) });
+      const position = this.durableSessionLookup?.(restored.chat_jid);
+      if (!position || position.branchId !== restored.branch_id) throw Error("Exact native restore binding unavailable");
+      if (position.assertCurrent !== undefined && typeof position.assertCurrent !== "function") {
+        throw Error("Exact native restore binding invalid");
+      }
+      position.assertCurrent?.();
+      return restored;
+    }, check, signal, undefined, () => {
+      if (database.inTransaction) throw Error("Native restore requires an outermost transaction");
+      check();
+    });
   }
 
   async permanentPurgeChatBranch(
@@ -590,9 +575,8 @@ export class AgentPool {
   ): Promise<{ branch: ChatBranchRecord; removedSessionArtifacts: string[] }> {
     if (this.durableApplication) {
       requireLegacyRoutingMutation(getDb(), "legacy purge");
-      throw new Error("Durable branch purge unavailable");
     }
-    return this.branchManager.permanentPurgeChatBranch(chatJid, context);
+    throw new Error("Durable branch purge unavailable");
   }
 
   async createForkedChatBranch(
@@ -601,9 +585,8 @@ export class AgentPool {
   ): Promise<ChatBranchRecord> {
     if (this.durableApplication) {
       requireLegacyRoutingMutation(getDb(), "legacy fork");
-      throw new Error("Durable branch fork unavailable");
     }
-    return this.branchManager.createForkedChatBranch(sourceChatJid, options);
+    throw new Error("Durable branch fork unavailable");
   }
 
   async createRootChatSession(agentName: string, context: BranchMutationContext = {}): Promise<ChatBranchRecord> {
@@ -629,7 +612,7 @@ export class AgentPool {
     return {
       cachedMainSessions: this.pool.size,
       cachedSideSessions: 0,
-      activeForkBaseLeaves: this.activeForkBaseLeafByChat.size,
+      activeForkBaseLeaves: 0,
       activeChats: this.branchManager.listActiveChats().length,
       sessionResources,
       ...(this.sessionManager ? {sessionManager:this.sessionManager.getInstrumentationSnapshot()} : {}),
@@ -664,22 +647,21 @@ export class AgentPool {
   async setSshConfig(
     chatJid: string,
     config: Omit<SshConfig, "chat_jid" | "created_at" | "updated_at" | "last_used_at">,
+    signal?: AbortSignal,
   ): Promise<SshConfigSetResult> {
-    const apply_timing: SshConfigApplyTiming = hasLiveChatSshSession(chatJid) ? "immediate" : "next_session";
-    if (apply_timing === "immediate") {
-      await applyLiveSshConfig(chatJid, resolveSshCoreConfigFromChatConfig(config));
-    }
-    const next = upsertSshConfig({ chat_jid: chatJid, ...config });
-    return { config: next, apply_timing };
+    const database = getDb(), binding = captureHostDatabaseBinding(database), captured = structuredClone(config);
+    const check = () => { binding(); if (this.shuttingDown) throw Error("SSH configuration owner is closing"); };
+    const next = await admitSqliteWrite(database, () => upsertSshConfig({ ...captured, chat_jid: chatJid }), check, signal, undefined,
+      () => { check(); if (database.inTransaction) throw Error("SSH configuration requires its own transaction"); });
+    return { config: next, apply_timing: "next_session" };
   }
 
-  async clearSshConfig(chatJid: string): Promise<SshConfigClearResult> {
-    const apply_timing: SshConfigApplyTiming = hasLiveChatSshSession(chatJid) ? "immediate" : "next_session";
-    const deleted = deleteSshConfig(chatJid);
-    if (apply_timing === "immediate") {
-      await clearLiveSshConfig(chatJid);
-    }
-    return { deleted, apply_timing };
+  async clearSshConfig(chatJid: string, signal?: AbortSignal): Promise<SshConfigClearResult> {
+    const database = getDb(), binding = captureHostDatabaseBinding(database);
+    const check = () => { binding(); if (this.shuttingDown) throw Error("SSH configuration owner is closing"); };
+    const deleted = await admitSqliteWrite(database, () => deleteSshConfig(chatJid), check, signal, undefined,
+      () => { check(); if (database.inTransaction) throw Error("SSH configuration requires its own transaction"); });
+    return { deleted, apply_timing: "next_session" };
   }
 
   /** Gracefully shut down all sessions. */

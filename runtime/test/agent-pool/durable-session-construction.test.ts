@@ -34,7 +34,6 @@ test("durable service-factory lookup port must be callable", () => {
   try {
     const options = {
       pool: new Map(),
-      activeForkBaseLeafByChat: new Map(),
       authStorage: model.credentialStore,
       modelRuntime: model.modelRuntime,
       modelRegistry: model.modelRegistry!,
@@ -81,8 +80,7 @@ for (const empty of [false, true]) {
       Object.defineProperties(options, Object.getOwnPropertyDescriptors(compatibility));
       pool = new AgentPool(options);
       const serviceOptions = Object.assign({}, {
-        pool: new Map(), activeForkBaseLeafByChat: new Map(),
-        authStorage: model.credentialStore, modelRuntime: model.modelRuntime,
+        pool: new Map(), authStorage: model.credentialStore, modelRuntime: model.modelRuntime,
         modelRegistry: model.modelRegistry!, settingsManager: SettingsManager.inMemory(), workspaceDir: process.env.PICLAW_WORKSPACE!, getDurableSession: (chat: string) => durableSessions.get(chat),
       });
       Object.defineProperties(serviceOptions, Object.getOwnPropertyDescriptors(compatibility));

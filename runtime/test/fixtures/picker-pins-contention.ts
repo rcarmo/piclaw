@@ -11,7 +11,7 @@ const { handlePickerPins } = await import("../../src/channels/web/handlers/picke
 const { changePickerPins, readPickerPins } = await import("../../src/db/picker-pins.js");
 assert.equal(process.env.PICLAW_DB_IN_MEMORY, "0");
 initDatabase(); const db = getDb();
-db.exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=40");
+db.exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=0");
 const blocker = new Database(join(STORE_DIR, "messages.db"));
 const events: unknown[] = [];
 const channel = { broadcastEvent: (...args: unknown[]) => { events.push(args); } } as unknown as WebChannelLike;
@@ -33,22 +33,22 @@ try {
   try {
     const result = await handlePickerPins(request(), channel); assert.equal(result.status, 200); assert.deepEqual(await result.json(), before);
     const started = performance.now();
-    // Default runtime policy is five seconds. The pin handler must never
-    // synchronously spend that budget waiting for this separate writer.
-    db.exec("PRAGMA busy_timeout=5000");
+    // The observation deadline remains five seconds; connection acquisition
+    // itself must never synchronously wait for this separate writer.
+    db.exec("PRAGMA busy_timeout=0");
     await busy(await handlePickerPins(request("POST", { action: "set", kind: "model", key: "test/model", pinned: true }), channel));
     assert.ok(performance.now() - started < 500, "pin contention must yield promptly instead of blocking the event loop");
-    assert.equal((db.query("PRAGMA busy_timeout").get() as {timeout:number}).timeout,5000);
+    assert.equal((db.query("PRAGMA busy_timeout").get() as {timeout:number}).timeout,0);
     assert.deepEqual(readPickerPins(db, "operator"), before); assert.deepEqual(events, []);
   } finally { blocker.exec("ROLLBACK"); }
   const result = await handlePickerPins(request("POST", { action: "set", kind: "model", key: "test/model", pinned: true }), channel);
   assert.equal(result.status, 200); assert.equal(events.length, 1);
-  assert.equal((db.query("PRAGMA busy_timeout").get() as {timeout:number}).timeout,5000);
+  assert.equal((db.query("PRAGMA busy_timeout").get() as {timeout:number}).timeout,0);
   const actor: AuthenticatedPrincipal = { kind: "user", mode: "single-user", userId: "missing", username: "missing", displayName: "Missing", role: "admin", homeChatJid: null, authentication: { method: "passkey", sessionId: "missing-login", expiresAt: null } };
   assert.equal((await handlePickerPins(request(), channel, actor)).status, 409);
   assert.equal((await handlePickerPins(request("GET", undefined, { "x-piclaw-account-id": actor.userId, "x-piclaw-login-id": actor.authentication.sessionId! }), channel, actor)).status, 403);
   assert.equal((await handlePickerPins(request("POST", { action: "set", kind: "model", key: "test/model", pinned: false }, { Origin: "https://evil.invalid" }), channel)).status, 403);
-  assert.equal((db.query("PRAGMA busy_timeout").get() as {timeout:number}).timeout,5000);
+  assert.equal((db.query("PRAGMA busy_timeout").get() as {timeout:number}).timeout,0);
 
   // Inject only at the SQLite query boundary to exercise error codes deterministically.
   // The real WAL tests above establish the actual Bun error shape.
@@ -74,7 +74,7 @@ try {
   finally { db.query = originalQuery; }
   for (const error of [new Error("unrelated fault"), { code: "SQLITE_CORRUPT" }, { errno: 8 }, { code: "SQLITE_BUSYNESS" }]) {
     fake(error, sql => sql.includes("picker_pin_scopes"));
-    try { await assert.rejects(handlePickerPins(request(), channel), value => value === error); assert.equal((db.query("PRAGMA busy_timeout").get() as {timeout:number}).timeout,5000); }
+    try { await assert.rejects(handlePickerPins(request(), channel), value => value === error); assert.equal((db.query("PRAGMA busy_timeout").get() as {timeout:number}).timeout,0); }
     finally { db.query = originalQuery; }
   }
   // A valid account must be rechecked after reading the asynchronous POST body.

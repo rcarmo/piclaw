@@ -272,7 +272,6 @@ You can extend that baseline with `.piclaw/config.json`:
 - `env` — get, set, or clear persistent workspace-scoped environment variables (managed block in `/workspace/.env.sh`, with immediate `process.env` updates for later tool calls; `set` also accepts `$NAME`/`${NAME}` copies)
 - `schedule_task` — schedule agent prompts or shell commands (cron, interval, or one-shot)
 - `scheduled_tasks` — inspect scheduled-task records via a shared query surface (`list` / `get`, optional latest-run summaries)
-- `budget_status` — inspect opt-in budget caps, current work state and blockers; read-only and unable to approve spending
 - `introspect_sql` — run read-only SQL queries against the messages database
 - `list_tools` — list available tools with compact summaries, active-state markers, toolset membership, capability metadata, and intent-based recommendations via `intent`
 - `list_scripts` — discover packaged skill scripts plus workspace skill/note scripts with compact summaries, role markers (`entrypoint` vs `module`), Bun invocation hints, and the same kind of query/intent shortlisting used for tool discovery
@@ -662,7 +661,6 @@ Direct commands (no LLM round-trip):
 | `/meters on\|off\|toggle` | Toggle system meters, including optional [Intel GPU activity/memory](intel-gpu-meters.md) |
 | `/tasks [filter]` | List scheduled tasks (via extension) |
 | `/scheduled [filter]` | Alias for `/tasks` |
-| `/budget [status\|cap\|allow\|warnings-only\|resume\|cancel]` | Inspect or manage [opt-in budget limits](budget-limits.md) |
 | `/dream [days]` | Queue an out-of-band Dream cycle on a temporary `dream:` channel; runtime backs up notes, seeds daily notes from DB, the model follows Orient / Signal / Consolidate / Prune and Index, and runtime refreshes FTS at the end |
 | `/mcp [status\|tools\|reconnect [server]\|setup]` | Open the MCP management panel in the web UI (or text status elsewhere), list MCP tools, reconnect bundled `pi-mcp-adapter` servers, or launch guided MCP setup |
 | `/mcp-auth <server>` | Show OAuth token-setup guidance for an MCP server managed by `pi-mcp-adapter` |

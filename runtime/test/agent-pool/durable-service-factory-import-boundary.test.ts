@@ -37,7 +37,6 @@ for (const mode of ["bound", "empty"] as const) {
 
       const services = createAgentPoolServices({
         pool: new Map(),
-        activeForkBaseLeafByChat: new Map(),
         authStorage: model.credentialStore,
         modelRuntime: model.modelRuntime,
         modelRegistry: new ModelRegistry(model.modelRuntime),
@@ -109,7 +108,6 @@ test("legacy service-factory path reaches legacy construction fence immediately"
     // Explicit resident-capture composition, never an omitted native callback.
     createAgentPoolServices({legacyCapture:true,
       pool: new Map(),
-      activeForkBaseLeafByChat: new Map(),
       authStorage: model.credentialStore,
       modelRuntime: model.modelRuntime,
       modelRegistry: new ModelRegistry(model.modelRuntime),

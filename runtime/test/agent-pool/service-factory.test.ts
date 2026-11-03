@@ -31,7 +31,6 @@ test("createAgentPoolServices wires the extracted helper services together", asy
     const modelServices = await createFactoryModelServices(workspace.base);
     const services = createAgentPoolServices({
       pool: new Map(),
-      activeForkBaseLeafByChat: new Map(),
       ...createServicesOptions(modelServices, workspace.workspace),
     });
 
@@ -54,10 +53,10 @@ test("createAgentPoolServices scopes attachment registries per pool", async () =
     const modelServices = await createFactoryModelServices(workspace.base);
     const options = createServicesOptions(modelServices, workspace.workspace);
     const first = createAgentPoolServices({
-      pool: new Map(), activeForkBaseLeafByChat: new Map(), ...options,
+      pool: new Map(), ...options,
     });
     const second = createAgentPoolServices({
-      pool: new Map(), activeForkBaseLeafByChat: new Map(), ...options,
+      pool: new Map(), ...options,
     });
 
     first.attachments.register("web:default", {

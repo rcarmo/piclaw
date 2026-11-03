@@ -31,7 +31,6 @@ export interface AgentPoolLogHooks {
 export interface AgentPoolServiceFactoryOptions extends AgentPoolLogHooks {
   legacyCapture?:true;
   pool: Map<string, PoolEntry>;
-  activeForkBaseLeafByChat: Map<string, string | null>;
   authStorage: PiclawCredentialStore;
   modelRuntime: ModelRuntime;
   modelRegistry: ModelRegistry;
@@ -50,8 +49,7 @@ type SessionManagerService = Pick<AgentSessionManager,
   | "acquireEvictionProtection" | "getOrCreate" | "refreshRuntime" | "prewarm" | "cancelPrewarm" | "hasPendingSessionWork"
   | "recreate" | "hasProtectedRun" | "hasActiveMemoryReclamationWork" | "getInstrumentationSnapshot" | "evictIdle" | "shutdown">;
 type BranchManagerService = Pick<AgentBranchManager,
-  "ensureBranchRegistration" | "renameChatBranch" | "pruneChatBranch" | "mergeChatBranchIntoParent" | "renameChatJid"
-  | "restoreChatBranch" | "permanentPurgeChatBranch" | "createForkedChatBranch" | "createRootChatSession"
+  "renameChatBranch" | "pruneChatBranch" | "createRootChatSession"
   | "listActiveChats" | "listKnownChats" | "findActiveChatByAgentName" | "findChatByAgentName" | "getAgentHandleForChat">;
 
 /** Concrete helper instances composed into AgentPool. */
@@ -138,9 +136,6 @@ export function createAgentPoolServices(options: AgentPoolServiceFactoryOptions)
         .installSessionUsageRecorder(runtime.session, chatJid, options.onWarn);
       await sessionBinder!.bindSession(runtime, chatJid);
     },
-    ensureBranchRegistration: (chatJid: string, session?: AgentSession | null) => {
-      branchManager.ensureBranchRegistration(chatJid, session);
-    },
     onInfo: options.onInfo,
     onWarn: options.onWarn,
     onError: options.onError,
@@ -148,12 +143,7 @@ export function createAgentPoolServices(options: AgentPoolServiceFactoryOptions)
 
   branchManager = new AgentBranchManager({
     pool: options.pool,
-    activeForkBaseLeafByChat: options.activeForkBaseLeafByChat,
-    ...(durable ? {} : { getOrCreateRuntime: (chatJid:string) => sessionManager!.getOrCreate(chatJid) }),
     isActive: (chatJid) => runtimeFacade.isActive(chatJid),
-    ...(durable ? {} : { scheduleSessionWarmup: (chatJid:string) => sessionManager!.prewarm(chatJid),
-      cancelSessionWarmup: (chatJid:string) => sessionManager!.cancelPrewarm(chatJid),
-      hasPendingSessionWork: (chatJid:string) => sessionManager!.hasPendingSessionWork(chatJid) }),
     onWarn: options.onWarn,
   });
 

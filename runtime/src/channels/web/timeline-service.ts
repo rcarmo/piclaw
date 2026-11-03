@@ -8,8 +8,6 @@
  */
 
 import {
-  deleteMessageByRowId,
-  deleteThreadByRowId,
   getChatBranchByChatJid,
   getDb,
   getMessageByRowId,
@@ -196,30 +194,4 @@ export function getThreadResponse(chatJid: string, id: number | null): { status:
   const thread = getMessageByRowId(chatJid, id);
   if (!thread) return { status: 404, body: { error: "Thread not found" } };
   return { status: 200, body: { thread: annotateProjectRepositories([thread]) } };
-}
-
-/** Delete a post and its thread, returning success/error. */
-export function deletePostResponse(
-  chatJid: string,
-  id: number | null,
-  cascade = false
-): {
-  status: number;
-  body: unknown;
-  deletedIds: number[];
-} {
-  if (!id) return { status: 404, body: { error: "Post not found" }, deletedIds: [] };
-  let deletedIds: number[];
-  try {
-    deletedIds = cascade
-      ? deleteThreadByRowId(chatJid, id)
-      : deleteMessageByRowId(chatJid, id) ? [id] : [];
-  } catch (error) {
-    throw error;
-  }
-  return {
-    status: 200,
-    body: { deleted: deletedIds.length, ids: deletedIds },
-    deletedIds,
-  };
 }

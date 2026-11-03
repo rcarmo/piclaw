@@ -1,3 +1,4 @@
+import { captureHostDatabaseBinding } from "../../../db/connection.js";
 import { captureWebRequestAuthority } from "../auth/auth-gateway.js";
 /**
  * channels/web/agent-control-plane-service.ts – WebChannel control-plane wrapper seam.
@@ -19,7 +20,7 @@ import type { QueuedFollowupItem } from "../../../queued-followups.js";
 import { parseJsonObjectRequest } from "../json-body.js";
 import { settledAbortStatus } from "./agent-abort-status.js";
 import type { QueuedFollowupLifecycleService } from "../runtime/queued-followup-lifecycle-service.js";
-import { completeOobeForInstance, isProviderReadyOobeCompletedForInstance } from "../oobe-instance-state.js";
+import { completeOobeForInstance } from "../oobe-instance-state.js";
 import {
   getAddonStatusPanelPayload,
   runAddonStatusPanelAction,
@@ -113,7 +114,10 @@ export function createWebAgentControlPlaneService(
   return new WebAgentControlPlaneService({
     defaultChatJid: defaults.defaultChatJid,
     defaultAgentId: defaults.defaultAgentId,
-    captureWriteAuthority: req => captureWebRequestAuthority(channel.authGateway, req),
+    captureWriteAuthority: req => {
+      const binding = captureHostDatabaseBinding(), gateway = channel.authGateway, request = captureWebRequestAuthority(gateway, req);
+      return () => { binding(); if (channel.authGateway !== gateway) throw Error('Control request gateway changed.'); request(); };
+    },
     json: (payload, status = 200) => channel.json(payload, status),
     broadcastEvent: (eventType, data) => channel.broadcastEvent(eventType, data),
     queue: channel.queue,
@@ -197,6 +201,7 @@ export class WebAgentControlPlaneService {
   }
 
   async handleAgentOobeComplete(req: Request): Promise<Response> {
+    const authorise = this.options.captureWriteAuthority?.(req);
     const parsed = await parseJsonObjectRequest(req);
     if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
 
@@ -206,11 +211,11 @@ export class WebAgentControlPlaneService {
       return this.options.json({ error: "Unsupported OOBE completion kind." }, 400);
     }
 
-    completeOobeForInstance("provider-ready");
+    const completed = await completeOobeForInstance("provider-ready", authorise, req.signal);
     return this.options.json({
       status: "ok",
       kind,
-      provider_ready_completed_instance: isProviderReadyOobeCompletedForInstance(),
+      provider_ready_completed_instance: completed,
     });
   }
 

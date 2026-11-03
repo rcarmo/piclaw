@@ -26,10 +26,8 @@ import type { Database } from "bun:sqlite";
 import { readAccessConfig } from "../../../core/config-access.js";
 import { requireOwnedSessionExecution } from "../../../agent-pool/owned-session-access.js";
 import { createUuid } from "../../../utils/ids.js";
-import { getDatabaseBinding } from '../../../db/connection.js';
+import { captureHostDatabaseBinding } from '../../../db/connection.js';
 import { admitSqliteWrite } from '../../../db/sqlite-async-admission.js';
-import { getWorkspaceDir, getStoreDir, getConfigPath } from '../../../core/config.js';
-import { statSync } from 'node:fs';
 import { createLogger, debugSuppressedError } from '../../../utils/logger.js';
 const log = createLogger('web.message-store');
 
@@ -271,14 +269,9 @@ export async function admitWebMessage(channel: LinkPreviewChannel, params: Store
   const targetKey = () => { const branch = getChatBranchByChatJid(chatJid); return JSON.stringify(branch && [branch.branch_id, branch.chat_jid, branch.archived_at]); };
   const originalTarget = targetKey();
   let writtenTarget = originalTarget;
-  const database = getDb(), binding = getDatabaseBinding();
+  const database = getDb();
   if (database.inTransaction) throw new TypeError('Web message admission requires its own transaction.');
-  const paths = JSON.stringify([getWorkspaceDir(), getStoreDir(), getConfigPath()]);
-  const assertBinding = () => {
-    if (getDb() !== database || JSON.stringify(getDatabaseBinding()) !== JSON.stringify(binding)
-      || JSON.stringify([getWorkspaceDir(), getStoreDir(), getConfigPath()]) !== paths) throw Error('Message database binding changed.');
-    if (binding) { const stat=statSync(binding.path); if(`${stat.dev}:${stat.ino}` !== binding.identity) throw Error('Message database file changed.'); }
-  };
+  const assertBinding = captureHostDatabaseBinding(database);
   const check = (phase: 'before' | 'after') => {
     assertBinding();
     if (readAccessConfig().mode !== 'single-user' || getExecutionIdentity() !== identity) throw Error('Message authority changed.');

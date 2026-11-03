@@ -1,6 +1,5 @@
 import { Database } from "bun:sqlite";
 import { realpathSync, statSync } from "node:fs";
-import { enableSqliteWal } from "./sqlite-journal.js";
 import { isZfsFilesystem } from "./sqlite-checkpoint.js";
 import { RuntimeStartupCleanupError } from "../runtime/startup-cleanup-error.js";
 
@@ -37,26 +36,24 @@ export function configureSqliteRole(database: Database, path: string, options: S
   if (options.role === "index-worker" && memory) throw Error("Index worker requires an existing file-backed WAL database.");
   assertFile(database, path, options);
   const foreignKeys = root ? pragma(database, "foreign_keys", "foreign_keys") : 1;
-  const timeout = options.role === "sdk" ? 0 : 5000;
   const zfs = !memory && (options.zfs ?? isZfsFilesystem(path));
   const cache = root && !memory ? zfs ? -8000 : -1000 : -2000;
   const mmap = root && !memory && !zfs ? 268435456 : 0;
-  database.exec(`PRAGMA busy_timeout=${timeout}`);
+  database.exec("PRAGMA busy_timeout=0");
   // Format only a new zero-page root file, before WAL creates its header; never VACUUM here.
   if (root && !memory && pragma(database, "page_count", "page_count") === 0)
     database.exec("PRAGMA auto_vacuum=INCREMENTAL");
   if (!memory && pragma(database, "journal_mode", "journal_mode") !== "wal") {
     if (options.role === "index-worker") throw Error("Index worker requires an existing WAL database.");
-    // SDK admission must not inherit a synchronous writer-wait loop.
-    if (options.role === "sdk") {
-      if (pragma(database, "journal_mode=WAL", "journal_mode") !== "wal") throw Error("SQLite did not enable WAL journal mode.");
-    } else enableSqliteWal(database);
+    // Root bootstrap is offline, before readiness/models. Other owned openings
+    // also fail promptly on transition conflicts rather than sleeping on a live loop.
+    if (pragma(database, "journal_mode=WAL", "journal_mode") !== "wal") throw Error("SQLite did not enable WAL journal mode.");
   }
   if (memory) database.exec("PRAGMA journal_mode=MEMORY");
   database.exec(`PRAGMA synchronous=FULL; PRAGMA secure_delete=ON; PRAGMA cache_size=${cache}; PRAGMA mmap_size=${mmap}`);
   if (!root) database.exec("PRAGMA foreign_keys=ON");
   const expected: [string, string, unknown][] = [
-    ["busy_timeout", "timeout", timeout], ["synchronous", "synchronous", 2],
+    ["busy_timeout", "timeout", 0], ["synchronous", "synchronous", 2],
     ["secure_delete", "secure_delete", 1], ["cache_size", "cache_size", cache],
     ["foreign_keys", "foreign_keys", foreignKeys], ["journal_mode", "journal_mode", memory ? "memory" : "wal"],
   ];

@@ -222,7 +222,7 @@ export const keychainTools: ExtensionFactory = (pi: ExtensionAPI) => {
 
       if (params.action === "delete") {
         try {
-          const removed = deleteKeychainEntry(name);
+          const removed = await deleteKeychainEntry(name);
           return {
             content: [{ type: "text", text: removed ? `Deleted keychain entry ${name}.` : `Keychain entry not found: ${name}` }],
             details: { count: removed ? 1 : 0, entries: [], name, field: "", type: "" },

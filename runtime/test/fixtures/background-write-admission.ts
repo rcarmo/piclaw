@@ -28,10 +28,10 @@ try {
   assert.equal(getTaskById(id)?.status,'paused'); cases++;
 
   let warmups = 0;
-  const branches = new AgentBranchManager({pool:new Map(),activeForkBaseLeafByChat:new Map(),getOrCreateRuntime:async()=>{throw Error('unused');},refreshRuntime:async()=>{},isActive:()=>false,scheduleSessionWarmup:()=>{warmups++;}});
+  const branches = new AgentBranchManager({pool:new Map(),isActive:()=>false});
   blocker.exec('BEGIN IMMEDIATE'); const creation = branches.createRootChatSession('wal-fixture');
   await Bun.sleep(20); assert.equal(warmups,0); assert.equal(db.query("SELECT 1 FROM chat_branches WHERE chat_jid='web:wal-fixture'").get(),null);
-  blocker.exec('ROLLBACK'); await creation; assert.equal(warmups,1); cases++;
+  blocker.exec('ROLLBACK'); await creation; assert.equal(warmups,0); cases++;
 
   const relative = 'wal-attachment.txt'; writeFileSync(join(process.env.PICLAW_WORKSPACE!,relative),'fixture attachment');
   const files = new WorkspaceFileService(); blocker.exec('BEGIN IMMEDIATE'); let attached = false;

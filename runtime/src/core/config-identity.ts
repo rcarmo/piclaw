@@ -1,11 +1,9 @@
 /** Mutable assistant/user identity, routing, and UI theme configuration. */
 
-import { readJsonConfig, writeJsonConfig } from "./config-store.js";
 import { pickString } from "./config-helpers.js";
 import {
   assistantConfig,
   envConfig,
-  getConfigPath,
   getDomainConfigOptions,
   piclawConfig,
   userConfig,
@@ -92,18 +90,10 @@ export let USER_AVATAR_BACKGROUND = IDENTITY_CONFIG.userAvatarBackground;
 
 export interface UiThemeConfig { theme: string; tint: string | null; }
 const uiSection = piclawConfig.ui && typeof piclawConfig.ui === "object" ? piclawConfig.ui as Record<string, unknown> : {};
-let UI_THEME = typeof uiSection.theme === "string" ? uiSection.theme.trim() : "default";
-let UI_TINT: string | null = typeof uiSection.tint === "string" && uiSection.tint.trim() ? uiSection.tint.trim() : null;
+const UI_THEME = typeof uiSection.theme === "string" ? uiSection.theme.trim() : "default";
+const UI_TINT: string | null = typeof uiSection.tint === "string" && uiSection.tint.trim() ? uiSection.tint.trim() : null;
 
 export function getUiThemeConfig(): UiThemeConfig { return { theme: UI_THEME, tint: UI_TINT }; }
-export function setUiThemeConfig(patch: { theme?: string; tint?: string | null }): UiThemeConfig {
-  const config = readJsonConfig(getConfigPath());
-  const ui = config.ui && typeof config.ui === "object" ? { ...config.ui as Record<string, unknown> } : {};
-  if (typeof patch.theme === "string") { ui.theme = patch.theme.trim() || "default"; UI_THEME = ui.theme as string; }
-  if (patch.tint !== undefined) { ui.tint = typeof patch.tint === "string" && patch.tint.trim() ? patch.tint.trim() : null; UI_TINT = ui.tint as string | null; }
-  config.ui = ui; writeJsonConfig(getConfigPath(), config); return { theme: UI_THEME, tint: UI_TINT };
-}
-
 function escapeRegex(str: string): string { return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 export interface RoutingConfig { triggerPattern: RegExp; }
 export const ROUTING_CONFIG: RoutingConfig = Object.seal({ triggerPattern: new RegExp(`(?:^|\\s)@${escapeRegex(IDENTITY_CONFIG.assistantName)}\\b`, "i") });

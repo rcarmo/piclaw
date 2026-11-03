@@ -1,3 +1,5 @@
+import { captureHostDatabaseBinding } from "../../../db/connection.js";
+import { captureWebRequestAuthority } from "../auth/auth-gateway.js";
 /**
  * channels/web/channel-endpoint-context-factory.ts – Builds endpoint contexts for WebChannel handlers.
  */
@@ -106,7 +108,10 @@ export function createWebChannelEndpointContexts(
             : undefined,
           getTokenUsageForChat,
           getAvailableModels: (chatJid, modelOptions) => channel.agentPool.getAvailableModels(chatJid, modelOptions),
-          getProviderReadyCompletedForInstance: () => isProviderReadyOobeCompletedForInstance(),
+          getProviderReadyCompletedForInstance: req => {
+            const binding = captureHostDatabaseBinding(), gateway = channel.authGateway, request = captureWebRequestAuthority(gateway, req);
+            return isProviderReadyOobeCompletedForInstance(() => { binding(); if (channel.authGateway !== gateway) throw Error("OOBE request gateway changed"); request(); }, req.signal);
+          },
         };
       }
       return agentStatusContext;

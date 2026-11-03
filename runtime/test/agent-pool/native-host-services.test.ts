@@ -10,8 +10,7 @@ import '../helpers.js';
 
 test('native host services contain no binder/tool/session lifecycle placeholders',()=>{
   const model=createAgentPoolModelOptions();
-  const services=createAgentPoolServices({pool:new Map(),activeForkBaseLeafByChat:new Map(),
-    authStorage:model.credentialStore!,modelRuntime:model.modelRuntime!,modelRegistry:{} as any,
+  const services=createAgentPoolServices({pool:new Map(),authStorage:model.credentialStore!,modelRuntime:model.modelRuntime!,modelRegistry:{} as any,
     settingsManager:SettingsManager.inMemory(),workspaceDir:process.env.PICLAW_WORKSPACE!,getDurableSession:()=>undefined});
   for(const name of ['sessionBinder','toolFactory','sessionManager'])expect(services).not.toHaveProperty(name);
 });
@@ -36,8 +35,7 @@ test('no implicit legacy selection, mixed authority, native GC timer or fabricat
 
 test('native MCP config inspection cannot certify an empty legacy shutdown as live reconfiguration',async()=>{
   initDatabase();const model=createAgentPoolModelOptions();
-  const services=createAgentPoolServices({pool:new Map(),activeForkBaseLeafByChat:new Map(),
-    authStorage:model.credentialStore!,modelRuntime:model.modelRuntime!,modelRegistry:{} as any,
+  const services=createAgentPoolServices({pool:new Map(),authStorage:model.credentialStore!,modelRuntime:model.modelRuntime!,modelRegistry:{} as any,
     settingsManager:SettingsManager.inMemory(),workspaceDir:process.env.PICLAW_WORKSPACE!,getDurableSession:()=>undefined});
   const before=readMcpInstancePolicy(),database=getDb().serialize();
   const preview=services.mcpSettings.inspect();

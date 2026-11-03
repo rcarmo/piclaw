@@ -2,9 +2,6 @@ import type { Database } from 'bun:sqlite';
 import { statSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { isAsyncFunction, isPromise } from 'node:util/types';
-import { createLogger } from '../utils/logger.js';
-
-const log = createLogger('db.admission');
 
 export function isSqliteContention(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
@@ -42,8 +39,8 @@ export type SyncSqliteOperation<T> = () => T & (Extract<T, { then: (...args: nev
 
 /** Retry writer acquisition only; never replay an entered transaction callback.
  * Keep operations/authorization synchronous and SQL-only. Rejecting async misuse
- * cannot cancel work already started. Restore connection
- * policy before yielding and run rollback cleanup before returning any failure. */
+ * cannot cancel work already started. Owned connections have immutable zero-wait
+ * policy; run rollback cleanup before returning any transaction failure. */
 export async function admitSqliteWrite<T>(
   database: Database,
   operation: SyncSqliteOperation<T>,
@@ -68,10 +65,10 @@ export async function admitSqliteWrite<T>(
     // Recheck after every wait: another caller may have opened an outer scope.
     if (database.inTransaction && afterRollback !== undefined)
       throw new TypeError('Nested SQLite admission cannot use afterRollback');
-    const previous = (database.query('PRAGMA busy_timeout').get() as { timeout: number }).timeout;
+    if ((database.query('PRAGMA busy_timeout').get() as { timeout: number }).timeout !== 0)
+      throw new TypeError('SQLite admission requires zero busy_timeout policy');
     let contention: unknown;
-    let callbackEntered = false, completed = false;
-    database.exec('PRAGMA busy_timeout=0');
+    let callbackEntered = false;
     try {
       const result = database.transaction(() => {
         callbackEntered = true; // Authorization can mutate attempt-local state too.
@@ -87,19 +84,11 @@ export async function admitSqliteWrite<T>(
         signal.throwIfAborted();
         return result;
       }).immediate();
-      completed = true; return result;
+      return result;
     } catch (error) {
       afterRollback?.(); // Synchronous: restore attempt-local memory on terminal failures too.
       if (callbackEntered || !isSqliteContention(error)) throw error;
       contention = error;
-    } finally {
-      try { database.exec(`PRAGMA busy_timeout=${previous}`); }
-      catch (error) {
-        if (!completed) throw error;
-        // The transaction has completed. Cleanup failure cannot mean not_applied.
-        try { log.warn('SQLite timeout restoration failed after completed transaction', { error }); }
-        catch { /* Diagnostics cannot replace the completed transaction result. */ }
-      }
     }
     if (performance.now() >= deadline) throw contention;
     await waitForSqliteContention(deadline, signal);
