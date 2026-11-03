@@ -140,7 +140,7 @@ async function setup(holdRootAdapter = false, rootOnDisk = false) {
     async close() {
       stopSchedulerLoop(); for (const bridge of bridges.values()) bridge.fence();
       fixture.host.modelHold?.release(); late.release(); rootAdapter.release();
-      await queue.shutdown(); await fixture.close(); closeDatabase(); await rm(dir, { recursive: true, force: true });
+      await queue.shutdown(); await fixture.close(); await closeDatabase(); await rm(dir, { recursive: true, force: true });
     },
   };
 }

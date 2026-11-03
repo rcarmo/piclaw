@@ -78,7 +78,7 @@ function acceptSqliteSource(database: Database, input: { runId: string; chatJid:
 type SqliteSubject = ScheduledRunContractSubject & { database: Database; runtime: Runtime; root: string; path: string };
 function openSqliteSubject(path: string, root: string, trace: readonly NormalisedEffectTrace[] = []): SqliteSubject {
   const database = new Database(path, { create: true });
-  database.exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=1000; PRAGMA foreign_keys=ON");
+  database.exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=0; PRAGMA foreign_keys=ON");
   installScheduledRunCompositionSchema(database);
   const runtime = new Runtime(trace), built = createCurrentPiclawScheduledRunStore(database, runtime);
   if (!built.ok) throw new Error(`SQLite EF-S07 construction failed: ${built.error._tag}`);
@@ -468,7 +468,7 @@ describe("EF-S07 SQLite hardening", () => {
     const root = mkdtempSync(join(tmpdir(), "piclaw-s07-two-connections-")), path = join(root, "store.sqlite");
     const leftDb = new Database(path, { create: true }), rightDb = new Database(path);
     try {
-      for (const database of [leftDb, rightDb]) database.exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=1000; PRAGMA foreign_keys=ON");
+      for (const database of [leftDb, rightDb]) database.exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=0; PRAGMA foreign_keys=ON");
       installScheduledRunCompositionSchema(leftDb);
       createScheduledTaskAuthority(leftDb).create(authorityTask("task:two-connections"));
       const left = createCurrentPiclawScheduledRunStore(leftDb, new Runtime()), right = createCurrentPiclawScheduledRunStore(rightDb, new Runtime());
@@ -783,7 +783,7 @@ test('scheduled admission regression: each competing WAL wait owns its existing 
     expect(subject.inspect()).toMatchObject({occurrences:0,runLogs:0,nextDecisions:0});
     await released.promise; // Keep the real writer held beyond both five-second budgets.
     expect(subject.inspect()).toMatchObject({occurrences:0,runLogs:0,nextDecisions:0});
-    expect(subject.database.query('PRAGMA busy_timeout').get()).toEqual({timeout:1000});
+    expect(subject.database.query('PRAGMA busy_timeout').get()).toEqual({timeout:0});
   } finally {
     if (releaseTimer) clearTimeout(releaseTimer);
     clearInterval(pulse);
