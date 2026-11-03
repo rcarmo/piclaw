@@ -1,5 +1,6 @@
 import "./src/test-guard.js";
 import { expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
@@ -33,10 +34,10 @@ function captureRenewals() {
   return { callbacks, restore: () => { globalThis.setTimeout = original; } };
 }
 
-async function setup(holdRootAdapter = false) {
+async function setup(holdRootAdapter = false, rootOnDisk = false) {
   await mkdir(resolve(process.env.PICLAW_WORKSPACE!, ".piclaw"), { recursive: true });
   await writeFile(resolve(process.env.PICLAW_WORKSPACE!, ".piclaw/config.json"), JSON.stringify({ domains: { access: { mode: "single-user" } } }));
-  process.env.PICLAW_DB_IN_MEMORY = "1";
+  process.env.PICLAW_DB_IN_MEMORY = rootOnDisk ? "0" : "1";
   initDatabase();
   const db = getDb(); db.exec("PRAGMA foreign_keys=ON");
   const dir = await mkdtemp(resolve(process.env.PICLAW_WORKSPACE!, "scheduled-"));
@@ -351,3 +352,69 @@ test("unbound/stale lease and non-agent task cannot dispatch; explicit host fenc
     expect(calls).toBe(0); expect(h.fixture.host.modelCalls).toBe(0); expect(h.sent).toEqual([]);
   } finally { await h.close(); }
 }, 15000);
+
+for (const second of ['success','unknown','unknown_probe_unavailable'] as const) test(`retryable not_applied completion preserves native result and late uncertainty: ${second}`, async()=>{
+  const h=await setup(), complete=h.store.complete.bind(h.store), get=h.store.get.bind(h.store);
+  let calls=0, failedProbe=false, original:Parameters<ScheduledRunStore['complete']>[0]|undefined, snapshot='';
+  h.store.complete=async request=>{
+    calls++;
+    if(original){expect(request).toBe(original);expect(JSON.stringify(request)).toBe(snapshot);}
+    else{original=request;snapshot=JSON.stringify(request);}
+    if(calls===1)return{ok:false,error:{_tag:'storage_unavailable',certainty:'not_applied',retryable:true}};
+    const result=await complete(request);
+    if(calls===2&&second!=='success'&&result.ok)return{ok:false,error:{_tag:'storage_unavailable',certainty:'unknown',retryable:true}};
+    return result;
+  };
+  h.store.get=async id=>{
+    if(second==='unknown_probe_unavailable'&&calls===2&&!failedProbe){failedProbe=true;return{ok:false,error:{_tag:'storage_unavailable',certainty:'not_applied',retryable:true}};}
+    return get(id);
+  };
+  try{
+    await h.poll();await until(()=>h.queue.getMetrics().succeeded===1);
+    expect(calls).toBe(2);expect(h.fixture.host.modelCalls).toBe(1);expect(h.inputs).toHaveLength(1);
+    const id=h.inputs[0]!.requestId, committed=value(await h.actual.get(id))!;
+    expect(committed).toMatchObject({state:'completed',status:'success',resultRef:`task_run_result:${id}`,attempt:1});
+    if(second==='unknown_probe_unavailable'){
+      expect(failedProbe).toBe(true);
+      expect(h.db.query('SELECT terminal_disposition FROM service_effect_s01_operations WHERE operation_id=?').get(committed.operationId!)).toEqual({terminal_disposition:null});
+    }
+    await h.poll(); // Reconcile an existing receipt only, never dispatch this source again.
+    expect(h.db.query('SELECT s.state,o.phase,o.terminal_disposition FROM service_effect_s01_sources s JOIN service_effect_s01_operations o ON o.primary_source_seq=s.source_seq AND o.chat_jid=s.chat_jid WHERE s.source_id=?').get(id))
+      .toEqual({state:'consumed',phase:'terminal',terminal_disposition:'completed'});
+    expect(getTaskRunLogs('scheduled-fixture')).toEqual([expect.objectContaining({occurrence_id:id,result:'synthetic answer',status:'success'})]);
+    expect(h.fixture.host.modelCalls).toBe(1);expect(h.inputs).toHaveLength(1);expect(h.sent).toEqual(['synthetic answer']);
+    expect(h.db.query('SELECT count(*) n FROM service_effect_s07_run_logs').get()).toEqual({n:1});
+    expect((await h.fixture.storage.scanSubmissions({conversationId:h.fixture.root.id},10,undefined,context)).items).toHaveLength(1);
+    expect(value(await h.actual.complete(original!))).toEqual(committed);
+    expect(getTaskRunLogs('scheduled-fixture')).toHaveLength(1);
+  }finally{await h.close();}
+},15000);
+
+test('real six-second completion writer outage persists the same native result after retryable acquisition timeout',async()=>{
+  const h=await setup(false,true), complete=h.store.complete.bind(h.store);
+  const file=(h.db.query('PRAGMA database_list').all() as {name:string;file:string}[]).find(row=>row.name==='main')!.file;
+  const writer=new Database(file), first=Promise.withResolvers<void>();
+  const policy=h.db.query('PRAGMA busy_timeout').get();
+  let calls=0,ticks=0,release:ReturnType<typeof setTimeout>|undefined,original:Parameters<ScheduledRunStore['complete']>[0]|undefined;
+  const pulse=setInterval(()=>{ticks++;},10);
+  h.store.complete=async request=>{
+    calls++;
+    if(original)expect(request).toBe(original);else original=request;
+    if(calls===1){expect(h.fixture.host.modelCalls).toBe(1);writer.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE');release=setTimeout(()=>writer.exec('ROLLBACK'),6000);}
+    const result=await complete(request);
+    if(calls===1){expect(result).toMatchObject({ok:false,error:{_tag:'storage_unavailable',certainty:'not_applied',retryable:true}});first.resolve();}
+    return result;
+  };
+  try{
+    await h.poll();await first.promise;await until(()=>h.queue.getMetrics().succeeded===1);
+    expect(calls).toBe(2);expect(ticks).toBeGreaterThan(50);
+    const id=h.inputs[0]!.requestId, committed=value(await h.actual.get(id))!;
+    expect(committed).toMatchObject({state:'completed',status:'success',resultRef:`task_run_result:${id}`,attempt:1});
+    expect(getTaskRunLogs('scheduled-fixture')).toEqual([expect.objectContaining({occurrence_id:id,result:'synthetic answer',status:'success'})]);
+    expect(h.fixture.host.modelCalls).toBe(1);expect(h.inputs).toHaveLength(1);expect(h.sent).toEqual(['synthetic answer']);
+    expect(h.db.query('SELECT count(*) n FROM service_effect_s07_run_logs').get()).toEqual({n:1});
+    expect(h.db.query('SELECT count(*) n FROM service_effect_s07_next_decisions').get()).toEqual({n:1});
+    expect(h.db.query('PRAGMA busy_timeout').get()).toEqual(policy);
+    await h.poll();expect(h.fixture.host.modelCalls).toBe(1);expect(h.inputs).toHaveLength(1);
+  }finally{if(release)clearTimeout(release);clearInterval(pulse);if(writer.inTransaction)writer.exec('ROLLBACK');writer.close();await h.close();}
+},20000);

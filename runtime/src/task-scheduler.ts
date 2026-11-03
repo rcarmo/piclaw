@@ -898,11 +898,11 @@ async function runClaimedScheduledTask(
       outboxIntents: [],
     });
     let completed = await store.complete(completeRequest);
-    // A later not-applied retry cannot disprove an earlier uncertain commit.
-    const completionMayHaveCommitted = !completed.ok && completed.error.certainty === "unknown";
-    // Retry persistence with the identical sealed evidence, never task execution.
-    if (!completed.ok && completionMayHaveCommitted && completed.error.retryable && canRunLegacyScheduledWork()) {
+    // Retry only completion persistence; retain uncertainty from either attempt.
+    let completionMayHaveCommitted = !completed.ok && completed.error.certainty === "unknown";
+    if (!completed.ok && completed.error.retryable && canRunLegacyScheduledWork()) {
       completed = await store.complete(completeRequest);
+      completionMayHaveCommitted ||= !completed.ok && completed.error.certainty === "unknown";
     }
     if (!completed.ok && completionMayHaveCommitted && canRunLegacyScheduledWork()) {
       const observed = await store.get(finalLease.record.runId);
