@@ -43,8 +43,6 @@ const ALLOWED_UNUSED_EXPORTS = new Map<string, string>([
   ["src/db.ts - KvScope", "public database barrel contract retained for runtime modules, add-ons, and tests importing ./db.js"],
   ["src/db.ts - LinkPreviewImageCacheRecord", "public database barrel contract retained for runtime modules, add-ons, and tests importing ./db.js"],
   ["src/db.ts - endChatRunWithError", "public database barrel contract retained for runtime modules, add-ons, and tests importing ./db.js"],
-  ["src/db.ts - extensionKvDeleteByChatJid", "public database barrel contract retained for runtime modules, add-ons, and tests importing ./db.js"],
-  ["src/db.ts - extensionKvPrune", "public database barrel contract retained for runtime modules, add-ons, and tests importing ./db.js"],
   ["src/db.ts - getTaskRunLogs", "public database barrel contract retained for runtime modules, add-ons, and tests importing ./db.js"],
   ["src/db.ts - hasAgentRepliesAfter", "public database barrel contract retained for runtime modules, add-ons, and tests importing ./db.js"],
   ["src/db.ts - listSshConfigs", "public database barrel contract retained for runtime modules, add-ons, and tests importing ./db.js"],
