@@ -41,11 +41,11 @@ import { createAgentPoolServices, type AgentPoolServices } from "./agent-pool/se
 import { MemoryReclamationGate } from "./agent-pool/memory-reclamation.js";
 import { type AgentSessionManagerInstrumentationSnapshot, type PoolEntry } from "./agent-pool/session-manager.js";
 import type { PiclawCredentialStore } from "./agent-pool/credential-store.js";
-import { type ChatBranchRecord, type MergeChatBranchIntoParentResult, type SshConfig, type SshConfigApplyTiming, type SshConfigClearResult, type SshConfigSetResult, deleteSshConfig, getDb, getSshConfig, pruneOldTokenUsage, reclaimFreelistPages, restoreChatBranchIdentity, shrinkDatabaseMemory, upsertSshConfig } from "./db.js";
+import { type ChatBranchRecord, type MergeChatBranchIntoParentResult, type SshConfig, type SshConfigClearResult, type SshConfigSetResult, deleteSshConfig, getDb, getSshConfig, pruneOldTokenUsage, reclaimFreelistPages, restoreChatBranchIdentity, shrinkDatabaseMemory, upsertSshConfig } from "./db.js";
 import { migrateProxmoxPortainerToKv } from "./db.js";
 import { registerRootExtensionKvStore } from "./db/register-extension-kv.js";
 import { setSshToolHandlers } from "./extensions/ssh.js";
-import { applyLiveSshConfig, clearLiveSshConfig, hasLiveChatSshConnection, hasLiveChatSshSession, resolveSshCoreConfigFromChatConfig } from "./extensions/ssh-core.js";
+import { hasLiveChatSshConnection } from "./extensions/ssh-core.js";
 import { getKeychainEntry } from "./secure/keychain.js";
 import { addLogSink, createLogger, debugSuppressedError, removeLogSink } from "./utils/logger.js";
 
@@ -349,8 +349,8 @@ export class AgentPool {
     this.releaseSshHandlers = setSshToolHandlers({
       get: (chatJid) => this.getSshConfig(chatJid),
       isActive: (chatJid) => hasLiveChatSshConnection(chatJid),
-      set: (chatJid, config) => this.setSshConfig(chatJid, config),
-      clear: (chatJid) => this.clearSshConfig(chatJid),
+      set: (chatJid, config, signal) => this.setSshConfig(chatJid, config, signal),
+      clear: (chatJid, signal) => this.clearSshConfig(chatJid, signal),
     });
     registerRootExtensionKvStore();
     const runtimeInterop = ((globalThis as { __piclawRuntimeInterop?: RuntimeInteropBridge }).__piclawRuntimeInterop ||= {});
@@ -653,22 +653,21 @@ export class AgentPool {
   async setSshConfig(
     chatJid: string,
     config: Omit<SshConfig, "chat_jid" | "created_at" | "updated_at" | "last_used_at">,
+    signal?: AbortSignal,
   ): Promise<SshConfigSetResult> {
-    const apply_timing: SshConfigApplyTiming = hasLiveChatSshSession(chatJid) ? "immediate" : "next_session";
-    if (apply_timing === "immediate") {
-      await applyLiveSshConfig(chatJid, resolveSshCoreConfigFromChatConfig(config));
-    }
-    const next = upsertSshConfig({ chat_jid: chatJid, ...config });
-    return { config: next, apply_timing };
+    const database = getDb(), binding = captureHostDatabaseBinding(database), captured = structuredClone(config);
+    const check = () => { binding(); if (this.shuttingDown) throw Error("SSH configuration owner is closing"); };
+    const next = await admitSqliteWrite(database, () => upsertSshConfig({ ...captured, chat_jid: chatJid }), check, signal, undefined,
+      () => { check(); if (database.inTransaction) throw Error("SSH configuration requires its own transaction"); });
+    return { config: next, apply_timing: "next_session" };
   }
 
-  async clearSshConfig(chatJid: string): Promise<SshConfigClearResult> {
-    const apply_timing: SshConfigApplyTiming = hasLiveChatSshSession(chatJid) ? "immediate" : "next_session";
-    const deleted = deleteSshConfig(chatJid);
-    if (apply_timing === "immediate") {
-      await clearLiveSshConfig(chatJid);
-    }
-    return { deleted, apply_timing };
+  async clearSshConfig(chatJid: string, signal?: AbortSignal): Promise<SshConfigClearResult> {
+    const database = getDb(), binding = captureHostDatabaseBinding(database);
+    const check = () => { binding(); if (this.shuttingDown) throw Error("SSH configuration owner is closing"); };
+    const deleted = await admitSqliteWrite(database, () => deleteSshConfig(chatJid), check, signal, undefined,
+      () => { check(); if (database.inTransaction) throw Error("SSH configuration requires its own transaction"); });
+    return { deleted, apply_timing: "next_session" };
   }
 
   /** Gracefully shut down all sessions. */

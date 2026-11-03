@@ -45,7 +45,7 @@ describe("environment overrides", () => {
   test("persists overrides in extension KV and applies them to process.env", async () => {
     const envSettings = await loadModule();
 
-    envSettings.setEnvironmentOverride("TEST_ENVIRONMENT_RESTORE", "override-value");
+    await envSettings.admitEnvironmentOverride("TEST_ENVIRONMENT_RESTORE", "override-value", () => {});
 
     expect(process.env.TEST_ENVIRONMENT_RESTORE).toBe("override-value");
     const stored = getDb()
@@ -53,7 +53,7 @@ describe("environment overrides", () => {
       .get("piclaw.environment-settings") as { value: string };
     expect(JSON.parse(stored.value)).toEqual({ TEST_ENVIRONMENT_RESTORE: "override-value" });
 
-    envSettings.clearEnvironmentOverride("TEST_ENVIRONMENT_RESTORE");
+    await envSettings.admitEnvironmentOverride("TEST_ENVIRONMENT_RESTORE", null, () => {});
     expect(process.env.TEST_ENVIRONMENT_RESTORE).toBe("original-value");
   });
 
@@ -61,6 +61,6 @@ describe("environment overrides", () => {
     await setKeychainEntry({ name: "ssh/relay.local", secret: "secret", type: "ssh" });
     const envSettings = await loadModule();
 
-    expect(() => envSettings.setEnvironmentOverride("SSH_RELAY_LOCAL", "bad")).toThrow("Keychain-injected");
+    await expect(envSettings.admitEnvironmentOverride("SSH_RELAY_LOCAL", "bad", () => {})).rejects.toThrow("Keychain-injected");
   });
 });

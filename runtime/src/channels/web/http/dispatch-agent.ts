@@ -43,9 +43,8 @@ import { getWorkspaceSettingsData, saveWorkspaceSettings } from "../handlers/wor
 import { handleWorkspaceIndexingSettings } from "../handlers/workspace-indexing.js";
 import { getServerUiState, admitServerUiState, type ServerUiStatePatch } from "../ui-state.js";
 import {
-  clearEnvironmentOverride,
   getEnvironmentSettingsData,
-  setEnvironmentOverride,
+  admitEnvironmentOverride,
 } from "../../../environment-overrides.js";
 import { getProviderDefs } from "../../../agent-control/provider-defs.js";
 import {
@@ -547,12 +546,13 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
     path: "/agent/settings/environment",
     handle: async (channel, req) => {
       try {
+        const binding = captureHostDatabaseBinding(), gateway = channel.authGateway, request = captureWebRequestAuthority(gateway, req);
+        const authorise = () => { binding(); if (channel.authGateway !== gateway) throw Error('Environment request gateway changed.'); request(); };
         const body = await req.json().catch(() => ({}));
         const payload = (body && typeof body === "object") ? body as Record<string, unknown> : {};
         const action = typeof payload.action === "string" ? payload.action.trim().toLowerCase() : "set";
-        const saved = action === "clear"
-          ? clearEnvironmentOverride(payload.name)
-          : setEnvironmentOverride(payload.name, payload.value);
+        const value = action === 'clear' ? null : typeof payload.value === 'string' ? payload.value : String(payload.value ?? '');
+        const saved = await admitEnvironmentOverride(payload.name, value, authorise, req.signal);
         return channel.json({ ok: true, settings: saved }, 200);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
