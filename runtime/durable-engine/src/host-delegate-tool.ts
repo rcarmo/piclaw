@@ -16,8 +16,7 @@ export function createHostDelegateTool(definition: Pick<ToolDefinition<TSchema>,
   /** Must use current host availability AND the real Delegate Settings approval
    * and ordered classification policy; never grants permission via arguments. */
   selectModel(args: Readonly<Record<string, unknown>>, parent: ModelRef | undefined): Promise<ModelRef>;
-  /** Rechecked before creation and after settlement. Enabled budget caps must
-   * deny until operation-owned child request accounting has been qualified. */
+  /** Rechecked before child creation and after settlement. */
   assertModelCurrent(model: ModelRef): void;
   modelSupportsImages?(model: ModelRef): boolean;
   readFiles?(files: readonly string[], assertAllowed: () => void, options?: { modelSupportsImages: boolean }): Promise<readonly (TextContent | ImageContent)[]>;
