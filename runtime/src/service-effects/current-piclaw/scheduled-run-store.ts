@@ -149,7 +149,6 @@ export function createCurrentPiclawScheduledRunStore(
 
 class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunRetentionOwner {
   readonly outbox: ServiceOutboxEnqueueInserter;
-  private serial: Promise<void> = Promise.resolve();
 
   private constructor(readonly database: Database, private readonly runtime: ScheduledRunAdapterRuntime) {
     const inserted = createServiceOutboxEnqueueInserter(database, {
@@ -317,23 +316,22 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
     action: () => ResultValue<T, ScheduledRunStoreError>,
     sourceSeq: number | null = null,
   ): Promise<ResultValue<T, ScheduledRunStoreError>> {
-    let release!: () => void;
-    const previous = this.serial;
-    this.serial = new Promise<void>((resolve) => { release = resolve; });
-    await previous;
+    // Preserve asynchronous entry without waiting behind unrelated mutations.
+    await Promise.resolve();
     try {
       if (this.runtime.hitFault("before_effect", method)) return this.failed(method, effectId, operationId, version, errorOf("storage_unavailable"), sourceSeq);
       const result = await admitSqliteWrite(this.database, action);
       if (!result.ok) return this.failed(method, effectId, operationId, version, result.error, sourceSeq);
-      if (this.runtime.hitFault("effect_then_lost_acknowledgement", method)) {
-        return this.failed(method, effectId, operationId, version, errorOf("storage_unavailable", "unknown", true), sourceSeq);
-      }
+      let lostAcknowledgement = true;
+      try { lostAcknowledgement = this.runtime.hitFault("effect_then_lost_acknowledgement", method); }
+      catch { /* The SQL already committed; a hook failure cannot mean not_applied. */ }
+      if (lostAcknowledgement) return this.failed(method, effectId, operationId, version, errorOf("storage_unavailable", "unknown", true), sourceSeq);
       this.trace(method, effectId, operationId, version, "applied", "applied", sourceSeq);
       return result;
     } catch (error) {
       const bounded = error instanceof CorruptState ? errorOf("corrupt_state") : error instanceof ScheduledHistoryError ? errorOf(error.tag) : error instanceof AbortMutation ? error.error : errorOf("storage_unavailable", "not_applied", isBusy(error));
       return this.failed(method, effectId, operationId, version, bounded, sourceSeq);
-    } finally { release(); }
+    }
   }
 
   private claim(request: ClaimDueRunsRequest): ResultValue<readonly ScheduledRunLease[], ScheduledRunStoreError> {
@@ -341,7 +339,7 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
     const key = `claim:${prefixHash}`;
     const requestHash = canonicalRequestHash(request);
     const transaction = this.database.transaction(() => {
-      // Check after serial admission and BEGIN IMMEDIATE, including replay.
+      // Check inside SQLite writer admission, including replay.
       assertProcessAdmission();
       const replay = this.replay(key, requestHash, "claimDue", null);
       if (replay !== undefined) return Result.ok(this.restoreClaimReplay(request, replay));
