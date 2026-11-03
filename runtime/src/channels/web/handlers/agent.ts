@@ -1,3 +1,4 @@
+import { captureHostDatabaseBinding } from "../../../db/connection.js";
 import { admitSqliteWrite } from "../../../db/sqlite-async-admission.js";
 import { captureWebRequestAuthority } from "../auth/auth-gateway.js";
 /**
@@ -31,7 +32,7 @@ import {
 } from "../messaging/agent-message-service.js";
 import { handleUiThemeCommand } from "../theming/ui-theme-commands.js";
 import { handleUiMetersCommand } from "../ui-meters-commands.js";
-import { getServerUiMetersConfig, admitServerUiMetersConfig, admitServerUiThemeConfig } from "../ui-state.js";
+import { getServerUiMetersConfig, admitServerUiState } from "../ui-state.js";
 import { getChatCursor, getMessageRowIdById, getDb, setChatCursor, type InteractionRow } from "../../../db.js";
 import { formatOutbound } from "../../../router.js";
 import { isSqliteContention } from '../../../db/sqlite-async-admission.js';
@@ -185,8 +186,8 @@ function fallbackAgentHandle(chatJid: string): string {
 // Only in-process forwarding can share the original guarded request authority.
 // No request body/header can supply or replace this capability.
 function captureInputAuthority(channel: WebChannelLike, req: Request): () => void {
-  const check = captureWebRequestAuthority(channel.authGateway, req);
-  return () => { if (!isSingleUserAccess()) throw Error("Incoming request authority changed."); check(); };
+  const gateway = channel.authGateway, check = captureWebRequestAuthority(gateway, req);
+  return () => { if (!isSingleUserAccess() || channel.authGateway !== gateway) throw Error("Incoming request authority changed."); check(); };
 }
 
 /**
@@ -208,7 +209,13 @@ export async function handleAgentMessage(
   if (!isSingleUserAccess()) return channel.json({ error: "Single-user message admission is required." }, 403);
   let internalAuthority: ReturnType<typeof readInputRequestAuthority>;
   let revalidateInputAuthority: ValidateInputAuthority;
-  try { internalAuthority = readInputRequestAuthority(req, chatJid, pathname); revalidateInputAuthority = internalAuthority?.validate ?? captureInputAuthority(channel, req); revalidateInputAuthority(); }
+  try {
+    const binding = captureHostDatabaseBinding();
+    internalAuthority = readInputRequestAuthority(req, chatJid, pathname);
+    const request = internalAuthority?.validate ?? captureInputAuthority(channel, req);
+    revalidateInputAuthority = phase => { if (phase === 'before' || phase === 'after') binding(); request(phase); };
+    revalidateInputAuthority();
+  }
   catch { return channel.json({ error: 'Input authority is unavailable.' }, 403); }
   // Pin the trusted host selection to this route before any body read/await.
   // Request contents cannot select an engine or replace this SQL-only callback.
@@ -547,8 +554,9 @@ export async function handleAgentMessage(
 
   if (themeCommand) {
     if (themeCommand.payload) {
-      const uiTheme = await admitServerUiThemeConfig({ theme: themeCommand.payload.theme, tint: themeCommand.payload.tint ?? null }, revalidateInputAuthority, req.signal);
-      channel.broadcastEvent("ui_theme", { ...uiTheme });
+      const uiTheme = (await admitServerUiState({ ui_theme: { theme: themeCommand.payload.theme, tint: themeCommand.payload.tint ?? null } }, revalidateInputAuthority, req.signal)).ui_theme;
+      try { channel.broadcastEvent("ui_theme", { ...uiTheme }); }
+      catch (error) { try { log.warn('Committed theme awaiting publication', { error }); } catch { return channel.json({ thread_id: null, command: themeCommand, ui_only: true, response_delivery: 'failed' }, 200); } }
     }
 
     let themeResponseDelivered = true;
@@ -560,11 +568,8 @@ export async function handleAgentMessage(
         await channel.sendMessage(chatJid, formattedThemeMessage, { forceRoot: true, requirePersistence: true, authorise: revalidateInputAuthority, signal: req.signal });
       } catch (error) {
         themeResponseDelivered = false;
-        log.error("Failed to send /theme response", {
-          operation: "handle_agent_message.theme_response",
-          chatJid,
-          err: error,
-        });
+        try { log.error("Failed to send /theme response", { operation: "handle_agent_message.theme_response", chatJid, err: error }); }
+        catch { return channel.json({ thread_id: null, command: themeCommand, ui_only: true, response_delivery: 'failed' }, 200); }
       }
     }
 
@@ -577,12 +582,11 @@ export async function handleAgentMessage(
   if (metersCommand) {
     if (metersCommand.payload) {
       const currentMeters = getServerUiMetersConfig();
-      const nextMeters = await (metersCommand.payload.mode === "toggle"
-        ? admitServerUiMetersConfig({ enabled: !currentMeters.enabled }, revalidateInputAuthority, req.signal)
-        : metersCommand.payload.mode === "set"
-          ? admitServerUiMetersConfig({ enabled: metersCommand.payload.enabled }, revalidateInputAuthority, req.signal)
-          : admitServerUiMetersConfig({ collapsed: metersCommand.payload.collapsed }, revalidateInputAuthority, req.signal));
-      channel.broadcastEvent("ui_meters", { chat_jid: chatJid, mode: "set", ...nextMeters });
+      const patch = metersCommand.payload.mode === "toggle" ? { enabled: !currentMeters.enabled }
+        : metersCommand.payload.mode === "set" ? { enabled: metersCommand.payload.enabled } : { collapsed: metersCommand.payload.collapsed };
+      const nextMeters = (await admitServerUiState({ ui_meters: patch }, revalidateInputAuthority, req.signal)).ui_meters;
+      try { channel.broadcastEvent("ui_meters", { chat_jid: chatJid, mode: "set", ...nextMeters }); }
+      catch (error) { try { log.warn('Committed meters awaiting publication', { error }); } catch { return channel.json({ thread_id: null, command: metersCommand, ui_only: true }, 200); } }
     }
 
     const formattedMetersMessage = formatOutbound(metersCommand.message, "web");
@@ -590,11 +594,8 @@ export async function handleAgentMessage(
       try {
         await channel.sendMessage(chatJid, formattedMetersMessage, { forceRoot: true, authorise: revalidateInputAuthority, signal: req.signal });
       } catch (error) {
-        log.error("Failed to send /meters response", {
-          operation: "handle_agent_message.meters_response",
-          chatJid,
-          err: error,
-        });
+        try { log.error("Failed to send /meters response", { operation: "handle_agent_message.meters_response", chatJid, err: error }); }
+        catch { return channel.json({ thread_id: null, command: metersCommand, ui_only: true }, 200); }
       }
     }
 

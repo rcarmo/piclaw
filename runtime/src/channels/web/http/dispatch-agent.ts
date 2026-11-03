@@ -1,7 +1,9 @@
+import { captureHostDatabaseBinding } from "../../../db/connection.js";
 import { captureWebRequestAuthority } from "../auth/auth-gateway.js";
 import { createLogger } from '../../../utils/logger.js';
 import { getKeychainStatus } from '../../../secure/keychain.js';
 const keychainLog=createLogger('web.keychain');
+const uiLog=createLogger('web.ui-state');
 /**
  * web/http/dispatch-agent.ts – Agent route dispatch helpers.
  */
@@ -39,7 +41,7 @@ import { getQuickActionsSettingsData, saveQuickActionsSettings } from "../handle
 import { handleScheduledTasksManagementAction, handleScheduledTasksManagementList } from "../handlers/scheduled-tasks-management.js";
 import { getWorkspaceSettingsData, saveWorkspaceSettings } from "../handlers/workspace-settings.js";
 import { handleWorkspaceIndexingSettings } from "../handlers/workspace-indexing.js";
-import { getServerUiState, admitServerUiMetersConfig, admitServerUiOutputConfig, admitServerUiThemeConfig } from "../ui-state.js";
+import { getServerUiState, admitServerUiState, type ServerUiStatePatch } from "../ui-state.js";
 import {
   clearEnvironmentOverride,
   getEnvironmentSettingsData,
@@ -371,37 +373,33 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
     method: "POST",
     path: "/agent/ui-state",
     handle: async (channel, req) => {
-      const authorise = captureWebRequestAuthority(channel.authGateway, req);
-      const body = await req.json().catch(() => ({})) as Record<string, unknown>;
-      const response: Record<string, unknown> = { ok: true };
+      const binding = captureHostDatabaseBinding(), gateway = channel.authGateway, request = captureWebRequestAuthority(gateway, req);
+      const authorise = () => { binding(); if (channel.authGateway !== gateway) throw Error('UI request gateway changed.'); request(); };
+      const body = await req.json().catch(() => ({})) as Record<string, unknown>, patch: ServerUiStatePatch = {};
       if (body?.ui_theme && typeof body.ui_theme === "object") {
-        const themeBody = body.ui_theme as Record<string, unknown>;
-        const nextTheme = await admitServerUiThemeConfig({
-          ...(typeof themeBody.theme === "string" ? { theme: themeBody.theme } : {}),
-          ...(themeBody.tint !== undefined ? { tint: typeof themeBody.tint === "string" ? themeBody.tint : null } : {}),
-        }, authorise, req.signal);
-        response.ui_theme = nextTheme;
-        channel.broadcastEvent("ui_theme", { ...nextTheme });
+        const value = body.ui_theme as Record<string, unknown>;
+        patch.ui_theme = { ...(typeof value.theme === 'string' ? { theme: value.theme } : {}),
+          ...(value.tint !== undefined ? { tint: typeof value.tint === 'string' ? value.tint : null } : {}) };
       }
       if (body?.ui_meters && typeof body.ui_meters === "object") {
-        const metersBody = body.ui_meters as Record<string, unknown>;
-        const nextMeters = await admitServerUiMetersConfig({
-          ...(typeof metersBody.enabled === "boolean" ? { enabled: metersBody.enabled } : {}),
-          ...(typeof metersBody.collapsed === "boolean" ? { collapsed: metersBody.collapsed } : {}),
-        }, authorise, req.signal);
-        response.ui_meters = nextMeters;
-        channel.broadcastEvent("ui_meters", { mode: "set", ...nextMeters });
+        const value = body.ui_meters as Record<string, unknown>;
+        patch.ui_meters = { ...(typeof value.enabled === 'boolean' ? { enabled: value.enabled } : {}),
+          ...(typeof value.collapsed === 'boolean' ? { collapsed: value.collapsed } : {}) };
       }
       if (body?.ui_output && typeof body.ui_output === "object") {
-        const outputBody = body.ui_output as Record<string, unknown>;
-        const parsedPad = Number(outputBody.outputPad ?? outputBody.output_pad);
-        const nextOutput = await admitServerUiOutputConfig({
-          ...(Number.isFinite(parsedPad) ? { outputPad: parsedPad } : {}),
-        }, authorise, req.signal);
-        response.ui_output = nextOutput;
-        channel.broadcastEvent("ui_theme", { outputPad: nextOutput.outputPad });
+        const value = body.ui_output as Record<string, unknown>, pad = Number(value.outputPad ?? value.output_pad);
+        patch.ui_output = Number.isFinite(pad) ? { outputPad: pad } : {};
       }
-      return channel.json(response, 200);
+      const next = await admitServerUiState(patch, authorise, req.signal), result: Record<string, unknown> = { ok: true }, events: Array<[string, unknown]> = [];
+      if (patch.ui_theme) { result.ui_theme = next.ui_theme; events.push(['ui_theme', { ...next.ui_theme }]); }
+      if (patch.ui_meters) { result.ui_meters = next.ui_meters; events.push(['ui_meters', { mode: 'set', ...next.ui_meters }]); }
+      if (patch.ui_output) { result.ui_output = next.ui_output; events.push(['ui_theme', { outputPad: next.ui_output.outputPad }]); }
+      const response = channel.json(result, 200);
+      for (const [event, data] of events) {
+        try { channel.broadcastEvent(event, data); }
+        catch (error) { try { uiLog.warn('Committed preferences awaiting publication', { error }); } catch { return response; } }
+      }
+      return response;
     },
   },
   {
@@ -501,12 +499,16 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
     path: "/agent/settings/general",
     handle: async (channel, req) => {
       try {
-        const authorise = captureWebRequestAuthority(channel.authGateway, req);
+        const binding = captureHostDatabaseBinding(), gateway = channel.authGateway, request = captureWebRequestAuthority(gateway, req);
+        const authorise = () => { binding(); if (channel.authGateway !== gateway) throw Error('Settings request gateway changed.'); request(); };
         const body = await req.json().catch(() => ({}));
         const saved = await saveGeneralSettings((body && typeof body === "object") ? body as Record<string, unknown> : {}, authorise, req.signal);
-        channel.broadcastEvent("ui_theme", { theme: saved.uiTheme, tint: saved.uiTint, outputPad: saved.outputPad });
-        channel.broadcastEvent("profile_update", buildGeneralSettingsProfileUpdate(saved));
-        return channel.json({ ok: true, settings: saved });
+        const response = channel.json({ ok: true, settings: saved });
+        try {
+          channel.broadcastEvent("ui_theme", { theme: saved.uiTheme, tint: saved.uiTint, outputPad: saved.outputPad });
+          channel.broadcastEvent("profile_update", buildGeneralSettingsProfileUpdate(saved));
+        } catch (error) { try { uiLog.warn('Committed settings awaiting publication', { error }); } catch { return response; } }
+        return response;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return channel.json({ error: message || "Failed to save general settings." }, 400);

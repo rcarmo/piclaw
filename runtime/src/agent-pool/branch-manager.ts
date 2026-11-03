@@ -31,7 +31,7 @@ import { existsSync, readdirSync, renameSync, rmSync } from "fs";
 import { join } from "path";
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
 import { readAccessConfig } from "../core/config-access.js";
-import { getDb } from "../db/connection.js";
+import { getDb, captureHostDatabaseBinding } from "../db/connection.js";
 import { commitOwnedFork, findOwnedFork } from "../db/owned-forks.js";
 import { getExecutionIdentity } from "../core/execution-context.js";
 import { requireOwnedSessionExecution } from "./owned-session-access.js";
@@ -257,9 +257,9 @@ export class AgentBranchManager {
   /** Lifecycle publication requires this admission to own the physical commit. */
   private admitMutation<T>(database: Database, operation: SyncSqliteOperation<T>,
     context: BranchMutationContext, checkAction: () => void): Promise<T> {
-    const { signal, authorise } = context;
+    const { signal, authorise } = context, assertBinding = captureHostDatabaseBinding(database);
     const check = () => {
-      if (getDb() !== database) throw new ChatAccessDenied();
+      assertBinding();
       authorise?.(); checkAction();
     };
     return admitSqliteWrite<T>(database, operation, check, signal, undefined, () => {

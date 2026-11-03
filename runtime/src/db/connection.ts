@@ -32,7 +32,7 @@ import { initializeScheduledHistorySchema } from './scheduled-history-schema.js'
 import fs from "fs";
 import path from "path";
 
-import { WORKSPACE_DIR, getRuntimeConfigPaths } from "../core/config.js";
+import { WORKSPACE_DIR, getRuntimeConfigPaths, getWorkspaceDir, getStoreDir, getConfigPath } from "../core/config.js";
 import type { RuntimeConfigPaths } from "../core/config-paths.js";
 import { createLogger } from "../utils/logger.js";
 import { migrateMediaCompression } from "./media-recompress.js";
@@ -64,6 +64,17 @@ function currentFileIdentity(pathname: string): string {
 export function getDatabaseBinding(): { path: string; identity: string; instance: number } | null {
   if (!db || !dbPathCache || !dbFileIdentity) return null;
   return { path: dbPathCache, identity: dbFileIdentity, instance: dbInstance };
+}
+
+/** Capture this host singleton's existing binding. A pre-start snapshot is safe
+ * for pure controls, but can never authorise a later database write. */
+export function captureHostDatabaseBinding(database: Database | null = db): () => void {
+  const binding = getDatabaseBinding(), paths = JSON.stringify([getWorkspaceDir(), getStoreDir(), getConfigPath()]);
+  return () => {
+    if (!database || db !== database || JSON.stringify(getDatabaseBinding()) !== JSON.stringify(binding)
+      || JSON.stringify([getWorkspaceDir(), getStoreDir(), getConfigPath()]) !== paths) throw Error('Host database binding changed.');
+    if (binding && currentFileIdentity(binding.path) !== binding.identity) throw Error('Host database file changed.');
+  };
 }
 
 const CANONICAL_WORKSPACE_DIR = path.resolve("/workspace");

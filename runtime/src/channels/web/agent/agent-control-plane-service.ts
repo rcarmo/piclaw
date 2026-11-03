@@ -1,3 +1,4 @@
+import { captureHostDatabaseBinding } from "../../../db/connection.js";
 import { captureWebRequestAuthority } from "../auth/auth-gateway.js";
 /**
  * channels/web/agent-control-plane-service.ts – WebChannel control-plane wrapper seam.
@@ -113,7 +114,10 @@ export function createWebAgentControlPlaneService(
   return new WebAgentControlPlaneService({
     defaultChatJid: defaults.defaultChatJid,
     defaultAgentId: defaults.defaultAgentId,
-    captureWriteAuthority: req => captureWebRequestAuthority(channel.authGateway, req),
+    captureWriteAuthority: req => {
+      const binding = captureHostDatabaseBinding(), gateway = channel.authGateway, request = captureWebRequestAuthority(gateway, req);
+      return () => { binding(); if (channel.authGateway !== gateway) throw Error('Control request gateway changed.'); request(); };
+    },
     json: (payload, status = 200) => channel.json(payload, status),
     broadcastEvent: (eventType, data) => channel.broadcastEvent(eventType, data),
     queue: channel.queue,
