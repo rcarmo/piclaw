@@ -851,6 +851,23 @@ export function initializeDatabaseSchema(database: Database): void {
 function initializeSchema(database: Database): void {
   migrateLegacyConfigTables(database);
   createSchema(database);
+  // Historical profiles join the existing schema transaction before readiness.
+  // Preserve original JSON/timestamps; an existing KV override always wins.
+  for (const extensionId of ['proxmox', 'portainer'] as const) {
+    const rows = database.prepare(`SELECT chat_jid,base_url,api_token_keychain,allow_insecure_tls,created_at,updated_at
+      FROM ${extensionId}_configs`).all() as Array<{ chat_jid: string; base_url: string; api_token_keychain: string;
+        allow_insecure_tls: number; created_at: string; updated_at: string }>;
+    const insert = database.prepare(`INSERT OR IGNORE INTO extension_kv
+      (extension_id,scope,scope_key,key,value,created_at,updated_at) VALUES (?,'chat',?,'config',?,?,?)`);
+    for (const row of rows) {
+      const value = JSON.stringify({
+        base_url: row.base_url,
+        api_token_keychain: row.api_token_keychain,
+        allow_insecure_tls: row.allow_insecure_tls === 1,
+      });
+      insert.run(extensionId, row.chat_jid, value, row.created_at, row.updated_at);
+    }
+  }
   retireAttachmentRowidIndex(database);
   ensureChatBranchConstraints(database);
   initializeChatProjects(database);
