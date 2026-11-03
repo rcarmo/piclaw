@@ -1,4 +1,4 @@
-import { beforeEach, afterEach, expect, test } from "bun:test";
+import { beforeEach, afterEach, expect, spyOn, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { join } from "node:path";
 import { createTempWorkspace } from "../helpers.js";
@@ -80,4 +80,16 @@ test('scheduled retention: changed plan, invalid cursor, and ignored tombstone r
   database.exec("CREATE TEMP TRIGGER ignore_tombstone BEFORE INSERT ON service_effect_s07_tombstones BEGIN SELECT RAISE(IGNORE); END");
   try{expect((await store.applyRetention(plan)).ok).toBe(false);expect(snapshot()).toEqual(before);}finally{database.exec('DROP TRIGGER ignore_tombstone');}
   expect(value(await store.applyRetention(plan)).removed).toBe(2);
+});
+
+test('scheduled retention keeps its read snapshot and uses only the existing admitted writer',async()=>{
+  await seed(2);const before=snapshot(),transaction=database.transaction.bind(database);let calls=0;
+  const scope=spyOn(database,'transaction').mockImplementation((fn:any)=>{calls++;return transaction(fn);});
+  try{
+    const plan=value(await store.planRetention({settledBefore:cutoff,limit:2}));expect(calls).toBe(1);expect(plan.rows).toHaveLength(2);expect(snapshot()).toEqual(before);
+    calls=0;const applied=value(await store.applyRetention(plan));expect(applied.removed).toBe(2);expect(calls).toBe(1);expect(database.inTransaction).toBe(false);
+    calls=0;expect(value(await store.applyRetention(plan))).toEqual(applied);expect(calls).toBe(1);
+    expect(value(await store.get(applied.runIds[0]!))?.retained).toBe(true);expect(database.query('PRAGMA foreign_key_check').all()).toEqual([]);
+    const empty=value(await store.planRetention({settledBefore:cutoff,limit:2}));calls=0;expect(value(await store.applyRetention(empty))).toEqual({removed:0,runIds:[]});expect(calls).toBe(0);
+  }finally{scope.mockRestore();}
 });
