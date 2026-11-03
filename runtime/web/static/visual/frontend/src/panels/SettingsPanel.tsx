@@ -12,7 +12,6 @@ import "./settings/GeneralSection";
 import "./settings/SessionsSection";
 import "./settings/RecordingsSection";
 import "./settings/CompactionSection";
-import "./settings/BudgetSection";
 import "./settings/KeyboardSection";
 import "./settings/ScheduledTasksSection";
 import "./settings/WorkspaceSection";
@@ -183,7 +182,7 @@ export function SettingsPanel() {
         {builtinPanes.map((pane) => (
           <button
             key={pane.id}
-            className={`settings-panel__nav-item${activeCategory.value === pane.id ? " settings-panel__nav-item--active" : ""}`}
+            className={`settings-panel__nav-item${activePane?.id === pane.id ? " settings-panel__nav-item--active" : ""}`}
             onClick={() => { activeCategory.value = pane.id; safeSetItem("piclaw-settings-category", pane.id); }}
           >
             <span className="settings-panel__nav-icon">{typeof pane.icon === "string" && pane.icon.trim().startsWith("<") ? <span dangerouslySetInnerHTML={{ __html: pane.icon }} /> : pane.icon as never}</span>
@@ -195,7 +194,7 @@ export function SettingsPanel() {
         {addonPanes.map((pane) => (
           <button
             key={pane.id}
-            className={`settings-panel__nav-item settings-panel__nav-item--addon${activeCategory.value === pane.id ? " settings-panel__nav-item--active" : ""}`}
+            className={`settings-panel__nav-item settings-panel__nav-item--addon${activePane?.id === pane.id ? " settings-panel__nav-item--active" : ""}`}
             onClick={() => { activeCategory.value = pane.id; safeSetItem("piclaw-settings-category", pane.id); }}
           >
             <span className="settings-panel__nav-icon">{typeof pane.icon === "string" && pane.icon.trim().startsWith("<") ? <span dangerouslySetInnerHTML={{ __html: pane.icon }} /> : pane.icon as never}</span>

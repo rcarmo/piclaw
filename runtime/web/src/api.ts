@@ -172,19 +172,6 @@ export async function getSystemMetrics() {
     return deduplicatedGet('/agent/system-metrics');
 }
 
-export async function getBudgetSettings(chatJid = null) {
-    const query = chatJid ? `?chat_jid=${encodeURIComponent(chatJid)}` : '';
-    return request(`/agent/settings/budget${query}`);
-}
-
-export async function updateBudgetSettings(action, chatJid = null) {
-    const query = chatJid ? `?chat_jid=${encodeURIComponent(chatJid)}` : '';
-    return request(`/agent/settings/budget/action${query}`, {
-        method: 'POST',
-        body: JSON.stringify(action || {}),
-    });
-}
-
 export async function getScheduledTasks(options: ApiOptions = {}) {
     const params = new URLSearchParams();
     if (options?.id) params.set('id', String(options.id));

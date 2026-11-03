@@ -133,9 +133,7 @@ export interface WebChannelLike
   dispatchAcceptedInput?: import("../../../agent-pool/durable-queue-dispatch.js").AcceptedQueueDispatch;
   admitMessage(chatJid: string, content: string, isBot: boolean, mediaIds: number[], options: StoreWebMessageOptions,
     authorise?: (phase?: "before" | "after") => void, signal?: AbortSignal, deferBeforeInsert?: () => boolean): Promise<InteractionRow | null>;
-  agentPool: AgentPool & {
-    resolveBudgetProviderAccountRef?(providerId: string): Promise<string | null>;
-  };
+  agentPool: AgentPool;
   uiBridge: UiBridge;
   interactionBroadcaster: InteractionBroadcasterLike;
 

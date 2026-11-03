@@ -83,8 +83,6 @@ The route tables below describe single-user guards. “Authenticated” means th
 | GET | `/agent/status` | `dispatch-agent.ts` | authenticated | n/a | none | JSON status payload |
 | GET | `/agent/context` | `dispatch-agent.ts` | authenticated | n/a | none | JSON context usage |
 | GET | `/agent/queue-state` | `dispatch-agent.ts` | authenticated | n/a | none | JSON queue state |
-| GET | `/agent/settings/budget` | `dispatch-agent.ts` / `handlers/budget-settings.ts` | authenticated single-user owner | n/a | none | Redacted durable caps, windows, spend/remaining, provider evidence freshness and current-work state; no account references |
-| POST | `/agent/settings/budget/action` | `dispatch-agent.ts` / `handlers/budget-settings.ts` | authenticated single-user owner | yes | covered agent-data bucket | Strict discriminated cap/current-work mutation; revision-confirmed changes retain spend/history; multi-user modes denied |
 | GET | `/agent/scheduled-tasks` | `dispatch-agent.ts` / `handlers/scheduled-tasks-management.ts` | authenticated single-user owner | n/a | none | Task inspection including optional per-run `budget_usd` and cap revision |
 | POST | `/agent/scheduled-tasks/action` | `dispatch-agent.ts` / `handlers/scheduled-tasks-management.ts` | authenticated single-user owner | yes | covered agent-data bucket | Pause/resume/delete and revision-confirmed per-run budget set/disable; shell budgets denied |
 | POST | `/agent/queue-remove` | `dispatch-agent.ts` | authenticated | yes | `data/agent_queue` | status JSON |

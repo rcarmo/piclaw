@@ -48,8 +48,6 @@ import { applyLiveSshConfig, clearLiveSshConfig, hasLiveChatSshConnection, hasLi
 import { getKeychainEntry } from "./secure/keychain.js";
 import { addLogSink, createLogger, debugSuppressedError, removeLogSink } from "./utils/logger.js";
 
-import { resolveProviderUsageAccountRef } from "./agent-pool/provider-usage.js";
-
 const log = createLogger("agent-pool");
 const requireLegacyCapture = createRequire(import.meta.url);
 
@@ -445,10 +443,6 @@ export class AgentPool {
   /** Return available model labels and current model for a chat session. */
   async getAvailableModels(chatJid: string, options: { includeProviderUsage?: boolean; includeProviderDiagnostics?: boolean; includeCatalogue?: boolean } = {}): Promise<AvailableModelsResult> {
     return this.runtimeFacade.getAvailableModels(chatJid, options);
-  }
-
-  resolveBudgetProviderAccountRef(providerId: string): Promise<string | null> {
-    return resolveProviderUsageAccountRef(this.modelRuntime, providerId);
   }
 
   setProviderUsageRefreshListener(

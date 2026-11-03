@@ -10,7 +10,6 @@ import { getScheduledTaskInspection } from "../../src/scheduled-task-query-servi
 import { parseScheduledBudgetMicros } from "../../src/budget/amount.js";
 import { scheduledBudgetReadiness } from "../../src/budget/scheduled-readiness.js";
 import { evaluateBudget } from "../../src/budget/evaluator.js";
-import { admitBudgetBoundary } from "../../src/budget/admission.js";
 import { persistProviderEvidence } from "../../src/budget/provider-evidence.js";
 import { pollScheduledRunsOnce } from "../../src/task-scheduler.js";
 import { createCurrentPiclawScheduledRunStore } from "../../src/service-effects/current-piclaw/scheduled-run-store.js";
@@ -166,8 +165,7 @@ test("uncapped recurring tasks reach execution on every fresh run without pricin
       const chat=lease.task.chatJid,opts={budgetWorkId:'scheduled:'+lease.record.runId,budgetScheduledTaskId:lease.record.taskId};
       workIds.push(opts.budgetWorkId);
       ensureBudgetWork({ id: opts.budgetWorkId, chatJid: chat, executionKind: "scheduled", scheduledTaskId: opts.budgetScheduledTaskId });
-      const admission = await admitBudgetBoundary({ workId: opts.budgetWorkId, boundary: "model_call", modelRuntime: { getAuth() { throw Error("No quota/auth lookup expected without provider guards"); } } as any });
-      expect(admission.decision.action).toBe("allow");
+      expect(evaluateBudget({ workId: opts.budgetWorkId }).action).toBe("allow");
       modelCalls++;
       setBudgetWorkStatus(opts.budgetWorkId, "completed");
       return { status: "success", result: "Fixture completed" };
