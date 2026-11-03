@@ -342,7 +342,7 @@ function finishWebMessage(channel: LinkPreviewChannel, committed: CommittedWebMe
   try {
     scheduleLinkPreviews(channel, committed.params.chatJid, committed.rowId, committed.params.content, committed.options.linkPreviews);
   } catch (error) {
-    debugSuppressedError(log, 'Optional preview scheduling failed after message commit.', error, { operation: 'web_message_store.preview_after_commit', rowId: committed.rowId });
+    try { debugSuppressedError(log, 'Optional preview scheduling failed after message commit.', error, { operation: 'web_message_store.preview_after_commit', rowId: committed.rowId }); } catch { return committed.interaction; }
   }
   return committed.interaction;
 }

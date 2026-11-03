@@ -269,7 +269,7 @@ export class WebChannel implements WebChannelLike {
     }, options, authorise, signal, deferBeforeInsert);
     if (!interaction) return null;
     try { recordTimelineInteraction(interaction); }
-    catch (error) { debugSuppressedError(messageLog, 'Optional recording failed after message commit.', error, { operation: 'web_message_storage.record_after_commit', rowId: interaction.id }); }
+    catch (error) { try { debugSuppressedError(messageLog, 'Optional recording failed after message commit.', error, { operation: 'web_message_storage.record_after_commit', rowId: interaction.id }); } catch { return interaction; } }
     return interaction;
   }
 
