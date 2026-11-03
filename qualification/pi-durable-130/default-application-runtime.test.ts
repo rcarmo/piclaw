@@ -1408,9 +1408,9 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
   }
   if(recoveryPackage) backend.attachChannel!({broadcastEvent(){}});
   if(scenario==='native-scheduled-lease-free'){
-    const {runScheduledTask,getSchedulerMetrics}=await import('../../runtime/src/task-scheduler.js');let reads=0;
+    const scheduler=await import('../../runtime/src/task-scheduler.js'),{getSchedulerMetrics}=scheduler;let reads=0;
     const denied=new Proxy({},{get(){reads++;throw Error('Unsupported task/options inspected');}}),snapshot=()=>['scheduled_tasks','task_run_logs','service_effect_s07_occurrences','service_effect_s01_sources','budget_work','entries','documents'].map(table=>root.query(`SELECT * FROM ${table} ORDER BY rowid`).all()),before=snapshot(),metrics=getSchedulerMetrics();
-    try{expect(await runScheduledTask(denied as never,{agentPool:pool,queue:base.queue,sendMessage:async()=>{}},denied)).toEqual({status:'skipped',result:null,error:'Native scheduled execution requires an admitted occurrence',durationMs:0,taskRunLogId:null});expect(reads).toBe(0);expect(calls).toBe(0);expect(snapshot()).toEqual(before);expect(getSchedulerMetrics()).toEqual(metrics);expect(sdkSpies.every(spy=>spy.mock.calls.length===0)).toBe(true);}
+    try{expect(scheduler).not.toHaveProperty('runScheduledTask');expect(reads).toBe(0);expect(calls).toBe(0);expect(snapshot()).toEqual(before);expect(getSchedulerMetrics()).toEqual(metrics);expect(sdkSpies.every(spy=>spy.mock.calls.length===0)).toBe(true);}
     finally{for(const spy of sdkSpies)spy.mockRestore();backend.stop();await backend.close();await base.queue.shutdown();await pool.shutdown();closeDatabase();owner.release();}return;
   }
   if(scenario.startsWith('native-dream-runner')){

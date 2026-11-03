@@ -1,3 +1,4 @@
+import {runAdmittedScheduledTask} from "./helpers/admitted-scheduled-task.js";
 /**
  * test/task-scheduler-shell.test.ts – Scheduled shell task execution.
  */
@@ -10,7 +11,6 @@ const sentMessages: Array<{ jid: string; text: string }> = [];
 const sentNudges: string[] = [];
 let restoreEnv: (() => void) | null = null;
 let db: typeof import("../src/db.js") | null = null;
-let scheduler: typeof import("../src/task-scheduler.js") | null = null;
 
 afterEach(() => {
   sentMessages.length = 0;
@@ -19,7 +19,6 @@ afterEach(() => {
   restoreEnv = null;
   try { db?.getDb().close(); } catch (_error) { void _error; }
   db = null;
-  scheduler = null;
 });
 
 beforeEach(async () => {
@@ -30,11 +29,10 @@ beforeEach(async () => {
     PICLAW_DATA: ws.data,
   });
   db = await importFresh("../src/db.js");
-  scheduler = await importFresh("../src/task-scheduler.js");
   db.initDatabase();
 });
 
-test("runScheduledTask executes shell command and sends output", async () => {
+test("admitted scheduled task executes shell command and sends output", async () => {
   const taskId = `task-shell-${Date.now()}`;
   db!.createTask({
     id: taskId,
@@ -55,7 +53,7 @@ test("runScheduledTask executes shell command and sends output", async () => {
   const task = db!.getTaskById(taskId);
   expect(task?.task_kind).toBe("shell");
 
-  await scheduler!.runScheduledTask(task!, {
+  await runAdmittedScheduledTask(task!, {
     queue: {} as any,
     agentPool: {} as any,
     sendMessage: async (jid, text) => { sentMessages.push({ jid, text }); },
@@ -68,7 +66,7 @@ test("runScheduledTask executes shell command and sends output", async () => {
   expect(sentNudges).toEqual([sentMessages[0].text]);
 });
 
-test("runScheduledTask injects upstream-compatible PI metadata for shell tasks", async () => {
+test("admitted scheduled task injects upstream-compatible PI metadata for shell tasks", async () => {
   const taskId = `task-shell-env-${Date.now()}`;
   db!.createTask({
     id: taskId,
@@ -87,7 +85,7 @@ test("runScheduledTask injects upstream-compatible PI metadata for shell tasks",
   });
 
   const task = db!.getTaskById(taskId)!;
-  await scheduler!.runScheduledTask(task, {
+  await runAdmittedScheduledTask(task, {
     queue: {} as any,
     agentPool: {} as any,
     sendMessage: async (jid, text) => { sentMessages.push({ jid, text }); },
@@ -98,7 +96,7 @@ test("runScheduledTask injects upstream-compatible PI metadata for shell tasks",
   expect(sentMessages[0].text).toContain(`${taskId} openrouter moonshotai/kimi-k2.6`);
 });
 
-test("runScheduledTask can suppress Pushover nudges for shell output", async () => {
+test("admitted scheduled task can suppress Pushover nudges for shell output", async () => {
   const taskId = `task-shell-muted-${Date.now()}`;
   db!.createTask({
     id: taskId,
@@ -118,7 +116,7 @@ test("runScheduledTask can suppress Pushover nudges for shell output", async () 
   });
 
   const task = db!.getTaskById(taskId)!;
-  await scheduler!.runScheduledTask(task, {
+  await runAdmittedScheduledTask(task, {
     queue: {} as any,
     agentPool: {} as any,
     sendMessage: async (jid, text) => { sentMessages.push({ jid, text }); },
@@ -130,7 +128,7 @@ test("runScheduledTask can suppress Pushover nudges for shell output", async () 
   expect(sentNudges).toEqual([]);
 });
 
-test("runScheduledTask keeps empty shell output silent", async () => {
+test("admitted scheduled task keeps empty shell output silent", async () => {
   const taskId = `task-shell-empty-${Date.now()}`;
   db!.createTask({
     id: taskId,
@@ -151,7 +149,7 @@ test("runScheduledTask keeps empty shell output silent", async () => {
   const task = db!.getTaskById(taskId);
   expect(task?.task_kind).toBe("shell");
 
-  await scheduler!.runScheduledTask(task!, {
+  await runAdmittedScheduledTask(task!, {
     queue: {} as any,
     agentPool: {} as any,
     sendMessage: async (jid, text) => { sentMessages.push({ jid, text }); },
@@ -161,7 +159,7 @@ test("runScheduledTask keeps empty shell output silent", async () => {
   expect(db!.getTaskById(taskId)?.last_result).toBe("```\n(no output)\n```");
 });
 
-test("runScheduledTask truncates shell output on code-point boundaries", async () => {
+test("admitted scheduled task truncates shell output on code-point boundaries", async () => {
   const taskId = `task-shell-unicode-${Date.now()}`;
   db!.createTask({
     id: taskId,
@@ -182,7 +180,7 @@ test("runScheduledTask truncates shell output on code-point boundaries", async (
   const task = db!.getTaskById(taskId);
   expect(task?.task_kind).toBe("shell");
 
-  await scheduler!.runScheduledTask(task!, {
+  await runAdmittedScheduledTask(task!, {
     queue: {} as any,
     agentPool: {} as any,
     sendMessage: async (jid, text) => { sentMessages.push({ jid, text }); },
