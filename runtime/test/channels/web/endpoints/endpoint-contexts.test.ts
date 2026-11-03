@@ -1,5 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test";
-import * as messages from "../../../../src/db/messages.js";
+import { describe, expect, test } from "bun:test";
 import { createWebChannelEndpointContexts } from "../../../../src/channels/web/endpoints/channel-endpoint-context-factory.js";
 
 function fixture(extra: Record<string, unknown> = {}) {
@@ -18,24 +17,8 @@ function fixture(extra: Record<string, unknown> = {}) {
 }
 
 describe("web endpoint contexts through the surviving channel factory", () => {
-  test("post context captures command interaction id and delegates updates through the surviving factory", () => {
-    let storedThreadId: { messageId: number; threadId: number } | null = null;
-    let broadcastedId: number | null = null;
-    const replace = spyOn(messages, "updateMessagePost").mockImplementation((_chatJid, id, content, threadId) => {
-      storedThreadId = { messageId: id, threadId: threadId! };
-      return { id, timestamp: new Date().toISOString(), data: { type: "agent_response", content } };
-    });
-    try {
-      const { channel, contexts } = fixture({ admitMessage: async () => null,
-        interactionBroadcaster: { broadcastInteractionUpdated: (row: { id: number }) => { broadcastedId = row.id; }, broadcastAgentResponse: () => {} },
-      });
-      const postCtx = contexts.postMutations(); channel.lastCommandInteractionId = 99;
-      expect(postCtx.defaultChatJid).toBe("web:default"); expect(postCtx.lastCommandInteractionId).toBe(42);
-      expect(contexts.postMutations().lastCommandInteractionId).toBe(99); expect(contexts.postMutations()).not.toBe(postCtx);
-      const replaced = postCtx.replaceMessageContent("web:default", 9, "updated", 100)!; postCtx.broadcastInteractionUpdated(replaced);
-      expect(storedThreadId).toEqual({ messageId: 9, threadId: 100 }); expect(broadcastedId).toBe(9);
-      expect(replace).toHaveBeenCalledWith("web:default", 9, "updated", 100);
-    } finally { replace.mockRestore(); }
+  test("post mutations no longer allocate a forwarding context", () => {
+    expect(fixture().contexts).not.toHaveProperty('postMutations');
   });
 
   test("agent status and content preserve shared buffer access", async () => {

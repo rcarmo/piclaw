@@ -358,15 +358,15 @@ export class WebChannel implements WebChannelLike {
   }
 
   async handleUpdatePost(req: Request, id: number | null): Promise<Response> {
-    return await handleUpdatePostRequest(req, id, this.endpointContexts.postMutations());
+    return await handleUpdatePostRequest(this, req, id, DEFAULT_CHAT_JID);
   }
 
   async handleUpdatePostAnnotations(req: Request, id: number): Promise<Response> {
-    return await handleUpdatePostAnnotationsRequest(req, id, this.endpointContexts.postMutations());
+    return await handleUpdatePostAnnotationsRequest(this, req, id, DEFAULT_CHAT_JID);
   }
 
   async handleInternalPost(req: Request): Promise<Response> {
-    return await handleInternalPostRequest(req, this.endpointContexts.postMutations());
+    return await handleInternalPostRequest(this, req, DEFAULT_CHAT_JID);
   }
 
   handleSse(req: Request, authorisation?: import("./web/sse/sse.js").SseAuthorisation): Response {

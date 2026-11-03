@@ -31,6 +31,7 @@ import { HostEffectError } from "../../runtime/durable-engine/src/host-effects.j
 import { main } from "../../runtime/src/runtime.js";
 import { createDefaultRuntimeBootstrapDeps } from "../../runtime/src/runtime/bootstrap.js";
 import { storeChatMetadata, storeMessage } from "../../runtime/src/db.js";
+import { getMessageByRowIdFromDatabase } from "../../runtime/src/db/messages.js";
 import { existsSync, mkdirSync, writeFileSync, readFileSync, copyFileSync, symlinkSync, cpSync, renameSync, rmSync,linkSync,chmodSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { canonicalJson } from '../../runtime/src/utils/canonical-json.js';
@@ -5270,6 +5271,30 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(root.query("SELECT * FROM service_effect_s01_sources WHERE chat_jid=? ORDER BY source_seq").all(httpChat)).toEqual(sourcesBeforeControl);
     expect(channel.getQueuedFollowupCount(httpChat)).toBe(0);
     expect(calls).toBe(callsBeforeControl);
+    // Editing an ordinary tool/UI post must not touch native source/terminal
+    // receipts, SDK task state or provider execution. Do not edit S02-owned replies.
+    const sourceRows = root.query("SELECT * FROM service_effect_s01_sources ORDER BY chat_jid,source_seq").all();
+    const commits = root.query("SELECT * FROM service_effect_s02_commits").all();
+    const taskRows = root.query("SELECT * FROM tasks ORDER BY id").all();
+    const created = await channel.handleInternalPost(new Request(`http://fixture/internal/post?chat_jid=${httpChat}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: 'Tool display before edit' }),
+    }));
+    expect(created.status).toBe(201);
+    const editId = (await created.json() as { id: number }).id;
+    const edited = await channel.handleUpdatePost(new Request(`http://fixture/post/${editId}?chat_jid=${httpChat}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: 'Tool display after edit', thread_id: editId }),
+    }), editId);
+    expect(edited.status).toBe(200);
+    const annotated = await channel.handleUpdatePostAnnotations(new Request(`http://fixture/post/${editId}/annotations?chat_jid=${httpChat}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ annotations: [{ id: 'native-display-highlight' }] }),
+    }), editId);
+    expect(annotated.status).toBe(200);
+    expect(getMessageByRowIdFromDatabase(root, httpChat, editId)!.data).toMatchObject({ content: 'Tool display after edit', thread_id: editId,
+      annotations: [{ id: 'native-display-highlight' }] });
+    expect(root.query("SELECT * FROM service_effect_s01_sources ORDER BY chat_jid,source_seq").all()).toEqual(sourceRows);
+    expect(root.query("SELECT * FROM service_effect_s02_commits").all()).toEqual(commits);
+    expect(root.query("SELECT * FROM tasks ORDER BY id").all()).toEqual(taskRows);
+    expect(calls).toBe(callsBeforeControl); expect(channel.getQueuedFollowupCount(httpChat)).toBe(0);
   }
   const before = (root.query("SELECT count(*) AS n FROM conversations").get() as { n: number }).n;
   await Promise.all([bound.prepareInputSourceAdmission!(newcomer), bound.prepareInputSourceAdmission!(newcomer)]);
