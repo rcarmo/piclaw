@@ -99,7 +99,6 @@ export {
   extensionKvClear,
   extensionKvDeleteByChatJid,
   extensionKvPrune,
-  migrateProxmoxPortainerToKv,
   type KvScope,
   type KvEntry,
   type KvQueryOptions,

@@ -42,7 +42,6 @@ import { MemoryReclamationGate } from "./agent-pool/memory-reclamation.js";
 import { type AgentSessionManagerInstrumentationSnapshot, type PoolEntry } from "./agent-pool/session-manager.js";
 import type { PiclawCredentialStore } from "./agent-pool/credential-store.js";
 import { type ChatBranchRecord, type MergeChatBranchIntoParentResult, type SshConfig, type SshConfigClearResult, type SshConfigSetResult, deleteSshConfig, getDb, getSshConfig, pruneOldTokenUsage, reclaimFreelistPages, restoreChatBranchIdentity, shrinkDatabaseMemory, upsertSshConfig } from "./db.js";
-import { migrateProxmoxPortainerToKv } from "./db.js";
 import { registerRootExtensionKvStore } from "./db/register-extension-kv.js";
 import { setSshToolHandlers } from "./extensions/ssh.js";
 import { hasLiveChatSshConnection } from "./extensions/ssh-core.js";
@@ -374,7 +373,6 @@ export class AgentPool {
     runtimeInterop.addLogSink = addLogSink;
     runtimeInterop.removeLogSink = removeLogSink;
     runtimeInterop.getKeychainEntry = getKeychainEntry;
-    try { migrateProxmoxPortainerToKv(); } catch (e) { void e; /* migration is best-effort */ }
     if (options.getDurableSession === undefined) mkdirSync(SESSIONS_DIR, { recursive: true });
     if (this.sessionManager) {
       this.memoryReclamation = new MemoryReclamationGate();
