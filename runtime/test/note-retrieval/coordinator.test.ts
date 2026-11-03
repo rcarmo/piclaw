@@ -12,8 +12,8 @@ let ws:ReturnType<typeof createTempWorkspace>,restore:()=>void;
 const workspaceEnvKeys=['PICLAW_WORKSPACE','PICLAW_STORE','PICLAW_DATA','PICLAW_DB_IN_MEMORY'] as const;
 let previousWorkspaceEnv:Record<string,string|undefined>;
 setDefaultTimeout(30_000);
-beforeEach(()=>{previousWorkspaceEnv=Object.fromEntries(workspaceEnvKeys.map(key=>[key,process.env[key]]));ws=createTempWorkspace('note-index-376-');restore=setEnv({PICLAW_DISABLE_BACKGROUND_WORKSPACE_INDEX:'1'});Object.assign(process.env,{PICLAW_WORKSPACE:ws.workspace,PICLAW_STORE:ws.store,PICLAW_DATA:ws.data,PICLAW_DB_IN_MEMORY:'0'});mkdirSync(join(ws.workspace,'notes'),{recursive:true});closeDatabase();initDatabase();closeDatabase();});
-afterEach(()=>{restore();for(const key of workspaceEnvKeys){const value=previousWorkspaceEnv[key];if(value===undefined)delete process.env[key];else process.env[key]=value;}ws.cleanup();});
+beforeEach(async()=>{previousWorkspaceEnv=Object.fromEntries(workspaceEnvKeys.map(key=>[key,process.env[key]]));ws=createTempWorkspace('note-index-376-');restore=setEnv({PICLAW_DISABLE_BACKGROUND_WORKSPACE_INDEX:'1'});Object.assign(process.env,{PICLAW_WORKSPACE:ws.workspace,PICLAW_STORE:ws.store,PICLAW_DATA:ws.data,PICLAW_DB_IN_MEMORY:'0'});mkdirSync(join(ws.workspace,'notes'),{recursive:true});await closeDatabase();initDatabase();await closeDatabase();});
+afterEach(async()=>{await closeDatabase();restore();for(const key of workspaceEnvKeys){const value=previousWorkspaceEnv[key];if(value===undefined)delete process.env[key];else process.env[key]=value;}ws.cleanup();});
 const put=(name:string,content:string)=>{writeFileSync(join(ws.workspace,'notes',name),content);};
 const binding=()=>{const paths=[ws.workspace,ws.store,ws.data,join(ws.store,'messages.db')].map(realpathSync),identities=paths.map(p=>{const s=lstatSync(p);return `${s.dev}:${s.ino}`;});return {version:1,mode:'single-user',workspace:paths[0],store:paths[1],data:paths[2],database:paths[3],databaseIdentity:identities[3],identities};};
 const database=()=>new Database(join(ws.store,'messages.db'));
@@ -187,4 +187,62 @@ test('stale/malformed family identity denies before selectors are inspected',()=
  const identity:any=Object.freeze({mode:'family-shared',provenance:Object.freeze({})});let touched=false;
  withExecutionIdentity(identity,()=>expect(()=>markNoteIndexDirty(new Proxy([],{get(){touched=true;throw Error('selector accessed');}}))).toThrow('Note index access denied'));
  expect(touched).toBe(false);
+});
+
+for(const phase of ['claim','batch','publish','cancel','cancel-after-claim','cleanup'] as const)test(`immutable-zero worker cooperates at note ${phase} acquisition without callback replay`,async()=>{
+ put('admission.md','old publication');expect((await run()).code).toBe(0);const previous=chunks(),published=snapshot().published;
+ put('admission.md','new publication');
+ if(phase==='cleanup'){const db=database();db.exec("CREATE TRIGGER admission_fault BEFORE INSERT ON note_retrieval_chunks BEGIN SELECT RAISE(ABORT,'original note fault'); END");db.close();}
+ const point=phase==='batch'||phase==='cancel-after-claim'?2:phase==='publish'?3:1;
+ const script=`
+ const {Database}=await import('bun:sqlite');
+ const blocker=new Database(${JSON.stringify(join(ws.store,'messages.db'))});
+ const transaction=Database.prototype.transaction;
+ let completed=0,held=false,heldOnce=false,attempts=0,enteredWhileHeld=0,beats=0;
+ const controller=new AbortController();const heartbeat=setInterval(()=>{if(held)beats++;},5);
+ const hold=database=>{database.exec('PRAGMA busy_timeout=0');blocker.exec('BEGIN IMMEDIATE');held=true;heldOnce=true;setTimeout(()=>{blocker.exec('ROLLBACK');held=false;},100);if(${phase==='cancel'||phase==='cancel-after-claim'})setTimeout(()=>controller.abort(Error('fixture note cancelled')),35);};
+ Database.prototype.transaction=function(body,...args){const database=this;if(held)database.exec('PRAGMA busy_timeout=0');
+  const tx=transaction.call(this,function(...values){if(held)enteredWhileHeld++;return body.apply(this,values)},...args),immediate=tx.immediate;
+  const wrapped=(...values)=>tx(...values);wrapped.deferred=tx.deferred;wrapped.exclusive=tx.exclusive;
+  wrapped.immediate=function(...values){if(held)attempts++;
+   try{const result=immediate.apply(tx,values);if(!database.inTransaction){completed++;if(!heldOnce&&${phase!=='cleanup'}&&completed===${point})hold(database);}return result;}
+   catch(error){if(!database.inTransaction&&!heldOnce&&${phase==='cleanup'}&&String(error).includes('original note fault'))hold(database);throw error;}
+  };return wrapped;
+ };
+ let error=null;
+ try{const {runNoteIndexPhase}=await import('./src/note-retrieval/coordinator.ts');await runNoteIndexPhase({signal:controller.signal});}
+ catch(value){error=value.message;}
+ while(held)await Bun.sleep(5);clearInterval(heartbeat);blocker.close();
+ console.log('NOTE_ADMISSION='+JSON.stringify({error,heldOnce,attempts,enteredWhileHeld,beats,completed}));
+ `;
+ const child=spawn(process.execPath,['-e',script],{cwd:resolve(import.meta.dir,'../..'),env:process.env,stdio:['ignore','pipe','pipe','pipe']});
+ let output='',errors='';child.stdout!.on('data',b=>output+=b);child.stderr!.on('data',b=>errors+=b);(child.stdio[3] as any).end(JSON.stringify(binding()));const [exit]=await once(child,'exit');
+ expect(exit,errors).toBe(0);const result=JSON.parse(/NOTE_ADMISSION=([^\n]+)/.exec(output)![1]);
+ expect(result.heldOnce,JSON.stringify(result)).toBe(true);expect(result.attempts).toBeGreaterThan(0);expect(result.enteredWhileHeld).toBe(0);
+ if(phase==='cancel'||phase==='cancel-after-claim'||phase==='cleanup'){
+  expect(result.error).toContain(phase==='cleanup'?'original note fault':'fixture note cancelled');expect(chunks()).toEqual(previous);expect(snapshot().published).toBe(published);
+  expect(snapshot().staging).toBeNull();
+  if(phase==='cancel-after-claim')expect(snapshot()).toMatchObject({writer_pid:null,reason:'cancelled'});
+ }else{expect(result.error).toBeNull();expect(result.beats).toBeGreaterThan(0);expect(snapshot().published).toBeGreaterThan(published);expect(chunks()[0].content).toBe('new publication');}
+});
+
+test('entered note batch BUSY failure is rolled back once and retains the old publication',async()=>{
+ put('once.md','old');expect((await run()).code).toBe(0);const previous=chunks(),published=snapshot().published;put('once.md','new');
+ const script=`const {Database}=await import('bun:sqlite');const query=Database.prototype.query;let entered=0;
+ Database.prototype.query=function(sql,...args){const stmt=query.call(this,sql,...args);if(sql.startsWith('INSERT INTO note_retrieval_chunks(')){const run=stmt.run;Object.defineProperty(stmt,'run',{configurable:true,value:function(...values){entered++;throw Object.assign(Error('entered note busy'),{code:'SQLITE_BUSY'})}})}return stmt};
+ let error=null;try{const {runNoteIndexPhase}=await import('./src/note-retrieval/coordinator.ts');await runNoteIndexPhase()}catch(e){error=e.message}console.log('NOTE_ENTERED='+JSON.stringify({error,entered}));`;
+ const child=spawn(process.execPath,['-e',script],{cwd:resolve(import.meta.dir,'../..'),env:process.env,stdio:['ignore','pipe','pipe','pipe']});let output='',errors='';child.stdout!.on('data',b=>output+=b);child.stderr!.on('data',b=>errors+=b);(child.stdio[3] as any).end(JSON.stringify(binding()));const [exit]=await once(child,'exit');
+ expect(exit,errors).toBe(0);expect(JSON.parse(/NOTE_ENTERED=([^\n]+)/.exec(output)![1])).toEqual({error:'entered note busy',entered:1});
+ expect(chunks()).toEqual(previous);expect(snapshot()).toMatchObject({published,staging:null,writer_pid:null,state:'stale'});
+});
+
+test('note cleanup denial retains the primary cause and never writes a replacement authority marker',async()=>{
+ put('denied.md','old');expect((await run()).code).toBe(0);const previous=chunks(),published=snapshot().published;put('denied.md','new');
+ const configPath=join(ws.workspace,'.piclaw','config.json');mkdirSync(join(ws.workspace,'.piclaw'),{recursive:true});
+ const script=`const {Database}=await import('bun:sqlite');const fs=await import('node:fs');const query=Database.prototype.query;let changed=false;
+ Database.prototype.query=function(sql,...args){const stmt=query.call(this,sql,...args);if(sql.startsWith('INSERT INTO note_retrieval_chunks(')){const run=stmt.run;Object.defineProperty(stmt,'run',{configurable:true,value:function(...values){const value=run.apply(this,values);if(!changed){changed=true;fs.writeFileSync(${JSON.stringify(configPath)},JSON.stringify({domains:{access:{mode:'family-shared'}}}))}return value}})}return stmt};
+ let result=null;try{const {runNoteIndexPhase}=await import('./src/note-retrieval/coordinator.ts');await runNoteIndexPhase()}catch(error){result={name:error.name,cause:error.cause?.name}}console.log('NOTE_DENIED='+JSON.stringify(result));`;
+ const child=spawn(process.execPath,['-e',script],{cwd:resolve(import.meta.dir,'../..'),env:process.env,stdio:['ignore','pipe','pipe','pipe']});let output='',errors='';child.stdout!.on('data',b=>output+=b);child.stderr!.on('data',b=>errors+=b);(child.stdio[3] as any).end(JSON.stringify(binding()));const [exit]=await once(child,'exit');
+ expect(exit,errors).toBe(0);expect(JSON.parse(/NOTE_DENIED=([^\n]+)/.exec(output)![1])).toEqual({name:'NoteIndexDenied',cause:'NoteIndexDenied'});
+ expect(chunks()).toEqual(previous);expect(snapshot()).toMatchObject({published,state:'indexing',writer_pid:child.pid});expect(snapshot().staging).not.toBeNull();
 });

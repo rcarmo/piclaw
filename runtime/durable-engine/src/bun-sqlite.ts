@@ -15,7 +15,7 @@ type SqliteWriteScope = { admission?: () => void; source?: { check(): void; pers
 /** Inactive host bridge. The host must acquire ownership BEFORE construction. */
 export class BunSqliteDatabase implements SqliteDatabase {
   private readonly db: Database;
-  private stopCheckpoint?: () => void;
+  private stopCheckpoint?: () => void | Promise<void>;
   private readonly callback = new AsyncLocalStorage<boolean>();
   private tail: Promise<unknown> = Promise.resolve();
   private closing?: Promise<void>;
@@ -228,6 +228,6 @@ export class BunSqliteDatabase implements SqliteDatabase {
   close(): Promise<void> {
     if (this.callback.getStore()) return Promise.reject(new Error("Use the transaction handle inside its callback"));
     // Seal now, close only after all admitted operations settle, including failures.
-    return this.closing ??= this.tail.then(() => { this.stopCheckpoint?.(); this.stopCheckpoint = undefined; this.db.close(); });
+    return this.closing ??= this.tail.then(async () => { await this.stopCheckpoint?.(); this.stopCheckpoint = undefined; this.db.close(); });
   }
 }

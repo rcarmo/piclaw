@@ -21,7 +21,7 @@ try {
   initDatabase(); const db = getDb();
   assert.deepEqual(db.query("PRAGMA journal_mode").get(), { journal_mode: "wal" });
   assert.deepEqual(db.query("PRAGMA synchronous").get(), { synchronous: 2 });
-  assert.deepEqual(db.query("PRAGMA busy_timeout").get(), { timeout: 5000 });
+  assert.deepEqual(db.query("PRAGMA busy_timeout").get(), { timeout: 0 });
   const seedStart = performance.now();
   // Use real atomic helpers, but outer fixture transaction excludes per-output
   // durable commits from seed time. Runtime writes/FS cleanup are not profiled.

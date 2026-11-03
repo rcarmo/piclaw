@@ -33,7 +33,7 @@ try {
   assert.deepEqual(deleteToolOutputsBefore("2026-01-01"), []);
   assert.deepEqual(db.query("PRAGMA journal_mode").get(), { journal_mode: "wal" });
   assert.deepEqual(db.query("PRAGMA synchronous").get(), { synchronous: 2 });
-  assert.deepEqual(db.query("PRAGMA busy_timeout").get(), { timeout: 5000 });
+  assert.deepEqual(db.query("PRAGMA busy_timeout").get(), { timeout: 0 });
   assert.deepEqual(db.query("PRAGMA quick_check").get(), { quick_check: "ok" });
   console.log(JSON.stringify({ status: "pass", rollback: true, secondConnection: true, triggerCounts: true, idempotent: true }));
   db.close(true);

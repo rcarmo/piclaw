@@ -271,8 +271,8 @@ test("tracked bash auto-injects env-style keychain entries", async () => {
     expect(result.exitCode).toBe(0);
     expect(output.trim()).toBe("stripe-secret|unset");
   } finally {
-    deleteKeychainEntry("STRIPE_KEY");
-    deleteKeychainEntry("ssh/prod");
+    await deleteKeychainEntry("STRIPE_KEY");
+    await deleteKeychainEntry("ssh/prod");
     restore();
   }
 });
@@ -308,7 +308,7 @@ test("tracked bash resolves keychain env", async () => {
     expect(result.exitCode).toBe(0);
     expect(output.trim()).toContain("bash-secret|bash-user");
   } finally {
-    deleteKeychainEntry("bash-env");
+    await deleteKeychainEntry("bash-env");
     restore();
   }
 });
@@ -339,7 +339,7 @@ test("tracked bash resolves keychain placeholders in commands", async () => {
     expect(result.exitCode).toBe(0);
     expect(output.trim()).toBe("cmd-secret cmd-user");
   } finally {
-    deleteKeychainEntry("bash-cmd");
+    await deleteKeychainEntry("bash-cmd");
     restore();
   }
 });

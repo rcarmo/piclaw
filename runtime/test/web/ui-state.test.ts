@@ -16,16 +16,9 @@ test('server UI state persists theme, tint, meters, and output padding in global
   db.initDatabase();
   const uiState = await importFresh<typeof import('../../src/channels/web/ui-state.js')>('../../src/channels/web/ui-state.js', import.meta.url);
 
-  expect(await uiState.admitServerUiThemeConfig({ theme: 'dracula', tint: '#bd93f9' })).toEqual({
-    theme: 'dracula',
-    tint: '#bd93f9',
-  });
-  expect(uiState.setServerUiMetersConfig({ enabled: true, collapsed: true })).toEqual({
-    enabled: true,
-    collapsed: true,
-  });
-  expect(uiState.setServerUiOutputConfig({ outputPad: 32 })).toEqual({
-    outputPad: 24,
+  expect(await uiState.admitServerUiState({ ui_theme: { theme: 'dracula', tint: '#bd93f9' },
+    ui_meters: { enabled: true, collapsed: true }, ui_output: { outputPad: 32 } }, () => {})).toEqual({
+    ui_theme: { theme: 'dracula', tint: '#bd93f9' }, ui_meters: { enabled: true, collapsed: true }, ui_output: { outputPad: 24 },
   });
 
   expect(db.extensionKvGet('piclaw-ui', 'theme', 'global')).toEqual({
@@ -45,7 +38,7 @@ test('server UI state persists theme, tint, meters, and output padding in global
     ui_output: { outputPad: 24 },
   });
 
-  ws.cleanup();
+  db.closeDatabase(); ws.cleanup();
 });
 
 for (const mode of ['valid', 'revoked', 'cancelled'] as const) {

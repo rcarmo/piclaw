@@ -1240,3 +1240,51 @@ test.skipIf(!hasEngine)('reordered native queue executes second accepted source 
     expect(f.db.query('SELECT COUNT(*) AS n FROM messages WHERE is_bot_message=1').get()).toEqual({n:2});
   }finally{shutdown.abort();await adapter.close();}
 },15000);
+
+for (const timing of ['json', 'preparation'] as const) for (const busy of [false, true]) {
+  test(`prepared request retains pre-JSON database profile authority through SQL phases: ${timing}, queued=${busy}`, async () => {
+    const f = fixture(undefined, () => true), store = process.env.PICLAW_STORE, before = f.snapshot();
+    f.channel.getInputSourceAdmission = () => f.accept; f.channel.getQueuedInputSourceAdmission = () => f.acceptQueued;
+    f.busy(busy); f.expectSources(1);
+    f.channel.prepareInputText = (_chat, text) => {
+      if (timing === 'preparation') process.env.PICLAW_STORE = store + '-rebound';
+      return { text, assertCurrent() {} };
+    };
+    const req = new Request('http://fixture/agent/default/message', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://fixture' }, body: JSON.stringify({ content: 'must not adopt a different profile' }) });
+    if (timing === 'json') {
+      const json = req.json.bind(req); req.json = async () => { process.env.PICLAW_STORE = store + '-rebound'; return json(); };
+    }
+    try {
+      const response = await f.channel.handleRequest(req);
+      expect(response.status).toBeGreaterThanOrEqual(400); expect(f.snapshot()).toEqual(before);
+      expect(f.channel.getQueuedFollowupItems('web:default')).toEqual([]); expect(f.events).toEqual([]); expect(f.jobs).toEqual([]);
+    } finally { if (store === undefined) delete process.env.PICLAW_STORE; else process.env.PICLAW_STORE = store; }
+  });
+}
+
+test('stale request profile is rejected before source preparation can publish native allocation metadata', async () => {
+  const f = fixture(), store = process.env.PICLAW_STORE, before = f.snapshot(); let preparations = 0;
+  f.channel.prepareInputSourceAdmission = async () => { preparations++; f.db.query("INSERT INTO router_state(key,value) VALUES ('stale-allocation','must not run')").run(); };
+  const req = new Request('http://fixture/agent/default/message', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://fixture' }, body: JSON.stringify({ content: 'stale preparation' }) });
+  const json = req.json.bind(req); req.json = async () => { process.env.PICLAW_STORE = store + '-rebound'; return json(); };
+  try {
+    const response = await f.channel.handleRequest(req);
+    expect(response.status).toBeGreaterThanOrEqual(400); expect(preparations).toBe(0); expect(f.snapshot()).toEqual(before);
+    expect(f.db.query("SELECT value FROM router_state WHERE key='stale-allocation'").get()).toBeNull();
+  } finally { if (store === undefined) delete process.env.PICLAW_STORE; else process.env.PICLAW_STORE = store; }
+});
+
+for (const busy of [false, true]) test(`prepared request forwards synchronous SQL authority phases for direct/queued admission: queued=${busy}`, async () => {
+  const f = fixture(undefined, () => true); f.busy(busy); f.expectSources(1);
+  f.channel.prepareInputText = (_chat, text) => ({ text, assertCurrent() {} });
+  f.channel.getInputSourceAdmission = () => f.accept; f.channel.getQueuedInputSourceAdmission = () => f.acceptQueued;
+  const body = JSON.stringify({ content: 'phase-pinned prepared input' });
+  const req = new Request('http://fixture/agent/default/message', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://fixture' }, body });
+  const { bindInputRequestAuthority, releaseInputRequestAuthority } = await import('../../../src/channels/web/messaging/input-request-authority.js');
+  const phases: string[] = [];
+  bindInputRequestAuthority(req, 'web:default', body, phase => {
+    if (f.db.inTransaction) phases.push(phase ?? 'missing');
+  });
+  try { expect((await f.channel.handleRequest(req)).status).toBe(201); expect(phases).toEqual(['before', 'after']); }
+  finally { releaseInputRequestAuthority(req); }
+});

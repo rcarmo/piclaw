@@ -98,7 +98,7 @@ function sqliteSubject(
 ): SqliteSubject {
   const database = new Database(path, { strict: true });
   database.exec(
-    "PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000",
+    "PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=0",
   );
   installServiceWorkSchema(database);
   const runtime = new Runtime(ctx, trace);

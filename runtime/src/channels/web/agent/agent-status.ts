@@ -273,13 +273,14 @@ export async function handleAgentContextRequest(req: Request, ctx: AgentStatusCo
 export async function handleAgentModelsRequest(req: Request, ctx: AgentStatusContext): Promise<Response> {
   const { result, durationMs } = await measureAsync(async () => {
     const chatJid = resolveChatJid(req, ctx.defaultChatJid);
+    const completed = await ctx.getProviderReadyCompletedForInstance(req);
     const payload = await ctx.getAvailableModels(chatJid);
     if (payload && typeof payload === "object") {
       return ctx.json({
         ...payload as Record<string, unknown>,
         oobe: {
           ...((payload as { oobe?: Record<string, unknown> }).oobe ?? {}),
-          provider_ready_completed_instance: ctx.getProviderReadyCompletedForInstance(),
+          provider_ready_completed_instance: completed,
         },
       }, 200);
     }
@@ -300,6 +301,7 @@ export async function handleAgentUiSnapshotRequest(req: Request, ctx: AgentStatu
 }): Promise<Response> {
   const chatJid = resolveChatJid(req, ctx.defaultChatJid);
   const { result, durationMs } = await measureAsync(async () => {
+    const completed = await ctx.getProviderReadyCompletedForInstance(req);
     const status = buildAgentStatusSnapshot(chatJid, ctx);
     const sections = await Promise.allSettled([
       ctx.getAvailableModels(chatJid, { includeCatalogue: false, includeProviderDiagnostics: false }),
@@ -311,7 +313,7 @@ export async function handleAgentUiSnapshotRequest(req: Request, ctx: AgentStatu
       status,
       model: model.status === 'fulfilled' ? {
         ...(model.value as Record<string, unknown>),
-        oobe: { provider_ready_completed_instance: ctx.getProviderReadyCompletedForInstance() },
+        oobe: { provider_ready_completed_instance: completed },
       } : null,
       context: context.status === 'fulfilled' ? context.value : null,
       metrics: metrics.status === 'fulfilled' ? metrics.value : null,

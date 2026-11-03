@@ -218,7 +218,7 @@ async function handleKeychainCommand(args: string[]): Promise<void> {
     }
     case "delete": {
       if (!name) throw new Error("Keychain name is required.");
-      const removed = deleteKeychainEntry(name);
+      const removed = await deleteKeychainEntry(name);
       if (!removed) {
         console.log(`Keychain entry not found: ${name}`);
       } else {

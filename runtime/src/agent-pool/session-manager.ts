@@ -57,7 +57,6 @@ export interface AgentSessionManagerOptions {
   createCustomToolOverrides?: (chatJid: string) => unknown[];
   getSessionExtensionFactories?: (chatJid: string) => Promise<ExtensionFactory[]>;
   bindSession?: (runtime: AgentSessionRuntime, chatJid: string) => Promise<void>;
-  ensureBranchRegistration?: (chatJid: string, session?: AgentSession | null) => void;
   onInfo?: (message: string, details: Record<string, unknown>) => void;
   onWarn?: (message: string, details: Record<string, unknown>) => void;
   onError?: (message: string, details: Record<string, unknown>) => void;
@@ -271,7 +270,6 @@ export class AgentSessionManager {
     await this.options.bindSession!(runtime, chatJid);
     requireOwnedSessionExecution(chatJid);
     this.assertMcpAdmission(epoch);
-    this.options.ensureBranchRegistration!(chatJid, runtime.session);
   }
 
   async getOrCreate(chatJid: string): Promise<AgentSessionRuntime> {

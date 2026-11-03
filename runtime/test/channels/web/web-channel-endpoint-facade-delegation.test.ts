@@ -5,7 +5,6 @@ import * as status from "../../../src/channels/web/agent/agent-status.js";
 import * as manifest from "../../../src/channels/web/manifest.js";
 import * as mutations from "../../../src/channels/web/post-mutations.js";
 import * as posts from "../../../src/channels/web/handlers/posts.js";
-import * as timeline from "../../../src/channels/web/timeline-service.js";
 const leafRestores: (() => void)[] = [];
 afterEach(() => { for (const restore of leafRestores.splice(0)) restore(); });
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
@@ -120,7 +119,7 @@ describe("WebChannel endpoint facade delegation", () => {
     if ("handleAgentBranches" in endpointMocks) { const spy = spyOn(status, "handleAgentBranchesRequest").mockImplementation((...args: any[]) => (endpointMocks as any).handleAgentBranches(...args)); leafRestores.push(() => spy.mockRestore()); }
     if ("handleAgentRespond" in endpointMocks) { const spy = spyOn(ui, "handleAgentRespondRequest").mockImplementation((...args: any[]) => (endpointMocks as any).handleAgentRespond(...args)); leafRestores.push(() => spy.mockRestore()); }
     const post = spyOn(posts, "handlePost").mockImplementation((_channel, req, isReply) => endpointMocks.handlePost(req, isReply)); leafRestores.push(() => post.mockRestore());
-    const remove = spyOn(timeline, "deletePostResponse").mockImplementation((_chat, id, cascade) => { const value = endpointMocks.handleDeletePost(undefined as any, id, cascade ?? false); return { deletedIds: [], body: "delete", status: value.status } as any; }); leafRestores.push(() => remove.mockRestore());
+    const remove = spyOn(mutations, "handleDeletePostRequest").mockImplementation(async (_channel, req, id, cascade) => endpointMocks.handleDeletePost(req, id, cascade)); leafRestores.push(() => remove.mockRestore());
 
     expect(await (await fixture.channel.handleAgents()).text()).toBe("agents");
     expect(await (await fixture.channel.handleManifest(new Request("https://example.com/manifest.json", { method: "HEAD" }))).text())
@@ -136,7 +135,7 @@ describe("WebChannel endpoint facade delegation", () => {
     expect(await fixture.channel.handleThought("draft", "turn-1").text()).toBe("thought");
     expect((await fixture.channel.handleThoughtVisibility(new Request("https://example.com/agent/thought/visibility", { method: "POST" }))).status)
       .toBe(203);
-    expect(fixture.channel.handleDeletePost(new Request("https://example.com/post/9?cascade=true", { method: "DELETE" }), 9, true).status)
+    expect((await fixture.channel.handleDeletePost(new Request("https://example.com/post/9?cascade=true", { method: "DELETE" }), 9, true)).status)
       .toBe(206);
     expect((await fixture.channel.handleUpdatePost(new Request("https://example.com/post/9", { method: "PATCH" }), 9)).status).toBe(204);
     expect((await fixture.channel.handleInternalPost(new Request("https://example.com/internal/post", { method: "POST" }))).status).toBe(201);

@@ -32,7 +32,7 @@ import {
 } from "../../../core/config.js";
 import { generateTotpQr } from "../../../utils/totp-qr.js";
 import { ensureAvatarCache, resolveAvatarUrl, type AvatarKind } from "../media/avatar-service.js";
-import { getServerUiOutputConfig, getServerUiThemeConfig, admitServerUiOutputConfig, admitServerUiThemeConfig } from "../ui-state.js";
+import { getServerUiState, admitServerUiState, type ServerUiStatePatch } from "../ui-state.js";
 
 export interface GeneralSettingsData {
   assistantName: string;
@@ -169,10 +169,11 @@ function buildTotpSettingsData(): GeneralSettingsData["instanceTotp"] {
 }
 
 export function getGeneralSettingsData(): GeneralSettingsData {
+  const uiState = getServerUiState();
   const identity = getIdentityConfig();
   const web = getWebRuntimeConfig();
-  const uiTheme = getServerUiThemeConfig();
-  const uiOutput = getServerUiOutputConfig();
+  const uiTheme = uiState.ui_theme;
+  const uiOutput = uiState.ui_output;
   return {
     assistantName: identity.assistantName || "PiClaw",
     assistantAvatar: identity.assistantAvatar || "",
@@ -283,17 +284,18 @@ export async function saveGeneralSettings(input: GeneralSettingsInput, authorise
     : (typeof input.uiTint === "string" && input.uiTint.trim())
       ? input.uiTint.trim()
       : null;
-  if (nextUiTheme !== undefined || nextUiTint !== undefined) {
-    await admitServerUiThemeConfig({
-      ...(nextUiTheme !== undefined ? { theme: nextUiTheme || "default" } : {}),
-      ...(nextUiTint !== undefined ? { tint: nextUiTint } : {}),
-    }, current, signal);
-  }
-
+  const uiPatch: ServerUiStatePatch = {};
+  if (nextUiTheme !== undefined || nextUiTint !== undefined) uiPatch.ui_theme = {
+    ...(nextUiTheme !== undefined ? { theme: nextUiTheme || "default" } : {}),
+    ...(nextUiTint !== undefined ? { tint: nextUiTint } : {}),
+  };
   const nextOutputPad = normalizeOptionalInt(input.outputPad, 0, 24);
-  if (nextOutputPad !== undefined) {
-    await admitServerUiOutputConfig({ outputPad: nextOutputPad }, current, signal);
-  }
-
-  return getGeneralSettingsData();
+  if (nextOutputPad !== undefined) uiPatch.ui_output = { outputPad: nextOutputPad };
+  current();
+  // Response preparation may create the widget token or fail reading config.
+  // Complete that work before SQL; no fallible getters follow the commit.
+  const data = getGeneralSettingsData();
+  if (!Object.keys(uiPatch).length) return data;
+  const uiState = await admitServerUiState(uiPatch, current, signal);
+  return { ...data, uiTheme: uiState.ui_theme.theme, uiTint: uiState.ui_theme.tint, outputPad: uiState.ui_output.outputPad };
 }

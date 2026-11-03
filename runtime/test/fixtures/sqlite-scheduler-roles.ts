@@ -77,7 +77,7 @@ try {
     expect(new Set(registrations).size).toBe(3);
     const scheduler = registrations[2]!;
     for (const [i, db] of registrations.entries()) {
-      expect(db.query("PRAGMA busy_timeout").get()).toEqual({ timeout: i === 1 ? 0 : 5000 });
+      expect(db.query("PRAGMA busy_timeout").get()).toEqual({ timeout: 0 });
       expect(db.query("PRAGMA synchronous").get()).toEqual({ synchronous: 2 });
       expect(db.query("PRAGMA secure_delete").get()).toEqual({ secure_delete: 1 });
       expect(db.query("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: i === 0 ? 0 : 1 });
