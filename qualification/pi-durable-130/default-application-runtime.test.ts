@@ -1081,8 +1081,9 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
         expect(args[2]).toBe(standardDelegate ? `factory-tool-${calls}` : "child-private-read");
         expect(captured.delegateModel).toMatchObject({ provider: modelB.provider, modelId: modelB.id });
         childSourceCaptures++;
-        // The real capture has already admitted this model. Revoke across its
-        // await boundary, before the default factory returns its effect guard.
+        // The real capture has already admitted this model. Change financial
+        // policy or revoke provider approval across its await boundary.
+        // Provider revocation still denies the tool; expense caps must not.
         if (scenario === "native-delegate-revoke-cap" || standardDelegate) saveBudgetCap({ scope: "instance_daily", metric: "api_usd_micros", amount: 0, timezone: "UTC" }, root);
         else extensionKvSet("delegate", "config", { searchable_providers: [], excluded_providers: [], excluded_models: [] }, "global");
       }
@@ -4281,7 +4282,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
   }
   if (nativeDelegate) {
     if (writeDelegate) {
-      for (const id of revokeDelegate ? ["A"] : ["A", "B"]) expect(readFileSync(childWritePath(id), "utf8")).toBe(standardDelegate && !revokeDelegate ? `WRITTEN_${id}` : "OLD");
+      for (const id of revokeDelegate ? ["A"] : ["A", "B"]) expect(readFileSync(childWritePath(id), "utf8")).toBe(standardDelegate ? `WRITTEN_${id}` : "OLD");
       expect(childRequests).toBe(revokeDelegate ? 1 : 4);
       if (revokeDelegate) {
         expect(calls).toBe(2);
@@ -4298,7 +4299,15 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
         const exposed = records.flatMap(row => JSON.parse(row.record).model ?? []).flatMap((message: { toolsAdded?: { name: string }[] }) => message.toolsAdded ?? []).map((tool: { name: string }) => tool.name).sort();
         expect(exposed).toEqual((standardDelegate ? ["read", "bash", "edit", "write", "find", "ls", "grep"] : ["read", "grep", "find", "ls"]).sort());
       }
-      if (revokeDelegate) expect(childSourceCaptures).toBe(1);
+      if (revokeDelegate) {
+        expect(childSourceCaptures).toBe(1);
+        const committed = (root.query('SELECT record FROM entries WHERE conversation_id=?').all(childIds[0]!.id) as { record: string }[])
+          .flatMap(row => JSON.parse(row.record).model ?? [])
+          .filter((message: { role: string; toolName?: string }) => message.role === 'toolResult' && message.toolName === 'write');
+        expect(committed).toHaveLength(1);
+        expect(committed[0].isError).not.toBe(true);
+        expect(root.query('SELECT enabled FROM budget_caps').all()).toEqual([{ enabled: 1 }]);
+      }
       captureSpies.forEach(spy => spy.mockRestore());
       await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close(); owner.release(); await closeDatabase();
       sdkSpies.forEach(spy => spy.mockRestore()); return;
@@ -4308,13 +4317,23 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       const capped = scenario === "native-delegate-revoke-cap";
       expect(childRequests).toBe(1);
       expect(calls).toBe(capped ? 2 : 3);
-      expect(sentinelReads).toBe(0);
+      expect(sentinelReads).toBe(capped ? 1 : 0);
       expect(requested).toEqual(capped ? [model.id, modelB.id] : [model.id, modelB.id, model.id]);
       expect(root.query("SELECT id FROM conversations WHERE owner_task_id IS NOT NULL").all()).toHaveLength(1);
       const entries = JSON.stringify(root.query("SELECT * FROM entries").all());
-      expect(entries).not.toContain(sentinel);
+      if (capped) expect(entries).toContain(sentinel);
+      else expect(entries).not.toContain(sentinel);
       expect(planRequests.join("\n")).not.toContain(sentinel);
       if (capped) {
+        // Expense policy cannot block the captured read. It still blocks the
+        // subsequent model request in the not-yet-retired request owner.
+        const committed = (root.query('SELECT record FROM entries').all() as { record: string }[])
+          .flatMap(row => JSON.parse(row.record).model ?? [])
+          .filter((message: { role: string; toolCallId?: string }) => message.role === 'toolResult' && message.toolCallId === 'child-private-read');
+        expect(committed).toHaveLength(1);
+        expect(committed[0].isError).not.toBe(true);
+        expect(JSON.stringify(committed[0].content)).toContain(sentinel);
+        expect(root.query('SELECT enabled FROM budget_caps').all()).toEqual([{ enabled: 1 }]);
         expect(observedResults.size).toBe(0);
         expect(root.query("SELECT id FROM messages WHERE is_bot_message=1").all()).toHaveLength(expectedFailedTurn ? 1 : 0);
         expect(root.query("SELECT state FROM service_effect_s01_sources WHERE source_id='factory-input'").get()).toEqual({ state: expectedFailedTurn ? "consumed" : "claimed" });
