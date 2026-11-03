@@ -758,9 +758,8 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   const defaultThinking = (model: any) => getSupportedThinkingLevels(model).includes("medium") ? "medium" as const : getSupportedThinkingLevels(model)[0]!;
   // Allocate/recover the shared namespace before any accepted task or API read.
   codeReview?.addon.reviewService();
-  const check = (model: { provider: string; id: string }, signal: AbortSignal,backgroundBudget=false) => {
+  const check = (model: { provider: string; id: string }, signal: AbortSignal) => {
     assertAdmission(); assert(); signal.throwIfAborted();
-    if (!backgroundBudget&&root.query("SELECT 1 FROM budget_caps WHERE enabled=1 LIMIT 1").get()) throw Error("Native model budget admission unavailable");
     if (!available.some(entry => entry.provider === model.provider && entry.id === model.id)) throw Error("Host model not approved");
     if (!host.modelRegistry.getAvailable().some(entry => entry.provider === model.provider && entry.id === model.id)) throw Error("Host model no longer available");
     const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
@@ -828,7 +827,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     // recheck must not turn concurrently retained bookkeeping into a model error.
     if(!prepared?.accounted)prepared?.assertAccountingReady();
     if(prepared&&!prepared.accounted&&root.query('SELECT 1 FROM budget_caps WHERE enabled=1 LIMIT 1').get())throw new BudgetRequestError('budget_denied');
-    check(model,signal,prepared?.accounted===true);
+    check(model,signal);
   };
   // SDK hook failures are reported but can still reach the model bridge. Keep
   // expected Goal denials on the exact task-owned signal, never on the app lifetime.
@@ -939,7 +938,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       return reservation;
     },
     assertStoredOutcomeCurrent(model, signal) {
-      preparedRequests.get(signal)?.assertCurrent(); check(model, signal, true);
+      preparedRequests.get(signal)?.assertCurrent(); check(model, signal);
     },
     async authorize(model, _kind, signal) { checkRequest(model, signal); }, assertCurrent(model, _kind, signal) { checkRequest(model, signal); } });
   regretsDecision = (captured, authority, scope) => createHostRegretsAccountedDecision({
@@ -1299,13 +1298,13 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
           sourceIdForAddon:id=>nativeBackgroundSourceId(addonBackgroundOrigin(root,id)),
           prepareAddon(id,existing,history){
             const baseline=existing??history?.previous.at(-1);
-            const choice=baseline?{provider:baseline.policy.model.provider,id:baseline.policy.model.modelId}:ref;check(choice,lifetime.signal,true);
+            const choice=baseline?{provider:baseline.policy.model.provider,id:baseline.policy.model.modelId}:ref;check(choice,lifetime.signal);
             const physical=host.modelRuntime.getPhysicalModel(choice.provider,choice.id)!;
             if(baseline)assertNativeBackgroundModel(baseline.policy,physical);
             const payload=prepareAddonBackgroundPayload(root,id,{provider:physical.provider,modelId:physical.id,api:physical.api},existing,name=>defaultToolNames.includes(name as typeof defaultToolNames[number])&&tools.some(tool=>tool.name===name),history);
-            check({provider:payload.policy.model.provider,id:payload.policy.model.modelId},lifetime.signal,true);return payload;
+            check({provider:payload.policy.model.provider,id:payload.policy.model.modelId},lifetime.signal);return payload;
           },
-          assertCurrent(payload){check({provider:payload.policy.model.provider,id:payload.policy.model.modelId},lifetime.signal,true);assertBackgroundCurrent(payload);
+          assertCurrent(payload){check({provider:payload.policy.model.provider,id:payload.policy.model.modelId},lifetime.signal);assertBackgroundCurrent(payload);
             const model=host.modelRuntime.getPhysicalModel(payload.policy.model.provider,payload.policy.model.modelId)!;assertNativeBackgroundModel(payload.policy,model);},
           assertExecution(payload){
             const identity=nativeBackgroundIdentity(payload.policy),binding=readNativeBackgroundContexts(root,mapping.domain).find(entry=>entry.contextKey===identity.contextKey);
@@ -1324,7 +1323,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
             const directory=openSync(payloadDir,'r');try{fsyncSync(directory);}finally{closeSync(directory);}
           },
           publish: (tx,payload,history)=>publishNativeBackgroundContext(tx,mapping.domain,payload,(payload.policy.origin.kind==='dream'?[...tools,...dreamTools]:tools).filter(tool=>payload.policy.allowedTools.includes(tool.name)),[registry.snapshot().extension('app.host-builtins')!,backgroundExtension],()=>{
-            check({provider:payload.policy.model.provider,id:payload.policy.model.modelId},lifetime.signal,true);assertBackgroundCurrent(payload);
+            check({provider:payload.policy.model.provider,id:payload.policy.model.modelId},lifetime.signal);assertBackgroundCurrent(payload);
           },history),
         },
         assertAccountingReady(operationId, terminal) { assert(); assertOperationAccountingReady(root, operationId, terminal, {domain:mapping.domain,incarnation:mapping.domain}); },
@@ -1456,7 +1455,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     const invocation=Object.freeze({invocationId:request.invocationId,chatJid:request.chatJid,mode:request.mode,days:request.days,model:request.model,timeoutMs:request.timeoutMs,acceptedAt:request.acceptedAt});
     if(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(invocation.invocationId)||!invocation.chatJid||!['manual','auto'].includes(invocation.mode)||!Number.isSafeInteger(invocation.days)||invocation.days<1||!Number.isSafeInteger(invocation.timeoutMs)||invocation.timeoutMs<1)throw Error('Invalid Dream invocation');
     const label=invocation.model?.trim(),choices=available.filter(model=>label?(model.provider+'/'+model.id===label||model.id===label):(model.provider===ref.provider&&model.id===ref.id));
-    if(choices.length!==1)throw Error('Exact approved Dream model required');const choice=choices[0]!;check(choice,lifetime.signal,true);
+    if(choices.length!==1)throw Error('Exact approved Dream model required');const choice=choices[0]!;check(choice,lifetime.signal);
     const physical=host.modelRuntime.getPhysicalModel(choice.provider,choice.id)!;
     const allowedTools=['read','edit','write','grep','find','ls','messages','search_workspace'];
     if(allowedTools.some(name=>![...tools,...dreamTools].some(tool=>tool.name===name)))throw Error('Full native Dream tool set unavailable');
