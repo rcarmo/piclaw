@@ -97,8 +97,6 @@ export {
   extensionKvList,
   extensionKvQuery,
   extensionKvClear,
-  extensionKvDeleteByChatJid,
-  extensionKvPrune,
   type KvScope,
   type KvEntry,
   type KvQueryOptions,

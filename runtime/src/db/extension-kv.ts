@@ -198,21 +198,3 @@ export function extensionKvClear(
     .run(extensionId);
   return result.changes;
 }
-
-/** Delete all chat-scoped entries for a specific chat JID (used by branch cleanup). */
-export function extensionKvDeleteByChatJid(chatJid: string): number {
-  const db = getDb();
-  const result = db
-    .prepare("DELETE FROM extension_kv WHERE scope = 'chat' AND scope_key = ?")
-    .run(chatJid);
-  return result.changes;
-}
-
-/** Prune entries older than the given number of days. */
-export function extensionKvPrune(staleDays = 30): number {
-  const db = getDb();
-  const result = db
-    .prepare("DELETE FROM extension_kv WHERE scope = 'chat' AND updated_at < datetime('now', ?)")
-    .run(`-${staleDays} days`);
-  return result.changes;
-}
