@@ -12,7 +12,7 @@ type Action = 'handle' | 'root' | 'prune';
 const parent = 'web:request-parent', child = `${parent}:child`;
 async function fixture(disk: boolean, run: (input: { store: Store; manager: AgentBranchManager; pool: Map<string, PoolEntry>; path: string }) => Promise<void>) {
   return withTempWorkspaceEnv('branch-request-admission-', {}, async ws => {
-    const store = await importFresh<Store>('../src/db.js'); store.closeDatabase();
+    const store = await importFresh<Store>('../src/db.js'); await store.closeDatabase();
     const path = join(ws.store, 'branch.sqlite');
     store.initDatabase(disk ? { ...getRuntimeConfigPaths(), databasePath: path } : getRuntimeConfigPaths());
     store.storeChatMetadata(parent, '2026-01-01', 'Parent');
@@ -21,7 +21,7 @@ async function fixture(disk: boolean, run: (input: { store: Store; manager: Agen
     const pool = new Map<string, PoolEntry>();
     const manager = new AgentBranchManager({ pool, isActive: jid => pool.get(jid)?.runtime.session.isStreaming === true });
     try { await run({ store, manager, pool, path }); }
-    finally { const db = store.getDb(); if (db.inTransaction) db.exec('ROLLBACK'); store.closeDatabase(); }
+    finally { const db = store.getDb(); if (db.inTransaction) db.exec('ROLLBACK'); await store.closeDatabase(); }
   });
 }
 function invoke(manager: AgentBranchManager, action: Action, context: Context) {

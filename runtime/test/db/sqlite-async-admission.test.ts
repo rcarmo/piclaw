@@ -231,3 +231,16 @@ test('deferred foreign-key commit failure rolls back its real SQL prefix without
  await expect(admitSqliteWrite(db,()=>{entered++;db.exec("INSERT INTO input VALUES('prefix'); INSERT INTO child VALUES(42)");})).rejects.toThrow();
  expect(entered).toBe(1);expect(count(db)).toBe(0);expect(db.query('SELECT * FROM child').all()).toEqual([]);expect(db.inTransaction).toBe(false);
 }));
+
+test('async callback rejection prevents both its synchronous prefix and delayed SQL continuation',()=>fixture(async(db)=>{
+ let entered=0;
+ // @ts-expect-error Deliberate erased-boundary misuse must never enter async code.
+ await expect(admitSqliteWrite(db,async()=>{entered++;db.exec("INSERT INTO input VALUES('prefix')");await Bun.sleep(0);db.exec("INSERT INTO input VALUES('escaped')");})).rejects.toThrow('synchronous');
+ await Bun.sleep(10);expect(entered).toBe(0);expect(count(db)).toBe(0);
+}));
+
+test('closed-handle commit/rollback failure never repeats an entered SQL prefix',()=>fixture(async(db,reader)=>{
+ let entered=0,cleanup=0;
+ await expect(admitSqliteWrite(db,()=>{entered++;db.exec("INSERT INTO input VALUES('uncommitted prefix')");db.close();},()=>{},undefined,5000,()=>{},()=>{cleanup++;})).rejects.toThrow();
+ expect(entered).toBe(1);expect(cleanup).toBe(1);expect(count(reader)).toBe(0);
+}));
