@@ -316,6 +316,8 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
     action: () => ResultValue<T, ScheduledRunStoreError>,
     sourceSeq: number | null = null,
   ): Promise<ResultValue<T, ScheduledRunStoreError>> {
+    // Preserve asynchronous entry without waiting behind unrelated mutations.
+    await Promise.resolve();
     try {
       if (this.runtime.hitFault("before_effect", method)) return this.failed(method, effectId, operationId, version, errorOf("storage_unavailable"), sourceSeq);
       const result = await admitSqliteWrite(this.database, action);

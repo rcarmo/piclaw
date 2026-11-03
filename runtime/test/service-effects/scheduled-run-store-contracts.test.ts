@@ -791,3 +791,16 @@ test('scheduled admission regression: each competing WAL wait owns its existing 
     writer.close(); subject.dispose?.();
   }
 });
+
+test('scheduled mutation entry remains asynchronous without a private serial tail', async () => {
+  const subject = isolated();
+  try {
+    subject.authority.create(authorityTask('task:async-entry'));
+    const pending = subject.store.claimDue(dueClaim('async-entry'));
+    expect(subject.inspect().occurrences).toBe(0);
+    expect(subject.database.inTransaction).toBe(false);
+    const claimed = await pending;
+    expect(claimed.ok && claimed.value.length).toBe(1);
+    expect(subject.inspect().occurrences).toBe(1);
+  } finally {subject.dispose?.();}
+});
