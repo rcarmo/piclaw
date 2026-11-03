@@ -612,6 +612,8 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
     path: "/agent/keychain",
     handle: async (channel, req) => {
       try {
+        const binding = captureHostDatabaseBinding(), gateway = channel.authGateway, request = captureWebRequestAuthority(gateway, req);
+        const authorise = () => { binding(); if (channel.authGateway !== gateway) throw Error("Keychain request gateway changed"); request(); };
         const body = await req.json().catch(() => ({})) as Record<string, unknown>;
         const name = typeof body.name === "string" ? body.name.trim() : "";
         const secret = typeof body.secret === "string" ? body.secret : "";
@@ -624,7 +626,7 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
         const username = typeof body.username === "string" && body.username.trim() ? body.username.trim() : undefined;
         const userNote = typeof body.userNote === "string" ? body.userNote : undefined;
         const agentNote = typeof body.agentNote === "string" ? body.agentNote : undefined;
-        await setKeychainEntry({ name, type, secret, username, userNote, agentNote });
+        await setKeychainEntry({ name, type, secret, username, userNote, agentNote }, authorise, req.signal);
         return channel.json({ ok: true, name, type });
       } catch (error) {
         keychainLog.warn('Keychain write failed', { operation: 'keychain.write_failed', reason: getKeychainStatus().reason });
@@ -638,12 +640,14 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
     path: "/agent/keychain",
     handle: async (channel, req) => {
       try {
+        const binding = captureHostDatabaseBinding(), gateway = channel.authGateway, request = captureWebRequestAuthority(gateway, req);
+        const authorise = () => { binding(); if (channel.authGateway !== gateway) throw Error("Keychain request gateway changed"); request(); };
         const body = await req.json().catch(() => ({})) as Record<string, unknown>;
         const name = typeof body.name === "string" ? body.name.trim() : "";
         if (!name) {
           return channel.json({ error: "Provide name." }, 400);
         }
-        const removed = deleteKeychainEntry(name);
+        const removed = await deleteKeychainEntry(name, authorise, req.signal);
         return channel.json({ ok: true, removed });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -656,6 +660,8 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
     path: "/agent/keychain/notes",
     handle: async (channel, req) => {
       try {
+        const binding = captureHostDatabaseBinding(), gateway = channel.authGateway, request = captureWebRequestAuthority(gateway, req);
+        const authorise = () => { binding(); if (channel.authGateway !== gateway) throw Error("Keychain request gateway changed"); request(); };
         const body = await req.json().catch(() => ({})) as Record<string, unknown>;
         const name = typeof body.name === "string" ? body.name.trim() : "";
         if (!name) {
@@ -663,7 +669,7 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
         }
         const userNote = typeof body.userNote === "string" ? body.userNote : "";
         const agentNote = typeof body.agentNote === "string" ? body.agentNote : "";
-        const updated = updateKeychainEntryNotes(name, { userNote, agentNote });
+        const updated = await updateKeychainEntryNotes(name, { userNote, agentNote }, authorise, req.signal);
         if (!updated) return channel.json({ error: `Keychain entry not found: ${name}` }, 404);
         return channel.json({ ok: true, name, userNote, agentNote });
       } catch (error) {

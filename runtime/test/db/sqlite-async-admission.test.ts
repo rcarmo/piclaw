@@ -7,7 +7,7 @@ import {admitSqliteWrite,isSqliteContention} from '../../src/db/sqlite-async-adm
 
 async function fixture(run:(db:Database,blocker:Database)=>Promise<void>){
   const ws=createTempWorkspace('async-admission-');const path=join(ws.base,'fixture.db');
-  const db=new Database(path);db.exec('PRAGMA journal_mode=WAL;PRAGMA busy_timeout=5000;CREATE TABLE input(value TEXT)');const blocker=new Database(path);
+  const db=new Database(path);db.exec('PRAGMA journal_mode=WAL;PRAGMA busy_timeout=0;CREATE TABLE input(value TEXT)');const blocker=new Database(path);
   try{await run(db,blocker);}finally{blocker.close();db.close();ws.cleanup();}
 }
 const count=(db:Database)=>(db.query('SELECT count(*) AS n FROM input').get() as {n:number}).n;
@@ -29,32 +29,32 @@ test('the shared helper rejects a replaced database file before entering its cal
   const pending=admitSqliteWrite(db,()=>{entered++;db.exec("INSERT INTO input VALUES('stale')");});
   await Bun.sleep(0);renameSync(path,path+'.displaced');writeFileSync(path,'replacement');
   blocker.exec('ROLLBACK');await expect(pending).rejects.toThrow('database file changed');
-  expect(entered).toBe(0);expect(count(db)).toBe(0);expect(db.inTransaction).toBe(false);expect(timeout(db)).toBe(5000);
+  expect(entered).toBe(0);expect(count(db)).toBe(0);expect(db.inTransaction).toBe(false);expect(timeout(db)).toBe(0);
 }));
 
 test('contended admission yields while locked and commits once only after release',async()=>fixture(async(db,blocker)=>{
   blocker.exec('BEGIN IMMEDIATE');let auth=0,operations=0;
   const pending=admitSqliteWrite(db,()=>{operations++;db.query('INSERT INTO input VALUES(?)').run('one');return 7;},()=>{auth++;},new AbortController().signal);
-  await Bun.sleep(10);expect(operations).toBe(0);expect(timeout(db)).toBe(5000);expect(count(db)).toBe(0);
-  blocker.exec('ROLLBACK');expect(await pending).toBe(7);expect(count(db)).toBe(1);expect(operations).toBe(1);expect(auth).toBe(2);expect(timeout(db)).toBe(5000);
+  await Bun.sleep(10);expect(operations).toBe(0);expect(timeout(db)).toBe(0);expect(count(db)).toBe(0);
+  blocker.exec('ROLLBACK');expect(await pending).toBe(7);expect(count(db)).toBe(1);expect(operations).toBe(1);expect(auth).toBe(2);expect(timeout(db)).toBe(0);
 }));
 test('cancelled or revoked admission never writes or publishes success',async()=>fixture(async(db,blocker)=>{
   blocker.exec('BEGIN IMMEDIATE');const controller=new AbortController();
-  const pending=admitSqliteWrite(db,()=>db.exec("INSERT INTO input VALUES('cancelled')"),()=>{},controller.signal);await Bun.sleep(0);controller.abort(Error('cancelled'));await expect(pending).rejects.toThrow('cancelled');blocker.exec('ROLLBACK');expect(count(db)).toBe(0);expect(timeout(db)).toBe(5000);
+  const pending=admitSqliteWrite(db,()=>db.exec("INSERT INTO input VALUES('cancelled')"),()=>{},controller.signal);await Bun.sleep(0);controller.abort(Error('cancelled'));await expect(pending).rejects.toThrow('cancelled');blocker.exec('ROLLBACK');expect(count(db)).toBe(0);expect(timeout(db)).toBe(0);
   blocker.exec('BEGIN IMMEDIATE');let allowed=true;
   const revoked=admitSqliteWrite(db,()=>db.exec("INSERT INTO input VALUES('revoked')"),()=>{if(!allowed)throw Error('revoked');},new AbortController().signal);await Bun.sleep(0);allowed=false;blocker.exec('ROLLBACK');await expect(revoked).rejects.toThrow('revoked');expect(count(db)).toBe(0);
 }));
-test('deadline is bounded and all errors restore connection policy and rollback',async()=>fixture(async(db,blocker)=>{
+test('deadline is bounded and all errors preserve immutable policy and rollback',async()=>fixture(async(db,blocker)=>{
   blocker.exec('BEGIN IMMEDIATE');const start=performance.now();
-  await expect(admitSqliteWrite(db,()=>db.exec("INSERT INTO input VALUES('late')"),()=>{},new AbortController().signal,30)).rejects.toThrow();expect(performance.now()-start).toBeLessThan(500);expect(timeout(db)).toBe(5000);blocker.exec('ROLLBACK');expect(count(db)).toBe(0);
-  await expect(admitSqliteWrite(db,()=>{db.exec("INSERT INTO input VALUES('bad')");throw Error('unrelated');},()=>{},new AbortController().signal)).rejects.toThrow('unrelated');expect(count(db)).toBe(0);expect(timeout(db)).toBe(5000);
+  await expect(admitSqliteWrite(db,()=>db.exec("INSERT INTO input VALUES('late')"),()=>{},new AbortController().signal,30)).rejects.toThrow();expect(performance.now()-start).toBeLessThan(500);expect(timeout(db)).toBe(0);blocker.exec('ROLLBACK');expect(count(db)).toBe(0);
+  await expect(admitSqliteWrite(db,()=>{db.exec("INSERT INTO input VALUES('bad')");throw Error('unrelated');},()=>{},new AbortController().signal)).rejects.toThrow('unrelated');expect(count(db)).toBe(0);expect(timeout(db)).toBe(0);
   let checks=0;await expect(admitSqliteWrite(db,()=>db.exec("INSERT INTO input VALUES('post-revoke')"),()=>{if(++checks===2)throw Error('post-revoked');},new AbortController().signal)).rejects.toThrow('post-revoked');expect(count(db)).toBe(0);
 }));
 test('concurrent read-modify-write retries see fresh committed state without lost updates',async()=>fixture(async(db,blocker)=>{
   blocker.exec('BEGIN IMMEDIATE');const signal=new AbortController().signal;
   const append=(value:string)=>admitSqliteWrite(db,()=>{const before=count(db);db.query('INSERT INTO input VALUES(?)').run(`${before}:${value}`);},()=>{},signal);
   const first=append('a'),second=append('b');await Bun.sleep(0);blocker.exec('ROLLBACK');await Promise.all([first,second]);
-  expect(count(db)).toBe(2);expect(db.query('SELECT value FROM input ORDER BY rowid').all()).toEqual([{value:'0:a'},{value:'1:b'}]);expect(timeout(db)).toBe(5000);
+  expect(count(db)).toBe(2);expect(db.query('SELECT value FROM input ORDER BY rowid').all()).toEqual([{value:'0:a'},{value:'1:b'}]);expect(timeout(db)).toBe(0);
 }));
 
 for (const code of ['SQLITE_BUSY', 'SQLITE_BUSY_SNAPSHOT', 'SQLITE_LOCKED', 261]) {
@@ -68,7 +68,7 @@ for (const code of ['SQLITE_BUSY', 'SQLITE_BUSY_SNAPSHOT', 'SQLITE_LOCKED', 261]
     },()=>{},new AbortController().signal,5000,()=>{},()=>{rollbacks++;});
     await expect(pending).rejects.toBe(failure);
     expect(effects).toBe(1); expect(rollbacks).toBe(1); expect(count(db)).toBe(0);
-    expect(db.inTransaction).toBe(false); expect(timeout(db)).toBe(5000);
+    expect(db.inTransaction).toBe(false); expect(timeout(db)).toBe(0);
   }));
 }
 for (const phase of ['before','after'] as const) {
@@ -79,7 +79,7 @@ for (const phase of ['before','after'] as const) {
       checks++; if(current===phase)throw failure;
     },new AbortController().signal,40,()=>{},()=>{rollbacks++;})).rejects.toBe(failure);
     expect(checks).toBe(phase==='before'?1:2);expect(operations).toBe(phase==='before'?0:1);
-    expect(rollbacks).toBe(1);expect(count(db)).toBe(0);expect(timeout(db)).toBe(5000);
+    expect(rollbacks).toBe(1);expect(count(db)).toBe(0);expect(timeout(db)).toBe(0);
   }));
 }
 test('commit contention never replays a callback while a rollback-journal reader is pinned',async()=>fixture(async(db,reader)=>{
@@ -90,7 +90,7 @@ test('commit contention never replays a callback while a rollback-journal reader
     await expect(admitSqliteWrite(db,()=>{operations++;db.exec("INSERT INTO input VALUES('blocked commit')");},()=>{},
       new AbortController().signal,40,()=>{},()=>{rollbacks++;})).rejects.toThrow();
     expect(operations).toBe(1);expect(rollbacks).toBe(1);expect(db.inTransaction).toBe(false);
-    expect(count(db)).toBe(0);expect(timeout(db)).toBe(5000);
+    expect(count(db)).toBe(0);expect(timeout(db)).toBe(0);
   } finally {reader.exec('ROLLBACK');}
 }));
 test('nested callback contention rolls back only its savepoint and preserves the outer transaction',async()=>fixture(async(db)=>{
@@ -100,7 +100,7 @@ test('nested callback contention rolls back only its savepoint and preserves the
     await expect(admitSqliteWrite(db,()=>{operations++;db.exec("INSERT INTO input VALUES('inner')");throw failure;},()=>{},
       new AbortController().signal,40)).rejects.toBe(failure);
     expect(operations).toBe(1);expect(db.inTransaction).toBe(true);
-    expect(db.query('SELECT value FROM input').all()).toEqual([{value:'outer'}]);expect(timeout(db)).toBe(5000);
+    expect(db.query('SELECT value FROM input').all()).toEqual([{value:'outer'}]);expect(timeout(db)).toBe(0);
   } finally {db.exec('ROLLBACK');}
   expect(count(db)).toBe(0);
 }));
@@ -111,7 +111,7 @@ test('nested compensation is rejected before authorization or callback entry',as
     await expect(admitSqliteWrite(db,()=>{operations++;db.exec("INSERT INTO input VALUES('inner')");},()=>{authorizations++;},
       new AbortController().signal,5000,()=>{},()=>{compensations++;})).rejects.toThrow('Nested SQLite admission');
     expect(operations).toBe(0);expect(authorizations).toBe(0);expect(compensations).toBe(0);
-    expect(db.inTransaction).toBe(true);expect(timeout(db)).toBe(5000);
+    expect(db.inTransaction).toBe(true);expect(timeout(db)).toBe(0);
     expect(db.query('SELECT value FROM input').all()).toEqual([{value:'outer'}]);
   } finally {db.exec('ROLLBACK');}
   expect(count(db)).toBe(0);
@@ -128,7 +128,7 @@ test('compensation cannot join an outer transaction started during acquisition b
   try {
     await expect(pending).rejects.toThrow('Nested SQLite admission');
     expect(operations).toBe(0);expect(authorizations).toBe(0);expect(compensations).toBe(1);
-    expect(db.inTransaction).toBe(true);expect(timeout(db)).toBe(5000);
+    expect(db.inTransaction).toBe(true);expect(timeout(db)).toBe(0);
     expect(db.query('SELECT value FROM input').all()).toEqual([{value:'outer'}]);
   } finally {db.exec('ROLLBACK');}
   expect(count(db)).toBe(0);
@@ -138,7 +138,7 @@ test('a changed binding while awaiting acquisition prevents callback entry witho
   blocker.exec('BEGIN IMMEDIATE');let valid=true,operations=0;
   const pending=admitSqliteWrite(db,()=>{operations++;},()=>{},new AbortController().signal,5000,()=>{if(!valid)throw Error('binding revoked');});
   await Bun.sleep(0);valid=false;blocker.exec('ROLLBACK');
-  await expect(pending).rejects.toThrow('binding revoked');expect(operations).toBe(0);expect(count(db)).toBe(0);expect(timeout(db)).toBe(5000);
+  await expect(pending).rejects.toThrow('binding revoked');expect(operations).toBe(0);expect(count(db)).toBe(0);expect(timeout(db)).toBe(0);
 }));
 
 
@@ -161,18 +161,17 @@ test("admission rolls back SQL when a synchronous callback returns a thenable", 
   expect(entered).toBe(1); expect(count(db)).toBe(0);
 }));
 
-test("post-commit timeout restoration failure cannot turn durable success into not_applied", () => fixture(async (db) => {
+test("removed timeout restoration cannot turn durable success into not_applied", () => fixture(async (db) => {
   const exec = db.exec.bind(db); let restored = 0;
   try {
-    exec("PRAGMA busy_timeout=71");
     db.exec = ((sql: string) => {
-      if (sql === "PRAGMA busy_timeout=71") { restored++; throw new Error("injected restoration failure"); }
+      if (/PRAGMA\s+busy_timeout\s*=/i.test(sql)) { restored++; throw new Error("injected restoration failure"); }
       return exec(sql);
     }) as typeof db.exec;
     await expect(admitSqliteWrite(db, () => {
       db.run("INSERT INTO input(value) VALUES ('committed')"); return "receipt";
     })).resolves.toBe("receipt");
-    expect(restored).toBe(1);
+    expect(restored).toBe(0);
     expect(db.query("SELECT value FROM input").all()).toEqual([{ value: "committed" }]);
   } finally { db.exec = exec; }
 }));
@@ -181,9 +180,8 @@ test("post-commit timeout restoration failure cannot turn durable success into n
 test("failed diagnostics cannot replace a completed transaction result", () => fixture(async (db) => {
   const exec = db.exec.bind(db), write = process.stderr.write;
   try {
-    exec("PRAGMA busy_timeout=71");
     db.exec = ((sql: string) => {
-      if (sql === "PRAGMA busy_timeout=71") throw new Error("injected restoration failure");
+      if (/PRAGMA\s+busy_timeout\s*=/i.test(sql)) throw new Error("injected restoration failure");
       return exec(sql);
     }) as typeof db.exec;
     process.stderr.write = (() => { throw new Error("injected diagnostic failure"); }) as typeof process.stderr.write;
@@ -194,12 +192,12 @@ test("failed diagnostics cannot replace a completed transaction result", () => f
   } finally { db.exec = exec; process.stderr.write = write; }
 }));
 
-test("nested successful admission preserves outer durability ownership despite restoration failure", () => fixture(async (db, blocker) => {
+test("nested successful admission preserves outer durability ownership without policy writes", () => fixture(async (db, blocker) => {
   const exec = db.exec.bind(db);
   try {
-    exec("PRAGMA busy_timeout=71;BEGIN IMMEDIATE");
+    exec("BEGIN IMMEDIATE");
     db.exec = ((sql: string) => {
-      if (sql === "PRAGMA busy_timeout=71") throw new Error("injected restoration failure");
+      if (/PRAGMA\s+busy_timeout\s*=/i.test(sql)) throw new Error("injected restoration failure");
       return exec(sql);
     }) as typeof db.exec;
     await expect(admitSqliteWrite(db, () => { db.run("INSERT INTO input VALUES ('savepoint')"); return "saved"; })).resolves.toBe("saved");
@@ -217,4 +215,19 @@ test("rejected Promise returned by a synchronous wrapper is contained without ex
   })).rejects.toThrow("synchronous");
   await new Promise(resolve => setTimeout(resolve, 0));
   expect(calls).toBe(1); expect(count(db)).toBe(0);
+}));
+
+test('the default five-second observation deadline yields throughout a longer real WAL hold',()=>fixture(async(db,blocker)=>{
+ blocker.exec('BEGIN IMMEDIATE');let entered=0,beats=0;const heartbeat=setInterval(()=>beats++,10),start=performance.now();
+ try {
+  await expect(admitSqliteWrite(db,()=>{entered++;db.exec("INSERT INTO input VALUES('must not run')");})).rejects.toThrow();
+  const elapsed=performance.now()-start;expect(elapsed).toBeGreaterThanOrEqual(4900);expect(elapsed).toBeLessThan(6000);
+  expect(beats).toBeGreaterThan(100);expect(entered).toBe(0);expect(blocker.inTransaction).toBe(true);expect(count(db)).toBe(0);expect(timeout(db)).toBe(0);
+ } finally {clearInterval(heartbeat);blocker.exec('ROLLBACK');}
+}),8000);
+
+test('deferred foreign-key commit failure rolls back its real SQL prefix without replay',()=>fixture(async(db)=>{
+ db.exec('PRAGMA foreign_keys=ON; CREATE TABLE parent(id INTEGER PRIMARY KEY); CREATE TABLE child(id INTEGER REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED)');let entered=0;
+ await expect(admitSqliteWrite(db,()=>{entered++;db.exec("INSERT INTO input VALUES('prefix'); INSERT INTO child VALUES(42)");})).rejects.toThrow();
+ expect(entered).toBe(1);expect(count(db)).toBe(0);expect(db.query('SELECT * FROM child').all()).toEqual([]);expect(db.inTransaction).toBe(false);
 }));

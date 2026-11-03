@@ -7,7 +7,7 @@ import type { WebChannelLike } from "./core/web-channel-contracts.js";
 import { createLogger } from "../../utils/logger.js";
 import { getDb, captureHostDatabaseBinding } from "../../db/connection.js";
 import { admitSqliteWrite } from "../../db/sqlite-async-admission.js";
-import { getMessageByRowIdFromDatabase, replaceMessageContentInDatabase, updateMessageAnnotationsInDatabase } from "../../db/messages.js";
+import { getMessageByRowIdFromDatabase, replaceMessageContentInDatabase, updateMessageAnnotationsInDatabase, deleteMessageByRowId, deleteThreadByRowId } from "../../db/messages.js";
 
 const log = createLogger("web.post-mutations");
 
@@ -23,7 +23,7 @@ function resolveChatJid(req: Request, defaultChatJid: string, bodyChatJid?: unkn
 
 /** Request-scoped fencing only: the existing SQLite primitive owns acquisition.
  * Row identity excludes editable fields; stable archived/branchless history stays editable. */
-function capturePostAuthority(channel: WebChannelLike, req: Request, database: ReturnType<typeof getDb>, id?: number) {
+function capturePostAuthority(channel: WebChannelLike, req: Request, database: ReturnType<typeof getDb>, id?: number, deleting = false) {
   const gateway = channel.authGateway, requestAuthority = captureWebRequestAuthority(gateway, req);
   const assertBinding = captureHostDatabaseBinding(database);
   const rowKey = () => JSON.stringify(database.query(`SELECT m.id,m.chat_jid,b.branch_id,b.archived_at FROM messages m
@@ -34,11 +34,26 @@ function capturePostAuthority(channel: WebChannelLike, req: Request, database: R
     if (phase === undefined && database.inTransaction) throw Error('Post mutation requires its own transaction.');
     if (channel.authGateway !== gateway) throw Error('Post request gateway changed.');
     requestAuthority();
-    if (originalRow !== null && rowKey() !== originalRow) throw Error('Post mutation identity changed.');
+    const actual = originalRow === null ? null : rowKey();
+    if (originalRow !== null && actual !== originalRow && !(deleting && phase === 'after' && actual === 'null')) throw Error('Post mutation identity changed.');
   };
   check();
   if (id !== undefined) originalRow = rowKey();
   return check;
+}
+
+/** DELETE /post/:id: SQL-only deletion followed by optional committed publication. */
+export async function handleDeletePostRequest(channel: WebChannelLike, req: Request, id: number | null, cascade: boolean, defaultChatJid: string): Promise<Response> {
+  if (!id) return channel.json({ error: "Post not found" }, 404);
+  const database = getDb(), check = capturePostAuthority(channel, req, database, id, true), chatJid = resolveChatJid(req, defaultChatJid);
+  const ids = await admitSqliteWrite(database, () => {
+    if (!getMessageByRowIdFromDatabase(database, chatJid, id)) return [];
+    return cascade ? deleteThreadByRowId(chatJid, id) : deleteMessageByRowId(chatJid, id) ? [id] : [];
+  }, check, req.signal, undefined, check);
+  const response = channel.json({ deleted: ids.length, ids }, 200);
+  if (ids.length) try { channel.broadcastEvent("interaction_deleted", { chat_jid: chatJid, ids }); }
+  catch (error) { try { log.warn("Post deletion publication deferred after commit", { error, chatJid, rowId: id }); } catch { return response; } }
+  return response;
 }
 
 /** PATCH /post/:id orchestration. */

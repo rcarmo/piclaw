@@ -70,7 +70,7 @@ export interface AgentStatusContext {
   getSessionTreeSummaryForChat?(chatJid: string): Promise<{ leafId: string | null; total: number } | null>;
   getTokenUsageForChat(chatJid: string): AgentTokenUsageContext | null;
   getAvailableModels(chatJid: string, options?: { includeProviderDiagnostics?: boolean; includeCatalogue?: boolean }): Promise<unknown>;
-  getProviderReadyCompletedForInstance(): boolean;
+  getProviderReadyCompletedForInstance(req: Request): boolean | Promise<boolean>;
   getAddonApiHealthSnapshot?: typeof getAddonApiHealthSnapshot;
   getMcpStartupDiagnostics?: typeof getMcpStartupDiagnostics;
 }
@@ -195,7 +195,7 @@ export interface WebChannelLike
   handleThread(id: number | null, chatJid?: string): Response;
   handleThought(panel: string | null, turnId: string | null): Response;
   handleThoughtVisibility(req: Request): Promise<Response>;
-  handleDeletePost(req: Request, id: number | null, cascade: boolean): Response;
+  handleDeletePost(req: Request, id: number | null, cascade: boolean): Promise<Response>;
   handleUpdatePost(req: Request, id: number | null): Promise<Response>;
   handleUpdatePostAnnotations(req: Request, id: number): Promise<Response>;
   handleInternalPost(req: Request): Promise<Response>;

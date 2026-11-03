@@ -20,7 +20,7 @@ import type { QueuedFollowupItem } from "../../../queued-followups.js";
 import { parseJsonObjectRequest } from "../json-body.js";
 import { settledAbortStatus } from "./agent-abort-status.js";
 import type { QueuedFollowupLifecycleService } from "../runtime/queued-followup-lifecycle-service.js";
-import { completeOobeForInstance, isProviderReadyOobeCompletedForInstance } from "../oobe-instance-state.js";
+import { completeOobeForInstance } from "../oobe-instance-state.js";
 import {
   getAddonStatusPanelPayload,
   runAddonStatusPanelAction,
@@ -201,6 +201,7 @@ export class WebAgentControlPlaneService {
   }
 
   async handleAgentOobeComplete(req: Request): Promise<Response> {
+    const authorise = this.options.captureWriteAuthority?.(req);
     const parsed = await parseJsonObjectRequest(req);
     if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
 
@@ -210,11 +211,11 @@ export class WebAgentControlPlaneService {
       return this.options.json({ error: "Unsupported OOBE completion kind." }, 400);
     }
 
-    completeOobeForInstance("provider-ready");
+    const completed = await completeOobeForInstance("provider-ready", authorise, req.signal);
     return this.options.json({
       status: "ok",
       kind,
-      provider_ready_completed_instance: isProviderReadyOobeCompletedForInstance(),
+      provider_ready_completed_instance: completed,
     });
   }
 

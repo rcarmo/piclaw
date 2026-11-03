@@ -29,12 +29,12 @@ afterEach(() => {
 });
 
 describe("oobe-instance-state", () => {
-  test("returns true when the provider-ready OOBE was explicitly completed for this instance", () => {
+  test("returns true when the provider-ready OOBE was explicitly completed for this instance", async () => {
     db.setRouterState("web:oobe:provider-ready:completed", "true");
-    expect(oobeState.isProviderReadyOobeCompletedForInstance()).toBe(true);
+    expect(await oobeState.isProviderReadyOobeCompletedForInstance()).toBe(true);
   });
 
-  test("auto-completes provider-ready OOBE on established installs with existing conversation history", () => {
+  test("auto-completes provider-ready OOBE on established installs with existing conversation history", async () => {
     db.storeMessage({
       id: "msg-oobe-history-1",
       chat_jid: "web:default",
@@ -46,12 +46,12 @@ describe("oobe-instance-state", () => {
       is_bot_message: false,
     });
 
-    expect(oobeState.isProviderReadyOobeCompletedForInstance()).toBe(true);
+    expect(await oobeState.isProviderReadyOobeCompletedForInstance()).toBe(true);
     const row = db.getDb().prepare("SELECT value FROM router_state WHERE key = ?").get("web:oobe:provider-ready:completed") as { value?: string } | undefined;
     expect(row?.value).toBe("true");
   });
 
-  test("keeps provider-ready OOBE incomplete on fresh installs with no history", () => {
-    expect(oobeState.isProviderReadyOobeCompletedForInstance()).toBe(false);
+  test("keeps provider-ready OOBE incomplete on fresh installs with no history", async () => {
+    expect(await oobeState.isProviderReadyOobeCompletedForInstance()).toBe(false);
   });
 });

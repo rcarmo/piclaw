@@ -52,7 +52,9 @@ const log = createLogger("db.connection");
 let db: Database | null = null;
 /** Cache key for the currently-open database target or in-memory test identity. */
 let dbPathCache: string | null = null;
-let stopCheckpoint: (() => void) | undefined;
+let stopCheckpoint: (() => void | Promise<void>) | undefined;
+let pendingCleanup: Promise<void> | undefined;
+let cleanupDatabase: Database | undefined;
 let dbFileIdentity: string | null = null;
 let dbInstance = 0;
 let dbRole: "root" | "index-worker" | undefined;
@@ -753,6 +755,7 @@ function openDatabase(paths: Readonly<RuntimeConfigPaths>, role: "root" | "index
   assertCurrent: () => void = () => {}, expectedIdentity?: string): void {
   assertCurrent();
   if (cleanupFailure) throw cleanupFailure;
+  if (pendingCleanup) throw Error("Database cleanup is pending; await closeDatabase() before reopening");
   const useMemory = paths.databasePath === ":memory:";
   const nextMode: "memory" | "file" = useMemory ? "memory" : "file";
   const nextPath = paths.databasePath;
@@ -798,8 +801,9 @@ function openDatabase(paths: Readonly<RuntimeConfigPaths>, role: "root" | "index
   }
   if (role === "index-worker" && useMemory) throw Error("Index worker requires an existing file-backed database.");
   closeDatabase({ shrinkMemory: false });
+  if (pendingCleanup) throw Error("Database cleanup is pending; await closeDatabase() before reopening");
   if (role === "root" && !useMemory) fs.mkdirSync(path.dirname(nextPath), { recursive: true });
-  let database: Database | undefined, releaseCheckpoint: (() => void) | undefined;
+  let database: Database | undefined, releaseCheckpoint: (() => void | Promise<void>) | undefined;
   try {
     database = openSqliteRole(nextPath, { role, create: role === "root", assertOwner: assertCurrent, expectedIdentity,
       expectedPath: role === "index-worker" ? nextPath : undefined });
@@ -817,7 +821,7 @@ function openDatabase(paths: Readonly<RuntimeConfigPaths>, role: "root" | "index
     db = database; dbPathCache = nextCacheKey; dbFileIdentity = identity;
     stopCheckpoint = releaseCheckpoint; dbRole = role; dbInstance += 1;
   } catch (error) {
-    const cleanup = database ? disposeDatabase(database, releaseCheckpoint) : [];
+    const cleanup = database ? disposeDatabase(database, releaseCheckpoint, error) : [];
     if (cleanup.length) throw cleanupFailure = new RuntimeStartupCleanupError([error, ...cleanup], "Database initialization cleanup uncertain");
     if (!database && error instanceof RuntimeStartupCleanupError) cleanupFailure = error;
     throw error;
@@ -961,23 +965,41 @@ export function backupDatabase(destinationPath: string): SqliteBackupManifest {
   return createVerifiedSqliteBackup(db, dbPathCache, destinationPath);
 }
 
-function disposeDatabase(database: Database, releaseCheckpoint?: () => void): unknown[] {
+function disposeDatabase(database: Database, releaseCheckpoint?: () => void | Promise<void>, originalError?: unknown): unknown[] {
   const failures: unknown[] = [];
-  try { releaseCheckpoint?.(); } catch (error) { failures.push(error); }
-  try { database.close(true); } catch (error) { failures.push(error); }
+  let released: void | Promise<void> = undefined;
+  cleanupDatabase = database;
+  try { released = releaseCheckpoint?.(); } catch (error) { failures.push(error); }
+  // Without positive worker closure, retain the Root handle and terminal failure.
+  const finish = () => {
+    try { database.close(true); cleanupDatabase = undefined; } catch (error) { failures.push(error); }
+  };
+  if (released) {
+    pendingCleanup = released.then(() => {
+      finish();
+      if (failures.length) throw new RuntimeStartupCleanupError(originalError === undefined ? failures : [originalError, ...failures], "Database cleanup uncertain");
+    }, error => {
+      throw new RuntimeStartupCleanupError(originalError === undefined ? [error] : [originalError, error], "Database cleanup uncertain");
+    }).then(() => { pendingCleanup = undefined; }, error => {
+      cleanupFailure = error; pendingCleanup = undefined; throw error;
+    });
+    void pendingCleanup.catch(error => { cleanupFailure = error; });
+  } else if (!failures.length) finish();
   return failures;
 }
 
-/** Certifying close releases statements/cache; the legacy shrinkMemory option needs no SQL. */
-export function closeDatabase(_options?: { shrinkMemory?: boolean }): void {
-  if (!db) return;
-
+/** Unpublish immediately; complete worker SQLite teardown before closing its last writer. */
+export function closeDatabase(_options?: { shrinkMemory?: boolean }): void | Promise<void> {
+  if (cleanupFailure) throw cleanupFailure;
+  if (!db) {
+    if (cleanupDatabase && !pendingCleanup) throw Error("Database cleanup remains uncertain");
+    return pendingCleanup;
+  }
   const database = db, releaseCheckpoint = stopCheckpoint;
-  // Unpublish before cleanup; a throwing disposer cannot leave a usable singleton.
   db = null; dbPathCache = null; dbFileIdentity = null; stopCheckpoint = undefined; dbRole = undefined;
-
   const failures = disposeDatabase(database, releaseCheckpoint);
   if (failures.length) throw cleanupFailure = new RuntimeStartupCleanupError(failures, "Database close cleanup uncertain");
+  return pendingCleanup;
 }
 
 /**
