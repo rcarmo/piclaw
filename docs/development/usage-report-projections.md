@@ -1,6 +1,6 @@
 # Native usage reports
 
-The host request boundary owns actual-call identities, reservations and accounting events. Event-linked `token_usage` rows are reporting projections. Budget enforcement and settings share one settled-usage reader in `runtime/src/budget/usage-total.ts`.
+The host request boundary owns actual-call identities, reservations and accounting events. Event-linked `token_usage` rows are reporting projections. The remaining native and scheduled budget enforcement reads settled usage through `runtime/src/budget/usage-total.ts`; the general budget Settings projection and management routes have been removed under #1881.
 
 ## Identities and valuations
 

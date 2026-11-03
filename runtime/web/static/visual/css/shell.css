@@ -8396,22 +8396,6 @@ mark[data-highlight] { border-radius: 2px; padding: 0 1px; }
   }
 }
 
-/* Budget Settings */
-.settings-panel__budget-header,.settings-panel__budget-actions,.settings-panel__budget-card header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
-.settings-panel__budget-grid { display:grid; gap:12px; }
-.settings-panel__budget-card,.settings-panel__budget-work,.settings-panel__budget-form { border:1px solid var(--border); border-radius:8px; padding:14px; background:var(--surface-2); }
-.settings-panel__budget-card.is-disabled { opacity:.68; }
-.settings-panel__budget-card header > div { display:grid; gap:4px; }
-.settings-panel__budget-card header span,.settings-panel__budget-card dt { color:var(--text-secondary); font-size:12px; }
-.settings-panel__budget-card dl { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:12px 0; }
-.settings-panel__budget-card dd { margin:3px 0 0; overflow-wrap:anywhere; }
-.settings-panel__budget-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-.settings-panel__budget-form h3,.settings-panel__budget-form p,.settings-panel__budget-form .settings-panel__budget-actions { grid-column:1/-1; }
-.settings-panel__budget-form label,.settings-panel__budget-allowance label { display:grid; gap:5px; }
-.settings-panel__budget-actions { justify-content:flex-end; flex-wrap:wrap; margin-top:12px; }
-.settings-panel__budget-actions button,.settings-panel__budget-allowance button { min-height:32px; }
-.settings-panel__budget-allowance { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)) auto; gap:10px; align-items:end; }
-@media (max-width:720px) { .settings-panel__budget-card dl,.settings-panel__budget-form,.settings-panel__budget-allowance { grid-template-columns:1fr; } .settings-panel__budget-form h3,.settings-panel__budget-form p,.settings-panel__budget-form .settings-panel__budget-actions { grid-column:auto; } .settings-panel__budget-actions button,.settings-panel__budget-header button { min-height:44px; } }
 .settings-panel__scheduled-layout { display:grid; grid-template-columns:minmax(180px,.8fr) minmax(0,1.5fr); gap:12px; }
 .settings-panel__scheduled-list { display:grid; align-content:start; gap:6px; }
 .settings-panel__scheduled-list button { display:grid; gap:4px; text-align:left; padding:10px; border:1px solid var(--border); border-radius:7px; background:var(--surface-2); color:var(--text-primary); }

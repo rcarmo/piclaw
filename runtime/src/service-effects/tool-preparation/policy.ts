@@ -55,7 +55,6 @@ const CURRENT_AUTHORITY_PATHS: Readonly<Record<string, string>> = Object.freeze(
   open_workspace_file: "runtime/src/extensions/open-workspace-file.ts addresses the active web client and waits for the current SSE/browser acknowledgement path.",
   schedule_task: "runtime/src/extensions/scheduled-tasks.ts writes the scheduled-task SQLite store and wakes the in-process task scheduler.",
   scheduled_tasks: "runtime/src/extensions/scheduled-tasks.ts reads or mutates the scheduled-task SQLite store and in-process task scheduler.",
-  budget_status: "runtime/src/extensions/budget-limits.ts reads the current chat's budget caps, usage, provider evidence, work state, and blockers without granting spending authority.",
   messages: "runtime/src/extensions/messages-crud.ts reads or mutates the messages SQLite timeline and uses the current web/SSE broadcast path where applicable.",
 });
 
@@ -167,7 +166,7 @@ const entries = Object.freeze([
     safeProof: "Deterministic bounded catalogue or selected-state snapshot with no mutation path.",
     authorityRationale: "Harness/catalogue query; no Piclaw service-operation authority is mutated.",
   }),
-  ...policy(["introspect_sql", "session_status", "budget_status"], {
+  ...policy(["introspect_sql", "session_status"], {
     effectClass: "query", replay: "safe", contextFields: ["chatJid"], abortExpectation: "may_finish_late", ...DIRECT_QUERY,
     safeProof: "Read-only bounded service/session snapshot; grammar and action surface reject writes.",
     authorityRationale: "Service projection query; no service-operation authority is mutated.",

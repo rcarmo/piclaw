@@ -13,7 +13,7 @@ import { storeTokenUsage, getTokenUsageTotals, pruneOldTokenUsage, type TokenUsa
 import { initializeBudgetLimitsSchema } from "../../src/db/budget-limits-schema.js";
 import { modelRequestAccounting } from "../../src/budget/model-request-accounting.js";
 import { evaluateBudget } from "../../src/budget/evaluator.js";
-import { getBudgetSettingsState } from "../../src/budget/settings.js";
+import { readBudgetUsageTotal } from "../../src/budget/usage-total.js";
 import { decodeUsageReport, readUsageProjectionEvent, reconcileUsageReports, usageReportMigration } from "../../src/db/usage-report-projection.js";
 isolateBudgetTestDatabase();
 const binding = { id: "projection-request", workId: "projection-child", chatJid: "web:child", providerId: "fixture", modelId: "fixture-model", accountRef: "synthetic-account", amountMicros: 50 };
@@ -38,7 +38,7 @@ function legacyFixture(database: Database) {
 test("canonical usage projection: spent ledger survives mutable report numbers", () => {
   const database = setup(); settleBudgetRequest(binding, usage());
   database.exec("UPDATE token_usage SET api_equivalent_cost_microusd=0,catalogue_cost_total=0,cost_total=0,total_tokens=0");
-  expect((getBudgetSettingsState("web:parent").caps as any[])[0]).toMatchObject({ known_usage: 40, remaining: 20 });
+  expect(readBudgetUsageTotal({ workIds: [binding.workId] }, database)).toEqual({ known_usage: 40, unknown_events: 0 });
   expect(budget().action).toBe("pause");
   expect(budget().blockers[0]?.knownUsage).toBe(70);
 });
