@@ -168,7 +168,8 @@ function buildTotpSettingsData(): GeneralSettingsData["instanceTotp"] {
   };
 }
 
-export function getGeneralSettingsData(uiState = getServerUiState()): GeneralSettingsData {
+export function getGeneralSettingsData(): GeneralSettingsData {
+  const uiState = getServerUiState();
   const identity = getIdentityConfig();
   const web = getWebRuntimeConfig();
   const uiTheme = uiState.ui_theme;
@@ -290,7 +291,11 @@ export async function saveGeneralSettings(input: GeneralSettingsInput, authorise
   };
   const nextOutputPad = normalizeOptionalInt(input.outputPad, 0, 24);
   if (nextOutputPad !== undefined) uiPatch.ui_output = { outputPad: nextOutputPad };
-  const uiState = Object.keys(uiPatch).length ? await admitServerUiState(uiPatch, current, signal) : undefined;
-
-  return getGeneralSettingsData(uiState);
+  current();
+  // Response preparation may create the widget token or fail reading config.
+  // Complete that work before SQL; no fallible getters follow the commit.
+  const data = getGeneralSettingsData();
+  if (!Object.keys(uiPatch).length) return data;
+  const uiState = await admitServerUiState(uiPatch, current, signal);
+  return { ...data, uiTheme: uiState.ui_theme.theme, uiTint: uiState.ui_theme.tint, outputPad: uiState.ui_output.outputPad };
 }

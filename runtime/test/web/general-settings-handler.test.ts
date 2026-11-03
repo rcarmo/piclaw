@@ -29,6 +29,7 @@ test('saveGeneralSettings persists and applies general settings immediately', as
     db.initDatabase();
     const config = await import('../../src/core/config.js');
     config.setUserAvatarBackground('');
+    const legacyUi = JSON.parse(readFileSync(join(workspace.workspace, '.piclaw', 'config.json'), 'utf8')).ui;
 
     const saved = await handler.saveGeneralSettings({
       assistantName: 'Smith',
@@ -85,11 +86,10 @@ test('saveGeneralSettings persists and applies general settings immediately', as
           toolUseMessageBudget: 23,
         },
       },
-      ui: {
-        theme: 'dracula',
-        tint: '#7c3aed',
-      },
     });
+    expect(persisted.ui).toEqual(legacyUi);
+    expect(db.extensionKvGet('piclaw-ui', 'theme', 'global', '')).toEqual({ theme: 'dracula', tint: '#7c3aed' });
+    expect(db.extensionKvGet('piclaw-ui', 'output-pad', 'global', '')).toEqual({ outputPad: 12 });
     for (const name of [
       'PICLAW_ASSISTANT_NAME',
       'PICLAW_ASSISTANT_AVATAR',

@@ -32,7 +32,7 @@ import {
 } from "../messaging/agent-message-service.js";
 import { handleUiThemeCommand } from "../theming/ui-theme-commands.js";
 import { handleUiMetersCommand } from "../ui-meters-commands.js";
-import { getServerUiMetersConfig, admitServerUiState } from "../ui-state.js";
+import { admitServerUiState } from "../ui-state.js";
 import { getChatCursor, getMessageRowIdById, getDb, setChatCursor, type InteractionRow } from "../../../db.js";
 import { formatOutbound } from "../../../router.js";
 import { isSqliteContention } from '../../../db/sqlite-async-admission.js';
@@ -213,7 +213,7 @@ export async function handleAgentMessage(
     const binding = captureHostDatabaseBinding();
     internalAuthority = readInputRequestAuthority(req, chatJid, pathname);
     const request = internalAuthority?.validate ?? captureInputAuthority(channel, req);
-    revalidateInputAuthority = phase => { if (phase === 'before' || phase === 'after') binding(); request(phase); };
+    revalidateInputAuthority = phase => { if (phase !== undefined) binding(); request(phase); };
     revalidateInputAuthority();
   }
   catch { return channel.json({ error: 'Input authority is unavailable.' }, 403); }
@@ -321,16 +321,18 @@ export async function handleAgentMessage(
   if (prepareAdmission) {
     try {
       revalidateInputAuthority();
-      if (!command && !themeCommand && !metersCommand && !isSettingsCommand && !isSlashCommandInvocation(content)) {
+      if (ordinaryInput) {
+        revalidateInputAuthority('verify');
         await prepareAdmission(chatJid);
-        revalidateInputAuthority();
+        revalidateInputAuthority('verify');
       }
       acceptSource = lookupAdmission?.(chatJid);
       acceptQueuedSource = lookupQueuedAdmission?.(chatJid);
     } catch { return channel.json({ error: 'Input admission could not be confirmed.' }, 503); }
   }
-  if (prepareInputText && !command && !themeCommand && !metersCommand && !isSettingsCommand && !isSlashCommandInvocation(content)) {
+  if (prepareInputText && ordinaryInput) {
     try {
+      revalidateInputAuthority('verify');
       const prepared = prepareInputText(chatJid, content);
       if (prepared && typeof (prepared as unknown as { then?: unknown }).then === "function") {
         void Promise.resolve(prepared).catch(error => debugSuppressedError(log, 'Rejected asynchronous input preparation.', error, { operation: 'handle_agent_message.async_preparation_rejected', chatJid }));
@@ -340,8 +342,8 @@ export async function handleAgentMessage(
         typeof prepared.assertCurrent !== "function") throw Error("Invalid prepared input");
       const requestAuthority = revalidateInputAuthority;
       const assertCurrent = prepared.assertCurrent.bind(prepared);
-      revalidateInputAuthority = () => {
-        requestAuthority();
+      revalidateInputAuthority = phase => {
+        requestAuthority(phase);
         const result = assertCurrent();
         if (result !== undefined) {
           void Promise.resolve(result).catch(error => debugSuppressedError(log, 'Rejected asynchronous input authority.', error, { operation: 'handle_agent_message.async_authority_rejected', chatJid }));
@@ -349,7 +351,7 @@ export async function handleAgentMessage(
         }
       };
       content = prepared.text;
-      revalidateInputAuthority();
+      revalidateInputAuthority('verify');
     } catch (error) {
       log.warn("Native input preparation rejected", { operation: "handle_agent_message.preparation_rejected", chatJid, err: error });
       return channel.json({ error: "Input preparation could not be confirmed." }, 503);
@@ -581,8 +583,7 @@ export async function handleAgentMessage(
 
   if (metersCommand) {
     if (metersCommand.payload) {
-      const currentMeters = getServerUiMetersConfig();
-      const patch = metersCommand.payload.mode === "toggle" ? { enabled: !currentMeters.enabled }
+      const patch = metersCommand.payload.mode === "toggle" ? 'toggle' as const
         : metersCommand.payload.mode === "set" ? { enabled: metersCommand.payload.enabled } : { collapsed: metersCommand.payload.collapsed };
       const nextMeters = (await admitServerUiState({ ui_meters: patch }, revalidateInputAuthority, req.signal)).ui_meters;
       try { channel.broadcastEvent("ui_meters", { chat_jid: chatJid, mode: "set", ...nextMeters }); }

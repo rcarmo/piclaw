@@ -108,7 +108,7 @@ export function getServerUiState(): { ui_theme: ServerUiThemeConfig; ui_meters: 
 /** One admitted preference update/readback; legacy config remains read-only. */
 export type ServerUiStatePatch = {
   ui_theme?: Partial<ServerUiThemeConfig>;
-  ui_meters?: Partial<ServerUiMetersConfig>;
+  ui_meters?: Partial<ServerUiMetersConfig> | 'toggle';
   ui_output?: Partial<ServerUiOutputConfig>;
 };
 export async function admitServerUiState(patch: ServerUiStatePatch, authorise: (phase?: 'before' | 'after') => void,
@@ -129,7 +129,11 @@ export async function admitServerUiState(patch: ServerUiStatePatch, authorise: (
         tint: value.tint !== undefined ? normalizeTintValue(value.tint) : current.tint,
       }, 'global');
     }
-    if (captured.ui_meters) extensionKvSet(UI_EXTENSION_ID, METERS_KEY, normalizeMetersConfig(captured.ui_meters, getServerUiMetersConfig()), 'global');
+    if (captured.ui_meters) {
+      const current = getServerUiMetersConfig();
+      extensionKvSet(UI_EXTENSION_ID, METERS_KEY, captured.ui_meters === 'toggle'
+        ? { ...current, enabled: !current.enabled } : normalizeMetersConfig(captured.ui_meters, current), 'global');
+    }
     if (captured.ui_output) {
       const current = getServerUiOutputConfig(), value = captured.ui_output;
       extensionKvSet(UI_EXTENSION_ID, OUTPUT_PAD_KEY, { outputPad: value.outputPad !== undefined ? normalizeOutputPad(value.outputPad, current.outputPad) : current.outputPad }, 'global');

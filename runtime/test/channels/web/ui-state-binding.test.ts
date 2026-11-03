@@ -97,3 +97,33 @@ test('historical config remains a read-only startup fallback in a real isolated 
     expect(JSON.parse(stdout.trim().split('\n').at(-1)!)).toEqual({ kind: 'ui-theme-legacy-reader', configUnchanged: true, sqlitePrimary: true, legacyFallback: true });
   } finally { if (child.exitCode === null) child.kill(); await child.exited; ws.cleanup(); }
 });
+
+test('general settings response preparation failure cannot reject an already committed UI preference patch', () =>
+  withTempWorkspaceEnv('general-response-preparation-', {}, async () => {
+    const f = fixture(), before = getServerUiState();
+    const config = await import('../../../src/core/config.js');
+    const fault = spyOn(config, 'getOrCreateWebWidgetToken').mockImplementation(() => { throw Error('widget token preparation failed'); });
+    try {
+      const response = await f.channel.handleRequest(request({ uiTheme: 'dracula', outputPad: 9 }, '/agent/settings/general'));
+      expect(response.status).toBe(400); expect(await response.json()).toEqual({ error: 'widget token preparation failed' });
+      expect(getServerUiState()).toEqual(before); expect(db.extensionKvList('piclaw-ui', '', 'global')).toEqual([]);
+    } finally { fault.mockRestore(); db.closeDatabase(); }
+  }));
+
+test('two existing meters toggle commands queued behind WAL each evaluate committed state once', () =>
+  withTempWorkspaceEnv('meters-toggle-admission-', {}, async ws => {
+    const path = join(ws.store, 'toggle.sqlite'), f = fixture(path);
+    await admitServerUiState({ ui_meters: { enabled: false, collapsed: true } }, () => {});
+    const { handleAgentMessage } = await import('../../../src/channels/web/handlers/agent.js');
+    const states: boolean[] = []; f.channel.broadcastEvent = (name, data: any) => { if (name === 'ui_meters') states.push(data.enabled); };
+    f.channel.sendMessage = async () => {};
+    const blocker = new Database(path); blocker.exec('BEGIN IMMEDIATE');
+    const toggle = () => handleAgentMessage(f.channel, request({ content: '/meters toggle' }, '/agent/default/message'), '/agent/default/message', 'web:default', 'default');
+    const pending = [toggle(), toggle()];
+    try {
+      await Bun.sleep(40); expect(states).toEqual([]); expect(getServerUiState().ui_meters.enabled).toBe(false);
+      blocker.exec('ROLLBACK');
+      expect((await Promise.all(pending)).map(response => response.status)).toEqual([200, 200]);
+      expect(getServerUiState().ui_meters).toEqual({ enabled: false, collapsed: true }); expect(states).toEqual([true, false]);
+    } finally { if (blocker.inTransaction) blocker.exec('ROLLBACK'); await Promise.allSettled(pending); blocker.close(); db.closeDatabase(); }
+  }));
