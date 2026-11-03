@@ -1015,6 +1015,41 @@ for (const failed of [false, true]) test(`terminal-retention rejection is not re
   expect(f.calls()).toBe(1); expect(JSON.stringify(result)).not.toContain(token);
 });
 
+for (const boundary of ['provider', 'source', 'cancel', 'conversion', 'drain'] as const) for (const providerCost of [undefined, 0, 2]) for (const actualField of ['providerCost', 'provider_cost'] as const) {
+  test(`failed native terminal preserves reporting fields without inventing actual cost; boundary=${boundary}, ${actualField}=${providerCost}`, async () => {
+    const f = await fixture(false, false, false, false, boundary === 'provider', 'HTTP 504 timed out');
+    Object.assign(f.message.usage, { reasoning: 3, reasoningTokens: 3, reasoning_tokens: 3,
+      cacheWrite1h: 1, cacheReadReported: false, cacheWriteReported: true,
+      ...(providerCost === undefined ? {} : { [actualField]: providerCost }) });
+    if (boundary === 'drain') f.holdUntilAbort();
+    if (boundary === 'source' || boundary === 'drain') { f.eventAuthority(() => { throw Error(token); }); f.observe(() => {}); }
+    if (boundary === 'cancel') f.policy.prepareRequest = async () => ({
+      retainTerminal: fixtureTerminalReceipt, async dispatch() {}, async settle() { f.abort(); }, async abandon() {},
+    });
+    if (boundary === 'conversion') Object.assign(f.message, { unsupportedProviderMetadata: new Date() });
+    const result = await f.models.completeSimple(f.model, context);
+    expect(result.stopReason).toBe('error');
+    expect(result.usage).toEqual(boundary === 'provider' ? { ...f.message.usage,
+      cost: { input: .1, output: .2, cacheRead: 0, cacheWrite: 0, total: .3 } } : f.message.usage);
+    expect(Object.hasOwn(result.usage, actualField)).toBe(providerCost !== undefined);
+    expect(parseModelFailure(result.errorMessage)?.phase).toBe(boundary === 'cancel' || boundary === 'drain' ? 'source' : boundary);
+    expect(result.content).toEqual([]); expect(f.calls()).toBe(1);
+    expect(JSON.stringify(result)).not.toContain(token);
+  });
+}
+
+test('cost-only explicit actual zero survives a failed native terminal without fabricating reasoning', async () => {
+  const f = await fixture();
+  f.message.usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }, ...{ providerCost: 0 } };
+  f.eventAuthority(() => { throw Error(token); }); f.observe(() => {});
+  const result = await f.models.completeSimple(f.model, context);
+  expect(result.stopReason).toBe('error'); expect(result.usage).toEqual(f.message.usage);
+  expect(Object.hasOwn(result.usage, 'reasoning')).toBe(false);
+  expect(Object.hasOwn(result.usage, 'providerCost')).toBe(true);
+  expect(f.calls()).toBe(1);
+});
+
 test("terminal projection failure cannot erase validated original usage", async () => {
   const f = await fixture(); Object.assign(f.message, { unsupportedProviderMetadata: new Date() });
   const result = await f.models.completeSimple(f.model, context);
