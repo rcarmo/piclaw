@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -803,4 +803,70 @@ test('scheduled mutation entry remains asynchronous without a private serial tai
     expect(claimed.ok && claimed.value.length).toBe(1);
     expect(subject.inspect().occurrences).toBe(1);
   } finally {subject.dispose?.();}
+});
+
+for (const method of ['claimDue','renew','bindAcceptedSource','complete','abandon','cleanupTerminal'] as const) test(`one admitted SQLite scope owns scheduled ${method} and its replay`,async()=>{
+  const subject=isolated();let scope:ReturnType<typeof spyOn>|undefined;
+  try{
+    const db=subject.database,agent=method==='bindAcceptedSource',id='task:single-scope:'+method;
+    subject.authority.create(authorityTask(id,agent?{kind:'agent',executionRepeatability:'agent_source'}:{}));
+    let action:()=>Promise<unknown>;
+    if(method==='claimDue')action=()=>subject.store.claimDue(dueClaim('single-scope:'+method));
+    else{
+      const claimed=await subject.store.claimDue(dueClaim('single-scope:'+method));if(!claimed.ok)throw Error(claimed.error._tag);
+      const lease=claimed.value[0]!,now='2026-08-16T01:00:10.000Z';
+      const fence={runId:lease.record.runId,workerId:lease.record.workerId,expectedAttempt:lease.record.attempt,expectedTaskRevision:lease.record.taskRevision,leaseToken:lease.leaseToken,now};
+      if(method==='renew')action=()=>subject.store.renew({...fence,leaseExpiresAt:'2026-08-16T01:02:00.000Z'});
+      else if(method==='complete')action=()=>subject.store.complete(completion(lease,'complete:single-scope'));
+      else if(method==='bindAcceptedSource'){
+        const sourceSeq=1,operationId='operation:single-scope';subject.acceptAgentSource({runId:lease.record.runId,chatJid:lease.task.chatJid,sourceSeq,operationId});
+        const request={...fence,effect:{idempotencyKey:'bind:single-scope',requestHash:'',operationId,sourceSeq,provenanceRef:lease.record.runId,redactionClass:'private' as const},operationId,sourceSeq,boundAt:now};
+        request.effect.requestHash=hashCanonicalRequest(request as unknown as CanonicalJsonValue);action=()=>subject.store.bindAcceptedSource(request);
+      }else{
+        const request={...fence,effect:{idempotencyKey:'abandon:single-scope',requestHash:'',operationId:null,sourceSeq:null,provenanceRef:lease.record.runId,redactionClass:'private' as const},reasonTag:'fixture',abandonedAt:now,retryAt:null};
+        request.effect.requestHash=hashCanonicalRequest(request as unknown as CanonicalJsonValue);
+        if(method==='abandon')action=()=>subject.store.abandon(request);
+        else{const abandoned=await subject.store.abandon(request);if(!abandoned.ok)throw Error(abandoned.error._tag);action=()=>subject.store.cleanupTerminal({settledBefore:'2026-08-17T00:00:00.000Z',limit:1});}
+      }
+    }
+    const transaction=db.transaction.bind(db);let calls=0;
+    scope=spyOn(db,'transaction').mockImplementation((fn:any)=>{calls++;return transaction(fn);});
+    expect(db.inTransaction).toBe(false);
+    // The independently callable canonical projector keeps its own scope; only the private S07 mutation wrapper is retired.
+    const expectedScopes=method==='complete'||method==='abandon'?2:1;
+    const first=await action();expect(first).toMatchObject({ok:true});expect(db.inTransaction).toBe(false);expect(calls).toBe(expectedScopes);
+    calls=0;expect(await action()).toEqual(first);expect(calls).toBe(expectedScopes);expect(db.inTransaction).toBe(false);
+    expect(subject.inspect()).toMatchObject({occurrences:method==='cleanupTerminal'?0:1,tombstones:method==='cleanupTerminal'?1:0});
+    expect(db.query('PRAGMA foreign_key_check').all()).toEqual([]);expect(db.query('PRAGMA busy_timeout').get()).toEqual({timeout:0});
+  }finally{scope?.mockRestore();subject.dispose?.();}
+});
+
+test('one admitted SQLite scope owns interrupted source reconciliation and replay',async()=>{
+  const f=await interruptedScheduledFixture(),db=f.database,transaction=db.transaction.bind(db);let calls=0;
+  const scope=spyOn(db,'transaction').mockImplementation((fn:any)=>{calls++;return transaction(fn);});
+  try{
+    const immutable=f.immutable(),result=await f.native.reconcileInterruptedAgentSource(f.seal());
+    expect(result).toMatchObject({ok:true,value:{state:'completed',errorCode:'scheduled_run_interrupted'}});expect(calls).toBe(2);expect(db.inTransaction).toBe(false); // Admission plus the retained standalone projector.
+    calls=0;expect(await f.native.reconcileInterruptedAgentSource(f.seal())).toEqual(result);expect(calls).toBe(1);
+    expect(f.immutable()).toEqual(immutable);expect(f.inspect()).toMatchObject({occurrences:1,runLogs:1,nextDecisions:1});
+  }finally{scope.mockRestore();f.dispose();}
+});
+
+test('entered scheduled SQL busy failure rolls back once without callback replay',async()=>{
+  const subject=isolated();let scope:ReturnType<typeof spyOn>|undefined;
+  try{
+    subject.authority.create(authorityTask('task:single-scope-busy'));
+    const claim=await subject.store.claimDue(dueClaim('single-scope-busy'));if(!claim.ok)throw Error(claim.error._tag);
+    const lease=claim.value[0]!,request=completion(lease,'complete:single-scope-busy','2026-08-16T01:00:10.000Z',[deliveryIntent('single-scope-busy')]),before=subject.inspect();
+    let entered=0,calls=0;const transaction=subject.database.transaction.bind(subject.database);
+    scope=spyOn(subject.database,'transaction').mockImplementation((fn:any)=>{calls++;return transaction(fn);});
+    subject.runtime.afterStatement=statement=>{if(statement==='decision_insert'){entered++;throw Object.assign(Error('entered SQL busy'),{code:'SQLITE_BUSY'});}};
+    expect(await subject.store.complete(request)).toMatchObject({ok:false,error:{_tag:'storage_unavailable',certainty:'not_applied',retryable:true}});
+    expect(calls).toBe(1);expect(entered).toBe(1);expect(subject.database.inTransaction).toBe(false);expect(subject.inspect()).toEqual(before);
+    expect((await subject.store.get(lease.record.runId)).value).toMatchObject({state:'claimed',status:null});
+    scope.mockRestore();scope=undefined;subject.runtime.afterStatement=()=>{};
+    const restored=await sqliteFactory.crashAndRestore!(subject,context());
+    try{expect(restored.subject.inspect()).toEqual(before);expect(await restored.subject.store.complete(request)).toMatchObject({ok:true,value:{state:'completed',status:'success'}});expect(restored.subject.inspect()).toMatchObject({occurrences:1,runLogs:1,nextDecisions:1,outboxRows:1});}
+    finally{restored.subject.database.close();}
+  }finally{scope?.mockRestore();subject.dispose?.();}
 });

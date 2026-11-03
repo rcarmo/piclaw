@@ -7,7 +7,7 @@ import { getExtensionKvStore,registerExtensionKvStore,resetExtensionKvStoreForTe
 
 for(const revoke of [false,true]) test(`KV write admission yields to a real writer and rechecks authority; revoke=${revoke}`,async()=>{
  const workspace=createTempWorkspace('kv-admission-'),path=join(workspace.base,'kv.sqlite');
- const db=new Database(path);db.exec('PRAGMA journal_mode=WAL;PRAGMA busy_timeout=731;CREATE TABLE values_store(id TEXT PRIMARY KEY,value TEXT)');
+ const db=new Database(path);db.exec('PRAGMA journal_mode=WAL;PRAGMA busy_timeout=0;CREATE TABLE values_store(id TEXT PRIMARY KEY,value TEXT)');
  const blocker=new Database(path);let current=true,entered=0;
  const check=()=>{if(!current)throw Error('revoked');};
  registerExtensionKvStore({get<T>(_id:string,key:string){const row=db.query('SELECT value FROM values_store WHERE id=?').get(key) as {value:string}|null;return row?JSON.parse(row.value) as T:null;},
@@ -20,11 +20,11 @@ for(const revoke of [false,true]) test(`KV write admission yields to a real writ
  try{
   blocker.exec('BEGIN IMMEDIATE');
   const pending=withExtensionKvAuthority(authority,()=>store.write!('fixture',()=>{entered++;store.set('fixture','key',{saved:true},'global');return 7;}));
-  await Bun.sleep(20);expect(entered).toBe(0);expect(db.query('PRAGMA busy_timeout').get()).toEqual({timeout:731});
+  await Bun.sleep(20);expect(entered).toBe(0);expect(db.query('PRAGMA busy_timeout').get()).toEqual({timeout:0});
   if(revoke)current=false;blocker.exec('ROLLBACK');
   if(revoke)await expect(pending).rejects.toThrow('revoked');else expect(await pending).toBe(7);
   expect(entered).toBe(revoke?0:1);expect(db.query('SELECT * FROM values_store').all()).toHaveLength(revoke?0:1);
-  expect(db.inTransaction).toBe(false);expect(db.query('PRAGMA busy_timeout').get()).toEqual({timeout:731});
+  expect(db.inTransaction).toBe(false);expect(db.query('PRAGMA busy_timeout').get()).toEqual({timeout:0});
  }finally{if(blocker.inTransaction)blocker.exec('ROLLBACK');resetExtensionKvStoreForTests();blocker.close();db.close();workspace.cleanup();}
 });
 

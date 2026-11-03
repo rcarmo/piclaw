@@ -46,7 +46,7 @@ try {
       assert.equal(inspect.inTransaction, false);
       assert.deepEqual(inspect.query("SELECT name FROM sqlite_schema").all(), mode === "existing-rollback" ? [{ name: "fixture_legacy" }] : []);
     } finally { inspect.close(true); }
-    closeDatabase({ shrinkMemory: false }); injectFailure = false;
+    await closeDatabase({ shrinkMemory: false }); injectFailure = false;
   }
   initDatabase();
   const db = getDb();
@@ -67,11 +67,11 @@ try {
   db.exec("PRAGMA foreign_keys=ON"); initDatabase();
   assert.equal((db.query("PRAGMA foreign_keys").get() as any).foreign_keys, 1);
   assert.equal(schema(), initialSchema);
-  closeDatabase({ shrinkMemory: false }); initDatabase();
+  await closeDatabase({ shrinkMemory: false }); initDatabase();
   assert.equal(schema(), initialSchema);
   assert.equal((getDb().query("PRAGMA quick_check").get() as any).quick_check, "ok");
   assert.equal((getDb().query("SELECT COUNT(*) AS n FROM messages_fts WHERE messages_fts MATCH 'needle'").get() as any).n, 1);
   assert.equal(vacuums, 0);
   assert.equal(baseCalls, ["rollback", "late-rollback", "existing-rollback"].includes(mode) ? 3 : 2);
   console.log(JSON.stringify({ mode, vacuums, schemaInTransaction, schemaStable: true, rowsAndFtsPreserved: true }));
-} finally { Database.prototype.exec = exec; closeDatabase({ shrinkMemory: false }); }
+} finally { Database.prototype.exec = exec; await closeDatabase({ shrinkMemory: false }); }

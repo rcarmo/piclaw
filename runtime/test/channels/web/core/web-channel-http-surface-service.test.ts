@@ -5,7 +5,6 @@ import * as status from "../../../../src/channels/web/agent/agent-status.js";
 import * as manifest from "../../../../src/channels/web/manifest.js";
 import * as mutations from "../../../../src/channels/web/post-mutations.js";
 import * as posts from "../../../../src/channels/web/handlers/posts.js";
-import * as timeline from "../../../../src/channels/web/timeline-service.js";
 const leafRestores: (() => void)[] = [];
 afterEach(() => { for (const restore of leafRestores.splice(0)) restore(); });
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
@@ -230,7 +229,7 @@ describe("web channel public HTTP wiring", () => {
     if ("handleAgentBranches" in endpointMocks) { const spy = spyOn(status, "handleAgentBranchesRequest").mockImplementation((...args: any[]) => (endpointMocks as any).handleAgentBranches(...args)); leafRestores.push(() => spy.mockRestore()); }
     if ("handleAgentRespond" in endpointMocks) { const spy = spyOn(ui, "handleAgentRespondRequest").mockImplementation((...args: any[]) => (endpointMocks as any).handleAgentRespond(...args)); leafRestores.push(() => spy.mockRestore()); }
     const post = spyOn(posts, "handlePost").mockImplementation((_channel, req, isReply) => endpointMocks.handlePost(req, isReply)); leafRestores.push(() => post.mockRestore());
-    const remove = spyOn(timeline, "deletePostResponse").mockImplementation((_chat, id, cascade) => { const value = endpointMocks.handleDeletePost(undefined as any, id, cascade ?? false); return { deletedIds: [], body: "delete", status: value.status } as any; }); leafRestores.push(() => remove.mockRestore());
+    const remove = spyOn(mutations, "handleDeletePostRequest").mockImplementation(async (_channel, req, id, cascade) => endpointMocks.handleDeletePost(req, id, cascade)); leafRestores.push(() => remove.mockRestore());
 
     const getReq = new Request("https://example.test/timeline?chat_jid=web%3Abranch", { method: "GET" });
     const postReq = new Request("https://example.test/post", { method: "POST" });
@@ -247,7 +246,7 @@ describe("web channel public HTTP wiring", () => {
     expect(await service.handleThread(9, "web:branch").text()).toBe("thread");
     expect(await service.handleThought("draft", "turn-1").text()).toBe("thought");
     expect(await (await service.handleThoughtVisibility(postReq)).text()).toBe("thought-visibility");
-    expect(await service.handleDeletePost(postReq, 9, true).text()).toBe("delete");
+    expect(await (await service.handleDeletePost(postReq, 9, true)).text()).toBe("delete");
     expect(await (await service.handleUpdatePost(postReq, 10)).text()).toBe("update");
     expect(await (await service.handleInternalPost(postReq)).text()).toBe("internal");
     expect(await service.handleSse(getReq).text()).toBe("sse");
