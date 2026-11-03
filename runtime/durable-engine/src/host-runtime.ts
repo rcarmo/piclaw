@@ -624,7 +624,7 @@ export class HostConversationRuntime {
     const context = signal ? withAbortSignal(this.context.abortSignal ? AbortSignal.any([signal, this.context.abortSignal]) : signal, this.context) : this.context;
     context.abortSignal?.throwIfAborted();
     const source = await this.captureToolSource(call.conversationId, call.taskId, call.toolCallId);
-    const guard = () => { context.abortSignal?.throwIfAborted(); this.assertCapturedSourceCurrent(source.inputs, true); };
+    const guard = () => { context.abortSignal?.throwIfAborted(); this.assertCapturedSourceCurrent(source.inputs); };
     return this.observe(async () => {
       guard();
       const conversation = await this.harness.conversation(call.conversationId, context); guard();
@@ -1078,10 +1078,10 @@ export class HostConversationRuntime {
 
   /** Qualify a MODEL tool against its public live slot and every accepted run
    * input. Busy-chat lookup alone is never source authority. No new ledger. */
-  async captureToolSource(conversationId: ConversationId, taskId: import("@earendil-works/pi-durable").TaskId, callId: string): Promise<Awaited<ReturnType<HostConversationRuntime['captureRunSource']>> & { accountingBarrier?: () => void }> {
+  async captureToolSource(conversationId: ConversationId, taskId: import("@earendil-works/pi-durable").TaskId, callId: string): Promise<Awaited<ReturnType<HostConversationRuntime['captureRunSource']>>> {
     const captured = await this.captureSource(conversationId, taskId, callId);
-    this.assertCapturedSourceCurrent(captured.inputs, true);
-    return { ...captured, ...(this.options.assertAccountingReady ? { accountingBarrier: () => this.assertAccountingReady(captured.operation.operationId) } : {}) };
+    this.assertCapturedSourceCurrent(captured.inputs);
+    return captured;
   }
   /** Read-only public SDK inspection; never starts, resumes or cancels work. */
   inspectProcessControl(call?: { conversationId: ConversationId; taskId: TaskId; callId: string }): Promise<NativeProcessSnapshot> {
@@ -1109,7 +1109,7 @@ export class HostConversationRuntime {
             taskId: tool.id, generationId: tool.owner, assistantId: assistant.id,
             singleton: calls.length === 1 && calls[0]!.id === call.callId && live.tools.length === 1 && !live.nestedTools?.length };
         }, this.context);
-        this.assertCapturedSourceCurrent(captured.inputs, true);
+        this.assertCapturedSourceCurrent(captured.inputs);
       }
       const inspection = await this.harness.inspect(this.context);
       this.fence();
@@ -1154,7 +1154,7 @@ export class HostConversationRuntime {
       this.fence();
       if (!proof) return undefined;
       const captured = await this.captureToolSource(proof.parent, proof.owner, proof.callId);
-      this.assertCapturedSourceCurrent(captured.inputs, true);
+      this.assertCapturedSourceCurrent(captured.inputs);
       return { inputs: captured.inputs, taskId: proof.taskId };
     }, true);
   }
@@ -1165,13 +1165,13 @@ export class HostConversationRuntime {
   async watchOwnedDelegateChild(conversationId: ConversationId, taskId: TaskId, callId: string, childId: ConversationId, context: Context) {
     const captured = await this.captureToolSource(conversationId, taskId, callId);
     const record = await this.harness.commit(tx => tx.conversation(childId), context);
-    this.fence(); this.assertCapturedSourceCurrent(captured.inputs, true);
+    this.fence(); this.assertCapturedSourceCurrent(captured.inputs);
     if (record?.owner?.conversationId !== conversationId || record.owner.taskId !== taskId) throw Error("Exact Delegate child ownership required");
     const child = await this.harness.conversation(childId, context);
-    this.fence(); this.assertCapturedSourceCurrent(captured.inputs, true);
+    this.fence(); this.assertCapturedSourceCurrent(captured.inputs);
     if (!child) throw Error("Missing owned Delegate child");
     const watch = await child.watch(context);
-    try { this.fence(); this.assertCapturedSourceCurrent(captured.inputs, true); }
+    try { this.fence(); this.assertCapturedSourceCurrent(captured.inputs); }
     catch (error) { await watch.stop(); throw error; }
     return watch;
   }
@@ -1200,7 +1200,7 @@ export class HostConversationRuntime {
         return { taskId: owner.id, callId: model.callId };
       }, this.context); this.fence();
       const captured = await this.captureSource(conversationId, parent.taskId, parent.callId);
-      this.assertCapturedSourceCurrent(captured.inputs, true);
+      this.assertCapturedSourceCurrent(captured.inputs);
       return { ...captured, runTaskId: live.run.taskId };
     }
     if (!live?.run || !live.tools?.some(slot => slot.taskId === taskId && slot.callId === callId && slot.status === "pending"))
@@ -1210,7 +1210,7 @@ export class HostConversationRuntime {
     if (task?.kind !== "pi.tool" || task.conversationId !== conversationId || task.abortRequested || task.state.status === "terminal" ||
       input?.kind !== "model" || input.callId !== callId) throw Error("Exact pending model tool required");
     const captured = await this.captureRunSource(conversationId, live.run.taskId);
-    this.assertCapturedSourceCurrent(captured.inputs, true);
+    this.assertCapturedSourceCurrent(captured.inputs);
     return { ...captured, runTaskId: live.run.taskId };
   }
   /** Committed terminal tool evidence after this run's accepted input boundary.
@@ -1384,13 +1384,12 @@ export class HostConversationRuntime {
     const checked: unknown = this.options.assertAccountingReady?.(operationId, terminal);
     if (checked !== undefined) { void Promise.resolve(checked).catch(() => {}); throw Error('Accounting barrier must be synchronous'); }
   }
-  assertCapturedSourceCurrent(inputs: readonly HostInputBinding[], effectBoundary = false): void {
+  assertCapturedSourceCurrent(inputs: readonly HostInputBinding[]): void {
     this.fence();
     for (const input of inputs) {
       if (!this.routed(input)) throw Error("Host binding conflict");
       this.options.bindings.assertSourceCurrent?.(input);
     }
-    if (effectBoundary) for (const id of new Set(inputs.map(input => input.operationId))) this.assertAccountingReady(id);
   }
   preparePlanContext(conversationId: ConversationId, taskId: TaskId, inputs: readonly HostInputBinding[],
     messages: readonly import("@earendil-works/pi-ai").Message[], content: import("@earendil-works/pi-ai").UserMessage["content"],

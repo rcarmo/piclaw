@@ -51,7 +51,7 @@
   },
   "current": {
     "production": {
-      "referencedNames": 143,
+      "referencedNames": 133,
       "directReaderNames": 7,
       "directReaderOccurrences": 11,
       "helperReaderNames": 10,
@@ -60,7 +60,7 @@
       "semanticReaderOccurrences": 21
     },
     "runtimeSrc": {
-      "referencedNames": 142,
+      "referencedNames": 132,
       "directReaderNames": 7,
       "directReaderOccurrences": 11,
       "helperReaderNames": 10,
@@ -864,7 +864,6 @@
           "helperReaders": 0,
           "semanticReaders": 0,
           "files": [
-            "runtime/src/core/config-runtime.ts",
             "runtime/src/core/config-sources.ts"
           ],
           "readerFiles": []
@@ -875,7 +874,6 @@
           "helperReaders": 0,
           "semanticReaders": 0,
           "files": [
-            "runtime/src/core/config-runtime.ts",
             "runtime/src/core/config-sources.ts"
           ],
           "readerFiles": []
@@ -891,7 +889,6 @@
           "helperReaders": 0,
           "semanticReaders": 0,
           "files": [
-            "runtime/src/core/config-runtime.ts",
             "runtime/src/core/config-sources.ts"
           ],
           "readerFiles": []
@@ -902,7 +899,6 @@
           "helperReaders": 0,
           "semanticReaders": 0,
           "files": [
-            "runtime/src/core/config-runtime.ts",
             "runtime/src/core/config-sources.ts"
           ],
           "readerFiles": []
@@ -955,7 +951,6 @@
           "helperReaders": 0,
           "semanticReaders": 0,
           "files": [
-            "runtime/src/core/config-runtime.ts",
             "runtime/src/core/config-sources.ts"
           ],
           "readerFiles": []
@@ -966,7 +961,6 @@
           "helperReaders": 0,
           "semanticReaders": 0,
           "files": [
-            "runtime/src/core/config-runtime.ts",
             "runtime/src/core/config-sources.ts"
           ],
           "readerFiles": []
@@ -3379,31 +3373,6 @@
       }
     },
     {
-      "name": "PICLAW_PROGRESSIVE_CHUNK_REASONING",
-      "scopes": {
-        "production": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/config.ts"
-          ],
-          "readerFiles": []
-        },
-        "runtimeSrc": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/config.ts"
-          ],
-          "readerFiles": []
-        }
-      }
-    },
-    {
       "name": "PICLAW_PROGRESSIVE_COMPACTION",
       "scopes": {
         "production": {
@@ -3412,7 +3381,6 @@
           "helperReaders": 0,
           "semanticReaders": 0,
           "files": [
-            "runtime/src/core/config-runtime.ts",
             "runtime/src/core/config-sources.ts"
           ],
           "readerFiles": []
@@ -3423,185 +3391,7 @@
           "helperReaders": 0,
           "semanticReaders": 0,
           "files": [
-            "runtime/src/core/config-runtime.ts",
             "runtime/src/core/config-sources.ts"
-          ],
-          "readerFiles": []
-        }
-      }
-    },
-    {
-      "name": "PICLAW_PROGRESSIVE_COMPACTION_CONCURRENCY",
-      "scopes": {
-        "production": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/config.ts"
-          ],
-          "readerFiles": []
-        },
-        "runtimeSrc": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/config.ts"
-          ],
-          "readerFiles": []
-        }
-      }
-    },
-    {
-      "name": "PICLAW_PROGRESSIVE_COMPACTION_MAX_CHUNKS",
-      "scopes": {
-        "production": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/config.ts",
-            "runtime/src/extensions/smart-compaction/progressive.ts"
-          ],
-          "readerFiles": []
-        },
-        "runtimeSrc": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/config.ts",
-            "runtime/src/extensions/smart-compaction/progressive.ts"
-          ],
-          "readerFiles": []
-        }
-      }
-    },
-    {
-      "name": "PICLAW_PROGRESSIVE_COMPACTION_MAX_PROMPT_CHARS",
-      "scopes": {
-        "production": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/config.ts"
-          ],
-          "readerFiles": []
-        },
-        "runtimeSrc": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/config.ts"
-          ],
-          "readerFiles": []
-        }
-      }
-    },
-    {
-      "name": "PICLAW_PROGRESSIVE_COMPACTION_PROMPT_CHARS",
-      "scopes": {
-        "production": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/progressive-policy.ts"
-          ],
-          "readerFiles": []
-        },
-        "runtimeSrc": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/progressive-policy.ts"
-          ],
-          "readerFiles": []
-        }
-      }
-    },
-    {
-      "name": "PICLAW_PROGRESSIVE_COMPRESS_REASONING",
-      "scopes": {
-        "production": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/config.ts"
-          ],
-          "readerFiles": []
-        },
-        "runtimeSrc": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/config.ts"
-          ],
-          "readerFiles": []
-        }
-      }
-    },
-    {
-      "name": "PICLAW_PROGRESSIVE_FINAL_REASONING",
-      "scopes": {
-        "production": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/config.ts"
-          ],
-          "readerFiles": []
-        },
-        "runtimeSrc": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/config.ts"
-          ],
-          "readerFiles": []
-        }
-      }
-    },
-    {
-      "name": "PICLAW_PROGRESSIVE_MERGE_REASONING",
-      "scopes": {
-        "production": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/config.ts"
-          ],
-          "readerFiles": []
-        },
-        "runtimeSrc": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/config.ts"
           ],
           "readerFiles": []
         }
@@ -4628,7 +4418,6 @@
           "helperReaders": 0,
           "semanticReaders": 0,
           "files": [
-            "runtime/src/core/config-runtime.ts",
             "runtime/src/core/config-sources.ts"
           ],
           "readerFiles": []
@@ -4639,33 +4428,7 @@
           "helperReaders": 0,
           "semanticReaders": 0,
           "files": [
-            "runtime/src/core/config-runtime.ts",
             "runtime/src/core/config-sources.ts"
-          ],
-          "readerFiles": []
-        }
-      }
-    },
-    {
-      "name": "PICLAW_SMART_COMPACTION_PROGRESS_INTERVAL_MS",
-      "scopes": {
-        "production": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/config.ts"
-          ],
-          "readerFiles": []
-        },
-        "runtimeSrc": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/config.ts"
           ],
           "readerFiles": []
         }
@@ -4680,7 +4443,6 @@
           "helperReaders": 0,
           "semanticReaders": 0,
           "files": [
-            "runtime/src/core/config-runtime.ts",
             "runtime/src/core/config-sources.ts"
           ],
           "readerFiles": []
@@ -4691,33 +4453,7 @@
           "helperReaders": 0,
           "semanticReaders": 0,
           "files": [
-            "runtime/src/core/config-runtime.ts",
             "runtime/src/core/config-sources.ts"
-          ],
-          "readerFiles": []
-        }
-      }
-    },
-    {
-      "name": "PICLAW_SMART_COMPACTION_SELECTIVE_REASONING",
-      "scopes": {
-        "production": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/config.ts"
-          ],
-          "readerFiles": []
-        },
-        "runtimeSrc": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/extensions/smart-compaction/config.ts"
           ],
           "readerFiles": []
         }

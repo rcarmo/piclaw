@@ -146,7 +146,7 @@ test('private Dream tools: message effects use the captured source after the adm
     allowed=true;const result=await invoke({action:'search',query:'absent-dream-message',chat_jid:'*',limit:1});
     expect(JSON.stringify(result.output)).not.toContain('FORBIDDEN_DREAM_MESSAGE');expect(captures).toBe(2);
     expect(tools.map(tool=>tool.name)).toEqual(['messages','search_workspace']);expect(tools.every(tool=>tool.replay==='unsafe')).toBe(true);
-  }finally{closeDatabase();}
+  }finally{await closeDatabase();}
 });
 
 test('private Dream tools: stale workspace search joins inline refresh and never launches a background writer',async()=>{
@@ -161,7 +161,7 @@ test('private Dream tools: stale workspace search joins inline refresh and never
     const result=await tools[1]!.execute({query:'DREAM_SEARCH_OWNED_SENTINEL',scope:'notes',limit:1} as never,{...api,conversationId:18,taskId:19} as never,context);
     expect(JSON.stringify(result.output)).toContain('dream-source-search.md');expect(background).toBe(0);expect(checks).toBeGreaterThan(5);
     expect(search.getWorkspaceIndexStatus({scope:'notes'}).state).toBe('ready');
-  }finally{search.setBackgroundWorkspaceIndexRefreshRequesterForTests(null);rmSync(join(cwd,'notes','dream-source-search.md'));closeDatabase();}
+  }finally{search.setBackgroundWorkspaceIndexRefreshRequesterForTests(null);rmSync(join(cwd,'notes','dream-source-search.md'));await closeDatabase();}
 });
 
 test('private Dream tools: index access snapshots retain and latch the invocation effect fence',async()=>{
@@ -184,7 +184,7 @@ test('private Dream tools: revocation across actual index traversal await preven
   try{
     await expect(tools[1]!.execute({query:'DREAM_REVOKED_SEARCH_SENTINEL',scope:'notes',refresh:true} as never,{...api,conversationId:18,taskId:19} as never,context)).rejects.toThrow('Native Dream tool failed');
     expect(revoked).toBe(true);expect(db.query('SELECT path FROM workspace_files WHERE path=?').all('notes/dream-revoked-search.md')).toEqual([]);
-  }finally{read.mockRestore();rmSync(file);closeDatabase();}
+  }finally{read.mockRestore();rmSync(file);await closeDatabase();}
 });
 
 test('private Dream tools: message post awaits committed storage before the registered broadcast',async()=>{
@@ -202,5 +202,5 @@ test('private Dream tools: message post awaits committed storage before the regi
   try{
     const result=await tools[0]!.execute({action:'post',content:'DREAM_BROADCAST_PARITY'} as never,{...api,conversationId:18,taskId:19} as never,context);
     expect(broadcasts).toBe(1);expect(JSON.stringify(result.output)).not.toContain('error');
-  }finally{setMessagesPostFn(undefined);closeDatabase();}
+  }finally{setMessagesPostFn(undefined);await closeDatabase();}
 });
