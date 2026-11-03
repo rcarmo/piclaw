@@ -291,7 +291,7 @@ async function reservedTerminal(body: (fixture: {
       },
       revokeSource() { source = false; }, sourceChecks() { return checks; } });
   } finally {
-    owner.abort(); caller.abort(); closeDatabase(); rmSync(authPath, { force: true });
+    owner.abort(); caller.abort(); await closeDatabase(); rmSync(authPath, { force: true });
     if (previousMemory === undefined) delete process.env.PICLAW_DB_IN_MEMORY; else process.env.PICLAW_DB_IN_MEMORY = previousMemory;
     restore(); workspace.cleanup();
   }
