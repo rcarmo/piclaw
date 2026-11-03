@@ -35,7 +35,7 @@ for (const window of windows.filter(value => !crashPhase || value === process.en
     cost: { input: 1, output: 1, cacheRead: 1, cacheWrite: 1 } };
   const message: AssistantMessage = { role: 'assistant', provider: model.provider, model: model.id, api: model.api, timestamp: 123,
     content: [{ type: 'text', text: 'Original paid summary' }], stopReason: 'stop',
-    usage: { input: 2, output: 3, cacheRead: 0, cacheWrite: 0, totalTokens: 5, cost: { input: 0.000002, output: 0.000003, cacheRead: 0, cacheWrite: 0, total: 0.000005 } } };
+    usage: { input: 2, output: 3, reasoning: 2, cacheRead: 0, cacheWrite: 0, totalTokens: 5, cost: { input: 0.000002, output: 0.000003, cacheRead: 0, cacheWrite: 0, total: 0.000005 } } };
   try {
     const paths = resolveRuntimeConfigPaths({ env: { ...process.env, PICLAW_DB_IN_MEMORY: '0' } }); initDatabase(paths);
     const root = getDb(), authPath = join(workspace.workspace, 'synthetic-auth.json');
@@ -131,6 +131,9 @@ for (const window of windows.filter(value => !crashPhase || value === process.en
     expect(after.state).toBe(window === 'before-receipt' ? crashPhase === 'read' ? 'dispatched' : 'unresolved' : 'settled');
     if (crashPhase === 'read' && window === 'before-receipt') expect(after).toEqual(before);
     if (window !== 'before-receipt') {
+      expect(root.query('SELECT input_tokens,output_tokens,reasoning_tokens,total_tokens FROM token_usage').get()).toEqual({
+        input_tokens: 2, output_tokens: 3, reasoning_tokens: 2, total_tokens: 5,
+      });
       expect(storedPublications).toBe(2);
       if (settled.state.outcome.status !== 'completed' || !settled.state.outcome.result.submissionId) throw Error('Exact summary write required');
       await (await harness.submission(settled.state.outcome.result.submissionId, context))!.wait(context);
