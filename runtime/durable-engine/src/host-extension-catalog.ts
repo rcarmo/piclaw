@@ -72,8 +72,8 @@ const approvedGoalFiles = Object.freeze({
   "compat/extension-kv.ts": "04240517e9e8664cae2d2badb99f382100a7af3e12679cfce97087870881551c"
 });
 const approvedObservabilityFiles = Object.freeze({
-  "usage-telemetry.ts": "1714e4f6b24450315940d960e0d971ca2c66c27453b399427b677d1fb807b705",
-  "package.json": "c890f655eab2b8a55306dbb1d2a3b7110d54c6697a14ea69c860966d59fe8b5c",
+  "usage-telemetry.ts": "9a9b9bffe72d31e2c80ba416cc6d31c5a70c6d75a9d75fb90420b4c28310e99b",
+  "package.json": "002e06e6ad6a49f847cd33400711aeecdd1f627fc9387e89c85e0dce7add3073",
   "model-speed-telemetry.ts": "a6b46ba29c71f459880c560575851312779f84163427ace6d7b1abd9e53a4b81",
   "compat/extension-kv.ts": "04240517e9e8664cae2d2badb99f382100a7af3e12679cfce97087870881551c",
   "compat/log-sink.ts": "b7f04b776dc33ec8a2bbe4d803b2d7c2783b8d16b5fa4a1b54c85fb30d1ee19e",
@@ -100,7 +100,7 @@ const approvedResticFiles = Object.freeze({
   "contracts.ts": "d73eea35af0c00b1dc36a98c352389804147447b5228c18cee807110fbddb27c"
 });
 const profiles = {
-  observability: { label: "Observability", name: "@rcarmo/piclaw-addon-observability", version: "0.1.19", files: approvedObservabilityFiles,
+  observability: { label: "Observability", name: "@rcarmo/piclaw-addon-observability", version: "0.1.20", files: approvedObservabilityFiles,
     shadows: [...Object.keys(approvedObservabilityFiles).filter(file => file.endsWith(".ts")).flatMap(file => [file.replace(/\.ts$/, ".js"), file.replace(/\.ts$/, ".json"), file.replace(/\.ts$/, "/index.js"), file.replace(/\.ts$/, "/package.json")]), "compat/package.json"],
     events: ["resources_discover", "session_start", "before_agent_start"] },
   restic: { label: "Restic", name: "@rcarmo/piclaw-addon-restic", version: "0.1.5", files: approvedResticFiles,
