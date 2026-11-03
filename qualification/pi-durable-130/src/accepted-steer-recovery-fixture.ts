@@ -220,5 +220,5 @@ open,
 stores,
 snapshot,
 prepare,
-async close() { base.host.modelHold?.release(); await runtime?.close(); await base.close(); owner.releaseAfterClose(); owner.closeConnection(); closeDatabase(); } };
+async close() { base.host.modelHold?.release(); await runtime?.close(); await base.close(); await closeDatabase(); owner.releaseAfterClose(); owner.closeConnection(); } };
 }

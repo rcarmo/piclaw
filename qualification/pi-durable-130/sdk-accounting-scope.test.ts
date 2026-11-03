@@ -98,7 +98,7 @@ async function fixture(body: (f: {
       get database() { return database; }, get storage() { return storage!; },
       async reopen() {
         await storage!.close(context); storage = undefined;
-        closeDatabase(); initDatabase(paths); database = getDb(); storage = await open();
+        await closeDatabase(); initDatabase(paths); database = getDb(); storage = await open();
       },
       reserve(at: Location, namespace = domain, maintenance?: 'bound' | 'standalone') {
         const id = `scope-request-${++serial}`, maintenanceWorkId = `durable-maintenance:fixture-incarnation:${at.taskId}`;
@@ -143,7 +143,7 @@ async function fixture(body: (f: {
   } finally {
     if (session) await session.close(context);
     else if (storage) await storage.close(context);
-    closeDatabase(); restore(); workspace.cleanup();
+    await closeDatabase(); restore(); workspace.cleanup();
   }
 }
 beforeAll(() => fixture(async f => {

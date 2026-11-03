@@ -8,7 +8,7 @@ export function createHostOperationAuthority(root: Database, captured: Capture, 
   const { operation, inputs } = captured;
   const chatJid = operation.chatJid;
   if (!readonly && !operation.harness) throw Error("Bound host harness required for writes");
-  const assertSourceCurrent = () => {
+  const assertCurrent = () => {
     assertAllowed();
     const current = readonly ? root.query(`SELECT 1 FROM service_effect_s01_operations o
       JOIN service_effect_s01_chats c ON c.chat_jid=o.chat_jid AND c.active_operation_id=o.operation_id
@@ -34,12 +34,7 @@ export function createHostOperationAuthority(root: Database, captured: Capture, 
       if (!source) throw Error("Stale host source authority");
     }
   };
-  const assertCurrent = () => {
-    assertSourceCurrent();
-    const checked: unknown = captured.accountingBarrier?.();
-    if (checked !== undefined) { void Promise.resolve(checked).catch(() => {}); throw Error('Accounting barrier must be synchronous'); }
-  };
-  return Object.freeze({ assertCurrent, assertSourceCurrent,
+  return Object.freeze({ assertCurrent, assertSourceCurrent: assertCurrent,
     async admitWrite<T>(body: SyncSqliteOperation<T>): Promise<T> {
       if (readonly) throw Error("Read-only host operation authority");
       return admitSqliteWrite<T>(root, body, assertCurrent, signal);

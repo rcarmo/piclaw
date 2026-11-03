@@ -57,7 +57,7 @@ async function fixture(run: (f: Awaited<ReturnType<typeof setup>>) => Promise<vo
 async function setup(busy = false, sharedRoot = false) {
   const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "runtime-"));
   process.env.PICLAW_DB_IN_MEMORY = "1";
-  initDatabase(); getDb().query("VACUUM INTO ?").run(join(dir, "host.sqlite")); closeDatabase();
+  initDatabase(); getDb().query("VACUUM INTO ?").run(join(dir, "host.sqlite")); await closeDatabase();
   const db = new Database(join(dir, "host.sqlite"), { strict: true });
   configureHostWalFixtureDatabase(db);
   if (sharedRoot) configureSqliteRole(db, join(dir, 'host.sqlite'), { role: 'root' });
@@ -643,6 +643,50 @@ test("runtime: operator abort settles exact held run and attached steer once, pr
   expect(await f.runtime.abortOperation(input)).toBe(false);
   expect(f.work.getAcceptedSource(input.chatJid, successor.sourceId)?.state).toBe("pending");
   expect(f.db.query("SELECT * FROM messages WHERE is_bot_message=1").all()).toEqual([]);
+}), 20000);
+
+test("runtime: live SDK tool capture keeps source authority without financial reporting readiness", () => fixture(async f => {
+  f.base.host.toolHold = barrier(); f.grantKnown();
+  let waiting: Promise<void> | undefined;
+  try {
+    const input = await f.accept("request-1", "use-tool");
+    const id = await f.runtime.submit(input);
+    const op = value(await f.work.getOperation(input.operationId))!;
+    value(await f.work.bindHarness(sealed({ effect: effect("expense-tool-bind", op.operationId, input.sourceSeq), expectedVersion: op.version,
+      sessionId: f.options.sessionId, harnessOperationId: String(id) })));
+    waiting = f.runtime.wait(input, id);
+    await f.base.host.toolEntered.promise;
+    let financialChecks = 0;
+    f.hooks.accounting = () => { financialChecks++; throw Error("synthetic financial reporting debt"); };
+    const snapshot = await f.runtime.inspectProcessControl();
+    const tool = snapshot.inspection.tasks.find(task => task.record.kind === "pi.tool")!.record;
+    const call = tool.input as { kind: string; callId: string };
+    expect(call.kind).toBe("model");
+    const captured = await f.runtime.captureToolSource(tool.conversationId, tool.id, call.callId);
+    expect(captured.inputs).toHaveLength(1);
+    expect(captured.inputs[0]?.operationId).toBe(input.operationId);
+    expect(Object.hasOwn(captured, "accountingBarrier")).toBe(false);
+    expect(() => f.runtime.assertCapturedSourceCurrent(captured.inputs)).not.toThrow();
+    const control = await f.runtime.inspectProcessControl({ conversationId: tool.conversationId, taskId: tool.id, callId: call.callId });
+    expect(control.scope?.taskId).toBe(tool.id);
+    const admission = await f.runtime.prepareToolModelContext({ conversationId: tool.conversationId, taskId: tool.id, toolCallId: call.callId },
+      { provider: "qualification", modelId: "synthetic" });
+    expect(() => admission.assertScopeCurrent()).not.toThrow();
+    expect(financialChecks).toBe(0);
+    // Accepted-source identity remains mandatory, independently of finance.
+    f.db.query("UPDATE service_effect_s01_sources SET payload_ref='foreign-payload' WHERE source_id=?").run(input.sourceId);
+    expect(() => f.runtime.assertCapturedSourceCurrent(captured.inputs)).toThrow();
+    f.db.query("UPDATE service_effect_s01_sources SET payload_ref=? WHERE source_id=?").run(input.payloadRef, input.sourceId);
+    expect(() => f.runtime.assertCapturedSourceCurrent(captured.inputs)).not.toThrow();
+    expect(financialChecks).toBe(0);
+    f.base.host.toolHold.release(); await waiting;
+    expect(f.base.host.effects).toBe(1);
+    expect(f.base.host.modelCalls).toBe(2);
+    expect(f.base.host.credentialLookups).toBe(0);
+  } finally {
+    f.hooks.accounting = undefined;
+    f.base.host.toolHold.release(); await waiting;
+  }
 }), 20000);
 
 test("runtime: operator abort cancels a held tool before its effect", () => fixture(async f => {
