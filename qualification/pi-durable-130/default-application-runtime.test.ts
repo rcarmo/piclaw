@@ -3732,7 +3732,39 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(root.query("SELECT * FROM piclaw_durable_bindings_v1 ORDER BY conversation_id,source_seq").all()).toEqual(nativeInputs);
     expect(root.query("SELECT * FROM entries ORDER BY id").all()).toEqual(history);
     const restoredPool = new AgentPool({ credentialStore, modelRuntime: runtime, modelRegistry, ...backend.sessionOptions });
-    expect((await restoredPool.restoreChatBranch(created.chat_jid)).agent_name).toBe("native-friendly");
+    const archivedPolicy = branches.getChatBranchByChatJid(created.chat_jid);
+    root.exec('BEGIN IMMEDIATE');
+    try {
+      await expect(restoredPool.restoreChatBranch(created.chat_jid)).rejects.toThrow('outermost');
+      expect(root.inTransaction).toBe(true); expect(branches.getChatBranchByChatJid(created.chat_jid)).toEqual(archivedPolicy);
+    } finally { root.exec('ROLLBACK'); }
+    root.exec("CREATE TRIGGER native_restore_sqlfail BEFORE UPDATE OF archived_at ON chat_branches WHEN new.archived_at IS NULL BEGIN SELECT RAISE(ABORT,'restore SQL failed'); END");
+    try { await expect(restoredPool.restoreChatBranch(created.chat_jid)).rejects.toThrow('restore SQL failed'); }
+    finally { root.exec('DROP TRIGGER native_restore_sqlfail'); }
+    expect(branches.getChatBranchByChatJid(created.chat_jid)).toEqual(archivedPolicy);
+    const file = (root.query('PRAGMA database_list').all() as { name: string; file: string }[]).find(row => row.name === 'main')!.file;
+    for (const reason of ['cancel', 'profile'] as const) {
+      const blocker = new Database(file), abort = new AbortController(), originalStore = process.env.PICLAW_STORE;
+      blocker.exec('BEGIN IMMEDIATE');
+      const pending = restoredPool.restoreChatBranch(created.chat_jid, { signal: abort.signal }).then(value => ({ value }), error => ({ error }));
+      try {
+        await Bun.sleep(30); const start = performance.now();
+        if (reason === 'cancel') abort.abort(Error('native restore cancelled'));
+        else process.env.PICLAW_STORE = originalStore + '-different-profile';
+        const result = await Promise.race([pending, Bun.sleep(400).then(() => ({ deadline: true }))]);
+        expect(performance.now() - start).toBeLessThan(500); expect('error' in result).toBe(true);
+        if ('error' in result) expect(result.error.message).toContain(reason === 'cancel' ? 'native restore cancelled' : 'database binding changed');
+        expect(blocker.inTransaction).toBe(true); expect(branches.getChatBranchByChatJid(created.chat_jid)).toEqual(archivedPolicy);
+        expect(backend.sessionOptions.getDurableSession!(created.chat_jid)).toBeUndefined();
+        expect(root.query(anchorsSql).all()).toEqual(anchors); expect(calls).toBe(2);
+      } finally {
+        if (originalStore === undefined) delete process.env.PICLAW_STORE; else process.env.PICLAW_STORE = originalStore;
+        blocker.exec('ROLLBACK'); await pending; blocker.close();
+      }
+    }
+    const lateAbort = new AbortController(); queueMicrotask(() => lateAbort.abort(Error('after native commit')));
+    expect((await restoredPool.restoreChatBranch(created.chat_jid, { signal: lateAbort.signal })).agent_name).toBe("native-friendly");
+    expect(lateAbort.signal.aborted).toBe(true);
     expect(backend.sessionOptions.getDurableSession!(created.chat_jid)).toMatchObject(identity);
     expect(root.query(anchorsSql).all()).toEqual(anchors); expect(calls).toBe(2);
     const unmapped = "web:unpublished-restore";

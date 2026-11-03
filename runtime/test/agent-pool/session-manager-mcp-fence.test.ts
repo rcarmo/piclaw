@@ -17,7 +17,7 @@ function fixture(options: { createSession?: () => Promise<AgentSessionRuntime>; 
   const pool = new Map<string, PoolEntry>();
   const manager = new AgentSessionManager({ pool, modelRuntime: { getAvailableModels: () => [] } as unknown as ModelRuntime,
     settingsManager: { getDefaultProvider: () => undefined, getDefaultModel: () => undefined } as unknown as SettingsManager,
-    createDefaultTools: () => [], bindSession: options.bindSession ?? (async () => {}), ensureBranchRegistration: () => {},
+    createDefaultTools: () => [], bindSession: options.bindSession ?? (async () => {}),
     createSession: options.createSession });
   return { manager, pool, cleanup: () => { restore(); ws.cleanup(); } };
 }
@@ -132,7 +132,7 @@ test("lightweight prewarm already in flight is drained by the snapshot", async (
   try {
     // This variant creates no session, but extension-factory discovery must
     // still finish before the fenced owner snapshot is considered stable.
-    const manager = new AgentSessionManager({ pool: f.pool, modelRuntime: {} as ModelRuntime, settingsManager: {} as SettingsManager, createDefaultTools: () => [], bindSession: async () => {}, ensureBranchRegistration: () => {},
+    const manager = new AgentSessionManager({ pool: f.pool, modelRuntime: {} as ModelRuntime, settingsManager: {} as SettingsManager, createDefaultTools: () => [], bindSession: async () => {},
       lightweightPrewarmSession: async () => { entered.resolve(); await release.promise; } });
     expect(manager.prewarm("web:light", { mode: "lightweight" })).toBe(true);
     await entered.promise;
@@ -234,7 +234,7 @@ test("lifecycle binding rejects re-entrant shutdown and snapshot instead of dead
   const f = fixture();
   try {
     const manager = new AgentSessionManager({ pool: f.pool, modelRuntime: {} as ModelRuntime, settingsManager: {} as SettingsManager,
-      createDefaultTools: () => [], ensureBranchRegistration: () => {}, bindSession: async () => {
+      createDefaultTools: () => [], bindSession: async () => {
         await expect(manager.shutdown()).rejects.toThrow("callbacks cannot await");
         await expect(manager.fenceMcpAndSnapshot(new AbortController().signal)).rejects.toThrow("callbacks cannot await");
       } });
@@ -301,7 +301,7 @@ test("creation and binding callbacks cannot re-enter same-manager admission or r
   try {
     const manager = new AgentSessionManager({ pool: f.pool, modelRuntime: {} as ModelRuntime,
       settingsManager: { getDefaultProvider: () => undefined, getDefaultModel: () => undefined } as unknown as SettingsManager,
-      createDefaultTools: () => [], ensureBranchRegistration: () => {}, createSession: async () => {
+      createDefaultTools: () => [], createSession: async () => {
         await expect(manager.getOrCreate("web:reentrant")).rejects.toThrow("callbacks cannot await");
         guarded += 2; return runtime("reentrant");
       }, bindSession: async current => {

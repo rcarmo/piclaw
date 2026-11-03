@@ -44,7 +44,7 @@ test('UI preferences cannot adopt another database while JSON is parsed', () =>
 test('branch control captures its database before JSON rather than renaming a replacement profile', () =>
   withTempWorkspaceEnv('branch-request-database-', {}, async () => {
     const f = fixture(), chat = 'web:branch-binding'; db.storeChatMetadata(chat, '2026-01-01');
-    const manager = new AgentBranchManager({ pool: new Map(), activeForkBaseLeafByChat: new Map(), isActive: () => false });
+    const manager = new AgentBranchManager({ pool: new Map(), isActive: () => false });
     const service = createWebAgentControlPlaneService({ ...f.channel,
       json: f.channel.json.bind(f.channel), broadcastEvent() {}, processChat: async () => {},
       agentPool: { renameChatBranch: manager.renameChatBranch.bind(manager) } as any,

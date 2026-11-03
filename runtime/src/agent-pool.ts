@@ -1,3 +1,4 @@
+import { captureHostDatabaseBinding } from "./db/connection.js";
 import { admitSqliteWrite } from "./db/sqlite-async-admission.js";
 /**
  * Host facade for admitted native dispatch, models/auth, metadata and resources.
@@ -250,7 +251,6 @@ export class AgentPool {
   }
   private mcpSettings: AgentPoolServices["mcpSettings"];
   private pool = new Map<string, PoolEntry>();
-  private activeForkBaseLeafByChat = new Map<string, string | null>();
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   private shuttingDown = false;
   private memoryPressureActive = false;
@@ -330,7 +330,6 @@ export class AgentPool {
       branchManager: this.branchManager,
     } = createAgentPoolServices({
       pool: this.pool,
-      activeForkBaseLeafByChat: this.activeForkBaseLeafByChat,
       authStorage: this.credentialStore,
       modelRuntime: this.modelRuntime,
       modelRegistry: this.modelRegistry,
@@ -524,10 +523,6 @@ export class AgentPool {
     return this.sessionManager?.hasProtectedRun(chatJid) || this.runtimeFacade.isActive(chatJid);
   }
 
-  private ensureBranchRegistration(chatJid: string, session?: AgentSession | null): ChatBranchRecord {
-    return this.branchManager.ensureBranchRegistration(chatJid, session);
-  }
-
   async renameChatBranch(
     chatJid: string,
     options: BranchMutationContext & { agentName?: string | null } = {},
@@ -540,8 +535,7 @@ export class AgentPool {
   }
 
   async mergeChatBranchIntoParent(chatJid: string, context: BranchMutationContext = {}): Promise<MergeChatBranchIntoParentResult> {
-    if (this.durableApplication) throw new Error("Durable branch rollup unavailable");
-    return this.branchManager.mergeChatBranchIntoParent(chatJid, context);
+    throw new Error("Durable branch rollup unavailable");
   }
 
   async renameChatJid(
@@ -549,39 +543,36 @@ export class AgentPool {
     newJid: string,
     context: BranchMutationContext = {},
   ): Promise<{ oldJid: string; newJid: string; branch: ChatBranchRecord }> {
-    if (this.durableApplication) throw new Error("Durable chat identity rename unavailable");
-    return this.branchManager.renameChatJid(oldJid, newJid, context);
+    throw new Error("Durable chat identity rename unavailable");
   }
 
   async restoreChatBranch(
     chatJid: string,
     options: BranchMutationContext & { agentName?: string | null } = {},
   ): Promise<ChatBranchRecord> {
-    if (this.durableApplication) {
-      if (readAccessConfig().mode !== "single-user") throw Error("Native restore requires single-user policy");
-      const database = getDb();
-      const agentName = options.agentName, { signal, authorise } = options;
-      const check = () => {
-        if (readAccessConfig().mode !== "single-user" || getDb() !== database) throw Error("Native restore authority changed");
-        authorise?.();
-      };
-      return admitSqliteWrite(database, () => {
-        const restored = restoreChatBranchIdentity({ chat_jid: chatJid,
-          ...(agentName !== undefined ? { agent_name: agentName } : {}) });
-        const position = this.durableSessionLookup?.(restored.chat_jid);
-        if (!position || position.branchId !== restored.branch_id) throw Error("Exact native restore binding unavailable");
-        if (position.assertCurrent !== undefined && typeof position.assertCurrent !== "function") {
-          throw Error("Exact native restore binding invalid");
-        }
-        position.assertCurrent?.();
-        return restored;
-      }, check, signal, undefined, () => {
-        if (getDb() !== database) throw Error("Native restore database changed");
-        if (database.inTransaction) throw Error("Native restore requires an outermost transaction");
-        check();
-      });
-    }
-    return this.branchManager.restoreChatBranch(chatJid, options);
+    if (!this.durableApplication) throw Error("Legacy branch restore unavailable");
+    if (readAccessConfig().mode !== "single-user") throw Error("Native restore requires single-user policy");
+    const database = getDb(), assertBinding = captureHostDatabaseBinding(database);
+    const agentName = options.agentName, { signal, authorise } = options;
+    const check = () => {
+      assertBinding();
+      if (readAccessConfig().mode !== "single-user") throw Error("Native restore authority changed");
+      authorise?.();
+    };
+    return admitSqliteWrite(database, () => {
+      const restored = restoreChatBranchIdentity({ chat_jid: chatJid,
+        ...(agentName !== undefined ? { agent_name: agentName } : {}) });
+      const position = this.durableSessionLookup?.(restored.chat_jid);
+      if (!position || position.branchId !== restored.branch_id) throw Error("Exact native restore binding unavailable");
+      if (position.assertCurrent !== undefined && typeof position.assertCurrent !== "function") {
+        throw Error("Exact native restore binding invalid");
+      }
+      position.assertCurrent?.();
+      return restored;
+    }, check, signal, undefined, () => {
+      if (database.inTransaction) throw Error("Native restore requires an outermost transaction");
+      check();
+    });
   }
 
   async permanentPurgeChatBranch(
@@ -590,9 +581,8 @@ export class AgentPool {
   ): Promise<{ branch: ChatBranchRecord; removedSessionArtifacts: string[] }> {
     if (this.durableApplication) {
       requireLegacyRoutingMutation(getDb(), "legacy purge");
-      throw new Error("Durable branch purge unavailable");
     }
-    return this.branchManager.permanentPurgeChatBranch(chatJid, context);
+    throw new Error("Durable branch purge unavailable");
   }
 
   async createForkedChatBranch(
@@ -601,9 +591,8 @@ export class AgentPool {
   ): Promise<ChatBranchRecord> {
     if (this.durableApplication) {
       requireLegacyRoutingMutation(getDb(), "legacy fork");
-      throw new Error("Durable branch fork unavailable");
     }
-    return this.branchManager.createForkedChatBranch(sourceChatJid, options);
+    throw new Error("Durable branch fork unavailable");
   }
 
   async createRootChatSession(agentName: string, context: BranchMutationContext = {}): Promise<ChatBranchRecord> {
@@ -629,7 +618,7 @@ export class AgentPool {
     return {
       cachedMainSessions: this.pool.size,
       cachedSideSessions: 0,
-      activeForkBaseLeaves: this.activeForkBaseLeafByChat.size,
+      activeForkBaseLeaves: 0,
       activeChats: this.branchManager.listActiveChats().length,
       sessionResources,
       ...(this.sessionManager ? {sessionManager:this.sessionManager.getInstrumentationSnapshot()} : {}),
