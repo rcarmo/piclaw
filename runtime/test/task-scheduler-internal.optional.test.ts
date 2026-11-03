@@ -8,7 +8,6 @@ import { assertPathWithinTestFilesystemIsolation } from "../scripts/test-filesys
 
 const sentMessages: Array<{ jid: string; text: string }> = [];
 let db: typeof import("../src/db.js") | null = null;
-let scheduler: typeof import("../src/task-scheduler.js") | null = null;
 let dream: typeof import("../src/dream.js") | null = null;
 
 function writeDailyNote(workspace: string, date: string, summary: string) {
@@ -25,7 +24,6 @@ afterEach(() => {
   sentMessages.length = 0;
   try { db?.getDb().close(); } catch (_error) { void _error; }
   db = null;
-  scheduler = null;
   dream = null;
 });
 
@@ -44,7 +42,6 @@ test("internal Dream flows keep notes/memory/days model-owned and AutoDream stay
   writeDailyNote(config.WORKSPACE_DIR, recentDate, "Infra tooling and memory maintenance landed.");
 
   db = await importFresh("../src/db.js");
-  scheduler = await importFresh("../src/task-scheduler.js");
   dream = await importFresh("../src/dream.js");
   db.initDatabase();
 
@@ -93,7 +90,7 @@ test("internal Dream flows keep notes/memory/days model-owned and AutoDream stay
   });
 
   const manualTask = db.getTaskById(manualTaskId);
-  await scheduler.runScheduledTask(manualTask!, {
+  await runAdmittedScheduledTask(manualTask!, {
     queue: {} as any,
     agentPool: {} as any,
     sendMessage: async (jid, text) => { sentMessages.push({ jid, text }); },
@@ -127,6 +124,7 @@ test("internal Dream flows keep notes/memory/days model-owned and AutoDream stay
   );
 
   for (const chat of ["web:default", "web:a", "web:b", "web:c", "web:d", "web:e"]) {
+    db.storeChatMetadata(chat, new Date().toISOString());
     db.storeMessage({
       id: `msg-${chat}-${Date.now()}`,
       chat_jid: chat,

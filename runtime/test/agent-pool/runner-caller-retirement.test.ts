@@ -5,7 +5,7 @@ import { AgentPool } from '../../src/agent-pool.js';
 import { createOperationHost } from '../../src/addons/operation-host.js';
 import { initDatabase,getDb } from '../../src/db.js';
 import { runDreamAgentTurn } from '../../src/dream.js';
-import { runScheduledTask } from '../../src/task-scheduler.js';
+import * as scheduler from '../../src/task-scheduler.js';
 import { existsSync,readdirSync } from 'node:fs';
 import { DATA_DIR,WORKSPACE_DIR } from '../../src/core/config.js';
 import '../helpers.js';
@@ -32,7 +32,7 @@ for(const native of [false,true])test(`unadmitted Dream and scheduled AI cannot 
   const paths=()=>[DATA_DIR,resolve(WORKSPACE_DIR,'notes')].map(path=>existsSync(path)?readdirSync(path,{recursive:true}).sort():[]);
   const before=getDb().serialize(),files=paths();
   await expect(runDreamAgentTurn({chatJid:'web:unadmitted',mode:'manual',agentPool:pool as any})).rejects.toThrow('Native Dream dispatcher unavailable');
-  expect(await runScheduledTask({task_kind:'agent',id:'unadmitted',prompt:'private'} as any,{agentPool:pool} as any,new Proxy({},{get:forbidden})))
-    .toMatchObject({status:'skipped',error:'Native scheduled execution requires an admitted occurrence',taskRunLogId:null});
+  expect(scheduler).not.toHaveProperty('runScheduledTask');
+  expect(typeof scheduler.pollScheduledRunsOnce).toBe('function');
   expect(getDb().serialize()).toEqual(before);expect(paths()).toEqual(files);expect(calls).toBe(0);
 });

@@ -32,7 +32,7 @@ import { formatRecoverySummary } from "./agent-pool/recovery-summary.js";
 import { DREAM_TASK_ID, parseDreamPromptToken, runDreamAgentTurn, runDreamMaintenance } from "./dream.js";
 import { computeNextRun } from "./task-scheduler-utils.js";
 import type { AgentPool } from "./agent-pool.js";
-import { applyScheduledRunToTask, getDb, getTaskById, logTaskRun, updateTaskAfterRun } from "./db.js";
+import { applyScheduledRunToTask, getDb, getTaskById } from "./db.js";
 import { getDatabaseBinding } from "./db/connection.js";
 import { openSqliteRole } from "./db/sqlite-role-policy.js";
 import { registerSqliteCheckpoint } from "./db/sqlite-checkpoint.js";
@@ -72,7 +72,7 @@ function canRunLegacyScheduledWork(): boolean {
 }
 
 function unsupportedScheduledRun(): ScheduledTaskRunOutcome {
-  return { status: "skipped", result: null, error: "Scheduled work requires valid single-user configuration and context.", durationMs: 0, taskRunLogId: null };
+  return { status: "skipped", result: null, error: "Scheduled work requires valid single-user configuration and context.", durationMs: 0 };
 }
 
 /**
@@ -246,37 +246,20 @@ async function runShellTask(task: ScheduledTask): Promise<{ result: string | nul
   }
 }
 
-export interface ScheduledTaskRunOutcome {
+interface ScheduledTaskRunOutcome {
   status: "success" | "error" | "skipped";
   result: string | null;
   error: string | null;
   durationMs: number;
-  taskRunLogId: number | null;
   /** Durable delivery waits for the atomic S07/history commitment. */
   budgetBlocked?: boolean;
-}
-
-/**
- * Execute a single scheduled task and preserve the existing delivery/log format.
- * Direct callers retain legacy recurrence advancement; the durable scheduler
- * disables it and lets EF-S07 settle the claimed occurrence instead.
- */
-export async function runScheduledTask(
-  task: ScheduledTask,
-  deps: SchedulerDeps,
-  options: { advanceTask?: boolean } = {},
-): Promise<ScheduledTaskRunOutcome> {
-  if(deps.agentPool.isDurableRuntime?.()===true || !(task.task_kind==='internal'||task.task_kind==='shell'||Boolean(task.command)) || (task.id===DREAM_TASK_ID&&parseDreamPromptToken(task.prompt).matched))
-    return{status:'skipped',result:null,error:'Native scheduled execution requires an admitted occurrence',durationMs:0,taskRunLogId:null};
-  return executeScheduledTask(task, deps, options);
 }
 
 async function executeScheduledTask(
   task: ScheduledTask,
   deps: SchedulerDeps,
-  options: { advanceTask?: boolean; deferHistory?: boolean },
-  claimActive: () => boolean = () => true,
-  scheduledLease?: ScheduledRunLease,
+  claimActive: () => boolean,
+  scheduledLease: ScheduledRunLease,
 ): Promise<ScheduledTaskRunOutcome> {
   if (!canRunLegacyScheduledWork()) return unsupportedScheduledRun();
   // Once denied, finally/catch paths must not restore models or persist results.
@@ -285,7 +268,7 @@ async function executeScheduledTask(
   // Re-check task status (may have been paused/cancelled while queued).
   const fresh = getTaskById(task.id);
   if (!fresh || fresh.status !== "active" || fresh.revision !== task.revision) {
-    return { status: "skipped", result: null, error: null, durationMs: 0, taskRunLogId: null };
+    return { status: "skipped", result: null, error: null, durationMs: 0 };
   }
   const notifyOnComplete = fresh.notify_on_complete !== false && fresh.notify_on_complete !== 0;
 
@@ -299,7 +282,7 @@ async function executeScheduledTask(
   };
 
   const start = Date.now();
-  const budgetWorkId = scheduledLease ? `scheduled:${scheduledLease.record.runId}` : `scheduled:${task.id}:${start}`;
+  const budgetWorkId = `scheduled:${scheduledLease.record.runId}`;
   schedulerMetrics.taskRunsStarted += 1;
   let result: string | null = null;
   let error: string | null = null;
@@ -317,7 +300,6 @@ async function executeScheduledTask(
       const nativeDream=deps.agentPool.isDurableRuntime?.()===true&&task.id===DREAM_TASK_ID&&parseDreamPromptToken(task.prompt).matched;
       let nativeAuthority:{invocationId:string;assertCurrent():void}|undefined;
       if(nativeDream){
-        if(!scheduledLease)throw Error('Native scheduled Dream requires its occurrence lease');
         const lease=scheduledLease,db=getDb(),tokenHash=hashScheduledLeaseToken(lease.leaseToken);
         nativeAuthority={invocationId:scheduledDreamInvocationId(lease.record.runId),assertCurrent(){
           if(!mayContinue()||getDb()!==db||!db.query(`SELECT 1 FROM service_effect_s07_occurrences r
@@ -352,7 +334,7 @@ async function executeScheduledTask(
       }
     } else {
       if (!mayContinue()) return unsupportedScheduledRun();
-      if(!scheduledLease || !deps.agentPool.dispatchScheduledAgent)throw Error('Native scheduled dispatcher unavailable');
+      if(!deps.agentPool.dispatchScheduledAgent)throw Error('Native scheduled dispatcher unavailable');
       // Once entered, join the admitted occurrence even if its lease is revoked.
       const dispatched=deps.agentPool.dispatchScheduledAgent(scheduledLease);
       if(!dispatched)throw Error('Native scheduled dispatcher unavailable');
@@ -387,43 +369,15 @@ async function executeScheduledTask(
   if (error) schedulerMetrics.taskRunsFailed += 1;
   else schedulerMetrics.taskRunsSucceeded += 1;
 
-  // Direct callers retain legacy history. Claimed occurrences commit their
-  // payload/projection inside the same fenced transaction as S07 completion.
   const effectiveResult = loggedResult ?? result;
   const effectiveError = loggedError ?? error;
   const durationMs = Date.now() - start;
-  let taskRunLogId: ReturnType<typeof logTaskRun> | null = null;
-  if (!options.deferHistory || options.advanceTask !== false) {
-    taskRunLogId = await scheduledSourceWrite(getDb(), () => {
-      const taskRunLogId = options.deferHistory ? null : logTaskRun({
-        task_id: task.id,
-        run_at: new Date().toISOString(),
-        duration_ms: durationMs,
-        status: error ? "error" : "success",
-        result: effectiveResult,
-        error: effectiveError,
-      });
-
-      if (options.advanceTask !== false) {
-        const nextRun = computeNextRun(task.schedule_type, task.schedule_value, {
-          currentDate: task.next_run,
-        });
-        updateTaskAfterRun(task.id, nextRun, error ? `Error: ${effectiveError || error}` : ((effectiveResult || result)?.slice(0, 200) || "Completed"), task.revision);
-      }
-
-      return taskRunLogId;
-    }, mayContinue);
-  }
-
-  if (budgetBlocked && !options.deferHistory) await drainScheduledBudgetNotifications(deps);
-
   return {
     status: error ? "error" : "success",
     result: effectiveResult,
     error: effectiveError,
     durationMs,
-    taskRunLogId,
-    ...(options.deferHistory && budgetBlocked ? { budgetBlocked: true } : {}),
+    ...(budgetBlocked ? { budgetBlocked: true } : {}),
   };
 }
 
@@ -866,7 +820,7 @@ async function runClaimedScheduledTask(
       }
     }
 
-    const outcome = await executeScheduledTask(task, deps, { advanceTask: false, deferHistory: true }, () => controller.valid, controller.lease);
+    const outcome = await executeScheduledTask(task, deps, () => controller.valid, controller.lease);
     if (outcome.status === "skipped" && outcome.error !== null) { controller.stop(); return; }
     if (!mayContinueClaim(controller)) return;
     if (outcome.status === "skipped") {
@@ -900,11 +854,11 @@ async function runClaimedScheduledTask(
       outboxIntents: [],
     });
     let completed = await store.complete(completeRequest);
-    // A later not-applied retry cannot disprove an earlier uncertain commit.
-    const completionMayHaveCommitted = !completed.ok && completed.error.certainty === "unknown";
-    // Retry persistence with the identical sealed evidence, never task execution.
-    if (!completed.ok && completionMayHaveCommitted && completed.error.retryable && canRunLegacyScheduledWork()) {
+    // Retry only completion persistence; retain uncertainty from either attempt.
+    let completionMayHaveCommitted = !completed.ok && completed.error.certainty === "unknown";
+    if (!completed.ok && completed.error.retryable && canRunLegacyScheduledWork()) {
       completed = await store.complete(completeRequest);
+      completionMayHaveCommitted ||= !completed.ok && completed.error.certainty === "unknown";
     }
     if (!completed.ok && completionMayHaveCommitted && canRunLegacyScheduledWork()) {
       const observed = await store.get(finalLease.record.runId);
