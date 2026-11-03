@@ -34,7 +34,7 @@ if (role === "writer") {
 } else {
   assert.equal(role, "reader");
   const { initDatabase, getDb, closeDatabase } = await import("../../src/db/connection.js");
-  const { createWebSession, getWebSession } = await import("../../src/db/web-sessions.js");
+  const { createWebSession, admitWebSession } = await import("../../src/db/web-sessions.js");
   let child: ReturnType<typeof Bun.spawn> | undefined;
   try {
     initDatabase(); const db = getDb(); createWebSession("synthetic-legacy", "default", 3600, "totp");
@@ -57,12 +57,17 @@ if (role === "writer") {
       const statement = Reflect.apply(originalQuery, db, [sql]);
       if (!sql.startsWith("SELECT")) return statement;
       return new Proxy(statement, { get(t, key) {
-        if (key === "get") return (...args: unknown[]) => { selectCalls++; return Reflect.apply(t.get, t, args); };
+        if (key === "get" || key === "all") return (...args: unknown[]) => {
+          selectCalls++; const result = Reflect.apply(t[key], t, args);
+          if (sql.includes("FROM web_sessions WHERE token IN") && !repairReached) { repairReached = true; writeFileSync(go, "go"); }
+          return result;
+        };
         return Reflect.get(t, key, t);
       } });
     }) as typeof db.query;
-    // Release the writer only after getWebSession itself has read the old row
-    // and reaches its repair. This is an ordering hook, not simulated SQL.
+    // Release the writer only after the actual HTTP admission entry has read
+    // its committed legacy candidate and is about to acquire the writer.
+    // Observe real SELECT/UPDATE calls; never simulate SQL or replay a callback.
     db.prepare = ((sql: string, ...params: unknown[]) => {
       const statement = Reflect.apply(originalPrepare, db, [sql, ...params]);
       return new Proxy(statement, { get(t, key) {
@@ -74,12 +79,13 @@ if (role === "writer") {
         return Reflect.get(t, key, t);
       } });
     }) as typeof db.prepare;
-    const cpu = process.cpuUsage(), start = performance.now(); let result: ReturnType<typeof getWebSession> = null, error: string | null = null;
+    const cpu = process.cpuUsage(), start = performance.now(); let result: Awaited<ReturnType<typeof admitWebSession>> = null, error: string | null = null;
     let timerMs = 0; const timer = new Promise<void>(resolve => setTimeout(() => { timerMs = performance.now() - start; resolve(); }, 0));
-    try { result = getWebSession("synthetic-legacy"); } catch (e) { error = e instanceof Error ? e.name : "Error"; }
+    try { result = await admitWebSession("synthetic-legacy"); } catch (e) { error = e instanceof Error ? e.name : "Error"; }
     finally { db.prepare = originalPrepare; db.query = originalQuery; }
     assert(repairReached, "actual repair must overlap the writer");
     assert(selectCalls >= 2, "observe the function's initial and canonical reads across compiled-query reuse");
+    assert.equal(updateCalls, 0, "revoked identities cannot be repaired; concurrent completed repairs need no second write");
     const elapsedMs = performance.now() - start, used = process.cpuUsage(cpu); await timer;
     const [out, err, exit] = await output; assert.equal(exit, 0, err);
     const rows = db.query("SELECT user_id,expires_at FROM web_sessions").all() as Array<{user_id:string;expires_at:string}>;
@@ -91,5 +97,5 @@ if (role === "writer") {
       else { assert.equal(error, null); assert.equal(result, null); }
       console.log(JSON.stringify({ ...observation, status: "pass" }));
     }
-  } finally { if (child && child.exitCode === null) { child.kill("SIGKILL"); await child.exited; } closeDatabase(); }
+  } finally { if (child && child.exitCode === null) { child.kill("SIGKILL"); await child.exited; } await closeDatabase(); }
 }
