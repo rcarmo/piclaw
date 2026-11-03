@@ -74,8 +74,8 @@ test("stores, updates, lists, and deletes entries across supported types", async
     ]);
     expect(list.every((entry) => entry.createdAt && entry.updatedAt)).toBe(true);
 
-    expect(keychain.deleteKeychainEntry("beta/password")).toBe(true);
-    expect(keychain.deleteKeychainEntry("beta/password")).toBe(false);
+    expect(await keychain.deleteKeychainEntry("beta/password")).toBe(true);
+    expect(await keychain.deleteKeychainEntry("beta/password")).toBe(false);
     await expect(keychain.getKeychainEntry("beta/password")).rejects.toThrow("Keychain entry not found");
   });
 });
@@ -104,7 +104,7 @@ test("stores user-only and agent-readable notes separately from secrets", async 
     });
     expect(keychain.listKeychainEntriesForUi().find((entry) => entry.name === "notes/service")?.userNote).toBe("Human-only deployment note");
 
-    expect(keychain.updateKeychainEntryNotes("notes/service", { userNote: "Updated user", agentNote: "Updated agent" })).toBe(true);
+    expect(await keychain.updateKeychainEntryNotes("notes/service", { userNote: "Updated user", agentNote: "Updated agent" })).toBe(true);
     const updated = keychain.listKeychainEntriesForUi().find((entry) => entry.name === "notes/service");
     expect(updated?.userNote).toBe("Updated user");
     expect(updated?.agentNote).toBe("Updated agent");

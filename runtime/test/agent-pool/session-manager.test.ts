@@ -39,7 +39,6 @@ function createManager(overrides: Record<string, unknown> = {}) {
   const pool = new Map<string, { runtime: any; lastUsed: number }>();
   const state = {
     bound: [] as string[],
-    registered: [] as string[],
     infos: [] as string[],
     warns: [] as string[],
     errors: [] as string[],
@@ -54,9 +53,6 @@ function createManager(overrides: Record<string, unknown> = {}) {
     createDefaultTools: () => [] as any,
     bindSession: async (_runtime, chatJid) => {
       state.bound.push(chatJid);
-    },
-    ensureBranchRegistration: (chatJid) => {
-      state.registered.push(chatJid);
     },
     onInfo: (message) => state.infos.push(message),
     onWarn: (message) => state.warns.push(message),
@@ -108,7 +104,6 @@ test("AgentSessionManager creates, caches, and binds main sessions", async () =>
   expect(second.session).toBe(session);
   expect(createCalls).toBe(1);
   expect(fixture.state.bound).toEqual(["web:default"]);
-  expect(fixture.state.registered).toEqual(["web:default"]);
   expect(fixture.pool.get("web:default")?.runtime.session).toBe(session);
 });
 

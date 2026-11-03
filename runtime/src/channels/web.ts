@@ -70,10 +70,9 @@ import {
   handleThoughtRequest,
   handleThreadRequest,
 } from "./web/endpoints/content-endpoints.js";
-import { deletePostResponse } from "./web/timeline-service.js";
 import { handleAgentsRequest, handleAvatarRequest } from "./web/endpoints/identity-endpoints.js";
 import { handleManifestRequest } from "./web/manifest.js";
-import { handleInternalPostRequest, handleUpdatePostAnnotationsRequest, handleUpdatePostRequest } from "./web/post-mutations.js";
+import { handleInternalPostRequest, handleDeletePostRequest, handleUpdatePostAnnotationsRequest, handleUpdatePostRequest } from "./web/post-mutations.js";
 import {
   handleAgentRespondRequest,
   handleThoughtVisibilityRequest,
@@ -347,14 +346,8 @@ export class WebChannel implements WebChannelLike {
     return await handleThoughtVisibilityRequest(req, this.endpointContexts.ui());
   }
 
-  handleDeletePost(req: Request, id: number | null, cascade = false): Response {
-    const url = new URL(req.url);
-    const chatJid = url.searchParams.get("chat_jid")?.trim() || DEFAULT_CHAT_JID;
-    const result = deletePostResponse(chatJid, id, cascade);
-    if (result.deletedIds.length > 0) {
-      this.broadcastEvent("interaction_deleted", { chat_jid: chatJid, ids: result.deletedIds });
-    }
-    return this.json(result.body, result.status);
+  async handleDeletePost(req: Request, id: number | null, cascade = false): Promise<Response> {
+    return handleDeletePostRequest(this, req, id, cascade, DEFAULT_CHAT_JID);
   }
 
   async handleUpdatePost(req: Request, id: number | null): Promise<Response> {

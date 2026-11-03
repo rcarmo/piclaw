@@ -49,6 +49,12 @@ Historical schema/source transitions need explicit proof and separately authoris
 - Provider cost units/currency must follow actual producer evidence. Existing valuation currency is insufficient to certify arbitrary provider actual units.
 - Direct financial request/work/event dependencies remain in current source. Running with caps disabled does not qualify their removal.
 
+## Subsequent preservation and reader evidence
+
+PR1927 preserves stock SDK reasoning and attributed all-zero-token/provider-actual-zero reports at the Core request/recorder boundary, including immutable historical replay. That bounded preservation is accepted; native financial decoupling remains open.
+
+The [historical seed audit](expense-shipped-seeds-1876.md) reproduces two separate observation gaps using actual original reader code: Delegate 0.2.20 collapses absent cost into supplied zero, and Observability labels Core's provider-actual `cost_total` as `cost.estimated_usd`. The latter reader is byte-identical at current add-on source 6a6. Keep values with truthful presence/source/units; do not delete observations, create a replacement accounting service or make reporting repair an execution prerequisite. Historical characterisation does not establish active native Delegate behaviour or financial-free acceptance.
+
 ## Focused acceptance matrix
 
 | Case | Required witness |

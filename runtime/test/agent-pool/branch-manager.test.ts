@@ -1,13 +1,11 @@
 import { afterEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "fs";
+import { writeFileSync } from "fs";
 
 import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { join } from "path";
-import { ensureSessionDir, sanitiseJid } from "../../src/agent-pool/session.js";
-import { SESSIONS_DIR } from "../../src/core/config.js";
+import { ensureSessionDir } from "../../src/agent-pool/session.js";
 import { AgentBranchManager } from "../../src/agent-pool/branch-manager.js";
-import { hasDeferredBranchSeed, readDeferredBranchSeed } from "../../src/agent-pool/branch-seeding.js";
+import { hasDeferredBranchSeed } from "../../src/agent-pool/branch-seeding.js";
 import { createTempWorkspace, importFresh, setEnv } from "../helpers.js";
 
 let restoreEnv: (() => void) | null = null;
@@ -36,119 +34,22 @@ function createRuntime(session: any): AgentSessionRuntime {
 
 function createManager(overrides: Partial<ConstructorParameters<typeof AgentBranchManager>[0]> = {}) {
   const pool = new Map<string, { runtime: any; lastUsed: number }>();
-  const activeForkBaseLeafByChat = new Map<string, string | null>();
   const warns: string[] = [];
 
   const manager = new AgentBranchManager({
     pool,
-    activeForkBaseLeafByChat,
-    getOrCreateRuntime: async (chatJid) => pool.get(chatJid)?.runtime,
-    refreshRuntime: async () => {},
     isActive: (chatJid) => {
       const session = pool.get(chatJid)?.runtime.session;
       return Boolean(session?.isStreaming || session?.isCompacting || session?.isRetrying || session?.isBashRunning);
     },
-    scheduleSessionWarmup: () => {},
     onWarn: (message) => warns.push(message),
     ...overrides,
   });
 
-  return { manager, pool, activeForkBaseLeafByChat, warns };
+  return { manager, pool, warns };
 }
 
-for (const operation of ['rename', 'merge', 'purge', 'rename-rollback', 'rename-active-child'] as const) {
-  test(`branch cleanup preserves sessions and artifacts after DB rejection: ${operation}`, async () => {
-    const ws = createTempWorkspace('branch-cleanup-rejected-');
-    restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
-    const db = await importFresh<typeof import('../src/db.js')>('../src/db.js');
-    db.initDatabase();
-    const jid = `web:cleanup-rejected-${operation}`, child = `${jid}:child`, target = `${jid}-target`;
-    db.storeChatMetadata(jid, new Date().toISOString(), 'Source');
-    const root = db.getChatBranchByChatJid(jid)!;
-    db.storeChatMetadata(child, new Date().toISOString(), 'Child');
-    db.ensureChatBranch({ chat_jid: child, root_chat_jid: jid, parent_branch_id: root.branch_id, agent_name: 'child' });
-    if (operation === 'rename') db.storeChatMetadata(target, new Date().toISOString(), 'Collision');
-    if (operation === 'rename-rollback') db.getDb().exec(`CREATE TRIGGER reject_address_rename BEFORE UPDATE OF jid ON chats
-      BEGIN SELECT RAISE(ABORT, 'injected rename rollback'); END`);
-    let disposed = 0;
-    const cancelled: string[] = [];
-    const fixture = createManager({ cancelSessionWarmup: key => { cancelled.push(key); } });
-    const session = { isStreaming: false, isCompacting: false, isRetrying: false, isBashRunning: false,
-      dispose() { disposed++; } };
-    const entry = { runtime: createRuntime(session), lastUsed: 1 };
-    const childEntry = { runtime: createRuntime({ ...session, isStreaming: operation === 'rename-active-child' }), lastUsed: 2 };
-    fixture.pool.set(jid, entry); fixture.pool.set(child, childEntry);
-    fixture.activeForkBaseLeafByChat.set(jid, 'retained-leaf');
-    const dir = ensureSessionDir(jid), marker = join(dir, 'retained.txt');
-    writeFileSync(marker, 'retained');
-    try {
-      const pending = operation === 'merge' ? fixture.manager.mergeChatBranchIntoParent(jid)
-        : operation === 'purge' ? fixture.manager.permanentPurgeChatBranch(jid)
-          : fixture.manager.renameChatJid(jid, target);
-      const message = operation === 'merge' ? 'Cannot merge a root chat session'
-        : operation === 'purge' ? 'not archived'
-          : operation === 'rename-rollback' ? 'injected rename rollback'
-            : operation === 'rename-active-child' ? 'active turn' : 'Target JID already exists';
-      await expect(pending).rejects.toThrow(message);
-      expect(disposed).toBe(0); expect(cancelled).toEqual([]);
-      expect(fixture.pool.get(jid)).toBe(entry); expect(fixture.pool.get(child)).toBe(childEntry);
-      expect(fixture.activeForkBaseLeafByChat.get(jid)).toBe('retained-leaf');
-      expect(existsSync(marker)).toBe(true);
-      expect(db.getChatBranchByChatJid(jid)?.branch_id).toBe(root.branch_id);
-      expect(db.getChatBranchByChatJid(child)?.parent_branch_id).toBe(root.branch_id);
-      expect(db.getDb().inTransaction).toBe(false);
-    } finally {
-      rmSync(dir, { recursive: true, force: true }); ws.cleanup();
-    }
-  });
-}
-
-for (const operation of ['rename', 'merge', 'purge', 'prune'] as const) {
-  test(`branch cleanup sees committed DB and retains replacement sessions: ${operation}`, async () => {
-    const ws = createTempWorkspace('branch-cleanup-replaced-');
-    restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
-    const db = await importFresh<typeof import('../src/db.js')>('../src/db.js');
-    db.initDatabase();
-    const parent = `web:cleanup-replaced-${operation}`, jid = `${parent}:source`, child = `${jid}:child`, target = `${parent}:renamed`;
-    db.storeChatMetadata(parent, new Date().toISOString(), 'Parent');
-    const root = db.getChatBranchByChatJid(parent)!;
-    db.storeChatMetadata(jid, new Date().toISOString(), 'Source');
-    const source = db.ensureChatBranch({ chat_jid: jid, root_chat_jid: parent, parent_branch_id: root.branch_id, agent_name: 'source' });
-    if (operation === 'purge') db.archiveChatBranch(jid);
-    if (operation === 'rename') {
-      db.storeChatMetadata(child, new Date().toISOString(), 'Child');
-      db.ensureChatBranch({ chat_jid: child, root_chat_jid: parent, parent_branch_id: source.branch_id, agent_name: 'child' });
-    }
-    const fixture = createManager();
-    const observedCommitted: boolean[] = [];
-    let childDisposed = 0, replacementDisposed = 0;
-    const replacement = { runtime: createRuntime({ dispose() { replacementDisposed++; } }), lastUsed: 3 };
-    const replacementChild = { runtime: createRuntime({ dispose() { replacementDisposed++; } }), lastUsed: 4 };
-    const entry = { runtime: { ...createRuntime({}), async dispose() {
-      const current = db.getChatBranchByChatJid(jid);
-      observedCommitted.push((operation === 'prune' ? current?.archived_at != null : current === null) && !db.getDb().inTransaction &&
-        (operation !== 'rename' || db.getChatBranchByChatJid(target)?.branch_id === source.branch_id));
-      fixture.pool.set(jid, replacement);
-      fixture.activeForkBaseLeafByChat.set(jid, 'replacement-leaf');
-      if (operation === 'rename') fixture.pool.set(child, replacementChild);
-    } }, lastUsed: 1 };
-    fixture.pool.set(jid, entry);
-    if (operation === 'rename') fixture.pool.set(child, { runtime: createRuntime({ dispose() { childDisposed++; } }), lastUsed: 2 });
-    try {
-      if (operation === 'rename') await fixture.manager.renameChatJid(jid, target);
-      else if (operation === 'merge') await fixture.manager.mergeChatBranchIntoParent(jid);
-      else if (operation === 'prune') await fixture.manager.pruneChatBranch(jid);
-      else await fixture.manager.permanentPurgeChatBranch(jid);
-      expect(observedCommitted).toEqual([true]);
-      expect(fixture.pool.get(jid)).toBe(replacement);
-      expect(fixture.activeForkBaseLeafByChat.get(jid)).toBe('replacement-leaf');
-      expect(replacementDisposed).toBe(0);
-      if (operation === 'rename') { expect(childDisposed).toBe(1); expect(fixture.pool.get(child)).toBe(replacementChild); }
-    } finally { ws.cleanup(); }
-  });
-}
-
-test("AgentBranchManager registers active chats and resolves agent handles", async () => {
+test("AgentBranchManager reads existing branch metadata and resolves agent handles", async () => {
   const ws = createTempWorkspace("piclaw-branch-manager-");
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
 
@@ -170,9 +71,7 @@ test("AgentBranchManager registers active chats and resolves agent handles", asy
     lastUsed: Date.now(),
   });
 
-  const branch = fixture.manager.ensureBranchRegistration("web:topic", fixture.pool.get("web:topic")?.runtime.session);
-  expect(branch.agent_name).toBe("research-bot");
-
+  const before = db.getDb().serialize();
   const active = fixture.manager.listActiveChats();
   expect(active).toHaveLength(1);
   expect(active[0]?.agent_name).toBe("research-bot");
@@ -190,6 +89,9 @@ test("AgentBranchManager registers active chats and resolves agent handles", asy
     agent_name: "research-bot",
   });
   expect(fixture.manager.getAgentHandleForChat("web:topic")).toBe("research-bot");
+  expect(fixture.manager.listKnownChats("web:topic")[0]?.agent_name).toBe("research-bot");
+  expect(db.getDb().serialize()).toEqual(before);
+  expect(db.getChatBranchByChatJid("web:topic")).toBeNull();
 
   ws.cleanup();
 });
@@ -264,128 +166,14 @@ test("AgentBranchManager renames branch handles without changing the chat JID", 
     lastUsed: Date.now(),
   });
 
+  db.storeChatMetadata("web:topic", new Date().toISOString(), "Topic");
   const branch = await fixture.manager.renameChatBranch("web:topic", { agentName: "Research Bot" });
 
   expect(branch.chat_jid).toBe("web:topic");
   expect(branch.agent_name).toBe("research-bot");
-  expect(appliedSessionName).toBe("research-bot");
+  expect(appliedSessionName).toBe("Topic");
   expect(db.getChatBranchByChatJid("web:topic")?.agent_name).toBe("research-bot");
   expect(db.getChatBranchByChatJid("web:research-bot")).toBeNull();
-
-  ws.cleanup();
-});
-
-test("AgentBranchManager writes a deferred fork seed and schedules branch warmup without hydrating the target runtime", async () => {
-  const ws = createTempWorkspace("piclaw-branch-seed-");
-  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
-
-  const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
-  db.initDatabase();
-
-  const sourceManager = SessionManager.create(ws.workspace, join(ws.workspace, "source-session"));
-  sourceManager.appendSessionInfo("Research");
-  sourceManager.appendModelChange("openai", "gpt-test");
-  sourceManager.appendMessage({ role: "user", content: "stable user", timestamp: Date.now() } as const);
-  sourceManager.appendMessage({
-    role: "assistant",
-    content: [{ type: "text", text: "stable assistant" }],
-    provider: "openai",
-    model: "gpt-test",
-    usage: {
-      input: 1,
-      output: 1,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 2,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
-    stopReason: "stop",
-    timestamp: Date.now(),
-  } as const);
-
-  const scheduled: string[] = [];
-  let getOrCreateCalls = 0;
-  const sourceSession = {
-    sessionManager: sourceManager,
-    sessionFile: sourceManager.getSessionFile(),
-    sessionName: "Research",
-    model: { provider: "openai", id: "gpt-test", reasoning: true },
-    thinkingLevel: "high",
-    isStreaming: false,
-    isCompacting: false,
-    isRetrying: false,
-    isBashRunning: false,
-  };
-
-  const fixture = createManager({
-    getOrCreateRuntime: async (chatJid) => {
-      getOrCreateCalls += 1;
-      if (chatJid !== "web:default") throw new Error(`unexpected runtime hydration for ${chatJid}`);
-      return fixture.pool.get(chatJid)?.runtime;
-    },
-    scheduleSessionWarmup: (chatJid) => {
-      scheduled.push(chatJid);
-    },
-  });
-  fixture.pool.set("web:default", { runtime: createRuntime(sourceSession), lastUsed: Date.now() });
-
-  const branch = await fixture.manager.createForkedChatBranch("web:default");
-  expect(branch.chat_jid).toBe("web:default:research-2");
-  expect(branch.agent_name).toBe("research-2");
-  expect(getOrCreateCalls).toBe(1);
-  expect(scheduled).toEqual([branch.chat_jid]);
-
-  const seed = readDeferredBranchSeed(branch.chat_jid);
-  expect(seed?.version).toBe(1);
-  expect(seed?.sessionName).toBe(branch.agent_name);
-  expect(seed?.model).toEqual({ provider: "openai", modelId: "gpt-test" });
-  expect(seed?.mode).toBe("rotated_context");
-
-  ws.cleanup();
-});
-
-test("AgentBranchManager builds readable hierarchical JIDs from branch handles", async () => {
-  const ws = createTempWorkspace("piclaw-readable-branch-jid-");
-  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
-
-  const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
-  db.initDatabase();
-  db.storeChatMetadata("web:default", new Date().toISOString(), "Default");
-  const root = db.getChatBranchByChatJid("web:default");
-  db.storeChatMetadata("web:default:branch:legacy-parent", new Date().toISOString(), "Legacy Parent");
-  const parent = db.ensureChatBranch({
-    chat_jid: "web:default:branch:legacy-parent",
-    root_chat_jid: "web:default",
-    parent_branch_id: root?.branch_id ?? null,
-    agent_name: "parent",
-  });
-
-  const sourceManager = SessionManager.create(ws.workspace, join(ws.workspace, "legacy-parent-session"));
-  sourceManager.appendSessionInfo("Parent");
-  sourceManager.appendModelChange("openai", "gpt-test");
-  sourceManager.appendMessage({ role: "user", content: "stable user", timestamp: Date.now() } as const);
-
-  const fixture = createManager();
-  fixture.pool.set(parent.chat_jid, {
-    runtime: createRuntime({
-      sessionManager: sourceManager,
-      sessionFile: sourceManager.getSessionFile(),
-      sessionName: "Parent",
-      model: { provider: "openai", id: "gpt-test" },
-      isStreaming: false,
-      isCompacting: false,
-      isRetrying: false,
-      isBashRunning: false,
-    }),
-    lastUsed: Date.now(),
-  });
-
-  const child = await fixture.manager.createForkedChatBranch(parent.chat_jid, { agentName: "Child Work" });
-
-  expect(child.chat_jid).toBe("web:default:parent:child-work");
-  expect(child.root_chat_jid).toBe("web:default");
-  expect(child.parent_branch_id).toBe(parent.branch_id);
-  expect(child.agent_name).toBe("child-work");
 
   ws.cleanup();
 });
@@ -397,10 +185,7 @@ test("AgentBranchManager creates independent root sessions", async () => {
   const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
   db.initDatabase();
 
-  const scheduled: string[] = [];
-  const fixture = createManager({
-    scheduleSessionWarmup: (chatJid) => scheduled.push(chatJid),
-  });
+  const fixture = createManager();
 
   const root = await fixture.manager.createRootChatSession("Ops Room");
 
@@ -408,162 +193,13 @@ test("AgentBranchManager creates independent root sessions", async () => {
   expect(root.root_chat_jid).toBe("web:ops-room");
   expect(root.parent_branch_id).toBeNull();
   expect(root.agent_name).toBe("ops-room");
-  expect(scheduled).toEqual(["web:ops-room"]);
+  expect(fixture.pool.size).toBe(0);
   expect(db.getChatBranchByChatJid("web:ops-room")?.root_chat_jid).toBe("web:ops-room");
 
   ws.cleanup();
 });
 
-test("AgentBranchManager appends new child paths to the stable source JID after rename", async () => {
-  const ws = createTempWorkspace("piclaw-renamed-stable-child-jid-");
-  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
-
-  const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
-  db.initDatabase();
-  db.storeChatMetadata("web:default", new Date().toISOString(), "Default");
-  const root = db.getChatBranchByChatJid("web:default");
-  db.storeChatMetadata("web:default:research", new Date().toISOString(), "Research");
-  const parent = db.ensureChatBranch({
-    chat_jid: "web:default:research",
-    root_chat_jid: "web:default",
-    parent_branch_id: root?.branch_id ?? null,
-    agent_name: "research",
-  });
-  db.renameChatBranchIdentity({ chat_jid: parent.chat_jid, agent_name: "renamed-parent" });
-
-  const sourceManager = SessionManager.create(ws.workspace, join(ws.workspace, "renamed-parent-session"));
-  sourceManager.appendSessionInfo("Renamed Parent");
-  sourceManager.appendModelChange("openai", "gpt-test");
-
-  const fixture = createManager();
-  fixture.pool.set(parent.chat_jid, {
-    runtime: createRuntime({
-      sessionManager: sourceManager,
-      sessionFile: sourceManager.getSessionFile(),
-      sessionName: "Renamed Parent",
-      model: { provider: "openai", id: "gpt-test" },
-      isStreaming: false,
-      isCompacting: false,
-      isRetrying: false,
-      isBashRunning: false,
-    }),
-    lastUsed: Date.now(),
-  });
-
-  const child = await fixture.manager.createForkedChatBranch(parent.chat_jid, { agentName: "Child Work" });
-
-  expect(child.chat_jid).toBe("web:default:research:child-work");
-  expect(child.parent_branch_id).toBe(parent.branch_id);
-  expect(child.agent_name).toBe("child-work");
-
-  ws.cleanup();
-});
-
-test("AgentBranchManager renameChatJid migrates hierarchical descendants and session artifacts", async () => {
-  const ws = createTempWorkspace("piclaw-rename-chat-jid-");
-  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
-
-  const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
-  db.initDatabase();
-
-  const rootChatJid = "web:default";
-  const oldParent = "web:default:research";
-  const oldChild = "web:default:research:analysis";
-  const oldUnrelated = "web:defaulting:keep";
-  const now = new Date().toISOString();
-
-  db.storeChatMetadata(rootChatJid, now, "Default");
-  const root = db.getChatBranchByChatJid(rootChatJid);
-  db.storeChatMetadata(oldParent, now, "Research");
-  const parent = db.ensureChatBranch({
-    chat_jid: oldParent,
-    root_chat_jid: rootChatJid,
-    parent_branch_id: root?.branch_id ?? null,
-    agent_name: "research",
-  });
-  db.storeChatMetadata(oldChild, now, "Analysis");
-  db.ensureChatBranch({
-    chat_jid: oldChild,
-    root_chat_jid: rootChatJid,
-    parent_branch_id: parent.branch_id,
-    agent_name: "analysis",
-  });
-  db.storeChatMetadata(oldUnrelated, now, "Keep");
-  db.ensureChatBranch({
-    chat_jid: oldUnrelated,
-    root_chat_jid: oldUnrelated,
-    parent_branch_id: null,
-    agent_name: "keep",
-  });
-
-  let disposed = 0;
-  const inactiveSession = {
-    isStreaming: false,
-    isCompacting: false,
-    isRetrying: false,
-    isBashRunning: false,
-    dispose() {
-      disposed += 1;
-    },
-  };
-
-  const fixture = createManager();
-  fixture.pool.set(oldParent, { runtime: createRuntime(inactiveSession), lastUsed: Date.now() });
-  fixture.pool.set(oldChild, { runtime: createRuntime(inactiveSession), lastUsed: Date.now() });
-  fixture.pool.set(oldUnrelated, { runtime: createRuntime(inactiveSession), lastUsed: Date.now() });
-
-  // Clean up any stale session dirs from prior tests before creating new ones
-  for (const prefix of ["web_default_research", "web_default_research-notes"]) {
-    for (const entry of readdirSync(SESSIONS_DIR).filter(e => e.startsWith(prefix))) {
-      rmSync(join(SESSIONS_DIR, entry), { recursive: true, force: true });
-    }
-  }
-
-  const oldParentDir = ensureSessionDir(oldParent);
-  const oldParentSideDir = `${oldParentDir}__btw-side`;
-  mkdirSync(oldParentSideDir, { recursive: true });
-  const oldChildDir = ensureSessionDir(oldChild);
-  const oldChildVariant = `${oldChildDir}__variant`;
-  mkdirSync(oldChildVariant, { recursive: true });
-
-  const newParent = "web:default:research-notes";
-  const newChild = "web:default:research-notes:analysis";
-  await fixture.manager.renameChatJid(oldParent, newParent);
-
-  expect(fixture.pool.has(oldParent)).toBe(false);
-  expect(fixture.pool.has(oldChild)).toBe(false);
-  expect(fixture.pool.has(oldUnrelated)).toBe(true);
-  expect(disposed).toBe(2);
-
-  expect(db.getChatBranchByChatJid(newParent)?.chat_jid).toBe(newParent);
-  expect(db.getChatBranchByChatJid(newChild)?.chat_jid).toBe(newChild);
-  expect(db.getChatBranchByChatJid(oldParent)).toBeNull();
-  expect(db.getChatBranchByChatJid(oldChild)).toBeNull();
-  expect(db.getChatBranchByChatJid(oldUnrelated)?.chat_jid).toBe(oldUnrelated);
-
-  const newParentDir = join(SESSIONS_DIR, sanitiseJid(newParent));
-  const newParentSideDir = `${newParentDir}__btw-side`;
-  const newChildDir = join(SESSIONS_DIR, sanitiseJid(newChild));
-  const newChildVariant = `${newChildDir}__variant`;
-
-  expect(existsSync(newParentDir)).toBe(true);
-  expect(existsSync(newParentSideDir)).toBe(true);
-  expect(existsSync(newChildDir)).toBe(true);
-  expect(existsSync(newChildVariant)).toBe(true);
-  expect(existsSync(oldParentDir)).toBe(false);
-  expect(existsSync(oldParentSideDir)).toBe(false);
-  expect(existsSync(oldChildDir)).toBe(false);
-  expect(existsSync(oldChildVariant)).toBe(false);
-
-  // Clean up session dirs created in the static SESSIONS_DIR (not covered by ws.cleanup)
-  for (const dir of [newParentDir, newParentSideDir, newChildDir, newChildVariant]) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-
-  ws.cleanup();
-});
-
-test("AgentBranchManager prunes inactive branches and disposes cached sessions", async () => {
+test("AgentBranchManager archives inactive branches without executing legacy session publication", async () => {
   const ws = createTempWorkspace("piclaw-branch-prune-");
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
 
@@ -591,14 +227,8 @@ test("AgentBranchManager prunes inactive branches and disposes cached sessions",
     },
   };
 
-  const cancelled: string[] = [];
-  const fixture = createManager({
-    cancelSessionWarmup: (chatJid) => {
-      cancelled.push(chatJid);
-    },
-  });
+  const fixture = createManager();
   fixture.pool.set("web:default:branch:prune", { runtime: createRuntime(session), lastUsed: Date.now() });
-  fixture.activeForkBaseLeafByChat.set("web:default:branch:prune", "leaf-1");
   writeFileSync(join(ensureSessionDir("web:default:branch:prune"), ".branch-seed.json"), JSON.stringify({
     version: 1,
     parentSession: null,
@@ -610,100 +240,12 @@ test("AgentBranchManager prunes inactive branches and disposes cached sessions",
 
   const archived = await fixture.manager.pruneChatBranch("web:default:branch:prune");
   expect(archived.archived_at).toBeTruthy();
-  expect(fixture.pool.has("web:default:branch:prune")).toBe(false);
-  expect(fixture.activeForkBaseLeafByChat.has("web:default:branch:prune")).toBe(false);
+  expect(fixture.pool.has("web:default:branch:prune")).toBe(true);
   // The deferred seed must survive prune — it is the only persisted copy of
   // the forked context until the session is realized, and restoreChatBranch()
   // must be able to pick it back up.
   expect(hasDeferredBranchSeed("web:default:branch:prune")).toBe(true);
-  // Prune must also cancel any queued prewarm so a background realization
-  // cannot materialize a runtime for an archived chat.
-  expect(cancelled).toEqual(["web:default:branch:prune"]);
-  expect(disposed).toBe(1);
-
-  ws.cleanup();
-});
-
-test("AgentBranchManager permanently purges archived branches and removes session artifacts", async () => {
-  const ws = createTempWorkspace("piclaw-branch-purge-");
-  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
-
-  const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
-  db.initDatabase();
-  db.storeChatMetadata("web:default", new Date().toISOString(), "Default");
-  const root = db.getChatBranchByChatJid("web:default");
-  db.storeChatMetadata("web:default:branch:purge", new Date().toISOString(), "Purge Me");
-  db.ensureChatBranch({
-    chat_jid: "web:default:branch:purge",
-    root_chat_jid: "web:default",
-    parent_branch_id: root?.branch_id ?? null,
-    agent_name: "purge-me",
-  });
-  db.archiveChatBranch("web:default:branch:purge");
-
-  let disposed = 0;
-  const session = {
-    sessionName: "Purge Me",
-    isStreaming: false,
-    isCompacting: false,
-    isRetrying: false,
-    isBashRunning: false,
-    dispose() {
-      disposed += 1;
-    },
-  };
-
-  const fixture = createManager();
-  fixture.pool.set("web:default:branch:purge", { runtime: createRuntime(session), lastUsed: Date.now() });
-  const baseDir = ensureSessionDir("web:default:branch:purge");
-  writeFileSync(join(baseDir, ".branch-seed.json"), JSON.stringify({ version: 1, parentSession: null, sessionName: "Purge Me", model: null, thinkingLevel: null, mode: "rotated_context" }), "utf8");
-  const namedVariantDir = `${baseDir}__variant`;
-  mkdirSync(namedVariantDir, { recursive: true });
-  writeFileSync(join(namedVariantDir, ".branch-seed.claimed.json"), JSON.stringify({ version: 1, parentSession: null, sessionName: "Purge Me", model: null, thinkingLevel: null, mode: "rotated_context" }), "utf8");
-
-  const result = await fixture.manager.permanentPurgeChatBranch("web:default:branch:purge");
-  expect(result.branch.chat_jid).toBe("web:default:branch:purge");
-  expect(result.removedSessionArtifacts).toContain(baseDir);
-  expect(result.removedSessionArtifacts).toContain(namedVariantDir);
-  expect(fixture.pool.has("web:default:branch:purge")).toBe(false);
-  expect(db.getChatBranchByChatJid("web:default:branch:purge")).toBeNull();
-  expect(disposed).toBe(1);
-
-  ws.cleanup();
-});
-
-test("AgentBranchManager permanently purges archived root sessions without child branches", async () => {
-  const ws = createTempWorkspace("piclaw-root-session-purge-");
-  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
-
-  const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
-  db.initDatabase();
-  db.storeChatMetadata("web:custom", new Date().toISOString(), "Custom Root");
-  db.archiveChatBranch("web:custom");
-
-  let disposed = 0;
-  const session = {
-    sessionId: "root-session",
-    sessionName: "Custom Root",
-    model: { provider: "openai", id: "gpt-test" },
-    isStreaming: false,
-    isCompacting: false,
-    isRetrying: false,
-    isBashRunning: false,
-    dispose: () => { disposed += 1; },
-  };
-
-  const fixture = createManager();
-  fixture.pool.set("web:custom", { runtime: createRuntime(session), lastUsed: Date.now() });
-  const baseDir = ensureSessionDir("web:custom");
-  writeFileSync(join(baseDir, ".branch-seed.json"), JSON.stringify({ version: 1, parentSession: null, sessionName: "Custom Root", model: null, thinkingLevel: null, mode: "rotated_context" }), "utf8");
-
-  const result = await fixture.manager.permanentPurgeChatBranch("web:custom");
-  expect(result.branch.chat_jid).toBe("web:custom");
-  expect(result.removedSessionArtifacts).toContain(baseDir);
-  expect(fixture.pool.has("web:custom")).toBe(false);
-  expect(db.getChatBranchByChatJid("web:custom")).toBeNull();
-  expect(disposed).toBe(1);
+  expect(disposed).toBe(0);
 
   ws.cleanup();
 });

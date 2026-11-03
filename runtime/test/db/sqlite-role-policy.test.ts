@@ -22,7 +22,7 @@ for (const zfs of [false, true]) test(`file-backed roles share identity and pres
       expect(db.query("SELECT * FROM visible").all()).toEqual([{ value: "shared" }]);
       expect(policy(db)).toMatchObject({
         journal_mode: { journal_mode: "wal" }, synchronous: { synchronous: 2 }, secure_delete: { secure_delete: 1 },
-        busy_timeout: { timeout: role === "sdk" ? 0 : 5000 }, foreign_keys: { foreign_keys: role === "root" ? 0 : 1 },
+        busy_timeout: { timeout: 0 }, foreign_keys: { foreign_keys: role === "root" ? 0 : 1 },
         cache_size: { cache_size: role === "root" ? zfs ? -8000 : -1000 : -2000 },
         mmap_size: { mmap_size: role === "root" && !zfs ? 268435456 : 0 },
       });
@@ -33,11 +33,11 @@ for (const zfs of [false, true]) test(`file-backed roles share identity and pres
   } finally { worker.close(); scheduler.close(); sdk.close(); root.close(); ws.cleanup(); }
 });
 
-for (const role of ["root", "sdk", "scheduler"] as SqliteConnectionRole[]) test(`memory role ${role} keeps memory journal and role-specific waits/FKs`, () => {
+for (const role of ["root", "sdk", "scheduler"] as SqliteConnectionRole[]) test(`memory role ${role} keeps memory journal and immutable zero wait and role-specific FKs`, () => {
   const db = openSqliteRole(":memory:", { role });
   try {
     expect(policy(db)).toMatchObject({ journal_mode: { journal_mode: "memory" }, synchronous: { synchronous: 2 },
-      foreign_keys: { foreign_keys: role === "root" ? 0 : 1 }, busy_timeout: { timeout: role === "sdk" ? 0 : 5000 },
+      foreign_keys: { foreign_keys: role === "root" ? 0 : 1 }, busy_timeout: { timeout: 0 },
       secure_delete: { secure_delete: 1 }, cache_size: { cache_size: -2000 } });
     db.exec("CREATE TABLE value(n INTEGER); INSERT INTO value VALUES(1)");
     expect(db.query("SELECT * FROM value").all()).toEqual([{ n: 1 }]);
