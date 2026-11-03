@@ -500,22 +500,18 @@ async function reconcileCompletedScheduledAgentSources(store: ScheduledRunStore,
 
 async function reconcileExpiredScheduledAgentSources(now: string, mayPoll: () => boolean): Promise<void> {
   const db = getDb();
+  const candidates = db.query(
+    `SELECT o.operation_id,o.chat_jid,o.primary_source_seq
+     FROM service_effect_s01_operations o
+     JOIN service_effect_s01_sources s
+       ON s.chat_jid=o.chat_jid AND s.source_seq=o.primary_source_seq AND s.kind='scheduled_agent'
+     JOIN service_effect_s07_occurrences r ON r.run_id=s.source_id
+     WHERE o.phase<>'terminal' AND r.state<>'completed' AND (r.state='abandoned' OR r.lease_expires_at<=?)`,
+  );
+  if (!candidates.get(now)) return;
   await scheduledSourceWrite(db, () => {
-    const rows = db.query(
-      `SELECT o.operation_id,o.chat_jid,o.primary_source_seq,r.state,r.lease_expires_at
-       FROM service_effect_s01_operations o
-       JOIN service_effect_s01_sources s
-         ON s.chat_jid=o.chat_jid AND s.source_seq=o.primary_source_seq AND s.kind='scheduled_agent'
-       LEFT JOIN service_effect_s07_occurrences r ON r.run_id=s.source_id
-       WHERE o.phase<>'terminal'`,
-    ).all() as { operation_id: string; chat_jid: string; primary_source_seq: number; state: string | null; lease_expires_at: string | null }[];
-    for (const row of rows) {
-      // Completed authority is never reinterpreted as an interruption, even
-      // when its receipt probe is temporarily unavailable or has another owner.
-      if (row.state === "completed") continue;
-      const terminalRun = row.state === "abandoned";
-      const expiredRun = row.lease_expires_at !== null && row.lease_expires_at <= now;
-      if (!terminalRun && !expiredRun) continue;
+    // Recheck under admission; completed or renewed runs never become interruptions.
+    for (const row of candidates.all(now) as { operation_id: string; chat_jid: string; primary_source_seq: number }[]) {
       db.query("UPDATE service_effect_s01_chats SET active_operation_id=NULL WHERE chat_jid=? AND active_operation_id=?").run(row.chat_jid, row.operation_id);
       db.query(
         `UPDATE service_effect_s01_operations
