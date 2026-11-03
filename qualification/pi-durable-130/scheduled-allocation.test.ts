@@ -106,7 +106,7 @@ for (const model of [undefined, "qualification/synthetic"]) test(`allocation-onl
     await pollScheduledRunsOnce(deps, store);
     await Promise.race([finished.promise, Bun.sleep(5000).then(() => { throw Error("allocation timeout"); })]);
     if (failure) throw failure;
-  } finally { stopSchedulerLoop(); await queue.shutdown(); await bundle.close(); lock.release(); closeDatabase(); }
+  } finally { await stopSchedulerLoop(); await queue.shutdown(); await bundle.close(); await closeDatabase(); lock.release(); }
 });
 
 for (const failBinding of [false, true]) test(`side prompt allocation binds an exact claimed internal source and leaves parent history unchanged; rollback=${failBinding}`, async () => {
@@ -357,6 +357,6 @@ for (const failBinding of [false, true]) test(`side prompt allocation binds an e
     db.query("UPDATE service_effect_s01_sources SET state='disposed' WHERE chat_jid=?").run(chat);
     db.query("UPDATE service_effect_s01_operations SET phase='terminal' WHERE chat_jid=?").run(chat);
     db.query("UPDATE service_effect_s01_chats SET active_operation_id=NULL WHERE chat_jid=?").run(chat);
-    lock.release(); closeDatabase();
+    await closeDatabase(); lock.release();
   }
 });
