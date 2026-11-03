@@ -78,11 +78,11 @@ describe("WebChannel endpoint facade delegation", () => {
         calls.push(`delete:${id ?? "null"}:${cascade}`);
         return response("delete", 206);
       },
-      handleUpdatePost: async (_req: Request, id: number | null) => {
+      handleUpdatePost: async (_channel: unknown, _req: Request, id: number | null) => {
         calls.push(`update:${id ?? "null"}`);
         return response("update", 204);
       },
-      handleInternalPost: async (req: Request) => {
+      handleInternalPost: async (_channel: unknown, req: Request) => {
         calls.push(`internal:${req.method}`);
         return response("internal", 201);
       },

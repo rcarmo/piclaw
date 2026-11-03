@@ -1,6 +1,7 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
 import { createWebChannelTestFixture } from "./helpers/web-channel-fixture.js";
 import * as posts from "../../../src/channels/web/handlers/posts.js";
+import * as mutations from "../../../src/channels/web/post-mutations.js";
 import * as metrics from "../../../src/channels/web/agent/system-metrics.js";
 import * as timeline from "../../../src/channels/web/timeline-service.js";
 import { createWebChannelEndpointContexts, createWebChannelIdentitySnapshot } from "../../../src/channels/web/endpoints/channel-endpoint-context-factory.js";
@@ -89,4 +90,20 @@ test("identity getter retains its options receiver and UI naming stays live afte
     expect((await (await pending).json()).agent_name).toBe("After");
     expect(contexts.identity()).toBe(live);
   } finally { models.resolve({}); await pending; }
+});
+
+test('post mutation entry calls the original channel and leaf directly without allocating a context', async () => {
+  const f = await fixture(), req = new Request('https://fixture.invalid/post/8', { method: 'PATCH' }), result = new Response('original', { status: 202 });
+  Object.defineProperty(f.channel.endpointContexts, 'postMutations', { get() { throw Error('Retired post context was accessed'); } });
+  for (const [leaf, invoke, args] of [
+    ['handleUpdatePostRequest', () => f.channel.handleUpdatePost(req, 8), [f.channel, req, 8, 'web:default']],
+    ['handleUpdatePostAnnotationsRequest', () => f.channel.handleUpdatePostAnnotations(req, 8), [f.channel, req, 8, 'web:default']],
+    ['handleInternalPostRequest', () => f.channel.handleInternalPost(req), [f.channel, req, 'web:default']],
+  ] as const) {
+    const calls: unknown[][] = [];
+    const hook = spyOn(mutations, leaf).mockImplementation((...input: any[]) => { calls.push(input); return Promise.resolve(result); });
+    restores.push(() => hook.mockRestore());
+    expect(await invoke()).toBe(result); expect(calls).toEqual([args]);
+    hook.mockRestore();
+  }
 });

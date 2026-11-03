@@ -120,7 +120,7 @@ describe("web channel http surface delegation", () => {
 
     stub.json = WebChannel.prototype.json.bind(stub);
     const endpointMocks = stub.endpointMocks;
-    stub.endpointContexts = { identity: () => ({ assistantName: "Fixture", assistantAvatarRaw: null }), agents: () => ({}), avatar: () => ({}), ui: () => ({}), content: () => ({}), postMutations: () => ({}), agentStatus: () => ({}) };
+    stub.endpointContexts = { identity: () => ({ assistantName: "Fixture", assistantAvatarRaw: null }), agents: () => ({}), avatar: () => ({}), ui: () => ({}), content: () => ({}), agentStatus: () => ({}) };
     if ("handleAgents" in endpointMocks) { const spy = spyOn(identity, "handleAgentsRequest").mockImplementation((...args: any[]) => (endpointMocks as any).handleAgents(...args)); leafRestores.push(() => spy.mockRestore()); }
     if ("handleManifest" in endpointMocks) { const spy = spyOn(manifest, "handleManifestRequest").mockImplementation((...args: any[]) => (endpointMocks as any).handleManifest(...args)); leafRestores.push(() => spy.mockRestore()); }
     if ("handleAvatar" in endpointMocks) { const spy = spyOn(identity, "handleAvatarRequest").mockImplementation((...args: any[]) => (endpointMocks as any).handleAvatar(...args)); leafRestores.push(() => spy.mockRestore()); }

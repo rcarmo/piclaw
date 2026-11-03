@@ -84,11 +84,11 @@ describe("web channel public HTTP wiring", () => {
           calls.push(`delete:${id ?? "null"}:${cascade}`);
           return response("delete");
         },
-        handleUpdatePost: async (_req: Request, id: number | null) => {
+        handleUpdatePost: async (_channel: unknown, _req: Request, id: number | null) => {
           calls.push(`update:${id ?? "null"}`);
           return response("update");
         },
-        handleInternalPost: async (req: Request) => {
+        handleInternalPost: async (_channel: unknown, req: Request) => {
           calls.push(`internal:${req.method}`);
           return response("internal");
         },
@@ -213,7 +213,7 @@ describe("web channel public HTTP wiring", () => {
     });
 
     const endpointMocks = service.endpointMocks;
-    service.endpointContexts = { identity: () => ({ assistantName: "Fixture", assistantAvatarRaw: null }), agents: () => ({}), avatar: () => ({}), ui: () => ({}), content: () => ({}), postMutations: () => ({}), agentStatus: () => ({}) };
+    service.endpointContexts = { identity: () => ({ assistantName: "Fixture", assistantAvatarRaw: null }), agents: () => ({}), avatar: () => ({}), ui: () => ({}), content: () => ({}), agentStatus: () => ({}) };
     if ("handleAgents" in endpointMocks) { const spy = spyOn(identity, "handleAgentsRequest").mockImplementation((...args: any[]) => (endpointMocks as any).handleAgents(...args)); leafRestores.push(() => spy.mockRestore()); }
     if ("handleManifest" in endpointMocks) { const spy = spyOn(manifest, "handleManifestRequest").mockImplementation((...args: any[]) => (endpointMocks as any).handleManifest(...args)); leafRestores.push(() => spy.mockRestore()); }
     if ("handleAvatar" in endpointMocks) { const spy = spyOn(identity, "handleAvatarRequest").mockImplementation((...args: any[]) => (endpointMocks as any).handleAvatar(...args)); leafRestores.push(() => spy.mockRestore()); }

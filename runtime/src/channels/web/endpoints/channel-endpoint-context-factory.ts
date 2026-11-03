@@ -3,7 +3,6 @@
  */
 
 import { getLatestTokenUsage, getTokenUsageTotals } from "../../../db.js";
-import { updateMessagePost } from "../../../db/messages.js";
 import { resolveAvatarUrl } from "../media/avatar-service.js";
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
 import type { AuthEndpointsContext } from "../auth/auth-endpoints.js";
@@ -11,7 +10,6 @@ import { isProviderReadyOobeCompletedForInstance } from "../oobe-instance-state.
 import type { AgentStatusContext, AgentTokenUsageContext } from "../agent/agent-status.js";
 import type { ContentEndpointsContext } from "./content-endpoints.js";
 import type { AgentsEndpointContext, AvatarEndpointContext } from "./identity-endpoints.js";
-import type { PostMutationsContext } from "../post-mutations.js";
 import type { UiEndpointsContext } from "./ui-endpoints.js";
 
 /** Live identity/avatar snapshot consumed by endpoint context builders. */
@@ -65,7 +63,6 @@ function getTokenUsageForChat(chatJid: string): AgentTokenUsageContext | null {
 /** Lazily built endpoint contexts consumed by WebChannel handlers. */
 export interface WebChannelEndpointContexts {
   identity(): WebChannelIdentitySnapshot;
-  postMutations(): PostMutationsContext;
   agentStatus(): AgentStatusContext;
   content(): ContentEndpointsContext;
   ui(): UiEndpointsContext;
@@ -86,21 +83,6 @@ export function createWebChannelEndpointContexts(
 
   return {
     identity: () => options.getIdentitySnapshot(),
-    postMutations: () => ({
-      defaultChatJid: options.defaultChatJid,
-      lastCommandInteractionId: channel.lastCommandInteractionId,
-      authGateway: channel.authGateway,
-      json: (payload, status = 200) => channel.json(payload, status),
-      replaceMessageContent: (chatJid, id, content, threadId) => updateMessagePost(chatJid, id, content, threadId) ?? null,
-      broadcastInteractionUpdated: (interaction) => {
-        channel.interactionBroadcaster.broadcastInteractionUpdated(interaction);
-      },
-      admitMessage: channel.admitMessage.bind(channel),
-      broadcastAgentResponse: (interaction) => {
-        channel.interactionBroadcaster.broadcastAgentResponse(interaction);
-      },
-    }),
-
     agentStatus: () => {
       if (!agentStatusContext) {
         agentStatusContext = {

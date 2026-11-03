@@ -370,18 +370,10 @@ export function updateMessageAnnotationsInDatabase(
   const payload = Array.isArray(annotations) && annotations.length > 0
     ? JSON.stringify(annotations)
     : null;
-  const res = (() => database
+  const res = database
     .prepare("UPDATE messages SET annotations = ? WHERE chat_jid = ? AND rowid = ?")
-    .run(payload, chatJid, rowId))();
+    .run(payload, chatJid, rowId);
   return res.changes > 0;
-}
-
-export function updateMessageAnnotations(
-  chatJid: string,
-  rowId: number,
-  annotations: unknown[] | null,
-): boolean {
-  return updateMessageAnnotationsInDatabase(getDb(), chatJid, rowId, annotations);
 }
 
 export function storeThinkingContent(
@@ -494,11 +486,7 @@ export {
   deleteThinkingContentByMessageRowIds,
 };
 
-/**
- * Replace the content (and optionally content_blocks, link_previews, media)
- * of an existing message. Used by the web channel's edit-post feature.
- * Returns the updated InteractionRow, or undefined if the row didn't exist.
- */
+/** Options for existing message content/media changes. */
 export interface ReplaceMessageContentOptions {
   contentBlocks?: unknown[];
   linkPreviews?: unknown[];
@@ -506,6 +494,7 @@ export interface ReplaceMessageContentOptions {
   isTerminalAgentReply?: boolean;
 }
 
+/** SQL-only content/media body; returns whether the selected row existed. */
 export function replaceMessageContentInDatabase(
   database: Database,
   chatJid: string,
@@ -513,7 +502,6 @@ export function replaceMessageContentInDatabase(
   content: string,
   options: ReplaceMessageContentOptions = {},
 ): boolean {
-  return (() => {
   const contentBlocks = options.contentBlocks ? JSON.stringify(options.contentBlocks) : null;
   const linkPreviews = options.linkPreviews ? JSON.stringify(options.linkPreviews) : null;
   const mediaIds = options.mediaIds ?? (getMediaIdsForMessageInDatabase(database, rowId));
@@ -537,27 +525,6 @@ export function replaceMessageContentInDatabase(
     attachMediaToMessageInDatabase(database, rowId, mediaIds, { index: true });
   }
   return true;
-  })();
-}
-
-/** Update threading within the selected chat. */
-export function setMessageThreadId(chatJid: string, rowId: number, threadId: number): void {
-  if (!Number.isSafeInteger(threadId) || threadId < 1) throw new Error("Invalid thread_id");
-  const db = getDb();
-  (() => {
-    db.prepare("UPDATE messages SET thread_id=? WHERE chat_jid=? AND rowid=?").run(threadId, chatJid, rowId);
-  })();
-}
-
-/** Content and thread changes share one transaction, including their display revisions. */
-export function updateMessagePost(chatJid: string, rowId: number, content: string, threadId?: number): InteractionRow | undefined {
-  if (threadId !== undefined && (!Number.isSafeInteger(threadId) || threadId < 1)) throw new Error("Invalid thread_id");
-  const db = getDb();
-  return db.transaction(() => {
-    if (!replaceMessageContentInDatabase(db, chatJid, rowId, content)) return undefined;
-    if (threadId !== undefined) setMessageThreadId(chatJid, rowId, threadId);
-    return getMessageByRowId(chatJid, rowId);
-  }).immediate();
 }
 
 export function replaceMessageContent(
