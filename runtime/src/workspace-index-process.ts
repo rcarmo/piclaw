@@ -30,8 +30,8 @@ let spawnWorkspaceIndexProcessImpl: WorkspaceIndexSpawn = (command, args, option
 let activeWorkspaceIndexChild: ChildProcess | null = null;
 let activeWorkspaceIndexCompletion: Promise<void> | null = null;
 let finalizeWorkspaceIndexProcessImpl: () => void | Promise<void> = finalizeWorkspaceIndexProcess;
-function finalizeWorkspaceIndexProcess(): void {
-  closeDatabase();
+async function finalizeWorkspaceIndexProcess(): Promise<void> {
+  await closeDatabase();
 
   try {
     const gc = (globalThis as typeof globalThis & { gc?: () => void }).gc;

@@ -21,13 +21,12 @@ import {
   projectQueuedFollowupItem,
   type QueuedFollowupItem,
 } from "../../../queued-followups.js";
-import { getDb, getDatabaseBinding } from '../../../db/connection.js';
+import { getDb, captureHostDatabaseBinding } from '../../../db/connection.js';
 import { getRouterState, setRouterState } from '../../../db/router-state.js';
 import { admitSqliteWrite } from '../../../db/sqlite-async-admission.js';
-import { getWorkspaceDir, getStoreDir, getConfigPath, getRoutingConfig } from '../../../core/config.js';
+import { getRoutingConfig } from '../../../core/config.js';
 import { parseControlCommand } from '../../../agent-control/agent-control-parser.js';
 import { DEFERRED_CONTROL_COMMAND_TYPES } from '../../../agent-control/agent-control-types.js';
-import { statSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import { createUuid } from '../../../utils/ids.js';
 import { hashCanonicalRequest } from '../../../service-effects/contracts/common.js';
@@ -87,17 +86,6 @@ export interface RemoveQueuedFollowupForActionResult {
 
 function toDeferredQueuedFollowupRecord(item: QueuedFollowupItem): DeferredQueuedFollowupRecord {
   return projectPersistedQueuedFollowupItem(item) as DeferredQueuedFollowupRecord;
-}
-
-function captureQueueBinding(database: ReturnType<typeof getDb>): () => void {
-  const binding = getDatabaseBinding();
-  const paths = JSON.stringify([getWorkspaceDir(), getStoreDir(), getConfigPath()]);
-  const assertBinding = () => {
-    if (getDb() !== database || JSON.stringify(getDatabaseBinding()) !== JSON.stringify(binding)
-      || JSON.stringify([getWorkspaceDir(), getStoreDir(), getConfigPath()]) !== paths) throw Error('Queue database binding changed.');
-    if (binding) { const stat=statSync(binding.path); if(`${stat.dev}:${stat.ino}` !== binding.identity) throw Error('Queue database file changed.'); }
-  };
-  return assertBinding;
 }
 
 export class QueuedFollowupLifecycleService {
@@ -189,7 +177,7 @@ export class QueuedFollowupLifecycleService {
     const targetKey = () => { const branch = getChatBranchByChatJid(chatJid); return JSON.stringify(branch && [branch.branch_id, branch.chat_jid, branch.archived_at]); };
     const originalTarget = targetKey();
     let writtenTarget = originalTarget;
-    const assertBinding = captureQueueBinding(database);
+    const assertBinding = captureHostDatabaseBinding(database);
     const check = (phase: 'before' | 'after') => {
       assertBinding();
       if ((phase === 'before' && targetKey() !== originalTarget) || getChatBranchByChatJid(chatJid)?.archived_at) throw Error('Queued input target lifetime changed.');
@@ -271,7 +259,7 @@ export class QueuedFollowupLifecycleService {
     options.signal?.throwIfAborted();
     const queued = this.getDeferredQueuedFollowupItems(chatJid);
     const observed = queued.find(item => item.rowId === rowId);
-    const database = getDb(), assertBinding = captureQueueBinding(database);
+    const database = getDb(), assertBinding = captureHostDatabaseBinding(database);
     const authorise = options.authorise, withdraw = options.withdrawAcceptedSource;
     const check = (phase: 'before' | 'after') => { assertBinding(); authorise?.(phase); };
     if (observed) {
@@ -319,7 +307,7 @@ export class QueuedFollowupLifecycleService {
 
   async reorderQueuedFollowupItems(chatJid: string, fromIndex: number, toIndex: number, options: QueuedFollowupWriteOptions = {}): Promise<boolean> {
     const database = getDb();
-    const assertBinding = captureQueueBinding(database);
+    const assertBinding = captureHostDatabaseBinding(database);
     const check = (phase: 'before' | 'after') => { assertBinding(); options.authorise?.(phase); };
     return await admitSqliteWrite(database, () => this.reorderQueuedFollowupItemsInTransaction(chatJid, fromIndex, toIndex),
       check, options.signal, 5000, assertBinding);

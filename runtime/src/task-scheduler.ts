@@ -409,7 +409,7 @@ function sealScheduledEffect<T extends { effect: EffectIdentity }>(request: T): 
 
 const primaryStores = new WeakMap<Database, { users: number; foreignKeysWereEnabled: boolean }>();
 
-function productionScheduledRunStore(): { store: ScheduledRunStore & InterruptedScheduledRunReconciler; close: () => void } {
+function productionScheduledRunStore(): { store: ScheduledRunStore & InterruptedScheduledRunReconciler; close: () => void | Promise<void> } {
   const primary = getDb();
   const databaseRow = primary.query("PRAGMA database_list").all() as Array<{ name: string; file: string }>;
   const filename = databaseRow.find((row) => row.name === "main")?.file || "";
@@ -428,19 +428,21 @@ function productionScheduledRunStore(): { store: ScheduledRunStore & Interrupted
     primaryState.users++;
     database = primary;
   }
-  let stopCheckpoint: (() => void) | undefined;
-  let closed = false;
-  const close = () => {
-    if (closed) return;
+  let stopCheckpoint: (() => void | Promise<void>) | undefined;
+  let closed = false, closing: Promise<void> | undefined;
+  const close = (): void | Promise<void> => {
+    if (closed) return closing;
     closed = true;
-    try { stopCheckpoint?.(); }
-    finally {
+    const finish = () => {
       if (filename) database.close();
       else if (primaryState && --primaryState.users === 0) {
         primaryStores.delete(primary);
         if (!primaryState.foreignKeysWereEnabled) primary.exec("PRAGMA foreign_keys=OFF");
       }
-    }
+    };
+    const released = stopCheckpoint?.();
+    if (released) return closing = released.then(finish);
+    finish();
   };
   try {
     if (!filename) primary.exec("PRAGMA foreign_keys=ON");
@@ -1002,7 +1004,7 @@ export function startSchedulerLoop(deps: SchedulerDeps): () => Promise<void> {
   const releaseStore = () => {
     if (!closed && pollJoined && pendingTasks === 0) {
       closed = true;
-      resource.close();
+      return resource.close();
     }
   };
   // Keep the store alive for work already handed to the queue, without making
@@ -1012,7 +1014,7 @@ export function startSchedulerLoop(deps: SchedulerDeps): () => Promise<void> {
       pendingTasks++;
       deps.queue.enqueueTask(id, async () => {
         try { await run(); }
-        finally { pendingTasks--; releaseStore(); }
+        finally { pendingTasks--; await releaseStore(); }
       }, lane);
     },
   } as AgentQueue };
@@ -1026,10 +1028,10 @@ export function startSchedulerLoop(deps: SchedulerDeps): () => Promise<void> {
       instance.stopped = true;
       if (instance.timer) clearTimeout(instance.timer);
       instance.timer = null;
-      stopPromise = instance.active.then(() => {
+      stopPromise = instance.active.then(async () => {
         pollJoined = true;
         try {
-          releaseStore();
+          await releaseStore();
         } catch (error) {
           throw new SchedulerStoreReleaseError(error);
         } finally {

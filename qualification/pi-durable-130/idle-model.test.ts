@@ -205,7 +205,7 @@ test("shared DB next-request model controls persist while destructive reset reta
 test("scoped reset preserves sibling SDK inbox and host sources while refusing its own pending work", async () => {
   const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "scoped-reset-"));
   const path = join(dir, "shared.db"), owner = TestOwner.acquire(path), root = new Database(path);
-  root.exec("PRAGMA busy_timeout=5000"); // Root fixture writes use the root role lock-wait policy.
+  root.exec("PRAGMA busy_timeout=0"); // Root acquisition is cooperative; no connection-local busy wait.
   installServiceWorkSchema(root);
   let sql!: BunSqliteDatabase;
   let resetHook: (() => void) | undefined, ownerHook: (() => void) | undefined;

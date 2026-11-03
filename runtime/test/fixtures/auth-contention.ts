@@ -41,7 +41,7 @@ if(mode==="writer") {
     const gateway=new WebAuthGateway({accessMode:"single-user",passkeyMode:"totp-only",totpSecret:"fixture-only",internalSecret:"",sessionTtlSeconds:3600,hasTls:true},{json:(p,s=200)=>Response.json(p,{status:s}),challenges:new WebauthnChallengeTracker(),failureTracker:new TotpFailureTracker()});
     const request=()=>new Request("https://fixture.invalid/agent/me",{headers:{cookie:`piclaw_session=${mode==="missing"?"missing-cookie":"synthetic-cookie"}`}});
     const settings={journal:db.query("PRAGMA journal_mode").all()[0],synchronous:db.query("PRAGMA synchronous").all()[0],busyTimeout:db.query("PRAGMA busy_timeout").all()[0]};
-    assert.deepEqual(settings.journal,{journal_mode:"wal"});assert.deepEqual(settings.synchronous,{synchronous:2});assert.deepEqual(settings.busyTimeout,{timeout:5000});
+    assert.deepEqual(settings.journal,{journal_mode:"wal"});assert.deepEqual(settings.synchronous,{synchronous:2});assert.deepEqual(settings.busyTimeout,{timeout:0});
     if(holdMs){
       const child=Bun.spawn([process.execPath,"--no-env-file",import.meta.filename,"writer",String(holdMs)],{env:process.env,stdin:"ignore",stdout:"pipe",stderr:"pipe"});
       writer=child;output=Promise.all([new Response(child.stdout).text(),new Response(child.stderr).text(),child.exited]);await waitFile(ready);

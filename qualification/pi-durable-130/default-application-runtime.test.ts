@@ -304,7 +304,7 @@ for (const uncertain of [false, true, 'synchronous'] as const) factoryTest(`clea
   } finally {
     transaction.mockRestore(); close.mockRestore(); pool.mockRestore(); registration?.mockRestore();
     if (captured) await originalClose.call(captured);
-    owner.release(); closeDatabase();
+    owner.release(); await closeDatabase();
   }
 });
 
@@ -1136,7 +1136,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(existsSync(mcpPid)).toBe(false);
     expect(existsSync(mcpMarker)).toBe(false);
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    owner.release(); closeDatabase(); return;
+    owner.release(); await closeDatabase(); return;
   }
   if (scenario === "native-routing-initial-rollback" || scenario === "native-routing-initial-ack") {
     const actual = BunSqliteDatabase.prototype.transaction;
@@ -1177,7 +1177,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(calls).toBe(0); reopened.stop(); await reopened.close();
     }
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   const capturedEventObservers: HostModelEventObserver[] = [];
   const originalModelFactory = hostModelBridge.createHostModels;
@@ -1309,7 +1309,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
         .get(JSON.parse(savedFactoryReceipt.request.model_invocation_json).operationId)).toEqual({harness_session_id:savedFactoryReceipt.facts.service_effect_s01_operations[0].harness_session_id+'-revoked'});
     } finally {
       if (unexpected) {unexpected.stop();await unexpected.close();}
-      for (const spy of [...captureSpies,...sdkSpies]) spy.mockRestore();closeDatabase();owner.release();
+      for (const spy of [...captureSpies,...sdkSpies]) spy.mockRestore();await closeDatabase();owner.release();
     }
     console.log('FACTORY_RECEIPT_RECOVERY '+JSON.stringify({window:factoryReceiptWindow,pid:process.pid,taskId:savedFactoryReceipt.taskId,
       requestId:savedFactoryReceipt.request.id,sourceId:savedFactoryReceipt.source.id,providerCalls:calls,revocation:factoryReceiptRevocation}));
@@ -1399,7 +1399,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(calls).toBe(0); expect(factoryReceiptFacts(root)).toEqual(settledFacts);
     } finally {
       backend.stop(); await backend.close(); await channel.stop(); await base.queue.shutdown(); await pool.shutdown();
-      for (const spy of [...captureSpies,...sdkSpies]) spy.mockRestore(); closeDatabase(); owner.release();
+      for (const spy of [...captureSpies,...sdkSpies]) spy.mockRestore(); await closeDatabase(); owner.release();
     }
     console.log('FACTORY_RECEIPT_RECOVERY '+JSON.stringify({window:factoryReceiptWindow,pid:process.pid,taskId:savedFactoryReceipt.taskId,
       requestId:savedFactoryReceipt.request.id,sourceId:savedFactoryReceipt.source.id,providerCalls:calls,
@@ -1411,7 +1411,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     const scheduler=await import('../../runtime/src/task-scheduler.js'),{getSchedulerMetrics}=scheduler;let reads=0;
     const denied=new Proxy({},{get(){reads++;throw Error('Unsupported task/options inspected');}}),snapshot=()=>['scheduled_tasks','task_run_logs','service_effect_s07_occurrences','service_effect_s01_sources','budget_work','entries','documents'].map(table=>root.query(`SELECT * FROM ${table} ORDER BY rowid`).all()),before=snapshot(),metrics=getSchedulerMetrics();
     try{expect(scheduler).not.toHaveProperty('runScheduledTask');expect(reads).toBe(0);expect(calls).toBe(0);expect(snapshot()).toEqual(before);expect(getSchedulerMetrics()).toEqual(metrics);expect(sdkSpies.every(spy=>spy.mock.calls.length===0)).toBe(true);}
-    finally{for(const spy of sdkSpies)spy.mockRestore();backend.stop();await backend.close();await base.queue.shutdown();await pool.shutdown();closeDatabase();owner.release();}return;
+    finally{for(const spy of sdkSpies)spy.mockRestore();backend.stop();await backend.close();await base.queue.shutdown();await pool.shutdown();await closeDatabase();owner.release();}return;
   }
   if(scenario.startsWith('native-dream-runner')){
     const {runDreamAgentTurn}=await import('../../runtime/src/dream.js'),index=await import('../../runtime/src/workspace-index-process.js');
@@ -1572,7 +1572,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
         reopenedDream.stop();await reopenedDream.close();
         await(await import('./background-admission-recovery-fixture.ts')).backgroundAdmissionRecoveryFixture(root,workspace,getDataDir(),getConfigPath(),true,1,1,'084d229bc038a2bdd01301f9f87135911685f88a');
       }
-    }finally{if(scenario==='native-dream-runner-scheduled-reclaim')root.exec('DROP TRIGGER IF EXISTS scheduled_dream_completion_fault');if(scenario==='native-dream-runner-unsafe-result')root.exec('DROP TRIGGER IF EXISTS native_dream_result_fault');dreamClock?.mockRestore();dreamWorkReleased.resolve();if(scenario==='native-dream-runner-lock-revoked'){rmSync(lockFile,{force:true});rmSync(movedLock,{force:true});}for(const spy of[modelControl,dreamDispatch,launch,wait,...captureSpies,...sdkSpies])spy.mockRestore();reopenedDream?.stop();await reopenedDream?.close();backend.stop();await backend.close();await base.queue.shutdown();await pool.shutdown();closeDatabase();owner.release();}return;
+    }finally{if(scenario==='native-dream-runner-scheduled-reclaim')root.exec('DROP TRIGGER IF EXISTS scheduled_dream_completion_fault');if(scenario==='native-dream-runner-unsafe-result')root.exec('DROP TRIGGER IF EXISTS native_dream_result_fault');dreamClock?.mockRestore();dreamWorkReleased.resolve();if(scenario==='native-dream-runner-lock-revoked'){rmSync(lockFile,{force:true});rmSync(movedLock,{force:true});}for(const spy of[modelControl,dreamDispatch,launch,wait,...captureSpies,...sdkSpies])spy.mockRestore();reopenedDream?.stop();await reopenedDream?.close();backend.stop();await backend.close();await base.queue.shutdown();await pool.shutdown();await closeDatabase();owner.release();}return;
   }
   if (scenario.startsWith("native-code-review-lifecycle-")) {
     const phase = scenario.slice("native-code-review-lifecycle-".length);
@@ -1626,7 +1626,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     } finally {
       await close(); await channel.stop(); await base.queue.shutdown(); await pool.shutdown();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-      owner.release(); closeDatabase();
+      owner.release(); await closeDatabase();
     }
     return;
   }
@@ -2143,7 +2143,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       if(saved===undefined)rmSync(configuration,{force:true});else writeFileSync(configuration,saved);
       reopened?.stop();await reopened?.close();await reopenedBase?.queue.shutdown();await reopenedPool?.shutdown();
       backend.stop();await backend.close();await channel.stop();await base.queue.shutdown();await pool.shutdown();
-      for(const spy of [...captureSpies,...sdkSpies])spy.mockRestore();owner.release();closeDatabase();
+      for(const spy of [...captureSpies,...sdkSpies])spy.mockRestore();owner.release();await closeDatabase();
     }
     return;
   }
@@ -2178,7 +2178,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     } finally {
       for(const spy of [control,slash,saves,marked])spy.mockRestore();
       backend.stop();await backend.close();await channel.stop();await base.queue.shutdown();await pool.shutdown();
-      for(const spy of [...captureSpies,...sdkSpies])spy.mockRestore();owner.release();closeDatabase();
+      for(const spy of [...captureSpies,...sdkSpies])spy.mockRestore();owner.release();await closeDatabase();
     }
     return;
   }
@@ -2194,7 +2194,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     } finally {
       backend.stop(); await backend.close(); await channel.stop(); await base.queue.shutdown(); await pool.shutdown();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-      owner.release(); closeDatabase();
+      owner.release(); await closeDatabase();
     }
     return;
   }
@@ -2246,7 +2246,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       checkpointHold = undefined; onProviderResponse = undefined;
       await backend.close(); await channel.stop(); await base.queue.shutdown(); await pool.shutdown();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-      owner.release(); closeDatabase();
+      owner.release(); await closeDatabase();
     }
     return;
   }
@@ -2320,7 +2320,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       releaseHeld(); globals.__PICLAW_EXIT_SCHEDULER__ = priorScheduler;
       await base.queue.shutdown(); await pool.shutdown(); await channel.stop(); backend.stop(); await backend.close();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-      closeDatabase(); owner.release();
+      await closeDatabase(); owner.release();
     }
     return;
   }
@@ -2369,7 +2369,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(() => assertFreshApplicationHistory(root, join(workspace, "absent-legacy-sessions"))).not.toThrow();
     // Reopen the actual default application with the human input and exactly one
     // admitted budget wrap-up still pending. No provider is replayed at startup.
-    await pool.shutdown(); backend.stop(); await backend.close(); closeDatabase();
+    await pool.shutdown(); backend.stop(); await backend.close(); await closeDatabase();
     initDatabase(); root = getDb();
     backend = await createDefaultApplicationRuntime(owner, async () => services);
     const reopenedPool = new AgentPool({ credentialStore, modelRuntime: runtime, modelRegistry, ...backend.sessionOptions });
@@ -2404,7 +2404,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       lifecycle_generation: 2, budget_limit_reported: true });
     expect(getDeferredQueuedFollowups("web:default")).toHaveLength(0);
     for (const spy of sdkSpies) expect(spy).not.toHaveBeenCalled();
-    await reopenedPool.shutdown(); backend.stop(); await backend.close(); closeDatabase(); owner.release();
+    await reopenedPool.shutdown(); backend.stop(); await backend.close(); await closeDatabase(); owner.release();
     return;
   }
   if (scenario === "native-goal-local-denial" || scenario === "native-goal-critical-denial") {
@@ -2449,7 +2449,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       criticalSpy?.mockRestore();
       await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-      closeDatabase(); owner.release();
+      await closeDatabase(); owner.release();
     }
     return;
   }
@@ -2508,7 +2508,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(calls).toBe(callsBeforeExpiry);
     expect(extensionKvGet("goal", "thread-goal", "chat", "web:default")).toEqual(pausedGoal);
     await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close();
-    closeDatabase(); initDatabase(); root = getDb();
+    await closeDatabase(); initDatabase(); root = getDb();
     backend = await createDefaultApplicationRuntime(owner, async () => services);
     const reopenedBase = createRuntimeBaseServices({ dataDir: workspace });
     const reopenedPool = new AgentPool({ credentialStore, modelRuntime: runtime, modelRegistry, ...backend.sessionOptions });
@@ -2522,7 +2522,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(calls).toBe(callsBeforeExpiry);
       for (const item of expired) expect(root.query("SELECT state FROM service_effect_s01_sources WHERE chat_jid=? AND source_id=?").get("web:default", item.source_id!)).toEqual({ state: "disposed" });
     } finally { await reopenedChannel.stop(); await reopenedBase.queue.shutdown(); await reopenedPool.shutdown(); backend.stop(); await backend.close(); }
-    closeDatabase(); owner.release();
+    await closeDatabase(); owner.release();
     return;
   }
   const widgetEvents: { event: string; data: unknown }[] = [];
@@ -2581,12 +2581,12 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
         expect(delivered.join(" ")).toContain("factory synthetic reply");
         const unknown = unknownTerminalSnapshot(root, 1);
         await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close();
-        closeDatabase(); initDatabase(); root = getDb();
+        await closeDatabase(); initDatabase(); root = getDb();
         expect(root.query("SELECT r.state FROM budget_request_reservations r JOIN budget_work w ON w.id=r.work_id WHERE w.execution_kind='scheduled'").all()).toEqual([{ state: "unresolved" }]);
         expect(root.query("SELECT status FROM budget_work WHERE parent_work_id IS NULL AND execution_kind='scheduled'").all()).toEqual([{ status: "active" }]);
         expect(unknownTerminalSnapshot(root, 1)).toEqual(unknown);
         for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-        closeDatabase(); owner.release(); return;
+        await closeDatabase(); owner.release(); return;
       }
     try {
       if (!definitionScheduler) {
@@ -2628,7 +2628,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
         prohibited.forEach(spy => expect(spy).not.toHaveBeenCalled());
         sdkSpies.forEach(spy => expect(spy).not.toHaveBeenCalled());
         await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close();
-        closeDatabase(); initDatabase(); root = getDb();
+        await closeDatabase(); initDatabase(); root = getDb();
         backend = await createDefaultApplicationRuntime(owner, async () => services);
         expect(root.query("SELECT * FROM host_scheduled_task_definitions ORDER BY task_id,revision").all()).toEqual(definitions);
         expect(root.query("SELECT * FROM service_effect_s07_task_revisions ORDER BY task_id,revision").all()).toEqual(revisions);
@@ -2658,7 +2658,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(root.query("SELECT SUM(t.api_equivalent_cost_microusd) AS amount FROM token_usage t JOIN budget_work w ON w.id=t.work_id WHERE t.invocation_id IS NOT NULL AND w.execution_kind='scheduled'").get()).toEqual({ amount: 30 });
       await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-      compactionPolicySpy?.mockRestore(); closeDatabase(); owner.release(); return;
+      compactionPolicySpy?.mockRestore(); await closeDatabase(); owner.release(); return;
     }
       expect(root.query("SELECT COUNT(*) AS n FROM task_run_logs WHERE task_id LIKE 'native-schedule-%' AND status='success'").get()).toEqual({ n: 3 });
       for (const [index, label] of ["unknown/model", "synthetic/", "synthetic", "/approved", "synthetic/virtual"].entries()) {
@@ -2749,7 +2749,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     } finally {
       stopSchedulerLoop(); prohibited.forEach(spy => spy.mockRestore());
       await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close();
-      sdkSpies.forEach(spy => spy.mockRestore()); owner.release(); closeDatabase();
+      sdkSpies.forEach(spy => spy.mockRestore()); owner.release(); await closeDatabase();
     }
     return;
   }
@@ -2788,7 +2788,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(root.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 1 });
     } finally {
       await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close();
-      sdkSpies.forEach(spy => spy.mockRestore()); owner.release(); closeDatabase();
+      sdkSpies.forEach(spy => spy.mockRestore()); owner.release(); await closeDatabase();
     }
     return;
   }
@@ -2834,7 +2834,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       for (const spy of sdkSpies) { expect(spy).not.toHaveBeenCalled(); spy.mockRestore(); }
     } finally {
       await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close();
-      noHttp.mockRestore(); closeDatabase(); owner.release();
+      noHttp.mockRestore(); await closeDatabase(); owner.release();
     }
     return;
   }
@@ -2942,7 +2942,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       } finally {
         await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close();
         for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-        owner.release(); closeDatabase();
+        owner.release(); await closeDatabase();
       }
       return;
     }
@@ -2986,7 +2986,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(() => service.database.get("SELECT 1")).toThrow("closed");
     const oldRoot = root;
     const pragmas = ["foreign_keys", "journal_mode"].map(name => root.query(`PRAGMA ${name}`).get());
-    closeDatabase(); initDatabase(); root = getDb();
+    await closeDatabase(); initDatabase(); root = getDb();
     expect(root).not.toBe(oldRoot);
     expect(() => oldRoot.query("SELECT 1").get()).toThrow();
     backend = await createDefaultApplicationRuntime(owner, async () => services);
@@ -3029,7 +3029,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       await reopenedChannel.stop(); await reopenedBase.queue.shutdown(); await reopenedPool.shutdown(); backend.stop(); await backend.close();
     }
     expect(sdkSpies.every(spy => spy.mock.calls.length === 0)).toBe(true);
-    sdkSpies.forEach(spy => spy.mockRestore()); owner.release(); closeDatabase(); return;
+    sdkSpies.forEach(spy => spy.mockRestore()); owner.release(); await closeDatabase(); return;
   }
   if (nativeTable && tableChat !== "web:default") {
     storeChatMetadata(tableChat, new Date().toISOString());
@@ -3051,7 +3051,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(calls).toBe(0);
     backend.stop(); await backend.close();
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   if (scenario === "public-admission-chat-mismatch") {
     const otherChat = "web:wrong-admission";
@@ -3069,7 +3069,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(calls).toBe(0);
     backend.stop(); await backend.close();
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   if (scenario === "public-archived-admission") {
     const archivedChat = "web:archive-admission";
@@ -3091,7 +3091,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(calls).toBe(0);
     backend.stop(); await backend.close();
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   const rowId = root.transaction(() => {
     const rowId = storeMessage(message);
@@ -3121,7 +3121,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       const tool = root.query('SELECT * FROM tasks WHERE kind=?').all(JSON.stringify('pi.tool'));
       const ids = root.query('SELECT id FROM tasks ORDER BY id').all();
       backend.stop(); await backend.close(); expect(await running).toBe('pending');
-      root.exec('DROP TRIGGER regrets_receipt_fail'); closeDatabase(); initDatabase(); root = getDb();
+      root.exec('DROP TRIGGER regrets_receipt_fail'); await closeDatabase(); initDatabase(); root = getDb();
       backend = await createDefaultApplicationRuntime(owner, async () => services);
       const rebound = backend.bind({ queue: base.queue, agentPool: pool }); running = rebound.dispatchAcceptedInput!(message.chat_jid, message.id, rowId!)!();
       expect(await sleeping(originalUntil)).toBeGreaterThan(originalUntil); expect(calls).toBe(2);
@@ -3132,7 +3132,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(root.query('SELECT count(*) n FROM service_effect_s02_commits').get()).toEqual({ n: 0 });
     } finally {
       root.exec('DROP TRIGGER IF EXISTS regrets_receipt_fail'); backend.stop(); await backend.close(); expect(await running).toBe('pending');
-      for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); closeDatabase(); owner.release();
+      for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); await closeDatabase(); owner.release();
     }
     return;
   }
@@ -3173,7 +3173,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
           backend.stop(); await backend.close(); expect(await running).toBe('pending');
           expect(root.query('SELECT record FROM tasks WHERE id=?').get(tool.id)).toEqual(toolRow);
           if (!scenario.endsWith('-held')) root.exec('DROP TRIGGER regrets_pending_price');
-          closeDatabase(); initDatabase(); root = getDb();
+          await closeDatabase(); initDatabase(); root = getDb();
           backend = await createDefaultApplicationRuntime(owner, async () => services);
           if (scenario.endsWith('-held')) {
             expect(root.query('SELECT * FROM budget_request_reservations WHERE id=?').get(held.id)).toEqual(held);
@@ -3197,7 +3197,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       for (const successor of successors) expect(JSON.parse(successor.record)).toMatchObject({ kind: 'pi.generation', state: { status: 'terminal', outcome: { status: 'completed' } } });
     } finally {
       root.exec('DROP TRIGGER IF EXISTS regrets_pending_price'); backend.stop(); await backend.close();
-      for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); closeDatabase(); owner.release();
+      for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); await closeDatabase(); owner.release();
     }
     return;
   }
@@ -3224,7 +3224,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(rows[1]!.model_invocation_json).not.toBeNull();
       expect(JSON.parse(rows[1]!.model_invocation_json!)).toMatchObject({ taskId: tool.id, conversationId: tool.conversationId, taskKind: 'pi.tool', phase: 'call' });
     } finally {
-      backend.stop(); await backend.close(); for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); closeDatabase(); owner.release();
+      backend.stop(); await backend.close(); for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); await closeDatabase(); owner.release();
     }
     return;
   }
@@ -3268,7 +3268,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       if (scenario.endsWith('-reopen')) {
         backend.stop(); await backend.close(); expect(await running).toBe('pending');
         expect(root.query('SELECT record FROM tasks WHERE id=?').get(tool.id)).toEqual(paused);
-        root.exec('DROP TRIGGER accounting_tool_price_fail'); closeDatabase(); initDatabase(); root = getDb();
+        root.exec('DROP TRIGGER accounting_tool_price_fail'); await closeDatabase(); initDatabase(); root = getDb();
         backend = await createDefaultApplicationRuntime(owner, async () => services);
         const rebound = backend.bind({ queue: base.queue, agentPool: pool });
         complete = rebound.dispatchAcceptedInput!(message.chat_jid, message.id, rowId!)!();
@@ -3293,7 +3293,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(root.query('SELECT terminal_disposition FROM service_effect_s01_operations').all()).toEqual([{ terminal_disposition: 'completed' }]);
     } finally {
       root.exec('DROP TRIGGER IF EXISTS accounting_tool_price_fail'); backend.stop(); await backend.close();
-      for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); closeDatabase(); owner.release();
+      for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); await closeDatabase(); owner.release();
     }
     return;
   }
@@ -3320,7 +3320,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(() => process.kill(childPid!, 0)).toThrow();
       await channel.stop(); await base.queue.shutdown(); await pool.shutdown();
       const oldRoot = root;
-      closeDatabase(); initDatabase(); root = getDb();
+      await closeDatabase(); initDatabase(); root = getDb();
       expect(root).not.toBe(oldRoot);
       expect(() => oldRoot.query("SELECT 1").get()).toThrow();
       owner.assertCurrentOwner();
@@ -3347,7 +3347,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       await channel.stop(); await base.queue.shutdown(); await pool.shutdown();
       await reopenedBase?.queue.shutdown(); await reopenedPool?.shutdown();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-      closeDatabase(); owner.release();
+      await closeDatabase(); owner.release();
     }
     return;
   }
@@ -3407,7 +3407,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     } finally {
       backend.stop(); await backend.close(); await channel.stop(); await base.queue.shutdown(); await pool.shutdown();
       for (const spy of [...captureSpies,...sdkSpies]) spy.mockRestore();
-      owner.release(); closeDatabase();
+      owner.release(); await closeDatabase();
     }
     return;
   }
@@ -3441,7 +3441,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(calls).toBe(1);
       root.exec("DROP TRIGGER refuse_cursor_ack");
       backend.stop(); await backend.close(); await channel.stop(); await base.queue.shutdown(); await pool.shutdown();
-      closeDatabase(); initDatabase(); root = getDb();
+      await closeDatabase(); initDatabase(); root = getDb();
       backend = await createDefaultApplicationRuntime(owner, async () => services);
       expect(backend.sessionOptions.getDurableSession!(message.chat_jid)?.sessionId).toBe(first!.sessionId);
       nextBase = createRuntimeBaseServices({ dataDir: workspace });
@@ -3466,7 +3466,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       await nextChannel?.stop(); await nextBase?.queue.shutdown(); await nextPool?.shutdown();
       await channel.stop(); await base.queue.shutdown(); await pool.shutdown();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-      closeDatabase(); owner.release();
+      await closeDatabase(); owner.release();
     }
     return;
   }
@@ -3487,12 +3487,12 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       content: [{ type: 'text', text: 'factory synthetic reply' }] });
     const unknown = unknownTerminalSnapshot(root, 2);
     backend.stop(); await backend.close();
-    closeDatabase(); initDatabase(); root = getDb();
+    await closeDatabase(); initDatabase(); root = getDb();
     expect(root.query("SELECT state FROM budget_request_reservations WHERE state='unresolved'").all()).toHaveLength(2);
     expect(root.query("SELECT status FROM budget_work WHERE parent_work_id IS NULL").all()).toEqual([{ status: "active" }]);
     expect(unknownTerminalSnapshot(root, 2)).toEqual(unknown);
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   if (delegateAutoCompaction) {
     try {
@@ -3530,7 +3530,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(sdkSpies.every(spy => spy.mock.calls.length === 0)).toBe(true);
     } finally {
       backend.stop(); await backend.close(); compactionPolicySpy!.mockRestore();
-      for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); closeDatabase(); owner.release();
+      for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); await closeDatabase(); owner.release();
     }
     return;
   }
@@ -3546,7 +3546,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(root.query("SELECT id FROM messages WHERE is_bot_message=1").all()).toHaveLength(1);
     backend.stop(); await backend.close();
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   if (scenario === "native-routing-bash-active" || scenario === "native-routing-control-race") {
     expect(dispatchOutcome).toBe("settled"); expect(calls).toBe(1);
@@ -3594,7 +3594,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     backend.stop(); await backend.close(); await pool.shutdown(); await base.queue.shutdown(); await channel.stop();
     if (scenario === "native-routing-bash-active") expect(() => branches.archiveChatBranch(created.chat_jid)).toThrow("Native routing owner unavailable");
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   if (scenario === "native-routing-queued-race" || scenario === "native-routing-side-race") {
     expect(dispatchOutcome).toBe("settled"); expect(calls).toBe(1);
@@ -3636,7 +3636,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(getDeferredQueuedFollowups(created.chat_jid)).toEqual([]); expect(calls).toBe(2);
     backend.stop(); await backend.close(); await pool.shutdown(); await base.queue.shutdown(); await channel.stop();
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   if (scenario === "native-routing-create-race") {
     expect(dispatchOutcome).toBe("settled"); expect(calls).toBe(1);
@@ -3693,7 +3693,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(calls).toBe(1);
     backend.stop(); await backend.close(); await reopenedPool.shutdown(); await reopenedBase.queue.shutdown();
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   if (scenario === "native-routing-policy") {
     expect(dispatchOutcome).toBe("settled"); expect(calls).toBe(1);
@@ -3725,14 +3725,46 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(() => bound.getInputSourceAdmission!(created.chat_jid)).toThrow("Unbound application conversation");
     await expect(bound.prepareInputSourceAdmission!(created.chat_jid)).rejects.toThrow("archived");
     backend.stop(); await backend.close(); await pool.shutdown(); await base.queue.shutdown(); await channel.stop();
-    closeDatabase(); initDatabase(); root = getDb();
+    await closeDatabase(); initDatabase(); root = getDb();
     backend = await createDefaultApplicationRuntime(owner, async () => services);
     expect(backend.sessionOptions.getDurableSession!(created.chat_jid)).toBeUndefined();
     expect(root.query(anchorsSql).all()).toEqual(anchors);
     expect(root.query("SELECT * FROM piclaw_durable_bindings_v1 ORDER BY conversation_id,source_seq").all()).toEqual(nativeInputs);
     expect(root.query("SELECT * FROM entries ORDER BY id").all()).toEqual(history);
     const restoredPool = new AgentPool({ credentialStore, modelRuntime: runtime, modelRegistry, ...backend.sessionOptions });
-    expect((await restoredPool.restoreChatBranch(created.chat_jid)).agent_name).toBe("native-friendly");
+    const archivedPolicy = branches.getChatBranchByChatJid(created.chat_jid);
+    root.exec('BEGIN IMMEDIATE');
+    try {
+      await expect(restoredPool.restoreChatBranch(created.chat_jid)).rejects.toThrow('outermost');
+      expect(root.inTransaction).toBe(true); expect(branches.getChatBranchByChatJid(created.chat_jid)).toEqual(archivedPolicy);
+    } finally { root.exec('ROLLBACK'); }
+    root.exec("CREATE TRIGGER native_restore_sqlfail BEFORE UPDATE OF archived_at ON chat_branches WHEN new.archived_at IS NULL BEGIN SELECT RAISE(ABORT,'restore SQL failed'); END");
+    try { await expect(restoredPool.restoreChatBranch(created.chat_jid)).rejects.toThrow('restore SQL failed'); }
+    finally { root.exec('DROP TRIGGER native_restore_sqlfail'); }
+    expect(branches.getChatBranchByChatJid(created.chat_jid)).toEqual(archivedPolicy);
+    const file = (root.query('PRAGMA database_list').all() as { name: string; file: string }[]).find(row => row.name === 'main')!.file;
+    for (const reason of ['cancel', 'profile'] as const) {
+      const blocker = new Database(file), abort = new AbortController(), originalStore = process.env.PICLAW_STORE;
+      blocker.exec('BEGIN IMMEDIATE');
+      const pending = restoredPool.restoreChatBranch(created.chat_jid, { signal: abort.signal }).then(value => ({ value }), error => ({ error }));
+      try {
+        await Bun.sleep(30); const start = performance.now();
+        if (reason === 'cancel') abort.abort(Error('native restore cancelled'));
+        else process.env.PICLAW_STORE = originalStore + '-different-profile';
+        const result = await Promise.race([pending, Bun.sleep(400).then(() => ({ deadline: true }))]);
+        expect(performance.now() - start).toBeLessThan(500); expect('error' in result).toBe(true);
+        if ('error' in result) expect(result.error.message).toContain(reason === 'cancel' ? 'native restore cancelled' : 'database binding changed');
+        expect(blocker.inTransaction).toBe(true); expect(branches.getChatBranchByChatJid(created.chat_jid)).toEqual(archivedPolicy);
+        expect(backend.sessionOptions.getDurableSession!(created.chat_jid)).toBeUndefined();
+        expect(root.query(anchorsSql).all()).toEqual(anchors); expect(calls).toBe(2);
+      } finally {
+        if (originalStore === undefined) delete process.env.PICLAW_STORE; else process.env.PICLAW_STORE = originalStore;
+        blocker.exec('ROLLBACK'); await pending; blocker.close();
+      }
+    }
+    const lateAbort = new AbortController(); queueMicrotask(() => lateAbort.abort(Error('after native commit')));
+    expect((await restoredPool.restoreChatBranch(created.chat_jid, { signal: lateAbort.signal })).agent_name).toBe("native-friendly");
+    expect(lateAbort.signal.aborted).toBe(true);
     expect(backend.sessionOptions.getDurableSession!(created.chat_jid)).toMatchObject(identity);
     expect(root.query(anchorsSql).all()).toEqual(anchors); expect(calls).toBe(2);
     const unmapped = "web:unpublished-restore";
@@ -3748,7 +3780,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     await expect(createDefaultApplicationRuntime(owner, async () => { modelLookups++; return services; })).rejects.toThrow("identity");
     expect(modelLookups).toBe(0); expect(calls).toBe(2);
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   if (accountingCloseFailure) {
     expect(calls).toBe(1);
@@ -3763,7 +3795,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(calls).toBe(1);
     backend.stop(); await backend.close();
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   if (parentAccounting && (accountingAuthDenied || accountingUnknown || accountingRotate || accountingStorageFailure)) {
     const published = expectedFailedTurn || accountingUnknown;
@@ -3792,11 +3824,11 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(root.query('SELECT terminal_disposition FROM service_effect_s01_operations').all()).toEqual([{ terminal_disposition: 'completed' }]);
       expect(root.query('SELECT content FROM messages WHERE is_bot_message=1').all()).toEqual([{ content: 'factory synthetic reply' }]);
       expect(calls).toBe(1); backend.stop(); await backend.close();
-      for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); closeDatabase(); owner.release(); return;
+      for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); await closeDatabase(); owner.release(); return;
     }
     backend.stop(); await backend.close();
     if (accountingStorageFailure) {
-      closeDatabase(); initDatabase(); root = getDb();
+      await closeDatabase(); initDatabase(); root = getDb();
       expect(root.query("SELECT state FROM budget_request_reservations").all()).toEqual([{ state: 'dispatched' }]);
       expect(root.query("SELECT status FROM budget_work WHERE parent_work_id IS NULL").all()).toEqual([{ status: accountingUnknown || accountingStorageFailure ? "active" : "completed" }]);
       expect(root.query("SELECT invocation_id FROM token_usage WHERE invocation_id IS NOT NULL").all()).toHaveLength(0);
@@ -3819,7 +3851,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(calls).toBe(1); backend.stop(); await backend.close();
     }
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   if (accountingTwoTurns) {
     expect(dispatchOutcome).toBe("settled");
@@ -3832,7 +3864,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(root.query("SELECT id FROM messages WHERE is_bot_message=1").all()).toHaveLength(1);
     backend.stop(); await backend.close();
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   if (usageProjection) {
     expect(dispatchOutcome).toBe("settled"); expect(calls).toBe(1);
@@ -3850,7 +3882,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(root.query("SELECT * FROM token_usage").all()).toEqual(report);
     expect(root.query("SELECT * FROM budget_usage_events").all()).toEqual([event]);
     expect(root.query("SELECT * FROM budget_request_reservations").all()).toEqual(reservations);
-    backend.stop(); await backend.close(); closeDatabase(); initDatabase(); root = getDb();
+    backend.stop(); await backend.close(); await closeDatabase(); initDatabase(); root = getDb();
     backend = await createDefaultApplicationRuntime(owner, async () => services);
     expect(root.query("SELECT * FROM token_usage").all()).toEqual(report);
     expect(root.query("SELECT * FROM budget_usage_events").all()).toEqual([event]);
@@ -3859,7 +3891,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(calls).toBe(1);
     backend.stop(); await backend.close();
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   if (scenario === 'native-parent-accounting-event-fence') {
     try {
@@ -3897,7 +3929,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       root.exec('DROP TRIGGER IF EXISTS hold_fenced_receipt_charge');
       terminalFenceSpy?.mockRestore(); backend.stop(); await backend.close();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-      closeDatabase(); owner.release();
+      await closeDatabase(); owner.release();
     }
     return;
   }
@@ -3928,7 +3960,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
         expect(binding.submission_id).toBeGreaterThan(0);
         const taskIdentity = JSON.parse(pausedTask.record);
         backend.stop(); await backend.close();
-        closeDatabase(); initDatabase(); root = getDb();
+        await closeDatabase(); initDatabase(); root = getDb();
         backend = await createDefaultApplicationRuntime(owner, async () => services);
         const rebound = backend.bind({ queue: base.queue, agentPool: pool });
         dispatchOutcome = await rebound.dispatchAcceptedInput!(message.chat_jid, message.id, rowId!)!();
@@ -3991,7 +4023,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       if (terminalWriter?.inTransaction) terminalWriter.exec('ROLLBACK'); terminalWriter?.close(); terminalWriter = undefined;
       backend.stop(); await backend.close();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-      closeDatabase(); owner.release();
+      await closeDatabase(); owner.release();
     }
     return;
   }
@@ -4005,7 +4037,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(sdkSpies.every(spy => spy.mock.calls.length === 0)).toBe(true);
     backend.stop(); await backend.close();
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   if (codemodePlanCancelled || mcpCancelled || mcpConfigChanged || mcpCatalogChanged || mcpDisconnected || scenario === "native-codemode-cancel" || scenario === "native-codemode-binding-revoked") {
     if (mcpCancelled || mcpConfigChanged) expect(existsSync(mcpMarker)).toBe(false);
@@ -4038,7 +4070,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     backend.stop(); await backend.close();
     if (mcpCancelled || mcpConfigChanged || mcpCatalogChanged || mcpDisconnected) expect(() => process.kill(Number(readFileSync(mcpPid, "utf8")), 0)).toThrow();
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   if (nativeMcp) {
     expect(dispatchOutcome).toBe("settled");
@@ -4074,13 +4106,13 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       clientClose.mockRestore(); sandboxClose.mockRestore(); runtimeClose.mockRestore();
       expect(() => process.kill(Number(readFileSync(mcpPid, "utf8")), 0)).toThrow();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-      closeDatabase(); owner.release(); return;
+      await closeDatabase(); owner.release(); return;
     }
     backend.stop(); await backend.close();
     const pid = Number(readFileSync(mcpPid, "utf8"));
     expect(() => process.kill(pid, 0)).toThrow();
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   if (tableCancelled) expect(widgetEvents).toHaveLength(0);
   expect(dispatchOutcome).toBe(!expectedFailedTurn && (tableCancelled || officeCancelled || drawioCancelled || scenario === "native-delegate-revoke-cap" || scenario === "native-delegate-standard-revoke") ? "pending" : "settled");
@@ -4146,7 +4178,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); await backend.close();
     const sealed = await channel.handleRequest(new Request("http://fixture/drawio/index.html"));
     expect(sealed.status).toBe(503);
-    sdkSpies.forEach(spy => spy.mockRestore()); owner.release(); closeDatabase(); return;
+    sdkSpies.forEach(spy => spy.mockRestore()); owner.release(); await closeDatabase(); return;
   }
   if (nativeOffice) {
     expect(realToolCaptures).toBe(codemodeOffice ? 2 : officeCancelled ? 1 : 4);
@@ -4199,7 +4231,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       }
     }
     captureSpies.forEach(spy => spy.mockRestore());
-    await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close(); owner.release(); closeDatabase();
+    await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close(); owner.release(); await closeDatabase();
     sdkSpies.forEach(spy => spy.mockRestore());
     return;
   }
@@ -4224,7 +4256,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       }
       if (revokeDelegate) expect(childSourceCaptures).toBe(1);
       captureSpies.forEach(spy => spy.mockRestore());
-      await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close(); owner.release(); closeDatabase();
+      await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close(); owner.release(); await closeDatabase();
       sdkSpies.forEach(spy => spy.mockRestore()); return;
     }
     if (revokeDelegate) {
@@ -4243,7 +4275,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
         expect(root.query("SELECT id FROM messages WHERE is_bot_message=1").all()).toHaveLength(expectedFailedTurn ? 1 : 0);
         expect(root.query("SELECT state FROM service_effect_s01_sources WHERE source_id='factory-input'").get()).toEqual({ state: expectedFailedTurn ? "consumed" : "claimed" });
         captureSpies.forEach(spy => spy.mockRestore());
-        await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close(); owner.release(); closeDatabase();
+        await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close(); owner.release(); await closeDatabase();
         sdkSpies.forEach(spy => spy.mockRestore()); return;
       }
       // The revoked child cannot make a follow-up model request to observe its
@@ -4256,7 +4288,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(JSON.stringify(root.query("SELECT content FROM messages WHERE is_bot_message=1").all())).not.toContain(sentinel);
       expect(sdkSpies.every(spy => spy.mock.calls.length === 0)).toBe(true);
       captureSpies.forEach(spy => spy.mockRestore());
-      await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close(); owner.release(); closeDatabase();
+      await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close(); owner.release(); await closeDatabase();
       sdkSpies.forEach(spy => spy.mockRestore());
       return;
     }
@@ -4284,7 +4316,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(sdkSpies.every(spy => spy.mock.calls.length === 0)).toBe(true);
       deadlineSpy!.mockRestore();
     } else for (const result of observedResults.values()) expect(!!result.isError).toBe(!delegateAllowed);
-    await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close(); owner.release(); closeDatabase();
+    await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close(); owner.release(); await closeDatabase();
     sdkSpies.forEach(spy => spy.mockRestore());
     return;
   }
@@ -4352,7 +4384,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     }
     if (codemodeTable) expect(sdkSpies.every(spy => spy.mock.calls.length === 0)).toBe(true);
     captureSpies.forEach(spy => spy.mockRestore());
-    await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close(); owner.release(); closeDatabase();
+    await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close(); owner.release(); await closeDatabase();
     sdkSpies.forEach(spy => spy.mockRestore());
     return;
   }
@@ -4399,12 +4431,12 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(root.query("SELECT state FROM service_effect_s01_sources WHERE source_id=?").get(message.id)).toEqual({ state: "consumed" });
     expect(sdkSpies.every(spy => spy.mock.calls.length === 0)).toBe(true);
     await channel.stop(); await base.queue.shutdown(); await pool.shutdown(); backend.stop(); await backend.close();
-    closeDatabase(); initDatabase();
+    await closeDatabase(); initDatabase();
     expect(extensionKvGet("plan-sidebar", "plan", "chat", "web:default")).toMatchObject({ markdown: expectedPlanMarkdown });
     backend = await createDefaultApplicationRuntime(owner, async () => services);
     expect(backend.sessionOptions.getDurableSession!("web:default")).toBeDefined();
     backend.stop(); await backend.close();
-    sdkSpies.forEach(spy => spy.mockRestore()); owner.release(); closeDatabase();
+    sdkSpies.forEach(spy => spy.mockRestore()); owner.release(); await closeDatabase();
     return;
   }
   expect(calls).toBe(1);
@@ -4540,7 +4572,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
           for (const spy of spies) spy.mockRestore(); financialContext.disable();
           compactionPolicySpy?.mockRestore(); automaticCaptureSpy?.mockRestore();
           for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-          closeDatabase(); owner.release();
+          await closeDatabase(); owner.release();
         }
         return;
       }
@@ -4597,7 +4629,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
             const sleeping = root.query('SELECT record FROM tasks WHERE id=?').get(parent.id);
             backend.stop(); await backend.close(); expect(await automaticDispatch).toBe('pending');
             expect(root.query('SELECT record FROM tasks WHERE id=?').get(parent.id)).toEqual(sleeping);
-            root.exec('DROP TRIGGER compaction_pending_close'); closeDatabase(); initDatabase(); root = getDb();
+            root.exec('DROP TRIGGER compaction_pending_close'); await closeDatabase(); initDatabase(); root = getDb();
             backend = await createDefaultApplicationRuntime(owner, async () => services);
             const rebound = backend.bind({ queue: base.queue, agentPool: pool });
             complete = rebound.dispatchAcceptedInput!(next.chat_jid, next.id, row!)!();
@@ -4618,7 +4650,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
         } finally {
           root.exec('DROP TRIGGER IF EXISTS compaction_pending_close'); backend.stop(); await backend.close();
           automaticCaptureSpy?.mockRestore(); compactionPolicySpy!.mockRestore();
-          for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); closeDatabase(); owner.release();
+          for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); await closeDatabase(); owner.release();
         }
         return;
       }
@@ -4643,7 +4675,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
           expect(root.query('SELECT id FROM tasks ORDER BY id').all()).toEqual(ids); expect(calls).toBe(beforeCalls + 2);
         } finally {
           backgroundCaptureReleased.resolve(); backend.stop(); await backend.close(); compactionPolicySpy!.mockRestore();
-          for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); closeDatabase(); owner.release();
+          for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); await closeDatabase(); owner.release();
         }
         return;
       }
@@ -4691,7 +4723,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
           expect(root.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(tasks); expect(calls).toBe(beforeCalls + 2);
         }
         automaticCaptureSpy?.mockRestore(); backend.stop(); await backend.close(); compactionPolicySpy.mockRestore();
-        for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); closeDatabase(); owner.release(); return;
+        for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); await closeDatabase(); owner.release(); return;
       }
       expect(['pending', 'settled']).toContain(automaticResult);
       const tasksBeforeObservation = root.query('SELECT * FROM tasks ORDER BY id').all();
@@ -4719,7 +4751,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       automaticCaptureSpy?.mockRestore();
       backend.stop(); await backend.close(); compactionPolicySpy.mockRestore();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-      closeDatabase(); owner.release(); return;
+      await closeDatabase(); owner.release(); return;
     }
     if (scenario === 'native-compaction-accounting-side-auto') {
       const historyBefore = root.query('SELECT * FROM entries ORDER BY id').all();
@@ -4763,7 +4795,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
         expect(replayed).toEqual(result); expect(calls).toBe(callsBefore + 2);
       } finally {
         await sidePool.shutdown(); backend.stop(); await backend.close(); compactionPolicySpy.mockRestore();
-        for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); closeDatabase(); owner.release();
+        for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); await closeDatabase(); owner.release();
       }
       return;
     }
@@ -4963,7 +4995,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       observerPolicySpy?.mockRestore();
       compactionPolicySpy?.mockRestore();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-      closeDatabase(); owner.release(); return;
+      await closeDatabase(); owner.release(); return;
     }
     if (scenario === "native-compaction-accounting-side-provenance") {
       backend.stop(); await backend.close();
@@ -5010,7 +5042,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(calls).toBe(beforeCalls);
       compactionPolicySpy?.mockRestore();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-      closeDatabase(); owner.release(); return;
+      await closeDatabase(); owner.release(); return;
     }
     if (scenario === "native-compaction-accounting-recover") {
       // Seed a genuine paused SDK checkpoint, then reopen the actual application.
@@ -5082,7 +5114,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(root.query("SELECT COUNT(*) AS n FROM token_usage t JOIN budget_work w ON w.id=t.work_id WHERE w.execution_kind='side_prompt'").get()).toEqual({ n: 0 });
       backend.stop(); await backend.close(); compactionPolicySpy?.mockRestore();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-      closeDatabase(); owner.release(); return;
+      await closeDatabase(); owner.release(); return;
     }
     if (compactionAccountingUnknown) {
       expect(await first!.compact!("Retain the accepted decision")).toEqual({ compacted: true });
@@ -5093,7 +5125,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(root.query("SELECT t.invocation_id FROM token_usage t JOIN budget_work w ON w.id=t.work_id WHERE w.execution_kind='side_prompt'").all()).toHaveLength(0);
       const unknown = unknownTerminalSnapshot(root, 1);
       backend.stop(); await backend.close(); compactionPolicySpy?.mockRestore();
-      closeDatabase(); initDatabase(); root = getDb();
+      await closeDatabase(); initDatabase(); root = getDb();
       backend = await createDefaultApplicationRuntime(owner, async () => services);
       expect(root.query("SELECT r.state FROM budget_request_reservations r JOIN budget_work w ON w.id=r.work_id WHERE w.execution_kind='side_prompt'").all()).toEqual([{ state: "unresolved" }]);
       expect(root.query("SELECT status FROM budget_work WHERE parent_work_id IS NULL AND execution_kind='side_prompt'").all()).toEqual([{ status: "active" }]);
@@ -5101,7 +5133,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(unknownTerminalSnapshot(root, 1)).toEqual(unknown);
       backend.stop(); await backend.close();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-      closeDatabase(); owner.release(); return;
+      await closeDatabase(); owner.release(); return;
     }
     if (compactionStartupProofFailure) {
       root.exec("CREATE TRIGGER startup_maintenance_close_hold BEFORE UPDATE ON budget_work WHEN OLD.id LIKE 'durable-maintenance:%' AND NEW.status='completed' BEGIN SELECT RAISE(ABORT,'hold original maintenance aggregate'); END");
@@ -5153,7 +5185,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
         release.resolve(); closeSpy.mockRestore(); proofSpy.mockRestore(); modelSpy.mockRestore();
         if (failedRuntime) await originalClose.call(failedRuntime);
         compactionPolicySpy?.mockRestore(); for (const spy of [...captureSpies,...sdkSpies]) spy.mockRestore();
-        closeDatabase(); owner.release();
+        await closeDatabase(); owner.release();
       }
       return;
     }
@@ -5182,7 +5214,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(root.query("SELECT SUM(t.api_equivalent_cost_microusd) AS amount FROM token_usage t JOIN budget_work w ON w.id=t.work_id WHERE w.execution_kind='side_prompt'").get()).toEqual({ amount: 10 });
       backend.stop(); await backend.close(); compactionPolicySpy?.mockRestore();
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-      closeDatabase(); owner.release(); return;
+      await closeDatabase(); owner.release(); return;
     }
     const result = await first!.compact!("Retain the accepted decision");
     expect(result).toEqual({ compacted: true });
@@ -5198,7 +5230,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     }
     backend.stop(); await backend.close(); compactionPolicySpy?.mockRestore();
     for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore();
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   // Tiny history is correctly below the public compaction policy's retained window.
   expect(await first!.compact!("Summarize")).toEqual({ compacted: false });
@@ -5383,7 +5415,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     assert.deepEqual(root.query("SELECT id,chat_jid,content FROM messages ORDER BY id").all(), timelineBefore);
     assert.equal(calls, callsBefore);
     for (const spy of sdkSpies) spy.mockRestore();
-    await pending.close(); owner.release(); closeDatabase(); return;
+    await pending.close(); owner.release(); await closeDatabase(); return;
   }
 
   const historyBeforeUpgrade = root.query("SELECT * FROM entries ORDER BY id").all();
@@ -5410,7 +5442,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(root.query(`SELECT * FROM document_revisions WHERE document_id IN (SELECT id FROM documents WHERE kind='"app.application-identity"') ORDER BY document_id, seq`).all()).toEqual(identitiesBeforeUpgrade);
     expect(calls).toBe(callsBeforeUpgrade);
     for (const spy of sdkSpies) { expect(spy).not.toHaveBeenCalled(); spy.mockRestore(); }
-    closeDatabase(); owner.release(); return;
+    await closeDatabase(); owner.release(); return;
   }
   // Read public stored state only after the active controller is closed below;
   // model-visible success for all six tools is exercised through this backend.
@@ -5573,7 +5605,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
   let realized = false;
   await expect(createDefaultApplicationRuntime(owner, async () => { realized = true; return services; })).rejects.toThrow("migration");
   expect(realized).toBe(false); expect(readFileSync(file, "utf8")).toBe("preserve legacy bytes\n");
-  closeDatabase(); owner.release();
+  await closeDatabase(); owner.release();
   } finally {
     if (postchargeSdkWriter) {
       // Also cover setup/dispatch failures before the shared accounting finally.
@@ -5665,5 +5697,5 @@ factoryTest("deferred-mcp-maintenance", "deferred MCP preserves SDK selections a
     await expect(createDefaultApplicationRuntime(owner, async () => { throw Error("Must reject metadata before models"); }, { offlineMaintenance: true })).rejects.toThrow("Durable MCP");
     expect(leaseSpy).toHaveBeenCalledTimes(leasesBefore);
     expect(connectSpy).toHaveBeenCalledTimes(connectsBefore);
-  } finally { await backend?.close(); leaseSpy.mockRestore(); connectSpy.mockRestore(); owner.release(); closeDatabase(); }
+  } finally { await backend?.close(); leaseSpy.mockRestore(); connectSpy.mockRestore(); owner.release(); await closeDatabase(); }
 });

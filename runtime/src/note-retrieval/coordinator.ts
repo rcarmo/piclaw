@@ -47,7 +47,7 @@ export async function runNoteIndexPhase(options: { rebuild?: boolean; signal?: A
   const deleteStagedPath=(generation:number,path:string)=>{db.query('DELETE FROM note_retrieval_fts WHERE generation=? AND path=?').run(generation,path);db.query('DELETE FROM note_retrieval_chunks WHERE generation=? AND path=?').run(generation,path);db.query('DELETE FROM note_retrieval_sources WHERE generation=? AND path=?').run(generation,path);};
   let captured!:State;let namespace='';let generation=0;let claimed=false;let dirtyPaths:string[]=[];let incremental=false;const binding=bindingKey(admission.binding);
   try {
-    db.transaction(()=>{
+    await admitSqliteWrite(db,()=>{
       check();const row=state();
       if(row.writer_pid){let live=true;try{process.kill(row.writer_pid,0);}catch(error){if((error as NodeJS.ErrnoException).code==='ESRCH')live=false;}
         if(live)throw new Error('writer_busy');}
@@ -65,7 +65,7 @@ export async function runNoteIndexPhase(options: { rebuild?: boolean; signal?: A
       }
       db.query("UPDATE note_retrieval_state SET staging=?,sequence=?,writer_pid=?,state='indexing',coverage=coverage+1,reason=NULL WHERE id=1").run(generation,generation,process.pid);
       captured=state();claimed=true;check();
-    }).immediate();
+    },check,signal,undefined,check);
     let sourceBytes=Number((db.query('SELECT coalesce(sum(bytes),0) value FROM note_retrieval_sources WHERE generation=?').get(generation) as {value:number}).value);
     let sourceCount=Number((db.query('SELECT count(*) value FROM note_retrieval_sources WHERE generation=?').get(generation) as {value:number}).value);
     const aggregate=db.query('SELECT count(*) chunks,coalesce(sum(length(cast(content as blob))),0) bytes FROM note_retrieval_chunks WHERE generation=?').get(generation) as {chunks:number;bytes:number};
@@ -76,15 +76,15 @@ export async function runNoteIndexPhase(options: { rebuild?: boolean; signal?: A
     // across asynchronous reads. Bound retained source data and lock duration.
     const staged: Array<{ verify: () => void; write: () => void }> = [];
     let stagedBytes=0;
-    const flush=()=>{
+    const flush=async()=>{
       if(!staged.length)return;
-      db.transaction(()=>{
+      await admitSqliteWrite(db,()=>{
         check();if(state().dirty!==captured.dirty)throw new Error('superseded');
         for(const source of staged){check();source.verify();source.write();}
         // A later insert must not conceal a change to an earlier batch member.
         for(const source of staged){check();source.verify();}
         check();
-      }).immediate();
+      },check,signal,undefined,check);
       staged.length=0;stagedBytes=0;
     };
     const processSource=async(relative:string)=>{
@@ -96,7 +96,7 @@ export async function runNoteIndexPhase(options: { rebuild?: boolean; signal?: A
       try { lstatSync(join(admission.binding.workspace,relative)); }
       catch(error){
         if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;
-        db.transaction(()=>{check();if(state().dirty!==captured.dirty)throw new Error('superseded',{cause:error});deleteStagedPath(generation,relative);check();}).immediate();return;
+        await admitSqliteWrite(db,()=>{check();if(state().dirty!==captured.dirty)throw new Error('superseded',{cause:error});deleteStagedPath(generation,relative);check();},check,signal,undefined,check);return;
       }
       let addedSource=0,addedChunks=0,addedContent=0;
       try {
@@ -126,22 +126,22 @@ export async function runNoteIndexPhase(options: { rebuild?: boolean; signal?: A
         const excluded=error instanceof NoteSourceExcluded||error instanceof NoteChunkerExclusionError;
         if(excluded){exclusions++;excludedPaths.push(relative);}else unavailable++;
         // Authoritative exclusion removes this source only, even if the scan later stops.
-        db.transaction(()=>{check();const current=state();
+        await admitSqliteWrite(db,()=>{check();const current=state();
           if(current.dirty!==captured.dirty)throw new Error('superseded',{cause:error});
           if(excluded)deleteStagedPath(generation,relative);
           db.query('INSERT INTO note_retrieval_dirty VALUES(?,?,?) ON CONFLICT(path) DO UPDATE SET revision=excluded.revision,reason=excluded.reason').run(relative,current.dirty,excluded?'excluded_sources':'source_unavailable');
           db.query('UPDATE note_retrieval_state SET coverage=coverage+1 WHERE id=1').run();check();
-        }).immediate();
+        },check,signal,undefined,check);
       }
       // A failed batch is fatal, not an exclusion attributed to the next path.
-      if(staged.length>=16||stagedBytes>=1024*1024)flush();
+      if(staged.length>=16||stagedBytes>=1024*1024)await flush();
     };
     if(incremental){for(const relative of dirtyPaths){check();await processSource(relative);}}
     else await walkNotes(admission.binding.workspace,check,processSource);
-    check();flush();
+    check();await flush();
     // An unavailable source is not evidence for deletion; retain the prior publication.
     if(unavailable)throw new Error('source_unavailable');
-    db.transaction(()=>{
+    await admitSqliteWrite(db,()=>{
       check();const current=state();if(current.dirty!==captured.dirty||current.staging!==generation||current.writer_pid!==process.pid)throw new Error('superseded');
       if(!incremental){
         const staged=db.query('SELECT path FROM note_retrieval_sources WHERE generation=?').all(generation) as Array<{path:string}>;
@@ -152,11 +152,16 @@ export async function runNoteIndexPhase(options: { rebuild?: boolean; signal?: A
       for(const name of excludedPaths)db.query('INSERT INTO note_retrieval_dirty VALUES(?,?,?)').run(name,captured.dirty,'excluded_sources');
       db.query('UPDATE note_retrieval_state SET namespace=?,binding=?,format=?,published=?,staging=NULL,writer_pid=NULL,state=?,last_complete=?,coverage=coverage+1,reason=?,exclusions=? WHERE id=1').run(namespace,binding,NOTE_INDEX_FORMAT,generation,exclusions?'limited':'ready',incremental?captured.last_complete:Date.now(),exclusions?'excluded_sources':null,exclusions);
       check();
-    }).immediate();
+    },check,signal,undefined,check);
   } catch(error){
     // Revoked authority must not write even a failure marker into a replacement store.
-    admission.validate();
-    if(claimed)db.transaction(()=>{admission.validate();const current=state();if(current.writer_pid!==process.pid||current.staging!==generation)return;purge(generation);db.query('UPDATE note_retrieval_state SET staging=NULL,writer_pid=NULL,state=?,reason=?,coverage=coverage+1 WHERE id=1').run(error instanceof NoteScanLimited?'limited':'stale',error instanceof NoteScanLimited?'limit_exceeded':(error as Error).message==='cancelled'?'cancelled':'refresh_pending');admission.validate();}).immediate();
+    try {
+      admission.validate();
+      if(claimed)await admitSqliteWrite(db,()=>{admission.validate();const current=state();if(current.writer_pid!==process.pid||current.staging!==generation)return;purge(generation);db.query('UPDATE note_retrieval_state SET staging=NULL,writer_pid=NULL,state=?,reason=?,coverage=coverage+1 WHERE id=1').run(error instanceof NoteScanLimited?'limited':'stale',error instanceof NoteScanLimited?'limit_exceeded':(signal?.aborted || (error as Error).message==='cancelled')?'cancelled':'refresh_pending');admission.validate();},admission.validate,undefined,undefined,admission.validate);
+    } catch(cleanup) {
+      if(cleanup instanceof NoteIndexDenied) { cleanup.cause=error; throw cleanup; }
+      throw new AggregateError([error,cleanup], "Note index cleanup incomplete", { cause: error });
+    }
     throw error;
   }
 }

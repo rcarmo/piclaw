@@ -16,8 +16,8 @@ type SshToolResult = { content: Array<{ type: "text"; text: string }>; details: 
 export interface SshToolHandlers {
   get(chatJid: string): SshConfig | null;
   isActive?(chatJid: string): boolean;
-  set(chatJid: string, config: SessionSshConfigInput): Promise<SshConfigSetResult>;
-  clear(chatJid: string): Promise<SshConfigClearResult>;
+  set(chatJid: string, config: SessionSshConfigInput, signal?: AbortSignal): Promise<SshConfigSetResult>;
+  clear(chatJid: string, signal?: AbortSignal): Promise<SshConfigClearResult>;
 }
 
 let registeredHandlers: SshToolHandlers | null = null;
@@ -124,7 +124,7 @@ export const sshTool: ExtensionFactory = (pi: ExtensionAPI) => {
     description: "Get, set, or clear the session-scoped SSH profile that redirects core tools to a remote host. When active, read/grep/find/ls/bash/edit/write execute on the remote host via the configured keychain-backed SSH connection.",
     promptSnippet: "ssh: set up or inspect an SSH profile to redirect read/grep/find/ls/bash/edit/write to a remote host via keychain-backed SSH.",
     parameters: SshToolSchema,
-    async execute(_toolCallId, params): Promise<SshToolResult> {
+    async execute(_toolCallId, params, signal): Promise<SshToolResult> {
       const handlers = registeredHandlers;
       if (!handlers) {
         return {
@@ -171,7 +171,7 @@ export const sshTool: ExtensionFactory = (pi: ExtensionAPI) => {
           private_key_keychain: privateKeyKeychain,
           known_hosts_keychain: normalizeKnownHostsKeychain(params.known_hosts_keychain),
           strict_host_key_checking: params.strict_host_key_checking ?? "yes",
-        });
+        }, signal);
 
         return {
           content: [{
@@ -189,7 +189,7 @@ export const sshTool: ExtensionFactory = (pi: ExtensionAPI) => {
         };
       }
 
-      const result = await handlers.clear(chatJid);
+      const result = await handlers.clear(chatJid, signal);
       return {
         content: [{
           type: "text",

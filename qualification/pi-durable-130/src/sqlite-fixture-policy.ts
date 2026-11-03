@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { isSqliteContention } from "../../../runtime/src/db/sqlite-async-admission.js";
-import { enableSqliteWal } from "../../../runtime/src/db/sqlite-journal.js";
+import { configureSqliteRole } from "../../../runtime/src/db/sqlite-role-policy.js";
 import { BunSqliteDatabase } from "../../../runtime/durable-engine/src/bun-sqlite.js";
 
 // Qualification policy only: copied host and standalone candidate fixtures remain
@@ -8,8 +8,9 @@ import { BunSqliteDatabase } from "../../../runtime/durable-engine/src/bun-sqlit
 export function configureHostWalFixtureDatabase(db: Database): void {
   const before = db.query("PRAGMA synchronous").get() as { synchronous: number };
   if (before.synchronous !== 2) throw new Error("Host fixture requires existing synchronous=FULL (2)");
-  enableSqliteWal(db); // Verifies returned WAL mode and preserves the owner's busy_timeout.
-  db.exec("PRAGMA synchronous=FULL");
+  const path = (db.query('PRAGMA database_list').all() as { name: string; file: string }[]).find(row => row.name === 'main')?.file;
+  if (!path) throw new Error('Host WAL fixture requires a file-backed database');
+  configureSqliteRole(db, path, { role: 'root' });
   const after = db.query("PRAGMA synchronous").get() as { synchronous: number };
   if (after.synchronous !== 2) throw new Error("Host fixture did not retain synchronous=FULL (2)");
 }

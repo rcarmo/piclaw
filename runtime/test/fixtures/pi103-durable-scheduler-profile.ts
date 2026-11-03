@@ -15,7 +15,7 @@ assertPathWithinTestFilesystemIsolation(workspace,process.env,{allowRoot:false})
 mkdirSync(join(workspace,'.piclaw'),{recursive:true});writeFileSync(join(workspace,'.piclaw/config.json'),JSON.stringify({domains:{access:{mode:'single-user'}}}));
 const originalFetch=globalThis.fetch;let fetchAttempts=0;const deny=()=>{fetchAttempts++;throw Error('No external fetch')};globalThis.fetch=Object.assign(deny,{preconnect:deny})as typeof fetch;
 initDatabase();const primary=getDb(),scheduled=new Database(join(store,'messages.db'));
-scheduled.exec('PRAGMA journal_mode=WAL;PRAGMA synchronous=FULL;PRAGMA busy_timeout=5000;PRAGMA foreign_keys=ON');
+scheduled.exec('PRAGMA journal_mode=WAL;PRAGMA synchronous=FULL;PRAGMA busy_timeout=0;PRAGMA foreign_keys=ON');
 const built=createCurrentPiclawScheduledRunStore(scheduled,{hitFault:()=>false,recordTrace:()=>undefined});assert(built.ok);if(!built.ok)throw Error('store');
 const due=new Date(Date.now()-60000).toISOString(),taskCount=12;
 primary.transaction(()=>{for(let n=0;n<taskCount;n++)createTask({id:'claim-probe-'+n,chat_jid:'web:claim-lane-'+n%4,prompt:'Synthetic scheduled fixture',schedule_type:'interval',schedule_value:'3600000',next_run:due,status:'active',notify_on_complete:false,created_at:due})}).immediate();
