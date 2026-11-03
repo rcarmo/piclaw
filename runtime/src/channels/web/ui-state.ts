@@ -9,7 +9,7 @@ import { getDb, captureHostDatabaseBinding } from "../../db/connection.js";
  */
 
 import { getUiThemeConfig as getLegacyUiThemeConfig } from "../../core/config.js";
-import { extensionKvGet, extensionKvSet } from "../../db.js";
+import { extensionKvGet, extensionKvSet } from "../../db/extension-kv.js";
 
 const UI_EXTENSION_ID = "piclaw-ui";
 const THEME_KEY = "theme";

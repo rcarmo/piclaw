@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { withTempWorkspaceEnv } from '../../helpers.js';
 import { getRuntimeConfigPaths } from '../../../src/core/config.js';
 import * as db from '../../../src/db.js';
+import { extensionKvSet } from '../../../src/db/extension-kv.js';
 import * as admission from '../../../src/db/sqlite-async-admission.js';
 import * as environment from '../../../src/environment-overrides.js';
 import { WebChannel } from '../../../src/channels/web.js';
@@ -60,7 +61,7 @@ test('environment HTTP captures its database before JSON rather than adopting a 
 test('environment settings GET is read-only and does not republish process overrides', () =>
   withTempWorkspaceEnv('environment-reader-', {}, async () => {
     const name = 'TEST_ENV_ADMISSION_READER', original = process.env[name], f = await fixture(); process.env[name] = 'original';
-    db.extensionKvSet('piclaw.environment-settings', 'overrides', { [name]: 'persisted only' }, 'global', '');
+    f.root.transaction(() => extensionKvSet('piclaw.environment-settings', 'overrides', { [name]: 'persisted only' }, 'global', '')).immediate();
     const before = f.root.serialize();
     try {
       expect(environment.getEnvironmentSettingsData().overrides[name]).toBe('persisted only');

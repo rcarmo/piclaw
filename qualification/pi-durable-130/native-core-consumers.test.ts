@@ -11,7 +11,8 @@ import { createAssistantMessageEventStream } from "../../node_modules/@earendil-
 import { createTestCredentialStore } from "../../runtime/test/model-services-fixture.js";
 import { createDefaultApplicationRuntime } from "../../runtime/durable-engine/src/default-application-runtime.js";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
-import { extensionKvSet, storeChatMetadata, storeMessage } from "../../runtime/src/db.js";
+import { storeChatMetadata, storeMessage } from "../../runtime/src/db.js";
+import { extensionKvSet } from "../../runtime/src/db/extension-kv.js";
 import { acquireRuntimeLock } from "../../runtime/src/runtime/single-instance.js";
 import { getPiclawAgentDir } from "../../runtime/src/core/agent-dir.js";
 import { AgentPool } from "../../runtime/src/agent-pool.js";
@@ -50,7 +51,7 @@ for (const accounted of [false, true]) test(`all seven shipped consumers admit a
   process.env.PICLAW_DB_IN_MEMORY = "0";
   const owner = acquireRuntimeLock({ lockPath: join(workspace, "core-consumers.lock"), strictOwnership: true, disabled: false });
   initDatabase(); const root = getDb(); storeChatMetadata("web:default", new Date().toISOString());
-  extensionKvSet("observability", "config", { instance_name: "native-persisted-instance", enabled: true, appinsights_enabled: false, graphite_enabled: false, appinsights_live_metrics: false }, "global");
+  root.transaction(() => extensionKvSet("observability", "config", { instance_name: "native-persisted-instance", enabled: true, appinsights_enabled: false, graphite_enabled: false, appinsights_live_metrics: false }, "global")).immediate();
   const provider = accounted ? 'github-copilot' : 'synthetic';
   if (accounted) {
     mkdirSync(getPiclawAgentDir(), { recursive: true });
