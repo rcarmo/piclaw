@@ -43,8 +43,10 @@ async function fixture(){
       }
       return{chat,operation,runId:lease.record.runId};
     }
+    // A real independent due slot keeps the mocked claim port reachable; expiry repair remains the measured owner.
+    const armClaim=()=>{const due=new Date(Date.now()-1000).toISOString();createTask({id:'expiry-independent-claim',chat_jid:'web:expiry-claim',prompt:'never execute',schedule_type:'once',schedule_value:due,next_run:due,status:'active',notify_on_complete:false,created_at:due});};
     const snapshot=()=>['service_effect_s01_chats','service_effect_s01_sources','service_effect_s01_operations','service_effect_s07_occurrences','service_effect_s07_leases','service_effect_s07_source_bindings'].map(t=>db.query(`SELECT * FROM ${t} ORDER BY rowid`).all());
-    return{db,seed,snapshot,poll:()=>pollScheduledRunsOnce(deps,store),claims:()=>claims,async close(){await closeDatabase();restore();ws.cleanup();}};
+    return{db,seed,armClaim,snapshot,poll:()=>pollScheduledRunsOnce(deps,store),claims:()=>claims,async close(){await closeDatabase();restore();ws.cleanup();}};
   }catch(error){await closeDatabase();restore();ws.cleanup();throw error;}
 }
 
@@ -52,6 +54,7 @@ for(const mode of ['empty','healthy','missing','completed'] as const)test(`expir
   const f=await fixture();let scope:ReturnType<typeof spyOn>|undefined;
   try{
     if(mode!=='empty')await f.seed('task:idle:'+mode,mode);
+    f.armClaim();
     const before=f.snapshot(),transaction=f.db.transaction.bind(f.db);let calls=0;
     scope=spyOn(f.db,'transaction').mockImplementation((fn:any)=>{calls++;return transaction(fn);});
     await f.poll();expect(calls).toBe(0);expect(f.snapshot()).toEqual(before);expect(f.claims()).toBe(1);
@@ -62,7 +65,7 @@ for(const mode of ['empty','healthy','missing','completed'] as const)test(`expir
 test('expiry repair idle poll completes while another real WAL writer remains held',async()=>{
   const f=await fixture();let writer:Database|undefined,timer:ReturnType<typeof setTimeout>|undefined;
   try{
-    await f.seed('task:idle:writer','healthy');const before=f.snapshot();
+    await f.seed('task:idle:writer','healthy');f.armClaim();const before=f.snapshot();
     const path=(f.db.query('PRAGMA database_list').all() as {name:string;file:string}[]).find(r=>r.name==='main')!.file;
     writer=new Database(path);writer.exec('PRAGMA busy_timeout=0;BEGIN IMMEDIATE');let released=false;
     timer=setTimeout(()=>{writer!.exec('ROLLBACK');released=true;},1000);
@@ -73,7 +76,7 @@ test('expiry repair idle poll completes while another real WAL writer remains he
 for(const mode of ['expired','abandoned'] as const)test(`expiry repair settles ${mode} sources once with unchanged S07 evidence`,async()=>{
   const f=await fixture();let scope:ReturnType<typeof spyOn>|undefined;
   try{
-    const row=await f.seed('task:repair:'+mode,mode),before=f.snapshot().slice(3),transaction=f.db.transaction.bind(f.db);let calls=0;
+    const row=await f.seed('task:repair:'+mode,mode);f.armClaim();const before=f.snapshot().slice(3),transaction=f.db.transaction.bind(f.db);let calls=0;
     scope=spyOn(f.db,'transaction').mockImplementation((fn:any)=>{calls++;return transaction(fn);});
     await f.poll();expect(calls).toBe(1);
     expect(f.db.query('SELECT phase,terminal_disposition,terminal_error_code,version FROM service_effect_s01_operations WHERE operation_id=?').get(row.operation)).toEqual({phase:'terminal',terminal_disposition:'failed',terminal_error_code:'scheduled_run_interrupted',version:2});
@@ -87,7 +90,7 @@ for(const mode of ['expired','abandoned'] as const)test(`expiry repair settles $
 test('expiry repair repeats eligibility inside admission after a lease renewal race',async()=>{
   const f=await fixture();let scope:ReturnType<typeof spyOn>|undefined;
   try{
-    const row=await f.seed('task:renewal-race','expired'),transaction=f.db.transaction.bind(f.db);let intercepted=false;
+    const row=await f.seed('task:renewal-race','expired');f.armClaim();const transaction=f.db.transaction.bind(f.db);let intercepted=false;
     scope=spyOn(f.db,'transaction').mockImplementation((fn:any)=>{
       if(!intercepted){intercepted=true;f.db.query('UPDATE service_effect_s07_occurrences SET lease_expires_at=? WHERE run_id=?').run(new Date(Date.now()+60000).toISOString(),row.runId);}
       return transaction(fn);
@@ -103,7 +106,7 @@ test('expiry repair repeats eligibility inside admission after a lease renewal r
 for(const change of ['renewed','terminal'] as const)test(`expiry repair rechecks ${change} authority after a real writer wait`,async()=>{
   const f=await fixture();let writer:Database|undefined,timer:ReturnType<typeof setTimeout>|undefined;
   try{
-    const row=await f.seed('task:held:'+change,'expired'),path=(f.db.query('PRAGMA database_list').all() as {name:string;file:string}[]).find(r=>r.name==='main')!.file;
+    const row=await f.seed('task:held:'+change,'expired');f.armClaim();const path=(f.db.query('PRAGMA database_list').all() as {name:string;file:string}[]).find(r=>r.name==='main')!.file;
     writer=new Database(path);writer.exec('PRAGMA busy_timeout=0;BEGIN IMMEDIATE');
     if(change==='renewed')writer.query('UPDATE service_effect_s07_occurrences SET lease_expires_at=? WHERE run_id=?').run(new Date(Date.now()+60000).toISOString(),row.runId);
     else writer.query("UPDATE service_effect_s01_operations SET phase='terminal',version=version+1,terminal_disposition='completed',terminal_committed_at=? WHERE operation_id=?").run(new Date().toISOString(),row.operation);

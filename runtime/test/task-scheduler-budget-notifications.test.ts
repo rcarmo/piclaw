@@ -20,9 +20,9 @@ const TASK_ID = "scheduled-budget-notice";
 const CHAT_JID = "web:scheduled-owner";
 const BLOCKED_ERROR = "PICLAW-BUDGET-BLOCKED: Budget limit stopped background work.";
 
-function seedTask(notifyOnComplete = true) {
+function seedTask(notifyOnComplete = true, id = TASK_ID) {
   createTask({
-    id: TASK_ID,
+    id,
     chat_jid: CHAT_JID,
     prompt: "private scheduled prompt",
     model: null,
@@ -176,6 +176,8 @@ describe("scheduled budget stop notifications", () => {
     expect(sendAttempts).toBe(1);
     expect(pendingStatus(decisionId)).toBe("pending");
 
+    // Keep the independent mocked claim phase reachable after the completed notice task advanced.
+    seedTask(false, "notice-poll-candidate");
     let claimCalls = 0;
     await pollScheduledRunsOnce(deps, {
       claimDue: async () => {
@@ -289,6 +291,7 @@ describe("scheduled budget stop notifications", () => {
       expect(outcome.status).toBe("error");
       expect(getTaskRunLogs(TASK_ID)).toHaveLength(1);
       expect(pendingStatus(decision)).toBe("pending");
+      seedTask(false, "notice-failure-poll-candidate");
       let claimed = 0;
       const store = { async claimDue() { claimed++; return { ok: true, value: [] }; } } as unknown as ScheduledRunStore;
       await pollScheduledRunsOnce(agentDeps({ sendMessage: async () => { sends++; } }), store);
