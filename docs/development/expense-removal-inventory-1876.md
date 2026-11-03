@@ -78,7 +78,9 @@ Read-only public downloads on 2 November 2026 produced:
 | restic | 0.1.5 | Available; SHA256 equals the release lock; 18 text files inspected |
 | session-dashboard | 0.2.4 | HTTP404 |
 
-The URLs and expected hashes are in [`release/core-addons.lock.json`](../../release/core-addons.lock.json). The available Restic seed and current A2A archive have no differences among compared first-party JS/TS source files. Their inspection does not establish bytes or behaviour for the missing seeds. No replacement version, catalog/seed change, install or source restoration was performed. #1880 must reconcile this packaging gap; fresh-workspace shipping qualification remains incomplete.
+The URLs and expected hashes are in [`release/core-addons.lock.json`](../../release/core-addons.lock.json). The available Restic seed and current A2A archive have no differences among compared first-party JS/TS source files. These public-download results alone did not inspect the other six seeds.
+
+**3 November correction:** all seven exact archives were already present under `release/core-addons/tarballs/` at this checkpoint's original 8b11 source. HTTP404 was an availability failure, not missing shipped bytes. The [historical seed follow-up](expense-shipped-seeds-1876.md) records 130 file hashes, 285 import/re-export references, two additional execution references and the semantic dispositions. No archive was reconstructed, replaced or republished. Public distribution, current runtime compatibility and fresh-workspace shipping qualification remain separate open work.
 
 ## Shared reliability scope
 
@@ -90,4 +92,4 @@ The URLs and expected hashes are in [`release/core-addons.lock.json`](../../rele
 
 The five selected reporting files pass 62 tests/290 assertions on the starting audit source. This baseline includes financial expectations and does not qualify financial-free execution. The current-base rerun and audit checks are recorded in the PR receipt.
 
-[The reporting contract](expense-reporting-contract-1882.md) defines the retained producers/readers and required absence/native failure/reopen cases. Before mixed implementation, review the exact preservation boundary, shared ownership and historical source transition. Historical seed availability and actual financial-free native parity stay open. Source changes require focused exact-candidate validation; merges and live data/installation/restart remain separately authorised.
+[The reporting contract](expense-reporting-contract-1882.md) defines the retained producers/readers and required absence/native failure/reopen cases. Before mixed implementation, review the exact preservation boundary, shared ownership and historical source transition. Historical public availability and actual financial-free native parity stay open; the bounded vendored-seed source/caller census is recorded in the follow-up. Source changes require focused exact-candidate validation; merges and live data/installation/restart remain separately authorised.
