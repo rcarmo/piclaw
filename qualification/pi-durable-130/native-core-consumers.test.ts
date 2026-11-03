@@ -2,7 +2,7 @@ import "./src/test-guard.js";
 import { admitAddonLocalRequest } from "../../runtime/src/addons/local-context.js";
 import { getExtensionKvStore } from "../../runtime/src/extension-kv-registry.js";
 import { test, expect, spyOn } from "bun:test";
-import { cpSync, symlinkSync } from "node:fs";
+import { cpSync, symlinkSync, mkdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { ensureTestFilesystemIsolation } from "../../runtime/scripts/test-filesystem-isolation.js";
@@ -20,13 +20,13 @@ import { registerOwnedAddonConfigApi, handleRegisteredAddonConfigApiRequest } fr
 import type { RuntimeModelServices } from "../../runtime/src/agent-pool/model-services.js";
 
 const slugs = ["code-review", "delegate", "goal", "observability", "plan-sidebar", "restic", "session-dashboard"];
-test("all seven shipped consumers admit actual native startup and Restic effects without legacy sessions", async () => {
+for (const accounted of [false, true]) test(`all seven shipped consumers admit actual native startup and Restic effects without legacy sessions; accounted=${accounted}`, async () => {
   if (!process.env.PICLAW_NATIVE_CORE_CHILD) {
     const env = { ...process.env };
     delete env.PICLAW_TEST_FS_ISOLATION_ACTIVE; delete env.PICLAW_TEST_FS_ISOLATION_ROOT;
     const isolated = ensureTestFilesystemIsolation(env);
     try {
-      const child = Bun.spawn([process.execPath, "test", import.meta.path], { cwd: import.meta.dir, env: { ...env, PICLAW_NATIVE_CORE_CHILD: "1" }, stdout: "pipe", stderr: "pipe" });
+      const child = Bun.spawn([process.execPath, "test", import.meta.path, '--test-name-pattern', `accounted=${accounted}$`], { cwd: import.meta.dir, env: { ...env, PICLAW_NATIVE_CORE_CHILD: "1" }, stdout: "pipe", stderr: "pipe" });
       const [code, out, err] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
       expect(code, out + err).toBe(0);
     } finally { isolated.cleanup(); }
@@ -51,11 +51,18 @@ test("all seven shipped consumers admit actual native startup and Restic effects
   const owner = acquireRuntimeLock({ lockPath: join(workspace, "core-consumers.lock"), strictOwnership: true, disabled: false });
   initDatabase(); const root = getDb(); storeChatMetadata("web:default", new Date().toISOString());
   extensionKvSet("observability", "config", { instance_name: "native-persisted-instance", enabled: true, appinsights_enabled: false, graphite_enabled: false, appinsights_live_metrics: false }, "global");
-  const model = { provider: "synthetic", id: "approved", name: "Approved", api: "openai-completions" as const, baseUrl: "https://invalid.invalid", input: ["text" as const], reasoning: false, contextWindow: 10000, maxTokens: 1000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
+  const provider = accounted ? 'github-copilot' : 'synthetic';
+  if (accounted) {
+    mkdirSync(getPiclawAgentDir(), { recursive: true });
+    writeFileSync(join(getPiclawAgentDir(), 'auth.json'), JSON.stringify({ 'github-copilot': {
+      type: 'oauth', access: 'fixture-only', refresh: 'fixture-only-account', expires: Date.now() + 3600000,
+    } }));
+  }
+  const model = { provider, id: "approved", name: "Approved", api: "openai-completions" as const, baseUrl: "https://invalid.invalid", input: ["text" as const], reasoning: false, contextWindow: 10000, maxTokens: 1000, cost: { input: accounted ? 1 : 0, output: accounted ? 1 : 0, cacheRead: 0, cacheWrite: 0 } };
   const sequence = [{ action: "get_config", config: null }, { action: "set_config", config: saved }, { action: "status", config: null }];
   let calls = 0;
   let expectedInstance = "native-persisted-instance";
-  const credentials = createTestCredentialStore({ synthetic: { type: "api_key", key: "fixture-only" } });
+  const credentials = createTestCredentialStore({ [provider]: { type: "api_key", key: "fixture-only" } });
   const runtime = await ModelRuntime.create({ modelsPath: null, modelsStore: { read: async () => undefined, write: async () => {}, delete: async () => {} }, credentials, allowModelNetwork: false, refreshOnCreate: false });
   const stream = (_physical: unknown, input: unknown) => {
     expect(JSON.stringify(input)).toContain("## Observability");
@@ -66,14 +73,14 @@ test("all seven shipped consumers admit actual native startup and Restic effects
     const message = { role: "assistant" as const, api: model.api, provider: model.provider, model: model.id, timestamp: Date.now(),
       content: step < sequence.length ? [{ type: "toolCall" as const, id: `restic-${step}`, name: "restic", arguments: sequence[step]! }] : [{ type: "text" as const, text: "Native core consumers complete" }],
       stopReason: step < sequence.length ? "toolUse" as const : "stop" as const,
-      usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
+      usage: { input: 1, output: 1, reasoning: 1, ...(accounted ? { providerCost: 2 } : {}), cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: accounted ? .000001 : 0, output: accounted ? .000001 : 0, cacheRead: 0, cacheWrite: 0, total: accounted ? .000002 : 0 } } };
     queueMicrotask(() => { output.push({ type: "done", reason: message.stopReason, message }); output.end(message); });
     return output;
   };
-  runtime.registerNativeProvider({ id: "synthetic", name: "Synthetic", getModels: () => [model] as any,
+  runtime.registerNativeProvider({ id: provider, name: "Synthetic", getModels: () => [model] as any,
     auth: { apiKey: { name: "Synthetic", check: async () => ({ type: "api_key" }), resolve: async () => ({ auth: { apiKey: "fixture-only" }, source: "synthetic" }) } }, stream: stream as any, streamSimple: stream as any });
   await runtime.refresh({ allowNetwork: false }); await runtime.getAvailable();
-  const settings = SettingsManager.create(workspace, getPiclawAgentDir()); settings.setDefaultModelAndProvider("synthetic", "approved"); await settings.flush();
+  const settings = SettingsManager.create(workspace, getPiclawAgentDir()); settings.setDefaultModelAndProvider(provider, "approved"); await settings.flush();
   const spies = [spyOn(SessionManager, "create"), spyOn(SessionManager, "open"), spyOn(SessionManager, "inMemory")];
   let backend: Awaited<ReturnType<typeof createDefaultApplicationRuntime>> | undefined;
   try {
@@ -127,12 +134,28 @@ test("all seven shipped consumers admit actual native startup and Restic effects
     const row = root.transaction(() => { const rowId = storeMessage(message); bound.getInputSourceAdmission!(message.chat_jid)!({ message, rowId, database: root }); return rowId; })();
     expect(await bound.dispatchAcceptedInput!(message.chat_jid, message.id, row!)!()).toBe("settled");
     expect(calls).toBe(4);
+    // Read the rows written by the real native SDK/accounting path using the
+    // exact installed public-package collector, not a second SQL projection.
+    if (accounted) {
+      const { collectUsage } = await loadAddon('observability', 'usage-telemetry.ts');
+      const before = root.serialize();
+      const dbPath = (root.query('PRAGMA database_list').all() as { name: string; file: string }[]).find(row => row.name === 'main')!.file;
+      const batch = collectUsage({ graphite_host: '', graphite_port: 2003, graphite_prefix: 'piclaw', instance_name: 'fixture' },
+        { runAt: '1970-01-01T00:00:00.000Z', id: 0 }, new Date(), dbPath);
+      const points = new Map<string, number>(batch.points.map((point: { path: string; value: number }) => [point.path.replace('piclaw.fixture.usage.github-copilot.approved.', ''), point.value]));
+      expect(points.get('cost.provider_reported.currency_unknown.latest_known_amount')).toBe(2);
+      expect(points.get('cost.provider_reported.currency_unknown.known_rows')).toBe(4);
+      expect(points.get('cost.api_equivalent_usd.known_subtotal')).toBe(.000008);
+      expect(points.get('cost.api_equivalent_usd.complete_rows')).toBe(4);
+      expect(points.get('tokens.reasoning')).toBe(4); expect(points.get('tokens.total')).toBe(8);
+      expect(points.has('cost.estimated_usd')).toBe(false); expect(root.serialize()).toEqual(before);
+    }
     expect(service.configurationSnapshot().config.excludes).toEqual(["native-owned-config"]);
     expect(resticRuntime().service).toBe(service);
     for (const spy of spies) expect(spy).not.toHaveBeenCalled();
   } finally {
     backend?.stop(); await backend?.close();
     for (const spy of spies) spy.mockRestore();
-    service.stop(); resticRuntime().service = previousService; closeDatabase(); owner.release();
+    service.stop(); resticRuntime().service = previousService; await closeDatabase(); owner.release();
   }
 }, 30_000);
