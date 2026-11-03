@@ -128,12 +128,17 @@ export async function admitWebSession(token: string, signal?: AbortSignal): Prom
   const current = getWebSession(token, false);
   if (current) return current;
   const db = getDb(), tokenHash = hashSessionToken(token);
-  const candidates = db.query("SELECT token,session_id,expires_at FROM web_sessions WHERE token IN (?,?)")
-    .all(tokenHash, token) as { token: string; session_id: string | null; expires_at: string }[];
-  if (!candidates.some(row => Number.isFinite(Date.parse(row.expires_at)) && Date.parse(row.expires_at) > Date.now()
-    && (row.token !== tokenHash || !row.session_id))) return null;
+  const candidate = db.query(`SELECT token,user_id,auth_method,created_at,expires_at,session_id
+    FROM web_sessions WHERE token IN (?,?) ORDER BY token = ? DESC LIMIT 1`);
+  const observed = candidate.get(tokenHash, token, tokenHash) as StoredWebSession | null;
+  if (!observed || !Number.isFinite(Date.parse(observed.expires_at)) || Date.parse(observed.expires_at) <= Date.now()
+    || (observed.token === tokenHash && observed.session_id)) return null;
   const check = () => { if (getDb() !== db) throw Error("Session database binding changed"); };
-  return admitSqliteWrite(db, () => getWebSession(token), check, signal, 5000, check);
+  return admitSqliteWrite(db, () => {
+    const committed = candidate.get(tokenHash, token, tokenHash) as StoredWebSession | null;
+    if (!sameRepairIdentity(observed, committed)) return null;
+    return getWebSession(token);
+  }, check, signal, 5000, check);
 }
 
 /** List device sessions without exposing bearer tokens or their stored hashes. */

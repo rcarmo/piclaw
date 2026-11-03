@@ -14,7 +14,7 @@ assert.notEqual(file, ':memory:');
 assertPathWithinTestFilesystemIsolation(file, process.env, { allowRoot: false });
 const exec = Database.prototype.exec, close = Database.prototype.close, transaction = Database.prototype.transaction, prepare = Database.prototype.prepare;
 const primary = Error('injected schema failure'), restoration = Error('injected FK restoration failure'), disposal = Error('injected close failure');
-let candidate: Database | undefined;
+let candidate: Database | undefined, expectedCleanupFailure: unknown;
 let closed = 0;
 let registration: ReturnType<typeof spyOn> | undefined;
 function failSchema() {
@@ -42,15 +42,14 @@ try {
       if (this !== blocker) { candidate = this; closed++; }
       return close.call(this, throwOnError);
     };
-    // Isolate schema-lock publication failure without spending the existing
-    // test deadline on Root's still-separate 5s policy (#1818 remains open).
+    // The accepted Root policy is immutable zero-wait, including schema failure.
     Database.prototype.transaction = function(this: Database, body: (...args: any[]) => any) {
-      if (this !== blocker) this.exec('PRAGMA busy_timeout=0');
+      if (this !== blocker) assert.deepEqual(this.query('PRAGMA busy_timeout').get(), { timeout: 0 });
       return transaction.call(this, body);
     } as typeof Database.prototype.transaction;
     try {
       let failure: unknown;
-      try { initDatabase(paths); } catch (error) { failure = error; }
+      try { initDatabase(paths); } catch (error) { failure = error; if (error instanceof RuntimeStartupCleanupError) expectedCleanupFailure = error; }
       assert.equal((failure as { code?: string })?.code, 'SQLITE_BUSY');
       assert.equal(closed, 1); assert.throws(() => getDb(), /not initialized/); assert.equal(getDatabaseBinding(), null);
       assert.throws(() => candidate!.query('SELECT 1'), /closed/);
@@ -112,7 +111,7 @@ try {
       return close.call(this, throwOnError);
     };
     let failure: unknown;
-    try { initDatabase(paths); } catch (error) { failure = error; }
+    try { initDatabase(paths); } catch (error) { failure = error; if (error instanceof RuntimeStartupCleanupError) expectedCleanupFailure = error; }
     assert.equal(injected, 1);
     if (scenario === 'column-and-close-failure') {
       assert(failure instanceof RuntimeStartupCleanupError); assert.deepEqual(failure.errors, [primary, disposal]);
@@ -133,7 +132,7 @@ try {
   } else if (['schema-failure', 'restoration-failure', 'schema-and-close-failure'].includes(scenario)) {
     failSchema();
     let failure: unknown;
-    try { initDatabase(paths); } catch (error) { failure = error; }
+    try { initDatabase(paths); } catch (error) { failure = error; if (error instanceof RuntimeStartupCleanupError) expectedCleanupFailure = error; }
     assert(failure);
     assert.throws(() => getDb(), /not initialized/); assert.equal(getDatabaseBinding(), null);
     assert.equal(closed, 1);
@@ -193,7 +192,7 @@ try {
       assert.throws(() => getDb(), /not initialized/); // Checkpoint policy release follows unpublication.
       return exec.call(db, sql);
     }) as typeof db.exec;
-    closeDatabase();
+    await closeDatabase();
     assert.equal(maintenance, 0);
     assert.throws(() => statement.get(), /closed/);
     assert.throws(() => getDb(), /not initialized/); assert.equal(getDatabaseBinding(), null);
@@ -214,16 +213,16 @@ try {
     Database.prototype.close = function(throwOnError?: boolean) { if (this === candidate) closed++; return close.call(this, throwOnError); };
     initDatabase(paths);
     let failure: unknown;
-    try { closeDatabase(); } catch (error) { failure = error; }
+    try { await closeDatabase(); } catch (error) { failure = error; if (error instanceof RuntimeStartupCleanupError) expectedCleanupFailure = error; }
     assert(failure instanceof RuntimeStartupCleanupError); assert.deepEqual(failure.errors, [disposal]);
-    assert.equal(closed, 1); assert.throws(() => candidate!.query('SELECT 1'), /closed/);
+    assert.equal(closed, 0); assert(candidate!.query('SELECT 1').get());
     assert.throws(() => getDb(), /not initialized/); assert.equal(getDatabaseBinding(), null);
     assert.throws(() => initDatabase(paths), error => error === failure);
   } else if (scenario === 'published-close-failure') {
     initDatabase(paths); candidate = getDb();
     Database.prototype.close = function(throwOnError?: boolean) { if (this === candidate) { closed++; throw disposal; } return close.call(this, throwOnError); };
     let failure: unknown;
-    try { closeDatabase({ shrinkMemory: false }); } catch (error) { failure = error; }
+    try { await closeDatabase({ shrinkMemory: false }); } catch (error) { failure = error; if (error instanceof RuntimeStartupCleanupError) expectedCleanupFailure = error; }
     assert(failure instanceof RuntimeStartupCleanupError); assert.deepEqual(failure.errors, [disposal]);
     assert.equal(closed, 1); assert.throws(() => getDb(), /not initialized/); assert.equal(getDatabaseBinding(), null);
     assert.throws(() => initDatabase(paths), error => error === failure);
@@ -233,5 +232,6 @@ try {
 } finally {
   registration?.mockRestore();
   Database.prototype.exec = exec; Database.prototype.close = close; Database.prototype.transaction = transaction; Database.prototype.prepare = prepare;
-  closeDatabase({ shrinkMemory: false });
+  try { await closeDatabase({ shrinkMemory: false }); } catch (error) { assert.equal(error, expectedCleanupFailure); }
+  if (scenario === 'disposer-failure') close.call(candidate!, true);
 }

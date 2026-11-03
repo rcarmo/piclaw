@@ -216,12 +216,36 @@ test("failed checkpoint construction restores built-in policy without an allocat
 
 test("failed checkpoint close delivery retains the uncertain worker and refuses a replacement", async () => {
   const f = fixture(), RealWorker = globalThis.Worker;
+  let worker: EventTarget | undefined, failing = true, reused: Database | undefined, moved = false;
+  const reusedPath = f.path + '.reused';
   try {
-    globalThis.Worker = class extends EventTarget { postMessage() { throw Error("post failure"); } } as any;
+    globalThis.Worker = class extends EventTarget {
+      constructor() { super(); worker = this; }
+      postMessage(data: any) {
+        if (failing) throw Error("post failure");
+        if (data.type === "close") this.dispatchEvent(new MessageEvent("message", { data: { type: "closed" } }));
+      }
+    } as any;
     const stop = registerSqliteCheckpoint(f.db, f.path, true)!;
     await expect(Promise.resolve(stop())).rejects.toThrow("post failure");
     expect(() => registerSqliteCheckpoint(f.db, f.path, true)).toThrow("closing");
-  } finally { globalThis.Worker = RealWorker; f.close(); }
+    // Deterministically exercise the hosted inode-reuse rejection: the same
+    // identity at a new path cannot join an unresolved old checkpoint lifetime.
+    const identity = statSync(f.path); f.db.close(); renameSync(f.path, reusedPath); moved = true;
+    reused = new Database(reusedPath); expect(statSync(reusedPath).ino).toBe(identity.ino);
+    expect(registerSqliteCheckpoint(reused, reusedPath, true)).toBeUndefined();
+    // This fake owns no actual SQLite reader. Its positive late acknowledgement
+    // must release the registry identity before another fixture reuses the inode.
+    worker!.dispatchEvent(new MessageEvent("message", { data: { type: "closed" } }));
+    await expect(Promise.resolve(stop())).rejects.toThrow("post failure");
+    failing = false;
+    const replacement = registerSqliteCheckpoint(reused, reusedPath, true)!;
+    expect(replacement).toBeFunction(); await replacement();
+  } finally {
+    worker?.dispatchEvent(new MessageEvent("message", { data: { type: "closed" } }));
+    reused?.close(); if (moved) renameSync(reusedPath, f.path);
+    globalThis.Worker = RealWorker; f.close();
+  }
 });
 
 test("a ready-time closed peer triggers sticky fallback and a late ready cannot disable writers", async () => {

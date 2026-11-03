@@ -98,9 +98,9 @@ try {
   const renewed = createWebSession("legacy-fixture", "new-user", 3600, "passkey");
   assert.equal(getWebSession("legacy-fixture")?.session_id, renewed.session_id);
   assert.equal(getWebSession("legacy-fixture")?.user_id, "new-user");
-  closeDatabase(); initDatabase(); db = getDb();
+  await closeDatabase(); initDatabase(); db = getDb();
   assert.equal(getWebSession("legacy-fixture")?.session_id, renewed.session_id);
   assert.equal(getWebSession("fixture-a"), null);
   assert.deepEqual(db.query("PRAGMA quick_check").get(), { quick_check: "ok" });
   console.log(JSON.stringify({ status: "pass", bindings: true, externalRevocation: true, disabledUser: true, transactionSnapshot: true, rollback: true, expiry: true, legacyMigration: true, schemaReprepare: true, reopen: true, hotPathPrepares: prepares, journal: "wal", synchronous: 2 }));
-} finally { external?.close(); closeDatabase(); }
+} finally { external?.close(); await closeDatabase(); }

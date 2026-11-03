@@ -1,4 +1,7 @@
-import {expect,test} from 'bun:test';
+import {afterEach,beforeEach,expect,test} from 'bun:test';
+import {initDatabase,closeDatabase} from '../../../../src/db.js';
+beforeEach(()=>{initDatabase();});
+afterEach(async()=>{await closeDatabase();});
 import {Database} from 'bun:sqlite';
 import {join} from 'node:path';
 import {withTempWorkspaceEnv,importFresh} from '../../../helpers.js';
@@ -63,7 +66,7 @@ test('incoming synchronous wrapper exports are retired',async()=>{
 
 test('incoming control admission yields and cancels while a foreign WAL writer remains held',()=>
   withTempWorkspaceEnv('incoming-control-wal-',{},async ws=>{
-    const store=await importFresh<Store>('../src/db.js');store.closeDatabase();
+    const store=await importFresh<Store>('../src/db.js');await store.closeDatabase();
     const path=join(ws.store,'control.sqlite');store.initDatabase({...getRuntimeConfigPaths(),databasePath:path});
     store.storeChatMetadata(jid,'2026-11-01T00:00:00Z','Fixture');
     const {channel,effects}=fixtureChannel(),controller=new AbortController();
@@ -82,13 +85,13 @@ test('incoming control admission yields and cancels while a foreign WAL writer r
       expect((await pending).status).toBe(400);expect(blocker.inTransaction).toBe(true);
       expect(effects).toMatchObject({legacy:0,admitted:1,commands:0,events:[]});
       expect(store.getDb().query('SELECT id FROM messages WHERE chat_jid=?').all(jid)).toEqual([]);
-    }finally{clearInterval(heartbeat);if(blocker.inTransaction)blocker.exec('ROLLBACK');await pending;blocker.close();store.closeDatabase();}
+    }finally{clearInterval(heartbeat);if(blocker.inTransaction)blocker.exec('ROLLBACK');await pending;blocker.close();await store.closeDatabase();}
   }),10_000);
 
 for (const publishFailure of [false,true]) {
   test(`post captures admitted port before parsing and retains accepted outcome: publication failure=${publishFailure}`,()=>
     withTempWorkspaceEnv('incoming-post-contract-',{},async()=>{
-      const store=await importFresh<Store>('../src/db.js');store.closeDatabase();store.initDatabase(getRuntimeConfigPaths());
+      const store=await importFresh<Store>('../src/db.js');await store.closeDatabase();store.initDatabase(getRuntimeConfigPaths());
       const {channel,effects}=fixtureChannel();let replacement=0,attemptedBroadcast=0,attemptedWake=0;
       channel.admitMessage=(chatJid:string,content:string, _isBot: boolean,mediaIds:number[],options:any,check:()=>void,signal:AbortSignal)=>{
         effects.admitted++;return admitWebMessage(channel,{chatJid,content,isBot:false,mediaIds,agentId:'default',agentName:'Fixture'},options,check,signal);
@@ -109,6 +112,6 @@ for (const publishFailure of [false,true]) {
         expect({admitted:effects.admitted,legacy:effects.legacy,replacement,attemptedBroadcast,attemptedWake})
           .toEqual({admitted:1,legacy:0,replacement:0,attemptedBroadcast:1,attemptedWake:1});
         expect(store.getDb().query('SELECT id FROM messages WHERE chat_jid=?').all(jid)).toHaveLength(1);
-      }finally{store.closeDatabase();}
+      }finally{await store.closeDatabase();}
     }));
 }

@@ -3,7 +3,6 @@ import { createWebChannelTestFixture } from "./helpers/web-channel-fixture.js";
 import * as posts from "../../../src/channels/web/handlers/posts.js";
 import * as mutations from "../../../src/channels/web/post-mutations.js";
 import * as metrics from "../../../src/channels/web/agent/system-metrics.js";
-import * as timeline from "../../../src/channels/web/timeline-service.js";
 import { createWebChannelEndpointContexts, createWebChannelIdentitySnapshot } from "../../../src/channels/web/endpoints/channel-endpoint-context-factory.js";
 
 let cleanup: (() => void) | undefined;
@@ -57,18 +56,22 @@ test("UI status keeps partial errors and never renews GPU sampling", async () =>
 });
 
 test("delete preserves default chat, empty/error payloads and broadcasts only actual deletions", async () => {
-  const f = await fixture(), calls: unknown[][] = [];
-  let result = { deletedIds: [7, 9], body: { deleted: 2 }, status: 202 };
-  const remove = spyOn(timeline, "deletePostResponse").mockImplementation((...args) => { calls.push(args); return result as any; });
-  restores.push(() => remove.mockRestore());
-  let response = f.channel.handleDeletePost(new Request("https://fixture.invalid/post/7?chat_jid=%20web%3Abranch%20"), 7, true);
-  expect(response.status).toBe(202); expect(await response.json()).toEqual({ deleted: 2 });
-  expect(calls).toEqual([["web:branch", 7, true]]);
-  expect(f.events).toEqual([{ type: "interaction_deleted", data: { chat_jid: "web:branch", ids: [7, 9] } }]);
-  result = { deletedIds: [], body: { error: "missing" } as any, status: 404 };
-  response = f.channel.handleDeletePost(new Request("https://fixture.invalid/post/7"), null);
-  expect(response.status).toBe(404); expect(await response.json()).toEqual({ error: "missing" });
-  expect(calls.at(-1)).toEqual(["web:default", null, false]); expect(f.events).toHaveLength(1);
+  const f = await fixture(), timestamp = new Date().toISOString();
+  for (const chat of ["web:branch", "web:default"]) f.db.storeChatMetadata(chat, timestamp, "Fixture");
+  const seed = (id: string, chat_jid: string, thread_id?: number) => f.db.storeMessage({ id, chat_jid, thread_id,
+    sender: "user", sender_name: "Fixture", content: id, timestamp, is_from_me: false, is_bot_message: false })!;
+  const parent = seed("delete-root", "web:branch"), child = seed("delete-child", "web:branch", parent), defaultRow = seed("delete-default", "web:default");
+  let response = await f.channel.handleDeletePost(new Request(`https://fixture.invalid/post/${parent}?chat_jid=%20web%3Abranch%20`), parent, true);
+  expect(response.status).toBe(200); expect(await response.json()).toEqual({ deleted: 2, ids: [parent, child] });
+  expect(f.events).toEqual([{ type: "interaction_deleted", data: { chat_jid: "web:branch", ids: [parent, child] } }]);
+  expect(f.db.getDb().query("SELECT rowid FROM messages WHERE chat_jid='web:branch'").all()).toEqual([]);
+  response = await f.channel.handleDeletePost(new Request(`https://fixture.invalid/post/${parent}?chat_jid=web:branch`), parent);
+  expect(response.status).toBe(200); expect(await response.json()).toEqual({ deleted: 0, ids: [] }); expect(f.events).toHaveLength(1);
+  response = await f.channel.handleDeletePost(new Request("https://fixture.invalid/post/7"), null);
+  expect(response.status).toBe(404); expect(await response.json()).toEqual({ error: "Post not found" }); expect(f.events).toHaveLength(1);
+  response = await f.channel.handleDeletePost(new Request(`https://fixture.invalid/post/${defaultRow}`), defaultRow);
+  expect(response.status).toBe(200); expect(await response.json()).toEqual({ deleted: 1, ids: [defaultRow] });
+  expect(f.events.at(-1)).toEqual({ type: "interaction_deleted", data: { chat_jid: "web:default", ids: [defaultRow] } });
 });
 
 test("identity getter retains its options receiver and UI naming stays live after awaited sections", async () => {
