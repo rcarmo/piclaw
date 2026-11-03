@@ -32,7 +32,7 @@ import { formatRecoverySummary } from "./agent-pool/recovery-summary.js";
 import { DREAM_TASK_ID, parseDreamPromptToken, runDreamAgentTurn, runDreamMaintenance } from "./dream.js";
 import { computeNextRun } from "./task-scheduler-utils.js";
 import type { AgentPool } from "./agent-pool.js";
-import { applyScheduledRunToTask, getDb, getTaskById } from "./db.js";
+import { getDb, getTaskById } from "./db.js";
 import { getDatabaseBinding } from "./db/connection.js";
 import { openSqliteRole } from "./db/sqlite-role-policy.js";
 import { registerSqliteCheckpoint } from "./db/sqlite-checkpoint.js";
@@ -756,13 +756,8 @@ async function abandonClaimedRun(
   });
   const abandoned = await store.abandon(abandonRequest);
   if (!canRunLegacyScheduledWork()) return;
-  if (abandoned.ok) {
-    await scheduledSourceWrite(getDb(), () => {
-      if (source) settleScheduledAgentSource(lease.task.chatJid, source, "error", now);
-      applyScheduledRunToTask(abandoned.value, `Skipped: ${reasonTag}`);
-    });
-  }
-  else log.error("Failed to abandon scheduled run", { operation: "abandon_scheduled_run", runId: lease.record.runId, errorTag: abandoned.error._tag });
+  if (!abandoned.ok) log.error("Failed to abandon scheduled run", { operation: "abandon_scheduled_run", runId: lease.record.runId, errorTag: abandoned.error._tag });
+  else if (source) await scheduledSourceWrite(getDb(), () => settleScheduledAgentSource(lease.task.chatJid, source!, "error", now));
 }
 
 async function runClaimedScheduledTask(
@@ -883,12 +878,8 @@ async function runClaimedScheduledTask(
       if (source && !completionMayHaveCommitted) await scheduledSourceWrite(getDb(), () => settleScheduledAgentSource(finalLease.task.chatJid, source!, "error", completedAt));
       return;
     }
-    const summary = outcome.status === "error"
-      ? `Error: ${outcome.error || "Unknown"}`
-      : (outcome.result?.slice(0, 200) || "Completed");
     const terminalSource = source, terminalStatus = outcome.status;
-    await scheduledSourceWrite(getDb(), () => {
-      applyScheduledRunToTask(completed.value, summary);
+    if (terminalSource || task.id === DREAM_TASK_ID) await scheduledSourceWrite(getDb(), () => {
       if (task.id === DREAM_TASK_ID && lease.task.kind === 'internal' && deps.agentPool.isDurableRuntime?.() === true) {
         const workId = 'scheduled:' + lease.record.runId, db = getDb();
         if (getBudgetWork(workId, db)?.status === 'active' && !db.query("SELECT 1 FROM budget_work WHERE parent_work_id=? AND status IN ('active','paused') LIMIT 1").get(workId)) setBudgetWorkStatus(workId, 'completed', {boundary:'scheduled_dream_settled'}, db);
