@@ -16,14 +16,13 @@ test('incoming and outgoing rows have one admitted write recipe', () => {
 
 test('outgoing send yields and honours cancellation while the foreign WAL writer stays held', () =>
   withTempWorkspaceEnv('outgoing-wal-', {}, async ws => {
-    const store = await importFresh<Store>('../src/db.js'); store.closeDatabase();
+    const store = await importFresh<Store>('../src/db.js'); await store.closeDatabase();
     const path = join(ws.store, 'outgoing.sqlite'); store.initDatabase({ ...getRuntimeConfigPaths(), databasePath: path });
     store.storeChatMetadata(chat, '2026-11-02T00:00:00Z', 'Fixture');
     const web = new WebChannel({ queue: { enqueue() {} }, agentPool: {} } as any);
     let broadcasts = 0; web.broadcastEvent = () => { broadcasts++; };
     const blocker = new Database(path), controller = new AbortController();
-    // A short fixture-only policy keeps the old synchronous counterexample bounded.
-    store.getDb().exec('PRAGMA busy_timeout=200'); blocker.exec('BEGIN IMMEDIATE');
+    expect(store.getDb().query('PRAGMA busy_timeout').get()).toEqual({ timeout: 0 }); blocker.exec('BEGIN IMMEDIATE');
     let beats = 0; const timer = setInterval(() => { beats++; }, 5);
     const started = performance.now();
     const pending = web.sendMessage(chat, 'cancelled outgoing reply', { signal: controller.signal, requirePersistence: true } as any);
@@ -34,13 +33,13 @@ test('outgoing send yields and honours cancellation while the foreign WAL writer
       expect(performance.now() - started).toBeLessThan(500); expect(beats).toBeGreaterThan(0);
       expect(blocker.inTransaction).toBe(true); expect(broadcasts).toBe(0);
       expect(store.getDb().query('SELECT id FROM messages WHERE chat_jid=?').all(chat)).toEqual([]);
-      expect(store.getDb().query('PRAGMA busy_timeout').get()).toEqual({ timeout: 200 });
-    } finally { clearInterval(timer); if (blocker.inTransaction) blocker.exec('ROLLBACK'); await observed; blocker.close(); store.closeDatabase(); }
+      expect(store.getDb().query('PRAGMA busy_timeout').get()).toEqual({ timeout: 0 });
+    } finally { clearInterval(timer); if (blocker.inTransaction) blocker.exec('ROLLBACK'); await observed; blocker.close(); await store.closeDatabase(); }
   }));
 
 test('admitted outgoing rows cannot adopt an archived target while waiting for SQL', () =>
   withTempWorkspaceEnv('outgoing-target-', {}, async ws => {
-    const store = await importFresh<Store>('../src/db.js'); store.closeDatabase();
+    const store = await importFresh<Store>('../src/db.js'); await store.closeDatabase();
     const path = join(ws.store, 'target.sqlite'); store.initDatabase({ ...getRuntimeConfigPaths(), databasePath: path });
     store.storeChatMetadata(chat, '2026-11-02T00:00:00Z', 'Fixture');
     const blocker = new Database(path); blocker.exec('BEGIN IMMEDIATE');
@@ -53,12 +52,12 @@ test('admitted outgoing rows cannot adopt an archived target while waiting for S
       blocker.exec('COMMIT');
       expect(await observed).toBeInstanceOf(Error);
       expect(store.getDb().query('SELECT id FROM messages WHERE chat_jid=?').all(chat)).toEqual([]);
-    } finally { if (blocker.inTransaction) blocker.exec('ROLLBACK'); await observed; blocker.close(); store.closeDatabase(); }
+    } finally { if (blocker.inTransaction) blocker.exec('ROLLBACK'); await observed; blocker.close(); await store.closeDatabase(); }
   }));
 
 test('publication admission rejects inherited transactions instead of acknowledging a rolled-back savepoint', () =>
   withTempWorkspaceEnv('outgoing-outer-transaction-', {}, async () => {
-    const store = await importFresh<Store>('../src/db.js'); store.closeDatabase(); store.initDatabase(getRuntimeConfigPaths());
+    const store = await importFresh<Store>('../src/db.js'); await store.closeDatabase(); store.initDatabase(getRuntimeConfigPaths());
     let pending!: Promise<unknown>;
     try {
       expect(() => store.getDb().transaction(() => {
@@ -68,7 +67,7 @@ test('publication admission rejects inherited transactions instead of acknowledg
       }).immediate()).toThrow('outer rollback');
       await expect(pending).rejects.toThrow('own transaction');
       expect(store.getDb().query('SELECT id FROM messages WHERE chat_jid=?').all(chat)).toEqual([]);
-    } finally { await Promise.allSettled(pending ? [pending] : []); store.closeDatabase(); }
+    } finally { await Promise.allSettled(pending ? [pending] : []); await store.closeDatabase(); }
   }));
 
 test('the synchronous web writer and public forwarding chain are retired', async () => {

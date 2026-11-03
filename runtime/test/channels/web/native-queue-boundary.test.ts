@@ -1,7 +1,10 @@
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import "../../helpers.ts";
-import { getDb, getDeferredQueuedFollowups, initDatabase, setDeferredQueuedFollowups } from "../../../src/db.js";
+import { closeDatabase, getDb, getDeferredQueuedFollowups, initDatabase, setDeferredQueuedFollowups } from "../../../src/db.js";
 import { handleAgentMessage } from "../../../src/channels/web/handlers/agent.js";
+
+beforeEach(()=>{initDatabase();});
+afterEach(async()=>{await closeDatabase();});
 
 function fixture() {
   const calls: string[] = [], queued: any[][] = [];
