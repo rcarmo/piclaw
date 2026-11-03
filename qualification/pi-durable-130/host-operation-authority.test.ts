@@ -35,9 +35,10 @@ async function fixture(financial = false) {
   return { root, before, captured: { operation, inputs } };
 }
 
-for (const readonly of [false, true]) test(`captured tool authority repeats the pending accounting barrier before its effect; readonly=${readonly}`, async () => {
+for (const readonly of [false, true]) test(`captured tool authority ignores financial reporting debt; readonly=${readonly}`, async () => {
   const { root, captured } = await fixture(true);
-  const guarded = { ...captured, accountingBarrier: () => assertOperationAccountingReady(root, captured.operation.operationId) };
+  let financialChecks = 0;
+  const guarded = { ...captured, accountingBarrier: () => { financialChecks++; assertOperationAccountingReady(root, captured.operation.operationId); } };
   const authority = createHostOperationAuthority(root, guarded, () => {}, readonly);
   try {
     authority.assertCurrent();
@@ -50,26 +51,27 @@ for (const readonly of [false, true]) test(`captured tool authority repeats the 
     recordBudgetTerminalReceipt(binding, { version: 1, requestId: binding.id, requestBindingSha256: getBudgetRequest(binding.id, root)!.binding_sha256,
       projectedOutcome: { role: 'assistant', provider: binding.providerId, model: binding.modelId, api: 'openai-completions', stopReason: 'stop', usage: {
         input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0.00003, output: 0.00001, cacheRead: 0, cacheWrite: 0, total: 0.00004 } } } }, at, root);
-    const before = root.serialize(); let entered = 0;
-    expect(() => authority.assertSourceCurrent()).not.toThrow(); // Existing outcome observation only.
-    expect(() => authority.assertCurrent()).toThrow('budget_denied');
-    if (!readonly) await expect(authority.admitWrite(() => { entered++; root.exec("INSERT INTO authority_probe VALUES('must not write')"); })).rejects.toThrow('budget_denied');
-    expect(entered).toBe(0); expect(root.serialize()).toEqual(before);
-    // Model/prompt source capture is not a tool grant. It can still reach the
-    // exact reservation recovery path rather than being denied prematurely.
+    const financialState = () => ({ request: getBudgetRequest(binding.id, root),
+      work: root.query('SELECT * FROM budget_work ORDER BY id').all(), reports: root.query('SELECT * FROM token_usage').all() });
+    const before = financialState(); financialChecks = 0; let entered = 0;
+    expect(() => authority.assertSourceCurrent()).not.toThrow();
+    expect(() => authority.assertCurrent()).not.toThrow();
+    if (!readonly) expect(await authority.admitWrite(() => { entered++; root.exec("INSERT INTO authority_probe VALUES('independent effect')"); return 7; })).toBe(7);
+    else await expect(authority.admitWrite(() => { entered++; })).rejects.toThrow('Read-only host operation authority');
+    expect(entered).toBe(readonly ? 0 : 1); expect(financialChecks).toBe(0); expect(financialState()).toEqual(before);
     expect(() => createHostOperationAuthority(root, captured, () => {}, true).assertCurrent()).not.toThrow();
   } finally { root.close(); }
 });
 
-for (const readonly of [false, true]) for (const invalid of ['value', 'async', 'reject'] as const) test(`captured accounting callback stays synchronous and fail closed; ${invalid}, readonly=${readonly}`, async () => {
-  const { root, captured } = await fixture(); let entered = 0;
+for (const readonly of [false, true]) test(`tool authority never reads an obsolete financial observer; readonly=${readonly}`, async () => {
+  const { root, captured } = await fixture(); let reads = 0, entered = 0;
+  Object.defineProperty(captured, 'accountingBarrier', { get() { reads++; throw Error('obsolete observer unavailable'); } });
   try {
-    const accountingBarrier = invalid === 'value' ? () => true : invalid === 'async' ? () => Promise.resolve() : () => Promise.reject(Error('synthetic guard rejection'));
-    const authority = createHostOperationAuthority(root, { ...captured, accountingBarrier }, () => {}, readonly);
+    const authority = createHostOperationAuthority(root, captured, () => {}, readonly);
     const before = root.serialize();
-    expect(() => authority.assertCurrent()).toThrow('Accounting barrier must be synchronous');
-    if (!readonly) await expect(authority.admitWrite(() => { entered++; })).rejects.toThrow('Accounting barrier must be synchronous');
-    expect(entered).toBe(0); expect(root.serialize()).toEqual(before); await Promise.resolve();
+    authority.assertCurrent(); authority.assertSourceCurrent();
+    if (!readonly) await authority.admitWrite(() => { entered++; });
+    expect(entered).toBe(readonly ? 0 : 1); expect(reads).toBe(0); expect(root.serialize()).toEqual(before);
   } finally { root.close(); }
 });
 
