@@ -23,7 +23,7 @@ beforeAll(async () => {
     if (url.pathname === '/workspace/file/stat') return Response.json({ mtime: 'fixture' });
     if (url.pathname !== '/') return new Response(null, { status: 404 });
     const skin = url.searchParams.get('skin') === 'visual' ? 'visual' : 'classic';
-    return new Response(`<!doctype html><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/static/${skin}/css/styles.css"><style>html,body{margin:0}body{display:block;height:auto;min-height:0;overflow:visible}#editor{height:560px;width:100%}#preview{height:300px}#blur{position:fixed;right:0;top:0;z-index:100}</style><button id="blur">Blur</button><div id="editor"></div><div id="preview"></div><div id="chat" class="post-content"><h1>Chat heading</h1><p>Chat prose</p></div><script src="/static/common/js/marked.min.js"></script><script type="importmap">{"imports":{"#editor-vendor/codemirror":"/editor-vendor/codemirror.js"}}</script><script type="module" src="/fixture.js"></script>`, { headers: { 'content-type': 'text/html' } });
+    return new Response(`<!doctype html><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/static/${skin}/css/styles.css"><style>html,body{margin:0}body{display:block;height:auto;min-height:0;overflow:visible}#editor{height:560px;width:100%}#preview{height:300px}#blur{position:fixed;right:0;top:0;z-index:100}</style><button id="blur">Blur</button><div id="editor" class="editor-pane-instance-host"></div><div id="preview"></div><div id="chat" class="post-content"><h1>Chat heading</h1><p>Chat prose</p></div><script src="/static/common/js/marked.min.js"></script><script type="importmap">{"imports":{"#editor-vendor/codemirror":"/editor-vendor/codemirror.js"}}</script><script type="module" src="/fixture.js"></script>`, { headers: { 'content-type': 'text/html' } });
   } });
 }, 30000);
 afterAll(() => server?.stop(true));
@@ -48,7 +48,9 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) for (co
             const css = getComputedStyle(element);
             return { top: parseFloat(css.marginTop), bottom: parseFloat(css.marginBottom), padding: parseFloat(css.paddingTop) + parseFloat(css.paddingBottom), font: parseFloat(css.fontSize), line: parseFloat(css.lineHeight), height: element.getBoundingClientRect().height, children: [...element.querySelectorAll('span')].map(span => ({ className: span.className, font: getComputedStyle(span).fontSize, line: getComputedStyle(span).lineHeight, height: span.getBoundingClientRect().height })) };
           };
-          return { text: view.state.doc.toString(), lines: [...document.querySelectorAll('.cm-md-h-line')].map(metrics), headings: [...document.querySelectorAll('#preview :is(h1,h2,h3,h4,h5,h6)')].map(metrics), chat: metrics(document.querySelector('#chat h1')!) };
+          const heading = document.querySelector('#preview h1')!, box = heading.getBoundingClientRect();
+          const previewReceivesPointer = Boolean(document.elementFromPoint(box.left + 10, box.top + box.height / 2)?.closest('#preview'));
+          return { previewReceivesPointer, text: view.state.doc.toString(), lines: [...document.querySelectorAll('.cm-md-h-line')].map(metrics), headings: [...document.querySelectorAll('#preview :is(h1,h2,h3,h4,h5,h6)')].map(metrics), chat: metrics(document.querySelector('#chat h1')!) };
         });
         if (theme === 'github-light' && blankLines === 0) {
           const directory = resolve(root, 'generated/reports/editor-heading-spacing');
@@ -58,6 +60,7 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) for (co
           await page.locator('#preview .md-preview-panel').screenshot({ path: path.replace('.png', '-preview.png') });
           console.log('Heading spacing evidence', JSON.stringify({ path, lines: state.lines, headings: state.headings }));
         }
+        expect(state.previewReceivesPointer, 'the real attached preview must not be obscured by an unconstrained editor fixture').toBe(true);
         expect(state.text).toBe(text);
         for (const line of state.lines) {
           expect(line.padding, `inline heading must not add padding to source blank lines: ${JSON.stringify(line)}`).toBe(0);
