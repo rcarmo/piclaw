@@ -79,7 +79,7 @@ export interface RuntimeOptions {
   /** Fresh producer only; atomic root ACK plus exact execution harness. */
   readonly completeInputHandoff?: (input: AcceptedInput, submissionId: SubmissionId, capturedOperation: OperationSnapshot, intent: boolean, signal?: AbortSignal) => Promise<void>;
   readonly incarnation: string;
-  readonly onOperationSettled?: (operationId: string, processExit?: NativeExitReceipt) => void | Promise<void>;
+  readonly onOperationSettled?: (operationId: string, processExit: NativeExitReceipt | undefined, input: AcceptedInput) => void | Promise<void>;
   /** Synchronous, ancestry-scoped barrier before new effects and host settlement. */
   readonly assertAccountingReady?: (operationId: string, terminal?: boolean) => void;
   /** Existing receipt owner prepares facts outside SQL before terminal CAS. */
@@ -1865,6 +1865,30 @@ export class HostConversationRuntime {
       return { inputs: inputs.sort((a, b) => a.entryId - b.entryId), receipts };
     });
   }
+  /** Reporting carriers from the same verified successful window. The existing
+   * Goal receipt oracle remains unchanged; this read grants no execution. */
+  readSettledUsageMessages(input: AcceptedInput) {
+    const copy = inputSnapshot(input);
+    return this.observe(async () => {
+      const window = await this.settledUsageEntries(copy);
+      if (!window) return [];
+      const entries = window.entries.slice(window.start + 1, window.end + 1).filter(entry => {
+        const message = entry.model?.[0];
+        return entry.kind === 'pi.assistant' && message?.role === 'assistant' && ['stop', 'length', 'toolUse'].includes(message.stopReason);
+      });
+      const receipts = new Set((await this.readUsageEntries(copy.conversationId, entries)).map(receipt => receipt.entryId));
+      this.fence();
+      if ((await this.checked(copy)).operation.version !== window.version) throw Error("Settled usage operation changed");
+      return entries.flatMap(entry => {
+        const message = entry.model?.[0];
+        if (!receipts.has(entry.id) || message?.role !== "assistant" || entry.byTaskId === undefined) return [];
+        return [{ entryId: entry.id, taskId: entry.byTaskId, message: {
+          role: message.role, provider: message.provider, model: message.model, responseModel: message.responseModel,
+          api: message.api, timestamp: message.timestamp, usage: structuredClone(message.usage),
+        } }];
+      });
+    });
+  }
   private async settledUsageEntries(copy: AcceptedInput) {
       const primary = await this.readState(copy);
       const selected = await this.readOperationInputs(copy, primary);
@@ -2261,7 +2285,7 @@ export class HostConversationRuntime {
   private async settleInput(input: AcceptedInput) {
     const primary = await this.readState(input); const o = this.options;
     if (primary.operation.terminal) {
-      const terminal = value(await o.terminal.getTerminal(input.operationId)); this.fence(); await o.onOperationSettled?.(input.operationId, primary.answer?.processExit); this.fence(); return terminal;
+      const terminal = value(await o.terminal.getTerminal(input.operationId)); this.fence(); await o.onOperationSettled?.(input.operationId, primary.answer?.processExit, input); this.fence(); return terminal;
     }
     const initialVersion = primary.operation.version;
     const primarySubmissionId = primary.submissionId;
@@ -2329,7 +2353,7 @@ export class HostConversationRuntime {
     if (modelFailed) log.warn("Native turn failed; no automatic replay", { operation: "durable_turn.model_failed",
       chatJid: input.chatJid, operationId: input.operationId, conversationId: input.conversationId, submissionId: state.submissionId,
       ...(parseModelFailure(state.status?.status === "unanswered" ? state.status.detail : undefined) ?? { category: "unknown" }) });
-    await o.onOperationSettled?.(input.operationId, state.answer?.processExit); this.fence(); return terminal;
+    await o.onOperationSettled?.(input.operationId, state.answer?.processExit, input); this.fence(); return terminal;
   }
   /** Rollback-only shutdown: seal before yielding, join host calls, then reject ANY live
    * public task/submission before Harness.close can cancel work. Failure stays sealed.

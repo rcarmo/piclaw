@@ -266,6 +266,7 @@ test("runtime: final usage receipt survives settlement and remains bound to orig
     f.runtime = seeded;
     const input = await f.accept("request-1", "use-tool");
     expect(await f.runtime.readSettledUsage(input)).toBeNull();
+    expect(await f.runtime.readSettledUsageMessages(input)).toEqual([]);
     await f.runtime.submit(input); await seeded.close(); const reopened = await f.drain();
     try {
     const before = await f.work.getOperation(input.operationId);
@@ -273,6 +274,10 @@ test("runtime: final usage receipt survives settlement and remains bound to orig
     const progressReader = createHostGoalProgressReader({ isGoalProgressTool: name => name === "host_effect" }, { runtime: () => reopened, assertOwner() {} });
     expect(await progressReader(input)).toMatchObject({ hadToolActivity: true, message: { role: "assistant", stopReason: "stop" } });
     const settledReceipts = await reopened.readSettledUsage(input);
+    const observations = await reopened.readSettledUsageMessages(input);
+    expect(observations.map(observation => Number(observation.entryId))).toEqual(settledReceipts!.map(receipt => receipt.entryId));
+    expect(observations.every(observation => Number.isSafeInteger(observation.taskId) && !('content' in observation.message))).toBe(true);
+    await expect(reopened.readSettledUsageMessages({ ...input, requestHash: 'f'.repeat(64) })).rejects.toThrow('Host binding conflict');
     const receipt = settledReceipts!.at(-1)!;
     expect(settledReceipts).toHaveLength(2);
     expect(await reopened.readSettledToolNames(input)).toEqual(["host_effect"]);
@@ -304,6 +309,8 @@ test("runtime: final usage receipt survives settlement and remains bound to orig
     expect(f.db.query("SELECT * FROM terminal_usage_fixture").all()).toHaveLength(1);
     expect(await reopened.readSettledUsage(input)).toEqual(settledReceipts);
     const later = await f.accept("later-final-usage", "new plain answer");
+    expect(await reopened.readSettledUsageMessages(input)).toEqual(observations);
+    expect(await reopened.readSettledUsageMessages(later)).toEqual([]);
     expect(await reopened.readSettledUsage(input)).toEqual(settledReceipts);
     expect(await reopened.readSettledUsage(later)).toBeNull();
     expect(await reopened.readSettledToolNames(later)).toBeNull();

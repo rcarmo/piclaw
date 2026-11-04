@@ -21,13 +21,22 @@ import { registerOwnedAddonConfigApi, handleRegisteredAddonConfigApiRequest } fr
 import type { RuntimeModelServices } from "../../runtime/src/agent-pool/model-services.js";
 
 const slugs = ["code-review", "delegate", "goal", "observability", "plan-sidebar", "restic", "session-dashboard"];
-for (const accounted of [false, true]) test(`all seven shipped consumers admit actual native startup and Restic effects without legacy sessions; accounted=${accounted}`, async () => {
+const scenarios = [
+  { name: 'unbound', accounted: false, storedIdentity: false, actual: 2, reportFailure: false },
+  { name: 'accounted', accounted: true, storedIdentity: true, actual: 2, reportFailure: false },
+  { name: 'actual-zero', accounted: false, storedIdentity: false, actual: 0, reportFailure: false },
+  { name: 'actual-absent', accounted: false, storedIdentity: false, actual: undefined, reportFailure: false },
+  { name: 'identity-without-price', accounted: false, storedIdentity: true, actual: 2, reportFailure: false },
+  { name: 'one-report-failure', accounted: false, storedIdentity: false, actual: 2, reportFailure: true },
+];
+for (const scenario of scenarios) test(`all seven shipped consumers admit actual native startup and Restic effects without legacy sessions; scenario=${scenario.name}`, async () => {
+  const { accounted, storedIdentity, actual, reportFailure } = scenario;
   if (!process.env.PICLAW_NATIVE_CORE_CHILD) {
     const env = { ...process.env };
     delete env.PICLAW_TEST_FS_ISOLATION_ACTIVE; delete env.PICLAW_TEST_FS_ISOLATION_ROOT;
     const isolated = ensureTestFilesystemIsolation(env);
     try {
-      const child = Bun.spawn([process.execPath, "test", import.meta.path, '--test-name-pattern', `accounted=${accounted}$`], { cwd: import.meta.dir, env: { ...env, PICLAW_NATIVE_CORE_CHILD: "1" }, stdout: "pipe", stderr: "pipe" });
+      const child = Bun.spawn([process.execPath, "test", import.meta.path, '--test-name-pattern', `scenario=${scenario.name}$`], { cwd: import.meta.dir, env: { ...env, PICLAW_NATIVE_CORE_CHILD: "1" }, stdout: "pipe", stderr: "pipe" });
       const [code, out, err] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
       expect(code, out + err).toBe(0);
     } finally { isolated.cleanup(); }
@@ -52,8 +61,8 @@ for (const accounted of [false, true]) test(`all seven shipped consumers admit a
   const owner = acquireRuntimeLock({ lockPath: join(workspace, "core-consumers.lock"), strictOwnership: true, disabled: false });
   initDatabase(); const root = getDb(); storeChatMetadata("web:default", new Date().toISOString());
   root.transaction(() => extensionKvSet("observability", "config", { instance_name: "native-persisted-instance", enabled: true, appinsights_enabled: false, graphite_enabled: false, appinsights_live_metrics: false }, "global")).immediate();
-  const provider = accounted ? 'github-copilot' : 'synthetic';
-  if (accounted) {
+  const provider = storedIdentity ? 'github-copilot' : 'synthetic';
+  if (storedIdentity) {
     mkdirSync(getPiclawAgentDir(), { recursive: true });
     writeFileSync(join(getPiclawAgentDir(), 'auth.json'), JSON.stringify({ 'github-copilot': {
       type: 'oauth', access: 'fixture-only', refresh: 'fixture-only-account', expires: Date.now() + 3600000,
@@ -74,7 +83,9 @@ for (const accounted of [false, true]) test(`all seven shipped consumers admit a
     const message = { role: "assistant" as const, api: model.api, provider: model.provider, model: model.id, timestamp: Date.now(),
       content: step < sequence.length ? [{ type: "toolCall" as const, id: `restic-${step}`, name: "restic", arguments: sequence[step]! }] : [{ type: "text" as const, text: "Native core consumers complete" }],
       stopReason: step < sequence.length ? "toolUse" as const : "stop" as const,
-      usage: { input: 1, output: 1, reasoning: 1, ...(accounted ? { providerCost: 2 } : {}), cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: accounted ? .000001 : 0, output: accounted ? .000001 : 0, cacheRead: 0, cacheWrite: 0, total: accounted ? .000002 : 0 } } };
+      usage: { input: actual === 0 ? 0 : 1, output: actual === 0 ? 0 : 1, reasoning: actual === 0 ? 0 : 1,
+        invocationId: 'provider-selected-collision', usageEventId: 'provider-selected-collision',
+        ...(actual === undefined ? {} : { providerCost: reportFailure && step === 0 ? 3 : actual }), cacheRead: 0, cacheWrite: 0, totalTokens: actual === 0 ? 0 : 2, cost: { input: accounted ? .000001 : 0, output: accounted ? .000001 : 0, cacheRead: 0, cacheWrite: 0, total: accounted ? .000002 : 0 } } };
     queueMicrotask(() => { output.push({ type: "done", reason: message.stopReason, message }); output.end(message); });
     return output;
   };
@@ -130,25 +141,64 @@ for (const accounted of [false, true]) test(`all seven shipped consumers admit a
     expect(await updated!.json()).toMatchObject({ ok: true, config: { instance_name: expectedInstance, enabled: true } });
     const base = createRuntimeBaseServices({ dataDir: workspace });
     const pool = new AgentPool({ credentialStore: credentials, modelRuntime: runtime, modelRegistry: new ModelRegistry(runtime), ...backend.sessionOptions });
-    const bound = backend.bind({ queue: base.queue, agentPool: pool });
+    let bound = backend.bind({ queue: base.queue, agentPool: pool });
     const message = { id: "native-core-input", chat_jid: "web:default", sender: "user", sender_name: "User", content: "Inspect and configure the fixture backup service", timestamp: new Date().toISOString(), is_from_me: false, is_bot_message: false };
     const row = root.transaction(() => { const rowId = storeMessage(message); bound.getInputSourceAdmission!(message.chat_jid)!({ message, rowId, database: root }); return rowId; })();
+    if (reportFailure) root.exec(`CREATE TEMP TRIGGER reject_one_native_report BEFORE INSERT ON main.token_usage
+      WHEN NEW.provider_cost_total=3 BEGIN SELECT RAISE(ABORT,'Fixture report failure'); END`);
     expect(await bound.dispatchAcceptedInput!(message.chat_jid, message.id, row!)!()).toBe("settled");
     expect(calls).toBe(4);
+    let expectedRows = reportFailure ? 3 : 4;
+    expect(root.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: expectedRows });
+    expect(root.query('SELECT disposition FROM service_effect_s02_commits').all()).toEqual([{ disposition: 'completed' }]);
+    // Replay the existing accepted source; no provider or report duplication.
+    const reports = root.query('SELECT * FROM token_usage ORDER BY id').all();
+    const tasks = root.query('SELECT * FROM tasks ORDER BY id').all();
+    if (scenario.name === 'unbound' || reportFailure) {
+      backend.stop(); await backend.close();
+      backend = await createDefaultApplicationRuntime(owner, async () => ({ modelRuntime: runtime, modelRegistry: new ModelRegistry(runtime) } as RuntimeModelServices));
+      const reopenedPool = new AgentPool({ credentialStore: credentials, modelRuntime: runtime, modelRegistry: new ModelRegistry(runtime), ...backend.sessionOptions });
+      bound = backend.bind({ queue: base.queue, agentPool: reopenedPool });
+    }
+    expect(await bound.dispatchAcceptedInput!(message.chat_jid, message.id, row!)!()).toBe('settled');
+    expect(root.query('SELECT * FROM token_usage ORDER BY id').all()).toEqual(reports);
+    expect(root.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(tasks); expect(calls).toBe(4);
+    if (reportFailure) {
+      root.exec('DROP TRIGGER reject_one_native_report');
+      expect(await bound.dispatchAcceptedInput!(message.chat_jid, message.id, row!)!()).toBe('settled');
+      const repaired = root.query('SELECT * FROM token_usage ORDER BY id').all();
+      expect(repaired).toHaveLength(4);
+      expect(repaired.slice(0, reports.length)).toEqual(reports);
+      expect(root.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(tasks); expect(calls).toBe(4);
+      expectedRows = 4;
+    }
     // Read the rows written by the real native SDK/accounting path using the
     // exact installed public-package collector, not a second SQL projection.
-    if (accounted) {
+    {
       const { collectUsage } = await loadAddon('observability', 'usage-telemetry.ts');
       const before = root.serialize();
       const dbPath = (root.query('PRAGMA database_list').all() as { name: string; file: string }[]).find(row => row.name === 'main')!.file;
       const batch = collectUsage({ graphite_host: '', graphite_port: 2003, graphite_prefix: 'piclaw', instance_name: 'fixture' },
         { runAt: '1970-01-01T00:00:00.000Z', id: 0 }, new Date(), dbPath);
-      const points = new Map<string, number>(batch.points.map((point: { path: string; value: number }) => [point.path.replace('piclaw.fixture.usage.github-copilot.approved.', ''), point.value]));
-      expect(points.get('cost.provider_reported.currency_unknown.latest_known_amount')).toBe(2);
-      expect(points.get('cost.provider_reported.currency_unknown.known_rows')).toBe(4);
-      expect(points.get('cost.api_equivalent_usd.known_subtotal')).toBe(.000008);
-      expect(points.get('cost.api_equivalent_usd.complete_rows')).toBe(4);
-      expect(points.get('tokens.reasoning')).toBe(4); expect(points.get('tokens.total')).toBe(8);
+      expect(batch).not.toBeNull();
+      const points = new Map<string, number>(batch.points.map((point: { path: string; value: number }) => [point.path.replace(`piclaw.fixture.usage.${provider}.approved.`, ''), point.value]));
+      if (actual === undefined) {
+        expect(points.has('cost.provider_reported.currency_unknown.latest_known_amount')).toBe(false);
+        expect(points.get('cost.provider_reported.currency_unknown.known_rows')).toBe(0);
+        expect(points.get('cost.provider_reported.currency_unknown.unknown_rows')).toBe(expectedRows);
+      } else {
+        expect(points.get('cost.provider_reported.currency_unknown.latest_known_amount')).toBe(actual);
+        expect(points.get('cost.provider_reported.currency_unknown.known_rows')).toBe(expectedRows);
+      }
+      if (accounted) {
+        expect(points.get('cost.api_equivalent_usd.known_subtotal')).toBe(.000008);
+        expect(points.get('cost.api_equivalent_usd.complete_rows')).toBe(4);
+      } else {
+        expect(points.has('cost.api_equivalent_usd.known_subtotal')).toBe(false);
+        expect(points.get('cost.api_equivalent_usd.unknown_rows')).toBe(expectedRows);
+        expect(root.query('SELECT count(*) n FROM budget_request_reservations').get()).toEqual({ n: 0 });
+      }
+      expect(points.get('tokens.reasoning')).toBe(actual === 0 ? 0 : expectedRows); expect(points.get('tokens.total')).toBe(actual === 0 ? 0 : expectedRows * 2);
       expect(points.has('cost.estimated_usd')).toBe(false); expect(root.serialize()).toEqual(before);
     }
     expect(service.configurationSnapshot().config.excludes).toEqual(["native-owned-config"]);

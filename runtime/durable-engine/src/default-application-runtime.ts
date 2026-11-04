@@ -47,6 +47,7 @@ import { applicationOwnership, createApplicationBootstrapBundle } from "./applic
 import { previewHostRequest } from "../../src/agent-pool/model-request-preview.js";
 import { createHostModels } from "./host-models.js";
 import { readStoredProviderUsageAccountRef } from "../../src/agent-pool/provider-usage.js";
+import { recordMessageUsage } from "../../src/agent-pool/usage.js";
 import { createHostDreamTools } from './host-dream-tools.js';
 import { buildDreamPrompt } from '../../src/agent-memory/dream-prompt.js';
 import { getBudgetWorkContext } from '../../src/budget/context.js';
@@ -1335,7 +1336,37 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         assertInputAdmission(chat) { assertAdmission(); ensureLiveWatch(chat); },
         materializeAnswer: codex ? createHostCodexAnswerMaterializer({ root, cwd: WORKSPACE_DIR, answers, assertOwner: assert }) : undefined,
     async onMaintenanceSettled(workId) { codexServices?.releaseTurn(workId); assert(); await closeCompletedMaintenance(workId); },
-    async onOperationSettled(operationId, processExit) {
+    async onOperationSettled(operationId, processExit, input) {
+      // Successful public parent generations with no financial request owner.
+      // Mixed-attempt/receipt-owned generations remain with their existing producer.
+      // Reporting never supplies readiness, releases a hold or grants replay.
+      try {
+        if (mapping.bindings.some(binding => binding.conversationId === input.conversationId && binding.chatJid === input.chatJid)) {
+          const observations = await runtime().readSettledUsageMessages(input);
+          for (const observation of observations) {
+            try {
+              const linked = root.query(`SELECT id,model_invocation_json FROM budget_request_reservations
+                WHERE chat_jid=? AND json_extract(model_invocation_json,'$.domain')=?
+                  AND json_extract(model_invocation_json,'$.operationId')=? AND json_extract(model_invocation_json,'$.conversationId')=?
+                  AND json_extract(model_invocation_json,'$.taskId')=? AND json_extract(model_invocation_json,'$.taskKind')='pi.generation'`)
+                .all(input.chatJid, mapping.domain, operationId, input.conversationId, observation.taskId) as { id: string; model_invocation_json: string }[];
+              for (const row of linked) {
+                const request = findBudgetRequestByModelInvocation(JSON.parse(row.model_invocation_json), root);
+                if (request?.id !== row.id || request.provider_id !== observation.message.provider || request.model_id !== observation.message.model)
+                  throw Error('Native usage request identity conflict');
+              }
+              if (linked.length) continue; // Producer partition only: no valuation/state/readiness decision.
+              const id = `native:${JSON.stringify([input.incarnation, operationId, input.conversationId, observation.entryId])}`;
+              recordMessageUsage(input.chatJid, { ...observation.message, id,
+                usage: { ...observation.message.usage, invocationId: id } }, null);
+            } catch {
+              log.warn('Native usage entry could not be projected', { operation: 'durable_usage.entry_failed', operationId, entryId: observation.entryId });
+            }
+          }
+        }
+      } catch {
+        log.warn('Native usage window could not be observed', { operation: 'durable_usage.window_failed', operationId });
+      }
       codexServices?.releaseTurn(operationId);
       assert();
       if (processExit || processControls!.ownsOperation(operationId)) {

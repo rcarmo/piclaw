@@ -12,8 +12,25 @@ import "../helpers.js";
 import { initDatabase } from "../../src/db.js";
 import { getDb } from "../../src/db/connection.js";
 import { recordMessageUsage, recordSessionEventUsage } from "../../src/agent-pool/usage.js";
+import { withBudgetWorkContext } from "../../src/budget/context.js";
+import { ensureBudgetWork } from "../../src/db/budget-limits.js";
 
 describe("recordMessageUsage", () => {
+  test('explicit unlinked committed observation cannot borrow an ambient financial work owner', () => {
+    initDatabase();
+    const db = getDb(), chat = 'test:native-unlinked';
+    const work = { workId: 'ambient-report-work', chatJid: 'test:other-owner', kind: 'background' as const };
+    ensureBudgetWork({ id: work.workId, chatJid: work.chatJid, executionKind: work.kind }, db);
+    const message = { role: 'assistant', timestamp: '2026-11-04T00:00:00Z',
+      usage: { input: 1, output: 0, totalTokens: 1, providerCost: 0, cost: { total: 0 } } };
+    withBudgetWorkContext(work, () => {
+      recordMessageUsage(chat, { ...message, id: 'native-owned-entry' }, null);
+      recordMessageUsage(chat, { ...message, id: 'legacy-context-entry' });
+    });
+    expect(db.query("SELECT work_id,json_extract(report_payload_json,'$.execution_kind') execution_kind FROM budget_usage_events WHERE chat_jid=? ORDER BY token_usage_id").all(chat))
+      .toEqual([{ work_id: null, execution_kind: null }, { work_id: work.workId, execution_kind: work.kind }]);
+  });
+
   test("stores usage from a well-formed message", () => {
     initDatabase();
     const db = getDb();

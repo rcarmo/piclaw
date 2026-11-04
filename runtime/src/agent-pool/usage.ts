@@ -37,6 +37,7 @@ interface UsageMetadata {
   eventId?: string | null;
   invocationId?: string | null;
   contextTier?: unknown;
+  work?: ReturnType<typeof getBudgetWorkContext>;
 }
 
 type SessionWithUsageRecorder = AgentSession & {
@@ -178,7 +179,7 @@ function storeUsageRecord(chatJid: string, usage: Record<string, unknown>, metad
     : catalogueCostTotal !== null
       ? "catalogue_estimate"
       : "unavailable";
-  const work = getBudgetWorkContext();
+  const work = metadata.work === undefined ? getBudgetWorkContext() : metadata.work;
   const provider = asStringOrNull(metadata.provider);
   const cacheWriteFallback = cacheWrite > 0
     && (provider === "openai" || provider === "openai-codex")
@@ -246,8 +247,10 @@ function storeUsageRecord(chatJid: string, usage: Record<string, unknown>, metad
 /**
  * Extract token usage from an assistant message and store it in the database.
  * Kept for direct side-prompt streams and existing call sites/tests.
+ * Explicit null attribution keeps committed native observations out of ambient
+ * financial work; existing session callers retain their captured ALS default.
  */
-export function recordMessageUsage(chatJid: string, message: unknown): void {
+export function recordMessageUsage(chatJid: string, message: unknown, work = getBudgetWorkContext()): void {
   const msg = asRecord(message) as UsageCarrier | null;
   if (!msg || msg.role !== "assistant") return;
 
@@ -265,6 +268,7 @@ export function recordMessageUsage(chatJid: string, message: unknown): void {
     eventId: firstString(msg.id, msg.messageId),
     invocationId: firstString(msg.id, msg.messageId),
     contextTier: usage.contextTier ?? usage.context_tier,
+    work,
   });
 }
 
