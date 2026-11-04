@@ -7,11 +7,10 @@ import { admitSqliteWrite } from "../../src/db/sqlite-async-admission.js";
 import { boundHostRequestCost } from "../../src/budget/request-cost-bound.js";
 import { ensureBudgetWork, getBudgetWork, setBudgetWorkStatus } from "../../src/db/budget-limits.js";
 import { readStoredProviderUsageAccountRef } from "../../src/agent-pool/provider-usage.js";
-import { abandonBudgetRequest,BudgetRequestError,findBudgetRequestByModelInvocation,findBudgetRequestByLogicalModelInvocation,getBudgetRequest,readBudgetTerminalReceipt,retainBudgetTerminalReceipt,
+import { abandonBudgetRequest,BudgetRequestError,findBudgetRequestByModelInvocation,getBudgetRequest,readBudgetTerminalReceipt,retainBudgetTerminalReceipt,
   type BudgetModelInvocation,type BudgetRequestBinding,type BudgetRequestReservation,type BudgetTerminalReceiptPayload } from '../../src/db/budget-request-reservations.js';
 import { getDb } from '../../src/db/connection.js';
 import { createLogger } from '../../src/utils/logger.js';
-import type { TaskModelRequestScope } from './task-model-boundary-shim.js';
 const log = createLogger('durable.accounting');
 import { projectTerminalOutcome,decodeStoredTerminalOutcome } from './host-terminal-outcome.js';
 import { nativeBackgroundIdentity,nativeBackgroundPolicyHash,readNativeBackgroundPolicy,type NativeBackgroundPolicy } from '../../src/agent-pool/background-operation-contract.js';
@@ -220,26 +219,7 @@ function pendingSdkAccountingRows(database: Database, domain: string, root: numb
   ) SELECT r.*,a.broken AS accounting_scope_broken FROM ancestry a JOIN budget_request_reservations r ON r.id=a.request_id
     WHERE a.id=? AND a.owner_task_id IS NULL`).all(domain,chatJid ?? null,chatJid ?? null,domain,chatJid ?? null,chatJid ?? null,root) as (BudgetRequestReservation & { accounting_scope_broken: number })[];
 }
-/** Before the SDK phase body enters: reconcile immutable local facts or ask the
- * existing SDK scheduler to wait. No provider, tool, task-revival or queue port. */
-export async function prepareTaskAccounting(database: Database, domain: string, scope: TaskModelRequestScope, owner: AccountingOwner): Promise<boolean> {
-  const captured = captureAccountingOwner(database, owner);
-  scope.signal.throwIfAborted();
-  // Recovering an exact paid checkpoint is observation, not a new effect. Its
-  // real model/account/source guards still run in the unchanged model port.
-  if (scope.checkpointHash && (scope.taskKind === 'pi.generation' && scope.phase === 'request'
-    || scope.taskKind === 'pi.compaction' && scope.phase === 'summarize')) {
-    const row = findBudgetRequestByLogicalModelInvocation({ version: 1, domain, conversationId: scope.conversationId,
-      taskId: scope.taskId, taskKind: scope.taskKind, phase: scope.phase as 'request' | 'summarize', checkpointHash: scope.checkpointHash }, database);
-    if (row && row.terminal_receipt_json !== null) return true;
-  }
-  // This phase has not entered. Its observer may stop waiting for acquisition;
-  // the immutable receipt remains for the database owner's later reconciliation.
-  const observer = { signal: AbortSignal.any([captured.signal, scope.signal]), assertCurrent: captured.assertCurrent };
-  const ready = await prepareConversationAccounting(database, domain, scope.conversationId, observer);
-  scope.signal.throwIfAborted(); return ready;
-}
-/** Same receipt owner for SDK phase preparation and terminal observation. */
+/** Reconcile existing receipts under the caller's observation lifetime. */
 export async function prepareConversationAccounting(database: Database, domain: string, conversationId: number, owner: AccountingOwner): Promise<boolean> {
   const captured = captureAccountingOwner(database, owner);
   const rootFor = accountingConversationRoots(database), root = rootFor(conversationId);

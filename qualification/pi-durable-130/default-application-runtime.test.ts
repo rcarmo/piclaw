@@ -3181,30 +3181,29 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
   const tableCancelled = codemodeTableCancelled || scenario === "native-editable-table-revoked" || scenario === "native-editable-table-closed-publisher" || scenario === "native-editable-table-archived" || scenario === "native-editable-table-binding-revoked";
   expect(dispatch).toBeDefined();
   if (regretsReceiptFailure) {
-    let running = dispatch!();
-    const sleeping = async (after = 0) => {
-      const deadline = Date.now() + 3000; let row: { record: string } | null;
-      do {
-        row = root.query("SELECT record FROM tasks WHERE kind=? AND status='sleeping'").get(JSON.stringify('pi.generation')) as typeof row;
-        if (row && JSON.parse(row.record).state.until <= after) row = null;
-        if (!row) await Bun.sleep(10);
-      } while (!row && Date.now() < deadline);
-      expect(row).not.toBeNull(); return JSON.parse(row!.record).state.until as number;
-    };
+    const running = dispatch!();
     try {
-      const originalUntil = await sleeping(); expect(calls).toBe(2);
+      // No host-induced phase sleep: the SDK enters its next request body and
+      // its unchanged request owner refuses the receipt-less unknown send.
+      expect(await running).toBe('pending'); expect(calls).toBe(2);
+      const generation = JSON.parse((root.query('SELECT record FROM tasks WHERE kind=? ORDER BY id DESC LIMIT 1')
+        .get(JSON.stringify('pi.generation')) as { record: string }).record);
+      expect(generation.state).toMatchObject({ status: 'terminal', outcome: { status: 'failed', error: { detail: { reason: 'model_error' } } } });
       const held = root.query("SELECT * FROM budget_request_reservations WHERE json_extract(model_invocation_json,'$.taskKind')='pi.tool'").get() as BudgetRequestReservation;
       expect(held.state).toBe('unresolved'); expect(held.terminal_receipt_json).toBeNull();
       expect(root.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 1 });
       const tool = root.query('SELECT * FROM tasks WHERE kind=?').all(JSON.stringify('pi.tool'));
+      const tasks = root.query('SELECT * FROM tasks ORDER BY id').all();
       const ids = root.query('SELECT id FROM tasks ORDER BY id').all();
-      backend.stop(); await backend.close(); expect(await running).toBe('pending');
+      backend.stop(); await backend.close();
       root.exec('DROP TRIGGER regrets_receipt_fail'); await closeDatabase(); initDatabase(); root = getDb();
       backend = await createDefaultApplicationRuntime(owner, async () => services);
-      const rebound = backend.bind({ queue: base.queue, agentPool: pool }); running = rebound.dispatchAcceptedInput!(message.chat_jid, message.id, rowId!)!();
-      expect(await sleeping(originalUntil)).toBeGreaterThan(originalUntil); expect(calls).toBe(2);
+      const rebound = backend.bind({ queue: base.queue, agentPool: pool });
+      expect(await rebound.dispatchAcceptedInput!(message.chat_jid, message.id, rowId!)!()).toBe('pending');
+      expect(calls).toBe(2);
       expect(root.query('SELECT * FROM budget_request_reservations WHERE id=?').get(held.id)).toEqual(held);
       expect(root.query('SELECT * FROM tasks WHERE kind=?').all(JSON.stringify('pi.tool'))).toEqual(tool);
+      expect(root.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(tasks);
       expect(root.query('SELECT id FROM tasks ORDER BY id').all()).toEqual(ids);
       expect(root.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 1 });
       expect(root.query('SELECT count(*) n FROM service_effect_s02_commits').get()).toEqual({ n: 0 });
@@ -3219,10 +3218,10 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     try {
       const deadline = Date.now() + 3000; let paused: { id: number; record: string } | null;
       do {
-        paused = root.query("SELECT id,record FROM tasks WHERE kind=? AND status='sleeping'").get(JSON.stringify('pi.generation')) as typeof paused;
+        paused = root.query("SELECT id,record FROM tasks WHERE kind=? AND status='running' AND json_extract(record,'$.state.checkpoint.phase')='request' AND EXISTS(SELECT 1 FROM tasks WHERE kind=? AND status='terminal')").get(JSON.stringify('pi.generation'), JSON.stringify('pi.tool')) as typeof paused;
         if (!paused) await Bun.sleep(10);
       } while (!paused && Date.now() < deadline);
-      expect(paused).not.toBeNull(); expect(JSON.parse(paused!.record).state.checkpoint.phase).toBe('tools'); expect(calls).toBe(2);
+      expect(paused).not.toBeNull(); expect(JSON.parse(paused!.record).state.checkpoint.phase).toBe('request'); expect(calls).toBe(2);
       const toolRow = root.query('SELECT record FROM tasks WHERE kind=?').get(JSON.stringify('pi.tool')) as { record: string };
       const tool = JSON.parse(toolRow.record); expect(tool.state).toMatchObject({ status: 'terminal', outcome: { status: 'completed' } });
       const entry = JSON.parse((root.query("SELECT record FROM entries WHERE json_extract(record,'$.kind')='pi.tool-result'").get() as { record: string }).record);
@@ -3271,7 +3270,9 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       const after = root.query('SELECT id,record FROM tasks ORDER BY id').all() as { id: number; record: string }[];
       expect(after.filter(row => originals.has(row.id)).map(row => ({ id: row.id }))).toEqual(ids);
       const successors = after.filter(row => !originals.has(row.id));
-      expect(successors).toHaveLength(scenario.endsWith('-cancel') ? 0 : 1);
+      expect(successors).toHaveLength(0);
+      expect(JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(paused!.id) as { record: string }).record).state)
+        .toMatchObject({ status: 'terminal', outcome: { status: scenario.endsWith('-cancel') ? 'aborted' : 'completed' } });
       for (const successor of successors) expect(JSON.parse(successor.record)).toMatchObject({ kind: 'pi.generation', state: { status: 'terminal', outcome: { status: 'completed' } } });
     } finally {
       root.exec('DROP TRIGGER IF EXISTS regrets_pending_price'); backend.stop(); await backend.close();
@@ -3312,13 +3313,18 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       const deadline = Date.now() + 3000;
       let paused: { record: string } | null;
       do {
-        paused = root.query("SELECT record FROM tasks WHERE kind=? AND status='sleeping'").get(JSON.stringify('pi.tool')) as { record: string } | null;
+        paused = root.query("SELECT record FROM tasks WHERE kind=? AND status='running' AND json_extract(record,'$.state.checkpoint.phase')='request' AND EXISTS(SELECT 1 FROM tasks WHERE kind=? AND status='terminal')").get(JSON.stringify('pi.generation'), JSON.stringify('pi.tool')) as { record: string } | null;
         if (!paused) await Bun.sleep(10);
       } while (!paused && Date.now() < deadline);
       expect(paused).not.toBeNull();
-      const tool = JSON.parse(paused!.record); expect(tool.state.checkpoint.phase).toBe('call');
+      const generation = JSON.parse(paused!.record); expect(generation.state.checkpoint.phase).toBe('request');
+      const toolRow = root.query("SELECT record FROM tasks WHERE kind=?").get(JSON.stringify('pi.tool')) as { record: string };
+      const tool = JSON.parse(toolRow.record);
+      expect(tool.state).toMatchObject({ status: 'terminal', outcome: { status: 'completed' } });
       expect(calls).toBe(1); expect(observedResults.size).toBe(0);
-      expect(existsSync(join(workspace, 'accounting-pending-effect.txt'))).toBe(false);
+      const entry = JSON.parse((root.query("SELECT record FROM entries WHERE json_extract(record,'$.kind')='pi.tool-result'").get() as { record: string }).record);
+      expect(entry.model[0]).toMatchObject({ toolCallId: 'factory-tool-1', toolName: 'write', isError: false });
+      expect(readFileSync(join(workspace, 'accounting-pending-effect.txt'), 'utf8')).toBe('effect after settlement');
       const held = root.query('SELECT * FROM budget_request_reservations').get() as BudgetRequestReservation;
       expect(held.state).toBe('dispatched'); expect(held.terminal_receipt_json).not.toBeNull();
       expect(root.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
@@ -3331,8 +3337,9 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
         const target = await position.readAbortScope!(); expect(target).not.toBeNull();
         expect(await position.abort!(target!)).toBe(true); expect(await running).toBe('pending');
         const tasks = root.query('SELECT * FROM tasks ORDER BY id').all();
-        expect(JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(tool.id) as { record: string }).record).state)
+        expect(JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(generation.id) as { record: string }).record).state)
           .toMatchObject({ status: 'terminal', outcome: { status: 'aborted' } });
+        expect(root.query('SELECT record FROM tasks WHERE id=?').get(tool.id)).toEqual(toolRow);
         root.exec('DROP TRIGGER accounting_tool_price_fail');
         expect(await bound.dispatchAcceptedInput!(message.chat_jid, message.id, rowId!)!()).toBe('settled');
         expect(root.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(tasks);
@@ -3340,12 +3347,13 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
         expect(root.query('SELECT count(*) n FROM token_usage WHERE invocation_id=?').get(held.id)).toEqual({ n: 1 });
         const repaired = root.query('SELECT * FROM budget_request_reservations WHERE id=?').get(held.id) as BudgetRequestReservation;
         expect(repaired.terminal_receipt_json).toBe(held.terminal_receipt_json); expect(repaired.terminal_received_at).toBe(held.terminal_received_at);
-        expect(existsSync(join(workspace, 'accounting-pending-effect.txt'))).toBe(false); expect(calls).toBe(1); return;
+        expect(readFileSync(join(workspace, 'accounting-pending-effect.txt'), 'utf8')).toBe('effect after settlement'); expect(calls).toBe(1); return;
       }
       let complete = running;
       if (scenario.endsWith('-reopen')) {
         backend.stop(); await backend.close(); expect(await running).toBe('pending');
-        expect(root.query('SELECT record FROM tasks WHERE id=?').get(tool.id)).toEqual(paused);
+        expect(root.query('SELECT record FROM tasks WHERE id=?').get(tool.id)).toEqual(toolRow);
+        expect(JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(generation.id) as { record: string }).record).state.checkpoint).toEqual(generation.state.checkpoint);
         root.exec('DROP TRIGGER accounting_tool_price_fail'); await closeDatabase(); initDatabase(); root = getDb();
         backend = await createDefaultApplicationRuntime(owner, async () => services);
         const rebound = backend.bind({ queue: base.queue, agentPool: pool });
@@ -3357,10 +3365,11 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(calls).toBe(2);
       const originalIds = new Set(ids.map(row => (row as { id: number }).id));
       const successors = (root.query('SELECT id,record FROM tasks ORDER BY id').all() as { id: number; record: string }[]).filter(row => !originalIds.has(row.id));
-      // Stock postTools hands off to exactly one new generation, not a retry of
-      // the paid request or the original tool callback.
-      expect(successors).toHaveLength(1);
-      expect(JSON.parse(successors[0]!.record)).toMatchObject({ kind: 'pi.generation', state: { status: 'terminal', outcome: { status: 'completed' } } });
+      // The SDK already handed off before finance repaired. Complete that same
+      // request task, without allocating or replaying a tool/model successor.
+      expect(successors).toHaveLength(0);
+      expect(JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(generation.id) as { record: string }).record))
+        .toMatchObject({ kind: 'pi.generation', state: { status: 'terminal', outcome: { status: 'completed' } } });
       expect(JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(tool.id) as { record: string }).record))
         .toMatchObject({ id: tool.id, input: tool.input, state: { status: 'terminal', outcome: { status: 'completed' } } });
       const repaired = root.query('SELECT * FROM budget_request_reservations WHERE id=?').get(held.id) as BudgetRequestReservation;
@@ -4670,12 +4679,12 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
           const deadline = Date.now() + 3000;
           let paused: { record: string } | null;
           do {
-            paused = root.query("SELECT record FROM tasks WHERE kind=? AND status='sleeping'").get(JSON.stringify('pi.generation')) as { record: string } | null;
+            paused = root.query("SELECT record FROM tasks WHERE kind=? AND status='running' AND json_extract(record,'$.state.checkpoint.phase')='request'").get(JSON.stringify('pi.generation')) as { record: string } | null;
             if (!paused) await Bun.sleep(10);
           } while (!paused && Date.now() < deadline);
           expect(paused).not.toBeNull();
           const parent = JSON.parse(paused!.record);
-          expect(parent.state.checkpoint.phase).toBe('prepare');
+          expect(parent.state.checkpoint.phase).toBe('request');
           expect(parent.state.status).not.toBe('terminal');
           expect(calls).toBe(beforeCalls + 1);
           expect(root.query("SELECT 1 FROM entries WHERE json_extract(record,'$.kind')='pi.assistant' AND json_extract(record,'$.model[0].stopReason')='error'").get()).toBeNull();
@@ -4704,9 +4713,12 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
             expect(calls).toBe(beforeCalls + 1); return;
           }
           if (scenario.endsWith('-reopen')) {
-            const sleeping = root.query('SELECT record FROM tasks WHERE id=?').get(parent.id);
+            const runningRecord = JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(parent.id) as { record: string }).record);
             backend.stop(); await backend.close(); expect(await automaticDispatch).toBe('pending');
-            expect(root.query('SELECT record FROM tasks WHERE id=?').get(parent.id)).toEqual(sleeping);
+            const stopped = JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(parent.id) as { record: string }).record);
+            expect(stopped).toEqual({ ...runningRecord, state: { ...runningRecord.state, status: 'pending' } });
+            expect(JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(summary.id) as { record: string }).record)).toEqual(summary);
+            expect(root.query('SELECT * FROM budget_request_reservations WHERE id=?').get(held.id)).toEqual(held);
             root.exec('DROP TRIGGER compaction_pending_close'); await closeDatabase(); initDatabase(); root = getDb();
             backend = await createDefaultApplicationRuntime(owner, async () => services);
             const rebound = backend.bind({ queue: base.queue, agentPool: pool });

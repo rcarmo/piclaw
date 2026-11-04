@@ -6,7 +6,7 @@ import { createSession, GenerationTask, CompactionTask, type ConversationId, typ
 import { BACKGROUND_CONTEXT as context } from "../../runtime/durable-engine/qualification/context.ts";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
 import { BunSqliteDatabase } from "../../runtime/durable-engine/src/bun-sqlite.js";
-import { assertConversationAccountingReady, operationBudgetWorkId, prepareTaskAccounting, reserveHostRequest } from "../../runtime/durable-engine/src/host-request-accounting.js";
+import { assertConversationAccountingReady, operationBudgetWorkId, prepareConversationAccounting, reserveHostRequest } from "../../runtime/durable-engine/src/host-request-accounting.js";
 import { projectTerminalOutcome } from "../../runtime/durable-engine/src/host-terminal-outcome.js";
 import { modelRequestAccounting } from "../../runtime/src/budget/model-request-accounting.js";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
@@ -303,9 +303,7 @@ for (const outcome of ['failed', 'aborted'] as const) for (const state of ['disp
     for (const at of [f.parent, f.child, f.sibling]) {
       expect(() => f.ready(at)).not.toThrow(); expect(() => f.ready(at, undefined, true)).not.toThrow();
     }
-    // Preparation must not put a new accepted phase into an indefinite wait.
-    const scope = { ...f.parent, taskKind: 'pi.generation', phase: 'prepare', signal: owner.signal };
-    expect(await prepareTaskAccounting(f.database, domain, scope, owner)).toBe(true);
+    expect(await prepareConversationAccounting(f.database, domain, f.parent.conversationId, owner)).toBe(true);
     await f.reopen();
     expect(() => f.ready(f.parent, undefined, true)).not.toThrow();
     expect(getBudgetRequest(binding.id, f.database)).toEqual(before);
@@ -329,7 +327,7 @@ for (const ancestry of ['bound', 'standalone'] as const) test(`failed task-bound
   abandonBudgetRequest(binding, f.database);
   const before = getBudgetRequest(binding.id, f.database), work = f.database.query('SELECT * FROM budget_work ORDER BY id').all();
   expect(() => f.ready(f.parent, undefined, true)).not.toThrow();
-  expect(await prepareTaskAccounting(f.database, domain, { ...f.parent, taskKind: 'pi.generation', phase: 'prepare', signal: owner.signal }, owner)).toBe(true);
+  expect(await prepareConversationAccounting(f.database, domain, f.parent.conversationId, owner)).toBe(true);
   await f.reopen();
   expect(() => f.ready(f.parent, undefined, true)).not.toThrow();
   expect(getBudgetRequest(binding.id, f.database)).toEqual(before);
@@ -430,78 +428,67 @@ test('dependency queries use outstanding-work/status indexes rather than billed 
   expect([...pendingPlan, ...livePlan].some(row => scan.test(row.detail))).toBe(false);
 }));
 
-for (const namespace of [domain, 'unrelated-domain']) test(`invalid retained facts outside the tree/domain do not fault phase preparation: ${namespace}`, () => fixture(async f => {
+for (const namespace of [domain, 'unrelated-domain']) test(`invalid retained facts outside the tree/domain do not fault related receipt reconciliation: ${namespace}`, () => fixture(async f => {
   const at = namespace === domain ? f.independent : f.child;
   const binding = f.reserve(at, namespace), invalid = terminal(); invalid.usage.input = -1;
   f.retain(binding, invalid); const held = getBudgetRequest(binding.id, f.database);
-  const scope = (location: Location) => ({ ...location, signal: owner.signal, taskKind: 'pi.generation', phase: 'prepare' });
-  expect(await prepareTaskAccounting(f.database, domain, scope(f.parent), owner)).toBe(true);
+  expect(await prepareConversationAccounting(f.database, domain, f.parent.conversationId, owner)).toBe(true);
   expect(() => f.ready(f.parent)).not.toThrow();
-  await expect(prepareTaskAccounting(f.database, namespace, scope(at), owner)).rejects.toBeInstanceOf(BudgetRequestError);
+  await expect(prepareConversationAccounting(f.database, namespace, at.conversationId, owner)).rejects.toBeInstanceOf(BudgetRequestError);
   expect(getBudgetRequest(binding.id, f.database)).toEqual(held);
   expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
 }));
 
-test('receipt-less unresolved sends wait before a new phase without guessing or dispatching', () => fixture(async f => {
+test('receipt-less unresolved sends remain unreconciled without guessing or dispatching', () => fixture(async f => {
   const binding = f.reserve(f.child); dispatchBudgetRequest(binding, { signal: owner.signal, authorise() {} }, f.database);
   abandonBudgetRequest(binding, f.database); const held = getBudgetRequest(binding.id, f.database);
-  expect(await prepareTaskAccounting(f.database, domain, { ...f.parent, signal: owner.signal, taskKind: 'pi.generation', phase: 'prepare' }, owner)).toBe(false);
+  expect(await prepareConversationAccounting(f.database, domain, f.parent.conversationId, owner)).toBe(false);
   expect(getBudgetRequest(binding.id, f.database)).toEqual(held);
   expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
 }));
 
-test('phase preparation reconciles only related retained debt, preserving receipt and independent scopes', () => fixture(async f => {
+test('receipt reconciliation repairs only related retained debt, preserving receipt and independent scopes', () => fixture(async f => {
   const binding = f.reserve(f.child); f.retain(binding);
   const held = getBudgetRequest(binding.id, f.database)!;
-  const scope = (at: Location) => ({ taskId: at.taskId, conversationId: at.conversationId,
-    signal: owner.signal, taskKind: 'pi.generation', phase: 'prepare' });
   f.database.exec("CREATE TRIGGER phase_price_fault BEFORE INSERT ON token_usage BEGIN SELECT RAISE(ABORT,'synthetic phase price fault'); END");
-  expect(await prepareTaskAccounting(f.database, domain, scope(f.parent), owner)).toBe(false);
+  expect(await prepareConversationAccounting(f.database, domain, f.parent.conversationId, owner)).toBe(false);
   expect(getBudgetRequest(binding.id, f.database)).toEqual(held);
-  expect(await prepareTaskAccounting(f.database, domain, scope(f.independent), owner)).toBe(true);
-  expect(await prepareTaskAccounting(f.database, domain, scope(f.fork), owner)).toBe(true);
+  expect(await prepareConversationAccounting(f.database, domain, f.independent.conversationId, owner)).toBe(true);
+  expect(await prepareConversationAccounting(f.database, domain, f.fork.conversationId, owner)).toBe(true);
   expect(getBudgetRequest(binding.id, f.database)).toEqual(held);
   f.database.exec('DROP TRIGGER phase_price_fault');
-  expect(await prepareTaskAccounting(f.database, domain, scope(f.sibling), owner)).toBe(true);
+  expect(await prepareConversationAccounting(f.database, domain, f.sibling.conversationId, owner)).toBe(true);
   const settled = getBudgetRequest(binding.id, f.database)!;
   expect(settled.state).toBe('settled'); expect(settled.terminal_receipt_json).toBe(held.terminal_receipt_json);
   expect(settled.terminal_receipt_sha256).toBe(held.terminal_receipt_sha256); expect(settled.terminal_received_at).toBe(held.terminal_received_at);
   expect(f.database.query('SELECT count(*) n FROM token_usage WHERE invocation_id=?').get(binding.id)).toEqual({ n: 1 });
 }));
 
-test('an unentered phase cancels writer acquisition without discarding its paid receipt or owner', () => fixture(async f => {
+test('a receipt observer cancels writer acquisition without discarding its paid receipt or owner', () => fixture(async f => {
   const binding = f.reserve(f.child); f.retain(binding);
   const held = getBudgetRequest(binding.id, f.database)!;
   const path = (f.database.query("SELECT file FROM pragma_database_list WHERE name='main'").get() as { file: string }).file;
-  const writer = new Database(path), caller = new AbortController(), cancelled = Error('phase observer cancelled');
+  const writer = new Database(path), caller = new AbortController(), cancelled = Error('receipt observer cancelled');
   writer.exec('BEGIN IMMEDIATE');
   const timer = setTimeout(() => caller.abort(cancelled), 20);
   try {
-    await expect(prepareTaskAccounting(f.database, domain, { taskId: f.parent.taskId, conversationId: f.parent.conversationId,
-      signal: caller.signal, taskKind: 'pi.generation', phase: 'prepare' }, owner)).rejects.toBe(cancelled);
+    await expect(prepareConversationAccounting(f.database, domain, f.parent.conversationId,
+      { signal: caller.signal, assertCurrent: owner.assertCurrent })).rejects.toBe(cancelled);
     expect(owner.signal.aborted).toBe(false); expect(getBudgetRequest(binding.id, f.database)).toEqual(held);
     expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
   } finally { clearTimeout(timer); writer.exec('ROLLBACK'); writer.close(); }
 }));
 
-test('phase preparation permits exact paid-checkpoint observation while sibling debt still blocks new effects', () => fixture(async f => {
-  const first = f.reserve(f.parent), second = f.reserve(f.child); f.retain(first); f.retain(second);
-  const before = f.database.query('SELECT * FROM budget_request_reservations ORDER BY id').all();
-  f.database.exec("CREATE TRIGGER phase_price_fault BEFORE INSERT ON token_usage BEGIN SELECT RAISE(ABORT,'synthetic phase price fault'); END");
-  const scope = { taskId: f.parent.taskId, conversationId: f.parent.conversationId, signal: owner.signal,
-    taskKind: 'pi.generation', phase: 'request', checkpointHash: first.modelInvocation!.checkpointHash };
-  expect(await prepareTaskAccounting(f.database, domain, scope, owner)).toBe(true);
-  expect(f.database.query('SELECT * FROM budget_request_reservations ORDER BY id').all()).toEqual(before);
-  expect(await prepareTaskAccounting(f.database, domain, { ...scope, checkpointHash: 'f'.repeat(64) }, owner)).toBe(false);
-  expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
-}));
+// Exact paid-checkpoint recovery stays in reserveHostRequest and the actual
+// generation/compaction SIGKILL receipt fixtures; it is no longer a phase gate.
+// @ts-expect-error The financial task-preparation adapter has been retired.
+type RetiredTaskPreparation = typeof import("../../runtime/durable-engine/src/host-request-accounting.js")['prepareTaskAccounting'];
 
-test('phase preparation leaves intentional unknown valuation ready and byte-identical', () => fixture(async f => {
+test('receipt reconciliation leaves intentional unknown valuation intact and byte-identical', () => fixture(async f => {
   const binding = f.reserve(f.child); f.retain(binding, terminal(true));
   await modelRequestAccounting({ authorise() {}, documentedFree: false }, f.database).settleRetainedRequest(binding, owner);
   const row = getBudgetRequest(binding.id, f.database);
-  expect(await prepareTaskAccounting(f.database, domain, { taskId: f.parent.taskId, conversationId: f.parent.conversationId,
-    signal: owner.signal, taskKind: 'pi.generation', phase: 'prepare' }, owner)).toBe(true);
+  expect(await prepareConversationAccounting(f.database, domain, f.parent.conversationId, owner)).toBe(true);
   expect(getBudgetRequest(binding.id, f.database)).toEqual(row);
   expect(f.database.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
 }));

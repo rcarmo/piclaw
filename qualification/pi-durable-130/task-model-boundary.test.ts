@@ -3,6 +3,28 @@ import { createRegistry, defineExtension, defineTask, ToolTask, type ToolTaskInp
 import { context } from "./src/fixture.ts";
 import { withTaskModelRequestScope, taskModelRequestScope, taskModelHookScope, taskModelToolScope } from "../../runtime/durable-engine/src/task-model-boundary-shim.ts";
 
+test('native phase has no financial preparation protocol or host-induced SDK sleep', async () => {
+  const registry = createRegistry(), controller = new AbortController();
+  let preparations = 0, bodies = 0, sleeps = 0;
+  const result = Symbol('original body');
+  const task = defineTask({ name: 'qualification.no-financial-phase', version: 1,
+    initial: () => ({ phase: 'request' as const }), phases: { async request(record, runtime, ctx) {
+      bodies++; expect<unknown>(record).toBe(original); expect<unknown>(runtime).toBe(actual); expect(ctx).toBe(context);
+      expect(taskModelRequestScope(runtime.signal)?.taskId).toBe(runtime.taskId); return result as never;
+    } }, async abort() {} });
+  registry.install(defineExtension({ name: 'no-financial-phase', tasks: [task] }));
+  const original = { id: 12, conversationId: 34, kind: task.definition.name, version: 1, input: {},
+    state: { status: 'running', checkpoint: { phase: 'request' } } };
+  const actual = { taskId: 12, conversationId: 34, signal: controller.signal, now: () => 1000,
+    sleepUntil() { sleeps++; return Symbol('financial sleep'); } };
+  // @ts-expect-error Financial beforePhase callbacks have been retired from this API.
+  const wrapped = withTaskModelRequestScope(registry, async () => { preparations++; return false; });
+  const execute = wrapped.snapshot().task(task.definition.name)!.definition.phases.request as Function;
+  expect(await execute(original, actual, context)).toBe(result);
+  expect(preparations).toBe(0); expect(bodies).toBe(1); expect(sleeps).toBe(0);
+  expect(taskModelRequestScope(controller.signal)).toBeUndefined();
+});
+
 test("temporary request scope preserves exact invocation identity through awaits and rejects other signals", async () => {
   const registry = createRegistry();
   const definition = defineTask({ name: "qualification.scope", version: 1, initial: () => ({ phase: "request" as const }),
@@ -25,11 +47,13 @@ test("temporary request scope preserves exact invocation identity through awaits
     } }, async abort() {} });
   registry.install(defineExtension({ name: "observe", tasks: [task] }));
   const phase = wrapped.snapshot().task("qualification.observe")!.definition.phases.summarize as Function;
-  await phase({}, runtime, context);
+  const record = { id: 12, conversationId: 34, kind: task.definition.name, version: 1, input: {},
+    state: { status: 'running', checkpoint: { phase: 'summarize' } } };
+  await phase(record, runtime, context);
   expect(observed).toMatchObject({ taskId: 12, conversationId: 34, taskKind: "qualification.observe", phase: "summarize", signal: controller.signal });
   expect(taskModelRequestScope(controller.signal)).toBeUndefined();
   controller.abort();
-  await expect(phase({}, runtime, context)).rejects.toThrow();
+  expect(() => phase(record, runtime, context)).toThrow();
 });
 
 test("Goal hook identity resolves only its current public generation IDs without a HookApi signal", async () => {
@@ -58,7 +82,8 @@ test("Goal hook identity resolves only its current public generation IDs without
   } };
   const wrapped = withTaskModelRequestScope(reader);
   const phase = wrapped.snapshot().task("pi.generation")!.definition.phases.request as Function;
-  await phase({}, { taskId: 12, conversationId: 34, signal: controller.signal }, context);
+  await phase({ id: 12, conversationId: 34, kind: task.definition.name, version: 1, input: {},
+    state: { status: 'running', checkpoint: { phase: 'request' } } }, { taskId: 12, conversationId: 34, signal: controller.signal }, context);
   expect(taskModelHookScope({ taskId: 12 as never, conversationId: 34 as never })).toBeUndefined();
 });
 
@@ -101,7 +126,9 @@ for (const [kind, phaseName] of [["pi.generation", "request"], ["pi.compaction",
   }
   for (const changed of [{ ...record, id: 99 }, { ...record, conversationId: 99 }, { ...record, version: 2 },
     { ...record, state: { status: "pending", checkpoint } }, { ...record, state: { status: "running", checkpoint: { ...checkpoint, phase: "other" } } }]) {
-    await execute(changed, runtime, context); expect(hashes.at(-1)).toBeUndefined();
+    const before = hashes.length;
+    expect(() => execute(changed, runtime, context)).toThrow('Exact running SDK phase required');
+    expect(hashes).toHaveLength(before);
   }
   expect(taskModelRequestScope(controller.signal)).toBeUndefined();
 });
@@ -124,7 +151,9 @@ test("temporary request scope isolates concurrent phases and follows registry re
   const unsubscribe = wrapped.subscribe(() => { changes++; });
   const phase = original.task("qualification.concurrent")!.definition.phases.summarize as Function;
   const signals = [new AbortController().signal, new AbortController().signal];
-  await Promise.all(signals.map((signal, index) => phase({}, { taskId: index + 1, conversationId: index + 10, signal }, context)));
+  await Promise.all(signals.map((signal, index) => phase({ id: index + 1, conversationId: index + 10,
+    kind: 'qualification.concurrent', version: 1, input: {}, state: { status: 'running', checkpoint: { phase: 'summarize' } } },
+    { taskId: index + 1, conversationId: index + 10, signal }, context)));
   registry.install(defineExtension({ name: "concurrent", tasks: [make(2)] }));
   expect(changes).toBe(1);
   expect(original.task("qualification.concurrent")!.definition.version).toBe(1);
@@ -202,114 +231,74 @@ test("temporary request scope is rebuilt for a persisted summary phase after har
   } finally { await harness.close(context); await rm(directory, { recursive: true, force: true }); }
 });
 
-// Executable-definition unit fixture, like the identity tests above. Persisted
-// lifecycle assertions below use only public SDK task creation and transitions.
-function preparationFixture(beforePhase: NonNullable<Parameters<typeof withTaskModelRequestScope>[1]>, body: Function) {
+// Executable-definition unit fixture. Financial preparation is absent; the
+// SDK owns waiting and every original body result/failure.
+function phaseFixture(body: Function) {
   const registry = createRegistry(), controller = new AbortController();
-  const task = defineTask({ name: "qualification.prepared-phase", version: 1,
+  const task = defineTask({ name: "qualification.scoped-phase", version: 1,
     initial: () => ({ phase: "request" as const }),
     phases: { request: (record, runtime, ctx) => body(record, runtime, ctx) }, async abort() {} });
-  registry.install(defineExtension({ name: "prepared-phase", tasks: [task] }));
+  registry.install(defineExtension({ name: "scoped-phase", tasks: [task] }));
   const checkpoint = { phase: "request", attempt: 3, cursor: { offset: 7, keys: ["original", "checkpoint"] } };
   const record = { id: 12, conversationId: 34, kind: task.definition.name, version: 1,
     input: { source: "original" }, state: { status: "running", checkpoint } };
   const sleeps: unknown[][] = [];
-  const sleepResult = Symbol("native sleep result");
   const runtime = { taskId: 12, conversationId: 34, signal: controller.signal, now: () => 1000,
-    sleepUntil: async (...args: unknown[]) => { sleeps.push(args); return sleepResult; } };
-  const execute = withTaskModelRequestScope(registry, beforePhase).snapshot().task(task.definition.name)!.definition.phases.request as Function;
-  return { execute, record, checkpoint, runtime, controller, sleeps, sleepResult };
+    sleepUntil: (...args: unknown[]) => { sleeps.push(args); return Symbol("SDK sleep"); } };
+  const execute = withTaskModelRequestScope(registry).snapshot().task(task.definition.name)!.definition.phases.request as Function;
+  return { execute, record, checkpoint, runtime, controller, sleeps };
 }
 
-test("beforePhase false sleeps with the exact unchanged checkpoint before entering any body", async () => {
-  let preparations = 0, bodies = 0;
-  const fixture = preparationFixture(async scope => {
-    preparations++;
-    await Promise.resolve();
-    expect(taskModelRequestScope(scope.signal)).toBe(scope);
-    expect(Object.isFrozen(scope)).toBe(true);
-    expect(scope).toMatchObject({ taskId: 12, conversationId: 34, taskKind: "qualification.prepared-phase", phase: "request" });
-    return false;
-  }, () => { bodies++; throw Error("body must not enter"); });
-  const before = structuredClone(fixture.record);
-  expect(await fixture.execute(fixture.record, fixture.runtime, context)).toBe(fixture.sleepResult);
-  expect(preparations).toBe(1); expect(bodies).toBe(0);
-  expect(fixture.sleeps).toHaveLength(1);
-  expect(fixture.sleeps[0]).toEqual([2000, fixture.checkpoint, context]);
-  expect(fixture.sleeps[0]![1]).toBe(fixture.checkpoint);
-  expect(fixture.sleeps[0]![2]).toBe(context);
-  expect(fixture.record).toEqual(before);
-  expect(taskModelRequestScope(fixture.runtime.signal)).toBeUndefined();
-});
-
-test("beforePhase true invokes the original body exactly once with its original arguments and result", async () => {
+test("scope invokes the original body once with its original arguments and result", async () => {
   const result = Symbol("original body result");
-  let preparations = 0, bodies = 0;
-  const fixture = preparationFixture(async scope => {
-    preparations++; expect(taskModelRequestScope(scope.signal)).toBe(scope); return true;
-  }, async (record: unknown, runtime: typeof fixture.runtime, ctx: unknown) => {
+  let bodies = 0;
+  const fixture = phaseFixture(async (record: unknown, runtime: typeof fixture.runtime, ctx: unknown) => {
     bodies++;
     expect(record).toBe(fixture.record); expect(runtime).toBe(fixture.runtime); expect(ctx).toBe(context);
     await Promise.resolve();
     expect(taskModelRequestScope(runtime.signal)?.phase).toBe("request");
     return result;
   });
+  const before = structuredClone(fixture.record);
   expect(await fixture.execute(fixture.record, fixture.runtime, context)).toBe(result);
-  expect(preparations).toBe(1); expect(bodies).toBe(1); expect(fixture.sleeps).toEqual([]);
+  expect(bodies).toBe(1); expect(fixture.sleeps).toEqual([]); expect(fixture.record).toEqual(before);
   expect(taskModelRequestScope(fixture.runtime.signal)).toBeUndefined();
 });
 
-for (const asynchronous of [false, true]) test(`beforePhase never catches an entered ${asynchronous ? "async" : "sync"} body failure as a wait or replay`, async () => {
+for (const asynchronous of [false, true]) test(`scope never catches an entered ${asynchronous ? "async" : "sync"} body failure as a wait or replay`, async () => {
   const failure = Error("original entered body failure");
-  let preparations = 0, bodies = 0;
+  let bodies = 0;
   const enter = () => { bodies++; throw failure; };
-  const fixture = preparationFixture(async () => { preparations++; return true; },
-    asynchronous ? async () => { await Promise.resolve(); return enter(); } : enter);
-  await expect(fixture.execute(fixture.record, fixture.runtime, context)).rejects.toBe(failure);
+  const fixture = phaseFixture(asynchronous ? async () => { await Promise.resolve(); return enter(); } : enter);
+  await expect(Promise.resolve().then(() => fixture.execute(fixture.record, fixture.runtime, context))).rejects.toBe(failure);
   await Promise.resolve();
-  expect(preparations).toBe(1); expect(bodies).toBe(1); expect(fixture.sleeps).toEqual([]);
+  expect(bodies).toBe(1); expect(fixture.sleeps).toEqual([]);
   expect(taskModelRequestScope(fixture.runtime.signal)).toBeUndefined();
 });
 
-for (const ready of [false, true]) test(`cancellation during async beforePhase blocks both body and sleep after readiness ${ready}`, async () => {
+test("scope rejects cancelled entry and preserves cancellation through an entered body await", async () => {
   const { barrier } = await import("./src/fixture.ts");
-  const entered = barrier(), release = barrier(), cancellation = Error("cancelled during preparation");
-  let bodies = 0, preparations = 0;
-  const fixture = preparationFixture(async () => { preparations++; entered.release(); await release.promise; return ready; }, () => { bodies++; });
-  const invocation = fixture.execute(fixture.record, fixture.runtime, context);
-  // Observe rejection before release without invoking Bun's blocking promise
-  // assertion while this same test still owns the release barrier.
-  const observed = Promise.resolve(invocation).then(() => ({ resolved: true }), error => ({ error }));
+  const entered = barrier(), release = barrier(), cancellation = Error("native body cancelled");
+  let bodies = 0, effects = 0;
+  const fixture = phaseFixture(async (_record: unknown, runtime: typeof fixture.runtime) => {
+    bodies++; entered.release(); await release.promise;
+    taskModelRequestScope(runtime.signal); effects++;
+  });
+  const observed = Promise.resolve(fixture.execute(fixture.record, fixture.runtime, context))
+    .then(() => ({ resolved: true }), error => ({ error }));
   try {
-    await entered.promise;
-    expect(preparations).toBe(1); expect(bodies).toBe(0); expect(fixture.sleeps).toEqual([]);
-    fixture.controller.abort(cancellation); release.release();
+    await entered.promise; fixture.controller.abort(cancellation); release.release();
     expect(await observed).toEqual({ error: cancellation });
-    expect(bodies).toBe(0); expect(fixture.sleeps).toEqual([]);
+    expect(bodies).toBe(1); expect(effects).toBe(0); expect(fixture.sleeps).toEqual([]);
+    expect(() => fixture.execute(fixture.record, fixture.runtime, context)).toThrow(cancellation);
+    expect(bodies).toBe(1);
     expect(taskModelRequestScope(fixture.runtime.signal)).toBeUndefined();
   } finally { release.release(); }
 });
 
-test("beforePhase rejects invalid readiness and preparation exceptions without sleeping or entering a body", async () => {
-  for (const readiness of [undefined, null, 0, 1, "false", "true", {}, []]) {
-    let preparations = 0, bodies = 0;
-    // Deliberately violate the callback return type to test the runtime boundary.
-    const fixture = preparationFixture(async () => { preparations++; return readiness as never; }, () => { bodies++; });
-    await expect(fixture.execute(fixture.record, fixture.runtime, context)).rejects.toThrow("must return readiness");
-    expect(preparations).toBe(1); expect(bodies).toBe(0); expect(fixture.sleeps).toEqual([]);
-    expect(taskModelRequestScope(fixture.runtime.signal)).toBeUndefined();
-  }
-  const failure = Error("preparation failed");
-  let preparations = 0, bodies = 0;
-  const fixture = preparationFixture(async () => { preparations++; await Promise.resolve(); throw failure; }, () => { bodies++; });
-  await expect(fixture.execute(fixture.record, fixture.runtime, context)).rejects.toBe(failure);
-  expect(preparations).toBe(1); expect(bodies).toBe(0); expect(fixture.sleeps).toEqual([]);
-  expect(taskModelRequestScope(fixture.runtime.signal)).toBeUndefined();
-});
-
-test("beforePhase fails closed on a record that is not this exact running SDK phase", async () => {
-  let preparations = 0, bodies = 0;
-  const fixture = preparationFixture(async () => { preparations++; return true; }, () => { bodies++; });
+test("scope fails closed on a record that is not this exact running SDK phase", () => {
+  let bodies = 0;
+  const fixture = phaseFixture(() => { bodies++; });
   const record = fixture.record;
   for (const invalid of [undefined, {}, { ...record, id: 99 }, { ...record, conversationId: 99 },
     { ...record, kind: "qualification.other" }, { ...record, version: 2 },
@@ -318,13 +307,13 @@ test("beforePhase fails closed on a record that is not this exact running SDK ph
     { ...record, state: { status: "terminal", outcome: { status: "failed" } } },
     { ...record, state: undefined }, { ...record, state: { status: "running" } },
     { ...record, state: { status: "running", checkpoint: { ...fixture.checkpoint, phase: "other" } } }]) {
-    await expect(fixture.execute(invalid, fixture.runtime, context)).rejects.toThrow("Exact running SDK phase required");
-    expect(preparations).toBe(0); expect(bodies).toBe(0); expect(fixture.sleeps).toEqual([]);
+    expect(() => fixture.execute(invalid, fixture.runtime, context)).toThrow("Exact running SDK phase required");
+    expect(bodies).toBe(0); expect(fixture.sleeps).toEqual([]);
     expect(taskModelRequestScope(fixture.runtime.signal)).toBeUndefined();
   }
 });
 
-test("public SDK beforePhase sleep survives reopen at the exact checkpoint; failures stay terminal and readiness completes only the original task", async () => {
+test("original SDK body owns persisted sleep and reopen; failed bodies never revive", async () => {
   const { Harness } = await import("../../runtime/durable-engine/qualification/durable.ts");
   const { openFixture } = await import("./src/fixture.ts");
   const { mkdtemp, rm } = await import("node:fs/promises");
@@ -332,90 +321,69 @@ test("public SDK beforePhase sleep survives reopen at the exact checkpoint; fail
   const { SqliteStorage } = await import("../../runtime/durable-engine/qualification/sqlite.ts");
   const { BunSqliteDatabase } = await import("../../runtime/durable-engine/src/bun-sqlite.ts");
   const base = await openFixture({ acquired: true }); await base.close();
-  const directory = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "phase-preparation-reopen-"));
+  const directory = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "native-phase-reopen-"));
   const openStorage = () => SqliteStorage.open(new BunSqliteDatabase(join(directory, "tasks.sqlite")));
-  type Mode = "wait" | "body-failure" | "preparation-failure" | "invalid-readiness";
   type Checkpoint = { phase: "request"; attempt: number; cursor: { offset: number; keys: string[] } };
   const checkpoint: Checkpoint = { phase: "request", attempt: 3, cursor: { offset: 7, keys: ["original", "checkpoint"] } };
-  const preparations: number[] = [], bodies: number[] = [];
-  const wakes: { active: boolean; at?: number }[] = [];
-  let clock = 1000, ready = false;
-  const task = defineTask<{ mode: Mode; source: string }, Checkpoint, null, object>({ name: "qualification.native-preparation", version: 1,
+  const bodies: number[] = [], wakes: { active: boolean; at?: number }[] = [];
+  let clock = 1000;
+  const task = defineTask<{ fail: boolean; source: string }, Checkpoint, null, object>({ name: "qualification.native-phase", version: 1,
     initial: () => structuredClone(checkpoint),
     phases: { async request(record, runtime, ctx) {
       bodies.push(record.id);
       expect(record.state).toEqual({ status: "running", checkpoint });
       expect(taskModelRequestScope(runtime.signal)).toMatchObject({ taskId: record.id, conversationId: record.conversationId, phase: "request" });
-      if (record.input.mode === "body-failure") throw Error("entered original body failed");
-      expect(record.input).toEqual({ mode: "wait", source: "original input" });
+      if (record.input.fail) throw Error("entered original body failed");
+      expect(record.input).toEqual({ fail: false, source: "original input" });
+      if (runtime.now() < 2000) return runtime.sleepUntil(2000, record.state.checkpoint, ctx);
       await runtime.commit(() => ({ status: "terminal", outcome: { status: "completed", result: null } }), ctx);
     } }, async abort() {} });
-  base.registry.install(defineExtension({ name: "native-preparation", tasks: [task] }));
-  let harness: Awaited<ReturnType<typeof Harness.open>>;
+  base.registry.install(defineExtension({ name: "native-phase", tasks: [task] }));
   const options = { models: base.models, now: () => clock,
     onWake: (wake: { active: boolean; at?: number }) => { wakes.push({ ...wake }); },
-    registry: withTaskModelRequestScope(base.registry, async scope => {
-      preparations.push(scope.taskId);
-      expect(taskModelRequestScope(scope.signal)).toBe(scope);
-      const record = await harness.getTask(scope.taskId, context);
-      expect(record?.state).toEqual({ status: "running", checkpoint });
-      const mode = (record!.input as { mode: Mode }).mode;
-      if (mode === "preparation-failure") throw Error("native preparation failed");
-      if (mode === "invalid-readiness") return undefined as never; // Runtime fail-closed probe.
-      return mode === "wait" ? ready : true;
-    }) };
-  harness = await Harness.open(await openStorage(), options, context);
+    registry: withTaskModelRequestScope(base.registry) };
+  let harness = await Harness.open(await openStorage(), options, context);
   try {
     const conversation = await harness.createConversation({ ownership: { kind: "ownerless" } }, context);
-    const create = (mode: Mode) => harness.commit(tx => tx.createTask(task, { mode, source: "original input" },
+    const create = (fail: boolean) => harness.commit(tx => tx.createTask(task, { fail, source: "original input" },
       { conversationId: conversation.id, ownership: { kind: "conversation" } }), context);
-    const waiting = await create("wait"), bodyFailure = await create("body-failure"),
-      preparationFailure = await create("preparation-failure"), invalidReadiness = await create("invalid-readiness");
-    expect(preparations).toEqual([]); expect(bodies).toEqual([]);
-    harness.resume();
-    // Existing SDK lifecycle pattern: a bounded poll, not a larger deadline to
-    // absorb the adapter's 1s sleep. HarnessOptions.now advances below instead.
+    const waiting = await create(false), failure = await create(true);
+    expect(bodies).toEqual([]); harness.resume();
     const deadline = Date.now() + 1500;
     while ((await harness.getTask(waiting, context))?.state.status !== "sleeping" && Date.now() < deadline) await Bun.sleep(1);
     const sleeping = await harness.getTask(waiting, context);
     expect(sleeping?.state).toEqual({ status: "sleeping", until: 2000, checkpoint });
-    expect(sleeping?.input).toEqual({ mode: "wait", source: "original input" });
-    const failedIds = [bodyFailure, preparationFailure, invalidReadiness];
-    const failed = await Promise.all(failedIds.map(id => harness.waitForTask(id, context)));
-    for (const record of failed) expect(record.state.outcome.status).toBe("faulted");
-    expect(bodies).toEqual([bodyFailure]);
-    for (const id of [waiting, ...failedIds]) expect(preparations.filter(value => value === id)).toHaveLength(1);
+    expect(sleeping?.input).toEqual({ fail: false, source: "original input" });
+    const failed = await harness.waitForTask(failure, context);
+    expect(failed.state.outcome.status).toBe("faulted");
+    expect(bodies.filter(id => id === waiting)).toHaveLength(1);
+    expect(bodies.filter(id => id === failure)).toHaveLength(1);
     await harness.close(context);
     harness = await Harness.open(await openStorage(), options, context);
     expect((await harness.getTask(waiting, context))?.state).toEqual(sleeping!.state);
-    for (const record of failed) expect((await harness.getTask(record.id, context))?.state).toEqual(record.state);
-    ready = true;
     harness.resume(); await Bun.sleep(5);
-    // Readiness alone cannot bypass the native persisted sleep deadline.
     expect((await harness.getTask(waiting, context))?.state).toEqual(sleeping!.state);
-    expect(preparations).toHaveLength(4); expect(bodies).toEqual([bodyFailure]);
-    expect(wakes.some(wake => wake.at === 2000)).toBe(true);
+    expect(bodies).toHaveLength(2); expect(wakes.some(wake => wake.at === 2000)).toBe(true);
     clock = 2000; harness.resume();
     const completed = await harness.waitForTask(waiting, context);
     expect(completed.id).toBe(waiting); expect(completed.conversationId).toBe(conversation.id);
     expect(completed.input).toEqual(sleeping!.input);
     expect(completed.state.outcome).toEqual({ status: "completed", result: null });
-    expect(preparations.filter(id => id === waiting)).toHaveLength(2);
-    expect(bodies).toEqual([bodyFailure, waiting]);
+    expect(bodies.filter(id => id === waiting)).toHaveLength(2);
+    expect(bodies.filter(id => id === failure)).toHaveLength(1);
     await harness.close(context);
     harness = await Harness.open(await openStorage(), options, context);
     harness.resume(); await Bun.sleep(5);
     expect((await harness.getTask(waiting, context))?.state).toEqual(completed.state);
-    for (const record of failed) expect((await harness.getTask(record.id, context))?.state).toEqual(record.state);
-    for (const id of failedIds) expect(preparations.filter(value => value === id)).toHaveLength(1);
-    expect(preparations).toHaveLength(5); expect(bodies).toEqual([bodyFailure, waiting]);
+    expect((await harness.getTask(failure, context))?.state).toEqual(failed.state);
+    expect(bodies).toHaveLength(3);
     expect(base.host.modelCalls).toBe(0); expect(base.host.effects).toBe(0); expect(base.host.credentialLookups).toBe(0);
   } finally { await harness.close(context); await rm(directory, { recursive: true, force: true }); }
 });
 
 // Public 1.4 exported definition, with only the executable bodies replaced for
 // observation. These unit fixtures grant no tool/source/accounting authority.
-function toolScopeDefinitionFixture(body: Function, beforePhase?: NonNullable<Parameters<typeof withTaskModelRequestScope>[1]>) {
+function toolScopeDefinitionFixture(body: Function) {
   const registry = createRegistry();
   const task = { ...ToolTask, definition: { ...ToolTask.definition, phases: {
     call: (record: unknown, runtime: unknown, ctx: unknown) => body(record, runtime, ctx),
@@ -430,7 +398,7 @@ function toolScopeDefinitionFixture(body: Function, beforePhase?: NonNullable<Pa
       return typeof value === "function" ? value.bind(target) : value;
     } });
   } };
-  const phases = withTaskModelRequestScope(reader, beforePhase).snapshot().task("pi.tool")!.definition.phases;
+  const phases = withTaskModelRequestScope(reader).snapshot().task("pi.tool")!.definition.phases;
   return { call: phases.call as Function, execute: phases.execute as Function };
 }
 
@@ -448,24 +416,31 @@ function expectOnlyCurrentTool(scope: NonNullable<ReturnType<typeof taskModelReq
   expect(taskModelHookScope(api)).toBeUndefined();
 }
 
-test("actual SDK model and nested tools match beforePhase and body IDs; initial-record hashes survive intent commits", async () => {
+test("actual SDK model and nested tools retain initial-call identity through intent commits", async () => {
   const { Harness, MemoryStorage, defineTool } = await import("../../runtime/durable-engine/qualification/durable.ts");
   const { Type } = await import("../../runtime/durable-engine/qualification/ai.ts");
   const { openFixture } = await import("./src/fixture.ts");
   const base = await openFixture({ acquired: true }); await base.close();
   type Scope = NonNullable<ReturnType<typeof taskModelRequestScope>>;
-  const prepared = new Map<Scope["taskId"], { scope: Scope; record: NonNullable<Awaited<ReturnType<typeof base.harness.getTask>>> }>();
+  const initial = new Map<Scope["taskId"], { scope: Scope; record: NonNullable<Awaited<ReturnType<typeof base.harness.getTask>>> }>();
   const bodies: Scope[] = [];
   const observeBody = async (api: { taskId: Scope["taskId"]; conversationId: Scope["conversationId"]; callId: string }) => {
     await Promise.resolve();
     const scope = taskModelToolScope({ ...api, toolCallId: api.callId });
     expect(scope).toBeDefined();
-    expect(scope).toBe(prepared.get(api.taskId)!.scope);
     expectOnlyCurrentTool(scope!);
     expect(taskModelRequestScope(scope!.signal)).toBe(scope);
-    // The actual SDK has committed execute intent, but this is still the call
-    // handler's ASL scope, hashing its original call record, not that intent.
-    expect((await harness.getTask(api.taskId, context))?.state).toMatchObject({ status: "running", checkpoint: { phase: "execute" } });
+    const record = (await harness.getTask(api.taskId, context))!;
+    expect(record.kind).toBe(ToolTask.definition.name);
+    expect(record.version).toBe(ToolTask.definition.version);
+    // SDK execution intent is already committed. The scope must still retain
+    // the initial call identity, never the recovery execute checkpoint.
+    expect(record.state).toMatchObject({ status: "running", checkpoint: { phase: "execute" } });
+    const input = record.input as ToolTaskInput;
+    expect(scope!.toolCallId).toBe(input.kind === "model" ? input.callId : input.call.id);
+    expect(scope!.checkpointHash).toMatch(/^[a-f0-9]{64}$/);
+    initial.set(api.taskId, { scope: scope!, record: { ...structuredClone(record),
+      state: { status: "running", checkpoint: ToolTask.definition.initial(input) } } });
     expect(scope!.phase).toBe("call");
     bodies.push(scope!);
     return scope!;
@@ -493,29 +468,14 @@ test("actual SDK model and nested tools match beforePhase and body IDs; initial-
   const extension = defineExtension({ name: "qualification", tools: [parent, nested] });
   base.registry.install(extension);
   const harness = await Harness.open(new MemoryStorage(), { models: base.models,
-    registry: withTaskModelRequestScope(base.registry, async scope => {
-      if (scope.taskKind !== "pi.tool") return true;
-      await Promise.resolve();
-      expectOnlyCurrentTool(scope);
-      expect(Object.isFrozen(scope)).toBe(true);
-      const record = (await harness.getTask(scope.taskId, context))!;
-      expect(record.kind).toBe(ToolTask.definition.name);
-      expect(record.version).toBe(ToolTask.definition.version);
-      expect(record.state).toEqual({ status: "running", checkpoint: ToolTask.definition.initial(record.input as ToolTaskInput) });
-      const input = record.input as ToolTaskInput;
-      expect(scope.toolCallId).toBe(input.kind === "model" ? input.callId : input.call.id);
-      expect(scope.checkpointHash).toMatch(/^[a-f0-9]{64}$/);
-      expect(bodies.some(body => body.taskId === scope.taskId)).toBe(false);
-      prepared.set(scope.taskId, { scope, record: structuredClone(record) });
-      return true;
-    }), settings: { retry: { enabled: false }, compaction: { enabled: false } } }, context);
+    registry: withTaskModelRequestScope(base.registry), settings: { retry: { enabled: false }, compaction: { enabled: false } } }, context);
   try {
     const root = await harness.root(context, { agent: { model: { provider: "qualification", modelId: "synthetic" }, extensions: [extension], tools: [parent, nested] } });
     const submission = await root.submit({ type: "input", requestId: "actual-tool-scopes", content: "use-tool" }, context);
     expect((await submission.wait(context)).status).toBe("done");
-    expect(bodies).toHaveLength(2); expect(prepared.size).toBe(2);
-    expect([...prepared.values()].map(({ record }) => (record.input as ToolTaskInput).kind)).toEqual(["model", "nested"]);
-    for (const { scope, record } of prepared.values()) {
+    expect(bodies).toHaveLength(2); expect(initial.size).toBe(2);
+    expect([...initial.values()].map(({ record }) => (record.input as ToolTaskInput).kind)).toEqual(["model", "nested"]);
+    for (const { scope, record } of initial.values()) {
       expect(taskModelToolScope({ ...scope, toolCallId: scope.toolCallId! })).toBeUndefined();
       expect(taskModelRequestScope(scope.signal)).toBeUndefined();
       expect((await harness.getTask(scope.taskId, context))?.state.status).toBe("terminal");
@@ -549,7 +509,7 @@ test("actual SDK model and nested tools match beforePhase and body IDs; initial-
   } finally { await harness.close(context); }
 });
 
-for (const kind of ["model", "nested"] as const) test(`exported ToolTask ${kind}: invalid initial records and recovery execute never acquire call identity`, async () => {
+for (const kind of ["model", "nested"] as const) test(`exported ToolTask ${kind}: invalid frames never enter a body; recovery never acquires call identity`, async () => {
   const input: ToolTaskInput = kind === "model" ? { kind, assistant: 56 as never, callId: "actual-call" }
     : { kind, parent: 78 as never, parentCallId: "parent-call", key: "child", call: { type: "toolCall", id: "actual-call", name: "scope_nested", arguments: { value: "original" } } };
   const controller = new AbortController();
@@ -557,10 +517,11 @@ for (const kind of ["model", "nested"] as const) test(`exported ToolTask ${kind}
   const record = { id: 12, conversationId: 34, kind: ToolTask.definition.name, version: ToolTask.definition.version,
     input, state: { status: "running", checkpoint: ToolTask.definition.initial(input) } };
   const api = { taskId: 12 as never, conversationId: 34 as never, toolCallId: "actual-call" };
-  let preparations = 0, bodies = 0;
+  let bodies = 0;
   const fixture = toolScopeDefinitionFixture((_record: unknown, actual: typeof runtime) => {
     bodies++;
     const scope = taskModelRequestScope(actual.signal)!;
+    expect(scope.phase).toBe("execute");
     expect(scope.toolCallId).toBeUndefined(); expect(scope.checkpointHash).toBeUndefined();
     expect(taskModelToolScope(api)).toBeUndefined();
   });
@@ -568,35 +529,27 @@ for (const kind of ["model", "nested"] as const) test(`exported ToolTask ${kind}
   for (const invalid of [{ ...record, id: 99 }, { ...record, conversationId: 99 }, { ...record, kind: "pi.generation" },
     { ...record, version: record.version + 1 }, { ...record, state: { status: "pending", checkpoint: record.state.checkpoint } },
     { ...record, state: { status: "running", checkpoint: { phase: "execute", replay: "safe", arguments: {} } } }]) {
-    await fixture.call(invalid, runtime, context);
-    const guarded = toolScopeDefinitionFixture(() => { throw Error("invalid body entered"); }, async () => { preparations++; return true; });
-    await expect(guarded.call(invalid, runtime, context)).rejects.toThrow("Exact running SDK phase required");
+    expect(() => fixture.call(invalid, runtime, context)).toThrow("Exact running SDK phase required");
+    expect(bodies).toBe(0); expect(taskModelToolScope(api)).toBeUndefined();
   }
-  // Recovery may re-enter a safe tool, but is not a new initial call identity.
   const recovery = { ...record, state: { status: "running", checkpoint: { phase: "execute", replay: "safe", arguments: { value: "original" } } } };
   await fixture.execute(recovery, runtime, context);
-  const guarded = toolScopeDefinitionFixture((_record: unknown, actual: typeof runtime) => {
-    expect(taskModelRequestScope(actual.signal)?.phase).toBe("execute");
-    expect(taskModelToolScope(api)).toBeUndefined();
-  }, async scope => {
-    preparations++; expect(scope.phase).toBe("execute");
-    expect(scope.toolCallId).toBeUndefined(); expect(scope.checkpointHash).toBeUndefined();
-    expect(taskModelToolScope(api)).toBeUndefined(); return true;
-  });
-  await guarded.execute(recovery, runtime, context);
-  expect(preparations).toBe(1); expect(bodies).toBe(7);
+  expect(bodies).toBe(1);
   expect(taskModelToolScope(api)).toBeUndefined();
+  expect(taskModelRequestScope(controller.signal)).toBeUndefined();
 });
 
-test("tool scope checks the current signal after awaits, including beforePhase; matching IDs cannot revive an aborted scope", async () => {
-  for (const abortDuringPreparation of [false, true]) {
+test("tool scope checks cancellation after awaits; matching IDs cannot revive an aborted scope", async () => {
+  for (const alreadyAborted of [false, true]) {
     const controller = new AbortController(), cancellation = Error("tool scope cancelled");
     const input: ToolTaskInput = { kind: "model", assistant: 56 as never, callId: "cancelled-call" };
     const record = { id: 12, conversationId: 34, kind: ToolTask.definition.name, version: ToolTask.definition.version,
       input, state: { status: "running", checkpoint: ToolTask.definition.initial(input) } };
     const runtime = { taskId: 12, conversationId: 34, signal: controller.signal };
-    let bodies = 0, preparations = 0;
-    const check = async (scope: NonNullable<ReturnType<typeof taskModelRequestScope>>) => {
+    let bodies = 0;
+    const fixture = toolScopeDefinitionFixture(async (_record: unknown, actual: typeof runtime) => {
+      bodies++;
+      const scope = taskModelRequestScope(actual.signal)!;
       expectOnlyCurrentTool(scope);
       const api = { ...scope, toolCallId: scope.toolCallId! };
       await Promise.resolve(); controller.abort(cancellation);
@@ -604,27 +557,22 @@ test("tool scope checks the current signal after awaits, including beforePhase; 
       expect(() => taskModelRequestScope(scope.signal)).toThrow(cancellation);
       expect(taskModelToolScope({ ...api, toolCallId: "other-call" })).toBeUndefined();
       expect(taskModelRequestScope(new AbortController().signal)).toBeUndefined();
-    };
-    const fixture = toolScopeDefinitionFixture(async (_record: unknown, actual: typeof runtime) => {
-      bodies++; await check(taskModelRequestScope(actual.signal)!);
-    }, async scope => {
-      preparations++; expectOnlyCurrentTool(scope);
-      if (abortDuringPreparation) await check(scope);
-      return true;
     });
-    if (abortDuringPreparation) await expect(fixture.call(record, runtime, context)).rejects.toBe(cancellation);
-    else await fixture.call(record, runtime, context);
-    expect(preparations).toBe(1); expect(bodies).toBe(abortDuringPreparation ? 0 : 1);
+    if (alreadyAborted) {
+      controller.abort(cancellation);
+      expect(() => fixture.call(record, runtime, context)).toThrow(cancellation);
+    } else await fixture.call(record, runtime, context);
+    expect(bodies).toBe(alreadyAborted ? 0 : 1);
     expect(taskModelToolScope({ taskId: 12 as never, conversationId: 34 as never, toolCallId: input.callId })).toBeUndefined();
     expect(taskModelRequestScope(controller.signal)).toBeUndefined();
   }
 });
 
-test("tool identity is unavailable in other task kinds, and an already-aborted tool never reaches preparation or body", async () => {
+test("tool identity is unavailable in other task kinds, and an already-aborted tool never enters its body", async () => {
   const api = { taskId: 12 as never, conversationId: 34 as never, toolCallId: "same-call" };
   for (const [name, phase] of [["pi.generation", "request"], ["pi.compaction", "summarize"], ["qualification.not-a-tool", "call"]]) {
     const registry = createRegistry(), controller = new AbortController();
-    let bodies = 0, preparations = 0;
+    let bodies = 0;
     const task = defineTask({ name: name!, version: 1, initial: () => ({ phase: phase! }), phases: {
       [phase!]: async (_record: unknown, runtime: { signal: AbortSignal }) => {
         bodies++; await Promise.resolve();
@@ -632,7 +580,6 @@ test("tool identity is unavailable in other task kinds, and an already-aborted t
         expect(taskModelToolScope(api)).toBeUndefined();
       },
     }, async abort() {} });
-    // Same public executable-definition substitution as the generation fixtures.
     const reader = { subscribe: registry.subscribe.bind(registry), snapshot() {
       const snapshot = registry.snapshot();
       return new Proxy(snapshot, { get(target, key) {
@@ -642,24 +589,20 @@ test("tool identity is unavailable in other task kinds, and an already-aborted t
         return typeof value === "function" ? value.bind(target) : value;
       } });
     } };
-    const execute = withTaskModelRequestScope(reader, async scope => {
-      preparations++; expect(scope.toolCallId).toBeUndefined();
-      expect(taskModelToolScope(api)).toBeUndefined(); return true;
-    }).snapshot().task(name!)!.definition.phases[phase!] as Function;
+    const execute = withTaskModelRequestScope(reader).snapshot().task(name!)!.definition.phases[phase!] as Function;
     await execute({ id: 12, conversationId: 34, kind: name, version: 1,
       input: { kind: "model", assistant: 56, callId: api.toolCallId }, state: { status: "running", checkpoint: { phase } } },
     { taskId: 12, conversationId: 34, signal: controller.signal }, context);
-    expect(preparations).toBe(1); expect(bodies).toBe(1);
-    expect(taskModelToolScope(api)).toBeUndefined();
+    expect(bodies).toBe(1); expect(taskModelToolScope(api)).toBeUndefined();
   }
   const controller = new AbortController(), cancellation = Error("already cancelled tool");
-  let bodies = 0, preparations = 0;
-  const fixture = toolScopeDefinitionFixture(() => { bodies++; }, async () => { preparations++; return true; });
+  let bodies = 0;
+  const fixture = toolScopeDefinitionFixture(() => { bodies++; });
   const input: ToolTaskInput = { kind: "model", assistant: 56 as never, callId: api.toolCallId };
   controller.abort(cancellation);
-  await expect(fixture.call({ id: 12, conversationId: 34, kind: ToolTask.definition.name, version: ToolTask.definition.version,
+  expect(() => fixture.call({ id: 12, conversationId: 34, kind: ToolTask.definition.name, version: ToolTask.definition.version,
     input, state: { status: "running", checkpoint: ToolTask.definition.initial(input) } },
-  { taskId: 12, conversationId: 34, signal: controller.signal }, context)).rejects.toBe(cancellation);
-  expect(preparations).toBe(0); expect(bodies).toBe(0);
+  { taskId: 12, conversationId: 34, signal: controller.signal }, context)).toThrow(cancellation);
+  expect(bodies).toBe(0);
   expect(taskModelToolScope(api)).toBeUndefined();
 });
