@@ -66,7 +66,7 @@ import { createHostProcessControls, nativeProcessToolNames, nativeProcessInstruc
 import { loadApplicationExtensionCatalog, qualifyInstalledAddon, bindInstalledAddon, qualifyInstalledPlan, qualifyInstalledDelegate, qualifyInstalledCodeReview, qualifyInstalledEditableTable, qualifyInstalledOfficeViewer, qualifyInstalledDrawio, qualifyInstalledGoal, qualifyInstalledObservability, qualifyInstalledRestic, assertApplicationExtensionCatalogSupported } from "./host-extension-catalog.js";
 import { createHostDelegateTool } from "./host-delegate-tool.js";
 import { createHostDelegateFileReader } from "./host-delegate-files.js";
-import { extensionKvGet, extensionKvSet } from "../../src/db/extension-kv.js";
+import { extensionKvGet } from "../../src/db/extension-kv.js";
 import { createHostProxmoxTool, type ProxmoxNativeExports } from "./host-proxmox-tool.js";
 import { createHostPortainerTool, type PortainerNativeExports } from "./host-portainer-tool.js";
 import { createHostImapTool, type ImapNativeExports } from "./host-imap-tool.js";
@@ -94,7 +94,7 @@ import { createHostGoalCommand } from "./host-goal-command.js";
 import type { HostConversationRuntime,HostInputBinding } from "./host-runtime.js";
 import { readAccessConfig } from "../../src/core/config-access.js";
 import { registerRootExtensionKvStore } from "../../src/db/register-extension-kv.js";
-import { withExtensionKvAuthority, requireExtensionKvAuthority } from "../../src/extension-kv-registry.js";
+import { getExtensionKvStore, withExtensionKvAuthority, requireExtensionKvAuthority } from "../../src/extension-kv-registry.js";
 import { registerExtensionRoute } from "../../src/channels/web/http/extension-routes.js";
 
 import { HostManagedInstructions, instructionHash, shouldManageInstructions } from "./host-managed-instructions.js";
@@ -325,7 +325,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   const regretsAddon = regrets?.nativeExports["native.ts"] as any;
   const assertRegrets = () => { assert(); lifetime.signal.throwIfAborted(); regrets?.assertCurrent();
     if (readAccessConfig().mode !== "single-user") throw Error("Regrets requires single-user mode"); };
-  const configWrite = <T>(body: SyncSqliteOperation<T>): Promise<T> => admitSqliteWrite<T>(root, body, assertRegrets);
+  const configWrite = <T>(body: SyncSqliteOperation<T>): Promise<T> => getExtensionKvStore().write!<T>("late-night-regrets", body);
   const regretsPorts = (chat: string, assertCurrent = assertRegrets, transactionalWrite = configWrite, accountedDecision?: any) => createHostRegretsBindings({
     root, historyDatabase: root, cwd: WORKSPACE_DIR, chat, assertCurrent, transactionalWrite,
     accessMode: () => readAccessConfig().mode, allowAllChats: () => true,
@@ -723,7 +723,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     });
   if (observability) releaseObservabilityConfiguration = observability.addon.bindObservabilityConfiguration({
     assertCurrent: assertObservability, read: readObservabilityConfiguration,
-    write(config) { return admitSqliteWrite(root, () => extensionKvSet("observability", "config", config, "global"), assertObservability); },
+    write(config) { const store = getExtensionKvStore(); return store.write!("observability", () => store.set("observability", "config", config, "global")); },
   });
   mcp = await createHostMcp({ offlineMaintenance, assertCurrent() { assert(); lifetime.signal.throwIfAborted(); },
     captureSource: api => captureSource({ conversationId: api.conversationId, taskId: api.taskId, toolCallId: api.callId }) });
