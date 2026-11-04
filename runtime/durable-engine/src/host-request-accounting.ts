@@ -217,7 +217,7 @@ function pendingSdkAccountingRows(database: Database, domain: string, root: numb
       FROM ancestry a LEFT JOIN tasks t ON t.id=a.owner_task_id
       JOIN conversations c ON c.id=coalesce(t.conversation_id,a.owner_conversation_id)
       WHERE a.owner_task_id IS NOT NULL
-  ) SELECT r.*,a.broken AS accounting_scope_broken FROM ancestry a JOIN budget_request_reservations r ON r.id=a.request_id
+  ) SELECT r.*,a.broken AS accounting_scope_broken FROM ancestry a CROSS JOIN budget_request_reservations r INDEXED BY sqlite_autoindex_budget_request_reservations_1 ON r.id=a.request_id
     WHERE a.id=? AND a.owner_task_id IS NULL`).all(domain,chatJid ?? null,chatJid ?? null,domain,chatJid ?? null,chatJid ?? null,root) as (BudgetRequestReservation & { accounting_scope_broken: number })[];
 }
 /** Before the SDK phase body enters: reconcile immutable local facts or ask the

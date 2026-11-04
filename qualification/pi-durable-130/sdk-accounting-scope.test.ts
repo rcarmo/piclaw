@@ -413,7 +413,11 @@ test("dangling ownership fails closed both as target and as an outstanding invoc
   denied(() => f.ready(f.parent), "conflict");
 }));
 
-test('dependency queries use outstanding-work/status indexes rather than billed history scans', () => fixture(async f => {
+test('dependency queries use indexed request lookups even with stale tiny-history statistics', () => fixture(async f => {
+  f.reserve(f.independent);
+  // Reproduce the tiny-history estimate retained after the live table grew.
+  // This is disposable fixture metadata; financial row contents are unchanged.
+  f.database.exec('ANALYZE budget_request_reservations');
   const spy = spyOn(f.database, 'query'); let queries: string[];
   try { f.ready(f.parent, undefined, true); queries = spy.mock.calls.map(call => call[0]); }
   finally { spy.mockRestore(); }
@@ -425,6 +429,7 @@ test('dependency queries use outstanding-work/status indexes rather than billed 
   for (const name of ['idx_budget_requests_domain_state', 'idx_budget_work_status', 'idx_budget_requests_work_state'])
     expect(pendingPlan.some(row => row.detail.includes(name))).toBe(true);
   expect(livePlan.some(row => row.detail.includes('tasks_by_status'))).toBe(true);
+  expect(pendingPlan.some(row => row.detail.includes('SEARCH r USING INDEX sqlite_autoindex_budget_request_reservations_1 (id=?)'))).toBe(true);
   const scan = /\bSCAN (r|w|tasks)\b/;
   expect(scan.test('SCAN r')).toBe(true);
   expect([...pendingPlan, ...livePlan].some(row => scan.test(row.detail))).toBe(false);
