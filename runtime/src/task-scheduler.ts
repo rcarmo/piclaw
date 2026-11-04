@@ -924,6 +924,13 @@ async function runSchedulerPoll(deps: SchedulerDeps, store: ScheduledRunStore & 
   await reconcileExpiredScheduledAgentSources(now, mayPoll);
   if (!mayPoll()) return;
   await reconcileInterruptedScheduledAgentRuns(store,now);
+  if (!mayPoll()) return;
+  const reclaimAuthorities = scheduledReclaimAuthorities(now);
+  if (!reclaimAuthorities.length && !getDb().query(
+    `SELECT 1 FROM service_effect_s07_tasks t WHERE t.status='active' AND t.next_run_at IS NOT NULL AND t.next_run_at<=?
+     AND NOT EXISTS (SELECT 1 FROM service_effect_s07_occurrences r WHERE r.task_id=t.task_id AND r.task_revision=t.current_revision AND r.scheduled_for=t.next_run_at)
+     AND NOT EXISTS (SELECT 1 FROM service_effect_s07_tombstones r WHERE r.task_id=t.task_id AND r.task_revision=t.current_revision AND r.scheduled_for=t.next_run_at) LIMIT 1`,
+  ).get(now)) return;
   claimSequence += 1;
   const claimed = await store.claimDue({
     now,
@@ -931,7 +938,7 @@ async function runSchedulerPoll(deps: SchedulerDeps, store: ScheduledRunStore & 
     workerId: schedulerWorkerId,
     leaseTokenPrefix: `scheduler_claim:${process.pid}:${claimSequence}:${randomUUID()}`,
     leaseDurationMs: SCHEDULED_LEASE_DURATION_MS,
-    reclaimAuthorities: scheduledReclaimAuthorities(now),
+    reclaimAuthorities,
   });
   if (!mayPoll()) return;
   if (!claimed.ok) throw new Error(`claimDue failed: ${claimed.error._tag}`);
