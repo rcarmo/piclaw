@@ -306,6 +306,6 @@ for (const scenario of scenarios.filter(name => !process.env.PICLAW_WORKFLOW_CAS
       await bundle?.close(); await importer?.close();
       await queue.shutdown(); await pool.shutdown(); await web.stop();
       complete(); await running; registration.mockRestore();
-      closeDatabase(); lock.release(); rmSync(dir, { recursive: true, force: true });
+      await closeDatabase(); lock.release(); rmSync(dir, { recursive: true, force: true });
     }
   }, 20000);

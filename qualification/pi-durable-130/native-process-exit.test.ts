@@ -140,7 +140,7 @@ for (const scenario of ["success", "siblings", "materialization-recovery", "alte
       expect(root.query("SELECT id FROM tasks WHERE status<>'terminal'").all()).toEqual([]);
       expect(root.query("SELECT state FROM service_effect_s01_sources WHERE source_id=?").get(message.id)).toEqual({ state: "consumed" });
     } finally {
-      await bundle!?.close(); closeDatabase(); owner.release(); await rm(dir, { recursive: true, force: true });
+      await bundle!?.close(); await closeDatabase(); owner.release(); await rm(dir, { recursive: true, force: true });
     }
   }, 30000);
 }

@@ -281,5 +281,5 @@ for (const scenario of ["write", "model", "sse", "broken-sse"] as const) applica
     const treeAfter = await reopened.readTree!();
     expect(treeAfter).toEqual(treeBefore);
     expect(runtime.getRegisteredNativeProvider(model.provider)).toBe(provider);
-  } finally { fetchSpy.mockRestore(); try { await backend?.close(); } finally { routingRelease.mockRestore(); closeSpy.mockRestore(); owner.release(); closeDatabase(); } }
+  } finally { fetchSpy.mockRestore(); try { await backend?.close(); } finally { routingRelease.mockRestore(); closeSpy.mockRestore(); owner.release(); await closeDatabase(); } }
 }, 60000);

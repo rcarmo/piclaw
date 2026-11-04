@@ -120,5 +120,5 @@ applicationTest("all 23 installed: actual default factory public provider termin
     expect(treeAfter).toEqual(treeBefore);
     expect(getDb().query("SELECT content FROM messages WHERE is_bot_message=1 AND is_terminal_agent_reply=1 AND chat_jid=?").all("web:default")).toEqual(terminals);
     expect(runtime.getRegisteredNativeProvider(model.provider)).toBe(provider);
-  } finally { fetchSpy.mockRestore(); await backend?.close(); owner.release(); closeDatabase(); }
+  } finally { fetchSpy.mockRestore(); await backend?.close(); owner.release(); await closeDatabase(); }
 }, 60000);

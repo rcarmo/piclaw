@@ -42,7 +42,7 @@ test("actual Goal factory uses scoped shared database KV and denies revoked muta
     expect(extensionKvGet("goal", "thread-goal", "chat", authority.chatJid)).toMatchObject({ status: "complete", completion_summary: "Verified" });
     expect(() => addon.loadThreadGoal(authority.chatJid)).toThrow("Extension KV operation authority required");
     expect(() => withExtensionKvAuthority({ ...authority, chatJid: "web:foreign" }, () => addon.loadThreadGoal(authority.chatJid))).toThrow("Extension KV scope denied");
-  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); closeDatabase(); }
+  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); await closeDatabase(); }
 });
 
 test("Goal host adapter fences mutations to committed operation authority", async () => {
@@ -92,7 +92,7 @@ test("Goal host adapter fences mutations to committed operation authority", asyn
     await expect(invoke("goal_complete", { summary: "Denied", evidence: ["revoked operation"] })).rejects.toThrow();
     expect(extensionKvGet("goal", "thread-goal", "chat", chat)).toMatchObject({ status: "active" });
     expect(factoryCalls).toBe(1);
-  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); closeDatabase(); }
+  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); await closeDatabase(); }
 });
 
 for (const mode of [false, true, "snapshot-replace", "snapshot-stop", "snapshot-complete", "external", "stop", "external-terminal", "stop-accounting", "complete-accounting", "compacted-accounting", "compacted-foreign-boundary", "update-accounting", "budget-accounting", "persisted-budget", "deadline-checkpoint", "continuation", "steer-accounting", "steer-complete", "steer-ordinary"] as const) test(`actual Goal tool task captures its live accepted operation; rejected=${mode}`, async () => {
@@ -598,7 +598,7 @@ test("prepared Goal text and accepted source commit together; stale lifecycle ro
     })).toThrow("Goal input lifecycle changed");
     expect(["messages", "service_effect_s01_sources", "service_effect_s01_decisions"].map(table => db.query(`SELECT * FROM ${table}`).all())).toEqual(before);
     expect(extensionKvGet("goal", "thread-goal", "chat", chatJid)).toMatchObject({ objective: "Accepted current Goal" });
-  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); closeDatabase(); }
+  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); await closeDatabase(); }
 });
 
 test("actual web message admission runs Goal lifecycle guard inside its owned transaction", async () => {
@@ -702,5 +702,5 @@ test("actual web message admission runs Goal lifecycle guard inside its owned tr
     }));
     expect(denied.status).toBe(503);
     expect(root.query("SELECT id FROM messages WHERE chat_jid=?").all(chat)).toEqual(beforeRejected);
-  } finally { await bundle.close(); lock.release(); addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); closeDatabase(); }
+  } finally { await bundle.close(); lock.release(); addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); await closeDatabase(); }
 });

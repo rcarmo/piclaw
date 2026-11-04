@@ -37,7 +37,7 @@ async function fixture(run: (f: Awaited<ReturnType<typeof setup>>) => Promise<vo
 async function setup() {
   const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "cutover-runtime-"));
   process.env.PICLAW_DB_IN_MEMORY = "1"; initDatabase();
-  const hostPath = join(dir, "host.sqlite"); getDb().query("VACUUM INTO ?").run(hostPath); closeDatabase();
+  const hostPath = join(dir, "host.sqlite"); getDb().query("VACUUM INTO ?").run(hostPath); await closeDatabase();
   const db = new Database(hostPath, { strict: true }); db.exec("PRAGMA foreign_keys=ON");
   installTerminalSettlementCompositionSchema(db); initializeCutoverManifest(db);
   db.exec(`CREATE TABLE runtime_payloads (ref TEXT PRIMARY KEY, content TEXT NOT NULL)`);

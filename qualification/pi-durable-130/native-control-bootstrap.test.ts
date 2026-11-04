@@ -130,5 +130,5 @@ for(const scenario of ['idle','busy','retry','storage-recovery','storage-reopen-
   expect(root.query("SELECT operation_id FROM service_effect_s01_operations WHERE phase<>'terminal'").all()).toEqual([]);
   expect(await control.abortRetry!()).toBe(false);
   expect(root.query("SELECT count(*) AS n FROM service_effect_s01_sources WHERE kind='cancellation'").get()).toEqual({n:1});
- }finally{restoreContention?.();if(writer?.inTransaction)writer.exec("ROLLBACK");writer?.close();await bundle!?.close();closeDatabase();owner.release();await rm(dir,{recursive:true,force:true});}
+ }finally{restoreContention?.();if(writer?.inTransaction)writer.exec("ROLLBACK");writer?.close();await bundle!?.close();await closeDatabase();owner.release();await rm(dir,{recursive:true,force:true});}
 },scenario==='storage-recovery'||scenario==='storage-reopen-retry'?45000:15000);

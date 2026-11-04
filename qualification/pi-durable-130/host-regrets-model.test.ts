@@ -18,7 +18,7 @@ test("accounted adapter refuses absent stored identity without dispatching a mod
     expect(port.getAvailable()).toEqual([model]);
     await expect(port.complete(model, { messages: [] }, {})).rejects.toThrow("cannot be accounted");
     expect(requests).toBe(0);
-  } finally { closeDatabase(); rmSync(dir, { recursive: true }); }
+  } finally { await closeDatabase(); rmSync(dir, { recursive: true }); }
 });
 
 import { createCurrentPiclawServiceWorkStore } from "../../runtime/src/service-effects/current-piclaw/service-work-store.js";
@@ -120,7 +120,7 @@ for (const outcome of ["success", "error", "cancel", "revoke"] as const) {
       if (usage.length) { expect(usage[0].work_id).toBe(row.work_id); expect(usage[0].api_equivalent_cost_microusd).toBe(15); }
       expect(root.query("SELECT * FROM service_effect_s01_sources").all()).toEqual(sources);
       expect(root.query("SELECT * FROM service_effect_s01_operations").all()).toEqual(operations);
-    } finally { databaseLifetime.abort(); closeDatabase(); rmSync(dir, { recursive: true }); }
+    } finally { databaseLifetime.abort(); await closeDatabase(); rmSync(dir, { recursive: true }); }
   });
 }
 
@@ -160,7 +160,7 @@ for (const recovered of [false, true]) test(`Regrets transport checks late sourc
       current = false; await expect(port.complete(model, { messages: [] }, {})).rejects.toThrow('source revoked');
       expect(auths).toBe(1); expect(calls).toBe(1);
     }
-  } finally { closeDatabase(); rmSync(dir, { recursive: true }); }
+  } finally { await closeDatabase(); rmSync(dir, { recursive: true }); }
 });
 
 import { reserveHostRequest } from "../../runtime/durable-engine/src/host-request-accounting.ts";
@@ -186,5 +186,5 @@ test("same host ledger refunds only undispatched reservation, not an uncertain p
     expect(root.query("SELECT * FROM budget_work WHERE id LIKE 'durable-request:%'").get()).toEqual(stopped);
     expect(root.query("SELECT state FROM budget_request_reservations").get()).toEqual({ state: "released" });
     expect(root.query("SELECT count(*) n FROM token_usage").get()).toEqual({ n: 0 });
-  } finally { closeDatabase(); rmSync(dir, { recursive: true }); }
+  } finally { await closeDatabase(); rmSync(dir, { recursive: true }); }
 });

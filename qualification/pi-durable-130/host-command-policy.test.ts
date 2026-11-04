@@ -14,7 +14,7 @@ for (const revoke of [false, true]) test(`retry policy yields under owned WAL co
   delete process.env.PICLAW_AUTO_COMPACTION_ENABLED;
   let pending: Promise<void> | undefined;
   try {
-    root.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=731; CREATE TABLE router_state(key TEXT PRIMARY KEY,value TEXT)');
+    root.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=0; CREATE TABLE router_state(key TEXT PRIMARY KEY,value TEXT)');
     writer = new Database(join(dir, 'root.sqlite'));
     writer.exec('BEGIN IMMEDIATE');
     let current = true;
@@ -29,7 +29,7 @@ for (const revoke of [false, true]) test(`retry policy yields under owned WAL co
     void pending.then(() => { settled = true; }, () => { settled = true; });
     await Bun.sleep(40);
     expect(settled).toBe(false);
-    expect(root.query('PRAGMA busy_timeout').get()).toEqual({ timeout: 731 });
+    expect(root.query('PRAGMA busy_timeout').get()).toEqual({ timeout: 0 });
     expect(root.query('SELECT * FROM router_state').all()).toEqual([]);
     if (revoke) current = false;
     writer.exec('ROLLBACK');
@@ -37,7 +37,7 @@ for (const revoke of [false, true]) test(`retry policy yields under owned WAL co
     else { await pending; expect(policy.read().autoRetry).toBe(true); }
     expect(root.query('SELECT * FROM router_state').all()).toHaveLength(revoke ? 0 : 1);
     expect(root.inTransaction).toBe(false);
-    expect(root.query('PRAGMA busy_timeout').get()).toEqual({ timeout: 731 });
+    expect(root.query('PRAGMA busy_timeout').get()).toEqual({ timeout: 0 });
   } finally {
     if (writer?.inTransaction) writer.exec('ROLLBACK');
     await pending?.catch(() => {});

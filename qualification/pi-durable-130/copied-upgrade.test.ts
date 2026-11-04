@@ -289,7 +289,7 @@ test("copied upgrade: single host messages.db preserves original rows through lo
     expect(f.hostSnapshot()).toEqual(f.originalHost);
     const originalConversations = (await f.base.root.commit(tx => tx.scanConversations({}, 100), context)).items;
     const header = f.db.query("PRAGMA user_version").get();
-    await f.base.close(); closeDatabase();
+    await f.base.close(); await closeDatabase();
     // The exclusive owner remains held across connection restart; nobody can steal a live owner.
     expect(() => TestOwner.acquire(f.path)).toThrow("owner busy");
     f.owner.assert(); initDatabase(); journal = getDb(); journal.exec("PRAGMA foreign_keys=ON");
@@ -339,7 +339,7 @@ test("copied upgrade: single host messages.db preserves original rows through lo
     expect(files.filter(file => ![f.path, `${f.path}-wal`, `${f.path}-shm`].includes(file))).toEqual([]);
     expect((await stat(f.path)).ino).toBe((await stat(f.owner.path)).ino);
   } finally {
-    await reopened?.close(); await f.base.close(); closeDatabase();
+    await reopened?.close(); await f.base.close(); await closeDatabase();
     f.owner.releaseAfterClose(); f.owner.closeConnection();
     process.env.PICLAW_DB_IN_MEMORY = oldMemory;
     await rm(f.dir, { recursive: true, force: true });

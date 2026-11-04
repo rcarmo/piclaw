@@ -151,5 +151,5 @@ test("committed Goal usage and cursor are atomic, replay safe and lifecycle scop
       scoped(() => addon.accountGoalProgress(authority.chatJid, 3));
       expect(load().tokens_used).toBe(9); // Legacy callers still ignore terminal Goals.
     }
-  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); closeDatabase(); }
+  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); await closeDatabase(); }
 });

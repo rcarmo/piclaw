@@ -47,7 +47,7 @@ test("vertical: copied existing chat -> host 1.2 models + actual Plan + guarded 
   expect((await Bun.file(resolve(addon, "package.json")).json()).version).toBe("0.1.27");
   const dir = await mkdtemp(resolve(process.env.PICLAW_WORKSPACE!, "vertical-"));
   process.env.PICLAW_DB_IN_MEMORY = "1";
-  initDatabase(); getDb().query("VACUUM INTO ?").run(resolve(dir, "host.sqlite")); closeDatabase();
+  initDatabase(); getDb().query("VACUUM INTO ?").run(resolve(dir, "host.sqlite")); await closeDatabase();
   // Acquire host ownership BEFORE constructing the candidate sidecar or harness.
   const owner = TestOwner.acquire(resolve(dir, "host.sqlite"));
   const db = new Database(owner.path, { strict: true });

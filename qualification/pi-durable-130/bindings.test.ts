@@ -20,7 +20,7 @@ async function fixture(run: (f: Awaited<ReturnType<typeof setup>>) => Promise<vo
 async function setup() {
   const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "bindings-"));
   process.env.PICLAW_DB_IN_MEMORY = "1";
-  initDatabase(); getDb().query("VACUUM INTO ?").run(join(dir, "host.sqlite")); closeDatabase();
+  initDatabase(); getDb().query("VACUUM INTO ?").run(join(dir, "host.sqlite")); await closeDatabase();
   const db = new Database(join(dir, "host.sqlite"), { strict: true });
   configureHostWalFixtureDatabase(db);
   db.exec("PRAGMA foreign_keys=ON"); installTerminalSettlementCompositionSchema(db);

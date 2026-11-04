@@ -92,7 +92,7 @@ applicationTest("enabled Regrets actual factory uses public Root and separately 
   let backend: Awaited<ReturnType<typeof createDefaultApplicationRuntime>> | undefined;
   try {
     backend = await createDefaultApplicationRuntime(owner, async () => services);
-    withExtensionKvAuthority({ extensionId: "late-night-regrets", chatJid: "web:default", globalRead: true, globalWrite: true, assertCurrent: () => owner.assertCurrentOwner(), write: body => { owner.assertCurrentOwner(); return body(); } }, () => getExtensionKvStore().set("late-night-regrets", "config", { enabled: true, decision_model: "openai-codex/synthetic", review_scope: "current" }, "global"));
+    withExtensionKvAuthority({ extensionId: "late-night-regrets", chatJid: "web:default", globalRead: true, globalWrite: true, assertCurrent: () => owner.assertCurrentOwner(), write: body => { owner.assertCurrentOwner(); return getDb().transaction(body)(); } }, () => getExtensionKvStore().set("late-night-regrets", "config", { enabled: true, decision_model: "openai-codex/synthetic", review_scope: "current" }, "global"));
     const base = createRuntimeBaseServices({ dataDir: workspace });
     const pool = new AgentPool({ credentialStore: createTestCredentialStore({}), modelRuntime: root, modelRegistry: services.modelRegistry, ...backend.sessionOptions } as any);
     const bound = backend.bind({ queue: base.queue, agentPool: pool });
@@ -141,5 +141,5 @@ applicationTest("enabled Regrets actual factory uses public Root and separately 
     await backend.close(); backend = await createDefaultApplicationRuntime(owner, async () => services);
     expect([mainCalls, decisionCalls, publicCompleteCalls]).toEqual([3, 1, 1]);
     expect(JSON.stringify({ rows: getDb().query("SELECT * FROM budget_request_reservations ORDER BY rowid").all(), usage: getDb().query("SELECT * FROM budget_usage_events ORDER BY rowid").all(), work: getDb().query("SELECT * FROM budget_work ORDER BY rowid").all(), tokens: getDb().query("SELECT * FROM token_usage ORDER BY id").all(), messages: getDb().query("SELECT * FROM messages ORDER BY rowid").all(), sources: getDb().query("SELECT * FROM service_effect_s01_sources ORDER BY rowid").all(), operations: getDb().query("SELECT * FROM service_effect_s01_operations ORDER BY rowid").all() })).toBe(before);
-  } finally { await backend?.close(); owner.release(); closeDatabase(); }
+  } finally { await backend?.close(); owner.release(); await closeDatabase(); }
 });

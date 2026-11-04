@@ -39,7 +39,7 @@ import { hashCanonicalRequest } from '../../runtime/src/service-effects/contract
 
 async function sourceRoot(body: (f: any) => Promise<void>, native = false) {
  const cwd=await mkdtemp(join(process.env.PICLAW_WORKSPACE!,'codex-projection-'));
- process.env.PICLAW_DB_IN_MEMORY='1'; initDatabase(); getDb().query('VACUUM INTO ?').run(join(cwd,'root.sqlite')); closeDatabase();
+ process.env.PICLAW_DB_IN_MEMORY='1'; initDatabase(); getDb().query('VACUUM INTO ?').run(join(cwd,'root.sqlite')); await closeDatabase();
  const root=new Database(join(cwd,'root.sqlite')); root.exec('PRAGMA foreign_keys=ON'); installTerminalSettlementCompositionSchema(root);
  const lock=acquireRuntimeLock({lockPath:join(cwd,'owner.lock'),strictOwnership:true,disabled:false});
  const assertOwner=()=>lock.assertCurrentOwner();
@@ -144,7 +144,7 @@ for (const outcome of ['commit', 'revoke', 'entered-error'] as const) test(`arti
  const root=new Database(join(cwd,'root.sqlite'));
  let writer:Database|undefined, pending:Promise<void>|undefined;
  try {
-  root.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=619;
+  root.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=0;
    CREATE TABLE extension_kv(extension_id TEXT,scope TEXT,scope_key TEXT,key TEXT,value TEXT,updated_at TEXT,PRIMARY KEY(extension_id,scope,scope_key,key))`);
   const path='.pi/openai-codex-images/call.png';
   await mkdir(join(cwd,'.pi/openai-codex-images'),{recursive:true});await writeFile(join(cwd,path),'image');
@@ -166,7 +166,7 @@ for (const outcome of ['commit', 'revoke', 'entered-error'] as const) test(`arti
   void pending.then(()=>{settled=true;},()=>{settled=true;});
   await writing;await Bun.sleep(40);
   expect(settled).toBe(false);expect(entries).toBe(0);
-  expect(root.query('PRAGMA busy_timeout').get()).toEqual({timeout:619});
+  expect(root.query('PRAGMA busy_timeout').get()).toEqual({timeout:0});
   if(outcome==='revoke')current=false;
   writer.exec('ROLLBACK');
   if(outcome==='revoke')await expect(pending).rejects.toThrow('revoked');
@@ -175,7 +175,7 @@ for (const outcome of ['commit', 'revoke', 'entered-error'] as const) test(`arti
   expect(entries).toBe(outcome==='revoke'?0:1);
   expect(root.query('SELECT * FROM extension_kv').all()).toHaveLength(outcome==='commit'?1:0);
   expect(root.inTransaction).toBe(false);
-  expect(root.query('PRAGMA busy_timeout').get()).toEqual({timeout:619});
+  expect(root.query('PRAGMA busy_timeout').get()).toEqual({timeout:0});
  }finally{
   if(writer?.inTransaction)writer.exec('ROLLBACK');
   await pending?.catch(()=>{});writer?.close();root.close();await rm(cwd,{recursive:true,force:true});

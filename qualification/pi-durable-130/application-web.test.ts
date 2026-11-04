@@ -795,7 +795,7 @@ for (const [failWait, forks, deferred] of [[false, false, undefined], [false, tr
     lock.assertCurrentOwner(); // Other application components are still live.
     expect(() => bundle.bind({ queue, agentPool: pool })).toThrow("sealed");
     expect(db.query("SELECT 1 AS alive").get()).toEqual({ alive: 1 });
-    closeDatabase(); lock.release();
+    await closeDatabase(); lock.release();
     for (const spy of spies) spy.mockRestore(); resetRateLimiterStateForTests();
     await rm(dir, { recursive: true, force: true });
   }

@@ -116,5 +116,5 @@ applicationTest("owned application peer steer joins active native operation and 
     expect(posts[0].data.id).toBe(peerMessage.rowid);
     expect(posts[0].data.chat_jid).toBe(chat);
     expect(base.host.credentialLookups).toBe(0); expect(base.host.effects).toBe(0);
-  } finally { hold.release(); await bundle.close(); closeDatabase(); lock.release(); process.env.PICLAW_DB_IN_MEMORY = oldMemory; await rm(dir, { recursive: true, force: true }); }
+  } finally { hold.release(); await bundle.close(); await closeDatabase(); lock.release(); process.env.PICLAW_DB_IN_MEMORY = oldMemory; await rm(dir, { recursive: true, force: true }); }
 }, 20000);

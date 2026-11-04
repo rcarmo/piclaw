@@ -65,7 +65,7 @@ for (const variant of ['plain', 'thread', 'screen', 'both', 'tampered'] as const
     if (variant === 'tampered') {
       const items = getDeferredQueuedFollowups(chat); items[0]!.screenHint = 'mobile'; setDeferredQueuedFollowups(chat, items);
       const queueBefore = getDeferredQueuedFollowups(chat);
-      await expect(ports.getAcceptedQueuedSteering!(chat)!.accept(rowId!)).rejects.toThrow('materialization failed');
+      await expect(ports.getAcceptedQueuedSteering!(chat)!.accept(rowId!)).rejects.toThrow("Queued source payload conflict");
       expect(getDeferredQueuedFollowups(chat)).toEqual(queueBefore);
       expect(root.query('SELECT source_id,source_hash,state FROM service_effect_s01_sources WHERE chat_jid=? AND source_id=?').get(chat, sourceId)).toEqual(sourceBefore);
       expect(root.query('SELECT 1 FROM messages WHERE id=?').get(sourceId)).toBeNull();
@@ -90,5 +90,5 @@ for (const variant of ['plain', 'thread', 'screen', 'both', 'tampered'] as const
       expect(root.query('SELECT 1 FROM piclaw_durable_intent_bindings_v1 WHERE chat_jid=? AND source_id=? AND submission_id IS NOT NULL').get(chat, sourceId)).not.toBeNull();
     }
     expect(base.host.credentialLookups).toBe(0); expect(base.host.effects).toBe(0);
-  } finally { hold.release(); await settling?.catch(() => {}); await bundle.close(); closeDatabase(); lock.release(); process.env.PICLAW_DB_IN_MEMORY = oldMemory; await rm(dir, { recursive: true, force: true }); }
+  } finally { hold.release(); await settling?.catch(() => {}); await bundle.close(); await closeDatabase(); lock.release(); process.env.PICLAW_DB_IN_MEMORY = oldMemory; await rm(dir, { recursive: true, force: true }); }
 }, 20000);

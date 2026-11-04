@@ -74,5 +74,5 @@ applicationTest("owned public SDK bundle admits authenticated host inputs, not G
     await bundle.admitApplicationInput({ ...input, sourceId: "new-chat", target: added });
     expect(getDeferredQueuedFollowups(newChat)[0]!.source_accepted).toBe(true);
     expect(base.host.modelCalls).toBe(0); expect(base.host.credentialLookups).toBe(0);
-  } finally { await bundle.close(); closeDatabase(); lock.release(); await rm(dir, { recursive: true, force: true }); }
+  } finally { await bundle.close(); await closeDatabase(); lock.release(); await rm(dir, { recursive: true, force: true }); }
 });

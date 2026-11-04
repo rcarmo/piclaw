@@ -131,7 +131,7 @@ async function fixture(goalPreparationAvailable = true) {
         if (ownerLost) await expect(bundle.close()).rejects.toThrow("Runtime ownership lost");
         else await bundle.close();
       } finally {
-        addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); closeDatabase(); lock.release();
+        addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); await closeDatabase(); lock.release();
         await rm(dir, { recursive: true, force: true });
       }
     },

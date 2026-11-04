@@ -28,7 +28,7 @@ async function seed(directory: string) {
   process.env.PICLAW_DB_IN_MEMORY = "1";
   initDatabase();
   try { getDb().query("VACUUM INTO ?").run(join(directory, "host.sqlite")); }
-  finally { closeDatabase(); }
+  finally { await closeDatabase(); }
   const db = new Database(join(directory, "host.sqlite"), { strict: true });
   try { installTerminalSettlementCompositionSchema(db); }
   finally { db.close(); }
