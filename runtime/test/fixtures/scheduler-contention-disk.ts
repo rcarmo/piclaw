@@ -20,7 +20,11 @@ const deps={queue:{enqueueTask(){throw Error('No tasks permitted');}},agentPool:
 const counts=()=>Object.fromEntries((db.query("SELECT name FROM sqlite_schema WHERE type='table' AND name LIKE 'service_effect_s07_%' ORDER BY name").all() as {name:string}[]).map(({name})=>[name,(db.query(`SELECT COUNT(*) AS n FROM "${name.replaceAll('"','""')}"`).get() as {n:number}).n]));
 try{
  const empty={async claimDue(){claims++;return {ok:true,value:[]};}} as unknown as ScheduledRunStore;
- await locked(()=>pollScheduledRunsOnce(deps,empty));assert.equal(claims,1);assert(!db.inTransaction);
+ // Empty reconciliation and claim scans are reads: they must finish without releasing the competing writer.
+ blocker.exec('BEGIN IMMEDIATE');
+ await pollScheduledRunsOnce(deps,empty);
+ assert(blocker.inTransaction,'idle poll must leave the competing writer held');assert.equal(claims,0);assert.equal(releases,0);assert(!db.inTransaction);
+ blocker.exec('COMMIT');
  let fail=false,entered=0;
  const built=createCurrentPiclawScheduledRunStore(scheduler,{hitFault:()=>false,recordTrace:()=>{},afterStatement(){if(fail){entered++;throw Object.assign(Error('callback busy'),{code:'SQLITE_BUSY'});}}});
  assert(built.ok,'scheduler store construction');
@@ -29,5 +33,5 @@ try{
  const result=await locked(()=>built.value.claimDue(request('fixture-contended-claim-00000001')));assert(result.ok);assert.equal(result.value.length,0);assert(!scheduler.inTransaction);
  const before=counts();fail=true;const rejected=await built.value.claimDue(request('fixture-callback-fault-00000002'));assert(!rejected.ok);assert.equal(entered,1);assert.deepEqual(counts(),before);assert(!scheduler.inTransaction);
  assert.deepEqual(db.query('PRAGMA busy_timeout').get(),{timeout:0});assert.deepEqual(scheduler.query('PRAGMA busy_timeout').get(),schedulerPolicy);
- console.log(JSON.stringify({pollAfterRelease:true,storeAfterRelease:true,noCallbackReplay:true,rollbackExact:true,noProviderWork:true,busyTimeoutRestored:true}));
+ console.log(JSON.stringify({idlePollWhileLocked:true,storeAfterRelease:true,noCallbackReplay:true,rollbackExact:true,noProviderWork:true,busyTimeoutRestored:true}));
 }finally{for(const t of timers)clearTimeout(t);if(blocker.inTransaction)blocker.exec('ROLLBACK');blocker.close();scheduler.close();closeDatabase();}
