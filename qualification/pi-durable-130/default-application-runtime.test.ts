@@ -3876,7 +3876,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     await closeDatabase(); owner.release(); return;
   }
   if (parentAccounting && (accountingAuthDenied || accountingUnknown || accountingRotate || accountingStorageFailure)) {
-    const published = expectedFailedTurn || accountingUnknown;
+    const published = expectedFailedTurn || accountingUnknown || accountingStorageFailure;
     expect(dispatchOutcome).toBe(published ? "settled" : "pending");
     expect(calls).toBe(accountingUnknown || accountingStorageFailure ? 1 : 0);
     // Cleanup classifies the original reservation; never rebind to rotated auth
@@ -3887,7 +3887,12 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(root.query("SELECT status FROM budget_work WHERE parent_work_id IS NULL").all()).toEqual([{ status: accountingUnknown || accountingStorageFailure ? "active" : "completed" }]);
     expect(root.query("SELECT id FROM messages WHERE is_bot_message=1").all()).toHaveLength(published ? 1 : 0);
     expect(root.query("SELECT source_id FROM service_effect_s01_sources WHERE state='claimed'").all()).toHaveLength(published ? 0 : 1);
-    if (accountingStorageFailure) expect(root.query("SELECT invocation_id FROM token_usage WHERE invocation_id IS NOT NULL").all()).toHaveLength(0);
+    if (accountingStorageFailure) {
+      expect(root.query("SELECT invocation_id FROM token_usage WHERE invocation_id IS NOT NULL").all()).toHaveLength(0);
+      expect(root.query('SELECT terminal_disposition FROM service_effect_s01_operations').all()).toEqual([{ terminal_disposition: 'completed' }]);
+      expect(root.query('SELECT operation_id FROM service_effect_s02_commits').all()).toHaveLength(1);
+      expect(root.query('SELECT content FROM messages WHERE is_bot_message=1').all()).toEqual([{ content: 'factory synthetic reply' }]);
+    }
     const tasksBeforeRepair = accountingStorageFailure ? root.query('SELECT * FROM tasks ORDER BY id').all() : undefined;
     if (scenario.endsWith('-live')) {
       if (!tasksBeforeRepair?.length) throw Error('Missing original SDK tasks');

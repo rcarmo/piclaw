@@ -117,8 +117,6 @@ export interface ApplicationBootstrapOptions {
   /** Publish the existing runtime before recovery can schedule any provider. */
   onMaintenanceSettled?: (workId: string) => void | Promise<void>;
   onOperationSettled?: RuntimeOptions["onOperationSettled"];
-  assertAccountingReady?: RuntimeOptions['assertAccountingReady'];
-  prepareAccounting?: RuntimeOptions['prepareAccounting'];
   prepareTerminalEffect?: RuntimeOptions["prepareTerminalEffect"];
   materializeAnswer?: RuntimeOptions["materializeAnswer"];
   dispatchHostCommand?: import("../../src/agent-pool/contracts.js").AgentPoolOptions["dispatchHostCommand"];
@@ -204,12 +202,8 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
   const candidateDatabase = database;
     await prepareHostSchema(root, assert, config.offlineInitialize === true, context.abortSignal, () => candidateDatabase.assertApplicationRoot(root));
     const hostFollowups = new QueuedFollowupLifecycleService();
-    const assertAccountingReady = config.assertAccountingReady && ((id: string, terminal = false) => {
-      const checked: unknown = config.assertAccountingReady!(id, terminal);
-      if (checked !== undefined) { void Promise.resolve(checked).catch(() => {}); throw Error('Accounting barrier must be synchronous'); }
-    });
-    const work = value(createCurrentPiclawServiceWorkStore(root, { hitFault: () => false, recordTrace() {}, validateAcceptance(method, operationId) {
-      assert(); if (method === 'finishHarness' && operationId) assertAccountingReady?.(operationId, true); return true;
+    const work = value(createCurrentPiclawServiceWorkStore(root, { hitFault: () => false, recordTrace() {}, validateAcceptance() {
+      assert(); return true;
     },
       pendingQueuedSourceOrder: chat => {
         // Materialization already selected this input and removed its queue card.
@@ -222,7 +216,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       },
     }));
     const terminal = value(createCurrentPiclawTerminalSettlementStore(root, config.answers.resolver,
-      { hitFault: () => false, recordTrace() {}, validateOwnership(operationId) { assert(); if (operationId) assertAccountingReady?.(operationId, true); return true; } }));
+      { hitFault: () => false, recordTrace() {}, validateOwnership() { assert(); return true; } }));
     // Resolve only actual root messages and verify both accepted reference and source identity.
     async function content(ref: string, input: AcceptedInput | { chatJid: string; sourceId: string }) {
       assert();
@@ -277,7 +271,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       runtime: { ...r, work, terminal, bindings,
         completeInputHandoff: createInputHandoffCompletion(root, { domain: r.incarnation, incarnation: r.incarnation,
           sessionId: r.sessionId, bindings, work, assertCurrent(input) { assert(); config.assertAdmission?.(input); } }),
-        assertAdmission: config.assertAdmission, assertAccountingReady, prepareAccounting: config.prepareAccounting, materializeAnswer: config.materializeAnswer, prepareTerminalEffect: config.prepareTerminalEffect, onOperationSettled: config.onOperationSettled, onMaintenanceSettled: config.onMaintenanceSettled, putAnswer: config.answers.put.bind(config.answers),
+        assertAdmission: config.assertAdmission, materializeAnswer: config.materializeAnswer, prepareTerminalEffect: config.prepareTerminalEffect, onOperationSettled: config.onOperationSettled, onMaintenanceSettled: config.onMaintenanceSettled, putAnswer: config.answers.put.bind(config.answers),
         replyThreadFor(input) { assert(); return resolveAcceptedMessageThread(root, input); },
         async cancelOperationSource(input, expectedVersion, retryTaskId, cause) {
           await admitSqliteWrite(root, () => {

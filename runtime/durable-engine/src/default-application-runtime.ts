@@ -55,7 +55,7 @@ import type { NativeDreamRequest,AgentOutput } from '../../src/agent-pool/contra
 import { getBudgetWork,ensureBudgetWork,setBudgetWorkStatus } from '../../src/db/budget-limits.js';
 import { assertModelAccountingReady } from '../../src/budget/model-request-accounting.js';
 import { BudgetRequestError, findBudgetRequestByModelInvocation, type BudgetModelInvocation } from '../../src/db/budget-request-reservations.js';
-import { reserveHostRequest, reconcileOperationBudgetWork, completeMaintenanceBudgetWork,operationBudgetWorkId,assertOperationAccountingReady,assertConversationAccountingReady,prepareTaskAccounting,prepareConversationAccounting } from "./host-request-accounting.js";
+import { reserveHostRequest, reconcileOperationBudgetWork, completeMaintenanceBudgetWork,operationBudgetWorkId,assertOperationAccountingReady,assertConversationAccountingReady,prepareTaskAccounting } from "./host-request-accounting.js";
 import { createHostMcp } from "./host-mcp.js";
 import { createHostFetch } from "./host-fetch.js";
 import { taskModelRequestScope, taskModelHookScope, taskModelToolScope, withTaskModelRequestScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
@@ -1326,11 +1326,6 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
             check({provider:payload.policy.model.provider,id:payload.policy.model.modelId},lifetime.signal);assertBackgroundCurrent(payload);
           },history),
         },
-        assertAccountingReady(operationId, terminal) { assert(); assertOperationAccountingReady(root, operationId, terminal, {domain:mapping.domain,incarnation:mapping.domain}); },
-        async prepareAccounting(_operationId, conversationId) {
-          assert(); const ready = await prepareConversationAccounting(root, mapping.domain, conversationId, terminalOwner); assert();
-          if (!ready) throw new BudgetRequestError('budget_denied');
-        },
         assertAdmission: input => processControls!.assertAdmission(input),
         assertInputAdmission(chat) { assertAdmission(); ensureLiveWatch(chat); },
         materializeAnswer: codex ? createHostCodexAnswerMaterializer({ root, cwd: WORKSPACE_DIR, answers, assertOwner: assert }) : undefined,
@@ -1340,6 +1335,10 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       assert();
       if (processExit || processControls!.ownsOperation(operationId)) {
         try { await reconcileOperationBudgetWork(root, operationId, terminalOwner); assert(); }
+        catch (error) {
+          assert(); if (getDb() !== root) throw error;
+          log.warn('Committed terminal retains pending financial reporting', { operation: 'durable_accounting.terminal_projection_failed', operationId });
+        }
         finally {
           publishTerminal(operationId);
         }
@@ -1347,6 +1346,10 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         return; // No Goal or queue continuation after a committed exit receipt.
       }
       try { await reconcileOperationBudgetWork(root, operationId, terminalOwner); await closeCompletedMaintenance(); assert(); }
+      catch (error) {
+        assert(); if (getDb() !== root) throw error;
+        log.warn('Committed terminal retains pending financial reporting', { operation: 'durable_accounting.terminal_projection_failed', operationId });
+      }
       finally {
         publishTerminal(operationId);
         const row = root.query("SELECT chat_jid FROM service_effect_s01_operations WHERE operation_id=?").get(operationId) as { chat_jid: string } | null;
