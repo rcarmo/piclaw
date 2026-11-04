@@ -27,7 +27,9 @@ function seed() {
   const first = Number((db.query("SELECT rowid FROM messages").get() as { rowid: number }).rowid);
   const media = [1, 2, 3].map(i => createMedia(`fixture-${i}.bin`, "application/octet-stream", new Uint8Array([i, 0, 255])));
   attachMediaToMessage(first, [media[2]!, media[0]!, media[1]!, media[0]!]);
-  for (const key of ["beta", "alpha", "other"]) extensionKvSet("fixture", key, { key }, "chat", "web:index-fixture");
+  db.transaction(() => {
+    for (const key of ["beta", "alpha", "other"]) extensionKvSet("fixture", key, { key }, "chat", "web:index-fixture");
+  }).immediate();
   for (const chat of ["web:index-fixture", "web:other"]) for (let i = 0; i < 12; i++) db.query(
     "INSERT INTO token_usage(chat_jid,run_at,input_tokens,total_tokens,cost_total) VALUES(?,?,?,?,?)",
   ).run(chat, `2025-01-${String(i + 1).padStart(2, "0")}`, i + 1, i + 2, 0.125);

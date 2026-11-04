@@ -23,7 +23,7 @@ for (const phase of ["generation", "tool", "tool-restart"] as const) test(`nativ
     setRouterState("last_agent_timestamp_web", history);
     setRouterState("web:oobe:provider-ready:completed", "true");
     const preferences = { theme: "dark", outputPad: false, meters: true };
-    extensionKvSet("native-ui-projection-fixture", "preferences", preferences, "global");
+    f.db.transaction(() => extensionKvSet("native-ui-projection-fixture", "preferences", preferences, "global")).immediate();
     const { primary, primaryId, b } = await f.prepare(phase === "generation" ? "accepted B" : "use-tool");
     const binding = { incarnation: f.incarnation, chatJid: f.chatJid, branchId: "main", conversationId: f.base.root.id };
     const attach = async () => {
@@ -65,7 +65,7 @@ for (const phase of ["generation", "tool", "tool-restart"] as const) test(`nativ
     if (phase === "generation") {
       // Actual SDK/storage shutdown and new exclusive owner, not a forged public frame.
       await f.runtime!.close(); f.runtime = undefined;
-      closeDatabase(); f.owner.releaseAfterClose(); f.owner.closeConnection();
+      await closeDatabase(); f.owner.releaseAfterClose(); f.owner.closeConnection();
       f.owner = TestOwner.acquire(f.path);
       expect(f.owner.token.generation).toBe(f.generation + 1);
       initDatabase(); f.db = getDb(); f.ports = f.stores(); f.permit = false;
@@ -100,7 +100,7 @@ for (const phase of ["generation", "tool", "tool-restart"] as const) test(`nativ
       if (phase === "tool-restart") {
         await fresh.stop(); fresh.store.dispose();
         await f.runtime!.close(); f.runtime = undefined;
-        closeDatabase(); f.owner.releaseAfterClose(); f.owner.closeConnection();
+        await closeDatabase(); f.owner.releaseAfterClose(); f.owner.closeConnection();
         f.owner = TestOwner.acquire(f.path);
         expect(f.owner.token.generation).toBe(f.generation + 1);
         initDatabase(); f.db = getDb(); f.ports = f.stores(); f.permit = false;

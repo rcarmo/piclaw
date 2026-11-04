@@ -92,11 +92,8 @@ export {
 export { getRouterState, setRouterState } from "./db/router-state.js";
 export {
   extensionKvGet,
-  extensionKvSet,
-  extensionKvDelete,
   extensionKvList,
   extensionKvQuery,
-  extensionKvClear,
   type KvScope,
   type KvEntry,
   type KvQueryOptions,

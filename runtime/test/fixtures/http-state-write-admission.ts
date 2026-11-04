@@ -13,7 +13,7 @@ assert.equal(process.env.PICLAW_DB_IN_MEMORY,'0');initDatabase();
 const db=getDb(),path=(db.query('PRAGMA database_list').all() as {name:string;file:string}[]).find(row=>row.name==='main')!.file;
 const blocker=new Database(path),policy=db.query('PRAGMA busy_timeout').get();let cases=0;
 try{
- extensionKvDelete('piclaw-ui','theme','global');
+ await admitSqliteWrite(db, () => extensionKvDelete('piclaw-ui','theme','global'));
  blocker.exec('BEGIN IMMEDIATE');const before=db.query('SELECT total_changes() n').get();
  getServerUiState();assert.deepEqual(db.query('SELECT total_changes() n').get(),before);blocker.exec('ROLLBACK');cases++;
  const old=getServerUiThemeConfig();blocker.exec('BEGIN IMMEDIATE');let saved=false;

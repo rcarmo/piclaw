@@ -76,7 +76,7 @@ applicationTest("all 23 installed: explicit offline maintenance preserves enable
   const { extensionKvSet, extensionKvGet } = await import("../../runtime/src/db/extension-kv.js");
   const observation = { enabled:true, appinsights_enabled:false, usage_telemetry_enabled:true, graphite_enabled:true, graphite_host:"fixture.invalid", graphite_port:2003 };
   const peer = { enabled:true };
-  extensionKvSet("observability", "config", observation, "global");
+  getDb().transaction(() => extensionKvSet("observability", "config", observation, "global")).immediate();
   const peerDir = join(DATA_DIR, "addons", "remote-peer"); mkdirSync(peerDir, {recursive:true});
   const peerDb = new Database(join(peerDir, "peers.db"));
   peerDb.exec("CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT NOT NULL)");
@@ -114,5 +114,5 @@ applicationTest("all 23 installed: explicit offline maintenance preserves enable
     expect(extensionKvGet("observability", "config", "global")).toEqual(observation);
     assertPeerConfig();
     expect(runtime.getRegisteredNativeProvider(model.provider)).toBe(provider);
-  } finally { socketSpy.mockRestore(); fetchSpy.mockRestore(); await backend?.close(); peerDb.close(); owner.release(); closeDatabase(); }
+  } finally { socketSpy.mockRestore(); fetchSpy.mockRestore(); await backend?.close(); peerDb.close(); owner.release(); await closeDatabase(); }
 }, 60000);
