@@ -353,8 +353,10 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
          AND NOT EXISTS (SELECT 1 FROM ${TOMBSTONES} r WHERE r.task_id=t.task_id AND r.task_revision=t.current_revision AND r.scheduled_for=t.next_run_at) ORDER BY t.next_run_at,t.task_id LIMIT 100`,
       ).all(request.now) as Candidate[];
       const expired = this.database.query(
-        `SELECT task_id AS taskId,scheduled_for AS scheduledFor,run_id AS runId FROM ${RUNS} WHERE state IN ('claimed','source_bound') AND lease_expires_at<=? ORDER BY scheduled_for,task_id LIMIT 100`,
-      ).all(request.now) as Candidate[];
+        `SELECT r.task_id AS taskId,r.scheduled_for AS scheduledFor,r.run_id AS runId FROM json_each(?) a CROSS JOIN ${RUNS} r
+         WHERE r.run_id=json_extract(a.value,'$.runId') AND r.attempt=json_extract(a.value,'$.expectedAttempt')
+         AND r.state IN ('claimed','source_bound') AND r.lease_expires_at<=? ORDER BY r.scheduled_for,r.task_id,r.run_id`,
+      ).all(JSON.stringify(request.reclaimAuthorities), request.now) as Candidate[];
       const candidates = [
         ...due.map((row) => ({ ...row, kind: "new" as const })),
         ...expired.map((row) => ({ ...row, kind: "expired" as const })),
