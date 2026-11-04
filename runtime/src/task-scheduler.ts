@@ -609,8 +609,6 @@ function acceptScheduledAgentSource(lease: ScheduledRunLease, acceptedAt: string
     kind: "scheduled_agent",
     payloadRef: lease.task.payloadRef,
   });
-  let sourceSeq = 0;
-  db.transaction(() => {
     db.query(
       "INSERT OR IGNORE INTO service_effect_s01_chats(chat_jid,next_source_seq,consumed_through_source_seq,active_operation_id) VALUES(?,1,0,NULL)",
     ).run(lease.task.chatJid);
@@ -618,7 +616,7 @@ function acceptScheduledAgentSource(lease: ScheduledRunLease, acceptedAt: string
       "SELECT next_source_seq,active_operation_id FROM service_effect_s01_chats WHERE chat_jid=?",
     ).get(lease.task.chatJid) as { next_source_seq: number; active_operation_id: string | null };
     if (chat.active_operation_id) throw new Error(`Scheduled source owner conflict for ${lease.task.chatJid}.`);
-    sourceSeq = chat.next_source_seq;
+    const sourceSeq = chat.next_source_seq;
     db.query("UPDATE service_effect_s01_chats SET next_source_seq=next_source_seq+1 WHERE chat_jid=? AND next_source_seq=?").run(lease.task.chatJid, sourceSeq);
     db.query(
       `INSERT INTO service_effect_s01_sources(
@@ -633,7 +631,6 @@ function acceptScheduledAgentSource(lease: ScheduledRunLease, acceptedAt: string
       "INSERT INTO service_effect_s01_operation_sources(chat_jid,operation_id,source_seq) VALUES(?,?,?)",
     ).run(lease.task.chatJid, operationId, sourceSeq);
     db.query("UPDATE service_effect_s01_chats SET active_operation_id=? WHERE chat_jid=?").run(operationId, lease.task.chatJid);
-  }).immediate();
   return { sourceSeq, operationId };
 }
 
@@ -645,7 +642,6 @@ function settleScheduledAgentSource(
   errorCode = "scheduled_task_failed",
 ): void {
   const db = getDb();
-  db.transaction(() => {
     db.query("UPDATE service_effect_s01_chats SET active_operation_id=NULL WHERE chat_jid=? AND active_operation_id=?").run(chatJid, source.operationId);
     db.query(
       `UPDATE service_effect_s01_operations
@@ -661,7 +657,6 @@ function settleScheduledAgentSource(
         "UPDATE service_effect_s01_chats SET consumed_through_source_seq=MAX(consumed_through_source_seq,?) WHERE chat_jid=?",
       ).run(source.sourceSeq, chatJid);
     }
-  }).immediate();
 }
 
 interface LeaseController {
