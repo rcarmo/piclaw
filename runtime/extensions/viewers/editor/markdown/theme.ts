@@ -60,18 +60,20 @@ export const markdownPreviewTheme = EditorView.theme({
     },
 
     /* ── Headings ── */
-    '.cm-md-h-line': { paddingTop: '0.1em' },
-    // IMPORTANT: avoid vertical margins on .cm-line decorations
-    // (CodeMirror coordinate mapping drifts when line margins accumulate).
-    // Heading typography lives on line decorations so active/raw and
-    // inactive/preview states keep the same line height.
-    '.cm-md-h1-line': { paddingTop: '0.9em', fontSize: '1.42em', fontWeight: '700', lineHeight: '1.24', letterSpacing: '-0.01em' },
-    '.cm-md-h2-line': { paddingTop: '0.82em', fontSize: '1.28em', fontWeight: '700', lineHeight: '1.25', letterSpacing: '-0.005em' },
-    '.cm-md-h3-line': { paddingTop: '0.72em', fontSize: '1.16em', fontWeight: '650', lineHeight: '1.26' },
-    '.cm-md-h4-line': { paddingTop: '0.6em', fontSize: '1.08em', fontWeight: '650', lineHeight: '1.28' },
-    '.cm-md-h5-line': { paddingTop: '0.6em', fontSize: '1.02em', fontWeight: '600', lineHeight: '1.3' },
-    '.cm-md-h6-line': { paddingTop: '0.6em', fontSize: '0.98em', fontWeight: '600', lineHeight: '1.32', opacity: '0.92' },
+    // Source blank lines own the spacing. Vertical margins accumulate outside
+    // CodeMirror's measured line boxes; keep padding and margins off headings.
+    // Line typography stays the same in editing and reading states.
+    '.cm-md-h-line': { paddingBlock: '0', marginBlock: '0' },
+    '.cm-md-h1-line': { fontSize: '1.42em', fontWeight: '700', lineHeight: '1.24', letterSpacing: '-0.01em' },
+    '.cm-md-h2-line': { fontSize: '1.28em', fontWeight: '700', lineHeight: '1.25', letterSpacing: '-0.005em' },
+    '.cm-md-h3-line': { fontSize: '1.16em', fontWeight: '650', lineHeight: '1.26' },
+    '.cm-md-h4-line': { fontSize: '1.08em', fontWeight: '650', lineHeight: '1.28' },
+    '.cm-md-h5-line': { fontSize: '1.02em', fontWeight: '600', lineHeight: '1.3' },
+    '.cm-md-h6-line': { fontSize: '0.98em', fontWeight: '600', lineHeight: '1.32', opacity: '0.92' },
     '.cm-md-h1, .cm-md-h2, .cm-md-h3, .cm-md-h4, .cm-md-h5, .cm-md-h6': { fontSize: 'inherit', fontWeight: 'inherit', lineHeight: 'inherit', letterSpacing: 'inherit' },
+    // The syntax highlighter also sizes heading tokens; the line is the sole
+    // typography owner in preview, in both editing and reading states.
+    '.cm-md-h-line .tok-heading': { fontSize: 'inherit', lineHeight: 'inherit' },
     '.cm-md-heading-fold': {
         display: 'inline-flex',
         alignItems: 'center',

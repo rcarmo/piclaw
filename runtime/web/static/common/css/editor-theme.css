@@ -40,6 +40,15 @@
     color: var(--text-code);
     background-color: var(--bg-code);
 }
+/* The attached editor preview has its own compact block rhythm. Do not change
+ * timeline headings, or add a second gap between a heading and its body. */
+.md-preview-body.post-content :is(h1, h2, h3, h4, h5, h6) {
+    margin-block: 0.5em 0;
+    line-height: 1.25;
+}
+.md-preview-body.post-content :is(h1, h2, h3, h4, h5, h6):first-child {
+    margin-block-start: 0;
+}
 @media (forced-colors: active) {
     :root .cm-editor .cm-selectionBackground { background: Highlight !important; opacity: 0.35; }
     :root .cm-editor .cm-fat-cursor { background: Highlight !important; color: HighlightText !important; outline-color: Highlight !important; }
