@@ -80,10 +80,6 @@ export interface RuntimeOptions {
   readonly completeInputHandoff?: (input: AcceptedInput, submissionId: SubmissionId, capturedOperation: OperationSnapshot, intent: boolean, signal?: AbortSignal) => Promise<void>;
   readonly incarnation: string;
   readonly onOperationSettled?: (operationId: string, processExit?: NativeExitReceipt) => void | Promise<void>;
-  /** Synchronous, ancestry-scoped barrier before new effects and host settlement. */
-  readonly assertAccountingReady?: (operationId: string, terminal?: boolean) => void;
-  /** Existing receipt owner prepares facts outside SQL before terminal CAS. */
-  readonly prepareAccounting?: (operationId: string, conversationId: ConversationId) => Promise<void>;
   /** New work is sealed while an exact native shutdown request settles. */
   readonly assertAdmission?: (input?: AcceptedInput) => void;
   /** Host timeline root for this exact accepted input, including queued messages. */
@@ -212,8 +208,6 @@ function runtimeSnapshot(o: RuntimeOptions): RuntimeSnapshot {
     authorizeScheduling: authorizeScheduling.bind(o), putAnswer: putAnswer.bind(o),
     materializeAnswer: materializeAnswer?.bind(o), now: now.bind(o),
     prepareTerminalEffect: o.prepareTerminalEffect?.bind(o),
-    assertAccountingReady: o.assertAccountingReady?.bind(o),
-    prepareAccounting: o.prepareAccounting?.bind(o),
     replyThreadFor: o.replyThreadFor?.bind(o),
     onOperationSettled: o.onOperationSettled?.bind(o), onMaintenanceSettled: o.onMaintenanceSettled?.bind(o), cancelSideSource: o.cancelSideSource?.bind(o),
     cancelOperationSource: o.cancelOperationSource?.bind(o),
@@ -1380,10 +1374,6 @@ export class HostConversationRuntime {
     this.assertCapturedSourceCurrent(inputs);
     return texts;
   }
-  private assertAccountingReady(operationId: string, terminal = false): void {
-    const checked: unknown = this.options.assertAccountingReady?.(operationId, terminal);
-    if (checked !== undefined) { void Promise.resolve(checked).catch(() => {}); throw Error('Accounting barrier must be synchronous'); }
-  }
   assertCapturedSourceCurrent(inputs: readonly HostInputBinding[]): void {
     this.fence();
     for (const input of inputs) {
@@ -2278,11 +2268,6 @@ export class HostConversationRuntime {
     // ACK-only/reopened evidence cannot create execution authority during settlement.
     // Retain the original outcome and host hold until an explicitly qualified owner can reconcile it.
     if (!operation.harness) return null;
-    if (o.prepareAccounting) {
-      const prepared: unknown = await o.prepareAccounting(input.operationId, o.operationConversationFor?.(input) ?? input.conversationId); this.fence();
-      if (prepared !== undefined) throw Error('Accounting preparation must return no effect');
-    }
-    this.assertAccountingReady(input.operationId, true);
     if (operation.phase !== "settling") {
       if (!o.work.finishHarness) throw new Error("Host settlement API required");
       if (operation.harness!.sessionId !== o.sessionId || operation.harness!.harnessOperationId !== String(primarySubmissionId))
@@ -2324,7 +2309,6 @@ export class HostConversationRuntime {
       outboxIntents: [], committedAt: o.now() });
     const terminalEffect = cancelled || modelFailed ? undefined : await o.prepareTerminalEffect?.(input, state.answer ?? undefined);
     this.fence();
-    this.assertAccountingReady(input.operationId, true);
     const terminal = value(await o.terminal.commitTerminal(request, terminalEffect)); this.fence();
     if (modelFailed) log.warn("Native turn failed; no automatic replay", { operation: "durable_turn.model_failed",
       chatJid: input.chatJid, operationId: input.operationId, conversationId: input.conversationId, submissionId: state.submissionId,

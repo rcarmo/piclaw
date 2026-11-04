@@ -3185,7 +3185,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     try {
       // No host-induced phase sleep: the SDK enters its next request body and
       // its unchanged request owner refuses the receipt-less unknown send.
-      expect(await running).toBe('pending'); expect(calls).toBe(2);
+      expect(await running).toBe('settled'); expect(calls).toBe(2);
       const generation = JSON.parse((root.query('SELECT record FROM tasks WHERE kind=? ORDER BY id DESC LIMIT 1')
         .get(JSON.stringify('pi.generation')) as { record: string }).record);
       expect(generation.state).toMatchObject({ status: 'terminal', outcome: { status: 'failed', error: { detail: { reason: 'model_error' } } } });
@@ -3199,16 +3199,19 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       root.exec('DROP TRIGGER regrets_receipt_fail'); await closeDatabase(); initDatabase(); root = getDb();
       backend = await createDefaultApplicationRuntime(owner, async () => services);
       const rebound = backend.bind({ queue: base.queue, agentPool: pool });
-      expect(await rebound.dispatchAcceptedInput!(message.chat_jid, message.id, rowId!)!()).toBe('pending');
+      expect(await rebound.dispatchAcceptedInput!(message.chat_jid, message.id, rowId!)!()).toBe('settled');
       expect(calls).toBe(2);
       expect(root.query('SELECT * FROM budget_request_reservations WHERE id=?').get(held.id)).toEqual(held);
       expect(root.query('SELECT * FROM tasks WHERE kind=?').all(JSON.stringify('pi.tool'))).toEqual(tool);
       expect(root.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(tasks);
       expect(root.query('SELECT id FROM tasks ORDER BY id').all()).toEqual(ids);
       expect(root.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 1 });
-      expect(root.query('SELECT count(*) n FROM service_effect_s02_commits').get()).toEqual({ n: 0 });
+      expect(root.query('SELECT disposition FROM service_effect_s02_commits').all()).toEqual([{ disposition: 'failed' }]);
+      const notices = root.query('SELECT content FROM messages WHERE is_bot_message=1').all() as { content: string }[];
+      expect(notices).toHaveLength(1); expect(notices[0]!.content).toStartWith('**Turn failed**');
+      expect(notices[0]!.content).not.toContain('factory synthetic reply');
     } finally {
-      root.exec('DROP TRIGGER IF EXISTS regrets_receipt_fail'); backend.stop(); await backend.close(); expect(await running).toBe('pending');
+      root.exec('DROP TRIGGER IF EXISTS regrets_receipt_fail'); backend.stop(); await backend.close(); expect(await running).toBe('settled');
       for (const spy of [...captureSpies, ...sdkSpies]) spy.mockRestore(); await closeDatabase(); owner.release();
     }
     return;
@@ -3239,7 +3242,8 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       if (scenario.endsWith('-cancel')) {
         const position = backend.sessionOptions.getDurableSession!(message.chat_jid)!;
         const target = await position.readAbortScope!(); expect(target).not.toBeNull(); expect(await position.abort!(target!)).toBe(true);
-        expect(await running).toBe('pending'); const tasks = root.query('SELECT * FROM tasks ORDER BY id').all();
+        expect(await running).toBe('settled'); const tasks = root.query('SELECT * FROM tasks ORDER BY id').all();
+        expect(root.query('SELECT terminal_disposition FROM service_effect_s01_operations').all()).toEqual([{ terminal_disposition: 'cancelled' }]);
         root.exec('DROP TRIGGER regrets_pending_price');
         expect(await bound.dispatchAcceptedInput!(message.chat_jid, message.id, rowId!)!()).toBe('settled');
         expect(root.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(tasks);
@@ -3335,7 +3339,9 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       if (scenario.endsWith('-cancel')) {
         const position = backend.sessionOptions.getDurableSession!(message.chat_jid)!;
         const target = await position.readAbortScope!(); expect(target).not.toBeNull();
-        expect(await position.abort!(target!)).toBe(true); expect(await running).toBe('pending');
+        expect(await position.abort!(target!)).toBe(true); expect(await running).toBe('settled');
+        expect(root.query('SELECT terminal_disposition FROM service_effect_s01_operations').all()).toEqual([{ terminal_disposition: 'cancelled' }]);
+        expect(readFileSync(join(workspace, 'accounting-pending-effect.txt'), 'utf8')).toBe('effect after settlement');
         const tasks = root.query('SELECT * FROM tasks ORDER BY id').all();
         expect(JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(generation.id) as { record: string }).record).state)
           .toMatchObject({ status: 'terminal', outcome: { status: 'aborted' } });
@@ -3885,7 +3891,7 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     await closeDatabase(); owner.release(); return;
   }
   if (parentAccounting && (accountingAuthDenied || accountingUnknown || accountingRotate || accountingStorageFailure)) {
-    const published = expectedFailedTurn || accountingUnknown;
+    const published = expectedFailedTurn || accountingUnknown || accountingStorageFailure;
     expect(dispatchOutcome).toBe(published ? "settled" : "pending");
     expect(calls).toBe(accountingUnknown || accountingStorageFailure ? 1 : 0);
     // Cleanup classifies the original reservation; never rebind to rotated auth
@@ -3896,7 +3902,12 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
     expect(root.query("SELECT status FROM budget_work WHERE parent_work_id IS NULL").all()).toEqual([{ status: accountingUnknown || accountingStorageFailure ? "active" : "completed" }]);
     expect(root.query("SELECT id FROM messages WHERE is_bot_message=1").all()).toHaveLength(published ? 1 : 0);
     expect(root.query("SELECT source_id FROM service_effect_s01_sources WHERE state='claimed'").all()).toHaveLength(published ? 0 : 1);
-    if (accountingStorageFailure) expect(root.query("SELECT invocation_id FROM token_usage WHERE invocation_id IS NOT NULL").all()).toHaveLength(0);
+    if (accountingStorageFailure) {
+      expect(root.query("SELECT invocation_id FROM token_usage WHERE invocation_id IS NOT NULL").all()).toHaveLength(0);
+      expect(root.query('SELECT terminal_disposition FROM service_effect_s01_operations').all()).toEqual([{ terminal_disposition: 'completed' }]);
+      expect(root.query('SELECT operation_id FROM service_effect_s02_commits').all()).toHaveLength(1);
+      expect(root.query('SELECT content FROM messages WHERE is_bot_message=1').all()).toEqual([{ content: 'factory synthetic reply' }]);
+    }
     const tasksBeforeRepair = accountingStorageFailure ? root.query('SELECT * FROM tasks ORDER BY id').all() : undefined;
     if (scenario.endsWith('-live')) {
       if (!tasksBeforeRepair?.length) throw Error('Missing original SDK tasks');
@@ -3982,15 +3993,18 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
   }
   if (scenario === 'native-parent-accounting-event-fence') {
     try {
-      expect(dispatchOutcome).toBe('pending'); expect(calls).toBe(1);
+      expect(dispatchOutcome).toBe('settled'); expect(calls).toBe(1);
       expect(terminalFenceCalls).toBe(1); expect(terminalFenceObservedReceipt).toBe(true); expect(terminalObserverCalls).toBe(0);
       const row = root.query('SELECT * FROM budget_request_reservations').get() as BudgetRequestReservation;
       expect(row.state).toBe('unresolved'); expect(row.terminal_receipt_json).not.toBeNull();
       expect(JSON.parse(row.terminal_receipt_json!).projectedOutcome).toEqual(originalPaidTerminal);
       expect(root.query('SELECT count(*) n FROM token_usage').get()).toEqual({ n: 0 });
       const tasks = root.query('SELECT * FROM tasks ORDER BY id').all(), terminals = root.query('SELECT * FROM service_effect_s02_commits').all();
-      expect(root.query("SELECT state FROM service_effect_s01_sources WHERE source_id='factory-input'").get()).toEqual({ state: 'claimed' });
-      expect(terminals).toEqual([]); expect(root.query('SELECT content FROM messages WHERE is_bot_message=1').all()).toEqual([]);
+      expect(root.query("SELECT state FROM service_effect_s01_sources WHERE source_id='factory-input'").get()).toEqual({ state: 'consumed' });
+      expect(terminals).toHaveLength(1);
+      expect(root.query('SELECT terminal_disposition FROM service_effect_s01_operations').all()).toEqual([{ terminal_disposition: 'failed' }]);
+      const failurePosts = JSON.stringify(root.query('SELECT content FROM messages WHERE is_bot_message=1').all());
+      expect(failurePosts).toContain('Turn failed'); expect(failurePosts).not.toContain('factory synthetic reply');
       expect(JSON.stringify(root.query("SELECT record FROM entries WHERE json_extract(record,'$.kind')='pi.assistant'").all())).toContain('phase=source');
       const binding: BudgetRequestBinding = { id: row.id, workId: row.work_id, chatJid: row.chat_jid,
         providerId: row.provider_id, modelId: row.model_id, accountRef: row.account_ref, amountMicros: row.amount_microusd,
@@ -4005,8 +4019,8 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       expect(root.query('SELECT count(*) n FROM budget_usage_events').get()).toEqual({ n: 1 });
       expect(root.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(tasks);
       expect(root.query('SELECT * FROM service_effect_s02_commits').all()).toEqual(terminals); expect(calls).toBe(1);
-      // Only observational terminal reconciliation can now consume the input;
-      // the mandatory source failure and original SDK task are never revived.
+      // Paid-fact recovery cannot revive the failed SDK task or rewrite its
+      // already-published failure. Re-observation preserves that terminal.
       expect(await dispatch!()).toBe('settled');
       expect(root.query("SELECT state FROM service_effect_s01_sources WHERE source_id='factory-input'").get()).toEqual({ state: 'consumed' });
       expect(JSON.stringify(root.query('SELECT content FROM messages WHERE is_bot_message=1').all())).toContain('Turn failed');
@@ -4700,7 +4714,8 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
             const position = backend.sessionOptions.getDurableSession!(next.chat_jid)!;
             const target = await position.readAbortScope!(); expect(target).not.toBeNull();
             expect(await position.abort!(target!)).toBe(true);
-            expect(await automaticDispatch).toBe('pending');
+            expect(await automaticDispatch).toBe('settled');
+            expect(root.query('SELECT terminal_disposition FROM service_effect_s01_operations ORDER BY rowid DESC LIMIT 1').get()).toEqual({ terminal_disposition: 'cancelled' });
             const tasks = root.query('SELECT * FROM tasks ORDER BY id').all();
             expect(JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(parent.id) as { record: string }).record).state)
               .toMatchObject({ status: 'terminal', outcome: { status: 'aborted' } });
@@ -4747,12 +4762,12 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
       const automaticResult = await automaticDispatch;
       if (compactionBackgroundPreReservation) {
         try {
-          expect(backgroundCaptureEntered).toBe(true); expect(automaticResult).toBe('pending'); expect(calls).toBe(beforeCalls + 1);
+          expect(backgroundCaptureEntered).toBe(true); expect(automaticResult).toBe('settled'); expect(calls).toBe(beforeCalls + 1);
           expect(root.query("SELECT count(*) n FROM budget_request_reservations WHERE json_extract(model_invocation_json,'$.taskKind')='pi.compaction'").get()).toEqual({ n: 0 });
           const operation = root.query('SELECT operation_id,phase FROM service_effect_s01_operations ORDER BY rowid DESC LIMIT 1').get() as { operation_id: string; phase: string };
-          expect(operation.phase).toBe('executing');
-          expect(root.query('SELECT 1 FROM service_effect_s02_commits WHERE operation_id=?').get(operation.operation_id)).toBeNull();
-          expect(root.query('SELECT state FROM service_effect_s01_sources WHERE source_id=?').get(next.id)).toEqual({ state: 'claimed' });
+          expect(operation.phase).toBe('terminal');
+          expect(root.query('SELECT 1 FROM service_effect_s02_commits WHERE operation_id=?').get(operation.operation_id)).not.toBeNull();
+          expect(root.query('SELECT state FROM service_effect_s01_sources WHERE source_id=?').get(next.id)).toEqual({ state: 'consumed' });
           const ids = root.query('SELECT id FROM tasks ORDER BY id').all();
           backgroundCaptureReleased.resolve();
           const deadline = Date.now() + 3000;
@@ -4774,15 +4789,15 @@ for (const scenario of [...(factoryReceiptCase ? [factoryReceiptCase] : []), ...
           expect(backgroundParentEntered).toBe(true); expect(backgroundSummarySawParent).toBe(true); expect(backgroundExpenseObserved).toBe(true);
           console.log('OWNERLESS_PENDING_FACT', JSON.stringify({ automaticResult, calls, expense: root.query("SELECT state,terminal_receipt_json IS NOT NULL AS receipt FROM budget_request_reservations WHERE json_extract(model_invocation_json,'$.taskKind')='pi.compaction'").get(), operation: root.query('SELECT operation_id,phase,terminal_disposition FROM service_effect_s01_operations ORDER BY rowid DESC LIMIT 1').get() }));
         }
-        expect(automaticResult).toBe('pending'); expect(calls).toBe(beforeCalls + (background ? 2 : 1));
+        expect(automaticResult).toBe('settled'); expect(calls).toBe(beforeCalls + (background ? 2 : 1));
         const pending = root.query("SELECT r.*,w.parent_work_id AS maintenance_id FROM budget_request_reservations r JOIN budget_work w ON w.id=r.work_id WHERE json_extract(r.model_invocation_json,'$.taskKind')='pi.compaction'").get() as BudgetRequestReservation & { maintenance_id: string };
         expect(pending.state).toBe('dispatched'); expect(pending.terminal_receipt_json).not.toBeNull();
         const operation = root.query('SELECT operation_id,phase FROM service_effect_s01_operations ORDER BY rowid DESC LIMIT 1').get() as { operation_id: string; phase: string };
-        expect(operation.phase).toBe('executing');
+        expect(operation.phase).toBe('terminal');
         expect(root.query('SELECT parent_work_id FROM budget_work WHERE id=?').get(pending.maintenance_id)).toEqual({ parent_work_id: background ? null : `durable-operation:${operation.operation_id}` });
         expect(JSON.parse(pending.model_invocation_json!).operationId).toBe(background ? pending.maintenance_id : operation.operation_id);
-        expect(root.query('SELECT 1 FROM service_effect_s02_commits WHERE operation_id=?').get(operation.operation_id)).toBeNull();
-        expect(root.query('SELECT state FROM service_effect_s01_sources WHERE source_id=?').get(next.id)).toEqual({ state: 'claimed' });
+        expect(root.query('SELECT 1 FROM service_effect_s02_commits WHERE operation_id=?').get(operation.operation_id)).not.toBeNull();
+        expect(root.query('SELECT state FROM service_effect_s01_sources WHERE source_id=?').get(next.id)).toEqual({ state: 'consumed' });
         expect(root.query('SELECT count(*) n FROM token_usage WHERE invocation_id=?').get(pending.id)).toEqual({ n: 0 });
         if (!background) {
           const summary = JSON.parse((root.query('SELECT record FROM tasks WHERE id=?').get(JSON.parse(pending.model_invocation_json!).taskId) as { record: string }).record);
