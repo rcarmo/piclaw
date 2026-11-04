@@ -2,10 +2,21 @@ import { describe, expect, test } from "bun:test";
 import Database from "bun:sqlite";
 import { join } from "node:path";
 import { createTempWorkspace } from "../helpers.js";
-import { resolveProviderModelPricing } from "../../skills/operator/token-chart/provider-model-pricing-reference.ts";
+import { PROVIDER_MODEL_PRICING_REFERENCE_TAG, resolveProviderModelPricing } from "../../skills/operator/token-chart/provider-model-pricing-reference.ts";
 import { generateProviderModelEstimatedCostChart } from "../../skills/operator/token-chart/token-cost-by-provider-model-chart.ts";
 
 describe("provider/model pricing reference", () => {
+  test("prices Terra 6.1 exact routes and Graphite aliases without inheriting other providers", () => {
+    const expected = { canonicalModel: "GPT-6.1 Terra", inputPerMTok: 1, outputPerMTok: 5, cacheReadPerMTok: 0.05, cacheWritePerMTok: 1.25 };
+    for (const provider of ["openai", "github-copilot", "openai-codex"]) {
+      expect(resolveProviderModelPricing(provider, "gpt-6.1-terra")).toMatchObject(expected);
+      expect(resolveProviderModelPricing(provider, "gpt-6_1-terra")).toMatchObject(expected);
+    }
+    expect(resolveProviderModelPricing("openrouter", "openai/gpt-6.1-terra")).toMatchObject(expected);
+    expect(resolveProviderModelPricing("openrouter", "gpt-6.1-terra").basis).toContain("Unpriced fallback");
+    expect(resolveProviderModelPricing("azure-foundry", "gpt-6.1-terra").basis).toContain("Unpriced fallback");
+    expect(resolveProviderModelPricing("github-copilot", "gpt-6.1-terra").notes).toContain("Above 272K");
+  });
   test("keeps route-specific prices separate", () => {
     expect(resolveProviderModelPricing("azure-foundry", "deepseek-v4-flash")).toMatchObject({
       canonicalModel: "DeepSeek V4 Flash (Azure Foundry)",
@@ -165,7 +176,7 @@ describe("provider/model pricing reference", () => {
       const chart = generateProviderModelEstimatedCostChart({days: 1, dbPath, now: new Date("2026-10-06T13:00:00Z")});
       expect(chart.totalEstimatedCost).toBeCloseTo(0.068, 12);
       expect(chart.seriesCount).toBe(1);
-      expect(chart.pricingReferenceTag).toBe("2026-10-06");
+      expect(chart.pricingReferenceTag).toBe(PROVIDER_MODEL_PRICING_REFERENCE_TAG);
       expect(chart.svg).toContain("mistral / mistral-large-4-0");
       expect(chart.csv).toContain("0.068");
     } finally {
