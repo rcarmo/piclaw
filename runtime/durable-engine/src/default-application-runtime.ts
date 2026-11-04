@@ -53,9 +53,8 @@ import { getBudgetWorkContext } from '../../src/budget/context.js';
 import { boundHostRequestCost } from '../../src/budget/request-cost-bound.js';
 import type { NativeDreamRequest,AgentOutput } from '../../src/agent-pool/contracts.js';
 import { getBudgetWork,ensureBudgetWork,setBudgetWorkStatus } from '../../src/db/budget-limits.js';
-import { assertModelAccountingReady } from '../../src/budget/model-request-accounting.js';
 import { BudgetRequestError, findBudgetRequestByModelInvocation, type BudgetModelInvocation } from '../../src/db/budget-request-reservations.js';
-import { reserveHostRequest, reconcileOperationBudgetWork, completeMaintenanceBudgetWork,operationBudgetWorkId,assertOperationAccountingReady,assertConversationAccountingReady } from "./host-request-accounting.js";
+import { reserveHostRequest, reconcileOperationBudgetWork, completeMaintenanceBudgetWork,operationBudgetWorkId } from "./host-request-accounting.js";
 import { createHostMcp } from "./host-mcp.js";
 import { createHostFetch } from "./host-fetch.js";
 import { taskModelRequestScope, taskModelHookScope, taskModelToolScope, withTaskModelRequestScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
@@ -456,7 +455,6 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   const assertBackgroundCurrent=(payload:NativeBackgroundPayload)=>payload.policy.origin.kind==='dream'?assertDreamCurrent(payload):assertAddonBackgroundCurrent(root,payload);
   const maintenanceRequests = new WeakMap<AbortSignal, { chatJid: string; workId: string; operationId?: string; assertCurrent(): void; background?:{input:HostInputBinding;policy:NativeBackgroundPayload['policy']} }>();
   const requestSources = new WeakMap<AbortSignal, Awaited<ReturnType<HostConversationRuntime["captureRunSource"]>>>();
-  const preparedRequests=new WeakMap<AbortSignal,{accounted:boolean;assertCurrent():void;assertAccountingReady():void}>();
   const codexNative = {} as HostCodexToolGroupAddon & NativeCodexFactories & Record<string, any>;
   for (const exports of Object.values(codex?.nativeExports ?? {})) for (const [name, value] of Object.entries(exports)) {
     if (name in codexNative && codexNative[name] !== value) throw Error("Ambiguous qualified Codex export: " + name);
@@ -826,14 +824,6 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     if (!delegate.buildModelCandidates([candidate], config).some(entry => entry.id === candidate.fullId)) throw Error("Native Delegate model not approved");
   };
   const sideObservers = new Map<string, NonNullable<import("../../src/agent-pool/contracts.js").SidePromptOptions["onEvent"]>>();
-  const checkRequest=(model:{provider:string;id:string},signal:AbortSignal)=>{
-    const prepared=preparedRequests.get(signal);prepared?.assertCurrent();
-    // Funded requests own financial admission at reserve/dispatch; a source
-    // recheck must not turn concurrently retained bookkeeping into a model error.
-    if(!prepared?.accounted)prepared?.assertAccountingReady();
-    if(prepared&&!prepared.accounted&&root.query('SELECT 1 FROM budget_caps WHERE enabled=1 LIMIT 1').get())throw new BudgetRequestError('budget_denied');
-    check(model,signal);
-  };
   // SDK hook failures are reported but can still reach the model bridge. Keep
   // expected Goal denials on the exact task-owned signal, never on the app lifetime.
   const goalRequestDenials = new WeakMap<AbortSignal, GoalRequestDenied>();
@@ -911,22 +901,16 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         identity.assertCurrent();
         if(identity.background){
           const {input,policy}=identity.background;assertNativeBackgroundModel(policy,model);
-          const reservation=await reserveHostRequest({database:root,terminalOwner,operationId:input.operationId,chatJid:input.chatJid,authPath:join(getPiclawAgentDir(),'auth.json'),model:model as any,maxTokens:options?.maxTokens,
+          return reserveHostRequest({database:root,terminalOwner,operationId:input.operationId,chatJid:input.chatJid,authPath:join(getPiclawAgentDir(),'auth.json'),model:model as any,maxTokens:options?.maxTokens,
             executionKind:'background',backgroundPolicy:policy,modelInvocation:invocation(input.operationId),usageSource:'compaction',signal,assertCurrent(){assert();identity.assertCurrent();}});
-          preparedRequests.set(signal,{accounted:reservation!==undefined,assertCurrent:identity.assertCurrent,assertAccountingReady:()=>assertOperationAccountingReady(root,input.operationId,false,{domain:mapping.domain,incarnation:mapping.domain})});return reservation;
         }
         const operationId = identity.operationId ?? identity.workId;
         const scheduled = identity.operationId ? root.query('SELECT task_id FROM service_effect_s07_occurrences WHERE operation_id=?').get(identity.operationId) as { task_id: string } | null : null;
-        const reservation = await reserveHostRequest({ database: root, terminalOwner, operationId, modelInvocation: invocation(operationId), maintenanceWorkId: identity.workId,
+        return reserveHostRequest({ database: root, terminalOwner, operationId, modelInvocation: invocation(operationId), maintenanceWorkId: identity.workId,
           maintenanceParentOperationId: identity.operationId, scheduledTaskId: scheduled?.task_id,
           chatJid: identity.chatJid, authPath: join(getPiclawAgentDir(), "auth.json"), model: model as any,
           maxTokens: options?.maxTokens, executionKind: "side_prompt", signal,
           assertCurrent() { assert(); identity.assertCurrent(); } });
-        preparedRequests.set(signal,{accounted:false,assertCurrent:identity.assertCurrent,assertAccountingReady:()=>{
-          if(identity.operationId)assertOperationAccountingReady(root,identity.operationId,false,{domain:mapping.domain,incarnation:mapping.domain});
-          else{assertModelAccountingReady(identity.workId,root);assertConversationAccountingReady(root,{domain:mapping.domain,conversationId:scope.conversationId,chatJid:identity.chatJid});}
-        }});
-        return reservation;
       }
       if (scope.taskKind !== "pi.generation") throw Error("Native request kind unavailable");
       const captured = requestSources.get(scope.signal);
@@ -934,18 +918,14 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       const scheduled = root.query("SELECT task_id FROM service_effect_s07_occurrences WHERE operation_id=?").get(captured.operation.operationId) as { task_id: string } | null;
       const background=bundle.backgroundPolicyFor(captured.inputs[0]!);
       if(background)assertNativeBackgroundModel(background,model);
-      const reservation=await reserveHostRequest({ database: root, terminalOwner, operationId: captured.operation.operationId,
+      return reserveHostRequest({ database: root, terminalOwner, operationId: captured.operation.operationId,
         chatJid: captured.operation.chatJid, authPath: join(getPiclawAgentDir(), "auth.json"), model: model as any,
         maxTokens: options?.maxTokens, executionKind: captured.delegateModel ? "delegate" : scheduled ? "scheduled" : background ? 'background' : "interactive",
         backgroundPolicy:background,modelInvocation:invocation(captured.operation.operationId),scheduledTaskId: scheduled?.task_id, signal,
         assertCurrent() { assert(); scope.signal.throwIfAborted(); runtime().assertCapturedSourceCurrent(captured.inputs); if (captured.delegateModel) assertDelegateModel(captured.delegateModel); } });
-      preparedRequests.set(signal,{accounted:!!background&&reservation!==undefined,assertCurrent:()=>runtime().assertCapturedSourceCurrent(captured.inputs),assertAccountingReady:()=>assertOperationAccountingReady(root,captured.operation.operationId,false,{domain:mapping.domain,incarnation:mapping.domain})});
-      return reservation;
     },
-    assertStoredOutcomeCurrent(model, signal) {
-      preparedRequests.get(signal)?.assertCurrent(); check(model, signal);
-    },
-    async authorize(model, _kind, signal) { checkRequest(model, signal); }, assertCurrent(model, _kind, signal) { checkRequest(model, signal); } });
+    assertStoredOutcomeCurrent: check,
+    async authorize(model, _kind, signal) { check(model, signal); }, assertCurrent(model, _kind, signal) { check(model, signal); } });
   regretsDecision = (captured, authority, scope) => createHostRegretsAccountedDecision({
     modelInvocation: { version: 1, domain: mapping.domain, operationId: captured.operation.operationId,
       conversationId: scope.conversationId, taskId: scope.taskId, taskKind: 'pi.tool', phase: 'call', checkpointHash: scope.checkpointHash! },
