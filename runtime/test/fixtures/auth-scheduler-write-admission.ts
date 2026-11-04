@@ -57,11 +57,11 @@ function task() {
 }
 const channel = { json(body: unknown, status = 200) { expect(getDb().inTransaction).toBe(false); return Response.json(body, { status }); } } as any;
 
-function setup() {
+async function setup() {
   ws = createTempWorkspace('auth-scheduler-wal-');
   restore = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data, PICLAW_ACCESS_MODE: 'single-user' });
   // Explicitly opt this owned disposable fixture out of helpers' memory mode.
-  closeDatabase();
+  await closeDatabase();
   process.env.PICLAW_DB_IN_MEMORY = '0'; initDatabase();
   WEB_RUNTIME_CONFIG.passkeyMode = 'passkey-only'; WEB_RUNTIME_CONFIG.totpSecret = ''; WEB_RUNTIME_CONFIG.trustProxy = false;
   resetRateLimiterStateForTests();
@@ -74,9 +74,9 @@ function setup() {
   blocker = new Database(file);
   expect((blocker.query('PRAGMA database_list').all() as { name: string; file: string }[]).find(row => row.name === 'main')!.file).toBe(file);
 }
-function cleanup() {
+async function cleanup() {
   if (blocker?.inTransaction) blocker.exec('ROLLBACK');
-  blocker?.close(); closeDatabase(); restore(); Object.assign(WEB_RUNTIME_CONFIG, savedConfig); resetRateLimiterStateForTests(); ws.cleanup();
+  blocker?.close(); await closeDatabase(); restore(); Object.assign(WEB_RUNTIME_CONFIG, savedConfig); resetRateLimiterStateForTests(); ws.cleanup();
 }
 
 for (const outcome of ['commit', 'abort', 'revoke', 'counter-changed'] as const) test(`signed login waits for WAL writer; ${outcome}`, async () => {
@@ -209,8 +209,8 @@ const batch = Number(process.argv[2]);
 if (!Number.isInteger(batch) || batch < 0 || batch > 3) throw Error("Expected WAL case batch 0..3");
 const selected = cases.filter((_, index) => index % 4 === batch);
 for (const entry of selected) {
-  setup();
+  await setup();
   try { await entry.run(); console.log(`PASS ${entry.name}`); }
-  finally { cleanup(); }
+  finally { await cleanup(); }
 }
 console.log(JSON.stringify({ kind: 'auth-scheduler-write-admission', cases: selected.length, realWal: true, abortedAndRevokedDenied: true, noCallbackReplay: true }));

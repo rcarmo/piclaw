@@ -52,7 +52,7 @@ applicationTest("fresh core inventory owns every object and exact FTS shadow wit
     try { expect(() => inventory(db, 'core')).toThrow('Unapproved schema drift trigger:budget_request_invocation_insert'); }
     finally { db.exec('ROLLBACK TO invocation_inventory_drift; RELEASE invocation_inventory_drift'); }
     expect(db.query('SELECT * FROM sqlite_schema ORDER BY type,name').all()).toEqual(before);
-  } finally { closeDatabase(); }
+  } finally { await closeDatabase(); }
 });
 
 for (const addons of [false, true]) applicationTest(`complete native startup inventory, approved add-ons present=${addons}`, async () => {
@@ -118,7 +118,7 @@ applicationTest("historical core upgrade classifies its one approved spelling di
     expect(cli.errors).toEqual([]);
     expect(cli.objects).toEqual(result.objects);
     expect(db.query("SELECT * FROM piclaw_agent_entries ORDER BY entry_seq").all()).toEqual(before.entries);
-    closeDatabase(); initDatabase();
+    await closeDatabase(); initDatabase();
     const reopened = inventory(getDb(), "core");
     // Optional statistics from explicit maintenance still require an exact owner/shape.
     const beforeKeys = new Set(result.objects.map(object => `${object.kind}:${object.name}`));
@@ -129,7 +129,7 @@ applicationTest("historical core upgrade classifies its one approved spelling di
     expect(getDb().query("SELECT * FROM piclaw_schema_migrations WHERE owner='piclaw-agent-sessions'").all()).toEqual(before.receipts);
     expect(getDb().query("SELECT * FROM piclaw_schema_migrations WHERE owner='host.chat-cursors'").all()).toEqual(cursorReceipts);
     expect(getDb().query('SELECT rowid,* FROM host_legacy_chat_cursor_state_v1 ORDER BY rowid').all()).toEqual(before.cursors);
-  } finally { closeDatabase(); }
+  } finally { await closeDatabase(); }
 });
 
 applicationTest("offline historical retirement preserves real SDK document families and approved add-on schemas", async () => {

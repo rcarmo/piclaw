@@ -12,10 +12,10 @@ assert.equal(process.env.PICLAW_DB_IN_MEMORY,'0');
 initDatabase();const path=join(STORE_DIR,'messages.db'),first=getDb();const service=new QueuedFollowupLifecycleService();
 const blocker=new Database(path);blocker.exec('BEGIN IMMEDIATE');
 const handleChange=service.admitQueuedFollowupItem(['web:binding',0,'must not commit after reopen'],()=>{},new AbortController().signal);
-void handleChange.catch(error=>debugSuppressedError(log,'Expected captured-handle rejection; asserted below.',error));await Bun.sleep(0);blocker.exec('ROLLBACK');blocker.close();closeDatabase();initDatabase();assert.notEqual(getDb(),first);
+void handleChange.catch(error=>debugSuppressedError(log,'Expected captured-handle rejection; asserted below.',error));await Bun.sleep(0);blocker.exec('ROLLBACK');blocker.close();await closeDatabase();initDatabase();assert.notEqual(getDb(),first);
 await assert.rejects(handleChange,/binding changed/);assert.deepEqual(service.getQueuedFollowupItems('web:binding'),[]);
 const secondBlocker=new Database(path);secondBlocker.exec('BEGIN IMMEDIATE');
 const replaced=service.admitQueuedFollowupItem(['web:replacement',0,'must not commit after file replacement'],()=>{},new AbortController().signal);
 void replaced.catch(error=>debugSuppressedError(log,'Expected replaced-file rejection; asserted below.',error));await Bun.sleep(0);
 const renamed=path+'.old';renameSync(path,renamed);const replacement=new Database(path);replacement.close();secondBlocker.exec('ROLLBACK');secondBlocker.close();
-try{await assert.rejects(replaced,/file changed/);assert.deepEqual(service.getQueuedFollowupItems('web:replacement'),[]);console.log('QUEUE_BINDING_REJECTED');}finally{closeDatabase();}
+try{await assert.rejects(replaced,/file changed/);assert.deepEqual(service.getQueuedFollowupItems('web:replacement'),[]);console.log('QUEUE_BINDING_REJECTED');}finally{await closeDatabase();}

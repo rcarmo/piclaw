@@ -23,8 +23,8 @@ function ownedPaths() {
   // bootstrap path API for this owned file fixture, not a global test bypass.
   return resolveRuntimeConfigPaths({ env: { ...process.env, PICLAW_DB_IN_MEMORY: '0' } });
 }
-beforeEach(() => {
-  closeDatabase(); // Other host files may leave the process-wide memory bootstrap open.
+beforeEach(async () => {
+  await closeDatabase(); // Other host files may leave the process-wide memory bootstrap open.
   workspace = createTempWorkspace('retained-settlement-');
   restore = setEnv({ PICLAW_WORKSPACE: workspace.workspace, PICLAW_STORE: workspace.store,
     PICLAW_DATA: workspace.data });
@@ -32,7 +32,7 @@ beforeEach(() => {
   expect(getDb().query("SELECT file FROM pragma_database_list WHERE name='main'").get()).toEqual({ file: ownedPaths().databasePath });
   expect(getDb().query('PRAGMA journal_mode').get()).toEqual({ journal_mode: 'wal' });
 });
-afterEach(() => { closeDatabase(); restore(); workspace.cleanup(); });
+afterEach(async () => { await closeDatabase(); restore(); workspace.cleanup(); });
 const receivedAt = '2026-10-04T12:00:00.000Z';
 const earlier = '2026-10-03T10:00:00.000Z';
 const later = '2026-10-05T12:00:00.000Z';
@@ -75,7 +75,7 @@ test('retained SDK reasoning survives current projection and exact database reop
   expect(getDb().query('SELECT input_tokens,output_tokens,reasoning_tokens,total_tokens FROM token_usage').get())
     .toEqual({ input_tokens: 1, output_tokens: 1, reasoning_tokens: 1, total_tokens: 2 });
   const original = financialRows(), request = getBudgetRequest(binding.id);
-  closeDatabase(); initDatabase(ownedPaths());
+  await closeDatabase(); initDatabase(ownedPaths());
   await accounting().settleRetainedRequest(binding, owner());
   expect(financialRows()).toEqual(original); expect(getBudgetRequest(binding.id)).toEqual(request);
   expect(readBudgetTerminalReceipt(binding)).toEqual(receipt);
@@ -104,7 +104,7 @@ test('already committed alias-only reporting retains its original hash and numbe
   const original = financialRows(), request = getBudgetRequest(binding.id), work = getBudgetWork(binding.workId);
   getDb().query('UPDATE token_usage SET reasoning_tokens=999').run(); // Mutable projection cannot replace the canonical report.
   await helper.settleRetainedRequest(binding, owner());
-  closeDatabase(); initDatabase(ownedPaths());
+  await closeDatabase(); initDatabase(ownedPaths());
   await accounting().settleRetainedRequest(binding, owner());
   expect(financialRows()).toEqual(original); expect(getBudgetRequest(binding.id)).toEqual(request);
   expect(getBudgetWork(binding.workId)).toEqual(work); expect(readBudgetTerminalReceipt(binding)).toEqual(receipt);
@@ -251,7 +251,7 @@ test('exact duplicates, lost ACK and database/helper reopen preserve original ch
   expect(recordBudgetTerminalReceipt(binding, payload, later)).toEqual(receipt);
   await helper.settleRetainedRequest(binding, owner());
   expect(getBudgetRequest(binding.id)).toEqual(request); expect(getBudgetWork(binding.workId)).toEqual(work);
-  closeDatabase(); initDatabase(ownedPaths());
+  await closeDatabase(); initDatabase(ownedPaths());
   await accounting().settleRetainedRequest(binding, owner());
   expect(readBudgetTerminalReceipt(binding)).toEqual(receipt);
   expect(getBudgetRequest(binding.id)).toEqual(request); expect(getBudgetWork(binding.workId)).toEqual(work);

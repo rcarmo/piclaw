@@ -9,7 +9,7 @@ type Store = typeof import('../../../../src/db.js');
 
 for (const outcome of ['cancel', 'archive'] as const) test(`queued HTTP admission yields under held WAL and rejects ${outcome} without a raw write`, () =>
   withTempWorkspaceEnv('queued-admission-wal-', {}, async ws => {
-    const db = await importFresh<Store>('../src/db.js'); db.closeDatabase();
+    const db = await importFresh<Store>('../src/db.js'); await db.closeDatabase();
     const path = join(ws.store, 'queued.sqlite'), chat = 'web:queued-wal';
     db.initDatabase({ ...getRuntimeConfigPaths(), databasePath: path });
     db.storeChatMetadata(chat, '2026-01-01T00:00:00Z');
@@ -41,13 +41,13 @@ for (const outcome of ['cancel', 'archive'] as const) test(`queued HTTP admissio
       expect(db.getDb().query('PRAGMA busy_timeout').get()).toEqual(policy);
     } finally {
       clearInterval(timer); controller.abort(); if (blocker.inTransaction) blocker.exec('ROLLBACK');
-      await Promise.allSettled(pending ? [pending] : []); blocker.close(); db.closeDatabase();
+      await Promise.allSettled(pending ? [pending] : []); blocker.close(); await db.closeDatabase();
     }
   }));
 
 test('a source callback cannot replace the queued target lifetime inside the transaction', () =>
   withTempWorkspaceEnv('queued-callback-lifetime-', {}, async () => {
-    const db = await importFresh<Store>('../src/db.js'); db.closeDatabase(); db.initDatabase(getRuntimeConfigPaths());
+    const db = await importFresh<Store>('../src/db.js'); await db.closeDatabase(); db.initDatabase(getRuntimeConfigPaths());
     const chat = 'web:queued-callback';
     db.storeChatMetadata(chat, '2026-01-01T00:00:00Z'); const branch = db.ensureChatBranch({ chat_jid: chat, agent_name: 'fixture' });
     const channel = new WebChannel({ queue: { enqueue() {} }, agentPool: {} } as any);
@@ -60,5 +60,5 @@ test('a source callback cannot replace the queued target lifetime inside the tra
       expect(entered).toBe(1); expect(db.getChatBranchByChatJid(chat)!.branch_id).toBe(branch.branch_id);
       expect(db.getDeferredQueuedFollowups(chat)).toEqual([]);
       expect(await channel.admitQueuedFollowupItem([chat, 0, 'next original target'], () => {}, new AbortController().signal)).toBe(-1);
-    } finally { db.closeDatabase(); }
+    } finally { await db.closeDatabase(); }
   }));

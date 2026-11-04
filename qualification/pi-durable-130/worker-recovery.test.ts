@@ -37,7 +37,7 @@ test('disk restart controller + current queue worker: lost ACK repair retains la
     const oldOwner = f.owner;
     await f.runtime!.close(); f.runtime = undefined;
     oldOwner.releaseAfterClose(); // Actual candidate close precedes ownership release.
-    closeDatabase(); // Actual host SQL connection close, not a cache reset.
+    await closeDatabase(); // Actual host SQL connection close, not a cache reset.
     const events: string[] = [];
     f.owner = TestOwner.acquire(f.path); events.push("owner");
     expect(() => oldOwner.assert()).toThrow("owner lost");

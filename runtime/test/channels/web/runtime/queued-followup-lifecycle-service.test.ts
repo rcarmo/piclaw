@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { closeDatabase } from "../../../../src/db/connection.js";
 import { createTempWorkspace, setEnv } from "../../../helpers.js";
 import { installServiceWorkSchema } from "../../../../src/service-effects/current-piclaw/service-work-schema.js";
 import { createCurrentPiclawServiceWorkStore } from "../../../../src/service-effects/current-piclaw/service-work-store.js";
@@ -13,7 +14,8 @@ function seal<T extends { effect: { requestHash: string } }>(request: T, method?
 let restoreEnv: (() => void) | null = null;
 let cleanupWorkspace: (() => void) | null = null;
 
-afterEach(() => {
+afterEach(async () => {
+  await closeDatabase();
   restoreEnv?.();
   restoreEnv = null;
   cleanupWorkspace?.();
@@ -29,7 +31,7 @@ async function createServiceFixture(fileBacked = false) {
   // setEnv enforces memory by default; this reopen fixture explicitly owns its
   // temporary store and restores the default before workspace cleanup.
   if (fileBacked) {
-    db.closeDatabase();
+    await db.closeDatabase();
     process.env.PICLAW_DB_IN_MEMORY = "0";
   }
   db.initDatabase();
@@ -72,7 +74,7 @@ describe("queued follow-up lifecycle service", () => {
       expect(original.source_id).toMatch(/^source-[0-9a-f-]{36}$/);
       expect(service).not.toHaveProperty("replaceQueuedFollowupItem");
       expect(service.peekQueuedFollowupItem("web:default")!.source_id).toBe(original.source_id);
-      db.closeDatabase();
+      await db.closeDatabase();
       db.initDatabase();
       const restored = new QueuedFollowupLifecycleService();
       expect(restored.peekQueuedFollowupItem("web:default")).toEqual(original);
@@ -85,7 +87,7 @@ describe("queued follow-up lifecycle service", () => {
       expect(restartedEmpty.enqueueQueuedFollowupItem("web:default", 0, "persistent", null, original.queuedAt)).toBe(rowId);
       expect(restartedEmpty.peekQueuedFollowupItem("web:default")!.source_id).not.toBe(original.source_id);
     } finally {
-      db.closeDatabase();
+      await db.closeDatabase();
     }
   });
   test('asynchronous admission commits one atomic queue update and rolls back revoked authority', async () => {
@@ -494,14 +496,14 @@ describe("queued follow-up lifecycle service", () => {
         isBot: false, mediaIds: [], agentId: 'default', agentName: 'Fixture' }, { consumeDeferredFollowupRowId: before[1]!.rowId,
         materializeQueuedSource({ database, message }) { expect(database.inTransaction).toBe(true); expect(message.id).toBe(before[1]!.source_id); } });
       expect(materialized).not.toBeNull();
-      db.closeDatabase(); db.initDatabase();
+      await db.closeDatabase(); db.initDatabase();
       const { QueuedFollowupLifecycleService } = await import('../../../../src/channels/web/runtime/queued-followup-lifecycle-service.js');
       const reopened = new QueuedFollowupLifecycleService();
       expect(reopened.getPendingQueuedSourceOrder('web:default')).toEqual([before[1]!.source_id!,before[0]!.source_id!]);
       expect(reopened.getQueuedFollowupItems('web:default')).toEqual([before[0]]);
       expect(await reopened.reorderQueuedFollowupItems('web:default',0,0)).toBe(false);
       expect(await reopened.reorderQueuedFollowupItems('web:default',-1,0)).toBe(false);
-    } finally { db.closeDatabase(); }
+    } finally { await db.closeDatabase(); }
   });
 
   test("rejects reordering that moves ordinary work ahead of protected continuations", async () => {

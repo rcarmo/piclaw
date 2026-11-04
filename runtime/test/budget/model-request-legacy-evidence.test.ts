@@ -11,8 +11,8 @@ import { assertModelAccountingReady } from '../../src/budget/model-request-accou
 
 let workspace: TempWorkspace, restore: () => void;
 function ownedPaths() { return resolveRuntimeConfigPaths({ env: { ...process.env, PICLAW_DB_IN_MEMORY: '0' } }); }
-beforeEach(() => {
-  closeDatabase(); workspace = createTempWorkspace('legacy-accounting-');
+beforeEach(async () => {
+  await closeDatabase(); workspace = createTempWorkspace('legacy-accounting-');
   restore = setEnv({ PICLAW_WORKSPACE: workspace.workspace, PICLAW_STORE: workspace.store, PICLAW_DATA: workspace.data });
   initDatabase(ownedPaths()); const db = getDb();
   // Reproduce the exact v4 schema, before provenance existed. Fixture changes only.
@@ -23,7 +23,7 @@ beforeEach(() => {
   ensureBudgetWork({ id: 'operation', chatJid: 'web:legacy-evidence', executionKind: 'interactive' });
   saveBudgetCap({ scope: 'task', workId: 'operation', metric: 'api_usd_micros', amount: 100 });
 });
-afterEach(() => { closeDatabase(); restore?.(); workspace?.cleanup(); });
+afterEach(async () => { await closeDatabase(); restore?.(); workspace?.cleanup(); });
 function seed(id: string, createdAt = '2020-01-01T00:00:00.000Z', invocation?: BudgetModelInvocation) {
   const binding: BudgetRequestBinding = { id, workId: `durable-request:${id}`, chatJid: 'web:legacy-evidence',
     providerId: 'fixture', modelId: 'fixture-model', accountRef: 'fixture-account', amountMicros: 60,
@@ -40,7 +40,7 @@ function snapshot(id: string) {
     charges: getDb().query('SELECT * FROM budget_usage_events').all(), usage: getDb().query('SELECT * FROM token_usage').all() };
 }
 
-test('pre-retention unknown hold survives upgrade/reopen without demanding nonexistent proof', () => {
+test('pre-retention unknown hold survives upgrade/reopen without demanding nonexistent proof', async () => {
   const binding = seed('legacy'), before = snapshot(binding.id);
   migrate();
   expect(getBudgetRequest(binding.id)?.terminal_evidence_version).toBe(0);
@@ -49,7 +49,7 @@ test('pre-retention unknown hold survives upgrade/reopen without demanding nonex
   // Financial admission still includes the entire unknown reservation.
   ensureBudgetWork({ id: 'another', chatJid: binding.chatJid, executionKind: 'interactive', parentWorkId: 'operation' });
   expect(() => reserveBudgetRequest({ ...binding, id: 'next', workId: 'another', amountMicros: 50 })).toThrow('budget_denied');
-  closeDatabase(); initDatabase(ownedPaths());
+  await closeDatabase(); initDatabase(ownedPaths());
   expect(getBudgetRequest(binding.id)?.terminal_evidence_version).toBe(0);
   expect(() => assertModelAccountingReady('operation', getDb(), undefined, true)).not.toThrow();
   expect(getBudgetRequest(binding.id)?.state).toBe('unresolved');

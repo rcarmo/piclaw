@@ -17,10 +17,10 @@ let restore: () => void;
 let database: Database;
 let blocker: Database;
 let service: QueuedFollowupLifecycleService;
-beforeEach(() => {
+beforeEach(async () => {
   ws = createTempWorkspace('media-queue-admission-');
   assertPathWithinTestFilesystemIsolation(ws.store, process.env, { allowRoot: false });
-  db.closeDatabase();
+  await db.closeDatabase();
   restore = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data, PICLAW_DB_IN_MEMORY: '0' });
   // Bind this fixture's own store before opening its competing WAL writer.
   process.env.PICLAW_DB_IN_MEMORY = '0';
@@ -36,9 +36,9 @@ beforeEach(() => {
   database.exec('CREATE TABLE fixture_grants(media_id INTEGER PRIMARY KEY REFERENCES media(id));');
   service = new QueuedFollowupLifecycleService();
 });
-afterEach(() => {
+afterEach(async () => {
   blocker?.close();
-  db.closeDatabase();
+  await db.closeDatabase();
   restore?.();
   ws?.cleanup();
 });
