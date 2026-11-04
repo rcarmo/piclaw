@@ -15,7 +15,6 @@
  *   - The AgentQueue (queue.ts) serialises task execution with user messages per chat lane while allowing unrelated chats to progress in parallel.
  */
 
-import { statSync } from "node:fs";
 import { admitSqliteWrite, type SyncSqliteOperation } from "./db/sqlite-async-admission.js";
 import { randomUUID,createHash } from "node:crypto";
 import { withBudgetWorkContext } from './budget/context.js';
@@ -33,7 +32,7 @@ import { DREAM_TASK_ID, parseDreamPromptToken, runDreamAgentTurn, runDreamMainte
 import { computeNextRun } from "./task-scheduler-utils.js";
 import type { AgentPool } from "./agent-pool.js";
 import { getDb, getTaskById } from "./db.js";
-import { getDatabaseBinding } from "./db/connection.js";
+import { captureHostDatabaseBinding, getDatabaseBinding } from "./db/connection.js";
 import { openSqliteRole } from "./db/sqlite-role-policy.js";
 import { registerSqliteCheckpoint } from "./db/sqlite-checkpoint.js";
 import { RuntimeStartupCleanupError } from "./runtime/startup-cleanup-error.js";
@@ -409,8 +408,9 @@ function sealScheduledEffect<T extends { effect: EffectIdentity }>(request: T): 
 
 const primaryStores = new WeakMap<Database, { users: number; foreignKeysWereEnabled: boolean }>();
 
-function productionScheduledRunStore(): { store: ScheduledRunStore & InterruptedScheduledRunReconciler; close: () => void | Promise<void> } {
+function productionScheduledRunStore(mayClaim: () => boolean): { store: ScheduledRunStore & InterruptedScheduledRunReconciler; close: () => void | Promise<void> } {
   const primary = getDb();
+  const assertBinding = captureHostDatabaseBinding(primary);
   const databaseRow = primary.query("PRAGMA database_list").all() as Array<{ name: string; file: string }>;
   const filename = databaseRow.find((row) => row.name === "main")?.file || "";
   let database: Database;
@@ -446,7 +446,14 @@ function productionScheduledRunStore(): { store: ScheduledRunStore & Interrupted
   };
   try {
     if (!filename) primary.exec("PRAGMA foreign_keys=ON");
-    const built = createCurrentPiclawScheduledRunStore(database, { hitFault: () => false, recordTrace: () => undefined });
+    const built = createCurrentPiclawScheduledRunStore(database, {
+      hitFault: () => false,
+      recordTrace: () => undefined,
+      assertClaimCurrent: () => {
+        assertBinding();
+        if (!mayClaim() || !canRunLegacyScheduledWork()) throw Error("Scheduled poll claim revoked");
+      },
+    });
     if (!built.ok) throw new Error(`Scheduled run store unavailable: ${built.error._tag}`);
     if (filename) stopCheckpoint = registerSqliteCheckpoint(database, filename);
     return { store: built.value, close };
@@ -457,16 +464,14 @@ function productionScheduledRunStore(): { store: ScheduledRunStore & Interrupted
   }
 }
 
-/** Recheck the captured scheduler/database before and after the SQL-only body. */
+/** Recheck the captured owner before acquisition attempts and before/after SQL. */
 async function scheduledSourceWrite<T>(database: Database, operation: SyncSqliteOperation<T>, mayWrite: () => boolean = canRunLegacyScheduledWork): Promise<T> {
-  const binding = getDatabaseBinding();
-  return admitSqliteWrite<T>(database, operation, () => {
-    if (getDb() !== database || !mayWrite()) throw Error("Scheduled source write revoked");
-    if (binding) {
-      const current = statSync(binding.path);
-      if (`${current.dev}:${current.ino}` !== binding.identity) throw Error("Scheduled source database file changed");
-    }
-  });
+  const assertBinding = captureHostDatabaseBinding(database);
+  const check = () => {
+    assertBinding();
+    if (!mayWrite()) throw Error("Scheduled source write revoked");
+  };
+  return admitSqliteWrite<T>(database, operation, check, undefined, undefined, check);
 }
 
 /** Repair only exact canonical completion receipts; never reclaim/execute work
@@ -991,7 +996,7 @@ export class SchedulerStoreReleaseError extends Error {
 export function startSchedulerLoop(deps: SchedulerDeps): () => Promise<void> {
   if (schedulerLoop) return schedulerLoop.stop;
   if (!canRunLegacyScheduledWork()) return () => stoppedScheduler;
-  const resource = productionScheduledRunStore();
+  const resource = productionScheduledRunStore(isCurrent);
   let pendingTasks = 0;
   let pollJoined = false;
   let closed = false;
@@ -1040,7 +1045,7 @@ export function startSchedulerLoop(deps: SchedulerDeps): () => Promise<void> {
     },
   };
   schedulerLoop = instance;
-  const isCurrent = () => schedulerLoop === instance && !instance.stopped;
+  function isCurrent(): boolean { return schedulerLoop === instance && !instance.stopped; }
   log.info("Scheduler loop started", { operation: "start_scheduler_loop", workerId: schedulerWorkerId });
   const loop = (): Promise<void> => {
     if (!isCurrent()) return stoppedScheduler;

@@ -81,6 +81,8 @@ export interface ScheduledRunAdapterRuntime {
   hitFault(point: "before_effect" | "effect_then_lost_acknowledgement", method: MutationMethod): boolean;
   afterStatement?(statement: ScheduledRunStatement): void;
   recordTrace(input: NormalisedTraceInput): void;
+  /** Read-only poll authority check; never gates already accepted work. */
+  assertClaimCurrent?(): void;
 }
 
 export type ScheduledRunStoreConstructionResult = ResultValue<ScheduledRunStore & InterruptedScheduledRunReconciler & ScheduledRunRetentionOwner, ScheduledRunStoreError>;
@@ -320,7 +322,8 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
     await Promise.resolve();
     try {
       if (this.runtime.hitFault("before_effect", method)) return this.failed(method, effectId, operationId, version, errorOf("storage_unavailable"), sourceSeq);
-      const result = await admitSqliteWrite(this.database, action);
+      const result = await admitSqliteWrite(this.database, action, undefined, undefined, undefined,
+        () => { if (method === "claimDue") this.runtime.assertClaimCurrent?.(); });
       if (!result.ok) return this.failed(method, effectId, operationId, version, result.error, sourceSeq);
       let lostAcknowledgement: boolean;
       try { lostAcknowledgement = this.runtime.hitFault("effect_then_lost_acknowledgement", method); }
