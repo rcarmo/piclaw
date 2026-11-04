@@ -6,7 +6,7 @@
  *
  * ATXHeading1–6 nodes contain HeaderMark children (the `#` symbols).
  */
-import { registerDecorator, Decoration, WidgetType, cursorInRange } from './live-preview.js';
+import { registerDecorator, Decoration, WidgetType, cursorInRange, forceLivePreviewRebuild } from './live-preview.js';
 import type { DecorationEntry, SyntaxNode, EditorView } from './live-preview.js';
 
 const HEADING_CLASSES: Record<string, string> = {
@@ -67,10 +67,8 @@ class HeadingFoldWidget extends WidgetType {
             } else {
                 collapsedHeadingStarts.add(this.headingFrom);
             }
-            // Trigger a lightweight view refresh transaction.
-            view.dispatch({
-                changes: { from: this.headingFrom, to: this.headingFrom, insert: '' },
-            });
+            // Keyboard toggles have no pointer-release transaction to refresh them.
+            view.dispatch({ effects: forceLivePreviewRebuild.of() });
         };
 
         btn.addEventListener('mousedown', (e) => {

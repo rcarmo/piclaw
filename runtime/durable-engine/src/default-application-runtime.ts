@@ -702,16 +702,21 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       ["goal", goal], ["observability", observability], ["plan-sidebar", plan],
       ["delegate", delegate], ["code-review", codeReview],
     ]);
-    releaseAdminKv = registerAddonConfigKvAuthority((extensionId, chatJid, signal) => {
+    releaseAdminKv = registerAddonConfigKvAuthority((extensionId, chatJid, request) => {
       const qualified = infrastructure.find(item => item.kind === extensionId) ?? resourceQualifications.find(item => item.kind === extensionId) ?? (regrets?.kind === extensionId ? regrets : undefined)
         ?? nativeConfigOwners.get(extensionId);
       if (!qualified) throw Error("Addon configuration namespace denied");
       const assertCurrent = () => { assert(); lifetime.signal.throwIfAborted(); qualified.assertCurrent();
         if (readAccessConfig().mode !== "single-user") throw Error("Configuration requires single-user policy"); };
       assertCurrent();
-      return { extensionId, chatJid, globalRead: extensionId !== "session-dashboard", globalWrite: extensionId !== "session-dashboard", assertCurrent,
-        admitWrite: body => admitSqliteWrite(root, body, assertCurrent, signal),
+      return { extensionId, chatJid, globalRead: extensionId !== "session-dashboard" && extensionId !== "goal", globalWrite: extensionId !== "session-dashboard" && extensionId !== "goal", assertCurrent,
+        admitWrite<T>(body: SyncSqliteOperation<T>) {
+          if (request.method !== "POST") throw Error("Extension KV scope denied");
+          const current = () => this.assertCurrent();
+          return admitSqliteWrite(root, body, current, request.signal, undefined, current);
+        },
         write: body => {
+          if (request.method !== "POST") throw Error("Extension KV scope denied");
           assertCurrent(); if (!root.inTransaction) throw Error("Admitted configuration write transaction required");
           const result = body(); assertCurrent(); return result;
         } };
@@ -1433,7 +1438,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     registerAddonConfigApi("late-night-regrets", "models", { get: () => settings.getModels() }, regrets.source.packageDir);
   }
   if (goal) {
-    const config = createHostGoalConfig(goal.addon, { root, assertAdmission: goalAdmission, admit: input => bundle.admitHostFollowup(input) });
+    const config = createHostGoalConfig(goal.addon, { assertAdmission: goalAdmission, admit: input => bundle.admitHostFollowup(input) });
     const chatFrom = (payload: unknown, request: Request) => {
       const body = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
       const chat = new URL(request.url).searchParams.get("chat_jid") || body.chat_jid;
