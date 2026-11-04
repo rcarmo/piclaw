@@ -37,7 +37,7 @@ type RuntimeGlobal = typeof globalThis & {
   ) => "created" | "updated";
 };
 
-type AdminGrantFactory = (addonId: string, chatJid: string, signal?: AbortSignal) => ExtensionKvAuthority;
+type AdminGrantFactory = (addonId: string, chatJid: string, request: Request) => ExtensionKvAuthority;
 let adminGrantFactory: AdminGrantFactory | undefined;
 /** Application-owner registration; disposer cannot revoke a newer owner. */
 export function registerAddonConfigKvAuthority(factory: AdminGrantFactory): () => void {
@@ -55,7 +55,7 @@ async function invokeConfig(handler: AddonConfigApiHandler, payload: unknown, re
   if (queryChat && bodyChat && queryChat !== bodyChat) throw Error("Conflicting configuration chat");
   const requestedChat = queryChat || bodyChat || context.chatJid;
   const target = requestedChat ? await context.resolveTarget({ chatJid: requestedChat }) : undefined;
-  const grant = adminGrantFactory(addonId, target?.chatJid ?? "", req.signal);
+  const grant = adminGrantFactory(addonId, target?.chatJid ?? "", req);
   let active = true;
   const assertCurrent = () => { if (!active || !addonLocalContextApi.getRequestContext(req)) throw Error("Configuration request expired"); grant.assertCurrent(); };
   try { return await withExtensionKvAuthority({ ...grant, globalWrite: req.method === "POST" && grant.globalWrite === true, assertCurrent, write: body => grant.write(() => { assertCurrent(); const result = body(); assertCurrent(); return result; }) }, () => handler(payload, req, context)); }
