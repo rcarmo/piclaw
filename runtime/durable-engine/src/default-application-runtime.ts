@@ -54,6 +54,7 @@ import { boundHostRequestCost } from '../../src/budget/request-cost-bound.js';
 import type { NativeDreamRequest,AgentOutput } from '../../src/agent-pool/contracts.js';
 import { getBudgetWork,ensureBudgetWork,setBudgetWorkStatus } from '../../src/db/budget-limits.js';
 import { assertModelAccountingReady } from '../../src/budget/model-request-accounting.js';
+import { evaluateBudget } from "../../src/budget/evaluator.js";
 import { BudgetRequestError, findBudgetRequestByModelInvocation, type BudgetModelInvocation } from '../../src/db/budget-request-reservations.js';
 import { reserveHostRequest, reconcileOperationBudgetWork, completeMaintenanceBudgetWork,operationBudgetWorkId,assertOperationAccountingReady,assertConversationAccountingReady,prepareTaskAccounting,prepareConversationAccounting } from "./host-request-accounting.js";
 import { createHostMcp } from "./host-mcp.js";
@@ -433,7 +434,20 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       assert(); lifetime.signal.throwIfAborted(); runtime().assertCapturedSourceCurrent(captured.inputs);
     }, true);
     const background=bundle.backgroundPolicyFor(captured.inputs[0]!);
-    return () => { authority.assertCurrent();if(background)assertAddonBackgroundToolBudget(root,background); if (captured.delegateModel) assertDelegateModel(captured.delegateModel); };
+    return () => {
+      authority.assertCurrent();
+      if (background) assertAddonBackgroundToolBudget(root, background);
+      if (captured.delegateModel) {
+        assertDelegateModel(captured.delegateModel);
+        const workId = operationBudgetWorkId(captured.operation.operationId);
+        if (getBudgetWork(workId, root)) {
+          const decision = evaluateBudget({ workId, providerId: captured.delegateModel.provider, readOnly: true }, root);
+          if (decision.action === "pause" || decision.action === "stop") throw new BudgetRequestError("budget_denied");
+        } else if (root.query("SELECT 1 FROM budget_caps WHERE enabled=1 LIMIT 1").get()) {
+          throw new BudgetRequestError("budget_denied");
+        }
+      }
+    };
   };
   let assertDelegateModel: (model: { provider: string; modelId: string }) => void = () => { throw Error("Delegate unavailable"); };
   const infrastructureTools = infrastructure.map(qualified => {
