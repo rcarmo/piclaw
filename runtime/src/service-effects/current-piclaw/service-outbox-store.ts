@@ -638,7 +638,7 @@ export class CurrentPiclawServiceOutboxStore implements ServiceOutboxStore {
             freeze({
               decision: "replayed" as const,
               record: recordFromOutcome(
-                this.requireIdentityRecord(request.outboxId),
+                this.requireRecord(request.outboxId),
                 known,
               ),
             }),
@@ -872,9 +872,6 @@ export class CurrentPiclawServiceOutboxStore implements ServiceOutboxStore {
     if (!record) throw new CorruptStateFault();
     return record;
   }
-  private requireIdentityRecord(id: string): OutboxRecord {
-    return this.requireRecord(id);
-  }
   private readDecision(key: string): ReturnType<typeof decodeDecision> | null {
     const row = this.database
       .query(`SELECT * FROM ${DECISIONS} WHERE decision_key=?`)
@@ -919,7 +916,7 @@ export class CurrentPiclawServiceOutboxStore implements ServiceOutboxStore {
             freeze({
               decision: "replayed" as const,
               lease: leaseFromAuthority(
-                this.requireIdentityRecord(lease.outboxId),
+                this.requireRecord(lease.outboxId),
                 lease,
                 request.leaseToken,
               ),
@@ -937,7 +934,7 @@ export class CurrentPiclawServiceOutboxStore implements ServiceOutboxStore {
       lease.method !== "claimNext"
     )
       return Result.err(errorOf("corrupt_state"));
-    const identity = this.requireIdentityRecord(lease.outboxId);
+    const identity = this.requireRecord(lease.outboxId);
     return Result.ok(
       freeze({
         decision: "replayed" as const,
@@ -964,7 +961,7 @@ export class CurrentPiclawServiceOutboxStore implements ServiceOutboxStore {
         freeze({
           decision: "replayed" as const,
           record: recordFromLease(
-            this.requireIdentityRecord(lease.outboxId),
+            this.requireRecord(lease.outboxId),
             lease,
             (request as ReclaimOutboxRequest).leaseToken,
           ),
@@ -981,7 +978,7 @@ export class CurrentPiclawServiceOutboxStore implements ServiceOutboxStore {
       freeze({
         decision: "replayed" as const,
         record: recordFromResolution(
-          this.requireIdentityRecord(request.outboxId),
+          this.requireRecord(request.outboxId),
           resolution,
         ),
       }),
