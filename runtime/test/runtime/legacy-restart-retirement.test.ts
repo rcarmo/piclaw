@@ -1,11 +1,13 @@
 import '../helpers.js';
 import { expect, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
-import { initDatabase, getDb, extensionKvSet, extensionKvGet, storeChatMetadata, storeMessage } from '../../src/db.js';
+import { initDatabase, getDb, extensionKvGet, storeChatMetadata, storeMessage } from '../../src/db.js';
+import { extensionKvSet } from '../../src/db/extension-kv.js';
 import { runWebStartupRecoveryBootstrap } from '../../src/runtime/startup.js';
 
 test('startup retains opaque historical handoffs and timeline bytes without replay, deletion or synthetic completion', () => {
   initDatabase(); const chat = 'web:historical-exit'; storeChatMetadata(chat, new Date().toISOString());
+  getDb().transaction(() => {
   for (const state of ['preparing', 'ready', 'completion_posted', 'resume_posted']) {
     extensionKvSet('exit-process', `restart-handoff:${state}`, { version: 1, restartId: state, state, chatJid: chat,
       reason: 'historical', resumeMessage: 'never replay this input', requestedAt: '2026-01-01T00:00:00.000Z',
@@ -13,6 +15,7 @@ test('startup retains opaque historical handoffs and timeline bytes without repl
   }
   extensionKvSet('exit-process', 'restart-handoff:future', { version: 900, payload: 'retain unsupported bytes' }, 'global');
   extensionKvSet('exit-process', 'restart-handoff:malformed', 'retain malformed history', 'global');
+  }).immediate();
   storeMessage({ id: 'historical-exit-notice', chat_jid: chat, sender: 'fixture', sender_name: 'Fixture', content: 'Historical notice',
     timestamp: '2026-01-01T00:00:00.000Z', is_from_me: true, is_bot_message: true,
     content_blocks: [{ type: 'restart_handoff', source: 'exit_process', restart_id: 'ready', phase: 'notice' }] });

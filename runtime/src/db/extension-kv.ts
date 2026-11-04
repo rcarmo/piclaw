@@ -1,5 +1,5 @@
 /**
- * db/extension-kv.ts — Scoped key-value store for extensions.
+ * db/extension-kv.ts — Root KV readers and transaction-local SQL mutation bodies.
  *
  * Each extension is isolated by extension_id (runtime-assigned).
  * Values are JSON-serialized. Supports chat-scoped and global entries.
@@ -78,8 +78,9 @@ export function extensionKvSet(
   scopeKey?: string,
 ): void {
   const { scope: s, scopeKey: sk } = resolveScope(scope, scopeKey);
-  const json = serializeValue(value);
   const db = getDb();
+  if (!db.inTransaction) throw Error("Extension KV mutation requires a transaction-local SQL scope");
+  const json = serializeValue(value);
 
   // Enforce key count limit
   const count = db
@@ -108,6 +109,7 @@ export function extensionKvDelete(
 ): boolean {
   const { scope: s, scopeKey: sk } = resolveScope(scope, scopeKey);
   const db = getDb();
+  if (!db.inTransaction) throw Error("Extension KV mutation requires a transaction-local SQL scope");
   const result = db
     .prepare("DELETE FROM extension_kv WHERE extension_id = ? AND scope = ? AND scope_key = ? AND key = ?")
     .run(extensionId, s, sk, key);
@@ -181,6 +183,7 @@ export function extensionKvClear(
   scopeKey?: string,
 ): number {
   const db = getDb();
+  if (!db.inTransaction) throw Error("Extension KV mutation requires a transaction-local SQL scope");
   if (scope && scopeKey) {
     const result = db
       .prepare("DELETE FROM extension_kv WHERE extension_id = ? AND scope = ? AND scope_key = ?")
