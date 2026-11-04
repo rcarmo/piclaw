@@ -31,6 +31,8 @@ for(const revoke of [false,true]) test(`KV write admission yields to a real writ
 test('KV admission denies missing/wrong authority and rolls back an entered callback without retry',async()=>{
  resetExtensionKvStoreForTests();requireExtensionKvAuthority();const store=getExtensionKvStore();
  const db=new Database(':memory:');db.exec('CREATE TABLE marker(value TEXT)');let entered=0;
+ const unexpected=()=>{throw Error('No KV sink operation expected in the SQL marker fixture');};
+ registerExtensionKvStore({get:unexpected,set:unexpected,delete:unexpected,list:unexpected,query:unexpected,clear:unexpected});
  const authority={extensionId:'fixture',chatJid:'web:fixture',assertCurrent(){},write<T>(body:()=>T){return body();},admitWrite:<T>(body:SyncSqliteOperation<T>)=>admitSqliteWrite<T>(db,body)};
  try{
   await expect(store.write!('fixture',()=>{entered++;})).rejects.toThrow('authority required');

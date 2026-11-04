@@ -1,6 +1,9 @@
 import './src/test-guard.js';
 import { test,expect } from 'bun:test';
 import { Database } from 'bun:sqlite';
+import { initDatabase,getDb,closeDatabase } from '../../runtime/src/db/connection.js';
+import { getRuntimeConfigPaths } from '../../runtime/src/core/config.js';
+import { registerRootExtensionKvStore } from '../../runtime/src/db/register-extension-kv.js';
 import { mkdtemp,rm,writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { installCodeReviewFixture } from './code-review-fixture.js';
@@ -9,7 +12,8 @@ import { getExtensionKvStore,requireExtensionKvAuthority,resetExtensionKvStoreFo
 
 for(const revoke of [false,true]) test(`native review preparation and UI mutation yield to the shared writer; revoke=${revoke}`,async()=>{
  const dir=await mkdtemp(join(process.env.PICLAW_WORKSPACE!,'review-admission-'));
- const path=join(dir,'root.sqlite'),root=new Database(path);root.exec('PRAGMA journal_mode=WAL;PRAGMA busy_timeout=0');
+ const path=join(dir,'root.sqlite');await closeDatabase();initDatabase({...getRuntimeConfigPaths(),databasePath:path});
+ const root=getDb();registerRootExtensionKvStore();
  const blocker=new Database(path),globals=globalThis as any,previous=globals.__piclawRuntimeInterop;
  const addon=await import(installCodeReviewFixture(dir)+'/runtime.ts');
  let current=true;
@@ -38,5 +42,5 @@ for(const revoke of [false,true]) test(`native review preparation and UI mutatio
   expect(root.inTransaction).toBe(false);expect(root.query('PRAGMA busy_timeout').get()).toEqual({timeout:0});
   current=true;addon.closeReviewServices();
   const reopened=await addon.prepareReviewService();expect(reopened).not.toBe(service);
- }finally{if(blocker.inTransaction)blocker.exec('ROLLBACK');current=true;releaseSource();resetExtensionKvStoreForTests();globals.__piclawRuntimeInterop=previous;blocker.close();root.close();await rm(dir,{recursive:true,force:true});}
+ }finally{if(blocker.inTransaction)blocker.exec('ROLLBACK');current=true;releaseSource();resetExtensionKvStoreForTests();globals.__piclawRuntimeInterop=previous;blocker.close();await closeDatabase();await rm(dir,{recursive:true,force:true});}
 });

@@ -11,13 +11,17 @@ test("Imap schema discovery grants no invocation authority", () => {
   expect(tool).toBeDefined(); expect(checks).toBe(1);
 });
 
-import { Database } from "bun:sqlite";
+import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
+import { getRuntimeConfigPaths } from "../../runtime/src/core/config.js";
+import { registerRootExtensionKvStore } from "../../runtime/src/db/register-extension-kv.js";
+import { resetExtensionKvStoreForTests } from "../../runtime/src/extension-kv-registry.js";
 import { createCurrentPiclawServiceWorkStore } from "../../runtime/src/service-effects/current-piclaw/service-work-store.js";
 import { installTerminalSettlementCompositionSchema } from "../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js";
 import { at, effect, sealed, value } from "./src/host-handoff.js";
 import { BACKGROUND_CONTEXT } from "../../runtime/durable-engine/qualification/context.ts";
 async function fixture() {
-  const root = new Database(":memory:");
+  await closeDatabase(); initDatabase({ ...getRuntimeConfigPaths(), databasePath: ":memory:" });
+  const root = getDb(); registerRootExtensionKvStore();
   installTerminalSettlementCompositionSchema(root);
   const work = value(createCurrentPiclawServiceWorkStore(root, { hitFault: () => false, recordTrace() {} }));
   const chatJid = "web:authority";
@@ -68,6 +72,6 @@ for (const mode of ["valid", "foreign", "owner", "version", "source", "binding",
       if (mode === "valid") { expect((await execution).output).toEqual([{ type: "text", text: "synthetic" }]); expect(effects).toBe(1); }
       else { await expect(execution).rejects.toThrow(); expect(effects).toBe(0); }
       expect(captures).toBe(1);
-    } finally { root.close(); }
+    } finally { resetExtensionKvStoreForTests(); await closeDatabase(); }
   });
 }

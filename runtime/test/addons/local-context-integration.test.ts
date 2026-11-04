@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { closeDatabase, initDatabase } from '../../src/db/connection.js';
+import { closeDatabase, initDatabase, getDb } from '../../src/db/connection.js';
+import { registerRootExtensionKvStore } from '../../src/db/register-extension-kv.js';
 import { storeChatMetadata } from '../../src/db.js';
 import { ensureChatBranch } from '../../src/db/chat-branches.js';
 import { withChatContext } from '../../src/core/chat-context.js';
@@ -69,13 +70,13 @@ test("authenticated configuration KV owner grants are exact, request-fenced and 
  const { registerAddonConfigKvAuthority } = await import("../../src/channels/web/handlers/addon-config-api.js");
  const { getExtensionKvStore, resetExtensionKvStoreForTests, requireExtensionKvAuthority } = await import("../../src/extension-kv-registry.js");
  await withTempWorkspaceEnv("addon-admin-kv-", {}, async () => {
-  resetExtensionKvStoreForTests(); requireExtensionKvAuthority();
+  resetExtensionKvStoreForTests(); registerRootExtensionKvStore(); requireExtensionKvAuthority();
   const kv = getExtensionKvStore(); let valid = true, owned = true, transactions = 0;
   const release = registerAddonConfigKvAuthority((extensionId, chatJid) => {
    if (extensionId !== "imap") throw Error("namespace denied");
    const assertCurrent = () => { if (!owned) throw Error("owner expired"); };
    return { extensionId, chatJid, globalRead: true, globalWrite: true, assertCurrent,
-    write: body => { transactions++; assertCurrent(); const result = body(); assertCurrent(); return result; } };
+    write: body => getDb().transaction(() => { transactions++; assertCurrent(); const result = body(); assertCurrent(); return result; }).immediate() };
   });
   try {
    const path = "/agent/addons/api/imap/config";
