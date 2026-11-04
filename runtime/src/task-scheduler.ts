@@ -556,10 +556,11 @@ function scheduledReclaimAuthorities(now: string): ScheduledRunReclaimAuthority[
      JOIN service_effect_s07_task_revisions v
        ON v.task_id=r.task_id AND v.revision=r.task_revision
      WHERE r.state IN ('claimed','source_bound') AND r.lease_expires_at<=?
-     ORDER BY r.scheduled_for,r.task_id`,
+     ORDER BY r.scheduled_for,r.task_id,r.run_id`,
   ).all(now) as Array<{ run_id: string; attempt: number; snapshot_json: string }>;
   const authorities: ScheduledRunReclaimAuthority[] = [];
   for (const row of rows) {
+    if (authorities.length === 100) break;
     let snapshot: { executionRepeatability?: string; chatJid?: string;taskId?:string;kind?:string };
     try { snapshot = JSON.parse(row.snapshot_json); } catch { continue; }
     if (snapshot.executionRepeatability === "agent_source" && typeof snapshot.chatJid === "string") {
