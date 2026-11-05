@@ -1,4 +1,3 @@
-import { decodeEntities } from '../../../../../src/markdown';
 /** Syntax highlighting with the shared CodeMirror vendor and theme token roles. */
 import * as cmHighlight from "#editor-vendor/codemirror";
 import { themeClassHighlighter } from "../../../../../../extensions/viewers/editor/syntax-highlighter";
@@ -347,13 +346,20 @@ export function highlightCodeToHtml(code: string, lang: string): string {
   return html;
 }
 
+// Decode the parser's single HTML-encoding layer without requiring a DOM.
+// A single replacement pass keeps literal entity text such as &lt; intact.
+function decodeCodeHtml(text: string): string {
+  const entities: Record<string,string> = {amp:'&',lt:'<',gt:'>',quot:'"','#39':"'"};
+  return text.replace(/&(amp|lt|gt|quot|#39);/g, (_match, name: string) => entities[name]);
+}
+
 export function applySyntaxHighlighting(html: string): string {
   if (!html) return html;
   return html.replace(
     /<pre><code(?:\s+class="language-([A-Za-z0-9_+-]+)")?>([\s\S]*?)<\/code><\/pre>/g,
     (_match, lang, code) => {
       const normalizedLang = String(lang || "").trim().toLowerCase();
-      const decodedCode = decodeEntities(code);
+      const decodedCode = decodeCodeHtml(code);
       const highlighted = highlightCodeToHtml(decodedCode, normalizedLang);
       const langClass = normalizedLang || "plaintext";
       const humanLabel = normalizeCodeLanguageLabel(langClass);

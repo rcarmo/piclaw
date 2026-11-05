@@ -15,6 +15,13 @@ test("Visual code fences use the shared theme roles without a deferred window gl
   expect(readFileSync(join(root, "web/static/visual/frontend/build.ts"), "utf8")).toContain('external: ["#editor-vendor/codemirror"]');
 });
 
+test('Visual code decoding is one pass and needs no browser DOM', () => {
+  const html=applySyntaxHighlighting('<pre><code class="language-unknown">&amp;lt;literal&amp;gt; &amp;amp; &lt;b&gt;</code></pre>');
+  expect(html).toContain('&amp;lt;literal&amp;gt; &amp;amp; &lt;b&gt;');
+  const encoded=html.match(/data-code="([^"]*)"/)![1];
+  expect(decodeURIComponent(escape(atob(encoded)))).toBe('&lt;literal&gt; &amp; <b>');
+});
+
 test("Visual keeps Bicep highlighting and escapes unknown or oversized code", () => {
   expect(highlightCodeToHtml('param region string = "west"', "bicep")).toContain('tok-');
   expect(highlightCodeToHtml('<script>alert("x")</script>', "unknown")).toContain("&lt;script&gt;");
