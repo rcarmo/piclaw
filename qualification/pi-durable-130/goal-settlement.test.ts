@@ -11,14 +11,29 @@ import { createCurrentPiclawServiceWorkStore } from "../../runtime/src/service-e
 import { createCurrentPiclawTerminalSettlementStore } from "../../runtime/src/service-effects/current-piclaw/terminal-settlement-store.js";
 import { InMemoryEffectPayloadResolver } from "../../runtime/src/service-effects/testing/in-memory-payload-resolver.js";
 import { createHostGoalSettlement, withGoalSettlementAuthority } from "../../runtime/durable-engine/src/host-goal-settlement.js";
-import { QueuedFollowupLifecycleService } from "../../runtime/src/channels/web/runtime/queued-followup-lifecycle-service.js";
-import { getDeferredQueuedFollowups } from "../../runtime/src/db.js";
 import { createHostGoalCommand } from "../../runtime/durable-engine/src/host-goal-command.js";
 import { createHostGoalPlanReader } from "../../runtime/durable-engine/src/host-goal-plan.js";
 import { getExtensionKvStore } from "../../runtime/src/extension-kv-registry.js";
 import { accountCommittedGoalBatch } from "../../runtime/durable-engine/src/host-goal-usage.js";
 import { hashCanonicalRequest } from "../../runtime/src/service-effects/contracts/common.js";
 import { value, effect, sealed, at } from "./src/host-handoff.js";
+
+// Component-only admission witness. The real S01 store accepts the source;
+// this SQL probe records its input in the same transaction. It owns no queue,
+// SDK placement, execution or status. Actual SDK Goal coverage is separate.
+function admissionProbe(db: ReturnType<typeof getDb>, work: import("../../runtime/src/service-effects/current-piclaw/service-work-store.js").CurrentPiclawServiceWorkStore) {
+  db.exec('CREATE TABLE goal_admission_probe (source_id TEXT PRIMARY KEY, chat_jid TEXT, content TEXT, queued_at TEXT)');
+  return {
+    admit(next: {sourceId:string;chatJid:string;text:string;queuedAt:string}) {
+      if(!db.inTransaction)throw Error('Goal admission transaction required');
+      work.acceptSourceInTransaction(sealed({effect:effect('goal-probe:'+next.sourceId),chatJid:next.chatJid,sourceId:next.sourceId,kind:'message',
+        payloadRef:'goal-probe:'+next.sourceId,targetOperationId:null,parentSourceSeq:null,acceptedAt:next.queuedAt,createWakeIntent:false}),db);
+      db.query('INSERT INTO goal_admission_probe VALUES (?,?,?,?)').run(next.sourceId,next.chatJid,next.text,next.queuedAt);
+      return (db.query('SELECT rowid FROM goal_admission_probe WHERE source_id=?').get(next.sourceId) as {rowid:number}).rowid;
+    },
+    read(chat:string) {return db.query('SELECT p.source_id,p.content AS queuedContent,1 AS source_accepted FROM goal_admission_probe p JOIN service_effect_s01_sources s ON s.chat_jid=p.chat_jid AND s.source_id=p.source_id WHERE p.chat_jid=? ORDER BY p.rowid').all(chat) as {source_id:string;queuedContent:string;source_accepted:number}[];},
+  };
+}
 
 test("native Goal commands commit state and accepted continuation atomically", async () => {
   const sourceRoot = process.env.DURABLE_GOAL_ADDON_ROOT;
@@ -28,14 +43,11 @@ test("native Goal commands commit state and accepted continuation atomically", a
   registerRootExtensionKvStore(); requireExtensionKvAuthority();
   const addon = await import(pathToFileURL(join(sourceRoot, "addons/goal/index.ts")).href); addon.resetGoalAddonForTests();
   const work = value(createCurrentPiclawServiceWorkStore(db, { hitFault: () => false, recordTrace() {} }));
-  const queue = new QueuedFollowupLifecycleService(), chatJid = "web:native-goal-command";
+  const admissions = admissionProbe(db, work), chatJid = "web:native-goal-command";
   let fail = true, admitted = 0;
   const command = createHostGoalCommand(addon, { root: db, assertAdmission(chat) { expect(chat).toBe(chatJid); },
     admit(next) {
-      const row = queue.enqueueAcceptedFollowupOnce(next.sourceId, next.chatJid, next.text, next.queuedAt, { source: "goal.command" }, ({ chatJid, item, database }) => {
-        work.acceptSourceInTransaction(sealed({ effect: effect(`command:${item.source_id}`), chatJid, sourceId: item.source_id, kind: "message",
-          payloadRef: `queued-source:${item.source_id}`, targetOperationId: null, parentSourceSeq: null, acceptedAt: item.queuedAt, createWakeIntent: false }), database);
-      });
+      const row = admissions.admit(next);
       admitted++;
       if (fail) throw Error("command admission rollback");
       return row;
@@ -45,15 +57,15 @@ test("native Goal commands commit state and accepted continuation atomically", a
     expect(admitted).toBe(0);
     await expect(command(chatJid, "/goal Native objective")).rejects.toThrow("command admission rollback");
     expect(extensionKvGet("goal", "thread-goal", "chat", chatJid)).toBeNull();
-    expect(getDeferredQueuedFollowups(chatJid)).toHaveLength(0);
+    expect(admissions.read(chatJid)).toHaveLength(0);
     expect(db.query("SELECT * FROM service_effect_s01_sources").all()).toHaveLength(0);
     fail = false;
     expect(await command(chatJid, "/goal Native objective")).toMatchObject({ status: "success", message: "Goal active — continuation queued" });
-    expect(getDeferredQueuedFollowups(chatJid)).toHaveLength(1);
-    expect(getDeferredQueuedFollowups(chatJid)[0]!.queuedContent).toContain("<piclaw_goal_input>");
+    expect(admissions.read(chatJid)).toHaveLength(1);
+    expect(admissions.read(chatJid)[0]!.queuedContent).toContain("<piclaw_goal_input>");
     expect(await command(chatJid, "/goal pause")).toMatchObject({ status: "success", message: "Goal paused" });
     expect(await command(chatJid, "/goal resume")).toMatchObject({ status: "success", message: "Goal resumed — continuation queued" });
-    expect(getDeferredQueuedFollowups(chatJid)).toHaveLength(2);
+    expect(admissions.read(chatJid)).toHaveLength(2);
     expect(await command(chatJid, "/unknown")).toMatchObject({ status: "error" });
   } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); await closeDatabase(); }
 });
@@ -84,7 +96,7 @@ for (const mode of ["continue", "human", "human-pending", "human-error", "human-
   const bound = value(await work.bindHarness(sealed({ effect: effect("bind", "op", source.sourceSeq), expectedVersion: claimed.operation.version, sessionId: "session", harnessOperationId: "1" })));
   const finish = sealed({ effect: effect("finish", "op", source.sourceSeq), expectedVersion: bound.version, expectedHarness: bound.harness! });
   const finished = value(await work.finishHarness({ ...finish, effect: { ...finish.effect, requestHash: hashCanonicalRequest({ method: "finishHarness.v1", ...finish }) } }));
-  const queue = new QueuedFollowupLifecycleService();
+  const admissions = admissionProbe(db, work);
   if (mode === "pending" || mode === "human-pending" || mode === "budget-pending") value(await work.acceptSource(sealed({ effect: effect("pending-user"), chatJid, sourceId: "pending-user", kind: "message", payloadRef: "pending-user", targetOperationId: null, parentSourceSeq: null, acceptedAt: at, createWakeIntent: false })));
   const initial = extensionKvGet("goal", "thread-goal", "chat", chatJid) as { goal_id: string };
   const continuationId = budget ? `goal-budget:${initial.goal_id}:2` : "goal-continuation:op";
@@ -115,11 +127,7 @@ for (const mode of ["continue", "human", "human-pending", "human-error", "human-
       assertCurrent(); expect(db.inTransaction).toBe(true); expect(chat).toBe(chatJid); planReads++;
       return readPlan(chat, assertCurrent);
     },
-    admit(next, onlyIfIdle = true) { return queue.enqueueAcceptedFollowupOnce(next.sourceId, next.chatJid, next.text, next.queuedAt,
-      { source: "goal.continuation" }, ({ chatJid, item, database }) => {
-        work.acceptSourceInTransaction(sealed({ effect: effect(`accept:${item.source_id}`), chatJid, sourceId: item.source_id,
-          kind: "message", payloadRef: `queued-source:${item.source_id}`, targetOperationId: null, parentSourceSeq: null, acceptedAt: at, createWakeIntent: false }), database);
-      }, onlyIfIdle); },
+    admit(next) { return admissions.admit(next); },
   } });
   const input = { incarnation: "fixture", conversationId: 1, chatJid, branchId: "main", operationId: "op", sourceSeq: source.sourceSeq,
     sourceId: source.sourceId, payloadRef: source.payloadRef, requestId: "request", requestHash: "a".repeat(64) };
@@ -162,7 +170,7 @@ for (const mode of ["continue", "human", "human-pending", "human-error", "human-
       expect((await terminal.commitTerminal(request)).ok).toBe(false);
       expect(extensionKvGet("goal", "thread-goal", "chat", chatJid)).toMatchObject({ tokens_used: 0, status: "budget_limited", budget_limit_reported: false });
       expect(extensionKvGet("goal", "committed-usage:1", "chat", chatJid)).toBeNull();
-      expect(getDeferredQueuedFollowups(chatJid)).toHaveLength(0);
+      expect(admissions.read(chatJid)).toHaveLength(0);
       withExtensionKvAuthority(setup, () => getExtensionKvStore().set("goal", "thread-goal", before, "chat", chatJid));
       deniedExternalBudget = 1;
       fail = true;
@@ -170,7 +178,7 @@ for (const mode of ["continue", "human", "human-pending", "human-error", "human-
     expect((await terminal.commitTerminal(request)).ok).toBe(false);
     expect(extensionKvGet("goal", "thread-goal", "chat", chatJid)).toMatchObject({ tokens_used: 0 });
     expect(extensionKvGet("goal", "committed-usage:1", "chat", chatJid)).toBeNull();
-    expect(getDeferredQueuedFollowups(chatJid)).toHaveLength(0);
+    expect(admissions.read(chatJid)).toHaveLength(0);
     expect(db.query("SELECT * FROM service_effect_s01_sources WHERE source_id=?").all(continuationId)).toHaveLength(0);
     fail = false;
     value(await terminal.commitTerminal(request));
@@ -179,10 +187,10 @@ for (const mode of ["continue", "human", "human-pending", "human-error", "human-
     value(await terminal.commitTerminal(request));
     expect(calls).toBe(2 + deniedExternalBudget);
     expect(planReads).toBe(budget || mode === "pending" || mode === "error" || (human && mode !== "human") ? 0 : 2); // Replay never re-reads.
-    const queued = getDeferredQueuedFollowups(chatJid);
+    const queued = admissions.read(chatJid);
     if (budget) {
       expect(queued).toHaveLength(1);
-      expect(queued[0]).toMatchObject({ source_id: continuationId, source_accepted: true });
+      expect(queued[0]).toMatchObject({ source_id: continuationId, source_accepted: 1 });
       expect(queued[0]!.queuedContent).toStartWith("🎯 Goal budget reached:");
       expect(withExtensionKvAuthority({ extensionId: "goal", chatJid, assertCurrent() {},
         write() { throw Error("Read-only assertion"); } },
@@ -198,7 +206,7 @@ for (const mode of ["continue", "human", "human-pending", "human-error", "human-
     const continues = mode === "continue" || mode === "human" || ordinary || mode === "finalize";
     expect(queued).toHaveLength(continues ? 1 : 0);
     if (continues) {
-    expect(queued[0]).toMatchObject({ source_id: continuationId, source_accepted: true });
+    expect(queued[0]).toMatchObject({ source_id: continuationId, source_accepted: 1 });
     expect(queued[0]!.queuedContent).toContain("Terminal usage");
     expect(queued[0]!.queuedContent).toContain("<piclaw_goal_input>");
     expect(extensionKvGet("goal", "thread-goal", "chat", chatJid)).toMatchObject(mode === "finalize"

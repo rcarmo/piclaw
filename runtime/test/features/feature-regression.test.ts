@@ -1,7 +1,8 @@
 /**
  * test/features/feature-regression.test.ts
  *
- * End-to-end feature regression tests.
+ * HTTP/storage feature regression tests. Admission/control ports are contract
+ * doubles; actual SDK execution is covered by the native qualification suites.
  *
  * Boots ONE dedicated isolated web server with its own temp workspace
  * and in-memory database. No test touches the live instance. The server
@@ -47,12 +48,20 @@ beforeAll(async () => {
       listActiveChats: () => [],
       getAgentHandleForChat: () => "agent",
       findChatByAgentName: () => null,
-      runAgent: async (prompt: string, _chatJid: string, options: any = {}) => {
-        options.onTurnComplete?.({ text: `Echo: ${prompt}`, attachments: [] });
-        return { status: "success", result: `Echo: ${prompt}` };
-      },
+      applyControlCommand: async (_chat: string, command: {type:string}) => ({ status: 'success', message: `Fixture control: ${command.type}` }),
+      runAgent() { throw Error('HTTP features must not restore the retired web runner'); },
     },
   });
+  // Transport-only doubles prove the handler forwards an already persisted row.
+  // They create no SDK task, queue or provider execution.
+  inst.web.getInputSourceAdmission = (chat: string) => ({message,rowId,database}: any) => {
+    expect(database).toBe(inst!.db.getDb()); expect(database.inTransaction).toBe(true);
+    expect(database.query('SELECT id,chat_jid FROM messages WHERE rowid=?').get(rowId)).toEqual({id:message.id,chat_jid:chat});
+  };
+  inst.web.dispatchAcceptedInput = async (chat: string, id: string, rowId: number) => {
+    expect(inst!.db.getDb().query('SELECT id,chat_jid FROM messages WHERE rowid=?').get(rowId)).toEqual({id,chat_jid:chat});
+    return {submission_id:rowId,queued:false};
+  };
 });
 
 afterAll(async () => {
