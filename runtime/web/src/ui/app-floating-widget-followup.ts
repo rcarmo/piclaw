@@ -121,6 +121,7 @@ export interface FollowupActionOptions {
   setFollowupQueueItems: StateSetter<any[]>;
   showIntentToast: ToastFn;
   clearQueuedSteerStateIfStale?: (remainingQueueCount: number) => void;
+  isCurrent?: () => boolean;
   steerAgentQueueItem: (rowId: string | number, chatJid: string | null) => Promise<unknown>;
   removeAgentQueueItem: (rowId: string | number, chatJid: string | null) => Promise<unknown>;
 }
@@ -155,7 +156,7 @@ export function handleInjectQueuedFollowupAction(options: FollowupActionOptions)
     });
 }
 
-export function handleRemoveQueuedFollowupAction(options: FollowupActionOptions): void {
+export async function handleRemoveQueuedFollowupAction(options: FollowupActionOptions): Promise<boolean> {
   const {
     queuedItem,
     followupQueueItemsRef,
@@ -166,27 +167,32 @@ export function handleRemoveQueuedFollowupAction(options: FollowupActionOptions)
     showIntentToast,
     clearQueuedSteerStateIfStale,
     removeAgentQueueItem,
+    isCurrent = () => true,
   } = options;
 
-  const optimisticRemoval = resolveFollowupQueueRemovalPlan(followupQueueItemsRef.current, queuedItem);
-  if (!optimisticRemoval) return;
-  const { rowId } = optimisticRemoval;
-
-  removeAgentQueueItem(rowId, resolveQueueActionChatJid(currentChatJid))
-    .then((response: any) => {
-      if(response?.removed!==true)throw Error('Queue changed before removal');
-      dismissedQueueRowIdsRef.current.add(rowId);
-      clearQueuedSteerStateIfStale?.(optimisticRemoval.remainingQueueCount);
-      setFollowupQueueItems((current) => removeFollowupQueueRow(current,rowId).items);
-      void refreshQueueState();
-    })
-    .catch((error) => {
-      console.warn('[queue] Failed to remove queued item:', error);
+  const removal = resolveFollowupQueueRemovalPlan(followupQueueItemsRef.current, queuedItem);
+  if (!removal || !isCurrent()) return false;
+  const { rowId } = removal;
+  try {
+    const response: any = await removeAgentQueueItem(rowId, resolveQueueActionChatJid(currentChatJid));
+    if (response?.removed !== true) throw Error('Queue changed before removal');
+  } catch (error) {
+    console.warn('[queue] Failed to remove queued item:', error);
+    if (isCurrent()) {
       const failureToast = resolveFollowupActionFailureToast('remove');
       showIntentToast(failureToast.title, failureToast.detail, 'warning');
       dismissedQueueRowIdsRef.current.delete(rowId);
       void refreshQueueState();
-    });
+    }
+    return false;
+  }
+  if (isCurrent()) {
+    dismissedQueueRowIdsRef.current.add(rowId);
+    clearQueuedSteerStateIfStale?.(removal.remainingQueueCount);
+    setFollowupQueueItems((current) => removeFollowupQueueRow(current,rowId).items);
+    void refreshQueueState();
+  }
+  return true;
 }
 
 export interface OpenFloatingWidgetOptions {

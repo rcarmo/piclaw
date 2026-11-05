@@ -9,23 +9,23 @@ const browserTest=enabled?test:test.skip,root=resolve(import.meta.dir,"../.."),b
 beforeAll(async()=>{
   if(!enabled)return;
   const classic=`import{html,render,useState,useRef,useEffect}from'./web/src/vendor/preact-htm.js';
-    import{QueuedFollowupStack}from'./web/src/components/compose-box.ts';
+    import{QueuedFollowupStack,returnQueuedFollowupToEditor}from'./web/src/components/compose-box.ts';
     import{handleInjectQueuedFollowupAction,handleRemoveQueuedFollowupAction}from'./web/src/ui/app-floating-widget-followup.ts';
-    function App(){const[items,setItems]=useState([]),ref=useRef(items),dismissed=useRef(new Set());ref.current=items;
+    function App(){const[items,setItems]=useState([]),[draft,setDraft]=useState('Original draft'),textarea=useRef(null),ref=useRef(items),dismissed=useRef(new Set());ref.current=items;
       const refresh=async()=>{try{const r=await fetch('/agent/queue-state');if(!r.ok)throw Error('read unavailable');setItems((await r.json()).items);}catch{}};
       const action=async(path,id)=>{const r=await fetch(path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({row_id:id})});if(!r.ok)throw Error('action unavailable');return r.json();};
       const options=item=>({queuedItem:item,followupQueueItemsRef:ref,dismissedQueueRowIdsRef:dismissed,currentChatJid:'web:queue-browser',refreshQueueState:refresh,setFollowupQueueItems:setItems,showIntentToast(){},steerAgentQueueItem:id=>action('/agent/queue-steer',id),removeAgentQueueItem:id=>action('/agent/queue-remove',id)});
       useEffect(()=>{void refresh();window.addEventListener('piclaw:followup-consumed',refresh);return()=>window.removeEventListener('piclaw:followup-consumed',refresh);},[]);
-      return html\`<\${QueuedFollowupStack} items=\${items} onInjectQueuedFollowup=\${item=>handleInjectQueuedFollowupAction(options(item))} onRemoveQueuedFollowup=\${item=>handleRemoveQueuedFollowupAction(options(item))}/>\`;
+      return html\`<\${QueuedFollowupStack} items=\${items} onInjectQueuedFollowup=\${item=>handleInjectQueuedFollowupAction(options(item))} onRemoveQueuedFollowup=\${item=>handleRemoveQueuedFollowupAction(options(item))} onReturnQueuedFollowup=\${item=>returnQueuedFollowupToEditor({queuedItem:item,onRemoveQueuedFollowup:item=>handleRemoveQueuedFollowupAction(options(item)),setContent:setDraft,textareaRef:textarea})}/><textarea id='draft' ref=\${textarea} value=\${draft}/>\`;
     }render(html\`<\${App}/>\`,document.getElementById('root'));`;
-  const visual=`import{h,render}from'preact';import{QueueStack}from'./web/static/visual/frontend/src/components/QueueStack.tsx';render(h(QueueStack,{onEdit(){}}),document.getElementById('root'));`;
+  const visual=`import{h,render}from'preact';import{useState}from'preact/hooks';import{QueueStack}from'./web/static/visual/frontend/src/components/QueueStack.tsx';function App(){const[draft,setDraft]=useState('Original draft');return h('div',null,h(QueueStack,{onEdit:item=>setDraft(item.content)}),h('textarea',{id:'draft',value:draft}));}render(h(App,{}),document.getElementById('root'));`;
   for(const [skin,contents]of [["classic",classic],["visual",visual]]){
     const result=await build({stdin:{contents,resolveDir:root,loader:"tsx"},bundle:true,format:"esm",platform:"browser",jsx:"automatic",jsxImportSource:"preact",write:false});bundles.set(skin,result.outputFiles[0].text);
   }
   browsers.set("chromium",await chromium.launch({headless:true}));browsers.set("webkit",await webkit.launch({headless:true}));
 },30000);
 afterAll(async()=>{for(const browser of browsers.values())await browser.close();});
-for(const skin of ["classic","visual"])for(const engine of ["chromium","webkit"])for(const touch of [false,true])browserTest(`${skin}/${engine}/${touch?"touch":"keyboard"}: failed actions and accepted steering never hide an unplaced SDK item`,async()=>{
+for(const skin of ["classic","visual"])for(const engine of ["chromium","webkit"])for(const touch of [false,true])for(const finalAction of ['remove','return'] as const)browserTest(`${skin}/${engine}/${touch?"touch":"keyboard"}: failed actions and accepted steering/${finalAction} never hide an unplaced SDK item`,async()=>{
   let items=[{row_id:17,content:"Visible SDK input",source:"native_sdk"}],deny=true,denyReads=false,actions=0;
   const server=Bun.serve({hostname:"127.0.0.1",port:0,async fetch(req){
     const path=new URL(req.url).pathname;
@@ -43,12 +43,14 @@ for(const skin of ["classic","visual"])for(const engine of ["chromium","webkit"]
   const page=await browsers.get(engine)!.newPage({viewport:touch?{width:520,height:720}:{width:1100,height:800},hasTouch:touch});const errors:string[]=[];page.on("pageerror",error=>errors.push(error.message));
   try{
     await page.goto(`${server.url}?chat_jid=web:queue-browser`);await page.getByText("Visible SDK input",{exact:true}).waitFor();
-    const button=(action:"steer"|"remove")=>page.locator(skin==="visual"?`.queue-stack__btn--${action}`:action==="steer"?".compose-queue-stack-steer-btn":".compose-queue-stack-close-btn").first();
-    const invoke=async(action:"steer"|"remove")=>{const before=actions;const target=button(action);if(touch)await target.tap();else{await target.focus();await page.keyboard.press("Enter");}const until=Date.now()+2000;while(actions===before&&Date.now()<until)await page.waitForTimeout(5);expect(actions).toBe(before+1);await page.waitForTimeout(60);};
+    const button=(action:"steer"|"remove"|"return")=>page.locator(skin==="visual"?`.queue-stack__btn--${action==="return"?"edit":action}`:action==="steer"?".compose-queue-stack-steer-btn":action==="return"?".compose-queue-stack [data-action=edit]":".compose-queue-stack-close-btn").first();
+    const invoke=async(action:"steer"|"remove"|"return")=>{const before=actions;const target=button(action);if(touch)await target.tap();else{await target.focus();await page.keyboard.press("Enter");}const until=Date.now()+2000;while(actions===before&&Date.now()<until)await page.waitForTimeout(5);expect(actions).toBe(before+1);await page.waitForTimeout(60);};
     await invoke("steer");expect(await page.getByText("Visible SDK input",{exact:true}).count()).toBe(1);
     await invoke("remove");expect(await page.getByText("Visible SDK input",{exact:true}).count()).toBe(1);
+    await invoke("return");expect(await page.getByText("Visible SDK input",{exact:true}).count()).toBe(1);expect(await page.locator("#draft").inputValue()).toBe("Original draft");
     deny=false;denyReads=false;await invoke("steer");expect(await page.getByText("Visible SDK input",{exact:true}).count()).toBe(1);
-    await invoke("remove");await page.getByText("Visible SDK input",{exact:true}).waitFor({state:"detached"});
-    expect(actions).toBe(4);expect(errors).toEqual([]);
+    await invoke(finalAction);await page.getByText("Visible SDK input",{exact:true}).waitFor({state:"detached"});
+    expect(await page.locator("#draft").inputValue()).toBe(finalAction==='return'?'Visible SDK input':'Original draft');
+    expect(actions).toBe(5);expect(errors).toEqual([]);
   }finally{await page.close();server.stop(true);}
 },15000);

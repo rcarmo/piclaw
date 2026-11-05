@@ -484,68 +484,37 @@ test('buildReturnedQueuedDraft restores refs and preserves attachment markers in
   });
 });
 
-test('returnQueuedFollowupToEditor restores compose state before removing the queue item', () => {
-  const calls: string[] = [];
-  const textarea = {
-    value: '',
-    selectionStart: 0,
-    selectionEnd: 0,
-    focus: () => { calls.push('focus'); },
-  };
-  const timeoutCallbacks: Array<() => void> = [];
+test('returnQueuedFollowupToEditor waits for confirmed removal before restoring text, refs and focus', async () => {
+  const calls:string[]=[]; const ack=Promise.withResolvers<boolean>();
+  const textarea={value:'existing draft',selectionStart:0,selectionEnd:0,focus(){calls.push('focus');}};
+  const pending=returnQueuedFollowupToEditor({queuedItem:{row_id:7,content:'Please check this later.\n\nFiles:\n- notes/todo.md\n\nFolders:\n- runtime/web/src/components'},
+    onRemoveQueuedFollowup(){calls.push('remove');return ack.promise;},
+    setSubmitError:v=>calls.push('error:'+v),setSubmitNotice:v=>calls.push('notice:'+v),setMediaFiles:v=>calls.push('media:'+v.length),
+    onSetFileRefs:v=>calls.push('files:'+v.join(',')),onSetFolderRefs:v=>calls.push('folders:'+v.join(',')),onSetMessageRefs:v=>calls.push('messages:'+v.join(',')),
+    setContent:v=>calls.push('content:'+v),textareaRef:{current:textarea},resizeTextarea:()=>calls.push('resize'),scheduleRaf:cb=>cb(),logger:{info(){},warn(){}}});
+  expect(calls).toEqual(['remove']);expect(textarea.value).toBe('existing draft');
+  ack.resolve(true);expect(await pending).toBe(true);
+  expect(calls).toEqual(['remove','error:null','notice:null','media:0','files:notes/todo.md','folders:runtime/web/src/components','messages:','content:Please check this later.','resize','focus']);
+  expect(textarea.value).toBe('Please check this later.');expect(textarea.selectionStart).toBe(textarea.value.length);expect(textarea.selectionEnd).toBe(textarea.value.length);
+});
 
-  const result = returnQueuedFollowupToEditor({
-    queuedItem: {
-      row_id: 7,
-      content: [
-        'Channel: web',
-        '',
-        'Rui Carmo @ 2026-04-13T08:40:35.008Z:',
-        '  Please check this later.',
-        '  ',
-        '  Files:',
-        '  - notes/todo.md',
-        '  ',
-        '  Folders:',
-        '  - runtime/web/src/components',
-      ].join('\n'),
-    },
-    setSubmitError: (value: string | null) => { calls.push(`error:${String(value)}`); },
-    setSubmitNotice: (value: string | null) => { calls.push(`notice:${String(value)}`); },
-    setMediaFiles: (value: unknown[]) => { calls.push(`media:${Array.isArray(value) ? value.length : 'x'}`); },
-    onSetFileRefs: (value: string[]) => { calls.push(`files:${value.join(',')}`); },
-    onSetFolderRefs: (value: string[]) => { calls.push(`folders:${value.join(',')}`); },
-    onSetMessageRefs: (value: string[]) => { calls.push(`messages:${value.join(',')}`); },
-    setContent: (value: string) => { calls.push(`content:${value}`); },
-    textareaRef: { current: textarea },
-    resizeTextarea: () => { calls.push('resize'); },
-    scheduleRaf: (callback: () => void) => { calls.push('raf'); callback(); },
-    scheduleTimeout: (callback: () => void) => { calls.push('timeout'); timeoutCallbacks.push(callback); return 0 as any; },
-    onRemoveQueuedFollowup: () => { calls.push('remove'); },
-    logger: { info: () => undefined, warn: () => undefined },
-  });
+for(const result of [false,undefined,{removed:true},'reject'] as const)test(`failed/unconfirmed queue Return preserves the complete draft: ${String(result)}`,async()=>{
+  const writes:unknown[]=[];const textarea={value:'draft must survive',focus(){throw Error('Rejected Return must not focus');}};
+  const update=(value:unknown)=>writes.push(value);
+  const returned=await returnQueuedFollowupToEditor({queuedItem:{row_id:7,content:'Queued text'},onRemoveQueuedFollowup:async()=>{if(result==='reject')throw Error('Rejected removal');return result;},
+    setContent:update,setSubmitError:update,setSubmitNotice:update,setMediaFiles:update,onSetFileRefs:update,onSetFolderRefs:update,onSetMessageRefs:update,
+    textareaRef:{current:textarea},scheduleRaf:cb=>cb(),logger:{info(){},warn(){}}});
+  expect(returned).toBe(false);expect(writes).toEqual([]);expect(textarea.value).toBe('draft must survive');
+});
 
-  expect(result).toBe(true);
-  expect(calls).toEqual([
-    'error:null',
-    'notice:null',
-    'media:0',
-    'files:notes/todo.md',
-    'folders:runtime/web/src/components',
-    'messages:',
-    'content:Please check this later.',
-    'raf',
-    'resize',
-    'focus',
-    'timeout',
-  ]);
-  expect(textarea.value).toBe('Please check this later.');
-  expect(textarea.selectionStart).toBe('Please check this later.'.length);
-  expect(textarea.selectionEnd).toBe('Please check this later.'.length);
-
-  timeoutCallbacks[0]?.();
-  expect(calls).toContain('remove');
-  expect(calls.indexOf('content:Please check this later.')).toBeLessThan(calls.indexOf('remove'));
+for(const changed of ['chat','draft'] as const)test(`late successful Return cannot overwrite a changed ${changed}`,async()=>{
+  const ack=Promise.withResolvers<boolean>(),writes:unknown[]=[],notices:unknown[]=[];let current=true,draftUnchanged=true;
+  const pending=returnQueuedFollowupToEditor({queuedItem:{row_id:7,content:'Queued text'},onRemoveQueuedFollowup:()=>ack.promise,
+    isCurrent:()=>current,canRestoreDraft:()=>draftUnchanged,setContent:v=>writes.push(v),setMediaFiles:v=>writes.push(v),onSetFileRefs:v=>writes.push(v),
+    setSubmitNotice:v=>notices.push(v),scheduleRaf:()=>{throw Error('Changed scope must not focus');},logger:{info(){},warn(){}}});
+  if(changed==='chat')current=false;else draftUnchanged=false;
+  ack.resolve(true);expect(await pending).toBe(false);expect(writes).toEqual([]);
+  expect(notices).toEqual(changed==='draft'?['Queued message removed; existing draft preserved.']:[]);
 });
 
 test('model picker helpers expose searchable names, formatted context windows, without browser capacity guards', () => {

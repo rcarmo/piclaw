@@ -888,7 +888,7 @@ export function buildReturnedQueuedDraft(value) {
     };
 }
 
-export function returnQueuedFollowupToEditor(options) {
+export async function returnQueuedFollowupToEditor(options) {
     const {
         queuedItem,
         buildDraft = buildReturnedQueuedDraft,
@@ -902,13 +902,25 @@ export function returnQueuedFollowupToEditor(options) {
         setContent,
         textareaRef,
         resizeTextarea = () => {},
-        scheduleTimeout = (callback, delayMs = 0) => setTimeout(callback, delayMs),
         scheduleRaf = (callback) => requestAnimationFrame(callback),
+        isCurrent = () => true,
+        canRestoreDraft = () => true,
         logger = console,
     } = options || {};
 
-    if (!queuedItem) return false;
+    if (!queuedItem || !isCurrent() || typeof onRemoveQueuedFollowup !== 'function') return false;
     const restored = buildDraft(queuedItem?.content || '');
+    try {
+        if (await onRemoveQueuedFollowup(queuedItem) !== true) return false;
+    } catch (error) {
+        logger?.warn?.('[compose-box] Failed to remove returned queued follow-up.', error);
+        return false;
+    }
+    if (!isCurrent()) return false;
+    if (!canRestoreDraft()) {
+        setSubmitNotice?.('Queued message removed; existing draft preserved.');
+        return false;
+    }
     const text = restored.content;
     logger?.info?.('[compose-box] Returning queued item to editor', {
         text: text?.slice(0, 80),
@@ -927,7 +939,7 @@ export function returnQueuedFollowupToEditor(options) {
 
     scheduleRaf(() => {
         const textarea = textareaRef?.current;
-        if (!textarea) return;
+        if (!isCurrent() || !textarea) return;
         textarea.value = text;
         // Keep the controlled textarea state in sync even if a render happens
         // before setContent has flushed. Some tests provide a lightweight
@@ -941,14 +953,6 @@ export function returnQueuedFollowupToEditor(options) {
         textarea.selectionEnd = len;
         textarea.focus();
     });
-
-    scheduleTimeout(() => {
-        try {
-            onRemoveQueuedFollowup?.(queuedItem);
-        } catch (error) {
-            logger?.warn?.('[compose-box] Failed to remove returned queued follow-up.', error);
-        }
-    }, 0);
 
     return true;
 }
@@ -1334,6 +1338,8 @@ export function ComposeBox({
     const speechPushToTalkActiveRef = useRef(false);
     const suppressNextSpeechClickRef = useRef(false);
     const submittingRef = useRef(false);
+    const mediaFilesRef = useRef(mediaFiles);
+    mediaFilesRef.current = mediaFiles;
     const fileRefsRef = useRef(fileRefs);
     const folderRefsRef = useRef(folderRefs);
     const messageRefsRef = useRef(messageRefs);
@@ -2680,9 +2686,16 @@ export function ComposeBox({
     };
 
     const handleReturnQueuedFollowup = useCallback((queuedItem) => {
-        returnQueuedFollowupToEditor({
+        const chat = currentChatJid, textarea = textareaRef.current;
+        const draft = textarea?.value ?? content;
+        const files = fileRefsRef.current, folders = folderRefsRef.current, messages = messageRefsRef.current, media = mediaFilesRef.current;
+        return returnQueuedFollowupToEditor({
             queuedItem,
             onRemoveQueuedFollowup,
+            isCurrent: () => currentChatJidRef.current === chat && textareaRef.current === textarea,
+            canRestoreDraft: () => (textareaRef.current?.value ?? content) === draft
+                && fileRefsRef.current === files && folderRefsRef.current === folders && messageRefsRef.current === messages
+                && mediaFilesRef.current === media,
             setSubmitError,
             setSubmitNotice,
             setMediaFiles,
@@ -2693,7 +2706,7 @@ export function ComposeBox({
             textareaRef,
             resizeTextarea,
         });
-    }, [onRemoveQueuedFollowup, onSetFileRefs, onSetFolderRefs, onSetMessageRefs, resizeTextarea]);
+    }, [currentChatJid, content, onRemoveQueuedFollowup, onSetFileRefs, onSetFolderRefs, onSetMessageRefs, resizeTextarea]);
 
     const handlePopupKeyboardEvent = useCallback((e) => {
         if (searchMode || (!showModelPopup && !showSessionPopup) || e?.isComposing) return false;
