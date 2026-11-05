@@ -25,7 +25,8 @@ find runtime/web/static/classic/dist runtime/web/static/common/dist runtime/web/
 
 rm -f piclaw-*.tgz
 PACK_DIR="$(mktemp -d)"
-bun pm pack --outdir "$PACK_DIR"
+# Reason: the bundled add-on inventory otherwise exhausts Docker's build log limit.
+bun pm pack --destination "$PACK_DIR" --quiet
 
 TARBALL="$(find "$PACK_DIR" -maxdepth 1 -name 'piclaw-*.tgz' | head -n1)"
 if [ -z "$TARBALL" ] || [ ! -f "$TARBALL" ]; then
