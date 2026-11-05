@@ -6,18 +6,16 @@ import { planUsageReportRetention, applyUsageReportRetention } from "../../src/d
 import { createTempWorkspace, setEnv } from "../helpers.js";
 import { initDatabase, closeDatabase, getDb } from "../../src/db/connection.js";
 import { storeTokenUsage, pruneOldTokenUsage, type TokenUsageRecord } from "../../src/db/token-usage.js";
-import { readBudgetUsageTotal } from "../../src/budget/usage-total.js";
-import { ensureBudgetWork, saveBudgetCap } from "../../src/db/budget-limits.js";
-import { reserveBudgetRequest } from "../../src/db/budget-request-reservations.js";
 
 let workspace: ReturnType<typeof createTempWorkspace>, restore:()=>void;
-beforeEach(()=>{workspace=createTempWorkspace("usage-retention-");restore=setEnv({PICLAW_WORKSPACE:workspace.workspace,PICLAW_STORE:workspace.store,PICLAW_DATA:workspace.data});closeDatabase();initDatabase();});
-afterEach(()=>{closeDatabase();restore();workspace.cleanup();});
+beforeEach(async()=>{workspace=createTempWorkspace("usage-retention-");restore=setEnv({PICLAW_WORKSPACE:workspace.workspace,PICLAW_STORE:workspace.store,PICLAW_DATA:workspace.data});await closeDatabase();initDatabase();});
+afterEach(async()=>{await closeDatabase();restore();workspace.cleanup();});
 const old="2000-01-01T00:00:00.000Z";
 const usage=(overrides:Partial<TokenUsageRecord>={}):TokenUsageRecord=>({chat_jid:"web:retention",run_at:old,input_tokens:1,output_tokens:1,cache_read_tokens:0,cache_write_tokens:0,total_tokens:2,cost_input:0,cost_output:0,cost_cache_read:0,cost_cache_write:0,cost_total:0,...overrides});
 function seed(count:number){getDb().transaction(()=>{for(let i=0;i<count;i++)storeTokenUsage(usage());}).immediate();}
 const before="2026-01-01T00:00:00.000Z";
 const snapshot=()=>getDb().query("SELECT * FROM token_usage ORDER BY id").all();
+const historicalFinance=()=>['budget_work','budget_caps','budget_cap_revisions','budget_cap_windows','budget_request_reservations','budget_usage_events'].map(table=>getDb().query(`SELECT * FROM ${table} ORDER BY rowid`).all());
 test("usage retention: dry-run, exact-page ACK replay and persisted cursor survive a disposable reopen",()=>{
   seed(7);storeTokenUsage(usage({usage_event_id:"retained-event"}));
   const database=getDb(), rows=snapshot(), events=database.query("SELECT * FROM budget_usage_events").all();
@@ -35,20 +33,26 @@ test("usage retention: dry-run, exact-page ACK replay and persisted cursor survi
   }finally{copy.close();}
 });
 test("usage retention: sole legacy spend evidence survives work lifetime and recorded calendar windows",()=>{
-  const database=getDb();ensureBudgetWork({id:'long-lived-work',chatJid:'web:retention',executionKind:'background'});
+  const database=getDb();
+  database.query("INSERT INTO budget_work(id,chat_jid,execution_kind,created_at,updated_at) VALUES ('long-lived-work','web:retention','background',?,?)").run(old,old);
   storeTokenUsage(usage({work_id:'long-lived-work',api_equivalent_cost_known:true,api_equivalent_cost_microusd:7}));
   storeTokenUsage(usage({run_at:'2000-02-01T00:00:00.000Z',api_equivalent_cost_known:true,api_equivalent_cost_microusd:11}));
-  saveBudgetCap({id:'old-calendar',scope:'instance_monthly',metric:'api_usd_micros',amount:100,timezone:'UTC'},database,new Date('2000-02-15T00:00:00.000Z'));
-  const work=readBudgetUsageTotal({workIds:['long-lived-work']},database),window=readBudgetUsageTotal({startsAt:'2000-02-01T00:00:00.000Z',endsAt:'2000-03-01T00:00:00.000Z'},database);
+  // Literal historical window, without installing a cap evaluator or recorder.
+  database.query("INSERT INTO budget_caps(id,scope,metric,amount,timezone,created_at,updated_at) VALUES ('old-calendar','instance_monthly','api_usd_micros',100,'UTC',?,?)").run(old,old);
+  database.query("INSERT INTO budget_cap_revisions(cap_id,revision,scope,metric,amount,enabled,timezone,recorded_at) VALUES ('old-calendar',1,'instance_monthly','api_usd_micros',100,1,'UTC',?)").run(old);
+  database.query("INSERT INTO budget_cap_windows(cap_id,cap_revision,window_id,starts_at,ends_at,timezone,created_at) VALUES ('old-calendar',1,'historical-February-2000','2000-02-01T00:00:00.000Z','2000-03-01T00:00:00.000Z','UTC',?)").run(old);
+  const records=snapshot(),history=historicalFinance();
   expect(planUsageReportRetention(database,{before}).rows).toEqual([]);expect(pruneOldTokenUsage()).toBe(0);
-  expect(readBudgetUsageTotal({workIds:['long-lived-work']},database)).toEqual(work);
-  expect(readBudgetUsageTotal({startsAt:'2000-02-01T00:00:00.000Z',endsAt:'2000-03-01T00:00:00.000Z'},database)).toEqual(window);
+  expect(snapshot()).toEqual(records);expect(historicalFinance()).toEqual(history);
 });
 test("usage retention: newly recorded accounting window invalidates an approved page before deletion",()=>{
   storeTokenUsage(usage());storeTokenUsage(usage({run_at:'2000-02-01T00:00:00.000Z'}));
   const plan=planUsageReportRetention(getDb(),{before,limit:2});expect(plan.rows).toHaveLength(2);
-  saveBudgetCap({id:'late-window',scope:'instance_daily',metric:'api_usd_micros',amount:100,timezone:'UTC'},getDb(),new Date('2000-02-01T00:00:00.000Z'));
-  const rows=snapshot();expect(()=>applyUsageReportRetention(getDb(),plan)).toThrow("became referenced");expect(snapshot()).toEqual(rows);
+  const database=getDb();
+  database.query("INSERT INTO budget_caps(id,scope,metric,amount,timezone,created_at,updated_at) VALUES ('late-window','instance_daily','api_usd_micros',100,'UTC',?,?)").run(old,old);
+  database.query("INSERT INTO budget_cap_revisions(cap_id,revision,scope,metric,amount,enabled,timezone,recorded_at) VALUES ('late-window',1,'instance_daily','api_usd_micros',100,1,'UTC',?)").run(old);
+  database.query("INSERT INTO budget_cap_windows(cap_id,cap_revision,window_id,starts_at,ends_at,timezone,created_at) VALUES ('late-window',1,'historical-February-1-2000','2000-02-01T00:00:00.000Z','2000-02-02T00:00:00.000Z','UTC',?)").run(old);
+  const rows=snapshot(),history=historicalFinance();expect(()=>applyUsageReportRetention(database,plan)).toThrow("became referenced");expect(snapshot()).toEqual(rows);expect(historicalFinance()).toEqual(history);
 });
 test("usage retention: changed report, mid-page fault and final revocation preserve the whole page",()=>{
   seed(3);const database=getDb(), plan=planUsageReportRetention(database,{before,limit:3});
@@ -103,8 +107,8 @@ test("usage retention: startup compatibility cleanup is bounded to one thousand 
   expect(getDb().query("SELECT count(*) AS n FROM token_usage").get()).toEqual({n:1});
 });
 test("usage retention: unresolved work protects legacy reports even without an invocation link",()=>{
-  ensureBudgetWork({id:"held-work",chatJid:"web:retention",executionKind:"background"});
-  reserveBudgetRequest({id:"held-request",workId:"held-work",chatJid:"web:retention",providerId:"fixture",modelId:"fixture",accountRef:"synthetic",amountMicros:1});
+  getDb().query("INSERT INTO budget_work(id,chat_jid,execution_kind,created_at,updated_at) VALUES ('held-work','web:retention','background',?,?)").run(old,old);
+  getDb().query("INSERT INTO budget_request_reservations(id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,amount_microusd,state,created_at,updated_at) VALUES ('held-request','held-work','web:retention','fixture','fixture','synthetic',?,1,'reserved',?,?)").run('a'.repeat(64),old,old);
   storeTokenUsage(usage({work_id:"held-work"}));storeTokenUsage(usage());
   const before=getDb().query("SELECT * FROM budget_request_reservations").all();
   expect(pruneOldTokenUsage()).toBe(1);

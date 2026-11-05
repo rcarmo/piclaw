@@ -4,6 +4,7 @@ import { expect } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
+import { storeMessageInDatabase } from "../../runtime/src/db/messages.js";
 import { storeChatMetadata } from "../../runtime/src/db.js";
 import { acquireRuntimeLock } from "../../runtime/src/runtime/single-instance.js";
 import { BunSqliteDatabase } from "../../runtime/durable-engine/src/bun-sqlite.js";
@@ -22,7 +23,7 @@ import { openFixture, context } from "./src/fixture.js";
 
 const applicationTest = isolatedApplicationTest(import.meta.url);
 for (const scenario of ["success", "siblings", "materialization-recovery", "altered-result"] as const) {
-  applicationTest(`native exit: ${scenario} uses SDK termination and committed host settlement only`, async () => {
+  applicationTest(`native exit: ${scenario} uses SDK termination and actual timeline publication without host settlement`, async () => {
     const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "process-exit-"));
     const owner = acquireRuntimeLock({ lockPath: join(dir, "owner.lock"), strictOwnership: true, disabled: false });
     process.env.PICLAW_DB_IN_MEMORY = "0"; initDatabase();
@@ -86,9 +87,13 @@ for (const scenario of ["success", "siblings", "materialization-recovery", "alte
         assertAdmission: input => controls.assertAdmission(input), assertInputAdmission() { controls.assertAdmission(); },
         answers: { put(ref, text) { if (failMaterialization) throw Error("synthetic answer storage failure"); resolver.putText(ref, text); }, resolver },
         onRuntime(value) { controlRuntime = value; },
-        onOperationSettled(id, receipt) {
-          expect(root.query("SELECT phase FROM service_effect_s01_operations WHERE operation_id=?").get(id)).toEqual({ phase: "terminal" });
-          controls.onOperationSettled(id, receipt);
+        async onMessageResult(input,result){
+          if(failMaterialization)throw Error("synthetic publication failure");
+          if(!result.answer?.text.trim())return;
+          const id=`native-answer:${result.runId}`;
+          let row=(root.query("SELECT rowid FROM messages WHERE id=? AND chat_jid=?").get(id,chat) as {rowid:number}|null)?.rowid;
+          if(!row)row=storeMessageInDatabase(root,{id,chat_jid:chat,sender:"assistant",sender_name:"Fixture",content:result.answer.text,timestamp:new Date().toISOString(),is_from_me:true,is_bot_message:true,is_terminal_agent_reply:true,thread_id:Number(result.inputs[0]!.payloadRef.slice(12))});
+          controls.onMessagePublished(input,row,result.answer.processExit);
         },
         runtime: { incarnation: "native-process-test", sessionId: "runtime",
           now: () => new Date().toISOString(), harnessOptions: { models: base.models, registry, settings: { retry: { enabled: false }, compaction: { enabled: false } } } },
@@ -102,33 +107,28 @@ for (const scenario of ["success", "siblings", "materialization-recovery", "alte
         { acceptSource: bound.getInputSourceAdmission!(chat) }, () => owner.assertCurrentOwner(), new AbortController().signal);
       expect(stored).not.toBeNull();
       const message = root.query("SELECT rowid,id FROM messages WHERE chat_jid=? AND is_bot_message=0").get(chat) as any;
-      const dispatch = bundle!.dispatchAcceptedInput(chat, message.id, message.rowid)!;
-      const outcome = await dispatch();
-      expect(advertised).toHaveLength(calls); expect(advertised.length).toBeGreaterThan(0);
-      for (const tool of advertised) {
-        const schema = JSON.parse(JSON.stringify(tool.parameters));
-        expect(Object.keys(schema.properties)).toEqual(["reason"]);
-        expect(schema.required).toEqual(["reason"]);
+      const ack=await bundle!.dispatchAcceptedInput(chat,message.id,message.rowid);
+      expect(ack.submission_id).toBeGreaterThan(0);
+      const idle=async()=>{const deadline=Date.now()+5000;while(Date.now()<deadline){if(!(root.query("SELECT 1 FROM tasks WHERE status<>'terminal' LIMIT 1").get())){await Bun.sleep(30);return;}await Bun.sleep(10);}throw Error("SDK process round did not settle");};
+      await idle();
+      expect(advertised).toHaveLength(calls);expect(advertised.length).toBeGreaterThan(0);
+      for(const tool of advertised){const schema=JSON.parse(JSON.stringify(tool.parameters));expect(Object.keys(schema.properties)).toEqual(["reason"]);expect(schema.required).toEqual(["reason"]);}
+      if(scenario==="altered-result"){
+        expect(root.query("SELECT * FROM messages WHERE is_bot_message=1").all()).toEqual([]);
+        expect(controls!.pending()).toBe(false);expect(deferred).toHaveLength(0);expect(shutdowns).toHaveLength(0);
+        expect(root.query("SELECT * FROM service_effect_s01_operations").all()).toEqual([]);
+        expect(root.query("SELECT * FROM service_effect_s02_commits").all()).toEqual([]);expect(calls).toBe(1);return;
       }
-      if (scenario === "altered-result") {
-        expect(outcome).toBe("pending");
-        expect(deferred).toHaveLength(0); expect(shutdowns).toHaveLength(0);
-        expect(root.query("SELECT * FROM service_effect_s02_commits").all()).toHaveLength(0);
-        expect(calls).toBe(1); return;
+      if(scenario==="materialization-recovery"){
+        expect(root.query("SELECT * FROM messages WHERE is_bot_message=1").all()).toEqual([]);expect(calls).toBe(1);expect(deferred).toHaveLength(0);
+        await bundle!.close();failMaterialization=false;await boot();
+        const again=await bundle!.dispatchAcceptedInput(chat,message.id,message.rowid);expect(again.submission_id).toBe(ack.submission_id);await idle();
+        expect(deferred).toHaveLength(0);expect(shutdowns).toHaveLength(0);expect(calls).toBe(1);
       }
-      if (scenario === "materialization-recovery") {
-        expect(outcome).toBe("pending");
-        expect(calls).toBe(1); expect(deferred).toHaveLength(0); expect(shutdowns).toHaveLength(0);
-        await bundle!.close(); failMaterialization = false;
-        await boot();
-        await bundle!.retryRecoveredWork();
-        const again = bundle!.dispatchAcceptedInput(chat, message.id, message.rowid);
-        if (again) expect(await again()).toBe("settled");
-        expect(deferred).toHaveLength(0); expect(shutdowns).toHaveLength(0); expect(calls).toBe(1);
-      } else expect(outcome).toBe("settled");
       const posts = root.query("SELECT content FROM messages WHERE chat_jid=? AND is_bot_message=1").all(chat);
       expect(posts).toEqual([{ content: scenario === "siblings" ? "Exit refused; sibling finished normally" : nativeExitNotice(reason) }]);
-      expect(root.query("SELECT * FROM service_effect_s02_commits").all()).toHaveLength(1);
+      expect(root.query("SELECT * FROM service_effect_s01_operations").all()).toEqual([]);
+      expect(root.query("SELECT * FROM service_effect_s02_commits").all()).toEqual([]);
       expect(calls).toBe(scenario === "siblings" ? 2 : 1);
       expect(effects).toBe(scenario === "siblings" ? 1 : 0);
       if (scenario === "success") {

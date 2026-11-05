@@ -7,8 +7,6 @@
 
 import { getDb } from "./db.js";
 import { canonicalScheduledTasksSql, readCanonicalScheduledTask } from "./db/scheduled-task-definitions.js";
-import { getBudgetCap } from "./db/budget-limits.js";
-import { scheduledBudgetReadiness, type ScheduledBudgetReadiness } from "./budget/scheduled-readiness.js";
 import type { ScheduledTask, TaskRunLog } from "./types.js";
 
 const TASK_STATUS_VALUES = new Set(["active", "paused", "completed"] as const);
@@ -54,10 +52,6 @@ export interface ScheduledTaskInspectionRecord {
   timeout_sec: number | null;
   notify_on_complete: boolean;
   muted: boolean;
-  budget_usd: number | null;
-  budget_cap_enabled: boolean;
-  budget_cap_revision: number | null;
-  budget_readiness: ScheduledBudgetReadiness;
   prompt_summary: string | null;
   command_summary: string | null;
   summary: string;
@@ -149,7 +143,6 @@ function getLatestRunLog(taskId: string): ScheduledTaskRunLogSummary | null {
 
 function mapTaskRow(row: ScheduledTask, includeLatestRunLog: boolean, includeRunLogs: boolean, runLogLimit: number): ScheduledTaskInspectionRecord {
   const summary = summarizeTask(row);
-  const budgetCap = getBudgetCap(`scheduled-cap:${row.id}`);
   return {
     id: row.id,
     chat_jid: row.chat_jid,
@@ -168,10 +161,6 @@ function mapTaskRow(row: ScheduledTask, includeLatestRunLog: boolean, includeRun
     timeout_sec: row.timeout_sec ?? null,
     notify_on_complete: row.notify_on_complete !== false && row.notify_on_complete !== 0,
     muted: row.notify_on_complete === false || row.notify_on_complete === 0,
-    budget_usd: budgetCap ? budgetCap.amount / 1_000_000 : null,
-    budget_cap_enabled: Boolean(budgetCap?.enabled),
-    budget_cap_revision: budgetCap?.revision ?? null,
-    budget_readiness: scheduledBudgetReadiness(row),
     prompt_summary: summary.prompt_summary,
     command_summary: summary.command_summary,
     summary: summary.summary,

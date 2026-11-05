@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { createTempWorkspace } from '../../../helpers.js';
 
 // Bound file-backed batches while allowing asynchronous close under CI I/O contention.
-for (const batch of [0, 1, 2, 3]) test(`owned WAL auth/scheduler contention batch ${batch}: fresh checks, cancellation, atomicity and no callback replay`, async () => {
+for (const batch of [0, 1, 2, 3]) test(`owned WAL auth contention batch ${batch}: fresh checks, cancellation, atomicity and no callback replay`, async () => {
   const workspace = createTempWorkspace('auth-scheduler-admission-child-');
   const launcher = new URL('../../../../scripts/local-test-priority.ts', import.meta.url).pathname;
   const fixture = new URL('../../../fixtures/auth-scheduler-write-admission.ts', import.meta.url).pathname;
@@ -11,7 +11,7 @@ for (const batch of [0, 1, 2, 3]) test(`owned WAL auth/scheduler contention batc
   try {
     const [exit, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
     expect(exit, `${stderr}\n${stdout}`).toBe(0);
-    expect(JSON.parse(stdout.trim().split('\n').at(-1)!)).toEqual({ kind: 'auth-scheduler-write-admission', cases: batch === 0 ? 5 : 4, realWal: true, abortedAndRevokedDenied: true, noCallbackReplay: true });
+    expect(JSON.parse(stdout.trim().split('\n').at(-1)!)).toEqual({ kind: 'auth-scheduler-write-admission', cases: batch === 0 ? 4 : 3, realWal: true, abortedAndRevokedDenied: true, noCallbackReplay: true });
   } finally {
     clearTimeout(timer); if (child.exitCode === null) child.kill('SIGKILL'); await child.exited; workspace.cleanup();
   }

@@ -8,8 +8,7 @@
 import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { createHash } from "node:crypto";
 import { storeTokenUsage } from "../db.js";
-import { getBudgetWorkContext } from "../budget/context.js";
-import { valueApiEquivalentCost } from "../budget/valuation.js";
+import { valueApiEquivalentCost } from "./usage-valuation.js";
 
 export type UsageRecordSource = "assistant" | "tool" | "compaction" | "branch_summary" | "unknown";
 
@@ -178,7 +177,6 @@ function storeUsageRecord(chatJid: string, usage: Record<string, unknown>, metad
     : catalogueCostTotal !== null
       ? "catalogue_estimate"
       : "unavailable";
-  const work = getBudgetWorkContext();
   const provider = asStringOrNull(metadata.provider);
   const cacheWriteFallback = cacheWrite > 0
     && (provider === "openai" || provider === "openai-codex")
@@ -226,7 +224,6 @@ function storeUsageRecord(chatJid: string, usage: Record<string, unknown>, metad
     api: asStringOrNull(metadata.api),
     usage_source: metadata.source,
     turns: metadata.turns ?? null,
-    work_id: work?.workId ?? null,
     invocation_id: metadata.invocationId ?? metadata.eventId ?? null,
     usage_event_id: eventId,
     api_equivalent_cost_microusd: valuation.amountMicros,
@@ -239,7 +236,6 @@ function storeUsageRecord(chatJid: string, usage: Record<string, unknown>, metad
     pricing_version: "pi-ai-usage-cost-v1",
     pricing_context_tier: asStringOrNull(metadata.contextTier ?? usage.contextTier ?? usage.context_tier),
     pricing_cache_fallbacks: JSON.stringify(valuation.fallbackCategories),
-    execution_kind: work?.kind ?? null,
   });
 }
 
@@ -247,7 +243,7 @@ function storeUsageRecord(chatJid: string, usage: Record<string, unknown>, metad
  * Extract token usage from an assistant message and store it in the database.
  * Kept for direct side-prompt streams and existing call sites/tests.
  */
-export function recordMessageUsage(chatJid: string, message: unknown): void {
+export function recordMessageUsage(chatJid: string, message: unknown, source: UsageRecordSource = "assistant"): void {
   const msg = asRecord(message) as UsageCarrier | null;
   if (!msg || msg.role !== "assistant") return;
 
@@ -255,7 +251,7 @@ export function recordMessageUsage(chatJid: string, message: unknown): void {
   if (!usage) return;
 
   storeUsageRecord(chatJid, usage, {
-    source: "assistant",
+    source,
     timestamp: msg.timestamp,
     model: msg.model,
     responseModel: msg.responseModel,

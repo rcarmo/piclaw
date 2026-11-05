@@ -81,9 +81,9 @@ export function QueueStack({ onEdit }: QueueStackProps) {
           signal: AbortSignal.timeout(15000),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        if (path === '/agent/queue-remove' || path === '/agent/queue-reorder') {
+        if (path === '/agent/queue-remove' || path === '/agent/queue-reorder' || path === '/agent/queue-steer') {
           const result = await res.json();
-          if (path.endsWith('remove') ? result?.removed !== true : result?.reordered !== true) throw Error('Queue changed before the action');
+          if (path.endsWith('remove') ? result?.removed !== true : path.endsWith('steer') ? result?.queued !== 'steer' : result?.reordered !== true) throw Error('Queue changed before the action');
         }
       }, removeRowId);
     } catch {
@@ -93,9 +93,9 @@ export function QueueStack({ onEdit }: QueueStackProps) {
   };
 
   const handleSteer = async (item: QueueItem) => {
-    if (await action('/agent/queue-steer', { row_id: item.row_id }, item.row_id)) {
+    if (await action('/agent/queue-steer', { row_id: item.row_id })) {
       window.dispatchEvent(new CustomEvent("piclaw:status-flash", {
-        detail: { message: "Steering injected", type: "success" },
+        detail: { message: "Steering queued", type: "success" },
       }));
     }
   };

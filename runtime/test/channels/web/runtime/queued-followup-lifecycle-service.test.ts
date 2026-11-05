@@ -374,8 +374,8 @@ describe("queued follow-up lifecycle service", () => {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ row_id: rowId, from_index: 0, to_index: 0 }),
       }));
-      expect(response.status).toBe(500);
-      expect(await response.json()).toEqual({ error: action === "handleAgentQueueRemove" ? "Unable to remove queued follow-up" : "Accepted input requires host cancellation" });
+      expect(response.status).toBe(action==='handleAgentQueueRemove'?500:409);
+      expect(await response.json()).toEqual({ error: action === "handleAgentQueueRemove" ? "Unable to remove queued follow-up" : "This preserved legacy queue item has no SDK submission; it was not changed." });
       expect(db.getDeferredQueuedFollowups("web:default")).toEqual(before);
       expect(db.getMessageByRowId("web:default", rowId)).toEqual(timelineBefore);
     }

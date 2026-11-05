@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { collectModuleSpecifiers } from "./fixtures/typescript-syntax-oracle.js";
 import { readRepositorySourceTree } from "./fixtures/repository-tool-family-oracle.js";
@@ -10,8 +9,11 @@ const latent = "src/service-effects/earendil-harness-v3-compatibility/";
 
 describe("1.0.1 runtime / retired Harness boundary", () => {
   test("private native engine has no retired compatibility or Harness/Pico3 import", () => {
-    const files = execFileSync("git", ["ls-files", "-z", "--", "runtime/durable-engine/src"], { cwd: root, encoding: "utf8" })
-      .split("\0").filter(path => path.endsWith(".ts") && !path.endsWith(".d.ts"));
+    // The current source tree includes untracked additions and excludes actual
+    // deletions; the Git index may still contain removed compatibility owners.
+    const source=resolve(root,'runtime/durable-engine/src');
+    const files=[...new Bun.Glob('**/*.ts').scanSync({cwd:source,dot:true,onlyFiles:true})]
+      .filter(path=>!path.endsWith('.d.ts')).map(path=>resolve(source,path));
     expect(files.length).toBeGreaterThan(0);
     const incoming: string[] = [];
     for (const path of files) {

@@ -126,8 +126,7 @@ export interface SidePromptOptions {
   onTextDelta?: (delta: string) => void;
   onThinkingDelta?: (delta: string) => void;
   /** Optional stable identity for a retried side prompt. */
-  budgetWorkId?: string;
-  budgetParentWorkId?: string | null;
+  requestId?: string;
 }
 
 /** Data-only accepted native identity; no SDK handle or execution permission. */

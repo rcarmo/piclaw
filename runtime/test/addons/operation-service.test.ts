@@ -56,7 +56,8 @@ const input = {
   text: "untrusted external input",
 };
 
-test("atomic concurrent admission deduplicates, tracks work and returns only scoped public results", async () => {
+test("atomic concurrent admission deduplicates without financial work and returns only scoped public results", async () => {
+  const financialBefore=getDb().query('SELECT * FROM budget_work ORDER BY id').all();
   const client = service.bind(principal);
   const responses = await Promise.all(
     Array.from({ length: 12 }, () => client.admit(input)),
@@ -77,10 +78,7 @@ test("atomic concurrent admission deduplicates, tracks work and returns only sco
   expect(result).not.toHaveProperty("text");
   expect(executions[0].chatJid).toBe("operation:" + id);
   expect(executions[0].workId).toBe(result.workId);
-  const budget = getDb()
-    .query("SELECT status,execution_kind FROM budget_work WHERE id=?")
-    .get(result.workId);
-  expect(budget).toEqual({ status: "completed", execution_kind: "background" });
+  expect(getDb().query('SELECT * FROM budget_work ORDER BY id').all()).toEqual(financialBefore);
   const replay = await client.events(id);
   expect(replay.events.map((e) => e.snapshot.status)).toEqual([
     "queued",

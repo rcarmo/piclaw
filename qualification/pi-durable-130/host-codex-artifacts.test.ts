@@ -5,7 +5,7 @@ import { isSqliteContention } from '../../runtime/src/db/sqlite-async-admission.
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createHostCodexArtifactStore, createHostCodexAnswerMaterializer } from '../../runtime/durable-engine/src/host-codex-artifacts.ts';
+import { createHostCodexArtifactStore, createHostCodexAnswerMaterializer, renderCodexAnswer } from '../../runtime/durable-engine/src/host-codex-artifacts.ts';
 test('actual Root metadata and file-pill refs survive close/reopen with source guards', async()=>{
  const cwd=await mkdtemp(join(tmpdir(),'codex-root-'));
  let root=new Database(join(cwd,'root.sqlite'));
@@ -14,12 +14,14 @@ test('actual Root metadata and file-pill refs survive close/reopen with source g
   const path='.pi/openai-codex-images/call-response.png'; await mkdir(join(cwd,'.pi/openai-codex-images'),{recursive:true}); await writeFile(join(cwd,path),'actual-image');
   let active=true;const assertCurrent=()=>{if(!active)throw Error('revoked');};
   const operation=Object.freeze({id:'codex-source',sessionId:'session',cwd,model:{provider:'openai-codex',id:'test',api:'openai-codex-responses'},signal:new AbortController().signal,assertCurrent});
-  const binding={hostOperationId:'host-source',chatJid:'actual-chat',assertCurrent,write:<T>(body:()=>T):T=>root.transaction(body)()};
+  const binding={hostOperationId:'sdk-run:2:7',chatJid:'actual-chat',assertCurrent,write:<T>(body:()=>T):T=>root.transaction(body)()};
   let store=createHostCodexArtifactStore(root,operation,binding);
   const activity={kind:'image' as const,savedImage:{absolutePath:join(cwd,path),relativePath:path,callId:'call',outputFormat:'png'}};
   await store.publish(operation,activity); expect(store.refs()[0]?.sha256).toHaveLength(64);
   root.close(); root=new Database(join(cwd,'root.sqlite')); store=createHostCodexArtifactStore(root,operation,binding);
   expect(store.filePills()).toBe(`Files:\n- ${path}`);expect(store.refs()).toHaveLength(1);
+  expect(await renderCodexAnswer(root,cwd,binding.chatJid,binding.hostOperationId,'SDK result',assertCurrent)).toBe(`SDK result\n\nFiles:\n- ${path}`);
+  expect(root.query("SELECT count(*) n FROM sqlite_master WHERE name LIKE 'service_effect%'").get()).toEqual({n:0});
   await expect(store.publish(Object.freeze({...operation}),activity)).rejects.toThrow('mismatch');
   await expect(store.publish(operation,{kind:'image',savedImage:{...activity.savedImage,absolutePath:join(cwd,'root.sqlite'),relativePath:'root.sqlite'}})).rejects.toThrow('outside');
   active=false;expect(()=>store.refs()).toThrow('revoked');

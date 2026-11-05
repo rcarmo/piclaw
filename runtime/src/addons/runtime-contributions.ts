@@ -1,6 +1,5 @@
 import { addonLocalContextApi, setAddonLocalContextHost } from "./local-context.js";
 import { AddonOperationService } from "./operation-service.js";
-import { admitAddonOutboundWork } from './operation-outbound-admission.js';
 import type { OperationHost } from "./operation-contracts.js";
 import { getCurrentAddonRegistrationOwner } from "./external-routes.js";
 import { mkdirSync, realpathSync } from "node:fs";
@@ -133,7 +132,7 @@ export interface PiclawRuntimeExternalRoutesApiV1 {
 export interface PiclawRuntimeOperationsApiV1 {
   version: 1;
   /** Register only during an owning startup import; verified principals bind later. */
-  register(): { forPrincipal(principalId: string): ReturnType<AddonOperationService["bind"]>; admitOutbound(): ReturnType<typeof admitAddonOutboundWork> };
+  register(): { forPrincipal(principalId: string): ReturnType<AddonOperationService["bind"]> };
 }
 
 export interface PiclawRuntimeAddonApi {
@@ -371,7 +370,7 @@ function registerOperations() {
   const owner = getCurrentAddonRegistrationOwner();
   if (!owner || !operationService) throw new Error("Operations require an owning startup import and a ready host.");
   const service = operationService;
-  return Object.freeze({ forPrincipal: (principalId: string) => service.bind({ addonId: owner.addonId, principalId }), admitOutbound: () => admitAddonOutboundWork(owner.addonId) });
+  return Object.freeze({ forPrincipal: (principalId: string) => service.bind({ addonId: owner.addonId, principalId }) });
 }
 
 export function installAddonRuntimeApi(): PiclawRuntimeAddonApi {

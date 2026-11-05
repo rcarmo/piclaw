@@ -34,9 +34,9 @@ export function createHostDrawioTool(addon: DrawioNativeExports, options: {
       const check = () => {
         authority.assertCurrent();
         options.runtime().assertCapturedSourceCurrent(captured.inputs);
-        if (!primary || !captured.operation.harness || !captured.inputs.length || captured.delegateModel ||
+        if (!primary || (!captured.native && !captured.operation.harness) || !captured.inputs.length || captured.delegateModel ||
           !captured.operation.chatJid.startsWith("web:") || captured.inputs.some(input =>
-            input.chatJid !== captured.operation.chatJid || input.operationId !== captured.operation.operationId || input.branchId !== primary.branchId ||
+            input.chatJid !== captured.operation.chatJid || (!captured.native && input.operationId !== captured.operation.operationId) || input.branchId !== primary.branchId ||
             !options.root.query("SELECT 1 FROM service_effect_s01_sources WHERE chat_jid=? AND source_seq=? AND kind='message'").get(input.chatJid, input.sourceSeq)) ||
           !options.root.query("SELECT 1 FROM chat_branches WHERE chat_jid=? AND branch_id=? AND archived_at IS NULL AND handle_owner_id=''").get(primary.chatJid, primary.branchId))
           throw Error("Draw.io requires current foreground web source");

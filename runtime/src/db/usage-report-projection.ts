@@ -111,37 +111,6 @@ export function decodeUsageReport(event: UsageProjectionEvent): Payload | null {
   return body;
 }
 
-/** Numeric/report metadata repair. Existing chat routing remains its explicit
- * legacy projection exception; missing rows recover the original event chat. */
-export function projectUsageEvent(database: Database, event: UsageProjectionEvent): boolean {
-  const body = decodeUsageReport(event); if (!body) return false;
-  if (body.origin.kind === "host_request") {
-    const request = database.query("SELECT state,binding_sha256,settlement_sha256,usage_event_id FROM main.budget_request_reservations WHERE id=?").get(body.origin.request_id) as { state: string; binding_sha256: string; settlement_sha256: string | null; usage_event_id: string | null } | null;
-    if (!request || request.state !== "settled" || request.binding_sha256 !== body.origin.binding_sha256 || request.settlement_sha256 !== body.origin.settlement_sha256
-      || request.usage_event_id !== event.usage_event_id) throw Error("Usage projection reservation binding mismatch");
-  }
-  const existing = database.query("SELECT * FROM main.token_usage WHERE id=?").get(event.token_usage_id) as (Report & { id: number }) | null;
-  if (existing && existing.usage_event_id !== event.usage_event_id) throw Error("Usage projection identity occupied");
-  const record = { ...body.record, chat_jid: existing?.chat_jid ?? body.record.chat_jid };
-  const columns = tokenReportColumns;
-  if (existing && columns.every(column => existing[column] === record[column])) return true;
-  database.query(`INSERT INTO main.token_usage(id,${columns.join(",")}) VALUES (?,${columns.map(() => "?").join(",")})
-    ON CONFLICT(id) DO UPDATE SET ${columns.map(column => `${column}=excluded.${column}`).join(",")}`).run(event.token_usage_id, ...columns.map(column => record[column]));
-  return true;
-}
-
-/** Explicit bounded observation repair; no reservation/work/event mutation. */
-export function reconcileUsageReports(database: Database, input: { after?: string; limit?: number } = {}) {
-  const limit = input.limit ?? 100;
-  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000) throw Error("Invalid usage reconciliation limit");
-  return database.transaction(() => {
-    const events = database.query("SELECT * FROM main.budget_usage_events WHERE usage_event_id>? ORDER BY usage_event_id LIMIT ?").all(input.after ?? "", limit + 1) as UsageProjectionEvent[];
-    let projected = 0, unavailable = 0;
-    for (const event of events.slice(0, limit)) { if (projectUsageEvent(database, event)) projected++; else unavailable++; }
-    return { projected, unavailable, next: events.length > limit ? events[limit - 1]!.usage_event_id : null };
-  }).immediate();
-}
-
 /** Check owned state before the older additive budget initializer can recreate
  * a missing immutable-event trigger. Old untouched schemas upgrade afterwards. */
 export function verifyExistingUsageReportProjection(database: Database): void {

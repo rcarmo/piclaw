@@ -154,21 +154,21 @@ describe("web runtime state service", () => {
 });
 
 
-test("native terminal status stays idle during worker cleanup; accepted work remains active", () => {
-  let operation: {operation_id:string;phase:string}|null = null, queued = 0;
-  const statuses = new Map<string,any>([["chat",{type:"done",title:"Idle",turn_id:"durable:1"}]]);
-  const service = new WebChannelRuntimeStateService({getAssistantName:()=>"Test",enqueue(){},async processChat(){},isNativeRuntime:()=>true,isChatLaneBusy:()=>true,readNativeTurnState:()=>({operation,queued})},{defaultAgentId:"default"},{agentStatusStore:{get:(chat:string)=>statuses.get(chat),update:(chat:string,value:any)=>statuses.set(chat,value),dispose(){}} as any});
-  expect(service.getAgentStatus("chat")?.type).toBe("done");
-  queued=1;expect(service.getAgentStatus("chat")?.state).toBe("active");
-  queued=0;operation={operation_id:"op",phase:"executing"};expect(service.getAgentStatus("chat")?.operation_id).toBe("op");
-  operation=null;
-  for (const intent_key of ["native_task", "compaction", "session_rotation"]) {
-    statuses.set("chat", {type:"intent",intent_key,title:"Owned command"});
-    expect(service.getAgentStatus("chat")?.state).toBe("active");
-    expect(service.getAgentStatus("chat")?.type).toBe("intent");
+test("native status uses SDK observations only, never host activity or saved intents", () => {
+  const statuses = new Map<string,any>();
+  const service = new WebChannelRuntimeStateService({getAssistantName:()=>"Test",enqueue(){},async processChat(){},isNativeRuntime:()=>true},
+    {defaultAgentId:"default"},{agentStatusStore:{get:(chat:string)=>statuses.get(chat)??null,update:(chat:string,value:any)=>statuses.set(chat,value),dispose(){}}});
+  for (const intent_key of ["native_task","compaction","session_rotation"]) {
+    service.updateAgentStatus("chat",{type:"intent",intent_key,title:"Working"});
+    expect(service.getAgentStatus("chat")).toBeNull();
   }
-  statuses.set("chat",{type:"intent",title:"Old model status"});
-  expect(service.getAgentStatus("chat")?.type).toBe("done");
+  service.updateAgentStatus("chat",{sdk_observation:true,type:"thinking",state:"active",title:"Thinking..."});
+  service.updateAgentStatus("chat",{type:"done",title:"Idle"});
+  expect(service.getAgentStatus("chat")).toMatchObject({type:"thinking",state:"active"});
+  service.updateAgentStatus("chat",{sdk_observation:true,type:"done",state:"idle",title:"Idle"});
+  service.updateAgentStatus("chat",{type:"intent",intent_key:"native_task",title:"Working"});
+  expect(service.getAgentStatus("chat")).toMatchObject({type:"done",state:"idle"});
+  service.dispose();
 });
 
 test('direct resume context preserves callback receivers and null thread semantics', async () => {

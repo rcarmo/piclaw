@@ -1,7 +1,6 @@
 import { captureWebRequestAuthority } from "../auth/auth-gateway.js";
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
-import { deleteTask, getBudgetCap, getDb, getTaskById, saveBudgetCap, setBudgetCapEnabled, updateTask } from "../../../db.js";
-import { parseScheduledBudgetMicros } from "../../../budget/amount.js";
+import { deleteTask, getDb, getTaskById, updateTask } from "../../../db.js";
 import { getScheduledTaskInspection, listScheduledTasks } from "../../../scheduled-task-query-service.js";
 import { admitSqliteWrite } from "../../../db/sqlite-async-admission.js";
 import type { ScheduledTask } from "../../../types.js";
@@ -37,7 +36,7 @@ function mutationError(action: string, message: string, status = 400, extra: Rec
   return { body: { ok: false, action, error: message, ...extra }, status };
 }
 
-function getMutableTask(action: "pause" | "resume" | "delete" | "set_budget", id: string, allowInternal: boolean): ScheduledTask | ReturnType<typeof mutationError> {
+function getMutableTask(action: "pause" | "resume" | "delete", id: string, allowInternal: boolean): ScheduledTask | ReturnType<typeof mutationError> {
   if (!id) return mutationError(action, "Missing scheduled task id.", 400, { id: null });
   const task = getTaskById(id);
   if (!task) return mutationError(action, `No scheduled task found for ${id}.`, 404, { id });
@@ -82,50 +81,20 @@ export async function handleScheduledTasksManagementAction(channel: WebChannelLi
   const id = typeof body.id === "string" ? body.id.trim() : "";
   const allowInternal = body.allow_internal === true;
 
-  if (action !== "pause" && action !== "resume" && action !== "delete" && action !== "set_budget") {
+  if (action !== "pause" && action !== "resume" && action !== "delete") {
     return json(channel, { ok: false, action: action || "unknown", error: "Unsupported scheduled task action." }, 400);
   }
-  const allowedKeys = action === "set_budget"
-    ? new Set(["action", "id", "budget_usd", "enabled", "confirm_revision", "confirm_zero_budget", "allow_internal"])
-    : new Set(["action", "id", "allow_internal"]);
+  const allowedKeys = new Set(["action", "id", "allow_internal"]);
   if (Object.keys(body).some((key) => !allowedKeys.has(key))) {
     return json(channel, { ok: false, action, error: "Scheduled task request contains unsupported fields." }, 400);
   }
 
   // Include receipt projection in the mutation transaction. A failed read must
-  // not report failure after a durable budget/task change has committed.
+  // not report failure after a durable task change has committed.
   const receipt = await admitSqliteWrite(getDb(), (): { body: Record<string, unknown>; status?: number } => {
   const loaded = getMutableTask(action, id, allowInternal);
   if ("body" in loaded) return loaded;
   const task = loaded;
-
-  if (action === "set_budget") {
-    if (taskKind(task) !== "agent") return mutationError(action, "Per-run budget applies only to scheduled agent tasks.", 409, { id, task_kind: taskKind(task) });
-    const existing = getBudgetCap(`scheduled-cap:${id}`);
-    if (existing && body.confirm_revision !== existing.revision) {
-      return mutationError(action, "Scheduled budget revision changed; reload before confirming this update.", 409, { id, revision: existing.revision });
-    }
-    if (!existing && body.confirm_revision !== undefined) return mutationError(action, "confirm_revision is only valid when revising an existing budget.", 400, { id });
-    if (body.enabled === false) {
-      if (!existing) return mutationError(action, `No scheduled budget found for ${id}.`, 404, { id });
-      setBudgetCapEnabled(existing.id, false);
-    } else {
-      let amount: number;
-      try { amount = parseScheduledBudgetMicros(body.budget_usd); }
-      catch (error) { return mutationError(action, error instanceof Error ? error.message : String(error), 400, { id }); }
-      if (amount === 0 && body.confirm_zero_budget !== true) return mutationError(action, "A zero task cap blocks model execution. Disable the cap for no task-specific limit, or confirm_zero_budget=true to acknowledge zero.", 409, { id, requires_zero_acknowledgement: true });
-      saveBudgetCap({
-        id: existing?.id ?? `scheduled-cap:${id}`,
-        scope: "scheduled_run",
-        metric: "api_usd_micros",
-        amount,
-        enabled: true,
-        scheduledTaskId: id,
-      });
-    }
-    const updated = getScheduledTaskInspection(id, { include_latest_run_log: true, include_run_logs: true });
-    return { body: { ok: true, action, id, task: updated } };
-  }
 
   if (action === "pause") {
     if (task.status === "completed") return mutationError(action, `Task ${id} is completed and cannot be paused.`, 409, { id, status: task.status });

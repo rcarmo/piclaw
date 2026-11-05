@@ -222,6 +222,7 @@ describe("web agent message handler", () => {
     active=true;events.length=0;expect((await handleAgentMessage(channel,request(),'/agent/default/message','web:test','default')).status).toBe(403);expect(events).toEqual([]);
   });
   test('avatar command broadcasts updated branding and completion cannot restore the captured old avatar', async () => {
+    initDatabase();
     const previous = getIdentityConfig().assistantAvatar;
     const broadcasts: Array<{event: string; payload: any}> = [];
     let status: Record<string, unknown> | null = null;

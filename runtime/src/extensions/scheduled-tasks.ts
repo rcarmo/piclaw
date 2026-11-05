@@ -5,9 +5,7 @@
 import { Type } from "typebox";
 import { readAccessConfig } from "../core/config-access.js";
 import type { AgentToolResult, ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
-import { createTask, deleteTask, getBudgetCap, getDb, getTaskById, saveBudgetCap, setBudgetCapEnabled, updateTask } from "../db.js";
-import { parseScheduledBudgetMicros } from "../budget/amount.js";
-import { scheduledBudgetReadiness } from "../budget/scheduled-readiness.js";
+import { createTask, deleteTask, getTaskById, updateTask } from "../db.js";
 import {
   getScheduledTaskInspection,
   listScheduledTasks,
@@ -42,9 +40,6 @@ type ScheduledTaskToolParams = {
   command?: string;
   cwd?: string;
   timeout_sec?: number;
-  /** Optional API-equivalent USD cap for each agent invocation. */
-  budget_usd?: number;
-  confirm_zero_budget?: boolean;
 };
 
 function computeInitialRun(scheduleType: ScheduleType, scheduleValue: string): string | null {
@@ -136,8 +131,6 @@ const ScheduleTaskSchema = Type.Object({
   command: Type.Optional(Type.String({ description: "Shell command to execute using the host shell (bash/sh on POSIX, PowerShell/cmd on Windows)." })),
   cwd: Type.Optional(Type.String({ description: "Working directory for shell tasks (relative to workspace)." })),
   timeout_sec: Type.Optional(Type.Integer({ description: "Shell timeout in seconds.", minimum: 1, maximum: 3600 })),
-  budget_usd: Type.Optional(Type.Number({ description: "Optional per-run USD cap, up to six decimal places. Omit for no task-specific cap: with no applicable limits the task may run without budget approval. Zero blocks model execution and requires confirm_zero_budget=true. Instance/provider limits still apply.", minimum: 0 })),
-  confirm_zero_budget: Type.Optional(Type.Boolean({ description: "Deliberately accept a zero task cap that blocks model execution. Not needed for omitted or positive caps." })),
   notify: Type.Optional(Type.Boolean({ description: "Whether successful task output should trigger a Pushover nudge. Defaults true." })),
   muted: Type.Optional(Type.Boolean({ description: "Set true to suppress Pushover nudges for this task." })),
   no_nudge: Type.Optional(Type.Boolean({ description: "Compatibility alias for muted=true." })),
@@ -175,8 +168,6 @@ const ScheduledTaskToolSchema = Type.Object({
   command: Type.Optional(Type.String({ description: "Shell command for action=create and task_kind=shell." })),
   cwd: Type.Optional(Type.String({ description: "Working directory for shell tasks (relative to workspace)." })),
   timeout_sec: Type.Optional(Type.Integer({ description: "Shell timeout in seconds.", minimum: 1, maximum: 3600 })),
-  budget_usd: Type.Optional(Type.Number({ description: "Optional per-run USD cap, up to six decimal places. Omit for no task-specific cap: with no applicable limits the task may run without budget approval. Zero blocks model execution and requires confirm_zero_budget=true. Instance/provider limits still apply.", minimum: 0 })),
-  confirm_zero_budget: Type.Optional(Type.Boolean({ description: "Deliberately accept a zero task cap that blocks model execution. Not needed for omitted or positive caps." })),
 });
 
 function formatTaskDetail(row: ScheduledTaskInspectionRecord): string {
@@ -190,9 +181,6 @@ function formatTaskDetail(row: ScheduledTaskInspectionRecord): string {
     `last_run: ${row.last_run ?? "n/a"}`,
     `last_result: ${row.last_result ?? "n/a"}`,
     `created_at: ${row.created_at}`,
-    `budget: ${row.budget_readiness.mode}; ${row.budget_readiness.status} at ${row.budget_readiness.checked_at}`,
-    row.budget_readiness.summary,
-    ...row.budget_readiness.next_steps,
     `model: ${row.model ?? "n/a"}`,
     `notify_on_complete: ${row.notify_on_complete ? "true" : "false"}`,
     `summary: ${row.summary}`,
@@ -263,57 +251,32 @@ function createScheduledTask(params: ScheduledTaskToolParams): AgentToolResult<R
     if (!nextRun) {
       return makeTextResult("Invalid schedule value.", failureDetails("create", { chat_jid: chatJid }));
     }
-    let budgetMicros: number | null = null;
-    try { if (params.budget_usd !== undefined) budgetMicros = parseScheduledBudgetMicros(params.budget_usd); }
-    catch (error) {
-      return makeTextResult(error instanceof Error ? error.message : "Invalid budget_usd.", failureDetails("create", { chat_jid: chatJid }));
-    }
-    if (budgetMicros === 0 && params.confirm_zero_budget !== true) {
-      return makeTextResult("A zero task cap blocks model execution. Omit budget_usd for no task-specific cap, set a positive cap, or explicitly acknowledge the zero cap with confirm_zero_budget=true. No task was created.", failureDetails("create", { chat_jid: chatJid, requires_zero_acknowledgement: true }));
-    }
-
     const taskId = createUuid("task");
-    const readiness = getDb().transaction(() => {
-      createTask({
-        id: taskId,
-        chat_jid: chatJid,
-        prompt,
-        model: typeof params.model === "string" && params.model.trim() ? params.model.trim() : null,
-        task_kind: "agent",
-        command: null,
-        cwd: null,
-        timeout_sec: null,
-        notify_on_complete: normalizeNotifyOnComplete(params),
-        schedule_type: scheduleType,
-        schedule_value: scheduleValue,
-        next_run: nextRun,
-        status: "active",
-        created_at: new Date().toISOString(),
-      });
-      if (budgetMicros !== null) {
-        saveBudgetCap({
-          id: `scheduled-cap:${taskId}`,
-          scope: "scheduled_run",
-          metric: "api_usd_micros",
-          amount: budgetMicros,
-          scheduledTaskId: taskId,
-        });
-      }
-      // Project the receipt before commit: a failed readiness read must not
-      // leave a created schedule behind an error that invites a duplicate retry.
-      return scheduledBudgetReadiness({ id: taskId, task_kind: "agent", model: typeof params.model === "string" ? params.model : null });
-    }).immediate();
+    createTask({
+      id: taskId,
+      chat_jid: chatJid,
+      prompt,
+      model: typeof params.model === "string" && params.model.trim() ? params.model.trim() : null,
+      task_kind: "agent",
+      command: null,
+      cwd: null,
+      timeout_sec: null,
+      notify_on_complete: normalizeNotifyOnComplete(params),
+      schedule_type: scheduleType,
+      schedule_value: scheduleValue,
+      next_run: nextRun,
+      status: "active",
+      created_at: new Date().toISOString(),
+    });
     return makeTextResult(
-      `Scheduled agent task for ${chatJid}. ${readiness.summary} This is budget readiness only; model availability and other safety checks still apply.`,
+      `Scheduled agent task for ${chatJid}.`,
       successDetails("create", {
         schedule_accepted: true,
-        budget_readiness: readiness,
         id: taskId,
         task_kind: "agent",
         next_run: nextRun,
         chat_jid: chatJid,
         notify_on_complete: normalizeNotifyOnComplete(params),
-        budget_usd: params.budget_usd ?? null,
       }),
     );
   }
@@ -328,13 +291,6 @@ function createScheduledTask(params: ScheduledTaskToolParams): AgentToolResult<R
       failureDetails("create", { chat_jid: chatJid, task_kind: "shell" }),
     );
   }
-  if (params.budget_usd !== undefined) {
-    return makeTextResult(
-      "budget_usd applies only to scheduled agent tasks; shell tasks do not invent model spend.",
-      failureDetails("create", { chat_jid: chatJid, task_kind: "shell" }),
-    );
-  }
-
   const cwdResult = validateShellCwd(params.cwd);
   if (!cwdResult.ok) {
     return makeTextResult(cwdResult.error || "Invalid cwd.", failureDetails("create", { chat_jid: chatJid, task_kind: "shell" }));
@@ -540,11 +496,7 @@ function deleteScheduledTask(params: ScheduledTaskToolParams): AgentToolResult<R
   if ("content" in loaded) return loaded;
 
   const { task, id } = loaded;
-  getDb().transaction(() => {
-    const capId = `scheduled-cap:${id}`;
-    if (getBudgetCap(capId)?.enabled) setBudgetCapEnabled(capId, false);
-    deleteTask(id);
-  }).immediate();
+  deleteTask(id);
   return makeTextResult(
     `Deleted task ${id}.`,
     successDetails("delete", {

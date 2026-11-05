@@ -32,19 +32,14 @@ for(const tokens of [null,0,42])test(`current SDK context ${tokens} never reads 
   expect(staleReads).toBe(0);
 });
 
-test('a cached native tool cannot be relabelled as a different accepted operation or pending queue',()=>{
- let operation:{operation_id:string;phase:string}|null={operation_id:'current',phase:'claimed'},queued=0;
+test('SDK observations cannot be overwritten by host work or relabelled as a successor',()=>{
  const store=new AgentStatusStore();
- const service=new WebChannelRuntimeStateService({getAssistantName:()=>'',enqueue(){},async processChat(){},isNativeRuntime:()=>true,isChatLaneBusy:()=>true,readNativeTurnState:()=>({operation,queued})},{defaultAgentId:'default'},{agentStatusStore:store});
- service.updateAgentStatus('chat',{type:'tool_call',tool_name:'old-tool',operation_id:'finished'});
- expect(service.getAgentStatus('chat')).toMatchObject({type:'thinking',operation_id:'current',state:'active'});
- expect(service.getAgentStatus('chat')).not.toHaveProperty('tool_name');
- operation=null;queued=1;
- expect(service.getAgentStatus('chat')).toMatchObject({type:'thinking',operation_id:null,queued_count:1});
- expect(service.getAgentStatus('chat')).not.toHaveProperty('tool_name');
- operation={operation_id:'current',phase:'executing'};queued=0;
- service.updateAgentStatus('chat',{type:'tool_call',tool_name:'current-tool',operation_id:'current'});
- expect(service.getAgentStatus('chat')).toMatchObject({type:'tool_call',tool_name:'current-tool',operation_id:'current'});
+ const service=new WebChannelRuntimeStateService({getAssistantName:()=>'',enqueue(){},async processChat(){},isNativeRuntime:()=>true},{defaultAgentId:'default'},{agentStatusStore:store});
+ service.updateAgentStatus('chat',{sdk_observation:true,type:'tool_call',tool_name:'sdk-tool',operation_id:'sdk-run'});
+ service.updateAgentStatus('chat',{type:'thinking',operation_id:'host-successor',title:'Working'});
+ expect(service.getAgentStatus('chat')).toMatchObject({type:'tool_call',tool_name:'sdk-tool',operation_id:'sdk-run'});
+ service.updateAgentStatus('chat',{sdk_observation:true,type:'done',state:'idle'});
+ expect(service.getAgentStatus('chat')).toMatchObject({type:'done',state:'idle'});
  store.dispose();
 });
 

@@ -14,6 +14,7 @@ import {
 } from "../db/addon-operations.js";
 import {
   OperationAccessError,
+  operationGrantKey,
   TERMINAL_OPERATION_STATUSES,
   type OperationExecution,
   type OperationGrant,
@@ -69,7 +70,6 @@ function cleanResult(result: OperationResult): OperationResult {
       "failed",
       "cancelled",
       "input_required",
-      "budget_blocked",
     ].includes(result.status)
   )
     throw new Error("Invalid operation result");
@@ -303,8 +303,8 @@ export class AddonOperationService {
     this.ensureOpen();
     if (
       decision.decision !== "allow" ||
-      JSON.stringify(validateGrant(decision.grant, previous.target)) !==
-        JSON.stringify(previous.grant)
+      operationGrantKey(validateGrant(decision.grant, previous.target)) !==
+        operationGrantKey(previous.grant)
     )
       throw new OperationAccessError();
     const queued = appendOperationInput(id, text);
@@ -371,7 +371,8 @@ export class AddonOperationService {
       previous.principalId !== principal.principalId
     )
       throw new OperationAccessError();
-    if (!["approval_required", "budget_blocked"].includes(previous.status))
+    // Historical financial pauses carry no current execution/resume authority.
+    if (previous.status !== "approval_required")
       return { resumed: false, operation: await this.get(principal, id) };
     const decision = await this.host.authorize(
       principal,
@@ -383,7 +384,7 @@ export class AddonOperationService {
       return { resumed: false, admission: decision.decision, operation: null };
     const currentGrant = validateGrant(decision.grant, previous.target);
     // Policy revisions require fresh operator reconciliation; never silently widen.
-    if (JSON.stringify(currentGrant) !== JSON.stringify(previous.grant))
+    if (operationGrantKey(currentGrant) !== operationGrantKey(previous.grant))
       throw new OperationAccessError();
     const queued = transitionAddonOperation(id, [previous.status], "queued");
     if (queued) this.start(id);
@@ -438,7 +439,7 @@ export class AddonOperationService {
         return;
       }
       const grant = validateGrant(admission.grant, record.target);
-      if (JSON.stringify(grant) !== JSON.stringify(record.grant)) {
+      if (operationGrantKey(grant) !== operationGrantKey(record.grant)) {
         transitionAddonOperation(
           id,
           ["queued"],

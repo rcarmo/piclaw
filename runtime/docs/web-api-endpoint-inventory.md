@@ -83,8 +83,8 @@ The route tables below describe single-user guards. “Authenticated” means th
 | GET | `/agent/status` | `dispatch-agent.ts` | authenticated | n/a | none | JSON status payload |
 | GET | `/agent/context` | `dispatch-agent.ts` | authenticated | n/a | none | JSON context usage |
 | GET | `/agent/queue-state` | `dispatch-agent.ts` | authenticated | n/a | none | JSON queue state |
-| GET | `/agent/scheduled-tasks` | `dispatch-agent.ts` / `handlers/scheduled-tasks-management.ts` | authenticated single-user owner | n/a | none | Task inspection including optional per-run `budget_usd` and cap revision |
-| POST | `/agent/scheduled-tasks/action` | `dispatch-agent.ts` / `handlers/scheduled-tasks-management.ts` | authenticated single-user owner | yes | covered agent-data bucket | Pause/resume/delete and revision-confirmed per-run budget set/disable; shell budgets denied |
+| GET | `/agent/scheduled-tasks` | `dispatch-agent.ts` / `handlers/scheduled-tasks-management.ts` | authenticated single-user owner | n/a | none | Task inspection, schedule state and run history |
+| POST | `/agent/scheduled-tasks/action` | `dispatch-agent.ts` / `handlers/scheduled-tasks-management.ts` | authenticated single-user owner | yes | covered agent-data bucket | Pause, resume or delete a scheduled task |
 | POST | `/agent/queue-remove` | `dispatch-agent.ts` | authenticated | yes | `data/agent_queue` | status JSON |
 | POST | `/agent/queue-steer` | `dispatch-agent.ts` | authenticated | yes | `data/agent_queue` | status JSON |
 | GET | `/agent/models` | `dispatch-agent.ts` | authenticated | n/a | none | JSON model list/state, per-model thinking levels, provider usage, and non-secret `provider_diagnostics` |

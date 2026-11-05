@@ -11,7 +11,7 @@ beforeEach(() => {
   const restore = setEnv({PICLAW_WORKSPACE:ws.workspace,PICLAW_STORE:ws.store,PICLAW_DATA:ws.data});
   cleanup = () => {restore();ws.cleanup();};
 });
-afterEach(() => {closeDatabase();cleanup();});
+afterEach(async () => {await closeDatabase();cleanup();});
 
 function pendingInput(chatJid: string) {
   initDatabase();
@@ -28,8 +28,8 @@ test("web execution without an admitted dispatcher cannot read the legacy runner
   pendingInput(chat);
   let legacyReads = 0;
   const before = getDb().serialize();
-  const channel = { agentPool: { get runAgent() { legacyReads++; throw Error("Legacy runner accessed"); } } };
-  await expect(processChat(channel as any, chat, "default")).rejects.toThrow("Native input dispatch is unavailable");
+  const channel = { agentPool: { isDurableRuntime:()=>true, get runAgent() { legacyReads++; throw Error("Legacy runner accessed"); } } };
+  await expect(processChat(channel as any, chat, "default")).rejects.toThrow("Native SDK dispatcher required");
   expect(legacyReads).toBe(0);
   expect(getChatCursor(chat)).toBe("");
   expect(getDb().serialize()).toEqual(before);
@@ -53,31 +53,31 @@ test("historical failed markers cannot skip accepted native input or be rewritte
   const receipts = db.query("SELECT * FROM piclaw_schema_migrations WHERE owner='host.chat-cursors'").all();
   const calls: unknown[] = [];
   await processChat({ dispatchAcceptedInput: (...args: unknown[]) => {
-    calls.push(args); return async () => "settled";
+    calls.push(args); return Promise.resolve({submission_id:17,queued:false});
   }, broadcastEvent() {}, resumeChat() {} } as any, chat, "default");
-  expect(calls).toEqual([[chat, input.id, input.rowId]]);
-  expect(getChatCursor(chat)).toBe(input.timestamp);
+  expect(calls).toEqual([[chat, input.id, input.rowId,'followUp']]);
+  expect(getChatCursor(chat)).toBe('');
   expect(db.query('SELECT rowid,* FROM '+legacyCursorArchive).all()).toEqual(history);
   expect(db.query("SELECT * FROM piclaw_schema_migrations WHERE owner='host.chat-cursors'").all()).toEqual(receipts);
   expect(db.query('SELECT failed_message_id FROM '+legacyCursorArchive+' WHERE chat_jid=?').get(chat)).toEqual({failed_message_id:input.id});
   expect((db.query('PRAGMA main.table_info(chat_cursors)').all() as {name:string}[]).map(row=>row.name)).toEqual(['chat_jid','cursor_ts','queued_followups_json']);
 });
 
-test("pending wakeups retain one input identity until settlement advances its cursor", async () => {
+test("explicit worker handoffs retain one source identity without a host settlement/cursor/wake owner", async () => {
   const chat = "web:native-repeat-wake";
   const input = pendingInput(chat);
   const selected: unknown[] = [];
   let settled = false, resumed = 0;
   const dispatch = (...args: unknown[]) => {
-    selected.push(args); return async () => settled ? "settled" : "pending";
+    selected.push(args); return Promise.resolve({submission_id:17,queued:!settled});
   };
-  dispatch.waitForPending = async () => "pending" as const;
+  Object.defineProperty(dispatch,'waitForPending',{get(){throw Error('Retired pending owner forbidden');}});
   const channel = { dispatchAcceptedInput: dispatch, broadcastEvent() {}, resumeChat() { resumed++; } };
   await processChat(channel as any, chat, "default");
   expect(getChatCursor(chat)).toBe("");
   settled = true;
   await processChat(channel as any, chat, "default");
-  expect(selected).toEqual([[chat,input.id,input.rowId],[chat,input.id,input.rowId]]);
-  expect(getChatCursor(chat)).toBe(input.timestamp);
-  expect(resumed).toBe(1);
+  expect(selected).toEqual([[chat,input.id,input.rowId,'followUp'],[chat,input.id,input.rowId,'followUp']]);
+  expect(getChatCursor(chat)).toBe('');
+  expect(resumed).toBe(0);
 });

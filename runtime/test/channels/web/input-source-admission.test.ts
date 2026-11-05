@@ -1,10 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { createDurableQueuedSteering } from '../../../src/agent-pool/durable-queued-steering.js';
-import { createDurableRecoveryDispatch } from '../../../src/agent-pool/durable-recovery-dispatch.js';
 import { admitWebMessage } from '../../../src/channels/web/messaging/message-store.js';
-import { createDurableQueueDispatch } from "../../../src/agent-pool/durable-queue-dispatch.js";
-import { createDurableConversationAdapter } from "../../../src/agent-pool/durable-runtime-adapter.js";
 import { join } from "node:path";
 import { createTempWorkspace, setEnv } from "../../helpers.js";
 import { closeDatabase, getDb, initDatabase } from "../../../src/db/connection.js";
@@ -129,31 +125,7 @@ test("autonomous stable follow-up yields to pending sources and legacy queue ite
   expect(f.db.query('SELECT source_id FROM service_effect_s01_sources').all()).toEqual([{ source_id: 'goal:first' }]);
 });
 
-for (const busyOnce of [false, true]) test(`accepted stable dispatch never replays an uncertain submission; busy=${busyOnce}`, async () => {
-  const f = fixture(undefined, () => true), chatJid = 'web:stable-dispatch';
-  const service = new QueuedFollowupLifecycleService(), messageId = 'goal-continuation:operation-1';
-  f.db.transaction(() => service.enqueueAcceptedFollowupOnce(messageId, chatJid, 'Continue Goal', '2026-10-19T00:00:00.000Z',
-    { source: 'goal.continuation' }, f.acceptQueued)).immediate();
-  f.db.query('INSERT OR IGNORE INTO chats(jid,name,last_message_time) VALUES (?,?,?)').run(chatJid, 'Stable dispatch', '2026-10-19T00:00:00.000Z');
-  const rowId = Number(f.db.query("INSERT INTO messages(id,chat_jid,content,timestamp,is_from_me) VALUES (?,?,?,?,0)").run(messageId, chatJid, 'Continue Goal', '2026-10-19T00:00:00.000Z').lastInsertRowid);
-  let submissions = 0;
-  const dispatch = createDurableQueueDispatch({ work: f.work, branchId: 'main', assertCurrentWriter() {}, shutdown: new AbortController().signal,
-    async waitForReconciliation() {}, adapter: {
-      async submit(accepted: any) {
-        expect(accepted.claimed.source.sourceId).toBe(messageId); expect(accepted.content).toBe('Continue Goal');
-        submissions++;
-        if (busyOnce && submissions === 1) throw Object.assign(new Error('database is locked'), { code: 'SQLITE_BUSY' });
-        return 1;
-      },
-      async wait() {}, async settle() { return {}; },
-    } as any });
-  expect(await dispatch(chatJid, messageId, rowId)!()).toBe(busyOnce ? 'pending' : 'settled');
-  expect(submissions).toBe(1);
-  expect(f.db.query('SELECT operation_id FROM service_effect_s01_operations').all()).toHaveLength(1);
-  expect(dispatch(chatJid, 'goal-continuation:foreign', rowId)).toBeUndefined();
-  f.db.query('UPDATE service_effect_s01_sources SET payload_ref=? WHERE chat_jid=? AND source_id=?').run('queued-source:foreign', chatJid, messageId);
-  expect(() => dispatch(chatJid, messageId, rowId)).toThrow('identity conflict');
-});
+
 
 function withdrawalFixture() {
   const f = fixture(undefined, () => true);
@@ -220,8 +192,8 @@ test('steer never invokes registered withdrawal or creates legacy work for accep
   let calls = 0; f.channel.getQueuedInputSourceWithdrawal = () => () => { calls++; };
   const before = f.snapshot(), jobs = f.jobs.length;
   const response = await f.remove(item.rowId, '/agent/queue-steer');
-  expect(response.status).toBe(500);
-  expect(await response.json()).toEqual({ error: 'Accepted input requires host cancellation' });
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: 'This preserved legacy queue item has no SDK submission; it was not changed.' });
   expect(calls).toBe(0); expect(f.snapshot()).toEqual(before); expect(f.jobs.length).toBe(jobs);
 });
 
@@ -661,331 +633,13 @@ test("manual queue input is adopted by the durable queued source hook", async ()
   expect(f.db.query("SELECT * FROM service_effect_s01_sources").all()).toHaveLength(1);
 });
 
-for (const failure of ["selection", "pending", "wait"] as const) test(`worker ${failure} retains lane and accepted-source authority without legacy`, async () => {
-  const f = fixture();
-  let legacy = 0;
-  (f.channel.agentPool as any).runAgent = () => { legacy++; throw Error("legacy forbidden"); };
-  const shutdown = new AbortController();
-  const host = createDurableQueueDispatch({ work: f.work, adapter: { submit() {}, wait() {}, settle() {} } as any, branchId: "main",
-    assertCurrentWriter() {}, shutdown: shutdown.signal,
-    waitForReconciliation: (_identity, signal) => new Promise(resolve => signal.addEventListener("abort", () => resolve(), { once: true })) });
-  f.channel.dispatchAcceptedInput = Object.assign(() => {
-    if (failure === "selection") throw Error("owner lost");
-    return async () => { if (failure === "wait") throw Error("wait failed"); return "pending" as const; };
-  }, { waitForPending: host.waitForPending });
-  expect((await f.route()).status).toBe(201);
-  let released = false;
-  const original = f.jobs[0]!.task().then(() => { released = true; });
-  await Bun.sleep(10);
-  expect(released).toBe(false);
-  expect(legacy).toBe(0);
-  expect((f.db.query("PRAGMA main.table_info(chat_cursors)").all() as {name:string}[]).map(row=>row.name)).toEqual(["chat_jid","cursor_ts","queued_followups_json"]);
-  expect(f.db.query("SELECT cursor_ts FROM chat_cursors WHERE cursor_ts<>''").get()).toBeNull();
-  const before = f.db.query("SELECT * FROM chat_cursors").get();
-  shutdown.abort(); await original;
-  expect(released).toBe(true);
-  expect(f.db.query("SELECT * FROM chat_cursors").get()).toEqual(before);
-  expect(legacy).toBe(0);
-});
+
 
 const hasEngine = existsSync(new URL("../../../durable-engine/node_modules/@earendil-works/pi-durable/package.json", import.meta.url));
 test("required engine integration prerequisite cannot silently skip", () => {
   if (process.env.PICLAW_REQUIRE_DURABLE_ENGINE === "1") expect(hasEngine).toBe(true);
 });
-for (const [queuedInput, pending, steering] of [[false,false,false], [false,true,false], [true,false,false], [true,true,false], [false,false,true], [false,false,'ack-lost'], [false,false,'stale-target']] as const) test.skipIf(!hasEngine)(`HTTP accepted message uses current worker and real engine exactly once; queued=${queuedInput}; pending=${pending}; steering=${steering}`, async () => {
-  const { createInputHandoffCompletion } = await import("../../../durable-engine/src/host-bindings.js");
-  const { HostConversationRuntime, BunSqliteDatabase, createHostDurableBindings, initializeHostDurableBindings } = await import("../../../durable-engine/src/index.js");
-  const { SqliteStorage } = await import("../../../durable-engine/qualification/sqlite.ts");
-  const { context, openFixture, barrier } = await import("../../../../qualification/pi-durable-130/src/fixture.js");
-  const { installTerminalSettlementCompositionSchema } = await import("../../../src/service-effects/current-piclaw/terminal-settlement-schema.js");
-  const { createCurrentPiclawTerminalSettlementStore } = await import("../../../src/service-effects/current-piclaw/terminal-settlement-store.js");
-  const { InMemoryEffectPayloadResolver } = await import("../../../src/service-effects/testing/in-memory-payload-resolver.js");
-  let callback: StoreWebMessageOptions["acceptSource"];
-  const f = fixture(() => callback, () => true);
-  callback = f.accept;
-  installTerminalSettlementCompositionSchema(f.db);
-  const path = join(process.env.PICLAW_WORKSPACE!, "engine.sqlite");
-  const base = await openFixture({ acquired: true }, () => {}, () => SqliteStorage.open(new BunSqliteDatabase(path)));
-  const conversationId = base.root.id;
-  await base.close();
-  let owner = true;
-  const assert = () => { if (!owner) throw Error("owner lost"); };
-  initializeHostDurableBindings(f.db, assert);
-  const payloads = new InMemoryEffectPayloadResolver();
-  const terminal = createCurrentPiclawTerminalSettlementStore(f.db, payloads, {
-    hitFault: () => false, recordTrace() {}, validateOwnership() { assert(); return f.db.inTransaction; },
-  });
-  if (!terminal.ok) throw Error("terminal construction");
-  const manifest = [{ chatJid: "web:default", branchId: "main", conversationId }];
-  const bindings = createHostDurableBindings(f.db, { domain: "queue-test", incarnation: "queue-test", assertOwner: assert, manifest,
-      async resolveContent(ref) {
-        const row = (ref.startsWith('queued-source:')
-          ? f.db.query('SELECT content FROM messages WHERE id=? AND chat_jid=?').get(ref.slice('queued-source:'.length), 'web:default')
-          : f.db.query("SELECT content FROM messages WHERE rowid=?").get(Number(ref.split(":")[1]))) as { content: string };
-        return row.content;
-      } });
-  const runtime = await HostConversationRuntime.open({
-    completeInputHandoff: createInputHandoffCompletion(f.db, {
-      domain: "queue-test", incarnation: "queue-test", sessionId: "queue-test", bindings, work: f.work, assertCurrent: assert,
-    }),
-    incarnation: "queue-test", owner: { assert, release() {} }, work: f.work, terminal: terminal.value,
-    openStorage: () => SqliteStorage.open(new BunSqliteDatabase(path)),
-    harnessOptions: { models: base.models, registry: base.registry, settings: { retry: { enabled: false }, compaction: { enabled: false } } },
-    existingConversationIds: [conversationId], conversationFor(chat, branch) {
-      if (chat !== "web:default" || branch !== "main") throw Error("binding conflict"); return conversationId;
-    },
-    bindings,
-    authorizeScheduling() { assert(); }, putAnswer(ref, text) { payloads.putText(ref, text); },
-    sessionId: "queue-test", lane: "main", generation: 1, now: () => new Date().toISOString(),
-  }, context);
-  const adapter = createDurableConversationAdapter({ incarnation: "queue-test", manifest, runtime });
-  const shutdown = new AbortController();
-  let repairs = 0;
-  const recoveryDispatch = createDurableRecoveryDispatch({ assertCurrentWriter: assert, shutdown: shutdown.signal,
-    async submitIntent(input) { repairs++; return adapter.submitIntent(input); } });
-  const reconcile = recoveryDispatch.onReconcile;
-  const lifecycle = { shutdown: shutdown.signal, waitForReconciliation: recoveryDispatch.waitForReconciliation };
-  let pendingIntent: Parameters<typeof adapter.submitIntent>[0] | undefined;
-  let accepted: Parameters<typeof adapter.settle>[0] | undefined;
-  const selectedAdapter = pending ? { ...adapter, async wait(work: Parameters<typeof adapter.wait>[0], id: number) {
-    await adapter.wait(work, id);
-    if (!accepted) { accepted = work; throw Error("lost wait acknowledgement"); }
-  } } : adapter;
-  f.channel.dispatchAcceptedInput = createDurableQueueDispatch({ ...lifecycle, work: f.work, adapter: selectedAdapter, branchId: "main", assertCurrentWriter: assert,
-    ...(steering ? { runningCorrelation: (id: number) => ({ sessionId: 'queue-test', harnessOperationId: String(id) }) } : {}) });
-  let legacyCalls = 0;
-  (f.channel.agentPool as any).runAgent = () => { legacyCalls++; throw Error("legacy forbidden"); };
-  const resumeQueued = f.channel.resumeChat.bind(f.channel);
-  f.channel.resumeChat = () => {};
-  try {
-    f.expectSources(1);
-    if (queuedInput) {
-      f.busy(true);
-      f.channel.getQueuedInputSourceAdmission = () => f.acceptQueued;
-      f.channel.getQueuedInputMaterialization = () => ({ item, message, rowId, database }) => {
-        expect(database.inTransaction).toBe(true);
-        const source = f.work.getAcceptedSource('web:default', item.source_id);
-        expect(source?.payloadRef).toBe(`queued-source:${message.id}`);
-        const { source_accepted: _sourceAccepted, materializeRetries: _materializeRetries, ...immutableInput } = item;
-        expect(source?.provenanceRef).toBe(`engine:host-selected:${hashCanonicalRequest(JSON.parse(JSON.stringify(immutableInput)) as CanonicalJsonValue)}`);
-        expect(message.id).toBe(item.source_id);
-        expect(database.query('SELECT id FROM messages WHERE rowid=?').get(rowId)).toEqual({ id: item.source_id });
-      };
-    }
-    expect((await f.route({ content: "ordinary input", engine: "forged" })).status).toBe(201);
-    const originalSources = f.db.query('SELECT source_id, source_seq, payload_ref FROM service_effect_s01_sources').all();
-    if (queuedInput) {
-      expect(f.jobs).toHaveLength(0);
-      f.busy(false);
-      f.channel.resumeChat = resumeQueued;
-      const queuedRowId = getDeferredQueuedFollowups('web:default')[0]!.rowId;
-      const { materializeDeferredFollowups } = await import('../../../src/channels/web/runtime/process-chat-control-runtime.js');
-      expect((await materializeDeferredFollowups({ channel: f.channel as any, chatJid: 'web:default', agentId: 'default' })).status).toBe('resumed');
-      for (let n = 0; n < 200 && !f.jobs.length; n++) await Bun.sleep(1);
-      expect(f.jobs).toHaveLength(1);
-      expect(getDeferredQueuedFollowups('web:default')).toEqual([]);
-      let withdrawalCalls = 0;
-      f.channel.getQueuedInputSourceWithdrawal = () => () => { withdrawalCalls++; throw Error('materialized source must not withdraw'); };
-      const materializedSnapshot = f.snapshot(), published = f.events.length;
-      const remove = await f.channel.handleRequest(new Request('http://fixture/agent/queue-remove', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://fixture' }, body: JSON.stringify({ row_id: queuedRowId }) }));
-      expect(remove.status).toBe(200); expect((await remove.json()).removed).toBe(false);
-      expect(withdrawalCalls).toBe(0); expect(f.snapshot()).toEqual(materializedSnapshot); expect(f.events.length).toBe(published);
-      expect(f.db.query('SELECT source_id, source_seq, payload_ref FROM service_effect_s01_sources').all()).toEqual(originalSources);
-    }
-    let releases = 0;
-    const hold = barrier(), intentHold = barrier();
-    if (steering) base.host.modelHold = hold;
-    const original = f.jobs[0]!.task().then(() => { releases++; });
-    if (steering) {
-      for (let n = 0; n < 500; n++) {
-        const active = await f.work.getChatFrontier('web:default');
-        const op = active.ok && active.value.activeOperationId ? await f.work.getOperation(active.value.activeOperationId) : null;
-        if (op?.ok && op.value?.harness?.state === 'running') break;
-        await Bun.sleep(1);
-      }
-      f.busy(true, true); f.expectSources(2);
-      f.channel.getQueuedInputSourceAdmission = () => f.acceptQueued;
-      expect((await f.route({ content: 'accepted B' })).status).toBe(201);
-      const queued = getDeferredQueuedFollowups('web:default')[0]!;
-      const before = f.work.getAcceptedSource('web:default', queued.source_id!)!;
-      let stale = true;
-      let dispatches = 0;
-      const coordinator = createDurableQueuedSteering({ work: f.work,
-        adapter: { ...adapter, async submitIntent(input) {
-          dispatches++;
-          const id = await adapter.submitIntent(input);
-          if (steering === 'ack-lost') throw Error('lost dispatch ACK');
-          return id;
-        } },
-        onPendingIntent(input) { pendingIntent = input; recoveryDispatch.onPendingIntent(input); },
-        chatJid: 'web:default', branchId: 'main', assertCurrentWriter: assert,
-        runningBinding: { sessionId: 'queue-test' },
-        readQueued: id => getDeferredQueuedFollowups('web:default').find(item => item.rowId === id),
-        validatePayload: ({ item }) => {
-          const { source_accepted: _sourceAccepted, materializeRetries: _materializeRetries, ...immutable } = item;
-          expect(f.work.getAcceptedSource('web:default', item.source_id)?.provenanceRef).toBe(`engine:host-selected:${hashCanonicalRequest(JSON.parse(JSON.stringify(immutable)) as CanonicalJsonValue)}`);
-        },
-        materialize: (item, accept) => admitWebMessage(f.channel as any, { chatJid: 'web:default', content: item.queuedContent,
-          isBot: false, mediaIds: item.mediaIds ?? [], agentId: 'default', agentName: 'Fixture' }, {
-          contentBlocks: item.contentBlocks, linkPreviews: item.linkPreviews, threadId: item.threadId,
-          screenHint: item.screenHint, isSteeringMessage: true, consumeDeferredFollowupRowId: item.rowId,
-          materializeQueuedSource: stored => {
-            accept(stored);
-            // Prove attachment, timeline insert and queue consumption share rollback.
-            if (stale) throw Error('private post-attachment failure');
-          } }),
-      });
-      f.channel.getAcceptedQueuedSteering = () => coordinator;
-      const click = () => f.channel.handleRequest(new Request('http://fixture/agent/queue-steer', { method: 'POST',
-        headers: { 'Content-Type': 'application/json', Origin: 'http://fixture' }, body: JSON.stringify({ row_id: queued.rowId }) }));
-      if (steering === 'stale-target') {
-        // Finish through the host lifecycle API, never by editing operation SQL.
-        const frontier = await f.work.getChatFrontier('web:default');
-        if (!frontier.ok || !frontier.value.activeOperationId) throw Error('active operation');
-        const current = await f.work.getOperation(frontier.value.activeOperationId);
-        if (!current.ok || !current.value?.harness) throw Error('running harness');
-        const finish = { effect: { idempotencyKey: 'stale-target-finish', requestHash: '',
-          operationId: current.value.operationId, sourceSeq: current.value.primarySourceSeq,
-          provenanceRef: 'host:test', redactionClass: 'private' as const },
-          expectedVersion: current.value.version, expectedHarness: current.value.harness };
-        finish.effect.requestHash = hashCanonicalRequest({ method: 'finishHarness.v1', ...finish } as unknown as CanonicalJsonValue);
-        expect((await f.work.finishHarness(finish)).ok).toBe(true);
-        const unchanged = f.snapshot(), queue = getDeferredQueuedFollowups('web:default'), events = [...f.events];
-        const operations = f.db.query('SELECT * FROM service_effect_s01_operations').all();
-        const denied = await click();
-        expect(denied.status).toBe(500);
-        expect(await denied.json()).toEqual({ error: 'Accepted steering is unavailable.' });
-        expect(f.snapshot()).toEqual(unchanged);
-        expect(getDeferredQueuedFollowups('web:default')).toEqual(queue);
-        expect(f.db.query('SELECT * FROM service_effect_s01_operations').all()).toEqual(operations);
-        expect(f.events).toEqual(events); expect(dispatches).toBe(0);
-        hold.release(); await original;
-        expect(f.work.getAcceptedSource('web:default', queued.source_id!)?.state).toBe('pending');
-        expect(getDeferredQueuedFollowups('web:default')).toEqual(queue);
-        expect(f.db.query('SELECT * FROM service_effect_s02_commits').all()).toHaveLength(1);
-        expect(base.host.modelCalls).toBe(1); expect(legacyCalls).toBe(0);
-        return;
-      }
-      const unchanged = f.snapshot(), queuedBefore = getDeferredQueuedFollowups('web:default');
-      const eventsBefore = [...f.events];
-      const operationsBefore = f.db.query('SELECT * FROM service_effect_s01_operations').all();
-      expect((await click()).status).toBe(500);
-      expect(f.snapshot()).toEqual(unchanged);
-      expect(f.events).toEqual(eventsBefore);
-      expect(dispatches).toBe(0);
-      expect(getDeferredQueuedFollowups('web:default')).toEqual(queuedBefore);
-      expect(f.db.query('SELECT * FROM service_effect_s01_operations').all()).toEqual(operationsBefore);
-      owner = true; stale = false;
-      const response = await click(); expect(response.status).toBe(201);
-      expect(await response.json()).toMatchObject({ queued: 'steer', steering_delivery: 'pending', removed: true });
-      expect(getDeferredQueuedFollowups('web:default')).toEqual([]);
-      const claimed = f.work.getAcceptedSource('web:default', queued.source_id!)!;
-      expect(claimed.sourceSeq).toBe(before.sourceSeq); expect(claimed.state).toBe('claimed');
-      expect(f.db.query('SELECT id FROM messages WHERE id=?').get(queued.source_id!)).toEqual({ id: queued.source_id });
-      expect(releases).toBe(0);
-      const committed = f.snapshot(), published = [...f.events];
-      expect((await (await click()).json()).removed).toBe(false);
-      expect(f.snapshot()).toEqual(committed); expect(f.events).toEqual(published);
-      expect(dispatches).toBe(1);
-      if (steering === 'ack-lost') {
-        for (let n = 0; n < 500 && !pendingIntent; n++) await Bun.sleep(1);
-        expect(pendingIntent).toBeDefined();
-        base.host.modelHold = intentHold;
-        base.host.finalContent = [{ type: 'text', text: 'primary answer A' }];
-        hold.release();
-        // Primary finishes while the committed intent has no observed host receipt.
-        for (let n = 0; n < 500; n++) {
-          const primary = f.db.query('SELECT rowid, id FROM messages WHERE is_bot_message=0 ORDER BY rowid').get() as { rowid: number; id: string };
-          const source = f.work.getAcceptedSource('web:default', primary.id)!;
-          const op = await f.work.getOperation(`message:${primary.rowid}:${source.sourceSeq}`);
-          const primaryInput = { claimed: { source, operation: op.ok ? op.value! : (() => { throw Error('operation'); })() },
-            branchId: 'main', requestId: `message:${primary.rowid}:${primary.id}`, content: 'ordinary input' };
-          const state = await adapter.reconcile(primaryInput);
-          if (state.status?.status === 'done') break;
-          await Bun.sleep(1);
-        }
-        await Bun.sleep(10);
-        expect(releases).toBe(0);
-        expect(f.db.query('SELECT * FROM service_effect_s02_commits').all()).toHaveLength(0);
-        expect(f.work.getAcceptedSource('web:default', queued.source_id!)?.state).toBe('claimed');
-        expect(getDeferredQueuedFollowups('web:default')).toEqual([]);
-        expect(f.db.query('SELECT id FROM messages WHERE id=?').get(queued.source_id!)).toEqual({ id: queued.source_id });
-        expect(legacyCalls).toBe(0); expect(dispatches).toBe(1);
-        const beforeRepair = f.snapshot();
-        owner = false;
-        await expect(recoveryDispatch.retryRecoveredWork()).rejects.toThrow('owner lost');
-        expect(f.snapshot()).toEqual(beforeRepair); expect(repairs).toBe(0);
-        owner = true;
-        const repairing = recoveryDispatch.retryRecoveredWork();
-        expect(recoveryDispatch.retryRecoveredWork()).toBe(repairing);
-        await repairing;
-        await recoveryDispatch.retryRecoveredWork();
-        expect(repairs).toBe(1);
-        base.host.finalContent = [{ type: 'text', text: 'latest answer B' }];
-        intentHold.release();
-        // Explicit host-controller settlement; a queue observer never re-dispatches work.
-        const primary = f.db.query('SELECT rowid, id FROM messages WHERE is_bot_message=0 ORDER BY rowid').get() as { rowid: number; id: string };
-        const source = f.work.getAcceptedSource('web:default', primary.id)!;
-        const op = await f.work.getOperation(`message:${primary.rowid}:${source.sourceSeq}`);
-        if (!op.ok || !op.value) throw Error('operation');
-        const input = { claimed: { source, operation: op.value }, branchId: 'main',
-          requestId: `message:${primary.rowid}:${primary.id}`, content: 'ordinary input' };
-        for (let n = 0; n < 500 && !(await adapter.settle(input)); n++) await Bun.sleep(1);
-        reconcile(); // retained event resolves even if committed before listener subscription
-      }
-      for (let n = 0; n < 500; n++) {
-        if (f.db.query('SELECT * FROM piclaw_durable_intent_bindings_v1 WHERE submission_id IS NOT NULL').all().length) break;
-        await Bun.sleep(1);
-      }
-      hold.release();
-    }
-    if (pending) {
-      for (let n = 0; n < 200 && !accepted; n++) await Bun.sleep(1);
-      expect(accepted).toBeDefined();
-      expect(releases).toBe(0);
-      expect(f.db.query("SELECT * FROM service_effect_s02_commits").all()).toHaveLength(0);
-      expect(await adapter.settle(accepted!)).not.toBeNull();
-      reconcile();
-    }
-    await original;
-    expect(releases).toBe(1);
-    expect(base.host.modelCalls).toBe(steering ? 2 : 1);
-    expect(f.db.query("SELECT * FROM service_effect_s02_commits").all()).toHaveLength(1);
-    expect(f.db.query("SELECT * FROM messages WHERE is_bot_message=1").all()).toHaveLength(1);
-    if (steering) {
-      const frontier = await f.work.getChatFrontier('web:default');
-      expect(frontier.ok && frontier.value.consumedThroughSourceSeq).toBe(2);
-      expect(f.db.query('SELECT state FROM service_effect_s01_sources ORDER BY source_seq').all()).toEqual([{ state: 'consumed' }, { state: 'consumed' }]);
-      const operation = f.db.query('SELECT operation_id FROM service_effect_s01_operations').get() as { operation_id: string };
-      const state = await f.work.getOperation(operation.operation_id);
-      expect(state.ok && state.value?.claimedSourceSeqs).toEqual([1, 2]);
-      if (steering === 'ack-lost') expect(f.db.query('SELECT content FROM messages WHERE is_bot_message=1').get()).toEqual({ content: 'latest answer B' });
-    }
-    await f.jobs[0]!.task();
-    expect(base.host.modelCalls).toBe(steering ? 2 : 1);
-    expect(legacyCalls).toBe(0);
-    const row = f.db.query("SELECT rowid, id FROM messages WHERE is_bot_message=0").get() as { rowid: number; id: string };
-    const retry = f.channel.dispatchAcceptedInput("web:default", row.id, row.rowid)!;
-    expect(await retry()).toBe("settled");
-    expect(f.db.query('SELECT * FROM service_effect_s02_commits').all()).toHaveLength(1);
-    expect(f.db.query('SELECT * FROM messages WHERE is_bot_message=1').all()).toHaveLength(1);
-    expect(base.host.modelCalls).toBe(steering ? 2 : 1);
-    // Settlement notification happened before this observer attached. Its SQL recheck
-    // must return without waiting for a second event (edge-triggered bridge, no replay).
-    expect(await Promise.race([f.channel.dispatchAcceptedInput.waitForPending({ chatJid: 'web:default', messageId: row.id, rowId: row.rowid }),
-      Bun.sleep(100).then(() => 'lost-wake')])).toBe('settled');
-    const failedWait = createDurableQueueDispatch({ ...lifecycle, work: f.work, branchId: "main", assertCurrentWriter: assert,
-      adapter: { ...adapter, async wait() { throw Error("uncertain wait"); } } });
-    expect(await failedWait("web:default", row.id, row.rowid)!()).toBe("pending");
-    expect(legacyCalls).toBe(0);
-    expect(() => failedWait("web:default", row.id, row.rowid + 1000)).toThrow("identity conflict");
-    owner = false;
-    expect(() => f.channel.dispatchAcceptedInput!("web:default", row.id, row.rowid)).toThrow("owner lost");
-    expect(legacyCalls).toBe(0);
-    owner = true;
-  } finally { owner = true; shutdown.abort(); await adapter.close(); }
-}, 15000);
+
 
 for (const command of ["queue", "steer"] as const) for (const busy of [false, true]) {
   test(`native /${command} uses prepared accepted input, busy=${busy}`, async () => {
@@ -1030,17 +684,21 @@ test("native command acknowledges execution but reports failed reply persistence
 test("busy native compaction executes without model admission or overwriting the active turn", async () => {
   const f = fixture(undefined, () => true);
   f.busy(true, true); f.expectSources(0);
-  let prepared = 0, controlled = 0, statusWrites = 0;
+  f.channel.agentPool.isDurableRuntime = () => true;
+  let prepared = 0, controlled = 0;
+  const statuses: Record<string, unknown>[] = [];
   f.channel.prepareInputText = () => { prepared++; return "must not become a prompt"; };
   f.channel.agentPool.applyControlCommand = async (_chat, command) => {
     controlled++; expect(command.type).toBe("compact");
     return { status: "success", message: "Context compacted.", contextUsage: { tokens: 20, contextWindow: 100, percent: 20 } };
   };
   f.channel.sendMessage = async () => {};
-  f.channel.updateAgentStatus = () => { statusWrites++; };
+  f.channel.updateAgentStatus = (_chat, data) => { statuses.push(data); };
   const response = await f.route({ content: "/compact preserve user context" });
   expect(response.status).toBe(201); expect(await response.json()).toMatchObject({command:{status:"success",message:"Context compacted."}});
-  expect(prepared).toBe(0); expect(controlled).toBe(1); expect(statusWrites).toBe(0);
+  expect(prepared).toBe(0); expect(controlled).toBe(1);
+  expect(statuses).toEqual([]); // Native status belongs only to SDK watches.
+  expect(f.events).toContain('agent_status'); // Context telemetry uses its independent broadcast.
   expect(f.db.query("SELECT * FROM service_effect_s01_sources").all()).toEqual([]);
   expect(getDeferredQueuedFollowups("web:default")).toEqual([]); expect(f.jobs).toHaveLength(0);
 });
@@ -1160,86 +818,7 @@ test("prepared queued source authority revocation rolls back item and accepted s
 });
 
 // Deterministic SDK integration, not a provider-backed/live-user queue mutation.
-test.skipIf(!hasEngine)('reordered native queue executes second accepted source first, closes gaps and reconciles exactly once', async () => {
-  const { createInputHandoffCompletion } = await import("../../../durable-engine/src/host-bindings.js");
-  const { HostConversationRuntime, BunSqliteDatabase, createHostDurableBindings, initializeHostDurableBindings } = await import("../../../durable-engine/src/index.js");
-  const { SqliteStorage } = await import("../../../durable-engine/qualification/sqlite.ts");
-  const { context, openFixture, barrier } = await import("../../../../qualification/pi-durable-130/src/fixture.js");
-  const { installTerminalSettlementCompositionSchema } = await import("../../../src/service-effects/current-piclaw/terminal-settlement-schema.js");
-  const { createCurrentPiclawTerminalSettlementStore } = await import("../../../src/service-effects/current-piclaw/terminal-settlement-store.js");
-  const { InMemoryEffectPayloadResolver } = await import("../../../src/service-effects/testing/in-memory-payload-resolver.js");
-  let callback: StoreWebMessageOptions["acceptSource"];
-  const queueService = new QueuedFollowupLifecycleService();
-  const f = fixture(() => callback, () => true, chat => queueService.getPendingQueuedSourceOrder(chat));
-  callback = f.accept;
-  installTerminalSettlementCompositionSchema(f.db);
-  const path = join(process.env.PICLAW_WORKSPACE!, "engine.sqlite");
-  const base = await openFixture({ acquired: true }, () => {}, () => SqliteStorage.open(new BunSqliteDatabase(path)));
-  const conversationId = base.root.id;
-  await base.close();
-  let owner = true;
-  const assert = () => { if (!owner) throw Error("owner lost"); };
-  initializeHostDurableBindings(f.db, assert);
-  const payloads = new InMemoryEffectPayloadResolver();
-  const terminal = createCurrentPiclawTerminalSettlementStore(f.db, payloads, {
-    hitFault: () => false, recordTrace() {}, validateOwnership() { assert(); return f.db.inTransaction; },
-  });
-  if (!terminal.ok) throw Error("terminal construction");
-  const manifest = [{ chatJid: "web:default", branchId: "main", conversationId }];
-  const bindings = createHostDurableBindings(f.db, { domain: "queue-test", incarnation: "queue-test", assertOwner: assert, manifest,
-      async resolveContent(ref) {
-        const row = (ref.startsWith('queued-source:')
-          ? f.db.query('SELECT content FROM messages WHERE id=? AND chat_jid=?').get(ref.slice('queued-source:'.length), 'web:default')
-          : f.db.query("SELECT content FROM messages WHERE rowid=?").get(Number(ref.split(":")[1]))) as { content: string };
-        return row.content;
-      } });
-  const runtime = await HostConversationRuntime.open({
-    completeInputHandoff: createInputHandoffCompletion(f.db, {
-      domain: "queue-test", incarnation: "queue-test", sessionId: "queue-test", bindings, work: f.work, assertCurrent: assert,
-    }),
-    incarnation: "queue-test", owner: { assert, release() {} }, work: f.work, terminal: terminal.value,
-    openStorage: () => SqliteStorage.open(new BunSqliteDatabase(path)),
-    harnessOptions: { models: base.models, registry: base.registry, settings: { retry: { enabled: false }, compaction: { enabled: false } } },
-    existingConversationIds: [conversationId], conversationFor(chat, branch) {
-      if (chat !== "web:default" || branch !== "main") throw Error("binding conflict"); return conversationId;
-    },
-    bindings,
-    authorizeScheduling() { assert(); }, putAnswer(ref, text) { payloads.putText(ref, text); },
-    sessionId: "queue-test", lane: "main", generation: 1, now: () => new Date().toISOString(),
-  }, context);
-  const adapter = createDurableConversationAdapter({ incarnation: "queue-test", manifest, runtime });
-  const shutdown = new AbortController();
 
-  const dispatch = createDurableQueueDispatch({work:f.work,adapter,branchId:'main',assertCurrentWriter:assert,
-    shutdown:shutdown.signal,waitForReconciliation:async()=>{throw Error('SQL terminal recheck must suffice');}});
-  try {
-    const signal=new AbortController().signal;
-    await queueService.admitQueuedFollowupItem(['web:default',0,'first accepted'],()=>{},signal,f.acceptQueued);
-    await queueService.admitQueuedFollowupItem(['web:default',0,'second accepted'],()=>{},signal,f.acceptQueued);
-    f.expectSources(2);
-    const before=f.db.query('SELECT source_id,source_seq,payload_ref,source_hash FROM service_effect_s01_sources ORDER BY source_seq').all();
-    expect(await queueService.reorderQueuedFollowupItems('web:default',1,0)).toBe(true);
-    const selected=queueService.peekQueuedFollowupItem('web:default')!;
-    expect(selected.queuedContent).toBe('second accepted');
-    let index=0;
-    while(queueService.peekQueuedFollowupItem('web:default')) {
-      const item=queueService.peekQueuedFollowupItem('web:default')!;
-      const interaction=await admitWebMessage(f.channel as any,{chatJid:'web:default',content:item.queuedContent,isBot:false,mediaIds:[],agentId:'default',agentName:'Fixture'},
-        {consumeDeferredFollowupRowId:item.rowId,threadToSelf:true,materializeQueuedSource:({message})=>{expect(message.id).toBe(item.source_id);}});
-      const row=f.db.query('SELECT rowid,id FROM messages WHERE id=?').get(item.source_id!) as {rowid:number,id:string};
-      expect(interaction.id).toBe(row.rowid);
-      expect(await dispatch('web:default',row.id,row.rowid)!()).toBe('settled');
-      expect(await Promise.race([dispatch.waitForPending({chatJid:'web:default',messageId:row.id,rowId:row.rowid}),Bun.sleep(100).then(()=>'lost-wake')])).toBe('settled');
-      expect(await dispatch('web:default',row.id,row.rowid)!()).toBe('settled');
-      expect(base.host.modelCalls).toBe(++index);
-      const frontier=await f.work.getChatFrontier('web:default');
-      expect(frontier.ok&&frontier.value.consumedThroughSourceSeq).toBe(index===1?0:2);
-    }
-    expect(f.db.query('SELECT source_id,source_seq,payload_ref,source_hash FROM service_effect_s01_sources ORDER BY source_seq').all()).toEqual(before);
-    expect(f.db.query('SELECT COUNT(*) AS n FROM service_effect_s02_commits').get()).toEqual({n:2});
-    expect(f.db.query('SELECT COUNT(*) AS n FROM messages WHERE is_bot_message=1').get()).toEqual({n:2});
-  }finally{shutdown.abort();await adapter.close();}
-},15000);
 
 for (const timing of ['json', 'preparation'] as const) for (const busy of [false, true]) {
   test(`prepared request retains pre-JSON database profile authority through SQL phases: ${timing}, queued=${busy}`, async () => {

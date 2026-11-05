@@ -239,8 +239,9 @@ Methods:
   Aliases are picker conveniences; persist the chat JID and incarnation together.
 - `enqueue({target: {chatJid, incarnation}, content, mode: 'queue', reference?})` is available
   only to operator contexts from POST handlers. Content is bounded to 32 KiB and
-  cannot begin with a slash command or routed `@mention`. Existing queue, budget
-  and tool restrictions apply. No source/caller/content-block override is accepted.
+  cannot begin with a slash command or routed `@mention`. Current source, provider,
+  grant and tool restrictions apply. Financial expense limits do not admit work;
+  explicit Goal token limits remain separate. No source/caller/content-block override is accepted.
   Optional `reference` contains an `addonId` of 1–64 lowercase letters, digits,
   dots, underscores or hyphens (first character alphanumeric), and an `intentId`
   of 1–128 ASCII letters, digits, underscores, dots, colons or hyphens. The host
@@ -264,7 +265,7 @@ There is no durable idempotency-key or exactly-once API here.
 `getToolContext()` grants agent authority only during a positively verified
 local dispatch from this API. Core persists a body-free dispatch digest, target
 lifetime and one-message binding in its generic authority ledger. The marker
-survives queued materialisation/restart but is stripped from public and
+survives SDK inbox placement/restart but is stripped from public and
 model-authored message input. Direct steering, control-command or follow-up
 injection into an active Pi session revokes its scoped authority. Ordinary legacy
 prompts, scheduled/side turns and remote messages do not inherit the operator's

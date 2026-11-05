@@ -1,3 +1,4 @@
+import { handleAgentMessage } from "../../runtime/src/channels/web/handlers/agent.js";
 import { isolatedApplicationTest } from "./src/isolated-application-test.js";
 import "./src/test-guard.js";
 import { expect } from "bun:test";
@@ -13,7 +14,6 @@ import { createTestCredentialStore } from "../../runtime/test/model-services-fix
 import { AgentPool } from "../../runtime/src/agent-pool.js";
 import { createRuntimeBaseServices } from "../../runtime/src/runtime/composition.js";
 import { WebChannel } from "../../runtime/src/channels/web.js";
-import { admitWebMessage } from "../../runtime/src/channels/web/messaging/message-store.js";
 
 import { ModelRuntime } from "../../node_modules/@earendil-works/pi-coding-agent/dist/index.js";
 import { createProvider, normalizeContext, type Model } from "../../node_modules/@earendil-works/pi-ai/dist/index.js";
@@ -21,18 +21,24 @@ import { streamSimple as sdkStreamSimple } from "../../node_modules/@earendil-wo
 import { previewHostRequest } from "../../runtime/src/agent-pool/model-request-preview.ts";
 import { getPiclawAgentDir } from "../../runtime/src/core/agent-dir.js";
 import { getExtensionKvStore, withExtensionKvAuthority } from "../../runtime/src/extension-kv-registry.ts";
-import { initializeBudgetLimitsSchema } from "../../runtime/src/db/budget-limits-schema.ts";
 
-applicationTest("enabled Regrets actual factory uses public Root and separately accounts decision", async () => {
+for(const mode of ['reported','unknown-price','report-fault'] as const)applicationTest(`enabled Regrets actual factory retains original usage without expense ownership or replay: ${mode}`, async () => {
   const workspace = process.env.PICLAW_WORKSPACE!;
   const pkg = join(workspace, ".pi/extensions/node_modules/@rcarmo/piclaw-addon-late-night-regrets");
   cpSync(join(process.env.DURABLE_ADDONS_ROOT!, "addons/late-night-regrets"), pkg, { recursive: true, filter: p => !p.split("/").includes("node_modules") });
   symlinkSync(join(import.meta.dir, "../../node_modules"), join(pkg, "node_modules"));
-  process.env.PICLAW_DB_IN_MEMORY = "0"; initDatabase(); initializeBudgetLimitsSchema(getDb());
+  process.env.PICLAW_DB_IN_MEMORY = "0"; initDatabase();
+  const database = getDb();
+  database.query("INSERT INTO budget_work(id,chat_jid,execution_kind,status,created_at,updated_at) VALUES('historical-regrets','web:default','interactive','paused','2026-01-01','2026-01-01')").run();
+  database.query("INSERT INTO budget_caps(id,scope,metric,amount,work_id,created_at,updated_at) VALUES('historical-zero','task','api_usd_micros',0,'historical-regrets','2026-01-01','2026-01-01')").run();
+  database.query("INSERT INTO budget_request_reservations(id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,state,created_at,updated_at) VALUES('historical-unknown','historical-regrets','web:default','openai-codex','synthetic','original-account',?,'unresolved','2026-01-01','2026-01-01')").run('a'.repeat(64));
+  const financialSnapshot = () => ['budget_work','budget_caps','budget_request_reservations','budget_usage_events'].map(table=>database.query(`SELECT * FROM ${table} ORDER BY rowid`).all());
+  const financialBefore = financialSnapshot();
+  if(mode==='report-fault')database.exec("CREATE TEMP TRIGGER fail_regrets_report BEFORE INSERT ON token_usage BEGIN SELECT RAISE(ABORT,'synthetic passive Regrets report failure'); END");
   mkdirSync(getPiclawAgentDir(), { recursive: true });
   writeFileSync(join(getPiclawAgentDir(), "auth.json"), JSON.stringify({ "openai-codex": { type: "oauth", access: "synthetic", refresh: "synthetic", accountId: "syntheticOnly", expires: Date.now()+60000 } }));
   const owner = acquireRuntimeLock({ lockPath: join(workspace, "enabled-regrets.lock"), strictOwnership: true, disabled: false });
-  const model: any = { provider: "openai-codex", id: "synthetic", name: "Synthetic", type: "chat", api: "openai-completions", baseUrl: "https://synthetic.invalid", input: ["text"], reasoning: false, contextWindow: 100000, maxTokens: 4096, cost: { input: 1, output: 1, cacheRead: 1, cacheWrite: 1 } };
+  const model: any = { provider: "openai-codex", id: "synthetic", name: "Synthetic", type: "chat", api: "openai-completions", baseUrl: "https://synthetic.invalid", input: ["text"], reasoning: false, contextWindow: 100000, maxTokens: 4096, cost: { input: mode==='unknown-price'?0:1, output: mode==='unknown-price'?0:1, cacheRead: mode==='unknown-price'?0:1, cacheWrite: mode==='unknown-price'?0:1 } };
   const root = await ModelRuntime.create({ modelsPath: null, refreshOnCreate: false, credentials: { read: async () => undefined, get: async () => undefined, set: async () => {}, delete: async () => {}, list: async () => [] } as any });
   let mainCalls = 0, decisionCalls = 0, nativeToolResult = "", decisionWires = 0;
   const dispatchEvidence: any[] = [];
@@ -65,7 +71,7 @@ applicationTest("enabled Regrets actual factory uses public Root and separately 
       if (tool) nativeToolResult = JSON.stringify(tool);
       content = users.length < 2 || tool ? [{ type: "text", text: "Baseline complete" }] : [{ type: "toolCall", id: "enabled-regrets-call", name: "regrets_review", arguments: {} }];
     }
-    const message: any = { role: "assistant", api: model.api, provider: model.provider, model: model.id, timestamp: Date.now(), content, stopReason: content[0].type === "toolCall" ? "toolUse" : "stop", usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 15, cost: { input: 0.00001, output: 0.000005, cacheRead: 0, cacheWrite: 0, total: 0.000015 } } };
+    const message: any = { role: "assistant", api: model.api, provider: model.provider, model: model.id, timestamp: Date.now(), content, stopReason: content[0].type === "toolCall" ? "toolUse" : "stop", usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 15, cost: { input: mode==='unknown-price'?0:0.00001, output: mode==='unknown-price'?0:0.000005, cacheRead: 0, cacheWrite: 0, total: mode==='unknown-price'?0:0.000015 } } };
     const out = createAssistantMessageEventStream(); queueMicrotask(() => { out.push({ type: "done", reason: message.stopReason, message }); out.end(message); }); return out;
   };
   const native = createProvider({ id: model.provider, models: [model], auth: { apiKey: { name: "synthetic", resolve: async () => ({ auth: { apiKey: "synthetic" }, source: "fixture" }) } }, api: {
@@ -97,11 +103,20 @@ applicationTest("enabled Regrets actual factory uses public Root and separately 
     const pool = new AgentPool({ credentialStore: createTestCredentialStore({}), modelRuntime: root, modelRegistry: services.modelRegistry, ...backend.sessionOptions } as any);
     const bound = backend.bind({ queue: base.queue, agentPool: pool });
     const channel = new WebChannel(bound);
+    channel.queue.isLaneBusy=()=>{throw Error("Host lane must not govern native submission");};
+    channel.getQueuedFollowupCount=()=>{throw Error("Saved UI queue must not govern native submission");};
+    (channel as any).getAcceptedQueuedSteering=()=>{throw Error("Host steering selection must not govern native submission");};
+    pool.isActive=()=>true; pool.isStreaming=()=>false; // Reproduced stale host lifecycle window.
+    let completed=0;
     for (const content of ["Please explain the baseline", "Please be concise. Review recent exchanges"]) {
-      const admitted = await admitWebMessage(channel, { chatJid: "web:default", content, mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" }, { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
-      expect(admitted).not.toBeNull();
-      const id = (getDb().query("SELECT id FROM messages WHERE rowid=?").get(admitted!.id) as any).id;
-      expect(await bound.dispatchAcceptedInput!("web:default", id, admitted!.id)!()).toBe("settled");
+      const request=new Request("https://fixture/agent/default/message",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({content})});
+      const response=await handleAgentMessage(channel,request,"/agent/default/message","web:default","default");
+      expect(response.status).toBe(201);
+      expect(await response.json()).toMatchObject({submission_id:expect.any(Number)});
+      completed++;
+      const until=Date.now()+4000;
+      while((getDb().query("SELECT count(*) n FROM messages WHERE is_bot_message=1").get() as {n:number}).n<completed && Date.now()<until)await Bun.sleep(10);
+      expect((getDb().query("SELECT count(*) n FROM messages WHERE is_bot_message=1").get() as {n:number}).n).toBe(completed);
     }
     expect([mainCalls, decisionCalls]).toEqual([3, 1]);
     expect(JSON.parse(nativeToolResult).details.decision).toMatchObject({ status: "complete", decisions: [{ rowid: 1, choice: "review" }, { rowid: 3, choice: "review" }] }); expect(nativeToolResult).not.toContain('"isError":true');
@@ -113,29 +128,22 @@ applicationTest("enabled Regrets actual factory uses public Root and separately 
     // Custom native transports are honestly unknown; no extra preview/decorator layer.
     expect(await previewHostRequest(root, model, normalizeContext({ messages: [] }), {})).toEqual({ status: "unknown", reason: "unsupported" });
     const tokens = getDb().query("SELECT * FROM token_usage ORDER BY id").all() as any[];
-    expect(tokens).toHaveLength(4);
+    expect(tokens).toHaveLength(mode==='report-fault'?0:4);
+    expect(decisionUsage?.totalTokens).toBe(15);
+    const assistants=getDb().query("SELECT record FROM entries WHERE json_extract(record,'$.kind')='pi.assistant' ORDER BY id").all() as {record:string}[];
+    expect(assistants.map(row=>JSON.parse(row.record).model[0].usage.totalTokens)).toEqual([15,15,15]);
     for (const [index, token] of tokens.entries()) expect(token).toMatchObject({ input_tokens: 10, output_tokens: 5, total_tokens: 15,
       // The real SDK sums input/output categories; retain its exact numeric evidence.
-      cost_total: index === 2 ? decisionUsage!.cost.total : 0.000015,
+      cost_total: index === 2 ? decisionUsage!.cost.total : mode==='unknown-price'?0:0.000015,
       provider: "openai-codex", model: "synthetic", chat_jid: "web:default" });
-    for (let i = 0; i < usage.length; i++) {
-      expect(usage[i]).toMatchObject({ api_usd_micros: 15, api_usd_known: 1, chat_jid: "web:default", work_id: (rows[i] as any).work_id, invocation_id: (rows[i] as any).id });
-      expect((rows[i] as any).usage_event_id).toBe(usage[i].usage_event_id);
-    }
-    expect(work).toHaveLength(6);
-    expect(work.every(w => w.status === "completed")).toBe(true);
-    expect(dispatchEvidence).toHaveLength(4);
-    for (let i = 0; i < dispatchEvidence.length; i++) { const evidence = dispatchEvidence[i]; expect(evidence).toHaveLength(1); expect(evidence[0]).toMatchObject({ chat_jid: "web:default", execution_kind: i === 2 ? "side_prompt" : "interactive", state: "dispatched" }); }
-    for (const row of rows as any[]) expect(row).toMatchObject({ state: "settled", provider_id: "openai-codex", model_id: "synthetic", chat_jid: "web:default" });
-    expect(usage).toHaveLength(4);
-    expect(dispatchEvidence[1][0].parent_work_id).toBe(dispatchEvidence[2][0].parent_work_id);
-    expect(dispatchEvidence[2][0].parent_work_id).toBe(dispatchEvidence[3][0].parent_work_id);
-    expect(dispatchEvidence[0][0].parent_work_id).not.toBe(dispatchEvidence[1][0].parent_work_id);
-    expect(rows).toHaveLength(4);
+    expect(financialSnapshot()).toEqual(financialBefore);
+    expect(rows).toEqual(financialBefore[2]); expect(usage).toEqual([]);
+    expect(work).toHaveLength(1);
+    expect(dispatchEvidence).toEqual([[],[],[],[]]);
     const operations = getDb().query("SELECT * FROM service_effect_s01_operations ORDER BY rowid").all() as any[];
     const sources = getDb().query("SELECT * FROM service_effect_s01_sources ORDER BY rowid").all() as any[];
-    expect(operations).toHaveLength(2); expect(sources).toHaveLength(2);
-    expect(dispatchEvidence[2][0].parent_work_id).toBe(`durable-operation:${operations[1].operation_id}`);
+    expect(operations).toHaveLength(0); expect(sources).toHaveLength(2);
+    expect(sources.every(source=>source.state==="consumed")).toBe(true);
     expect(sources.every(s => s.chat_jid === "web:default" && s.kind === "message")).toBe(true);
     const before = JSON.stringify({ rows, usage, work, tokens, messages: getDb().query("SELECT * FROM messages ORDER BY rowid").all(), sources: getDb().query("SELECT * FROM service_effect_s01_sources ORDER BY rowid").all(), operations: getDb().query("SELECT * FROM service_effect_s01_operations ORDER BY rowid").all() });
     await backend.close(); backend = await createDefaultApplicationRuntime(owner, async () => services);

@@ -312,54 +312,39 @@ test("channel callbacks captured at startup use fresh admission scopes after reo
   await backend.close();
 });
 
-function observingFixture(name: string, trace: string[]) {
-  const f = fixture(name, trace);
-  const dispatch = Object.assign(async () => { trace.push(name + ":dispatch"); return "pending" as const; }, {
-    async waitForPending(this: unknown, identity: { chatJid: string; messageId: string; rowId: number }) {
-      expect(this).toBe(dispatch);
-      trace.push(name + ":observe:" + identity.messageId);
-      return "settled" as const;
-    },
-  });
-  f.backend.bind = options => Object.freeze({ ...options, dispatchAcceptedInput: dispatch });
-  return f;
+function admissionFixture(name: string, trace: string[]) {
+  const f=fixture(name,trace);
+  f.backend.bind=options=>{
+    const bound=Object.freeze({...options,async dispatchAcceptedInput(this:unknown,chat:string,message:string,row:number,mode?:string){
+      expect(this).toBe(bound);expect([chat,message,row,mode]).toEqual(["web:test","accepted",1,"followUp"]);
+      trace.push(name+":dispatch");return {submission_id:17,queued:true};
+    }});return bound;
+  };return f;
 }
 
-test("channel recovery facade preserves callable pending observer before first recovery", async () => {
-  const trace: string[] = [], f = observingFixture("initial", trace);
-  const backend = await createRecoverableRuntimeBackend(async () => f.backend);
-  const coordinator = backend.bind({} as any).dispatchAcceptedInput!;
-  const wait = coordinator.waitForPending.bind(coordinator); // Actual web handler call shape.
-  expect(await coordinator("web:test", "accepted", 1)).toBe("pending");
-  expect(await wait({ chatJid: "web:test", messageId: "accepted", rowId: 1 })).toBe("settled");
-  expect(trace).toEqual(["initial:dispatch", "initial:observe:accepted"]);
-  await backend.close();
+test("channel recovery facade forwards a native admission Promise without a pending-observer owner",async()=>{
+  const trace:string[]=[],f=admissionFixture("initial",trace),backend=await createRecoverableRuntimeBackend(async()=>f.backend);
+  const dispatch=backend.bind({} as any).dispatchAcceptedInput!;
+  expect(dispatch).not.toHaveProperty("waitForPending");expect(await dispatch("web:test","accepted",1,"followUp")).toEqual({submission_id:17,queued:true});
+  expect(trace).toEqual(["initial:dispatch"]);await backend.close();
 });
 
-test("captured pending observer follows replacement ownership and rejects after close", async () => {
-  const trace: string[] = [], a = observingFixture("old", trace), b = observingFixture("new", trace);
-  let prepares = 0;
-  failAbort(a);
-  const backend = await createRecoverableRuntimeBackend(async () => (++prepares === 1 ? a : b).backend);
-  const coordinator = backend.bind({} as any).dispatchAcceptedInput!;
-  const wait = coordinator.waitForPending.bind(coordinator);
+test("captured admission callback follows replacement ownership and rejects after close",async()=>{
+  const trace:string[]=[],a=admissionFixture("old",trace),b=admissionFixture("new",trace);let prepares=0;failAbort(a);
+  const backend=await createRecoverableRuntimeBackend(async()=>(++prepares===1?a:b).backend),dispatch=backend.bind({} as any).dispatchAcceptedInput!;
   expect(await backend.sessionOptions.getDurableSession!("web:test")!.abort!()).toBe(true);
-  expect(await coordinator("web:test", "accepted", 1)).toBe("pending");
-  expect(await wait({ chatJid: "web:test", messageId: "accepted", rowId: 1 })).toBe("settled");
-  expect(trace.filter(value => value.includes(":dispatch") || value.includes(":observe:"))).toEqual(["new:dispatch", "new:observe:accepted"]);
-  expect(b.state.calls).toEqual([original]);
-  await backend.close();
-  expect(() => wait({ chatJid: "web:test", messageId: "accepted", rowId: 1 })).toThrow("Native runtime closing");
+  expect(await dispatch("web:test","accepted",1,"followUp")).toEqual({submission_id:17,queued:true});
+  expect(trace.filter(value=>value.endsWith(":dispatch"))).toEqual(["new:dispatch"]);expect(b.state.calls).toEqual([original]);await backend.close();
+  expect(()=>dispatch("web:test","accepted",1,"followUp")).toThrow("Native runtime closing");
 });
 
-test("missing backend pending observation fails closed instead of settling accepted work", async () => {
-  const f = fixture("invalid", []);
-  f.backend.bind = options => ({ ...options, dispatchAcceptedInput: (async () => "pending") as any });
-  const backend = await createRecoverableRuntimeBackend(async () => f.backend);
-  const coordinator = backend.bind({} as any).dispatchAcceptedInput!;
-  expect(() => coordinator.waitForPending({ chatJid: "web:test", messageId: "accepted", rowId: 1 }))
-    .toThrow("Native channel binding method unavailable: dispatchAcceptedInput.waitForPending");
-  await backend.close();
+test("missing replacement admission callback fails closed without resubmitting accepted input",async()=>{
+  const trace:string[]=[],a=admissionFixture("old",trace),b=fixture("missing",trace);let prepares=0;
+  const backend=await createRecoverableRuntimeBackend(async()=>(++prepares===1?a:b).backend),dispatch=backend.bind({} as any).dispatchAcceptedInput!;
+  expect(await dispatch("web:test","accepted",1,"followUp")).toEqual({submission_id:17,queued:true});
+  a.failure.resolve(Error("storage closed"));await tick();
+  expect(()=>dispatch("web:test","accepted",1,"followUp")).toThrow("Native channel binding unavailable: dispatchAcceptedInput");
+  expect(trace.filter(value=>value.endsWith(":dispatch"))).toEqual(["old:dispatch"]);await backend.close();
 });
 
 test('Dream dispatch facade: preserves original invocation and deadline, joins cleanup and never automatically replays',async()=>{

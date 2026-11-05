@@ -67,7 +67,7 @@ export async function createHostController(config: HostControllerOptions, contex
     if (aborting && !abortScope) return deny();
     const known = new Set<number>();
     for (const entry of recovered) {
-      // Unbound intents stay explicit retry work; do not manufacture a binding on bootstrap.
+      // Unsubmitted historical intents remain inert; bootstrap never enqueues them.
       const binding = await recoveryBindings.findSource(entry.input.chatJid, entry.input.sourceSeq); assert();
       if (!binding) continue;
       const state = await (entry.role === "primary" ? runtime.reconcile(entry.input) : runtime.reconcileIntent(entry.input));
@@ -78,6 +78,10 @@ export async function createHostController(config: HostControllerOptions, contex
           if (inspection.submissions.some(s => s.id === state.submissionId)) return deny();
         } else known.add(state.submissionId);
       }
+    }
+    for (const submission of inspection.submissions) {
+      if (!known.has(submission.id) && await runtime.ownsMessageSubmission(submission)) known.add(submission.id);
+      assert();
     }
     // Foreground Delegate children have SDK inputs, not independent host sources.
     // Qualify their exact task/request ownership back to ALREADY known host inputs;
@@ -218,8 +222,14 @@ export async function createHostController(config: HostControllerOptions, contex
         await authorizeRecoveredWork((await activeRuntime.inspectAuthority()).inspection);
         for (const entry of current) {
           assert();
-          if (entry.role === "intent" && entry.binding?.submissionId == null)
-            await activeRuntime.submitIntent(entry.input);
+          if (entry.role !== "intent" || entry.binding?.submissionId != null) continue;
+          // Historical correlation repair may acknowledge ONLY an already
+          // accepted, exactly verified SDK input. An unsubmitted host intent
+          // is inert history, never permission to enqueue/replay model work.
+          const state=await activeRuntime.reconcileIntent(entry.input);assert();
+          if(state.submissionId!==null){
+            await recoveryBindings.intents!.recordSubmission(entry.input,state.submissionId);assert();
+          }
         }
         // Release terminal model errors without replay. Recover committed answers
         // only for cold-start operations: their previous dispatcher no longer exists.
@@ -244,9 +254,8 @@ export async function createHostController(config: HostControllerOptions, contex
           }
         }
         assert();
-        // A new intent uses submitInput's existing whole-domain scheduling gate.
-        // Bound ACK repair never resumes. Do not inspect a running, changing task tree
-        // as though inspection and live snapshots were one atomic storage observation.
+        // Correlation ACK repair never submits or resumes work. A running task
+        // tree can change between public observations; none is a dispatch grant.
       })().finally(() => { retry = undefined; });
       return retry;
     }

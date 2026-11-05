@@ -16,8 +16,7 @@ import type { TokenUsageRecord, TokenUsageSource, TokenUsageCostProvenance } fro
 import { getDb } from "./connection.js";
 import { getRouterState, setRouterState, deleteRouterState } from "./router-state.js";
 import { planUsageReportRetention, applyUsageReportRetention } from "./usage-report-retention.js";
-import { insertBudgetUsageEvent } from "./budget-limits.js";
-import { decodeUsageReport, encodeUsageReport, projectUsageEvent, readUsageProjectionEvent, tokenReportColumns, usageReportRecord, type UsageReportOrigin } from "./usage-report-projection.js";
+import { tokenReportColumns, usageReportRecord } from "./usage-report-projection.js";
 
 /** Overall token/cost totals for a chat across all runs. */
 export interface TokenUsageTotalsSummary {
@@ -91,31 +90,12 @@ export interface LatestTokenUsageModelSummary {
  */
 export type { TokenUsageRecord } from "./usage-report-types.js";
 
-/** Commit a reporting observation once; existing event bytes own replay. */
-export function storeTokenUsage(record: TokenUsageRecord, db: Database = getDb(), origin: UsageReportOrigin = { kind: "recorder_event" }): void {
-  db.transaction(() => {
-    const existing = record.usage_event_id ? readUsageProjectionEvent(db, record.usage_event_id) : null;
-    // Replayed parent/tool observations retain the original charge owner and
-    // provider valuation. Caller text is never repair authority.
-    if (existing) { projectUsageEvent(db, existing); return; }
-    const values = usageReportRecord(record);
-    const result = db.query(`INSERT OR IGNORE INTO main.token_usage (${tokenReportColumns.join(",")})
-      VALUES (${tokenReportColumns.map(() => "?").join(",")})`).run(...tokenReportColumns.map(column => values[column]));
-    if (result.changes !== 1 || !record.usage_event_id) return;
-    const payload = encodeUsageReport(record, origin);
-    if (origin.kind === "host_request") {
-      const request = db.query("SELECT binding_sha256,state,work_id,chat_jid,provider_id,model_id FROM main.budget_request_reservations WHERE id=?").get(origin.request_id) as { binding_sha256: string; state: string; work_id: string; chat_jid: string; provider_id: string; model_id: string } | null;
-      if (!request || !["dispatched","unresolved"].includes(request.state) || request.binding_sha256 !== origin.binding_sha256 || request.work_id !== record.work_id
-        || request.chat_jid !== record.chat_jid || request.provider_id !== record.provider || request.model_id !== record.model) throw Error("Usage request binding mismatch");
-    }
-    insertBudgetUsageEvent({ workId: record.work_id ?? null, invocationId: record.invocation_id ?? null, usageEventId: record.usage_event_id,
-      executionKind: record.execution_kind ?? null, tokenUsageId: Number(result.lastInsertRowid), chatJid: record.chat_jid, accountedAt: record.run_at,
-      apiUsdMicros: record.api_equivalent_cost_microusd ?? null, apiUsdKnown: record.api_equivalent_cost_known === true,
-      valuationProvenance: record.valuation_provenance ?? "unavailable", usageSource: record.usage_source ?? "assistant",
-      reportPayloadJson: payload.json, reportPayloadSha256: payload.hash }, db);
-    const event = readUsageProjectionEvent(db, record.usage_event_id);
-    if (!event || !decodeUsageReport(event)) throw Error("Usage event was not committed");
-  }).immediate();
+/** Append passive telemetry. Existing event identities are never rewritten;
+ * expense tables, prices and financial work ownership cannot admit this write. */
+export function storeTokenUsage(record: TokenUsageRecord, db: Database = getDb()): void {
+  const values = usageReportRecord(record);
+  db.query(`INSERT OR IGNORE INTO main.token_usage (${tokenReportColumns.join(",")})
+    VALUES (${tokenReportColumns.map(() => "?").join(",")})`).run(...tokenReportColumns.map(column => values[column]));
 }
 
 function normalizeLimit(limit: number): number {

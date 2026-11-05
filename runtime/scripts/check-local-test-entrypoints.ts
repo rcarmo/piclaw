@@ -30,12 +30,17 @@ const RAW_PATTERNS = [
 
 function repositoryFiles(root: string, files?: readonly string[]): string[] {
   if (files) return [...files].map(normalizePath).sort();
-  const result = spawnSync("git", ["ls-files", "-co", "--exclude-standard"], {
+  const result = spawnSync("git", ["ls-files", "-co", "--exclude-standard", "-z"], {
     cwd: root,
     encoding: "utf8",
   });
   if (result.status !== 0) throw new Error(`git ls-files failed: ${result.stderr.trim()}`);
-  return result.stdout.split("\n").filter(Boolean).map(normalizePath).sort();
+  const removed = spawnSync("git", ["ls-files", "--deleted", "-z"], { cwd: root, encoding: "utf8" });
+  if (removed.status !== 0) throw new Error(`git ls-files --deleted failed: ${removed.stderr.trim()}`);
+  // Audit current tracked/untracked source, excluding only Git-proven working
+  // tree deletions. Missing explicit inputs and other read failures still throw.
+  const deleted = new Set(removed.stdout.split("\0").filter(Boolean).map(normalizePath));
+  return result.stdout.split("\0").filter(Boolean).map(normalizePath).filter(path => !deleted.has(path)).sort();
 }
 
 function normalizePath(path: string): string {

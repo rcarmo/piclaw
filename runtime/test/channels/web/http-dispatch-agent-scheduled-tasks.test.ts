@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import "../../helpers.js";
-import { createTask, getBudgetCap, getDb, initDatabase, saveBudgetCap } from "../../../src/db.js";
+import { createTask, getDb, initDatabase } from "../../../src/db.js";
 import { handleAgentRoutes } from "../../../src/channels/web/http/dispatch-agent.js";
 
 function jsonChannel() {
@@ -80,66 +80,28 @@ describe("scheduled task web management routes", () => {
     expect((await resumeResponse!.json() as any).task.status).toBe("active");
   });
 
-  test("edits per-run budget only through the scheduled task surface", async () => {
+  test("retired expense actions cannot mutate historical records; schedule controls ignore caps", async () => {
     insertTask();
-    const setReq = new Request("https://example.com/agent/scheduled-tasks/action", {
-      method: "POST",
-      body: JSON.stringify({ action: "set_budget", id: "task-web-ui", budget_usd: "0.25" }),
-    });
-    const setResponse = await handleAgentRoutes(jsonChannel(), setReq, "/agent/scheduled-tasks/action", new URL(setReq.url));
-    expect(setResponse?.status).toBe(200);
-    expect((await setResponse!.json() as any).task).toMatchObject({ budget_usd: 0.25, budget_cap_enabled: true, budget_cap_revision: 1 });
-    expect(getBudgetCap("scheduled-cap:task-web-ui")).toMatchObject({ amount: 250_000, enabled: 1 });
-
-    const staleReq = new Request("https://example.com/agent/scheduled-tasks/action", {
-      method: "POST",
-      body: JSON.stringify({ action: "set_budget", id: "task-web-ui", budget_usd: "0.50", confirm_revision: 99 }),
-    });
-    expect((await handleAgentRoutes(jsonChannel(), staleReq, "/agent/scheduled-tasks/action", new URL(staleReq.url)))?.status).toBe(409);
-
-    const disableReq = new Request("https://example.com/agent/scheduled-tasks/action", {
-      method: "POST",
-      body: JSON.stringify({ action: "set_budget", id: "task-web-ui", enabled: false, confirm_revision: 1 }),
-    });
-    const disableResponse = await handleAgentRoutes(jsonChannel(), disableReq, "/agent/scheduled-tasks/action", new URL(disableReq.url));
-    expect((await disableResponse!.json() as any).task).toMatchObject({ budget_usd: 0.25, budget_cap_enabled: false, budget_cap_revision: 2 });
-  });
-
-  test("zero requires deliberate acknowledgement and tiny positive input never becomes zero", async () => {
-    insertTask();
-    const channel = jsonChannel();
-    const submit = (fields: Record<string, unknown>) => handleAgentRoutes(channel, new Request("http://test/agent/scheduled-tasks/action", {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "set_budget", id: "task-web-ui", ...fields }),
-    }), "/agent/scheduled-tasks/action", new URL("http://test/agent/scheduled-tasks/action"));
-    expect((await submit({ budget_usd: "0" }))?.status).toBe(409);
-    expect(getDb().query("SELECT count(*) n FROM budget_caps WHERE scheduled_task_id='task-web-ui'").get()).toEqual({ n: 0 });
-    expect((await submit({ budget_usd: 0.0000001 }))?.status).toBe(400);
-    const acknowledged = await submit({ budget_usd: "0", confirm_zero_budget: true });
-    expect(acknowledged?.status).toBe(200);
-    expect((await acknowledged!.json()).task.budget_readiness).toMatchObject({ mode: "zero_task_cap", status: "blocked" });
-    const disabled = await submit({ enabled: false, confirm_revision: 1 });
-    expect((await disabled!.json()).task.budget_readiness).toMatchObject({ mode: "disabled_task_cap", status: "allowed" });
-  });
-
-  test("failed budget receipt projection rolls back both cap value and revision", async () => {
-    insertTask();
-    saveBudgetCap({ id: "scheduled-cap:task-web-ui", scope: "scheduled_run", metric: "api_usd_micros", amount: 250000, scheduledTaskId: "task-web-ui" });
-    saveBudgetCap({ id: "bad-calendar", scope: "instance_daily", metric: "api_usd_micros", amount: 1000000, timezone: "UTC" });
-    getDb().query("UPDATE budget_caps SET timezone='bad-zone' WHERE id='bad-calendar'").run();
-    const call = () => handleAgentRoutes(jsonChannel(), new Request("http://test/agent/scheduled-tasks/action", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "set_budget", id: "task-web-ui", budget_usd: "0.5", confirm_revision: 1 }) }), "/agent/scheduled-tasks/action", new URL("http://test/agent/scheduled-tasks/action"));
-    await expect(call()).rejects.toThrow();
-    expect(getBudgetCap("scheduled-cap:task-web-ui")).toMatchObject({ amount: 250000, revision: 1 });
-    getDb().query("UPDATE budget_caps SET timezone='UTC' WHERE id='bad-calendar'").run();
-    expect((await call())?.status).toBe(200);
-    expect(getBudgetCap("scheduled-cap:task-web-ui")).toMatchObject({ amount: 500000, revision: 2 });
-  });
-
-  test("rejects per-run budgets for shell tasks", async () => {
-    insertTask({ id: "task-shell", task_kind: "shell", command: "echo hi", prompt: "" });
-    const req = new Request("https://example.com/agent/scheduled-tasks/action", {
-      method: "POST", body: JSON.stringify({ action: "set_budget", id: "task-shell", budget_usd: "1" }),
-    });
-    expect((await handleAgentRoutes(jsonChannel(), req, "/agent/scheduled-tasks/action", new URL(req.url)))?.status).toBe(409);
+    getDb().query(`INSERT INTO budget_caps(id,scope,metric,amount,scheduled_task_id,created_at,updated_at) VALUES(?,'scheduled_run','api_usd_micros',0,?,'2026-01-01','2026-01-01')`).run("scheduled-cap:task-web-ui", "task-web-ui");
+    const before = getDb().query("SELECT * FROM budget_caps").all();
+    const schema = getDb().query("SELECT type,name,sql FROM sqlite_master ORDER BY type,name").all();
+    const call = (body: Record<string, unknown>) => {
+      const req = new Request("https://example.com/agent/scheduled-tasks/action", {method:"POST",body:JSON.stringify({id:"task-web-ui",...body})});
+      return handleAgentRoutes(jsonChannel(),req,"/agent/scheduled-tasks/action",new URL(req.url));
+    };
+    for (const body of [{action:"set_budget",budget_usd:1},{action:"set_budget",enabled:false,confirm_revision:1},
+      {action:"pause",budget_usd:0},{action:"resume",confirm_zero_budget:true}]) {
+      expect((await call(body))?.status).toBe(400);
+    }
+    for (const action of ["pause","resume"]) {
+      const res = await call({action});
+      expect(res?.status).toBe(200);
+      const body = await res!.json();
+      expect(Object.keys(body.task).filter(key=>key.startsWith("budget"))).toEqual([]);
+    }
+    expect((await call({action:"delete"}))?.status).toBe(200);
+    expect(getDb().query("SELECT * FROM budget_caps").all()).toEqual(before);
+    expect(getDb().query("SELECT type,name,sql FROM sqlite_master ORDER BY type,name").all()).toEqual(schema);
   });
 
   test("protects internal tasks unless explicitly allowed", async () => {

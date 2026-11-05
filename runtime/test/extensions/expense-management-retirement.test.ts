@@ -59,5 +59,6 @@ test('both skins and shared client remove the pane and API while model pricing a
   expect(source('web/src/api.ts')).not.toMatch(/getBudgetSettings|updateBudgetSettings|\/agent\/settings\/budget/);
   expect(source('web/src/components/model-picker.ts')).toContain('formatModelCataloguePricing');
   expect(source('web/static/visual/frontend/src/panels/SettingsPanel.tsx')).toContain('settings/ScheduledTasksSection');
-  expect(source('web/src/components/settings/scheduled-tasks.ts')).toContain('set_budget');
+  expect(source('web/src/components/settings/scheduled-tasks.ts')).not.toContain('set_budget');
+  expect(source('web/src/components/settings/scheduled-tasks.ts')).toContain('onAction(\'pause\'');
 });

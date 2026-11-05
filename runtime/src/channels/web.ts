@@ -21,7 +21,6 @@ import type { WebChannelLike } from "./web/core/web-channel-contracts.js";
 import type { RequestRouterService } from "./web/request-router-service.js";
 import type { WebSessionBroadcastService } from "./web/sse/session-broadcast-service.js";
 import { ResponseService } from "./web/http/response-service.js";
-import { QueuedFollowupLifecycleService, type QueuedInputSourceAdmission } from "./web/runtime/queued-followup-lifecycle-service.js";
 import type { WebMessageWriteService } from "./web/message-write-service.js";
 import type { WebChannelRuntimeStateService } from "./web/runtime/runtime-state-service.js";
 import type { WebChannelEndpointContexts } from "./web/endpoints/channel-endpoint-context-factory.js";
@@ -39,17 +38,15 @@ import {
   type RuntimeAgentMessageResult,
 } from "./web/core/web-channel-runtime-public-surface-service.js";
 import type { InteractionRow } from "../db.js";
-import type { QueuedFollowupItem } from "../queued-followups.js";
 import type { SendMessageOptions } from "./web/message-write-service.js";
 import type { WebAgentBufferEntry } from "./web/agent/agent-buffers.js";
-import { handleAgentMessage as handleAgentMessageRequest, processChat as processAgentChat } from "./web/handlers/agent.js";
+import { handleAgentMessage as handleAgentMessageRequest } from "./web/handlers/agent.js";
 import { handlePost as handlePostRequest } from "./web/handlers/posts.js";
 import { TerminalSessionService } from "./web/terminal/terminal-session-service.js";
 import { VncSessionService } from "./web/vnc/vnc-session-service.js";
 import { createLazyTerminalService, createLazyVncService } from "./web/lazy-session-services.js";
 import { admitWebMessage, type StoreWebMessageOptions } from "./web/messaging/message-store.js";
 import { getIdentityConfig } from "../core/config.js";
-import { isSlashCommandInvocation } from "../agent-control/agent-control-parser.js";
 import { recordTimelineInteraction } from "../session-recordings/session-recordings.js";
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
 import { initializeWebChannelConstructor } from "./web/core/web-channel-constructor-factory.js";
@@ -92,13 +89,12 @@ export interface WebChannelOpts {
   /** Internal host coordinator only; never derived from request fields. */
   prepareInputSourceAdmission?: WebChannelLike["prepareInputSourceAdmission"];
   prepareInputText?: WebChannelLike["prepareInputText"];
-  expireQueuedInput?: WebChannelLike["expireQueuedInput"];
   getInputSourceAdmission?: WebChannelLike["getInputSourceAdmission"];
-  getQueuedInputSourceAdmission?: WebChannelLike["getQueuedInputSourceAdmission"];
-  getQueuedInputSourceWithdrawal?: WebChannelLike["getQueuedInputSourceWithdrawal"];
-  getAcceptedQueuedSteering?: WebChannelLike["getAcceptedQueuedSteering"];
-  getQueuedInputMaterialization?: WebChannelLike["getQueuedInputMaterialization"];
+  filterNativeTimeline?: WebChannelLike["filterNativeTimeline"];
+  readNativeQueue?: WebChannelLike["readNativeQueue"];
+  controlNativeQueue?: WebChannelLike["controlNativeQueue"];
   dispatchAcceptedInput?: WebChannelLike["dispatchAcceptedInput"];
+  resumeNativeInputs?: WebChannelLike["resumeNativeInputs"];
 }
 
 /** Web channel: HTTP/SSE server, API endpoints, and agent event bridge. */
@@ -146,40 +142,6 @@ export class WebChannel implements WebChannelLike {
     return this.runInternalDispatch(() => this.runtimePublicSurfaceService.enqueueAgentMessage(request));
   }
 
-  enqueueQueuedFollowupItem(
-    chatJid: string,
-    rowId: number,
-    queuedContent: string,
-    threadId?: number | null,
-    queuedAt?: string,
-    extras?: { mediaIds?: number[]; contentBlocks?: unknown[]; linkPreviews?: unknown[]; screenHint?: string; source?: string; queuedBy?: QueuedFollowupItem["queuedBy"] },
-  ): number {
-    return this.queuedFollowupLifecycle.enqueueQueuedFollowupItem(
-      chatJid,
-      rowId,
-      queuedContent,
-      threadId,
-      queuedAt,
-      extras,
-    );
-  }
-
-  peekQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null {
-    return this.queuedFollowupLifecycle.peekQueuedFollowupItem(chatJid);
-  }
-
-  admitQueuedFollowupItem(args: Parameters<WebChannel["enqueueQueuedFollowupItem"]>, authorise: () => void, signal: AbortSignal, acceptSource?: QueuedInputSourceAdmission): Promise<number> {
-    return this.queuedFollowupLifecycle.admitQueuedFollowupItem(args, authorise, signal, acceptSource);
-  }
-
-  getQueuedFollowupCount(chatJid: string): number {
-    return this.queuedFollowupLifecycle.getQueuedFollowupCount(chatJid);
-  }
-
-  getQueuedFollowupItems(chatJid: string): QueuedFollowupItem[] {
-    return this.queuedFollowupLifecycle.getQueuedFollowupItems(chatJid);
-  }
-
   updateAgentStatus(chatJid: string, status: Record<string, unknown>): void {
     this.runtimePublicSurfaceService.updateAgentStatus(chatJid, status);
   }
@@ -198,11 +160,13 @@ export class WebChannel implements WebChannelLike {
   }
 
   resumeChat(chatJid: string, threadRootId?: number | null): void {
-    this.runtimePublicSurfaceService.runtimeState.resumeChat(chatJid, threadRootId);
+    if (!this.resumeNativeInputs) throw Error("Native pending-input reconciliation is unavailable");
+    this.resumeNativeInputs(chatJid);
   }
 
   resumePendingChats(chatJid?: string): void {
-    this.runtimePublicSurfaceService.runtimeState.resumePendingChats(chatJid);
+    if (!this.resumeNativeInputs) throw Error("Native pending-input reconciliation is unavailable");
+    this.resumeNativeInputs(chatJid);
   }
 
   setPanelExpanded(turnId: string, panel: "thought" | "draft", expanded: boolean): void {
@@ -251,16 +215,8 @@ export class WebChannel implements WebChannelLike {
     ));
   }
 
-  async processChat(chatJid: string, agentId: string, threadRootId?: number | null): Promise<void> {
-    return processAgentChat(this, chatJid, agentId, threadRootId ?? undefined);
-  }
-
   async admitMessage(chatJid: string, content: string, isBot: boolean, mediaIds: number[], options: StoreWebMessageOptions,
     authorise?: (phase?: 'before' | 'after') => void, signal?: AbortSignal, deferBeforeInsert?: () => boolean): Promise<InteractionRow | null> {
-    if (!isBot && typeof options.consumeDeferredFollowupRowId === "number") {
-      options = { ...options, materializeQueuedSource: this.getQueuedInputMaterialization?.(chatJid),
-        acceptMaterializedSource: !isSlashCommandInvocation(content.trim()) ? this.getInputSourceAdmission?.(chatJid) : undefined };
-    }
     const identity = getIdentityConfig();
     const interaction = await admitWebMessage(this, {
       chatJid, content, isBot, mediaIds, agentId: DEFAULT_AGENT_ID,
@@ -276,7 +232,7 @@ export class WebChannel implements WebChannelLike {
     return this.uiBridge.openWorkspaceFile(chatJid, path, label);
   }
 
-  handleTimeline(limit: number, before?: number, chatJid?: string): Response {
+  handleTimeline(limit: number, before?: number, chatJid?: string): Response | Promise<Response> {
     return handleTimelineRequest(limit, before, chatJid, this.endpointContexts.content());
   }
 
@@ -554,20 +510,18 @@ export class WebChannel implements WebChannelLike {
   agentPool!: AgentPool;
   declare prepareInputSourceAdmission?: WebChannelOpts["prepareInputSourceAdmission"];
   declare prepareInputText?: WebChannelOpts["prepareInputText"];
-  declare expireQueuedInput?: WebChannelOpts["expireQueuedInput"];
   declare getInputSourceAdmission?: WebChannelOpts["getInputSourceAdmission"];
-  declare getQueuedInputSourceAdmission?: WebChannelOpts["getQueuedInputSourceAdmission"];
-  declare getQueuedInputSourceWithdrawal?: WebChannelOpts["getQueuedInputSourceWithdrawal"];
-  declare getAcceptedQueuedSteering?: WebChannelOpts["getAcceptedQueuedSteering"];
-  declare getQueuedInputMaterialization?: WebChannelOpts["getQueuedInputMaterialization"];
+  declare filterNativeTimeline?: WebChannelOpts["filterNativeTimeline"];
+  declare readNativeQueue?: WebChannelOpts["readNativeQueue"];
+  declare controlNativeQueue?: WebChannelOpts["controlNativeQueue"];
   declare dispatchAcceptedInput?: WebChannelOpts["dispatchAcceptedInput"];
+  declare resumeNativeInputs?: WebChannelOpts["resumeNativeInputs"];
   responses = new ResponseService();
   requestRouter!: RequestRouterService;
   endpointContexts!: WebChannelEndpointContexts;
   pendingLinkPreviews = new Set<number>();
   workspaceVisible = false;
   workspaceShowHidden = false;
-  queuedFollowupLifecycle = new QueuedFollowupLifecycleService();
   interactionBroadcaster!: InteractionBroadcaster;
   lastCommandInteractionId: number | null = null;
   webauthnChallenges = new WebauthnChallengeTracker();

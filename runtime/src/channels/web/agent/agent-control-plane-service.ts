@@ -15,11 +15,7 @@ import {
   exportArchivedBranchDownloadData,
 } from "../../../db.js";
 import { createLogger } from "../../../utils/logger.js";
-import { queuedSteeringRejectionReason } from "./queued-steering-diagnostics.js";
-import type { QueuedFollowupItem } from "../../../queued-followups.js";
 import { parseJsonObjectRequest } from "../json-body.js";
-import { settledAbortStatus } from "./agent-abort-status.js";
-import type { QueuedFollowupLifecycleService } from "../runtime/queued-followup-lifecycle-service.js";
 import { completeOobeForInstance } from "../oobe-instance-state.js";
 import {
   getAddonStatusPanelPayload,
@@ -69,25 +65,17 @@ interface AgentQueueLike {
 
 type ControlPlaneAgentPool = AgentPool;
 
-type ControlPlaneQueuedLifecycle = Pick<
-  QueuedFollowupLifecycleService,
-  "getQueuedFollowupCount" | "listQueuedStateItems" | "removeQueuedFollowupForAction" | "reorderQueuedFollowupItems"
->;
-
 export interface WebAgentControlPlaneServiceOptions {
   captureWriteAuthority?(req: Request): () => void;
-  getAcceptedQueuedSteering?: (chatJid: string) => import('../../../agent-pool/durable-queued-steering.js').AcceptedQueuedSteering | undefined;
-  getQueuedInputSourceWithdrawal?: (chatJid: string) => import('../runtime/queued-followup-lifecycle-service.js').QueuedInputSourceAdmission | undefined;
+  readNativeQueue?: import("../core/web-channel-contracts.js").WebChannelLike["readNativeQueue"];
+  controlNativeQueue?: import("../core/web-channel-contracts.js").WebChannelLike["controlNativeQueue"];
   defaultChatJid: string;
   defaultAgentId: string;
   json(payload: unknown, status?: number): Response;
   broadcastEvent(eventType: string, data: unknown): void;
   queue: AgentQueueLike;
   agentPool: ControlPlaneAgentPool;
-  queuedFollowupLifecycle: ControlPlaneQueuedLifecycle;
-  processChat(chatJid: string, agentId: string, threadRootId?: number | null): Promise<void> | void;
   getAgentStatus?: (chatJid: string) => Record<string, unknown> | null;
-  updateAgentStatus?: (chatJid: string, status: Record<string, unknown>) => void;
   getAutoresearchWidgetPayload?: (chatJid: string) => unknown;
   stopAutoresearchFromWeb?: (input: { chat_jid: string; generate_report: boolean }) => Promise<unknown>;
   dismissAutoresearchWidget?: (chatJid: string) => boolean;
@@ -95,16 +83,13 @@ export interface WebAgentControlPlaneServiceOptions {
 
 export interface WebAgentControlPlaneChannelLike {
   authGateway?: Parameters<typeof captureWebRequestAuthority>[0];
-  getAcceptedQueuedSteering?: WebAgentControlPlaneServiceOptions['getAcceptedQueuedSteering'];
-  getQueuedInputSourceWithdrawal?: WebAgentControlPlaneServiceOptions['getQueuedInputSourceWithdrawal'];
+  readNativeQueue?: WebAgentControlPlaneServiceOptions["readNativeQueue"];
+  controlNativeQueue?: WebAgentControlPlaneServiceOptions["controlNativeQueue"];
   json(payload: unknown, status?: number): Response;
   broadcastEvent(eventType: string, data: unknown): void;
   queue: AgentQueueLike;
   agentPool: ControlPlaneAgentPool;
-  queuedFollowupLifecycle: ControlPlaneQueuedLifecycle;
-  processChat(chatJid: string, agentId: string, threadRootId?: number | null): Promise<void> | void;
   getAgentStatus?(chatJid: string): Record<string, unknown> | null;
-  updateAgentStatus?(chatJid: string, status: Record<string, unknown>): void;
 }
 
 export function createWebAgentControlPlaneService(
@@ -122,12 +107,9 @@ export function createWebAgentControlPlaneService(
     broadcastEvent: (eventType, data) => channel.broadcastEvent(eventType, data),
     queue: channel.queue,
     agentPool: channel.agentPool,
-    queuedFollowupLifecycle: channel.queuedFollowupLifecycle,
-    get getAcceptedQueuedSteering() { return channel.getAcceptedQueuedSteering?.bind(channel); },
-    get getQueuedInputSourceWithdrawal() { return channel.getQueuedInputSourceWithdrawal?.bind(channel); },
-    processChat: (chatJid, agentId, threadRootId) => channel.processChat(chatJid, agentId, threadRootId),
+    get readNativeQueue(){return channel.readNativeQueue?.bind(channel);},
+    get controlNativeQueue(){return channel.controlNativeQueue?.bind(channel);},
     getAgentStatus: (chatJid) => channel.getAgentStatus?.(chatJid) ?? null,
-    updateAgentStatus: (chatJid, status) => channel.updateAgentStatus?.(chatJid, status),
   });
 }
 
@@ -222,7 +204,8 @@ export class WebAgentControlPlaneService {
   async handleAgentQueueState(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const chatJid = this.resolveChatJid(url.searchParams.get("chat_jid"));
-    const items = this.options.queuedFollowupLifecycle.listQueuedStateItems(chatJid);
+    if (!this.options.readNativeQueue) return this.options.json({ error: "Native queue observation is unavailable." }, 503);
+    const items = await this.options.readNativeQueue(chatJid);
 
     return this.options.json({
       count: items.length,
@@ -232,7 +215,6 @@ export class WebAgentControlPlaneService {
 
   async handleAgentQueueRemove(req: Request): Promise<Response> {
     const authorise = this.options.captureWriteAuthority?.(req);
-    const selectWithdrawal = this.options.getQueuedInputSourceWithdrawal;
     const parsed = await parseJsonObjectRequest(req);
     if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
 
@@ -244,56 +226,32 @@ export class WebAgentControlPlaneService {
         return this.options.json({ error: "Missing or invalid row_id" }, 400);
       }
 
-      const withdrawAcceptedSource = selectWithdrawal?.(chatJid);
-      const { removed } = await this.options.queuedFollowupLifecycle.removeQueuedFollowupForAction(chatJid, rowId, {
-        withdrawAcceptedSource, authorise,
-        signal: req.signal,
-      });
-      if (!removed) {
-        return this.options.json({ status: "ok", removed: false, count: this.options.queuedFollowupLifecycle.getQueuedFollowupCount(chatJid) }, 200);
+      if(this.options.readNativeQueue){
+        if(!this.options.controlNativeQueue)throw Error('Native queue control unavailable');
+        const native=await this.options.readNativeQueue(chatJid);
+        const legacy=getDeferredQueuedFollowups(chatJid).some(item=>item.rowId===rowId);
+        if(native.some(item=>item.row_id===rowId)){
+          if(legacy)return this.options.json({error:"Ambiguous queued input; no item changed."},409);
+          const removed=await this.options.controlNativeQueue(chatJid,rowId,"remove",authorise);
+          if(removed)this.options.broadcastEvent("agent_followup_removed",{chat_jid:chatJid,row_id:rowId});
+          return this.options.json({status:"ok",removed,row_id:rowId,count:(await this.options.readNativeQueue(chatJid)).length});
+        }
+        if(legacy)return this.options.json({error:"This preserved legacy queue item has no SDK submission; it was not changed."},409);
+        return this.options.json({status:"ok",removed:false,count:native.length});
       }
-
-      this.options.broadcastEvent("agent_followup_removed", {
-        chat_jid: chatJid,
-        row_id: removed.rowId,
-        thread_id: removed.threadId ?? null,
-      });
-
-      return this.options.json({
-        status: "ok",
-        removed: true,
-        row_id: removed.rowId,
-        count: this.options.queuedFollowupLifecycle.getQueuedFollowupCount(chatJid),
-      });
+      return this.options.json({ error: "Native queue control is unavailable." }, 503);
     } catch (error) {
       // Host selectors/callbacks can carry private engine or source details.
       return this.options.json({ error: "Unable to remove queued follow-up" }, 500);
     }
   }
 
-  async handleAgentQueueReorder(req: Request): Promise<Response> {
-    const authorise = this.options.captureWriteAuthority?.(req);
-    const parsed = await parseJsonObjectRequest(req);
-    if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
-
-    try {
-      const payload = parsed.payload as { chat_jid?: string; from_index?: number; to_index?: number };
-      const chatJid = this.resolveChatJid(payload.chat_jid);
-      const fromIndex = typeof payload.from_index === "number" ? payload.from_index : -1;
-      const toIndex = typeof payload.to_index === "number" ? payload.to_index : -1;
-
-      const reordered = await this.options.queuedFollowupLifecycle.reorderQueuedFollowupItems(chatJid, fromIndex, toIndex, { authorise, signal: req.signal });
-      return this.options.json({ status: "ok", reordered });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return this.options.json({ error: message }, 500);
-    }
+  async handleAgentQueueReorder(_req: Request): Promise<Response> {
+    return this.options.json({ error: "Queue reorder is not exposed by the native runtime." }, 409);
   }
 
   async handleAgentQueueSteer(req: Request): Promise<Response> {
-    const selectSteering = this.options.getAcceptedQueuedSteering;
-    let acceptedSteering = false;
-    let acceptedSteeringStage = "resolve_host";
+    const authorise = this.options.captureWriteAuthority?.(req);
     const parsed = await parseJsonObjectRequest(req);
     if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
 
@@ -305,43 +263,21 @@ export class WebAgentControlPlaneService {
         return this.options.json({ error: "Missing or invalid row_id" }, 400);
       }
 
-      // Only already-accepted input may enter the host intent path. Reads never
-      // adopt historical/manual rows or remove them to resubmit their text.
-      const queued = getDeferredQueuedFollowups(chatJid).find(item => item.rowId === rowId);
-      if (queued?.source_accepted && queued.source_id) {
-        acceptedSteering = true;
-        const host = selectSteering?.(chatJid);
-        if (!host) {
-          log.warn('Accepted queued steering rejected', { stage: acceptedSteeringStage, reason: 'host_unavailable' });
-          return this.options.json({ error: 'Accepted input requires host cancellation' }, 500);
+      if(this.options.readNativeQueue){
+        if(!this.options.controlNativeQueue)throw Error('Native queue control unavailable');
+        const native=await this.options.readNativeQueue(chatJid);
+        const legacy=getDeferredQueuedFollowups(chatJid).some(item=>item.rowId===rowId);
+        if(native.some(item=>item.row_id===rowId)){
+          if(legacy)return this.options.json({error:"Ambiguous queued input; no item changed."},409);
+          const changed=await this.options.controlNativeQueue(chatJid,rowId,"steer",authorise);
+          if(changed)this.options.broadcastEvent("agent_steer_queued",{chat_jid:chatJid,source:"queued-item"});
+          return this.options.json({status:"ok",removed:false,row_id:rowId,queued:changed?"steer":undefined,count:(await this.options.readNativeQueue(chatJid)).length},changed?201:200);
         }
-        const accept = host.accept.bind(host);
-        acceptedSteeringStage = 'accept';
-        const { interaction, dispatch } = await accept(rowId);
-        acceptedSteeringStage = 'publish';
-        void dispatch().catch((error) => {
-          log.warn("Accepted steering dispatch remains pending", { err: error, chatJid });
-        });
-        this.options.broadcastEvent('agent_followup_removed', { chat_jid: chatJid, row_id: rowId, thread_id: queued.threadId ?? null });
-        this.options.broadcastEvent('new_post', interaction);
-        this.options.broadcastEvent('agent_steer_queued', { chat_jid: chatJid,
-          thread_id: interaction.data?.thread_id ?? null, source: 'queued-item' });
-        // Host intent accepted; this does not promise provider placement/execution.
-        return this.options.json({ status: 'ok', removed: true, row_id: rowId,
-          queued: 'steer', steering_delivery: 'pending', user_message: interaction,
-          count: this.options.queuedFollowupLifecycle.getQueuedFollowupCount(chatJid) }, 201);
+        if(legacy)return this.options.json({error:"This preserved legacy queue item has no SDK submission; it was not changed."},409);
+        return this.options.json({status:"ok",removed:false,count:native.length});
       }
-      const exists = queued || this.options.queuedFollowupLifecycle.listQueuedStateItems(chatJid)
-        .some(item => item.row_id === rowId);
-      if (exists) {
-        return this.options.json({ error: "Queued input is not accepted for steering." }, 409);
-      }
-      return this.options.json({ status: "ok", removed: false,
-        count: this.options.queuedFollowupLifecycle.getQueuedFollowupCount(chatJid) }, 200);
+      return this.options.json({ error: "Native queue control is unavailable." }, 503);
     } catch (error) {
-      if (acceptedSteering) {
-        log.warn('Accepted queued steering rejected', { stage: acceptedSteeringStage, reason: queuedSteeringRejectionReason(error) });
-      }
       return this.options.json({ error: 'Accepted steering is unavailable.' }, 500);
     }
   }
@@ -362,13 +298,14 @@ export class WebAgentControlPlaneService {
     }
     if (requestedChatJid) chatJids.add(requestedChatJid);
 
-    const runs = [...chatJids]
+    const runs = await Promise.all([...chatJids]
       .filter((chatJid) => !requestedChatJid || chatJid === requestedChatJid)
-      .map((chatJid) => {
+      .map(async (chatJid) => {
         const active = (activeChats as unknown as Array<Record<string, unknown>>).find((chat) => chat.chat_jid === chatJid) ?? null;
         const status = this.options.getAgentStatus?.(chatJid) ?? null;
         const progress = progressByChat.get(chatJid) ?? null;
-        const queued = this.options.queuedFollowupLifecycle.listQueuedStateItems(chatJid);
+        if (!this.options.readNativeQueue) throw Error("Native queue observation unavailable");
+        const queued = await this.options.readNativeQueue(chatJid);
         return {
           chat_jid: chatJid,
           active,
@@ -380,7 +317,7 @@ export class WebAgentControlPlaneService {
           queue_count: queued.length,
           stalled_work: buildStalledWorkDiagnostic(progress),
         };
-      });
+      }));
 
     return this.options.json({ runs, inflight: [], preflight: [] }, 200);
   }
@@ -412,16 +349,10 @@ export class WebAgentControlPlaneService {
       requestedTurnId: expectedTurnId || null,
       activeTurnId: activeTurnId || null,
     });
-    const captured = JSON.stringify(status);
     try {
       const result = await this.options.agentPool.applyControlCommand(chatJid, { type: "abort", raw: "/abort" });
       if (result.status === "error") {
         return this.options.json({ status: "error", error: result.message, chat_jid: chatJid, turn_id: activeTurnId || null, result }, 500);
-      }
-      const terminal = settledAbortStatus(captured, this.options.getAgentStatus?.(chatJid) ?? null, result.message);
-      if (terminal) {
-        this.options.updateAgentStatus?.(chatJid, terminal);
-        this.options.broadcastEvent("agent_status", { ...terminal, chat_jid: chatJid });
       }
       return this.options.json({ status: "ok", chat_jid: chatJid, turn_id: activeTurnId || null, result }, 200);
     } catch (error) {
@@ -430,63 +361,13 @@ export class WebAgentControlPlaneService {
     }
   }
 
-  async handleAgentRunClearStale(req: Request): Promise<Response> {
-    const parsed = await parseJsonObjectRequest(req);
-    if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
-    const payload = parsed.payload as { chat_jid?: string };
-    const chatJid = this.resolveRequiredChatJid(payload.chat_jid);
-    if (!chatJid) return this.options.json({ error: "Missing chat_jid" }, 400);
-    const status = this.options.getAgentStatus?.(chatJid) ?? null;
-    if (status && status.type !== "done" && status.type !== "error") {
-      return this.options.json({ error: "Active native work cannot be cleared as stale; use abort." }, 409);
-    }
-    const hadStatus = Boolean(status);
-    if (hadStatus) {
-      this.options.updateAgentStatus?.(chatJid, { type: "done", title: "Idle", source: "operator_clear_stale" });
-    }
-    log.info("Operator cleared terminal display status", {
-      operation: "operator_run.clear_stale",
-      chatJid,
-      hadStatus,
-    });
-    return this.options.json({
-      status: "ok",
-      chat_jid: chatJid,
-      cleared: hadStatus,
-      had_inflight: false,
-      had_preflight: false,
-      had_status: hadStatus,
-    }, 200);
+  async handleAgentRunClearStale(_req: Request): Promise<Response> {
+    return this.options.json({ error: "Native execution status is supplied by the SDK and cannot be cleared by a host control." }, 409);
   }
 
-  async handleAgentRunDrainQueue(req: Request): Promise<Response> {
-    const parsed = await parseJsonObjectRequest(req);
-    if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
-    const payload = parsed.payload as { chat_jid?: string };
-    const chatJid = this.resolveRequiredChatJid(payload.chat_jid);
-    if (!chatJid) return this.options.json({ error: "Missing chat_jid" }, 400);
-    const items = this.options.queuedFollowupLifecycle.listQueuedStateItems(chatJid) as Array<{ rowId?: unknown; row_id?: unknown }>;
-    // Preflight the whole selection against authoritative rows before deleting
-    // anything. Drain is not an accepted-source withdrawal operation.
-    const selected = new Set(items.map(item => this.parseRowId((item.rowId ?? item.row_id) as number | string | undefined)));
-    if (getDeferredQueuedFollowups(chatJid).some(item => item.source_accepted && selected.has(item.rowId))) {
-      return this.options.json({ error: "Accepted input cannot be drained." }, 409);
-    }
-    let removedCount = 0;
-    for (const item of items) {
-      const rowId = this.parseRowId((item.rowId ?? item.row_id) as number | string | undefined);
-      if (rowId === null) continue;
-      const { removed } = await this.removeQueuedFollowupForAction(chatJid, rowId);
-      if (removed) removedCount += 1;
-    }
-    log.warn("Operator drained queued follow-ups", {
-      operation: "operator_run.drain_queue",
-      chatJid,
-      queuedCount: items.length,
-      removedCount,
-    });
-    this.options.broadcastEvent("agent_followup_drained", { chat_jid: chatJid, removed_count: removedCount });
-    return this.options.json({ status: "ok", chat_jid: chatJid, removed_count: removedCount }, 200);
+  async handleAgentRunDrainQueue(_req: Request): Promise<Response> {
+    // No bulk deletion of historical rows or inferred cancellation of SDK inputs.
+    return this.options.json({ error: "Bulk drain is unavailable; remove individual native queued submissions." }, 409);
   }
 
   async handleAgentBranchFork(req: Request): Promise<Response> {
@@ -740,10 +621,4 @@ export class WebAgentControlPlaneService {
     return Number(rowId);
   }
 
-  private async removeQueuedFollowupForAction(
-    chatJid: string,
-    rowId: number,
-  ): Promise<{ removed: QueuedFollowupItem | null; source: "deferred" | "placeholder" | null }> {
-    return await this.options.queuedFollowupLifecycle.removeQueuedFollowupForAction(chatJid, rowId);
-  }
 }

@@ -7,8 +7,6 @@ import { migrateOwnedSessionHandles } from "../../src/db/session-handles.js";
 import { commitOwnedFork } from "../../src/db/owned-forks.js";
 import type { AuthenticatedPrincipal } from "../../src/core/access-types.js";
 import { ensureChatBranch, getChatBranchByChatJid, renameChatBranchIdentity, archiveChatBranch, restoreChatBranchIdentity, renameChatJid, permanentDeleteArchivedBranch } from "../../src/db/chat-branches.js";
-import { ensureBudgetWork } from "../../src/db/budget-limits.js";
-import { reserveBudgetRequest, abandonBudgetRequest } from "../../src/db/budget-request-reservations.js";
 import { requireLegacyRoutingMutation, registerNativeBranchControlGuard } from "../../src/db/native-routing-policy.js";
 import { ChatAccessDenied } from "../../src/db/session-ownership.js";
 import { AgentPool } from "../../src/agent-pool.js";
@@ -106,15 +104,13 @@ test("native routing policy: owned and parent-linked SDK fork work retains scope
   db.exec(`INSERT INTO conversations VALUES(4,'{"parent":{"conversationId":2}}',NULL),(5,'{}',4); INSERT INTO tasks VALUES(1,5,'running')`);
   expect(() => archiveChatBranch(chat)).toThrow("live SDK work");
 });
-test("native routing policy: captured request holds cannot disappear behind archive", () => {
-  const branch = fixture();
-  ensureBudgetWork({ id: "routing-work", chatJid: chat, executionKind: "interactive" });
-  const request = { id: "routing-request", chatJid: chat, workId: "routing-work", providerId: "fixture", modelId: "fixture", accountRef: "fixture", amountMicros: 1 };
-  reserveBudgetRequest(request);
-  expect(() => archiveChatBranch(chat)).toThrow("accepted, queued or uncertain work");
-  expect(getChatBranchByChatJid(chat)).toEqual(branch);
-  abandonBudgetRequest(request);
-  expect(archiveChatBranch(chat).archived_at).not.toBeNull();
+test("native routing policy: historical expense holds remain inert and unchanged across archive", () => {
+  const branch = fixture(),database=getDb();
+  database.query("INSERT INTO budget_work(id,chat_jid,execution_kind,created_at,updated_at) VALUES ('routing-work',?,'interactive',?,?)").run(chat,at,at);
+  database.query("INSERT INTO budget_request_reservations(id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,amount_microusd,state,created_at,updated_at) VALUES ('routing-request','routing-work',?,'fixture','fixture','fixture',?,1,'reserved',?,?)").run(chat,'a'.repeat(64),at,at);
+  const historical=()=>['budget_work','budget_request_reservations'].map(table=>database.query(`SELECT * FROM ${table} ORDER BY rowid`).all()),before=historical();
+  const archived=archiveChatBranch(chat);expect(archived.archived_at).not.toBeNull();expect(archived.branch_id).toBe(branch.branch_id);
+  expect(historical()).toEqual(before);
 });
 test("native routing policy: explicit handle rename and restore preserve the creation anchor", () => {
   const branch = fixture(), db = getDb(), anchor = db.query("SELECT * FROM document_revisions").all();

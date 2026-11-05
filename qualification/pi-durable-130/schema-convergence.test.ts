@@ -4,7 +4,7 @@ import { Database } from "bun:sqlite";
 import { initializeHostSchema, initializeHostDurableBindings, createHostDurableBindings, HostCutoverController } from "../../runtime/durable-engine/src/index.js";
 import { acceptedPayloadRecoveryIndex, migrateHostAcceptedPayloadLookup, prepareHostSchema } from '../../runtime/durable-engine/src/host-schema.js';
 import { acceptedPayloadRecoverySql, readApplicationMessagePayload } from '../../runtime/durable-engine/src/accepted-payload-recovery.js';
-import { acceptedSteerFixture } from './src/accepted-steer-recovery-fixture.js';
+import {nativeMessageFixture} from './src/native-message-fixture.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -168,59 +168,37 @@ test('host binding lookup migration is owned, atomic, exact and idempotent witho
   } finally { db.close(); }
 });
 
-test('real accepted-payload fallback searches retained bindings and preserves SDK provenance/hash checks', async () => {
-  const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, 'binding-recovery-index-'));
-  const oldMemory = process.env.PICLAW_DB_IN_MEMORY;
-  const f = await acceptedSteerFixture(dir, 'before-submit', undefined, true, { sharedDatabase: true });
-  try {
-    const { primary } = await f.prepare();
-    const db = f.db;
-    const params = [primary.chatJid, primary.sourceId, primary.payloadRef, f.incarnation];
-    const original = db.query(acceptedPayloadRecoverySql).get(...params);
-    expect(original).not.toBeNull();
-    const insert = db.query('INSERT INTO piclaw_durable_bindings_v1 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
-    db.transaction(() => {
-      for (let i = 0; i < 4000; i++) insert.run('retained', f.incarnation, f.base.root.id,
-        `retained-chat-${i % 20}`, 'main', `retained-op-${i}`, i + 1000, `retained-source-${i}`,
-        `retained-payload-${i}`, `retained-request-${i}`, 'a'.repeat(64), null);
-    }).immediate();
-    const rows = () => db.query('SELECT * FROM piclaw_durable_bindings_v1 ORDER BY domain,operation_id').all();
-    const retained = rows(); removeLookupStep(db);
-    const plan = () => (db.query(`EXPLAIN QUERY PLAN ${acceptedPayloadRecoverySql}`).all(...params) as {detail:string}[]).map(row => row.detail);
-    expect(plan().some(detail => /SCAN b\b/.test(detail))).toBe(true);
-    migrateHostAcceptedPayloadLookup(db, () => f.owner.assert());
-    const indexed = plan();
-    expect(indexed.some(detail => detail.includes(`SEARCH b USING INDEX ${acceptedPayloadRecoveryIndex}`))).toBe(true);
-    for (const alias of ['s','e']) expect(indexed.some(detail => detail.startsWith(`SEARCH ${alias} `) && /PRIMARY KEY|rowid/.test(detail))).toBe(true);
-    expect(rows()).toEqual(retained);
-    expect(db.query(acceptedPayloadRecoverySql).get(...params)).toEqual(original);
-    const bindings = createHostDurableBindings(db, { domain: f.incarnation, incarnation: f.incarnation,
-      manifest: [{chatJid:f.chatJid,branchId:'main',conversationId:f.base.root.id}], assertOwner() { f.owner.assert(); },
-      async resolveContent(ref, input) { return readApplicationMessagePayload(db, f.incarnation, input, ref); } });
-    expect(await bindings.getOrBind(primary)).toEqual({ content: 'primary A' });
-    expect(db.query('UPDATE messages SET content=? WHERE id=? AND chat_jid=? RETURNING id').all('edited projection', primary.sourceId, primary.chatJid)).toEqual([{id:primary.sourceId}]);
-    // Preserve production selection: an existing same-identity edit fails its hash.
+test('real native accepted-payload fallback uses retained indexed bindings without granting changed/deleted display input',async()=>{
+  const f=await nativeMessageFixture();
+  try{
+    await f.open();const primary=f.accept('primary A'),id=await f.runtime.submitMessage(primary);expect((await f.runtime.waitForMessage(primary,id)).status).toBe('done');
+    // All subsequent corruption is disposable forensic test input, after the
+    // real SDK owner is closed; never mutate beneath a live Session.
+    await f.runtime.close();const db=f.root,params=[primary.chatJid,primary.sourceId,primary.payloadRef,f.domain];
+    const original=db.query(acceptedPayloadRecoverySql).get(...params);expect(original).not.toBeNull();
+    const insert=db.query('INSERT INTO piclaw_durable_bindings_v1 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+    db.transaction(()=>{for(let i=0;i<4000;i++)insert.run('retained',f.domain,f.base.root.id,`retained-chat-${i%20}`,'main',`retained-op-${i}`,i+1000,`retained-source-${i}`,`retained-payload-${i}`,`retained-request-${i}`,'a'.repeat(64),null);}).immediate();
+    const rows=()=>db.query('SELECT * FROM piclaw_durable_bindings_v1 ORDER BY domain,operation_id').all(),retained=rows();removeLookupStep(db);
+    const plan=()=>(db.query(`EXPLAIN QUERY PLAN ${acceptedPayloadRecoverySql}`).all(...params) as {detail:string}[]).map(row=>row.detail);
+    expect(plan().some(detail=>/SCAN b\b/.test(detail))).toBe(true);migrateHostAcceptedPayloadLookup(db,f.options.owner.assert);const indexed=plan();
+    expect(indexed.some(detail=>detail.includes(`SEARCH b USING INDEX ${acceptedPayloadRecoveryIndex}`))).toBe(true);
+    for(const alias of ['s','e'])expect(indexed.some(detail=>detail.startsWith(`SEARCH ${alias} `)&&/PRIMARY KEY|rowid/.test(detail))).toBe(true);
+    expect(rows()).toEqual(retained);expect(db.query(acceptedPayloadRecoverySql).get(...params)).toEqual(original);
+    const bindings=createHostDurableBindings(db,{domain:f.domain,incarnation:f.domain,manifest:[{chatJid:f.chat,branchId:'main',conversationId:f.base.root.id}],assertOwner:f.options.owner.assert,async resolveContent(ref,input){return readApplicationMessagePayload(db,f.domain,input,ref);}});
+    expect(await bindings.getOrBind(primary)).toEqual({content:'primary A'});
+    db.query('UPDATE messages SET content=? WHERE id=? AND chat_jid=?').run('edited display',primary.sourceId,f.chat);
     await expect(bindings.getOrBind(primary)).rejects.toThrow('Host payload hash conflict');
-    // A changed projection identity or missing row takes the actual SDK fallback.
-    const editedId = `${primary.sourceId}:edited-projection`;
-    expect(db.query('UPDATE messages SET id=? WHERE id=? AND chat_jid=? RETURNING id').all(editedId, primary.sourceId, primary.chatJid)).toEqual([{id:editedId}]);
-    expect(await bindings.getOrBind(primary)).toEqual({ content: 'primary A' });
-    expect(db.query('DELETE FROM messages WHERE id=? AND chat_jid=? RETURNING id').all(editedId, primary.chatJid)).toEqual([{id:editedId}]);
-    expect(await bindings.getOrBind(primary)).toEqual({ content: 'primary A' });
-    expect(() => readApplicationMessagePayload(db, f.incarnation, { ...primary, sourceId:'wrong' }, primary.payloadRef)).toThrow('Unverified application payload');
-    db.query('UPDATE piclaw_durable_bindings_v1 SET request_hash=? WHERE domain=? AND request_id=?').run('b'.repeat(64),f.incarnation,primary.requestId);
-    expect(() => readApplicationMessagePayload(db, f.incarnation, primary, primary.payloadRef)).toThrow('Unverified SDK accepted payload');
-    db.query('UPDATE piclaw_durable_bindings_v1 SET request_hash=? WHERE domain=? AND request_id=?').run(primary.requestHash,f.incarnation,primary.requestId);
-    const accepted = db.query(`SELECT e.id,e.record FROM piclaw_durable_bindings_v1 b JOIN submissions s ON s.id=b.submission_id
-      JOIN entries e ON e.id=json_extract(s.record,'$.entry') WHERE b.domain=? AND b.request_id=?`).get(f.incarnation, primary.requestId) as {id:number;record:string};
-    const changed = JSON.parse(accepted.record); changed.model[0].content = 'forged SDK bytes';
-    db.query('UPDATE entries SET record=? WHERE id=?').run(JSON.stringify(changed), accepted.id);
-    await expect(bindings.getOrBind(primary)).rejects.toThrow('Host payload hash conflict');
-    db.query('UPDATE entries SET record=? WHERE id=?').run(accepted.record, accepted.id);
-    expect(await bindings.getOrBind(primary)).toEqual({ content: 'primary A' });
-    expect(rows()).toEqual(retained);
-  } finally {
-    await f.close(); process.env.PICLAW_DB_IN_MEMORY = oldMemory;
-    await rm(dir, { recursive:true, force:true });
-  }
+    const editedId=primary.sourceId+':edited-display';db.query('UPDATE messages SET id=? WHERE id=? AND chat_jid=?').run(editedId,primary.sourceId,f.chat);
+    expect(readApplicationMessagePayload(db,f.domain,primary,primary.payloadRef)).toBe('primary A');
+    await expect(bindings.getOrBind(primary)).rejects.toThrow('Native accepted message changed'); // Passive recovery is not admission permission.
+    db.query('DELETE FROM messages WHERE id=? AND chat_jid=?').run(editedId,f.chat);expect(readApplicationMessagePayload(db,f.domain,primary,primary.payloadRef)).toBe('primary A');
+    expect(()=>readApplicationMessagePayload(db,f.domain,{...primary,sourceId:'wrong'},primary.payloadRef)).toThrow('Unverified application payload');
+    db.query('UPDATE piclaw_durable_bindings_v1 SET request_hash=? WHERE domain=? AND request_id=?').run('b'.repeat(64),f.domain,primary.requestId);
+    expect(()=>readApplicationMessagePayload(db,f.domain,primary,primary.payloadRef)).toThrow('Unverified SDK accepted payload');
+    db.query('UPDATE piclaw_durable_bindings_v1 SET request_hash=? WHERE domain=? AND request_id=?').run(primary.requestHash,f.domain,primary.requestId);
+    const accepted=db.query(`SELECT e.id,e.record FROM submissions s JOIN entries e ON e.id=json_extract(s.record,'$.entry') WHERE s.id=?`).get(id) as {id:number;record:string};
+    const changed=JSON.parse(accepted.record);changed.data.sourceId='forged-owner';
+    try{db.query('UPDATE entries SET record=? WHERE id=?').run(JSON.stringify(changed),accepted.id);expect(()=>readApplicationMessagePayload(db,f.domain,primary,primary.payloadRef)).toThrow('Unverified SDK accepted payload');}finally{db.query('UPDATE entries SET record=? WHERE id=?').run(accepted.record,accepted.id);}
+    expect(readApplicationMessagePayload(db,f.domain,primary,primary.payloadRef)).toBe('primary A');expect(rows()).toEqual(retained);
+  }finally{await f.close();}
 });

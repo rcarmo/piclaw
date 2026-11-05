@@ -89,6 +89,18 @@ describe("web channel runtime public surface service", () => {
     });
   });
 
+  for(const created of [false,true])test(`preserves native receipt IDs and explicit source creation without manufacturing a user_message: created=${created}`,async()=>{
+    await withTempWorkspaceEnv('runtime-native-receipt-',{},async()=>{
+      initDatabase();
+      try{
+        const service=new WebChannelRuntimePublicSurfaceService({async handleAgentMessage(){return Response.json({row_id:77,thread_id:5,submission_id:123,created,queued:'steer'},{status:201});}} as any);
+        const result=await service.enqueueAgentMessage({chatJid:'web:receipt',content:'One accepted source',mode:'steer'});
+        expect(result).toEqual({status:'ok',chat_jid:'web:receipt',row_id:77,thread_id:5,submission_id:123,created,queued:'steer'});
+        expect(result).not.toHaveProperty('user_message');
+      }finally{await closeDatabase();}
+    });
+  });
+
   test("runtime input pins its trusted handler before admission validation", async () => {
     await withTempWorkspaceEnv("runtime-handler-capture-", {}, async () => {
       initDatabase();

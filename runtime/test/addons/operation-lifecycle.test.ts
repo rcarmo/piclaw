@@ -118,7 +118,7 @@ test("revocation interrupts subscribed access, not unrelated task execution", as
   );
 });
 
-test("input continuation remains in one operation and budget work, requires nonempty bounded input", async () => {
+test("input continuation remains in one operation, requires nonempty bounded input", async () => {
   let count = 0;
   handler = async (input) =>
     ++count === 1
@@ -147,18 +147,34 @@ test("input continuation remains in one operation and budget work, requires none
   expect(count).toBe(2);
 });
 
-test("budget pause can resume with identical grant and bounded event replay reports gaps", async () => {
-  let count = 0;
-  handler = async () =>
-    ++count === 1
-      ? { status: "budget_blocked", reason: "budget_boundary" }
-      : { status: "completed" };
-  const client = service.bind(principal),
-    receipt = await client.admit(request("budget"));
-  await service.waitForIdle();
-  expect((await client.resume(receipt.operation!.id)).resumed).toBe(true);
-  await service.waitForIdle();
-  expect(count).toBe(2);
+test('historical budget-only pause cannot be resumed or rewritten by the operation service',async()=>{
+  const database=getDb();let executions=0;handler=async()=>{executions++;return {status:'completed'};};
+  database.query("INSERT INTO addon_operations(id,addon_id,principal_id,idempotency_key,input_hash,target,text,input_bytes,grant_json,chat_jid,work_id,status,sequence,created_at,updated_at,output,reason) VALUES ('historical-paused','fixture','alice','old','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','target','old input',9,?,'operation:historical-paused','old-financial-work','budget_blocked',1,'2020-01-01','2020-01-01',NULL,'historical_budget_boundary')").run(JSON.stringify(grant));
+  const before=database.query("SELECT * FROM addon_operations WHERE id='historical-paused'").get();
+  const client=service.bind(principal);expect((await client.resume('historical-paused')).resumed).toBe(false);await service.waitForIdle();
+  expect(executions).toBe(0);expect(database.query("SELECT * FROM addon_operations WHERE id='historical-paused'").get()).toEqual(before);
+  expect(database.query("SELECT * FROM addon_operation_events WHERE operation_id='historical-paused'").all()).toEqual([]);
+});
+
+for(const changed of [false,true])test(`approval-required resume still requires the exact current grant: changed=${changed}`,async()=>{
+  service.shutdown();await service.waitForIdle();let admissions=0,executions=0,current=grant;
+  service=new AddonOperationService({authorize:(_principal,_target,action)=>action==='admit'&&++admissions===2?{decision:'approval_required'}:{decision:'allow',grant:current},execute:async()=>{executions++;return {status:'completed'};}});
+  const client=service.bind(principal),receipt=await client.admit(request('approval'));
+  await service.waitForIdle();expect((await client.get(receipt.operation!.id)).status).toBe('approval_required');expect(executions).toBe(0);
+  if(changed){current={...grant,revision:'revoked-policy'};await expect(client.resume(receipt.operation!.id)).rejects.toThrow('unavailable');expect(readAddonOperation(receipt.operation!.id)?.status).toBe('approval_required');}
+  else{expect((await client.resume(receipt.operation!.id)).resumed).toBe(true);await service.waitForIdle();expect((await client.get(receipt.operation!.id)).status).toBe('completed');}
+  expect(executions).toBe(changed?0:1);
+});
+
+test('executors cannot reintroduce a new financial-pause result',async()=>{
+  handler=async()=>({status:'budget_blocked',reason:'retired_financial_boundary'} as never);
+  const client=service.bind(principal),receipt=await client.admit(request('invalid-budget-result'));await service.waitForIdle();
+  expect(await client.get(receipt.operation!.id)).toMatchObject({status:'failed',reason:'execution_failed'});
+  expect(getDb().query('SELECT * FROM budget_work').all()).toEqual([]);
+});
+
+test("bounded nonfinancial operation event replay reports retained gaps", async () => {
+  const client = service.bind(principal);
   const next = await client.admit(request("many"));
   await service.waitForIdle();
   // Test retention with host-owned transitions; no adapter mutation API exists.
@@ -199,7 +215,7 @@ test("concurrent active-work quota is enforced inside admission transaction", as
   await service.waitForIdle();
 });
 
-test("resume after committed model input uses continuation instruction instead of replaying the last user request", async () => {
+test("committed model input is not replayed by resume; explicit continuation sends only new input", async () => {
   const { markAddonOperationInputCommitted } =
     await import("../../src/db/addon-operations.js");
   const prompts: string[] = [];
@@ -207,18 +223,18 @@ test("resume after committed model input uses continuation instruction instead o
     prompts.push(input.text);
     if (prompts.length === 1) {
       markAddonOperationInputCommitted(input.operationId);
-      return { status: "budget_blocked", reason: "budget_boundary" };
+      return { status: "input_required" };
     }
     return { status: "completed" };
   };
   const client = service.bind(principal);
   const first = await client.admit(request("resume-committed"));
   await service.waitForIdle();
-  await client.resume(first.operation!.id);
+  expect((await client.resume(first.operation!.id)).resumed).toBe(false);
+  expect(prompts).toEqual(['external data']);
+  expect((await client.continue(first.operation!.id,'New independently supplied instruction')).resumed).toBe(true);
   await service.waitForIdle();
-  expect(prompts[0]).toBe("external data");
-  expect(prompts[1]).not.toContain("external data");
-  expect(prompts[1]).toContain("already in this session");
+  expect(prompts).toEqual(['external data','New independently supplied instruction']);
 });
 
 test("cumulative input quota survives replacement of previous continuation text", async () => {

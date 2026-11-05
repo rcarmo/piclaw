@@ -34,6 +34,7 @@ export interface RuntimeAgentMessageResult {
   status: "ok";
   chat_jid: string;
   row_id?: number | null;
+  submission_id?: number;
   user_message?: InteractionRow;
   thread_id: number | null;
   queued?: "followup" | "steer";
@@ -158,10 +159,11 @@ function normalizeRuntimeHandlerMessageResult(chatJid: string, payload: unknown)
     status: "ok",
     chat_jid: typeof data.chat_jid === "string" && data.chat_jid.trim() ? data.chat_jid.trim() : chatJid,
     ...(rowId ? { row_id: rowId } : {}),
+    ...(typeof data.submission_id==='number' && Number.isSafeInteger(data.submission_id) && data.submission_id>0 ? {submission_id:data.submission_id} : {}),
     ...(isRuntimeRecord(userMessage) ? { user_message: userMessage as unknown as InteractionRow } : {}),
     thread_id: threadId,
     ...(queued ? { queued } : {}),
-    created: isRuntimeRecord(userMessage),
+    created: typeof data.created==='boolean' ? data.created : isRuntimeRecord(userMessage),
   };
 }
 
@@ -175,7 +177,7 @@ async function readRuntimeHandlerError(response: Response): Promise<string> {
 export interface WebChannelRuntimePublicSurfaceChannel {
   handleAgentMessage?: (req: Request, pathname: string) => Promise<Response>;
   readonly runtimeState: Pick<WebChannelRuntimeStateService,
-    "updateAgentStatus" | "getAgentStatus" | "getThreadRootId" | "resumeChat" | "resumePendingChats" |
+    "updateAgentStatus" | "getAgentStatus" | "getThreadRootId" |
     "setPanelExpanded" | "isPanelExpanded" | "updateThoughtBuffer" | "updateDraftBuffer" | "getBuffer">;
   sessionBroadcast: Pick<WebSessionBroadcastService, "broadcastEvent">;
   agentPool?: WebChannelRuntimePublicSurfaceAgentPool;

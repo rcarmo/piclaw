@@ -1,11 +1,11 @@
 import "./src/test-guard.js";
 import { expect, test } from "bun:test";
-import { mkdirSync } from "node:fs";
+import { createTempWorkspace } from "../../runtime/test/helpers.js";
+import { resolveRuntimeConfigPaths } from "../../runtime/src/core/config-paths.js";
 import { join } from "node:path";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
 import { installTerminalSettlementCompositionSchema } from "../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js";
 import { createTask } from "../../runtime/src/db/tasks.js";
-import { saveBudgetCap, setBudgetCapEnabled } from "../../runtime/src/db/budget-limits.js";
 import { createCurrentPiclawScheduledRunStore } from "../../runtime/src/service-effects/current-piclaw/scheduled-run-store.js";
 import { pollScheduledRunsOnce, stopSchedulerLoop, type SchedulerDeps } from "../../runtime/src/task-scheduler.js";
 import { AgentQueue } from "../../runtime/src/queue.js";
@@ -19,9 +19,9 @@ import { context, openFixture, barrier } from "./src/fixture.js";
 import { value } from "./src/host-handoff.js";
 
 for (const model of [undefined, "qualification/synthetic"]) test(`allocation-only helper (synthetic native dispatch): source-bound lease, rollback, public fork, forged route denied; model=${model}`, async () => {
-  process.env.PICLAW_DB_IN_MEMORY = "0";
-  mkdirSync(join(process.env.PICLAW_WORKSPACE!, ".piclaw"), { recursive: true });
-  initDatabase();
+  const workspace=createTempWorkspace("scheduled-allocation-");
+  const paths=resolveRuntimeConfigPaths({env:{...process.env,PICLAW_WORKSPACE:workspace.workspace,PICLAW_STORE:workspace.store,PICLAW_DATA:workspace.data,PICLAW_DB_IN_MEMORY:"0"}});
+  initDatabase(paths);
   const db = getDb(); db.exec("PRAGMA foreign_keys=ON");
   installTerminalSettlementCompositionSchema(db);
   const path = (db.query("PRAGMA database_list").all() as { name: string; file: string }[]).find(r => r.name === "main")!.file;
@@ -74,9 +74,10 @@ for (const model of [undefined, "qualification/synthetic"]) test(`allocation-onl
           { scope: "scheduled_run" as const, scheduledTaskId: lease.task.taskId },
           { scope: "instance_daily" as const, timezone: "UTC" },
         ]) {
-          const cap = saveBudgetCap({ ...capInput, metric: "api_usd_micros", amount: 1_000_000 }, db);
-          expect(() => bindings.resolveConversation(input)).toThrow("Native scheduled budget admission unavailable");
-          setBudgetCapEnabled(cap.id, false, db);
+          db.query("INSERT INTO budget_caps(id,scope,scheduled_task_id,metric,amount,timezone,created_at,updated_at) VALUES (?,?,?,'api_usd_micros',0,'UTC',?,?)").run(`historical-${capInput.scope}`,capInput.scope,"scheduledTaskId" in capInput?capInput.scheduledTaskId??null:null,"2020-01-01T00:00:00.000Z","2020-01-01T00:00:00.000Z");
+          const history = db.query("SELECT * FROM budget_caps").all();
+          expect(bindings.resolveConversation(input)).toBe(input.conversationId);
+          expect(db.query("SELECT * FROM budget_caps").all()).toEqual(history);
           expect(bindings.resolveConversation(input)).toBe(input.conversationId);
         }
         expect(bindings.resolveConversation({ ...input, conversationId: fixture.root.id })).toBeUndefined();
@@ -106,14 +107,16 @@ for (const model of [undefined, "qualification/synthetic"]) test(`allocation-onl
     await pollScheduledRunsOnce(deps, store);
     await Promise.race([finished.promise, Bun.sleep(5000).then(() => { throw Error("allocation timeout"); })]);
     if (failure) throw failure;
-  } finally { await stopSchedulerLoop(); await queue.shutdown(); await bundle.close(); await closeDatabase(); lock.release(); }
+  } finally { await stopSchedulerLoop(); await queue.shutdown(); await bundle.close(); await closeDatabase(); lock.release();workspace.cleanup(); }
 });
 
 for (const failBinding of [false, true]) test(`side prompt allocation binds an exact claimed internal source and leaves parent history unchanged; rollback=${failBinding}`, async () => {
   const { createCurrentPiclawServiceWorkStore } = await import("../../runtime/src/service-effects/current-piclaw/service-work-store.js");
   const { effect, sealed } = await import("./src/host-handoff.js");
   const { hashCanonicalRequest } = await import("../../runtime/src/service-effects/contracts/common.js");
-  process.env.PICLAW_DB_IN_MEMORY = "0"; initDatabase();
+  const workspace=createTempWorkspace("side-allocation-");
+  const paths=resolveRuntimeConfigPaths({env:{...process.env,PICLAW_WORKSPACE:workspace.workspace,PICLAW_STORE:workspace.store,PICLAW_DATA:workspace.data,PICLAW_DB_IN_MEMORY:"0"}});
+  initDatabase(paths);
   const db = getDb(); db.exec("PRAGMA foreign_keys=ON"); installTerminalSettlementCompositionSchema(db);
   const path = (db.query("PRAGMA database_list").all() as { name: string; file: string }[]).find(row => row.name === "main")!.file;
   const lock = acquireRuntimeLock({ lockPath: join(process.env.PICLAW_WORKSPACE!, "side-allocation.lock"), strictOwnership: true, disabled: false });
@@ -199,9 +202,10 @@ for (const failBinding of [false, true]) test(`side prompt allocation binds an e
     const bindings = createHostDurableBindings(db, { domain: "side-allocation", incarnation: "side-allocation", manifest, assertOwner: assert, resolveContent: async () => prompt });
     expect(bindings.resolveConversation(allocated)).toBe(allocated.conversationId);
     expect(bindings.resolveConversation({ ...allocated, requestHash: "0".repeat(64) })).toBeUndefined();
-    const cap = saveBudgetCap({ scope: "instance_daily", metric: "api_usd_micros", amount: 1, timezone: "UTC" }, db);
-    expect(() => bindings.resolveConversation(allocated)).toThrow("Native side prompt budget admission unavailable");
-    setBudgetCapEnabled(cap.id, false, db);
+    db.query("INSERT INTO budget_caps(id,scope,metric,amount,timezone,created_at,updated_at) VALUES ('historical-instance','instance_daily','api_usd_micros',0,'UTC',?,?)").run("2020-01-01T00:00:00.000Z","2020-01-01T00:00:00.000Z");
+    const capHistory = db.query("SELECT * FROM budget_caps").all();
+    expect(bindings.resolveConversation(allocated)).toBe(allocated.conversationId);
+    expect(db.query("SELECT * FROM budget_caps").all()).toEqual(capHistory);
     db.query("UPDATE service_effect_s01_sources SET state='pending' WHERE source_id=?").run(id);
     expect(bindings.resolveConversation(allocated)).toBeUndefined();
     db.query("UPDATE service_effect_s01_sources SET state='claimed' WHERE source_id=?").run(id);
@@ -252,19 +256,6 @@ for (const failBinding of [false, true]) test(`side prompt allocation binds an e
       sourceId: recoveringId, kind: "internal", payloadRef: recoveringId, targetOperationId: null, parentSourceSeq: null,
       acceptedAt: new Date().toISOString(), createWakeIntent: false }), sealed({ effect: effect(`claim:${recoveringId}`), chatJid: chat,
       expectedFrontier: frontier.consumedThroughSourceSeq, newOperationId: `op:${recoveringId}`, claimedAt: new Date().toISOString() }), db)).immediate();
-    const { writeFileSync } = await import("node:fs");
-    const { reserveHostRequest } = await import("../../runtime/durable-engine/src/host-request-accounting.js");
-    const authPath = join(process.env.PICLAW_WORKSPACE!, "side-accounting-auth.json");
-    writeFileSync(authPath, JSON.stringify({ "openai-codex": { type: "oauth", access: "synthetic", refresh: "synthetic", accountId: "side-fixture", expires: Date.now() + 60000 } }), { mode: 0o600 });
-    const priced = { ...fixture.models.getModel("qualification", "synthetic"), provider: "openai-codex", contextWindow: 1000, maxTokens: 100,
-      cost: { input: 1, output: 1, cacheRead: 1, cacheWrite: 1 } };
-    const reservation = await reserveHostRequest({ database: db, operationId: recovering.operation.operationId, chatJid: chat, authPath,
-      model: priced as any, signal: new AbortController().signal, assertCurrent: assert,
-      terminalOwner: { signal: new AbortController().signal, assertCurrent: assert } });
-    expect(reservation).toBeDefined();
-    expect(db.query("SELECT execution_kind FROM budget_work WHERE id=?").get(`durable-operation:${recovering.operation.operationId}`)).toEqual({ execution_kind: "side_prompt" });
-    expect(db.query("SELECT execution_kind FROM budget_work WHERE parent_work_id=?").all(`durable-operation:${recovering.operation.operationId}`)).toEqual([{ execution_kind: "side_prompt" }]);
-    await reservation!.abandon();
     const callsBeforeRecovery = fixture.host.modelCalls;
     await bundle.close(); bundle = await createBundle();
     expect(fixture.host.modelCalls).toBe(callsBeforeRecovery);
@@ -304,7 +295,7 @@ for (const failBinding of [false, true]) test(`side prompt allocation binds an e
     try {
       const failed = bundle.dispatchSidePrompt(chat, "join abort despite wait failure", { signal: failingSignal.signal });
       const observed = failed.then(() => { dispatchFinished = true; return null; }, error => { dispatchFinished = true; return error; });
-      await abortJoined.promise;
+      await Promise.race([abortJoined.promise,observed.then(error=>{throw error??Error("Side dispatch completed before cancellation joined");})]);
       await Bun.sleep(0);
       expect(dispatchFinished).toBe(false);
       expect(abortFinished).toBe(false);
@@ -328,20 +319,20 @@ for (const failBinding of [false, true]) test(`side prompt allocation binds an e
     }
     const firstRetryCalls = fixture.host.modelCalls;
     const firstRetries = await Promise.allSettled([
-      bundle.dispatchSidePrompt(chat, "same first retry", { budgetWorkId: "simultaneous-side-retry" }),
-      bundle.dispatchSidePrompt(chat, "same first retry", { budgetWorkId: "simultaneous-side-retry" }),
+      bundle.dispatchSidePrompt(chat, "same first retry", { requestId: "simultaneous-side-retry" }),
+      bundle.dispatchSidePrompt(chat, "same first retry", { requestId: "simultaneous-side-retry" }),
     ]);
     expect(firstRetries.every(result => result.status === "fulfilled")).toBe(true);
     expect((firstRetries[0] as PromiseFulfilledResult<unknown>).value).toEqual((firstRetries[1] as PromiseFulfilledResult<unknown>).value);
     expect(fixture.host.modelCalls).toBe(firstRetryCalls + 1);
-    const stableResult = await bundle.dispatchSidePrompt(chat, "same first retry", { budgetWorkId: "simultaneous-side-retry" });
+    const stableResult = await bundle.dispatchSidePrompt(chat, "same first retry", { requestId: "simultaneous-side-retry" });
     expect(stableResult.status).toBe("success");
     expect(fixture.host.modelCalls).toBe(firstRetryCalls + 1);
-    const { sidePromptSourceId } = await import("../../runtime/durable-engine/src/host-request-accounting.js");
+    const { sidePromptSourceId } = await import("../../runtime/durable-engine/src/application-bootstrap.js");
     const resultRef = `side-result:${sidePromptSourceId(chat, "simultaneous-side-retry")}`;
     const savedResult = payloads.get(resultRef)!;
     payloads.set(resultRef, JSON.stringify({ status: "success", result: 42 }));
-    await expect(bundle.dispatchSidePrompt(chat, "same first retry", { budgetWorkId: "simultaneous-side-retry" })).rejects.toThrow("Invalid side prompt stored result");
+    await expect(bundle.dispatchSidePrompt(chat, "same first retry", { requestId: "simultaneous-side-retry" })).rejects.toThrow("Invalid side prompt stored result");
     payloads.set(resultRef, savedResult);
     expect(fixture.host.modelCalls).toBe(firstRetryCalls + 1);
     acceptMainDuringPayload = true;
@@ -357,6 +348,6 @@ for (const failBinding of [false, true]) test(`side prompt allocation binds an e
     db.query("UPDATE service_effect_s01_sources SET state='disposed' WHERE chat_jid=?").run(chat);
     db.query("UPDATE service_effect_s01_operations SET phase='terminal' WHERE chat_jid=?").run(chat);
     db.query("UPDATE service_effect_s01_chats SET active_operation_id=NULL WHERE chat_jid=?").run(chat);
-    await closeDatabase(); lock.release();
+    await closeDatabase(); lock.release();workspace.cleanup();
   }
 });

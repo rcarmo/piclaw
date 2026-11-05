@@ -26,3 +26,13 @@ test('empty or rejected successful HTTP payloads do not silently consume a draft
 test('accepted UI command with failed reply delivery remains accepted and has an explicit notice',async()=>{
  const {getComposeDeliveryNotice}=await import('../../web/src/ui/compose-submission');const response={ui_only:true,command:{status:'success'},response_delivery:'failed'};expect(()=>requireComposeAcknowledgement(response)).not.toThrow();expect(getComposeDeliveryNotice(response)).toBe('Command handled, but its timeline reply could not be delivered. Do not resend the command.');expect(getComposeDeliveryNotice({...response,response_delivery:'persisted'})).toBeNull();
 });
+
+test('an exact saved input receipt prevents duplicate draft restoration without claiming SDK placement',async()=>{
+  const {isCommittedComposeInput,getComposeDeliveryNotice}=await import('../../web/src/ui/compose-submission.js');
+  const receipt={accepted:true,thread_id:17,error:'Input saved; SDK admission could not be confirmed.'};
+  expect(isCommittedComposeInput(receipt)).toBe(true);expect(()=>requireComposeAcknowledgement(receipt)).not.toThrow();
+  expect(getComposeDeliveryNotice(receipt)).toBe('Input saved, but SDK admission is unconfirmed. Do not resend this input.');
+  for(const patch of [{accepted:false},{accepted:'true'},{thread_id:null},{thread_id:0},{thread_id:-1},{thread_id:'17'},{thread_id:Infinity},{thread_id:1.5}]){
+    const invalid={...receipt,...patch};expect(isCommittedComposeInput(invalid)).toBe(false);expect(()=>requireComposeAcknowledgement(invalid)).toThrow();expect(getComposeDeliveryNotice(invalid)).toBeNull();
+  }
+});

@@ -71,7 +71,7 @@ function grantsField(): DomainConfigField<ConfiguredOperationGrant[]> {
           !Number.isSafeInteger(r.maxToolCalls) ||
           Number(r.maxToolCalls) < 0 ||
           Number(r.maxToolCalls) > 100 ||
-          (r.parentWorkId !== null && !validId(r.parentWorkId))
+          (r.parentWorkId !== undefined && r.parentWorkId !== null && !validId(r.parentWorkId))
         )
           throw new Error("Invalid operation grant.");
         if (r.allowedTools.length && Number(r.maxToolCalls) === 0)

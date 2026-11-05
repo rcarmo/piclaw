@@ -175,13 +175,13 @@ test("accepted web publisher stores attachment content blocks through the curren
   const webMod = await import("../../src/channels/web.js");
   const web = new (webMod.WebChannel as any)({
     // Publisher double only; native source identity/settlement is separately qualified.
-    dispatchAcceptedInput: (chatJid:string,messageId:string,rowId:number)=>async()=>{
+    dispatchAcceptedInput: async(chatJid:string,messageId:string,rowId:number)=>{
       expect(db.getMessageRowIdById(chatJid,messageId)).toBe(rowId);
       const stored = await web.admitMessage(chatJid, "Here is the report.", true, [mediaId], {
         threadId: rowId, isTerminalAgentReply: true,
         contentBlocks: [{ type: "file", name: "report.txt", filename: "report.txt", mime_type: "text/plain", size: 6 }],
       });
-      expect(stored?.id).toBeGreaterThan(0); return "settled" as const;
+      expect(stored?.id).toBeGreaterThan(0); return {submission_id:17,queued:false};
     },
     queue: { enqueue: () => {} },
     agentPool: {

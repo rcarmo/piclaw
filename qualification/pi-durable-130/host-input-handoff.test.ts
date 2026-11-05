@@ -8,14 +8,14 @@ import { SqliteStorage } from '../../runtime/durable-engine/qualification/sqlite
 import type { AcceptedInput } from '../../runtime/durable-engine/src/host-runtime.js';
 import { createHostOperationAuthority } from '../../runtime/durable-engine/src/host-operation-authority.js';
 import { hashCanonicalRequest } from '../../runtime/src/service-effects/contracts/common.js';
-import { acceptedSteerFixture } from './src/accepted-steer-recovery-fixture.js';
+import { hostSourceContractFixture } from './src/host-source-contract-fixture.js';
 import { OwnedSqlite } from './src/ownership.js';
 import { barrier, context } from './src/fixture.js';
 import { at, effect, sealed, value } from './src/host-handoff.js';
 
 async function heldHandoff(loseRootAck = false) {
   const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, 'input-handoff-'));
-  const f = await acceptedSteerFixture(dir, 'before-submit');
+  const f = await hostSourceContractFixture(dir, 'before-submit');
   const held = barrier(), release = barrier(), hookEntered = barrier(), subscribed = barrier(), hookFinished = barrier();
   const failures: unknown[] = [], proofs: unknown[] = [];
   let input!: AcceptedInput, hookActive = false, heldOnce = false, witnessEnabled = true;

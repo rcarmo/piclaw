@@ -12,7 +12,7 @@ import { Database } from "bun:sqlite";
 import { createHostBuiltinTools } from "../../runtime/durable-engine/src/host-builtins.ts";
 import { awaitWithContext } from "../../runtime/durable-engine/qualification/context.ts";
 import { createHostDelegateFileReader } from "../../runtime/durable-engine/src/host-delegate-files.ts";
-import { acceptedSteerFixture } from "./src/accepted-steer-recovery-fixture.ts";
+import { hostSourceContractFixture } from "./src/host-source-contract-fixture.ts";
 import { OwnedSqlite } from "./src/ownership.ts";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
 import { configure } from "../../runtime/durable-engine/qualification/durable.ts";
@@ -270,7 +270,7 @@ for (const mode of ["success", "expiry", "reopen"] as const) {
 for (const cancel of [false, true]) {
   test(`native Delegate actual host source walk; cancel=${cancel}`, async () => {
     const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "native-source-"));
-    const f = await acceptedSteerFixture(dir, "before-submit", undefined, false, { sharedDatabase: true });
+    const f = await hostSourceContractFixture(dir, "before-submit", false, { sharedDatabase: true });
     const entered = barrier(), release = barrier();
     let children = 0;
     const proofs: Awaited<ReturnType<NonNullable<typeof f.runtime>["captureRunSource"]>>[] = [];
@@ -363,7 +363,7 @@ for (const cancel of [false, true]) {
 for (const boundary of ["before-effect", "after-effect"] as const) {
   test(`native Delegate standard unsafe child recovery: ${boundary}`, async () => {
     const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "delegate-standard-recovery-"));
-    const f = await acceptedSteerFixture(dir, "before-submit");
+    const f = await hostSourceContractFixture(dir, "before-submit");
     const hold = barrier(), entered = barrier();
     const sentinel = join(dir, "sentinel.txt");
     let executions = 0, writes = 0, captures = 0, modelCaptures = 0;

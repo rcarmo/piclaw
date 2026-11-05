@@ -56,6 +56,7 @@ for (const name of ['chromium', 'webkit']) browserTest(`Visual queued input is v
       if (['/agent/queue-remove','/agent/queue-steer'].includes(url.pathname)) {
         actions.push({path:url.pathname,chatJid:url.searchParams.get('chat_jid')});
         if (denyAction) return Response.json({error:'denied'},{status:403});
+        if(url.pathname==='/agent/queue-steer')return Response.json({queued:"steer",removed:false});
         const {row_id}=await req.json(); const {removed}=await queue.removeQueuedFollowupForAction(url.searchParams.get('chat_jid')!,row_id);
         return Response.json({removed:Boolean(removed)});
       }
@@ -102,6 +103,13 @@ for (const name of ['chromium', 'webkit']) browserTest(`Visual queued input is v
         const until=Date.now()+3000;while(!release&&Date.now()<until)await Bun.sleep(5);expect(release).toBeTruthy();
         const text=action==='cancel'?'Accepted while SSE is disconnected':'Steer while snapshot held';
         await page.locator('.queue-stack__item').filter({hasText:text}).getByTitle(action==='cancel'?'Remove from queue':'Inject as steering now').click();
+        if(action==='steer'){
+          await page.waitForFunction(()=>document.querySelector('.queue-stack__btn--steer')?.hasAttribute('disabled')===false);
+          expect(await page.getByText(text,{exact:true}).count()).toBe(1);
+          const item=queue.peekQueuedFollowupItem(chatJid)!;
+          await admitWebMessage(channel,{chatJid,content:item.queuedContent,isBot:false,mediaIds:[],agentId:'default',agentName:'Fixture'},{consumeDeferredFollowupRowId:item.rowId});
+          await page.evaluate(payload=>window.dispatchEvent(new CustomEvent('piclaw:followup-consumed',{detail:payload})),{row_id:item.rowId,chat_jid:chatJid});
+        }
         await page.getByText(text,{exact:true}).waitFor({state:'detached'});release!();await page.waitForTimeout(30);
         expect(await page.getByText(text,{exact:true}).count()).toBe(0);
       }

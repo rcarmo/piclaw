@@ -1,6 +1,5 @@
 import type Database from "bun:sqlite";
 import { getDb } from "./connection.js";
-import { ensureBudgetWork, setBudgetWorkStatus } from "./budget-limits.js";
 import {
   OperationConflictError,
   TERMINAL_OPERATION_STATUSES,
@@ -101,12 +100,6 @@ export function admitAddonOperation(record: OperationRecord): {
         }) >= 16
       )
         throw new Error("Operation active quota exceeded.");
-      ensureBudgetWork({
-        id: record.workId,
-        parentWorkId: record.grant.parentWorkId,
-        chatJid: record.chatJid,
-        executionKind: "background",
-      });
       db.query(
         `INSERT INTO addon_operations(id,addon_id,principal_id,idempotency_key,input_hash,target,text,input_bytes,grant_json,chat_jid,work_id,status,sequence,created_at,updated_at,output,reason)
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -184,23 +177,6 @@ export function transitionAddonOperation(
       db.query(
         "DELETE FROM addon_operation_events WHERE operation_id=? AND sequence<=?",
       ).run(id, next.sequence - 128);
-      if (
-        status === "budget_blocked" ||
-        status === "approval_required" ||
-        status === "input_required"
-      )
-        setBudgetWorkStatus(next.workId, "paused");
-      if (status === "queued" || status === "working")
-        setBudgetWorkStatus(next.workId, "active");
-      if (TERMINAL_OPERATION_STATUSES.has(status))
-        setBudgetWorkStatus(
-          next.workId,
-          status === "completed"
-            ? "completed"
-            : status === "cancelled"
-              ? "cancelled"
-              : "stopped",
-        );
       return next;
     })
     .immediate();
@@ -274,7 +250,7 @@ export function countActiveAddonOperations(
 ): number {
   const row = getDb()
     .query(
-      "SELECT COUNT(*) AS n FROM addon_operations WHERE addon_id=? AND principal_id=? AND status NOT IN ('completed','failed','cancelled','rejected')",
+      "SELECT COUNT(*) AS n FROM addon_operations WHERE addon_id=? AND principal_id=? AND status NOT IN ('completed','failed','cancelled','rejected','budget_blocked')",
     )
     .get(principal.addonId, principal.principalId) as { n: number };
   return row.n;

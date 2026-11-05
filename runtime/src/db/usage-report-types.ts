@@ -66,7 +66,7 @@ export interface TokenUsageRecord {
   pricing_version?: string | null;
   pricing_context_tier?: string | null;
   pricing_cache_fallbacks?: string | null;
-  execution_kind?: import("../budget/types.js").BudgetExecutionKind | null;
+  execution_kind?: "interactive" | "goal" | "scheduled" | "background" | "delegate" | "side_prompt" | null;
 }
 
 export type TokenUsageSource = "assistant" | "tool" | "compaction" | "branch_summary" | "unknown";

@@ -32,11 +32,16 @@ export interface OperationGrant {
   allowedTools: string[];
   timeoutMs: number;
   maxToolCalls: number;
-  parentWorkId: string | null;
+  /** Historical attribution only; never required for grants or execution. */
+  parentWorkId?: string | null;
+}
+/** Only actual permission/resource fields participate in grant identity. */
+export function operationGrantKey(grant: OperationGrant): string {
+  return JSON.stringify([grant.revision,grant.target,[...grant.allowedTools].sort(),grant.timeoutMs,grant.maxToolCalls]);
 }
 export type OperationAdmission =
   | { decision: "allow"; grant: OperationGrant }
-  | { decision: "approval_required" | "budget_blocked" | "rejected" };
+  | { decision: "approval_required" | "rejected" };
 export interface OperationSnapshot {
   id: string;
   target: string;
@@ -74,7 +79,7 @@ export interface OperationExecution {
 }
 export interface OperationResult {
   status:
-    "completed" | "failed" | "cancelled" | "input_required" | "budget_blocked";
+    "completed" | "failed" | "cancelled" | "input_required";
   /** Public final text only. Never include hidden reasoning, prompts or raw tool logs. */
   output?: string;
   /** Machine-readable host reason, not arbitrary provider exception text. */

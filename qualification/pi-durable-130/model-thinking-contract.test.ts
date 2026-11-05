@@ -114,20 +114,15 @@ async function fixture(override?: Partial<Model<'openai-completions'>>) {
   await Bun.sleep(0);
   reads.length = 0; auth.length = 0;
   const lifetime = new AbortController();
-  const accounting = { authorize: 0, current: 0, dispatch: 0, retain: 0, settle: 0, abandon: 0 };
+  const effects = { authorize: 0, current: 0, usage: 0 };
   const check = (signal: AbortSignal) => { lifetime.signal.throwIfAborted(); signal.throwIfAborted(); };
   const policy: HostModelPolicy = { signal: lifetime.signal,
-    async authorize(owner, kind, signal) { expect(owner).toEqual(ref); expect(kind).toBe('chat'); check(signal); accounting.authorize++; },
-    assertCurrent(_owner, _kind, signal) { check(signal); accounting.current++; },
-    async prepareRequest(_owner, _options, signal) { check(signal); return {
-      async dispatch() { check(signal); accounting.dispatch++; },
-      async retainTerminal(message) { accounting.retain++; return copy(message); },
-      async settle() { check(signal); accounting.settle++; },
-      async abandon() { accounting.abandon++; },
-    }; },
+    async authorize(owner, kind, signal) { expect(owner).toEqual(ref); expect(kind).toBe('chat'); check(signal); effects.authorize++; },
+    assertCurrent(_owner, _kind, signal) { check(signal); effects.current++; },
+    observeUsage() { effects.usage++; },
   };
   const models = createHostModels(runtime, [ref], policy);
-  return { runtime, models, model: models.getModel(ref.provider, ref.id)!, reads, auth, wires, accounting,
+  return { runtime, models, model: models.getModel(ref.provider, ref.id)!, reads, auth, wires, effects,
     calls: () => calls, close: () => lifetime.abort() };
 }
 
@@ -216,7 +211,7 @@ test('real native configuration persists xhigh/max for the next actual wire requ
       expect((await harness.snapshot(AgentDoc, conversation.id, context))!.thinkingLevel).toBe(level);
       expect(copy((await conversation.entries({ order: 'ascending' }, 100, undefined, context)).items)).toEqual(before);
       expect(f.wires).toEqual(priorWire); expect(f.calls()).toBe(index);
-      expect(f.reads).toHaveLength(index); expect(f.accounting.authorize).toBe(index);
+      expect(f.reads).toHaveLength(index); expect(f.effects.authorize).toBe(index);
       const submission = await conversation.submit({ type: 'input', requestId: `thinking-${level}`, content: `next-${level}` }, context);
       expect((await submission.wait(context)).status).toBe('done');
       expect(f.wires).toHaveLength(index + 1);
@@ -226,7 +221,7 @@ test('real native configuration persists xhigh/max for the next actual wire requ
       expect(rows.flatMap(entry => entry.model ?? []).filter(message => message.role === 'user')).toHaveLength(index + 1);
     }
     expect(reports).toEqual([]);
-    expect(f.accounting).toMatchObject({ authorize: 3, dispatch: 3, retain: 3, settle: 3, abandon: 0 });
+    expect(f.effects).toMatchObject({ authorize: 3, usage: 3 });
     console.log('[native-thinking-wire]', JSON.stringify(f.wires.map(wire => ({
       reasoning_effort: wire.body.reasoning_effort, max_tokens: wire.body.max_tokens,
     }))));
@@ -255,7 +250,7 @@ for (const change of ['reasoning-disabled', 'level-disabled', 'level-remapped'] 
   });
 }
 
-test('thinking metadata change across awaited dispatch admission prevents the root wire request', async () => {
+test('thinking metadata change across awaited source/provider approval prevents the root wire request', async () => {
   const f = await fixture();
   let release!: () => void, entered!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
@@ -271,18 +266,14 @@ test('thinking metadata change across awaited dispatch admission prevents the ro
         expect(Object.isFrozen(model.thinkingLevelMap)).toBe(true);
         return f.runtime.streamSimple(model, ctx, options);
       } }, [ref], {
-      signal: new AbortController().signal, async authorize() {}, assertCurrent() {},
-      async prepareRequest() { return {
-        async dispatch() { entered(); await held; },
-        async retainTerminal(message) { return copy(message); }, async settle() {}, async abandon() {},
-      }; },
+      signal: new AbortController().signal, async authorize() { entered(); await held; }, assertCurrent() {},
     });
     const result = bridge.streamSimple(bridge.getModel(ref.provider, ref.id)!, prefix(), { reasoning: 'max' }).result();
     await started;
     source.thinkingLevelMap!.max = 'high';
     release();
     expect((await result).stopReason).toBe('error');
-    expect(snapshots).toBe(1); expect(f.wires).toEqual([]);
+    expect(snapshots).toBe(0); expect(f.wires).toEqual([]);
     expect(f.calls()).toBe(0);
   } finally { release(); f.close(); }
 });
