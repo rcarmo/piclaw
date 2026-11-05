@@ -168,6 +168,8 @@ export function sanitizeProviderErrorDetail(errorText: string | null | undefined
 
 function inferCategory(text: string): ProviderErrorCategory {
   if (isOrphanFunctionCallOutputError(text)) return "session_corruption";
+  // Explicit exhaustion evidence outranks transient HTTP/retry wording.
+  if (/\binsufficient_quota\b/i.test(text)) return "quota";
   if (/\b429\b|rate[ -]?limit|too many requests|retry-after/i.test(text)) return "rate_limit";
   // A refresh request that reaches a 5xx response is a transient provider
   // failure, not evidence that the user's OAuth credentials expired.

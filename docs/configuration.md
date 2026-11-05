@@ -339,6 +339,12 @@ Piclaw's `/login` provider picker uses Earendil's runtime provider catalog plus 
 
 Use `/login <provider-id>` to configure one of these providers directly. Provider composition details are available in the `/agent/models` payload under `provider_diagnostics`; the payload includes non-secret auth source/label and composition flags.
 
+### Custom-endpoint error diagnostics
+
+OpenAI-compatible endpoints can report exhausted billing quota with `error.code` or `error.type` set to `insufficient_quota`. Piclaw's web error formatter treats that explicit identifier as a quota error even when the response is HTTP 429 or asks the client to retry. An ordinary 429 remains a transient rate-limit warning.
+
+Request IDs remain available in the diagnostic details. The formatter keeps bounded text and omits HTML error bodies, embedded data and unrelated JSON payload fields. Compatibility can be checked with synthetic formatter fixtures; no provider key, new transport or provider-listing endorsement is required.
+
 ### OpenRouter output budget
 
 Piclaw bounds OpenRouter output reservations to avoid HTTP 402 failures caused by a model's advertised maximum output. The filter applies only to `openrouter` requests, preserves a lower explicit `max_tokens` or `max_completion_tokens` value, and defaults absent, malformed, or excessive limits to 32,768 tokens. It does not change the model's context window.
