@@ -112,10 +112,22 @@ function catalogCost(cost: AnyModel["cost"]): AnyModel["cost"] {
   return { ...rates(cost), tiers: cost.tiers?.map((tier) => ({ ...rates(tier), inputTokensAbove: tier.inputTokensAbove })) };
 }
 function usage(value?: Usage): Usage | undefined {
-  return value && { input: value.input, output: value.output, cacheRead: value.cacheRead,
+  if (!value) return;
+  const result: Usage = { input: value.input, output: value.output, cacheRead: value.cacheRead,
     cacheWrite: value.cacheWrite, totalTokens: value.totalTokens,
     cost: { input: value.cost.input, output: value.cost.output, cacheRead: value.cost.cacheRead,
       cacheWrite: value.cost.cacheWrite, total: value.cost.total } };
+  // Keep the same reporting scalars as retained terminals. In particular, a
+  // supplied actual zero is not absence; neither implies a currency or price.
+  for (const key of ['reasoning', 'cacheWrite1h', 'providerCost', 'provider_cost', 'reasoningTokens', 'reasoning_tokens'] as const) {
+    const item: unknown = Object.getOwnPropertyDescriptor(value, key)?.value;
+    if (typeof item === 'number' && Number.isFinite(item) && item >= 0) Object.assign(result, { [key]: item });
+  }
+  for (const key of ['cacheReadReported', 'cacheWriteReported'] as const) {
+    const item: unknown = Object.getOwnPropertyDescriptor(value, key)?.value;
+    if (typeof item === 'boolean') Object.assign(result, { [key]: item });
+  }
+  return result;
 }
 function operationOptions(operation: "generateImages" | "classify", options: ImagesOptions | ClassifierOptions = {}) {
   if (Object.getPrototypeOf(options) !== Object.prototype) throw new Error("Only JSON data is qualified");
