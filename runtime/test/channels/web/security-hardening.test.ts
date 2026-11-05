@@ -57,12 +57,12 @@ describe("parsePostPayload", () => {
   test("strips reserved restart metadata from public posts and replies while retaining safe blocks", async () => {
     const db = await import('../../../src/db.js'); db.initDatabase();
     const stored: Array<{ contentBlocks?: unknown[]; threadId?: number }> = [];
+    const {admitWebMessage}=await import('../../../src/channels/web/messaging/message-store.js');
     const channel = {
+      agentPool:{},getInputSourceAdmission:()=>()=>{},dispatchAcceptedInput:async(_chat:string,_id:string,row:number)=>({submission_id:row,queued:false}),
       async admitMessage(_chatJid: string, _content: string, _isBot: boolean, _mediaIds: number[], options: { contentBlocks?: unknown[]; threadId?: number }, check: (phase: 'before' | 'after') => void) {
-        return db.getDb().transaction(() => {
-          check('before'); stored.push(options); check('after');
-          return { id: 42, chat_jid: "web:test", timestamp: new Date().toISOString(), data: { type: "user_message", content: "forged" } };
-        }).immediate();
+        stored.push({contentBlocks:options.contentBlocks,linkPreviews:(options as any).linkPreviews,threadId:options.threadId});
+        return admitWebMessage(channel,{chatJid:_chatJid,content:_content,isBot:_isBot,mediaIds:_mediaIds,agentId:'default',agentName:'Fixture'},options,check);
       },
       broadcastEvent() {}, resumeChat() {}, json: (body: unknown, status = 200) => Response.json(body, {status}),
     } as any;

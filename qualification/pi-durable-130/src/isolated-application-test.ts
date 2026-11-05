@@ -14,6 +14,11 @@ export function isolatedApplicationTest(caller: string) {
     cases.add(scenario);
     const selected = process.env.PICLAW_ISOLATED_APPLICATION_CASE;
     if (selected && selected !== scenario) return;
+    const scenarioTimeout = Math.min(timeout, 60_000);
+    // The child's Bun test owns the scenario deadline. The parent must also
+    // allow bounded process launch/import and cleanup; killing it after 4s for
+    // a 5s scenario discarded still-valid cold-start assertion receipts.
+    const parentTimeout = scenarioTimeout + 10_000;
     test(title, async () => {
       if (selected) {
         expect(process.env.PICLAW_TEST_FS_ISOLATION_ROOT).not.toBe(process.env.PICLAW_ISOLATED_APPLICATION_PARENT_ROOT);
@@ -33,7 +38,7 @@ export function isolatedApplicationTest(caller: string) {
             PICLAW_ISOLATED_APPLICATION_PARENT_ROOT: process.env.PICLAW_TEST_FS_ISOLATION_ROOT ?? "" },
           stdout: "pipe", stderr: "pipe",
         });
-        const timer = setTimeout(() => child.kill(), Math.min(timeout, 60_000) - 1000);
+        const timer = setTimeout(() => child.kill(), parentTimeout - 1000);
         try {
           const [code, out, err] = await Promise.all([child.exited,
             new Response(child.stdout).text(), new Response(child.stderr).text()]);
@@ -43,6 +48,6 @@ export function isolatedApplicationTest(caller: string) {
           expect(code, `Isolated application ${scenario}`).toBe(0);
         } finally { clearTimeout(timer); }
       } finally { isolation.cleanup(); }
-    }, Math.min(timeout, 60_000));
+    }, selected ? scenarioTimeout : parentTimeout);
   };
 }

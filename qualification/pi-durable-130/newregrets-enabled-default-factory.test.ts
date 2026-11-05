@@ -104,7 +104,7 @@ for(const mode of ['reported','unknown-price','report-fault'] as const)applicati
     const bound = backend.bind({ queue: base.queue, agentPool: pool });
     const channel = new WebChannel(bound);
     channel.queue.isLaneBusy=()=>{throw Error("Host lane must not govern native submission");};
-    channel.getQueuedFollowupCount=()=>{throw Error("Saved UI queue must not govern native submission");};
+    (channel as any).getQueuedFollowupCount=()=>{throw Error("Saved UI queue must not govern native submission");};
     (channel as any).getAcceptedQueuedSteering=()=>{throw Error("Host steering selection must not govern native submission");};
     pool.isActive=()=>true; pool.isStreaming=()=>false; // Reproduced stale host lifecycle window.
     let completed=0;

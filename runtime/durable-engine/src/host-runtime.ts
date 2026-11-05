@@ -18,8 +18,9 @@ import type { ServiceWorkStore, AcceptCancellationRequest, OperationSnapshot } f
 import type { TerminalSettlementStore, CommitTerminalRequest, TerminalDatabaseEffect } from "../../../runtime/src/service-effects/contracts/terminal-settlement-store.js";
 import { value, sealed, effect } from "./host-effects.js";
 import { LegacyImportManifest } from "./legacy-import-schema.js";
-import { assertNativeBackgroundExecution,claimNativeBackgroundTool,nativeBackgroundToolReceiptKnown } from './host-background-policy.js';
-import { nativeBackgroundIdentity,readNativeBackgroundPolicy,type NativeBackgroundPolicy } from '../../src/agent-pool/background-operation-contract.js';
+import { assertNativeBackgroundExecution,claimNativeBackgroundTool,NativeBackgroundPolicyDoc } from './host-background-policy.js';
+import { nativeBackgroundIdentity,readNativeBackgroundPayload,nativeBackgroundPolicyHash,type NativeBackgroundPayload } from '../../src/agent-pool/background-operation-contract.js';
+import { NativeBackgroundContexts, type NativeBackgroundContext } from "./host-background-context.js";
 import { projectPublicHistory } from "./session-tree.js";
 import { materializePlanContext, materializeGoalContext, type GoalContextIdentity } from "./host-plan-context.js";
 import { buildSessionTreeSnapshot, type RootSessionTreeNode, type SessionTreeSnapshot } from "../../src/agent-control/session-tree-snapshot.js";
@@ -109,7 +110,7 @@ export interface RuntimeOptions {
   readonly onMaintenanceSettled?: (workId: string) => void | Promise<void>;
   readonly cancelSideSource?: (input: AcceptedInput) => void | Promise<void>;
   /** Atomically persist operator cancellation against this exact operation version. */
-  readonly cancelOperationSource?: (input: AcceptedInput, expectedVersion: number, retryTaskId?: number, cause?: 'background_cancelled' | 'background_timeout') => void | Promise<void>;
+  readonly cancelOperationSource?: (input: AcceptedInput, expectedVersion: number, retryTaskId?: number) => void | Promise<void>;
   /** Required for model SET: shared-file SQL guard, checked inside each storage transaction. */
   readonly withIdleModelGuard?: <T>(body: () => Promise<T>) => Promise<T>;
   readonly withSessionResetGuard?: <T>(chatJid: string, body: () => Promise<T>) => Promise<T>;
@@ -328,15 +329,6 @@ export class HostConversationRuntime {
       this.fence();
       (this.options.existingConversationIds as ConversationId[]).push(binding.conversationId);
       return binding;
-    });
-  }
-  /** Existing private context publication never appends another conversation
-   * identity to the scheduling/recovery domain. */
-  prepareBackgroundInput(id:ConversationId,update:(tx:import('@earendil-works/pi-durable').Tx)=>Promise<void>,check:()=>void){
-    this.options.assertAdmission?.();
-    return this.observe(async()=>{
-      this.fence();check();if(!this.options.existingConversationIds.includes(id))throw Error('Existing background context is not registered');
-      await this.harness.commit(async tx=>{this.fence();check();await update(tx);this.fence();check();},this.context);this.fence();check();
     });
   }
   /** Allocation only; EF-S07 continues to own execution, result and recurrence. */
@@ -1423,34 +1415,162 @@ export class HostConversationRuntime {
       });
     });
   }
-  /** Exact accepted private input, public SDK configuration and bounded quota.
-   * The same synchronous source fence also guards the actual host effect. */
-  qualifyBackgroundRequest(inputs:readonly HostInputBinding[],raw:NativeBackgroundPolicy,call?:{taskId:TaskId;callId:string;toolName:string}){
-    const policy=readNativeBackgroundPolicy(raw),captured=inputs.map(input=>Object.freeze({...inputSnapshot(input),submissionId:input.submissionId})),identity=nativeBackgroundIdentity(policy);
-    if(captured.length!==1||captured[0]!.sourceId!==identity.sourceId||captured[0]!.operationId!==identity.operationId||captured[0]!.chatJid!==identity.chatJid)throw Error('Exact background accepted input required');
-    const input=captured[0]!,actual=call&&Object.freeze({...call});
-    return this.observe(async()=>{
-      const check=()=>this.assertCapturedSourceCurrent(captured),guard=this.options.withPromptContextGuard;
-      if(!guard)throw Error('Background SDK transaction guard unavailable');check();
-      await guard(check,()=>this.harness.commit(async tx=>{
-        if(actual)await claimNativeBackgroundTool(tx,input.conversationId,policy,actual,Date.now(),check);
-        else await assertNativeBackgroundExecution(tx,input.conversationId,policy,Date.now(),check);
-      },this.context));check();
+  /** SDK-owned Dream input and actual task provenance. The host supplies only
+   * current domain authority; there is no S01 operation or terminal owner. */
+  qualifyDreamSource(binding: NativeBackgroundContext, raw: NativeBackgroundPayload,
+    scope: { conversationId: number; taskId: number; taskKind: "pi.generation" | "pi.compaction" | "pi.tool"; callId?: string }, check: () => void) {
+    const payload = readNativeBackgroundPayload(raw), target = Object.freeze({ ...binding }), call = Object.freeze({ ...scope });
+    const identity = nativeBackgroundIdentity(payload.policy);
+    if (payload.policy.origin.kind !== "dream" || target.contextKey !== identity.contextKey || target.chatJid !== identity.chatJid ||
+        target.branchId !== identity.branchId || call.conversationId !== target.conversationId) throw Error("Exact private Dream source required");
+    return this.observe(async () => {
+      const guard = this.options.withPromptContextGuard;
+      if (!guard) throw Error("Dream SDK source guard unavailable");
+      const current = () => { this.fence(); check(); };
+      current();
+      await guard(current, () => this.harness.commit(async tx => {
+        const task = await tx.task(call.taskId as TaskId);
+        if (!task || task.conversationId !== target.conversationId || task.kind !== call.taskKind || task.abortRequested || task.state.status !== "running")
+          throw Error("Live Dream SDK task required");
+        const submission = await this.dreamSubmission(tx, target, payload);
+        const live = await tx.doc(LiveDoc, target.conversationId);
+        if (call.taskKind === "pi.compaction") {
+          const reason = (task.input as { reason?: string }).reason;
+          const checkpoint = task.state.checkpoint;
+          if (!checkpoint || typeof checkpoint !== "object" || Array.isArray(checkpoint) || checkpoint.phase !== "summarize" ||
+              !["threshold", "overflow"].includes(reason ?? "") ||
+              !live.compactions?.some(slot => slot.taskId === task.id && slot.reason === reason && slot.blocking === (task.owner !== undefined)))
+            throw Error("Exact Dream compaction task required");
+          if (task.owner !== undefined) {
+            const owner = await tx.task(task.owner);
+            if (!owner || owner.kind !== "pi.generation" || owner.conversationId !== target.conversationId || owner.abortRequested ||
+                owner.state.status === "terminal" || live.run?.taskId !== owner.id || live.run.inputs.length !== 1 || live.run.inputs[0] !== submission.id)
+              throw Error("Exact Dream compaction generation required");
+          } else if (!task.background || reason !== "threshold") throw Error("Exact Dream background compaction required");
+        }
+        if (call.taskKind !== "pi.compaction" && (!live.run || live.run.inputs.length !== 1 || live.run.inputs[0] !== submission.id ||
+            (call.taskKind === "pi.generation" ? live.run.taskId !== task.id : task.owner !== live.run.taskId))) throw Error("Exact Dream SDK run required");
+        if (call.taskKind === "pi.tool") {
+          const input = task.input as import("@earendil-works/pi-durable").ToolTaskInput;
+          const slot = live.tools?.find(item => item.taskId === task.id && item.callId === call.callId && item.status !== "done");
+          if (input.kind !== "model" || !call.callId || input.callId !== call.callId || !slot) throw Error("Exact Dream model tool required");
+          const assistant = await tx.entry(input.assistant);
+          const messages = assistant?.model?.filter(message => message.role === "assistant" && message.content.some(part => part.type === "toolCall" && part.id === call.callId && part.name === slot.name)) ?? [];
+          if (assistant?.kind !== "pi.assistant" || assistant.conversationId !== target.conversationId || assistant.byTaskId !== task.owner || messages.length !== 1)
+            throw Error("Exact Dream tool assistant required");
+          const message = messages[0]!;
+          if (message.role !== "assistant" || message.provider !== payload.policy.model.provider || message.model !== payload.policy.model.modelId || message.api !== payload.policy.model.api)
+            throw Error("Dream source model changed");
+          if (slot.status === 'pending') {
+            await claimNativeBackgroundTool(tx, target.conversationId, payload.policy, { taskId: task.id, callId: call.callId, toolName: slot.name }, Date.now(), current);
+          } else {
+            await assertNativeBackgroundExecution(tx, target.conversationId, payload.policy, Date.now(), current);
+            if (!payload.policy.allowedTools.includes(slot.name)) throw Error('Dream tool ceiling denied');
+            if (payload.policy.maxToolCalls !== null) {
+              const quota = await tx.doc(NativeBackgroundPolicyDoc, target.conversationId, payload.policy.sourceId, null);
+              if (!quota.calls.some(claim => claim.taskId === task.id && claim.callId === call.callId && claim.toolName === slot.name))
+                throw Error('Dream tool requires its existing SDK quota claim');
+            }
+          }
+        } else await assertNativeBackgroundExecution(tx, target.conversationId, payload.policy, Date.now(), current);
+        current();
+      }, this.context));
+      current();
     });
   }
-  /** Passive tool receipt inspection for an already settled input. Never grants
-   * scheduling, task replay or current spending permission. */
-  backgroundToolOutcomesKnown(input:AcceptedInput){
-    const copy=inputSnapshot(input);
-    return this.observe(async()=>{
-      await this.checked(copy);this.fence();
-      const known=await this.harness.commit(async tx=>{
-        let cursor:import('@earendil-works/pi-durable').Cursor|undefined;
-        do{const page=await tx.scanTasks({conversationId:copy.conversationId,kind:'pi.tool'},100,cursor);
-          for(const task of page.items)if(!await nativeBackgroundToolReceiptKnown(tx,task))return false;
-          cursor=page.next;
-        }while(cursor!==undefined);return true;
-      },this.context);this.fence();return known;
+  private async dreamSubmission(tx: import("@earendil-works/pi-durable").Tx, binding: NativeBackgroundContext, payload: NativeBackgroundPayload) {
+    const record = await tx.submissionByRequest(binding.conversationId, payload.policy.sourceId);
+    if (!record || record.type !== "input" || record.entry === undefined) throw Error("Dream SDK input required");
+    const entry = await tx.entry(record.entry), data = entry?.data as Record<string, unknown> | undefined;
+    if (record.conversationId !== binding.conversationId || entry?.conversationId !== binding.conversationId || entry.kind !== "app.dream-input" ||
+        data?.incarnation !== this.options.incarnation || data.sourceId !== payload.policy.sourceId || data.contextKey !== binding.contextKey ||
+        data.policySha256 !== nativeBackgroundPolicyHash(payload.policy) || entry.model?.length !== 1 || entry.model[0]?.role !== "user" || entry.model[0].content !== payload.prompt)
+      throw Error("Dream SDK input identity conflict");
+    return record;
+  }
+  /** Private one-shot execution is a direct public SDK mapping. Cleanup sits
+   * outside tracked observation so SDK close can finish before the FD lease joins. */
+  async runDreamConversation(binding: NativeBackgroundContext, raw: NativeBackgroundPayload, check: () => void, signal: AbortSignal) {
+    const payload = readNativeBackgroundPayload(raw), target = Object.freeze({ ...binding });
+    if (payload.policy.origin.kind !== "dream" || nativeBackgroundIdentity(payload.policy).contextKey !== target.contextKey) throw Error("Private Dream identity required");
+    let conversation: Awaited<ReturnType<Harness["conversation"]>> = undefined, admitted = false;
+    const deadline = new AbortController();
+    const timer = setTimeout(() => deadline.abort(new DOMException("Dream deadline expired", "TimeoutError")), Math.max(0, Date.parse(payload.policy.expiresAt) - Date.now()));
+    const context = withAbortSignal(AbortSignal.any([signal, deadline.signal, this.observations.signal]), this.context);
+    const cleanupContext = withoutAbortSignal(this.context);
+    try {
+      return await this.observe(async () => {
+        check(); this.options.assertAdmission?.();
+        conversation = await this.harness.conversation(target.conversationId, context); this.fence(); check();
+        if (!conversation) throw Error("Missing private Dream conversation");
+        await conversation.commit(async tx => {
+          const prior = await tx.submissionByRequest(target.conversationId, payload.policy.sourceId);
+          const tasks = await tx.scanTasks({ conversationId: target.conversationId }, 1);
+          const entries = await tx.scanEntries({ conversationId: target.conversationId }, 1);
+          check();
+          if (prior || tasks.items.length || entries.items.length) throw Error("Dream context already has SDK work; input was not resubmitted");
+        }, context);
+        this.fence(); check();
+        // The exact empty, invocation-specific context is now ours. There is no
+        // host claim, frontier, operation binding or second completion commit.
+        admitted = true;
+        let status: SubmissionRecord | undefined;
+        try {
+          const submission = await conversation.submit({ type: "input", requestId: payload.policy.sourceId, content: payload.prompt, whenBusy: "reject",
+            entry: { kind: "app.dream-input", data: { incarnation: this.options.incarnation, sourceId: payload.policy.sourceId, contextKey: target.contextKey, policySha256: nativeBackgroundPolicyHash(payload.policy) } } }, context);
+          status = await submission.wait(context); this.fence();
+        } catch (error) {
+          if (this.closed || this.storageClosing) throw error;
+          // A lost return is correlation uncertainty, not a cancellation grant.
+          // Re-observe the exact accepted SDK handle without resubmitting input.
+          if (context.abortSignal?.aborted) {
+            await conversation.abort(cleanupContext, { background: true }); this.fence();
+            status = await conversation.commit(tx => tx.submissionByRequest(target.conversationId, payload.policy.sourceId), cleanupContext);
+            if (!status || !["done", "unanswered"].includes(status.status)) throw error;
+          } else {
+            const record = await conversation.commit(tx => this.dreamSubmission(tx, target, payload), cleanupContext); this.fence();
+            const submission = await this.harness.submission(record.id, context); this.fence();
+            if (!submission) throw error;
+            status = await submission.wait(context); this.fence();
+          }
+        }
+        if (!status) throw Error("Missing Dream SDK result");
+        const verified = await conversation.commit(tx => this.dreamSubmission(tx, target, payload), cleanupContext); this.fence();
+        if (verified.id !== status.id || verified.status !== status.status) throw Error("Dream SDK result changed");
+        if (status.type !== "input" || status.status !== "done") return { status, answer: null, timedOut: deadline.signal.aborted };
+        const completed = status;
+        const entry = await conversation.commit(tx => tx.entry(completed.answer), cleanupContext); this.fence();
+        if (entry?.kind !== "pi.assistant" || entry.conversationId !== target.conversationId || entry.model?.length !== 1 || entry.model[0]?.role !== "assistant")
+          throw Error("Dream SDK answer missing");
+        const message = entry.model[0];
+        return { status, answer: { message, text: message.content.filter(part => part.type === "text").map(part => part.text).join("") }, timedOut: false };
+      });
+    } finally {
+      clearTimeout(timer);
+      const captured = conversation as Awaited<ReturnType<Harness["conversation"]>>;
+      if (admitted && captured) {
+        if (this.closed || this.storageClosing) await this.storageEnded;
+        else try { await captured.abort(cleanupContext, { background: true }); }
+        catch (error) { log.warn("Dream cleanup awaits confirmed SDK close", { operation: "durable_dream.cleanup_pending", conversationId: target.conversationId }); await this.storageEnded; throw error; }
+      }
+    }
+  }
+  /** Passive attribution lets other SDK work progress alongside a live Dream.
+   * It grants no provider/tool permission; those retain the live domain guard. */
+  ownsDreamSubmission(inspected: SubmissionRecord): Promise<boolean> {
+    return this.observe(async () => {
+      if (inspected.type !== "input" || !inspected.requestId || !this.options.existingConversationIds.includes(inspected.conversationId)) return false;
+      return this.harness.commit(async tx => {
+        const record = await tx.submissionByRequest(inspected.conversationId, inspected.requestId!);
+        if (!record || record.id !== inspected.id || record.type !== "input" || record.entry === undefined) return false;
+        const entry = await tx.entry(record.entry), data = entry?.data as Record<string, unknown> | undefined;
+        if (entry?.kind !== "app.dream-input" || data?.incarnation !== this.options.incarnation || data.sourceId !== record.requestId || typeof data.policySha256 !== "string") return false;
+        const mapping = await tx.doc(NativeBackgroundContexts, 1 as ConversationId);
+        const binding = mapping.contexts.find(item => item.conversationId === inspected.conversationId && item.contextKey === data.contextKey && item.chatJid.startsWith("dream:"));
+        if (!binding || mapping.domain !== this.options.incarnation) return false;
+        const policy = await tx.doc(NativeBackgroundPolicyDoc, binding.conversationId, record.requestId!, null);
+        return policy.sourceId === record.requestId && policy.policySha256 === data.policySha256;
+      }, this.context);
     });
   }
   /** Read-only generation provenance, including the first request before host ACK. */
@@ -2335,86 +2455,6 @@ export class HostConversationRuntime {
       // Publish the public failed-storage proof before a caller considers recovery.
       if (this.storageClosing) await this.storageEnded;
       throw error;
-    });
-  }
-  /** Capture cleanup while the fresh private Dream source is still owned.
-   * The returned join is deliberately outside detachable observation tracking:
-   * shutdown must be able to close SDK resources before this waiter returns. */
-  captureDreamCleanup(input:AcceptedInput):Promise<()=>Promise<void>>{
-    const copy=inputSnapshot(input);
-    return this.observe(async()=>{
-      await this.checked(copy);this.fence();
-      if(!copy.chatJid.startsWith('dream:')||!/^background:[a-f0-9]{64}$/.test(copy.sourceId)||this.options.operationConversationFor?.(copy)!==copy.conversationId)throw Error('Exact private Dream cleanup owner required');
-      const record=await this.harness.commit(tx=>tx.conversation(copy.conversationId),this.context);this.fence();
-      if(!record||record.parent||record.owner)throw Error('Fresh ownerless Dream context required');
-      const context=withoutAbortSignal(this.context);
-      let joined:Promise<void>|undefined;
-      return()=>joined??=(async()=>{
-        if(this.closed||this.storageClosing){await this.storageEnded;return;}
-        try{
-          this.options.owner.assert();
-          const conversation=await this.harness.conversation(copy.conversationId,context);
-          if(!conversation)throw Error('Private Dream cleanup context missing');
-          await conversation.abort(context,{background:true});
-        }catch(error){
-          // Do not release Dream's FD lease merely because observation/abort
-          // failed. SDK close owns actual provider/tool resource cleanup.
-          log.warn('Private Dream cleanup awaits confirmed SDK close',{operation:'durable_dream.cleanup_pending',conversationId:copy.conversationId});
-          await this.storageEnded;
-          throw error;
-        }
-      })();
-    });
-  }
-  /** Join the private context's SDK-owned compaction work before releasing its
-   * accepted source/lease. Observation detaches on close; SDK close still owns
-   * the real tasks and provider cleanup. No new scheduler progress is granted. */
-  joinBackgroundCompactions(input:AcceptedInput){
-    const copy=inputSnapshot(input),context=withAbortSignal(this.observations.signal,this.context);
-    return this.observe(async()=>{
-      await this.checked(copy);this.fence();
-      if(!/^background:[a-f0-9]{64}$/.test(copy.sourceId)||this.options.operationConversationFor?.(copy)!==copy.conversationId)throw Error('Exact background compaction join required');
-      const joined=new Set<number>();
-      for(;;){
-        const tasks=await this.harness.commit(async tx=>{
-          const found:import('@earendil-works/pi-durable').TaskRecord<unknown,unknown,CompactionResult>[]=[];let cursor:import('@earendil-works/pi-durable').Cursor|undefined;
-          do{const page=await tx.scanTasks({conversationId:copy.conversationId,kind:'pi.compaction'},100,cursor);
-            for(const task of page.items)if(!joined.has(task.id))found.push(task as typeof found[number]);cursor=page.next;
-          }while(cursor!==undefined);return found;
-        },context);this.fence();if(!tasks.length)return;
-        for(const candidate of tasks){
-          const reason=(candidate.input as {reason?:string}).reason;
-          if(!['threshold','overflow'].includes(reason??''))throw Error('Unqualified private compaction task');
-          const task=candidate.state.status==='terminal'?candidate:await this.harness.waitForTask(candidate.id,context);this.fence();
-          if(task.state.status!=='terminal')throw Error('Private compaction task remains live');
-          if(task.state.outcome.status==='completed'&&task.state.outcome.result.submissionId!==undefined){
-            const submission=await this.harness.submission(task.state.outcome.result.submissionId,context);this.fence();
-            const status=await submission?.wait(context);this.fence();
-            if(!status||status.type!=='write'||status.conversationId!==copy.conversationId||!['done','unanswered'].includes(status.status))throw Error('Private compaction write remains uncertain');
-          }
-          joined.add(candidate.id);
-        }
-      }
-    });
-  }
-  /** Only an exact private ownerless/unforked context may be aborted wholesale.
-   * Cancellation is owner cleanup and does not require a current spend grant. */
-  abortBackground(input:AcceptedInput,cause:'background_cancelled'|'background_timeout'='background_cancelled'):Promise<boolean>{
-    const copy=inputSnapshot(input);
-    return this.observe(async()=>{
-      const o=this.options;
-      if(!/^background:[a-f0-9]{64}$/.test(copy.sourceId)||copy.requestId!==copy.sourceId||copy.payloadRef!==copy.sourceId||
-        o.operationConversationFor?.(copy)!==copy.conversationId||o.conversationFor(copy.chatJid,copy.branchId)!==copy.conversationId||!o.cancelOperationSource)throw Error('Exact private background abort required');
-      const state=await this.readState(copy);this.fence();
-      if(state.operation.terminal)return false;
-      const record=await this.harness.commit(tx=>tx.conversation(copy.conversationId),this.context);this.fence();
-      if(!record||record.parent||record.owner)throw Error('Exact private background abort required');
-      const completed=state.status?.status==='done';
-      if(!completed&&!state.operation.cancellation)await o.cancelOperationSource(copy,state.operation.version,undefined,cause);
-      this.fence();await this.progress(completed?undefined:copy);
-      const conversation=await this.harness.conversation(copy.conversationId,this.context);this.fence();
-      if(!conversation)throw Error('Missing private background conversation');
-      await conversation.abort(this.context,{background:true});this.fence();return !completed;
     });
   }
   /** Explicit progress grant after caller has revalidated the entire ownership domain. */

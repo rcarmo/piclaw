@@ -1,4 +1,3 @@
-import { operationSessionProfile, operationSessionTools } from "./operation-session-profile.js";
 import { assertCurrentProviderSelection } from './retired-provider-selection.js';
 /**
  * agent-pool/session.ts – pi-agent session creation and directory management.
@@ -533,10 +532,9 @@ export async function createSessionInDir(
 ): Promise<AgentSessionRuntime> {
   if (readAccessConfig().mode !== "single-user") throw new Error("Single-user session execution is required.");
   ensureValidProcessCwd();
-  const operationProfile = operationSessionProfile(options.chatJid);
-  const channelSystemPromptAppendix = operationProfile ? '' : getChannelSystemPromptAppendix(options.chatJid);
+  const channelSystemPromptAppendix = getChannelSystemPromptAppendix(options.chatJid);
   const appendSystemPromptOverride = getAppendSystemPromptOverride(channelSystemPromptAppendix);
-  const additionalExtensionPaths = operationProfile ? [] : getBundledExtensionPaths(options.chatJid);
+  const additionalExtensionPaths = getBundledExtensionPaths(options.chatJid);
 
   const workspaceDir = getWorkspaceDir();
   await sanitizePersistedSessionFileBeforeLoad(sessionDir);
@@ -554,7 +552,7 @@ export async function createSessionInDir(
     sessionStartEvent?: SessionStartEvent;
   }) => {
     assertCurrentProviderSelection(options.settingsManager, sessionManager);
-    const mcpAvailable = !operationProfile && canConstructMcpOwner();
+    const mcpAvailable = canConstructMcpOwner();
     const mcpOwner = !mcpAvailable ? null : createMcpBridgeOwner((bridge, onLifecycle) => selectedMcpPolicy().engine === 'native'
       ? createConstrainedNativeOwner({
           servers: (bridge.nativePreview ?? { servers: [], errors: [] }).servers.map(entry => ({ ...entry, config: 'command' in entry.config
@@ -569,7 +567,7 @@ export async function createSessionInDir(
       resolveRuntimeEnv: serverName => bridge.resolveRuntimeEnv(serverName),
     }), undefined, { requireLifecycle: true });
     try {
-    const builtinExtensionFactories = operationProfile ? [] : [
+    const builtinExtensionFactories = [
       ...createBuiltinExtensionFactories({
         modelRuntime: options.modelRuntime,
         chatJid: options.chatJid,
@@ -588,7 +586,6 @@ export async function createSessionInDir(
         : builtinExtensionFactories,
       additionalExtensionPaths,
       ...(appendSystemPromptOverride ? { appendSystemPromptOverride } : {}),
-      ...operationProfile,
     });
     await resourceLoader.reload();
     mcpOwner?.assertLoaded(resourceLoader.getExtensions());
@@ -616,8 +613,7 @@ export async function createSessionInDir(
       // allowlist that silently blocks every extension tool not listed.
       // The tool-activation extension sets the correct default-active set
       // via its session_start handler instead.
-      ...(operationProfile ? { tools: operationSessionTools(options.chatJid!) } : {}),
-      customTools: operationProfile ? [] : options.customTools as any,
+      customTools: options.customTools as any,
     });
     try {
     if (mcpOwner) {
@@ -632,7 +628,7 @@ export async function createSessionInDir(
       }));
 
     const diagnostics = [
-      ...(!operationProfile && !mcpAvailable ? [{ type: "warning" as const, message: "MCP instance policy unavailable; MCP and codemode disabled for this session. Repair the instance configuration before enabling MCP." }] : []),
+      ...(!mcpAvailable ? [{ type: "warning" as const, message: "MCP instance policy unavailable; MCP and codemode disabled for this session. Repair the instance configuration before enabling MCP." }] : []),
       ...normalizeResourceDiagnostics(result.extensionsResult?.errors ?? []),
       ...normalizeResourceDiagnostics(resourceLoader.getSkills().diagnostics ?? []),
       ...normalizeResourceDiagnostics(resourceLoader.getPrompts().diagnostics ?? []),

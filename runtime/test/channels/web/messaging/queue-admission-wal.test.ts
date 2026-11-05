@@ -15,7 +15,7 @@ for (const outcome of ['cancel', 'archive'] as const) test(`queued HTTP admissio
     db.storeChatMetadata(chat, '2026-01-01T00:00:00Z');
     db.ensureChatBranch({ chat_jid: chat, agent_name: 'fixture' });
     const policy = db.getDb().query('PRAGMA busy_timeout').get();
-    const channel = new WebChannel({ queue: { enqueue() { throw Error('No input execution'); } },
+    const channel = new WebChannel({ getInputSourceAdmission:()=>()=>{},dispatchAcceptedInput:async()=>{throw Error('Denied source cannot reach SDK');},queue: { enqueue() { throw Error('No input execution'); } },
       agentPool: { isActive: () => true, isStreaming: () => true } } as any);
     const events: string[] = []; channel.broadcastEvent = event => { events.push(event); };
     const blocker = new Database(path), controller = new AbortController();
@@ -27,14 +27,14 @@ for (const outcome of ['cancel', 'archive'] as const) test(`queued HTTP admissio
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: 'must not be accepted', mode: 'queue' }) });
       pending = channel.handleAgentMessage(req, '/agent/default/message').then(response => { settled = true; return response; });
       await Bun.sleep(45); expect(settled).toBe(false); expect(beats).toBeGreaterThan(1);
-      expect(events).toEqual([]); expect(channel.getQueuedFollowupCount(chat)).toBe(0);
+      expect(events).toEqual([]); expect(db.getDeferredQueuedFollowups(chat)).toEqual([]);
       if (outcome === 'cancel') {
         controller.abort(Error('cancelled queued writer'));
         expect((await pending).status).toBe(400); expect(blocker.inTransaction).toBe(true);
       } else {
         blocker.query('UPDATE chat_branches SET archived_at=? WHERE chat_jid=?').run('2026-01-02T00:00:00Z', chat);
         blocker.exec('COMMIT');
-        expect((await pending).status).toBe(403);
+        expect((await pending).status).toBe(503);
       }
       expect(db.getDb().query('SELECT id FROM messages WHERE chat_jid=?').all(chat)).toEqual([]);
       expect(db.getDeferredQueuedFollowups(chat)).toEqual([]); expect(events).toEqual([]);
@@ -53,12 +53,11 @@ test('a source callback cannot replace the queued target lifetime inside the tra
     const channel = new WebChannel({ queue: { enqueue() {} }, agentPool: {} } as any);
     let entered = 0;
     try {
-      await expect(channel.admitQueuedFollowupItem([chat, 0, 'unchanged original payload'], () => {}, new AbortController().signal,
-        ({ database }) => { entered++; expect(database.inTransaction).toBe(true);
-          database.query('UPDATE chat_branches SET branch_id=? WHERE chat_jid=?').run('changed-in-callback', chat); }))
+      await expect(channel.admitMessage(chat,'unchanged original payload',false,[],{acceptSource:({ database }) => { entered++; expect(database.inTransaction).toBe(true);
+          database.query('UPDATE chat_branches SET branch_id=? WHERE chat_jid=?').run('changed-in-callback', chat); }},()=>{},new AbortController().signal))
         .rejects.toThrow('target lifetime changed');
       expect(entered).toBe(1); expect(db.getChatBranchByChatJid(chat)!.branch_id).toBe(branch.branch_id);
       expect(db.getDeferredQueuedFollowups(chat)).toEqual([]);
-      expect(await channel.admitQueuedFollowupItem([chat, 0, 'next original target'], () => {}, new AbortController().signal)).toBe(-1);
+      expect((await channel.admitMessage(chat,'next original target',false,[],{},()=>{},new AbortController().signal))!.id).toBeGreaterThan(0);
     } finally { await db.closeDatabase(); }
   }));

@@ -3,7 +3,6 @@ import {expect,spyOn} from 'bun:test';
 import {isolatedApplicationTest} from './src/isolated-application-test.js';
 import {nativeGoalFixture} from './src/native-goal-default-fixture.js';
 import {HostConversationRuntime} from '../../runtime/durable-engine/src/host-runtime.js';
-import {processChat} from '../../runtime/src/channels/web/handlers/agent.js';
 const applicationTest=isolatedApplicationTest(import.meta.url);
 
 for(const fault of ['source-state','source-frontier','polling-cursor'] as const)applicationTest(`accepted SDK queue placement survives optional Root ${fault} ACK failure without resubmission`,async()=>{
@@ -35,7 +34,7 @@ for(const fault of ['source-state','source-frontier','polling-cursor'] as const)
       const dispatch=f.channel.dispatchAcceptedInput!,resume=f.channel.resumeChat;let handoffs=0;
       f.channel.dispatchAcceptedInput=async(...args)=>{handoffs++;return dispatch.apply(f.channel,args);};
       f.channel.resumeChat=()=>{throw Error('Host worker must not requeue an accepted native input');};
-      try{await processChat(f.channel,'web:default','default');expect(handoffs).toBe(1);}
+      try{expect(await f.channel.dispatchAcceptedInput!('web:default',source.source_id,source.rowid,'followUp')).toEqual({submission_id:queued.submission_id,queued:true});expect(handoffs).toBe(1);}
       finally{f.channel.dispatchAcceptedInput=dispatch;f.channel.resumeChat=resume;}
       expect(f.calls()).toBe(1);expect(f.root.query('SELECT * FROM submissions ORDER BY id').all()).toEqual(accepted);expect(f.root.query('SELECT * FROM entries ORDER BY id').all()).toEqual(entries);
       expect(f.root.query('SELECT cursor_ts FROM chat_cursors WHERE chat_jid=?').get('web:default')).toEqual(cursor);

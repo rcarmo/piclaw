@@ -19,10 +19,6 @@ This page lists Piclaw's environment variables, config files, secrets, authentic
 [External workspace](#using-an-external-workspace) ·
 [Cross-instance interop](#remote-peer-add-on)
 
-## External add-on operations
-
-`domains.operations` controls generic principal-scoped background work for runtime add-ons. It defaults to disabled with no grants. The [operation API and configuration guide](addon-operations.md) describes explicit principal/target grants, text-only defaults, budget lineage, cancellation, persistence and tool authority. This does not enable A2A or expose a network endpoint.
-
 ## Configuration surface policy
 
 Piclaw keeps `PICLAW_*` environment variables for immutable deployment bootstrap, secrets, and compatibility aliases. Runtime code should read ordinary settings through typed config helpers instead of open-coded `process.env.PICLAW_*` expressions.
@@ -702,7 +698,7 @@ Dream runtime settings are persisted under `domains.dream` in `.piclaw/config.js
 | Typed setting | Compatibility variable | Default | Purpose |
 |---------------|------------------------|---------|---------|
 | `domains.dream.cron` | `PICLAW_DREAM_CRON` | `0 1 * * *` | Cron schedule for AutoDream. Evaluated in the runtime timezone (`TZ` / runtime timing config), so the default is 01:00 local runtime time. |
-| `domains.dream.model` | `PICLAW_DREAM_MODEL` | _(unset — inherits session model)_ | Pin Dream / AutoDream to a specific model label (e.g. `anthropic/claude-sonnet-4-20250514`). The Dream pass applies it to the temporary Dream chat, so it also covers manual `/dream` runs. |
+| `domains.dream.model` | `PICLAW_DREAM_MODEL` | _(unset — inherits session model)_ | Pin Dream / AutoDream to a specific model label (e.g. `anthropic/claude-sonnet-4-20250514`). The Dream pass applies it to its private SDK conversation, including manual `/dream` runs. |
 | `domains.dream.backupKeep` | `PICLAW_DREAM_BACKUP_KEEP` | `10` | Number of pre-Dream note backups to retain. |
 | `domains.dream.agentTimeoutMs` | `PICLAW_DREAM_AGENT_TIMEOUT_MS` | background-agent timeout, or `360000` | Positive timeout for the out-of-band Dream model turn. |
 

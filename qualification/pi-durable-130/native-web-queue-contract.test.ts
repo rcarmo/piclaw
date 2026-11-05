@@ -15,7 +15,7 @@ for(const command of ['queue','steer'] as const)for(const busy of [false,true])a
     f.root.query("INSERT INTO chat_cursors(chat_jid,cursor_ts,queued_followups_json) VALUES ('web:default','',?)").run(historical);
     if(busy){await f.send('Keep actual SDK execution busy');await f.entered.promise;}
     f.pool.isActive=()=>!busy;f.pool.isStreaming=()=>!busy;
-    f.channel.getQueuedFollowupCount=()=>{throw Error('Legacy backlog cannot choose native placement');};
+    (f.channel as any).getQueuedFollowupCount=()=>{throw Error('Legacy backlog cannot choose native placement');};
     f.channel.resumeChat=()=>{throw Error('Native command cannot wake a host worker');};
     const accepted=await f.send(`/${command} Command payload body`);
     expect(accepted.created).toBe(true);expect(accepted.row_id).toBeGreaterThan(0);expect(accepted.submission_id).toBeGreaterThan(0);expect(accepted.queued).toBe(busy?(command==='steer'?'steer':'followup'):undefined);
@@ -70,13 +70,15 @@ for(const action of ['steer','remove'] as const)applicationTest(`native queue ${
 
 for(const boundary of ['before-source','after-source','structured-payload','stream-ended'] as const)applicationTest(`native steering races an actually starting SDK turn at ${boundary} without a host lane decision`,async()=>{
   const file=join(process.env.PICLAW_WORKSPACE!,'native-starting-proof.txt');writeFileSync(file,'Native starting source');
-  const f=await nativeGoalFixture(false,false,attempt=>attempt===1?[{type:'toolCall',id:'native-starting-read',name:'read',arguments:{path:file}}]:[{type:'text',text:'Starting SDK turn completed'}]);
+  // The ended-stream boundary needs a completed SDK turn, not an unrelated
+  // tool round trip. The other starting races retain the real source-bound read.
+  const f=await nativeGoalFixture(false,false,attempt=>boundary!=='stream-ended'&&attempt===1?[{type:'toolCall',id:'native-starting-read',name:'read',arguments:{path:file}}]:[{type:'text',text:'Starting SDK turn completed'}]);
   let release!:()=>void,entered!:()=>void;
   const held=new Promise<void>(resolve=>{release=resolve;}),ready=new Promise<void>(resolve=>{entered=resolve;});
   const admit=f.channel.admitMessage!;
   try{
     const metadata={content_blocks:[{type:'text',text:'Structured starting correction'}],link_previews:[{url:'https://fixture.invalid',title:'Starting fixture'}],screen_hint:'tablet'};
-    const media=createMedia('starting.txt','text/plain',new TextEncoder().encode('Starting attachment'),null,null);
+    const media=boundary==='structured-payload'?createMedia('starting.txt','text/plain',new TextEncoder().encode('Starting attachment'),null,null):undefined;
     f.channel.admitMessage=async(...args)=>{
       const correction=args[1]==='Starting correction'||args[1]==='';
       if(correction&&boundary==='before-source'){entered();await held;}
@@ -87,7 +89,7 @@ for(const boundary of ['before-source','after-source','structured-payload','stre
     const payload=boundary==='structured-payload'?{content:'',mode:'steer',persist_steer:true,media_ids:[media],...metadata}:{content:'Starting correction',mode:'steer',persist_steer:true};
     const pending=f.channel.handleAgentMessage(new Request('https://fixture/agent/default/message',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)}),'/agent/default/message');
     await Promise.race([ready,pending.then(async response=>{throw Error(`Source boundary not reached: HTTP ${response.status} ${await response.clone().text()}`);})]);const primary=await f.send('Start the independent SDK turn');await f.entered.promise;
-    f.pool.isActive=()=>false;f.pool.isStreaming=()=>false;f.channel.getQueuedFollowupCount=()=>{throw Error('Host queue cannot decide starting steering');};
+    f.pool.isActive=()=>false;f.pool.isStreaming=()=>false;(f.channel as any).getQueuedFollowupCount=()=>{throw Error('Host queue cannot decide starting steering');};
     if(boundary==='stream-ended'){f.held.release();await f.until(()=>f.status(primary.submission_id)==='done');}
     release();const response=await pending;expect(response.status).toBe(201);const accepted=await response.json() as any;expect(accepted.queued).toBe(boundary==='stream-ended'?undefined:'steer');expect(accepted.created).toBe(true);
     expect((await f.queue()).map(item=>item.row_id)).toEqual(boundary==='stream-ended'?[]:[accepted.submission_id]);if(boundary!=='stream-ended')expect(f.calls()).toBe(1);
@@ -96,8 +98,8 @@ for(const boundary of ['before-source','after-source','structured-payload','stre
       const row=rows.find(row=>row.rowid===accepted.row_id);expect(JSON.parse(row.content_blocks)).toEqual(metadata.content_blocks);expect(JSON.parse(row.link_previews)).toEqual(metadata.link_previews);expect(row.screen_hint).toBe('tablet');
       expect(f.root.query('SELECT media_id FROM message_media WHERE message_rowid=?').all(accepted.row_id)).toEqual([{media_id:media}]);
     }
-    f.held.release();await f.until(()=>f.status(accepted.submission_id)==='done');expect(f.status(primary.submission_id)).toBe('done');expect(f.calls()).toBe(boundary==='stream-ended'?3:2);
+    f.held.release();await f.until(()=>f.status(accepted.submission_id)==='done');expect(f.status(primary.submission_id)).toBe('done');expect(f.calls()).toBe(2);
     expect(f.root.query('SELECT * FROM service_effect_s01_operations').all()).toEqual([]);expect(f.root.query('SELECT * FROM service_effect_s02_commits').all()).toEqual([]);
-    const sdk=f.root.query('SELECT * FROM submissions ORDER BY id').all(),entries=f.root.query('SELECT * FROM entries ORDER BY id').all();await f.reopen();expect(f.calls()).toBe(boundary==='stream-ended'?3:2);expect(f.root.query('SELECT * FROM submissions ORDER BY id').all()).toEqual(sdk);expect(f.root.query('SELECT * FROM entries ORDER BY id').all()).toEqual(entries);
+    const sdk=f.root.query('SELECT * FROM submissions ORDER BY id').all(),entries=f.root.query('SELECT * FROM entries ORDER BY id').all();await f.reopen();expect(f.calls()).toBe(2);expect(f.root.query('SELECT * FROM submissions ORDER BY id').all()).toEqual(sdk);expect(f.root.query('SELECT * FROM entries ORDER BY id').all()).toEqual(entries);
   }finally{release();await f.close();}
 },5000);

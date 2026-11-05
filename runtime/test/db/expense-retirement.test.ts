@@ -1,11 +1,4 @@
 import { expect, test } from "bun:test";
-import { writeFileSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { createTempWorkspace } from "../helpers.js";
-import { readOperationsConfig } from "../../src/core/config-operations.js";
-import { authorizeAddonOperation } from "../../src/addons/operation-host.js";
-import { operationGrantKey, type OperationRecord } from "../../src/addons/operation-contracts.js";
-import { admitAddonOperation, countActiveAddonOperations } from "../../src/db/addon-operations.js";
 import "../helpers.js";
 import * as dbApi from "../../src/db.js";
 import { getDb, initDatabase } from "../../src/db/connection.js";
@@ -46,42 +39,6 @@ test("Core exposes no expense management or financial execution APIs", () => {
     "resumeBudgetWork","setBudgetWorkStatus","insertBudgetUsageEvent"]) expect(dbApi).not.toHaveProperty(name);
   for (const name of ["storeTokenUsage","getTokenUsageTotals","getLatestTokenUsage","getTokenUsageByProvider","getTokenUsageByModel"])
     expect(typeof dbApi[name as keyof typeof dbApi]).toBe("function");
-});
-
-test("operation config/admission requires no financial parent and historic attribution cannot revoke a grant",()=>{
-  initDatabase();const workspace=createTempWorkspace("operation-no-finance-");
-  const path=join(workspace.workspace,"operations.json");
-  const grant={addonId:"fixture",principalId:"owner",target:"task",revision:"r1",allowedTools:[],timeoutMs:1000,maxToolCalls:0,enabled:true,approvalRequired:false};
-  const write=(value:object)=>writeFileSync(path,JSON.stringify({domains:{operations:{enabled:true,grants:[value]}}}));
-  try{
-    write(grant);const bytes=readFileSync(path,"utf8"),before=financialSnapshot();
-    const config=readOperationsConfig(path);expect(config.grants).toHaveLength(1);
-    expect(config.grants[0]).not.toHaveProperty("parentWorkId");
-    expect(authorizeAddonOperation({addonId:"fixture",principalId:"owner"},"task","admit",()=>config).decision).toBe("allow");
-    expect(readFileSync(path,"utf8")).toBe(bytes);expect(financialSnapshot()).toEqual(before);
-    write({...grant,parentWorkId:"historical-parent"});
-    const historicalBytes=readFileSync(path,"utf8"),historical=readOperationsConfig(path);
-    expect(historical.grants[0]?.parentWorkId).toBe("historical-parent");expect(readFileSync(path,"utf8")).toBe(historicalBytes);
-    expect(operationGrantKey(config.grants[0]!)).toBe(operationGrantKey(historical.grants[0]!));
-    expect(operationGrantKey({...config.grants[0]!,revision:"revoked"})).not.toBe(operationGrantKey(historical.grants[0]!));
-    expect(authorizeAddonOperation({addonId:"fixture",principalId:"owner"},"task","admit",()=>({...config,enabled:false})).decision).toBe("rejected");
-    expect(authorizeAddonOperation({addonId:"fixture",principalId:"owner"},"task","admit",()=>({...config,grants:[{...config.grants[0]!,approvalRequired:true}]})).decision).toBe("approval_required");
-  }finally{workspace.cleanup();}
-});
-
-test("legacy budget-only pauses do not own active operation capacity or get rewritten",()=>{
-  initDatabase();const database=getDb(),principal={addonId:"legacy-capacity",principalId:"owner"};
-  const grant={revision:"r1",target:"task",allowedTools:[],timeoutMs:1000,maxToolCalls:0};
-  const insert=database.query(`INSERT INTO addon_operations(id,addon_id,principal_id,idempotency_key,input_hash,target,text,input_bytes,grant_json,chat_jid,work_id,status,sequence,created_at,updated_at,output,reason)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
-  for(let n=0;n<16;n++)insert.run(`retired-quota-${n}`,principal.addonId,principal.principalId,`old-${n}`,"a".repeat(64),"task","old",3,JSON.stringify(grant),`operation:retired-quota-${n}`,`legacy-work-${n}`,"budget_blocked",1,"2026-01-01","2026-01-01",null,"historical_budget_boundary");
-  const historical=database.query("SELECT * FROM addon_operations WHERE addon_id=? ORDER BY id").all(principal.addonId),finance=financialSnapshot();
-  expect(countActiveAddonOperations(principal)).toBe(0);
-  const fresh:OperationRecord={...principal,id:"fresh-no-finance",idempotencyKey:"fresh",inputHash:"b".repeat(64),target:"task",text:"new",grant,
-    chatJid:"operation:fresh-no-finance",workId:"operation:fresh-no-finance",status:"queued",sequence:1,createdAt:"2026-11-04",updatedAt:"2026-11-04",output:null,reason:null};
-  expect(admitAddonOperation(fresh).created).toBe(true);expect(countActiveAddonOperations(principal)).toBe(1);
-  expect(database.query("SELECT * FROM addon_operations WHERE addon_id=? AND id LIKE 'retired-quota-%' ORDER BY id").all(principal.addonId)).toEqual(historical);
-  expect(financialSnapshot()).toEqual(finance);
 });
 
 test('scheduler polling neither delivers nor acknowledges historical expense-stop notifications',async()=>{

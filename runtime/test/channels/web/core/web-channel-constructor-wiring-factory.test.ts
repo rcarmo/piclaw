@@ -4,7 +4,6 @@ import type { AgentPool } from "../../../../src/agent-pool.js";
 import type { InteractionRow } from "../../../../src/db.js";
 import type { InteractionBroadcasterProfile } from "../../../../src/channels/web/interaction-broadcaster.js";
 import type { WebMessageWriteServiceDeps } from "../../../../src/channels/web/message-write-service.js";
-import type { WebChannelRuntimeStateCallbacks } from "../../../../src/channels/web/runtime/runtime-state-service.js";
 import {
   createWebChannelConstructorFactory,
   type WebChannelConstructorFactoryChannel,
@@ -72,7 +71,6 @@ describe("web channel constructor wiring factory", () => {
     );
     const peerMessageRelayService = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createPeerMessageRelayService"]>>("peer-message-relay");
 
-    let runtimeStateCallbacks: WebChannelRuntimeStateCallbacks | null = null;
     let interactionProfileGetter: (() => InteractionBroadcasterProfile) | null = null;
     let authConfig: ConstructorParameters<WebChannelConstructorFactoryDeps["createAuthGateway"]>[0] | null = null;
     let authDeps: ConstructorParameters<WebChannelConstructorFactoryDeps["createAuthGateway"]>[1] | null = null;
@@ -93,7 +91,6 @@ describe("web channel constructor wiring factory", () => {
           Boolean(options?.includeArchived),
         ],
       } as unknown as AgentPool,
-      queuedFollowupLifecycle: {} as WebChannelConstructorFactoryChannel["queuedFollowupLifecycle"],
       terminalService: sentinel<WebChannelConstructorFactoryChannel["terminalService"]>("terminal-service"),
       vncService: sentinel<WebChannelConstructorFactoryChannel["vncService"]>("vnc-service"),
       webauthnChallenges: sentinel<WebChannelConstructorFactoryChannel["webauthnChallenges"]>("webauthn-challenges"),
@@ -140,10 +137,9 @@ describe("web channel constructor wiring factory", () => {
         expect(agentPool).toBe(channel.agentPool);
         return sessionBroadcast;
       },
-      createRuntimeState: (callbacks, runtimeOptions) => {
+      createRuntimeState: (...args) => {
         creationOrder.push("runtimeState");
-        runtimeStateCallbacks = callbacks;
-        expect(runtimeOptions).toEqual({ defaultAgentId: "default" });
+        expect(args).toEqual([]);
         return runtimeState;
       },
       createIdentitySnapshot: (currentIdentity) => ({
@@ -287,12 +283,8 @@ describe("web channel constructor wiring factory", () => {
     expect(authDeps?.failureTracker).toBe(channel.totpFailureTracker);
     expect((await (authDeps?.json({ ok: true }, 201) ?? new Response(null)).json())).toEqual({ ok: true });
 
-    expect(runtimeStateCallbacks).not.toBeNull();
-    runtimeStateCallbacks?.enqueue(async () => {}, "resume:web:test", "chat:web:test");
-    await runtimeStateCallbacks?.processChat("web:test", "agent-a", 42);
-    expect(runtimeStateCallbacks).not.toHaveProperty("getChatCursor");
-    expect(queueCalls).toEqual([{ key: "resume:web:test", laneKey: "chat:web:test" }]);
-    expect(processCalls).toEqual([{ chatJid: "web:test", agentId: "agent-a", threadRootId: 42 }]);
+    expect(queueCalls).toEqual([]);
+    expect(processCalls).toEqual([]);
 
     expect(messageWriteDeps).not.toBeNull();
     const interaction = { id: 1 } as unknown as InteractionRow;
@@ -329,6 +321,5 @@ describe("web channel constructor wiring factory", () => {
     expect(interactionProfileGetter?.().userAvatar).toBe("/avatars/you.png");
     expect(endpointContextOptions?.getIdentitySnapshot().assistantName).toBe("Nova");
     expect(endpointContextOptions?.getIdentitySnapshot().userAvatarBackground).toBe("#654321");
-    expect(runtimeStateCallbacks?.getAssistantName()).toBe("Nova");
   });
 });

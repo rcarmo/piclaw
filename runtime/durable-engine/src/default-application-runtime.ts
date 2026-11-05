@@ -25,8 +25,7 @@ import { createHostCodexArtifactStore, createHostCodexAnswerMaterializer, render
 import type { CodexOperation, NativeCodexFactories } from "./host-codex-model-profile.js";
 import { existsSync, readdirSync, readFileSync, mkdirSync, writeFileSync,openSync,closeSync,fsyncSync,fstatSync,lstatSync,realpathSync } from "node:fs";
 import { readNativeBackgroundContexts,readNativeBackgroundPayloads,publishNativeBackgroundContext,backgroundPolicyProvenance,assertStoredBackgroundExecution,type NativeBackgroundContext } from './host-background-context.js';
-import { addonBackgroundOrigin,prepareAddonBackgroundPayload,assertAddonBackgroundCurrent } from './host-addon-background.js';
-import { nativeBackgroundIdentity,nativeBackgroundSourceId,assertNativeBackgroundModel,createNativeBackgroundPayload,assertNativeBackgroundDeadline,type NativeBackgroundPayload } from '../../src/agent-pool/background-operation-contract.js';
+import { nativeBackgroundIdentity,assertNativeBackgroundModel,createNativeBackgroundPayload,assertNativeBackgroundDeadline,type NativeBackgroundPayload } from '../../src/agent-pool/background-operation-contract.js';
 import { join, extname } from "node:path";
 import { BACKGROUND_CONTEXT as context, withAbortSignal } from "@earendil-works/chord/context";
 import { apply } from "@earendil-works/chord/delta";
@@ -90,7 +89,7 @@ import { createHostGoalPlanReader } from "./host-goal-plan.js";
 import { registerAddonConfigApi } from "../../src/channels/web/handlers/addon-config-api.js";
 import { createHostGoalConfig } from "./host-goal-config.js";
 import { createHostGoalCommand } from "./host-goal-command.js";
-import type { HostConversationRuntime,HostInputBinding } from "./host-runtime.js";
+import type { HostConversationRuntime } from "./host-runtime.js";
 import { readAccessConfig } from "../../src/core/config-access.js";
 import { registerRootExtensionKvStore } from "../../src/db/register-extension-kv.js";
 import { getExtensionKvStore, withExtensionKvAuthority, requireExtensionKvAuthority } from "../../src/extension-kv-registry.js";
@@ -441,6 +440,8 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     return captureRuntime;
   };
   const captureSource = async (call: { conversationId: ConversationId; taskId: import("@earendil-works/pi-durable").TaskId; toolCallId: string }) => {
+    const dream = await captureDreamSource({conversationId:call.conversationId,taskId:call.taskId,taskKind:'pi.tool',callId:call.toolCallId,signal:taskModelToolScope(call)?.signal});
+    if(dream)return dream.assertCurrent;
     const captured = await runtime().captureToolSource(call.conversationId, call.taskId, call.toolCallId);
     const authority = createHostOperationAuthority(root, captured, () => {
       assert(); lifetime.signal.throwIfAborted(); runtime().assertCapturedSourceCurrent(captured.inputs);
@@ -461,9 +462,24 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     const owned=dreamOwners.get(payload.policy.sourceId);if(!owned||JSON.stringify(owned.payload)!==JSON.stringify(payload))throw Error('Live Dream invocation unavailable');owned.assertCurrent();
     assertNativeBackgroundDeadline(payload.policy,Date.now());
   };
-  const assertBackgroundCurrent=(payload:NativeBackgroundPayload)=>payload.policy.origin.kind==='dream'?assertDreamCurrent(payload):assertAddonBackgroundCurrent(root,payload);
-  const maintenanceRequests = new WeakMap<AbortSignal, { chatJid: string; workId: string; operationId?: string; assertCurrent(): void; background?:{input:HostInputBinding;policy:NativeBackgroundPayload['policy']} }>();
+  const assertBackgroundCurrent=(payload:NativeBackgroundPayload)=>{if(payload.policy.origin.kind!=='dream')throw Error('Retired add-on background execution is unavailable');assertDreamCurrent(payload);};
+  const maintenanceRequests = new WeakMap<AbortSignal, { chatJid: string; workId: string; operationId?: string; assertCurrent(): void }>();
   const requestSources = new WeakMap<AbortSignal, Awaited<ReturnType<HostConversationRuntime["captureRunSource"]>>>();
+  const dreamRequests = new WeakMap<AbortSignal, Awaited<ReturnType<typeof captureDreamSource>>>();
+  let assertDreamModel: (model: NativeBackgroundPayload['policy']['model']) => void = () => { throw Error('Dream model authority unavailable'); };
+  async function captureDreamSource(scope:{conversationId:number;taskId:number;taskKind:'pi.generation'|'pi.compaction'|'pi.tool';callId?:string;signal?:AbortSignal}){
+    const source=bundle.dreamSourceFor(scope.conversationId);if(!source)return;
+    const owned=dreamOwners.get(source.payload.policy.sourceId);if(!owned)throw Error('Live Dream invocation unavailable');
+    const current=()=>{
+      assert();lifetime.signal.throwIfAborted();scope.signal?.throwIfAborted();
+      if(dreamOwners.get(source.payload.policy.sourceId)!==owned)throw Error('Dream invocation owner changed');
+      assertDreamCurrent(source.payload);
+      assertDreamModel(source.payload.policy.model);
+      assertStoredBackgroundExecution(root,source.context.conversationId,source.payload);
+    };
+    current();await runtime().qualifyDreamSource(source.context,source.payload,scope,current);current();
+    return Object.freeze({...source,assertCurrent:current});
+  }
   const codexNative = {} as HostCodexToolGroupAddon & NativeCodexFactories & Record<string, any>;
   for (const exports of Object.values(codex?.nativeExports ?? {})) for (const [name, value] of Object.entries(exports)) {
     if (name in codexNative && codexNative[name] !== value) throw Error("Ambiguous qualified Codex export: " + name);
@@ -481,9 +497,10 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       const scope = taskModelRequestScope(original);
       if (!scope) throw Error("Codex native task source unavailable");
       const captured = scope.taskKind === "pi.generation" ? requestSources.get(scope.signal) : undefined;
-      if (scope.taskKind === "pi.generation" && !captured) throw Error("Codex generation source unavailable");
+      const dream=dreamRequests.get(scope.signal);
+      if (scope.taskKind === "pi.generation" && !captured && !dream) throw Error("Codex generation source unavailable");
       const sourceCurrent = () => { assertCodex(); signal.throwIfAborted(); scope.signal.throwIfAborted();
-        if (captured) runtime().assertCapturedSourceCurrent(captured.inputs); else { const maintenance = maintenanceRequests.get(scope.signal); if (!maintenance) throw Error("Compaction source capture unavailable"); maintenance.assertCurrent(); } };
+        if(dream)dream.assertCurrent();else if (captured) runtime().assertCapturedSourceCurrent(captured.inputs); else { const maintenance = maintenanceRequests.get(scope.signal); if (!maintenance) throw Error("Compaction source capture unavailable"); maintenance.assertCurrent(); } };
       sourceCurrent();
       const accountRef = readStoredProviderUsageAccountRef(model.provider, codexAuthPath);
       const accountProvider = codexHost!.modelRuntime.getRegisteredNativeProvider(model.provider);
@@ -498,12 +515,12 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       const operation: CodexOperation = Object.freeze({ id: randomUUID(), sessionId: "native-conversation:" + scope.conversationId,
         cwd: WORKSPACE_DIR, model: Object.freeze({ provider: model.provider, id: model.id, api: model.api, input: Object.freeze([...model.input]) }),
         signal, profilePrompt: scope.taskKind === "pi.generation", assertCurrent: current });
-      // Generation task IDs change each tool round. The admitted operation is the
-      // logical turn; Delegate conversation IDs and maintenance work remain separate.
-      const turnId = captured ? captured.operation.operationId : maintenanceRequests.get(scope.signal)!.workId;
+      // Physical task IDs change each tool round. Keep the actual accepted SDK
+      // input identity separate from Delegate and maintenance request scopes.
+      const turnId = dream?.payload.policy.sourceId ?? (captured ? captured.operation.operationId : maintenanceRequests.get(scope.signal)!.workId);
       accountBindings.set(operation, { turnId, accountRef, provider: accountProvider });
-      if (captured) outputBindings.set(operation, createHostCodexArtifactStore(root, operation, {
-        hostOperationId: captured.operation.operationId, chatJid: captured.operation.chatJid, assertCurrent: current,
+      if (captured || dream && scope.taskKind === "pi.generation") outputBindings.set(operation, createHostCodexArtifactStore(root, operation, {
+        hostOperationId: turnId, chatJid: dream?.context.chatJid ?? captured!.operation.chatJid, assertCurrent: current,
         write(body) { return admitSqliteWrite(root, body, current, signal); },
       }));
       return operation;
@@ -777,6 +794,11 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
     if (!physical || physical.provider !== model.provider || physical.id !== model.id) throw Error("Host model no longer available");
   };
+  assertDreamModel = model => {
+    check({ provider: model.provider, id: model.modelId }, lifetime.signal);
+    const physical = host.modelRuntime.getPhysicalModel(model.provider, model.modelId);
+    if (!physical || physical.api !== model.api) throw Error('Dream source model changed');
+  };
   const instructionsFor = (chatJid?: string) => loadHostInstructions({ cwd: WORKSPACE_DIR, agentDir: getPiclawAgentDir(),
     projectTrusted: true, additionalSkillPaths: [...settings.getSkillPaths(), ...infrastructure.flatMap(item => [...item.skillPaths]), ...resourceQualifications.flatMap(item => [...item.skillPaths]), ...(regrets?.skillPaths ?? [])],
     channelAppendix: [nativeToolInstructions, nativeProcessInstructions, chatJid ? buildChannelSystemPromptAppendix(detectChannel(chatJid), chatJid) ?? "" : "", ...infrastructure.map(infrastructurePrompt)].filter(Boolean).join("\n\n") });
@@ -787,9 +809,9 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     const manifest = root.query(`SELECT id FROM documents WHERE kind='"app.application-conversations"' AND owner_id=1 AND retired_at IS NULL`).get() as { id: number };
     const mapping = storedDocument(root, manifest.id) as ApplicationMapping;
     const active = new Set([1, ...mapping.bindings.map(binding => binding.conversationId)]);
-    // The read-only startup preflight already proved the private manifest,
-    // immutable payloads and S01 provenance. Keep revoked private choices for
-    // passive recovery; their live grant/model fence still denies execution.
+    // The preflight proves private metadata and historical binding provenance.
+    // Fresh Dream uses SDK input evidence; retained old choices remain readable
+    // without becoming execution authority.
     const privateIds = new Set(readNativeBackgroundContexts(root, mapping.domain).map(binding => binding.conversationId));
     if ([...privateIds].some(id => active.has(id))) throw Error('Private background context overlaps a public route');
     const docs = root.query(`SELECT id, owner_id, scope_kind FROM documents WHERE kind='"pi.agent"' AND retired_at IS NULL`).all() as { id: number; owner_id: number; scope_kind: string }[];
@@ -839,11 +861,12 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       if (!scope) throw Error("Native model request source unavailable");
       const denied = goalRequestDenials.get(scope.signal);
       if (denied) { runtime(); throw denied; } // Preserve ownership/fatal-lifetime fences first.
+      if(scope.taskKind !== 'pi.generation' && scope.taskKind !== 'pi.compaction') throw Error('Native model task kind unavailable');
+      const dream=await captureDreamSource({...scope,taskKind:scope.taskKind});
+      if(dream){dreamRequests.set(scope.signal,dream);return dream.assertCurrent;}
       if (scope.taskKind === "pi.generation") {
         const captured = await runtime().captureRunSource(scope.conversationId, scope.taskId);
         requestSources.set(scope.signal, captured);
-        const background=bundle.backgroundPolicyFor(captured.inputs[0]!);
-        if(background)await runtime().qualifyBackgroundRequest(captured.inputs,background);
         let assertGoalInput:(()=>void)|undefined;
         if(goal){
           const authority=createHostOperationAuthority(root,captured,assertGoal,true);
@@ -880,17 +903,9 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         const identity = runtime().maintenanceRequestIdentity(scope);
         maintenance = { ...identity, assertCurrent: () => runtime().assertMaintenanceRequest(scope) };
       } else {
-        const privateInput=await bundle.backgroundCompactionInput(scope.conversationId);
-        if(privateInput){
-          const policy=bundle.backgroundPolicyFor(privateInput);if(!policy)throw Error('Private compaction policy unavailable');
-          const captured=await runtime().captureAutomaticCompaction(scope,privateInput);
-          await runtime().qualifyBackgroundRequest([privateInput],policy);
-          maintenance={...captured,background:{input:privateInput,policy},assertCurrent(){captured.assertCurrent();runtime().assertCapturedSourceCurrent([privateInput]);}};
-        }else{
-          const target = bundle.sessionTargets.list().find(target => target.conversationId === scope.conversationId);
-          const captured = await runtime().captureAutomaticCompaction(scope, target && { incarnation: target.domain, ...target });
-          maintenance = { ...captured, assertCurrent() { captured.assertCurrent(); if (captured.delegateModel) assertDelegateModel(captured.delegateModel); } };
-        }
+        const target = bundle.sessionTargets.list().find(target => target.conversationId === scope.conversationId);
+        const captured = await runtime().captureAutomaticCompaction(scope, target && { incarnation: target.domain, ...target });
+        maintenance = { ...captured, assertCurrent() { captured.assertCurrent(); if (captured.delegateModel) assertDelegateModel(captured.delegateModel); } };
       }
       maintenanceRequests.set(scope.signal, maintenance);
       maintenance.assertCurrent();
@@ -918,7 +933,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     observeUsage(message, scope) {
       if (!scope?.checkpointHash) return;
       const source = requestSources.get(scope.signal);
-      const chat = source?.operation.chatJid ?? maintenanceRequests.get(scope.signal)?.chatJid;
+      const chat = dreamRequests.get(scope.signal)?.context.chatJid ?? source?.operation.chatJid ?? maintenanceRequests.get(scope.signal)?.chatJid;
       if (chat) reportUsage(chat, message, `native:${mapping.domain}:${scope.taskId}:${scope.checkpointHash}`, scope.taskKind === "pi.compaction" ? "compaction" : "assistant");
     },
     async authorize(model, _kind, signal) { check(model, signal); }, assertCurrent(model, _kind, signal) { check(model, signal); } });
@@ -1061,16 +1076,13 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     return result;
   } }));
   const dreamTools=createHostDreamTools({assertOwner(){assert();lifetime.signal.throwIfAborted();if(readAccessConfig().mode!=='single-user')throw Error('Dream requires single-user authority');},async capture(call){
-    const captured=await runtime().captureToolSource(call.conversationId,call.taskId,call.toolCallId),policy=bundle.backgroundPolicyFor(captured.inputs[0]!);
-    if(!policy||policy.origin.kind!=='dream'||captured.inputs.length!==1)throw Error('Accepted Dream tool source required');
-    const owned=dreamOwners.get(policy.sourceId);if(!owned)throw Error('Live Dream source unavailable');
-    const current=await captureSource(call);return{chatJid:captured.inputs[0]!.chatJid,assertCurrent(){current();assertDreamCurrent(owned.payload);}};
+    const source=await captureDreamSource({conversationId:call.conversationId,taskId:call.taskId,taskKind:'pi.tool',callId:call.toolCallId,signal:taskModelToolScope(call)?.signal});
+    if(!source)throw Error('Exact SDK Dream source required');
+    return{chatJid:source.context.chatJid,assertCurrent:source.assertCurrent};
   }});
   registry.install(defineExtension({ name: "app.host-builtins", tools:[...tools,...dreamTools], hooks: processControls.extension.hooks }));
   const backgroundExtension=defineExtension({name:'app.host-background-policy',hooks:[{task:'pi.tool',handlers:{beforeTool:async(call:Parameters<ToolHooks['beforeTool']>[0],api:Parameters<ToolHooks['beforeTool']>[1])=>{
-    const captured=await runtime().capturePendingToolSource(api.conversationId,api.taskId,call.id);
-    const policy=bundle.backgroundPolicyFor(captured.inputs[0]!);if(!policy)return; // Proven ordinary/Delegate input; private/unknown references still throw.
-    await runtime().qualifyBackgroundRequest(captured.inputs,policy,{taskId:api.taskId,callId:call.id,toolName:call.name});
+    await captureDreamSource({conversationId:api.conversationId,taskId:api.taskId,taskKind:'pi.tool',callId:call.id});
   }}}]});
   registry.install(backgroundExtension);
   // Goal and Plan retain immutable context before request-only system hooks.
@@ -1147,6 +1159,15 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     mapping = JSON.parse(JSON.stringify(persisted));
     backgroundContexts=readNativeBackgroundContexts(root,mapping.domain);
     backgroundPayloads=readNativeBackgroundPayloads(root,backgroundContexts,readBackgroundPayloadText);
+    // Retired protocol history stays readable. Never resume its unfinished SDK
+    // work or invent a terminal outcome after removing its execution owner.
+    const retiredContexts=new Set([...backgroundPayloads.values()].filter(payload=>payload.policy.origin.kind==='addon').map(payload=>nativeBackgroundIdentity(payload.policy).contextKey));
+    for(const retired of backgroundContexts){
+      if(root.query("SELECT 1 FROM tasks WHERE conversation_id=? AND status<>'terminal' LIMIT 1").get(retired.conversationId)||
+         root.query("SELECT 1 FROM submissions WHERE conversation_id=? AND status NOT IN ('done','unanswered') LIMIT 1").get(retired.conversationId)||
+         root.query("SELECT 1 FROM service_effect_s01_operations WHERE chat_jid=? AND phase<>'terminal' LIMIT 1").get(retired.chatJid))
+        throw Error(retiredContexts.has(retired.contextKey)?'A2A support was removed; unfinished retired add-on work requires explicit operator reconciliation':'Interrupted Dream SDK work has no live caller lease; explicit reconciliation is required without resubmission');
+    }
     // Older native bootstrap omitted thinkingLevel entirely. Repair only that
     // omission through the public SDK; an explicitly selected off is preserved.
     const missingThinking = await app.commit(async tx => {
@@ -1239,22 +1260,9 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       const nativeGoalProjection=goal&&goalProjectionOptions?createNativeGoalProjection(goal.addon,goalProjectionOptions):undefined;
       bundle = await createApplicationBootstrapBundle({ root, path, ownership, offlineInitialize: true, answers, contentionSignal: lifetime.signal,
         background:{contexts:backgroundContexts,payloads:backgroundPayloads,
-          sourceIdForAddon:id=>nativeBackgroundSourceId(addonBackgroundOrigin(root,id)),
-          prepareAddon(id,existing,history){
-            const baseline=existing??history?.previous.at(-1);
-            const choice=baseline?{provider:baseline.policy.model.provider,id:baseline.policy.model.modelId}:ref;check(choice,lifetime.signal);
-            const physical=host.modelRuntime.getPhysicalModel(choice.provider,choice.id)!;
-            if(baseline)assertNativeBackgroundModel(baseline.policy,physical);
-            const payload=prepareAddonBackgroundPayload(root,id,{provider:physical.provider,modelId:physical.id,api:physical.api},existing,name=>defaultToolNames.includes(name as typeof defaultToolNames[number])&&tools.some(tool=>tool.name===name),history);
-            check({provider:payload.policy.model.provider,id:payload.policy.model.modelId},lifetime.signal);return payload;
-          },
           assertCurrent(payload){check({provider:payload.policy.model.provider,id:payload.policy.model.modelId},lifetime.signal);assertBackgroundCurrent(payload);
             const model=host.modelRuntime.getPhysicalModel(payload.policy.model.provider,payload.policy.model.modelId)!;assertNativeBackgroundModel(payload.policy,model);},
-          assertExecution(payload){
-            const identity=nativeBackgroundIdentity(payload.policy),binding=readNativeBackgroundContexts(root,mapping.domain).find(entry=>entry.contextKey===identity.contextKey);
-            if(!binding||binding.chatJid!==identity.chatJid)throw Error('Private background execution context unavailable');
-            assertStoredBackgroundExecution(root,binding.conversationId,payload);
-          },
+
           put(payload){assert();const file=payloadPath(payload.policy.sourceId),encoded=JSON.stringify(payload);if(Buffer.byteLength(encoded)>1024*1024)throw Error('Background payload exceeds storage bound');
             mkdirSync(payloadDir,{recursive:true});let fd:number,created=false;
             try{fd=openSync(file,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);created=true;}
@@ -1264,9 +1272,9 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
             if(readBackgroundPayloadText(payload.policy.sourceId)!==encoded)throw Error('Background payload publication changed');
             const directory=openSync(payloadDir,'r');try{fsyncSync(directory);}finally{closeSync(directory);}
           },
-          publish: (tx,payload,history)=>publishNativeBackgroundContext(tx,mapping.domain,payload,(payload.policy.origin.kind==='dream'?[...tools,...dreamTools]:tools).filter(tool=>payload.policy.allowedTools.includes(tool.name)),[registry.snapshot().extension('app.host-builtins')!,backgroundExtension],()=>{
+          publish: (tx,payload)=>publishNativeBackgroundContext(tx,mapping.domain,payload,[...tools,...dreamTools].filter(tool=>payload.policy.allowedTools.includes(tool.name)),[registry.snapshot().extension('app.host-builtins')!,backgroundExtension],()=>{
             check({provider:payload.policy.model.provider,id:payload.policy.model.modelId},lifetime.signal);assertBackgroundCurrent(payload);
-          },history),
+          }),
         },
         assertAdmission: input => processControls!.assertAdmission(input),
         assertInputAdmission(chat) { assertAdmission(); ensureLiveWatch(chat); },
@@ -1442,15 +1450,20 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       model:{provider:physical.provider,modelId:physical.id,api:physical.api},allowedTools,maxToolCalls:null,acceptedAt,expiresAt:new Date(Date.parse(acceptedAt)+invocation.timeoutMs).toISOString(),prompt:buildDreamPrompt(invocation),instructions:instructionsFor()});
     const identity=nativeBackgroundIdentity(payload.policy);checkInvocation();assertNativeBackgroundDeadline(payload.policy,Date.now());
     if(dreamOwners.has(payload.policy.sourceId))throw Error('Dream invocation already has a live owner');
-    if(root.query('SELECT 1 FROM service_effect_s01_sources WHERE chat_jid=? AND source_id=?').get(identity.chatJid,identity.sourceId))throw Error('Dream invocation already accepted; replay is not authorised');
-    await admitSqliteWrite(root,()=>{
-      if(dreamOwners.has(payload.policy.sourceId))throw Error('Dream invocation already has a live owner');
-      if(root.query('SELECT 1 FROM service_effect_s01_sources WHERE chat_jid=? AND source_id=?').get(identity.chatJid,identity.sourceId))throw Error('Dream invocation already accepted; replay is not authorised');
-    },()=>{assertAdmission();checkInvocation();assertNativeBackgroundDeadline(payload.policy,Date.now());},lifetime.signal);
-    if(dreamOwners.has(payload.policy.sourceId))throw Error('Dream invocation already has a live owner');
     dreamOwners.set(payload.policy.sourceId,{payload,assertCurrent:checkInvocation});
-    try{assertDreamCurrent(payload);return await bundle.dispatchDreamPayload(payload,new AbortController().signal);}
-    finally{dreamOwners.delete(payload.policy.sourceId);}
+    try{
+      assertDreamCurrent(payload);const result=await bundle.dispatchDreamPayload(payload,new AbortController().signal);checkInvocation();
+      if(result.status==='success'&&codex&&result.result){
+        try {
+          result.result=await renderCodexAnswer(root,WORKSPACE_DIR,identity.chatJid,payload.policy.sourceId,result.result,()=>{assert();checkInvocation();});
+        } catch (error) {
+          assert();checkInvocation();
+          log.warn('Dream SDK result retained without optional artifact projection',{operation:'durable_dream.artifact_projection_failed',err:error});
+        }
+      }
+      return result;
+    }
+    finally{codexServices?.releaseTurn(payload.policy.sourceId);dreamOwners.delete(payload.policy.sourceId);}
   };
   let closing: Promise<void> | undefined;
   const backend: RuntimeBackend = { storageFailure, sessionOptions: offlineMaintenance ? { getDurableSession(chat) {
@@ -1458,9 +1471,6 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       return position && { ...position, compact: async () => { throw Error("Offline maintenance cannot admit compaction"); } };
     },
     dispatchDreamOperation:async()=>{throw Error('Offline maintenance cannot execute Dream');},
-    prepareAddonOperation:async()=>{throw Error('Offline maintenance cannot admit background operations');},
-    dispatchAddonOperation:async()=>{throw Error('Offline maintenance cannot execute background operations');},
-    reconcileAddonOperation:async()=>{throw Error('Offline maintenance cannot settle background operations');},
     dispatchScheduledAgent: async () => { throw Error("Offline maintenance cannot admit conversations"); }, dispatchSidePrompt: async () => { throw Error("Offline maintenance cannot admit conversations"); },
     dispatchHostCommand: async () => { throw Error("Offline maintenance cannot admit conversations"); } } : {...bundle.sessionOptions,dispatchDreamOperation},
     bind(options) {

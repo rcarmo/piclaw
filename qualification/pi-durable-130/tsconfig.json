@@ -120,6 +120,9 @@
     "native-web-queue-contract.test.ts",
     "native-factory-compaction.test.ts",
     "native-side-input.test.ts",
-    "factory-mcp-maintenance.test.ts"
+    "factory-mcp-maintenance.test.ts",
+    "native-dream-codex.test.ts",
+    "native-dream-retirement.test.ts",
+    "native-a2a-history.test.ts"
   ]
 }

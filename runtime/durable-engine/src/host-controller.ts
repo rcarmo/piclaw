@@ -80,7 +80,7 @@ export async function createHostController(config: HostControllerOptions, contex
       }
     }
     for (const submission of inspection.submissions) {
-      if (!known.has(submission.id) && await runtime.ownsMessageSubmission(submission)) known.add(submission.id);
+      if (!known.has(submission.id) && (await runtime.ownsMessageSubmission(submission) || await runtime.ownsDreamSubmission(submission))) known.add(submission.id);
       assert();
     }
     // Foreground Delegate children have SDK inputs, not independent host sources.

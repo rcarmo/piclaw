@@ -9,9 +9,9 @@ test('native projection exposes no persistence/restore/context-copy entrypoint a
   initDatabase();
   const key='last_agent_timestamp_web',historical=JSON.stringify({agentStatuses:{'web:test':{type:'thinking'}},contextUsages:{'web:test':{tokens:777,sessionGeneration:'same'}},draftRecoveries:{'web:test':{text:'historical uncommitted draft',totalLines:1,updatedAt:1}},unrelated:{keep:true}});
   setRouterState(key,historical);const before=getDb().serialize();
-  const service=new WebChannelRuntimeStateService({getAssistantName:()=>'',enqueue(){},async processChat(){}},{defaultAgentId:'default'});
+  const service=new WebChannelRuntimeStateService();
   for(const name of ['loadState','saveState','setContextUsage','getContextUsage'])expect(service).not.toHaveProperty(name);
-  service.updateAgentStatus('web:test',{type:'thinking',turn_id:'native:1'});
+  service.updateAgentStatus('web:test',{sdk_observation:true,type:'thinking',turn_id:'native:1'});
   expect(service.getAgentStatus('web:test')).toMatchObject({type:'thinking',turn_id:'native:1'});
   expect(getRouterState(key)).toBe(historical);expect(getDb().serialize()).toEqual(before);
 });
@@ -34,7 +34,7 @@ for(const tokens of [null,0,42])test(`current SDK context ${tokens} never reads 
 
 test('SDK observations cannot be overwritten by host work or relabelled as a successor',()=>{
  const store=new AgentStatusStore();
- const service=new WebChannelRuntimeStateService({getAssistantName:()=>'',enqueue(){},async processChat(){},isNativeRuntime:()=>true},{defaultAgentId:'default'},{agentStatusStore:store});
+ const service=new WebChannelRuntimeStateService({agentStatusStore:store});
  service.updateAgentStatus('chat',{sdk_observation:true,type:'tool_call',tool_name:'sdk-tool',operation_id:'sdk-run'});
  service.updateAgentStatus('chat',{type:'thinking',operation_id:'host-successor',title:'Working'});
  expect(service.getAgentStatus('chat')).toMatchObject({type:'tool_call',tool_name:'sdk-tool',operation_id:'sdk-run'});
@@ -46,7 +46,7 @@ test('SDK observations cannot be overwritten by host work or relabelled as a suc
 test('malformed historical router bytes remain inert and unchanged by local status updates',()=>{
  initDatabase();const historical='{malformed\u0000old model draft';setRouterState('last_agent_timestamp_web',historical);
  const before=getDb().serialize();
- const service=new WebChannelRuntimeStateService({getAssistantName:()=>'',enqueue(){},async processChat(){}},{defaultAgentId:'default'});
+ const service=new WebChannelRuntimeStateService();
  expect(service.getAgentStatus('web:malformed')).toBeNull();
  service.updateAgentStatus('web:malformed',{type:'thinking'});
  expect(getRouterState('last_agent_timestamp_web')).toBe(historical);expect(getDb().serialize()).toEqual(before);

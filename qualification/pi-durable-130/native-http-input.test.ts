@@ -62,7 +62,7 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
     const bound=backend.bind({queue:base.queue,agentPool:pool});channel=new WebChannel(bound);
     backend.attachChannel!(channel);
     channel.queue.isLaneBusy=()=>{throw Error("Host lane admission is retired");};
-    channel.getQueuedFollowupCount=()=>{throw Error("UI queue admission is retired");};
+    (channel as any).getQueuedFollowupCount=()=>{throw Error("UI queue admission is retired");};
     (channel as any).getAcceptedQueuedSteering=()=>{throw Error("Host steering admission is retired");};
     pool.isActive=()=>true;pool.isStreaming=()=>false;
     const send=async(content:string,mode="auto")=>{

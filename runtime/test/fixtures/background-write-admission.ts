@@ -60,7 +60,7 @@ try {
   assert.equal(faulted?.image,'https://8.8.8.8/other-image.png');
   assert.equal((db.query('SELECT count(*) n FROM media').get() as {n:number}).n,count); assert(fallback); cases++;
   const { WebChannel } = await import('../../src/channels/web.js');
-  const web = new WebChannel({queue:{enqueue:()=>{}},agentPool:{isStreaming:()=>false,runAgent:async()=>({status:'success',result:'unused'}),getContextUsageForChat:async()=>null}} as any) as any;
+  const web = new WebChannel({getInputSourceAdmission:()=>()=>{},dispatchAcceptedInput:async(_chat:string,_id:string,row:number)=>({submission_id:row,queued:false}),queue:{enqueue:()=>{}},agentPool:{isStreaming:()=>false,runAgent:async()=>({status:'success',result:'unused'}),getContextUsageForChat:async()=>null}} as any) as any;
   const broadcasts: unknown[] = []; web.broadcastEvent = (...args:unknown[]) => broadcasts.push(args);
   blocker.exec('BEGIN IMMEDIATE'); let posted = false;
   const posting = web.handleRequest(new Request('http://test/post',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({content:'WAL public post'})})).then((response:Response)=>{posted=true;return response;});
@@ -97,4 +97,4 @@ try {
   } finally {setMessagesPostFn(undefined);}
   assert.equal(db.inTransaction,false); assert.deepEqual(db.query('PRAGMA busy_timeout').get(),policy);
   console.log(JSON.stringify({kind:'background-write-admission',cases,realWal:true}));
-} finally { globalThis.fetch = nativeFetch; if(blocker.inTransaction)blocker.exec('ROLLBACK');blocker.close();closeDatabase(); }
+} finally { globalThis.fetch = nativeFetch; if(blocker.inTransaction)blocker.exec('ROLLBACK');blocker.close();await closeDatabase(); }

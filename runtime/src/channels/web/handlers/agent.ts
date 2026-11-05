@@ -107,7 +107,8 @@ export async function handleAgentMessage(
   req: Request,
   pathname: string,
   chatJid: string,
-  defaultAgentId: string
+  defaultAgentId: string,
+  post?: { requireReplyThread: boolean; authorise: ValidateInputAuthority },
 ): Promise<Response> {
   if (!isSingleUserAccess()) return channel.json({ error: "Single-user message admission is required." }, 403);
   let internalAuthority: ReturnType<typeof readInputRequestAuthority>;
@@ -116,7 +117,7 @@ export async function handleAgentMessage(
     const binding = captureHostDatabaseBinding();
     internalAuthority = readInputRequestAuthority(req, chatJid, pathname);
     const request = internalAuthority?.validate ?? captureInputAuthority(channel, req);
-    revalidateInputAuthority = phase => { if (phase !== undefined) binding(); request(phase); };
+    revalidateInputAuthority = phase => { if (phase !== undefined) binding(); request(phase); post?.authorise(phase); };
     revalidateInputAuthority();
   }
   catch { return channel.json({ error: 'Input authority is unavailable.' }, 403); }
@@ -148,6 +149,7 @@ export async function handleAgentMessage(
   catch { return channel.json({ error: 'Input authority changed before admission.' }, 403); }
 
   const normalized = normalizeAgentMessagePayload(parsed.payload);
+  if (post?.requireReplyThread && !normalized.threadId) return channel.json({ error: "Missing 'thread_id' field" }, 400);
   const localDispatch = getAddonLocalDispatchBlock(req, chatJid, normalized.content ?? "");
   if (localDispatch) normalized.contentBlocks = [...(normalized.contentBlocks ?? []), localDispatch];
   let content = typeof normalized.content === "string" ? normalized.content : "";
@@ -259,12 +261,11 @@ export async function handleAgentMessage(
     if (!interaction) return channel.json({error:"Failed to store message"},500);
     const stored = getDb().query("SELECT id FROM messages WHERE rowid=? AND chat_jid=?").get(interaction.id,chatJid) as {id:string}|null;
     if (!stored) return channel.json({error:"Accepted input source is unavailable."},503);
+    let receipt: Awaited<ReturnType<NonNullable<WebChannelLike['dispatchAcceptedInput']>>>;
     try {
-      const receipt = await dispatchNative!(chatJid,stored.id,interaction.id,requestMode==="steer"?"steer":"followUp");
-      if (receipt.queued) channel.broadcastEvent("agent_followup_queued",{chat_jid:chatJid,row_id:receipt.submission_id,content,thread_id:interaction.data?.thread_id??null,timestamp:interaction.timestamp,source:"native_sdk"});
-      else channel.broadcastEvent("new_post",interaction);
-      return channel.json({thread_id:interaction.data?.thread_id??interaction.id,row_id:interaction.id,created:true,submission_id:receipt.submission_id,
-        ...(receipt.queued?{queued:requestMode==="steer"?"steer":"followup"}: {})},201);
+      receipt = await dispatchNative!(chatJid,stored.id,interaction.id,requestMode==="steer"?"steer":"followUp");
+      if (!receipt || !Number.isSafeInteger(receipt.submission_id) || receipt.submission_id <= 0 || typeof receipt.queued !== 'boolean')
+        throw Error('Native SDK admission receipt required');
     } catch (error) {
       // The source is committed, but its SDK placement is unproven. Only a
       // verified receipt/watch may publish it to the timeline or follow-up queue.
@@ -272,6 +273,14 @@ export async function handleAgentMessage(
       log.warn("Accepted input SDK admission could not be confirmed",{operation:"handle_agent_message.native_admission_uncertain",chatJid,err:error});
       return channel.json({error:"Input saved; SDK admission could not be confirmed.",thread_id:interaction.data?.thread_id??interaction.id,accepted:true},503);
     }
+    try {
+      if (receipt.queued) channel.broadcastEvent("agent_followup_queued",{chat_jid:chatJid,row_id:receipt.submission_id,content,thread_id:interaction.data?.thread_id??null,timestamp:interaction.timestamp,source:"native_sdk"});
+      else channel.broadcastEvent("new_post",interaction);
+    } catch (error) {
+      log.warn('SDK input accepted; optional publication failed', { operation: 'handle_agent_message.publication_pending', chatJid, err: error });
+    }
+    return channel.json({thread_id:interaction.data?.thread_id??interaction.id,row_id:interaction.id,created:true,submission_id:receipt.submission_id,
+      ...(receipt.queued?{queued:requestMode==="steer"?"steer":"followup"}: {})},201);
   }
   if (mention && mentionTarget && mentionTarget.chat_jid !== chatJid) {
     const targetJid = mentionTarget.chat_jid;

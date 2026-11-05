@@ -14,7 +14,7 @@ import { openFixture,context } from "./src/fixture.js";
  * host callback is NOT production grant/S01 admission or a native AgentPool. */
 export async function backgroundPolicyFixture(mode:"allowed"|"limit"|"ceiling"|"forged-call"|"revoked"|"expired"|"configuration"|"parallel"|"reused-call-id"|"api-change"|"long-call"){
   const f=await openFixture({acquired:true});let permitted=true,now=Date.parse('2026-10-26T15:20:00.000Z');
-  const payload=createNativeBackgroundPayload({origin:{kind:'addon',operationId:'policy-fixture',addonId:'qualification',principalId:'fixture',target:'effect',grantRevision:'1',inputSequence:1},
+  const payload=createNativeBackgroundPayload({origin:{kind:'dream',invocationId:'policy-fixture',chatJid:'web:qualification-policy',mode:'manual'},
     workId:'fixture:work',parentWorkId:null,model:{provider:'qualification',modelId:'synthetic',api:mode==='api-change'?'different-api':'openai-completions'},allowedTools:['host_effect'],maxToolCalls:mode==='limit'?0:mode==='reused-call-id'?2:1,
     acceptedAt:new Date(now).toISOString(),expiresAt:new Date(now+60_000).toISOString(),prompt:'use-tool',instructions:'Background quota fixture'});
   const policy=payload.policy,check=()=>{if(!permitted)throw Error('Synthetic background grant revoked');};
@@ -89,7 +89,7 @@ export async function backgroundPolicyOwnerFixture(){
 export async function backgroundPolicyReopenFixture(){
   const dir=await mkdtemp(join(process.env.PICLAW_WORKSPACE!,'background-policy-')),path=join(dir,'candidate.sqlite');
   let owner:TestOwner|undefined,f:Awaited<ReturnType<typeof openFixture>>|undefined;
-  const payload=createNativeBackgroundPayload({origin:{kind:'addon',operationId:'reopen-policy',addonId:'qualification',principalId:'fixture',target:'effect',grantRevision:'1',inputSequence:1},
+  const payload=createNativeBackgroundPayload({origin:{kind:'dream',invocationId:'reopen-policy',chatJid:'web:qualification-reopen',mode:'manual'},
     workId:'fixture:reopen',parentWorkId:null,model:{provider:'qualification',modelId:'synthetic',api:'openai-completions'},allowedTools:['host_effect'],maxToolCalls:1,
     acceptedAt:'2026-10-26T15:20:00.000Z',expiresAt:'2026-10-26T15:23:00.000Z',prompt:'use-tool',instructions:'Persistent quota fixture'});
   const policy=payload.policy,now=Date.parse(policy.acceptedAt);

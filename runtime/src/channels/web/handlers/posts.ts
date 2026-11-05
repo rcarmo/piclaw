@@ -3,7 +3,6 @@ import { getMessageByRowId } from "../../../db.js";
 import { captureWebRequestAuthority } from "../auth/auth-gateway.js";
 import { captureInputTarget } from "../messaging/input-request-authority.js";
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
-import { parsePostPayload } from "../posts-service.js";
 import { handleAgentMessage } from "./agent.js";
 
 /** Legacy post URL, same native admission boundary as compose. No worker wake. */
@@ -12,18 +11,15 @@ export async function handlePost(channel: WebChannelLike, req: Request, isReply:
   const gateway = channel.authGateway;
   const requestAuthority = captureWebRequestAuthority(gateway, req);
   const target = captureInputTarget(chatJid);
-  let body: unknown;
-  try { body = await req.clone().json(); }
-  catch { return channel.json({ error: "Invalid JSON" }, 400); }
-  const parsed = parsePostPayload(body);
-  if (!parsed.ok || !parsed.data) return channel.json({ error: parsed.error }, 400);
-  if (isReply && !parsed.data.thread_id) return channel.json({ error: "Missing 'thread_id' field" }, 400);
-  try {
-    database(); requestAuthority(); target();
-    if (channel.authGateway !== gateway) throw Error("Post authority changed");
-  } catch { return channel.json({ error: "Input authority changed before admission." }, 403); }
-
-  const response = await handleAgentMessage(channel, req, "/agent/default/message", chatJid, "default");
+  // Enter the shared boundary synchronously so it pins its ports BEFORE JSON.
+  // Reuse the original caller/target guards through that boundary's SQL phases.
+  const response = await handleAgentMessage(channel, req, "/agent/default/message", chatJid, "default", {
+    requireReplyThread: isReply,
+    authorise(phase) {
+      database(); requestAuthority(); target(phase);
+      if (channel.authGateway !== gateway) throw Error("Post authority changed");
+    },
+  });
   if (!response.ok) return response;
   const receipt = await response.clone().json() as Record<string, unknown>;
   if (typeof receipt.row_id !== "number" || !Number.isSafeInteger(receipt.row_id)) return response;

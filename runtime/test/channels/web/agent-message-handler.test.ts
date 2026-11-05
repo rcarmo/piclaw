@@ -44,7 +44,7 @@ function modelLookupFixture(getCurrentModelLabel: () => Promise<string | null>) 
 }
 
 describe("UI-only abort acknowledgement", () => {
-  test("settled no-op abort clears only the captured busy status without a timeline post", async () => {
+  test("settled no-op abort leaves lifecycle status to the SDK without a timeline post", async () => {
     const f = modelLookupFixture(async () => null);
     f.statuses.update("web:test", { type: "intent", turn_id: "old", title: "Working" });
     const pending = f.send("/abort");
@@ -53,8 +53,8 @@ describe("UI-only abort acknowledgement", () => {
     const response = await pending;
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ ui_only: true, command: { status: "success", message: "No active durable operation." } });
-    expect(f.statuses.get("web:test")).toMatchObject({ type: "done", title: "Idle", turn_id: "old" });
-    expect(f.events.filter(e => e.event === "agent_status")).toHaveLength(1);
+    expect(f.statuses.get("web:test")).toMatchObject({ type: "intent", title: "Working", turn_id: "old" });
+    expect(f.events.filter(e => e.event === "agent_status")).toHaveLength(0);
     expect(f.events.some(e => e.event === "new_post")).toBe(false);
     expect(f.responses).toEqual([]);
   });
@@ -87,140 +87,7 @@ describe("UI-only abort acknowledgement", () => {
   });
 });
 
-describe("manual command deferred model lookup ownership", () => {
-  for (const command of ["/compact", "/session-rotate"]) {
-    test(`${command} claims before lookup and cannot reclaim a newer command`, async () => {
-      const model = deferred<string | null>();
-      const modelStarted = deferred<void>();
-      const f = modelLookupFixture(() => { modelStarted.resolve(); return model.promise; });
-      const older = f.send(command);
-      await modelStarted.promise;
-      const initial = f.statuses.get("web:test")!;
-      expect(initial).toMatchObject({ type: "intent", model: null,
-        intent_key: command === "/compact" ? "compaction" : "session_rotation" });
-      expect(f.events.filter(e => e.event === "agent_status")).toHaveLength(1);
-      const newer = f.send("/stats");
-      await f.statsStarted.promise;
-      const owner = f.statuses.get("web:test")!;
-      expect(owner.turn_id).not.toBe(initial.turn_id);
-      const eventCount = f.events.length;
-      model.resolve("fixture/resolved-model");
-      await f.compactStarted.promise;
-      expect(f.statuses.get("web:test")).toEqual(owner);
-      expect(f.events.slice(eventCount).filter(e => e.event === "agent_status")).toEqual([]);
-      f.compact.resolve({ status: "success", message: "Finished older command" });
-      expect((await older).status).toBe(201);
-      expect(f.responses).toContain("Finished older command");
-      expect(f.statuses.get("web:test")).toEqual(owner);
-      expect(f.events.slice(eventCount).filter(e => e.event === "agent_status")).toEqual([]);
-      f.stats.resolve({ status: "success", message: "Finished stats" });
-      expect((await newer).status).toBe(201);
-      expect(f.statuses.get("web:test")).toMatchObject({ type: "done", turn_id: owner.turn_id });
-    });
-
-    test(`${command} model metadata preserves the original timer and turn`, async () => {
-      const model = deferred<string | null>();
-      const modelStarted = deferred<void>();
-      const f = modelLookupFixture(() => { modelStarted.resolve(); return model.promise; });
-      const pending = f.send(command);
-      await modelStarted.promise;
-      const initial = f.statuses.get("web:test")!;
-      await Bun.sleep(5);
-      model.resolve("fixture/resolved-model");
-      await f.compactStarted.promise;
-      expect(f.statuses.get("web:test")).toMatchObject({
-        type: "intent", model: "fixture/resolved-model", turn_id: initial.turn_id,
-        started_at: initial.started_at, run_started_at: initial.run_started_at, phase_key: initial.phase_key,
-      });
-      f.compact.resolve({ status: "success", message: "Finished" });
-      expect((await pending).status).toBe(201);
-      expect(f.statuses.get("web:test")).toMatchObject({ type: "done", turn_id: initial.turn_id });
-    });
-
-    for (const failure of ["reject", "throw"] as const) {
-      test(`${command} model lookup ${failure} stays nonfatal and reaches its own terminal`, async () => {
-        const f = modelLookupFixture(() => {
-          if (failure === "throw") throw new Error("model lookup failed");
-          return Promise.reject(new Error("model lookup failed"));
-        });
-        const pending = f.send(command);
-        await f.compactStarted.promise;
-        const owner = f.statuses.get("web:test")!;
-        expect(owner).toMatchObject({ type: "intent", model: null });
-        f.compact.resolve({ status: "error", message: "Compaction failed" });
-        expect((await pending).status).toBe(201);
-        expect(f.statuses.get("web:test")).toMatchObject({ type: "error", turn_id: owner.turn_id });
-      });
-    }
-  }
-});
-
 describe("web agent message handler", () => {
-  for (const duringAdmission of [false, true]) {
-    test(`explicit queued thread survives busy input; admission race=${duringAdmission}`, async () => {
-      let busy = !duringAdmission;
-      const queued: any[][] = [], events: any[] = [];
-      const channel = {
-        agentPool: { isStreaming: () => busy, isActive: () => busy }, getQueuedFollowupCount: () => 0,
-        async admitMessage(_chat: string, _content: string, _isBot: boolean, _media: unknown, _options: unknown, check: () => void, _signal: unknown, defer: () => boolean) {
-          busy = true; check(); expect(defer()).toBe(true); return null;
-        },
-        enqueueQueuedFollowupItem(...args: any[]) { queued.push(args); return -42; },
-        async admitQueuedFollowupItem(args: any[], check: () => void) { check(); queued.push(args); return -42; },
-        broadcastEvent(event: string, data: unknown) { events.push({ event, data }); },
-        json: (body: unknown, status = 200) => Response.json(body, { status }),
-      } as any;
-      const response = await handleAgentMessage(channel, new Request('https://fixture/agent/default/message', {
-        method: 'POST', body: JSON.stringify({ content: 'explicit reply', thread_id: 17, mode: 'queue' }),
-      }), '/agent/default/message', 'web:test', 'default');
-      expect(response.status).toBe(201);
-      expect(await response.json()).toMatchObject({ queued: 'followup', thread_id: 17 });
-      expect(queued).toHaveLength(1); expect(queued[0][3]).toBe(17);
-      expect(events).toContainEqual({ event: 'agent_followup_queued', data: expect.objectContaining({ thread_id: 17 }) });
-    });
-  }
-  test('idle input becoming busy during storage is queued atomically before acknowledgement',async()=>{
-    let busy=false,committed=false,scheduled=0;const queued:any[]=[];const events:string[]=[];
-    let release!:()=>void;const gate=new Promise<void>(resolve=>{release=resolve;});
-    const channel={agentPool:{isStreaming:()=>busy,isActive:()=>busy},getQueuedFollowupCount:()=>queued.length,
-      async admitMessage(_jid:string,_text:string, _isBot: boolean,_media:unknown,_options:unknown,check:()=>void,_signal:unknown,defer:()=>boolean){await gate;check();const queued=defer();committed=true;expect(queued).toBe(true);return null;},
-      enqueueQueuedFollowupItem:(...args:any[])=>{expect(committed).toBe(false);queued.push(args);return -42;},broadcastEvent:(type:string)=>{expect(committed).toBe(true);events.push(type);},queue:{enqueue:()=>{scheduled++;}},resumeChat:()=>{scheduled++;},json:(value:unknown,status=200)=>Response.json(value,{status})} as any;
-    const pending=handleAgentMessage(channel,new Request('https://fixture/agent/default/message',{method:'POST',body:JSON.stringify({content:'idle input'})}),'/agent/default/message','web:test','default');await Bun.sleep(0);expect(events).toEqual([]);busy=true;release();
-    const response=await pending;expect(response.status).toBe(201);const body=await response.json();expect(body.queued).toBe('followup');expect(body.user_message).toBeUndefined();expect(queued[0].slice(0,4)).toEqual(['web:test',0,'idle input',null]);expect(events).toEqual(['agent_followup_queued']);expect(scheduled).toBe(0);
-  });
-  test('idle input acknowledgement and scheduling wait for successful atomic storage',async()=>{
-    let committed=false,scheduled=0;const events:string[]=[];
-    const channel={agentPool:{isStreaming:()=>false,isActive:()=>false},getQueuedFollowupCount:()=>0,
-      async admitMessage(_jid:string,_text:string, _isBot: boolean,_media:unknown,_options:unknown,check:()=>void,_signal:unknown,defer:()=>boolean){check();expect(defer()).toBe(false);committed=true;return{id:43,chat_jid:'web:test',timestamp:'2026-10-04T13:00:01Z',data:{content:'idle input',thread_id:43}};},
-      broadcastEvent:(type:string)=>{expect(committed).toBe(true);events.push(type);},queue:{enqueue:()=>{expect(committed).toBe(true);scheduled++;}},json:(value:unknown,status=200)=>Response.json(value,{status})} as any;
-    const request=()=>new Request('https://fixture/agent/default/message',{method:'POST',body:JSON.stringify({content:'idle input'})});
-    expect((await handleAgentMessage(channel,request(),'/agent/default/message','web:test','default')).status).toBe(201);expect(events).toEqual(['new_post']);expect(scheduled).toBe(1);
-    channel.admitMessage=async()=>{throw Error('write rejected');};events.length=0;expect((await handleAgentMessage(channel,request(),'/agent/default/message','web:test','default')).status).toBe(503);expect(events).toEqual([]);expect(scheduled).toBe(1);
-  });
-  test('fresh streaming state prevents a compose wake even if the active flag is false',async()=>{
-    let wakes=0,admissions=0;
-    const channel={agentPool:{isStreaming:()=>true,isActive:()=>false},getQueuedFollowupCount:()=>0,resumeChat:()=>{wakes++;},admitQueuedFollowupItem:async()=>{admissions++;return -1;},broadcastEvent:()=>{},json:(body:unknown,status=200)=>Response.json(body,{status})} as any;
-    const response=await handleAgentMessage(channel,new Request('https://fixture/agent/default/message',{method:'POST',body:JSON.stringify({content:'stay queued while streaming',mode:'queue'})}),'/agent/default/message','web:test','default');
-    expect(response.status).toBe(201);expect(admissions).toBe(1);expect(wakes).toBe(0);
-  });
-  test('manual queue remains deferred when streaming stops during storage admission',async()=>{
-    let streaming=true,wakes=0;
-    const channel={agentPool:{isStreaming:()=>streaming,isActive:()=>false},getQueuedFollowupCount:()=>0,resumeChat:()=>{wakes++;},admitQueuedFollowupItem:async()=>{streaming=false;return -1;},broadcastEvent:()=>{},json:(body:unknown,status=200)=>Response.json(body,{status})} as any;
-    const response=await handleAgentMessage(channel,new Request('https://fixture/agent/default/message',{method:'POST',body:JSON.stringify({content:'/queue explicitly deferred'})}),'/agent/default/message','web:test','default');
-    expect(response.status).toBe(201);expect((await response.json()).queued).toBe('followup');expect(wakes).toBe(0);
-  });
-  test('queued HTTP acknowledgement follows durable admission and rejects changed authority without broadcast', async () => {
-    let release!:()=>void;const gate=new Promise<void>(resolve=>{release=resolve;});
-    let admitted=false,active=true,wakes=0;const events:string[]=[];
-    let principal:any={kind:'local',userId:'default',mode:'single-user',role:'admin',authentication:{method:'local',sessionId:null,expiresAt:null}};
-    const channel={authGateway:{getPrincipal:()=>principal,isAuthEnabled:()=>false},agentPool:{isStreaming:()=>false,isActive:()=>active},getQueuedFollowupCount:()=>0,resumeChat:()=>{expect(admitted).toBe(true);wakes++;},
-      async admitQueuedFollowupItem(_args:unknown,check:()=>void){await gate;check();admitted=true;return -1;},broadcastEvent:(type:string)=>{expect(admitted).toBe(true);events.push(type);},json:(body:unknown,status=200)=>Response.json(body,{status})} as any;
-    const request=()=>new Request('https://fixture/agent/default/message',{method:'POST',body:JSON.stringify({content:'synthetic queued input',mode:'queue'})});
-    let done=false;const pending=handleAgentMessage(channel,request(),'/agent/default/message','web:test','default').then(res=>{done=true;return res;});await Bun.sleep(0);expect(done).toBe(false);expect(events).toEqual([]);
-    active=false;release();expect((await pending).status).toBe(201);expect(events).toEqual(['agent_followup_queued']);expect(wakes).toBe(1);
-    channel.admitQueuedFollowupItem=async(_args:unknown,check:()=>void)=>{principal={...principal,userId:'replacement'};check();return -2;};
-    active=true;events.length=0;expect((await handleAgentMessage(channel,request(),'/agent/default/message','web:test','default')).status).toBe(403);expect(events).toEqual([]);
-  });
   test('avatar command broadcasts updated branding and completion cannot restore the captured old avatar', async () => {
     initDatabase();
     const previous = getIdentityConfig().assistantAvatar;
@@ -239,7 +106,7 @@ describe("web agent message handler", () => {
       expect(response.status).toBe(201);
       expect(broadcasts.find(b => b.event === 'profile_update')?.payload.agent_avatar).toBeNull();
       const done = broadcasts.find(b => b.event === 'agent_status' && b.payload.type === 'done');
-      expect(done).toBeDefined(); expect(done!.payload.agent_avatar).toBeNull();
+      expect(done).toBeUndefined();
     } finally { setAssistantAvatar(previous); }
   });
   test("handles /meters as a UI-only command while still returning command output as an assistant message", async () => {
@@ -505,7 +372,7 @@ describe("web agent message handler", () => {
     expect(storeMessageCalls).toBe(1);
     expect(sentMessages[0]?.content).toBe("Compaction requested immediately.");
     expect(contextUsages).toEqual([]); // Existing SSE below owns the projection; no host context copy.
-    expect(statusUpdates.map(entry => entry.status.type)).toEqual(["intent", "done"]);
+    expect(statusUpdates).toEqual([]);
     expect(broadcasts).toContainEqual(expect.objectContaining({
       event: "agent_status",
       payload: expect.objectContaining({
@@ -905,22 +772,7 @@ describe("web agent message handler", () => {
     expect(queuedFollowups).toHaveLength(0);
     expect(sentMessages).toHaveLength(1);
     expect(sentMessages[0]?.content).toContain("Archived previous session:");
-    expect(statusUpdates[0]).toMatchObject({
-      type: "intent",
-      intent_key: "session_rotation",
-      title: "Rotating session",
-      model: null,
-    });
-    expect(statusUpdates[1]).toMatchObject({
-      type: "intent",
-      intent_key: "session_rotation",
-      title: "Rotating session",
-      started_at: statusUpdates[0].started_at,
-      turn_id: statusUpdates[0].turn_id,
-      run_started_at: statusUpdates[0].run_started_at,
-      model: "github-copilot/gpt-5.4",
-    });
-    expect(statusUpdates.map(status => status.type)).toEqual(["intent", "intent", "done"]);
+    expect(statusUpdates).toEqual([]);
     expect(broadcasts.map(entry => entry.payload)).toContainEqual(expect.objectContaining({
       type: "context_usage",
       context_reset: true,
@@ -938,49 +790,7 @@ describe("web agent message handler", () => {
       event: "model_changed",
       payload: expect.objectContaining({ chat_jid: "web:default", model: "github-copilot/gpt-5.4" }),
     }));
-    expect(statusUpdates.at(-1)).toMatchObject({ type: "done", title: "Completed /session-rotate" });
     expect(broadcasts.some((entry) => entry.event === "new_post")).toBe(true);
-  });
-
-  test("defers a normal user turn while the chat is still active even if streaming already settled", async () => {
-    const queuedFollowups: Array<{ chatJid: string; content: string }> = [];
-    let timelineAdmissions = 0;
-
-    const channel = {
-      agentPool: {
-        isStreaming: () => false,
-        isActive: () => true,
-      },
-      json: (payload: unknown, status = 200) =>
-        new Response(JSON.stringify(payload), {
-          status,
-          headers: { "Content-Type": "application/json" },
-        }),
-      admitQueuedFollowupItem: async ([chatJid, _rowId, content]: [string, number, string], check: (phase: string) => void, signal: AbortSignal) => {
-        signal.throwIfAborted(); check('before'); queuedFollowups.push({ chatJid, content }); check('after');
-        return 777;
-      },
-      getQueuedFollowupCount: () => 0,
-      broadcastEvent: () => {},
-      admitMessage: async () => {
-        timelineAdmissions += 1;
-        return null;
-      },
-      sendMessage: async () => {},
-    } as any;
-
-    const req = new Request("https://example.com/agent/default/message", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "follow up while compacting" }),
-    });
-
-    const response = await handleAgentMessage(channel, req, "/agent/default/message", "web:default", "default");
-    expect(response.status).toBe(201);
-    const body = await response.json();
-    expect(body.queued).toBe("followup");
-    expect(queuedFollowups).toEqual([{ chatJid: "web:default", content: "follow up while compacting" }]);
-    expect(timelineAdmissions).toBe(0);
   });
 
   test("returns typed 400s for malformed agent message payload classes", async () => {

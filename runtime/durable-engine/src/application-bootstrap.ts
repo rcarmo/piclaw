@@ -6,12 +6,10 @@ import { getChatCursor, setChatCursor } from "../../src/db/chat-cursors.js";
 import { readScheduledDefinition } from "../../src/db/scheduled-task-definitions.js";
 import { resolveAcceptedMessageThread } from "./host-message-thread.js";
 import { parseModelFailure } from './host-model-failure.js';
-import { assertAddonBackgroundRecoveryOwner } from './host-addon-background.js';
 import { getAgentRuntimeConfig } from "../../src/core/config.js";
 import { readAccessConfig } from "../../src/core/config-access.js";
 import { getExecutionIdentity } from "../../src/core/execution-context.js";
 import { getDeferredQueuedFollowups } from "../../src/db/chat-cursors.js";
-import { markAddonOperationInputCommitted,readAddonOperationInputSequence } from '../../src/db/addon-operations.js';
 import { createHash } from "node:crypto";
 import { isPromise } from "node:util/types";
 import { createLogger } from "../../src/utils/logger.js";
@@ -36,10 +34,10 @@ import { readApplicationMessagePayload } from "./accepted-payload-recovery.js";
 import { value, effect, sealed } from "./host-effects.js";
 import { hashScheduledLeaseToken } from "../../src/service-effects/current-piclaw/scheduled-run-values.js";
 import type { ScheduledRunLease } from "../../src/service-effects/contracts/scheduled-run-store.js";
-import { isNativeMessageInput, type NativeMessageResult, type AcceptedInput, type HostInputBinding, type RuntimeOptions } from "./host-runtime.js";
+import { isNativeMessageInput, type NativeMessageResult, type AcceptedInput, type RuntimeOptions } from "./host-runtime.js";
 import type { ConversationId,Tx } from "@earendil-works/pi-durable";
-import { nativeBackgroundIdentity,readNativeBackgroundPayload,type NativeBackgroundPayload,type NativeBackgroundPolicy } from "../../src/agent-pool/background-operation-contract.js";
-import { backgroundPolicyProvenance,type NativeBackgroundContext,type NativeBackgroundInputHistory } from "./host-background-context.js";
+import { nativeBackgroundIdentity,readNativeBackgroundPayload,assertNativeBackgroundRetry,type NativeBackgroundPayload } from "../../src/agent-pool/background-operation-contract.js";
+import { backgroundPolicyProvenance,type NativeBackgroundContext } from "./host-background-context.js";
 
 import { admitWebMessage } from "../../src/channels/web/messaging/message-store.js";
 import { createApplicationHostInput } from "./host-application-input.js";
@@ -91,13 +89,9 @@ export interface ApplicationBootstrapOptions {
   background?: {
     contexts:readonly NativeBackgroundContext[];
     payloads:ReadonlyMap<string,NativeBackgroundPayload>;
-    sourceIdForAddon(operationId:string):string;
-    prepareAddon(operationId:string,existing:NativeBackgroundPayload|undefined,history?:NativeBackgroundInputHistory):NativeBackgroundPayload;
     assertCurrent(payload:NativeBackgroundPayload):void;
-    /** Installed only with fully qualified model/tool/abort ports. */
-    assertExecution?: (payload:NativeBackgroundPayload)=>void;
     put(payload:NativeBackgroundPayload):void|Promise<void>;
-    publish(tx:Tx,payload:NativeBackgroundPayload,history?:NativeBackgroundInputHistory):Promise<NativeBackgroundContext>;
+    publish(tx:Tx,payload:NativeBackgroundPayload):Promise<NativeBackgroundContext>;
   };
   ownership: ReturnType<typeof applicationOwnership>;
   manifest: Manifest;
@@ -166,12 +160,17 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
   const routeIndex = new Map(manifest.map(b => [b.chatJid, Object.freeze({ ...b, sessionId: sessions.get(b.chatJid)! })]));
   const backgroundSource = config.background;
   const background = backgroundSource&&Object.freeze({contexts:backgroundSource.contexts.map(entry=>Object.freeze({...entry})),payloads:new Map(backgroundSource.payloads),
-    sourceIdForAddon:backgroundSource.sourceIdForAddon.bind(backgroundSource),prepareAddon:backgroundSource.prepareAddon.bind(backgroundSource),
-    assertCurrent:backgroundSource.assertCurrent.bind(backgroundSource),assertExecution:backgroundSource.assertExecution?.bind(backgroundSource),put:backgroundSource.put.bind(backgroundSource),publish:backgroundSource.publish.bind(backgroundSource)});
+    assertCurrent:backgroundSource.assertCurrent.bind(backgroundSource),put:backgroundSource.put.bind(backgroundSource),publish:backgroundSource.publish.bind(backgroundSource)});
   const privateIndex = new Map((background?.contexts??[]).map(b=>[b.chatJid,Object.freeze({...b})]));
   const backgroundPayloads = new Map(background?.payloads??[]);
-  const backgroundExecutions = new Map<string,{check():void}>();
-  const backgroundRuns = new Map<string,Promise<AgentOutput>>();
+  // Lifetime joins and immutable SDK/source lookup only, never execution state.
+  const dreamInvocations = new Set<Promise<AgentOutput>>();
+  const dreamSources = new Map<number,Readonly<{context:NativeBackgroundContext;payload:NativeBackgroundPayload}>>();
+  for(const payload of backgroundPayloads.values())if(payload.policy.origin.kind==='dream'){
+    const context=privateIndex.get(nativeBackgroundIdentity(payload.policy).chatJid);
+    if(!context)throw Error('Dream SDK context identity missing');
+    dreamSources.set(context.conversationId,Object.freeze({context,payload}));
+  }
   if(privateIndex.size!==(background?.contexts.length??0)||new Set([...privateIndex.values()].map(entry=>entry.conversationId)).size!==privateIndex.size)throw Error('Duplicate private background identity');
   if([...privateIndex.values()].some(b=>routeIndex.has(b.chatJid)||manifest.some(publicBinding=>publicBinding.conversationId===b.conversationId||publicBinding.branchId===b.branchId)))throw Error('Private background context overlaps a public route');
   const recoveryManifest = [...manifest,...privateIndex.values()].map(({chatJid,branchId,conversationId})=>({chatJid,branchId,conversationId}));
@@ -242,12 +241,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       if(!proof)throw Error('Background accepted source proof missing');return scope.conversationId;
     };
     const bindings = createHostDurableBindings(root, { domain: r.incarnation, incarnation: r.incarnation, manifest:recoveryManifest, getConversationBinding: lookup,
-      assertOwner: assert, resolveContent: content,resolveBackground,
-      assertBackgroundExecution(input){const payload=backgroundPayloads.get(input.sourceId);if(!payload||!background)throw Error('Background authority unavailable');background.assertCurrent(payload);
-        const execution=backgroundExecutions.get(input.sourceId);
-        if(!background.assertExecution||!execution)throw Error('Native background execution port is not qualified');
-        execution.check();
-        const result:unknown=background.assertExecution(payload);if(result!==undefined){void Promise.resolve(result).catch(()=>{});throw Error('Background execution guard must be synchronous');}} });
+      assertOwner: assert, resolveContent: content,resolveBackground });
     controller = await createHostController({ acquireOwnership: async () => lease,
       createStorage: async () => SqliteStorage.open(candidateDatabase),
       runtime: { ...r, work, terminal, bindings,
@@ -255,7 +249,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
           sessionId: r.sessionId, bindings, work, assertCurrent(input) { assert(); config.assertAdmission?.(input); } }),
         assertAdmission: config.assertAdmission, materializeAnswer: config.materializeAnswer, prepareTerminalEffect: config.prepareTerminalEffect, onOperationSettled: config.onOperationSettled, onMaintenanceSettled: config.onMaintenanceSettled, putAnswer: config.answers.put.bind(config.answers),
         replyThreadFor(input) { assert(); return resolveAcceptedMessageThread(root, input); },
-        async cancelOperationSource(input, expectedVersion, retryTaskId, cause) {
+        async cancelOperationSource(input, expectedVersion, retryTaskId) {
           await admitSqliteWrite(root, () => {
             assert();
             const operation = root.query("SELECT version,phase,cancellation_source_seq FROM service_effect_s01_operations WHERE operation_id=? AND chat_jid=?")
@@ -267,11 +261,10 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
               const task = row && JSON.parse(row.record);
               if (!task || task.kind !== "pi.generation" || task.conversationId !== input.conversationId || task.state.checkpoint?.phase !== "retry") throw Error("Retry backoff already changed; no operation was cancelled");
             }
-            if(cause&&(retryTaskId!==undefined||resolveBackground(input)!==input.conversationId))throw Error('Background cancellation source mismatch');
-            const id = `${cause??'operator-abort'}:${input.operationId}`;
+            const id = `operator-abort:${input.operationId}`;
             work.acceptAndCancelSourceInTransaction(sealed({ effect: effect(id), chatJid: input.chatJid, sourceId: id,
               kind: "cancellation", payloadRef: id, targetOperationId: input.operationId, parentSourceSeq: input.sourceSeq,
-              acceptedAt: r.now(), createWakeIntent: false }), expectedVersion, cause??"operator_abort", root);
+              acceptedAt: r.now(), createWakeIntent: false }), expectedVersion, "operator_abort", root);
             assert();
           }, assert);
         },
@@ -333,7 +326,6 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
         return runtime.reconcileMaintenance(binding);
       } });
     const hostControls = new Map<Promise<unknown>, {chatJid:string;sourceId?:string}>();
-    const backgroundPreparing = new Map<string,Promise<AcceptedInput>>();
     const messageObservers = new Set<Promise<void>>(), observedMessages = new Set<number>();
     const observeMessage = (input: AcceptedInput, submissionId: import("@earendil-works/pi-durable").SubmissionId) => {
       if (observedMessages.has(submissionId)) return;
@@ -533,178 +525,39 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
     };
     const preparing = new Map<string, Promise<void>>();
     const assertLive = () => { assert(); if (closing || shutdown.signal.aborted) throw Error("Application closing"); };
-    async function prepareBackgroundOperation(operationId:string,signal?:AbortSignal,expectedSourceId?:string,dream?:NativeBackgroundPayload):Promise<AcceptedInput>{
-      assertLive();config.assertAdmission?.();signal?.throwIfAborted();if(!background)throw Error('Native background admission unavailable');
-      const sourceId=dream?.policy.sourceId??background.sourceIdForAddon(operationId);
-      if(expectedSourceId!==undefined&&sourceId!==expectedSourceId)throw Error('Native add-on admission input epoch changed');
-      if(backgroundPreparing.has(sourceId)){
-        const payload=backgroundPayloads.get(sourceId);
-        if(payload){const result:unknown=background.assertCurrent(payload);if(result!==undefined){void Promise.resolve(result).catch(()=>{});throw Error('Background admission guard must be synchronous');}}
-        return backgroundPreparing.get(sourceId)!;
-      }
-      let commitPossible=false;
-      const preparing=(async()=>{
-        const prior=backgroundPayloads.get(sourceId),existing=privateIndex.get(dream?nativeBackgroundIdentity(dream.policy).chatJid:'operation:'+operationId);
-        const checkHistory=()=>{assertLive();signal?.throwIfAborted();if(existing&&root.query("SELECT 1 FROM service_effect_s01_operations WHERE chat_jid=? AND operation_id<>? AND phase<>'terminal'").get(existing.chatJid,'operation:'+sourceId))throw Error('Previous background operation is still accepted');};
-        let history:NativeBackgroundInputHistory|undefined;
-        if(existing&&!prior){
-          if(dream)throw Error('Dream context identity conflict');
-          checkHistory();
-          const previous=[...backgroundPayloads.values()].filter(payload=>payload.policy.origin.kind==='addon'&&payload.policy.origin.operationId===operationId&&payload.policy.sourceId!==sourceId)
-            .sort((a,b)=>(a.policy.origin as Extract<NativeBackgroundPolicy['origin'],{kind:'addon'}>).inputSequence-(b.policy.origin as Extract<NativeBackgroundPolicy['origin'],{kind:'addon'}>).inputSequence);
-          if(!previous.length)throw Error('Previous private background input unavailable');
-          const known=new Set(previous.map(payload=>payload.policy.sourceId));
-          const bound=root.query('SELECT source_id FROM piclaw_durable_bindings_v1 WHERE conversation_id=?').all(existing.conversationId) as {source_id:string}[];
-          if(bound.some(row=>!known.has(row.source_id)))throw Error('Previous background payload proof missing');
-          const acceptedSources:string[]=[];
-          for(const old of previous){
-            const input=acceptedBackgroundInput(old.policy.sourceId);
-            if(input){
-              const state=await runtime.reconcile(input);checkHistory();
-              if(!state.operation.terminal||!state.status||!['done','unanswered'].includes(state.status.status))throw Error('Previous background submission is not settled');
-              acceptedSources.push(old.policy.sourceId);
-            }else if(root.query('SELECT 1 FROM service_effect_s01_sources WHERE source_id=?').get(old.policy.sourceId))throw Error('Previous background binding proof missing');
-          }
-          history=Object.freeze({previous:Object.freeze(previous),acceptedSources:Object.freeze(acceptedSources)});
-        }
-        const payload=readNativeBackgroundPayload(dream??background.prepareAddon(operationId,prior,history)),identity=nativeBackgroundIdentity(payload.policy);
-        const check=()=>{assertLive();config.assertAdmission?.();signal?.throwIfAborted();if(history)checkHistory();const result:unknown=background.assertCurrent(payload);
-          if(result!==undefined){void Promise.resolve(result).catch(()=>{});throw Error('Background admission guard must be synchronous');}};
-        check();if(identity.sourceId!==sourceId)throw Error('Background source identity changed');
-        if(routeIndex.has(identity.chatJid))throw Error('Background identity is already bound to a public/imported context');
-        backgroundPayloads.set(sourceId,payload);
-        await background.put(payload);check();
-        let scope=existing;
-        if(scope&&history){
-          const context=scope;commitPossible=true;
-          await candidateDatabase.withAdmissionGuard(check,()=>runtime.prepareBackgroundInput(context.conversationId,async tx=>{
-            const published=await background.publish(tx,payload,history);
-            if(published.conversationId!==context.conversationId||published.contextKey!==context.contextKey||published.sessionId!==context.sessionId||published.chatJid!==context.chatJid||published.branchId!==context.branchId)throw Error('Background continuation changed context identity');
-          },check));check();
-        }
-        if(!scope){commitPossible=true;
-          const created=await candidateDatabase.withAdmissionGuard(check,()=>activeController.addConversation(tx=>background.publish(tx,payload),check));check();
-          if(created.contextKey!==identity.contextKey||created.chatJid!==identity.chatJid||created.branchId!==identity.branchId)throw Error('Published background context mismatch');
-          scope=Object.freeze({...created});privateIndex.set(identity.chatJid,scope);
-        }
-        if(scope.contextKey!==identity.contextKey||scope.branchId!==identity.branchId)throw Error('Background owner context changed');
-        const context=scope;
-        const accepted=await admitSqliteWrite(root,()=>{
-          check();const current=work.getAcceptedSource(identity.chatJid,identity.sourceId);
-          if(current){
-            const row=root.query('SELECT source_seq,request_hash,conversation_id FROM piclaw_durable_bindings_v1 WHERE domain=? AND incarnation=? AND operation_id=?')
-              .get(r.incarnation,r.incarnation,identity.operationId) as {source_seq:number;request_hash:string;conversation_id:number}|null;
-            if(!row||row.source_seq!==current.sourceSeq||row.conversation_id!==context.conversationId||row.request_hash!==hashCanonicalRequest({type:'input',requestId:identity.requestId,content:payload.prompt}))throw Error('Background replay binding unavailable');
-            return current.sourceSeq;
-          }
-          const frontier=root.query('SELECT consumed_through_source_seq,active_operation_id FROM service_effect_s01_chats WHERE chat_jid=?').get(identity.chatJid) as {consumed_through_source_seq:number;active_operation_id:string|null}|null;
-          if(frontier?.active_operation_id)throw Error('Background owner already has accepted work');
-          const provenanceRef=backgroundPolicyProvenance(payload);
-          commitPossible=true;
-          const claimed=work.acceptAndClaimSourceInTransaction(sealed({effect:{...effect(`accept:${sourceId}`),provenanceRef},chatJid:identity.chatJid,sourceId,kind:'internal',payloadRef:sourceId,targetOperationId:null,parentSourceSeq:null,acceptedAt:payload.policy.acceptedAt,createWakeIntent:false}),
-            sealed({effect:{...effect(`claim:${sourceId}`),provenanceRef},chatJid:identity.chatJid,expectedFrontier:frontier?.consumed_through_source_seq??0,newOperationId:identity.operationId,claimedAt:r.now()}),root);
-          root.query(`INSERT INTO piclaw_durable_bindings_v1(domain,incarnation,conversation_id,chat_jid,branch_id,operation_id,source_seq,source_id,payload_ref,request_id,request_hash)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(r.incarnation,r.incarnation,context.conversationId,identity.chatJid,identity.branchId,identity.operationId,claimed.source.sourceSeq,sourceId,sourceId,sourceId,hashCanonicalRequest({type:'input',requestId:sourceId,content:payload.prompt}));
-          check();return claimed.source.sourceSeq;
-        },check,signal);
-        const input:AcceptedInput=Object.freeze({incarnation:r.incarnation,conversationId:context.conversationId,chatJid:identity.chatJid,branchId:identity.branchId,operationId:identity.operationId,
-          sourceSeq:accepted,sourceId,payloadRef:sourceId,requestId:sourceId,requestHash:hashCanonicalRequest({type:'input',requestId:sourceId,content:payload.prompt})});
-        check();if(resolveBackground(input)!==input.conversationId)throw Error('Accepted background correlation failed');return input;
-      })();
-      const pending=preparing.then(input=>{backgroundPreparing.delete(sourceId);return input;},error=>{if(!commitPossible)backgroundPreparing.delete(sourceId);throw error;});
-      backgroundPreparing.set(sourceId,pending);return pending;
+    function dreamSourceFor(conversationId:number){
+      assertLive();
+      const source=dreamSources.get(conversationId);
+      if(!source&&[...privateIndex.values()].some(entry=>entry.conversationId===conversationId))throw Error('Retired or unknown private execution source');
+      return source;
     }
-    function prepareAddonOperation(operationId:string,signal?:AbortSignal){return prepareBackgroundOperation(operationId,signal);}
-    function backgroundPolicyFor(input:AcceptedInput):NativeBackgroundPolicy|undefined{
-      if(!input.sourceId.startsWith('background:'))return;
-      const payload=backgroundPayloads.get(input.sourceId);
-      if(!payload||resolveBackground(input)!==input.conversationId)throw Error('Background policy source unavailable');
-      return payload.policy;
-    }
-    function acceptedBackgroundInput(sourceId:string):AcceptedInput|undefined{
-      const row=root.query('SELECT conversation_id,chat_jid,branch_id,operation_id,source_seq,source_id,payload_ref,request_id,request_hash FROM piclaw_durable_bindings_v1 WHERE domain=? AND incarnation=? AND source_id=?')
-        .get(r.incarnation,r.incarnation,sourceId) as {conversation_id:ConversationId;chat_jid:string;branch_id:string;operation_id:string;source_seq:number;source_id:string;payload_ref:string;request_id:string;request_hash:string}|null;
-      if(!row)return;
-      const input:AcceptedInput=Object.freeze({incarnation:r.incarnation,conversationId:row.conversation_id,chatJid:row.chat_jid,branchId:row.branch_id,operationId:row.operation_id,
-        sourceSeq:row.source_seq,sourceId:row.source_id,payloadRef:row.payload_ref,requestId:row.request_id,requestHash:row.request_hash});
-      if(resolveBackground(input)!==input.conversationId)throw Error('Background replay identity unavailable');return input;
-    }
-    function backgroundResultFor(state:Awaited<ReturnType<typeof runtime.reconcile>>,timedOut=false):AgentOutput{
-      const category=state.status?.status==='unanswered'?parseModelFailure(state.status.detail)?.category:undefined;
-      const deadlineExpired=timedOut||state.operation.cancellation?.cause==='background_timeout'||category==='timeout';
-      if(state.operation.terminal?.disposition!=='completed'||!state.answer)return{status:'error',result:null,error:deadlineExpired?'Native background deadline expired':state.operation.cancellation?'Native background cancelled':'Native background failed',failureCategory:deadlineExpired?'timeout':state.operation.cancellation?'aborted':category==='budget'?'provider_budget':'provider'};
-      return{status:'success',result:state.answer.text,usage:state.answer.message.usage};
-    }
-    async function backgroundCompactionInput(conversationId:number):Promise<HostInputBinding|undefined>{
-      assertLive();const scope=[...privateIndex.values()].find(binding=>binding.conversationId===conversationId);if(!scope)return;
-      const current=root.query(`SELECT s.source_id FROM service_effect_s01_chats c JOIN service_effect_s01_operations o ON o.operation_id=c.active_operation_id AND o.chat_jid=c.chat_jid
-        JOIN service_effect_s01_sources s ON s.chat_jid=o.chat_jid AND s.source_seq=o.primary_source_seq
-        WHERE c.chat_jid=? AND o.phase='executing' AND o.cancellation_source_id IS NULL AND s.state='claimed'`).get(scope.chatJid) as {source_id:string}|null;
-      if(!current)throw Error('Private compaction requires an active admitted input');
-      const input=acceptedBackgroundInput(current.source_id);if(!input||input.conversationId!==conversationId)throw Error('Private compaction binding unavailable');
-      const bound=await bindings.get(input);assertLive();if(!bound)throw Error('Private compaction source proof missing');bindings.assertSourceCurrent!(bound);return bound;
-    }
-    async function reconcileAddonOperation(operationId:string,expectedInputSequence?:number):Promise<AgentOutput|null>{
-      assertLive();if(!background)throw Error('Native add-on recovery unavailable');
-      const check=()=>{assertLive();if(expectedInputSequence!==undefined&&readAddonOperationInputSequence(operationId,root)!==expectedInputSequence)throw Error('Native add-on recovery input epoch changed');};check();
-      const sourceId=background.sourceIdForAddon(operationId),input=acceptedBackgroundInput(sourceId),payload=backgroundPayloads.get(sourceId);
-      if(!input||!payload)return null;assertAddonBackgroundRecoveryOwner(root,payload);
-      const owned=backgroundRuns.get(sourceId);if(owned){const result=await owned;check();return result;}
-      // Neither absence of a caller nor a timeout authorises provider/tool replay.
-      // Unknown capacity and tool effects remain authoritative even if SDK error
-      // bookkeeping has reached a local terminal state.
-      const state=await runtime.reconcile(input);check();
-      const acknowledge=async()=>{const bound=await bindings.get(input);check();if(!bound)throw Error('Native recovery binding missing');if(bound.submissionId===null){await runtime.acknowledgeExistingInput(input);check();}};
-      // A committed completion/cancellation is a known local outcome, not proof
-      // that its historical provider charges were free or reconciled.
-      if(state.operation.terminal?.disposition==='completed'&&state.status?.status==='done'&&state.answer||state.operation.terminal?.disposition==='cancelled'&&state.status&&['done','unanswered'].includes(state.status.status)){await acknowledge();return backgroundResultFor(state);}
-      if(!state.submissionId||!state.status||!(state.status.status==='done'||state.status.status==='unanswered'&&(state.operation.cancellation!==null||state.status.reason==='model_error')))return null;
-      if(!await runtime.backgroundToolOutcomesKnown(input))return null;check();
-      await acknowledge();
-      if(!state.operation.terminal&&!await runtime.settle(input))return null;check();
-      const settled=await runtime.reconcile(input);check();return settled.operation.terminal?backgroundResultFor(settled):null;
-    }
-    async function dispatchBackgroundOperation(operationId:string,signal:AbortSignal,expectedInputSequence?:number,dream?:NativeBackgroundPayload):Promise<AgentOutput>{
-      assertLive();config.assertAdmission?.();if(!background)throw Error('Native background execution unavailable');
-      if(expectedInputSequence!==undefined&&readAddonOperationInputSequence(operationId,root)!==expectedInputSequence)throw Error('Native add-on dispatch input epoch changed');
-      const sourceId=dream?.policy.sourceId??background.sourceIdForAddon(operationId),pending=backgroundRuns.get(sourceId);if(pending)return pending;
+    function dispatchDreamPayload(raw:NativeBackgroundPayload,signal:AbortSignal):Promise<AgentOutput>{
+      const payload=readNativeBackgroundPayload(raw);
+      if(payload.policy.origin.kind!=='dream')throw Error('Only native Dream execution is supported');
       const running=(async():Promise<AgentOutput>=>{
-        let input=acceptedBackgroundInput(sourceId);
-        if(input){const state=await runtime.reconcile(input);assertLive();if(state.operation.terminal)return backgroundResultFor(state);}
-        input=await prepareBackgroundOperation(operationId,signal,sourceId,dream);
-        const cleanup=dream?await runtime.captureDreamCleanup(input):undefined;
-        const payload=backgroundPayloads.get(sourceId)!;let failedExecution=false,ready=false,timedOut=false,cancelling:Promise<boolean>|undefined,primaryFailure:unknown;
-        const lease={check(){assertLive();if(failedExecution)throw Error('Background execution is uncertain');signal.throwIfAborted();if(expectedInputSequence!==undefined&&readAddonOperationInputSequence(operationId,root)!==expectedInputSequence)throw Error('Native add-on execution input epoch changed');}};
-        if(backgroundExecutions.has(sourceId))throw Error('Background execution lease already owned');backgroundExecutions.set(sourceId,lease);
-        const cancel=()=>{timedOut ||= Date.now()>=Date.parse(payload.policy.expiresAt);if(ready&&!cancelling){cancelling=runtime.abortBackground(input!,timedOut?'background_timeout':'background_cancelled');void cancelling.catch(()=>{});}};
-        const deadline=Date.parse(payload.policy.expiresAt)-Date.now();
-        const timer=setTimeout(function expireNativeBackgroundDeadline(){timedOut=true;cancel();},Math.max(0,deadline));signal.addEventListener('abort',cancel,{once:true});
-        try{
-          const submission=await runtime.submit(input);assertLive();
-          const operation=value(await work.getOperation(input.operationId));assertLive();
-          if(!operation)throw Error('Background operation unavailable');
-          if(operation.harness?.sessionId!==r.sessionId || operation.harness.harnessOperationId!==String(submission))
-            throw Error('Exact completed background handoff required');
-          if(payload.policy.origin.kind==='addon') {
-            const inputSequence=payload.policy.origin.inputSequence;
-            await admitSqliteWrite(root,()=>{lease.check();markAddonOperationInputCommitted(operationId,inputSequence);lease.check();},lease.check,signal);
-          }
-          ready=true;timedOut ||= Date.now()>=Date.parse(payload.policy.expiresAt);if(signal.aborted||timedOut)cancel();
-          if(cancelling)await cancelling;else await runtime.wait(input,submission,shutdown.signal);
-          if(cancelling)await cancelling;
-          await runtime.joinBackgroundCompactions(input);assertLive();
-          if(!await runtime.settle(input))throw Error('Background settlement remains pending');
-          const settled=await runtime.reconcile(input);assertLive();
-          backgroundExecutions.delete(sourceId);return backgroundResultFor(settled,timedOut);
-        }catch(error){failedExecution=true;primaryFailure=error;throw error;}
-        finally{clearTimeout(timer);signal.removeEventListener('abort',cancel);
-          try{if(cancelling)await cancelling;}catch(error){const failure=primaryFailure!==undefined&&primaryFailure!==error?new AggregateError([primaryFailure,error],'Background wait and cancellation failed'):error;primaryFailure=failure;throw failure;}
-          finally{try{await cleanup?.();}catch(error){if(primaryFailure!==undefined&&primaryFailure!==error)throw new AggregateError([primaryFailure,error],'Background outcome and Dream cleanup failed');throw error;}}
+        assertLive();config.assertAdmission?.();signal.throwIfAborted();
+        if(!background)throw Error('Dream SDK ports unavailable');
+        const check=()=>{assertLive();signal.throwIfAborted();background.assertCurrent(payload);};check();
+        const identity=nativeBackgroundIdentity(payload.policy),prior=backgroundPayloads.get(payload.policy.sourceId);
+        if(prior)assertNativeBackgroundRetry(prior.policy,payload.policy);
+        if(routeIndex.has(identity.chatJid))throw Error('Private Dream identity overlaps public context');
+        await background.put(payload);check();
+        let context=privateIndex.get(identity.chatJid);
+        if(!context){
+          const created=await candidateDatabase.withAdmissionGuard(check,()=>activeController.addConversation(tx=>background.publish(tx,payload),check));check();
+          if(created.contextKey!==identity.contextKey||created.chatJid!==identity.chatJid||created.branchId!==identity.branchId)throw Error('Dream publication identity changed');
+          context=Object.freeze({...created});privateIndex.set(identity.chatJid,context);
         }
+        if(context.contextKey!==identity.contextKey||context.branchId!==identity.branchId)throw Error('Dream SDK context changed');
+        backgroundPayloads.set(payload.policy.sourceId,payload);
+        dreamSources.set(context.conversationId,Object.freeze({context,payload}));
+        const result=await runtime.runDreamConversation(context,payload,check,signal);
+        if(result.status.type==='input'&&result.status.status==='done'&&result.answer)return{status:'success',result:result.answer.text,usage:result.answer.message.usage};
+        const category=result.status.type==='input'&&result.status.status==='unanswered'?parseModelFailure(result.status.detail)?.category:undefined;
+        return{status:'error',result:null,error:result.timedOut?'Native Dream deadline expired':'Native Dream did not complete',failureCategory:result.timedOut||category==='timeout'?'timeout':category==='aborted'?'aborted':category==='budget'?'provider_budget':'provider'};
       })();
-      const result=running.then(value=>{backgroundRuns.delete(sourceId);return value;});backgroundRuns.set(sourceId,result);return result;
+      dreamInvocations.add(running);void running.finally(()=>dreamInvocations.delete(running)).catch(()=>{});return running;
     }
-    function dispatchAddonOperation(operationId:string,signal:AbortSignal,expectedInputSequence?:number){return dispatchBackgroundOperation(operationId,signal,expectedInputSequence);}
     function prepareInputSourceAdmission(chat: string): Promise<void> {
       assert(); config.assertAdmission?.();
       if (closing || shutdown.signal.aborted) return Promise.reject(Error("Application closing"));
@@ -1047,7 +900,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       // fence, including its final check after the borrowed SDK lease closes.
       assertProcessControlIdle(input?:AcceptedInput) {
         const otherControl=[...hostControls.values()].some(control=>!input||control.chatJid!==input.chatJid||control.sourceId!==input.sourceId);
-        if (preparing.size || otherControl || backgroundPreparing.size || backgroundRuns.size) throw Error("Host admission or credential/control work is active or uncertain");
+        if (preparing.size || otherControl || dreamInvocations.size) throw Error("Host admission or credential/control work is active or uncertain");
       },
       bindInputProjection(projection: Parameters<typeof admitWebMessage>[0] | undefined) {
         if (projection) { assertLive(); if (inputProjection) throw Error("Application input projection already bound"); }
@@ -1073,9 +926,8 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
           return rowId;
         }).immediate();
       },
-      dispatchDreamPayload(payload:NativeBackgroundPayload,signal:AbortSignal){if(payload.policy.origin.kind!=='dream')throw Error('Expected Dream origin');return dispatchBackgroundOperation(payload.policy.origin.invocationId,signal,undefined,payload);},
-      prepareAddonOperation,backgroundPolicyFor,backgroundCompactionInput,dispatchAddonOperation,reconcileAddonOperation,
-      sessionOptions: Object.freeze({ getDurableSession, dispatchScheduledAgent, dispatchSidePrompt,prepareAddonOperation,dispatchAddonOperation,reconcileAddonOperation,
+      dispatchDreamPayload,dreamSourceFor,
+      sessionOptions: Object.freeze({ getDurableSession, dispatchScheduledAgent, dispatchSidePrompt,
         dispatchHostCommand: config.dispatchHostCommand ? (chat: string, text: string) => { assertLive(); if (!routeIndex.has(chat)) throw Error("Unbound command chat"); return config.dispatchHostCommand!(chat, text); } : undefined }),
       allocateScheduledConversation, allocateSidePromptConversation, dispatchSidePrompt, reconcileSidePrompt,
       bind(options: Pick<WebChannelOpts, "queue" | "agentPool">): Readonly<WebChannelOpts> {
@@ -1098,17 +950,13 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
         shutdown.abort();
         await Promise.allSettled([...hostControls.keys(), ...messageObservers]);
         await activeController.close();
-        await Promise.allSettled([...backgroundRuns.values()]);
+        await Promise.allSettled([...dreamInvocations]);
         releaseBranchControlGuard?.();
       })(); },
     } satisfies RuntimeBackend & ReturnType<typeof createApplicationHostInput> & {
       assertProcessControlIdle(input?:AcceptedInput): void;
       dispatchDreamPayload(payload:NativeBackgroundPayload,signal:AbortSignal):Promise<AgentOutput>;
-      prepareAddonOperation(operationId:string,signal?:AbortSignal):Promise<AcceptedInput>;
-      backgroundPolicyFor(input:AcceptedInput):NativeBackgroundPolicy|undefined;
-      backgroundCompactionInput(conversationId:number):Promise<HostInputBinding|undefined>;
-      dispatchAddonOperation(operationId:string,signal:AbortSignal,expectedInputSequence?:number):Promise<AgentOutput>;
-      reconcileAddonOperation(operationId:string,expectedInputSequence?:number):Promise<AgentOutput|null>;
+      dreamSourceFor(conversationId:number):Readonly<{context:NativeBackgroundContext;payload:NativeBackgroundPayload}>|undefined;
       bindInputProjection(projection: Parameters<typeof admitWebMessage>[0] | undefined): void;
       dispatchAcceptedInput: typeof dispatch;
       admitHostFollowup(input: { sourceId: string; chatJid: string; text: string; queuedAt: string }): number;

@@ -1,7 +1,5 @@
 import { unlinkedUsageReportPredicate } from "../db/usage-report-projection.js";
 import { hasNativeRouting } from "../db/native-routing-policy.js";
-import { createOperationHost } from "../addons/operation-host.js";
-import { setAddonOperationHost } from "../addons/runtime-contributions.js";
 /**
  * runtime/startup.ts – Runtime startup wiring helpers.
  */
@@ -474,7 +472,6 @@ export async function startWebChannel(
   // Startup runtime entries may register chat transports and other process-wide
   // services. Wire the complete ABI before importing them, and load them before
   // warmups/recovery can resume chats that use those transports.
-  setAddonOperationHost(createOperationHost(agentPool));
   await initializeWebAddonMessagingRuntime(agentPool, web);
 
   captureStartupMemorySnapshot(agentPool, { label: "post-web-start" });

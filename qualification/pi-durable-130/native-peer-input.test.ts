@@ -18,7 +18,7 @@ for(const ingress of ['peer-http','chat-tool','runtime-message'] as const)for(co
     if(busy){primary=await f.send('Keep the primary SDK turn open');await f.entered.promise;}
     // Deliberately contradict the real SDK state. These flags cannot choose placement.
     f.pool.isStreaming=()=>!busy;f.pool.isActive=()=>!busy;
-    f.channel.getQueuedFollowupCount=()=>{throw Error('Host queue cannot choose relay placement');};
+    (f.channel as any).getQueuedFollowupCount=()=>{throw Error('Host queue cannot choose relay placement');};
     f.channel.resumeChat=()=>{throw Error('SDK relay must not wake a host worker');};
     let receipt:any;
     if(ingress==='peer-http'){

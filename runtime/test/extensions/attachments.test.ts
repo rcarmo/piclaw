@@ -161,7 +161,7 @@ test("accepted web publisher stores attachment content blocks through the curren
     { size: 6 }
   );
 
-  db.storeMessage({
+  const sourceRow = db.storeMessage({
     id: `msg-${Math.random()}`,
     chat_jid: "web:default",
     sender: "user",
@@ -189,7 +189,8 @@ test("accepted web publisher stores attachment content blocks through the curren
     },
   });
 
-  await (web as any).processChat("web:default", "default");
+  const source = db.getDb().query('SELECT id FROM messages WHERE rowid=?').get(sourceRow) as {id:string};
+  await web.dispatchAcceptedInput('web:default', source.id, sourceRow);
 
   const timeline = db.getTimeline("web:default", 10);
   const last = timeline[timeline.length - 1];
