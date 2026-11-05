@@ -11,7 +11,7 @@ import { safeGetItem, safeSetItem } from "../utils/storage";
 import { createLogger } from "../utils/logger";
 import { agentDisplayName } from "../api/agent-identity";
 import { SubmissionFeedback, type SubmissionFeedbackState } from '../../../../../src/ui/submission-feedback';
-import { isComposeSteerShortcut, requireComposeAcknowledgement, getComposeDeliveryNotice } from '../../../../../src/ui/compose-submission';
+import { isComposeSteerShortcut, requireComposeAcknowledgement, getComposeDeliveryNotice, isCommittedComposeInput } from '../../../../../src/ui/compose-submission';
 import {
   uploadFileBatch,
   uploadChatAttachment,
@@ -492,9 +492,8 @@ export function ChatPanel({ onOpenPalette }: ChatPanelProps = {}) {
         clearTimeout(timeout);
       }
 
-      if (!res.ok) throw new Error(`Send failed (HTTP ${res.status}). Try again.`);
-
       const data = await res.json();
+      if (!res.ok && !isCommittedComposeInput(data)) throw new Error(data?.error || `Send failed (HTTP ${res.status}). Try again.`);
       requireComposeAcknowledgement(data);
       const deliveryNotice = getComposeDeliveryNotice(data);
       if (deliveryNotice && getChatJid() === submissionChatJid) sendError.value = deliveryNotice;

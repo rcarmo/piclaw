@@ -5,13 +5,13 @@ import {mkdtempSync, rmSync, existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {context} from './src/fixture.ts';
-import {acceptedSteerFixture} from './src/accepted-steer-recovery-fixture.ts';
+import {hostSourceContractFixture} from './src/host-source-contract-fixture.ts';
 import {createHostCommandPolicy} from '../../runtime/durable-engine/src/host-command-policy.ts';
 import {barrier} from './src/fixture.ts';
 import {resolveSettings} from '../../runtime/durable-engine/node_modules/@earendil-works/pi-durable/dist/harness/agent.js';
 
 async function fixture(body: (f:any,binding:any)=>Promise<void>, guard: boolean | (<T>(run: () => Promise<T>) => Promise<T>) = true) {
- const dir=mkdtempSync(join(tmpdir(),'native-critical-')); const f=await acceptedSteerFixture(dir,'committed-ack-lost', undefined, false, {withIdleModelGuard:typeof guard === 'function' ? guard : guard ? async run=>run() : undefined});
+ const dir=mkdtempSync(join(tmpdir(),'native-critical-')); const f=await hostSourceContractFixture(dir,'committed-ack-lost', false, {withIdleModelGuard:typeof guard === 'function' ? guard : guard ? async run=>run() : undefined});
  try {await f.open(); const binding={incarnation:f.incarnation,chatJid:f.chatJid,branchId:'main',conversationId:f.base.root.id};
   // This fixture owns an isolated DB, not production shared host work.
 

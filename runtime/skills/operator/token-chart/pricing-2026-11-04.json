@@ -1,0 +1,46 @@
+[
+  {
+    "provider": "openai",
+    "model": "gpt-6.1-terra",
+    "canonicalModel": "GPT-6.1 Terra",
+    "basis": "OpenAI Standard API; verified 2026-11-04",
+    "inputPerMTok": 1,
+    "outputPerMTok": 5,
+    "cacheReadPerMTok": 0.05,
+    "cacheWritePerMTok": 1.25,
+    "notes": "Base <=272K input tier. Above 272K input the whole request uses $2 input / $7.50 output / $0.10 cache read / $2.50 short-retention write. Native 12h writes $2.50/$5; no corresponding subscription entitlement inferred. Cost charts use base rates only."
+  },
+  {
+    "provider": "github-copilot",
+    "model": "gpt-6.1-terra",
+    "canonicalModel": "GPT-6.1 Terra",
+    "basis": "GitHub Copilot published tariff; verified 2026-11-04",
+    "inputPerMTok": 1,
+    "outputPerMTok": 5,
+    "cacheReadPerMTok": 0.05,
+    "cacheWritePerMTok": 1.25,
+    "notes": "Base <=272K input tier. Above 272K input the whole request uses $2 input / $7.50 output / $0.10 cache read / $2.50 short-retention write. Native 12h writes $2.50/$5; no corresponding subscription entitlement inferred. Cost charts use base rates only."
+  },
+  {
+    "provider": "openai-codex",
+    "model": "gpt-6.1-terra",
+    "canonicalModel": "GPT-6.1 Terra",
+    "basis": "OpenAI Standard API-equivalent estimate; not a subscription invoice; verified 2026-11-04",
+    "inputPerMTok": 1,
+    "outputPerMTok": 5,
+    "cacheReadPerMTok": 0.05,
+    "cacheWritePerMTok": 1.25,
+    "notes": "Base <=272K input tier. Above 272K input the whole request uses $2 input / $7.50 output / $0.10 cache read / $2.50 short-retention write. Native 12h writes $2.50/$5; no corresponding subscription entitlement inferred. Cost charts use base rates only."
+  },
+  {
+    "provider": "openrouter",
+    "model": "openai/gpt-6.1-terra",
+    "canonicalModel": "GPT-6.1 Terra",
+    "basis": "OpenRouter exact route; verified 2026-11-04",
+    "inputPerMTok": 1,
+    "outputPerMTok": 5,
+    "cacheReadPerMTok": 0.05,
+    "cacheWritePerMTok": 1.25,
+    "notes": "Base <=272K input tier. Above 272K input the whole request uses $2 input / $7.50 output / $0.10 cache read / $2.50 short-retention write. Native 12h writes $2.50/$5; no corresponding subscription entitlement inferred. Cost charts use base rates only."
+  }
+]

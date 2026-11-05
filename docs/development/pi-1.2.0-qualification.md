@@ -97,11 +97,9 @@ The device/Codex fixtures use fetch interception, without an OS network sandbox.
 
 ## Reproduce Plan sidebar and local checks
 
-Use a separate checkout of the qualified add-on source; the script checks sidebar version 0.1.25 and SDK version 1.2.0 before running. It clears inherited environment, forbids fetch, uses in-memory storage and cleans disposable session files. It exercises loader modes, next-step activation, the same-batch negative control, tool ceilings, SDK filters, cache/recreation/branch isolation, the actual core session factory and the admitted operation profile.
+The historical Plan harness pinned sidebar 0.1.25 and SDK 1.2.0. It has been retired after the native SDK cutover; its existing receipts remain historical evidence. The current native suites include `qualification/pi-durable-130/plan.test.ts` and `installed-tool-catalog.test.ts`. Run `make ci-full` for the required host and native gates; these older commands do not qualify the current native runtime.
 
 ```sh
-PLAN193_ADDONS_ROOT=/path/to/qualified-addons-checkout \
-  bun --no-env-file runtime/scripts/qualify-plan193.ts
 bun run runtime/scripts/repo-dev-command.ts typecheck:scripts
 make lint
 bun run test:local --cwd runtime --env PICLAW_DB_IN_MEMORY=1 -- bun test \

@@ -10,7 +10,7 @@ import { Harness, type ConversationId } from "../../runtime/durable-engine/quali
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
 import { HostConversationRuntime, importCopiedLegacyTree, LegacyImportManifest } from "../../runtime/durable-engine/src/index.js";
 import { OwnedSqlite } from "./src/ownership.js";
-import { acceptedSteerFixture } from "./src/accepted-steer-recovery-fixture.js";
+import { hostSourceContractFixture } from "./src/host-source-contract-fixture.js";
 import { context } from "./src/fixture.js";
 import { createDurableConversationAdapter } from "../../runtime/src/agent-pool/durable-runtime-adapter.js";
 import { AgentRuntimeFacade } from "../../runtime/src/agent-pool/runtime-facade.js";
@@ -81,7 +81,7 @@ test("historical system instructions stay private and must match immutable impor
 
 test("one DB imported fork tree through actual facade, original provenance and native public suffix", async () => {
   const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "db-tree-"));
-  const f = await acceptedSteerFixture(dir, "before-submit", undefined, false, { sharedDatabase: true });
+  const f = await hostSourceContractFixture(dir, "before-submit", false, { sharedDatabase: true });
   const events: string[] = [];
   const watcher = watch(dirname(f.hostPath), { recursive: true }, (_, name) => { if (name?.endsWith(".jsonl")) events.push(name); });
   const spies = (["create", "open", "continueRecent"] as const).map(key => spyOn(SessionManager, key).mockImplementation(() => { throw Error("JSONL forbidden"); }));

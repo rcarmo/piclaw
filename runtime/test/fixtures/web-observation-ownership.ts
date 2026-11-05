@@ -37,12 +37,11 @@ if (scenario === 'registration') {
       if (scenario === 'failure' && index === 0 && counts[index] === 1) throw Error('uncertain local cleanup');
       dispose();
     };
-    return new WebChannelRuntimeStateService({ getAssistantName: () => 'Fixture', enqueue() { wakes[index]++; }, async processChat() {} } as any,
-      { defaultAgentId: 'default' }, { agentStatusStore: status });
+    return new WebChannelRuntimeStateService({ agentStatusStore: status });
   });
   try {
-    services[0]!.updateAgentStatus('shared', { type: 'done' });
-    services[1]!.updateAgentStatus('shared', { type: 'done' }); assert.equal(timers.size, 2);
+    services[0]!.updateAgentStatus('shared', { sdk_observation: true, type: 'done' });
+    services[1]!.updateAgentStatus('shared', { sdk_observation: true, type: 'done' }); assert.equal(timers.size, 2);
     if (scenario === 'failure') {
       assert.throws(() => services[0]!.dispose(), /uncertain local cleanup/);
       assert.equal(timers.size, 2); assert.equal(services[0]!.getAgentStatus('shared')?.type, 'done');
@@ -69,8 +68,8 @@ if (scenario === 'registration') {
     }
     if (scenario !== 'failure') {
       assert.equal(services[1]!.getAgentStatus('shared')?.type, 'done');
-      services[0]!.updateAgentStatus('late-old', { type: 'done' });
-      services[0]!.resumeChat('late-old'); services[0]!.resumePendingChats(); assert.deepEqual(wakes, [0, 0]);
+      services[0]!.updateAgentStatus('late-old', { sdk_observation: true, type: 'done' });
+      assert.equal('resumeChat' in services[0]!, false); assert.equal('resumePendingChats' in services[0]!, false);
       assert.equal(timers.size, 1); assert.equal(services[0]!.getAgentStatus('late-old'), null);
       await runPreShutdownHooksOnce();
       assert.deepEqual(counts, [1, 1]); assert.equal(timers.size, 0);

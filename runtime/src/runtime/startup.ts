@@ -1,7 +1,5 @@
 import { unlinkedUsageReportPredicate } from "../db/usage-report-projection.js";
 import { hasNativeRouting } from "../db/native-routing-policy.js";
-import { createOperationHost } from "../addons/operation-host.js";
-import { setAddonOperationHost } from "../addons/runtime-contributions.js";
 /**
  * runtime/startup.ts – Runtime startup wiring helpers.
  */
@@ -50,8 +48,6 @@ import { createAddonMessagingRuntimeHandlers } from "../addons/runtime-messaging
 const log = createLogger("runtime.startup");
 const WORKSPACE_SKEL_DIR = resolve(process.env.PICLAW_SKEL_DIR || resolve(import.meta.dir, "../../../skel"));
 const STARTUP_MEMORY_SNAPSHOT_DIR = join(DATA_DIR, "startup-memory-snapshots");
-export const STARTUP_STATUS_CHAT_JID = "web:default";
-export const STARTUP_STATUS_TURN_ID = "startup:web:default";
 
 
 const WORKSPACE_BOOTSTRAP_ENTRIES = [
@@ -240,33 +236,7 @@ export function captureStartupMemorySnapshot(
   }
 }
 
-export function buildStartupAgentStatus(options: {
-  phase: string;
-  detail: string;
-  startedAt?: string;
-  title?: string;
-  blocking?: boolean;
-}): Record<string, unknown> {
-  const startedAt = typeof options.startedAt === "string" && options.startedAt.trim()
-    ? options.startedAt.trim()
-    : new Date().toISOString();
-  return {
-    type: "intent",
-    kind: "info",
-    intent_key: "startup",
-    source: "startup",
-    phase: options.phase,
-    title: options.title || "Starting up…",
-    detail: options.detail,
-    blocking: options.blocking ?? true,
-    started_at: startedAt,
-    last_event_at: new Date().toISOString(),
-    turn_id: STARTUP_STATUS_TURN_ID,
-  };
-}
-
 interface StartupRecoveryWebChannel {
-  updateAgentStatus(chatJid: string, status: Record<string, unknown>): void;
   resumePendingChats(chatJid?: string): void;
 }
 
@@ -449,32 +419,8 @@ export function runWebStartupRecoveryBootstrap(
   web: StartupRecoveryWebChannel,
   scheduleResumePending: (resume: () => void) => void = (resume) => { setTimeout(resume, 0); },
 ): void {
-  const startedAt = new Date().toISOString();
-  web.updateAgentStatus(STARTUP_STATUS_CHAT_JID, buildStartupAgentStatus({
-    phase: "recovering_native",
-    detail: "Restoring native runtime state.",
-    startedAt,
-  }));
-
-  try {
-    web.updateAgentStatus(STARTUP_STATUS_CHAT_JID, buildStartupAgentStatus({
-      phase: "resuming_pending",
-      detail: "Resuming pending chats and queued follow-ups.",
-      startedAt,
-    }));
-    // Defer the pending-resume scan so the HTTP server can bind and start
-    // accepting connections before heavy chat processing begins. Queue
-    // dedupe keeps this safe when IPC-driven resume_pending runs too.
-    scheduleResumePending(() => web.resumePendingChats());
-  } finally {
-    web.updateAgentStatus(STARTUP_STATUS_CHAT_JID, {
-      type: "done",
-      source: "startup",
-      turn_id: STARTUP_STATUS_TURN_ID,
-      title: "Startup ready",
-      detail: "Runtime recovery complete.",
-    });
-  }
+  // The SDK owns execution recovery/status. Reconcile native source delivery only.
+  scheduleResumePending(() => web.resumePendingChats());
 }
 
 export async function initializeWebAddonMessagingRuntime(
@@ -526,7 +472,6 @@ export async function startWebChannel(
   // Startup runtime entries may register chat transports and other process-wide
   // services. Wire the complete ABI before importing them, and load them before
   // warmups/recovery can resume chats that use those transports.
-  setAddonOperationHost(createOperationHost(agentPool));
   await initializeWebAddonMessagingRuntime(agentPool, web);
 
   captureStartupMemorySnapshot(agentPool, { label: "post-web-start" });

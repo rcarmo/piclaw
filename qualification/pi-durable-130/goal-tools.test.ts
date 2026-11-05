@@ -42,7 +42,7 @@ test("actual Goal factory uses scoped shared database KV and denies revoked muta
     expect(extensionKvGet("goal", "thread-goal", "chat", authority.chatJid)).toMatchObject({ status: "complete", completion_summary: "Verified" });
     expect(() => addon.loadThreadGoal(authority.chatJid)).toThrow("Extension KV operation authority required");
     expect(() => withExtensionKvAuthority({ ...authority, chatJid: "web:foreign" }, () => addon.loadThreadGoal(authority.chatJid))).toThrow("Extension KV scope denied");
-  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); closeDatabase(); }
+  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); await closeDatabase(); }
 });
 
 test("Goal host adapter fences mutations to committed operation authority", async () => {
@@ -92,14 +92,11 @@ test("Goal host adapter fences mutations to committed operation authority", asyn
     await expect(invoke("goal_complete", { summary: "Denied", evidence: ["revoked operation"] })).rejects.toThrow();
     expect(extensionKvGet("goal", "thread-goal", "chat", chat)).toMatchObject({ status: "active" });
     expect(factoryCalls).toBe(1);
-  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); closeDatabase(); }
+  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); await closeDatabase(); }
 });
 
-for (const mode of [false, true, "snapshot-replace", "snapshot-stop", "snapshot-complete", "external", "stop", "external-terminal", "stop-accounting", "complete-accounting", "compacted-accounting", "compacted-foreign-boundary", "update-accounting", "budget-accounting", "persisted-budget", "deadline-checkpoint", "continuation", "steer-accounting", "steer-complete", "steer-ordinary"] as const) test(`actual Goal tool task captures its live accepted operation; rejected=${mode}`, async () => {
-  const continuation = mode === "continuation";
+for (const mode of [false, true, "snapshot-replace", "snapshot-stop", "snapshot-complete", "external", "stop", "external-terminal", "stop-accounting", "complete-accounting", "compacted-accounting", "compacted-foreign-boundary", "update-accounting", "budget-accounting", "persisted-budget", "deadline-checkpoint"] as const) test(`actual Goal tool task captures its live accepted operation; rejected=${mode}`, async () => {
   const compactedMode = mode === "compacted-accounting" || mode === "compacted-foreign-boundary";
-  const steer = mode === "steer-accounting" || mode === "steer-complete" || mode === "steer-ordinary";
-  const terminalSteer = mode === "steer-complete", ordinarySteer = mode === "steer-ordinary";
   const rejectRequestAuthority = mode === true;
   const snapshotRace = typeof mode === "string" && mode.startsWith("snapshot-");
   const externalLifecycle = mode === "external";
@@ -111,7 +108,7 @@ for (const mode of [false, true, "snapshot-replace", "snapshot-stop", "snapshot-
   const sourceRoot = process.env.DURABLE_GOAL_ADDON_ROOT;
   if (!sourceRoot) throw Error("DURABLE_GOAL_ADDON_ROOT required");
   const { mkdtemp, rm } = await import("node:fs/promises");
-  const { acceptedSteerFixture } = await import("./src/accepted-steer-recovery-fixture.js");
+  const { hostSourceContractFixture } = await import("./src/host-source-contract-fixture.js");
   const { context } = await import("./src/fixture.js");
   const { value, effect, sealed, at } = await import("./src/host-handoff.js");
   const { Harness, configure, defineExtension } = await import("../../runtime/durable-engine/qualification/durable.ts");
@@ -121,12 +118,9 @@ for (const mode of [false, true, "snapshot-replace", "snapshot-stop", "snapshot-
   const { storeChatMetadata } = await import("../../runtime/src/db.js");
   const { createHostGoalTools } = await import("../../runtime/durable-engine/src/host-goal-tools.js");
   const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "goal-live-source-"));
-  const allowedContinuationRequests = new Set<string>();
   let prepareSettlement: import("../../runtime/durable-engine/src/host-runtime.js").RuntimeOptions["prepareTerminalEffect"];
-  const f = await acceptedSteerFixture(dir, "before-submit", undefined, true, {
+  const f = await hostSourceContractFixture(dir, "before-submit", true, {
     withPromptContextGuard: async (assertCurrent, body) => { assertCurrent(); return body(); },
-    sharedDatabase: continuation || steer,
-    allowRequest: request => allowedContinuationRequests.has(request),
     prepareTerminalEffect: input => prepareSettlement?.(input) ?? Promise.resolve(undefined),
   });
   const addon = await import(pathToFileURL(join(sourceRoot, "addons/goal/index.ts")).href);
@@ -136,8 +130,7 @@ for (const mode of [false, true, "snapshot-replace", "snapshot-stop", "snapshot-
     const proof = await f.runtime!.captureToolSource(conversation, task, call);
     expect(proof.operation.chatJid).toBe(f.chatJid); captures++; return proof;
   } }) });
-  let steerText = "", steered = false, compacted = false;
-  const capturedCounts: number[] = [];
+  let compacted = false;
   const extension = defineExtension({ name: "native-goal-fixture", tools, hooks: [{ task: "pi.generation", handlers: {
     async afterTools(...[_assistant, results, api, hookContext]: Parameters<import("../../runtime/durable-engine/qualification/durable.ts").GenerationHooks["afterTools"]>) {
       if (compactedMode && !compacted) {
@@ -159,28 +152,6 @@ for (const mode of [false, true, "snapshot-replace", "snapshot-stop", "snapshot-
         const conversation = await harness.conversation(api.conversationId, hookContext);
         expect((await conversation!.context(hookContext)).entries.some(entry => entry.kind === "host.accepted")).toBe(false);
       }
-      if (!steer || steered) return;
-      steered = true;
-      const { createDurableConversationAdapter } = await import("../../runtime/src/agent-pool/durable-runtime-adapter.js");
-      const { createDurableQueuedSteering } = await import("../../runtime/src/agent-pool/durable-queued-steering.js");
-      const { setDeferredQueuedFollowups, getDeferredQueuedFollowups } = await import("../../runtime/src/db.js");
-      const { admitWebMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
-      const source = value(await f.ports.work.acceptSource(sealed({ effect: effect(`${f.incarnation}:goal-steer-usage`), chatJid: f.chatJid,
-        sourceId: f.intentSourceId, kind: "message", payloadRef: `queued-source:${f.intentSourceId}`,
-        targetOperationId: null, parentSourceSeq: null, acceptedAt: at, createWakeIntent: false })));
-      setDeferredQueuedFollowups(f.chatJid, [{ rowId: 1650, threadId: null, source_id: source.sourceId,
-        source_accepted: true, queuedContent: steerText, queuedAt: at }]);
-      const adapter = createDurableConversationAdapter({ incarnation: f.incarnation,
-        manifest: [{ chatJid: f.chatJid, branchId: "main", conversationId: f.base.root.id }], runtime: f.runtime! });
-      const coordinator = createDurableQueuedSteering({ work: f.ports.work, adapter, chatJid: f.chatJid, branchId: "main",
-        assertCurrentWriter: () => f.owner.assert(), runningBinding: { sessionId: f.incarnation },
-        readQueued: id => getDeferredQueuedFollowups(f.chatJid).find(item => item.rowId === id),
-        validatePayload({ item }) { expect(item.queuedContent).toBe(steerText); },
-        materialize: (item, accept) => admitWebMessage({} as any, { chatJid: f.chatJid, content: item.queuedContent,
-          isBot: false, mediaIds: [], agentId: "default", agentName: "Fixture" },
-          { consumeDeferredFollowupRowId: item.rowId, materializeQueuedSource: accept, isSteeringMessage: true }),
-      });
-      await (await coordinator.accept(1650)).dispatch();
     },
   } }] }); f.base.registry.install(extension);
   const { createHostGoalTerminalFence } = await import("../../runtime/durable-engine/src/host-goal-terminal.js");
@@ -194,28 +165,7 @@ for (const mode of [false, true, "snapshot-replace", "snapshot-stop", "snapshot-
   const checkedTerminalBoundaries = new Set<string>();
   const { createHostGoalSettlement } = await import("../../runtime/durable-engine/src/host-goal-settlement.js");
   prepareSettlement = createHostGoalSettlement(addon, { root: f.db, runtime: () => f.runtime!, assertOwner: () => f.owner.assert() });
-  if (continuation) {
-    const planRoot = process.env.DURABLE_ADDONS_ROOT;
-    if (!planRoot) throw Error("DURABLE_ADDONS_ROOT required");
-    const plan = await import(pathToFileURL(join(planRoot, "addons/plan-sidebar/index.ts")).href);
-    const { createHostGoalPlanReader } = await import("../../runtime/durable-engine/src/host-goal-plan.js");
-    const { createHostGoalProgressReader } = await import("../../runtime/durable-engine/src/host-goal-progress.js");
-    const { QueuedFollowupLifecycleService } = await import("../../runtime/src/channels/web/runtime/queued-followup-lifecycle-service.js");
-    const { getExtensionKvStore } = await import("../../runtime/src/extension-kv-registry.js");
-    withExtensionKvAuthority({ extensionId: "plan-sidebar", chatJid: f.chatJid, assertCurrent: () => f.owner.assert(),
-      write<T>(run: () => T) { return f.db.transaction(run).immediate(); } }, () => {
-      getExtensionKvStore().set("plan-sidebar", "plan", { markdown: "- [ ] Continue implementation", updated_at: at }, "chat", f.chatJid);
-    });
-    const queue = new QueuedFollowupLifecycleService();
-    prepareSettlement = createHostGoalSettlement(addon, { root: f.db, runtime: () => f.runtime!, assertOwner: () => f.owner.assert(), continuation: {
-      addon, prepare: createHostGoalProgressReader(addon, { runtime: () => f.runtime!, assertOwner: () => f.owner.assert() }),
-      readPlan: createHostGoalPlanReader(f.db, plan, addon),
-      admit(next) { return queue.enqueueAcceptedFollowupOnce(next.sourceId, next.chatJid, next.text, next.queuedAt, { source: "goal.continuation" }, ({ chatJid, item, database }) => {
-        f.ports.work.acceptSourceInTransaction(sealed({ effect: effect(`accept:${item.source_id}`), chatJid, sourceId: item.source_id,
-          kind: "message", payloadRef: `queued-source:${item.source_id}`, targetOperationId: null, parentSourceSeq: null, acceptedAt: at, createWakeIntent: false }), database);
-      }, true); },
-    } });
-  }
+
   let requestOperation = "";
   // Observe the real prompt reader instead of reading every SDK receipt twice.
   const readTerminalProof: NonNullable<typeof f.runtime>["hasGoalTerminalResult"] = async (conversation, task, proof) => {
@@ -244,7 +194,6 @@ for (const mode of [false, true, "snapshot-replace", "snapshot-stop", "snapshot-
     async captureRunSource(conversation, task) {
       if (rejectRequestAuthority) throw Error("synthetic Goal request authority revoked");
       const captured = await f.runtime!.captureRunSource(conversation, task);
-      capturedCounts.push(captured.inputs.length);
       requestOperation = captured.operation.operationId;
       if (externalLifecycle) withExtensionKvAuthority({ extensionId: "goal", chatJid: f.chatJid, assertCurrent() {},
         write<T>(body: () => T) { return f.db.transaction(body).immediate(); } }, () => {
@@ -257,7 +206,7 @@ for (const mode of [false, true, "snapshot-replace", "snapshot-stop", "snapshot-
       });
       // Ordinary later input does not use the Goal accounting/proof hooks.
       // Retain its explicit public-reader negative controls here.
-      if (!steer && captured.inputs.some(input => input.requestId === `queued-steer:${f.intentSourceId}`)) {
+      if (captured.inputs.some(input => input.requestId === `queued-steer:${f.intentSourceId}`)) {
         usageReads.push(await f.runtime!.readCommittedRunUsage(conversation, task));
         const goal = extensionKvGet("goal", "thread-goal", "chat", f.chatJid) as { goal_id: string; lifecycle_generation: number; status: string } | null;
         if (goal?.status === terminalStatus) await readTerminalProof(conversation, task,
@@ -285,7 +234,7 @@ for (const mode of [false, true, "snapshot-replace", "snapshot-stop", "snapshot-
     // current program must not count another fixture's committed tool results.
     const toolTurns = modelEntries - 1;
     const later = JSON.stringify(transcript.messages).includes("LATER_GOAL_OPERATION");
-    const calling = continuation || (steer && !terminalSteer) ? modelEntries === 1 : later ? laterModelEntries++ === 0 : modelEntries <= 3;
+    const calling = later ? laterModelEntries++ === 0 : modelEntries <= 3;
     const output = createAssistantMessageEventStream();
     const message = { role: "assistant" as const, api: model.api, provider: model.provider, model: model.id, timestamp: 1,
       stopReason: calling ? "toolUse" as const : "stop" as const, content: calling
@@ -316,7 +265,6 @@ for (const mode of [false, true, "snapshot-replace", "snapshot-stop", "snapshot-
           continuation_generation: 1, status: "scheduled" } };
       f.db.query("UPDATE extension_kv SET value=? WHERE extension_id='goal' AND scope_key=? AND key='thread-goal'").run(JSON.stringify(updated), f.chatJid);
     }
-    steerText = ordinarySteer ? "Explicit ordinary human steer" : acceptedText;
     f.db.query("INSERT INTO messages(id,chat_jid,content,timestamp) VALUES (?,?,?,?)").run("goal-native", f.chatJid, acceptedText, at);
     const claimed = value(await f.ports.work.claimNext(sealed({ effect: effect(`${f.incarnation}:goal-claim`), chatJid: f.chatJid, expectedFrontier: 0, newOperationId: f.incarnation, claimedAt: at })))!;
     const { hashCanonicalRequest } = await import("../../runtime/src/service-effects/contracts/common.js");
@@ -335,92 +283,13 @@ for (const mode of [false, true, "snapshot-replace", "snapshot-stop", "snapshot-
       return;
     }
     if (mode === "compacted-accounting") expect(usageErrors).toEqual([]);
-    if (steer) {
-      expect(steered).toBe(true);
-      expect(capturedCounts).toEqual(terminalSteer ? [1, 2, 2, 2] : [1, 2]);
-      expect(usageReads.map(receipts => receipts.length)).toEqual(ordinarySteer ? [0] : terminalSteer ? [0, 1, 2, 3] : [0, 1]);
-      if (!ordinarySteer) expect(usageReads[1]![0]!.tokens).toBe(3); // Before the later accepted B boundary.
-      expect(extensionKvGet("goal", "thread-goal", "chat", f.chatJid)).toMatchObject({ tokens_used: ordinarySteer ? 0 : terminalSteer ? 9 : 3, status: terminalSteer ? "complete" : "active" });
-      expect(modelEntries).toBe(terminalSteer ? 4 : 2);
-      expect(requestFenced).toBe(false);
-      await f.runtime!.close(); f.runtime = undefined;
-      await f.open();
-      // Every intent's physical payload still has to match its committed SDK
-      // submission; a matching primary input never blesses a modified B.
-      f.db.query("UPDATE messages SET content=? WHERE id=?").run(steerText + " tampered", f.intentSourceId);
-      await expect(f.runtime!.readSettledUsage(input)).rejects.toThrow("Host payload hash conflict");
-      f.db.query("UPDATE messages SET content=? WHERE id=?").run(steerText, f.intentSourceId);
-      const receipts = await f.runtime!.readSettledUsage(input);
-      expect(receipts?.map(receipt => receipt.tokens)).toEqual(terminalSteer ? [3, 3, 3, 3] : [3, 3]);
-      expect(await f.runtime!.readSettledToolNames(input)).toEqual(terminalSteer ? ["get_goal", "goal_complete", "get_goal"] : ["get_goal"]);
-      const batch = await f.runtime!.readSettledInputUsage(input);
-      expect(batch?.inputs.map(input => input.text)).toEqual([acceptedText, steerText]);
-      expect(batch!.inputs[0]!.entryId).toBeLessThan(batch!.inputs[1]!.entryId);
-      if (ordinarySteer) {
-        expect(prompts[1]).toContain("Explicit ordinary human steer");
-        expect(receipts![0]!.entryId).toBeLessThan(batch!.inputs[1]!.entryId);
-        expect(receipts![1]!.entryId).toBeGreaterThan(batch!.inputs[1]!.entryId);
-      }
-      const tokens = ordinarySteer ? 3 : terminalSteer ? 12 : 6;
-      const commit = await f.runtime!.settle(input);
-      expect(commit).not.toBeNull();
-      expect(await f.runtime!.settle(input)).toEqual(commit);
-      expect(f.ports.work.getAcceptedSource(f.chatJid, source.sourceId)?.state).toBe("consumed");
-      expect(f.ports.work.getAcceptedSource(f.chatJid, f.intentSourceId)?.state).toBe("consumed");
-      expect(extensionKvGet("goal", "thread-goal", "chat", f.chatJid)).toMatchObject({ tokens_used: tokens, status: terminalSteer ? "complete" : "active" });
-      expect(await f.runtime!.readSettledUsage(input)).toEqual(receipts);
-      await f.runtime!.close(); f.runtime = undefined;
-      await f.open();
-      expect(await f.runtime!.settle(input)).toEqual(commit);
-      expect(await f.runtime!.readSettledUsage(input)).toEqual(receipts);
-      expect(extensionKvGet("goal", "thread-goal", "chat", f.chatJid)).toMatchObject({ tokens_used: tokens });
-      expect(modelEntries).toBe(terminalSteer ? 4 : 2);
-      return;
-    }
     if (mode === "persisted-budget" || mode === "deadline-checkpoint") {
       expect(requestFenced).toBe(true);
       expect(modelEntries).toBe(0);
       expect(captures).toBe(0);
       return;
     }
-    if (continuation) {
-      expect((await f.runtime!.reconcile(input)).answer?.text).toBe("Goal stored");
-      expect(await f.runtime!.settle(input)).not.toBeNull();
-      expect(await f.runtime!.settle(input)).not.toBeNull();
-      const { getDeferredQueuedFollowups } = await import("../../runtime/src/db.js");
-      const queued = getDeferredQueuedFollowups(f.chatJid);
-      expect(queued).toHaveLength(1);
-      expect(queued[0]).toMatchObject({ source_id: `goal-continuation:${input.operationId}`, source_accepted: true });
-      expect(queued[0]!.queuedContent).toContain("<piclaw_goal_input>");
-      expect(extensionKvGet("goal", "thread-goal", "chat", f.chatJid)).toMatchObject({ tokens_used: 6, status: "active", no_progress_turns: 1 });
-      // Restart the durable runtime before consuming the admitted continuation.
-      // Neither the accepted source nor its queue identity may be recreated.
-      await f.runtime!.close(); f.runtime = undefined;
-      await f.open();
-      expect(getDeferredQueuedFollowups(f.chatJid)).toEqual(queued);
-      const item = getDeferredQueuedFollowups(f.chatJid)[0]!;
-      const { admitWebMessage } = await import("../../runtime/src/channels/web/messaging/message-store.js");
-      const stored = await admitWebMessage({} as any, { chatJid: f.chatJid, content: item.queuedContent, isBot: false, mediaIds: [], agentId: "default", agentName: "Fixture" }, {
-        consumeDeferredFollowupRowId: item.rowId,
-        materializeQueuedSource({ database, message }) {
-          const source = f.ports.work.getAcceptedSource(f.chatJid, message.id);
-          if (database !== f.db || !database.inTransaction || source?.payloadRef !== `queued-source:${message.id}`) throw Error("Exact continuation source required");
-        },
-      });
-      if (!stored) throw Error("Continuation materialization failed");
-      const { createDurableQueueDispatch } = await import("../../runtime/src/agent-pool/durable-queue-dispatch.js");
-      const { createDurableConversationAdapter } = await import("../../runtime/src/agent-pool/durable-runtime-adapter.js");
-      const adapter = createDurableConversationAdapter({ incarnation: f.incarnation, manifest: [{ chatJid: f.chatJid, branchId: "main", conversationId: f.base.root.id }], runtime: f.runtime! });
-      allowedContinuationRequests.add(`message:${stored.id}:${item.source_id}`);
-      const dispatch = createDurableQueueDispatch({ work: f.ports.work, adapter, branchId: "main", assertCurrentWriter: () => f.owner.assert(),
-        runningCorrelation(id) { return { sessionId: f.incarnation, harnessOperationId: String(id) }; },
-        async waitForReconciliation() {}, shutdown: new AbortController().signal });
-      expect(await dispatch(f.chatJid, item.source_id!, stored.id)!()).toBe("settled");
-      expect(modelEntries).toBe(3);
-      expect(extensionKvGet("goal", "thread-goal", "chat", f.chatJid)).toMatchObject({ tokens_used: 9, no_progress_turns: 2 });
-      expect(getDeferredQueuedFollowups(f.chatJid)).toHaveLength(1); // Exactly the next turn's continuation, not a replay duplicate.
-      return;
-    }
+
     if (mode === "budget-accounting") {
       expect(requestFenced).toBe(false);
       expect(modelEntries).toBe(4);
@@ -598,7 +467,7 @@ test("prepared Goal text and accepted source commit together; stale lifecycle ro
     })).toThrow("Goal input lifecycle changed");
     expect(["messages", "service_effect_s01_sources", "service_effect_s01_decisions"].map(table => db.query(`SELECT * FROM ${table}`).all())).toEqual(before);
     expect(extensionKvGet("goal", "thread-goal", "chat", chatJid)).toMatchObject({ objective: "Accepted current Goal" });
-  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); closeDatabase(); }
+  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); await closeDatabase(); }
 });
 
 test("actual web message admission runs Goal lifecycle guard inside its owned transaction", async () => {
@@ -702,5 +571,5 @@ test("actual web message admission runs Goal lifecycle guard inside its owned tr
     }));
     expect(denied.status).toBe(503);
     expect(root.query("SELECT id FROM messages WHERE chat_jid=?").all(chat)).toEqual(beforeRejected);
-  } finally { await bundle.close(); lock.release(); addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); closeDatabase(); }
+  } finally { await bundle.close(); lock.release(); addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); await closeDatabase(); }
 });

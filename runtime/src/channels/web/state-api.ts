@@ -98,7 +98,7 @@ export async function buildPiclawStateSnapshot(channel: WebChannelLike): Promise
       root_chat_jid: typeof record.root_chat_jid === "string" ? record.root_chat_jid : null,
       is_active: Boolean(record.is_active),
       has_side_session: Boolean(record.has_side_session),
-      queued_followups: channel.getQueuedFollowupCount(chatJid),
+      queued_followups: (await channel.readNativeQueue!(chatJid)).length,
       status: channel.getAgentStatus(chatJid),
       context: publicContextUsage(context),
     });

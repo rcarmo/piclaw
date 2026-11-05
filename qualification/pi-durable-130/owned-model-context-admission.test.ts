@@ -6,7 +6,7 @@ import { createProvider, createAssistantMessageEventStream, Type, type Assistant
 import { Harness, defineExtension, defineTool } from '../../runtime/durable-engine/qualification/durable.ts';
 import { SqliteStorage } from '../../runtime/durable-engine/qualification/sqlite.ts';
 import { OwnedSqlite } from './src/ownership.ts';
-import { acceptedSteerFixture } from './src/accepted-steer-recovery-fixture.ts';
+import { hostSourceContractFixture } from './src/host-source-contract-fixture.ts';
 import { barrier, context } from './src/fixture.ts';
 import { createHostModelTools } from '../../runtime/durable-engine/src/host-model-controls.ts';
 import { at, effect, sealed, value } from './src/host-handoff.ts';
@@ -16,7 +16,7 @@ import type { AcceptedInput } from '../../runtime/durable-engine/src/host-runtim
 
 for(const extended of [false,true]) test('real owned model tool uses current selected schemas and switches only the next request'+(extended?' [extended max and disabled minimal]':''), async () => {
   const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, 'owned-context-'));
-  const f = await acceptedSteerFixture(dir, 'committed-ack-lost');
+  const f = await hostSourceContractFixture(dir, 'committed-ack-lost');
   const release = barrier(), entered = barrier();
   const requests: string[] = [];
   let preparations = 0;

@@ -20,11 +20,11 @@ const open = (path: string, readonly = false) => {
   db.exec(readonly ? "PRAGMA query_only=ON" : "PRAGMA foreign_keys=ON");
   return db;
 };
-beforeEach(() => {
-  closeDatabase(); process.env.PICLAW_DB_IN_MEMORY = "1"; initDatabase();
+beforeEach(async () => {
+  await closeDatabase(); process.env.PICLAW_DB_IN_MEMORY = "1"; initDatabase();
   root = mkdtempSync(join(process.env.TMPDIR!, "historical-accounts-"));
 });
-afterEach(() => { closeDatabase(); rmSync(root, { recursive: true, force: true }); });
+afterEach(async () => { await closeDatabase(); rmSync(root, { recursive: true, force: true }); });
 function source(historical = true, mutate?: (db: Database) => void) {
   const db = getDb();
   if (historical) for (const batch of legacy) db.exec(batch.sql);
@@ -70,7 +70,7 @@ test("fresh copy retires zero tables without introducing historical objects or c
   } finally { h.close(); }
 });
 
-test("empty history and zero counter retire transactionally while current auth, ownership, FTS and provenance survive backup/reopen", () => {
+test("empty history and zero counter retire transactionally while current auth, ownership, FTS and provenance survive backup/reopen", async () => {
   const path = source(true, db => {
     createWebSession("synthetic-retained-session", "default", 3600, "totp");
     db.exec(`INSERT INTO chats(jid) VALUES('web:retained');
@@ -95,7 +95,7 @@ test("empty history and zero counter retire transactionally while current auth, 
     expect(h.archive.query("SELECT * FROM family_workspace_index_generation").all()).toEqual([{ id: 1n, revision: 0n }]);
   } finally { h.close(); }
   // An isolated copied profile exercises the actual current startup initializer.
-  closeDatabase();
+  await closeDatabase();
   const paths = resolveRuntimeConfigPaths({ env: { PICLAW_WORKSPACE: root, PICLAW_STORE: join(root, "reopened-store"), PICLAW_DB_IN_MEMORY: "0" } });
   mkdirSync(paths.storeDir, { recursive: true });
   copyFileSync(join(root, "prepared", "candidate.db"), paths.databasePath);

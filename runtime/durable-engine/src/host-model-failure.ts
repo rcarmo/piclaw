@@ -1,4 +1,3 @@
-import { BudgetRequestError } from '../../src/db/budget-request-reservations.js';
 import { isRetryableAssistantError, type AssistantMessage } from "@earendil-works/pi-ai";
 const phases = ["validation", "source", "admission", "provider", "conversion", "accounting"] as const;
 const categories = ["aborted", "timeout", "authentication", "rate_limit", "quota", "budget", "context_limit", "transport", "unavailable", "unknown"] as const;
@@ -10,14 +9,9 @@ export interface ModelFailure {
   evidenceId?: string;
 }
 
-function hostBudgetDenied(error:unknown):boolean{
-  try{return error instanceof BudgetRequestError&&error.code==='budget_denied';}catch{return false;} // Unknown diagnostics may be hostile proxies.
-}
-
 /** Inspect private errors, but export only fixed categories and an HTTP status.
  * Never retain exception text, headers, URLs, partial output or abort reasons. */
 export function classifyModelFailure(phase: ModelFailurePhase, error: unknown): ModelFailure {
-  if((phase==='source'||phase==='admission')&&hostBudgetDenied(error))return{phase,category:'budget'};
   const parts: string[] = [], seen = new Set<object>();
   let status: unknown, aborted = false, node = error;
   for (let depth = 0; depth < 4; depth++) {

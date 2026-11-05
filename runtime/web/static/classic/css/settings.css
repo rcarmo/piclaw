@@ -3245,8 +3245,3 @@
     font-size: 0.88em;
     color: var(--text-secondary);
 }
-
-.settings-task-budget-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(100px,160px) auto auto; gap:8px; align-items:end; margin:14px 0 0; }
-.settings-task-budget-row label { display:grid; gap:5px; color:var(--text-secondary); font-size:.84em; }
-.settings-task-budget-row input { min-height:34px; padding:6px 9px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-primary); color:var(--text-primary); }
-@media (max-width:720px) { .settings-task-budget-row { grid-template-columns:1fr; } .settings-task-budget-row button { min-height:44px; } }

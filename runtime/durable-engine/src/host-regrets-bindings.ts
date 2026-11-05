@@ -11,9 +11,9 @@ type Window = { start: string; end: string; chat_jid: string };
 type Config = { enabled: boolean; cron_schedule: string; reflections_path: string; exports_dir: string; recent_hours_for_reflection: number; review_budget_tokens: number; decision_model: string; review_scope: "current" | "all" };
 /** Root is application-owned and must already have the canonical extension_kv schema.
  * Admission is the application's accepted normal-input path, not sendUserMessage.
- * accountedDecision is deliberately explicit: the parent owns controller reservation,
- * dispatch and terminal settlement (host-request-accounting), including revoked calls.
- * Absence means no nested model requests, not an unaccounted fallback.
+ * The add-on's accountedDecision port receives scoped provider/model approval
+ * and passive usage reporting. Its historical API name grants no financial
+ * admission or settlement authority. Absence means no nested model requests.
  */
 export interface HostRegretsBindingOptions<E> {
   root: Database;
@@ -62,7 +62,7 @@ export function createHostRegretsBindings<E>(options: HostRegretsBindingOptions<
     accountedDecision: {
       getAvailable() { check(); const models = decision?.getAvailable() ?? []; check(); return models; },
       async complete(...args: Parameters<DecisionPort["complete"]>) {
-        single(); if (!decision) throw Error("Accounted Regrets model callback required");
+        single(); if (!decision) throw Error("Regrets model callback required");
         const result = await decision.complete(...args); check(); return result;
       },
     },

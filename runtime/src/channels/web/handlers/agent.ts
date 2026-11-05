@@ -11,8 +11,6 @@ import { captureWebRequestAuthority } from "../auth/auth-gateway.js";
  * Consumers: web/request-router.ts routes agent paths to these handlers.
  */
 
-import { acceptQueuedInputSource } from "../runtime/queued-followup-lifecycle-service.js";
-import { settledAbortStatus } from "../agent/agent-abort-status.js";
 import { getAddonLocalDispatchBlock } from "../../../addons/local-dispatch.js";
 
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
@@ -33,7 +31,7 @@ import {
 import { handleUiThemeCommand } from "../theming/ui-theme-commands.js";
 import { handleUiMetersCommand } from "../ui-meters-commands.js";
 import { admitServerUiState } from "../ui-state.js";
-import { getChatCursor, getMessageRowIdById, getDb, setChatCursor, type InteractionRow } from "../../../db.js";
+import { getDb, setChatCursor, type InteractionRow } from "../../../db.js";
 import { formatOutbound } from "../../../router.js";
 import { isSqliteContention } from '../../../db/sqlite-async-admission.js';
 import { bindInputRequestAuthority, readInputRequestAuthority, releaseInputRequestAuthority, captureInputTarget, type ValidateInputAuthority } from '../messaging/input-request-authority.js';
@@ -41,7 +39,8 @@ import { createAgentProfileBuilder } from "../agent/agent-utils.js";
 import { buildGeneralSettingsProfileUpdate, getGeneralSettingsData } from "./general-settings.js";
 import { resolveAvatarUrl } from "../media/avatar-service.js";
 
-import { MODEL_COMMAND_TYPES, executeDeferredControlCommand, isDeferredControlCommand, materializeDeferredFollowups, resolveAndBroadcastModelStateForCommand, selectProcessChatMessage } from "../runtime/process-chat-control-runtime.js";
+import { MODEL_COMMAND_TYPES } from "../../../agent-control/agent-control-types.js";
+import { resolveAndBroadcastModelStateForCommand } from "../agent/command-model-state.js";
 import { resolveThreadId } from "../runtime/threading.js";
 
 import { createUuid } from "../../../utils/ids.js";
@@ -52,17 +51,6 @@ export type BrowserObservabilityContext = {
   userId?: string;
   sessionId?: string;
   clientId?: string;
-};
-
-type QueueDeferredFollowupExtras = {
-  mediaIds?: number[];
-  contentBlocks?: unknown[];
-  linkPreviews?: unknown[];
-  screenHint?: string;
-  source?: string;
-  browserContext?: BrowserObservabilityContext;
-  wakeIfIdle?: boolean;
-  steering?: boolean;
 };
 
 function readTrimmedHeader(req: Request, name: string): string | null {
@@ -79,91 +67,6 @@ function getBrowserObservabilityContext(req: Request): BrowserObservabilityConte
     ...(sessionId ? { sessionId } : {}),
     ...(clientId ? { clientId } : {}),
   };
-}
-
-export function buildAgentStatusPhaseKey(payload: Record<string, unknown>): string {
-  const type = typeof payload.type === "string" ? payload.type : "unknown";
-  const intentKey = typeof payload.intent_key === "string"
-    ? payload.intent_key.trim()
-    : (typeof payload.intentKey === "string" ? payload.intentKey.trim() : "");
-  const classifier = typeof payload.classifier === "string" ? payload.classifier.trim() : "";
-  const toolCallId = typeof payload.tool_call_id === "string"
-    ? payload.tool_call_id.trim()
-    : (typeof payload.toolCallId === "string" ? payload.toolCallId.trim() : "");
-  const toolName = typeof payload.tool_name === "string"
-    ? payload.tool_name.trim()
-    : (typeof payload.toolName === "string" ? payload.toolName.trim() : "");
-  const phase = typeof payload.phase === "string"
-    ? payload.phase.trim()
-    : (typeof payload.state === "string" ? payload.state.trim() : "");
-
-  if (type === "tool_call" || type === "tool_status") {
-    return `tool:${toolCallId || toolName || "unknown"}`;
-  }
-  if (type === "intent") {
-    return `intent:${intentKey || classifier || "generic"}`;
-  }
-  return `${type}:${phase}`;
-}
-
-function withAgentStatusProgressMetadata(
-  payload: Record<string, unknown>,
-  previousStatus: Record<string, unknown> | null | undefined,
-): Record<string, unknown> {
-  const now = new Date().toISOString();
-  const next = { ...payload };
-  const type = typeof next.type === "string" ? next.type : "";
-
-  if (type === "done" || type === "error") {
-    return {
-      ...next,
-      last_event_at: now,
-      phase_key: buildAgentStatusPhaseKey(next),
-    };
-  }
-
-  const previous = previousStatus && typeof previousStatus === "object" ? previousStatus : null;
-  const previousPhaseKey = previous && typeof previous.phase_key === "string"
-    ? previous.phase_key
-    : previous
-      ? buildAgentStatusPhaseKey(previous)
-      : null;
-  const nextPhaseKey = buildAgentStatusPhaseKey(next);
-  const previousStartedAt = previous && typeof previous.started_at === "string"
-    ? previous.started_at
-    : (previous && typeof previous.startedAt === "string" ? previous.startedAt : null);
-  const previousRunStartedAt = previous && typeof previous.run_started_at === "string"
-    ? previous.run_started_at
-    : (previous && typeof previous.runStartedAt === "string" ? previous.runStartedAt : null);
-
-  return {
-    ...next,
-    started_at: typeof next.started_at === "string"
-      ? next.started_at
-      : previousPhaseKey === nextPhaseKey && previousStartedAt
-        ? previousStartedAt
-        : now,
-    run_started_at: typeof next.run_started_at === "string"
-      ? next.run_started_at
-      : previousRunStartedAt || now,
-    last_event_at: now,
-    phase_key: nextPhaseKey,
-  };
-}
-
-export function stripMarkdownCodeFenceMarkers(value: string): string {
-  return value
-    .replace(/^```[a-zA-Z0-9_-]*\s*\n?/, "")
-    .replace(/\n?```\s*$/, "")
-    .trim();
-}
-
-export function summarizeCommandStatusTitle(message: unknown, fallback = "Command failed"): string {
-  const raw = typeof message === "string" ? message.trim() : "";
-  if (!raw) return fallback;
-  const unfenced = stripMarkdownCodeFenceMarkers(raw);
-  const collapsed = unfenced.replace(/\s*\n\s*/g, " ").trim();
-  return collapsed || fallback;
 }
 
 function parseLeadingAgentMention(content: string): { agentName: string; remainder: string } | null {
@@ -204,7 +107,8 @@ export async function handleAgentMessage(
   req: Request,
   pathname: string,
   chatJid: string,
-  defaultAgentId: string
+  defaultAgentId: string,
+  post?: { requireReplyThread: boolean; authorise: ValidateInputAuthority },
 ): Promise<Response> {
   if (!isSingleUserAccess()) return channel.json({ error: "Single-user message admission is required." }, 403);
   let internalAuthority: ReturnType<typeof readInputRequestAuthority>;
@@ -213,29 +117,18 @@ export async function handleAgentMessage(
     const binding = captureHostDatabaseBinding();
     internalAuthority = readInputRequestAuthority(req, chatJid, pathname);
     const request = internalAuthority?.validate ?? captureInputAuthority(channel, req);
-    revalidateInputAuthority = phase => { if (phase !== undefined) binding(); request(phase); };
+    revalidateInputAuthority = phase => { if (phase !== undefined) binding(); request(phase); post?.authorise(phase); };
     revalidateInputAuthority();
   }
   catch { return channel.json({ error: 'Input authority is unavailable.' }, 403); }
   // Pin the trusted host selection to this route before any body read/await.
   // Request contents cannot select an engine or replace this SQL-only callback.
-  const nativeRuntime = channel.agentPool?.isDurableRuntime?.() === true;
-  const selectSteering = channel.getAcceptedQueuedSteering?.bind(channel);
-  const admitQueuedInput = channel.admitQueuedFollowupItem?.bind(channel);
+  const dispatchNative = channel.dispatchAcceptedInput?.bind(channel);
   const admitUserInput = channel.admitMessage?.bind(channel);
   const prepareAdmission = channel.prepareInputSourceAdmission?.bind(channel);
   const prepareInputText = channel.prepareInputText?.bind(channel);
   const lookupAdmission = channel.getInputSourceAdmission?.bind(channel);
-  const lookupQueuedAdmission = channel.getQueuedInputSourceAdmission?.bind(channel);
   let acceptSource: ReturnType<NonNullable<WebChannelLike["getInputSourceAdmission"]>>;
-  let acceptQueuedSource: ReturnType<NonNullable<WebChannelLike["getQueuedInputSourceAdmission"]>>;
-  try {
-    if (!prepareAdmission) {
-      acceptSource = lookupAdmission?.(chatJid);
-      acceptQueuedSource = lookupQueuedAdmission?.(chatJid);
-    }
-  }
-  catch { return channel.json({ error: 'Input admission could not be confirmed.' }, 503); }
   if (internalAuthority) {
     try {
       const reader = req.clone().body?.getReader();
@@ -256,6 +149,7 @@ export async function handleAgentMessage(
   catch { return channel.json({ error: 'Input authority changed before admission.' }, 403); }
 
   const normalized = normalizeAgentMessagePayload(parsed.payload);
+  if (post?.requireReplyThread && !normalized.threadId) return channel.json({ error: "Missing 'thread_id' field" }, 400);
   const localDispatch = getAddonLocalDispatchBlock(req, chatJid, normalized.content ?? "");
   if (localDispatch) normalized.contentBlocks = [...(normalized.contentBlocks ?? []), localDispatch];
   let content = typeof normalized.content === "string" ? normalized.content : "";
@@ -296,8 +190,7 @@ export async function handleAgentMessage(
     const result = await channel.agentPool.applyControlCommand(chatJid, command);
     return channel.json({ thread_id: null, command: result, ui_only: true, immediate: true }, 200);
   }
-  const manualQueue = command?.type === "queue";
-  if (command?.type === "queue_all") return channel.json({ error: "Native inputs use FIFO operation settlement. Batch /queue-all is unavailable; use /queue." }, 400);
+  if (command?.type === "queue_all") return channel.json({ error: "Batch /queue-all is unavailable for SDK-managed inputs; use /queue." }, 400);
   // Native queued commands are accepted input, not display-only controls or
   // legacy session.prompt calls. Use the same preparation/admission as modes.
   if (command?.type === "queue" || command?.type === "steer") {
@@ -314,20 +207,15 @@ export async function handleAgentMessage(
   const metersCommand = handleUiMetersCommand(trimmed);
   const isSettingsCommand = /^\/settings\s*$/i.test(trimmed);
   const ordinaryInput = !command && !themeCommand && !metersCommand && !isSettingsCommand && !isSlashCommandInvocation(content);
-  if (nativeRuntime && ordinaryInput && (!lookupAdmission || !lookupQueuedAdmission
-    || !admitUserInput || !admitQueuedInput || !selectSteering)) {
+  if (ordinaryInput && (!lookupAdmission || !admitUserInput || !dispatchNative)) {
     return channel.json({ error: "Native input admission is unavailable." }, 503);
   }
-  if (prepareAdmission) {
+  if (ordinaryInput) {
     try {
-      revalidateInputAuthority();
-      if (ordinaryInput) {
-        revalidateInputAuthority('verify');
-        await prepareAdmission(chatJid);
-        revalidateInputAuthority('verify');
-      }
+      revalidateInputAuthority('verify');
+      await prepareAdmission?.(chatJid);
+      revalidateInputAuthority('verify');
       acceptSource = lookupAdmission?.(chatJid);
-      acceptQueuedSource = lookupQueuedAdmission?.(chatJid);
     } catch { return channel.json({ error: 'Input admission could not be confirmed.' }, 503); }
   }
   if (prepareInputText && ordinaryInput) {
@@ -338,7 +226,7 @@ export async function handleAgentMessage(
         void Promise.resolve(prepared).catch(error => debugSuppressedError(log, 'Rejected asynchronous input preparation.', error, { operation: 'handle_agent_message.async_preparation_rejected', chatJid }));
         throw Error("Input preparation must be synchronous");
       }
-      if (!prepared || typeof prepared.text !== "string" || !prepared.text.trim() || isSlashCommandInvocation(prepared.text) ||
+      if (!prepared || typeof prepared.text !== "string" || (!prepared.text.trim() && !hasAttachments) || isSlashCommandInvocation(prepared.text) ||
         typeof prepared.assertCurrent !== "function") throw Error("Invalid prepared input");
       const requestAuthority = revalidateInputAuthority;
       const assertCurrent = prepared.assertCurrent.bind(prepared);
@@ -357,27 +245,43 @@ export async function handleAgentMessage(
       return channel.json({ error: "Input preparation could not be confirmed." }, 503);
     }
   }
-  if (nativeRuntime && ordinaryInput && (typeof acceptSource !== "function" || typeof acceptQueuedSource !== "function"))
+  if (ordinaryInput && typeof acceptSource !== "function")
     return channel.json({ error: "Native input admission is unavailable." }, 503);
-  let nativeSteering: ReturnType<NonNullable<WebChannelLike["getAcceptedQueuedSteering"]>>;
-  try { nativeSteering = selectSteering?.(chatJid, revalidateInputAuthority); }
-  catch { return channel.json({ error: "Native steering authority is unavailable." }, 503); }
-  const isStreaming = Boolean(nativeSteering) || (typeof channel.agentPool.isStreaming === "function"
-    ? channel.agentPool.isStreaming(chatJid)
-    : false);
-  const isChatActive = () => channel.agentPool.isStreaming?.(chatJid) === true
-    || channel.agentPool.isActive?.(chatJid) === true
-    || channel.queue?.isLaneBusy?.(`chat:${chatJid}`) === true;
-  const isActive = isChatActive();
-  const hasQueuedBacklog = channel.getQueuedFollowupCount(chatJid) > 0;
-  // NOTE: we intentionally use the in-memory active-run flags—not the DB
-  // inflight marker—to decide whether to queue/defer. The DB marker survives
-  // restarts and can be stale (cleared only when recovery runs), so trusting
-  // it here would silently defer messages against ghost turns that no
-  // processChat is actively draining. The in-memory session state resets on
-  // restart and reflects whether the agent pool still has an active run,
-  // including streaming/compaction/retry phases of the same turn.
-
+  if (ordinaryInput && (!mentionTarget || mentionTarget.chat_jid===chatJid)) {
+    let interaction: InteractionRow | null;
+    try {
+      interaction = await admitUserInput(chatJid,content,false,normalized.mediaIds,{
+        contentBlocks:normalized.contentBlocks,linkPreviews:normalized.linkPreviews,threadId:normalized.threadId??undefined,
+        screenHint:normalized.screenHint,acceptSource,isSteeringMessage:requestMode==="steer",
+      },revalidateInputAuthority,req.signal);
+    } catch (error) {
+      if (req.signal.aborted) return channel.json({error:"Input submission was cancelled before acceptance."},400);
+      return channel.json({error:"Message admission could not be confirmed."},503);
+    }
+    if (!interaction) return channel.json({error:"Failed to store message"},500);
+    const stored = getDb().query("SELECT id FROM messages WHERE rowid=? AND chat_jid=?").get(interaction.id,chatJid) as {id:string}|null;
+    if (!stored) return channel.json({error:"Accepted input source is unavailable."},503);
+    let receipt: Awaited<ReturnType<NonNullable<WebChannelLike['dispatchAcceptedInput']>>>;
+    try {
+      receipt = await dispatchNative!(chatJid,stored.id,interaction.id,requestMode==="steer"?"steer":"followUp");
+      if (!receipt || !Number.isSafeInteger(receipt.submission_id) || receipt.submission_id <= 0 || typeof receipt.queued !== 'boolean')
+        throw Error('Native SDK admission receipt required');
+    } catch (error) {
+      // The source is committed, but its SDK placement is unproven. Only a
+      // verified receipt/watch may publish it to the timeline or follow-up queue.
+      // Never create another source or replay it after an uncertain admission.
+      log.warn("Accepted input SDK admission could not be confirmed",{operation:"handle_agent_message.native_admission_uncertain",chatJid,err:error});
+      return channel.json({error:"Input saved; SDK admission could not be confirmed.",thread_id:interaction.data?.thread_id??interaction.id,accepted:true},503);
+    }
+    try {
+      if (receipt.queued) channel.broadcastEvent("agent_followup_queued",{chat_jid:chatJid,row_id:receipt.submission_id,content,thread_id:interaction.data?.thread_id??null,timestamp:interaction.timestamp,source:"native_sdk"});
+      else channel.broadcastEvent("new_post",interaction);
+    } catch (error) {
+      log.warn('SDK input accepted; optional publication failed', { operation: 'handle_agent_message.publication_pending', chatJid, err: error });
+    }
+    return channel.json({thread_id:interaction.data?.thread_id??interaction.id,row_id:interaction.id,created:true,submission_id:receipt.submission_id,
+      ...(receipt.queued?{queued:requestMode==="steer"?"steer":"followup"}: {})},201);
+  }
   if (mention && mentionTarget && mentionTarget.chat_jid !== chatJid) {
     const targetJid = mentionTarget.chat_jid;
     const targetName = mentionTarget.agent_name;
@@ -455,105 +359,6 @@ export async function handleAgentMessage(
     }, forwardRes.status);
   }
 
-  const revalidateQueuedAdmission = revalidateInputAuthority;
-  const queueDeferredFollowup = async (
-    queuedContent: string,
-    extras: QueueDeferredFollowupExtras = {}
-  ): Promise<Response> => {
-    if (!admitQueuedInput) return channel.json({ error: "Queued input admission is unavailable." }, 503);
-    const queuedAt = new Date().toISOString();
-    // Never inherit the active turn's root. Preserve an explicitly selected
-    // thread; ordinary compose input remains self-rooted when materialized.
-    const queuedThreadId: number | null = normalized.threadId ?? null;
-    const queuedBy = extras.browserContext
-      ? {
-          ...(extras.browserContext.userId ? { userId: extras.browserContext.userId } : {}),
-          ...(extras.browserContext.sessionId ? { sessionId: extras.browserContext.sessionId } : {}),
-          ...(extras.browserContext.clientId ? { clientId: extras.browserContext.clientId } : {}),
-        }
-      : undefined;
-    const args: Parameters<WebChannelLike['enqueueQueuedFollowupItem']> = [chatJid, 0, queuedContent, queuedThreadId, queuedAt, {
-      mediaIds: extras.mediaIds,
-      contentBlocks: extras.contentBlocks,
-      linkPreviews: extras.linkPreviews,
-      screenHint: extras.screenHint,
-      source: extras.source,
-      queuedBy: queuedBy && Object.keys(queuedBy).length > 0 ? queuedBy : undefined,
-    }];
-    let queuedRowId: number;
-    try {
-      const acceptedInput = (extras.steering || ordinaryInput)
-        && (extras.source === "web.compose" || extras.source === "web.steer_startup_fallback");
-      const accept = acceptedInput ? acceptQueuedSource : undefined;
-      if ((nativeRuntime && acceptedInput) || extras.steering) {
-        if (!accept || (extras.steering && !selectSteering))
-          throw Error("Atomic native queue admission is unavailable.");
-      }
-      queuedRowId = await admitQueuedInput(args, revalidateQueuedAdmission, req.signal, accept);
-    } catch (error) {
-      if (isSqliteContention(error)) return channel.json({ error: 'Queue storage is busy; this input was not accepted.' }, 503);
-      if (req.signal.aborted) return channel.json({ error: 'Input submission was cancelled before acceptance.' }, 400);
-      return channel.json({ error: 'Queued input could not be accepted.' }, 403);
-    }
-    if (extras.steering) {
-      const host = nativeSteering;
-      if (host) {
-        try {
-          const accepted = await host.accept(queuedRowId);
-          void accepted.dispatch().catch(error => log.warn("Native steering remains pending", { operation: "native_steer.pending", err: error }));
-          try {
-            channel.broadcastEvent("agent_followup_removed", { chat_jid: chatJid, row_id: queuedRowId, thread_id: null });
-            channel.broadcastEvent("new_post", accepted.interaction);
-            channel.broadcastEvent("agent_steer_queued", { chat_jid: chatJid, thread_id: null, source: "compose", timestamp: queuedAt });
-          } catch (error) {
-        // Publication cannot revoke committed native input.
-        log.warn("Native steering publication deferred", { operation: "handle_agent_message.native_steer_publication", chatJid, err: error });
-      }
-          return channel.json({ queued: "steer", user_message: accepted.interaction,
-            thread_id: accepted.interaction.data?.thread_id ?? null, steering_delivery: "pending" }, 201);
-        } catch (error) {
-          // Admission already committed. Preserve the accepted follow-up if the
-          // selected operation ended; never reject it or send it through legacy.
-          log.warn("Native steering deferred after admission", { operation: "native_steer.deferred", err: error });
-        }
-      }
-    }
-    channel.broadcastEvent("agent_followup_queued", {
-      chat_jid: chatJid,
-      thread_id: queuedThreadId,
-      row_id: queuedRowId,
-      content: queuedContent,
-      timestamp: queuedAt,
-      ...(extras.source ? { source: extras.source } : {}),
-      ...(queuedBy && Object.keys(queuedBy).length > 0 ? { queued_by: queuedBy } : {}),
-    });
-    const stillActive = isChatActive();
-    // Manual /queue remains deferred even while idle. Compose admission opts
-    // in so a turn ending during an asynchronous lock wait cannot strand input.
-    if (extras.wakeIfIdle && !manualQueue && !stillActive) {
-      channel.resumeChat(chatJid);
-    }
-    return channel.json({ queued: "followup", thread_id: queuedThreadId }, 201);
-  };
-
-  log.info("Handling agent message", {
-    operation: "handle_agent_message",
-    chatJid,
-    mode: requestMode,
-    isStreaming,
-    isActive,
-    hasQueuedBacklog,
-    shouldDefer: false,
-    hasCommand: Boolean(command || themeCommand),
-    contentPreview: content.slice(0, 60),
-  });
-
-  if (ordinaryInput && isStreaming && requestMode === "steer") {
-    return queueDeferredFollowup(content, { source: "web.compose", steering: true,
-      browserContext: browserObservability, wakeIfIdle: true, mediaIds: normalized.mediaIds,
-      contentBlocks: normalized.contentBlocks, linkPreviews: normalized.linkPreviews, screenHint: normalized.screenHint });
-  }
-
   if (themeCommand) {
     if (themeCommand.payload) {
       const uiTheme = (await admitServerUiState({ ui_theme: { theme: themeCommand.payload.theme, tint: themeCommand.payload.tint ?? null } }, revalidateInputAuthority, req.signal)).ui_theme;
@@ -615,31 +420,19 @@ export async function handleAgentMessage(
   }
 
   if (command?.type === "abort" && !hasAttachments) {
-    const captured = JSON.stringify(channel.getAgentStatus?.(chatJid) ?? null);
     const result = await channel.agentPool.applyControlCommand(chatJid, command);
     if (result.status !== "success") {
       return channel.json({ error: result.message, command: result, thread_id: null, ui_only: true }, 500);
-    }
-    const terminal = settledAbortStatus(captured, channel.getAgentStatus?.(chatJid) ?? null, result.message);
-    if (terminal) {
-      channel.updateAgentStatus?.(chatJid, terminal);
-      channel.broadcastEvent("agent_status", { ...terminal, chat_jid: chatJid });
     }
     return channel.json(
       {
         thread_id: null,
         command: result,
         ui_only: true,
-        immediate: isActive,
+        immediate: true,
       },
       200,
     );
-  }
-
-  // Native compaction uses SDK conversation ordering, even during an active turn.
-  // Keep legacy deferral separate; a native slash command is never model input.
-  if (command?.type === "compact" && isActive && !prepareInputText) {
-    if (acceptSource !== undefined) return queueDeferredFollowup(content, { source: "web.compose", browserContext: browserObservability, wakeIfIdle: true });
   }
 
   // Model/thinking commands: execute without writing to the timeline,
@@ -688,87 +481,22 @@ export async function handleAgentMessage(
     );
   }
 
-  // Defer before publishing a timeline row. Queue acceptance is persisted here;
-  // materialisation admits the timeline row and source in their shared transaction.
-  const shouldDeferQueuedFollowup =
-    !command &&
-    !themeCommand &&
-    !metersCommand &&
-    !isSlashCommandInvocation(trimmed) &&
-    (manualQueue || isActive || hasQueuedBacklog) &&
-    (requestMode === "queue" || requestMode === "auto" || (requestMode === "steer" && !isStreaming));
-
-  if (shouldDeferQueuedFollowup) {
-    log.info("Deferring agent message as queued follow-up", {
-      operation: "handle_agent_message.defer_followup",
-      chatJid,
-      mode: requestMode,
-      isStreaming,
-      isActive,
-      hasQueuedBacklog,
-      shouldDefer: true,
-      hasCommand: Boolean(command || themeCommand),
-      contentPreview: content.slice(0, 60),
-    });
-
-    const response = queueDeferredFollowup(content, {
-      mediaIds: normalized.mediaIds,
-      contentBlocks: normalized.contentBlocks,
-      linkPreviews: normalized.linkPreviews,
-      screenHint: normalized.screenHint,
-      source: requestMode === 'steer' ? 'web.steer_startup_fallback' : 'web.compose',
-      browserContext: browserObservability,
-      wakeIfIdle: true,
-    });
-
-    return response;
-  }
-
-  let queuedDuringAdmission = false;
-  let deferredRowId = 0;
-  let deferredAt = '';
-  const deferredSource = requestMode === 'steer' ? 'web.steer_startup_fallback' : 'web.compose';
+  // Controls may persist their real timeline row, but never become input jobs.
+  if (ordinaryInput || !admitUserInput) return channel.json({ error: 'Native input admission is unavailable.' }, 503);
   let interaction: InteractionRow | null;
-  // Only ordinary input creates SDK sources or defers into the input queue.
-  // Control rows share SQL admission without becoming model input.
   try {
     interaction = await admitUserInput(chatJid, content, false, normalized.mediaIds, {
       contentBlocks: normalized.contentBlocks, linkPreviews: normalized.linkPreviews,
       threadId: normalized.threadId ?? undefined, screenHint: normalized.screenHint,
-      acceptSource: ordinaryInput ? acceptSource : undefined,
-    }, revalidateQueuedAdmission, req.signal, ordinaryInput ? () => {
-      const busy = isChatActive();
-      queuedDuringAdmission = busy || channel.getQueuedFollowupCount(chatJid) > 0;
-      if (!queuedDuringAdmission) return false;
-      deferredAt = new Date().toISOString();
-      deferredRowId = channel.enqueueQueuedFollowupItem(chatJid, 0, content,
-        normalized.threadId ?? null, deferredAt, {
-          source: deferredSource, mediaIds: normalized.mediaIds, contentBlocks: normalized.contentBlocks,
-          linkPreviews: normalized.linkPreviews, screenHint: normalized.screenHint,
-          queuedBy: { ...(browserObservability.userId ? { userId: browserObservability.userId } : {}),
-            ...(browserObservability.sessionId ? { sessionId: browserObservability.sessionId } : {}),
-            ...(browserObservability.clientId ? { clientId: browserObservability.clientId } : {}) },
-        });
-      if (acceptQueuedSource)
-        acceptQueuedInputSource(chatJid, deferredRowId, getDb(), acceptQueuedSource);
-      return true;
-    } : undefined);
+    }, revalidateInputAuthority, req.signal);
   } catch (error) {
     if (isSqliteContention(error)) return channel.json({ error: 'Message storage is busy; this input was not accepted.' }, 503);
     if (req.signal.aborted) return channel.json({ error: 'Input submission was cancelled before acceptance.' }, 400);
     return channel.json({ error: 'Input admission could not be confirmed.' }, 503);
   }
-
-  if (queuedDuringAdmission) {
-    channel.broadcastEvent('agent_followup_queued', { chat_jid: chatJid, row_id: deferredRowId, content,
-      thread_id: normalized.threadId ?? null, timestamp: deferredAt, source: deferredSource });
-    if (!manualQueue && !isChatActive()) channel.resumeChat(chatJid);
-    return channel.json({ thread_id: normalized.threadId ?? null, queued: 'followup' }, 201);
-  }
   if (!interaction) return channel.json({ error: "Failed to store message" }, 500);
 
-  // Defer new_post broadcast — don't emit for messages that will be queued
-  // as follow-ups (prevents flash in timeline before filtering kicks in).
+  // Publish the real control interaction at most once.
   let newPostBroadcast = false;
   const broadcastNewPost = () => {
     if (!newPostBroadcast) {
@@ -787,32 +515,9 @@ export async function handleAgentMessage(
     )(payload);
   };
 
-  let commandStatusTurnId: unknown;
-  let commandStatusStarted = false;
-  const emitCommandStatus = (payload: Record<string, unknown>) => {
-    // Concurrent native compaction must not claim or clear the running turn's
-    // lifecycle surface. Its context update remains a side-channel event.
-    if (prepareInputText && command?.type === "compact" && isActive && payload.type !== "context_usage") return;
-    const activeStatus = typeof channel.getAgentStatus === "function"
-      ? channel.getAgentStatus(chatJid)
-      : null;
-    // A new command may claim the surface, but an older operation must not
-    // overwrite a successor (or resurrect a status that has been cleared).
-    if (commandStatusStarted && typeof channel.getAgentStatus === "function"
-      && (!activeStatus || activeStatus.turn_id !== commandStatusTurnId)) return;
-    if (!commandStatusStarted) {
-      commandStatusTurnId = payload.turn_id;
-      commandStatusStarted = true;
-    }
-    // Usage is a side-channel event, not a lifecycle phase. In particular it
-    // must not replace the owning intent before that command's terminal event.
-    if (payload.type === "context_usage") {
-      channel.broadcastEvent("agent_status", withAgentProfile(payload));
-      return;
-    }
-    const nextPayload = withAgentStatusProgressMetadata(payload, activeStatus);
-    channel.updateAgentStatus(chatJid, nextPayload);
-    channel.broadcastEvent("agent_status", withAgentProfile(nextPayload));
+  // Passive context observations are not execution lifecycle transitions.
+  const emitCommandContextUsage = (payload: Record<string, unknown>) => {
+    channel.broadcastEvent("agent_status", withAgentProfile(payload));
   };
 
   const publishCommandContextUsage = async (
@@ -858,7 +563,7 @@ export async function handleAgentMessage(
       source: contextUsage.source ?? null,
       phase: contextUsage.phase ?? null,
     };
-    emitCommandStatus({
+    emitCommandContextUsage({
       thread_id: payload.threadId,
       agent_id: agentId,
       turn_id: payload.turnId,
@@ -870,45 +575,8 @@ export async function handleAgentMessage(
   if (command) {
     broadcastNewPost();
     const commandTurnId = createUuid("turn");
-    const commandTitle = content.trim().split(/\s+/, 1)[0] || "command";
     const isCompactCommand = command.type === "compact";
     const isSessionRotateCommand = command.type === "session_rotate" || command.type === "new_session";
-    if (isCompactCommand || isSessionRotateCommand) {
-      // Claim before model lookup can yield; later metadata must retain ownership
-      // and the original timer rather than claiming over a newer command.
-      const intent = {
-        thread_id: interaction.timestamp,
-        agent_id: agentId,
-        turn_id: commandTurnId,
-        type: "intent",
-        title: isCompactCommand ? "Compacting context" : "Rotating session",
-        detail: isCompactCommand
-          ? "Manual compaction requested via /compact."
-          : "Compacting context before archiving the current session and creating its successor.",
-        intent_key: isCompactCommand ? "compaction" : "session_rotation",
-        started_at: new Date().toISOString(),
-        model: null,
-      };
-      emitCommandStatus(intent);
-      if (typeof channel.agentPool.getCurrentModelLabel === "function") {
-        let commandModel: string | null = null;
-        try {
-          commandModel = await channel.agentPool.getCurrentModelLabel(chatJid);
-        } catch (err) {
-          debugSuppressedError(log, "Failed to read model for command status.", err, { operation: "command_status.model_lookup" });
-        }
-        if (commandModel !== null) emitCommandStatus({ ...intent, model: commandModel });
-      }
-    } else {
-      emitCommandStatus({
-        thread_id: interaction.timestamp,
-        agent_id: agentId,
-        turn_id: commandTurnId,
-        type: "intent",
-        title: "Running " + commandTitle + "...",
-      });
-    }
-
     const result = await channel.agentPool.applyControlCommand(chatJid, command);
     if (result.status === "success" && ["agent_avatar", "agent_name", "user_avatar", "user_name", "user_github"].includes(command.type)) {
       channel.broadcastEvent("profile_update", buildGeneralSettingsProfileUpdate(getGeneralSettingsData()));
@@ -921,7 +589,7 @@ export async function handleAgentMessage(
         sessionGeneration: result.sessionGeneration,
         contextUpdate: "replace",
       };
-      emitCommandStatus({
+      emitCommandContextUsage({
         thread_id: interaction.timestamp,
         agent_id: agentId,
         turn_id: commandTurnId,
@@ -956,12 +624,11 @@ export async function handleAgentMessage(
       if (result.contentBlocks?.length) {
         sendOptions.contentBlocks = result.contentBlocks;
       }
-      if (prepareInputText) sendOptions.requirePersistence = true;
+      sendOptions.requirePersistence = true;
       try {
         await channel.sendMessage(responseChatJid, formatted || "", sendOptions);
         responseDelivery = "persisted";
       } catch (error) {
-        if (!prepareInputText) throw error;
         // Execution already completed. Do not turn publication failure into
         // permission to repeat a non-idempotent command or open a legacy session.
         responseDelivery = "failed";
@@ -1006,16 +673,6 @@ export async function handleAgentMessage(
       });
     }
 
-    emitCommandStatus({
-      thread_id: interaction.timestamp,
-      agent_id: agentId,
-      turn_id: commandTurnId,
-      type: result.status === "success" ? "done" : "error",
-      title: result.status === "success"
-        ? "Completed " + commandTitle
-        : summarizeCommandStatusTitle(result.message, "Command failed"),
-    });
-
     const commandResult = result.contextUsage ? { ...result, contextUsage: {
       ...publicContextUsage(result.contextUsage),
       estimated: result.contextUsage.estimated,
@@ -1023,7 +680,7 @@ export async function handleAgentMessage(
       phase: result.contextUsage.phase,
     } } : result;
     return channel.json(
-      { user_message: interaction, thread_id: threadId, command: commandResult, ...(prepareInputText ? { response_delivery: responseDelivery } : {}) },
+      { user_message: interaction, thread_id: threadId, command: commandResult, response_delivery: responseDelivery },
       201
     );
   }
@@ -1032,16 +689,6 @@ export async function handleAgentMessage(
   // Paths such as /workspace/piclaw or prose that merely mention /commands stay normal prompts.
   if (isSlashCommandInvocation(trimmed)) {
     broadcastNewPost();
-    const commandTurnId = createUuid("turn");
-    const slashName = trimmed.split(/\s+/, 1)[0] || "/command";
-    emitCommandStatus({
-      thread_id: interaction.timestamp,
-      agent_id: agentId,
-      turn_id: commandTurnId,
-      type: "intent",
-      title: "Running " + slashName + "...",
-    });
-
     channel.lastCommandInteractionId = interaction.id;
     let cmdResult;
     try {
@@ -1060,224 +707,11 @@ export async function handleAgentMessage(
       });
     }
 
-    if (slashName === "/reload" && cmdResult.status === "success") {
-      emitCommandStatus({
-        thread_id: interaction.timestamp,
-        agent_id: agentId,
-        turn_id: commandTurnId,
-        type: "intent",
-        title: "Reload scheduled — waiting for restart",
-        detail: cmdResult.message || undefined,
-      });
-    } else {
-      emitCommandStatus({
-        thread_id: interaction.timestamp,
-        agent_id: agentId,
-        turn_id: commandTurnId,
-        type: cmdResult.status === "success" ? "done" : "error",
-        title: cmdResult.status === "success"
-          ? "Completed " + slashName
-          : summarizeCommandStatusTitle(cmdResult.message, "Command failed"),
-      });
-    }
-
     return channel.json(
       { user_message: interaction, thread_id: threadId, command: cmdResult },
       201
     );
   }
 
-  // Normal (non-queued) message processing — broadcast to timeline now
-  broadcastNewPost();
-
-  log.info("Enqueuing processChat for normal agent message path", {
-    operation: "handle_agent_message.enqueue_process_chat",
-    chatJid,
-    queueKey: `chat:${chatJid}:${interaction.id}`,
-  });
-
-  channel.queue.enqueue(async () => {
-    await processChat(channel, chatJid, agentId, interaction.data?.thread_id ?? interaction.id, browserObservability);
-  }, `chat:${chatJid}:${interaction.id}`, `chat:${chatJid}`);
-
-  return channel.json({ user_message: interaction, thread_id: threadId }, 201);
-
-}
-
-/**
- * Drain chat work for an agent turn, including deferred followups and run lifecycle events.
- * @param channel Web channel contract for chat state, queue control, and event fanout.
- * @param chatJid Chat JID being processed.
- * @param agentId Agent identifier used for run execution and telemetry.
- * @param threadRootId Optional thread root id used to keep follow-up messages linked.
- * @returns Resolves when the current chat processing cycle has completed.
- */
-export async function processChat(
-  channel: WebChannelLike,
-  chatJid: string,
-  agentId: string,
-  threadRootId?: number,
-  browserObservability?: BrowserObservabilityContext,
-): Promise<void> {
-  const prevCursor = getChatCursor(chatJid);
-  const selection = selectProcessChatMessage({
-    chatJid,
-    prevCursor,
-    threadRootId,
-  });
-
-  if (selection.kind === "no_messages") {
-    log.info("processChat found no pending messages", {
-      operation: "process_chat.no_pending_messages",
-      chatJid,
-      cursor: prevCursor,
-      threadRootId: threadRootId ?? null,
-    });
-    await materializeDeferredFollowups({
-      channel,
-      chatJid,
-      agentId,
-    });
-    return;
-  }
-
-  const {
-    pendingMessages: messages,
-    currentMessage,
-    messageThreadId,
-    effectiveThreadRootId,
-  } = selection;
-
-  log.info("processChat selected next pending message", {
-    operation: "process_chat.select_message",
-    chatJid,
-    cursor: prevCursor,
-    pendingMessageCount: messages.length,
-    pendingMessages: messages.map(m => `${m.id}@${m.timestamp}`),
-    threadRootId: threadRootId ?? null,
-    messageThreadId: messageThreadId ?? null,
-    effectiveThreadRootId: effectiveThreadRootId ?? null,
-    processingMessageId: currentMessage.id,
-  });
-
-  const coordinator = channel.dispatchAcceptedInput;
-  if (coordinator !== undefined && typeof coordinator !== "function") {
-    throw new Error("Accepted dispatch coordinator must be callable");
-  }
-  const pendingIdentity = Object.freeze({ chatJid, messageId: currentMessage.id,
-    rowId: getMessageRowIdById(chatJid, currentMessage.id) ?? 0 });
-  const waitForPendingRaw = coordinator?.waitForPending;
-  if (waitForPendingRaw !== undefined && typeof waitForPendingRaw !== "function") {
-    throw new Error("Accepted pending observer must be callable");
-  }
-  const waitForPending = typeof waitForPendingRaw === "function"
-    ? waitForPendingRaw.bind(coordinator)
-    : undefined;
-  let acceptedDispatchRaw: unknown;
-  try {
-    acceptedDispatchRaw = coordinator?.(chatJid, currentMessage.id, pendingIdentity.rowId);
-  } catch {
-    // A fenced or unreadable persisted selection is not evidence of legacy ownership.
-    acceptedDispatchRaw = async () => "pending";
-  }
-  if (acceptedDispatchRaw !== undefined && typeof acceptedDispatchRaw !== "function") {
-    throw new Error("Accepted dispatch must be callable");
-  }
-  const acceptedDispatch = acceptedDispatchRaw as (() => Promise<"settled" | "pending">) | undefined;
-  if (acceptedDispatch) {
-    const { setChatCursor } = await import("../../../db/chat-cursors.js");
-    if (channel.updateAgentStatus !== undefined && typeof channel.updateAgentStatus !== "function") {
-      throw new Error("Native status updater must be callable");
-    }
-    if (typeof channel.broadcastEvent !== "function") {
-      throw new Error("Native status broadcaster must be callable");
-    }
-    if (typeof channel.resumeChat !== "function") {
-      throw new Error("Native resume hook must be callable");
-    }
-    const startedAt = new Date().toISOString();
-    const nativeStatus = (type: "intent" | "done") => {
-      const payload = { chat_jid: chatJid, turn_id: `durable:${pendingIdentity.rowId}`, thread_id: effectiveThreadRootId,
-        type: type === "intent" ? "thinking" : type, kind: "info", source: "durable_runtime", intent_key: "native_task", blocking: false,
-        title: type === "done" ? "Idle" : "Thinking...", started_at: startedAt };
-      try {
-        channel.updateAgentStatus?.(chatJid, payload);
-      } catch (error) {
-        debugSuppressedError(log, "Native status updater failed after accepted dispatch admission.", error, {
-          operation: "process_chat.native_status_updater_failed",
-          chatJid,
-          type,
-        });
-      }
-      try {
-        channel.broadcastEvent("agent_status", payload);
-      } catch (error) {
-        debugSuppressedError(log, "Native status broadcaster failed after accepted dispatch admission.", error, {
-          operation: "process_chat.native_status_broadcast_failed",
-          chatJid,
-          type,
-        });
-      }
-    };
-    // Native operations/submissions own recovery. A legacy inflight marker
-    // would falsely advertise every live SDK turn as interrupted after reload.
-    nativeStatus("intent");
-    let result = await Promise.resolve()
-      .then(() => acceptedDispatch())
-      .catch(() => "pending" as const);
-    if (result !== "settled" && result !== "pending") {
-      throw new Error("Accepted dispatch returned invalid status");
-    }
-    if (result === "pending") {
-      // The captured host port owns observation only. Shutdown must retain the recovery marker.
-      if (!waitForPending) throw new Error("Accepted dispatch requires host pending observation");
-      result = await Promise.resolve()
-        .then(() => waitForPending(pendingIdentity))
-        .catch(() => "pending" as const);
-      if (result !== "settled" && result !== "pending") {
-        throw new Error("Accepted pending observer returned invalid status");
-      }
-      if (result === "pending") return;
-    }
-    await admitSqliteWrite(getDb(), () => setChatCursor(chatJid, currentMessage.timestamp));
-    nativeStatus("done");
-    try {
-      channel.resumeChat(chatJid);
-    } catch (error) {
-      debugSuppressedError(log, "Native resume hook failed after accepted dispatch settlement.", error, {
-        operation: "process_chat.native_resume_failed",
-        chatJid,
-      });
-    }
-    return;
-  }
-
-  const persistedCommand = parseControlCommand(String(currentMessage.content || ""), getRoutingConfig().triggerPattern);
-  if (isDeferredControlCommand(persistedCommand)) {
-    const action = await executeDeferredControlCommand({
-      channel,
-      chatJid,
-      agentId,
-      command: persistedCommand,
-      message: {
-        rowId: getMessageRowIdById(chatJid, currentMessage.id ?? "") ?? 0,
-        messageId: currentMessage.id,
-        content: String(currentMessage.content || ""),
-        timestamp: currentMessage.timestamp,
-        threadId: currentMessage.thread_id ?? effectiveThreadRootId ?? null,
-      },
-      effectiveThreadRootId,
-    });
-    if (action === "continue") {
-      await materializeDeferredFollowups({
-        channel,
-        chatJid,
-        agentId,
-      });
-    }
-    return;
-  }
-
-  if (coordinator) throw new Error("Native input has no admitted source");
-  throw new Error("Native input dispatch is unavailable");
+  return channel.json({ error: "Unsupported durable input." }, 400);
 }

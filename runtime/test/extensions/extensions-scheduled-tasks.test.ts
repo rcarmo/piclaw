@@ -233,44 +233,25 @@ describe("scheduled-tasks extension", () => {
     expect(tasks[0].notify_on_complete).toBe(0);
   });
 
-  test("scheduled_tasks creates and retires an opt-in per-run budget", async () => {
+  test("schedule tools expose no expense controls and deletion preserves historical caps", async () => {
+    for (const name of ["schedule_task", "scheduled_tasks"]) {
+      const tool = fake.tools.get(name);
+      expect(tool.parameters.properties).not.toHaveProperty("budget_usd");
+      expect(tool.parameters.properties).not.toHaveProperty("confirm_zero_budget");
+    }
     const tool = fake.tools.get("scheduled_tasks");
-    const created = await tool.execute("call-create-budget", {
-      action: "create",
-      chat_jid: "web:test",
-      prompt: "Capped agent check",
-      budget_usd: 0.25,
-      schedule_type: "once",
-      schedule_value: new Date(Date.now() + 60_000).toISOString(),
-    });
-    const taskId = created.details.id as string;
-    expect(getDb().query("SELECT scope,metric,amount,scheduled_task_id,enabled FROM budget_caps WHERE id=?")
-      .get(`scheduled-cap:${taskId}`)).toEqual({
-      scope: "scheduled_run",
-      metric: "api_usd_micros",
-      amount: 250_000,
-      scheduled_task_id: taskId,
-      enabled: 1,
-    });
-
-    await tool.execute("call-delete-budget", { action: "delete", id: taskId });
-    expect(getDb().query("SELECT enabled FROM budget_caps WHERE id=?").get(`scheduled-cap:${taskId}`))
-      .toEqual({ enabled: 0 });
-  });
-
-  test("scheduled task budgets reject shell tasks without creating work", async () => {
-    const tool = fake.tools.get("schedule_task");
-    const result = await tool.execute("call-shell-budget", {
-      chat_jid: "web:test",
-      task_kind: "shell",
-      command: "echo hi",
-      budget_usd: 1,
-      schedule_type: "once",
-      schedule_value: new Date(Date.now() + 60_000).toISOString(),
-    });
-    expect(result.content?.[0]?.text).toContain("applies only to scheduled agent tasks");
-    expect(getDb().query("SELECT COUNT(*) AS count FROM scheduled_tasks WHERE chat_jid='web:test'").get())
-      .toEqual({ count: 0 });
+    const created = await tool.execute("create", {action:"create",chat_jid:"web:test",prompt:"Regular check",
+      schedule_type:"once",schedule_value:new Date(Date.now()+60_000).toISOString()});
+    const id = created.details.id;
+    expect(created.details.schedule_accepted).toBe(true);
+    expect(created.details).not.toHaveProperty("budget_readiness");
+    expect(created.details).not.toHaveProperty("budget_usd");
+    getDb().query(`INSERT INTO budget_caps(id,scope,metric,amount,scheduled_task_id,created_at,updated_at) VALUES(?,'scheduled_run','api_usd_micros',0,?,'2026-01-01','2026-01-01')`).run(`scheduled-cap:${id}`, id);
+    const before = getDb().query("SELECT * FROM budget_caps").all();
+    const detail = await tool.execute("get",{action:"get",id});
+    expect(detail.content[0].text).not.toContain("budget:");
+    await tool.execute("delete",{action:"delete",id});
+    expect(getDb().query("SELECT * FROM budget_caps").all()).toEqual(before);
   });
 
   test("scheduled_tasks tool gets latest run summary", async () => {

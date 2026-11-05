@@ -81,6 +81,8 @@ export interface ScheduledRunAdapterRuntime {
   hitFault(point: "before_effect" | "effect_then_lost_acknowledgement", method: MutationMethod): boolean;
   afterStatement?(statement: ScheduledRunStatement): void;
   recordTrace(input: NormalisedTraceInput): void;
+  /** Read-only poll authority check; never gates already accepted work. */
+  assertClaimCurrent?(): void;
 }
 
 export type ScheduledRunStoreConstructionResult = ResultValue<ScheduledRunStore & InterruptedScheduledRunReconciler & ScheduledRunRetentionOwner, ScheduledRunStoreError>;
@@ -320,7 +322,8 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
     await Promise.resolve();
     try {
       if (this.runtime.hitFault("before_effect", method)) return this.failed(method, effectId, operationId, version, errorOf("storage_unavailable"), sourceSeq);
-      const result = await admitSqliteWrite(this.database, action);
+      const result = await admitSqliteWrite(this.database, action, undefined, undefined, undefined,
+        () => { if (method === "claimDue") this.runtime.assertClaimCurrent?.(); });
       if (!result.ok) return this.failed(method, effectId, operationId, version, result.error, sourceSeq);
       let lostAcknowledgement: boolean;
       try { lostAcknowledgement = this.runtime.hitFault("effect_then_lost_acknowledgement", method); }
@@ -345,11 +348,15 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
 
       type Candidate = { kind: "new" | "expired"; taskId: string; scheduledFor: string; runId: string | null };
       const due = this.database.query(
-        `SELECT task_id AS taskId,next_run_at AS scheduledFor,NULL AS runId FROM ${TASKS} WHERE status='active' AND next_run_at IS NOT NULL AND next_run_at<=? ORDER BY next_run_at,task_id LIMIT 100`,
+        `SELECT t.task_id AS taskId,t.next_run_at AS scheduledFor,NULL AS runId FROM ${TASKS} t WHERE t.status='active' AND t.next_run_at IS NOT NULL AND t.next_run_at<=?
+         AND NOT EXISTS (SELECT 1 FROM ${RUNS} r WHERE r.task_id=t.task_id AND r.task_revision=t.current_revision AND r.scheduled_for=t.next_run_at)
+         AND NOT EXISTS (SELECT 1 FROM ${TOMBSTONES} r WHERE r.task_id=t.task_id AND r.task_revision=t.current_revision AND r.scheduled_for=t.next_run_at) ORDER BY t.next_run_at,t.task_id LIMIT 100`,
       ).all(request.now) as Candidate[];
       const expired = this.database.query(
-        `SELECT task_id AS taskId,scheduled_for AS scheduledFor,run_id AS runId FROM ${RUNS} WHERE state IN ('claimed','source_bound') AND lease_expires_at<=? ORDER BY scheduled_for,task_id LIMIT 100`,
-      ).all(request.now) as Candidate[];
+        `SELECT r.task_id AS taskId,r.scheduled_for AS scheduledFor,r.run_id AS runId FROM json_each(?) a CROSS JOIN ${RUNS} r
+         WHERE r.run_id=json_extract(a.value,'$.runId') AND r.attempt=json_extract(a.value,'$.expectedAttempt')
+         AND r.state IN ('claimed','source_bound') AND r.lease_expires_at<=? ORDER BY r.scheduled_for,r.task_id,r.run_id`,
+      ).all(JSON.stringify(request.reclaimAuthorities), request.now) as Candidate[];
       const candidates = [
         ...due.map((row) => ({ ...row, kind: "new" as const })),
         ...expired.map((row) => ({ ...row, kind: "expired" as const })),

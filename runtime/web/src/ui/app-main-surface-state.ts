@@ -113,7 +113,7 @@ export function useMainAppSurfaceState(options: {
   const dismissedQueueRowIdsRef = useRef(new Set<string | number>());
   const queueRefreshGenRef = useRef(0);
   const silentRecoveryRef = useRef({ inFlight: false, lastAttemptAt: 0, turnId: null as string | null });
-  followupQueueRowIdsRef.current = new Set(followupQueueItems.map((item) => item.row_id));
+  followupQueueRowIdsRef.current = new Set(followupQueueItems.filter((item) => item.source !== 'native_sdk').map((item) => item.row_id));
   followupQueueItemsRef.current = followupQueueItems;
 
   const {

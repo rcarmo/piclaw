@@ -89,6 +89,18 @@ describe("web channel runtime public surface service", () => {
     });
   });
 
+  for(const created of [false,true])test(`preserves native receipt IDs and explicit source creation without manufacturing a user_message: created=${created}`,async()=>{
+    await withTempWorkspaceEnv('runtime-native-receipt-',{},async()=>{
+      initDatabase();
+      try{
+        const service=new WebChannelRuntimePublicSurfaceService({async handleAgentMessage(){return Response.json({row_id:77,thread_id:5,submission_id:123,created,queued:'steer'},{status:201});}} as any);
+        const result=await service.enqueueAgentMessage({chatJid:'web:receipt',content:'One accepted source',mode:'steer'});
+        expect(result).toEqual({status:'ok',chat_jid:'web:receipt',row_id:77,thread_id:5,submission_id:123,created,queued:'steer'});
+        expect(result).not.toHaveProperty('user_message');
+      }finally{await closeDatabase();}
+    });
+  });
+
   test("runtime input pins its trusted handler before admission validation", async () => {
     await withTempWorkspaceEnv("runtime-handler-capture-", {}, async () => {
       initDatabase();
@@ -140,24 +152,7 @@ describe("web channel runtime public surface service", () => {
           calls.push(`widget:${chatJid}:${options?.threadId ?? "null"}:${options?.widgetId ?? ""}`);
         },
       },
-      queuedFollowupLifecycle: {
-        enqueueQueuedFollowupItem: (chatJid, rowId, queuedContent, threadId, queuedAt) => {
-          calls.push(`enqueue:${chatJid}:${rowId}:${queuedContent}:${threadId ?? "null"}:${queuedAt ?? ""}`);
-          return 41;
-        },
-        peekQueuedFollowupItem: (chatJid) => {
-          calls.push(`peek-item:${chatJid}`);
-          return queuedItem;
-        },
-        getQueuedFollowupCount: (chatJid) => {
-          calls.push(`count:${chatJid}`);
-          return 2;
-        },
-        getQueuedFollowupItems: (chatJid) => {
-          calls.push(`items:${chatJid}`);
-          return [queuedItem];
-        },
-      },
+      resumeNativeInputs: chatJid => { calls.push(`resume:${chatJid}`); },
       runtimeState: {
         updateAgentStatus: (chatJid, nextStatus) => {
           calls.push(`status-update:${chatJid}:${String(nextStatus.title ?? "")}`);
@@ -221,11 +216,7 @@ describe("web channel runtime public surface service", () => {
     expect(service.uiBridge).toBe(uiBridge);
     await service.sendMessage("web:test", "hello", { threadId: 9 });
     await service.postDashboardWidget("web:test", { threadId: 8, widgetId: "widget-runtime" });
-    expect(service.enqueueQueuedFollowupItem("web:test", 11, "queued", 6, "2026-03-28T00:00:00.000Z")).toBe(41);
-    expect(service.peekQueuedFollowupItem("web:test")).toBe(queuedItem);
     expect(service).not.toHaveProperty("replaceQueuedFollowupItem");
-    expect(service.getQueuedFollowupCount("web:test")).toBe(2);
-    expect(service.getQueuedFollowupItems("web:test")).toEqual([queuedItem]);
     service.updateAgentStatus("web:test", status);
     expect(service.getAgentStatus("web:test")).toEqual(status);
     expect(service).not.toHaveProperty('setContextUsage');expect(service).not.toHaveProperty('getContextUsage');
@@ -253,18 +244,14 @@ describe("web channel runtime public surface service", () => {
     expect(calls).toEqual([
       "send:web:test:hello:9",
       "widget:web:test:8:widget-runtime",
-      "enqueue:web:test:11:queued:6:2026-03-28T00:00:00.000Z",
-      "peek-item:web:test",
-      "count:web:test",
-      "items:web:test",
       "status-update:web:test:Thinking",
       "status-get:web:test",
       "broadcast:extension_ui_working:{\"chat_jid\":\"web:test\",\"message\":\"Compacting context…\"}",
       "broadcast:extension_ui_working_indicator:{\"chat_jid\":\"web:test\",\"frames\":[\"a\",\"b\"],\"interval_ms\":80}",
       "broadcast:agent_response:{\"chat_jid\":\"web:test\"}",
       "thread-root:web:test:m-1",
-      "resume:web:test:12",
-      "resume-pending:web:test",
+      "resume:web:test",
+      "resume:web:test",
       "panel-set:turn-1:thought:true",
       "panel-get:turn-1:thought",
       "thought:turn-1:thought text:3",

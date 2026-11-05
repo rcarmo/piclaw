@@ -120,7 +120,7 @@ test("owned application Root dashboard projects native routes, timeline and usag
         expect(cleanup.host.modelCalls).toBe(0);
       } finally { await cleanup.close(); }
     }
-    closeDatabase(); lock.release(); await rm(dir, { recursive: true, force: true });
+    await closeDatabase(); lock.release(); await rm(dir, { recursive: true, force: true });
   }
 });
 

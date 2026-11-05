@@ -1,19 +1,11 @@
 import { admitSqliteWrite } from '../../src/db/sqlite-async-admission.js';
 // INACTIVE application-owned correlation store. No database opens or automatic migrations.
 import type { Database } from "bun:sqlite";
-import { listBudgetCaps } from "../../src/db/budget-limits.js";
-
-/** Native schedules have no qualified per-request reservation authority yet. */
-export function assertNativeScheduledBudgetAvailable(root: Database, taskId: string): void {
-  if (listBudgetCaps({ enabledOnly: true }, root).some(cap =>
-    cap.scope !== "task" && (cap.scope !== "scheduled_run" || cap.scheduled_task_id === taskId)))
-    throw Error("Native scheduled budget admission unavailable");
-}
 import { assertHostSchema, initializeHostSchemaTables } from "./host-schema.js";
 import { getQueuedInputIntent } from "../../src/service-effects/current-piclaw/queued-input-intent.js";
 import type { ConversationId, SubmissionId } from "@earendil-works/pi-durable";
 import { hashCanonicalRequest } from "../../../runtime/src/service-effects/contracts/common.js";
-import { inputSnapshot, type AcceptedInput, type HostInputBinding, type HostDurableBindings } from "./host-runtime.js";
+import { inputSnapshot, isNativeMessageInput, type AcceptedInput, type HostInputBinding, type HostDurableBindings } from "./host-runtime.js";
 
 export interface HostBindingOptions {
   readonly domain: string;
@@ -78,7 +70,6 @@ export function createHostDurableBindings(db: Database, options: HostBindingOpti
       i.requestId === i.sourceId && i.payloadRef === i.sourceId && side.conversation_id !== root &&
       side.chat_jid === i.chatJid && side.branch_id === i.branchId && side.conversation_id === i.conversationId &&
       side.request_id === i.requestId && side.request_hash === i.requestHash) {
-      if (db.query("SELECT 1 FROM budget_caps WHERE enabled=1 LIMIT 1").get()) throw Error("Native side prompt budget admission unavailable");
       return side.conversation_id;
     }
     if (!db.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='service_effect_s07_occurrences'").get()) return undefined;
@@ -94,7 +85,6 @@ export function createHostDurableBindings(db: Database, options: HostBindingOpti
       .get(domain, incarnation, i.operationId, i.sourceSeq, i.sourceId, i.payloadRef, new Date().toISOString()) as (Row & { task_id: string }) | null;
     if (!row || row.conversation_id === root || row.chat_jid !== i.chatJid || row.branch_id !== i.branchId ||
       row.conversation_id !== i.conversationId || row.request_id !== i.requestId || row.request_hash !== i.requestHash) return undefined;
-    assertNativeScheduledBudgetAvailable(db, row.task_id);
     return row.conversation_id;
   }
   function capture(input: AcceptedInput) {
@@ -102,6 +92,18 @@ export function createHostDurableBindings(db: Database, options: HostBindingOpti
     assertOwner();
     if (i.incarnation !== incarnation || (lookup(i.chatJid, i.branchId)?.conversationId !== i.conversationId && resolveConversation(i) !== i.conversationId)) throw conflict();
     return i;
+  }
+  function assertNativeMessage(i: AcceptedInput) {
+    if (!isNativeMessageInput(i)) throw conflict();
+    const source = db.query(`SELECT s.source_id,s.payload_ref,s.state,m.rowid FROM service_effect_s01_sources s
+      JOIN messages m ON m.chat_jid=s.chat_jid AND m.id=s.source_id AND m.is_bot_message=0
+      WHERE s.chat_jid=? AND s.source_seq=? AND s.kind='message'`).get(i.chatJid,i.sourceSeq) as
+      {source_id:string;payload_ref:string;state:string;rowid:number}|null;
+    if (!source || source.source_id!==i.sourceId || source.payload_ref!==i.payloadRef ||
+      !["pending","consumed"].includes(source.state) ||
+      ![`message-row:${source.rowid}`,`queued-source:${i.sourceId}`].includes(i.payloadRef) ||
+      i.requestId!==`message:${source.rowid}:${i.sourceId}`) throw Error("Native accepted message changed");
+    assertOwner();
   }
   function makePort(intent = false) {
   const table = intent ? "piclaw_durable_intent_bindings_v1" : "piclaw_durable_bindings_v1";
@@ -120,6 +122,7 @@ export function createHostDurableBindings(db: Database, options: HostBindingOpti
   }
   function verifySource(i: AcceptedInput) {
     assertHostSchema(db);
+    if (!intent && isNativeMessageInput(i)) { assertNativeMessage(i); return; }
     // A committed exact binding may replay after terminal settlement. Fresh admission
     // must use the same nonterminal proof as root recovery.
     if (intent) {
@@ -231,6 +234,7 @@ export function createHostDurableBindings(db: Database, options: HostBindingOpti
     assertSourceCurrent(input: AcceptedInput) {
       const i = capture(input);
       assertHostSchema(db);
+      if (isNativeMessageInput(i)) { assertNativeMessage(i); return; }
       // Unlike correlation replay, an effect requires a currently executing,
       // uncancelled operation and its exact still-claimed accepted source.
       const current = db.query(`SELECT 1 FROM service_effect_s01_sources s

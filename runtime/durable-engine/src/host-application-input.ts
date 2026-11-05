@@ -2,7 +2,8 @@ import type { Database } from "bun:sqlite";
 import { admitSqliteWrite } from "../../src/db/sqlite-async-admission.js";
 import { apply } from "@earendil-works/chord/delta";
 import { hashCanonicalRequest } from "../../src/service-effects/contracts/common.js";
-import type { QueuedFollowupLifecycleService, QueuedInputSourceAdmission } from "../../src/channels/web/runtime/queued-followup-lifecycle-service.js";
+import { storeMessageInDatabase } from "../../src/db/messages.js";
+import type { StoreWebMessageOptions } from "../../src/channels/web/messaging/message-store.js";
 
 export interface NativeSessionTarget {
   readonly domain: string;
@@ -29,9 +30,8 @@ type Route = Omit<NativeSessionTarget, "domain" | "revision">;
 /** Application-owned ingress; no runner, task lifetime, session emulation or provider IO. */
 export function createApplicationHostInput(options: {
   root: Database; domain: string; assertCurrent(): void; routes(): readonly Route[];
-  followups: QueuedFollowupLifecycleService;
-  admission(chat: string): QueuedInputSourceAdmission | undefined;
-  steer?(input: ApplicationHostInput, receipt: { rowId: number; chatJid: string }, check: () => void): Promise<{ rowId: number; chatJid: string; mode: "steer" | "new_input" }>;
+  admission(chat: string, provenance: string): StoreWebMessageOptions["acceptSource"];
+  submit(chat: string, sourceId: string, rowId: number, whenBusy: "steer" | "followUp"): Promise<{submission_id:number;queued:boolean}>;
 }) {
   const { root } = options;
   const canonical = (s: unknown): s is string => typeof s === "string" && !!s && s.trim() === s;
@@ -67,7 +67,7 @@ export function createApplicationHostInput(options: {
       throw Error("Exact native session target required");
     return found;
   }
-  async function admitApplicationInput(raw: ApplicationHostInput) {
+  async function admitApplicationInput(raw: ApplicationHostInput, whenBusy: "steer" | "followUp" = "followUp") {
     // Copy all persisted authority before callbacks can mutate caller-owned objects.
     const input = { ...raw, target: { ...raw.target }, principal: { ...raw.principal } };
     if (!["remote_peer", "regrets.command"].includes(input.source) || (input.mode !== undefined && input.mode !== "queue"))
@@ -82,26 +82,25 @@ export function createApplicationHostInput(options: {
       if (result !== undefined) { void Promise.resolve(result).catch(() => {}); throw Error("Application input guard must be synchronous"); }
       options.assertCurrent(); resolve(input.target);
     };
-    return admitSqliteWrite(root, () => {
-      const admit = options.admission(input.target.chatJid);
-      if (!admit) throw Error("Native input admission unavailable");
-      const rowId = options.followups.enqueueAcceptedFollowupOnce(input.sourceId, input.target.chatJid,
-        input.text, input.queuedAt, { source: input.source, queuedBy: {
-          source: input.source, userId: input.principal.id, sessionId: input.target.sessionId,
-          // Existing metadata projection preserves this canonical, complete authority proof.
-          clientId: JSON.stringify({ principalRevision: input.principal.revision, target: input.target }),
-          sourceMessageId: input.sourceId,
-        } }, stored => { check(); admit(stored); check(); });
-      if (rowId === null) throw Error("Application input admission unavailable");
+    const receipt=await admitSqliteWrite(root, () => {
+      const provenance=`application:pi-durable:${hashCanonicalRequest({source:input.source,principal:input.principal,target:input.target})}`;
+      const admit=options.admission(input.target.chatJid,provenance);
+      if(!admit)throw Error("Native source admission unavailable");
+      const prior=root.query("SELECT rowid,content,timestamp,is_bot_message FROM messages WHERE chat_jid=? AND id=?").get(input.target.chatJid,input.sourceId) as {rowid:number;content:string;timestamp:string;is_bot_message:number}|null;
+      if(prior&&(prior.content!==input.text||prior.is_bot_message!==0))throw Error("Application input identity conflict");
+      const message={id:input.sourceId,chat_jid:input.target.chatJid,sender:input.source,sender_name:input.principal.id,content:input.text,
+        timestamp:prior?.timestamp??input.queuedAt,is_from_me:false,is_bot_message:false,
+        ...(input.source==="remote_peer"?{content_blocks:[{type:"peer_message",peer_instance_id:input.principal.id,message_id:input.sourceId}]}: {})};
+      const rowId=prior?.rowid??storeMessageInDatabase(root,message);
+      check();admit({message,rowId,database:root});check();
       return Object.freeze({ sourceId: input.sourceId, chatJid: input.target.chatJid, rowId, target: Object.freeze(input.target) });
     }, check);
+    // The verified ingress grant was committed above. Submit the same accepted
+    // source to the SDK; transport disconnect is not permission to replay it.
+    options.assertCurrent();resolve(input.target);
+    const submitted=await options.submit(receipt.chatJid,receipt.sourceId,receipt.rowId,whenBusy);
+    return Object.freeze({...receipt,submission_id:submitted.submission_id,mode:whenBusy==="steer"&&submitted.queued?"steer" as const:"new_input" as const});
   }
-  async function steerApplicationInput(input: ApplicationHostInput) {
-    if (!options.steer) throw Error("Native steering unavailable");
-    const snapshot = { ...input, target: { ...input.target }, principal: { ...input.principal } };
-    const check = () => { options.assertCurrent(); resolve(snapshot.target); snapshot.assertCurrent(); options.assertCurrent(); resolve(snapshot.target); };
-    const receipt = await admitApplicationInput(snapshot);
-    return options.steer(snapshot, receipt, check);
-  }
+  const steerApplicationInput=(input:ApplicationHostInput)=>admitApplicationInput(input,"steer");
   return Object.freeze({ steerApplicationInput, sessionTargets: Object.freeze({ list, resolve }), admitApplicationInput });
 }

@@ -397,7 +397,7 @@ test("mergeChatBranchIntoParent moves child chat state into its parent", () => {
   expect(db.getDb().prepare("SELECT COUNT(*) AS count FROM extension_kv WHERE scope = 'chat' AND scope_key = ?").get(rootChatJid)).toEqual({ count: 1 });
 });
 
-test("mergeChatBranchIntoParent materializes queued followups instead of carrying queue state", () => {
+test("mergeChatBranchIntoParent refuses preserved legacy queue bytes without moving or rewriting history", () => {
   const rootChatJid = `web:test-merge-queue-root-${Date.now()}`;
   const branchChatJid = `${rootChatJid}:branch:queued`;
   const now = new Date().toISOString();
@@ -430,16 +430,9 @@ test("mergeChatBranchIntoParent materializes queued followups instead of carryin
     },
   ]);
 
-  const result = db.mergeChatBranchIntoParent(branchChatJid);
-
-  expect(result.counts.messages).toBe(2);
-  expect(db.getDeferredQueuedFollowups(rootChatJid)).toEqual([]);
-  expect(db.getDeferredQueuedFollowups(branchChatJid)).toEqual([]);
-  expect(db.getDb().prepare("SELECT COUNT(*) AS count FROM chat_cursors WHERE chat_jid = ? AND queued_followups_json IS NOT NULL").get(rootChatJid)).toEqual({ count: 0 });
-  expect(db.getChatCursor(rootChatJid)).toBe(later);
-  expect(db.getDb().prepare("SELECT COUNT(*) AS count FROM messages WHERE chat_jid = ? AND content = ?").get(rootChatJid, "already queued")).toEqual({ count: 1 });
-  expect(db.getDb().prepare("SELECT COUNT(*) AS count FROM messages WHERE chat_jid = ? AND content = ?").get(rootChatJid, "deferred queued")).toEqual({ count: 1 });
-  expect(db.getDb().prepare("SELECT COUNT(*) AS count FROM messages WHERE chat_jid = ?").get(branchChatJid)).toEqual({ count: 0 });
+  const before = ['chat_branches','chat_cursors','messages','chats'].map(table=>db.getDb().query(`SELECT * FROM ${table} ORDER BY rowid`).all());
+  expect(()=>db.mergeChatBranchIntoParent(branchChatJid)).toThrow('preserved legacy queue');
+  expect(['chat_branches','chat_cursors','messages','chats'].map(table=>db.getDb().query(`SELECT * FROM ${table} ORDER BY rowid`).all())).toEqual(before);
 });
 
 test("mergeChatBranchIntoParent rejects roots and branches with children", () => {

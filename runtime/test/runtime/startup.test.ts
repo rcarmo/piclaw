@@ -3,9 +3,6 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, join } from "path";
 import { closeDbQuietly, createTempWorkspace, importFresh, setEnv, withTempWorkspaceEnv } from "../helpers.js";
 import {
-  STARTUP_STATUS_CHAT_JID,
-  STARTUP_STATUS_TURN_ID,
-  buildStartupAgentStatus,
   initializeWebAddonMessagingRuntime,
   runWebStartupRecoveryBootstrap,
 } from "../../src/runtime/startup.js";
@@ -347,79 +344,10 @@ export {};
     }
   });
 
-  test("buildStartupAgentStatus emits startup intent metadata for the web UI", () => {
-    const status = buildStartupAgentStatus({
-      phase: "recovering_inflight",
-      detail: "Restoring runtime state and recovering interrupted chats.",
-      startedAt: "2026-04-24T13:40:00.000Z",
-    });
-
-    expect(status).toMatchObject({
-      type: "intent",
-      kind: "info",
-      intent_key: "startup",
-      source: "startup",
-      phase: "recovering_inflight",
-      title: "Starting up…",
-      detail: "Restoring runtime state and recovering interrupted chats.",
-      blocking: true,
-      started_at: "2026-04-24T13:40:00.000Z",
-      turn_id: STARTUP_STATUS_TURN_ID,
-    });
-    expect(typeof status.last_event_at).toBe("string");
-  });
-
-  test("runWebStartupRecoveryBootstrap exposes startup phases and clears them when ready", async () => {
-    const events: Array<{ kind: string; chatJid?: string; status?: Record<string, unknown> }> = [];
-
-    let resumePending: (() => void) | null = null;
-    runWebStartupRecoveryBootstrap({
-      updateAgentStatus: (chatJid, status) => {
-        events.push({ kind: "status", chatJid, status });
-      },
-      resumePendingChats: () => {
-        events.push({ kind: "resume" });
-      },
-    }, (resume) => {
-      resumePending = resume;
-    });
-
-    expect(events).toHaveLength(3);
-    expect(events[0]).toMatchObject({
-      kind: "status",
-      chatJid: STARTUP_STATUS_CHAT_JID,
-      status: {
-        type: "intent",
-        intent_key: "startup",
-        phase: "recovering_native",
-        turn_id: STARTUP_STATUS_TURN_ID,
-      },
-    });
-    expect(events[1]).toMatchObject({
-      kind: "status",
-      chatJid: STARTUP_STATUS_CHAT_JID,
-      status: {
-        type: "intent",
-        intent_key: "startup",
-        phase: "resuming_pending",
-        turn_id: STARTUP_STATUS_TURN_ID,
-      },
-    });
-    expect(events[2]).toMatchObject({
-      kind: "status",
-      chatJid: STARTUP_STATUS_CHAT_JID,
-      status: {
-        type: "done",
-        source: "startup",
-        turn_id: STARTUP_STATUS_TURN_ID,
-        title: "Startup ready",
-      },
-    });
-
-    expect(events).toHaveLength(3);
-    expect(resumePending).toBeFunction();
-    (resumePending as () => void)();
-    expect(events[3]).toEqual({ kind: "resume" });
+  test('startup schedules native source reconciliation without inventing agent lifecycle status',()=>{
+    let pending:(()=>void)|undefined,calls=0;
+    runWebStartupRecoveryBootstrap({resumePendingChats(){calls++;}},resume=>{pending=resume;});
+    expect(calls).toBe(0);expect(pending).toBeFunction();pending!();expect(calls).toBe(1);
   });
 });
 

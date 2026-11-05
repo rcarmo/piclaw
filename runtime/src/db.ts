@@ -92,11 +92,8 @@ export {
 export { getRouterState, setRouterState } from "./db/router-state.js";
 export {
   extensionKvGet,
-  extensionKvSet,
-  extensionKvDelete,
   extensionKvList,
   extensionKvQuery,
-  extensionKvClear,
   type KvScope,
   type KvEntry,
   type KvQueryOptions,
@@ -129,24 +126,6 @@ export {
   getLatestTokenUsageModel,
   pruneOldTokenUsage,
 } from "./db/token-usage.js";
-export {
-  ensureBudgetWork,
-  getBudgetWork,
-  getActiveBudgetWorkForChat,
-  setBudgetWorkStatus,
-  insertBudgetUsageEvent,
-  saveBudgetCap,
-  getBudgetCap,
-  listBudgetCaps,
-  setBudgetCapEnabled,
-  ensureBudgetCapWindow,
-  persistBudgetDecision,
-  markBudgetDecisionNotified,
-  grantBudgetAllowance,
-  setBudgetWarningsOnly,
-  resumeBudgetWork,
-} from "./db/budget-limits.js";
-export type { BudgetWorkRecord, BudgetUsageEventInput, BudgetCapWindowRecord } from "./db/budget-limits.js";
 export {
   createWebauthnEnrollment,
   getWebauthnEnrollment,

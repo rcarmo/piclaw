@@ -42,12 +42,10 @@ export function taskModelToolScope(api: Pick<TaskModelRequestScope, 'taskId' | '
 /** TEMPORARY pi-durable 1.4 phase adapter. Replace with an SDK task-bound model-request
  * callback. Uses exported definitions and RegistryReader, without SDK file or
  * persisted-task mutation. Includes checkpoint recovery and every phase entry.
- * Identity is not dispatch/exactly-once proof. Optional accounting preparation
- * runs BEFORE the phase body: native SDK sleep preserves its same checkpoint;
- * exceptions from an entered body are never caught or replayed here.
+ * Identity is not dispatch/exactly-once proof. This adapter does not decide
+ * admission, suspend phases, retry bodies or own an execution queue.
  */
-export function withTaskModelRequestScope(registry: RegistryReader,
-  beforePhase?: (scope: TaskModelRequestScope) => Promise<boolean>): RegistryReader {
+export function withTaskModelRequestScope(registry: RegistryReader): RegistryReader {
   const wrapped = new WeakMap<AnyTask, AnyTask>();
   const wrap = (task: AnyTask): AnyTask => {
     const previous = wrapped.get(task);
@@ -73,16 +71,7 @@ export function withTaskModelRequestScope(registry: RegistryReader,
           taskKind: definition.name, phase, ...(checkpointHash ? { checkpointHash } : {}),
           ...(typeof toolCallId === 'string' && toolCallId ? { toolCallId } : {}),
         });
-        if (!beforePhase) return requests.run(scope, () => execute(record, runtime, context));
-        return requests.run(scope, async () => {
-          if (!valid) throw Error('Exact running SDK phase required');
-          runtime.signal.throwIfAborted();
-          const ready = await beforePhase(scope);
-          runtime.signal.throwIfAborted();
-          if (ready !== true && ready !== false) throw Error('SDK accounting preparation must return readiness');
-          if (!ready) return runtime.sleepUntil(runtime.now() + 1000, record.state.checkpoint, context);
-          return execute(record, runtime, context);
-        });
+        return requests.run(scope, () => execute(record, runtime, context));
       },
     ]));
     const result = { ...task, definition: { ...definition, phases } };

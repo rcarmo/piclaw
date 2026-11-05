@@ -1,34 +1,17 @@
 /**
- * channels/web/runtime-state-service.ts – WebChannel pending-input resume and local UI observations.
+ * channels/web/runtime-state-service.ts – WebChannel local UI observations.
  *
- * Accepted input/queue stores own resume work. Native watches rebuild bounded
+ * Public SDK watches rebuild bounded
  * process-local status and streamed model buffers; these observations are never
  * persisted as execution or recovery authority.
  */
 
 import type { WebAgentBufferEntry } from "../agent/agent-buffers.js";
 
-const RECOVERY_REPLAY_DELAY_MS = 2000;
 import { registerPreShutdownHook } from "../../../runtime/shutdown-registry.js";
 import { AgentBuffers } from "../agent/agent-buffers.js";
 import { AgentStatusStore } from "../agent/agent-status-store.js";
-import { getThreadRootId as getThreadRootIdForChat, resumeChat as resumeWebChat, type ChatRunControlStore } from "./chat-run-control.js";
-import { resumePendingChats as resumeWebPendingChats, type WebPendingResumeStore } from "./recovery.js";
-
-/** Runtime callbacks required to bridge recovery/resume helpers back into WebChannel orchestration. */
-export interface WebChannelRuntimeStateCallbacks {
-  isNativeRuntime?(): boolean;
-  isChatLaneBusy?(chatJid: string): boolean;
-  readNativeTurnState?(chatJid: string): { operation: { operation_id: string; phase: string } | null; queued: number };
-  getAssistantName(): string;
-  enqueue(task: () => Promise<void>, key: string, laneKey?: string): void;
-  processChat(chatJid: string, agentId: string, threadRootId?: number | null): Promise<void>;
-}
-
-/** Fixed options for a WebChannel runtime-state service instance. */
-export interface WebChannelRuntimeStateOptions {
-  defaultAgentId: string;
-}
+import { getMessageThreadRootIdById } from "../../../db.js";
 
 interface AgentStatusStoreLike {
   update(chatJid: string, status: Record<string, unknown>): void;
@@ -49,18 +32,14 @@ export interface WebChannelRuntimeStateServiceDeps {
   agentBuffers?: AgentBuffersLike;
 }
 
-/** Surviving WebChannel methods delegate pending-input resume and local UI observations here. */
+/** Local UI observations only; no admission, queue, execution or recovery owner. */
 export class WebChannelRuntimeStateService {
   private readonly agentStatusStore: AgentStatusStoreLike;
   private readonly agentBuffers: AgentBuffersLike;
   private readonly unregisterShutdown: () => void;
   private disposed = false;
 
-  constructor(
-    private readonly callbacks: WebChannelRuntimeStateCallbacks,
-    private readonly options: WebChannelRuntimeStateOptions,
-    deps: WebChannelRuntimeStateServiceDeps = {}
-  ) {
+  constructor(deps: WebChannelRuntimeStateServiceDeps = {}) {
     this.agentStatusStore = deps.agentStatusStore ?? new AgentStatusStore();
     this.agentBuffers = deps.agentBuffers ?? new AgentBuffers();
     this.unregisterShutdown = registerPreShutdownHook(() => this.dispose());
@@ -73,52 +52,20 @@ export class WebChannelRuntimeStateService {
     this.disposed = true;
   }
 
-  getThreadRootId(chatJid: string, messageId: string, store?: ChatRunControlStore): number | null {
-    return getThreadRootIdForChat(chatJid, messageId, store);
-  }
-
-  resumeChat(chatJid: string, threadRootId?: number | null): void {
-    if (this.disposed) return;
-    resumeWebChat(chatJid, threadRootId, {
-      defaultAgentId: this.options.defaultAgentId,
-      enqueue: this.callbacks.enqueue.bind(this.callbacks),
-      processChat: this.callbacks.processChat.bind(this.callbacks),
-    });
-  }
-
-  resumePendingChats(chatJid?: string, store?: WebPendingResumeStore): void {
-    if (this.disposed) return;
-    resumeWebPendingChats({
-      assistantName: this.callbacks.getAssistantName(),
-      defaultAgentId: this.options.defaultAgentId,
-      enqueue: this.callbacks.enqueue.bind(this.callbacks),
-      processChat: (chat, agent, thread) => this.callbacks.processChat(chat, agent, thread ?? undefined),
-      recoveryDelayMs: RECOVERY_REPLAY_DELAY_MS,
-      sleep: (ms) => Bun.sleep(ms),
-    }, chatJid, store);
+  getThreadRootId(chatJid: string, messageId: string): number | null {
+    return getMessageThreadRootIdById(chatJid, messageId);
   }
 
   updateAgentStatus(chatJid: string, status: Record<string, unknown>): void {
-    if (!this.disposed) this.agentStatusStore.update(chatJid, status);
+    // Only public SDK watch observations describe native execution. Host worker
+    // lanes, control intents and terminal settlement cannot start/finish a run.
+    if (this.disposed || status.sdk_observation !== true) return;
+    this.agentStatusStore.update(chatJid, status);
   }
 
   getAgentStatus(chatJid: string): Record<string, unknown> | null {
     if (this.disposed) return null;
-    const saved = this.agentStatusStore.get(chatJid);
-    if (this.callbacks.isNativeRuntime?.() !== true || !this.callbacks.readNativeTurnState) return saved;
-    const { operation, queued } = this.callbacks.readNativeTurnState(chatJid);
-    const laneBusy = this.callbacks.isChatLaneBusy?.(chatJid) === true;
-    // Worker cleanup can outlive terminal publication. A busy lane alone is
-    // not an active durable model turn and must not resurrect Stop/Working.
-    const nativeTaskRunning = laneBusy && saved?.type === "intent" && ["native_task", "compaction", "session_rotation"].includes(String(saved.intent_key));
-    if (operation || queued || nativeTaskRunning) {
-      const active = saved && saved.type !== "done" && saved.type !== "error"
-        && (nativeTaskRunning || (operation && saved.operation_id === operation.operation_id)) ? saved : {};
-      return { ...active, chat_jid: chatJid, type: active.type ?? "thinking", state: "active", source: "durable_runtime",
-        title: active.title ?? (operation ? "Working" : laneBusy ? "Running queued work" : "Queued"),
-        operation_id: operation?.operation_id ?? null, operation_phase: operation?.phase ?? null, queued_count: queued };
-    }
-    return saved && saved.type !== "done" && saved.type !== "error" ? { ...saved, type: "done", state: "idle", title: "Idle", queued_count: 0 } : saved;
+    return this.agentStatusStore.get(chatJid);
   }
 
   setPanelExpanded(turnId: string, panel: "thought" | "draft", expanded: boolean): void {

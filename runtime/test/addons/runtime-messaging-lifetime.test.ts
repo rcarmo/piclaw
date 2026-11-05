@@ -9,10 +9,9 @@ import { addonLocalContextApi } from '../../src/addons/local-context.js';
 import { WebChannelRuntimePublicSurfaceService } from '../../src/channels/web/core/web-channel-runtime-public-surface-service.js';
 import { readInputRequestAuthority } from '../../src/channels/web/messaging/input-request-authority.js';
 import { admitWebMessage } from '../../src/channels/web/messaging/message-store.js';
-import { QueuedFollowupLifecycleService } from '../../src/channels/web/runtime/queued-followup-lifecycle-service.js';
 
 let cleanup = () => {};
-afterEach(() => { closeDatabase(); cleanup(); });
+afterEach(async () => { await closeDatabase(); cleanup(); });
 const source = { peer_instance_id: 'peerInstance_1234567890', peer_fingerprint: 'fingerprint', message_id: 'message-1', reply_address: 'lab!@auditor', in_reply_to: 'parent-1' };
 function fixture(beforeCommit: () => Promise<void> = async () => {}, afterMutation: () => void = () => {}) {
   const ws = createTempWorkspace('peer-lifetime-');
@@ -21,7 +20,6 @@ function fixture(beforeCommit: () => Promise<void> = async () => {}, afterMutati
   initDatabase();
   const a = ensureChatBranch({ chat_jid: 'web:agent:a', agent_name: 'agent' });
   const b = ensureChatBranch({ chat_jid: 'web:agent:b', agent_name: 'agent-b' });
-  const queue = new QueuedFollowupLifecycleService();
   const seen: any[] = [];
   const service = new WebChannelRuntimePublicSurfaceService({
     handleAgentMessage: async req => {
@@ -30,10 +28,6 @@ function fixture(beforeCommit: () => Promise<void> = async () => {}, afterMutati
       const authority = readInputRequestAuthority(req, body.chat_jid, '/agent/default/message')!;
       await beforeCommit(); // Models awaited attachment preparation before admission.
       const validate = (phase?: 'before' | 'after') => { if (phase === 'after') afterMutation(); authority.validate(phase); };
-      if (body.mode === 'queue') {
-        await queue.admitQueuedFollowupItem([body.chat_jid, 0, body.content, body.thread_id, undefined, { contentBlocks: body.content_blocks, mediaIds: body.media_ids, source: body.source, queuedBy: body.queued_by }], validate, req.signal);
-        return Response.json({ status: 'ok', chat_jid: body.chat_jid, queued: 'followup' });
-      }
       const row = await admitWebMessage({ broadcastEvent() {} }, { chatJid: body.chat_jid, content: body.content, isBot: false, mediaIds: body.media_ids ?? [], agentId: 'default', agentName: 'Fixture' }, { contentBlocks: body.content_blocks, threadId: body.thread_id }, validate, req.signal);
       return Response.json({ status: 'ok', chat_jid: body.chat_jid, user_message: row });
     },
@@ -44,11 +38,11 @@ function fixture(beforeCommit: () => Promise<void> = async () => {}, afterMutati
     enqueueAgentMessage: request => service.enqueueAgentMessage(request),
   });
   const request = { target_chat_jid: b.chat_jid, target_incarnation: b.branch_id, content: 'review this', source, thread_id: 7 };
-  return { a, b, handlers, request, queue, seen };
+  return { a, b, handlers, request, seen };
 }
 
 test('persisted idle sessions enumerate without operator context and exact B keeps peer provenance', async () => {
-  const { a, b, handlers, request, queue } = fixture();
+  const { a, b, handlers, request } = fixture();
   expect(addonLocalContextApi.getToolContext()).toBeNull();
   expect(await handlers.listAdvertisableSessions()).toEqual([
     { chatJid: a.chat_jid, agentName: a.agent_name, incarnation: a.branch_id, active: false },
@@ -56,11 +50,11 @@ test('persisted idle sessions enumerate without operator context and exact B kee
   ]);
   expect(await handlers.resolveLocalTarget(request)).toMatchObject({ incarnation: b.branch_id });
   await handlers.deliverPeerMessage({ ...request, mode: 'queue' });
-  const queued = queue.peekQueuedFollowupItem(b.chat_jid)!;
-  expect(queue.getQueuedFollowupCount(a.chat_jid)).toBe(0);
-  expect(queued.threadId).toBe(7);
-  expect(queued.contentBlocks).toMatchObject([{ type: 'peer_message', target_chat_jid: b.chat_jid, in_reply_to: 'parent-1', reply_to: { address: 'lab!@auditor' } }]);
-  expect(queued.contentBlocks?.some((block: any) => block.type === 'addon_local_dispatch')).toBe(false);
+  const rows = getDb().query('SELECT chat_jid,thread_id,content_blocks FROM messages').all() as any[];
+  expect(rows).toHaveLength(1);expect(rows[0].chat_jid).toBe(b.chat_jid);expect(rows[0].thread_id).toBe(7);
+  const blocks=JSON.parse(rows[0].content_blocks);
+  expect(blocks).toMatchObject([{ type: 'peer_message', target_chat_jid: b.chat_jid, in_reply_to: 'parent-1', reply_to: { address: 'lab!@auditor' } }]);
+  expect(blocks.some((block:any)=>block.type==='addon_local_dispatch')).toBe(false);
   expect(addonLocalContextApi.getToolContext()).toBeNull();
 });
 
@@ -91,7 +85,7 @@ test('stale claim never reaches enqueue; cancellation during await cannot commit
   expect(getDeferredQueuedFollowups(f.b.chat_jid)).toEqual([]);
 });
 
-test('lifetime change after queue mutation rolls back exact admission commit', async () => {
+test('lifetime change after message mutation rolls back exact admission commit', async () => {
   let b: any;
   const f = fixture(undefined, () => getDb().query('UPDATE chat_branches SET archived_at=? WHERE chat_jid=?').run('archived-at-commit', b.chat_jid));
   b = f.b;

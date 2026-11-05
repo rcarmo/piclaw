@@ -32,7 +32,7 @@ async function fixture(run: (path: string, db: Database, payloads: Payloads, run
   initDatabase();
   const path = join(directory, "host.sqlite");
   getDb().query("VACUUM INTO ?").run(path);
-  closeDatabase();
+  await closeDatabase();
   const db = new Database(path, { strict: true });
   db.exec("PRAGMA foreign_keys=ON");
   installTerminalSettlementCompositionSchema(db);

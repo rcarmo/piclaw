@@ -46,13 +46,16 @@ applicationTest("owned public SDK bundle admits authenticated host inputs, not G
     const receipt = await bundle.admitApplicationInput(input);
     expect(checks).toBeGreaterThanOrEqual(4);
     expect(await bundle.admitApplicationInput(input)).toEqual(receipt);
-    const queued = getDeferredQueuedFollowups(chat).find(i => i.source_id === input.sourceId)!;
-    expect(queued.source).toBe("remote_peer"); expect(queued.source_accepted).toBe(true);
-    expect(queued.queuedBy?.userId).toBe("authenticated-peer");
-    expect(JSON.parse(queued.queuedBy!.clientId!).target).toEqual(target);
+    expect(getDeferredQueuedFollowups(chat)).toEqual([]);
+    expect(receipt.submission_id).toBeGreaterThan(0);
+    const message=root.query("SELECT content,content_blocks FROM messages WHERE chat_jid=? AND id=?").get(chat,input.sourceId) as {content:string;content_blocks:string};
+    expect(message.content).toBe(input.text);expect(JSON.parse(message.content_blocks)).toEqual([{type:"peer_message",peer_instance_id:"authenticated-peer",message_id:input.sourceId}]);
+    const sdkBefore=root.query("SELECT id,json_extract(record,'$.requestId') request_id FROM submissions ORDER BY id").all();
+    await expect(bundle.admitApplicationInput({...input,principal:{...input.principal,revision:"changed"}})).rejects.toThrow();
+    expect(root.query("SELECT id,json_extract(record,'$.requestId') request_id FROM submissions ORDER BY id").all()).toEqual(sdkBefore);
     const source = root.query("SELECT kind,target_operation_id,parent_source_seq,provenance_ref FROM service_effect_s01_sources WHERE chat_jid=? AND source_id=?").get(chat, input.sourceId) as any;
     expect(source.kind).toBe("message"); expect(source.target_operation_id).toBeNull(); expect(source.parent_source_seq).toBeNull();
-    expect(source.provenance_ref).toStartWith("application:queued:");
+    expect(source.provenance_ref).toStartWith("application:pi-durable:");
     await expect(bundle.admitApplicationInput({ ...input, text: "changed replay" })).rejects.toThrow("conflict");
     await expect(bundle.admitApplicationInput({ ...input, target: { ...target, revision: "wrong" } })).rejects.toThrow("Exact native");
     await expect(bundle.admitApplicationInput({ ...input, target: { ...target, sessionId: "fake" } })).rejects.toThrow("Exact native");
@@ -72,7 +75,8 @@ applicationTest("owned public SDK bundle admits authenticated host inputs, not G
     const added = bundle.sessionTargets.list().find(t => t.chatJid === newChat)!;
     expect(added.sessionId).toBe("new-real-session"); expect(bundle.sessionTargets.resolve(added)).toEqual(added);
     await bundle.admitApplicationInput({ ...input, sourceId: "new-chat", target: added });
-    expect(getDeferredQueuedFollowups(newChat)[0]!.source_accepted).toBe(true);
-    expect(base.host.modelCalls).toBe(0); expect(base.host.credentialLookups).toBe(0);
-  } finally { await bundle.close(); closeDatabase(); lock.release(); await rm(dir, { recursive: true, force: true }); }
+    expect(getDeferredQueuedFollowups(newChat)).toEqual([]);
+    expect(root.query("SELECT state FROM service_effect_s01_sources WHERE chat_jid=?").get(newChat)).toEqual({state:"consumed"});
+    expect(root.query("SELECT * FROM service_effect_s01_operations").all()).toEqual([]);expect(base.host.credentialLookups).toBe(0);
+  } finally { await bundle.close(); await closeDatabase(); lock.release(); await rm(dir, { recursive: true, force: true }); }
 });

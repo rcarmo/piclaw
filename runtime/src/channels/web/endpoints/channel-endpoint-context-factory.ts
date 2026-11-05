@@ -121,6 +121,7 @@ export function createWebChannelEndpointContexts(
       if (!contentContext) {
         contentContext = {
           defaultChatJid: options.defaultChatJid,
+          get hiddenNativeRows(){return channel.filterNativeTimeline?.bind(channel);},
           json: (payload, status = 200) => channel.json(payload, status),
           getBuffer: (turnId, panel) => channel.getBuffer(turnId, panel),
           getIdentity: () => {

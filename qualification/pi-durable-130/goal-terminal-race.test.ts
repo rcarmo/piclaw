@@ -40,5 +40,5 @@ for (const status of ["complete", "budget_limited"] as const) for (const change 
       else expect(await invoke()).toBeUndefined();
     }
     else await expect(invoke()).rejects.toThrow("Goal tool lifecycle changed");
-  } finally { closeDatabase(); }
+  } finally { await closeDatabase(); }
 });

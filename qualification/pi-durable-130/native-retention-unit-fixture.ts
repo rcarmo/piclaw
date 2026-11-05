@@ -9,8 +9,6 @@ import { createVerifiedSqliteBackup } from "../../runtime/src/db/backup.js";
 import { storeTokenUsage, type TokenUsageRecord } from "../../runtime/src/db/token-usage.js";
 import { planUsageReportRetention, applyUsageReportRetention } from "../../runtime/src/db/usage-report-retention.js";
 import { nativeToolOutputRetentionHeld } from "../../runtime/src/db/tool-outputs.js";
-import { ensureBudgetWork, saveBudgetCap } from "../../runtime/src/db/budget-limits.js";
-import { reserveBudgetRequest } from "../../runtime/src/db/budget-request-reservations.js";
 import { createCurrentPiclawScheduledRunStore } from "../../runtime/src/service-effects/current-piclaw/scheduled-run-store.js";
 import { scheduledResultRef } from "../../runtime/src/service-effects/current-piclaw/scheduled-history-projection.js";
 import { createScheduledTaskAuthority } from "../../runtime/src/service-effects/current-piclaw/scheduled-task-authority.js";
@@ -21,6 +19,22 @@ import type { CompleteScheduledRunRequest } from "../../runtime/src/service-effe
 import type { Result } from "../../runtime/src/service-effects/contracts/result.js";
 const value=<T,E>(result:Result<T,E>):T=>{if(!result.ok)throw Error(JSON.stringify(result.error));return result.value;};
 
+/** Literal historical fixture data only; no cap evaluator, reservation owner,
+ * financial settlement, schema mutation or execution permission is installed. */
+export function seedRetentionHistoryFixture(database:Database){
+  const old="2000-01-01T00:00:00.000Z",recorded="2001-02-15T00:00:00.000Z";
+  const usage:TokenUsageRecord={chat_jid:"web:default",run_at:old,input_tokens:1,output_tokens:1,cache_read_tokens:0,cache_write_tokens:0,total_tokens:2,cost_input:0,cost_output:0,cost_cache_read:0,cost_cache_write:0,cost_total:0};
+  for(let i=0;i<5;i++)storeTokenUsage(usage,database);
+  database.query("INSERT INTO budget_work(id,chat_jid,execution_kind,scheduled_task_id,created_at,updated_at) VALUES ('retention-held-work','web:default','scheduled','retention-fixture:3',?,?),('retention-long-work','web:default','background',NULL,?,?)").run(old,old,old,old);
+  database.query("INSERT INTO budget_request_reservations(id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,amount_microusd,state,created_at,updated_at) VALUES ('retention-held-request','retention-held-work','web:default','fixture','fixture','synthetic',?,1,'reserved',?,?)").run("a".repeat(64),old,old);
+  storeTokenUsage({...usage,work_id:"retention-held-work"},database);
+  storeTokenUsage({...usage,work_id:"retention-long-work"},database);
+  storeTokenUsage({...usage,run_at:"2001-02-01T00:00:00.000Z"},database);
+  database.query("INSERT INTO budget_caps(id,scope,metric,amount,timezone,created_at,updated_at) VALUES ('retention-recorded-window','instance_monthly','api_usd_micros',100,'UTC',?,?)").run(recorded,recorded);
+  database.query("INSERT INTO budget_cap_revisions(cap_id,revision,scope,metric,amount,enabled,timezone,recorded_at) VALUES ('retention-recorded-window',1,'instance_monthly','api_usd_micros',100,1,'UTC',?)").run(recorded);
+  database.query("INSERT INTO budget_cap_windows(cap_id,cap_revision,window_id,starts_at,ends_at,timezone,created_at) VALUES ('retention-recorded-window',1,'historical-February-2001','2001-02-01T00:00:00.000Z','2001-03-01T00:00:00.000Z','UTC',?)").run(recorded);
+}
+
 /** Full native/import/review/unknown-outbox checkpoint prepared by the existing
  * actual factory fixture. Maintenance below touches only its disposable copy. */
 export async function qualifyNativeRetentionUnit(unit:string,environment:RecoveryEnvironment,payloads:Pick<RecoveryCaptureOptions,"answers"|"workspace"|"externalPayloads">){
@@ -30,15 +44,7 @@ export async function qualifyNativeRetentionUnit(unit:string,environment:Recover
   let before:ReturnType<typeof measureRetentionStorage>,after:ReturnType<typeof measureRetentionStorage>;
   try{
     const old="2000-01-01T00:00:00.000Z",cutoff="2026-01-01T00:00:00.000Z";
-    const usage:TokenUsageRecord={chat_jid:"web:default",run_at:old,input_tokens:1,output_tokens:1,cache_read_tokens:0,cache_write_tokens:0,total_tokens:2,cost_input:0,cost_output:0,cost_cache_read:0,cost_cache_write:0,cost_total:0};
-    for(let i=0;i<5;i++)storeTokenUsage(usage,database);
-    ensureBudgetWork({id:"retention-held-work",chatJid:"web:default",executionKind:"scheduled",scheduledTaskId:"retention-fixture:3"},database);
-    reserveBudgetRequest({id:"retention-held-request",workId:"retention-held-work",chatJid:"web:default",providerId:"fixture",modelId:"fixture",accountRef:"synthetic",amountMicros:1},{now:new Date(old)},database);
-    storeTokenUsage({...usage,work_id:"retention-held-work"},database);
-    ensureBudgetWork({id:'retention-long-work',chatJid:'web:default',executionKind:'background'},database);
-    storeTokenUsage({...usage,work_id:'retention-long-work'},database);
-    storeTokenUsage({...usage,run_at:'2001-02-01T00:00:00.000Z'},database);
-    saveBudgetCap({id:'retention-recorded-window',scope:'instance_monthly',metric:'api_usd_micros',amount:100,timezone:'UTC'},database,new Date('2001-02-15T00:00:00.000Z'));
+    seedRetentionHistoryFixture(database);
     // Raw cache data has no qualified native reference-retirement inventory.
     // It stays retained even when metadata looks expired and unowned.
     database.query("INSERT INTO tool_outputs(id,created_at,summary) VALUES('retained-history-cache',?,'retained archive dependency')").run(old);

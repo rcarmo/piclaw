@@ -1,5 +1,4 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { isOperationSession } from "./operation-session-profile.js";
 /**
  * agent-pool/session-manager.ts – Main session lifecycle management for AgentPool.
  *
@@ -344,7 +343,7 @@ export class AgentSessionManager {
       const { ensureSessionDir, createDefaultSession } = await import("./session.js");
       const chatSessionDir = ensureSessionDir(chatJid);
 
-      const extensionFactories = isOperationSession(chatJid) ? [] : await this.options.getSessionExtensionFactories?.(chatJid) ?? [];
+      const extensionFactories = await this.options.getSessionExtensionFactories?.(chatJid) ?? [];
       requireOwnedSessionExecution(chatJid);
       this.assertMcpAdmission(epoch);
       const runtime = this.options.createSession
@@ -353,7 +352,7 @@ export class AgentSessionManager {
             modelRuntime: this.options.modelRuntime,
             settingsManager: this.options.settingsManager,
             tools: this.options.createDefaultTools!(),
-            customTools: isOperationSession(chatJid) ? [] : this.options.createCustomToolOverrides?.(chatJid) ?? [],
+            customTools: this.options.createCustomToolOverrides?.(chatJid) ?? [],
             extensionFactories,
           });
 

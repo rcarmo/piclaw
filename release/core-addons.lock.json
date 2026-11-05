@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "catalog": "https://raw.githubusercontent.com/rcarmo/piclaw-addons/main/catalog.json",
-  "catalogSha256": "4550a3052a504a3e55b54cdb477ce71904715a524bf2230eb63f2bcaceee5e47",
+  "catalogSha256": "2d53e92a7bf3aa2f653a89eaa990d59eee66b3a48b25b2fd4eabc464c816000d",
   "addons": [
     {
       "slug": "code-review",

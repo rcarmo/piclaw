@@ -62,7 +62,7 @@ The initial list incorrectly included 34 calls to locally declared assertion hel
 
 The package roster contains 50 add-on manifests, 14 generated native profiles plus specialised installed-source qualification, 7 Core seed entries and current public catalog install references. Native export filenames occur in their profile-pinned file lists. Generated profile data earns no handwritten reduction credit.
 
-Current distributed A2A 0.4.1 has two `budget_blocked` consumers. Its handler is imported by `server.ts`; task-store is consumed by handler, push worker, runtime API, server and service. #1880 removes the financial branches while preserving approval-required/input/result/cancellation and operation identity. Token-budget uses in Goal/Regrets/compaction and page/computation/time/resource limits remain outside monetary deletion.
+The inventory baseline included two `budget_blocked` consumers in A2A 0.4.1. A later explicit instruction removes that add-on and its exclusive Core operations service entirely; those CSV paths and hashes are historical inventory evidence, not current interfaces. Token-budget uses in Goal/Regrets/compaction and page/computation/time/resource limits remain outside monetary deletion.
 
 ## Historical seed availability
 
@@ -78,7 +78,7 @@ Read-only public downloads on 2 November 2026 produced:
 | restic | 0.1.5 | Available; SHA256 equals the release lock; 18 text files inspected |
 | session-dashboard | 0.2.4 | HTTP404 |
 
-The URLs and expected hashes are in [`release/core-addons.lock.json`](../../release/core-addons.lock.json). The available Restic seed and current A2A archive have no differences among compared first-party JS/TS source files. These public-download results alone did not inspect the other six seeds.
+The URLs and expected hashes are in [`release/core-addons.lock.json`](../../release/core-addons.lock.json). The Restic seed and then-current A2A archive had no differences among the first-party JS/TS files compared at the inventory baseline. A2A is now retired; its original comparison receipt remains historical evidence. These public-download results alone did not inspect the other six seeds.
 
 **3 November correction:** all seven exact archives were already present under `release/core-addons/tarballs/` at this checkpoint's original 8b11 source. HTTP404 was an availability failure, not missing shipped bytes. The [historical seed follow-up](expense-shipped-seeds-1876.md) records 130 file hashes, 285 import/re-export references, two additional execution references and the semantic dispositions. No archive was reconstructed, replaced or republished. Public distribution, current runtime compatibility and fresh-workspace shipping qualification remain separate open work.
 

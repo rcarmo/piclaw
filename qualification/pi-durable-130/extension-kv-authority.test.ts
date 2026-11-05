@@ -1,10 +1,14 @@
 import { test, expect } from "bun:test";
+import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
+import { getRuntimeConfigPaths } from "../../runtime/src/core/config.js";
+import { registerRootExtensionKvStore } from "../../runtime/src/db/register-extension-kv.js";
 import { getExtensionKvStore, requireExtensionKvAuthority, resetExtensionKvStoreForTests, withExtensionKvAuthority } from "../../runtime/src/extension-kv-registry.ts";
 
 test("explicit namespace global grants preserve chat default and revoke across await", async () => {
-  resetExtensionKvStoreForTests(); requireExtensionKvAuthority();
+  await closeDatabase(); initDatabase({ ...getRuntimeConfigPaths(), databasePath: ":memory:" });
+  resetExtensionKvStoreForTests(); registerRootExtensionKvStore(); requireExtensionKvAuthority();
   const kv = getExtensionKvStore(); let current = true, writes = 0;
-  const base = { extensionId: "imap", chatJid: "web:one", assertCurrent() { if (!current) throw Error("revoked"); }, write<T>(body: () => T): T { writes++; this.assertCurrent(); return body(); } };
+  const base = { extensionId: "imap", chatJid: "web:one", assertCurrent() { if (!current) throw Error("revoked"); }, write<T>(body: () => T): T { writes++; this.assertCurrent(); return getDb().transaction(body).immediate(); } };
   try {
     expect(() => kv.get("imap", "account", "global")).toThrow();
     withExtensionKvAuthority(base, () => {
@@ -27,5 +31,5 @@ test("explicit namespace global grants preserve chat default and revoke across a
       expect(() => kv.set("imap", "account", 2, "global")).toThrow("revoked");
     });
     expect(writes).toBeGreaterThan(1);
-  } finally { resetExtensionKvStoreForTests(); }
+  } finally { resetExtensionKvStoreForTests(); await closeDatabase(); }
 });

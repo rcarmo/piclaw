@@ -1,17 +1,21 @@
 import './src/test-guard.js';
 import { test,expect } from 'bun:test';
 import { Database } from 'bun:sqlite';
+import { initDatabase,getDb,closeDatabase } from '../../runtime/src/db/connection.js';
+import { getRuntimeConfigPaths } from '../../runtime/src/core/config.js';
+import { registerRootExtensionKvStore } from '../../runtime/src/db/register-extension-kv.js';
 import { mkdtemp,rm,writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { repoRoot } from './src/repo-root.js';
+import { installCodeReviewFixture } from './code-review-fixture.js';
 import { admitSqliteWrite, type SyncSqliteOperation } from '../../runtime/src/db/sqlite-async-admission.js';
 import { getExtensionKvStore,requireExtensionKvAuthority,resetExtensionKvStoreForTests,withExtensionKvAuthority } from '../../runtime/src/extension-kv-registry.js';
 
 for(const revoke of [false,true]) test(`native review preparation and UI mutation yield to the shared writer; revoke=${revoke}`,async()=>{
  const dir=await mkdtemp(join(process.env.PICLAW_WORKSPACE!,'review-admission-'));
- const path=join(dir,'root.sqlite'),root=new Database(path);root.exec('PRAGMA journal_mode=WAL;PRAGMA busy_timeout=731');
+ const path=join(dir,'root.sqlite');await closeDatabase();initDatabase({...getRuntimeConfigPaths(),databasePath:path});
+ const root=getDb();registerRootExtensionKvStore();
  const blocker=new Database(path),globals=globalThis as any,previous=globals.__piclawRuntimeInterop;
- const addon=await import(repoRoot('ADDONS')+'/addons/code-review/runtime.ts');
+ const addon=await import(installCodeReviewFixture(dir)+'/runtime.ts');
  let current=true;
  const check=()=>{if(!current)throw Error('revoked');};
  const releaseSource=addon.setReviewDatabaseSource({database:root,assertOwner:check,admitWrite:<T>(body:SyncSqliteOperation<T>)=>admitSqliteWrite<T>(root,body,check)});
@@ -21,7 +25,7 @@ for(const revoke of [false,true]) test(`native review preparation and UI mutatio
   await Bun.sleep(20);expect(()=>addon.reviewService()).toThrow('Await native review preparation');
   expect(root.query("SELECT name FROM sqlite_schema WHERE name='addon_code_review_schema'").get()).toBeNull();
   blocker.exec('ROLLBACK');const service=await pending;
-  expect(addon.reviewService()).toBe(service);expect(root.query('PRAGMA busy_timeout').get()).toEqual({timeout:731});
+  expect(addon.reviewService()).toBe(service);expect(root.query('PRAGMA busy_timeout').get()).toEqual({timeout:0});
   requireExtensionKvAuthority();globals.__piclawRuntimeInterop={getExtensionKvStore};
   await writeFile(join(dir,'file.ts'),'export const fixture = 1;\n');
   const target={chatJid:'web:fixture',incarnation:'branch',agentName:'fixture',label:'Fixture',active:false};
@@ -35,8 +39,8 @@ for(const revoke of [false,true]) test(`native review preparation and UI mutatio
   await Bun.sleep(60);expect(done).toBe(false);expect(root.query('SELECT count(*) n FROM addon_code_review_reviews').get()).toEqual({n:0});
   if(revoke)current=false;blocker.exec('ROLLBACK');const result=await mutation;
   expect(result.ok).toBe(!revoke);expect(root.query('SELECT count(*) n FROM addon_code_review_reviews').get()).toEqual({n:revoke?0:1});
-  expect(root.inTransaction).toBe(false);expect(root.query('PRAGMA busy_timeout').get()).toEqual({timeout:731});
+  expect(root.inTransaction).toBe(false);expect(root.query('PRAGMA busy_timeout').get()).toEqual({timeout:0});
   current=true;addon.closeReviewServices();
   const reopened=await addon.prepareReviewService();expect(reopened).not.toBe(service);
- }finally{if(blocker.inTransaction)blocker.exec('ROLLBACK');current=true;releaseSource();resetExtensionKvStoreForTests();globals.__piclawRuntimeInterop=previous;blocker.close();root.close();await rm(dir,{recursive:true,force:true});}
+ }finally{if(blocker.inTransaction)blocker.exec('ROLLBACK');current=true;releaseSource();resetExtensionKvStoreForTests();globals.__piclawRuntimeInterop=previous;blocker.close();await closeDatabase();await rm(dir,{recursive:true,force:true});}
 });

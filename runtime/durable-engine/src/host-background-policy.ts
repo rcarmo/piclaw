@@ -1,16 +1,15 @@
 import { createHash } from "node:crypto";
-import { AgentDoc, defineDocFamily, InboxDoc, LiveDoc, type ConversationId, type TaskId, type ToolTaskInput, type ConversationRecord, type TaskRecord, type Tx } from "@earendil-works/pi-durable";
+import { AgentDoc, defineDocFamily, InboxDoc, LiveDoc, type ConversationId, type TaskId, type ToolTaskInput, type ConversationRecord, type Tx } from "@earendil-works/pi-durable";
 import {
-  assertNativeBackgroundDeadline,nativeBackgroundPolicyHash,readNativeBackgroundPolicy,nativeBackgroundIdentity,
+  assertNativeBackgroundDeadline,nativeBackgroundPolicyHash,readNativeBackgroundPolicy,
   type NativeBackgroundPolicy,
 } from "../../src/agent-pool/background-operation-contract.js";
 
 type Claim={taskId:number;callId:string;toolName:string};
-/** Correlation and a bounded quota only. The immutable payload/S01 admission
- * own policy authority; this document never authorises execution or replay.
+/** Correlation and a bounded quota only. Immutable SDK input and the live
+ * domain lease prove authority; this document never authorises execution or replay.
  * Each accepted input has a family member; `initial` prevents a fork from
- * inheriting its parent's background grant. Explicit continuation never resets
- * an earlier input's quota. */
+ * inheriting its parent's background grant. */
 export const NativeBackgroundPolicyDoc=defineDocFamily({kind:"app.background-policy",version:1,family:true,scope:"conversation",history:"latest",fork:"initial",
   checkpointWhen:()=>false,initial:(_seed:null)=>({sourceId:null as string|null,policySha256:null as string|null,calls:[] as Claim[]})});
 function current(assertCurrent:()=>void){
@@ -56,66 +55,9 @@ export async function bindNativeBackgroundPolicy(tx:Tx,id:ConversationId,input:N
   }
   doc.sourceId=policy.sourceId;doc.policySha256=nativeBackgroundPolicyHash(policy);current(assertCurrent);
 }
-export async function nativeBackgroundToolReceiptKnown(tx:Tx,task:TaskRecord<unknown,unknown,unknown>):Promise<boolean>{
-  if(task.kind!=='pi.tool'||task.state.status!=='terminal'||task.state.outcome.status!=='completed')return false;
-  const result=task.state.outcome.result as {kind?:string;entryId?:import('@earendil-works/pi-durable').EntryId};
-  if(result.kind==='nested'||result.entryId===undefined)return false;
-  const entry=await tx.entry(result.entryId),diagnostics=(entry?.data as {diagnostics?:{code?:string}[]}|undefined)?.diagnostics;
-  return entry?.kind==='pi.tool-result'&&entry.conversationId===task.conversationId&&entry.byTaskId===task.id&&Array.isArray(diagnostics)&&!diagnostics.some(item=>['interrupted','aborted','faulted','orphaned'].includes(item.code??''));
-}
-
-/** A new owner input may reuse an idle context, never a fork or a live/unknown
- * tool. Host admission separately proves prior EF-S01 terminals. Existing
- * policy-family members remain immutable; only the new source gets a quota. */
-export async function advanceNativeBackgroundPolicy(tx:Tx,id:ConversationId,raw:NativeBackgroundPolicy,prior:readonly NativeBackgroundPolicy[],accepted:readonly string[],assertCurrent:()=>void){
-  const policy=readNativeBackgroundPolicy(raw),previous=prior.map(readNativeBackgroundPolicy),sources=new Set(accepted);current(assertCurrent);
-  if(policy.origin.kind!=='addon'||!previous.length||sources.size!==accepted.length)throw Error('Explicit background input history required');
-  for(const old of previous){
-    if(old.origin.kind!=='addon'||old.origin.inputSequence>=policy.origin.inputSequence||nativeBackgroundIdentity(old).contextKey!==nativeBackgroundIdentity(policy).contextKey||
-      old.origin.target!==policy.origin.target||old.origin.grantRevision!==policy.origin.grantRevision||old.workId!==policy.workId||old.parentWorkId!==policy.parentWorkId||
-      JSON.stringify(old.model)!==JSON.stringify(policy.model)||JSON.stringify(old.allowedTools)!==JSON.stringify(policy.allowedTools)||old.maxToolCalls!==policy.maxToolCalls||old.instructionsSha256!==policy.instructionsSha256||Date.parse(old.acceptedAt)>Date.parse(policy.acceptedAt))throw Error('Background continuation policy changed');
-  }
-  if([...sources].some(source=>!previous.some(old=>old.sourceId===source)))throw Error('Unbound previous background source');
-  const conversation=await tx.conversation(id),inbox=await tx.doc(InboxDoc,id),live=await tx.doc(LiveDoc,id);current(assertCurrent);
-  if(!conversation||conversation.owner||conversation.parent||inbox.items.length||live.run||live.compactions?.length||live.tools?.some(slot=>slot.status!=='done')||live.nestedTools?.some(slot=>slot.status!=='done'))throw Error('Idle private background context required');
-  let cursor:import('@earendil-works/pi-durable').Cursor|undefined;
-  do{
-    const page=await tx.scanTasks({conversationId:id},100,cursor);current(assertCurrent);
-    for(const task of page.items){
-      if(task.state.status!=='terminal')throw Error('Previous background task is still live');
-      if(task.kind==='pi.tool'&&!await nativeBackgroundToolReceiptKnown(tx,task))throw Error('Previous background tool effect is unresolved');
-      current(assertCurrent);
-    }
-    cursor=page.next;
-  }while(cursor!==undefined);
-  for(const old of previous){
-    const submission=await tx.submissionByRequest(id,old.sourceId);current(assertCurrent);
-    if(sources.has(old.sourceId)?!submission||submission.type!=='input'||!['done','unanswered'].includes(submission.status)||submission.entry===undefined:submission!==undefined&&submission!==null)throw Error('Previous background submission proof missing');
-  }
-  const seen=new Set<string>();cursor=undefined;
-  do{
-    const page=await tx.scanEntries({conversationId:id},100,cursor);current(assertCurrent);
-    for(const entry of page.items){
-      if(entry.kind==='pi.user')throw Error('Unaccepted private background input');
-      if(entry.kind!=='host.accepted')continue;
-      const data=entry.data as Record<string,unknown>|undefined,old=previous.find(policy=>policy.sourceId===data?.sourceId),model=entry.model?.[0];
-      const identity=old&&nativeBackgroundIdentity(old);
-      if(!data||!old||!identity||!sources.has(old.sourceId)||seen.has(old.sourceId)||data.role!=='primary'||data.requestId!==identity.requestId||data.operationId!==identity.operationId||data.chatJid!==identity.chatJid||data.branchId!==identity.branchId||data.conversationId!==id||entry.model?.length!==1||model?.role!=='user'||typeof model.content!=='string'||createHash('sha256').update(model.content).digest('hex')!==old.promptSha256)throw Error('Previous background input history mismatch');
-      seen.add(old.sourceId);
-    }
-    cursor=page.next;
-  }while(cursor!==undefined);
-  if(seen.size!==sources.size)throw Error('Missing previous background input history');
-  await assertAgentPolicy(tx,id,policy);
-  for(const old of previous){bound(await tx.doc(NativeBackgroundPolicyDoc,id,old.sourceId,null),old);current(assertCurrent);}
-  const doc=await tx.doc(NativeBackgroundPolicyDoc,id,policy.sourceId,null);current(assertCurrent);
-  if(doc.sourceId!==null||doc.policySha256!==null){bound(doc,policy);return;}
-  if(doc.calls.length)throw Error('New background input quota is not empty');doc.sourceId=policy.sourceId;doc.policySha256=nativeBackgroundPolicyHash(policy);current(assertCurrent);
-}
-
 /** A fresh host effect guard and exact accepted source remain mandatory. This
  * read must not be installed as a general bootstrap/read-only recovery gate:
- * revoked/expired work still needs passive inspection and terminal settlement. */
+ * revoked/expired work still needs passive inspection and SDK cleanup. */
 export async function assertNativeBackgroundExecution(tx:Tx,id:ConversationId,input:NativeBackgroundPolicy,now:number,assertCurrent:()=>void){
   current(assertCurrent);const policy=readNativeBackgroundPolicy(input);
   assertNativeBackgroundDeadline(policy,now);await assertAgentPolicy(tx,id,policy);

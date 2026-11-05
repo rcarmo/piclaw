@@ -55,7 +55,7 @@ test("native Goal commands commit state and accepted continuation atomically", a
     expect(await command(chatJid, "/goal resume")).toMatchObject({ status: "success", message: "Goal resumed — continuation queued" });
     expect(getDeferredQueuedFollowups(chatJid)).toHaveLength(2);
     expect(await command(chatJid, "/unknown")).toMatchObject({ status: "error" });
-  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); closeDatabase(); }
+  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); await closeDatabase(); }
 });
 
 for (const mode of ["continue", "human", "human-pending", "human-error", "human-paused", "ordinary", "ordinary-empty", "ordinary-budget", "pending", "error", "stalled", "finalize", "budget", "budget-pending"] as const) test(`actual Goal terminal continuation is atomic and policy scoped: ${mode}`, async () => {
@@ -213,5 +213,5 @@ for (const mode of ["continue", "human", "human-pending", "human-error", "human-
     }
     expect(() => retained!()).toThrow("scope ended");
     expect(() => db.transaction(() => retained!()).immediate()).toThrow("scope ended");
-  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); closeDatabase(); }
+  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); await closeDatabase(); }
 });

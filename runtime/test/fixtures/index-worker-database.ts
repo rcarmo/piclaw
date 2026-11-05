@@ -61,4 +61,4 @@ try {
     } else throw Error('Unknown index worker scenario');
   }
   console.log(JSON.stringify({ scenario, noCoreMigrationOrVacuum: true }));
-} finally { Database.prototype.exec = exec; connection.closeDatabase(); }
+} finally { Database.prototype.exec = exec; await connection.closeDatabase(); }

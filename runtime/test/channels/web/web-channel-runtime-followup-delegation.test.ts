@@ -10,7 +10,7 @@ afterEach(() => {
 });
 
 describe("WebChannel concrete-owner delegation", () => {
-  test("routes every public queue/runtime/write method to its existing owner", async () => {
+  test("routes UI observations and message writes directly, with native reconciliation as a callback", async () => {
     const fixture = await createWebChannelTestFixture({ workspace: "temp" });
     cleanup = fixture.cleanup;
 
@@ -27,31 +27,7 @@ describe("WebChannel concrete-owner delegation", () => {
         calls.push(`widget:${chatJid}:${options?.threadId ?? "null"}:${options?.widgetId ?? ""}`);
       },
     });
-    Object.assign(fixture.channel.queuedFollowupLifecycle, {
-      enqueueQueuedFollowupItem: (
-        chatJid: string,
-        rowId: number,
-        queuedContent: string,
-        threadId?: number | null,
-        queuedAt?: string,
-        extras?: { mediaIds?: number[]; contentBlocks?: unknown[]; linkPreviews?: unknown[] },
-      ) => {
-        calls.push(`enqueue:${chatJid}:${rowId}:${queuedContent}:${threadId ?? "null"}:${queuedAt ?? ""}:${extras?.mediaIds?.join(",") ?? ""}`);
-        return 44;
-      },
-      peekQueuedFollowupItem: (chatJid: string) => {
-        calls.push(`peek-item:${chatJid}`);
-        return queuedItem;
-      },
-      getQueuedFollowupCount: (chatJid: string) => {
-        calls.push(`count:${chatJid}`);
-        return 2;
-      },
-      getQueuedFollowupItems: (chatJid: string) => {
-        calls.push(`items:${chatJid}`);
-        return [queuedItem];
-      },
-    });
+    fixture.channel.resumeNativeInputs = chat => { calls.push(`resume:${chat}`); };
     Object.assign((fixture.channel as any).runtimeState, {
       updateAgentStatus: (chatJid: string, nextStatus: Record<string, unknown>) => {
         calls.push(`status-update:${chatJid}:${String(nextStatus.title ?? "")}`);
@@ -97,11 +73,7 @@ describe("WebChannel concrete-owner delegation", () => {
 
     await fixture.channel.sendMessage("web:test", "hello", { threadId: 9 });
     await fixture.channel.postDashboardWidget("web:test", { threadId: 8, widgetId: "widget-facade" });
-    expect(fixture.channel.enqueueQueuedFollowupItem("web:test", 0, "queued", 6, "2026-03-28T00:00:00.000Z", { mediaIds: [1, 2] })).toBe(44);
-    expect(fixture.channel.peekQueuedFollowupItem("web:test")).toBe(queuedItem);
     expect(fixture.channel).not.toHaveProperty('replaceQueuedFollowupItem');
-    expect(fixture.channel.getQueuedFollowupCount("web:test")).toBe(2);
-    expect(fixture.channel.getQueuedFollowupItems("web:test")).toEqual([queuedItem]);
     fixture.channel.updateAgentStatus("web:test", status);
     expect(fixture.channel.getAgentStatus("web:test")).toEqual(status);
     expect(fixture.channel.getThreadRootId("web:test", "m-1")).toBe(52);
@@ -117,15 +89,11 @@ describe("WebChannel concrete-owner delegation", () => {
     expect(calls).toEqual([
       "send:web:test:hello:9",
       "widget:web:test:8:widget-facade",
-      "enqueue:web:test:0:queued:6:2026-03-28T00:00:00.000Z:1,2",
-      "peek-item:web:test",
-      "count:web:test",
-      "items:web:test",
       "status-update:web:test:Thinking",
       "status-get:web:test",
       "thread-root:web:test:m-1",
-      "resume:web:test:12",
-      "resume-pending:web:test",
+      "resume:web:test",
+      "resume:web:test",
       "panel-set:turn-1:thought:true",
       "panel-get:turn-1:thought",
       "thought:turn-1:thought text:3",

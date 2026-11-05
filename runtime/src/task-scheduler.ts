@@ -15,17 +15,13 @@
  *   - The AgentQueue (queue.ts) serialises task execution with user messages per chat lane while allowing unrelated chats to progress in parallel.
  */
 
-import { statSync } from "node:fs";
 import { admitSqliteWrite, type SyncSqliteOperation } from "./db/sqlite-async-admission.js";
 import { randomUUID,createHash } from "node:crypto";
-import { withBudgetWorkContext } from './budget/context.js';
-import { ensureBudgetWork,getBudgetWork,setBudgetWorkStatus } from './db/budget-limits.js';
 import { nativeBackgroundSourceId } from './agent-pool/background-operation-contract.js';
 import { hostname } from "node:os";
 import Database from "bun:sqlite";
 
 import { WORKSPACE_DIR, getRuntimeTimingConfig } from "./core/config.js";
-import { drainScheduledBudgetNotifications } from "./budget/scheduled-notifications.js";
 import { readAccessConfig } from "./core/config-access.js";
 import { getExecutionIdentity } from "./core/execution-context.js";
 import { formatRecoverySummary } from "./agent-pool/recovery-summary.js";
@@ -33,7 +29,7 @@ import { DREAM_TASK_ID, parseDreamPromptToken, runDreamAgentTurn, runDreamMainte
 import { computeNextRun } from "./task-scheduler-utils.js";
 import type { AgentPool } from "./agent-pool.js";
 import { getDb, getTaskById } from "./db.js";
-import { getDatabaseBinding } from "./db/connection.js";
+import { captureHostDatabaseBinding, getDatabaseBinding } from "./db/connection.js";
 import { openSqliteRole } from "./db/sqlite-role-policy.js";
 import { registerSqliteCheckpoint } from "./db/sqlite-checkpoint.js";
 import { RuntimeStartupCleanupError } from "./runtime/startup-cleanup-error.js";
@@ -252,7 +248,6 @@ interface ScheduledTaskRunOutcome {
   error: string | null;
   durationMs: number;
   /** Durable delivery waits for the atomic S07/history commitment. */
-  budgetBlocked?: boolean;
 }
 
 async function executeScheduledTask(
@@ -282,13 +277,11 @@ async function executeScheduledTask(
   };
 
   const start = Date.now();
-  const budgetWorkId = `scheduled:${scheduledLease.record.runId}`;
   schedulerMetrics.taskRunsStarted += 1;
   let result: string | null = null;
   let error: string | null = null;
   let loggedResult: string | null = null;
   let loggedError: string | null = null;
-  let budgetBlocked = false;
   try {
     const kind = task.task_kind === "internal"
       ? "internal"
@@ -310,10 +303,8 @@ async function executeScheduledTask(
             allowed=false;throw Error('Scheduled Dream occurrence authority changed');
           }
         }};
-        const authority = nativeAuthority;
-        await scheduledSourceWrite(db, () => { authority.assertCurrent(); ensureBudgetWork({id:budgetWorkId,chatJid:task.chat_jid,executionKind:'scheduled',scheduledTaskId:task.id}); }, () => { authority.assertCurrent(); return true; });
       }
-      const out = await(nativeDream?withBudgetWorkContext({workId:budgetWorkId,chatJid:task.chat_jid,kind:'scheduled'},()=>runInternalTask(task,deps,nativeAuthority)):runInternalTask(task,deps));
+      const out = await runInternalTask(task, deps, nativeAuthority);
       if (!mayContinue()) return unsupportedScheduledRun();
       if (out.error) error=out.error; else result=out.result;
     } else if (kind === "shell") {
@@ -344,8 +335,6 @@ async function executeScheduledTask(
       if (out.status === "error") {
         error = out.error || "Unknown";
         loggedError = appendRecoverySummary(error, recoverySummary);
-        budgetBlocked = out.failureCategory === "provider_budget";
-        // The budget decision persists its own pending notification identity.
         // Delivery happens after the run log below so a send failure cannot
         // erase the blocked/error execution receipt.
       } else {
@@ -377,7 +366,6 @@ async function executeScheduledTask(
     result: effectiveResult,
     error: effectiveError,
     durationMs,
-    ...(budgetBlocked ? { budgetBlocked: true } : {}),
   };
 }
 
@@ -409,8 +397,9 @@ function sealScheduledEffect<T extends { effect: EffectIdentity }>(request: T): 
 
 const primaryStores = new WeakMap<Database, { users: number; foreignKeysWereEnabled: boolean }>();
 
-function productionScheduledRunStore(): { store: ScheduledRunStore & InterruptedScheduledRunReconciler; close: () => void | Promise<void> } {
+function productionScheduledRunStore(mayClaim: () => boolean): { store: ScheduledRunStore & InterruptedScheduledRunReconciler; close: () => void | Promise<void> } {
   const primary = getDb();
+  const assertBinding = captureHostDatabaseBinding(primary);
   const databaseRow = primary.query("PRAGMA database_list").all() as Array<{ name: string; file: string }>;
   const filename = databaseRow.find((row) => row.name === "main")?.file || "";
   let database: Database;
@@ -446,7 +435,14 @@ function productionScheduledRunStore(): { store: ScheduledRunStore & Interrupted
   };
   try {
     if (!filename) primary.exec("PRAGMA foreign_keys=ON");
-    const built = createCurrentPiclawScheduledRunStore(database, { hitFault: () => false, recordTrace: () => undefined });
+    const built = createCurrentPiclawScheduledRunStore(database, {
+      hitFault: () => false,
+      recordTrace: () => undefined,
+      assertClaimCurrent: () => {
+        assertBinding();
+        if (!mayClaim() || !canRunLegacyScheduledWork()) throw Error("Scheduled poll claim revoked");
+      },
+    });
     if (!built.ok) throw new Error(`Scheduled run store unavailable: ${built.error._tag}`);
     if (filename) stopCheckpoint = registerSqliteCheckpoint(database, filename);
     return { store: built.value, close };
@@ -457,16 +453,14 @@ function productionScheduledRunStore(): { store: ScheduledRunStore & Interrupted
   }
 }
 
-/** Recheck the captured scheduler/database before and after the SQL-only body. */
+/** Recheck the captured owner before acquisition attempts and before/after SQL. */
 async function scheduledSourceWrite<T>(database: Database, operation: SyncSqliteOperation<T>, mayWrite: () => boolean = canRunLegacyScheduledWork): Promise<T> {
-  const binding = getDatabaseBinding();
-  return admitSqliteWrite<T>(database, operation, () => {
-    if (getDb() !== database || !mayWrite()) throw Error("Scheduled source write revoked");
-    if (binding) {
-      const current = statSync(binding.path);
-      if (`${current.dev}:${current.ino}` !== binding.identity) throw Error("Scheduled source database file changed");
-    }
-  });
+  const assertBinding = captureHostDatabaseBinding(database);
+  const check = () => {
+    assertBinding();
+    if (!mayWrite()) throw Error("Scheduled source write revoked");
+  };
+  return admitSqliteWrite<T>(database, operation, check, undefined, undefined, check);
 }
 
 /** Repair only exact canonical completion receipts; never reclaim/execute work
@@ -551,10 +545,11 @@ function scheduledReclaimAuthorities(now: string): ScheduledRunReclaimAuthority[
      JOIN service_effect_s07_task_revisions v
        ON v.task_id=r.task_id AND v.revision=r.task_revision
      WHERE r.state IN ('claimed','source_bound') AND r.lease_expires_at<=?
-     ORDER BY r.scheduled_for,r.task_id`,
+     ORDER BY r.scheduled_for,r.task_id,r.run_id`,
   ).all(now) as Array<{ run_id: string; attempt: number; snapshot_json: string }>;
   const authorities: ScheduledRunReclaimAuthority[] = [];
   for (const row of rows) {
+    if (authorities.length === 100) break;
     let snapshot: { executionRepeatability?: string; chatJid?: string;taskId?:string;kind?:string };
     try { snapshot = JSON.parse(row.snapshot_json); } catch { continue; }
     if (snapshot.executionRepeatability === "agent_source" && typeof snapshot.chatJid === "string") {
@@ -604,8 +599,6 @@ function acceptScheduledAgentSource(lease: ScheduledRunLease, acceptedAt: string
     kind: "scheduled_agent",
     payloadRef: lease.task.payloadRef,
   });
-  let sourceSeq = 0;
-  db.transaction(() => {
     db.query(
       "INSERT OR IGNORE INTO service_effect_s01_chats(chat_jid,next_source_seq,consumed_through_source_seq,active_operation_id) VALUES(?,1,0,NULL)",
     ).run(lease.task.chatJid);
@@ -613,7 +606,7 @@ function acceptScheduledAgentSource(lease: ScheduledRunLease, acceptedAt: string
       "SELECT next_source_seq,active_operation_id FROM service_effect_s01_chats WHERE chat_jid=?",
     ).get(lease.task.chatJid) as { next_source_seq: number; active_operation_id: string | null };
     if (chat.active_operation_id) throw new Error(`Scheduled source owner conflict for ${lease.task.chatJid}.`);
-    sourceSeq = chat.next_source_seq;
+    const sourceSeq = chat.next_source_seq;
     db.query("UPDATE service_effect_s01_chats SET next_source_seq=next_source_seq+1 WHERE chat_jid=? AND next_source_seq=?").run(lease.task.chatJid, sourceSeq);
     db.query(
       `INSERT INTO service_effect_s01_sources(
@@ -628,7 +621,6 @@ function acceptScheduledAgentSource(lease: ScheduledRunLease, acceptedAt: string
       "INSERT INTO service_effect_s01_operation_sources(chat_jid,operation_id,source_seq) VALUES(?,?,?)",
     ).run(lease.task.chatJid, operationId, sourceSeq);
     db.query("UPDATE service_effect_s01_chats SET active_operation_id=? WHERE chat_jid=?").run(operationId, lease.task.chatJid);
-  }).immediate();
   return { sourceSeq, operationId };
 }
 
@@ -640,7 +632,6 @@ function settleScheduledAgentSource(
   errorCode = "scheduled_task_failed",
 ): void {
   const db = getDb();
-  db.transaction(() => {
     db.query("UPDATE service_effect_s01_chats SET active_operation_id=NULL WHERE chat_jid=? AND active_operation_id=?").run(chatJid, source.operationId);
     db.query(
       `UPDATE service_effect_s01_operations
@@ -656,7 +647,6 @@ function settleScheduledAgentSource(
         "UPDATE service_effect_s01_chats SET consumed_through_source_seq=MAX(consumed_through_source_seq,?) WHERE chat_jid=?",
       ).run(source.sourceSeq, chatJid);
     }
-  }).immediate();
 }
 
 interface LeaseController {
@@ -875,14 +865,9 @@ async function runClaimedScheduledTask(
       return;
     }
     const terminalSource = source, terminalStatus = outcome.status;
-    if (terminalSource || task.id === DREAM_TASK_ID) await scheduledSourceWrite(getDb(), () => {
-      if (task.id === DREAM_TASK_ID && lease.task.kind === 'internal' && deps.agentPool.isDurableRuntime?.() === true) {
-        const workId = 'scheduled:' + lease.record.runId, db = getDb();
-        if (getBudgetWork(workId, db)?.status === 'active' && !db.query("SELECT 1 FROM budget_work WHERE parent_work_id=? AND status IN ('active','paused') LIMIT 1").get(workId)) setBudgetWorkStatus(workId, 'completed', {boundary:'scheduled_dream_settled'}, db);
-      }
+    if (terminalSource) await scheduledSourceWrite(getDb(), () => {
       if (terminalSource) settleScheduledAgentSource(finalLease.task.chatJid, terminalSource, terminalStatus, completedAt);
     });
-    if (outcome.budgetBlocked) await drainScheduledBudgetNotifications(deps);
     log.info("Scheduled run settled", {
       operation: "complete_scheduled_run",
       runId: finalLease.record.runId,
@@ -915,7 +900,6 @@ async function runSchedulerPoll(deps: SchedulerDeps, store: ScheduledRunStore & 
   const mayPoll = () => isCurrent() && canRunLegacyScheduledWork();
   if (!mayPoll()) return;
   schedulerMetrics.polls += 1;
-  await drainScheduledBudgetNotifications(deps);
   if (!mayPoll()) return;
   const now = new Date().toISOString();
   schedulerMetrics.lastPollAt = now;
@@ -924,6 +908,13 @@ async function runSchedulerPoll(deps: SchedulerDeps, store: ScheduledRunStore & 
   await reconcileExpiredScheduledAgentSources(now, mayPoll);
   if (!mayPoll()) return;
   await reconcileInterruptedScheduledAgentRuns(store,now);
+  if (!mayPoll()) return;
+  const reclaimAuthorities = scheduledReclaimAuthorities(now);
+  if (!reclaimAuthorities.length && !getDb().query(
+    `SELECT 1 FROM service_effect_s07_tasks t WHERE t.status='active' AND t.next_run_at IS NOT NULL AND t.next_run_at<=?
+     AND NOT EXISTS (SELECT 1 FROM service_effect_s07_occurrences r WHERE r.task_id=t.task_id AND r.task_revision=t.current_revision AND r.scheduled_for=t.next_run_at)
+     AND NOT EXISTS (SELECT 1 FROM service_effect_s07_tombstones r WHERE r.task_id=t.task_id AND r.task_revision=t.current_revision AND r.scheduled_for=t.next_run_at) LIMIT 1`,
+  ).get(now)) return;
   claimSequence += 1;
   const claimed = await store.claimDue({
     now,
@@ -931,7 +922,7 @@ async function runSchedulerPoll(deps: SchedulerDeps, store: ScheduledRunStore & 
     workerId: schedulerWorkerId,
     leaseTokenPrefix: `scheduler_claim:${process.pid}:${claimSequence}:${randomUUID()}`,
     leaseDurationMs: SCHEDULED_LEASE_DURATION_MS,
-    reclaimAuthorities: scheduledReclaimAuthorities(now),
+    reclaimAuthorities,
   });
   if (!mayPoll()) return;
   if (!claimed.ok) throw new Error(`claimDue failed: ${claimed.error._tag}`);
@@ -984,7 +975,7 @@ export class SchedulerStoreReleaseError extends Error {
 export function startSchedulerLoop(deps: SchedulerDeps): () => Promise<void> {
   if (schedulerLoop) return schedulerLoop.stop;
   if (!canRunLegacyScheduledWork()) return () => stoppedScheduler;
-  const resource = productionScheduledRunStore();
+  const resource = productionScheduledRunStore(isCurrent);
   let pendingTasks = 0;
   let pollJoined = false;
   let closed = false;
@@ -1033,7 +1024,7 @@ export function startSchedulerLoop(deps: SchedulerDeps): () => Promise<void> {
     },
   };
   schedulerLoop = instance;
-  const isCurrent = () => schedulerLoop === instance && !instance.stopped;
+  function isCurrent(): boolean { return schedulerLoop === instance && !instance.stopped; }
   log.info("Scheduler loop started", { operation: "start_scheduler_loop", workerId: schedulerWorkerId });
   const loop = (): Promise<void> => {
     if (!isCurrent()) return stoppedScheduler;

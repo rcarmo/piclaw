@@ -18,8 +18,8 @@ import { AgentRuntimeFacade } from "../../runtime/src/agent-pool/runtime-facade.
 test("public manual compact: real model summary, idle admission, observer detach, host acceptance, facade and reopen continuation", async () => {
   const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "compact-"));
   const path = join(dir, "shared.db"), owner = TestOwner.acquire(path), root = openSqliteRole(path, { role: "root", create: true });
-  // Match the existing host-root policy; SDK storage keeps its zero timeout.
-  expect((root.query("PRAGMA busy_timeout").get() as { timeout: number }).timeout).toBe(5000);
+  // Root and SDK connections use zero timeout for asynchronous admission.
+  expect((root.query("PRAGMA busy_timeout").get() as { timeout: number }).timeout).toBe(0);
   installServiceWorkSchema(root);
   let sql!: BunSqliteDatabase, stale = false, beforeGuard: (() => void) | undefined;
   const openStorage = () => { sql = new BunSqliteDatabase(path, { root, assertOwner() { owner.assert(); if (stale) throw Error("stale owner"); } }); return SqliteStorage.open(sql); };

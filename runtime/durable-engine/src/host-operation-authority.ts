@@ -7,19 +7,22 @@ type Capture = Awaited<ReturnType<HostConversationRuntime["captureToolSource"]>>
 export function createHostOperationAuthority(root: Database, captured: Capture, assertAllowed: () => void, readonly = false, signal?: AbortSignal) {
   const { operation, inputs } = captured;
   const chatJid = operation.chatJid;
-  if (!readonly && !operation.harness) throw Error("Bound host harness required for writes");
+  if (!captured.native && !readonly && !operation.harness) throw Error("Bound host harness required for writes");
   const assertCurrent = () => {
     assertAllowed();
+    if (captured.native) { captured.native.assertCurrent(); return; }
+    const version = operation.version;
+    if (typeof version !== "number") throw Error("Host operation version required");
     const current = readonly ? root.query(`SELECT 1 FROM service_effect_s01_operations o
       JOIN service_effect_s01_chats c ON c.chat_jid=o.chat_jid AND c.active_operation_id=o.operation_id
       WHERE o.operation_id=? AND o.chat_jid=? AND o.version=? AND o.phase='executing'
-      AND o.cancellation_source_id IS NULL`).get(operation.operationId, chatJid, operation.version)
+      AND o.cancellation_source_id IS NULL`).get(operation.operationId, chatJid, version)
       : root.query(`SELECT 1 FROM service_effect_s01_operations o
       JOIN service_effect_s01_chats c ON c.chat_jid=o.chat_jid AND c.active_operation_id=o.operation_id
       WHERE o.operation_id=? AND o.chat_jid=? AND o.version=? AND o.phase='executing'
       AND o.cancellation_source_id IS NULL
       AND o.harness_operation_id=? AND o.harness_session_id=?`)
-      .get(operation.operationId, chatJid, operation.version, operation.harness!.harnessOperationId,
+      .get(operation.operationId, chatJid, version, operation.harness!.harnessOperationId,
         operation.harness!.sessionId);
     if (!current) throw Error("Stale host operation authority");
     if (readonly && operation.harness && !root.query(`SELECT 1 FROM service_effect_s01_operations

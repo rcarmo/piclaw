@@ -4,7 +4,7 @@ import {
   extensionKvDelete,
   extensionKvGet,
   extensionKvSet,
-} from "./db.js";
+} from "./db/extension-kv.js";
 import { listInjectableKeychainEnvNames } from "./secure/keychain.js";
 
 const ENVIRONMENT_SETTINGS_EXTENSION_ID = "piclaw.environment-settings";

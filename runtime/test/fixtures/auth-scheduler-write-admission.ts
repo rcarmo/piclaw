@@ -7,13 +7,10 @@ import { createTempWorkspace, setEnv } from '../helpers.js';
 import { closeDatabase, getDb, initDatabase, getDatabaseBinding } from '../../src/db/connection.js';
 import { createWebSession, getWebSession } from '../../src/db/web-sessions.js';
 import { createWebauthnEnrollment, getWebauthnCredentialById, getWebauthnEnrollment, storeWebauthnCredential } from '../../src/db/webauthn.js';
-import { createTask, getBudgetCap, getTaskById, saveBudgetCap } from '../../src/db.js';
-import { reviseScheduledTaskAuthorityRecord } from '../../src/db/scheduled-task-authority.js';
 import { WEB_RUNTIME_CONFIG } from '../../src/core/config-web.js';
 import { createSingleUserPasskeyHandler } from '../../src/channels/web/auth/single-user-passkeys.js';
 import { handleWebauthnLoginFinish, handleWebauthnRegisterFinish, type WebauthnAuthContext } from '../../src/channels/web/auth/webauthn-auth.js';
 import { WebauthnChallengeTracker } from '../../src/channels/web/auth/webauthn-challenges.js';
-import { handleScheduledTasksManagementAction } from '../../src/channels/web/handlers/scheduled-tasks-management.js';
 import { resetRateLimiterStateForTests } from '../../src/channels/web/http/rate-limit.js';
 
 let ws: ReturnType<typeof createTempWorkspace>, restore: () => void, blocker: Database;
@@ -52,16 +49,11 @@ function registration(ctx: WebauthnAuthContext, signal?: AbortSignal) {
   const client = Buffer.from(JSON.stringify({ type: 'webauthn.create', challenge: 'challenge', origin: 'https://example.com' }));
   return { token: enrollment.token, id: id.toString('base64url'), req: request('/auth/webauthn/register/finish', { token: enrollment.token, credential: { id: id.toString('base64url'), rawId: id.toString('base64url'), type: 'public-key', clientExtensionResults: {}, response: { clientDataJSON: client.toString('base64url'), attestationObject: attestation.toString('base64url'), transports: ['internal'] } } }, signal) };
 }
-function task() {
-  createTask({ id: 'wal-task', chat_jid: 'web:default', prompt: 'fixture', model: null, task_kind: 'agent', command: null, cwd: null, timeout_sec: null, schedule_type: 'once', schedule_value: '2030-01-01T00:00:00Z', next_run: '2030-01-01T00:00:00Z', status: 'active', created_at: new Date().toISOString() });
-}
-const channel = { json(body: unknown, status = 200) { expect(getDb().inTransaction).toBe(false); return Response.json(body, { status }); } } as any;
-
-function setup() {
+async function setup() {
   ws = createTempWorkspace('auth-scheduler-wal-');
   restore = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data, PICLAW_ACCESS_MODE: 'single-user' });
   // Explicitly opt this owned disposable fixture out of helpers' memory mode.
-  closeDatabase();
+  await closeDatabase();
   process.env.PICLAW_DB_IN_MEMORY = '0'; initDatabase();
   WEB_RUNTIME_CONFIG.passkeyMode = 'passkey-only'; WEB_RUNTIME_CONFIG.totpSecret = ''; WEB_RUNTIME_CONFIG.trustProxy = false;
   resetRateLimiterStateForTests();
@@ -74,9 +66,9 @@ function setup() {
   blocker = new Database(file);
   expect((blocker.query('PRAGMA database_list').all() as { name: string; file: string }[]).find(row => row.name === 'main')!.file).toBe(file);
 }
-function cleanup() {
+async function cleanup() {
   if (blocker?.inTransaction) blocker.exec('ROLLBACK');
-  blocker?.close(); closeDatabase(); restore(); Object.assign(WEB_RUNTIME_CONFIG, savedConfig); resetRateLimiterStateForTests(); ws.cleanup();
+  blocker?.close(); await closeDatabase(); restore(); Object.assign(WEB_RUNTIME_CONFIG, savedConfig); resetRateLimiterStateForTests(); ws.cleanup();
 }
 
 for (const outcome of ['commit', 'abort', 'revoke', 'counter-changed'] as const) test(`signed login waits for WAL writer; ${outcome}`, async () => {
@@ -170,25 +162,6 @@ test('owner registration consumes ceremony once while waiting, then denies revok
   expect((await pending).status).toBe(401); expect(getWebauthnCredentialById('new-key')).toBeNull(); expect(verifications).toBe(1);
 });
 
-for (const outcome of ['commit', 'abort', 'revision-changed', 'internal'] as const) test(`scheduler projects only committed fresh task/budget state; ${outcome}`, async () => {
-  task(); saveBudgetCap({ id: 'scheduled-cap:wal-task', scope: 'scheduled_run', metric: 'api_usd_micros', amount: 100000, enabled: true, scheduledTaskId: 'wal-task' });
-  const aborter = new AbortController(), previous = policy(), originalTask = getTaskById('wal-task')!;
-  blocker.exec('BEGIN IMMEDIATE'); let settled = false;
-  const pending = handleScheduledTasksManagementAction(channel, request('/agent/scheduled-tasks/action', { action: 'set_budget', id: 'wal-task', budget_usd: '0.25', confirm_revision: 1 }, aborter.signal)).then(response => ({ response }), error => ({ error })).finally(() => { settled = true; });
-  await Bun.sleep(20); expect(settled).toBe(false); expect(getBudgetCap('scheduled-cap:wal-task')?.revision).toBe(1); expect(policy()).toEqual(previous);
-  if (outcome === 'abort') aborter.abort(Error('cancelled'));
-  if (outcome === 'revision-changed') blocker.query("UPDATE budget_caps SET revision=2 WHERE id='scheduled-cap:wal-task'").run();
-  if (outcome === 'internal') reviseScheduledTaskAuthorityRecord(blocker,
-    { ...originalTask, task_kind: 'internal', prompt: '/dream', revision: originalTask.revision + 1 }, new Date().toISOString());
-  blocker.exec('COMMIT');
-  const result = await pending;
-  if (outcome === 'abort') expect('error' in result && String(result.error)).toContain('cancelled');
-  else if ('response' in result) expect(result.response.status).toBe(outcome === 'commit' ? 200 : outcome === 'internal' ? 403 : 409);
-  else throw result.error;
-  expect(getBudgetCap('scheduled-cap:wal-task')?.amount).toBe(outcome === 'commit' ? 250000 : 100000);
-  expect(getTaskById('wal-task')?.status).toBe('active'); expect(policy()).toEqual(previous);
-});
-
 test('entered login SQL contention is terminal: counter and session roll back together, never replayed', async () => {
   const database = getDb(), prepare = database.prepare.bind(database), previous = policy(), before = sessions();
   let inserts = 0;
@@ -209,8 +182,8 @@ const batch = Number(process.argv[2]);
 if (!Number.isInteger(batch) || batch < 0 || batch > 3) throw Error("Expected WAL case batch 0..3");
 const selected = cases.filter((_, index) => index % 4 === batch);
 for (const entry of selected) {
-  setup();
+  await setup();
   try { await entry.run(); console.log(`PASS ${entry.name}`); }
-  finally { cleanup(); }
+  finally { await cleanup(); }
 }
 console.log(JSON.stringify({ kind: 'auth-scheduler-write-admission', cases: selected.length, realWal: true, abortedAndRevokedDenied: true, noCallbackReplay: true }));

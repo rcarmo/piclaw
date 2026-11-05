@@ -33,7 +33,7 @@ export async function openNativeSchemaFixture(addons: boolean) {
       async start() { throw Error("Schema fixture forbids peer start"); }, async request() { throw Error("Schema fixture forbids peer network"); }, async close() {} }),
     discoveryFactory() { throw Error("Schema fixture forbids discovery"); },
   });
-  return { database: getDb(), async close() { await backend.close(); owner.release(); closeDatabase(); } };
+  return { database: getDb(), async close() { await backend.close(); owner.release(); await closeDatabase(); } };
 }
 
 /** Actual historical producers on an owned fixture, before current core init.

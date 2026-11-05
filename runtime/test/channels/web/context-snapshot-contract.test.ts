@@ -1,7 +1,6 @@
 import { expect, test } from 'bun:test';
 import { handleAgentContextRequest, type AgentStatusContext } from '../../../src/channels/web/agent/agent-status.js';
 import { publicContextUsage } from '../../../src/channels/web/context-usage.js';
-import { executeDeferredControlCommand, type DeferredControlCommandRuntime } from '../../../src/channels/web/runtime/process-chat-control-runtime.js';
 import { createWebChannelEndpointContexts } from '../../../src/channels/web/endpoints/channel-endpoint-context-factory.js';
 
 function context(overrides: Partial<AgentStatusContext> = {}): AgentStatusContext {
@@ -69,40 +68,3 @@ test('failed native display reads retain identity and clear estimates without re
   });
   expect(storedReads).toBe(0);
 });
-
-for (const command of ['compact'] as const) {
-  for (const tokens of [null, 0, 42]) {
-    test(`deferred native ${command} publishes stable-identity replacement for ${tokens} counts without a stale fallback`, async () => {
-      const events: any[] = [], writes: any[] = [], activity: any[] = [];
-      let fallbackReads = 0;
-      const channel: DeferredControlCommandRuntime = {
-        agentPool: {
-          applyControlCommand: async () => ({ status: 'success', message: 'Context updated.',
-            sessionGeneration: 'stable-session', sessionGenerationChanged: false,
-            contextUsage: { tokens, contextWindow: 10000, percent: tokens === null ? null : tokens / 100,
-              sessionGeneration: 'stable-session', tokensAreAuthoritative: true } }),
-          getAvailableModels: async () => ({ models: [] } as any), getCurrentModelLabel: async () => null,
-          getSessionGenerationForChat: () => 'stable-session',
-          getContextUsageForChat: async () => { fallbackReads++; return { tokens: 777, contextWindow: 10000, percent: 7.77 }; },
-        },
-        sendMessage: async () => {}, setContextUsage: (_chat, usage) => { writes.push(usage); },
-        updateAgentStatus: (_chat, status) => { activity.push(status); },
-        broadcastEvent: (event, payload) => { events.push({ event, payload }); },
-        saveState() {}, retryFailedOnModelSwitch: () => false, resumeChat() {},
-      };
-      await executeDeferredControlCommand({ channel, chatJid: 'web:test', agentId: 'default',
-        command: { type: command, raw: '/compact' },
-        message: { rowId: 20, messageId: 'command', content: '/command', timestamp: '2026-10-23T00:00:00Z', threadId: 20 },
-        effectiveThreadRootId: 20, assistantName: 'Smith',
-        cursorStore: { getChatCursor: () => '', setChatCursor() {}, getMessagesSince: () => [] },
-      });
-      expect(fallbackReads).toBe(0);
-      expect(writes).toEqual([]);
-      const snapshot = events.filter(event => event.payload.type === 'context_usage');
-      expect(snapshot).toHaveLength(1);
-      expect(snapshot[0].payload.context_usage).toMatchObject({tokens,contextWindow:10000,percent:tokens===null?null:tokens/100,sessionGeneration:'stable-session',contextUpdate:'replace'});
-      expect(snapshot[0].payload).not.toHaveProperty('context_reset');
-      expect(JSON.stringify(events)).not.toContain('tokensAreAuthoritative');
-    });
-  }
-}

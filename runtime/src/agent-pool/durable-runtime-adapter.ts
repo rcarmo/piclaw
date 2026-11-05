@@ -51,10 +51,21 @@ export interface DurableContextUsage {
   readonly contextWindow: number | null;
 }
 
-export interface DurableAbortScope {
+export type DurableAbortScope = {
+  readonly kind: "sdk";
+  readonly conversationId: number;
+  readonly taskId: number | null;
+  readonly submissionIds: readonly number[];
+} | {
+  readonly kind?: never;
   readonly operationId: string;
   readonly conversationId: number;
   readonly sourceSeq: number;
+};
+/** A constraint on operator cleanup, never an execution/admission grant. */
+export function durableAbortScopeKey(scope: DurableAbortScope): string {
+  return scope.kind === "sdk" ? JSON.stringify(["sdk",scope.conversationId,scope.submissionIds[0] ?? null,scope.submissionIds.length?null:scope.taskId])
+    : JSON.stringify(["host",scope.conversationId,scope.operationId,scope.sourceSeq]);
 }
 
 export interface DurableSessionPositionPort {

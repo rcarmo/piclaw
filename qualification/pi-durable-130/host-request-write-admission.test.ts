@@ -23,7 +23,7 @@ beforeAll(() => {
   const dir=mkdtempSync(join(process.env.PICLAW_WORKSPACE!,'admission-auth-'));authPath=join(dir,'auth.json');
   writeFileSync(authPath,JSON.stringify({'openai-codex':{type:'oauth',access:'synthetic',refresh:'synthetic',accountId:'synthetic-admission',expires:Date.now()+600000}}));
 });
-afterAll(() => {if(blocker.inTransaction)blocker.exec('ROLLBACK');blocker.close();closeDatabase();if(restoreMemory===undefined)delete process.env.PICLAW_DB_IN_MEMORY;else process.env.PICLAW_DB_IN_MEMORY=restoreMemory;});
+afterAll(async () => {if(blocker.inTransaction)blocker.exec('ROLLBACK');blocker.close();await closeDatabase();if(restoreMemory===undefined)delete process.env.PICLAW_DB_IN_MEMORY;else process.env.PICLAW_DB_IN_MEMORY=restoreMemory;});
 function request(signal=new AbortController().signal,authorise=()=>{}) {
   const operationId='model-admission-'+(++serial);
   return {terminalOwner:{signal:new AbortController().signal,assertCurrent:authorise},operationId,chatJid:'web:admission',database:root,authPath,model,signal,assertCurrent:authorise};

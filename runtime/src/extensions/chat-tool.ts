@@ -50,6 +50,7 @@ export type ChatRelayResult = {
   source_session_tree?: Record<string, unknown>;
   target_session_tree?: Record<string, unknown>;
   row_id?: number | null;
+  submission_id?: number;
   queued?: string;
   thread_id?: number | null;
   created?: boolean;
