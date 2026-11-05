@@ -124,3 +124,22 @@ test("provider error details omit standalone data URIs and remain bounded", () =
   expect(sanitized.length).toBe(900);
   expect(sanitized.endsWith("…")).toBe(true);
 });
+
+for(const field of ['code','type'] as const)test(`explicit 429 insufficient_quota ${field} outranks transient retry wording and retains request identity`,()=>{
+  const raw='OpenAI API error (429): '+JSON.stringify({error:{message:'Too many requests; retry later',code:'rate_limit_exceeded',[field]:'insufficient_quota'},request_id:'req-quota-fixture-123',private_payload:'must-not-be-published'});
+  const formatted=formatProviderError(raw);
+  expect(formatted).toMatchObject({category:'quota',label:'quota',severity:'error',requestId:'req-quota-fixture-123'});
+  expect(formatted!.detail).toContain('status: 429');expect(formatted!.detail).toContain('insufficient_quota');expect(formatted!.detail).not.toContain('must-not-be-published');
+});
+
+for(const message of ['Rate limit exceeded; retry later','Too many requests','Wait for the rate-limit window'])test(`ordinary 429 remains transient: ${message}`,()=>{
+  const formatted=formatProviderError('OpenAI API error (429): '+JSON.stringify({error:{message,code:'rate_limit_exceeded'},request_id:'req-insufficient_quota-123'}));
+  expect(formatted).toMatchObject({category:'rate_limit',severity:'warning',requestId:'req-insufficient_quota-123',code:'rate_limit_exceeded'});
+});
+
+test('non-JSON exhaustion remains distinguishable while malformed/HTML errors keep bounded sanitised fallback',()=>{
+  expect(formatProviderError('OpenAI API error (429): insufficient_quota')?.category).toBe('quota');
+  const malformed=formatProviderError('OpenAI API error (429): {not valid JSON');expect(malformed?.category).toBe('rate_limit');
+  const html=formatProviderError('OpenAI API error (429): <html><script>PRIVATE_BODY</script></html>');
+  expect(html?.category).toBe('rate_limit');expect(html?.detail).not.toContain('PRIVATE_BODY');expect(html?.detail).not.toContain('<script>');
+});
