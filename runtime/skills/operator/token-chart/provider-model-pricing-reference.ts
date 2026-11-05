@@ -5,6 +5,7 @@
  *   "role": "module"
  * }
  */
+import terraPricing from "./pricing-2026-11-04.json";
 import latestPricing from "./pricing-2026-10-06.json";
 import september29Pricing from "./pricing-2026-09-29.json";
 import refreshedPricing from "./pricing-2026-09-22.json";
@@ -29,7 +30,7 @@ interface ProviderModelPricingRule extends ProviderModelPricingReference {
 
 // Tag this reference snapshot with the commit date that introduced it so future
 // updates can track pricing provenance without guessing.
-export const PROVIDER_MODEL_PRICING_REFERENCE_TAG = "2026-10-06";
+export const PROVIDER_MODEL_PRICING_REFERENCE_TAG = "2026-11-04";
 
 const ANTHROPIC_PRICING_SOURCE = "https://docs.anthropic.com/en/docs/about-claude/pricing";
 const OPENAI_PRICING_SOURCE = "https://developers.openai.com/api/docs/pricing";
@@ -559,6 +560,7 @@ function normalizeModel(model: string): string {
     "gpt-5-5": "gpt-5.5",
     "gpt-5-6": "gpt-5.6",
     "gpt-6-1-sol": "gpt-6.1-sol",
+    "gpt-6-1-terra": "gpt-6.1-terra",
     "gpt-5-6-sol": "gpt-5.6-sol",
     "gpt-5-6-sol-fast": "gpt-5.6-sol-fast",
     "claude-opus-5-5": "claude-opus-5.5",
@@ -620,6 +622,13 @@ export function resolveProviderModelPricing(provider: string, model: string): Pr
       candidate.models.includes(normalizedModel) &&
       (!candidate.providers || candidate.providers.includes(normalizedProvider)),
   );
+  const terra = terraPricing.find((entry) =>
+    entry.provider === normalizedProvider && normalizeModel(entry.model) === normalizedModel,
+  );
+  if (terra) {
+    const { provider: _provider, model: _model, ...reference } = terra;
+    return reference;
+  }
   const latest = latestPricing.find((entry) =>
     entry.provider === normalizedProvider && normalizeModel(entry.model) === normalizedModel,
   );

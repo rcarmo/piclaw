@@ -18,6 +18,8 @@ beforeAll(async () => {
     ['résumé 日本語.png', 'image/png', png],
     ['voice recording.wav', 'audio/wav', new TextEncoder().encode('RIFFtestWAVE')],
     ['report.pdf', 'application/pdf', new TextEncoder().encode('%PDF-1.7\nfixture')],
+    ['setup-tool.exe', 'application/octet-stream', new TextEncoder().encode('Harmless download fixture; not executable code.')],
+    ['installer.exe', 'application/x-msdownload', new TextEncoder().encode('Harmless MIME-policy fixture; not executable code.')],
   ] as const) fixtures.push({ id: createMedia(filename, type, bytes, null, null), filename, bytes });
   const channel = {
     json: (body: unknown, status = 200) => Response.json(body, { status }),
@@ -39,7 +41,7 @@ beforeAll(async () => {
 afterAll(async () => {
   for (const { browser } of browsers) await browser.close();
   server?.stop(true);
-  if (enabled) closeDatabase();
+  if (enabled) await closeDatabase();
 });
 
 for (const engine of ['chromium', 'webkit']) browserTest(`${engine}: native media saves use stored names without a client filename hint`, async () => {
@@ -62,6 +64,7 @@ for (const engine of ['chromium', 'webkit']) browserTest(`${engine}: native medi
       const response = await context.request.get(`${origin}/media/${fixture.id}`);
       expect(response.status()).toBe(200);
       expect(response.headers()['content-disposition']).toContain(`filename*=UTF-8''${encodeURIComponent(fixture.filename)}`);
+      if (fixture.filename.endsWith('.exe')) expect(response.headers()['content-disposition'].startsWith('attachment;')).toBe(true);
       await page.evaluate(({ id, filename }) => {
         const link = document.createElement('a');
         link.href = `/media/${id}`;
