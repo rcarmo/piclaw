@@ -1,3 +1,4 @@
+import { decodeEntities } from '../../../../../src/markdown';
 /** Syntax highlighting with the shared CodeMirror vendor and theme token roles. */
 import * as cmHighlight from "#editor-vendor/codemirror";
 import { themeClassHighlighter } from "../../../../../../extensions/viewers/editor/syntax-highlighter";
@@ -346,22 +347,13 @@ export function highlightCodeToHtml(code: string, lang: string): string {
   return html;
 }
 
-function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-}
-
 export function applySyntaxHighlighting(html: string): string {
   if (!html) return html;
   return html.replace(
     /<pre><code(?:\s+class="language-([A-Za-z0-9_+-]+)")?>([\s\S]*?)<\/code><\/pre>/g,
     (_match, lang, code) => {
       const normalizedLang = String(lang || "").trim().toLowerCase();
-      const decodedCode = decodeHtmlEntities(decodeHtmlEntities(code));
+      const decodedCode = decodeEntities(code);
       const highlighted = highlightCodeToHtml(decodedCode, normalizedLang);
       const langClass = normalizedLang || "plaintext";
       const humanLabel = normalizeCodeLanguageLabel(langClass);

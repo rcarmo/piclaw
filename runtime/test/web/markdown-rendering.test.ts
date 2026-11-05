@@ -106,30 +106,31 @@ function installSimpleHtmlDomParser() {
   } as any;
 }
 
-test('prepareMarkdownSource preserves blockquote markers while escaping raw tags', async () => {
+test('source preparation leaves literal ranges intact; parser HTML tokens retain the escaping policy', async () => {
   globalThis.DOMParser = class {
     parseFromString(input: string) {
       return { documentElement: { textContent: decodeEntities(input) } } as any;
     }
   } as any;
 
-  const { prepareMarkdownSource } = await import('../../web/src/markdown.ts');
+  const { prepareMarkdownSource, prepareMarkdownToken } = await import('../../web/src/markdown.ts');
   const { safeHtml } = prepareMarkdownSource('> `/login` is still a work in progress <script>alert(1)</script>');
-
-  expect(safeHtml).toContain('> `/login` is still a work in progress');
-  expect(safeHtml).toContain('&lt;script>alert(1)&lt;/script>');
-  expect(safeHtml).not.toContain('&gt; `/login`');
+  expect(safeHtml).toBe('> `/login` is still a work in progress <script>alert(1)</script>');
+  const token={type:'html',text:'<script>alert(1)</script>'}; prepareMarkdownToken(token);
+  expect(token.text).toBe('&lt;script>alert(1)&lt;/script>');
+  for(const type of ['code','codespan']){const code={type,text:'if (a < b && c > d) return "&lt;literal&gt;";'};prepareMarkdownToken(code);expect(code.text).toBe('if (a < b && c > d) return "&lt;literal&gt;";');}
 });
 
-test('prepareMarkdownSource restores allowed ruby, br, and span tags', async () => {
+test('parser HTML policy retains allowed ruby, br, and span tags without touching code tokens', async () => {
   globalThis.DOMParser = class {
     parseFromString(input: string) {
       return { documentElement: { textContent: decodeEntities(input) } } as any;
     }
   } as any;
 
-  const { prepareMarkdownSource } = await import('../../web/src/markdown.ts');
-  const { safeHtml } = prepareMarkdownSource('<ruby>状況把握<rt>じょうきょうはあく</rt></ruby><br/><span lang="ja" title="x > y">日本語</span>');
+  const { prepareMarkdownToken } = await import('../../web/src/markdown.ts');
+  const token={type:'html',text:'<ruby>状況把握<rt>じょうきょうはあく</rt></ruby><br/><span lang="ja" title="x > y">日本語</span>'};
+  prepareMarkdownToken(token);const safeHtml=token.text;
 
   expect(safeHtml).toContain('<ruby>状況把握<rt>じょうきょうはあく</rt></ruby>');
   expect(safeHtml).toContain('<br>');
