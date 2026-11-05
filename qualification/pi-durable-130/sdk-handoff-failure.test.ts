@@ -6,7 +6,7 @@ import type { StorageWrite, SubmissionRecord } from '../../runtime/durable-engin
 import { SqliteStorage } from '../../runtime/durable-engine/qualification/sqlite.ts';
 import type { AcceptedInput } from '../../runtime/durable-engine/src/host-runtime.js';
 import { hashCanonicalRequest } from '../../runtime/src/service-effects/contracts/common.js';
-import { acceptedSteerFixture } from './src/accepted-steer-recovery-fixture.js';
+import { hostSourceContractFixture } from './src/host-source-contract-fixture.js';
 import { OwnedSqlite } from './src/ownership.js';
 import { barrier, context } from './src/fixture.js';
 import { at, effect, sealed, value } from './src/host-handoff.js';
@@ -16,7 +16,7 @@ import { at, effect, sealed, value } from './src/host-handoff.js';
 // second submit, Harness reopen, resume, provider replay or task revival here.
 test('SDK commit ACK lost: failed Session leaves original input uncertain and host handoff ungranted', async () => {
   const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, 'sdk-handoff-failure-'));
-  const f = await acceptedSteerFixture(dir, 'before-submit');
+  const f = await hostSourceContractFixture(dir, 'before-submit');
   let reader: SqliteStorage | undefined;
   try {
     const work = f.ports.work;
@@ -109,7 +109,7 @@ test('SDK commit ACK lost: failed Session leaves original input uncertain and ho
 // Fault only the public conversation adapter return; the SDK Session stays live.
 test('SDK submit return lost: usable Session reconciles original producer without resubmit', async () => {
   const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, 'sdk-usable-return-'));
-  const f = await acceptedSteerFixture(dir, 'before-submit');
+  const f = await hostSourceContractFixture(dir, 'before-submit');
   const completionEntered = barrier(), allowCompletion = barrier();
   try {
     const work = f.ports.work;

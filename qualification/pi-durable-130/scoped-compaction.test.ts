@@ -10,7 +10,7 @@ import {createHostController} from '../../runtime/durable-engine/src/host-contro
 import type {AcceptedInput} from '../../runtime/durable-engine/src/host-runtime.ts';
 import {withTaskModelRequestScope,taskModelRequestScope} from '../../runtime/durable-engine/src/task-model-boundary-shim.ts';
 import {TestOwner,OwnedSqlite} from './src/ownership.ts';
-import {acceptedSteerFixture} from './src/accepted-steer-recovery-fixture.ts';
+import {hostSourceContractFixture} from './src/host-source-contract-fixture.ts';
 import {barrier,context} from './src/fixture.ts';
 import {at,effect,sealed,value} from './src/host-handoff.ts';
 import {hashCanonicalRequest} from '../../runtime/src/service-effects/contracts/common.ts';
@@ -18,7 +18,7 @@ import {storeChatMetadata} from '../../runtime/src/db.ts';
 
 for(const same of [false,true])test(`controller compacts ${same?'the busy current':'an idle unrelated'} conversation without global idle`,async()=>{
  const dir=await mkdtemp(join(process.env.PICLAW_WORKSPACE!,'scoped-compact-'));
- const f=await acceptedSteerFixture(dir,'before-submit',undefined,false,{sharedDatabase:true});
+ const f=await hostSourceContractFixture(dir,'before-submit', false,{sharedDatabase:true});
  let controller:Awaited<ReturnType<typeof createHostController>>|undefined,sql!:BunSqliteDatabase;
  const release=barrier(),summaryRelease=barrier();f.base.host.toolHold=release;
  try{

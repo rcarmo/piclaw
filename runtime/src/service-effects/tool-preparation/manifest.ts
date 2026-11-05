@@ -231,7 +231,7 @@ export const TOOL_PREPARATION_MANIFEST: readonly ToolPreparationSpec[] = Object.
     contextFields: ["chatJid", "operationId"],
     serviceEffector: "EF-S07",
     abortExpectation: "may_finish_late",
-    protectedFields: ["params.chat_jid", "params.prompt", "params.command", "params.cwd", "params.budget_usd", "params.confirm_zero_budget", "result.content", "result.details"],
+    protectedFields: ["params.chat_jid", "params.prompt", "params.command", "params.cwd", "result.content", "result.details"],
   }),
   ...rows(["scheduled_tasks"], {
     currentSource: source.scheduling,
@@ -240,7 +240,7 @@ export const TOOL_PREPARATION_MANIFEST: readonly ToolPreparationSpec[] = Object.
     contextFields: ["chatJid", "operationId"],
     serviceEffector: "EF-S07",
     abortExpectation: "may_finish_late",
-    protectedFields: ["params.id", "params.chat_jid", "params.prompt", "params.command", "params.cwd", "params.budget_usd", "params.confirm_zero_budget", "result.content", "result.details"],
+    protectedFields: ["params.id", "params.chat_jid", "params.prompt", "params.command", "params.cwd", "result.content", "result.details"],
   }),
   ...rows(["search_workspace"], {
     currentSource: source.workspace,

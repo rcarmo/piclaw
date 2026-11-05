@@ -127,24 +127,6 @@ export {
   pruneOldTokenUsage,
 } from "./db/token-usage.js";
 export {
-  ensureBudgetWork,
-  getBudgetWork,
-  getActiveBudgetWorkForChat,
-  setBudgetWorkStatus,
-  insertBudgetUsageEvent,
-  saveBudgetCap,
-  getBudgetCap,
-  listBudgetCaps,
-  setBudgetCapEnabled,
-  ensureBudgetCapWindow,
-  persistBudgetDecision,
-  markBudgetDecisionNotified,
-  grantBudgetAllowance,
-  setBudgetWarningsOnly,
-  resumeBudgetWork,
-} from "./db/budget-limits.js";
-export type { BudgetWorkRecord, BudgetUsageEventInput, BudgetCapWindowRecord } from "./db/budget-limits.js";
-export {
   createWebauthnEnrollment,
   getWebauthnEnrollment,
   consumeWebauthnEnrollment,

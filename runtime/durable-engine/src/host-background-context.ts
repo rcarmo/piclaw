@@ -2,9 +2,8 @@ import type { Database } from "bun:sqlite";
 import { apply } from "@earendil-works/chord/delta";
 import { configure,defineDoc,type ConversationId,type Extension,type ToolRegistration,type Tx } from "@earendil-works/pi-durable";
 import { nativeBackgroundIdentity,nativeBackgroundPolicyHash,readNativeBackgroundPayload,type NativeBackgroundPayload } from "../../src/agent-pool/background-operation-contract.js";
-import { bindNativeBackgroundPolicy,advanceNativeBackgroundPolicy,assertNativeBackgroundBindingData,assertNativeBackgroundAgentData } from "./host-background-policy.js";
+import { bindNativeBackgroundPolicy,assertNativeBackgroundBindingData,assertNativeBackgroundAgentData } from "./host-background-policy.js";
 
-export type NativeBackgroundInputHistory=Readonly<{previous:readonly NativeBackgroundPayload[];acceptedSources:readonly string[]}>;
 export type NativeBackgroundContext = {contextKey:string;chatJid:string;branchId:string;conversationId:ConversationId;sessionId:string};
 export const NativeBackgroundContexts=defineDoc({kind:'app.background-contexts',version:1,scope:'conversation',history:'latest',fork:'initial',checkpointWhen:()=>false,
   initial:()=>({version:1,domain:'',contexts:[] as NativeBackgroundContext[]})});
@@ -95,15 +94,14 @@ export function verifyBackgroundRecoveryPayload(root:Database,sourceId:string,en
 
 /** Called by the application's sole SDK writer, under its admission guard.
  * No source/model dispatch occurs here. A staged empty context grants nothing. */
-export async function publishNativeBackgroundContext(tx:Tx,domain:string,raw:NativeBackgroundPayload,tools:readonly ToolRegistration[],extensions:readonly Extension[],assertCurrent:()=>void,history?:NativeBackgroundInputHistory){
-  const payload=readNativeBackgroundPayload(raw),identity=nativeBackgroundIdentity(payload.policy),proof=history&&{previous:history.previous.map(readNativeBackgroundPayload),acceptedSources:[...history.acceptedSources]};assertCurrent();
+export async function publishNativeBackgroundContext(tx:Tx,domain:string,raw:NativeBackgroundPayload,tools:readonly ToolRegistration[],extensions:readonly Extension[],assertCurrent:()=>void){
+  const payload=readNativeBackgroundPayload(raw),identity=nativeBackgroundIdentity(payload.policy);assertCurrent();
   const mapping=await tx.doc(NativeBackgroundContexts,1 as ConversationId);
   if(mapping.domain&&mapping.domain!==domain)throw Error('Background context domain changed');
   const prior=mapping.contexts.find(entry=>entry.contextKey===identity.contextKey);
   if(prior){
     if(prior.chatJid!==identity.chatJid||prior.branchId!==identity.branchId)throw Error('Background retry context conflict');
-    if(!proof)throw Error('Existing background context requires explicit input history');
-    await advanceNativeBackgroundPolicy(tx,prior.conversationId,payload.policy,proof.previous.map(entry=>entry.policy),proof.acceptedSources,assertCurrent);assertCurrent();return Object.freeze({...prior});
+    throw Error('Existing Dream context cannot accept another invocation');
   }
   if(mapping.contexts.some(entry=>entry.chatJid===identity.chatJid||entry.branchId===identity.branchId))throw Error('Background context owner conflict');
   const conversation=await tx.createConversation({ownership:{kind:'ownerless'}});assertCurrent();

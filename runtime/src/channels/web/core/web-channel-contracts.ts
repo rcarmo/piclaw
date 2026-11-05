@@ -14,7 +14,6 @@ import type { RequestGuardsChannel } from "../http/request-guards.js";
 import type { AuthEndpointsContext } from "../auth/auth-endpoints.js";
 import type { InteractionRow } from "../../../db.js";
 import type { WebAgentBufferEntry } from "../agent/agent-buffers.js";
-import type { QueuedFollowupItem } from "../../../queued-followups.js";
 import type { UiBridge } from "../theming/ui-bridge.js";
 import type { TotpAuthContext } from "../auth/totp-auth.js";
 import type { WebauthnAuthContext } from "../auth/webauthn-auth.js";
@@ -122,15 +121,14 @@ export interface WebChannelLike
   /** Trusted host-only selection, captured before reading HTTP input; absent by default. */
   prepareInputSourceAdmission?(chatJid: string): Promise<void>;
   prepareInputText?(chatJid: string, text: string): PreparedInputText;
-  /** Trusted host lifecycle retirement; never selected from request fields. */
-  expireQueuedInput?(chatJid: string, item: Readonly<QueuedFollowupItem>): Promise<boolean>;
+  /** Trusted SQL-only source acceptance; never selected from request fields. */
   getInputSourceAdmission?(chatJid: string): StoreWebMessageOptions["acceptSource"];
-  /** Default-off trusted SQL materialization binding; not an HTTP selection. */
-  getAcceptedQueuedSteering?(chatJid: string, assertCurrent?: () => void): import('../../../agent-pool/durable-queued-steering.js').AcceptedQueuedSteering | undefined;
-  getQueuedInputMaterialization?(chatJid: string): import('../messaging/message-store.js').QueuedInputMaterialization | undefined;
-  getQueuedInputSourceWithdrawal?(chatJid: string): import("../runtime/queued-followup-lifecycle-service.js").QueuedInputSourceAdmission | undefined;
-  getQueuedInputSourceAdmission?(chatJid: string): import("../runtime/queued-followup-lifecycle-service.js").QueuedInputSourceAdmission | undefined;
-  dispatchAcceptedInput?: import("../../../agent-pool/durable-queue-dispatch.js").AcceptedQueueDispatch;
+  /** Reconcile existing native sources only; never scan/replay historical chat rows. */
+  resumeNativeInputs?(chatJid?: string): void;
+  filterNativeTimeline?(chatJid:string,rowIds:readonly number[]):Promise<readonly number[]>;
+  readNativeQueue?(chatJid:string):Promise<import("../agent/native-queue-view.js").NativeQueueItem[]>;
+  controlNativeQueue?(chatJid:string,submissionId:number,action:"remove"|"steer",authorise?:()=>void):Promise<boolean>;
+  dispatchAcceptedInput?(chatJid: string, messageId: string, rowId: number, whenBusy?: "steer" | "followUp"): Promise<{submission_id: number; queued: boolean}>;
   admitMessage(chatJid: string, content: string, isBot: boolean, mediaIds: number[], options: StoreWebMessageOptions,
     authorise?: (phase?: "before" | "after") => void, signal?: AbortSignal, deferBeforeInsert?: () => boolean): Promise<InteractionRow | null>;
   agentPool: AgentPool;
@@ -150,18 +148,6 @@ export interface WebChannelLike
   updateThoughtBuffer(turnId: string, text: string, totalLines: number): void;
   updateDraftBuffer(turnId: string, text: string, totalLines: number): void;
 
-  enqueueQueuedFollowupItem(
-    chatJid: string,
-    rowId: number,
-    queuedContent: string,
-    threadId?: number | null,
-    queuedAt?: string,
-    extras?: { mediaIds?: number[]; contentBlocks?: unknown[]; linkPreviews?: unknown[]; screenHint?: string; source?: string; queuedBy?: QueuedFollowupItem["queuedBy"] }
-  ): number;
-  getQueuedFollowupCount(chatJid: string): number;
-  admitQueuedFollowupItem(args: Parameters<WebChannelLike['enqueueQueuedFollowupItem']>, authorise: () => void, signal: AbortSignal, acceptSource?: import("../runtime/queued-followup-lifecycle-service.js").QueuedInputSourceAdmission): Promise<number>;
-  getQueuedFollowupItems(chatJid: string): QueuedFollowupItem[];
-  peekQueuedFollowupItem(chatJid: string): QueuedFollowupItem | null;
   /** UI/runtime state consumed by endpoint contexts. */
   workspaceVisible: boolean;
   workspaceShowHidden: boolean;
@@ -187,7 +173,7 @@ export interface WebChannelLike
   handleAgents(): Promise<Response>;
 
   handleWorkspaceVisibility(req: Request): Promise<Response>;
-  handleTimeline(limit: number, before?: number, chatJid?: string): Response;
+  handleTimeline(limit: number, before?: number, chatJid?: string): Response | Promise<Response>;
   handleHashtag(tag: string, limit: number, offset: number, chatJid?: string): Response;
   handleSearch(query: string, limit: number, offset: number, chatJid?: string, searchScope?: "current" | "root" | "all", rootChatJid?: string, filters?: { images?: boolean; attachments?: boolean } | null): Response;
   handleThread(id: number | null, chatJid?: string): Response;

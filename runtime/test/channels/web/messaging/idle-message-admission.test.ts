@@ -49,14 +49,6 @@ test('callback contention is terminal and rolls back its one message ID and gene
   expect(attempts).toBe(1);expect(ids).toHaveLength(1);expect(count('messages')).toBe(0);expect(count('media')).toBe(0);expect(count('message_media')).toBe(0);expect(count('chats')).toBe(0);
   expect(db.query("SELECT rowid FROM messages_fts WHERE messages_fts MATCH 'retry'").all()).toEqual([]);
 });
-test('atomic incoming spill and deferred consume share one rollback and commit',async()=>{
-  fixture();setDeferredQueuedFollowups('web:idle',[{rowId:-7,queuedContent:'queued',queuedAt:new Date().toISOString()}]);
-  const content='consumed-spill '.repeat(15000);
-  await expect(admitWebMessage(channel,params(content),{consumeDeferredFollowupRowId:-7,beforeDeferredFollowupConsume:()=>{throw Error('fault before consume');}},()=>{},new AbortController().signal)).rejects.toThrow('fault before consume');
-  expect(getDeferredQueuedFollowups('web:idle').map(item=>item.rowId)).toEqual([-7]);expect(count('media')).toBe(0);expect(count('messages')).toBe(0);
-  const row=await admitWebMessage(channel,params(content),{consumeDeferredFollowupRowId:-7,threadId:77},()=>{},new AbortController().signal);
-  expect(row.data.thread_id).toBe(77);expect(getDeferredQueuedFollowups('web:idle')).toEqual([]);expect(count('messages')).toBe(1);expect(count('media')).toBe(1);
-});
 test('postcommit preview failure never retries or prevents committed acknowledgement',async()=>{
   fixture();let publications=0;const broken={get pendingLinkPreviews(){publications++;throw Error('postcommit preview failure');},broadcastEvent(){}};
   const row = await admitWebMessage(broken,params('https://example.invalid/fixture'),{},()=>{},new AbortController().signal);

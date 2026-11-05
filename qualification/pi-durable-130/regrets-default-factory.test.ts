@@ -66,5 +66,5 @@ applicationTest("Regrets-only actual factory executes default decision-off revie
     backend = await createDefaultApplicationRuntime(owner, async () => services);
     expect(calls).toBe(2);
     expect(getDeferredQueuedFollowups("web:default")[0]!.source_id).toBe(sourceId);
-  } finally { await backend?.close(); owner.release(); closeDatabase(); }
+  } finally { await backend?.close(); owner.release(); await closeDatabase(); }
 });

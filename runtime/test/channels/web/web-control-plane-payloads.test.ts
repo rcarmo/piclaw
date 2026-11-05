@@ -5,7 +5,6 @@ import { WebChannel } from "../../../src/channels/web.ts";
 import { WebAgentControlPlaneService } from "../../../src/channels/web/agent/agent-control-plane-service.js";
 import { createWebAdaptiveCardSidePromptService } from "../../../src/channels/web/cards/adaptive-card-side-prompt-service.js";
 import { createWebAgentPeerMessageRelayService } from "../../../src/channels/web/agent/agent-peer-message-relay-service.js";
-import type { QueuedFollowupLifecycleService } from "../../../src/channels/web/runtime/queued-followup-lifecycle-service.js";
 
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
@@ -14,18 +13,7 @@ function jsonResponse(payload: unknown, status = 200): Response {
   });
 }
 
-type QueueLifecycleStub = Pick<
-  QueuedFollowupLifecycleService,
-  "getQueuedFollowupCount" | "listQueuedStateItems" | "removeQueuedFollowupForAction"
->;
-
 function createControlPlaneChannel() {
-  const queuedFollowupLifecycle: QueueLifecycleStub = {
-    getQueuedFollowupCount: () => 0,
-    listQueuedStateItems: () => [],
-    removeQueuedFollowupForAction: async () => ({ removed: null, source: null }),
-  };
-
   return {
     json: jsonResponse,
     controlPlaneService: new WebAgentControlPlaneService({
@@ -35,9 +23,8 @@ function createControlPlaneChannel() {
       broadcastEvent: () => {},
       queue: { enqueue: () => {} },
       agentPool: { setSessionBinder: () => {} },
-      queuedFollowupLifecycle,
-      storeMessage: () => null,
-      processChat: () => {},
+      readNativeQueue: async () => [],
+      controlNativeQueue: async () => false,
     }),
   };
 }

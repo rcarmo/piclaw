@@ -83,7 +83,7 @@ test("run inventory and stale clearing cannot use or mutate legacy execution mar
   getDb().query(`INSERT INTO ${legacyCursorArchive}(chat_jid,cursor_ts,inflight_prev_ts,inflight_message_id,inflight_started_at) VALUES(?,'','','old-input','2026-01-01T00:00:00.000Z')`).run(chat);
   const before=getDb().serialize(); let updates=0;
   const control=new WebAgentControlPlaneService({defaultChatJid:chat,defaultAgentId:"default",json:(body:unknown,status=200)=>Response.json(body,{status}),
-    agentPool:{listActiveChats:()=>[]},queuedFollowupLifecycle:{listQueuedStateItems:()=>[]},getAgentStatus:()=>({type:"thinking",turn_id:"native-turn"}),
+    agentPool:{listActiveChats:()=>[]},readNativeQueue:async()=>[],getAgentStatus:()=>({type:"thinking",turn_id:"native-turn"}),
     updateAgentStatus(){updates++;}} as any);
   const listed=await (await control.handleAgentRuns(new Request("http://fixture/agent/runs?chat_jid="+encodeURIComponent(chat)))).json();
   expect(listed.inflight).toEqual([]);expect(listed.preflight).toEqual([]);
@@ -103,8 +103,7 @@ test("live draft buffers never persist a second restart-recovery payload", () =>
   let writes=0; const buffers=new Map<string,any>();
   const state={load(){},save(){writes++;},getAgentStatuses:()=>({}),setAgentStatus(){},setContextUsage(){},getContextUsage:()=>null,
     setDraftRecovery(){writes++;},getDraftRecovery(){throw Error("Legacy draft read");}};
-  const service=new WebChannelRuntimeStateService({getAssistantName:()=>"Test",enqueue(){},async processChat(){}},
-    {defaultAgentId:"default",stateKey:"draft-no-recovery"},{state,agentStatusStore:{load(){},update(){},get:()=>null,dispose(){}},
+  const service=new WebChannelRuntimeStateService({agentStatusStore:{load(){},update(){},get:()=>null,dispose(){}},
       agentBuffers:{setPanelExpanded(){},isPanelExpanded:()=>false,updateBuffer:(id,panel,text,totalLines)=>buffers.set(id+panel,{text,totalLines}),
         getBuffer:(id,panel)=>buffers.get(id+panel)}});
   service.updateAgentStatus("web:chat",{type:"thinking",turn_id:"turn"});
@@ -113,4 +112,5 @@ test("live draft buffers never persist a second restart-recovery payload", () =>
   expect(writes).toBe(0);
   service.updateAgentStatus("web:chat",{type:"done",turn_id:"turn"});
   expect(writes).toBe(0);
+  service.dispose();
 });

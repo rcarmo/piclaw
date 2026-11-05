@@ -2,7 +2,7 @@ import { compactGoalInput } from "./host-goal-input.js";
 import type Database from "bun:sqlite";
 import { getDeferredQueuedFollowups } from "../../src/db.js";
 import { accountCommittedGoalBatch, isGoalBudgetWrapup } from "./host-goal-usage.js";
-import type { AcceptedInput, HostConversationRuntime, SettledAnswer } from "./host-runtime.js";
+import { isNativeMessageInput, type NativeMessageResult, type AcceptedInput, type HostConversationRuntime, type SettledAnswer } from "./host-runtime.js";
 import type { TerminalDatabaseEffect, TerminalCommit } from "../../src/service-effects/contracts/terminal-settlement-store.js";
 import { withExtensionKvAuthority, type ExtensionKvAuthority } from "../../src/extension-kv-registry.js";
 
@@ -41,7 +41,7 @@ interface GoalContinuationAddon {
   applyGoalPlanProgress(goal: any, plan: GoalPlanState, hadToolActivity: boolean): { goal: any; decision: { action: string; completionProbeCount?: number } };
   prepareGoalInput(text: string, chat: string): { decision: { action: string; text?: string } };
 }
-export function createHostGoalSettlement(addon: Parameters<typeof accountCommittedGoalBatch>[0], options: {
+type GoalProjectionOptions = {
   root: Database;
   runtime(): Pick<HostConversationRuntime, "readAcceptedInputText" | "readSettledInputUsage" | "hasSettledGoalTerminalResult">;
   assertOwner(): void;
@@ -53,8 +53,11 @@ export function createHostGoalSettlement(addon: Parameters<typeof accountCommitt
     readPlan(chatJid: string, assertCurrent: () => void): GoalPlanState;
     admit(input: { sourceId: string; chatJid: string; text: string; queuedAt: string }, onlyIfIdle?: boolean): number | null;
   };
-}): (input: AcceptedInput, answer?: SettledAnswer) => Promise<TerminalDatabaseEffect | undefined> {
-  return async (input, answer) => {
+};
+export type GoalProjection = (authority: ExtensionKvAuthority, committedAt: string) => void;
+
+function prepareGoalProjection(addon: Parameters<typeof accountCommittedGoalBatch>[0], options: GoalProjectionOptions) {
+  return async (input: AcceptedInput, answer?: SettledAnswer, nativeResult?: NativeMessageResult): Promise<GoalProjection | undefined> => {
     const captured = Object.freeze({ ...input });
     options.assertOwner();
     const runtime = options.runtime();
@@ -90,54 +93,75 @@ export function createHostGoalSettlement(addon: Parameters<typeof accountCommitt
     const usage = Object.freeze(receipts.map(receipt => Object.freeze({ ...receipt })));
     const progress = !answer?.processExit && options.continuation ? structuredClone(await options.continuation.prepare(captured)) : undefined;
     options.assertOwner();
-    return (commit, scope) => {
+    return (authority, committedAt) => {
       options.assertOwner();
-      if (commit.operationId !== captured.operationId || commit.disposition !== "completed") throw Error("Exact Goal operation completion required");
-      withGoalSettlementAuthority(options.root, commit, scope, authority => {
-        if (authority.chatJid !== captured.chatJid) throw Error("Goal settlement chat conflict");
-        const source = { operationId: captured.operationId, conversationId: captured.conversationId };
-        if (identity) accountCommittedGoalBatch(addon, authority, texts, usage, proof, source);
-        if (ordinaryGoal) {
-          const current = addon.loadThreadGoal(captured.chatJid);
-          // Pause/replacement during preparation revokes this continuation. It
-          // must not stop the unrelated, already committed user answer settling.
-          if (!current || current.goal_id !== ordinaryGoal.goalId || current.lifecycle_generation !== ordinaryGoal.generation || current.status !== "active") return;
-        }
-        if (!options.continuation || !progress || !options.continuation.addon.shouldContinueGoalAfterMessage(progress.message)) return;
-        const current = addon.loadThreadGoal(captured.chatJid) as GoalContinuationState | null;
-        if (current?.status === "budget_limited") {
-          if (!isGoalBudgetWrapup(addon, captured.chatJid, texts, source)) throw Error("Goal budget input authority unavailable");
-          const claimed = options.continuation.addon.claimGoalBudgetWrapup(captured.chatJid,
-            { goalId: current.goal_id, generation: current.lifecycle_generation });
-          if (!claimed) return;
-          const prompt = options.continuation.addon.buildVisibleGoalPrompt(claimed, "budget_limited");
-          const prepared = options.continuation.addon.prepareGoalInput(prompt, captured.chatJid).decision;
-          if (prepared.action === "handled" || !prepared.text) throw Error("Goal budget wrap-up lifecycle changed");
-          // Budget wrap-up follows existing human work, using normal source/FIFO
-          // admission. It never claims the worker or starts another scheduler.
-          if (options.continuation.admit({ sourceId: `goal-budget:${current.goal_id}:${current.lifecycle_generation}`,
-            chatJid: captured.chatJid, text: compactGoalInput(addon, prompt, prepared), queuedAt: commit.committedAt }, false) === null)
-            throw Error("Goal budget wrap-up admission changed");
-          return;
-        }
-        if (!current || current.status !== "active") return;
-        // This check and the guard mutation/admission share the terminal write.
-        if (getDeferredQueuedFollowups(captured.chatJid).length || options.root.query(
-          "SELECT 1 FROM service_effect_s01_sources WHERE chat_jid=? AND state IN ('pending','claimed') LIMIT 1",
-        ).get(captured.chatJid)) return;
-        const plan = options.continuation.readPlan(captured.chatJid, authority.assertCurrent);
-        authority.assertCurrent();
-        const next = options.continuation.addon.applyGoalPlanProgress(current, plan, progress.hadToolActivity);
-        if (next.decision.action === "stop") return;
-        const prompt = options.continuation.addon.buildVisibleGoalPrompt(next.goal, next.decision.action === "finalize" ? "finalize" : "continuation");
+      if (authority.chatJid !== captured.chatJid) throw Error("Goal settlement chat conflict");
+      const source = { operationId: nativeResult?.runId ?? captured.operationId, conversationId: captured.conversationId };
+      if (identity) accountCommittedGoalBatch(addon, authority, texts, usage, proof, source);
+      if (ordinaryGoal) {
+        const current = addon.loadThreadGoal(captured.chatJid);
+        // Pause/replacement during preparation revokes this continuation. It
+        // must not stop the unrelated, already committed user answer settling.
+        if (!current || current.goal_id !== ordinaryGoal.goalId || current.lifecycle_generation !== ordinaryGoal.generation || current.status !== "active") return;
+      }
+      if (!options.continuation || !progress || !options.continuation.addon.shouldContinueGoalAfterMessage(progress.message)) return;
+      const current = addon.loadThreadGoal(captured.chatJid) as GoalContinuationState | null;
+      if (current?.status === "budget_limited") {
+        if (!isGoalBudgetWrapup(addon, captured.chatJid, texts, source)) throw Error("Goal budget input authority unavailable");
+        const claimed = options.continuation.addon.claimGoalBudgetWrapup(captured.chatJid,
+          { goalId: current.goal_id, generation: current.lifecycle_generation });
+        if (!claimed) return;
+        const prompt = options.continuation.addon.buildVisibleGoalPrompt(claimed, "budget_limited");
         const prepared = options.continuation.addon.prepareGoalInput(prompt, captured.chatJid).decision;
-        if (prepared.action === "handled") throw Error("Goal continuation lifecycle changed");
-        const queued = options.continuation.admit({ sourceId: `goal-continuation:${captured.operationId}`,
-          chatJid: captured.chatJid, text: compactGoalInput(addon, prompt, prepared), queuedAt: commit.committedAt });
-        if (queued === null) throw Error("Goal continuation admission changed");
-        authority.assertCurrent();
-      });
-      return undefined;
+        if (prepared.action === "handled" || !prepared.text) throw Error("Goal budget wrap-up lifecycle changed");
+        // Budget wrap-up follows existing human work, using normal source/FIFO
+        // admission. It never claims the worker or starts another scheduler.
+        if (options.continuation.admit({ sourceId: `goal-budget:${current.goal_id}:${current.lifecycle_generation}`,
+          chatJid: captured.chatJid, text: compactGoalInput(addon, prompt, prepared), queuedAt: committedAt }, false) === null)
+          throw Error("Goal budget wrap-up admission changed");
+        return;
+      }
+      if (!current || current.status !== "active") return;
+      // This check and the guard mutation/admission share the terminal write.
+      if (!nativeResult && (getDeferredQueuedFollowups(captured.chatJid).length || options.root.query(
+        "SELECT 1 FROM service_effect_s01_sources WHERE chat_jid=? AND state IN ('pending','claimed') LIMIT 1",
+      ).get(captured.chatJid))) return;
+      const plan = options.continuation.readPlan(captured.chatJid, authority.assertCurrent);
+      authority.assertCurrent();
+      const next = options.continuation.addon.applyGoalPlanProgress(current, plan, progress.hadToolActivity);
+      if (next.decision.action === "stop") return;
+      const prompt = options.continuation.addon.buildVisibleGoalPrompt(next.goal, next.decision.action === "finalize" ? "finalize" : "continuation");
+      const prepared = options.continuation.addon.prepareGoalInput(prompt, captured.chatJid).decision;
+      if (prepared.action === "handled") throw Error("Goal continuation lifecycle changed");
+      const queued = options.continuation.admit({ sourceId: `goal-continuation:${source.operationId}`,
+        chatJid: captured.chatJid, text: compactGoalInput(addon, prompt, prepared), queuedAt: committedAt });
+      if (queued === null) throw Error("Goal continuation admission changed");
+      authority.assertCurrent();
     };
+  };
+}
+
+/** Historical S02 callers still prove their real terminal row. Native callers
+ * below use the SDK result and the existing publication transaction instead. */
+export function createHostGoalSettlement(addon: Parameters<typeof accountCommittedGoalBatch>[0], options: GoalProjectionOptions):
+  (input: AcceptedInput, answer?: SettledAnswer) => Promise<TerminalDatabaseEffect | undefined> {
+  const prepare=prepareGoalProjection(addon,options);
+  return async(input,answer)=>{
+    const captured=Object.freeze({...input});
+    const apply=await prepare(captured,answer);if(!apply)return undefined;
+    return (commit,scope)=>{
+      if(commit.operationId!==captured.operationId||commit.disposition!=="completed")throw Error("Exact Goal operation completion required");
+      withGoalSettlementAuthority(options.root,commit,scope,authority=>apply(authority,commit.committedAt));
+    };
+  };
+}
+
+/** Prepare only from an exact completed SDK result. The application supplies
+ * Root publication authority; no synthetic S01/S02 terminal record is created. */
+export function createNativeGoalProjection(addon: Parameters<typeof accountCommittedGoalBatch>[0], options: GoalProjectionOptions) {
+  const prepare=prepareGoalProjection(addon,options);
+  return async(input: AcceptedInput,result: NativeMessageResult):Promise<GoalProjection|undefined>=>{
+    if(!isNativeMessageInput(input)||result.status.status!=="done"||!result.answer||!result.inputs.some(source=>source.requestId===input.requestId))throw Error("Completed native Goal source required");
+    return prepare(input,result.answer,result);
   };
 }

@@ -12,20 +12,10 @@ import { getDb } from "./connection.js";
 import { deleteTask, moveScheduledTasksToChat } from "./tasks.js";
 import { canonicalScheduledTasksSql, readCanonicalScheduledTask } from "./scheduled-task-definitions.js";
 import { ChatAccessDenied } from "./session-ownership.js";
-import { attachMediaToMessage, deleteUnreferencedMedia } from "./media.js";
+import { deleteUnreferencedMedia } from "./media.js";
 import { deleteThinkingContentByChatJid } from "./thinking-cleanup.js";
 import type { ChatBranchRecord } from "./types.js";
 import { createUuid } from "../utils/ids.js";
-
-interface QueuedFollowupForMerge {
-  rowId: number;
-  queuedContent: string;
-  threadId: number | null;
-  queuedAt: string;
-  mediaIds?: number[];
-  contentBlocks?: unknown[];
-  linkPreviews?: unknown[];
-}
 
 interface ChatBranchRow {
   branch_id: string;
@@ -493,42 +483,6 @@ export function previewPermanentDeleteArchivedBranch(chatJid: string): ArchivedB
   };
 }
 
-function sanitizeQueuedFollowupForMerge(value: unknown): QueuedFollowupForMerge | null {
-  if (!value || typeof value !== "object") return null;
-  const record = value as Record<string, unknown>;
-  if (typeof record.queuedContent !== "string" || !record.queuedContent.trim()) return null;
-  return {
-    rowId: Number.isFinite(record.rowId) ? Number(record.rowId) : 0,
-    queuedContent: record.queuedContent,
-    threadId: Number.isFinite(record.threadId) ? Number(record.threadId) : null,
-    queuedAt: typeof record.queuedAt === "string" && record.queuedAt.trim()
-      ? record.queuedAt.trim()
-      : new Date().toISOString(),
-    mediaIds: Array.isArray(record.mediaIds)
-      ? record.mediaIds.map((id) => Number(id)).filter((id) => Number.isFinite(id))
-      : undefined,
-    contentBlocks: Array.isArray(record.contentBlocks) ? [...record.contentBlocks] : undefined,
-    linkPreviews: Array.isArray(record.linkPreviews) ? [...record.linkPreviews] : undefined,
-  };
-}
-
-function readQueuedFollowupsForMerge(chatJid: string): QueuedFollowupForMerge[] {
-  const db = getDb();
-  const row = db.prepare(
-    `SELECT queued_followups_json FROM chat_cursors WHERE chat_jid = ?`
-  ).get(chatJid) as { queued_followups_json: string | null } | undefined;
-  if (!row?.queued_followups_json) return [];
-  try {
-    const parsed = JSON.parse(row.queued_followups_json);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((item) => sanitizeQueuedFollowupForMerge(item))
-      .filter((item): item is QueuedFollowupForMerge => Boolean(item));
-  } catch {
-    return [];
-  }
-}
-
 function getLatestChatPosition(chatJid: string): string {
   const db = getDb();
   const row = db.prepare(
@@ -551,70 +505,6 @@ function moveChatCursorToLastPosition(chatJid: string): void {
     ON CONFLICT(chat_jid) DO UPDATE SET
       cursor_ts = excluded.cursor_ts
   `).run(chatJid, ts);
-}
-
-function materializeQueuedFollowupsForTimelineMove(chatJid: string): number {
-  const queued = readQueuedFollowupsForMerge(chatJid);
-  if (queued.length === 0) return 0;
-
-  const db = getDb();
-  let inserted = 0;
-  let latestTimestamp = "";
-  const existingRow = db.prepare(`SELECT rowid FROM messages WHERE chat_jid = ? AND rowid = ?`);
-  const insertMessage = db.prepare(`INSERT INTO messages (
-      id, chat_jid, sender, sender_name, content, content_blocks, link_previews,
-      thread_id, timestamp, is_from_me, is_bot_message, is_terminal_agent_reply, is_steering_message
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-  const getInsertedRow = db.prepare(`SELECT rowid FROM messages WHERE chat_jid = ? AND id = ?`);
-  const threadExists = db.prepare(`SELECT rowid FROM messages WHERE chat_jid = ? AND rowid = ?`);
-
-  for (const item of queued) {
-    if (item.rowId > 0 && existingRow.get(chatJid, item.rowId)) {
-      if (item.queuedAt > latestTimestamp) latestTimestamp = item.queuedAt;
-      continue;
-    }
-
-    const messageId = createUuid("web");
-    const contentBlocks = Array.isArray(item.contentBlocks) ? JSON.stringify(item.contentBlocks) : null;
-    const linkPreviews = Array.isArray(item.linkPreviews) ? JSON.stringify(item.linkPreviews) : null;
-    const explicitThreadId = item.threadId && threadExists.get(chatJid, item.threadId) ? item.threadId : null;
-    insertMessage.run(
-      messageId,
-      chatJid,
-      "web-user",
-      "You",
-      item.queuedContent,
-      contentBlocks,
-      linkPreviews,
-      explicitThreadId,
-      item.queuedAt,
-      0,
-      0,
-      0,
-      0,
-    );
-    const row = getInsertedRow.get(chatJid, messageId) as { rowid: number } | undefined;
-    const rowId = row?.rowid ?? 0;
-    if (rowId > 0) {
-      if (!explicitThreadId) db.prepare(`UPDATE messages SET thread_id = ? WHERE rowid = ?`).run(rowId, rowId);
-      if (item.mediaIds?.length) attachMediaToMessage(rowId, item.mediaIds);
-      inserted += 1;
-    }
-    if (item.queuedAt > latestTimestamp) latestTimestamp = item.queuedAt;
-  }
-
-  db.prepare(`UPDATE chat_cursors SET queued_followups_json = NULL WHERE chat_jid = ?`).run(chatJid);
-  if (latestTimestamp) {
-    db.prepare(
-      `UPDATE chats
-          SET last_message_time = CASE
-                WHEN last_message_time IS NULL OR ? > last_message_time THEN ?
-                ELSE last_message_time
-              END
-        WHERE jid = ?`
-    ).run(latestTimestamp, latestTimestamp, chatJid);
-  }
-  return inserted;
 }
 
 export interface MergeChatBranchIntoParentResult {
@@ -675,7 +565,11 @@ export function mergeChatBranchIntoParent(chatJid: string): MergeChatBranchIntoP
       throw new Error(`Cannot merge chat branch because ${messageCollisionCount} message id(s) already exist in the parent chat.`);
     }
 
-    materializeQueuedFollowupsForTimelineMove(source.chat_jid);
+    // Historical queue bytes remain inert; never turn them into new messages.
+    const queued = db.prepare("SELECT queued_followups_json FROM chat_cursors WHERE chat_jid = ?").get(source.chat_jid) as { queued_followups_json: string | null } | undefined;
+    if (queued?.queued_followups_json && !["", "[]"].includes(queued.queued_followups_json.trim())) {
+      throw new Error("Cannot merge a branch with preserved legacy queue records.");
+    }
 
     const counts: MergeChatBranchIntoParentResult["counts"] = {
       messages: countRows(`SELECT COUNT(*) AS count FROM messages WHERE chat_jid = ?`, source.chat_jid),

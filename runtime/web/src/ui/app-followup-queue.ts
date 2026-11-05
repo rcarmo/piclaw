@@ -85,6 +85,7 @@ export function appendFollowupQueueItem(
     ...currentItems,
     {
       row_id: rowId,
+      ...(typeof payload?.source === 'string' ? {source:payload.source}: {}),
       content,
       timestamp: payload?.timestamp || null,
       thread_id: payload?.thread_id ?? null,

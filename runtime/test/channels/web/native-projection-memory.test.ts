@@ -9,9 +9,9 @@ test('native projection exposes no persistence/restore/context-copy entrypoint a
   initDatabase();
   const key='last_agent_timestamp_web',historical=JSON.stringify({agentStatuses:{'web:test':{type:'thinking'}},contextUsages:{'web:test':{tokens:777,sessionGeneration:'same'}},draftRecoveries:{'web:test':{text:'historical uncommitted draft',totalLines:1,updatedAt:1}},unrelated:{keep:true}});
   setRouterState(key,historical);const before=getDb().serialize();
-  const service=new WebChannelRuntimeStateService({getAssistantName:()=>'',enqueue(){},async processChat(){}},{defaultAgentId:'default'});
+  const service=new WebChannelRuntimeStateService();
   for(const name of ['loadState','saveState','setContextUsage','getContextUsage'])expect(service).not.toHaveProperty(name);
-  service.updateAgentStatus('web:test',{type:'thinking',turn_id:'native:1'});
+  service.updateAgentStatus('web:test',{sdk_observation:true,type:'thinking',turn_id:'native:1'});
   expect(service.getAgentStatus('web:test')).toMatchObject({type:'thinking',turn_id:'native:1'});
   expect(getRouterState(key)).toBe(historical);expect(getDb().serialize()).toEqual(before);
 });
@@ -32,26 +32,21 @@ for(const tokens of [null,0,42])test(`current SDK context ${tokens} never reads 
   expect(staleReads).toBe(0);
 });
 
-test('a cached native tool cannot be relabelled as a different accepted operation or pending queue',()=>{
- let operation:{operation_id:string;phase:string}|null={operation_id:'current',phase:'claimed'},queued=0;
+test('SDK observations cannot be overwritten by host work or relabelled as a successor',()=>{
  const store=new AgentStatusStore();
- const service=new WebChannelRuntimeStateService({getAssistantName:()=>'',enqueue(){},async processChat(){},isNativeRuntime:()=>true,isChatLaneBusy:()=>true,readNativeTurnState:()=>({operation,queued})},{defaultAgentId:'default'},{agentStatusStore:store});
- service.updateAgentStatus('chat',{type:'tool_call',tool_name:'old-tool',operation_id:'finished'});
- expect(service.getAgentStatus('chat')).toMatchObject({type:'thinking',operation_id:'current',state:'active'});
- expect(service.getAgentStatus('chat')).not.toHaveProperty('tool_name');
- operation=null;queued=1;
- expect(service.getAgentStatus('chat')).toMatchObject({type:'thinking',operation_id:null,queued_count:1});
- expect(service.getAgentStatus('chat')).not.toHaveProperty('tool_name');
- operation={operation_id:'current',phase:'executing'};queued=0;
- service.updateAgentStatus('chat',{type:'tool_call',tool_name:'current-tool',operation_id:'current'});
- expect(service.getAgentStatus('chat')).toMatchObject({type:'tool_call',tool_name:'current-tool',operation_id:'current'});
+ const service=new WebChannelRuntimeStateService({agentStatusStore:store});
+ service.updateAgentStatus('chat',{sdk_observation:true,type:'tool_call',tool_name:'sdk-tool',operation_id:'sdk-run'});
+ service.updateAgentStatus('chat',{type:'thinking',operation_id:'host-successor',title:'Working'});
+ expect(service.getAgentStatus('chat')).toMatchObject({type:'tool_call',tool_name:'sdk-tool',operation_id:'sdk-run'});
+ service.updateAgentStatus('chat',{sdk_observation:true,type:'done',state:'idle'});
+ expect(service.getAgentStatus('chat')).toMatchObject({type:'done',state:'idle'});
  store.dispose();
 });
 
 test('malformed historical router bytes remain inert and unchanged by local status updates',()=>{
  initDatabase();const historical='{malformed\u0000old model draft';setRouterState('last_agent_timestamp_web',historical);
  const before=getDb().serialize();
- const service=new WebChannelRuntimeStateService({getAssistantName:()=>'',enqueue(){},async processChat(){}},{defaultAgentId:'default'});
+ const service=new WebChannelRuntimeStateService();
  expect(service.getAgentStatus('web:malformed')).toBeNull();
  service.updateAgentStatus('web:malformed',{type:'thinking'});
  expect(getRouterState('last_agent_timestamp_web')).toBe(historical);expect(getDb().serialize()).toEqual(before);

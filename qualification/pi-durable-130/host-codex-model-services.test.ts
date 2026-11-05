@@ -52,10 +52,10 @@ test('queued artifact write is fenced after revocation and observer rejection is
  await expect(bound.finish()).rejects.toThrow('revoked'); expect(writes).toBe(0);
 });
 
-test('reported spend remains settled after failed output and request cleanup', async()=>{
+test('passive token usage survives failed Codex output without financial request ownership', async()=>{
  const root=await ModelRuntime.create({modelsPath:null,refreshOnCreate:false,credentials:{read:async()=>undefined,get:async()=>undefined,set:async()=>{},delete:async()=>{},list:async()=>[]} as any});
  const order:string[]=[];
- let settled=false, released=false, cleanups=0;
+ let observed=0;
  const model:any={...fixtureModel,name:'fixture',type:'chat',baseUrl:'https://synthetic.invalid',reasoning:false,input:['text'],cost:{input:0,output:0,cacheRead:0,cacheWrite:0},contextWindow:100,maxTokens:10};
  const spent={input:3,output:2,cacheRead:0,cacheWrite:0,totalTokens:5,cost:{input:1,output:1,cacheRead:0,cacheWrite:0,total:2}};
  const message:any={role:'assistant',provider:model.provider,model:model.id,api:model.api,content:[],timestamp:1,stopReason:'stop',usage:spent};
@@ -64,13 +64,12 @@ test('reported spend remains settled after failed output and request cleanup', a
  const service=new HostCodexModelServices({ routingScope,capture:async(signal)=>({id:'o',sessionId:'s',cwd:'/synthetic',model,signal,assertCurrent(){}}),assertAccount(){},observe:async()=>{},flush:async()=>{order.push('flush');throw Error('output failed')}},factories);
  service.register(root,provider);
  const models=createHostModels(root,[model],{signal:new AbortController().signal,authorize:async()=>{},assertCurrent(){},codex:service,
- prepareRequest:async()=>({retainTerminal:async(m)=>{expect(m.usage.totalTokens).toBe(5);order.push('retain')},dispatch:async()=>{order.push('dispatch')},settle:async(m:any)=>{expect(m.usage.totalTokens).toBe(5);if(!settled)order.push('settle');settled=true},abandon:async()=>{cleanups++;if(!settled){released=true;order.push('release')}}})});
+ observeUsage(m){expect(m.usage.totalTokens).toBe(5);observed++;order.push('usage');}});
  const result=await models.streamSimple(models.getModel(model.provider,model.id)!,{messages:[]}).result();
  expect(result.stopReason).toBe('error');expect(result.usage.totalTokens).toBe(5);
- expect(order.indexOf('retain')).toBeLessThan(order.indexOf('settle'));
- expect(order.filter(step=>step==='retain')).toHaveLength(1);
- expect(order.indexOf('settle')).toBeLessThan(order.indexOf('flush'));
- expect(cleanups).toBe(1);expect(settled).toBe(true);expect(released).toBe(false);expect(order).not.toContain('release');
+ expect(order.indexOf('usage')).toBeLessThan(order.indexOf('flush'));
+ expect(observed).toBe(1);
+
 });
 
 

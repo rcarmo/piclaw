@@ -3,32 +3,6 @@
   "source": "github:rcarmo/piclaw-addons",
   "addons": [
     {
-      "slug": "a2a",
-      "name": "@rcarmo/piclaw-addon-a2a",
-      "version": "0.4.1",
-      "type": "extension",
-      "description": "Opt-in A2A v1 agents with authenticated JSON-RPC, durable tasks and approved endpoints",
-      "path": "addons/a2a",
-      "tags": [
-        "a2a",
-        "agents",
-        "interoperability"
-      ],
-      "skills": [
-        "a2a"
-      ],
-      "install": {
-        "kind": "tarball",
-        "spec": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-a2a-0.4.1.tgz"
-      },
-      "updatedAt": "2026-09-19",
-      "owner": {
-        "login": "rcarmo",
-        "url": "https://github.com/rcarmo"
-      },
-      "contributors": []
-    },
-    {
       "slug": "ast-grep-tool",
       "name": "@rcarmo/piclaw-addon-ast-grep",
       "version": "0.1.7",

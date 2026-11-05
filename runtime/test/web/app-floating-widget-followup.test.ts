@@ -39,7 +39,7 @@ test('buildFloatingWidgetDashboardData composes settled payloads into dashboard 
   expect(dashboard.timeline.latestPostId).toBe(11);
 });
 
-test('handleInjectQueuedFollowupAction removes item optimistically then refreshes queue on success', async () => {
+test('steering keeps its SDK item visible until actual placement and refreshes on acceptance', async () => {
   const followupQueueItemsRef = { current: [{ row_id: 'r1', content: 'Queued' }] };
   const dismissedQueueRowIdsRef = { current: new Set<string | number>() };
   let followupQueueItems = [...followupQueueItemsRef.current];
@@ -58,13 +58,13 @@ test('handleInjectQueuedFollowupAction removes item optimistically then refreshe
     showIntentToast: () => {},
     steerAgentQueueItem: async (rowId, chatJid) => {
       calls.push([rowId, chatJid]);
-      return { ok: true };
+      return { queued: 'steer', removed: false };
     },
     removeAgentQueueItem: async () => ({ ok: true }),
   });
 
-  expect(followupQueueItems).toEqual([]);
-  expect(dismissedQueueRowIdsRef.current.has('r1')).toBe(true);
+  expect(followupQueueItems).toEqual(followupQueueItemsRef.current);
+  expect(dismissedQueueRowIdsRef.current.has('r1')).toBe(false);
 
   await Promise.resolve();
   await Promise.resolve();
@@ -102,8 +102,8 @@ test('handleRemoveQueuedFollowupAction restores dismissed row marker on failure 
     },
   });
 
-  expect(followupQueueItems).toEqual([]);
-  expect(clearCounts).toEqual([0]);
+  expect(followupQueueItems).toEqual(followupQueueItemsRef.current);
+  expect(clearCounts).toEqual([]);
 
   await Promise.resolve();
   await Promise.resolve();
@@ -111,6 +111,7 @@ test('handleRemoveQueuedFollowupAction restores dismissed row marker on failure 
   expect(dismissedQueueRowIdsRef.current.has('r1')).toBe(false);
   expect(refreshCount).toBe(1);
   expect(toastMessages).toContain('Failed to remove message');
+  expect(followupQueueItems).toEqual(followupQueueItemsRef.current);
 });
 
 test('openFloatingWidgetFromHost and closeFloatingWidgetFromHost update dismissed session tracking', () => {

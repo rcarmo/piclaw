@@ -306,6 +306,20 @@ describe("local test entrypoint audit", () => {
     expect(await auditLocalTestEntrypoints()).toEqual([]);
   });
 
+  test('working-tree deletion does not hide a new unaudited test runner',async()=>{
+    const directory=mkdtempSync(join(tmpdir(),'piclaw-deleted-entrypoint-'));
+    try{
+      expect(Bun.spawnSync(['git','init','-q'],{cwd:directory}).exitCode).toBe(0);
+      writeFileSync(join(directory,'removed.ts'),"Bun.spawn(['bun', 'test']);\n");
+      expect(Bun.spawnSync(['git','add','removed.ts'],{cwd:directory}).exitCode).toBe(0);
+      rmSync(join(directory,'removed.ts'));
+      writeFileSync(join(directory,'current runner.ts'),"Bun.spawn(['bun', 'test']);\n");
+      expect(await auditLocalTestEntrypoints(directory)).toEqual(["current runner.ts:1:Bun.spawn(['bun', 'test']);"]);
+      // Explicitly requested missing paths and real read errors still fail closed.
+      await expect(auditLocalTestEntrypoints(directory,['removed.ts'])).rejects.toThrow('ENOENT');
+    }finally{rmSync(directory,{recursive:true,force:true});}
+  });
+
   test("detects raw test commands in arbitrary nested scripts, package manifests, and Makefiles", async () => {
     const directory = mkdtempSync(join(tmpdir(), "piclaw-entrypoint-audit-"));
     try {

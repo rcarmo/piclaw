@@ -108,13 +108,8 @@ function createControlPlaneService(): WebAgentControlPlaneService {
       enqueue: (task: () => unknown) => task(),
     },
     agentPool: {} as any,
-    queuedFollowupLifecycle: {
-      getQueuedFollowupCount: () => 0,
-      listQueuedStateItems: () => [],
-      removeQueuedFollowupForAction: async () => ({ removed: null, source: null }),
-      reorderQueuedFollowupItems: async () => false,
-    },
-    processChat: async () => {},
+    readNativeQueue: async () => [],
+    controlNativeQueue: async () => false,
   });
 }
 

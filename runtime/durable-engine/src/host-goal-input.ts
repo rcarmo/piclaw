@@ -1,6 +1,5 @@
 import { withExtensionKvAuthority } from "../../src/extension-kv-registry.js";
 import type { PreparedInputText } from "../../src/channels/web/core/web-channel-contracts.js";
-import type { QueuedFollowupItem } from "../../src/queued-followups.js";
 
 export interface GoalInputAddon {
   goalInputIdentity(text: string): { goalId: string; generation: number } | false | null;
@@ -20,23 +19,6 @@ export function compactGoalInput(addon: Pick<GoalInputAddon, "goalInputIdentity"
   if (!identity) throw Error("Goal input identity required");
   const visible = text.replace(/\n\n<piclaw_goal_input>[\s\S]*<\/piclaw_goal_input>$/, "");
   return visible + "\n\n<piclaw_goal_input>" + JSON.stringify(identity) + "</piclaw_goal_input>";
-}
-
-/** Prove revocation only for host-generated, still-queued Goal controls. Ordinary
- * accepted input never acquires an automatic-discard capability from its text. */
-export function createHostGoalQueueExpiry(addon: GoalInputAddon, assertAdmission: (chat: string) => void) {
-  const prepare = addon.prepareGoalInput.bind(addon), identity = addon.goalInputIdentity.bind(addon);
-  return (chatJid: string, item: Readonly<QueuedFollowupItem>): (() => void) | undefined => {
-    assertAdmission(chatJid);
-    if (item.source !== "goal.continuation" || !item.source_accepted || !item.source_id ||
-      !Number.isSafeInteger(item.rowId) || item.rowId >= 0 ||
-      !/^goal-(?:command|settings|continuation|budget):/.test(item.source_id) || !identity(item.queuedContent)) return;
-    const scope = <T>(body: () => T) => withExtensionKvAuthority({ extensionId: "goal", chatJid,
-      assertCurrent() { assertAdmission(chatJid); }, write() { throw Error("Goal expiry preparation is read-only"); } }, body);
-    const prepared = scope(() => prepare(item.queuedContent, chatJid));
-    if (prepared.decision.action !== "handled") return;
-    return () => { assertAdmission(chatJid); scope(() => prepared.assertCurrent()); };
-  };
 }
 
 /** Read-only preparation before an accepted operation exists. The host must

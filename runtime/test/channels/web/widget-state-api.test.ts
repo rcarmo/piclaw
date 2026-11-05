@@ -26,7 +26,7 @@ function makeChannel(overrides: Partial<any> = {}): any {
       getContextUsageForChat: async () => ({ tokens: 123, contextWindow: 1000, percent: 12.3, sessionGeneration: "session-1" }),
       getSessionGenerationForChat: () => "session-1",
     },
-    getQueuedFollowupCount: () => 1,
+    readNativeQueue: async () => [{ row_id: 7, content: 'SDK queued input' }],
     getAgentStatus: () => ({ type: "thinking", title: "Thinking" }),
     getContextUsage: () => ({ tokens: 50, contextWindow: 1000, percent: 5 }),
     json: (payload: unknown, status = 200) => new Response(JSON.stringify(payload), {

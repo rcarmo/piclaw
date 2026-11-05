@@ -102,32 +102,40 @@ export function createHostCodexAnswerMaterializer(options: {
       assertOwner();
     };
     check();
-    const row = root.query("SELECT value FROM extension_kv WHERE extension_id='codex-conversion' AND scope='chat' AND scope_key=? AND key=?")
-      .get(operation.chatJid, `outputrefs:${operation.operationId}`) as {value: string} | null;
-    const paths: string[] = [];
-    if (row) {
-      const record = JSON.parse(row.value);
-      if (record.hostOperationId !== operation.operationId || record.chatJid !== operation.chatJid || !Array.isArray(record.refs))
-        throw Error('Codex artifact owner mismatch');
-      check(); const workspace = await realpath(cwd); check();
-      for (const item of record.refs) {
-        if (!item || typeof item.path !== 'string' || !/^\.pi\/openai-codex-images\/[^\r\n]+$/.test(item.path) ||
-          typeof (item.codexOperationId ?? record.codexOperationId) !== 'string' || !(item.codexOperationId ?? record.codexOperationId) ||
-          typeof item.callId !== 'string' || !item.callId || (item.responseId !== undefined && typeof item.responseId !== 'string') ||
-          typeof item.mimeType !== 'string' || !/^image\/[a-z0-9.+-]+$/.test(item.mimeType) ||
-          !Number.isSafeInteger(item.bytes) || item.bytes < 0 || typeof item.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(item.sha256))
-          throw Error('Invalid Codex artifact ref');
-        check(); const path = await realpath(resolve(workspace, item.path)); check();
-        const rel = relative(workspace, path);
-        if (rel !== item.path || isAbsolute(rel) || rel.startsWith('../')) throw Error('Image outside actual workspace');
-        check(); const bytes = await readFile(path); check();
-        if (bytes.length !== item.bytes || createHash('sha256').update(bytes).digest('hex') !== item.sha256) throw Error('Codex artifact changed');
-        if (!paths.includes(item.path)) paths.push(item.path);
-      }
-    }
-    const text = answer.text + (paths.length ? `\n\nFiles:\n${paths.map(path => `- ${path}`).join('\n')}` : '');
+    const text = await renderCodexAnswer(root,cwd,operation.chatJid,operation.operationId,answer.text,check);
     check(); const pending = answers.put(ref, text); check();
     if (pending !== undefined) { check(); await pending; check(); }
     return Object.freeze({ contentRef: ref, contentBlocksRef: null, mediaIds: Object.freeze([]) });
   };
+}
+
+/** Visible file-pill projection of validated source-owned output refs. SDK result
+ * identity authorises native use; this reader owns no turn or host operation. */
+export async function renderCodexAnswer(root: Database,cwd: string,chatJid: string,sourceId: string,answerText: string,check:()=>void): Promise<string> {
+  check();
+  const row = root.query("SELECT value FROM extension_kv WHERE extension_id='codex-conversion' AND scope='chat' AND scope_key=? AND key=?")
+    .get(chatJid, `outputrefs:${sourceId}`) as {value: string} | null;
+  const paths: string[] = [];
+  if (row) {
+    const record = JSON.parse(row.value);
+    if (record.hostOperationId !== sourceId || record.chatJid !== chatJid || !Array.isArray(record.refs))
+      throw Error('Codex artifact owner mismatch');
+    check(); const workspace = await realpath(cwd); check();
+    for (const item of record.refs) {
+      if (!item || typeof item.path !== 'string' || !/^\.pi\/openai-codex-images\/[^\r\n]+$/.test(item.path) ||
+        typeof (item.codexOperationId ?? record.codexOperationId) !== 'string' || !(item.codexOperationId ?? record.codexOperationId) ||
+        typeof item.callId !== 'string' || !item.callId || (item.responseId !== undefined && typeof item.responseId !== 'string') ||
+        typeof item.mimeType !== 'string' || !/^image\/[a-z0-9.+-]+$/.test(item.mimeType) ||
+        !Number.isSafeInteger(item.bytes) || item.bytes < 0 || typeof item.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(item.sha256))
+        throw Error('Invalid Codex artifact ref');
+      check(); const path = await realpath(resolve(workspace, item.path)); check();
+      const rel = relative(workspace, path);
+      if (rel !== item.path || isAbsolute(rel) || rel.startsWith('../')) throw Error('Image outside actual workspace');
+      check(); const bytes = await readFile(path); check();
+      if (bytes.length !== item.bytes || createHash('sha256').update(bytes).digest('hex') !== item.sha256) throw Error('Codex artifact changed');
+      if (!paths.includes(item.path)) paths.push(item.path);
+    }
+  }
+  const text = answerText + (paths.length ? `\n\nFiles:\n${paths.map(path => `- ${path}`).join('\n')}` : '');
+  check();return text;
 }

@@ -31,7 +31,7 @@ describe('canonical offline native contract', () => {
     expect(stages[3].cwd).toBe(join(ROOT, 'qualification/pi-durable-130'));
     expect(() => nativeStages({ ...contract, typeProjects: [] })).toThrow('both private type projects');
     expect(() => nativeStages({ ...contract, integrationTests: [] })).toThrow('required accepted-source');
-    for (const required of ['default-application-runtime.test.ts', 'runtime.test.ts', 'goal-tools.test.ts', 'goal-usage.test.ts', 'goal-settlement.test.ts', 'goal-terminal-race.test.ts', 'installed-goal-catalog.test.ts', 'native-compaction-settings.test.ts', 'routing-policy.test.ts', 'native-ui-projection.test.ts']) expect(contract.tests).toContain(required);
+    for (const required of ['native-http-input.test.ts', 'direct-sdk-message.test.ts', 'native-source-cursor-ack.test.ts', 'native-factory-compaction.test.ts', 'runtime.test.ts', 'goal-tools.test.ts', 'goal-usage.test.ts', 'goal-settlement.test.ts', 'goal-terminal-race.test.ts', 'installed-goal-catalog.test.ts', 'native-compaction-settings.test.ts', 'routing-policy.test.ts', 'native-ui-projection.test.ts']) expect(contract.tests).toContain(required);
   });
 
   test('preflight requires the separately locked code-review parser graph', async () => {
@@ -113,17 +113,14 @@ describe('canonical offline native contract', () => {
     expect(() => nativeScratchRoot(ROOT, { TMPDIR: join(ROOT, 'tmp') })).toThrow('outside the candidate');
   });
 
-  test('cold-start factory aggregate budget is bounded without relaxing scenario deadlines', () => {
+  test('focused native files keep the standard bounded deadline without a monolithic override', () => {
     expect(DEFAULT_NATIVE_FILE_TIMEOUT_MS).toBe(300_000);
-    expect(nativeFileTimeout('runtime.test.ts', contract.fileTimeoutMs, contract.tests)).toBe(300_000);
-    expect(nativeFileTimeout('default-application-runtime.test.ts', contract.fileTimeoutMs, contract.tests)).toBe(900_000);
-    expect(Object.keys(contract.fileTimeoutMs)).toEqual(['default-application-runtime.test.ts']);
+    expect(contract.fileTimeoutMs).toEqual({});
+    for (const file of contract.tests) expect(nativeFileTimeout(file, contract.fileTimeoutMs, contract.tests)).toBe(300_000);
     for (const value of [0, -1, Infinity, 900_001]) expect(() => nativeFileTimeout('runtime.test.ts', { 'runtime.test.ts': value }, contract.tests)).toThrow('Invalid bounded');
     expect(() => nativeFileTimeout('runtime.test.ts', { 'missing.test.ts': 1 }, contract.tests)).toThrow('Invalid bounded');
     expect(() => nativeFileTimeout('missing.test.ts', {}, contract.tests)).toThrow('Unknown native');
-    const factory = readFileSync(join(ROOT, 'qualification/pi-durable-130/default-application-runtime.test.ts'), 'utf8');
-    expect(factory).toContain("resolve(import.meta.dir, '../../runtime/scripts/local-test-priority.ts')");
-    expect(factory).toContain('}, 30_000);');
+    expect(contract.tests).not.toContain('default-application-runtime.test.ts');
   });
 
   test('discovery drift, missing suites, duplicates and filtered inventory cannot qualify', () => {

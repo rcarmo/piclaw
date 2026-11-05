@@ -11,8 +11,8 @@ import { sanitizePublicInboundContentBlocks, sanitizeModelPostedContentBlocks } 
 import type { AuthenticatedPrincipal } from '../../src/core/access-types.js';
 
 const principal: AuthenticatedPrincipal = {kind:'local',userId:'default',username:'local',displayName:'Local',role:'admin',mode:'single-user',homeChatJid:'web:default',authentication:{method:'none',sessionId:null,expiresAt:null}};
-beforeEach(()=>{ process.env.PICLAW_DB_IN_MEMORY='1'; closeDatabase(); initDatabase(); });
-afterEach(()=>{setAddonLocalContextHost(null);closeDatabase();});
+beforeEach(async()=>{ process.env.PICLAW_DB_IN_MEMORY='1'; await closeDatabase(); initDatabase(); });
+afterEach(async()=>{setAddonLocalContextHost(null);await closeDatabase();});
 function branch(chatJid='web:review-target',agentName='review-target') {
   storeChatMetadata(chatJid,new Date().toISOString());
   return ensureChatBranch({chat_jid:chatJid,agent_name:agentName});
@@ -229,7 +229,7 @@ test('durable dispatch authority survives database reopen and unchanged message 
     await withAddonLocalDispatch({chatJid:b.chat_jid,incarnation:b.branch_id},'durable',reference,async()=>{
       const req=new Request('http://internal/');bindAddonLocalDispatchRequest(req,b.chat_jid,'durable');marker=getAddonLocalDispatchBlock(req,b.chat_jid,'durable');
     });
-    closeDatabase();initDatabase();
+    await closeDatabase();initDatabase();
     await withChatContext(b.chat_jid,'web',()=>withVerifiedAddonMessage(b.chat_jid,{id:'persisted1',content:'durable',content_blocks:[marker]},async()=>{
       if(addonLocalContextApi.getToolContext()!==null)throw Error('Admission leaked direct authority');
       await withAddonLocalPrompt(b.chat_jid,true,async()=>{
@@ -238,7 +238,7 @@ test('durable dispatch authority survives database reopen and unchanged message 
         if(ctx?.reference?.addonId!==reference.addonId||ctx?.reference?.intentId!==reference.intentId)throw Error('Lost durable reference');
       });
     }));
-    closeDatabase();console.log('DURABLE_OK');
+    await closeDatabase();console.log('DURABLE_OK');
   `;
   const child=Bun.spawnSync([process.execPath,'-e',script],{cwd:import.meta.dir+'/../..',env:{...process.env,PICLAW_DB_IN_MEMORY:'0'},stdout:'pipe',stderr:'pipe',timeout:15000});
   expect(child.exitCode,child.stderr.toString()).toBe(0);expect(child.stdout.toString()).toContain('DURABLE_OK');

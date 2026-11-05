@@ -40,14 +40,14 @@ try {
     process.env.PICLAW_DB_IN_MEMORY = 'true';
     assert.throws(() => initDatabase(getRuntimeConfigPaths()), { message: refusal });
     assert.equal(getDb(), database); assert.deepEqual(getDatabaseBinding(), binding);
-    closeDatabase(); initDatabase(getRuntimeConfigPaths());
+    await closeDatabase(); initDatabase(getRuntimeConfigPaths());
     assert.equal(actualPath(), ''); assert.equal(getDatabaseBinding(), null);
   } else if (scenario === 'memory') {
     for (const flag of ['1', 'true']) {
       process.env.PICLAW_DB_IN_MEMORY = flag; initDatabase(getRuntimeConfigPaths());
       assert.equal(actualPath(), ''); assert.equal(getDatabaseBinding(), null);
       assert.throws(() => backupDatabase(join(originalStore, 'not-a-backup.db')), /file-backed database/);
-      closeDatabase();
+      await closeDatabase();
     }
     process.env.PICLAW_DB_IN_MEMORY = '0'; process.env.PICLAW_STORE = ':memory:';
     initDatabase(getRuntimeConfigPaths()); assert.equal(actualPath(), '');
@@ -58,7 +58,7 @@ try {
     assert.deepEqual(getDb().query("SELECT name FROM sqlite_schema WHERE name='fixture_old_memory'").all(), []);
     process.env.PICLAW_DB_IN_MEMORY = '0';
     assert.throws(() => initDatabase(getRuntimeConfigPaths()), { message: refusal });
-    closeDatabase(); initDatabase(getRuntimeConfigPaths()); assert.equal(actualPath(), join(alternateStore, 'messages.db'));
+    await closeDatabase(); initDatabase(getRuntimeConfigPaths()); assert.equal(actualPath(), join(alternateStore, 'messages.db'));
   } else if (scenario === 'memory-guard') {
     process.env.PICLAW_DB_IN_MEMORY = '1'; initDatabase(getRuntimeConfigPaths());
     const database = getDb(), argv = [...process.argv], bunArgv = [...Bun.argv];
@@ -74,8 +74,8 @@ try {
     const paths = getRuntimeConfigPaths(); initDatabase(paths);
     assert.equal(actualPath(), join(paths.workspaceDir, '.piclaw/store/messages.db'));
     assert.notEqual(paths.storeDir, originalStore);
-    closeDatabase(); process.env.PICLAW_STORE = ':memory:';
+    await closeDatabase(); process.env.PICLAW_STORE = ':memory:';
     initDatabase(getRuntimeConfigPaths()); assert.equal(actualPath(), '');
   }
   console.log(JSON.stringify({ scenario, actualOpenedPathsVerified: true, explicitSnapshot: true, boundTargetPreserved: true }));
-} finally { closeDatabase(); }
+} finally { await closeDatabase(); }

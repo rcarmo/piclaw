@@ -56,7 +56,7 @@ throw Error('unapproved shadow');\n`);
         await invoke("goal_stop", { reason: "other", summary: "Factory qualified" });
         expect(extensionKvGet("goal", "thread-goal", "chat", chatJid)).toMatchObject({ status: "stopped", stop_summary: "Factory qualified" });
         expect(() => assertApplicationExtensionCatalogSupported(catalog!)).toThrow("no operation-owned host effect port");
-      } finally { resetExtensionKvStoreForTests(); closeDatabase(); }
+      } finally { resetExtensionKvStoreForTests(); await closeDatabase(); }
       writeFileSync(join(pkg, "compat/chat-context.ts"), "// replaced\n");
       expect(() => qualified!.assertCurrent()).toThrow("Installed Goal source changed");
     }

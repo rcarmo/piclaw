@@ -4,14 +4,13 @@ import { Database } from "bun:sqlite";
 import { createHostProcessControls, nativeProcessToolNames } from "../../runtime/durable-engine/src/host-process-controls.js";
 import { nativeExitNotice, type NativeExitReceipt } from "../../runtime/durable-engine/src/host-process-receipt.js";
 import type { AcceptedInput, NativeProcessSnapshot } from "../../runtime/durable-engine/src/host-runtime.js";
-import { operationBudgetWorkId } from "../../runtime/durable-engine/src/host-request-accounting.js";
 import { addLogSink, removeLogSink, type LogRecord } from "../../runtime/src/utils/logger.js";
 import { BACKGROUND_CONTEXT as context } from "../../runtime/durable-engine/qualification/context.ts";
 
 const databases: Database[] = [];
 afterEach(() => { for (const db of databases.splice(0)) db.close(); });
 
-function fixture() {
+function fixture(native=false) {
   // Deliberately independent schema: only the read-side contract of this controller.
   const root = new Database(":memory:"); databases.push(root);
   root.exec(`
@@ -22,7 +21,7 @@ function fixture() {
     CREATE TABLE service_effect_s01_queued_inputs(state TEXT);
     CREATE TABLE service_effect_s07_occurrences(state TEXT);
     CREATE TABLE chat_cursors(queued_followups_json TEXT);
-    CREATE TABLE budget_work(id TEXT PRIMARY KEY, status TEXT);
+    CREATE TABLE messages(chat_jid TEXT, content TEXT, is_bot_message INTEGER, is_terminal_agent_reply INTEGER);
     INSERT INTO tasks VALUES (9,'running',0),(8,'running',0);
     INSERT INTO submissions VALUES (4,'placed');
     INSERT INTO service_effect_s01_operations VALUES ('op','executing',NULL);
@@ -30,8 +29,9 @@ function fixture() {
     INSERT INTO chat_cursors VALUES ('[]');
   `);
   const input: AcceptedInput = { incarnation: "inc", conversationId: 7 as AcceptedInput["conversationId"],
-    chatJid: "chat", branchId: "main", operationId: "op", sourceSeq: 1, sourceId: "source",
+    chatJid: "chat", branchId: "main", operationId: native?"native-message:7:1":"op", sourceSeq: 1, sourceId: "source",
     payloadRef: "payload", requestId: "request", requestHash: "a".repeat(64) };
+  if(native)root.exec("DELETE FROM service_effect_s01_operations; UPDATE service_effect_s01_sources SET state='consumed';");
   let scope: NativeProcessSnapshot["scope"] = { input, submissionIds: [4], taskId: 9 as any,
     generationId: 8 as any, assistantId: 12, singleton: true };
   let tasks = [9, 8], submissions = [4], scheduling = "open";
@@ -77,9 +77,8 @@ function fixture() {
   const run = (name = "exit_process", args: any = { reason: "  maintenance  " }) =>
     controls.tools.find(t => t.name === name)!.execute(args, { conversationId: 7, taskId: 9, callId: "exit-call" } as any, context) as Promise<any>;
   const afterTools = (assistant = 12) => (controls.extension as any).hooks[0].handlers.afterTools(assistant);
-  function terminal(disposition = "completed", budget = "completed") {
+  function terminal(disposition = "completed") {
     root.query("UPDATE service_effect_s01_operations SET phase='terminal',terminal_disposition=?").run(disposition);
-    root.query("INSERT OR REPLACE INTO budget_work VALUES (?,?)").run(operationBudgetWorkId("op"), budget);
     root.exec("UPDATE tasks SET status='terminal'; UPDATE submissions SET status='completed'; UPDATE service_effect_s01_sources SET state='consumed';");
     tasks = []; submissions = [];
   }
@@ -214,14 +213,11 @@ for (const mismatch of ["missing", "nonce"] as const) test(`committed failed aft
   expect(f.deferred).toHaveLength(0); expect(f.shutdowns).toHaveLength(0);
 });
 
-test("terminal persistence and completed budget precede one deferred cleanup/shutdown", async () => {
+test("terminal persistence precedes one deferred cleanup/shutdown", async () => {
   const f = fixture(), result = await f.run(); f.verify(result.details); await f.afterTools();
   expect(f.controls.pending()).toBe(true);
   expect(() => f.controls.onOperationSettled("op", result.details)).toThrow("persistence");
   expect(f.deferred).toHaveLength(0); expect(f.shutdowns).toHaveLength(0);
-  f.terminal("completed", "active");
-  expect(() => f.controls.onOperationSettled("op", result.details)).toThrow("accounting");
-  expect(f.deferred).toHaveLength(0); expect(f.stats().closed).toBe(0);
   f.terminal();
   f.controls.onOperationSettled("other", result.details); expect(f.deferred).toHaveLength(0);
   for (let i = 0; i < 3; i++) f.controls.onOperationSettled("op", result.details);
@@ -378,4 +374,20 @@ test("direct exit leaves admission sealed on ownership loss or uncertain cleanup
   await cleanup.controls.requestCommandExit("user /exit");
   await cleanup.deferred[0]!();
   expect(cleanup.controls.pending()).toBe(true); expect(cleanup.shutdowns).toEqual([]);
+});
+
+for(const acknowledged of [false,true])test(`native singleton uses SDK receipt and committed timeline notice, not an operation/S02 (ACK=${acknowledged})`,async()=>{
+  const f=fixture(true);if(!acknowledged)f.root.exec("UPDATE service_effect_s01_sources SET state='pending'");
+  const status=await f.run("session_status",{action:"check"});expect(JSON.parse(status.output[0].text).safe_to_restart).toBe(true);
+  const result=await f.run();expect(result.control).toEqual({terminate:true});f.verify(result.details);await f.afterTools();
+  expect(()=>f.controls.onMessagePublished(f.input,1,result.details)).toThrow("persistence");expect(f.deferred).toHaveLength(0);
+  f.root.exec("BEGIN IMMEDIATE");f.root.query("INSERT INTO messages VALUES (?,?,1,1)").run("chat",nativeExitNotice("maintenance"));
+  expect(()=>f.controls.onMessagePublished(f.input,1,result.details)).toThrow("persistence");f.root.exec("ROLLBACK");expect(f.deferred).toHaveLength(0);
+  f.root.query("INSERT INTO messages VALUES (?,?,1,1)").run("chat",nativeExitNotice("maintenance"));
+  expect(()=>f.controls.onMessagePublished(f.input,1,{...result.details,reason:"wrong"})).toThrow("receipt");
+  expect(()=>f.controls.onMessagePublished(f.input,1,{...result.details,nonce:"wrong"})).toThrow("receipt");expect(f.deferred).toHaveLength(0);
+  f.terminal();f.controls.onMessagePublished(f.input,1,result.details);f.controls.onMessagePublished(f.input,1,result.details);
+  expect(f.root.query("SELECT * FROM service_effect_s01_operations").all()).toEqual([]);expect(f.deferred).toHaveLength(1);
+  await f.deferred[0]!();expect(f.events).toEqual(["cleanup","shutdown"]);expect(f.shutdowns).toEqual(["maintenance"]);
+  const recovered=f.fresh();recovered.onMessagePublished(f.input,1,result.details);expect(recovered.pending()).toBe(false);expect(f.deferred).toHaveLength(1);
 });

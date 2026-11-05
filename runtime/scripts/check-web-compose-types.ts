@@ -14,7 +14,7 @@ const result = Bun.spawnSync([process.execPath, compiler, '--noEmit', '--pretty'
 const output = new TextDecoder().decode(result.stdout) + new TextDecoder().decode(result.stderr);
 const actual = [...new Set(output.split('\n')
   .filter(line => /^.+\(\d+,\d+\): error TS\d+: /.test(line))
-  .map(line => line.replace(/^runtime\//, '')))].sort();
+  .map(line => line.replace(/^runtime\//, '').replaceAll(runtimeDir, '<runtime>')))].sort();
 if (result.exitCode !== 0 && actual.length === 0) {
   throw new Error(`Frontend compiler failed without TypeScript diagnostics:\n${output}`);
 }

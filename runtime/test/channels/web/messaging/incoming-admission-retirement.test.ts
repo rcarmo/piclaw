@@ -93,6 +93,7 @@ for (const publishFailure of [false,true]) {
     withTempWorkspaceEnv('incoming-post-contract-',{},async()=>{
       const store=await importFresh<Store>('../src/db.js');await store.closeDatabase();store.initDatabase(getRuntimeConfigPaths());
       const {channel,effects}=fixtureChannel();let replacement=0,attemptedBroadcast=0,attemptedWake=0;
+      channel.getInputSourceAdmission=()=>()=>{};channel.dispatchAcceptedInput=async(_chat:string,_id:string,row:number)=>({submission_id:row,queued:false});
       channel.admitMessage=(chatJid:string,content:string, _isBot: boolean,mediaIds:number[],options:any,check:()=>void,signal:AbortSignal)=>{
         effects.admitted++;return admitWebMessage(channel,{chatJid,content,isBot:false,mediaIds,agentId:'default',agentName:'Fixture'},options,check,signal);
       };
@@ -110,7 +111,7 @@ for (const publishFailure of [false,true]) {
         const response=await handlePost(channel,request,false,jid);expect(response.status).toBe(201);
         expect((await response.json() as any).data.content).toBe('accepted post');
         expect({admitted:effects.admitted,legacy:effects.legacy,replacement,attemptedBroadcast,attemptedWake})
-          .toEqual({admitted:1,legacy:0,replacement:0,attemptedBroadcast:1,attemptedWake:1});
+          .toEqual({admitted:1,legacy:0,replacement:0,attemptedBroadcast:1,attemptedWake:0});
         expect(store.getDb().query('SELECT id FROM messages WHERE chat_jid=?').all(jid)).toHaveLength(1);
       }finally{await store.closeDatabase();}
     }));

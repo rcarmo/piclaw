@@ -93,7 +93,8 @@ export function readNativeBackgroundPolicy(value:unknown):NativeBackgroundPolicy
 export function createNativeBackgroundPayload(input:NativeBackgroundPolicyInput):NativeBackgroundPayload{
   fields(input,["origin","workId","parentWorkId","model","allowedTools","maxToolCalls","acceptedAt","expiresAt","prompt","instructions"]);
   if(typeof input.prompt!=="string"||!input.prompt.trim()||input.prompt.length>100_000||typeof input.instructions!=="string")throw invalid();
-  const policy=policyFields({...input,promptSha256:sha(input.prompt),instructionsSha256:sha(input.instructions)},origin(input.origin));
+  const who=origin(input.origin);if(who.kind!=='dream')throw Error('Only native Dream background payloads can be created');
+  const policy=policyFields({...input,promptSha256:sha(input.prompt),instructionsSha256:sha(input.instructions)},who);
   return Object.freeze({version:1,policy,prompt:input.prompt,instructions:input.instructions});
 }
 export function readNativeBackgroundPayload(value:unknown):NativeBackgroundPayload{

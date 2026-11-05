@@ -14,6 +14,7 @@ import { appendServerTiming, measureSync } from "../http/server-timing.js";
 /** Shared dependencies for timeline/search/thread/thought endpoint handlers. */
 export interface ContentEndpointsContext {
   defaultChatJid: string;
+  hiddenNativeRows?(chat:string,ids:readonly number[]):Promise<readonly number[]>;
   json(payload: unknown, status?: number): Response;
   getBuffer(turnId: string, panel: "thought" | "draft"): WebAgentBufferEntry | undefined;
   getIdentity?(): { assistantName?: string | null; assistantAvatarUrl?: string | null; userName?: string | null; userAvatarUrl?: string | null; userAvatarBackground?: string | null } | null;
@@ -25,7 +26,7 @@ export function handleTimelineRequest(
   before: number | undefined,
   chatJid: string | undefined,
   ctx: ContentEndpointsContext
-): Response {
+): Response | Promise<Response> {
   const identity = ctx.getIdentity?.();
   const timelineIdentity = identity ? {
     assistant_name: identity.assistantName ?? null,
@@ -35,10 +36,14 @@ export function handleTimelineRequest(
     user_avatar_background: identity.userAvatarBackground ?? null,
   } : null;
   const { result, durationMs } = measureSync(() => getTimelineResponse(chatJid || ctx.defaultChatJid, limit, before, timelineIdentity));
-  return appendServerTiming(ctx.json(result.body, result.status), {
-    name: "timeline",
-    durationMs,
-  });
+  const response=(body:unknown)=>appendServerTiming(ctx.json(body,result.status),{name:"timeline",durationMs});
+  if(ctx.hiddenNativeRows){
+    const body=result.body as {posts:{id:number}[]};
+    return ctx.hiddenNativeRows(chatJid||ctx.defaultChatJid,body.posts.map(post=>post.id)).then(hidden=>{
+      const ids=new Set(hidden);return response({...body,posts:body.posts.filter(post=>!ids.has(post.id))});
+    });
+  }
+  return response(result.body);
 }
 
 /** Return posts for a hashtag in the requested web chat (defaults to the main web chat). */

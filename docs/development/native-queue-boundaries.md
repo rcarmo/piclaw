@@ -1,39 +1,36 @@
 # Native queue ownership
 
-Native web input uses host-accepted sources and native intents. AgentPool and its runtime facade expose no `queueStreamingMessage` or `removeQueuedFollowupMessage` API. Web handlers cannot prompt, clear or replay an SDK queue, and do not invoke context-pressure retry for queue delivery.
+Native web input goes directly to pi-durable 1.4 public submission APIs. The SDK owns busy handling, inbox placement, model/tool execution and terminal results. Root stores the accepted message and source correlation. AgentPool activity flags, host lanes, legacy queue JSON and host operation settlement do not choose native placement.
 
-## Admission and delivery
+## Admission and receipts
 
-The explicit backend contract is `AgentPool.isDurableRuntime()`. Native ordinary input requires source selectors, atomic message/queue admission and the steering selector before queue or timeline writes. Optional input-text preparation may transform content and attach a lifetime fence; its presence does not select the backend. Missing or revoked admission authority rejects the request without queue/timeline publication or SDK session creation.
+`AgentPool.isDurableRuntime()` identifies the backend. Ordinary native input requires source admission, the atomic message writer and the direct SDK dispatcher. Optional text preparation retains its invocation-local authority fence. Missing or revoked source, owner, target or caller authority fails closed; no legacy prompt or pending-observer fallback runs.
 
-- `/queue <text>` creates deferred accepted input, including while idle. It does not wake itself when a running turn ends during admission.
-- `/steer <text>` and compose steering use the same accepted-source path. During a running binding, the captured host port attaches that exact source to the operation. A binding ending after admission leaves the source queued for FIFO delivery.
-- Web `/queue-all` is unsupported. Individual input remains ordered by operation settlement.
-- The historical `persist_steer` body/header cannot select an SDK delivery path. Native steering materialises one user message with the original source ID, content, media, metadata and selected thread. A null thread self-roots at materialisation; it is never changed to a guessed active legacy thread.
-- Steering replies include the materialised `user_message` and its thread. `steering_delivery: pending` records accepted intent, with provider placement and execution still asynchronous.
+- Ordinary input and `/queue <text>` submit with `whenBusy: "followUp"`. An idle SDK conversation can place them immediately.
+- `/steer <text>` and compose steering submit with `whenBusy: "steer"`. The SDK decides whether they enter its inbox or the current conversation.
+- Nested slash commands in `/queue` or `/steer` are rejected before acceptance. `/queue-all` remains unsupported; global SDK delivery settings are not silently applied as per-chat controls.
+- `persist_steer` cannot select another storage or execution path. Attachment-only input retains its source/media/structured metadata and does not require fabricated visible text.
 
-Lost acknowledgements and before-submit failures reconcile the same committed native intent. Publication failure does not revoke accepted input. No consumed queue row is restored for a replacement SDK submission.
+A successful native HTTP receipt includes `created`, `row_id`, `submission_id` and `thread_id`. `row_id` identifies the accepted Root message; `submission_id` identifies the SDK input. `thread_id` can refer to an existing thread and must not be used as the new message ID. `queued: "followup" | "steer"` reports the observed SDK inbox state. Queued responses do not fabricate a placed `user_message`.
 
-Host message/queue writers use [acquisition-only SQLite admission](sqlite-write-admission.md). An entered SQL/authorization callback is never automatically replayed, including BUSY after source acceptance.
+Source/frontier/polling-cursor writes are optional acknowledgements after SDK acceptance. If they fail, the dispatcher returns success only after re-proving the exact retained SDK input and current source/route/owner. Correlation repair does not resubmit accepted work. Result observation remains attached to the original SDK input.
 
-## Queue actions
+An unconfirmed handoff still returns503 with `accepted: true` for its committed source. It publishes no speculative timeline post. Both compose skins retain the saved-source receipt without restoring it as an unsent draft or retrying it automatically. They preserve independently typed next drafts. This receipt does not prove SDK placement or completion.
 
-Queue-item steering requires both `source_accepted` and `source_id`. Manual or historical unaccepted deferred/placeholder rows return409 unchanged. They remain visible, individually removable and eligible for normal FIFO materialisation/admission. Steering does not silently adopt or remove/resubmit their text.
+## Queue actions and historical data
 
-Explicit DELETE uses the existing immediate transaction: reread the exact item, invoke the synchronous host withdrawal compare-and-swap, then remove queue/timeline projection. Missing, fenced, asynchronous or failed withdrawal rolls the transaction back. Other queued inputs retain their identity and order. Placeholder removal uses the exact row; SDK content matching is retired.
+Native queue state comes from the SDK inbox. Preserved legacy queue JSON is retained as history and is not projected as executable native work.
 
-Drain preflights its selected rows and rejects protected accepted input before deletion. It supplies no accepted-source withdrawal callback.
+A native queue action uses the exact SDK submission ID and explicit target chat. Steering changes only the public mutable inbox mode; accepted submission bytes remain unchanged. The item stays visible until actual SDK placement/removal. Removal uses the public SDK abort operation. Wrong-branch IDs cannot adopt, remove or steer another chat's input.
 
-## Callers and retained compatibility
+An ID shared with a preserved legacy row is ambiguous and returns409 unchanged. A preserved row without an SDK submission also returns409 unchanged. Native actions do not fall through to legacy materialisation or withdrawal. Historical schema and source records remain intact.
 
-`enqueueAgentMessage` captures and calls the real web input handler. A missing handler rejects before storage, queueing or publication. The handler-less SDK/storage fallback is retired.
+Write authority is captured before request-body awaits and rechecked at the guarded mutation. Native watches publish queue changes, placement, status and retained replies. The compatibility worker performs only a direct admission handoff: it does not advance native cursors, materialise old queue rows, publish synthetic run status, wait for a host terminal or schedule another host wake.
 
-Facade queue control commands return an explicit input-admission error before session lookup, revocation or command protection in every profile. The legacy session-level queue handlers and control dispatcher are deleted; no direct SDK prompt/steer fallback remains. Broader resource/composition cleanup is tracked by #1672/#1673.
+## Producer paths and verification
 
-The old SDK replay audit and wrapper have no supported current caller. Their original bytes are retained as [non-executable historical text](../archive/legacy-queue-audit/README.md). Historical reports are preserved.
+Peer HTTP relay, direct chat-tool relay and `enqueueAgentMessage` use the same source/message/SDK path. They retain source/target and reply descriptors, media links, structured blocks and explicit thread lineage. Runtime-message adapters preserve `created`, source-row and SDK IDs without manufacturing a timeline message.
 
-## Focused verification
+Actual SDK qualification is in `native-peer-input.test.ts`, `native-web-queue-contract.test.ts`, `native-http-input.test.ts` and `native-source-cursor-ack.test.ts` under `qualification/pi-durable-130`. It covers stale host activity, before/after-source starting races, stream ending before submission, metadata, branch controls, ambiguous IDs, optional ACK faults and reopen without replay. Host import/transaction tests separately check required ports, caller revocation, cancellation and absence of legacy lifecycle dependencies.
 
-Focused tests cover missing/fenced ports, admission races, manual idle deferral, immutable payloads, branch scoping, exact-row cancellation, rollback, queue drain preflight, peer-message provenance, same-source materialisation and recovery after lost acknowledgements. UI port doubles use real message/queue transactions; separate durable integration tests verify canonical work-store source/intent/recovery contracts.
-
-The frozen issue campaign uses focused tests only. No deployment, dependency installation, restart, schema migration, live database/configuration action or historical-data cleanup accompanies this source change.
+These checks do not certify every model-side multimodal payload, reconnect scenario or latency claim. Native admission does not consult financial expense limits. Passive token/context/provider-cost observation and explicit Goal token limits remain separate contracts. Historical replay reports remain in the non-executable [queue audit archive](../archive/legacy-queue-audit/README.md).

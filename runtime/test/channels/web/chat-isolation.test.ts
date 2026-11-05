@@ -22,6 +22,8 @@ test("web channel isolates branch post writes from the default chat timeline", a
 
   try {
     const { db, channel } = fixture;
+    channel.getInputSourceAdmission=()=>()=>{};
+    channel.dispatchAcceptedInput=async(_chat,_id,row)=>({submission_id:row,queued:false});
     const res = await (channel as any).handleRequest(new Request("http://test/post?chat_jid=web%3Abranch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

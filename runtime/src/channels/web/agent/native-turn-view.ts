@@ -4,6 +4,7 @@ import { buildPreview, createToolTitleTracker } from "./agent-utils.js";
 
 /** Projection of the public pi-durable conversation watch onto existing web events. */
 export interface NativeTurnViewChannel {
+  publishInput?(sourceId:string):void;
   broadcastEvent(event: string, data: Record<string, unknown>): void;
   updateAgentStatus?(chat: string, data: Record<string, unknown>): void;
   updateThoughtBuffer?(turn: string, text: string, lines: number): void;
@@ -16,9 +17,11 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
   const tools = new Map<string, { signature: string; payload: Record<string, unknown> }>();
   const delegates = new Map<string, ReturnType<typeof readNativeDelegateProgress>>();
   const titles = createToolTitleTracker();
-  let lastStatus = "";
+  let queuedIds=new Set<number>();
+  let lastStatus = "", queued = 0, entryFrontier: number | undefined, lastPrimary="";
   const status = (data: Record<string, unknown>) => {
-    const payload = { ...base, ...data };
+    const payload = { chat_jid: chat, source: "durable_runtime", sdk_observation: true, queued_count: queued,
+      state: "active", ...base, ...data };
     const signature = JSON.stringify(payload);
     if (signature === lastStatus) return;
     lastStatus = signature;
@@ -38,27 +41,44 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
     channel.broadcastEvent(`agent_${kind}_delta`, { ...base, delta: append ? text.slice(previous.length) : text, reset: !append, ...(!append ? { text } : {}) });
   }
   return (view: any) => {
+    const entries=view.entries??[];
+    for(const entry of entries){
+      if(entryFrontier!==undefined&&entry.id>entryFrontier&&entry.kind==="host.accepted"&&entry.conversationId===view.conversation?.id&&entry.data?.chatJid===chat&&typeof entry.data.sourceId==="string")channel.publishInput?.(entry.data.sourceId);
+    }
+    entryFrontier=entries.reduce((latest:number,entry:any)=>Math.max(latest,entry.id),entryFrontier??0);
     const live = view.docs["pi.live"] ?? {};
+    const inbox=(view.docs["pi.inbox"]?.items??[]).filter((item:any)=>item.mode!=="write");
+    const nextQueuedIds=new Set<number>(inbox.map((item:any)=>item.id));
+    for(const item of inbox)if(!queuedIds.has(item.id)&&item.entry?.kind==="host.accepted"&&item.entry.data?.chatJid===chat&&typeof item.content==="string")
+      channel.broadcastEvent("agent_followup_queued",{chat_jid:chat,row_id:item.id,content:item.content,source:"native_sdk"});
+    for(const id of queuedIds)if(!nextQueuedIds.has(id))channel.broadcastEvent("agent_followup_consumed",{chat_jid:chat,row_id:id});
+    queuedIds=nextQueuedIds;queued=inbox.length;
     if (!live.run) {
-      if (runId !== undefined && base) status({ type: "intent", title: "Finishing turn", active_tools: [], active_tool_count: 0 });
       runId = undefined;
+      if (live.compactions?.length) {
+        base = undefined;
+        status({ type: "intent", state: "active", title: "Compacting context", phase: "compaction", intent_key: "compaction",
+          task_id: live.compactions[0].taskId, active_tools: [], active_tool_count: 0 });
+      } else status({ type: "done", state: "idle", title: "Idle", active_tools: [], active_tool_count: 0 });
       return;
     }
     if (runId !== live.run.taskId) {
-      const input = database.query(`SELECT b.operation_id,m.rowid,m.thread_id FROM piclaw_durable_bindings_v1 b
-        JOIN service_effect_s01_operations o ON o.operation_id=b.operation_id AND o.primary_source_seq=b.source_seq
+      const input = database.query(`SELECT b.operation_id,b.source_id,m.rowid,m.thread_id FROM piclaw_durable_bindings_v1 b
         LEFT JOIN messages m ON m.id=b.source_id AND m.chat_jid=b.chat_jid
         WHERE b.chat_jid=? AND b.conversation_id=? AND
           (b.submission_id IN (SELECT value FROM json_each(?)) OR EXISTS (
             SELECT 1 FROM piclaw_durable_intent_bindings_v1 i WHERE i.operation_id=b.operation_id
               AND i.chat_jid=b.chat_jid AND i.conversation_id=b.conversation_id
               AND i.submission_id IN (SELECT value FROM json_each(?)))) LIMIT 1`)
-        .get(chat, view.conversation.id, JSON.stringify(live.run.inputs), JSON.stringify(live.run.inputs)) as { operation_id: string; rowid: number | null; thread_id: number | null } | null;
+        .get(chat, view.conversation.id, JSON.stringify(live.run.inputs), JSON.stringify(live.run.inputs)) as { operation_id: string; source_id:string; rowid: number | null; thread_id: number | null } | null;
       if (!input) return;
+      if(lastPrimary!==input.source_id){channel.publishInput?.(input.source_id);lastPrimary=input.source_id;}
       runId = live.run.taskId;
       operationId = input.operation_id; lastTool = undefined;
       base = { chat_jid: chat, agent_id: "default", turn_id: input.rowid ? `durable:${input.rowid}` : `durable-operation:${input.operation_id}`,
-        thread_id: input.thread_id ?? input.rowid, operation_id: input.operation_id, source: "durable_runtime", started_at: new Date().toISOString() };
+        thread_id: input.thread_id ?? input.rowid,
+        operation_id: input.operation_id.startsWith("native-message:") ? `sdk-run:${view.conversation.id}:${live.run.inputs[0]}` : input.operation_id,
+        source: "durable_runtime", started_at: new Date().toISOString() };
       thought = draft = completedThought = completedDraft = partialThought = partialDraft = lastStatus = ""; tools.clear(); delegates.clear();
       status({ type: "thinking", title: "Thinking...", phase: "thinking" });
     }
@@ -68,8 +88,8 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
     // A watch can coalesce a whole generation or tool round. Committed public
     // entries are authoritative for completed text/results; partials are not a ledger.
     const first = view.entries.findIndex((entry: any) => entry.kind === "host.accepted" && entry.data?.operationId === operationId);
-    const entries = first >= 0 ? view.entries.slice(first) : view.entries.filter((entry: any) => entry.byTaskId >= live.run.taskId);
-    const messages = entries.flatMap((entry: any) => entry.model ?? []);
+    const runEntries = first >= 0 ? view.entries.slice(first) : view.entries.filter((entry: any) => entry.byTaskId >= live.run.taskId);
+    const messages = runEntries.flatMap((entry: any) => entry.model ?? []);
     const assistants = messages.filter((item: any) => item.role === "assistant");
     const textFor = (item: any, kind: string) => (item?.content ?? []).filter((block: any) => block.type === kind).map((block: any) => block[kind === "thinking" ? "thinking" : "text"] ?? "").join(kind === "thinking" ? "\n" : "");
     completedThought = assistants.map((item: any) => textFor(item, "thinking")).filter(Boolean).join("\n\n");

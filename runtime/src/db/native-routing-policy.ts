@@ -61,7 +61,6 @@ export function assertNativeBranchPolicyIdle(db: Database, branchId: string): vo
     ["service_effect_s01_operations", "phase<>'terminal'"],
     ["service_effect_s01_sources", "state NOT IN ('consumed','disposed')"],
     ["service_effect_s01_queued_inputs", "state NOT IN ('consumed','disposed')"],
-    ["budget_request_reservations", "state IN ('reserved','dispatched','unresolved')"],
   ] as const) {
     if (!exists(db, table)) throw Error("Native branch policy authority is incomplete");
     if (db.query(`SELECT 1 FROM main.${table} WHERE chat_jid IN (${chatMarks}) AND ${predicate} LIMIT 1`).get(...chats))

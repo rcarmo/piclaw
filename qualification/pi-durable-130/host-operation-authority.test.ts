@@ -5,13 +5,10 @@ import {join} from 'node:path';
 import {acquireRuntimeLock} from '../../runtime/src/runtime/single-instance.js';
 import { expect, test } from "bun:test";
 import { createHostOperationAuthority } from "../../runtime/durable-engine/src/host-operation-authority.js";
-import { assertOperationAccountingReady } from '../../runtime/durable-engine/src/host-request-accounting.js';
 import { createCurrentPiclawServiceWorkStore } from "../../runtime/src/service-effects/current-piclaw/service-work-store.js";
 import { installTerminalSettlementCompositionSchema } from "../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js";
 import { at, effect, sealed, value } from "./src/host-handoff.js";
 import { initDatabase, getDb, closeDatabase } from '../../runtime/src/db/connection.js';
-import { ensureBudgetWork } from '../../runtime/src/db/budget-limits.js';
-import { reserveBudgetRequest, dispatchBudgetRequest, recordBudgetTerminalReceipt, getBudgetRequest } from '../../runtime/src/db/budget-request-reservations.js';
 
 async function fixture(financial = false) {
   let root: Database;
@@ -38,21 +35,16 @@ async function fixture(financial = false) {
 for (const readonly of [false, true]) test(`captured tool authority ignores financial reporting debt; readonly=${readonly}`, async () => {
   const { root, captured } = await fixture(true);
   let financialChecks = 0;
-  const guarded = { ...captured, accountingBarrier: () => { financialChecks++; assertOperationAccountingReady(root, captured.operation.operationId); } };
+  const guarded = { ...captured, accountingBarrier: () => { financialChecks++; throw Error("Obsolete expense observer must not run"); } };
   const authority = createHostOperationAuthority(root, guarded, () => {}, readonly);
   try {
     authority.assertCurrent();
-    const operationWork = `durable-operation:${captured.operation.operationId}`;
-    ensureBudgetWork({ id: operationWork, chatJid: captured.operation.chatJid, executionKind: 'interactive' }, root);
-    const binding = { id: 'paid-pending', workId: 'durable-request:paid-pending', chatJid: captured.operation.chatJid, providerId: 'fixture', modelId: 'fixture', accountRef: 'generation', amountMicros: 100 };
-    ensureBudgetWork({ id: binding.workId, chatJid: binding.chatJid, executionKind: 'interactive', parentWorkId: operationWork }, root);
-    reserveBudgetRequest(binding, {}, root);
-    dispatchBudgetRequest(binding, { authorise() {}, signal: new AbortController().signal }, root);
-    recordBudgetTerminalReceipt(binding, { version: 1, requestId: binding.id, requestBindingSha256: getBudgetRequest(binding.id, root)!.binding_sha256,
-      projectedOutcome: { role: 'assistant', provider: binding.providerId, model: binding.modelId, api: 'openai-completions', stopReason: 'stop', usage: {
-        input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0.00003, output: 0.00001, cacheRead: 0, cacheWrite: 0, total: 0.00004 } } } }, at, root);
-    const financialState = () => ({ request: getBudgetRequest(binding.id, root),
-      work: root.query('SELECT * FROM budget_work ORDER BY id').all(), reports: root.query('SELECT * FROM token_usage').all() });
+    // Historical rows are fixture data, not calls to a retired finance owner.
+    root.query("INSERT INTO budget_work(id,chat_jid,execution_kind,created_at,updated_at) VALUES (?,?,'interactive',?,?)").run("historical-request-work",captured.operation.chatJid,at,at);
+    const receipt=JSON.stringify({version:1,requestId:"paid-pending",requestBindingSha256:"a".repeat(64),projectedOutcome:{role:"assistant",stopReason:"stop"}});
+    root.query("INSERT INTO budget_request_reservations(id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,amount_microusd,state,created_at,updated_at,terminal_receipt_json,terminal_receipt_sha256,terminal_received_at) VALUES (?,?,?,'fixture','fixture','historical-account',?,100,'unresolved',?,?,?,?,?)").run("paid-pending","historical-request-work",captured.operation.chatJid,"a".repeat(64),at,at,receipt,"b".repeat(64),at);
+    const financialState = () => ({ request: root.query("SELECT * FROM budget_request_reservations").all(),
+      work: root.query("SELECT * FROM budget_work ORDER BY id").all(), reports: root.query("SELECT * FROM token_usage").all() });
     const before = financialState(); financialChecks = 0; let entered = 0;
     expect(() => authority.assertSourceCurrent()).not.toThrow();
     expect(() => authority.assertCurrent()).not.toThrow();

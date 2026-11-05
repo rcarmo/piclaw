@@ -27,9 +27,9 @@ test("runtime public calls bypass displaced forwarding methods and retain every 
   for (const key of ["sendMessage", "postDashboardWidget", "enqueueQueuedFollowupItem", "admitQueuedFollowupItem", "getBuffer", "storeMessage", "admitUserMessage", "admitMessage"]) {
     Object.defineProperty(surface, key, { get() { throw Error("Retired runtime forwarding method was accessed: " + key); } });
   }
-  const writer = Reflect.get(f.channel, "messageWriteService"), queue = f.channel.queuedFollowupLifecycle;
-  for (const key of ["sendMessage", "postDashboardWidget", "enqueueQueuedFollowupItem", "admitQueuedFollowupItem", "getBuffer"]) {
-    replace(["sendMessage", "postDashboardWidget"].includes(key) ? writer : key === "getBuffer" ? Reflect.get(surface, "runtimeState") : queue, key, (...args) => { calls.push([key, ...args]); return key === "enqueueQueuedFollowupItem" ? 41 : key === "admitQueuedFollowupItem" ? Promise.resolve(42) : undefined; });
+  const writer = Reflect.get(f.channel, "messageWriteService");
+  for (const key of ["sendMessage", "postDashboardWidget", "getBuffer"]) {
+    replace(["sendMessage", "postDashboardWidget"].includes(key) ? writer : key === "getBuffer" ? Reflect.get(surface, "runtimeState") : Reflect.get(surface, "runtimeState"), key, (...args) => { calls.push([key, ...args]); return key === "enqueueQueuedFollowupItem" ? 41 : key === "admitQueuedFollowupItem" ? Promise.resolve(42) : undefined; });
   }
   const row = { id: 77 };
   replace(messages, "admitWebMessage", (...args) => { calls.push(["admitMessage", ...args]); return Promise.resolve(row); });
@@ -38,8 +38,6 @@ test("runtime public calls bypass displaced forwarding methods and retain every 
   const authorise = () => {}, source = { validate() {} } as any, signal = new AbortController().signal, defer = () => false;
   await f.channel.sendMessage("web:branch", "reply", options);
   await f.channel.postDashboardWidget("web:branch", { widgetId: "existing-widget" });
-  expect(f.channel.enqueueQueuedFollowupItem(...args)).toBe(41);
-  expect(await f.channel.admitQueuedFollowupItem([...args], authorise, signal, source)).toBe(42);
   expect(f.channel.getBuffer("native-turn", "draft")).toBeUndefined();
   expect(await f.channel.admitMessage("web:branch", "stored", true, [3], options)).toBe(row);
   expect(await f.channel.admitMessage("web:branch", "accepted", false, [3], options, authorise, signal, defer)).toBe(row);
@@ -47,8 +45,6 @@ test("runtime public calls bypass displaced forwarding methods and retain every 
   expect(calls).toEqual([
     ["sendMessage", "web:branch", "reply", options],
     ["postDashboardWidget", "web:branch", { widgetId: "existing-widget" }],
-    ["enqueueQueuedFollowupItem", ...args],
-    ["admitQueuedFollowupItem", [...args], authorise, signal, source],
     ["getBuffer", "native-turn", "draft"],
     ["admitMessage", f.channel, expect.objectContaining({ chatJid: "web:branch", content: "stored", isBot: true, mediaIds: [3] }), options, undefined, undefined, undefined],
     ["admitMessage", f.channel, expect.objectContaining({ chatJid: "web:branch", content: "accepted", isBot: false, mediaIds: [3] }), options, authorise, signal, defer],

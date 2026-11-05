@@ -12,7 +12,7 @@ test('the channel constructs its original owners without a runtime-followup faca
   expect(await Bun.file(new URL('../../../src/channels/web/runtime/runtime-followup-facade-service.ts', import.meta.url)).exists()).toBe(false);
 });
 
-test('public methods retain owner receivers, dynamic writer/queue replacement and exact admission promise/arguments', async () => {
+test('public methods retain owner receivers, dynamic writer replacement without the removed queue owner', async () => {
   const fixture = await createWebChannelTestFixture({ workspace: 'temp' }); cleanup = fixture.cleanup;
   const channel = fixture.channel as any;
   const state = channel.runtimeState;
@@ -25,27 +25,17 @@ test('public methods retain owner receivers, dynamic writer/queue replacement an
     expect(this).toBe(writer); expect([chat, text, options]).toEqual(['web:owners', 'reply', { threadId: 7 }]); calls.push('writer');
   } };
   channel.messageWriteService = writer;
-  const signal = new AbortController().signal, authorise = () => {}, accept = () => {};
-  const args = ['web:owners', 0, 'queued'] as const;
-  const result = Promise.resolve(-2);
-  const queue = { getQueuedFollowupCount(chat: string) { expect(this).toBe(queue); expect(chat).toBe('web:owners'); return 2; },
-    admitQueuedFollowupItem(...actual: unknown[]) {
-      expect(this).toBe(queue); expect(actual[0]).toBe(args); expect(actual[1]).toBe(authorise);
-      expect(actual[2]).toBe(signal); expect(actual[3]).toBe(accept); return result;
-    } };
-  channel.queuedFollowupLifecycle = queue;
   await channel.sendMessage('web:owners', 'reply', { threadId: 7 });
   expect(channel.getAgentStatus('web:owners')).toBe(status);
-  expect(channel.getQueuedFollowupCount('web:owners')).toBe(2);
-  expect(channel.admitQueuedFollowupItem(args, authorise, signal, accept)).toBe(result);
-  expect(await result).toBe(-2); expect(calls).toEqual(['writer']);
+  for (const name of ['getQueuedFollowupCount', 'admitQueuedFollowupItem', 'queuedFollowupLifecycle']) expect(channel).not.toHaveProperty(name);
+  expect(calls).toEqual(['writer']);
 });
 
 test('the public surface calls owners directly and never consults the retired facade', async () => {
   let sends = 0;
   const writer = { async sendMessage() { expect(this).toBe(writer); sends++; } };
   const service = Object.assign(Object.create(WebChannel.prototype), {
-    messageWriteService: writer, queuedFollowupLifecycle: {}, runtimeState: {},
+    messageWriteService: writer, runtimeState: {},
   } as any);
   Object.defineProperty(service, 'runtimeFollowupFacade', { get() { throw Error('retired forwarding layer'); } });
   await service.sendMessage('web:owners', 'reply');

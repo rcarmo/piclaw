@@ -16,7 +16,7 @@ test("five context projections retain exact own keys and allocation policy", () 
   const { contexts } = fixture();
   const shapes = {
     agentStatus: ["defaultChatJid", "json", "getAgentStatus", "getExtensionWorkingState", "getBuffer", "getContextUsageForChat", "getSessionTreeSummaryForChat", "getTokenUsageForChat", "getAvailableModels", "getProviderReadyCompletedForInstance"],
-    content: ["defaultChatJid", "json", "getBuffer", "getIdentity"],
+    content: ["defaultChatJid", "hiddenNativeRows", "json", "getBuffer", "getIdentity"],
     ui: ["json", "getWorkspaceVisible", "setWorkspaceVisible", "getWorkspaceShowHidden", "setWorkspaceShowHidden", "setPanelExpanded", "handleUiResponse"],
     agents: ["agentPool", "defaultChatJid", "defaultAgentId", "agentName", "agentAvatar", "userName", "userAvatar", "userAvatarBackground", "json"],
     avatar: ["assistantAvatar", "userAvatar", "json"],
@@ -37,6 +37,9 @@ test("context creation stays lazy and cached callbacks preserve live owners/defa
   const contexts = createWebChannelEndpointContexts(channel, options);
   const content = contexts.content(), ui = contexts.ui();
   expect(content.defaultChatJid).toBe("web:default");
+  expect(content.hiddenNativeRows).toBeUndefined();
+  channel.filterNativeTimeline=async function(chat:string,ids:number[]){expect(this).toBe(channel);expect([chat,ids]).toEqual(['web:default',[7,8]]);return [8];};
+  expect(await content.hiddenNativeRows!('web:default',[7,8])).toEqual([8]);
   expect(ui.getWorkspaceVisible()).toBe(false);
   const marker = new Error("same owner error");
   channel.getBuffer = function(turn: string, panel: string) { expect(this).toBe(channel); expect([turn, panel]).toEqual(["turn", "draft"]); throw marker; };

@@ -26,6 +26,7 @@ import { getNativeCommandCatalogue } from "./agent-control/native-control-capabi
 import { getPiclawAgentDir } from "./core/agent-dir.js";
 import { SESSIONS_DIR, WORKSPACE_DIR, getSessionPoolConfig } from "./core/config.js";
 import { readAccessConfig } from "./core/config-access.js";
+import { getExecutionIdentity } from "./core/execution-context.js";
 import { getChatChannel, getChatJid } from "./core/chat-context.js";
 import { registerChannelDetector } from "./router.js";
 import { createTrackedBashOperations } from "./tools/tracked-bash.js";
@@ -270,21 +271,6 @@ export class AgentPool {
     if(!this.durableApplication||!this.dreamDispatch)throw Error('Native Dream dispatcher unavailable');
     return this.dreamDispatch(Object.freeze({...request,assertCurrent:request.assertCurrent.bind(request)}));
   }
-  private readonly addonAdmission?: AgentPoolOptions["prepareAddonOperation"];
-  private readonly addonDispatch?: AgentPoolOptions["dispatchAddonOperation"];
-  private readonly addonReconcile?:AgentPoolOptions['reconcileAddonOperation'];
-  reconcileAddonOperation(operationId:string,expectedInputSequence?:number):Promise<AgentOutput|null>{
-    if(!this.durableApplication||!this.addonReconcile)throw Error('Native add-on recovery unavailable');
-    return this.addonReconcile(operationId,expectedInputSequence);
-  }
-  dispatchAddonOperation(operationId:string,signal:AbortSignal,expectedInputSequence?:number):Promise<AgentOutput>{
-    if(!this.durableApplication||!this.addonDispatch)throw Error('Native add-on execution unavailable');
-    return this.addonDispatch(operationId,signal,expectedInputSequence);
-  }
-  prepareAddonOperation(operationId:string,signal?:AbortSignal){
-    if(!this.durableApplication||!this.addonAdmission)throw Error("Native add-on operation admission unavailable");
-    signal?.throwIfAborted();return this.addonAdmission(operationId,signal);
-  }
   private readonly config = getSessionPoolConfig();
 
   private readonly scheduledDispatch: AgentPoolOptions["dispatchScheduledAgent"];
@@ -298,9 +284,6 @@ export class AgentPool {
 
   constructor(options: AgentPoolOptions) {
     this.dreamDispatch=options.dispatchDreamOperation?.bind(options);
-    this.addonAdmission = options.prepareAddonOperation?.bind(options);
-    this.addonDispatch = options.dispatchAddonOperation?.bind(options);
-    this.addonReconcile = options.reconcileAddonOperation?.bind(options);
     this.hostCommandDispatch = options.dispatchHostCommand?.bind(options);
     this.scheduledDispatch = options.dispatchScheduledAgent?.bind(options);
     this.sidePromptDispatch = options.dispatchSidePrompt?.bind(options);
@@ -426,10 +409,10 @@ export class AgentPool {
   }
 
   async runSidePrompt(chatJid: string, prompt: string, options: SidePromptOptions = {}): Promise<SidePromptResult> {
-    // Preserve the single-user boundary before budget bookkeeping or session
-    // hydration. Side prompts remain single-user-only regardless of which
-    // admission controls are installed around them.
-    if (readAccessConfig().mode !== "single-user") {
+    // A family-scoped caller cannot acquire single-user side authority from a
+    // later global mode/configuration change.
+    const origin = getExecutionIdentity();
+    if (readAccessConfig().mode !== "single-user" || (origin && origin.mode !== "single-user")) {
       return { status: "error", result: null, thinking: null, error: "Side prompts are unavailable in multi-user mode.", model: null };
     }
     if (!this.sidePromptDispatch) return { status: "error", result: null, thinking: null, model: null, error: "Durable side prompt dispatcher unavailable" };

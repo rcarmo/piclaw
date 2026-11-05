@@ -1,12 +1,11 @@
 import type { AgentPool } from "../../../agent-pool.js";
 import type { AgentQueue } from "../../../queue.js";
-import { readNativeTurnState } from "../agent/native-turn-state.js";
+import { getDb } from "../../../db.js";
 import {
   getIdentityConfig,
   getWebRuntimeConfig,
   getWebServerConfig,
 } from "../../../core/config.js";
-import { getDb } from "../../../db.js";
 import { handleAgentMessage as handleAgentMessageRequest } from "../handlers/agent.js";
 import {
   WebAdaptiveCardSidePromptService,
@@ -32,12 +31,9 @@ import {
 import type { InteractionBroadcaster, InteractionBroadcasterProfile } from "../interaction-broadcaster.js";
 import { createInteractionBroadcaster } from "../interaction-broadcaster.js";
 import { WebMessageWriteService, type WebMessageWriteServiceDeps } from "../message-write-service.js";
-import { QueuedFollowupLifecycleService } from "../runtime/queued-followup-lifecycle-service.js";
 import { RequestRouterService } from "../request-router-service.js";
 import {
   WebChannelRuntimeStateService,
-  type WebChannelRuntimeStateCallbacks,
-  type WebChannelRuntimeStateOptions,
 } from "../runtime/runtime-state-service.js";
 import {
   createWebServerLifecycleGateway,
@@ -62,7 +58,6 @@ export interface WebChannelConstructorFactoryChannel {
   agentPool: AgentPool;
   authGateway?: WebAuthGateway;
   interactionBroadcaster?: InteractionBroadcaster;
-  queuedFollowupLifecycle: QueuedFollowupLifecycleService;
   terminalService: TerminalSessionService;
   vncService: VncSessionService;
   workspaceVisible: boolean;
@@ -74,7 +69,7 @@ export interface WebChannelConstructorFactoryChannel {
   handleRequest(req: Request): Promise<Response>;
   sendMessage: WebChannelLike["sendMessage"];
   admitMessage: WebChannelLike["admitMessage"];
-  processChat(chatJid: string, agentId: string, threadRootId?: number | null): Promise<void>;
+  resumeNativeInputs?: WebChannelLike["resumeNativeInputs"];
 }
 
 export interface WebChannelConstructorFactoryDefaults {
@@ -87,13 +82,12 @@ export interface WebChannelConstructorFactoryRuntimeOpts {
   agentPool: AgentPool;
   prepareInputSourceAdmission?: WebChannelLike["prepareInputSourceAdmission"];
   prepareInputText?: WebChannelLike["prepareInputText"];
-  expireQueuedInput?: WebChannelLike["expireQueuedInput"];
   getInputSourceAdmission?: WebChannelLike["getInputSourceAdmission"];
-  getQueuedInputSourceAdmission?: WebChannelLike["getQueuedInputSourceAdmission"];
-  getQueuedInputSourceWithdrawal?: WebChannelLike["getQueuedInputSourceWithdrawal"];
-  getAcceptedQueuedSteering?: WebChannelLike["getAcceptedQueuedSteering"];
-  getQueuedInputMaterialization?: WebChannelLike["getQueuedInputMaterialization"];
+  filterNativeTimeline?: WebChannelLike["filterNativeTimeline"];
+  readNativeQueue?: WebChannelLike["readNativeQueue"];
+  controlNativeQueue?: WebChannelLike["controlNativeQueue"];
   dispatchAcceptedInput?: WebChannelLike["dispatchAcceptedInput"];
+  resumeNativeInputs?: WebChannelLike["resumeNativeInputs"];
 }
 
 export interface WebChannelConstructorFactoryOptions extends WebChannelConstructorFactoryDefaults {
@@ -133,10 +127,7 @@ export interface WebChannelConstructorFactoryResult {
 export interface WebChannelConstructorFactoryDeps {
   getIdentityConfig(): ReturnType<typeof getIdentityConfig>;
   createSessionBroadcast(agentPool: AgentPool): WebSessionBroadcastService;
-  createRuntimeState(
-    callbacks: WebChannelRuntimeStateCallbacks,
-    options: WebChannelRuntimeStateOptions,
-  ): WebChannelRuntimeStateService;
+  createRuntimeState(): WebChannelRuntimeStateService;
   createIdentitySnapshot(identity: ReturnType<typeof getIdentityConfig>): ReturnType<typeof createWebChannelIdentitySnapshot>;
   createInteractionBroadcaster(
     channel: WebChannelConstructorFactoryChannel,
@@ -175,7 +166,7 @@ export interface WebChannelConstructorFactoryDeps {
 const defaultDeps: WebChannelConstructorFactoryDeps = {
   getIdentityConfig,
   createSessionBroadcast: (agentPool) => new WebSessionBroadcastService(agentPool),
-  createRuntimeState: (callbacks, options) => new WebChannelRuntimeStateService(callbacks, options),
+  createRuntimeState: () => new WebChannelRuntimeStateService(),
   createIdentitySnapshot: (identity) => createWebChannelIdentitySnapshot(identity),
   createInteractionBroadcaster,
   createAuthGateway: (config, deps) => new WebAuthGateway(config, deps),
@@ -221,19 +212,7 @@ export function createWebChannelConstructorFactory(
   deps: WebChannelConstructorFactoryDeps = defaultDeps,
 ): WebChannelConstructorFactoryResult {
   const sessionBroadcast = deps.createSessionBroadcast(channel.agentPool);
-  const runtimeState = deps.createRuntimeState(
-    {
-      getAssistantName: () => deps.getIdentityConfig().assistantName,
-      isNativeRuntime: () => channel.agentPool.isDurableRuntime?.() === true,
-      isChatLaneBusy: chat => channel.queue.isLaneBusy(`chat:${chat}`),
-      readNativeTurnState: chat => readNativeTurnState(getDb(), chat),
-      enqueue: (task, key, laneKey) => channel.queue.enqueue(task, key, laneKey),
-      processChat: (chatJid, agentId, threadRootId) => channel.processChat(chatJid, agentId, threadRootId),
-    },
-    {
-      defaultAgentId: options.defaultAgentId,
-    },
-  );
+  const runtimeState = deps.createRuntimeState();
 
   const getIdentitySnapshot = () => deps.createIdentitySnapshot(deps.getIdentityConfig());
 

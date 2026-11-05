@@ -4,6 +4,7 @@
 
 import { recordAppPerfRequest } from './ui/app-perf-tracing.js';
 import { resolveScreenSizeHint } from './ui/screen-size-hint.js';
+import { isCommittedComposeInput } from './ui/compose-submission.js';
 import { getAgentUiSnapshot, currentUiChatJid } from './ui/agent-ui-snapshot.js';
 
 export { uploadMedia, uploadWorkspaceFile } from './ui/upload-transfers.js';
@@ -75,7 +76,7 @@ async function request(url, options: RequestInit & ApiOptions = {}) {
     
     if (!response.ok) {
         const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(error.error || `HTTP ${response.status}`);
+        throw Object.assign(new Error(error.error || `HTTP ${response.status}`), { status: response.status, payload: error });
     }
     
     return response.json();
@@ -191,10 +192,6 @@ export async function updateScheduledTask(action, id, options: ApiOptions = {}) 
             action,
             id,
             allow_internal: options?.allowInternal === true,
-            ...(options?.budgetUsd !== undefined ? { budget_usd: options.budgetUsd } : {}),
-            ...(options?.enabled !== undefined ? { enabled: options.enabled } : {}),
-            ...(options?.confirmRevision !== undefined ? { confirm_revision: options.confirmRevision } : {}),
-            ...(options?.confirmZeroBudget === true ? { confirm_zero_budget: true } : {}),
         }),
     });
 }
@@ -292,10 +289,18 @@ export async function sendAgentMessage(agentId, content, threadId = null, mediaI
     if (mode === 'auto' || mode === 'queue' || mode === 'steer') {
         payload.mode = mode;
     }
-    return request(`/agent/${agentId}/message${query}`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-    });
+    try {
+        return await request(`/agent/${agentId}/message${query}`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    } catch (error) {
+        const receipt = (error as ApiError)?.payload;
+        // A saved source must not be restored as an unsent draft. Preserve its
+        // uncertain receipt; no optimistic timeline/queue or automatic retry.
+        if (isCommittedComposeInput(receipt)) return receipt;
+        throw error;
+    }
 }
 
 export async function getAgentCommands(chatJid = 'web:default') {

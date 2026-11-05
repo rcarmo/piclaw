@@ -106,21 +106,16 @@ async function fixture(override?: Partial<Model<'openai-completions'>>) {
   await Bun.sleep(0);
   reads.length = 0; auth.length = 0;
   const lifetime = new AbortController();
-  const accounting = { authorize: 0, current: 0, dispatch: 0, retain: 0, settle: 0, abandon: 0 };
+  const effects = { authorize: 0, current: 0, usage: 0 };
   const check = (signal: AbortSignal) => { lifetime.signal.throwIfAborted(); signal.throwIfAborted(); };
   let previewRequest = previewSdkRequest;
   const policy: HostModelPolicy = { signal: lifetime.signal, previewRequest: (...args) => previewRequest(...args),
-    async authorize(owner, kind, signal) { expect(owner).toEqual(ref); expect(kind).toBe('chat'); check(signal); accounting.authorize++; },
-    assertCurrent(_owner, _kind, signal) { check(signal); accounting.current++; },
-    async prepareRequest(_owner, _options, signal) { check(signal); return {
-      async dispatch() { check(signal); accounting.dispatch++; },
-      async retainTerminal(message) { accounting.retain++; return copy(message); },
-      async settle() { check(signal); accounting.settle++; },
-      async abandon() { accounting.abandon++; },
-    }; },
+    async authorize(owner, kind, signal) { expect(owner).toEqual(ref); expect(kind).toBe('chat'); check(signal); effects.authorize++; },
+    assertCurrent(_owner, _kind, signal) { check(signal); effects.current++; },
+    observeUsage() { effects.usage++; },
   };
   const models = createHostModels(runtime, [ref, { ...ref, id: "initial" }], policy);
-  return { runtime, models, model: models.getModel(ref.provider, ref.id)!, reads, auth, wires, accounting,
+  return { runtime, models, model: models.getModel(ref.provider, ref.id)!, reads, auth, wires, effects,
     calls: () => calls, setPreview(fn: typeof previewSdkRequest) { previewRequest = fn; }, close: () => lifetime.abort() };
 }
 
@@ -137,12 +132,12 @@ test('actual Root ModelRuntime/private bridge preview is offline, physically iso
     expect(output).toEqual({ status: 'bounded', maxOutputTokens: 15904, reserveTokens: 20000, authIndependent: true });
     expect(() => assertModelContextFits(ctx.messages, f.model, output)).not.toThrow();
     expect(f.reads).toEqual([]); expect(f.auth).toEqual([]); expect(f.calls()).toBe(0);
-    expect(f.accounting.authorize).toBe(0);
+    expect(f.effects.authorize).toBe(0);
     const result = await f.models.streamSimple(f.model, copy(ctx), { maxTokens: 32000 }).result();
     expect(result.stopReason).toBe('stop'); expect(f.wires).toHaveLength(1);
     expect(f.wires[0]!.body.max_tokens).toBe(output.status === 'bounded' ? output.maxOutputTokens : NaN);
     expect(ctx).toEqual(before);
-    expect(f.accounting).toMatchObject({ authorize: 1, dispatch: 1, retain: 1, settle: 1, abandon: 0 });
+    expect(f.effects).toMatchObject({ authorize: 1, usage: 1 });
   } finally { f.close(); }
 });
 
@@ -153,7 +148,7 @@ test('actual sampling override cannot borrow a helper clamp or pass output admis
     const output = await f.models.previewSimple!(f.model, copy(ctx));
     expect(output).toEqual({ status: 'bounded', maxOutputTokens: 32000, reserveTokens: 36096, authIndependent: true });
     expect(() => assertModelContextFits(ctx.messages, f.model, output)).toThrow('context estimate exceeded');
-    expect(f.reads).toEqual([]); expect(f.auth).toEqual([]); expect(f.accounting.authorize).toBe(0);
+    expect(f.reads).toEqual([]); expect(f.auth).toEqual([]); expect(f.effects.authorize).toBe(0);
     // Offline transport control deliberately accepts the otherwise oversized body.
     expect((await f.models.streamSimple(f.model, copy(ctx), { maxTokens: 32000 }).result()).stopReason).toBe('stop');
     expect(f.wires[0]!.body.max_tokens).toBe(32000);
@@ -245,7 +240,7 @@ for (const scenario of ['known', 'override', 'close'] as const) test(`real idle 
       expect(await runtime.readSessionModel(binding)).toBe(`${ref.provider}/${ref.id}`);
     }
     expect(f.reads).toEqual([]); expect(f.auth).toEqual([]); expect(f.calls()).toBe(0);
-    expect(f.accounting.authorize).toBe(0);
+    expect(f.effects.authorize).toBe(0);
     await runtime.close(); runtime = undefined;
     seed = await Harness.open(await openStorage(), { models: f.models, registry }, context);
     const reopened = (await seed.conversation(id, context))!;

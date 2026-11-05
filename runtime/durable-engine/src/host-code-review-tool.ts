@@ -55,8 +55,8 @@ export function createHostCodeReviewTool(addon: CodeReviewNativeExports, options
       const check = () => {
         authority.assertCurrent();
         options.runtime().assertCapturedSourceCurrent(captured.inputs);
-        if (!primary || !captured.operation.harness || !captured.inputs.length || realpathSync(options.cwd) !== workspaceRoot ||
-          captured.inputs.some(input => input.chatJid !== captured.operation.chatJid || input.operationId !== captured.operation.operationId ||
+        if (!primary || (!captured.native && !captured.operation.harness) || !captured.inputs.length || realpathSync(options.cwd) !== workspaceRoot ||
+          captured.inputs.some(input => input.chatJid !== captured.operation.chatJid || (!captured.native && input.operationId !== captured.operation.operationId) ||
             input.branchId !== primary.branchId || !options.root.query("SELECT 1 FROM chat_branches WHERE chat_jid=? AND branch_id=? AND archived_at IS NULL AND handle_owner_id='' AND chat_jid LIKE 'web:%'").get(input.chatJid, input.branchId)))
           throw Error("Stale Code Review source authority");
       };

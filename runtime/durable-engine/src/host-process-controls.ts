@@ -6,9 +6,8 @@ import { defineTool, defineExtension, type ConversationId, type TaskId } from "@
 import { requestGracefulShutdown } from "../../src/runtime/shutdown-registry.js";
 import { getSessionIsolationLevel } from "../../src/core/config.js";
 import { createLogger } from "../../src/utils/logger.js";
-import { operationBudgetWorkId } from "./host-request-accounting.js";
 import { nativeExitNotice, type NativeExitReceipt } from "./host-process-receipt.js";
-import type { AcceptedInput, HostConversationRuntime, NativeProcessSnapshot } from "./host-runtime.js";
+import { isNativeMessageInput, type AcceptedInput, type HostConversationRuntime, type NativeProcessSnapshot } from "./host-runtime.js";
 
 export const nativeProcessToolNames = ["session_status", "exit_process"] as const;
 export const nativeProcessInstructions = `## Native process controls
@@ -87,7 +86,9 @@ export function createHostProcessControls(options: Options) {
       if (!Array.isArray(value) || value.length) throw Error("Deferred host input is pending or unreadable");
     }
     if (scope) {
-      if (!scope.singleton || scope.submissionIds.length !== 1 || tasks.length !== 2 || submissions.length !== 1 || operations.length !== 1 || sources.length !== 1)
+      const native=isNativeMessageInput(scope.input);
+      if (!scope.singleton || scope.submissionIds.length !== 1 || tasks.length !== 2 || submissions.length !== 1 ||
+          (native ? operations.length !== 0 || sources.length > 1 : operations.length !== 1 || sources.length !== 1))
         throw Error("A singleton root tool round with one accepted input is required");
       options.runtime().assertCapturedSourceCurrent([{ ...scope.input, submissionId: scope.submissionIds[0]! as import("@earendil-works/pi-durable").SubmissionId }]);
     }
@@ -160,8 +161,21 @@ export function createHostProcessControls(options: Options) {
       { phase: string; terminal_disposition: string | null } | null;
     if (terminal?.phase !== "terminal") throw Error("Native exit terminal persistence is unavailable");
     if (!receipt || receipt.nonce !== request.nonce || terminal.terminal_disposition !== "completed") { pending = undefined; return; }
-    const work = root.query("SELECT status FROM budget_work WHERE id=?").get(operationBudgetWorkId(operationId)) as { status: string } | null;
-    if (work && work.status !== "completed") throw Error("Native exit accounting settlement is uncertain");
+    scheduleExit(request.reason);
+  };
+  /** The current process may finish only its own live receipt after a real
+   * native timeline publication. Historical rows never reconstruct this latch. */
+  const onMessagePublished=(input:AcceptedInput,rowId:number,receipt?:NativeExitReceipt)=>{
+    const request=pending;
+    if(!request||scheduled||!isNativeMessageInput(input)||Object.keys(request.input).some(key=>request.input[key as keyof AcceptedInput]!==input[key as keyof AcceptedInput]))return;
+    assertOwner();
+    if(!receipt||receipt.kind!==request.kind||receipt.version!==request.version||receipt.reason!==request.reason||
+        receipt.nonce!==request.nonce||receipt.taskId!==request.taskId||receipt.assistantId!==request.assistantId||
+        !receipt.input||Object.keys(request.input).some(key=>request.input[key as keyof AcceptedInput]!==receipt.input[key as keyof AcceptedInput])||
+        Object.keys(receipt.input).length!==Object.keys(request.input).length)throw Error("Native exit SDK receipt unavailable");
+    if(root.inTransaction)throw Error("Native exit notice persistence unavailable");
+    const row=root.query("SELECT content FROM messages WHERE rowid=? AND chat_jid=? AND is_bot_message=1 AND is_terminal_agent_reply=1").get(rowId,input.chatJid) as {content:string}|null;
+    if(row?.content!==nativeExitNotice(request.reason))throw Error("Native exit notice persistence unavailable");
     scheduleExit(request.reason);
   };
   function scheduleExit(reason: string) {
@@ -211,7 +225,7 @@ export function createHostProcessControls(options: Options) {
       throw error;
     }
   }
-  return { tools, extension, assertAdmission, onOperationSettled, requestCommandExit,
+  return { tools, extension, assertAdmission, onOperationSettled, onMessagePublished, requestCommandExit,
     pending: () => pending !== undefined || commandPending,
     ownsOperation: (operationId: string) => pending?.input.operationId === operationId };
 }

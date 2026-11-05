@@ -141,11 +141,9 @@ export function handleInjectQueuedFollowupAction(options: FollowupActionOptions)
   if (!optimisticRemoval) return;
   const { rowId } = optimisticRemoval;
 
-  dismissedQueueRowIdsRef.current.add(rowId);
-  setFollowupQueueItems((current) => removeFollowupQueueRow(current, rowId).items);
-
   steerAgentQueueItem(rowId, resolveQueueActionChatJid(currentChatJid))
-    .then(() => {
+    .then((response: any) => {
+      if(response?.queued!=='steer')throw Error('Queue changed before steering');
       void refreshQueueState();
     })
     .catch((error) => {
@@ -174,12 +172,12 @@ export function handleRemoveQueuedFollowupAction(options: FollowupActionOptions)
   if (!optimisticRemoval) return;
   const { rowId } = optimisticRemoval;
 
-  dismissedQueueRowIdsRef.current.add(rowId);
-  clearQueuedSteerStateIfStale?.(optimisticRemoval.remainingQueueCount);
-  setFollowupQueueItems((current) => removeFollowupQueueRow(current, rowId).items);
-
   removeAgentQueueItem(rowId, resolveQueueActionChatJid(currentChatJid))
-    .then(() => {
+    .then((response: any) => {
+      if(response?.removed!==true)throw Error('Queue changed before removal');
+      dismissedQueueRowIdsRef.current.add(rowId);
+      clearQueuedSteerStateIfStale?.(optimisticRemoval.remainingQueueCount);
+      setFollowupQueueItems((current) => removeFollowupQueueRow(current,rowId).items);
       void refreshQueueState();
     })
     .catch((error) => {

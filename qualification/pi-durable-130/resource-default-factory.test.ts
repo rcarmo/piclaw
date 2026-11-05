@@ -50,5 +50,5 @@ applicationTest("actual eight-resource factory uses owned native Root dashboard 
     expect(await getDashboardRootCurrent()).toBeNull();
     backend = await createDefaultApplicationRuntime(owner, async () => services);
     expect((await getDashboardRootCurrent())?.status).toBe(200);
-  } finally { await backend?.close(); owner.release(); closeDatabase(); }
+  } finally { await backend?.close(); owner.release(); await closeDatabase(); }
 });

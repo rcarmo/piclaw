@@ -1,3 +1,4 @@
+import { durableAbortScopeKey } from "../agent-pool/durable-runtime-adapter.js";
 import { hasUnsettledLegacyCursorEvidence } from "../db/chat-cursor-storage.js";
 import { setTimeout as storageRetryDelay } from "node:timers/promises";
 import { RuntimePreparationError } from "./preparation-error.js";
@@ -16,7 +17,7 @@ import type { WebChannelOpts } from "../channels/web.js";
 export interface RuntimeBackend {
   /** Resolves only after a failed public SDK session has closed its storage. */
   readonly storageFailure?: Promise<unknown>;
-  readonly sessionOptions: Readonly<Pick<AgentPoolOptions, "getDurableSession" | "dispatchScheduledAgent" | "dispatchSidePrompt" | "dispatchHostCommand" | "prepareAddonOperation" | "dispatchAddonOperation" | "reconcileAddonOperation" | "dispatchDreamOperation">>;
+  readonly sessionOptions: Readonly<Pick<AgentPoolOptions, "getDurableSession" | "dispatchScheduledAgent" | "dispatchSidePrompt" | "dispatchHostCommand" | "dispatchDreamOperation">>;
   readonly bind: (options: Pick<WebChannelOpts, "queue" | "agentPool">) => Readonly<WebChannelOpts>;
   /** Attach the actual constructed channel, never a global channel lookup. */
   attachChannel?(channel: NativeTurnViewChannel & { resumePendingChats?(chatJid?: string): void; requestWorkspaceFileOpen?(chatJid: string, path: string, label: string): Promise<unknown> }): void;
@@ -114,9 +115,16 @@ export async function createRecoverableRuntimeBackend(prepare: () => Promise<Run
       assertLive();
       const live = await port.readAbortScope?.();
       if (live === null) return false;
-      if (expected && (!live || expected.operationId !== live.operationId || expected.conversationId !== live.conversationId || expected.sourceSeq !== live.sourceSeq)) return false;
-      const scope = live && Object.freeze({ operationId: live.operationId, conversationId: live.conversationId, sourceSeq: live.sourceSeq });
-      if (scope && (typeof scope.operationId !== "string" || !scope.operationId || !Number.isSafeInteger(scope.conversationId) || scope.conversationId <= 0 || !Number.isSafeInteger(scope.sourceSeq) || scope.sourceSeq <= 0)) throw Error("Invalid abort recovery scope");
+      if (expected && (!live || durableAbortScopeKey(expected)!==durableAbortScopeKey(live))) return false;
+      const scope:DurableAbortScope|undefined=live?.kind==="sdk" ? Object.freeze({...live,submissionIds:Object.freeze([...live.submissionIds])})
+        :live?Object.freeze({...live}):undefined;
+      if(scope){
+        if(!Number.isSafeInteger(scope.conversationId)||scope.conversationId<=0)throw Error("Invalid abort recovery scope");
+        if(scope.kind==="sdk"){
+          if(scope.taskId!==null&&(!Number.isSafeInteger(scope.taskId)||scope.taskId<=0)||!scope.taskId&&!scope.submissionIds.length||
+            scope.submissionIds.some(id=>!Number.isSafeInteger(id)||id<=0)||new Set(scope.submissionIds).size!==scope.submissionIds.length)throw Error("Invalid SDK abort recovery scope");
+        }else if(typeof scope.operationId!=="string"||!scope.operationId||!Number.isSafeInteger(scope.sourceSeq)||scope.sourceSeq<=0)throw Error("Invalid abort recovery scope");
+      }
       try { return await port[method]!(scope); }
       catch (error) {
         // Never replay arbitrary controls, tools, dispatches or a newer operation.
@@ -135,21 +143,6 @@ export async function createRecoverableRuntimeBackend(prepare: () => Promise<Run
       await ready();if(!current.sessionOptions.dispatchDreamOperation)throw Error('Native Dream dispatcher unavailable');
       return current.sessionOptions.dispatchDreamOperation(...args); // Never replay an uncertain invocation.
     }:undefined,
-    prepareAddonOperation: current.sessionOptions.prepareAddonOperation ? async (...args) => {
-      await ready();
-      if(!current.sessionOptions.prepareAddonOperation)throw Error("Native add-on admission unavailable");
-      return current.sessionOptions.prepareAddonOperation(...args); // No automatic replay after uncertain admission.
-    } : undefined,
-    dispatchAddonOperation: current.sessionOptions.dispatchAddonOperation ? async (...args) => {
-      await ready();
-      if(!current.sessionOptions.dispatchAddonOperation)throw Error('Native add-on execution unavailable');
-      return current.sessionOptions.dispatchAddonOperation(...args); // Same accepted ID; no automatic retry after uncertainty.
-    } : undefined,
-    reconcileAddonOperation: current.sessionOptions.reconcileAddonOperation ? async (...args) => {
-      await ready();
-      if(!current.sessionOptions.reconcileAddonOperation)throw Error('Native add-on recovery unavailable');
-      return current.sessionOptions.reconcileAddonOperation(...args); // Observation only; no replay on failure.
-    } : undefined,
     dispatchScheduledAgent: current.sessionOptions.dispatchScheduledAgent ? async (...args) => {
       await ready();
       if (!current.sessionOptions.dispatchScheduledAgent) throw Error("Native scheduled dispatch unavailable");
@@ -172,23 +165,15 @@ export async function createRecoverableRuntimeBackend(prepare: () => Promise<Run
       channelBindings = current.bind(binding);
       // The channel captures callbacks during construction. Future calls must use
       // freshly prepared admission scopes, never the closed backend callbacks.
-      const forward = (key: string, member?: "waitForPending") => (...args: unknown[]) => {
+      const forward = (key: string) => (...args: unknown[]) => {
         assertAvailable();
         const callback = (channelBindings as unknown as Record<string, unknown>)[key];
         if (typeof callback !== "function") throw Error("Native channel binding unavailable: " + key);
-        if (member) {
-          const method = (callback as unknown as Record<string, unknown>)[member];
-          if (typeof method !== "function") throw Error("Native channel binding method unavailable: " + key + "." + member);
-          return Reflect.apply(method, callback, args);
-        }
         return Reflect.apply(callback, channelBindings, args);
       };
       return Object.freeze(Object.fromEntries(Object.entries(channelBindings).map(([key, value]) => {
         if (typeof value !== "function") return [key, value];
         const callback = forward(key);
-        // Dispatch is callable and owns a pending observer. Both must follow the
-        // replacement backend; copying its old method would retain closed ownership.
-        if (key === "dispatchAcceptedInput") Object.assign(callback, { waitForPending: forward(key, "waitForPending") });
         return [key, callback];
       }))) as Readonly<WebChannelOpts>;
     },

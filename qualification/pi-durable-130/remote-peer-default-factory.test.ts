@@ -142,5 +142,5 @@ applicationTest("Remote Peer actual factory uses network-free transport, execute
     expect(getDeferredQueuedFollowups("web:default")[0]!.source_id).toBe(queued[0]!.source_id);
     await backend.close(); backend = undefined;
     expect(closes).toBe(2);
-  } finally { await backend?.close(); owner.release(); closeDatabase(); }
+  } finally { await backend?.close(); owner.release(); await closeDatabase(); }
 }, 20000);

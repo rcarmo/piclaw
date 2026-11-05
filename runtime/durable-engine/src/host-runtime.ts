@@ -1,4 +1,4 @@
-import { BudgetRequestError } from '../../src/db/budget-request-reservations.js';
+import { taskModelHookScope, taskModelToolScope } from "./task-model-boundary-shim.js";
 import { createTrackedBashOperations } from "../../src/tools/tracked-bash.js";
 import { withChatContext } from "../../src/core/chat-context.js";
 import { assertModelContextFits, projectModelContext, prepareModelContextAdmission, type ModelContextAdmission } from "./host-model-context.js";
@@ -9,7 +9,7 @@ import { estimateContextTokens } from "@earendil-works/pi-ai/utils/estimate";
 const log = createLogger("durable.runtime");
 import { getSupportedThinkingLevels, type ModelThinkingLevel } from "@earendil-works/pi-ai";
 // Native conversation runtime, explicitly composed with fenced host authority by application-bootstrap.
-import { configure, AgentDoc, AssistantEntry, ResetEntry, InboxDoc, LiveDoc, UsageDoc, Harness, type HarnessOptions, type HarnessInspection, type Storage, type ConversationId, type SubmissionId, type TaskId, type CompactionResult } from "@earendil-works/pi-durable";
+import { configure, AgentDoc, AssistantEntry, ResetEntry, InboxDoc, LiveDoc, UsageDoc, Harness, type HarnessOptions, type HarnessInspection, type Storage, type ConversationId, type SubmissionId, type TaskId, type CompactionResult, type SubmissionRecord, type EntryRecord, type Cursor } from "@earendil-works/pi-durable";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { awaitWithContext, withAbortSignal, withoutAbortSignal, type Context } from "@earendil-works/chord/context";
 import type { CurrentPiclawServiceWorkStore, FinishHarnessRequest } from "../../../runtime/src/service-effects/current-piclaw/service-work-store.js";
@@ -18,8 +18,9 @@ import type { ServiceWorkStore, AcceptCancellationRequest, OperationSnapshot } f
 import type { TerminalSettlementStore, CommitTerminalRequest, TerminalDatabaseEffect } from "../../../runtime/src/service-effects/contracts/terminal-settlement-store.js";
 import { value, sealed, effect } from "./host-effects.js";
 import { LegacyImportManifest } from "./legacy-import-schema.js";
-import { assertNativeBackgroundExecution,claimNativeBackgroundTool,nativeBackgroundToolReceiptKnown } from './host-background-policy.js';
-import { nativeBackgroundIdentity,readNativeBackgroundPolicy,type NativeBackgroundPolicy } from '../../src/agent-pool/background-operation-contract.js';
+import { assertNativeBackgroundExecution,claimNativeBackgroundTool,NativeBackgroundPolicyDoc } from './host-background-policy.js';
+import { nativeBackgroundIdentity,readNativeBackgroundPayload,nativeBackgroundPolicyHash,type NativeBackgroundPayload } from '../../src/agent-pool/background-operation-contract.js';
+import { NativeBackgroundContexts, type NativeBackgroundContext } from "./host-background-context.js";
 import { projectPublicHistory } from "./session-tree.js";
 import { materializePlanContext, materializeGoalContext, type GoalContextIdentity } from "./host-plan-context.js";
 import { buildSessionTreeSnapshot, type RootSessionTreeNode, type SessionTreeSnapshot } from "../../src/agent-control/session-tree-snapshot.js";
@@ -36,6 +37,26 @@ export interface AcceptedInput {
   readonly payloadRef: string;
   readonly requestId: string;
   readonly requestHash: string;
+}
+/** A message's persisted correlation identity, not a host operation/lifecycle. */
+export function isNativeMessageInput(input: AcceptedInput): boolean {
+  return input.operationId === `native-message:${input.conversationId}:${input.sourceSeq}`;
+}
+export interface CapturedRunSource {
+  readonly inputs: readonly HostInputBinding[];
+  readonly operation: Pick<OperationSnapshot, "operationId" | "chatJid" | "primarySourceSeq" | "harness"> & Partial<OperationSnapshot>;
+  /** Public SDK run identity and its invocation lifetime; no host phase or queue. */
+  readonly native?: { readonly taskId: TaskId; assertCurrent(): void };
+  readonly delegateModel?: { provider: string; modelId: string };
+  readonly sourceModel?: { provider: string; id: string; api: string };
+}
+export interface NativeMessageResult {
+  readonly status: SubmissionRecord;
+  readonly inputs: readonly HostInputBinding[];
+  readonly entries: readonly EntryRecord[];
+  readonly answer: SettledAnswer | null;
+  /** Stable SDK input identity across generation handovers and tool rounds. */
+  readonly runId: string;
 }
 export interface HostInputBinding extends AcceptedInput {
   readonly submissionId: SubmissionId | null;
@@ -80,10 +101,6 @@ export interface RuntimeOptions {
   readonly completeInputHandoff?: (input: AcceptedInput, submissionId: SubmissionId, capturedOperation: OperationSnapshot, intent: boolean, signal?: AbortSignal) => Promise<void>;
   readonly incarnation: string;
   readonly onOperationSettled?: (operationId: string, processExit?: NativeExitReceipt) => void | Promise<void>;
-  /** Synchronous, ancestry-scoped barrier before new effects and host settlement. */
-  readonly assertAccountingReady?: (operationId: string, terminal?: boolean) => void;
-  /** Existing receipt owner prepares facts outside SQL before terminal CAS. */
-  readonly prepareAccounting?: (operationId: string, conversationId: ConversationId) => Promise<void>;
   /** New work is sealed while an exact native shutdown request settles. */
   readonly assertAdmission?: (input?: AcceptedInput) => void;
   /** Host timeline root for this exact accepted input, including queued messages. */
@@ -93,7 +110,7 @@ export interface RuntimeOptions {
   readonly onMaintenanceSettled?: (workId: string) => void | Promise<void>;
   readonly cancelSideSource?: (input: AcceptedInput) => void | Promise<void>;
   /** Atomically persist operator cancellation against this exact operation version. */
-  readonly cancelOperationSource?: (input: AcceptedInput, expectedVersion: number, retryTaskId?: number, cause?: 'background_cancelled' | 'background_timeout') => void | Promise<void>;
+  readonly cancelOperationSource?: (input: AcceptedInput, expectedVersion: number, retryTaskId?: number) => void | Promise<void>;
   /** Required for model SET: shared-file SQL guard, checked inside each storage transaction. */
   readonly withIdleModelGuard?: <T>(body: () => Promise<T>) => Promise<T>;
   readonly withSessionResetGuard?: <T>(chatJid: string, body: () => Promise<T>) => Promise<T>;
@@ -212,8 +229,6 @@ function runtimeSnapshot(o: RuntimeOptions): RuntimeSnapshot {
     authorizeScheduling: authorizeScheduling.bind(o), putAnswer: putAnswer.bind(o),
     materializeAnswer: materializeAnswer?.bind(o), now: now.bind(o),
     prepareTerminalEffect: o.prepareTerminalEffect?.bind(o),
-    assertAccountingReady: o.assertAccountingReady?.bind(o),
-    prepareAccounting: o.prepareAccounting?.bind(o),
     replyThreadFor: o.replyThreadFor?.bind(o),
     onOperationSettled: o.onOperationSettled?.bind(o), onMaintenanceSettled: o.onMaintenanceSettled?.bind(o), cancelSideSource: o.cancelSideSource?.bind(o),
     cancelOperationSource: o.cancelOperationSource?.bind(o),
@@ -264,9 +279,8 @@ export class HostConversationRuntime {
   // Only rollback joins these; ordinary close must keep its detach semantics.
   private readonly underlyingWaits = new Set<Promise<unknown>>();
   private readonly observations = new AbortController();
-  private observe<T>(body: () => Promise<T>, authorityRead = false): Promise<T> {
+  private observe<T>(body: () => Promise<T>): Promise<T> {
     this.fence();
-    if (this.changingModel && !(authorityRead && this.authorizingMaintenance)) throw new Error("Runtime maintenance in progress");
     const promise = body();
     this.active.add(promise);
     void promise.finally(() => this.active.delete(promise)).catch(() => {});
@@ -315,15 +329,6 @@ export class HostConversationRuntime {
       this.fence();
       (this.options.existingConversationIds as ConversationId[]).push(binding.conversationId);
       return binding;
-    });
-  }
-  /** Existing private context publication never appends another conversation
-   * identity to the scheduling/recovery domain. */
-  prepareBackgroundInput(id:ConversationId,update:(tx:import('@earendil-works/pi-durable').Tx)=>Promise<void>,check:()=>void){
-    this.options.assertAdmission?.();
-    return this.observe(async()=>{
-      this.fence();check();if(!this.options.existingConversationIds.includes(id))throw Error('Existing background context is not registered');
-      await this.harness.commit(async tx=>{this.fence();check();await update(tx);this.fence();check();},this.context);this.fence();check();
     });
   }
   /** Allocation only; EF-S07 continues to own execution, result and recurrence. */
@@ -403,16 +408,24 @@ export class HostConversationRuntime {
     return this.observe(async () => {
       const conversation = await reader.conversation("Unknown conversation");
       const watch = await conversation.watch(this.context);
-      check();
-      const publish = async (view: import("@earendil-works/pi-durable").ConversationView) => {
-        if (this.closed) return;
+      try {
         check();
-        listener(view);
-      };
-      await publish(watch.value);
-      watch.start(publish);
-      return async () => { await watch.stop(); };
-    }, true);
+        const publish = async (view: import("@earendil-works/pi-durable").ConversationView) => {
+          if (this.closed) return;
+          check();
+          listener(view);
+        };
+        await publish(watch.value);
+        watch.start(publish);
+        return async () => { await watch.stop(); };
+      } catch (error) {
+        // Allocation may finish after close/route revocation. Never abandon the
+        // SDK-owned watch or publish its initial value after authority expires.
+        try { await watch.stop(); }
+        catch (cleanup) { throw new AggregateError([error,cleanup],"Native watch setup cleanup uncertain"); }
+        throw error;
+      }
+    });
   }
   /** Atomically read persisted model/thinking choice and public history head. */
   async readSessionState(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<import("../../src/agent-pool/durable-runtime-adapter.js").DurableSessionState> {
@@ -1012,14 +1025,13 @@ export class HostConversationRuntime {
         } else if (!task.background || reason !== "threshold") throw Error("Exact background compaction required");
         assertCurrent(); return task.owner;
       }, this.context);
-      const parent = generationId === undefined ? undefined : await this.captureRunSource(scope.conversationId as ConversationId, generationId);
+      const parent = generationId === undefined ? undefined : await this.captureSource(scope.conversationId as ConversationId, generationId, undefined, scope.signal);
       if (!parent && !copy) throw Error('Exact automatic compaction source required');
       const current = () => { assertCurrent(); if (parent) this.assertCapturedSourceCurrent(parent.inputs); };
       current();
       const workId = "durable-maintenance:" + this.options.incarnation + ":" + scope.taskId;
       // Observation only: no resubmission, provider retry or new runtime queue.
-      // Close cancels this observer; interrupted budget closure is repaired from
-      // the same committed SDK task on startup.
+      // Close detaches this display/cache cleanup observer, never SDK execution.
       const context = withAbortSignal(this.observations.signal, this.context);
       void (async () => {
         const task = await this.harness.waitForTask(scope.taskId as TaskId<CompactionResult>, context);
@@ -1030,15 +1042,11 @@ export class HostConversationRuntime {
           const submission = await this.harness.submission(submissionId, context);
           await submission?.wait(context); this.fence(); // Retain legacy deferred-write waiting.
         }
-        // Join only the ready proof/callback, never the future task wait. Close
-        // seals new observations but must let this entered financial phase finish.
         await this.observe(async () => {
-          const completed = await this.completedMaintenance(scope.taskId, withoutAbortSignal(this.context));
-          this.options.owner.assert();
-          if (completed?.conversationId === scope.conversationId) await this.options.onMaintenanceSettled?.(workId);
+          await this.options.onMaintenanceSettled?.(workId);
           this.options.owner.assert();
         });
-      })().catch(() => { /* Uncertain closure retains its durable accounting work. */ });
+      })().catch(() => { /* Close may detach the observer. */ });
       return { chatJid: parent?.operation.chatJid ?? copy!.chatJid, workId, operationId: parent?.operation.operationId,
         delegateModel: parent?.delegateModel, assertCurrent: current };
     });
@@ -1047,27 +1055,6 @@ export class HostConversationRuntime {
     this.fence(); scope.signal.throwIfAborted();
     if (!this.maintenanceBinding || this.maintenanceBinding.conversationId !== scope.conversationId || this.maintenanceTaskId !== scope.taskId || scope.taskKind !== "pi.compaction" || scope.phase !== "summarize"
       || !this.options.existingConversationIds.some(id => id === scope.conversationId)) throw Error("Exact maintenance request required");
-  }
-
-  /** Financial observation only: callers must already join their owning phase;
-   * this read has no independent execution admission or shutdown registration.
-   * Uses the live SDK owner, never the closed preparation Harness. */
-  async completedMaintenance(taskId: number, context: Context = this.context): Promise<{ taskId: number; conversationId: number; entryId: number } | null> {
-    const check = () => this.options.owner.assert(); check();
-    const task = await this.harness.getTask(taskId as TaskId<CompactionResult>, context); check();
-    if (task?.id !== taskId || task.kind !== 'pi.compaction' || task.state.status !== 'terminal' || task.state.outcome.status !== 'completed') return null;
-    const result = task.state.outcome.result;
-    let entryId = result.entryId;
-    if (result.submissionId !== undefined) {
-      const submission = await this.harness.submission(result.submissionId, context);
-      const state = await submission?.status(context); check();
-      if (state?.type !== 'write' || state.status !== 'done' || state.conversationId !== task.conversationId) return null;
-      entryId = state.entry;
-    }
-    if (entryId === undefined) return null;
-    const entry = await this.harness.commit(tx => tx.entry(entryId!), context); check();
-    return entry?.kind === 'pi.compaction' && entry.conversationId === task.conversationId
-      ? { taskId, conversationId: task.conversationId, entryId } : null;
   }
 
   maintenanceRequestIdentity(scope: { taskId: number; conversationId: number; taskKind: string; phase: string; signal: AbortSignal }) {
@@ -1156,7 +1143,7 @@ export class HostConversationRuntime {
       const captured = await this.captureToolSource(proof.parent, proof.owner, proof.callId);
       this.assertCapturedSourceCurrent(captured.inputs);
       return { inputs: captured.inputs, taskId: proof.taskId };
-    }, true);
+    });
   }
   /** Tools receive an invocation-bound control handle, not a public observer.
    * Open the read-only watch through the host, scoped to the exact live tool's
@@ -1178,6 +1165,7 @@ export class HostConversationRuntime {
   /** Read-only beforeTool provenance: the SDK has not recorded execution intent yet. */
   async capturePendingToolSource(conversationId: ConversationId, taskId: import("@earendil-works/pi-durable").TaskId, callId: string) {
     this.fence();
+    const executionSignal = taskModelToolScope({conversationId,taskId,toolCallId:callId})?.signal;
     const live = await this.harness.snapshot(LiveDoc, conversationId, this.context); this.fence();
     if (live?.run && live.nestedTools?.some(slot => slot.taskId === taskId && slot.callId === callId && slot.status === "pending")) {
       // beforeTool also runs for SDK-owned nested calls. Qualify the same exact
@@ -1199,7 +1187,7 @@ export class HostConversationRuntime {
           !live.tools?.some(slot => slot.taskId === owner.id && slot.callId === model.callId && slot.name === "codemode" && slot.status === "running")) throw Error("Exact codemode owner required");
         return { taskId: owner.id, callId: model.callId };
       }, this.context); this.fence();
-      const captured = await this.captureSource(conversationId, parent.taskId, parent.callId);
+      const captured = await this.captureSource(conversationId, parent.taskId, parent.callId, executionSignal);
       this.assertCapturedSourceCurrent(captured.inputs);
       return { ...captured, runTaskId: live.run.taskId };
     }
@@ -1209,7 +1197,7 @@ export class HostConversationRuntime {
     const input = task?.input as Partial<import("@earendil-works/pi-durable").ToolTaskInput> | undefined;
     if (task?.kind !== "pi.tool" || task.conversationId !== conversationId || task.abortRequested || task.state.status === "terminal" ||
       input?.kind !== "model" || input.callId !== callId) throw Error("Exact pending model tool required");
-    const captured = await this.captureRunSource(conversationId, live.run.taskId);
+    const captured = await this.captureSource(conversationId, live.run.taskId, undefined, executionSignal);
     this.assertCapturedSourceCurrent(captured.inputs);
     return { ...captured, runTaskId: live.run.taskId };
   }
@@ -1244,6 +1232,13 @@ export class HostConversationRuntime {
     expected: { goalId: string; generation: number; status: "complete" | "stopped" }) {
     const copy = inputSnapshot(input), target = Object.freeze({ ...expected });
     return this.observe(async () => {
+      if(isNativeMessageInput(copy)){
+        const result=await this.readMessageResult(copy);if(!result?.answer)return false;
+        let boundary=-1;
+        for(let index=0;index<result.entries.length;index++)if(result.entries[index]!.kind==="host.accepted")boundary=index;
+        if(boundary<0)return false;
+        return this.goalTerminalResultInEntries(copy.conversationId,result.entries,boundary,target);
+      }
       const window = await this.settledUsageEntries(copy);
       if (!window) return false;
       const { entries } = window;
@@ -1358,7 +1353,7 @@ export class HostConversationRuntime {
         if ((message.stopReason === "error" || message.stopReason === "aborted") && tokens === 0 &&
           parts.every(value => value === 0) && usage.cost && Object.values(usage.cost).every(value => value === 0)) continue;
         const outcome = task.state.status === "terminal" && task.state.outcome.status === "completed" ? task.state.outcome.result as { entryId?: number } : undefined;
-        if (outcome?.entryId !== entry.id) throw Error("Invalid committed usage task");
+        if (!["error","aborted"].includes(message.stopReason) && outcome?.entryId !== entry.id) throw Error("Invalid committed usage task");
         result.push({ conversationId, entryId: entry.id, tokens });
       }
       return result;
@@ -1369,9 +1364,12 @@ export class HostConversationRuntime {
     const texts: string[] = [];
     for (const input of inputs) {
       this.assertCapturedSourceCurrent(inputs);
-      const operation = value(await this.options.work.getOperation(input.operationId)); this.fence();
-      if (!operation) throw Error("Missing accepted input operation");
-      const intent = operation.primarySourceSeq !== input.sourceSeq;
+      let intent = false;
+      if (!isNativeMessageInput(input)) {
+        const operation = value(await this.options.work.getOperation(input.operationId)); this.fence();
+        if (!operation) throw Error("Missing accepted input operation");
+        intent = operation.primarySourceSeq !== input.sourceSeq;
+      }
       const { content } = await this.port(intent).getOrBind(input); this.fence();
       if (hashCanonicalRequest({ type: "input", requestId: input.requestId, content }) !== input.requestHash)
         throw Error("Host payload hash conflict");
@@ -1379,10 +1377,6 @@ export class HostConversationRuntime {
     }
     this.assertCapturedSourceCurrent(inputs);
     return texts;
-  }
-  private assertAccountingReady(operationId: string, terminal = false): void {
-    const checked: unknown = this.options.assertAccountingReady?.(operationId, terminal);
-    if (checked !== undefined) { void Promise.resolve(checked).catch(() => {}); throw Error('Accounting barrier must be synchronous'); }
   }
   assertCapturedSourceCurrent(inputs: readonly HostInputBinding[]): void {
     this.fence();
@@ -1421,45 +1415,171 @@ export class HostConversationRuntime {
       });
     });
   }
-  /** Exact accepted private input, public SDK configuration and bounded quota.
-   * The same synchronous source fence also guards the actual host effect. */
-  qualifyBackgroundRequest(inputs:readonly HostInputBinding[],raw:NativeBackgroundPolicy,call?:{taskId:TaskId;callId:string;toolName:string}){
-    const policy=readNativeBackgroundPolicy(raw),captured=inputs.map(input=>Object.freeze({...inputSnapshot(input),submissionId:input.submissionId})),identity=nativeBackgroundIdentity(policy);
-    if(captured.length!==1||captured[0]!.sourceId!==identity.sourceId||captured[0]!.operationId!==identity.operationId||captured[0]!.chatJid!==identity.chatJid)throw Error('Exact background accepted input required');
-    const input=captured[0]!,actual=call&&Object.freeze({...call});
-    return this.observe(async()=>{
-      const check=()=>this.assertCapturedSourceCurrent(captured),guard=this.options.withPromptContextGuard;
-      if(!guard)throw Error('Background SDK transaction guard unavailable');check();
-      await guard(check,()=>this.harness.commit(async tx=>{
-        if(actual)await claimNativeBackgroundTool(tx,input.conversationId,policy,actual,Date.now(),check);
-        else await assertNativeBackgroundExecution(tx,input.conversationId,policy,Date.now(),check);
-      },this.context));check();
+  /** SDK-owned Dream input and actual task provenance. The host supplies only
+   * current domain authority; there is no S01 operation or terminal owner. */
+  qualifyDreamSource(binding: NativeBackgroundContext, raw: NativeBackgroundPayload,
+    scope: { conversationId: number; taskId: number; taskKind: "pi.generation" | "pi.compaction" | "pi.tool"; callId?: string }, check: () => void) {
+    const payload = readNativeBackgroundPayload(raw), target = Object.freeze({ ...binding }), call = Object.freeze({ ...scope });
+    const identity = nativeBackgroundIdentity(payload.policy);
+    if (payload.policy.origin.kind !== "dream" || target.contextKey !== identity.contextKey || target.chatJid !== identity.chatJid ||
+        target.branchId !== identity.branchId || call.conversationId !== target.conversationId) throw Error("Exact private Dream source required");
+    return this.observe(async () => {
+      const guard = this.options.withPromptContextGuard;
+      if (!guard) throw Error("Dream SDK source guard unavailable");
+      const current = () => { this.fence(); check(); };
+      current();
+      await guard(current, () => this.harness.commit(async tx => {
+        const task = await tx.task(call.taskId as TaskId);
+        if (!task || task.conversationId !== target.conversationId || task.kind !== call.taskKind || task.abortRequested || task.state.status !== "running")
+          throw Error("Live Dream SDK task required");
+        const submission = await this.dreamSubmission(tx, target, payload);
+        const live = await tx.doc(LiveDoc, target.conversationId);
+        if (call.taskKind === "pi.compaction") {
+          const reason = (task.input as { reason?: string }).reason;
+          const checkpoint = task.state.checkpoint;
+          if (!checkpoint || typeof checkpoint !== "object" || Array.isArray(checkpoint) || checkpoint.phase !== "summarize" ||
+              !["threshold", "overflow"].includes(reason ?? "") ||
+              !live.compactions?.some(slot => slot.taskId === task.id && slot.reason === reason && slot.blocking === (task.owner !== undefined)))
+            throw Error("Exact Dream compaction task required");
+          if (task.owner !== undefined) {
+            const owner = await tx.task(task.owner);
+            if (!owner || owner.kind !== "pi.generation" || owner.conversationId !== target.conversationId || owner.abortRequested ||
+                owner.state.status === "terminal" || live.run?.taskId !== owner.id || live.run.inputs.length !== 1 || live.run.inputs[0] !== submission.id)
+              throw Error("Exact Dream compaction generation required");
+          } else if (!task.background || reason !== "threshold") throw Error("Exact Dream background compaction required");
+        }
+        if (call.taskKind !== "pi.compaction" && (!live.run || live.run.inputs.length !== 1 || live.run.inputs[0] !== submission.id ||
+            (call.taskKind === "pi.generation" ? live.run.taskId !== task.id : task.owner !== live.run.taskId))) throw Error("Exact Dream SDK run required");
+        if (call.taskKind === "pi.tool") {
+          const input = task.input as import("@earendil-works/pi-durable").ToolTaskInput;
+          const slot = live.tools?.find(item => item.taskId === task.id && item.callId === call.callId && item.status !== "done");
+          if (input.kind !== "model" || !call.callId || input.callId !== call.callId || !slot) throw Error("Exact Dream model tool required");
+          const assistant = await tx.entry(input.assistant);
+          const messages = assistant?.model?.filter(message => message.role === "assistant" && message.content.some(part => part.type === "toolCall" && part.id === call.callId && part.name === slot.name)) ?? [];
+          if (assistant?.kind !== "pi.assistant" || assistant.conversationId !== target.conversationId || assistant.byTaskId !== task.owner || messages.length !== 1)
+            throw Error("Exact Dream tool assistant required");
+          const message = messages[0]!;
+          if (message.role !== "assistant" || message.provider !== payload.policy.model.provider || message.model !== payload.policy.model.modelId || message.api !== payload.policy.model.api)
+            throw Error("Dream source model changed");
+          if (slot.status === 'pending') {
+            await claimNativeBackgroundTool(tx, target.conversationId, payload.policy, { taskId: task.id, callId: call.callId, toolName: slot.name }, Date.now(), current);
+          } else {
+            await assertNativeBackgroundExecution(tx, target.conversationId, payload.policy, Date.now(), current);
+            if (!payload.policy.allowedTools.includes(slot.name)) throw Error('Dream tool ceiling denied');
+            if (payload.policy.maxToolCalls !== null) {
+              const quota = await tx.doc(NativeBackgroundPolicyDoc, target.conversationId, payload.policy.sourceId, null);
+              if (!quota.calls.some(claim => claim.taskId === task.id && claim.callId === call.callId && claim.toolName === slot.name))
+                throw Error('Dream tool requires its existing SDK quota claim');
+            }
+          }
+        } else await assertNativeBackgroundExecution(tx, target.conversationId, payload.policy, Date.now(), current);
+        current();
+      }, this.context));
+      current();
     });
   }
-  /** Passive tool receipt inspection for an already settled input. Never grants
-   * scheduling, task replay or current spending permission. */
-  backgroundToolOutcomesKnown(input:AcceptedInput){
-    const copy=inputSnapshot(input);
-    return this.observe(async()=>{
-      await this.checked(copy);this.fence();
-      const known=await this.harness.commit(async tx=>{
-        let cursor:import('@earendil-works/pi-durable').Cursor|undefined;
-        do{const page=await tx.scanTasks({conversationId:copy.conversationId,kind:'pi.tool'},100,cursor);
-          for(const task of page.items)if(!await nativeBackgroundToolReceiptKnown(tx,task))return false;
-          cursor=page.next;
-        }while(cursor!==undefined);return true;
-      },this.context);this.fence();return known;
-    },true);
+  private async dreamSubmission(tx: import("@earendil-works/pi-durable").Tx, binding: NativeBackgroundContext, payload: NativeBackgroundPayload) {
+    const record = await tx.submissionByRequest(binding.conversationId, payload.policy.sourceId);
+    if (!record || record.type !== "input" || record.entry === undefined) throw Error("Dream SDK input required");
+    const entry = await tx.entry(record.entry), data = entry?.data as Record<string, unknown> | undefined;
+    if (record.conversationId !== binding.conversationId || entry?.conversationId !== binding.conversationId || entry.kind !== "app.dream-input" ||
+        data?.incarnation !== this.options.incarnation || data.sourceId !== payload.policy.sourceId || data.contextKey !== binding.contextKey ||
+        data.policySha256 !== nativeBackgroundPolicyHash(payload.policy) || entry.model?.length !== 1 || entry.model[0]?.role !== "user" || entry.model[0].content !== payload.prompt)
+      throw Error("Dream SDK input identity conflict");
+    return record;
+  }
+  /** Private one-shot execution is a direct public SDK mapping. Cleanup sits
+   * outside tracked observation so SDK close can finish before the FD lease joins. */
+  async runDreamConversation(binding: NativeBackgroundContext, raw: NativeBackgroundPayload, check: () => void, signal: AbortSignal) {
+    const payload = readNativeBackgroundPayload(raw), target = Object.freeze({ ...binding });
+    if (payload.policy.origin.kind !== "dream" || nativeBackgroundIdentity(payload.policy).contextKey !== target.contextKey) throw Error("Private Dream identity required");
+    let conversation: Awaited<ReturnType<Harness["conversation"]>> = undefined, admitted = false;
+    const deadline = new AbortController();
+    const timer = setTimeout(() => deadline.abort(new DOMException("Dream deadline expired", "TimeoutError")), Math.max(0, Date.parse(payload.policy.expiresAt) - Date.now()));
+    const context = withAbortSignal(AbortSignal.any([signal, deadline.signal, this.observations.signal]), this.context);
+    const cleanupContext = withoutAbortSignal(this.context);
+    try {
+      return await this.observe(async () => {
+        check(); this.options.assertAdmission?.();
+        conversation = await this.harness.conversation(target.conversationId, context); this.fence(); check();
+        if (!conversation) throw Error("Missing private Dream conversation");
+        await conversation.commit(async tx => {
+          const prior = await tx.submissionByRequest(target.conversationId, payload.policy.sourceId);
+          const tasks = await tx.scanTasks({ conversationId: target.conversationId }, 1);
+          const entries = await tx.scanEntries({ conversationId: target.conversationId }, 1);
+          check();
+          if (prior || tasks.items.length || entries.items.length) throw Error("Dream context already has SDK work; input was not resubmitted");
+        }, context);
+        this.fence(); check();
+        // The exact empty, invocation-specific context is now ours. There is no
+        // host claim, frontier, operation binding or second completion commit.
+        admitted = true;
+        let status: SubmissionRecord | undefined;
+        try {
+          const submission = await conversation.submit({ type: "input", requestId: payload.policy.sourceId, content: payload.prompt, whenBusy: "reject",
+            entry: { kind: "app.dream-input", data: { incarnation: this.options.incarnation, sourceId: payload.policy.sourceId, contextKey: target.contextKey, policySha256: nativeBackgroundPolicyHash(payload.policy) } } }, context);
+          status = await submission.wait(context); this.fence();
+        } catch (error) {
+          if (this.closed || this.storageClosing) throw error;
+          // A lost return is correlation uncertainty, not a cancellation grant.
+          // Re-observe the exact accepted SDK handle without resubmitting input.
+          if (context.abortSignal?.aborted) {
+            await conversation.abort(cleanupContext, { background: true }); this.fence();
+            status = await conversation.commit(tx => tx.submissionByRequest(target.conversationId, payload.policy.sourceId), cleanupContext);
+            if (!status || !["done", "unanswered"].includes(status.status)) throw error;
+          } else {
+            const record = await conversation.commit(tx => this.dreamSubmission(tx, target, payload), cleanupContext); this.fence();
+            const submission = await this.harness.submission(record.id, context); this.fence();
+            if (!submission) throw error;
+            status = await submission.wait(context); this.fence();
+          }
+        }
+        if (!status) throw Error("Missing Dream SDK result");
+        const verified = await conversation.commit(tx => this.dreamSubmission(tx, target, payload), cleanupContext); this.fence();
+        if (verified.id !== status.id || verified.status !== status.status) throw Error("Dream SDK result changed");
+        if (status.type !== "input" || status.status !== "done") return { status, answer: null, timedOut: deadline.signal.aborted };
+        const completed = status;
+        const entry = await conversation.commit(tx => tx.entry(completed.answer), cleanupContext); this.fence();
+        if (entry?.kind !== "pi.assistant" || entry.conversationId !== target.conversationId || entry.model?.length !== 1 || entry.model[0]?.role !== "assistant")
+          throw Error("Dream SDK answer missing");
+        const message = entry.model[0];
+        return { status, answer: { message, text: message.content.filter(part => part.type === "text").map(part => part.text).join("") }, timedOut: false };
+      });
+    } finally {
+      clearTimeout(timer);
+      const captured = conversation as Awaited<ReturnType<Harness["conversation"]>>;
+      if (admitted && captured) {
+        if (this.closed || this.storageClosing) await this.storageEnded;
+        else try { await captured.abort(cleanupContext, { background: true }); }
+        catch (error) { log.warn("Dream cleanup awaits confirmed SDK close", { operation: "durable_dream.cleanup_pending", conversationId: target.conversationId }); await this.storageEnded; throw error; }
+      }
+    }
+  }
+  /** Passive attribution lets other SDK work progress alongside a live Dream.
+   * It grants no provider/tool permission; those retain the live domain guard. */
+  ownsDreamSubmission(inspected: SubmissionRecord): Promise<boolean> {
+    return this.observe(async () => {
+      if (inspected.type !== "input" || !inspected.requestId || !this.options.existingConversationIds.includes(inspected.conversationId)) return false;
+      return this.harness.commit(async tx => {
+        const record = await tx.submissionByRequest(inspected.conversationId, inspected.requestId!);
+        if (!record || record.id !== inspected.id || record.type !== "input" || record.entry === undefined) return false;
+        const entry = await tx.entry(record.entry), data = entry?.data as Record<string, unknown> | undefined;
+        if (entry?.kind !== "app.dream-input" || data?.incarnation !== this.options.incarnation || data.sourceId !== record.requestId || typeof data.policySha256 !== "string") return false;
+        const mapping = await tx.doc(NativeBackgroundContexts, 1 as ConversationId);
+        const binding = mapping.contexts.find(item => item.conversationId === inspected.conversationId && item.contextKey === data.contextKey && item.chatJid.startsWith("dream:"));
+        if (!binding || mapping.domain !== this.options.incarnation) return false;
+        const policy = await tx.doc(NativeBackgroundPolicyDoc, binding.conversationId, record.requestId!, null);
+        return policy.sourceId === record.requestId && policy.policySha256 === data.policySha256;
+      }, this.context);
+    });
   }
   /** Read-only generation provenance, including the first request before host ACK. */
   captureRunSource(conversationId: ConversationId, taskId: import("@earendil-works/pi-durable").TaskId) {
     return this.captureSource(conversationId, taskId);
   }
-  private captureSource(conversationId: ConversationId, taskId: import("@earendil-works/pi-durable").TaskId, callId?: string): Promise<{
-    inputs: readonly HostInputBinding[]; operation: OperationSnapshot;
-    delegateModel?: { provider: string; modelId: string };
-    sourceModel?: { provider: string; id: string; api: string };
-  }> {
+  private captureSource(conversationId: ConversationId, taskId: TaskId, callId?: string, executionSignal?: AbortSignal): Promise<CapturedRunSource> {
+    executionSignal ??= callId === undefined ? taskModelHookScope({conversationId, taskId})?.signal
+      : taskModelToolScope({conversationId, taskId, toolCallId: callId})?.signal;
     return this.observe(async () => {
       const o = this.options;
       const live = await this.harness.snapshot(LiveDoc, conversationId, this.context); this.fence();
@@ -1483,7 +1603,7 @@ export class HostConversationRuntime {
             !live.tools?.some(slot => slot.taskId === owner.id && slot.callId === model.callId && slot.name === "codemode" && slot.status === "running")) throw Error("Exact codemode owner required");
           return { taskId: input.parent, callId: model.callId };
         }, this.context); this.fence();
-        return this.captureSource(conversationId, parent.taskId, parent.callId);
+        return this.captureSource(conversationId, parent.taskId, parent.callId, executionSignal);
       }
       if (!live?.run || !(callId === undefined ? live.run.taskId === taskId : live.tools?.some(slot => slot.taskId === taskId && slot.callId === callId && slot.status === "running")) || !live.run.inputs.length)
         throw Error("Exact host tool run required");
@@ -1502,7 +1622,7 @@ export class HostConversationRuntime {
           if (entry?.kind !== "host.accepted" || !data || data.role !== (join.intent ? "intent" : "primary") ||
             Object.entries(join.input).some(([key, value]) => data[key] !== value)) throw Error("Input handoff identity conflict");
           await awaitWithContext(join.ready, withAbortSignal(this.observations.signal, this.context)); this.fence();
-          return this.captureSource(conversationId, taskId, callId);
+          return this.captureSource(conversationId, taskId, callId, executionSignal);
         }
       }
       // Only the immutable assistant message owning this exact live MODEL call
@@ -1549,9 +1669,10 @@ export class HostConversationRuntime {
         if (!model) throw Error("Delegate model required");
         return { ...owner, callId: input.callId, model: Object.freeze({ ...model }) };
       }, this.context); this.fence();
-      if (owned) return { ...await this.captureSource(owned.conversationId, owned.taskId, owned.callId), delegateModel: owned.model, sourceModel };
+      if (owned) return { ...await this.captureSource(owned.conversationId, owned.taskId, owned.callId, executionSignal), delegateModel: owned.model, sourceModel };
       const inputs: HostInputBinding[] = [];
       let operation: OperationSnapshot | undefined;
+      let direct = false;
       for (const submissionId of live.run.inputs) {
         const submission = await this.harness.submission(submissionId, this.context); this.fence();
         const record = await submission?.status(this.context); this.fence();
@@ -1566,7 +1687,15 @@ export class HostConversationRuntime {
           !this.routed(input)) throw Error("Host binding conflict");
         await this.assertPublicRoute(input);
         const bound = await this.port(data.role === "intent").get(input); this.fence();
-        if (!bound || bound.submissionId !== submissionId) throw Error("Host binding conflict");
+        if (!bound || (isNativeMessageInput(input) ? bound.submissionId !== null && bound.submissionId !== submissionId : bound.submissionId !== submissionId)) throw Error("Host binding conflict");
+        if (isNativeMessageInput(input)) {
+          if (operation) throw Error("Mixed host and SDK source ownership");
+          const verified = await this.record(input); this.fence();
+          if (verified?.id !== submissionId) throw Error("Native message evidence changed");
+          o.bindings.assertSourceCurrent?.(bound); direct = true;
+          inputs.push(Object.freeze({...bound, submissionId})); continue;
+        }
+        if (direct) throw Error("Mixed host and SDK source ownership");
         const current = value(await o.work.getOperation(input.operationId)); this.fence();
         if (!current || current.chatJid !== input.chatJid || current.phase !== "executing" || current.cancellation ||
           !current.claimedSourceSeqs.includes(input.sourceSeq) || (operation && (operation.operationId !== current.operationId || operation.version !== current.version)))
@@ -1575,6 +1704,18 @@ export class HostConversationRuntime {
           (!live.run.inputs.some(id => String(id) === current.harness!.harnessOperationId) && data.role !== "intent"))
           throw Error("Exact host harness required");
         operation = current; inputs.push(bound);
+      }
+      if (direct) {
+        const signal = executionSignal;
+        const current = () => { if (!signal) throw Error("Exact SDK invocation lifetime required"); signal.throwIfAborted(); this.assertCapturedSourceCurrent(inputs); };
+        // Passive public inspection can read provenance, never acquire an
+        // invocation capability. Any attempted effect still requires signal.
+        if (signal) current(); else this.assertCapturedSourceCurrent(inputs);
+        const first = inputs[0]!;
+        return { inputs: Object.freeze(inputs), sourceModel,
+          native: Object.freeze({taskId: live.run.taskId, assertCurrent: current}),
+          operation: Object.freeze({operationId: `sdk-run:${conversationId}:${first.submissionId}`, chatJid: first.chatJid,
+            primarySourceSeq: first.sourceSeq, harness: null}) };
       }
       if (!operation) throw Error("Host primary input required");
       if (!inputs.some(input => input.sourceSeq === operation!.primarySourceSeq)) {
@@ -1699,6 +1840,263 @@ export class HostConversationRuntime {
     const inspection = await this.harness.inspect(this.context); this.fence();
     await this.options.authorizeScheduling(inspection, aborting); this.fence();
   }
+  /** Ordinary input goes straight to the public SDK inbox semantics. SQL bindings
+   * prove accepted source/content identity only; no host operation is claimed. */
+  submitMessage(input: AcceptedInput, whenBusy: "steer" | "followUp" = "followUp"): Promise<SubmissionId> {
+    const copy = inputSnapshot(input);
+    this.fence(); this.options.assertAdmission?.(copy);
+    if (!isNativeMessageInput(copy) || !["steer", "followUp"].includes(whenBusy)) throw Error("Native message source required");
+    return this.observe(async () => {
+      if (!this.routed(copy)) throw Error("Host binding conflict");
+      await this.assertPublicRoute(copy); this.fence();
+      const { content } = await this.options.bindings.getOrBind(copy); this.fence();
+      this.options.bindings.assertSourceCurrent?.(copy);
+      // A lookup/ACK repair never re-submits a previously accepted SDK input.
+      let record = await this.record(copy); this.fence();
+      if (!record) {
+        const conversation = await this.harness.conversation(copy.conversationId, this.context); this.fence();
+        if (!conversation) throw Error("Missing conversation");
+        this.options.assertAdmission?.(copy);
+        this.options.bindings.assertSourceCurrent?.(copy);
+        try {
+          await conversation.submit({ type: "input", requestId: copy.requestId, content, whenBusy,
+            entry: { kind: "host.accepted", data: { ...copy, role: "primary" } } }, this.context);
+        } catch (error) {
+          // Resolve only exact immutable SDK evidence after a lost return.
+          record = await this.record(copy); this.fence();
+          if (!record) throw error;
+        }
+        record = await this.record(copy); this.fence();
+        if (!record) throw Error("Missing SDK admission evidence");
+      }
+      try { await this.options.bindings.recordSubmission(copy, record.id); this.fence(); }
+      catch (error) {
+        // Admission belongs to the SDK, not a second correlation ACK. Return
+        // only after re-proving the exact retained input and current source;
+        // missing/changed evidence or a revoked owner still refuses the call.
+        this.fence();
+        const accepted=await this.record(copy);this.fence();
+        this.options.bindings.assertSourceCurrent?.(copy);
+        if(accepted?.id!==record.id)throw error;
+        log.warn("SDK input accepted; correlation acknowledgement pending",{operation:"durable.message_ack_pending",conversationId:copy.conversationId,submissionId:record.id});
+      }
+      return record.id;
+    });
+  }
+  /** Observe the exact SDK result. Waiting owns no host lane/frontier/settlement. */
+  waitForMessage(input: AcceptedInput, submissionId: SubmissionId, signal?: AbortSignal): Promise<SubmissionRecord> {
+    const copy = inputSnapshot(input);
+    const context = withAbortSignal(signal ? AbortSignal.any([signal, this.observations.signal]) : this.observations.signal, this.context);
+    return this.observe(() => {
+      context.abortSignal?.throwIfAborted();
+      const pending=(async()=>{
+        if (!isNativeMessageInput(copy)) throw Error("Native message source required");
+        const record = await this.record(copy); this.fence();context.abortSignal?.throwIfAborted();
+        if (!record || record.id !== submissionId) throw Error("Exact SDK submission required");
+        const submission = await this.harness.submission(submissionId, context); this.fence();
+        if (!submission) throw Error("Missing SDK submission");
+        const settled = await submission.wait(context); this.fence();
+        return settled;
+      })();
+      // Detach observation, including an entered correlation read, without
+      // cancelling accepted work. Rollback still joins the underlying callback
+      // before considering storage/owner release; every late read is fenced.
+      this.underlyingWaits.add(pending);
+      void pending.finally(()=>this.underlyingWaits.delete(pending)).catch(()=>{});
+      return awaitWithContext(pending,context);
+    });
+  }
+  /** Passive storage-backed observation; caller already selected an authorised
+   * timeline row and its exact persisted conversation/submission correlation. */
+  readSubmissionStatus(conversationId:number,id:number):Promise<SubmissionRecord|undefined>{
+    return this.observe(async()=>{const handle=await this.harness.submission(id as SubmissionId,this.context);this.fence();
+      const record=await handle?.status(this.context);this.fence();
+      if(record&&record.conversationId!==conversationId)throw Error("Submission conversation conflict");return record;});
+  }
+  messageSubmissionStatus(input: AcceptedInput): Promise<SubmissionRecord | undefined> {
+    const copy = inputSnapshot(input);
+    if (!isNativeMessageInput(copy)) throw Error("Native message source required");
+    return this.observe(()=>this.record(copy));
+  }
+  /** Current queued inputs from the exported SDK document, not a host FIFO. */
+  readMessageInbox(binding:{incarnation:string;chatJid:string;branchId:string;conversationId:number}):Promise<readonly {submissionId:number;mode:"steer"|"followUp";input:AcceptedInput;content:string}[]> {
+    const reader=this.sessionReader(binding);
+    return this.observe(async()=>{
+      const conversation=await reader.conversation();
+      const items=await conversation.commit(async tx=>(await tx.doc(InboxDoc,reader.binding.conversationId as ConversationId)).items.flatMap(item=>{
+        if(item.mode==="write"||item.entry?.kind!=="host.accepted"||!item.entry.data||typeof item.content!=="string")return [];
+        const input=inputSnapshot(item.entry.data as unknown as AcceptedInput);
+        if(!isNativeMessageInput(input)||input.incarnation!==reader.binding.incarnation||input.conversationId!==reader.binding.conversationId||
+            input.chatJid!==reader.binding.chatJid||input.branchId!==reader.binding.branchId)throw Error("Native inbox source conflict");
+        return [{submissionId:item.id,mode:item.mode,input,content:item.content}];
+      }),this.context);reader.check();
+      const current:typeof items=[];
+      for(const item of items){const record=await this.record(item.input);reader.check();if(record?.id===item.submissionId&&record.status==="queued")current.push(item);}
+      return Object.freeze(current);
+    });
+  }
+  /** SDK withdrawal owns the queued/placed race and leaves its history intact. */
+  removeQueuedMessage(binding:{incarnation:string;chatJid:string;branchId:string;conversationId:number},id:number):Promise<boolean>{
+    const reader=this.sessionReader(binding);
+    return this.observe(async()=>{
+      const item=(await this.readMessageInbox(binding)).find(item=>item.submissionId===id);reader.check();
+      if(!item)return false;
+      const submission=await this.harness.submission(id as SubmissionId,this.context);reader.check();
+      const result=await submission?.abort(this.context);reader.check();return result==="aborted";
+    });
+  }
+  /** An explicit delivery-mode control updates ONLY the SDK's public mutable
+   * inbox document. Accepted submission IDs/content/status/history are unchanged;
+   * the built-in boundary still chooses placement and generation ownership. */
+  steerQueuedMessage(binding:{incarnation:string;chatJid:string;branchId:string;conversationId:number},id:number):Promise<boolean>{
+    const reader=this.sessionReader(binding);
+    return this.observe(async()=>{
+      const expected=(await this.readMessageInbox(binding)).find(item=>item.submissionId===id);reader.check();
+      if(!expected)return false;
+      const conversation=await reader.conversation();
+      const changed=await conversation.commit(async tx=>{
+        const record=await tx.submissionByRequest(reader.binding.conversationId as ConversationId,expected.input.requestId);
+        const inbox=await tx.doc(InboxDoc,reader.binding.conversationId as ConversationId);
+        const item=inbox.items.find(item=>item.id===id);
+        if(record?.id!==id||record.status!=="queued"||!item||item.mode==="write")return false;
+        if(item.entry?.kind!=="host.accepted"||!item.entry.data||item.content!==expected.content)throw Error("Queued SDK source changed");
+        const input=inputSnapshot(item.entry.data as unknown as AcceptedInput);
+        if(Object.entries(expected.input).some(([key,value])=>input[key as keyof AcceptedInput]!==value))throw Error("Queued SDK source changed");
+        item.mode="steer";return true;
+      },this.context);reader.check();
+      if(changed){
+        // A documented context-changing write wakes an idle/failed inbox too.
+        // It adds no model messages and never re-submits the accepted input.
+        try { await conversation.submit({type:"write",requestId:`queue-steer:${id}`,entry:{kind:"app.queue-steer",data:{submissionId:id},model:[]}},this.context);reader.check(); }
+        catch { log.warn("Accepted SDK queue mode retained; wake unavailable",{operation:"durable.queue_wake_pending",conversationId:reader.binding.conversationId,submissionId:id}); }
+      }
+      return changed;
+    });
+  }
+  /** Actual SDK cleanup scope. Queued inputs and manual compaction are native
+   * work even when no host operation or process-local worker exists. */
+  readMessageAbortScope(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }, retryOnly=false): Promise<Extract<import("../../src/agent-pool/durable-runtime-adapter.js").DurableAbortScope,{kind:"sdk"}>|null> {
+    const reader=this.sessionReader(binding);
+    return this.observe(async()=>{
+      const conversation=await reader.conversation();
+      const snapshot=await conversation.commit(async tx=>{
+        const live=await tx.doc(LiveDoc,reader.binding.conversationId as ConversationId);
+        const inbox=await tx.doc(InboxDoc,reader.binding.conversationId as ConversationId);
+        if(retryOnly && !live.generation?.retry)return null;
+        const compaction=live.compactions?.find(item=>item.reason==="manual"||item.blocking);
+        return {taskId:live.run?.taskId??compaction?.taskId??null,
+          submissionIds:[...(live.run?.inputs??[]),...inbox.items.filter(item=>item.mode!=="write").map(item=>item.id)]};
+      },this.context);reader.check();
+      if(!snapshot||snapshot.taskId===null&&!snapshot.submissionIds.length)return null;
+      for(const id of snapshot.submissionIds){
+        const handle=await this.harness.submission(id,this.context);reader.check();
+        const record=await handle?.status(this.context);reader.check();
+        if(!record||!await this.ownsMessageSubmission(record))return null;
+      }
+      return Object.freeze({kind:"sdk" as const,conversationId:reader.binding.conversationId,
+        taskId:snapshot.taskId,submissionIds:Object.freeze(snapshot.submissionIds)});
+    });
+  }
+  /** Operator cancellation follows the public conversation scope, including its
+   * queued inputs. No host operation/cancellation row or worker lane is needed. */
+  abortMessages(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number },
+    expected?: Extract<import("../../src/agent-pool/durable-runtime-adapter.js").DurableAbortScope,{kind:"sdk"}>): Promise<void> {
+    const reader = this.sessionReader(binding);
+    return this.observe(async () => {
+      const conversation = await reader.conversation();
+      if (!expected) { await conversation.abort(this.context); reader.check(); return; }
+      if (expected.conversationId!==reader.binding.conversationId) throw Error("Abort conversation changed");
+      // Public SDK withdrawal and exact-task abort constrain cleanup to the
+      // captured work. A later input/run is never cancelled as a successor.
+      for (const id of expected.submissionIds) {
+        const submission=await this.harness.submission(id as SubmissionId,this.context);reader.check();
+        await submission?.abort(this.context);reader.check();
+      }
+      if (!expected.submissionIds.length) {
+        if(expected.taskId!==null){await this.harness.abortTask(expected.taskId as TaskId,this.context);reader.check();}
+        return;
+      }
+      for (;;) {
+        const live=await this.harness.snapshot(LiveDoc,reader.binding.conversationId as ConversationId,this.context);reader.check();
+        if(live?.run?.inputs[0]!==expected.submissionIds[0])return;
+        const taskId=live.run.taskId;
+        await this.harness.abortTask(taskId,this.context);reader.check();
+        await this.harness.waitForTask(taskId,this.context);reader.check();
+      }
+    });
+  }
+  /** Immutable SDK/source correlation for passive reopen. This neither resumes
+   * work nor grants a model/tool invocation; current approval stays at effects. */
+  ownsMessageSubmission(inspected: SubmissionRecord): Promise<boolean> {
+    return this.observe(async () => {
+      if (inspected.type !== "input" || !inspected.requestId) return false;
+      const entry = await this.harness.commit(async tx => {
+        const record = await tx.submissionByRequest(inspected.conversationId,inspected.requestId!);
+        if (!record || record.id!==inspected.id || record.type!=="input") return;
+        if (record.entry!==undefined) return tx.entry(record.entry);
+        if (record.status!=="queued") return;
+        const item = (await tx.doc(InboxDoc,inspected.conversationId)).items.find(item=>item.id===record.id);
+        return item && item.mode!=="write" && item.entry ? {
+          kind:item.entry.kind,
+          data:item.entry.kind==="host.accepted" && item.entry.data ? inputSnapshot(item.entry.data as unknown as AcceptedInput) : undefined,
+        } : undefined;
+      },this.context); this.fence();
+      if (entry?.kind!=="host.accepted" || !entry.data) return false;
+      const input = inputSnapshot(entry.data as unknown as AcceptedInput);
+      if (!isNativeMessageInput(input) || input.requestId!==inspected.requestId || input.conversationId!==inspected.conversationId || input.incarnation!==this.options.incarnation) return false;
+      const record = await this.record(input); this.fence();
+      return record?.id===inspected.id;
+    });
+  }
+  /** Public immutable result projection. A source may be one of several inputs
+   * answered by the same SDK run; project that answer once, under its first input. */
+  readMessageResult(input: AcceptedInput): Promise<NativeMessageResult | null> {
+    const copy = inputSnapshot(input);
+    if (!isNativeMessageInput(copy)) throw Error("Native message source required");
+    return this.observe(async () => {
+      const status = await this.record(copy); this.fence();
+      if (!status || status.type !== "input" || !["done", "unanswered"].includes(status.status)) return null;
+      if (status.status !== "done") {
+        const binding = await this.options.bindings.get(copy); this.fence();
+        if (!binding) throw Error("Native message binding missing");
+        return {status,inputs:[Object.freeze({...binding,submissionId:status.id})],entries:[],answer:null,
+          runId:`sdk-run:${copy.conversationId}:${status.id}`};
+      }
+      const sources: {input:HostInputBinding;entryId:number}[] = [];
+      let cursor: Cursor | undefined;
+      do {
+        const page = await this.storage.scanSubmissions({conversationId:copy.conversationId,status:"done"},100,cursor,this.context); this.fence();
+        for (const candidate of page.items) {
+          if (candidate.type !== "input" || candidate.status !== "done" || candidate.answer !== status.answer) continue;
+          const entry = await this.harness.commit(tx=>tx.entry(candidate.entry),this.context); this.fence();
+          if (entry?.kind !== "host.accepted" || entry.conversationId !== copy.conversationId) throw Error("Native result source unavailable");
+          const accepted = inputSnapshot(entry.data as unknown as AcceptedInput);
+          if (!isNativeMessageInput(accepted) || accepted.chatJid !== copy.chatJid || accepted.branchId !== copy.branchId || accepted.incarnation !== copy.incarnation)
+            throw Error("Native result source conflict");
+          const verified = await this.record(accepted); this.fence();
+          if (verified?.id !== candidate.id || verified.status !== "done" || verified.answer !== status.answer) throw Error("Native result source changed");
+          sources.push({input:Object.freeze({...accepted,submissionId:candidate.id}),entryId:candidate.entry});
+        }
+        cursor = page.next;
+      } while (cursor !== undefined);
+      sources.sort((a,b)=>a.entryId-b.entryId);
+      if (!sources.length || !sources.some(source=>source.input.requestId===copy.requestId)) throw Error("Native result source missing");
+      const conversation = await this.harness.conversation(copy.conversationId,this.context); this.fence();
+      if (!conversation) throw Error("Missing conversation");
+      const entries: EntryRecord[] = []; cursor = undefined;
+      do {
+        const page = await conversation.entries({minEntryId:sources[0]!.entryId as import("@earendil-works/pi-durable").EntryId,maxEntryId:status.answer,order:"ascending"},100,cursor,this.context); this.fence();
+        entries.push(...page.items); cursor = page.next;
+      } while (cursor !== undefined);
+      const final = entries.find(entry=>entry.id===status.answer);
+      if (final?.kind !== "pi.assistant" || final.conversationId !== copy.conversationId || final.model?.length !== 1 || final.model[0]?.role !== "assistant") throw Error("Native final answer missing");
+      const message = final.model[0];
+      const processExit = await this.harness.commit(tx=>readNativeExitReceipt(tx,final,inputSnapshot(sources[0]!.input)),this.context); this.fence();
+      const text = processExit ? nativeExitNotice(processExit.reason) : message.content.filter(part=>part.type==="text").map(part=>part.text).join("");
+      return {status,inputs:Object.freeze(sources.map(source=>source.input)),entries:Object.freeze(entries),
+        answer:Object.freeze({message,text,...(processExit?{processExit}: {})}),runId:`sdk-run:${copy.conversationId}:${sources[0]!.input.submissionId}`};
+    });
+  }
   submit(input: AcceptedInput) { const copy = inputSnapshot(input); return this.admitInput(copy); }
   /** Targets the accepted host operation, NOT an exact physical model generation. */
   submitIntent(input: AcceptedInput) { const copy = inputSnapshot(input); return this.admitInput(copy, true); }
@@ -1803,17 +2201,17 @@ export class HostConversationRuntime {
       await this.checked(copy);const record=await this.record(copy);this.fence();
       if(!record)throw Error('Existing SDK input acknowledgement required');
       await this.port(false).recordSubmission(copy,record.id);this.fence();return record.id;
-    },true);
+    });
   }
   /** Pure lookup/status/committed-entry reads. No wait/resume, terminal write or payload publication. */
-  reconcile(input: AcceptedInput) { const copy = inputSnapshot(input); return this.observe(() => this.readState(copy), true); }
+  reconcile(input: AcceptedInput) { const copy = inputSnapshot(input); return this.observe(() => this.readState(copy)); }
   /** Inspection and live documents are separate public observations. A task that
    * retired between them is no longer scheduling authority; require its durable receipt. */
   isTaskTerminal(id: import("@earendil-works/pi-durable").TaskId) {
     return this.observe(async () => {
       const task = await this.harness.getTask(id, this.context); this.fence();
       return task?.state.status === "terminal";
-    }, true);
+    });
   }
   inspectAuthority(additional: readonly AcceptedInput[] = []) {
     return this.observe(async () => {
@@ -1832,13 +2230,13 @@ export class HostConversationRuntime {
         for (const status of live?.compactions ?? []) compactions.push({ ...status, conversationId: id });
       }
       return { inspection, runs, compactions };
-    }, true);
+    });
   }
-  reconcileIntent(input: AcceptedInput) { const copy = inputSnapshot(input); return this.observe(() => this.readState(copy, true), true); }
+  reconcileIntent(input: AcceptedInput) { const copy = inputSnapshot(input); return this.observe(() => this.readState(copy, true)); }
   /** Original hash-checked host payload, including after the SDK run ends. */
   readAcceptedInputText(input: AcceptedInput): Promise<string> {
     const copy = inputSnapshot(input);
-    return this.observe(async () => (await this.checked(copy)).content);
+    return this.observe(async () => isNativeMessageInput(copy) ? (await this.options.bindings.getOrBind(copy)).content : (await this.checked(copy)).content);
   }
   /** Recovery accounting window: original accepted entry through its exact final
    * answer, even after later turns exist. No current-live-run dependency. */
@@ -1850,6 +2248,18 @@ export class HostConversationRuntime {
   readSettledInputUsage(input: AcceptedInput) {
     const copy = inputSnapshot(input);
     return this.observe(async () => {
+      if(isNativeMessageInput(copy)){
+        const result=await this.readMessageResult(copy);if(!result?.answer)return null;
+        const inputs:{entryId:number;text:string}[]=[];
+        for(const entry of result.entries){
+          if(entry.kind!=="host.accepted")continue;
+          const data=inputSnapshot(entry.data as unknown as AcceptedInput);
+          if(!result.inputs.some(input=>input.requestId===data.requestId))throw Error("Native Goal input window changed");
+          const content=entry.model?.[0];if(entry.model?.length!==1||content?.role!=="user"||typeof content.content!=="string")throw Error("Native Goal input unavailable");
+          inputs.push({entryId:entry.id,text:content.content});
+        }
+        return {inputs,receipts:await this.readUsageEntries(copy.conversationId,result.entries)};
+      }
       const window = await this.settledUsageEntries(copy);
       if (!window) return null;
       const entries = window.entries.slice(window.start + 1, window.end + 1);
@@ -1908,9 +2318,11 @@ export class HostConversationRuntime {
   readSettledToolNames(input: AcceptedInput) {
     const copy = inputSnapshot(input);
     return this.observe(async () => {
-      const window = await this.settledUsageEntries(copy);
-      if (!window) return null;
-      const entries = window.entries.slice(window.start + 1, window.end + 1);
+      const native=isNativeMessageInput(copy)?await this.readMessageResult(copy):null;
+      if(isNativeMessageInput(copy)&&!native?.answer)return null;
+      const window=native?null:await this.settledUsageEntries(copy);
+      if(!native&&!window)return null;
+      const entries=native?.entries??window!.entries.slice(window!.start+1,window!.end+1);
       const names = await this.harness.commit(async tx => {
         const result: string[] = [];
         for (const entry of entries) {
@@ -1934,7 +2346,7 @@ export class HostConversationRuntime {
         return result;
       }, this.context);
       this.fence();
-      if ((await this.checked(copy)).operation.version !== window.version) throw Error("Settled usage operation changed");
+      if (window && (await this.checked(copy)).operation.version !== window.version) throw Error("Settled usage operation changed");
       return names;
     });
   }
@@ -2036,101 +2448,13 @@ export class HostConversationRuntime {
         taskId = await readAbortTask(); this.fence();
         if (taskId === abortedTask) throw Error("Aborted run has not settled");
       }
-      let terminal;
-      try { terminal = await this.settleInput(copy); this.fence(); }
-      catch (error) {
-        this.fence();
-        // Cancellation and the exact SDK abort already committed. Retained
-        // accounting debt may delay S02, not turn that accepted abort into error.
-        if (error instanceof BudgetRequestError && error.code === 'budget_denied') return true;
-        throw error;
-      }
+      const terminal = await this.settleInput(copy); this.fence();
       if (!terminal) throw Error("Abort terminal settlement pending");
       return true;
     }).catch(async error => {
       // Publish the public failed-storage proof before a caller considers recovery.
       if (this.storageClosing) await this.storageEnded;
       throw error;
-    });
-  }
-  /** Capture cleanup while the fresh private Dream source is still owned.
-   * The returned join is deliberately outside detachable observation tracking:
-   * shutdown must be able to close SDK resources before this waiter returns. */
-  captureDreamCleanup(input:AcceptedInput):Promise<()=>Promise<void>>{
-    const copy=inputSnapshot(input);
-    return this.observe(async()=>{
-      await this.checked(copy);this.fence();
-      if(!copy.chatJid.startsWith('dream:')||!/^background:[a-f0-9]{64}$/.test(copy.sourceId)||this.options.operationConversationFor?.(copy)!==copy.conversationId)throw Error('Exact private Dream cleanup owner required');
-      const record=await this.harness.commit(tx=>tx.conversation(copy.conversationId),this.context);this.fence();
-      if(!record||record.parent||record.owner)throw Error('Fresh ownerless Dream context required');
-      const context=withoutAbortSignal(this.context);
-      let joined:Promise<void>|undefined;
-      return()=>joined??=(async()=>{
-        if(this.closed||this.storageClosing){await this.storageEnded;return;}
-        try{
-          this.options.owner.assert();
-          const conversation=await this.harness.conversation(copy.conversationId,context);
-          if(!conversation)throw Error('Private Dream cleanup context missing');
-          await conversation.abort(context,{background:true});
-        }catch(error){
-          // Do not release Dream's FD lease merely because observation/abort
-          // failed. SDK close owns actual provider/tool resource cleanup.
-          log.warn('Private Dream cleanup awaits confirmed SDK close',{operation:'durable_dream.cleanup_pending',conversationId:copy.conversationId});
-          await this.storageEnded;
-          throw error;
-        }
-      })();
-    });
-  }
-  /** Join the private context's SDK-owned compaction work before releasing its
-   * accepted source/lease. Observation detaches on close; SDK close still owns
-   * the real tasks and provider cleanup. No new scheduler progress is granted. */
-  joinBackgroundCompactions(input:AcceptedInput){
-    const copy=inputSnapshot(input),context=withAbortSignal(this.observations.signal,this.context);
-    return this.observe(async()=>{
-      await this.checked(copy);this.fence();
-      if(!/^background:[a-f0-9]{64}$/.test(copy.sourceId)||this.options.operationConversationFor?.(copy)!==copy.conversationId)throw Error('Exact background compaction join required');
-      const joined=new Set<number>();
-      for(;;){
-        const tasks=await this.harness.commit(async tx=>{
-          const found:import('@earendil-works/pi-durable').TaskRecord<unknown,unknown,CompactionResult>[]=[];let cursor:import('@earendil-works/pi-durable').Cursor|undefined;
-          do{const page=await tx.scanTasks({conversationId:copy.conversationId,kind:'pi.compaction'},100,cursor);
-            for(const task of page.items)if(!joined.has(task.id))found.push(task as typeof found[number]);cursor=page.next;
-          }while(cursor!==undefined);return found;
-        },context);this.fence();if(!tasks.length)return;
-        for(const candidate of tasks){
-          const reason=(candidate.input as {reason?:string}).reason;
-          if(!['threshold','overflow'].includes(reason??''))throw Error('Unqualified private compaction task');
-          const task=candidate.state.status==='terminal'?candidate:await this.harness.waitForTask(candidate.id,context);this.fence();
-          if(task.state.status!=='terminal')throw Error('Private compaction task remains live');
-          if(task.state.outcome.status==='completed'&&task.state.outcome.result.submissionId!==undefined){
-            const submission=await this.harness.submission(task.state.outcome.result.submissionId,context);this.fence();
-            const status=await submission?.wait(context);this.fence();
-            if(!status||status.type!=='write'||status.conversationId!==copy.conversationId||!['done','unanswered'].includes(status.status))throw Error('Private compaction write remains uncertain');
-          }
-          joined.add(candidate.id);
-        }
-      }
-    });
-  }
-  /** Only an exact private ownerless/unforked context may be aborted wholesale.
-   * Cancellation is owner cleanup and does not require a current spend grant. */
-  abortBackground(input:AcceptedInput,cause:'background_cancelled'|'background_timeout'='background_cancelled'):Promise<boolean>{
-    const copy=inputSnapshot(input);
-    return this.observe(async()=>{
-      const o=this.options;
-      if(!/^background:[a-f0-9]{64}$/.test(copy.sourceId)||copy.requestId!==copy.sourceId||copy.payloadRef!==copy.sourceId||
-        o.operationConversationFor?.(copy)!==copy.conversationId||o.conversationFor(copy.chatJid,copy.branchId)!==copy.conversationId||!o.cancelOperationSource)throw Error('Exact private background abort required');
-      const state=await this.readState(copy);this.fence();
-      if(state.operation.terminal)return false;
-      const record=await this.harness.commit(tx=>tx.conversation(copy.conversationId),this.context);this.fence();
-      if(!record||record.parent||record.owner)throw Error('Exact private background abort required');
-      const completed=state.status?.status==='done';
-      if(!completed&&!state.operation.cancellation)await o.cancelOperationSource(copy,state.operation.version,undefined,cause);
-      this.fence();await this.progress(completed?undefined:copy);
-      const conversation=await this.harness.conversation(copy.conversationId,this.context);this.fence();
-      if(!conversation)throw Error('Missing private background conversation');
-      await conversation.abort(this.context,{background:true});this.fence();return !completed;
     });
   }
   /** Explicit progress grant after caller has revalidated the entire ownership domain. */
@@ -2278,11 +2602,6 @@ export class HostConversationRuntime {
     // ACK-only/reopened evidence cannot create execution authority during settlement.
     // Retain the original outcome and host hold until an explicitly qualified owner can reconcile it.
     if (!operation.harness) return null;
-    if (o.prepareAccounting) {
-      const prepared: unknown = await o.prepareAccounting(input.operationId, o.operationConversationFor?.(input) ?? input.conversationId); this.fence();
-      if (prepared !== undefined) throw Error('Accounting preparation must return no effect');
-    }
-    this.assertAccountingReady(input.operationId, true);
     if (operation.phase !== "settling") {
       if (!o.work.finishHarness) throw new Error("Host settlement API required");
       if (operation.harness!.sessionId !== o.sessionId || operation.harness!.harnessOperationId !== String(primarySubmissionId))
@@ -2324,7 +2643,6 @@ export class HostConversationRuntime {
       outboxIntents: [], committedAt: o.now() });
     const terminalEffect = cancelled || modelFailed ? undefined : await o.prepareTerminalEffect?.(input, state.answer ?? undefined);
     this.fence();
-    this.assertAccountingReady(input.operationId, true);
     const terminal = value(await o.terminal.commitTerminal(request, terminalEffect)); this.fence();
     if (modelFailed) log.warn("Native turn failed; no automatic replay", { operation: "durable_turn.model_failed",
       chatJid: input.chatJid, operationId: input.operationId, conversationId: input.conversationId, submissionId: state.submissionId,

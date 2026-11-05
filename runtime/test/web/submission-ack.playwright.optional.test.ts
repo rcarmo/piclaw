@@ -34,6 +34,8 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
     let accepted = 0;
     let sseFirst = false;
     let rejectNext = false;
+    let uncertainPosts=0,uncertainPending=false,releaseUncertain!:()=>void;
+    const uncertainGate=new Promise<void>(resolve=>{releaseUncertain=resolve;});
     let queueNext = false;
     let invalidAck: 'json' | 'empty' | null = null;
     const shortcutPosts: any[] = [];
@@ -90,6 +92,7 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       requests.push(`${req.method()} ${url.pathname}`);
       let body: unknown;
       if (url.pathname.startsWith('/agent/') && url.pathname.endsWith('/message') && req.method() === 'POST') {
+        if(req.postDataJSON().content==='Uncertain saved prompt'){uncertainPosts++;uncertainPending=true;await uncertainGate;return route.fulfill({status:503,json:{accepted:true,thread_id:779001,error:'Input saved; SDK admission could not be confirmed.'}});}
         if (req.postDataJSON().content === '/theme default') return route.fulfill({json:{ui_only:true,command:{status:'success',message:'Theme set'},response_delivery:'failed'}});
         if (invalidAck) invalidRequests.push(req.postDataJSON().content);
         if (invalidAck === 'json') return route.fulfill({status:201,contentType:'application/json',body:'not json'});
@@ -122,9 +125,9 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       else if (url.pathname === "/timeline") body = { posts: durablePosts, has_more: false, chat_jid: chatJid, user: { name: "Fixture User" }, agent: { name: "Fixture" } };
       else if (url.pathname === "/agent/addons/web-entries") body = { entries: [] };
       else if (url.pathname === "/agent/roster") body = { agents: [], default_agent: "fixture" };
-      else if (url.pathname === "/agent/branches") body = { branches: [{ chat_jid: chatJid, root_chat_jid: "web:default", branch_id: "cold-start", agent_name: "fixture" }] };
+      else if (url.pathname === "/agent/branches") body = { chats: [{ chat_jid: chatJid, root_chat_jid: "web:default", branch_id: "cold-start", agent_name: "fixture" }] };
       else if (url.pathname === "/agent/active-chats") body = { chats: [{ chat_jid: chatJid, root_chat_jid: "web:default", agent_name: "fixture", is_active: false }] };
-      else if (["/agent/queue", "/agent/queue-state"].includes(url.pathname)) body = { items: [], queue: [], queued: [] };
+      else if (["/agent/queue", "/agent/queue-state"].includes(url.pathname)) body = { count: 0, items: [], queue: [], queued: [] };
       else if (url.pathname === "/workspace/tree") body = { root: { name: "fixture", path: "", type: "directory", children: [] }, entries: [], tree: [] };
       else if (url.pathname === "/workspace/index-status") body = { state: "ready", indexed_file_count: 0, roots: [] };
       else if (url.pathname === "/workspace/visibility") body = { visible: false, open: false };
@@ -272,6 +275,17 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       rejectNext=false;await input.fill('/theme default');await waitForSubmitReady();await input.press('Enter');
       await page.getByText('Command handled, but its timeline reply could not be delivered. Do not resend the command.',{exact:false}).waitFor({timeout:5000});
       expect(await input.inputValue()).toBe('');expect(accepted).toBe(2);
+      await input.fill('Uncertain saved prompt');await waitForSubmitReady();await input.press('Enter');
+      await page.waitForFunction(()=>document.querySelector('[data-submission-state="sending"]')!==null);
+      const until=Date.now()+1500;while(!uncertainPending&&Date.now()<until)await page.waitForTimeout(5);expect(uncertainPending).toBe(true);
+      await input.fill('Next independently typed draft');releaseUncertain();
+      await page.getByText('Input saved, but SDK admission is unconfirmed. Do not resend this input.',{exact:false}).first().waitFor({timeout:1500});
+      await page.locator('[data-submission-state]').waitFor({state:'hidden'});
+      expect(await input.inputValue()).toBe('Next independently typed draft');
+      expect(await page.locator('#post-779001,[data-message-id="779001"]').count()).toBe(0);
+      await page.waitForTimeout(200);expect(uncertainPosts).toBe(1);
+      expect(new URL(page.url()).searchParams.get('chat_jid')).toBe(chatJid);
+      expect(await page.getByText('Queue could not be refreshed. Reconnect or try again.',{exact:false}).count()).toBe(0);
       expect(errors).toEqual([]);
       expect([...unhandled]).toEqual([]);
     } catch (error) {

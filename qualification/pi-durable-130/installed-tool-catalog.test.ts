@@ -177,7 +177,7 @@ test("installed pinned Plan executes the public registry definition against root
   } finally {
     catalog?.runtime.invalidate("qualification complete");
     resetExtensionKvStoreForTests();
-    closeDatabase();
+    await closeDatabase();
     if (savedDbMode === undefined) delete process.env.PICLAW_DB_IN_MEMORY;
     else process.env.PICLAW_DB_IN_MEMORY = savedDbMode;
     keys.forEach((key, i) => { if (saved[i]) Object.defineProperty(globals, key, saved[i]!); else delete globals[key]; });

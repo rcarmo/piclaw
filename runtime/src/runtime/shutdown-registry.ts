@@ -7,8 +7,8 @@
  * (queue drain → session dispose → web stop → process.exit) that SIGINT uses.
  *
  * Native exit_process uses the SDK's singleton tool-round termination. Its
- * host coordinator verifies the committed tool receipt, visible terminal and
- * accounting, then proves global idleness and joins native cleanup before
+ * host coordinator verifies the committed tool receipt and visible reply,
+ * then proves global idleness and joins native cleanup before
  * calling requestGracefulShutdown(). Recovery never rearms that request.
  *
  * markPendingShutdown/checkPendingShutdown retain the legacy finalisation

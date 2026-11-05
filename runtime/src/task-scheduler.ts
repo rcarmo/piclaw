@@ -17,14 +17,11 @@
 
 import { admitSqliteWrite, type SyncSqliteOperation } from "./db/sqlite-async-admission.js";
 import { randomUUID,createHash } from "node:crypto";
-import { withBudgetWorkContext } from './budget/context.js';
-import { ensureBudgetWork,getBudgetWork,setBudgetWorkStatus } from './db/budget-limits.js';
 import { nativeBackgroundSourceId } from './agent-pool/background-operation-contract.js';
 import { hostname } from "node:os";
 import Database from "bun:sqlite";
 
 import { WORKSPACE_DIR, getRuntimeTimingConfig } from "./core/config.js";
-import { drainScheduledBudgetNotifications } from "./budget/scheduled-notifications.js";
 import { readAccessConfig } from "./core/config-access.js";
 import { getExecutionIdentity } from "./core/execution-context.js";
 import { formatRecoverySummary } from "./agent-pool/recovery-summary.js";
@@ -251,7 +248,6 @@ interface ScheduledTaskRunOutcome {
   error: string | null;
   durationMs: number;
   /** Durable delivery waits for the atomic S07/history commitment. */
-  budgetBlocked?: boolean;
 }
 
 async function executeScheduledTask(
@@ -281,13 +277,11 @@ async function executeScheduledTask(
   };
 
   const start = Date.now();
-  const budgetWorkId = `scheduled:${scheduledLease.record.runId}`;
   schedulerMetrics.taskRunsStarted += 1;
   let result: string | null = null;
   let error: string | null = null;
   let loggedResult: string | null = null;
   let loggedError: string | null = null;
-  let budgetBlocked = false;
   try {
     const kind = task.task_kind === "internal"
       ? "internal"
@@ -309,10 +303,8 @@ async function executeScheduledTask(
             allowed=false;throw Error('Scheduled Dream occurrence authority changed');
           }
         }};
-        const authority = nativeAuthority;
-        await scheduledSourceWrite(db, () => { authority.assertCurrent(); ensureBudgetWork({id:budgetWorkId,chatJid:task.chat_jid,executionKind:'scheduled',scheduledTaskId:task.id}); }, () => { authority.assertCurrent(); return true; });
       }
-      const out = await(nativeDream?withBudgetWorkContext({workId:budgetWorkId,chatJid:task.chat_jid,kind:'scheduled'},()=>runInternalTask(task,deps,nativeAuthority)):runInternalTask(task,deps));
+      const out = await runInternalTask(task, deps, nativeAuthority);
       if (!mayContinue()) return unsupportedScheduledRun();
       if (out.error) error=out.error; else result=out.result;
     } else if (kind === "shell") {
@@ -343,8 +335,6 @@ async function executeScheduledTask(
       if (out.status === "error") {
         error = out.error || "Unknown";
         loggedError = appendRecoverySummary(error, recoverySummary);
-        budgetBlocked = out.failureCategory === "provider_budget";
-        // The budget decision persists its own pending notification identity.
         // Delivery happens after the run log below so a send failure cannot
         // erase the blocked/error execution receipt.
       } else {
@@ -376,7 +366,6 @@ async function executeScheduledTask(
     result: effectiveResult,
     error: effectiveError,
     durationMs,
-    ...(budgetBlocked ? { budgetBlocked: true } : {}),
   };
 }
 
@@ -876,14 +865,9 @@ async function runClaimedScheduledTask(
       return;
     }
     const terminalSource = source, terminalStatus = outcome.status;
-    if (terminalSource || task.id === DREAM_TASK_ID) await scheduledSourceWrite(getDb(), () => {
-      if (task.id === DREAM_TASK_ID && lease.task.kind === 'internal' && deps.agentPool.isDurableRuntime?.() === true) {
-        const workId = 'scheduled:' + lease.record.runId, db = getDb();
-        if (getBudgetWork(workId, db)?.status === 'active' && !db.query("SELECT 1 FROM budget_work WHERE parent_work_id=? AND status IN ('active','paused') LIMIT 1").get(workId)) setBudgetWorkStatus(workId, 'completed', {boundary:'scheduled_dream_settled'}, db);
-      }
+    if (terminalSource) await scheduledSourceWrite(getDb(), () => {
       if (terminalSource) settleScheduledAgentSource(finalLease.task.chatJid, terminalSource, terminalStatus, completedAt);
     });
-    if (outcome.budgetBlocked) await drainScheduledBudgetNotifications(deps);
     log.info("Scheduled run settled", {
       operation: "complete_scheduled_run",
       runId: finalLease.record.runId,
@@ -916,7 +900,6 @@ async function runSchedulerPoll(deps: SchedulerDeps, store: ScheduledRunStore & 
   const mayPoll = () => isCurrent() && canRunLegacyScheduledWork();
   if (!mayPoll()) return;
   schedulerMetrics.polls += 1;
-  await drainScheduledBudgetNotifications(deps);
   if (!mayPoll()) return;
   const now = new Date().toISOString();
   schedulerMetrics.lastPollAt = now;

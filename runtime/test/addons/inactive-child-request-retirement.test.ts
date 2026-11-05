@@ -12,14 +12,11 @@ test('unregistered child-request proxy and stream installer are absent from exec
   for (const path of retired) expect(existsSync(resolve(source, path)), path).toBe(false);
 });
 
-test('native Delegate and captured host accounting keep their existing real owners', () => {
-  const runtime = readFileSync(resolve(source, '../durable-engine/src/default-application-runtime.ts'), 'utf8');
-  const accounting = readFileSync(resolve(source, '../durable-engine/src/host-request-accounting.ts'), 'utf8');
-  expect(runtime).toContain('createHostDelegateTool');
-  expect(accounting).toContain('modelRequestAccounting');
-  for (const path of ['budget/model-request-accounting.ts', 'budget/request-cost-bound.ts', 'budget/request-reservation-admission.ts', 'db/budget-request-reservations.ts']) {
-    expect(existsSync(resolve(source, path)), path).toBe(true);
-  }
-  expect(runtime).not.toContain('createChildRequestsApi');
-  expect(runtime).not.toContain('installSharedRequestBoundary');
+test("native Delegate retains source authority without financial execution owners", () => {
+  const runtime = readFileSync(resolve(source, "../durable-engine/src/default-application-runtime.ts"), "utf8");
+  expect(runtime).toContain("createHostDelegateTool");
+  expect(runtime).toContain("captureToolSource");
+  for (const path of ["../durable-engine/src/host-request-accounting.ts", "budget/model-request-accounting.ts", "budget/request-cost-bound.ts", "budget/request-reservation-admission.ts", "db/budget-request-reservations.ts", "addons/operation-outbound-admission.ts"]) expect(existsSync(resolve(source,path)), path).toBe(false);
+  expect(runtime).not.toContain("createChildRequestsApi");
+  expect(runtime).not.toContain("installSharedRequestBoundary");
 });
