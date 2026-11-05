@@ -17,7 +17,8 @@ beforeAll(async () => {
       build.onResolve({ filter: /^svg-test-entry$/ }, () => ({ path: 'entry', namespace: 'svg-test' }));
       build.onLoad({ filter: /.*/, namespace: 'svg-test' }, () => ({ loader: 'ts', contents: `
         import { classicSvgTest } from ${JSON.stringify(resolve(repo, 'runtime/web/src/components/post.ts'))};
-        import { renderMarkdown as visual } from ${JSON.stringify(resolve(repo, 'runtime/web/static/visual/frontend/src/utils/markdown-pipeline.ts'))};
+        import { renderMarkdown as visual, renderThinkingMarkdown as visualThinking } from ${JSON.stringify(resolve(repo, 'runtime/web/static/visual/frontend/src/utils/markdown-pipeline.ts'))};
+        import { renderThinkingMarkdown as classicThinking } from ${JSON.stringify(resolve(repo, 'runtime/web/src/markdown.ts'))};
         import { bindCodeCopyButtons } from ${JSON.stringify(resolve(repo, 'runtime/web/static/visual/frontend/src/components/message-list/useScrollManager.ts'))};
         import { sanitizeSvgImage, SVG_IMAGE_LIMITS } from ${JSON.stringify(resolve(repo, 'runtime/web/src/utils/svg-images.ts'))};
         import { initTheme, selectLocalTheme } from ${JSON.stringify(resolve(repo, 'runtime/web/src/ui/theme.ts'))};
@@ -25,7 +26,7 @@ beforeAll(async () => {
         import { renderMermaidDiagrams as classicMermaid } from ${JSON.stringify(resolve(repo, 'runtime/web/src/markdown.ts'))};
         import { renderMermaidDiagrams as visualMermaid } from ${JSON.stringify(resolve(repo, 'runtime/web/static/visual/frontend/src/utils/mermaid-render.ts'))};
         import { importVSCodeTheme, applyTheme, resetTheme } from ${JSON.stringify(resolve(repo, 'runtime/web/static/visual/frontend/src/utils/theme-importer.ts'))};
-        Object.assign(window, { svgTest: { ...classicSvgTest, visual, bindCodeCopyButtons, sanitizeSvgImage, initTheme,selectLocalTheme,importVSCodeTheme,applyTheme,resetTheme,presets:WEB_THEME_PRESETS,classicMermaid,visualMermaid,limits: SVG_IMAGE_LIMITS } });
+        Object.assign(window, { svgTest: { ...classicSvgTest, visual, classicThinking, visualThinking, bindCodeCopyButtons, sanitizeSvgImage, initTheme,selectLocalTheme,importVSCodeTheme,applyTheme,resetTheme,presets:WEB_THEME_PRESETS,classicMermaid,visualMermaid,limits: SVG_IMAGE_LIMITS } });
       ` }));
       build.onResolve({ filter: /^#editor-vendor\/codemirror$/ }, () => ({ path: resolve(repo, 'runtime/extensions/viewers/editor/vendor/codemirror.js') }));
       build.onLoad({ filter: /\/web\/src\/components\/post\.ts$/ }, (args) => ({ loader: 'ts', contents: readFileSync(args.path, 'utf8') + '\nexport const classicSvgTest = { classic: renderMarkdown, enhanceCodeBlocks };' }));
@@ -380,3 +381,56 @@ browserTest('theme tokens are a finite safe paint set; authored root colours and
   expect(result.docColor).toBe('#123456');expect(result.xml).toContain('fill="#abcdef"');expect(result.xml).toContain('url(#g)');expect(result.xml).not.toMatch(/var\(|bad.invalid|arbitrary/);
  });
 });
+
+for(const skin of ['classic','visual'])browserTest(`${skin}: literal fenced/inline bytes and actual copy handlers survive entity/tag syntax`,async()=>{
+  await fixture(async page=>{
+    const result=await page.evaluate(async skin=>{
+      const api=(window as any).svgTest,root=document.querySelector('#post')!;
+      let copied:string|undefined;
+      Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async(text:string)=>{copied=text;}}});
+      document.execCommand=(command)=>{if(command!=='copy')return false;copied=(document.activeElement as HTMLTextAreaElement)?.value;return true;};
+      const code='if (a < b && c > d) return "&lt;literal&gt; &amp; &#39;";';
+      const nested='```mermaid\nnot a real diagram <b> &lt;x&gt;\n```';
+      const cases=[
+        {source:'```js\n'+code+'\n```',expected:code+'\n'},
+        {source:'~~~unknown\n<code><b>literal</b></code> &lt;&amp;\n~~~',expected:'<code><b>literal</b></code> &lt;&amp;\n'},
+        {source:'````markdown\n'+nested+'\n````',expected:nested+'\n'},
+        {source:'```js\n'+code,expected:code+'\n'},
+        {source:'> ```js\n> '+code+'\n> ```',expected:code+'\n'},
+      ];
+      const checks=[];
+      for(const item of cases){
+        root.innerHTML=api[skin](item.source,null);
+        const node=root.querySelector('pre code')!;
+        const text=node?.textContent;
+        const cleanup=skin==='classic'?api.enhanceCodeBlocks(root):api.bindCodeCopyButtons(root);
+        copied=undefined;(root.querySelector(skin==='classic'?'.post-code-copy-btn':'.code-block__copy') as HTMLElement)?.click();
+        for(let i=0;i<20&&copied===undefined;i++)await new Promise(r=>setTimeout(r,5));
+        checks.push({text,copied,expected:item.expected,diagrams:root.querySelectorAll('.mermaid-container').length});cleanup();
+        root.innerHTML=api[skin+'Thinking'](item.source);
+        checks.push({text:root.querySelector('pre code')?.textContent,expected:item.expected,diagrams:root.querySelectorAll('.mermaid-container').length});
+      }
+      const inline='a < b && c > d &lt;x&gt; &amp;';
+      root.innerHTML=api[skin]('`'+inline+'`',null);const inlineText=root.querySelector('code')?.textContent;
+      root.innerHTML=api[skin]('<script>window.__literalExploit=1</script><img src="javascript:alert(1)" onerror="window.__literalExploit=2"><span onclick="window.__literalExploit=3" style="color:red" title="safe">Safe</span>',null);
+      return {checks,inline,inlineText,unsafe:!!root.querySelector('script,[onclick],[onerror],[style],[src^="javascript:"]'),exploit:(window as any).__literalExploit??null};
+    },skin);
+    expect(result.inlineText).toBe(result.inline);expect(result.unsafe).toBe(false);expect(result.exploit).toBeNull();
+    for(const check of result.checks){expect(check.text).toBe(check.expected);if('copied' in check)expect(check.copied).toBe(check.expected);expect(check.diagrams).toBe(0);}
+  });
+},30000);
+
+for(const skin of ['classic','visual'])browserTest(`${skin}: language fences are projected only from real parser code tokens`,async()=>{
+  await fixture(async page=>{
+    const result=await page.evaluate(skin=>{
+      const api=(window as any).svgTest,root=document.querySelector('#post')!,calls:any[]=[];
+      (window as any).katex={renderToString:(text:string,options:any)=>{calls.push({text,display:options.displayMode});return '<span class="katex">Rendered math</span>';}};
+      const math='\\frac{a}{b} < x';
+      root.innerHTML=api[skin]('```math\n'+math+'\n```',null);const mathCount=root.querySelectorAll('.katex').length;
+      root.innerHTML=api[skin+'Thinking']('```math\n'+math+'\n```');const literal=root.querySelector('code')?.textContent;
+      const diagram='graph TD\nA-->B';root.innerHTML=api[skin]('```mermaid\n'+diagram+'\n```',null);
+      const containers=root.querySelectorAll('[data-mermaid]');return {calls,mathCount,literal,math,diagrams:containers.length,diagram,source:atob(containers[0]?.getAttribute('data-mermaid')??'')};
+    },skin);
+    expect(result.calls).toEqual([{text:result.math,display:true}]);expect(result.mathCount).toBe(1);expect(result.literal).toBe(result.math+'\n');expect(result.diagrams).toBe(1);expect(result.source).toBe(result.diagram);
+  });
+},30000);

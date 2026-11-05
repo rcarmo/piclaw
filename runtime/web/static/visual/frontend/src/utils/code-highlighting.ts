@@ -346,13 +346,11 @@ export function highlightCodeToHtml(code: string, lang: string): string {
   return html;
 }
 
-function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+// Decode the parser's single HTML-encoding layer without requiring a DOM.
+// A single replacement pass keeps literal entity text such as &lt; intact.
+function decodeCodeHtml(text: string): string {
+  const entities: Record<string,string> = {amp:'&',lt:'<',gt:'>',quot:'"','#39':"'"};
+  return text.replace(/&(amp|lt|gt|quot|#39);/g, (_match, name: string) => entities[name]);
 }
 
 export function applySyntaxHighlighting(html: string): string {
@@ -361,7 +359,7 @@ export function applySyntaxHighlighting(html: string): string {
     /<pre><code(?:\s+class="language-([A-Za-z0-9_+-]+)")?>([\s\S]*?)<\/code><\/pre>/g,
     (_match, lang, code) => {
       const normalizedLang = String(lang || "").trim().toLowerCase();
-      const decodedCode = decodeHtmlEntities(decodeHtmlEntities(code));
+      const decodedCode = decodeCodeHtml(code);
       const highlighted = highlightCodeToHtml(decodedCode, normalizedLang);
       const langClass = normalizedLang || "plaintext";
       const humanLabel = normalizeCodeLanguageLabel(langClass);

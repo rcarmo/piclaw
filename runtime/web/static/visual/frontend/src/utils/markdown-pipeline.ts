@@ -1,12 +1,13 @@
+import { prepareMarkdownToken } from '../../../../../src/markdown';
 import { linkifyChatReferences } from "../../../../../src/ui/chat-reference-links";
 /**
  * Full markdown rendering pipeline — ported from upstream piclaw.
  *
  * Pipeline stages:
  *   1. Pre-processing  (frontmatter, math fences, mermaid extraction)
- *   2. Entity handling (decode, normalize code tags, escape + restore)
+ *   2. Literal Markdown source; parser-scoped HTML policy
  *   3. Markdown render (marked.parse)
- *   4. Post-processing (decode entities, syntax highlighting, KaTeX math,
+ *   4. Post-processing (syntax highlighting, KaTeX math,
  *                        hashtag links, mermaid injection)
  *   5. Sanitization    (DOMParser-based, allows KaTeX/MathML tags)
  */
@@ -50,32 +51,6 @@ function getMarked(): PiclawMarked | null {
 /** Regex matching #hashtag tokens in message text. */
 export const HASHTAG_REGEX = /#(\w+)/g;
 
-const ALLOWED_HTML_TAGS = new Set([
-  "strong",
-  "em",
-  "b",
-  "i",
-  "u",
-  "s",
-  "del",
-  "ins",
-  "sub",
-  "sup",
-  "mark",
-  "small",
-  "br",
-  "p",
-  "ul",
-  "ol",
-  "li",
-  "blockquote",
-  "ruby",
-  "rt",
-  "rp",
-  "span",
-  "input",
-]);
-
 // KaTeX/MathML tags to allow through DOMPurify
 const KATEX_TAGS = [
   "math", "semantics", "mrow", "mi", "mn", "mo", "mtext", "mspace",
@@ -84,11 +59,6 @@ const KATEX_TAGS = [
 ];
 
 const SAFE_PROTOCOLS = new Set(["http:", "https:", "mailto:", ""]);
-
-const RESTORABLE_HTML_ATTRS: Record<string, Set<string>> = {
-  span: new Set(["title", "class", "lang", "dir"]),
-  input: new Set(["type", "checked", "disabled"]),
-};
 
 // ── Utility ────────────────────────────────────────────────────────────────
 
@@ -176,55 +146,6 @@ export function decodeEntitiesDeep(text: string, maxDepth = 2): string {
   return current;
 }
 
-function normalizeHtmlCodeTags(text: string): string {
-  if (!text) return text;
-  return text.replace(/<code>([\s\S]*?)<\/code>/gi, (_match, code) => {
-    if (code.includes("\n")) {
-      return `\n\`\`\`\n${code}\n\`\`\`\n`;
-    }
-    return `\`${code}\``;
-  });
-}
-
-function extractRestorableAttributes(tagName: string, rawAttrs: string): string {
-  const allowed = RESTORABLE_HTML_ATTRS[tagName];
-  if (!allowed || !rawAttrs) return "";
-
-  const attrs: string[] = [];
-  const regex = /([a-zA-Z_:][\w:.-]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'`=<>]+)))?/g;
-  let match;
-  while ((match = regex.exec(rawAttrs))) {
-    const name = (match[1] || "").toLowerCase();
-    if (!name || name.startsWith("on") || !allowed.has(name)) continue;
-    const rawValue = match[2] ?? match[3] ?? match[4] ?? "";
-    attrs.push(` ${name}="${escapeHtmlAttr(rawValue)}"`);
-  }
-
-  return attrs.join("");
-}
-
-function restoreAllowedHtmlTags(text: string): string {
-  if (!text) return text;
-  return text.replace(/&lt;((?:[^"'<>]|"[^"]*"|'[^']*')*?)(?:&gt;|>)/g, (match, content) => {
-    const trimmed = content.trim();
-    const isClosing = trimmed.startsWith("/");
-    const rawTag = isClosing ? trimmed.slice(1).trim() : trimmed;
-    const isSelfClosing = rawTag.endsWith("/");
-    const tagContent = isSelfClosing ? rawTag.slice(0, -1).trim() : rawTag;
-    const [tagToken = ""] = tagContent.split(/\s+/, 1);
-    const tagName = tagToken.toLowerCase();
-    if (!tagName || !ALLOWED_HTML_TAGS.has(tagName)) return match;
-    if (tagName === "br") {
-      return isClosing ? "" : "<br>";
-    }
-    if (isClosing) return `</${tagName}>`;
-
-    const attrSource = tagContent.slice(tagToken.length).trim();
-    const attrs = extractRestorableAttributes(tagName, attrSource);
-    return `<${tagName}${attrs}>`;
-  });
-}
-
 // ── Stage 1: Pre-processing ────────────────────────────────────────────────
 
 function extractLeadingYamlFrontmatter(text: string): { text: string; frontmatter: string | null } {
@@ -263,127 +184,6 @@ function normalizeLeadingFrontmatter(text: string): string {
     "<!--frontmatter-block-end-->",
     body,
   ].filter(Boolean).join("\n\n");
-}
-
-function normalizeMathFences(text: string): string {
-  if (!text) return text;
-  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const lines = normalized.split("\n");
-  const output: string[] = [];
-  let inMath = false;
-
-  for (const line of lines) {
-    if (!inMath && line.trim().match(/^```(?:math|katex|latex)\s*$/i)) {
-      inMath = true;
-      output.push("$$");
-      continue;
-    }
-    if (inMath && line.trim().match(/^```\s*$/)) {
-      inMath = false;
-      output.push("$$");
-      continue;
-    }
-    output.push(line);
-  }
-
-  return output.join("\n");
-}
-
-function extractMermaidBlocks(text: string): { text: string; blocks: string[] } {
-  if (!text) return { text: "", blocks: [] };
-  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const lines = normalized.split("\n");
-  const blocks: string[] = [];
-  const output: string[] = [];
-  let inMermaid = false;
-  let current: string[] = [];
-
-  for (const line of lines) {
-    if (!inMermaid && line.trim().match(/^```mermaid\s*$/i)) {
-      inMermaid = true;
-      current = [];
-      continue;
-    }
-    if (inMermaid && line.trim().match(/^```\s*$/)) {
-      const idx = blocks.length;
-      blocks.push(current.join("\n"));
-      output.push(`@@MERMAID_BLOCK_${idx}@@`);
-      inMermaid = false;
-      current = [];
-      continue;
-    }
-    if (inMermaid) {
-      current.push(line);
-    } else {
-      output.push(line);
-    }
-  }
-
-  if (inMermaid) {
-    output.push("```mermaid");
-    output.push(...current);
-  }
-
-  return { text: output.join("\n"), blocks };
-}
-
-// ── Stage 4 helpers ────────────────────────────────────────────────────────
-
-function decodeCodeEntities(html: string): string {
-  if (!html) return html;
-  const normalize = (value: string) =>
-    value
-      .replace(/&amp;lt;/g, "&lt;")
-      .replace(/&amp;gt;/g, "&gt;")
-      .replace(/&amp;quot;/g, "&quot;")
-      .replace(/&amp;#39;/g, "&#39;")
-      .replace(/&amp;amp;/g, "&amp;");
-  return html
-    .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/g, (_match, code) => `<pre><code>${normalize(code)}</code></pre>`)
-    .replace(/<code>([\s\S]*?)<\/code>/g, (_match, code) => `<code>${normalize(code)}</code>`);
-}
-
-function decodeTextEntities(html: string): string {
-  if (!html) return html;
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
-  const decode = (value: string) =>
-    value
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&amp;/g, "&");
-  let node: Node | null;
-  while ((node = walker.nextNode())) {
-    if (!node.nodeValue) continue;
-    const next = decode(node.nodeValue);
-    if (next !== node.nodeValue) {
-      node.nodeValue = next;
-    }
-  }
-  return doc.body.innerHTML;
-}
-
-function toBase64(value: string): string {
-  const bytes = new TextEncoder().encode(String(value || ""));
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary);
-}
-
-
-function injectMermaidBlocks(html: string, blocks: string[]): string {
-  if (!html || !blocks || blocks.length === 0) return html;
-  return html.replace(/@@MERMAID_BLOCK_(\d+)@@/g, (_match, idxStr) => {
-    const idx = Number(idxStr);
-    const raw = blocks[idx] ?? "";
-    const decoded = decodeEntitiesDeep(raw, 5);
-    const encoded = toBase64(decoded);
-    return `<div class="mermaid-container" data-mermaid="${encoded}"><div class="mermaid-loading">Loading diagram...</div></div>`;
-  });
 }
 
 export function renderMath(html_content: string): string {
@@ -448,17 +248,8 @@ export function linkifyHashtagsInHtml(html: string, repositoryUrl: string | null
 
 // ── Pre-processing pipeline ────────────────────────────────────────────────
 
-export function prepareMarkdownSource(text: string): { safeHtml: string; mermaidBlocks: string[] } {
-  const normalizedFrontmatter = normalizeLeadingFrontmatter(text || "");
-  const normalizedMath = normalizeMathFences(normalizedFrontmatter);
-  const { text: stripped, blocks: mermaidBlocks } = extractMermaidBlocks(normalizedMath);
-
-  const decoded = decodeEntitiesDeep(stripped, 2);
-  const normalized = normalizeHtmlCodeTags(decoded);
-  const escaped = normalized.replace(/</g, "&lt;");
-  const safeHtml = restoreAllowedHtmlTags(escaped);
-
-  return { safeHtml, mermaidBlocks };
+export function prepareMarkdownSource(text: string): {safeHtml:string} {
+  return {safeHtml:normalizeLeadingFrontmatter(text || '')};
 }
 
 // ── Main exports ───────────────────────────────────────────────────────────
@@ -474,19 +265,16 @@ export function renderMarkdown(text: string, options: { sanitize?: boolean; proj
 
 function renderMarkdownBody(text: string, options: { sanitize?: boolean; projectRepository?: string | null }): string {
 
-  const { safeHtml, mermaidBlocks } = prepareMarkdownSource(text);
+  const { safeHtml } = prepareMarkdownSource(text);
 
   const m = getMarked();
   let html = m
-    ? m.parse(safeHtml, { headerIds: false, mangle: false })
-    : safeHtml.replace(/\n/g, "<br>");
+    ? m.parse(safeHtml, { headerIds: false, mangle: false, walkTokens: prepareMarkdownToken })
+    : escapeHtmlAttr(safeHtml).replace(/\n/g, "<br>");
 
-  html = decodeCodeEntities(html);
-  html = decodeTextEntities(html);
   html = applySyntaxHighlighting(html);
   html = renderMath(html);
   html = linkifyHashtagsInHtml(html, options.projectRepository);
-  html = injectMermaidBlocks(html, mermaidBlocks);
   html = sanitizeHtml(html, options);
 
   return html;
@@ -495,18 +283,8 @@ function renderMarkdownBody(text: string, options: { sanitize?: boolean; project
 export function renderThinkingMarkdown(text: string): string {
   if (!text) return "";
   const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const decoded = decodeEntitiesDeep(normalized, 2);
-  const normalizedHtml = normalizeHtmlCodeTags(decoded);
-  const escaped = normalizedHtml
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  const safeHtml = restoreAllowedHtmlTags(escaped);
   const m = getMarked();
-  let html = m
-    ? m.parse(safeHtml, { headerIds: false, mangle: false })
-    : safeHtml.replace(/\n/g, "<br>");
-  html = decodeCodeEntities(html);
-  html = decodeTextEntities(html);
+  let html = m ? m.parse(normalized, { walkTokens: (token: Parameters<typeof prepareMarkdownToken>[0]) => prepareMarkdownToken(token, false) }) : escapeHtmlAttr(normalized).replace(/\n/g, '<br>');
   // Skip math rendering to avoid $ false positives in shell output
   html = sanitizeHtml(html);
   return html;
