@@ -190,3 +190,12 @@ test('handleFloatingWidgetEventFromHost acknowledges refresh-only requests witho
   expect(widgetState.runtimeState.lastHostUpdate.type).toBe('refresh_ack');
   expect(widgetState.runtimeState.refreshCount).toBe(3);
 });
+
+for(const changed of [false,true])test(`removal returns its real server acknowledgement without publishing into a changed chat: changed=${changed}`,async()=>{
+  const ack=Promise.withResolvers<{removed:boolean}>(),items=[{row_id:17,content:'Queued'}],dismissed={current:new Set<string|number>()};let current=true,writes=0,refreshes=0;
+  const pending=handleRemoveQueuedFollowupAction({queuedItem:items[0],followupQueueItemsRef:{current:items},dismissedQueueRowIdsRef:dismissed,currentChatJid:'chat-a',
+    isCurrent:()=>current,setFollowupQueueItems:()=>{writes++;},refreshQueueState:()=>{refreshes++;},showIntentToast:()=>{throw Error('Confirmed removal must not warn');},
+    removeAgentQueueItem:()=>ack.promise,steerAgentQueueItem:async()=>({queued:'steer'})});
+  expect(writes).toBe(0);if(changed)current=false;ack.resolve({removed:true});expect(await pending).toBe(true);
+  expect(writes).toBe(changed?0:1);expect(refreshes).toBe(changed?0:1);expect(dismissed.current.has(17)).toBe(!changed);
+});
