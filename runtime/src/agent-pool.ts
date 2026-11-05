@@ -255,7 +255,7 @@ export class AgentPool {
   private readonly memoryReclamation?: MemoryReclamationGate;
   // Shared across all sessions (expensive to create, safe to reuse)
   private credentialStore: PiclawCredentialStore;
-  private modelRuntime: ModelRuntime;
+  readonly modelRuntime: ModelRuntime;
   private modelRegistry: ModelRegistry;
   private settingsManager = SettingsManager.create(WORKSPACE_DIR, getPiclawAgentDir());
   private attachments: AgentPoolServices["attachments"];
