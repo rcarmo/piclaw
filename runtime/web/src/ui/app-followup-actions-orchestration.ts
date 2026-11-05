@@ -44,6 +44,7 @@ interface QueueActionContext {
   setFollowupQueueItems: StateSetter<any[]>;
   showIntentToast: ToastFn;
   clearQueuedSteerStateIfStale?: () => void;
+  isCurrent?: () => boolean;
   steerAgentQueueItem: (...args: any[]) => Promise<any>;
   removeAgentQueueItem: (...args: any[]) => Promise<any>;
 }
@@ -57,9 +58,9 @@ export function runInjectQueuedFollowup(
 
 export function runRemoveQueuedFollowup(
   context: QueueActionContext,
-  action: (options: QueueActionContext) => void = handleRemoveQueuedFollowupAction,
-): void {
-  action(context);
+  action: (options: QueueActionContext) => Promise<boolean> = handleRemoveQueuedFollowupAction,
+): Promise<boolean> {
+  return action(context);
 }
 
 export function runMessageResponseRefresh(
@@ -118,7 +119,8 @@ export function useFollowupActionsOrchestration(options: UseFollowupActionsOrche
   }, [currentChatJid, dismissedQueueRowIdsRef, followupQueueItemsRef, refreshQueueState, removeAgentQueueItem, setFollowupQueueItems, showIntentToast, steerAgentQueueItem]);
 
   const handleRemoveQueuedFollowup = useCallback((queuedItem: any) => {
-    runRemoveQueuedFollowup({
+    return runRemoveQueuedFollowup({
+      isCurrent: () => activeChatJidRef.current === currentChatJid,
       queuedItem,
       followupQueueItemsRef,
       dismissedQueueRowIdsRef,
@@ -130,7 +132,7 @@ export function useFollowupActionsOrchestration(options: UseFollowupActionsOrche
       steerAgentQueueItem,
       removeAgentQueueItem,
     });
-  }, [clearQueuedSteerStateIfStale, currentChatJid, dismissedQueueRowIdsRef, followupQueueItemsRef, refreshQueueState, removeAgentQueueItem, setFollowupQueueItems, showIntentToast, steerAgentQueueItem]);
+  }, [activeChatJidRef, clearQueuedSteerStateIfStale, currentChatJid, dismissedQueueRowIdsRef, followupQueueItemsRef, refreshQueueState, removeAgentQueueItem, setFollowupQueueItems, showIntentToast, steerAgentQueueItem]);
 
   const handleMoveQueuedFollowup = useCallback(async (fromIndex: number, toIndex: number) => {
     // Optimistic local reorder

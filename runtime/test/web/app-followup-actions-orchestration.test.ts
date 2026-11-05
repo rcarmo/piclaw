@@ -28,9 +28,9 @@ test('runInjectQueuedFollowup forwards queue context to injected action', () => 
   expect(captured?.currentChatJid).toBe('web:default');
 });
 
-test('runRemoveQueuedFollowup includes clearQueuedSteerStateIfStale when provided', () => {
+test('runRemoveQueuedFollowup forwards the confirmed removal acknowledgement', async () => {
   let called = false;
-  runRemoveQueuedFollowup({
+  const result = runRemoveQueuedFollowup({
     queuedItem: { row_id: 'q2' },
     followupQueueItemsRef: { current: [] },
     dismissedQueueRowIdsRef: { current: new Set() },
@@ -43,11 +43,12 @@ test('runRemoveQueuedFollowup includes clearQueuedSteerStateIfStale when provide
     },
     steerAgentQueueItem: noopAsync,
     removeAgentQueueItem: noopAsync,
-  }, (options) => {
+  }, async (options) => {
     options.clearQueuedSteerStateIfStale?.();
+    return true;
   });
 
-  expect(called).toBe(true);
+  expect(called).toBe(true); expect(await result).toBe(true);
 });
 
 test('runMessageResponseRefresh forwards refresh callbacks and response payload', () => {
