@@ -6,6 +6,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
+import { Database } from "bun:sqlite";
 import "../helpers.js";
 
 import {
@@ -17,9 +18,67 @@ import {
   initDatabase,
   storeTokenUsage,
 } from "../../src/db.js";
-import { getDb } from "../../src/db/connection.js";
+import { getDb, initializeDatabaseSchema } from "../../src/db/connection.js";
 
 describe("token-usage", () => {
+  test("chat totals use a covering index without changing legacy counts or provenance", () => {
+    initDatabase();
+    const db = getDb();
+    const chatJid = "test:covering-totals";
+    for (const [i, provenance] of [null, "provider_reported", "catalogue_estimate", "unavailable"].entries()) {
+      storeTokenUsage({
+        chat_jid: chatJid, run_at: "2026-11-07T00:00:00.000Z",
+        input_tokens: i + 1, output_tokens: 2, reasoning_tokens: 3,
+        cache_read_tokens: 4, cache_write_tokens: 5, total_tokens: i + 15,
+        cost_input: 0, cost_output: 0, cost_cache_read: 0, cost_cache_write: 0,
+        cost_total: i / 100, cost_provenance: provenance as any,
+      });
+    }
+    db.query("UPDATE token_usage SET input_tokens=NULL, cost_total=NULL WHERE chat_jid=? AND cost_provenance IS NULL").run(chatJid);
+    let query = "";
+    const prepare = db.prepare.bind(db);
+    const original = db.prepare;
+    db.prepare = ((sql: string) => { query = sql; return prepare(sql); }) as typeof db.prepare;
+    let totals;
+    try { totals = getTokenUsageTotals(chatJid); }
+    finally { db.prepare = original; }
+    expect(query).toContain("FROM token_usage");
+    expect(db.query("EXPLAIN QUERY PLAN " + query).all(chatJid)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ detail: "SEARCH token_usage USING COVERING INDEX idx_token_usage_chat_totals_covering (chat_jid=?)" }),
+    ]));
+    expect(totals).toEqual(db.query(query.replace("FROM token_usage", "FROM token_usage NOT INDEXED")).get(chatJid) as any);
+    expect(totals).toMatchObject({ runs: 4, input_tokens: 9, provider_reported_cost_runs: 1,
+      catalogue_estimate_cost_runs: 1, unavailable_cost_runs: 1, legacy_cost_runs: 1 });
+    expect(getTokenUsageTotals("test:no-covering-rows")).toMatchObject({ runs: 0, total_tokens: 0 });
+    // All rows share a timestamp: the existing newest-id tie-break remains exact.
+    expect(getLatestTokenUsage(chatJid)).toMatchObject({ input_tokens: 4, cost_provenance: "unavailable" });
+  });
+
+  test("legacy token columns migrate before the covering index and repeated startup preserves rows", () => {
+    const db = new Database(":memory:");
+    try {
+      db.exec(`CREATE TABLE token_usage (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, chat_jid TEXT NOT NULL, run_at TEXT NOT NULL,
+        input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER,
+        cache_write_tokens INTEGER, total_tokens INTEGER, cost_input REAL, cost_output REAL,
+        cost_cache_read REAL, cost_cache_write REAL, cost_total REAL, model TEXT, provider TEXT,
+        api TEXT, turns INTEGER);
+        INSERT INTO token_usage(chat_jid,run_at,input_tokens,total_tokens,cost_total)
+        VALUES('test:legacy-covering','2026-01-01T00:00:00Z',NULL,7,NULL);`);
+      const original = db.query("SELECT id,chat_jid,run_at,input_tokens,total_tokens,cost_total FROM token_usage").all();
+      initializeDatabaseSchema(db);
+      initializeDatabaseSchema(db);
+      expect(db.query("SELECT id,chat_jid,run_at,input_tokens,total_tokens,cost_total FROM token_usage").all()).toEqual(original);
+      expect((db.query("PRAGMA index_info(idx_token_usage_chat_totals_covering)").all() as { name: string }[]).map(row => row.name)).toEqual([
+        "chat_jid", "run_at", "id", "input_tokens", "output_tokens", "reasoning_tokens",
+        "cache_read_tokens", "cache_write_tokens", "total_tokens", "cost_total", "cost_provenance",
+      ]);
+      expect(db.query("SELECT name FROM sqlite_master WHERE name='idx_token_usage_chat_jid_run_at'").get()).not.toBeNull();
+      db.query("INSERT INTO token_usage(chat_jid,run_at,total_tokens) VALUES(?,?,?)").run("test:legacy-covering", "2026-01-02T00:00:00Z", 3);
+      expect(db.query("SELECT sum(total_tokens) total FROM token_usage").get()).toEqual({ total: 10 });
+    } finally { db.close(); }
+  });
+
   test("storeTokenUsage inserts a record", () => {
     initDatabase();
     const db = getDb();

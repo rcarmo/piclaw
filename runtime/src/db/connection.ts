@@ -635,6 +635,11 @@ function ensureTokenUsageColumns(database: Database): void {
     ['pricing_cache_fallbacks', 'TEXT'],
   ]);
   database.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_token_usage_usage_event_id ON token_usage(usage_event_id) WHERE usage_event_id IS NOT NULL");
+  // Context polling sums chat history on the main thread. Cover the existing
+  // totals query after legacy columns exist, avoiding scattered table reads.
+  database.exec(`CREATE INDEX IF NOT EXISTS idx_token_usage_chat_totals_covering ON token_usage
+    (chat_jid, run_at, id, input_tokens, output_tokens, reasoning_tokens,
+     cache_read_tokens, cache_write_tokens, total_tokens, cost_total, cost_provenance)`);
 }
 
 function ensureScheduledTaskColumns(database: Database): void {
