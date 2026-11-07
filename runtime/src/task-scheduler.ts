@@ -438,6 +438,7 @@ function productionScheduledRunStore(mayClaim: () => boolean): { store: Schedule
     const built = createCurrentPiclawScheduledRunStore(database, {
       hitFault: () => false,
       recordTrace: () => undefined,
+      liveRenewalNow: () => new Date().toISOString(),
       assertClaimCurrent: () => {
         assertBinding();
         if (!mayClaim() || !canRunLegacyScheduledWork()) throw Error("Scheduled poll claim revoked");

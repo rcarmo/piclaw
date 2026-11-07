@@ -83,6 +83,8 @@ export interface ScheduledRunAdapterRuntime {
   recordTrace(input: NormalisedTraceInput): void;
   /** Read-only poll authority check; never gates already accepted work. */
   assertClaimCurrent?(): void;
+  /** Optional live UTC clock for fresh renewals; durable replay bypasses it. */
+  liveRenewalNow?(): string;
 }
 
 export type ScheduledRunStoreConstructionResult = ResultValue<ScheduledRunStore & InterruptedScheduledRunReconciler & ScheduledRunRetentionOwner, ScheduledRunStoreError>;
@@ -466,6 +468,7 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
       }
       const run = this.requireFencedRun(request, tokenHash);
       if (!run.lease_expires_at || request.leaseExpiresAt <= run.lease_expires_at) throw new AbortMutation(errorOf("invalid_request"));
+      if (this.runtime.liveRenewalNow && run.lease_expires_at <= this.runtime.liveRenewalNow()) throw new AbortMutation(errorOf("lease_expired", "not_applied", false, { observedAttempt: run.attempt }));
       const ordinalRow = this.database.query(`SELECT COALESCE(MAX(ordinal),0)+1 AS ordinal FROM ${RENEWALS} WHERE run_id=? AND attempt=?`).get(request.runId, request.expectedAttempt) as { ordinal: number };
       if (!Number.isSafeInteger(ordinalRow.ordinal) || ordinalRow.ordinal < 1) throw new CorruptState();
       this.database.query(`INSERT INTO ${RENEWALS}(run_id,attempt,ordinal,request_hash,previous_expires_at,lease_expires_at,renewed_at) VALUES(?,?,?,?,?,?,?)`).run(request.runId, request.expectedAttempt, ordinalRow.ordinal, requestHash, run.lease_expires_at, request.leaseExpiresAt, request.now);
@@ -481,6 +484,7 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
       const record = this.requireActiveRecord(this.readRecord(request.runId));
       const lease = this.lease(record, this.readSnapshot(run.task_id, run.task_revision), request.leaseToken);
       this.writeDecision(key, "renew", requestHash, request.runId, lease.record, request.now);
+      if (this.runtime.liveRenewalNow && run.lease_expires_at <= this.runtime.liveRenewalNow()) throw new AbortMutation(errorOf("lease_expired", "not_applied", false, { observedAttempt: run.attempt }));
       return Result.ok(lease);
   }
 
