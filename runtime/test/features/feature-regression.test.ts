@@ -43,6 +43,10 @@ beforeAll(async () => {
         provider_usage: null,
       }),
       getCurrentModelLabel: async () => "anthropic/claude-sonnet-4",
+      applyControlCommand: async (_chatJid: string, command: { type: string }) => {
+        expect(["commands", "state", "context"]).toContain(command.type);
+        return { status: "success", message: `Fixture ${command.type}` };
+      },
       listKnownChats: () => [],
       listActiveChats: () => [],
       getAgentHandleForChat: () => "agent",
@@ -53,6 +57,14 @@ beforeAll(async () => {
       },
     },
   });
+  // This HTTP fixture has no model runtime. Supply the current source-admission
+  // and placement contracts explicitly; real SDK admission has its own suites.
+  inst.web.getInputSourceAdmission = () => () => {};
+  inst.web.dispatchAcceptedInput = async (chatJid: string, messageId: string, rowId: number) => {
+    const stored = inst!.db.getDb().query("SELECT id FROM messages WHERE rowid=? AND chat_jid=?").get(rowId, chatJid);
+    expect(stored).toEqual({ id: messageId });
+    return { submission_id: rowId, queued: false };
+  };
 });
 
 afterAll(async () => {
