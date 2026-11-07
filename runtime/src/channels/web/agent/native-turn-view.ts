@@ -75,7 +75,7 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
       if(lastPrimary!==input.source_id){channel.publishInput?.(input.source_id);lastPrimary=input.source_id;}
       runId = live.run.taskId;
       operationId = input.operation_id; lastTool = undefined;
-      base = { chat_jid: chat, agent_id: "default", turn_id: input.rowid ? `durable:${input.rowid}` : `durable-operation:${input.operation_id}`,
+      base = { chat_jid: chat, agent_id: "default", task_id: live.run.taskId, turn_id: input.rowid ? `durable:${input.rowid}` : `durable-operation:${input.operation_id}`,
         thread_id: input.thread_id ?? input.rowid,
         operation_id: input.operation_id.startsWith("native-message:") ? `sdk-run:${view.conversation.id}:${live.run.inputs[0]}` : input.operation_id,
         source: "durable_runtime", started_at: new Date().toISOString() };

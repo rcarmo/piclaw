@@ -1,3 +1,6 @@
+import { shouldIgnoreAgentStatus } from "../../../../../src/ui/app-agent-turn-events";
+import { getAgentUiSnapshot, invalidateAgentUiSnapshot } from "../../../../../src/ui/agent-ui-snapshot";
+import { watchReturnToApp } from "../../../../../src/ui/app-resume";
 import { createDictationComposerBinding } from '../../../../../src/ui/composer-dictation-binding.js';
 import { subscribeDictationProviders } from '../../../../../src/ui/composer-dictation-registry.js';
 import { AgentStatusPanel } from "../components/AgentStatusPanel";
@@ -107,16 +110,35 @@ export function ChatPanel({ onOpenPalette }: ChatPanelProps = {}) {
 
 
   useEffect(() => {
+    let currentStatus: Record<string, any> | null = null;
+    let revision = 0, mounted = true;
+    let chat = getChatJid();
     const agentStatusHandler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      if (detail?.type === "done" || detail?.type === "idle") {
-        isAgentRunning.value = false;
-      } else if (detail?.type === "thinking" || detail?.type === "running" || detail?.type === "tool_call" || detail?.type === "tool_status") {
-        isAgentRunning.value = true;
-      }
+      if (!detail || detail.chat_jid !== getChatJid() || detail.type === 'context_usage') return;
+      if (shouldIgnoreAgentStatus(detail, currentStatus)) return;
+      revision++;
+      currentStatus = detail;
+      isAgentRunning.value = !['done', 'error', 'idle'].includes(detail.type);
     };
+    const restoreStatus = async () => {
+      const target = getChatJid();
+      if (chat !== target) { chat = target; currentStatus = null; isAgentRunning.value = false; revision++; }
+      const requestedRevision = revision;
+      try {
+        const { status } = await getAgentUiSnapshot(target);
+        if (!mounted || target !== getChatJid() || revision !== requestedRevision) return;
+        if (status.status === 'active' && shouldIgnoreAgentStatus(status.data, currentStatus)) return;
+        currentStatus = status.status === 'active' ? status.data : null;
+        isAgentRunning.value = Boolean(currentStatus);
+      } catch { /* Leave the last native projection intact until recovery. */ }
+    };
+    const refreshStatus = () => { invalidateAgentUiSnapshot(getChatJid()); void restoreStatus(); };
     window.addEventListener("piclaw:agent-status", agentStatusHandler);
-
+    window.addEventListener('piclaw:sse-connected', refreshStatus);
+    window.addEventListener('piclaw:current-chat-changed', refreshStatus);
+    const stopReturnWatch = watchReturnToApp(refreshStatus);
+    void restoreStatus();
 
   // Handle widget submissions as user messages
   const widgetSubmissionHandler = (e: Event) => {
@@ -132,7 +154,11 @@ export function ChatPanel({ onOpenPalette }: ChatPanelProps = {}) {
   };
   window.addEventListener("piclaw:widget-submission", widgetSubmissionHandler);
   return () => {
+    mounted = false;
+    stopReturnWatch();
     window.removeEventListener("piclaw:agent-status", agentStatusHandler);
+    window.removeEventListener("piclaw:sse-connected", refreshStatus);
+    window.removeEventListener("piclaw:current-chat-changed", refreshStatus);
     window.removeEventListener("piclaw:widget-submission", widgetSubmissionHandler);
   };
   }, []);
@@ -161,14 +187,9 @@ export function ChatPanel({ onOpenPalette }: ChatPanelProps = {}) {
         credentials: "same-origin",
         body: JSON.stringify({ content: "/abort" }),
       });
-      // Clear stale tool/thought/draft panels immediately
-      window.dispatchEvent(new CustomEvent("piclaw:agent-turn-end"));
-      window.dispatchEvent(
-        new CustomEvent("piclaw:agent-status", { detail: { type: "done" } })
-      );
+      // Only native status ends a turn. A late abort acknowledgement must not
+      // clear a queued or newer turn which has already started.
     } catch {
-      window.dispatchEvent(new CustomEvent("piclaw:agent-turn-end"));
-      window.dispatchEvent(new CustomEvent("piclaw:agent-status", { detail: { type: "done" } }));
       window.dispatchEvent(new CustomEvent("piclaw:status-flash", { detail: { message: "Failed to abort", type: "error" } }));
     }
   };

@@ -133,3 +133,12 @@ test('partial recovery also leaves an existing collapsed preview untouched when 
  release({status:'active',data:{type:'thinking',turn_id:'live-turn'},thought:{text:'Longer snapshot should not replace the existing pane',totalLines:2}});
  expect(await pending).toBeNull();expect(h.state().thought.text).toBe('Existing collapsed preview');
 });
+
+test('a cached older native projection cannot replace the held owner even without intervening SSE', async () => {
+  const h = harness('web:cached-owner');
+  const live = {type:'thinking',turn_id:'durable:30',task_id:30};
+  h.options.currentTurnIdRef.current='durable:30';h.agentStatusRef.current=live;
+  const result = await refreshAgentStatusForChat({...h.options,getAgentStatus:async()=>({status:'active',data:{type:'thinking',turn_id:'durable:10',task_id:10}})});
+  expect(result).toBeNull();
+  expect(h.agentStatusRef.current).toBe(live);
+});

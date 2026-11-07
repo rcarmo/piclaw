@@ -22,7 +22,7 @@ test("public conversation frames feed existing thought, draft and nested tool UI
     expect(events.some(e => e.event === "agent_draft" && e.data.text === "partial reply")).toBe(true);
     expect(events.some(e => e.event === "agent_status" && e.data.tool_name === "read" && e.data.output_preview === "progress")).toBe(true);
     expect(buffers).toEqual(["visible reasoning"]);
-    expect(events.every(e => e.data.chat_jid === "chat" && e.data.turn_id === "durable:1")).toBe(true);
+    expect(events.every(e => e.data.chat_jid === "chat" && e.data.turn_id === "durable:1" && e.data.task_id === 4)).toBe(true);
     const size = events.length;
     render(view);
     expect(events.length).toBe(size);

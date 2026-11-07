@@ -4,6 +4,7 @@ import {
   shouldKeepExistingPreview,
 } from './app-agent-status-refresh.js';
 import { inferAgentPreviewTotalLines } from './app-agent-previews.js';
+import { shouldIgnoreAgentStatus } from './app-agent-turn-events.js';
 import { isMainTimelineView } from './app-realtime-timeline.js';
 import { parseStatusLastEventAt } from './status-duration.js';
 import type { AgentStatusConnectionState } from './app-connection-lifecycle.js';
@@ -161,8 +162,9 @@ export async function refreshAgentStatusForChat(options: RefreshAgentStatusForCh
       return response ?? null;
     }
 
-    wasAgentActiveRef.current = true;
     const payload = response.data;
+    if (shouldIgnoreAgentStatus(payload, agentStatusRef.current)) return null;
+    wasAgentActiveRef.current = true;
     agentStatusRef.current = payload;
 
     const activeTurn = readAgentTurnId(payload);

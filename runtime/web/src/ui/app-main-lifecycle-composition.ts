@@ -260,11 +260,10 @@ interface ComposeRealtimeLifecycleOptionsInput {
   updateAgentProfile: (payload: any) => void;
   updateUserProfile: (payload: any) => void;
   currentTurnIdRef: RefBox<string | null>;
+  agentStatusRef: RefBox<any>;
   activeChatJidRef: RefBox<string>;
-  pendingRequestRef: RefBox<any>;
   draftBufferRef: RefBox<string>;
   thoughtBufferRef: RefBox<string>;
-  previewResyncPendingRef: RefBox<boolean>;
   previewResyncGenerationRef: RefBox<number>;
   steerQueuedTurnIdRef: RefBox<string | null>;
   thoughtExpandedRef: RefBox<boolean>;
@@ -290,9 +289,7 @@ interface ComposeRealtimeLifecycleOptionsInput {
   setAgentThought: StateSetter<any>;
   setPendingRequest: StateSetter<any>;
   clearAgentRunState: () => void;
-  getAgentStatus: (chatJid: string) => Promise<any>;
   noteAgentActivity: (options?: Record<string, unknown>) => void;
-  showLastActivity: (payload: any) => void;
   refreshTimeline: () => Promise<void>;
   refreshModelAndQueueState: () => void;
   refreshActiveChatAgents: () => void;
@@ -332,11 +329,10 @@ export function composeRealtimeLifecycleOptions(input: ComposeRealtimeLifecycleO
     updateAgentProfile: input.updateAgentProfile,
     updateUserProfile: input.updateUserProfile,
     currentTurnIdRef: input.currentTurnIdRef,
+    agentStatusRef: input.agentStatusRef,
     activeChatJidRef: input.activeChatJidRef,
-    pendingRequestRef: input.pendingRequestRef,
     draftBufferRef: input.draftBufferRef,
     thoughtBufferRef: input.thoughtBufferRef,
-    previewResyncPendingRef: input.previewResyncPendingRef,
     previewResyncGenerationRef: input.previewResyncGenerationRef,
     steerQueuedTurnIdRef: input.steerQueuedTurnIdRef,
     thoughtExpandedRef: input.thoughtExpandedRef,
@@ -362,9 +358,7 @@ export function composeRealtimeLifecycleOptions(input: ComposeRealtimeLifecycleO
     setAgentThought: input.setAgentThought,
     setPendingRequest: input.setPendingRequest,
     clearAgentRunState: input.clearAgentRunState,
-    getAgentStatus: input.getAgentStatus,
     noteAgentActivity: input.noteAgentActivity,
-    showLastActivity: input.showLastActivity,
     refreshTimeline: input.refreshTimeline,
     refreshModelAndQueueState: input.refreshModelAndQueueState,
     refreshActiveChatAgents: input.refreshActiveChatAgents,

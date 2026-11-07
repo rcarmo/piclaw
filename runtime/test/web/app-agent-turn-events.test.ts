@@ -55,3 +55,17 @@ test('resolveSteerQueuedTurnId prefers event turn id and falls back to current t
   expect(resolveSteerQueuedTurnId(null, 'turn:2')).toBe('turn:2');
   expect(resolveSteerQueuedTurnId(undefined, undefined)).toBeNull();
 });
+
+test('native projection fences old and ownerless terminal events without blocking a newer turn', async () => {
+  const { shouldIgnoreAgentStatus: ignore } = await import('../../web/src/ui/app-agent-turn-events.js');
+  const live = { turn_id: 'durable:30', started_at: '2026-11-06T01:03:00Z' };
+  for (const type of ['done', 'error', 'idle']) {
+    expect(ignore({type,turn_id:'durable:10'},live)).toBe(true);
+    expect(ignore({type},live)).toBe(true);
+    expect(ignore({type,turn_id:'durable:30'},live)).toBe(false);
+  }
+  expect(ignore({type:'thinking',turn_id:'durable:10',started_at:'2026-11-06T01:01:00Z'},live)).toBe(true);
+  expect(ignore({type:'thinking',turn_id:'durable:40',started_at:'2026-11-06T01:04:00Z'},live)).toBe(false);
+  expect(ignore({type:'thinking',turn_id:'durable:10',task_id:10,started_at:'2026-11-06T01:05:00Z'}, {...live,task_id:30})).toBe(true);
+  expect(ignore({type:'thinking',turn_id:'durable:40',task_id:40,started_at:live.started_at}, {...live,task_id:30})).toBe(false);
+});
