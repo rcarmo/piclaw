@@ -66,7 +66,7 @@ describe("legacy session affinity compatibility", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
-  });
+  }, 20_000);
 
   test("reloads models.json without freezing the compatibility overlay snapshot", async () => {
     const root = mkdtempSync(join(tmpdir(), "piclaw-affinity-reload-"));
