@@ -1,3 +1,4 @@
+import { shouldIgnoreAgentStatus, shouldIgnoreMismatchedTurn } from "../../../../../src/ui/app-agent-turn-events";
 import { useEffect, useRef, useState, useCallback } from "preact/hooks";
 import { getMessageUrl, getChatJid } from "../api/chat-jid";
 import { getAgentUiSnapshot, invalidateAgentUiSnapshot } from "../../../../../src/ui/agent-ui-snapshot";
@@ -196,11 +197,13 @@ export function AgentStatusPanel() {
   useEffect(() => {
     let statusRevision = 0, draftRevision = 0, thoughtRevision = 0, recoveryGeneration = 0;
     let liveTurn: string | null = null, liveType: string | null = null;
+    let liveStatus: Record<string, any> | null = null;
     let outputMetadataRevision = 0, outputContextPath: string | null = null;
     const knownTools = new Set<string>();
     const handleDraft = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail?.chat_jid && detail.chat_jid !== getChatJid()) return;
+      if (shouldIgnoreMismatchedTurn(detail?.turn_id || detail?.turnId, liveTurn)) return;
       draftRevision++;
       if (!draftStartRef.current) draftStartRef.current = Date.now();
       if (detail.reset) draftBufferRef.current = "";
@@ -217,6 +220,7 @@ export function AgentStatusPanel() {
     const handleThought = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail?.chat_jid && detail.chat_jid !== getChatJid()) return;
+      if (shouldIgnoreMismatchedTurn(detail?.turn_id || detail?.turnId, liveTurn)) return;
       thoughtRevision++;
       if (!thoughtStartRef.current) thoughtStartRef.current = Date.now();
       thoughtBufferRef.current = reconcileThoughtStreamText(thoughtBufferRef.current, detail);
@@ -228,6 +232,11 @@ export function AgentStatusPanel() {
     const handleStatus = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail?.chat_jid && detail.chat_jid !== getChatJid()) return;
+      if (detail.type === 'context_usage' || shouldIgnoreAgentStatus(detail, liveStatus)) return;
+      if (['done', 'idle'].includes(detail.type)) { handleTurnEnd(); return; }
+      if (detail.type === 'error') handleTurnEnd();
+      if (liveTurn && (detail.turn_id || detail.turnId) && liveTurn !== (detail.turn_id || detail.turnId)) handleTurnEnd();
+      liveStatus = detail;
       statusRevision++;
       liveTurn = detail.turn_id || detail.turnId || liveTurn;
       liveType = detail.type || liveType;
@@ -308,7 +317,7 @@ export function AgentStatusPanel() {
       }
       if (detail.type && detail.type !== "context_usage" && detail.type !== "done") {
         setStatus(detail.type);
-        if (detail.type !== "done") {
+        if (detail.type !== "error") {
           lastProgressTimeRef.current = Date.now();
           agentRunningRef.current = true;
         }
@@ -364,7 +373,7 @@ export function AgentStatusPanel() {
 
     const handleTurnEnd = () => {
       statusRevision++; draftRevision++; thoughtRevision++;
-      liveTurn = null; liveType = null; knownTools.clear();
+      liveTurn = null; liveType = null; liveStatus = null; knownTools.clear();
       draftBufferRef.current = "";
       thoughtBufferRef.current = "";
       outputBufferRef.current = "";
@@ -410,7 +419,6 @@ export function AgentStatusPanel() {
     window.addEventListener("piclaw:agent-draft", handleDraft);
     window.addEventListener("piclaw:agent-thought", handleThought);
     window.addEventListener("piclaw:agent-status", handleStatus);
-    window.addEventListener("piclaw:agent-turn-end", handleTurnEnd);
 
     // #377 Pending approval requests from extension_ui_request SSE events
     const handleAgentRequest = (e: Event) => {
@@ -458,6 +466,7 @@ export function AgentStatusPanel() {
           return;
         }
         const payload = response.data, turn = payload.turn_id || payload.turnId;
+        if (shouldIgnoreAgentStatus(payload, liveStatus)) return;
         if (!statusUnchanged && (!turn || liveTurn !== turn || ['done', 'error', 'idle'].includes(liveType || ''))) return;
         const restoreDraft = requestedDraft === draftRevision, restoreThought = requestedThought === thoughtRevision;
         if (statusUnchanged) {
@@ -487,7 +496,6 @@ export function AgentStatusPanel() {
       window.removeEventListener("piclaw:agent-draft", handleDraft);
       window.removeEventListener("piclaw:agent-thought", handleThought);
       window.removeEventListener("piclaw:agent-status", handleStatus);
-      window.removeEventListener("piclaw:agent-turn-end", handleTurnEnd);
       window.removeEventListener("piclaw:agent-request", handleAgentRequest);
       window.removeEventListener("piclaw:extension-panel", handleExtensionPanel);
       if (draftRafRef.current) cancelAnimationFrame(draftRafRef.current);
@@ -521,8 +529,7 @@ export function AgentStatusPanel() {
         body: JSON.stringify({ content: "/abort" }),
       });
     } catch {}
-    window.dispatchEvent(new CustomEvent("piclaw:agent-turn-end"));
-    window.dispatchEvent(new CustomEvent("piclaw:agent-status", { detail: { type: "done" } }));
+    // The native terminal event, not this request acknowledgement, owns cleanup.
   };
 
   const hasContent = draft.text || thought.text || output.text || tools.length > 0 || delegates.length > 0 || (status && status !== "idle" && status !== "done") || recoveryState || watchdogState || pendingRequest || extensionPanels.size > 0;

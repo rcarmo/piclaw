@@ -3,7 +3,7 @@ import { updateAgentDisplayName } from "../../api/agent-identity";
 import { applyThemeFromEvent } from '../../../../../../src/ui/theme';
 import { useEffect, useRef } from "preact/hooks";
 import type { Signal } from "@preact/signals";
-import { buildChatUrl } from "../../api/chat-jid";
+import { buildChatUrl, getChatJid } from "../../api/chat-jid";
 import { normalizePost } from "./helpers";
 import type { Interaction } from "./types";
 
@@ -126,7 +126,7 @@ export function useTimelineStream({
       try {
         const parsed = JSON.parse(e.data);
         draftDeltaActiveRef.current = true;
-        window.dispatchEvent(new CustomEvent("piclaw:agent-draft", { detail: { delta: parsed.delta, text: parsed.text, reset: parsed.reset } }));
+        window.dispatchEvent(new CustomEvent("piclaw:agent-draft", { detail: { ...parsed, delta: parsed.delta, text: parsed.text, reset: parsed.reset } }));
         scrollToBottomRef.current();
       } catch (err) {
         log.warn("SSE parse error:", err);
@@ -138,7 +138,7 @@ export function useTimelineStream({
         const parsed = JSON.parse(e.data);
         if (draftDeltaActiveRef.current) return;
         const text = parsed.text ?? parsed.content ?? "";
-        window.dispatchEvent(new CustomEvent("piclaw:agent-draft", { detail: { text } }));
+        window.dispatchEvent(new CustomEvent("piclaw:agent-draft", { detail: { ...parsed, text } }));
         scrollToBottomRef.current();
       } catch (err) {
         log.warn("SSE parse error:", err);
@@ -149,7 +149,7 @@ export function useTimelineStream({
       try {
         const parsed = JSON.parse(e.data);
         thoughtDeltaActiveRef.current = true;
-        window.dispatchEvent(new CustomEvent("piclaw:agent-thought", { detail: { delta: parsed.delta, text: parsed.text, reset: parsed.reset } }));
+        window.dispatchEvent(new CustomEvent("piclaw:agent-thought", { detail: { ...parsed, delta: parsed.delta, text: parsed.text, reset: parsed.reset } }));
       } catch (err) {
         log.warn("SSE thought parse error:", err);
       }
@@ -160,7 +160,7 @@ export function useTimelineStream({
         const parsed = JSON.parse(e.data);
         if (thoughtDeltaActiveRef.current) return;
         const text = parsed.text ?? parsed.content ?? "";
-        window.dispatchEvent(new CustomEvent("piclaw:agent-thought", { detail: { text } }));
+        window.dispatchEvent(new CustomEvent("piclaw:agent-thought", { detail: { ...parsed, text } }));
       } catch (err) {
         log.warn("SSE thought parse error:", err);
       }
@@ -169,30 +169,17 @@ export function useTimelineStream({
     es.addEventListener("agent_response", (e: MessageEvent) => {
       try {
         const raw = JSON.parse(e.data) as Record<string, unknown>;
+        if (raw.chat_jid !== getChatJid()) return;
         const interaction = normalizePost({ ...raw, type: "agent" });
         setMessagesRef.current((prev) => {
           if (prev.some((m) => m.id === interaction.id)) return prev;
           return [...prev, interaction];
         });
-        draftDeltaActiveRef.current = false;
-        thoughtDeltaActiveRef.current = false;
         scrollToBottomRef.current();
-        // Notify for browser notifications
+        // Notify for browser notifications; native status owns completion.
         window.dispatchEvent(new CustomEvent("piclaw:new-message", { detail: { content: interaction.content, type: "agent" } }));
-        // Signal that agent turn is complete (clears compaction badge, etc.)
-        window.dispatchEvent(new CustomEvent("piclaw:agent-turn-end"));
-        window.dispatchEvent(
-          new CustomEvent("piclaw:agent-status", { detail: { type: "done" } })
-        );
       } catch (err) {
         log.warn("SSE parse error:", err);
-        draftDeltaActiveRef.current = false;
-        thoughtDeltaActiveRef.current = false;
-        scrollToBottomRef.current();
-        window.dispatchEvent(new CustomEvent("piclaw:agent-turn-end"));
-        window.dispatchEvent(
-          new CustomEvent("piclaw:agent-status", { detail: { type: "done" } })
-        );
       }
     });
 
@@ -236,6 +223,9 @@ export function useTimelineStream({
         window.dispatchEvent(
           new CustomEvent("piclaw:agent-status", { detail: data })
         );
+        if (["done", "error", "idle"].includes(data.type)) {
+          window.dispatchEvent(new CustomEvent("piclaw:agent-turn-end", { detail: data }));
+        }
       } catch (err) {
         log.warn("SSE parse error:", err);
       }

@@ -4,8 +4,8 @@
   "files": [
     {
       "path": "runtime/extensions/viewers/editor/vendor/codemirror.js",
-      "bytes": 1394319,
-      "sha256": "882b4287631a5e54849c46cf0fd377857c55199a7dff7978f855ca67acba4c5a",
+      "bytes": 1413953,
+      "sha256": "815038e99773eb6336e4f0222d97c0e70658bda53728d7ec9ced69ad9beabb8d",
       "manifests": [
         "runtime/vendor-manifests/codemirror-editor.json"
       ],

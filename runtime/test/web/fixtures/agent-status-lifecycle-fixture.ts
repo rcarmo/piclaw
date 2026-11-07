@@ -44,6 +44,7 @@ function Fixture() {
     setPendingRequestForConnection: noop, hasConnectedOnceRef: useRef(true),
   });
   const eventRefs = useRef<any>({
+    // Kept only for the unchanged-source negative replay of the retired path.
     previewResyncPendingRef: { current: false }, previewResyncGenerationRef: { current: 0 },
     steerQueuedTurnIdRef: { current: null }, thoughtExpandedRef: { current: false }, draftExpandedRef: { current: false },
     draftThrottleRef: { current: 0 }, thoughtThrottleRef: { current: 0 }, viewStateRef: { current: null },
@@ -53,10 +54,12 @@ function Fixture() {
   });
   const event = (type: string, data: any) => handleAppSseEvent(type, data, new Proxy({
     ...eventRefs.current, currentChatJid: 'web:hook-fixture', activeChatJidRef: { current: 'web:hook-fixture' },
-    currentTurnIdRef, pendingRequestRef, draftBufferRef, thoughtBufferRef,
+    currentTurnIdRef, agentStatusRef, pendingRequestRef, draftBufferRef, thoughtBufferRef,
     setActiveTurn: (turn: string) => { currentTurnIdRef.current = turn; },
-    // Production SSE uses the state setter, not a synchronous status-ref write.
+    // The setter stays asynchronous; the handler updates its shared projection ref.
     setAgentStatus: setStatus, setPendingRequest,
+    // Baseline replay deliberately holds the retired connected-event fetch too.
+    getAgentStatus: () => new Promise(resolve => { requests.current.push(resolve); }),
     setAgentDraft: setDraft, setAgentThought: setThought,
     clearAgentRunState: () => { agentStatusRef.current = null; currentTurnIdRef.current = null; },
   }, { get: (target, key) => key in target ? target[key] : noop }) as any);

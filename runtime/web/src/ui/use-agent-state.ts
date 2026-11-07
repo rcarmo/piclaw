@@ -14,7 +14,6 @@ export function useAgentState() {
   const isAgentRunningRef = useRef(false);
   const draftBufferRef = useRef('');
   const thoughtBufferRef = useRef('');
-  const previewResyncPendingRef = useRef(false);
   const previewResyncGenerationRef = useRef(0);
   const pendingRequestRef = useRef(null);
   const stalledPostIdRef = useRef(null);
@@ -43,7 +42,6 @@ export function useAgentState() {
     isAgentRunningRef,
     draftBufferRef,
     thoughtBufferRef,
-    previewResyncPendingRef,
     previewResyncGenerationRef,
     pendingRequestRef,
     stalledPostIdRef,

@@ -37,11 +37,10 @@ interface UseRealtimeLifecycleOrchestrationOptions {
   updateAgentProfile: (payload: any) => void;
   updateUserProfile: (payload: any) => void;
   currentTurnIdRef: RefBox<string | null>;
+  agentStatusRef: RefBox<any>;
   activeChatJidRef: RefBox<string>;
-  pendingRequestRef: RefBox<any>;
   draftBufferRef: RefBox<string>;
   thoughtBufferRef: RefBox<string>;
-  previewResyncPendingRef: RefBox<boolean>;
   previewResyncGenerationRef: RefBox<number>;
   steerQueuedTurnIdRef: RefBox<string | null>;
   thoughtExpandedRef: RefBox<boolean>;
@@ -67,9 +66,7 @@ interface UseRealtimeLifecycleOrchestrationOptions {
   setAgentThought: (next: any) => void;
   setPendingRequest: (next: any) => void;
   clearAgentRunState: () => void;
-  getAgentStatus: (chatJid: string) => Promise<any>;
   noteAgentActivity: (options?: Record<string, unknown>) => void;
-  showLastActivity: (payload: any) => void;
   refreshTimeline: () => Promise<void>;
   refreshModelAndQueueState: () => void;
   refreshActiveChatAgents: () => void;
@@ -116,10 +113,8 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
     updateUserProfile,
     currentTurnIdRef,
     activeChatJidRef,
-    pendingRequestRef,
     draftBufferRef,
     thoughtBufferRef,
-    previewResyncPendingRef,
     previewResyncGenerationRef,
     steerQueuedTurnIdRef,
     thoughtExpandedRef,
@@ -145,9 +140,7 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
     setAgentThought,
     setPendingRequest,
     clearAgentRunState,
-    getAgentStatus,
     noteAgentActivity,
-    showLastActivity,
     refreshTimeline,
     refreshModelAndQueueState,
     refreshActiveChatAgents,
@@ -193,11 +186,10 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
       updateAgentProfile,
       updateUserProfile,
       currentTurnIdRef,
+      agentStatusRef: options.agentStatusRef,
       activeChatJidRef,
-      pendingRequestRef,
       draftBufferRef,
       thoughtBufferRef,
-      previewResyncPendingRef,
       previewResyncGenerationRef,
       steerQueuedTurnIdRef,
       thoughtExpandedRef,
@@ -223,9 +215,7 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
       setAgentThought,
       setPendingRequest,
       clearAgentRunState,
-      getAgentStatus,
       noteAgentActivity,
-      showLastActivity,
       refreshTimeline,
       refreshModelAndQueueState,
       refreshActiveChatAgents,
@@ -264,17 +254,14 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
     draftThrottleRef,
     followupQueueItemsRef,
     getAgentContext,
-    getAgentStatus,
     handleUiVersionDrift,
     hasMoreRef,
     lastAgentResponseRef,
     loadMoreRef,
     noteAgentActivity,
     notifyForFinalResponse,
-    pendingRequestRef,
     preserveTimelineScrollTop,
     previewResyncGenerationRef,
-    previewResyncPendingRef,
     refreshActiveChatAgents,
     refreshActiveEditorFromWorkspace,
     refreshContextUsage,
@@ -299,7 +286,6 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
     setPosts,
     setSteerQueuedTurnId,
     showIntentToast,
-    showLastActivity,
     steerQueuedTurnIdRef,
     thoughtBufferRef,
     thoughtExpandedRef,
