@@ -138,16 +138,23 @@ nativePtyTest("Bun native Linux PTY provides a controlling TTY and foreground jo
   const output: string[] = [];
   proc!.stdout.on("data", (chunk) => output.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8")));
   const exited = new Promise<void>((resolve) => proc!.on("exit", () => resolve()));
-  proc!.stdin.write("tty; /bin/sh -c 't=$(ps -o tpgid= -p $$); p=$(ps -o pgid= -p $$); [ $t -eq $p ] && echo PICLAW_JOB_CONTROL_OK'; exit\n");
-  await Promise.race([
-    exited,
-    Bun.sleep(5_000).then(() => { throw new Error("native PTY shell did not exit"); }),
-  ]);
-  const text = output.join("");
-  expect(text).toMatch(/\/dev\/pts\/\d+/);
-  expect(text).toContain("PICLAW_JOB_CONTROL_OK");
-  expect(text).not.toContain("no job control");
-  expect(text).not.toContain("can't access tty");
+  try {
+    // Assert command output while the PTY is open, not against an exit/data
+    // callback race. Require a complete marker line rather than echoed input.
+    proc!.stdin.write("tty; /bin/sh -c 't=$(ps -o tpgid= -p $$); p=$(ps -o pgid= -p $$); [ $t -eq $p ] && echo PICLAW_JOB_CONTROL_OK'\n");
+    const deadline = Date.now() + 5_000;
+    while (!/^PICLAW_JOB_CONTROL_OK\r?$/m.test(output.join("")) && Date.now() < deadline) await Bun.sleep(10);
+    const text = output.join("");
+    expect(text).toMatch(/\/dev\/pts\/\d+/);
+    expect(text).toMatch(/^PICLAW_JOB_CONTROL_OK\r?$/m);
+    expect(text).not.toContain("no job control");
+    expect(text).not.toContain("can't access tty");
+    proc!.stdin.write("exit\n");
+    await Promise.race([
+      exited,
+      Bun.sleep(2_000).then(() => { throw new Error("native PTY shell did not exit"); }),
+    ]);
+  } finally { proc!.kill(); }
 }, 10_000);
 
 test("terminal session service resolves owner from web session cookie", () => {
