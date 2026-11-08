@@ -1870,6 +1870,18 @@
       ],
       "table": "token_usage"
     },
+    "index:idx_token_usage_chat_totals_covering": {
+      "owner": "core:token_usage",
+      "fingerprints": [
+        "1fce1571bbfeaa8f30e6c755459d11910cc37fbd714b0be15cdf046b4f4c7b96"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "token_usage"
+    },
     "index:idx_token_usage_run_at": {
       "owner": "core:token_usage",
       "fingerprints": [

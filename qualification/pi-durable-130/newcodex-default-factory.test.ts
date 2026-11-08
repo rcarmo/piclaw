@@ -48,9 +48,7 @@ applicationTest("normal public Root stream preserves original request signal and
   }, { createNativeCodexHooks: () => ({ request: p => p, headers: h => h, context: m => [...m], systemPrompt: p => p }) });
   const models = createHostModels(root, [model], { signal: lifetime.signal, codex,
     authorize: async () => {}, assertCurrent() {},
-    prepareRequest: async () => ({ retainTerminal: async result => { expect(result.usage.totalTokens).toBe(5); return structuredClone(result); }, dispatch: async () => {}, settle: async result => {
-      expect(result.usage.totalTokens).toBe(5); settled = true;
-    }, abandon: async () => { throw Error("Unexpected abandon"); } }),
+    observeUsage: result => { expect(result.usage.totalTokens).toBe(5); settled = true; },
   });
   const result = await models.streamSimple(models.getModel(model.provider, model.id)!, { messages: [] }, { signal: request.signal }).result();
   expect(result.stopReason).toBe("stop");

@@ -153,7 +153,8 @@ for (const fault of [false, true]) test(`native Goal config keeps state and cont
     expect(response!.status, await response!.clone().text()).toBe(200); expect(await response!.json()).toMatchObject({ ok: true, continuationQueued: true });
     expect(f.root.query("SELECT source_id FROM service_effect_s01_sources WHERE source_id LIKE 'goal-settings:%'").all()).toHaveLength(1);
     expect(JSON.stringify(f.snapshot())).toContain('Updated configuration goal');
-    expect(JSON.stringify(f.root.query('SELECT queued_followups_json FROM chat_cursors').all())).toContain('goal-settings:');
+    expect(f.root.query("SELECT m.id,m.content FROM messages m JOIN service_effect_s01_sources s ON s.chat_jid=m.chat_jid AND s.source_id=m.id WHERE s.source_id LIKE 'goal-settings:%'").all()).toMatchObject([{id:expect.stringContaining('goal-settings:'),content:expect.stringContaining('Updated configuration goal')}]);
+    expect(f.root.query('SELECT * FROM chat_cursors').all()).toEqual(cursorBefore);
   }
   expect(f.root.inTransaction).toBe(false);
 }));

@@ -3,7 +3,7 @@ import {expect,test} from 'bun:test';
 import {HostConversationRuntime} from '../../runtime/durable-engine/src/host-runtime.js';
 import {openFixture,context} from './src/fixture.js';
 
-test('zero-usage SDK error attempts do not poison usage reads; successful provenance and nonzero failures stay fail closed',async()=>{
+test('SDK usage reads skip empty error attempts, retain measured failures and reject invalid successful provenance',async()=>{
  const owner={acquired:true}; const f=await openFixture(owner);
  // Exercise the host validator against real public SDK entries/tasks. No SDK private APIs.
  const read=(entries:any[],conversationId=f.root.id):Promise<any[]> =>
@@ -33,6 +33,9 @@ test('zero-usage SDK error attempts do not poison usage reads; successful proven
   f.host.modelAllowed=false; f.host.tokens=3;
   const priced=await f.root.submit({type:'input',content:'nonzero failure',requestId:'nonzero-failure'},context);
   expect((await priced.wait(context)).status).toBe('unanswered');
-  await expect(read([(await assistants()).at(-1)!])).rejects.toThrow('Invalid committed usage task');
+  const measuredFailure=(await assistants()).at(-1)!;
+  expect(measuredFailure.model![0]!.stopReason).toBe('error');
+  expect(await read([measuredFailure])).toEqual([{conversationId:f.root.id,entryId:measuredFailure.id,tokens:3}]);
+  await expect(read([measuredFailure],(f.root.id+1) as any)).rejects.toThrow('Invalid committed usage task');
  }finally{await f.close();owner.acquired=false;}
 });
