@@ -3,7 +3,7 @@ import { createLogger } from "../../src/utils/logger.js";
 import { taskModelRequestScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
 import { isPromise } from "node:util/types";
 import { classifyModelFailure, modelFailureDetail, type ModelFailure, type ModelFailurePhase } from "./host-model-failure.js";
-import type { ModelFailureEvidence } from "./host-model-failure-evidence.js";
+import { modelFailureUpstreamMessage, type ModelFailureEvidence } from "./host-model-failure-evidence.js";
 const log = createLogger("durable.models");
 import {
   createModels, createProvider, createAssistantMessageEventStream, normalizeContext,
@@ -470,10 +470,12 @@ export function createHostModels(
         try { await codex?.finish(); } catch {
           log.warn("Native model conversion cleanup remains unresolved", { operation: "durable_model.cleanup_failed", phase: "conversion", taskId: scope?.taskId, conversationId: scope?.conversationId });
         }
-        // Persist only the bounded classification; never provider text or partial output.
+        // Provider explanation is redacted and byte-encoded separately from retry
+        // classification. Never retain partial output or private exception stacks.
+        const upstreamMessage = providerError === undefined ? undefined : modelFailureUpstreamMessage(providerError);
         const error: AssistantMessage = { role: "assistant", content: [], api: model.api,
           provider: model.provider, model: model.id, timestamp: Date.now(),
-          stopReason: "error", errorMessage: modelFailureDetail({ ...failure, ...(evidenceId ? { evidenceId } : {}) }),
+          stopReason: "error", errorMessage: modelFailureDetail({ ...failure, ...(evidenceId ? { evidenceId } : {}), ...(upstreamMessage ? { upstreamMessage } : {}) }),
           usage: terminalUsage ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
             cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
         output.push({ type: "error", reason: "error", error });
@@ -495,7 +497,8 @@ export function createHostModels(
       log.warn("Native model failure evidence could not be retained", { operation: "durable_model.evidence_failed", phase });
     }
     log.warn("Native model request failed", { operation: "durable_model.request_failed", provider: model.provider, model: model.id, ...failure, ...(evidenceId ? { evidenceId } : {}) });
-    return modelFailureDetail({ ...failure, ...(evidenceId ? { evidenceId } : {}) });
+    const upstreamMessage = modelFailureUpstreamMessage(providerError ?? (phase === "provider" ? cause : undefined));
+    return modelFailureDetail({ ...failure, ...(evidenceId ? { evidenceId } : {}), ...(upstreamMessage ? { upstreamMessage } : {}) });
   };
   const operationModel = (operation: "generateImages" | "classify", model: AnyModel) => {
     const type = operation === "generateImages" ? "image" : "classifier";

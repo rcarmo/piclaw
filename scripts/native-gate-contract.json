@@ -176,6 +176,7 @@
     "task-model-compaction-recovery.test.ts",
     "threaded-queued-steering.test.ts",
     "tools.test.ts",
+    "upstream-model-failure.test.ts",
     "usage-error-recovery.test.ts",
     "vertical.test.ts"
   ],

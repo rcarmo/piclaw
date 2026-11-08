@@ -2619,8 +2619,8 @@ export class HostConversationRuntime {
     const scheduled = o.operationConversationFor?.(input) === input.conversationId;
     let materialized: MaterializedAnswer = Object.freeze({ contentRef: ref, contentBlocksRef: null, mediaIds: Object.freeze([]) });
     if (!cancelled && (!modelFailed || !scheduled)) {
-      // Failure notices contain no provider diagnostics or partial tool media.
-      // They use the same version-fenced terminal transaction as final answers.
+      // Failure notices expose only bounded, redacted provider explanations, no
+      // partial media/stacks. The same version-fenced terminal transaction applies.
       try {
         if (modelFailed) await o.putAnswer(ref, modelFailureNotice(state.status?.status === "unanswered" ? state.status.detail : undefined, state.submissionId));
         else if (o.materializeAnswer) materialized = materializedSnapshot(await o.materializeAnswer(ref, state.answer!, freezeTree(structuredClone(operation))));

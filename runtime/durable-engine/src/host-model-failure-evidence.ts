@@ -51,6 +51,19 @@ function redact(value: unknown): unknown {
   return visit(data);
 }
 
+/** Bounded provider explanation for the timeline. Error fields only, with the
+ * same credential/payload redaction as private receipts; no stacks or output. */
+export function modelFailureUpstreamMessage(error: unknown): string | undefined {
+  if (error === undefined || error === null) return;
+  const fields = errorFields(error);
+  const message = fields.errorMessage ?? fields.message ?? fields.code;
+  if (typeof message !== "string" || !message.trim()) return;
+  const safe = (redact(message) as string).replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, " ").trim();
+  // Truncate AFTER redaction so a credential/payload label cannot lose its value.
+  const bytes = Buffer.from(safe, "utf8");
+  return bytes.length > 512 ? bytes.subarray(0, 512).toString("utf8") + " [truncated]" : safe || undefined;
+}
+
 /** Private durable diagnostic receipts. This is not a usage settlement and must
  * never release a reservation or authorize/replay provider/tool work. */
 export function retainModelFailureEvidence(directory: string, input: ModelFailureEvidence): string {

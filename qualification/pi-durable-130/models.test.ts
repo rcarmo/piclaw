@@ -11,7 +11,8 @@ import type { ModelRuntime as HostRuntime } from "../../node_modules/@earendil-w
 import type { Credential, CredentialStore, Model, TranscriptContext as HostTranscript, AssistantMessage } from "../../node_modules/@earendil-works/pi-ai";
 import type { Models, ImageModel, ClassifierModel, Api, ImageApi, ClassifierApi, SimpleStreamOptions } from "../../runtime/durable-engine/qualification/ai.ts";
 import { createHostModels, type HostModelPolicy } from "../../runtime/durable-engine/src/index.js";
-import { modelFailureDetail, parseModelFailure } from "../../runtime/durable-engine/src/host-model-failure.js";
+import { modelFailureDetail, modelFailureNotice, parseModelFailure } from "../../runtime/durable-engine/src/host-model-failure.js";
+import { modelFailureUpstreamMessage } from "../../runtime/durable-engine/src/host-model-failure-evidence.js";
 import type { HostModelEventObserver } from "../../runtime/durable-engine/src/host-models.js";
 import { HostCodexModelServices } from '../../runtime/durable-engine/src/host-codex-model-services.js';
 import { addLogSink, removeLogSink, type LogRecord } from "../../runtime/src/utils/logger.js";
@@ -711,7 +712,7 @@ test("image capability: authorization, real post-auth fence, and accepted SQLite
       }
       const result = await pending;
       expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toBe(modelFailureDetail({ phase: phase === "authorize" ? "admission" : "provider", category: "unknown" }));
+      expect(result.errorMessage).toBe(modelFailureDetail({ phase: phase === "authorize" ? "admission" : "provider", category: "unknown", ...(phase === "post-auth" ? { upstreamMessage: "Model owner changed" } : {}) }));
       expect(f.calls()).toBe(0);
       expect(JSON.stringify(result)).not.toContain(token);
       expect(f.requested.length - initialReads).toBe(phase === "authorize" ? 0 : 1);
@@ -792,7 +793,7 @@ for (const method of ["stream", "streamSimple", "complete", "completeSimple"] as
       expect(result.stopReason).toBe(failed ? "error" : "toolUse");
       expect(settlements).toHaveLength(1);
       expect(result.usage).toEqual(settlements[0]!.usage);
-      if (failed) expect(parseModelFailure(result.errorMessage)).toEqual({ phase: "provider", category: "timeout", httpStatus: 504 });
+      if (failed) expect(parseModelFailure(result.errorMessage)).toEqual({ phase: "provider", category: "timeout", httpStatus: 504, upstreamMessage: modelFailureUpstreamMessage(`HTTP 504 timed out ${token}`) });
       else expect(result.content).toEqual(f.message.content);
       expect(observers).toBe(1); expect(f.calls()).toBe(1);
       expect(records.filter(record => record.operation === "durable_model.observer_failed")).toHaveLength(1);
@@ -931,7 +932,7 @@ test("provider error facts survive a simultaneous mandatory observer authority f
   f.eventAuthority(() => { throw Error("source authority revoked"); }); f.observe(() => {});
   const result = await f.models.completeSimple(f.model, context);
   expect(result.stopReason).toBe("error");
-  expect(parseModelFailure(result.errorMessage)).toEqual({ phase: "source", category: "timeout", httpStatus: 504 });
+  expect(parseModelFailure(result.errorMessage)).toEqual({ phase: "source", category: "timeout", httpStatus: 504, upstreamMessage: modelFailureUpstreamMessage(`HTTP 504 timed out ${token}`) });
   expect(result.usage.cost.total).toBe(0.3); expect(f.calls()).toBe(1);
   expect(JSON.stringify(result)).not.toContain(token);
 });
@@ -942,7 +943,7 @@ test("result-only provider error is classified before the mandatory post-result 
   f.eventAuthority(() => { throw Error("result authority revoked"); }); f.observe(() => { observers++; });
   const result = await f.models.completeSimple(f.model, context);
   expect(result.stopReason).toBe("error");
-  expect(parseModelFailure(result.errorMessage)).toEqual({ phase: "source", category: "timeout", httpStatus: 504 });
+  expect(parseModelFailure(result.errorMessage)).toEqual({ phase: "source", category: "timeout", httpStatus: 504, upstreamMessage: modelFailureUpstreamMessage(`HTTP 504 timed out ${token}`) });
   expect(result.usage.cost.total).toBe(0.3); expect(observers).toBe(0); expect(f.calls()).toBe(1);
 });
 
@@ -996,7 +997,7 @@ test("provider failure preserves safe category, accounting and a single dispatch
   try {
     const result = await f.models.completeSimple(f.model, context);
     expect(result.stopReason).toBe("error");
-    expect(parseModelFailure(result.errorMessage)).toEqual({ phase: "provider", category: "timeout", httpStatus: 504 });
+    expect(parseModelFailure(result.errorMessage)).toEqual({ phase: "provider", category: "timeout", httpStatus: 504, upstreamMessage: modelFailureUpstreamMessage(`HTTP 504 timed out; Authorization: Bearer ${token}`) });
     expect(f.calls()).toBe(1); expect(settlements).toBe(1);
     expect(result.usage.cost.total).toBe(0.3);
     expect(records.filter(record => record.operation === "durable_model.request_failed")).toHaveLength(1);
@@ -1084,7 +1085,7 @@ for(const kind of ["image","classifier"] as const) test(`${kind} provider failur
   const result=kind==="image"?await fx.models.generateImages(fx.models.getModelOfType("image",ref.provider,ref.id)!,imageContext)
     :await fx.models.classify(fx.models.getModelOfType("classifier",ref.provider,ref.id)!,classifierContext);
   expect(result.stopReason).toBe("error");
-  expect(parseModelFailure(result.errorMessage)).toEqual({phase:"provider",category:"unknown",evidenceId:"00000503-0000-0000-0000-000000000000"});
+  expect(parseModelFailure(result.errorMessage)).toEqual({phase:"provider",category:"unknown",evidenceId:"00000503-0000-0000-0000-000000000000",upstreamMessage:modelFailureUpstreamMessage(token)});
   expect(JSON.stringify(result)).not.toContain(token);
   expect(retained.length).toBe(1);
   expect(retained[0].error.message).toBe(token);
@@ -1232,4 +1233,41 @@ test('cost-only explicit actual zero survives a failed native terminal without f
   expect(Object.hasOwn(result.usage, 'reasoning')).toBe(false);
   expect(Object.hasOwn(result.usage, 'providerCost')).toBe(true);
   expect(f.calls()).toBe(1);
+});
+
+for (const archiveFails of [false, true]) test(`ChatGPT quota notice survives native terminal/reopen without retrying provider or tools; archiveFails=${archiveFails}`, async () => {
+  const quota = "You have hit your ChatGPT usage limit (prolite plan). Try again in ~84 min.";
+  const f = await fixture(false, true, false, false, "retry-always", quota);
+  const directory = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "quota-visible-native-"));
+  let effects = 0, retained = 0;
+  const observations: AssistantMessage[] = [];
+  f.policy.observeUsage = message => { observations.push(structuredClone(message)); };
+  f.policy.retainFailure = () => { retained++; if (archiveFails) throw Error("archive unavailable"); return "78190da8-0d18-42d0-8d4a-035a4949beb2"; };
+  const tool = defineTool({ name: "fixture_tool", description: "Committed effect counter", callers: ["model"], replay: "unsafe", parameters: Type.Object({ value: Type.Number() }),
+    async execute() { effects++; return { output: [{ type: "text", text: "effect committed" }] }; } });
+  const registry = createRegistry(); registry.install(defineExtension({ name: "quota-notice-fixture", tools: [tool] }));
+  const options = { models: f.models, registry, settings: { retry: { enabled: true, maxRetries: 2, baseDelayMs: 1 }, compaction: { enabled: false } } };
+  const path = join(directory, "sdk.sqlite");
+  let harness = await Harness.open(await SqliteStorage.open(new BunSqliteDatabase(path)), options, durableContext);
+  try {
+    const root = await harness.root(durableContext, { agent: { model: { provider: ref.provider, modelId: ref.id }, tools: [tool] } });
+    const submission = await root.submit({ type: "input", requestId: "quota-notice", content: "Perform one effect and continue" }, durableContext);
+    const status = await submission.wait(durableContext);
+    expect(status.status).toBe("unanswered");
+    if (status.status !== "unanswered") throw Error("Expected quota failure receipt");
+    expect(status.reason).toBe("model_error");
+    expect(parseModelFailure(status.detail)).toEqual({ phase: "provider", category: "quota", upstreamMessage: quota,
+      ...(archiveFails ? {} : { evidenceId: "78190da8-0d18-42d0-8d4a-035a4949beb2" }) });
+    const notice = modelFailureNotice(status.detail, status.id);
+    expect(notice).toContain(quota); expect(notice).toContain("quota, billing or subscription limit");
+    expect(notice).toContain("Tool actions may already have completed"); expect(notice).toContain("will not be retried automatically");
+    expect(f.calls()).toBe(2); expect(effects).toBe(1); expect(retained).toBe(1);
+    expect(observations.map(message => message.stopReason)).toEqual(["toolUse", "error"]);
+    await harness.close(durableContext);
+    harness = await Harness.open(await SqliteStorage.open(new BunSqliteDatabase(path)), options, durableContext);
+    const recovered = await harness.submission(submission.id, durableContext);
+    expect(await recovered!.wait(durableContext)).toEqual(status);
+    await harness.waitForIdle(durableContext);
+    expect(f.calls()).toBe(2); expect(effects).toBe(1); expect(retained).toBe(1);
+  } finally { await harness.close(durableContext); await rm(directory, { recursive: true, force: true }); }
 });
