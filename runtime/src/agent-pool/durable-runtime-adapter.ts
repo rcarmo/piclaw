@@ -251,3 +251,14 @@ export function createDurableConversationAdapter(options: {
     close,
   });
 }
+
+export interface InterruptedHarnessIdentity {
+  readonly sessionId: string;
+  readonly submissionId: string;
+  readonly runId: string;
+  readonly operationId: string;
+  readonly sourceSeq: number;
+  readonly chatJid: string;
+}
+
+export type PrepareInterruptedScheduledHarness = (identity: InterruptedHarnessIdentity) => Promise<(() => void) | undefined>;

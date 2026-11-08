@@ -1,3 +1,4 @@
+import { captureInterruptedScheduledHarness } from "./host-scheduled-terminal.js";
 import { taskModelHookScope, taskModelToolScope } from "./task-model-boundary-shim.js";
 import { createTrackedBashOperations } from "../../src/tools/tracked-bash.js";
 import { withChatContext } from "../../src/core/chat-context.js";
@@ -1908,6 +1909,10 @@ export class HostConversationRuntime {
   }
   /** Passive storage-backed observation; caller already selected an authorised
    * timeline row and its exact persisted conversation/submission correlation. */
+  captureInterruptedScheduledHarness(identity: import("../../src/service-effects/current-piclaw/scheduled-run-store.js").InterruptedHarnessIdentity) {
+    if (identity.sessionId !== this.options.sessionId) throw Error("Scheduled harness domain conflict");
+    return this.observe(() => captureInterruptedScheduledHarness(this.storage, this.context, identity, () => this.fence()));
+  }
   readSubmissionStatus(conversationId:number,id:number):Promise<SubmissionRecord|undefined>{
     return this.observe(async()=>{const handle=await this.harness.submission(id as SubmissionId,this.context);this.fence();
       const record=await handle?.status(this.context);this.fence();

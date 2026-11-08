@@ -109,6 +109,7 @@ export interface ApplicationBootstrapOptions {
   prepareTerminalEffect?: RuntimeOptions["prepareTerminalEffect"];
   materializeAnswer?: RuntimeOptions["materializeAnswer"];
   dispatchHostCommand?: import("../../src/agent-pool/contracts.js").AgentPoolOptions["dispatchHostCommand"];
+  prepareInterruptedScheduledHarness?: import("../../src/agent-pool/contracts.js").AgentPoolOptions["prepareInterruptedScheduledHarness"];
   requestProcessExit?: (reason: string) => Promise<void>;
   readExecutionPolicy?: () => {autoCompact: boolean; autoRetry: boolean};
   setExecutionPolicy?: (name: "autoCompact" | "autoRetry", enabled: boolean) => void | Promise<void>;
@@ -928,6 +929,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       },
       dispatchDreamPayload,dreamSourceFor,
       sessionOptions: Object.freeze({ getDurableSession, dispatchScheduledAgent, dispatchSidePrompt,
+        prepareInterruptedScheduledHarness: config.prepareInterruptedScheduledHarness ? async identity => { assertLive(); const fence = await config.prepareInterruptedScheduledHarness!(identity); assertLive(); return fence ? () => { assertLive(); fence(); } : undefined; } : undefined,
         dispatchHostCommand: config.dispatchHostCommand ? (chat: string, text: string) => { assertLive(); if (!routeIndex.has(chat)) throw Error("Unbound command chat"); return config.dispatchHostCommand!(chat, text); } : undefined }),
       allocateScheduledConversation, allocateSidePromptConversation, dispatchSidePrompt, reconcileSidePrompt,
       bind(options: Pick<WebChannelOpts, "queue" | "agentPool">): Readonly<WebChannelOpts> {

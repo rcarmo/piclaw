@@ -1344,6 +1344,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         prepareInputText: goalInput, prepareTerminalEffect: goalSettlement,
         readExecutionPolicy: commandPolicy.read,
         setExecutionPolicy: commandPolicy.set,
+        prepareInterruptedScheduledHarness: identity => runtime().captureInterruptedScheduledHarness(identity),
         requestProcessExit: reason => processControls!.requestCommandExit(reason),
         dispatchHostCommand: (regrets || goalCommand) ? async (chat, text) => {
           if (regrets && /^\/regrets(?:\s|$)/.test(text.trim())) { await regretsCommand(chat); return { status: "success", message: "Regrets input queued" }; }

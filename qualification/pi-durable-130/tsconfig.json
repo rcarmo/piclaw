@@ -59,6 +59,7 @@
     "cross-store.test.ts",
     "models.test.ts",
     "upstream-model-failure.test.ts",
+    "scheduled-terminal-proof.test.ts",
     "tools.test.ts",
     "bash-port.test.ts",
     "plan.test.ts",

@@ -306,3 +306,21 @@ test('Dream dispatch facade: unconfirmed cleanup cannot replace or replay an inv
   await expect(backend.sessionOptions.dispatchDreamOperation!(request)).rejects.toBe(failure);await tick();
   await expect(backend.sessionOptions.dispatchDreamOperation!(request)).rejects.toBe(cleanup);expect(calls).toBe(1);expect(prepares).toBe(1);await expect(backend.close()).rejects.toBe(cleanup);
 });
+
+test('scheduled terminal-proof fences cannot cross backend replacement or shutdown', async () => {
+  const old = fixture('old', []), next = fixture('new', []);
+  let preparations = 0, captures = 0, checks = 0;
+  const make = (base: RuntimeBackend): RuntimeBackend => ({ ...base, sessionOptions: { ...base.sessionOptions,
+    prepareInterruptedScheduledHarness: async () => { captures++; return () => { checks++; }; } } });
+  const first = make(old.backend), second = make(next.backend);
+  const backend = await createRecoverableRuntimeBackend(async () => ++preparations === 1 ? first : second);
+  const identity = { sessionId: 'sdk', submissionId: '42', runId: 'run', operationId: 'operation', sourceSeq: 1, chatJid: 'web:test' };
+  const prior = await backend.sessionOptions.prepareInterruptedScheduledHarness!(identity);
+  prior!(); expect(checks).toBe(1);
+  old.failure.resolve(Error('storage failed')); await tick();
+  const current = await backend.sessionOptions.prepareInterruptedScheduledHarness!(identity);
+  expect(prior!).toThrow('owner changed');
+  current!(); expect(checks).toBe(2); expect(captures).toBe(2);
+  await backend.close(); expect(current!).toThrow('closing');
+  expect(captures).toBe(2);
+});
