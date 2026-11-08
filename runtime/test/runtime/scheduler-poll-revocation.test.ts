@@ -97,3 +97,23 @@ test('a stopped waiting generation stays inert while its replacement claims afte
     expect(f.db.query('SELECT state,attempt FROM service_effect_s07_occurrences').get()).toEqual({state:'completed',attempt:1});expect(f.db.query("SELECT count(*) AS n FROM service_effect_s07_decisions WHERE method='claimDue'").get()).toEqual({n:1});
   }finally{if(timer)clearTimeout(timer);if(writer?.inTransaction)writer.exec('ROLLBACK');writer?.close();if(!work&&f.queued[0])work=f.queued[0]();await work;for(const spy of spies.toReversed())spy.mockRestore();factorySpy.mockRestore();await f.close();}
 },15000);
+
+for (const revocation of ['stop', 'access', 'binding'] as const) test(`a captured native terminal-proof fence is revoked on ${revocation}`, async () => {
+  const f = await fixture('claim'), factory = stores.createCurrentPiclawScheduledRunStore;
+  const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  let runtime: Parameters<typeof factory>[1] | undefined, nativeChecks = 0;
+  f.deps.agentPool.prepareInterruptedScheduledHarness = async () => { entered.resolve(); await release.promise; return () => { nativeChecks++; }; };
+  const factorySpy = spyOn(stores, 'createCurrentPiclawScheduledRunStore').mockImplementation((...args) => { runtime = args[1]; return factory(...args); });
+  try {
+    const stop = startSchedulerLoop(f.deps); await f.admitted.promise;
+    const capture = runtime!.prepareInterruptedHarness!({ sessionId: 'fixture', submissionId: '42', runId: 'fixture', operationId: 'fixture', sourceSeq: 1, chatJid: 'web:revocation' });
+    await entered.promise;
+    if (revocation === 'stop') await stop();
+    else if (revocation === 'access') writeFileSync(f.config, JSON.stringify({ domains: { access: { mode: 'isolated-containers', isolation: { component: 'backend', backendId: 'fixture', ownerUserId: 'fixture-owner', gatewayUrl: 'https://gateway.invalid', verificationKeyRef: 'fixture:verification' } } } }));
+    else process.env.PICLAW_STORE = f.path + '.revoked-profile';
+    release.resolve();
+    const fence = await capture;
+    expect(fence).toBeDefined(); expect(fence!).toThrow();
+    expect(nativeChecks).toBe(0);
+  } finally { release.resolve(); factorySpy.mockRestore(); await f.close(); }
+}, 15000);

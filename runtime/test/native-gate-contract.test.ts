@@ -124,6 +124,7 @@ describe('canonical offline native contract', () => {
   });
 
   test('discovery drift, missing suites, duplicates and filtered inventory cannot qualify', () => {
+    expect(contract.tests).toEqual([...contract.tests].sort());
     const files = ['a.test.ts', 'b.test.ts'];
     expect(() => assertNativeInventory(files, files)).not.toThrow();
     for (const actual of [[], files.slice(0, 1), [...files, 'c.test.ts'], [...files].reverse()]) expect(() => assertNativeInventory(files, actual)).toThrow('Native inventory mismatch');

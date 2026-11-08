@@ -1907,12 +1907,13 @@ export class HostConversationRuntime {
       return awaitWithContext(pending,context);
     });
   }
-  /** Passive storage-backed observation; caller already selected an authorised
-   * timeline row and its exact persisted conversation/submission correlation. */
+  /** Postmortem source proof; never reconstructs execution authority. */
   captureInterruptedScheduledHarness(identity: import("../../src/service-effects/current-piclaw/scheduled-run-store.js").InterruptedHarnessIdentity) {
     if (identity.sessionId !== this.options.sessionId) throw Error("Scheduled harness domain conflict");
     return this.observe(() => captureInterruptedScheduledHarness(this.storage, this.context, identity, () => this.fence()));
   }
+  /** Passive storage-backed observation; caller already selected an authorised
+   * timeline row and its exact persisted conversation/submission correlation. */
   readSubmissionStatus(conversationId:number,id:number):Promise<SubmissionRecord|undefined>{
     return this.observe(async()=>{const handle=await this.harness.submission(id as SubmissionId,this.context);this.fence();
       const record=await handle?.status(this.context);this.fence();

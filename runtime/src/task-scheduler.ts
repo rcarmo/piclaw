@@ -439,10 +439,11 @@ function productionScheduledRunStore(mayClaim: () => boolean, deps: SchedulerDep
       hitFault: () => false,
       recordTrace: () => undefined,
       liveRenewalNow: () => new Date().toISOString(),
-      prepareInterruptedHarness: identity => {
-        assertBinding();
-        if (!mayClaim()) throw Error("Scheduled reconciliation owner revoked");
-        return deps.agentPool.prepareInterruptedScheduledHarness(identity);
+      prepareInterruptedHarness: async identity => {
+        const check = () => { assertBinding(); if (!mayClaim() || !canRunLegacyScheduledWork()) throw Error("Scheduled reconciliation owner revoked"); };
+        check();
+        const fence = await deps.agentPool.prepareInterruptedScheduledHarness(identity);
+        return fence ? () => { check(); fence(); } : undefined;
       },
       assertClaimCurrent: () => {
         assertBinding();
