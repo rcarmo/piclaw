@@ -1,3 +1,4 @@
+import { captureInterruptedScheduledHarness } from "./host-scheduled-terminal.js";
 import { taskModelHookScope, taskModelToolScope } from "./task-model-boundary-shim.js";
 import { createTrackedBashOperations } from "../../src/tools/tracked-bash.js";
 import { withChatContext } from "../../src/core/chat-context.js";
@@ -1905,6 +1906,11 @@ export class HostConversationRuntime {
       void pending.finally(()=>this.underlyingWaits.delete(pending)).catch(()=>{});
       return awaitWithContext(pending,context);
     });
+  }
+  /** Postmortem source proof; never reconstructs execution authority. */
+  captureInterruptedScheduledHarness(identity: import("../../src/service-effects/current-piclaw/scheduled-run-store.js").InterruptedHarnessIdentity) {
+    if (identity.sessionId !== this.options.sessionId) throw Error("Scheduled harness domain conflict");
+    return this.observe(() => captureInterruptedScheduledHarness(this.storage, this.context, identity, () => this.fence()));
   }
   /** Passive storage-backed observation; caller already selected an authorised
    * timeline row and its exact persisted conversation/submission correlation. */

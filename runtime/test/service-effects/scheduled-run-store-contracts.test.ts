@@ -24,6 +24,7 @@ function context(): ContractTestContext {
 }
 
 class Runtime implements ScheduledRunAdapterRuntime {
+  prepareInterruptedHarness?: ScheduledRunAdapterRuntime["prepareInterruptedHarness"];
   readonly trace: EffectTraceRecorder;
   readonly planned = new Map<string, Set<number>>();
   readonly counts = new Map<string, number>();
@@ -869,4 +870,69 @@ test('entered scheduled SQL busy failure rolls back once without callback replay
     try{expect(restored.subject.inspect()).toEqual(before);expect(await restored.subject.store.complete(request)).toMatchObject({ok:true,value:{state:'completed',status:'success'}});expect(restored.subject.inspect()).toMatchObject({occurrences:1,runLogs:1,nextDecisions:1,outboxRows:1});}
     finally{restored.subject.database.close();}
   }finally{scope?.mockRestore();subject.dispose?.();}
+});
+
+describe('SDK-attached interrupted occurrence reconciliation', () => {
+  async function fixture() {
+    const f = await interruptedScheduledFixture();
+    f.database.query("UPDATE service_effect_s01_operations SET harness_session_id='sdk-session',harness_operation_id='42' WHERE operation_id=?").run(f.request.effect.operationId);
+    return f;
+  }
+  test('attachment alone is never proof, and denied capture/fence leaves all history unchanged', async () => {
+    const f = await fixture();
+    try {
+      const before = f.snapshot(), immutable = f.immutable();
+      for (const prepare of [undefined, async () => undefined, async () => { throw Error('owner revoked'); }, async () => () => { throw Error('owner revoked'); }, async () => async () => { throw Error('invalid async fence'); }]) {
+        f.runtime.prepareInterruptedHarness = prepare;
+        expect((await f.native.reconcileInterruptedAgentSource(f.seal())).ok).toBe(false);
+        expect(f.snapshot()).toEqual(before); expect(f.immutable()).toEqual(immutable);
+      }
+    } finally { f.dispose?.(); }
+  });
+  test('captured native proof preserves attachments and leases, skips backlog and replays only settlement', async () => {
+    const f = await fixture(); let captures = 0, fences = 0;
+    try {
+      const immutable = f.immutable();
+      f.runtime.prepareInterruptedHarness = async identity => {
+        captures++;
+        expect(identity).toEqual({ sessionId: 'sdk-session', submissionId: '42', runId: f.lease.record.runId,
+          operationId: f.request.effect.operationId, sourceSeq: 1, chatJid: f.lease.task.chatJid });
+        return () => { fences++; };
+      };
+      const result = await f.native.reconcileInterruptedAgentSource(f.seal());
+      expect(result.ok).toBe(true);
+      expect(result.value).toMatchObject({ state: 'completed', status: 'error', errorCode: 'scheduled_run_interrupted', attempt: 1, nextRunAt: '2026-08-21T01:00:00.000Z' });
+      expect(f.immutable()).toEqual(immutable); expect(captures).toBe(1); expect(fences).toBe(1);
+      f.runtime.prepareInterruptedHarness = undefined;
+      const settled = f.snapshot();
+      expect((await f.native.reconcileInterruptedAgentSource(f.seal())).value).toEqual(result.value);
+      expect((await f.native.get(f.lease.record.runId)).value).toEqual(result.value);
+      expect(f.snapshot()).toEqual(settled); expect(f.immutable()).toEqual(immutable);
+      expect(f.inspect()).toMatchObject({ occurrences: 1, runLogs: 1, nextDecisions: 1, outboxRows: 0 });
+    } finally { f.dispose?.(); }
+  });
+  for (const field of ['harness_operation_id', 'harness_session_id', 'version']) test(`capture cannot refresh away a changed ${field}`, async () => {
+    const f = await fixture();
+    try {
+      f.runtime.prepareInterruptedHarness = async () => {
+        f.database.query(`UPDATE service_effect_s01_operations SET ${field}=? WHERE operation_id=?`).run(field === 'version' ? 3 : 'changed', f.request.effect.operationId);
+        return () => {};
+      };
+      const before = f.snapshot();
+      expect((await f.native.reconcileInterruptedAgentSource(f.seal())).ok).toBe(false);
+      expect(f.snapshot()).toEqual(before);
+    } finally { f.dispose?.(); }
+  });
+  test('lost acknowledgement is a stored completion, never another proof/dispatch attempt', async () => {
+    const f = await fixture(); let captures = 0;
+    try {
+      f.runtime.prepareInterruptedHarness = async () => { captures++; return () => {}; };
+      f.runtime.plan('complete', 'effect_then_lost_acknowledgement', 1);
+      const lost = await f.native.reconcileInterruptedAgentSource(f.seal());
+      expect(lost.ok).toBe(false); if (!lost.ok) expect(lost.error.certainty).toBe('unknown');
+      const after = f.snapshot();
+      expect((await f.native.reconcileInterruptedAgentSource(f.seal())).ok).toBe(true);
+      expect(f.snapshot()).toEqual(after); expect(captures).toBe(1);
+    } finally { f.dispose?.(); }
+  });
 });

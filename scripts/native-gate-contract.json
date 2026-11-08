@@ -160,6 +160,7 @@
     "runtime-upgrade-workflow.test.ts",
     "runtime.test.ts",
     "scheduled-allocation.test.ts",
+    "scheduled-terminal-proof.test.ts",
     "scheduled.test.ts",
     "schema-convergence.test.ts",
     "schema-ownership.test.ts",

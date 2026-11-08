@@ -1,3 +1,5 @@
+import type { InterruptedHarnessIdentity } from "../../agent-pool/durable-runtime-adapter.js";
+export type { InterruptedHarnessIdentity } from "../../agent-pool/durable-runtime-adapter.js";
 import { admitSqliteWrite, isSqliteContention as isBusy } from '../../db/sqlite-async-admission.js';
 import type Database from "bun:sqlite";
 import type { ScheduledRunRetentionOwner, ScheduledRetentionPlan, ScheduledRetentionCursor } from "./scheduled-run-retention.js";
@@ -78,6 +80,9 @@ export type ScheduledRunStatement =
   | ServiceOutboxEnqueueStatement;
 
 export interface ScheduledRunAdapterRuntime {
+  /** Trusted native reader captures immutable failed SDK receipts, never input
+   * admission. The returned synchronous fence is repeated under writer lock. */
+  prepareInterruptedHarness?(identity: InterruptedHarnessIdentity): Promise<(() => void) | undefined>;
   hitFault(point: "before_effect" | "effect_then_lost_acknowledgement", method: MutationMethod): boolean;
   afterStatement?(statement: ScheduledRunStatement): void;
   recordTrace(input: NormalisedTraceInput): void;
@@ -202,7 +207,21 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
     const request=normaliseInterruptedReconciliation(input), effectId=request?.effect.idempotencyKey??'invalid';
     this.trace('complete',effectId,request?.effect.operationId??null,request?.expectedTaskRevision??null,'call',null,request?.effect.sourceSeq??null);
     if (!request) return this.failed('complete',effectId,null,null,errorOf('invalid_request'));
-    return this.mutate('complete',effectId,request.effect.operationId,request.expectedTaskRevision,()=>this.reconcileInterruptedRun(request),request.effect.sourceSeq);
+    let captured: { identity: InterruptedHarnessIdentity; assertCurrent(): void } | undefined;
+    try {
+      const run = this.readRunRow(request.runId);
+      if (run?.state === 'source_bound') {
+        const proof = this.interruptedSourceProof(run, this.readSnapshot(run.task_id, run.task_revision));
+        if (proof?.harness) {
+          const assertCurrent = await this.runtime.prepareInterruptedHarness?.(proof.harness);
+          if (typeof assertCurrent !== 'function') return this.failed('complete',effectId,request.effect.operationId,request.expectedTaskRevision,errorOf('invalid_transition'),request.effect.sourceSeq);
+          captured = { identity: proof.harness, assertCurrent };
+        }
+      }
+    } catch {
+      return this.failed('complete',effectId,request.effect.operationId,request.expectedTaskRevision,errorOf('invalid_transition'),request.effect.sourceSeq);
+    }
+    return this.mutate('complete',effectId,request.effect.operationId,request.expectedTaskRevision,()=>this.reconcileInterruptedRun(request,captured),request.effect.sourceSeq);
   }
 
   async abandon(input: AbandonScheduledRunRequest): Promise<ResultValue<ScheduledRunRecord, ScheduledRunStoreError>> {
@@ -540,7 +559,7 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
       return completed;
   }
 
-  private reconcileInterruptedRun(request: ReconcileInterruptedScheduledRunRequest): ResultValue<ScheduledRunRecord, ScheduledRunStoreError> {
+  private reconcileInterruptedRun(request: ReconcileInterruptedScheduledRunRequest, captured?: { identity: InterruptedHarnessIdentity; assertCurrent(): void }): ResultValue<ScheduledRunRecord, ScheduledRunStoreError> {
       assertProcessAdmission();
       const replay=this.replayRecordOrRetained(`effect:${request.effect.idempotencyKey}`,'complete',request.effect.requestHash,request.runId);
       if(replay)return Result.ok(replay);
@@ -552,26 +571,35 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
       if(run.operation_id!==request.effect.operationId||run.accepted_source_seq!==request.effect.sourceSeq)throw new AbortMutation(errorOf('invalid_request'));
       const snapshot=this.readSnapshot(run.task_id,run.task_revision), proof=this.interruptedSourceProof(run,snapshot);
       if(!proof||proof.version!==request.expectedOperationVersion||proof.committedAt>request.now||proof.committedAt<run.claimed_at)throw new AbortMutation(errorOf('invalid_transition'));
+      if (proof.harness) {
+        if (!captured || JSON.stringify(captured.identity) !== JSON.stringify(proof.harness)) throw new AbortMutation(errorOf('invalid_transition'));
+        try {
+          const checked: unknown = captured.assertCurrent();
+          if (checked !== undefined) { void Promise.resolve(checked).catch(() => undefined); throw Error('Synchronous native receipt fence required'); }
+        } catch { throw new AbortMutation(errorOf('invalid_transition')); }
+      }
       const durationMs=Date.parse(proof.committedAt)-Date.parse(run.claimed_at);
       if(!Number.isSafeInteger(durationMs)||durationMs<0)throw new CorruptState();
       return this.finishCompletion({effect:request.effect,status:'error',durationMs,resultRef:null,errorCode:'scheduled_run_interrupted',completedAt:request.now,outboxIntents:[]},run,snapshot,true);
   }
 
   /** Immutable host evidence only; never claim, submit or replay the agent source. */
-  private interruptedSourceProof(run: RunRow,snapshot: ScheduledTaskSnapshot): {version:number;committedAt:string}|null {
+  private interruptedSourceProof(run: RunRow,snapshot: ScheduledTaskSnapshot): {version:number;committedAt:string;harness:InterruptedHarnessIdentity|null}|null {
     if(snapshot.kind!=='agent'||snapshot.executionRepeatability!=='agent_source'||!run.operation_id||run.accepted_source_seq===null)return null;
-    const row=this.database.query(`SELECT o.version,o.terminal_committed_at FROM service_effect_s01_operations o
+    const row=this.database.query(`SELECT o.version,o.terminal_committed_at,o.harness_session_id,o.harness_operation_id FROM service_effect_s01_operations o
       JOIN service_effect_s01_sources s ON s.chat_jid=o.chat_jid AND s.source_seq=o.primary_source_seq
       JOIN service_effect_s01_chats c ON c.chat_jid=o.chat_jid
       WHERE o.operation_id=? AND o.chat_jid=? AND o.primary_source_seq=? AND s.source_id=? AND s.kind='scheduled_agent'
       AND o.phase='terminal' AND o.terminal_disposition='failed' AND o.terminal_error_code='scheduled_run_interrupted'
       AND s.state='disposed' AND s.disposition_reason='scheduled_run_interrupted'
-      AND o.harness_session_id IS NULL AND o.harness_operation_id IS NULL
+      AND ((o.harness_session_id IS NULL AND o.harness_operation_id IS NULL) OR (o.harness_session_id IS NOT NULL AND o.harness_operation_id IS NOT NULL))
       AND o.cancellation_source_seq IS NULL AND o.terminal_message_row_id IS NULL
       AND (c.active_operation_id IS NULL OR c.active_operation_id<>o.operation_id)
-      AND (SELECT COUNT(*) FROM service_effect_s01_operation_sources os WHERE os.operation_id=o.operation_id)=1`).get(run.operation_id,snapshot.chatJid,run.accepted_source_seq,run.run_id) as {version:number;terminal_committed_at:string}|null;
+      AND (SELECT COUNT(*) FROM service_effect_s01_operation_sources os WHERE os.operation_id=o.operation_id)=1`).get(run.operation_id,snapshot.chatJid,run.accepted_source_seq,run.run_id) as {version:number;terminal_committed_at:string;harness_session_id:string|null;harness_operation_id:string|null}|null;
     const committedAt=row&&canonicalInstant(row.terminal_committed_at);
-    return row&&Number.isSafeInteger(row.version)&&row.version>0&&committedAt?{version:row.version,committedAt}:null;
+    if (!row || !Number.isSafeInteger(row.version) || row.version<=0 || !committedAt) return null;
+    const harness=row.harness_session_id===null?null:Object.freeze({sessionId:row.harness_session_id,submissionId:row.harness_operation_id!,runId:run.run_id,operationId:run.operation_id,sourceSeq:run.accepted_source_seq,chatJid:snapshot.chatJid});
+    return {version:row.version,committedAt,harness};
   }
 
   private finishCompletion(request: Pick<CompleteScheduledRunRequest,'effect'|'status'|'durationMs'|'resultRef'|'errorCode'|'completedAt'|'outboxIntents'>,run: RunRow,snapshot: ScheduledTaskSnapshot,skipMissedOccurrences=false): ResultValue<ScheduledRunRecord,ScheduledRunStoreError> {

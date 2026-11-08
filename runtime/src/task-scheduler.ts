@@ -397,7 +397,7 @@ function sealScheduledEffect<T extends { effect: EffectIdentity }>(request: T): 
 
 const primaryStores = new WeakMap<Database, { users: number; foreignKeysWereEnabled: boolean }>();
 
-function productionScheduledRunStore(mayClaim: () => boolean): { store: ScheduledRunStore & InterruptedScheduledRunReconciler; close: () => void | Promise<void> } {
+function productionScheduledRunStore(mayClaim: () => boolean, deps: SchedulerDeps): { store: ScheduledRunStore & InterruptedScheduledRunReconciler; close: () => void | Promise<void> } {
   const primary = getDb();
   const assertBinding = captureHostDatabaseBinding(primary);
   const databaseRow = primary.query("PRAGMA database_list").all() as Array<{ name: string; file: string }>;
@@ -439,6 +439,12 @@ function productionScheduledRunStore(mayClaim: () => boolean): { store: Schedule
       hitFault: () => false,
       recordTrace: () => undefined,
       liveRenewalNow: () => new Date().toISOString(),
+      prepareInterruptedHarness: async identity => {
+        const check = () => { assertBinding(); if (!mayClaim() || !canRunLegacyScheduledWork()) throw Error("Scheduled reconciliation owner revoked"); };
+        check();
+        const fence = await deps.agentPool.prepareInterruptedScheduledHarness(identity);
+        return fence ? () => { check(); fence(); } : undefined;
+      },
       assertClaimCurrent: () => {
         assertBinding();
         if (!mayClaim() || !canRunLegacyScheduledWork()) throw Error("Scheduled poll claim revoked");
@@ -530,7 +536,7 @@ async function reconcileInterruptedScheduledAgentRuns(store: ScheduledRunStore &
     JOIN service_effect_s01_sources s ON s.chat_jid=o.chat_jid AND s.source_seq=r.accepted_source_seq
     WHERE r.state='source_bound' AND r.lease_expires_at<=? AND o.phase='terminal' AND o.terminal_disposition='failed'
     AND o.terminal_error_code='scheduled_run_interrupted' AND s.state='disposed' AND s.disposition_reason='scheduled_run_interrupted'
-    AND o.harness_session_id IS NULL ORDER BY r.scheduled_for,r.run_id LIMIT 100`).all(now) as Array<{run_id:string;attempt:number;task_revision:number;lease_expires_at:string;operation_id:string;accepted_source_seq:number;version:number}>;
+    ORDER BY r.scheduled_for,r.run_id LIMIT 100`).all(now) as Array<{run_id:string;attempt:number;task_revision:number;lease_expires_at:string;operation_id:string;accepted_source_seq:number;version:number}>;
   for(const row of rows){
     const request=sealScheduledEffect<ReconcileInterruptedScheduledRunRequest>({effect:{idempotencyKey: `scheduled-interrupted:${row.run_id}:${row.attempt}:${row.version}`,requestHash:'',operationId:row.operation_id,sourceSeq:row.accepted_source_seq,provenanceRef:row.run_id,redactionClass:'private'},runId:row.run_id,expectedAttempt:row.attempt,expectedTaskRevision:row.task_revision,expectedOperationVersion:row.version,expectedLeaseExpiresAt:row.lease_expires_at,now});
     const result=await reconcile(request);
@@ -976,7 +982,7 @@ export class SchedulerStoreReleaseError extends Error {
 export function startSchedulerLoop(deps: SchedulerDeps): () => Promise<void> {
   if (schedulerLoop) return schedulerLoop.stop;
   if (!canRunLegacyScheduledWork()) return () => stoppedScheduler;
-  const resource = productionScheduledRunStore(isCurrent);
+  const resource = productionScheduledRunStore(isCurrent, deps);
   let pendingTasks = 0;
   let pollJoined = false;
   let closed = false;

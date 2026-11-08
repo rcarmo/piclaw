@@ -273,6 +273,10 @@ export class AgentPool {
   }
   private readonly config = getSessionPoolConfig();
 
+  private readonly scheduledHarnessProof?: AgentPoolOptions["prepareInterruptedScheduledHarness"];
+  prepareInterruptedScheduledHarness(identity: Parameters<NonNullable<AgentPoolOptions["prepareInterruptedScheduledHarness"]>>[0]) {
+    return this.scheduledHarnessProof?.(Object.freeze({ ...identity })) ?? Promise.resolve(undefined);
+  }
   private readonly scheduledDispatch: AgentPoolOptions["dispatchScheduledAgent"];
   private readonly durableApplication: boolean;
   private readonly durableSessionLookup?: AgentPoolOptions["getDurableSession"];
@@ -285,6 +289,7 @@ export class AgentPool {
   constructor(options: AgentPoolOptions) {
     this.dreamDispatch=options.dispatchDreamOperation?.bind(options);
     this.hostCommandDispatch = options.dispatchHostCommand?.bind(options);
+    this.scheduledHarnessProof = options.prepareInterruptedScheduledHarness?.bind(options);
     this.scheduledDispatch = options.dispatchScheduledAgent?.bind(options);
     this.sidePromptDispatch = options.dispatchSidePrompt?.bind(options);
     if (options.getDurableSession !== undefined && typeof options.getDurableSession !== "function") {
