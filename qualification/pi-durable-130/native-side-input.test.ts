@@ -172,6 +172,22 @@ applicationTest('actual side automatic compaction stays in the exact private SDK
   }finally{settings.mockRestore();await s.close();}
 },30000);
 
+applicationTest('actual side SDK reporting retains reasoning-only usage across reopen without financial state',async()=>{
+  const s=await sideFixture(),{f,state}=s;
+  try{
+    const financial=s.financial();
+    state.usage={input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,reasoning:7,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}};
+    const result=await f.pool.runSidePrompt('web:default','Observe reasoning-only usage',{requestId:'side-reasoning-only'});
+    expect(result.status).toBe('success');
+    const report=()=>f.root.query('SELECT reasoning_tokens,total_tokens,provider_cost_total,cost_provenance FROM token_usage WHERE reasoning_tokens=7').all();
+    await f.until(()=>report().length===1);
+    expect(report()).toEqual([{reasoning_tokens:7,total_tokens:0,provider_cost_total:null,cost_provenance:'unavailable'}]);
+    expect(s.financial()).toEqual(financial);
+    const before=f.root.query('SELECT * FROM token_usage ORDER BY id').all();
+    await f.reopen();expect(state.calls).toBe(1);expect(f.root.query('SELECT * FROM token_usage ORDER BY id').all()).toEqual(before);expect(s.financial()).toEqual(financial);
+  }finally{await s.close();}
+},30000);
+
 for(const providerCost of [0,0.2])applicationTest(`actual factory passive metadata preserves provider cost ${providerCost}, catalogue valuation, reasoning and cache reporting without finance`,async()=>{
   const s=await sideFixture(),{f,state}=s;
   try{

@@ -52,6 +52,22 @@ describe("recordMessageUsage", () => {
     expect(row.run_at).toBe("2025-06-01T12:00:00.000Z");
   });
 
+  for (const [name, usage] of Object.entries({
+    reasoning: { reasoning: 7 },
+    camel: { reasoningTokens: 7 },
+    snake: { reasoning_tokens: 7 },
+    outputDetails: { output_tokens_details: { reasoning_tokens: 7 } },
+    completionDetails: { completion_tokens_details: { reasoning_tokens: 7 } },
+  })) test(`retains reasoning-only usage: ${name}`, () => {
+    initDatabase();
+    const chat = `test:reasoning-only-${name}`;
+    const message = { id: `reasoning-${name}`, role: "assistant", provider: "fixture", model: "fixture-model", usage };
+    recordMessageUsage(chat, message);
+    recordMessageUsage(chat, message);
+    const rows = getDb().query("SELECT reasoning_tokens,total_tokens,provider_cost_total,cost_provenance FROM token_usage WHERE chat_jid=?").all(chat);
+    expect(rows).toEqual([{ reasoning_tokens: 7, total_tokens: 0, provider_cost_total: null, cost_provenance: "unavailable" }]);
+  });
+
   test("preserves explicit cache reporting and provider cost provenance", () => {
     initDatabase();
     const db = getDb();

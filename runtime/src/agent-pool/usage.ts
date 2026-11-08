@@ -137,6 +137,7 @@ function hasUsageTokensOrCost(usage: Record<string, unknown>): boolean {
     usage.cacheWrite,
     usage.totalTokens,
     usage.total,
+    extractReasoningTokens(usage),
     cost.input,
     cost.output,
     cost.cacheRead,
