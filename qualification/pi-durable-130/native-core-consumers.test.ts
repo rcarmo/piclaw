@@ -74,7 +74,7 @@ for (const accounted of [false, true]) test(`all seven shipped consumers admit a
     const message = { role: "assistant" as const, api: model.api, provider: model.provider, model: model.id, timestamp: Date.now(),
       content: step < sequence.length ? [{ type: "toolCall" as const, id: `restic-${step}`, name: "restic", arguments: sequence[step]! }] : [{ type: "text" as const, text: "Native core consumers complete" }],
       stopReason: step < sequence.length ? "toolUse" as const : "stop" as const,
-      usage: { input: 1, output: 1, reasoning: 1, ...(accounted ? { providerCost: 2 } : {}), cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: accounted ? .000001 : 0, output: accounted ? .000001 : 0, cacheRead: 0, cacheWrite: 0, total: accounted ? .000002 : 0 } } };
+      usage: { input: 1, output: 1, reasoning: 1, providerCost: 2, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: accounted ? .000001 : 0, output: accounted ? .000001 : 0, cacheRead: 0, cacheWrite: 0, total: accounted ? .000002 : 0 } } };
     queueMicrotask(() => { output.push({ type: "done", reason: message.stopReason, message }); output.end(message); });
     return output;
   };
@@ -133,21 +133,40 @@ for (const accounted of [false, true]) test(`all seven shipped consumers admit a
     const bound = backend.bind({ queue: base.queue, agentPool: pool });
     const message = { id: "native-core-input", chat_jid: "web:default", sender: "user", sender_name: "User", content: "Inspect and configure the fixture backup service", timestamp: new Date().toISOString(), is_from_me: false, is_bot_message: false };
     const row = root.transaction(() => { const rowId = storeMessage(message); bound.getInputSourceAdmission!(message.chat_jid)!({ message, rowId, database: root }); return rowId; })();
-    expect(await bound.dispatchAcceptedInput!(message.chat_jid, message.id, row!)!()).toBe("settled");
+    const receipt = await bound.dispatchAcceptedInput!(message.chat_jid, message.id, row!)!;
+    expect(receipt).toMatchObject({ queued: false });
+    expect(receipt.submission_id).toBeGreaterThan(0);
+    const deadline = Date.now() + 20_000;
+    let finalStatus: string | undefined;
+    while (Date.now() < deadline) {
+      const status = root.query('SELECT status FROM submissions WHERE id = ?').get(receipt.submission_id) as { status: string } | null;
+      if (status && !['queued', 'placed'].includes(status.status)) {
+        finalStatus = status.status;
+        break;
+      }
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    expect(finalStatus).toBe('done');
     expect(calls).toBe(4);
     // Read the rows written by the real native SDK/accounting path using the
     // exact installed public-package collector, not a second SQL projection.
-    if (accounted) {
+    {
       const { collectUsage } = await loadAddon('observability', 'usage-telemetry.ts');
       const before = root.serialize();
       const dbPath = (root.query('PRAGMA database_list').all() as { name: string; file: string }[]).find(row => row.name === 'main')!.file;
       const batch = collectUsage({ graphite_host: '', graphite_port: 2003, graphite_prefix: 'piclaw', instance_name: 'fixture' },
         { runAt: '1970-01-01T00:00:00.000Z', id: 0 }, new Date(), dbPath);
-      const points = new Map<string, number>(batch.points.map((point: { path: string; value: number }) => [point.path.replace('piclaw.fixture.usage.github-copilot.approved.', ''), point.value]));
+      const points = new Map<string, number>(batch.points.map((point: { path: string; value: number }) => [point.path.replace(`piclaw.fixture.usage.${provider}.approved.`, ''), point.value]));
       expect(points.get('cost.provider_reported.currency_unknown.latest_known_amount')).toBe(2);
       expect(points.get('cost.provider_reported.currency_unknown.known_rows')).toBe(4);
-      expect(points.get('cost.api_equivalent_usd.known_subtotal')).toBe(.000008);
-      expect(points.get('cost.api_equivalent_usd.complete_rows')).toBe(4);
+      if(accounted){
+        expect(points.get('cost.api_equivalent_usd.known_subtotal')).toBe(.000008);
+        expect(points.get('cost.api_equivalent_usd.complete_rows')).toBe(4);
+      }else{
+        expect(points.has('cost.api_equivalent_usd.known_subtotal')).toBe(false);
+        expect(points.get('cost.api_equivalent_usd.unknown_rows')).toBe(4);
+      }
+      for(const table of ['budget_work','budget_request_reservations','budget_usage_events'])expect(root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
       expect(points.get('tokens.reasoning')).toBe(4); expect(points.get('tokens.total')).toBe(8);
       expect(points.has('cost.estimated_usd')).toBe(false); expect(root.serialize()).toEqual(before);
     }

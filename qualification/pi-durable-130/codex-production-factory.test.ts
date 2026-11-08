@@ -1,3 +1,4 @@
+import { waitForSubmissionProjection } from './src/submission-projection.js';
 import { repoRoot } from "./src/repo-root.js";
 import { isolatedApplicationTest } from "./src/isolated-application-test.js";
 import "./src/test-guard.js";
@@ -173,26 +174,26 @@ for (const scenario of ["write", "model", "sse", "broken-sse"] as const) applica
     const admitted = await admitWebMessage(channel, { chatJid: "web:default", content: "Reply with a short synthetic result", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" }, { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
     expect(admitted).not.toBeNull();
     const row = getDb().query("SELECT id FROM messages WHERE rowid=?").get(admitted!.id) as { id: string };
-    const outcome = await bound.dispatchAcceptedInput!("web:default", row.id, admitted!.id)!();
+    const beforeReplies=(getDb().query("SELECT count(*) n FROM messages WHERE chat_jid='web:default' AND is_bot_message=1").get() as {n:number}).n;
+    const receipt = await bound.dispatchAcceptedInput!("web:default", row.id, admitted!.id)!;
+    expect(receipt.queued).toBe(false);
+    const outcome = await waitForSubmissionProjection(getDb(),receipt.submission_id,'web:default',beforeReplies);
     if (scenario === "broken-sse") {
       expect(bodyFailed).toBe(true);
       expect(bodyPulls).toBe(2);
       expect(calls).toBe(1);
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       // Native model-error settlement consumes the accepted input once and releases the lane.
-      expect(outcome).toBe("settled");
+      expect(outcome).toBe(scenario === "broken-sse" ? "unanswered" : "done");
       const reservations = (getDb().query("SELECT * FROM budget_request_reservations").all() as any[]).filter(r => !priorReservations.has(r.id));
-      expect(reservations).toHaveLength(1);
-      expect(reservations[0].state).toBe("settled");
-      const usage = getDb().query("SELECT u.input_tokens, u.output_tokens, e.api_usd_micros FROM budget_usage_events e JOIN token_usage u ON u.id=e.token_usage_id WHERE e.usage_event_id=?").get(reservations[0].usage_event_id) as any;
-      expect(usage).toEqual({ input_tokens: 3, output_tokens: 2, api_usd_micros: 5 });
-      const workBefore = getDb().query("SELECT * FROM budget_work WHERE id=?").get(reservations[0].work_id);
-      const before = JSON.stringify(reservations);
+      expect(reservations).toEqual([]);
+      expect(getDb().query("SELECT input_tokens,output_tokens,api_equivalent_cost_microusd FROM token_usage").all()).toEqual([{input_tokens:3,output_tokens:2,api_equivalent_cost_microusd:5}]);
+      const financeBefore=['budget_work','budget_request_reservations','budget_usage_events'].map(table=>getDb().query(`SELECT * FROM ${table}`).all());
       const tree = JSON.stringify(await backend.sessionOptions.getDurableSession!("web:default")!.readTree!());
       expect(tree).not.toContain("owned synthetic codex terminal");
       expect(tree).not.toContain("PRIVATE_SYNTHETIC_CAPTURE_FAILURE");
       expect(tree).not.toContain("Files:");
-      expect(outcome).toBe("settled");
+      expect(outcome).toBe(scenario === "broken-sse" ? "unanswered" : "done");
       const records = JSON.stringify(getDb().query("SELECT record FROM entries ORDER BY id").all());
       expect(records).toContain("Host model request failed [phase=conversion; category=unknown; evidence=");
       const {parseModelFailure}=await import("../../runtime/durable-engine/src/host-model-failure.js");
@@ -222,34 +223,31 @@ for (const scenario of ["write", "model", "sse", "broken-sse"] as const) applica
       expect(backend.close()).toBe(closing);
       expect(await backend.close().catch(error => error)).toBe(firstError);
       expect(joined).toBe(1);
-      expect(getDb().query("SELECT * FROM budget_work WHERE id=?").get(reservations[0].work_id)).toEqual(workBefore);
+      expect(['budget_work','budget_request_reservations','budget_usage_events'].map(table=>getDb().query(`SELECT * FROM ${table}`).all())).toEqual(financeBefore);
       expect(fetchSpy).toHaveBeenCalledTimes(1);
-      expect(JSON.stringify((getDb().query("SELECT * FROM budget_request_reservations").all() as any[]).filter(r => !priorReservations.has(r.id)))).toBe(before);
+      expect(reservations).toEqual([]);
       backend = undefined;
       return;
     }
     if (fixtureError) throw fixtureError;
-    expect(outcome).toBe("settled");
+    expect(outcome).toBe(scenario === "broken-sse" ? "unanswered" : "done");
     expect(calls).toBe((scenario === "write" || scenario === "model") ? 2 : 1);
     const reservations = (getDb().query("SELECT * FROM budget_request_reservations").all() as any[]).filter(r => !priorReservations.has(r.id));
-    expect(reservations).toHaveLength(calls);
-    for (const reservation of reservations) {
-      expect(reservation.state).toBe("settled");
-      expect(reservation.provider_id).toBe(model.provider);
-      expect([model.id, ...(scenario === "model" ? [alternate.id] : [])]).toContain(reservation.model_id);
-      expect(reservation.account_ref).toBeTruthy();
-      expect(reservation.settlement_sha256).toHaveLength(64);
-      expect((getDb().query("SELECT status FROM budget_work WHERE id=?").get(reservation.work_id) as any).status).toBe("completed");
-    }
+    expect(reservations).toEqual([]);
+    const reports=getDb().query("SELECT total_tokens,provider,model FROM token_usage ORDER BY id").all();
+    expect(reports).toHaveLength(calls);
+    for(const report of reports)expect(report).toMatchObject({total_tokens:5,provider:model.provider});
     if (scenario === "write") {
       expect(readFileSync(join(workspace, "native-factory-proof.txt"), "utf8")).toBe("native write proof\n");
       expect(routingTokens).toEqual([null, "ROUTING_TOKEN_1"]);
-      const firstOperation = getDb().query("SELECT operation_id FROM service_effect_s01_operations WHERE chat_jid=? ORDER BY primary_source_seq DESC LIMIT 1").get("web:default") as { operation_id: string };
-      expect(routingRelease).toHaveBeenCalledWith(firstOperation.operation_id);
+      const firstBinding = getDb().query("SELECT conversation_id FROM piclaw_durable_bindings_v1 WHERE chat_jid=? AND submission_id=?").get("web:default",receipt.submission_id) as { conversation_id: number };
+      expect(routingRelease).toHaveBeenCalledWith(`sdk-run:${firstBinding.conversation_id}:${receipt.submission_id}`);
       const second = await admitWebMessage(channel, { chatJid: "web:default", content: "A new synthetic user turn", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" }, { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
       expect(second).not.toBeNull();
       const next = getDb().query("SELECT id FROM messages WHERE rowid=?").get(second!.id) as { id: string };
-      expect(await bound.dispatchAcceptedInput!("web:default", next.id, second!.id)!()).toBe("settled");
+      const replyCount=(getDb().query("SELECT count(*) n FROM messages WHERE chat_jid='web:default' AND is_bot_message=1").get() as {n:number}).n;
+      const secondReceipt=await bound.dispatchAcceptedInput!("web:default",next.id,second!.id)!;
+      expect(await waitForSubmissionProjection(getDb(),secondReceipt.submission_id,'web:default',replyCount)).toBe('done');
       if (fixtureError) throw fixtureError;
       expect(routingTokens).toEqual([null, "ROUTING_TOKEN_1", null]);
       expect(calls).toBe(3);

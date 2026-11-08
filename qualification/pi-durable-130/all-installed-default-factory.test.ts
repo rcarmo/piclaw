@@ -1,3 +1,4 @@
+import { waitForSubmissionProjection } from './src/submission-projection.js';
 import { installApprovedAddonsFixture } from "./installed-addons-fixture.js";
 import { isolatedApplicationTest } from "./src/isolated-application-test.js";
 import "./src/test-guard.js";
@@ -92,20 +93,16 @@ applicationTest("all 23 installed: actual default factory public provider termin
     const admitted = await admitWebMessage(channel, { chatJid: "web:default", content: "Reply with a short synthetic result", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" }, { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
     expect(admitted).not.toBeNull();
     const row = getDb().query("SELECT id FROM messages WHERE rowid=?").get(admitted!.id) as { id: string };
-    const outcome = await bound.dispatchAcceptedInput!("web:default", row.id, admitted!.id)!();
+    const beforeReplies=(getDb().query("SELECT count(*) n FROM messages WHERE chat_jid='web:default' AND is_bot_message=1").get() as {n:number}).n;
+    const receipt = await bound.dispatchAcceptedInput!("web:default", row.id, admitted!.id)!;
+    expect(receipt.queued).toBe(false);
+    const outcome = await waitForSubmissionProjection(getDb(),receipt.submission_id,'web:default',beforeReplies);
     if (fixtureError) throw fixtureError;
-    expect(outcome).toBe("settled");
+    expect(outcome).toBe("done");
     expect(calls).toBe(1);
     const reservations = (getDb().query("SELECT * FROM budget_request_reservations").all() as any[]).filter(r => !priorReservations.has(r.id));
-    expect(reservations).toHaveLength(calls);
-    for (const reservation of reservations) {
-      expect(reservation.state).toBe("settled");
-      expect(reservation.provider_id).toBe(model.provider);
-      expect(reservation.model_id).toBe(model.id);
-      expect(reservation.account_ref).toBeTruthy();
-      expect(reservation.settlement_sha256).toHaveLength(64);
-      expect((getDb().query("SELECT status FROM budget_work WHERE id=?").get(reservation.work_id) as any).status).toBe("completed");
-    }
+    expect(reservations).toEqual([]);
+    expect(getDb().query("SELECT total_tokens,provider,model FROM token_usage").all()).toEqual([{total_tokens:5,provider:model.provider,model:model.id}]);
     expect(fetchSpy).toHaveBeenCalledTimes(0);
     const terminals = getDb().query("SELECT content FROM messages WHERE is_bot_message=1 AND is_terminal_agent_reply=1 AND chat_jid=?").all("web:default");
     expect(terminals).toHaveLength(1);

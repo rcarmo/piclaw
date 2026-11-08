@@ -54,67 +54,53 @@ applicationTest("owned application peer steer joins active native operation and 
       { acceptSource: ports.getInputSourceAdmission!(chat) }, () => lock.assertCurrentOwner(), new AbortController().signal);
     expect(stored).not.toBeNull();
     const message = root.query("SELECT rowid,id FROM messages WHERE chat_jid=? AND content=?").get(chat, "A primary native input") as any;
-    const dispatch = bundle.dispatchAcceptedInput(chat, message.id, message.rowid)!;
-    expect(dispatch).toBeFunction();
-    const settling = dispatch();
+    const admission=await bundle.dispatchAcceptedInput(chat,message.id,message.rowid)!;
+    expect(admission.submission_id).toBeGreaterThan(0);
     await entered.promise;
-    // Provider entry precedes binding; synchronize on committed host state, not elapsed time.
-    let running = false;
-    for (let n=0; n<1000; n++) {
-      const rows = root.query("SELECT * FROM service_effect_s01_operations WHERE chat_jid=?").all(chat) as any[];
-      running = rows.some(r => r.phase === "executing" && r.harness_operation_id !== null);
-      if (running) break;
-      await Bun.sleep(2);
-    }
-    expect(running).toBe(true);
-    await expect(bundle.steerApplicationInput(peer("no-projection"))).rejects.toThrow("projection");
-    expect(getDeferredQueuedFollowups(chat)).toEqual([]);
-    expect(root.query("SELECT * FROM service_effect_s01_operation_sources os JOIN service_effect_s01_sources s ON s.chat_jid=? AND s.source_seq=os.source_seq WHERE s.source_id='no-projection'").all(chat)).toEqual([]);
+    expect(root.query('SELECT status FROM submissions WHERE id=?').get(admission.submission_id)).toEqual({status:'placed'});
+    expect(root.query('SELECT * FROM service_effect_s01_operations').all()).toEqual([]);
+    // A display projection is not an admission grant. Source/target/principal
+    // authority below must remain independent of it.
     bundle.bindInputProjection(projection);
     // Exact targeting and source scope are checked before any accepted queue write.
     await expect(bundle.steerApplicationInput({ ...peer("retarget"), target: { ...target, sessionId: "other-session" } })).rejects.toThrow("Exact native");
     await expect(bundle.steerApplicationInput({ ...peer("mixed-goal"), source: "goal.continuation" as any })).rejects.toThrow("Unsupported");
-    // Revoke after the composite helper crosses its first await, not just at ingress.
-    let outsideChecks = 0;
-    await expect(bundle.steerApplicationInput({ ...peer("revoked-after-await"), assertCurrent() {
+    // Principal authority is checked through the durable ingress commit.
+    // After that commit, the accepted source—not a UI projection—owns input.
+    let commitChecks = 0;
+    await expect(bundle.steerApplicationInput({ ...peer("revoked-at-commit"), assertCurrent() {
       lock.assertCurrentOwner();
-      if (!root.inTransaction && ++outsideChecks === 2) throw Error("fixture peer revoked after await");
-    } })).rejects.toThrow("revoked after await");
-    expect(outsideChecks).toBe(2);
+      if (++commitChecks === 3) throw Error("fixture peer revoked at commit");
+    } })).rejects.toThrow("revoked at commit");
+    expect(commitChecks).toBe(3);
+    expect(root.query("SELECT 1 FROM messages WHERE id='revoked-at-commit'").get()).toBeNull();
+    expect(root.query("SELECT 1 FROM service_effect_s01_sources WHERE source_id='revoked-at-commit'").get()).toBeNull();
     expect(getDeferredQueuedFollowups(chat)).toEqual([]);
-    // The captured projection is authority too: losing it must withdraw the queue.
-    outsideChecks = 0;
-    await expect(bundle.steerApplicationInput({ ...peer("detached-projection"), assertCurrent() {
-      lock.assertCurrentOwner();
-      if (!root.inTransaction && ++outsideChecks === 2) bundle.bindInputProjection(undefined);
-    } })).rejects.toThrow("projection detached");
-    expect(getDeferredQueuedFollowups(chat)).toEqual([]);
-    bundle.bindInputProjection(projection);
+    bundle.bindInputProjection(undefined);
     expect(root.query("SELECT source_id FROM service_effect_s01_sources WHERE chat_jid=? AND state IN ('pending','claimed') AND source_id<>?").all(chat, message.id)).toEqual([]);
     const receipt = await bundle.steerApplicationInput(peer("peer-B"));
     expect(receipt.mode).toBe("steer");
-    expect(checks).toBeGreaterThan(4);
-    expect([...guardContexts].sort()).toEqual([false, true]);
+    expect(checks).toBeGreaterThanOrEqual(4);
+    expect([...guardContexts]).toEqual([true]);
     expect(getDeferredQueuedFollowups(chat)).toEqual([]);
     expect(base.host.modelCalls).toBe(0);
     base.host.finalContent = [{ type: "text", text: "one whole-operation answer" }];
     hold.release();
-    expect(await settling).toBe("settled");
+    for(let n=0;n<1000&&(root.query('SELECT status FROM submissions WHERE id=?').get(receipt.submission_id) as any).status!=='done';n++)await Bun.sleep(2);
+    expect(root.query('SELECT status FROM submissions WHERE id=?').get(receipt.submission_id)).toEqual({status:'done'});
+    expect(root.query('SELECT status FROM submissions WHERE id=?').get(admission.submission_id)).toEqual({status:'done'});
     expect(base.host.transcripts.length).toBe(2);
     expect(base.host.transcripts[1]).toContain("B verified peer steering");
-    expect(root.query("SELECT content FROM messages WHERE chat_jid=? AND is_bot_message=1").all(chat)).toEqual([{content: "one whole-operation answer"}]);
+    const sdkAnswer=root.query("SELECT record FROM entries WHERE json_extract(record,'$.kind')='pi.assistant' ORDER BY id DESC LIMIT 1").get() as {record:string};
+    expect(JSON.parse(sdkAnswer.record).model[0].content).toEqual([{type:'text',text:'one whole-operation answer'}]);
+    expect(root.query("SELECT content FROM messages WHERE chat_jid=? AND is_bot_message=1").all(chat)).toEqual([]);
     const sources = root.query("SELECT source_id,state FROM service_effect_s01_sources WHERE chat_jid=? ORDER BY source_seq").all(chat) as any[];
     expect(sources.filter(s => [message.id,"peer-B"].includes(s.source_id)).map(s=>s.state)).toEqual(["consumed","consumed"]);
-    expect(root.query("SELECT * FROM service_effect_s02_commits").all()).toHaveLength(1);
-    expect(root.query("SELECT operation_id FROM service_effect_s01_operations WHERE chat_jid=?").all(chat)).toHaveLength(1);
+    expect(root.query("SELECT * FROM service_effect_s02_commits").all()).toHaveLength(0);
+    expect(root.query("SELECT operation_id FROM service_effect_s01_operations WHERE chat_jid=?").all(chat)).toHaveLength(0);
     expect(getDeferredQueuedFollowups(chat)).toEqual([]);
     expect(root.query("SELECT source_id FROM service_effect_s01_sources WHERE chat_jid=? AND state IN ('pending','claimed')").all(chat)).toEqual([]);
-    const posts = events.filter(e => e.type === "new_post");
-    expect(posts).toHaveLength(1);
-    expect(JSON.stringify(posts[0].data)).toContain("B verified peer steering");
-    const peerMessage = root.query("SELECT rowid FROM messages WHERE chat_jid=? AND id='peer-B'").get(chat) as { rowid: number };
-    expect(posts[0].data.id).toBe(peerMessage.rowid);
-    expect(posts[0].data.chat_jid).toBe(chat);
+    expect(root.query("SELECT content FROM messages WHERE chat_jid=? AND id='peer-B'").get(chat)).toEqual({content:'B verified peer steering'});
     expect(base.host.credentialLookups).toBe(0); expect(base.host.effects).toBe(0);
   } finally { hold.release(); await bundle.close(); await closeDatabase(); lock.release(); process.env.PICLAW_DB_IN_MEMORY = oldMemory; await rm(dir, { recursive: true, force: true }); }
 }, 20000);

@@ -5,43 +5,29 @@ import { classifyModelFailure, modelFailureDetail, modelFailureNotice, parseMode
 import { isRetryableAssistantError, isContextOverflow } from "../../runtime/durable-engine/qualification/ai.ts";
 
 const secret = "SYNTHETIC-PRIVATE-CREDENTIAL";
-const {BudgetRequestError}=await import('../../runtime/src/db/budget-request-reservations.js');
-test('host budget failure: exact owner denial survives bounded receipts and never authorises SDK retries',()=>{
-  for(const phase of ['source','admission'] as const){
-    const failure=classifyModelFailure(phase,new BudgetRequestError('budget_denied'));
-    expect(failure).toEqual({phase,category:'budget'});
-    const detail=modelFailureDetail(failure);expect(parseModelFailure(detail)).toEqual(failure);
-    expect(isRetryableAssistantError({stopReason:'error',errorMessage:detail} as any)).toBe(false);
-    expect(modelFailureNotice(detail,7)).toContain('budget policy');expect(modelFailureNotice(detail,7)).not.toContain('provider rejected');
-  }
-  expect(classifyModelFailure('admission',new BudgetRequestError('unavailable')).category).toBe('unknown');
-  expect(classifyModelFailure('provider',new BudgetRequestError('budget_denied')).category).toBe('unknown');
-  expect(classifyModelFailure('admission',Object.assign(Error('unrelated'),{code:'budget_denied'})).category).toBe('unknown');
-  expect(classifyModelFailure('admission',new Proxy({},{getPrototypeOf(){throw Error('untrusted prototype');}}))).toEqual({phase:'admission',category:'unknown'});
-});
 test('host compaction failure: exact SDK wrapper preserves bounded host evidence without accepting arbitrary nesting',()=>{
-  const failure={phase:'accounting' as const,category:'budget' as const,evidenceId:'b7e94df0-a012-40da-b950-29b1c1b0999b'};
+  const failure={phase:'conversion' as const,category:'unknown' as const,evidenceId:'b7e94df0-a012-40da-b950-29b1c1b0999b'};
   const detail=modelFailureDetail(failure),prefix='Compaction failed: Summarization failed: ';
   expect(parseModelFailure(prefix+detail)).toEqual(failure);
-  expect(modelFailureNotice(prefix+detail,7)).toContain('budget policy');
+  expect(modelFailureNotice(prefix+detail,7)).toContain('could not be processed safely');
   expect(modelFailureNotice(prefix+detail,7)).toContain(failure.evidenceId);
   expect(isRetryableAssistantError({stopReason:'error',errorMessage:prefix+detail} as any)).toBe(false);
   for(const forged of [prefix+prefix+detail,'Compaction failed: '+detail,'Summarization failed: '+detail,prefix+detail+' trailing',prefix+secret,secret+prefix+detail])expect(parseModelFailure(forged)).toBeUndefined();
   expect(classifyModelFailure('provider',Error(prefix+detail)).category).not.toBe('budget');
 });
-test('host budget aggregate evidence: bounded cleanup errors and unreadable arrays preserve the primary cause',async()=>{
+test('host aggregate evidence: bounded cleanup errors and unreadable arrays preserve the primary cause',async()=>{
   const {mkdtempSync,readFileSync,rmSync}=await import('node:fs'),{join}=await import('node:path'),{tmpdir}=await import('node:os');
   const {retainModelFailureEvidence}=await import('../../runtime/durable-engine/src/host-model-failure-evidence.js');
-  const dir=mkdtempSync(join(tmpdir(),'budget-aggregate-')),primary=new BudgetRequestError('budget_denied');
+  const dir=mkdtempSync(join(tmpdir(),'budget-aggregate-')),primary=Object.assign(Error('source revoked'),{code:'source_revoked'});
   const retain=(error:unknown)=>{
     const id=retainModelFailureEvidence(dir,{provider:'fixture',model:'fixture',failure:{phase:'admission',category:'unknown'},error});
     return JSON.parse(readFileSync(join(dir,id+'.json'),'utf8')).errors.error;
   };
   try{
     const error=new AggregateError([primary,Error('cleanup fault'),...Array.from({length:8},(_,i)=>Error('extra '+i))],'uncertain cleanup',{cause:primary});
-    const data=retain(error);expect(data.cause.code).toBe('budget_denied');expect(data.errors).toHaveLength(4);expect(data.errors[1].message).toBe('cleanup fault');
+    const data=retain(error);expect(data.cause.code).toBe('source_revoked');expect(data.errors).toHaveLength(4);expect(data.errors[1].message).toBe('cleanup fault');
     const hostile=Object.assign(Error('wrapper',{cause:primary}),{errors:new Proxy([],{get(){throw Error('unreadable children');}})});
-    const preserved=retain(hostile);expect(preserved.cause.code).toBe('budget_denied');expect(preserved.errors).toEqual([{message:'Aggregate errors unreadable'}]);
+    const preserved=retain(hostile);expect(preserved.cause.code).toBe('source_revoked');expect(preserved.errors).toEqual([{message:'Aggregate errors unreadable'}]);
   }finally{rmSync(dir,{recursive:true});}
 });
 for (const [message, category, status] of [

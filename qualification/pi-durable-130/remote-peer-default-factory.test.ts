@@ -1,3 +1,4 @@
+import {waitForSubmissionProjection} from './src/submission-projection.js';
 import { isolatedApplicationTest } from "./src/isolated-application-test.js";
 import "./src/test-guard.js";
 import { expect } from "bun:test";
@@ -7,7 +8,7 @@ import { repoRoot } from "./src/repo-root.js";
 import { DATA_DIR } from "../../runtime/src/core/config.js";
 import { join } from "node:path";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
-import { getDeferredQueuedFollowups, storeChatMetadata } from "../../runtime/src/db.js";
+import { getDeferredQueuedFollowups } from "../../runtime/src/db.js";
 import { acquireRuntimeLock } from "../../runtime/src/runtime/single-instance.js";
 import { createDefaultApplicationRuntime } from "../../runtime/durable-engine/src/default-application-runtime.js";
 
@@ -88,7 +89,8 @@ applicationTest("Remote Peer actual factory uses network-free transport, execute
       { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
     expect(admitted).not.toBeNull();
     const id = (getDb().query("SELECT id FROM messages WHERE rowid=?").get(admitted!.id) as any).id;
-    expect(await bound.dispatchAcceptedInput!("web:default", id, admitted!.id)!()).toBe("settled");
+    const first=await bound.dispatchAcceptedInput!('web:default',id,admitted!.id)!;
+    expect(await waitForSubmissionProjection(getDb(),first.submission_id,'web:default',0)).toBe('done');
     expect(result).not.toContain('"isError":true');
     expect(result).toContain("fixture-native-id");
     expect(calls).toBe(2);
@@ -97,7 +99,8 @@ applicationTest("Remote Peer actual factory uses network-free transport, execute
     const accepted = await admitWebMessage(channel, { chatJid: "web:default", content: "Accept synthetic peer", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" },
       { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
     const acceptedId = (getDb().query("SELECT id FROM messages WHERE rowid=?").get(accepted!.id) as any).id;
-    expect(await bound.dispatchAcceptedInput!("web:default", acceptedId, accepted!.id)!()).toBe("settled");
+    const second=await bound.dispatchAcceptedInput!('web:default',acceptedId,accepted!.id)!;
+    expect(await waitForSubmissionProjection(getDb(),second.submission_id,'web:default',1)).toBe('done');
     expect(result).not.toContain('"isError":true');
     const policyState = new PeerState(join(DATA_DIR, "addons", "remote-peer"));
     policyState.put({ ...policyState.peer(remoteId.toString())!, scope: "inbox-only", modes: ["queue", "steer"] });
@@ -111,7 +114,7 @@ applicationTest("Remote Peer actual factory uses network-free transport, execute
     const primary = await admitWebMessage(channel, { chatJid: "web:default", content: "Active primary A", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" },
       { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
     const primaryId = (getDb().query("SELECT id FROM messages WHERE rowid=?").get(primary!.id) as any).id;
-    const running = bound.dispatchAcceptedInput!("web:default", primaryId, primary!.id)!();
+    const running = await bound.dispatchAcceptedInput!('web:default',primaryId,primary!.id)!;
     await entry;
     entered = undefined;
     const peerBody = { epoch: "fixture-epoch", messageId: "steer-B", semantic: { target: "inbox", content: "Authenticated peer B steering marker", mode: "steer", files: [] } };
@@ -124,22 +127,26 @@ applicationTest("Remote Peer actual factory uses network-free transport, execute
     expect(getDb().query("SELECT COUNT(*) AS n FROM messages WHERE content LIKE '%Authenticated peer B steering marker%'").get()).toEqual({ n: 1 });
     expect(broadcasts.some(b => JSON.stringify(b.data).includes("Authenticated peer B steering marker"))).toBe(true);
     releaseHold!();
-    expect(await running).toBe("settled");
+    expect(await waitForSubmissionProjection(getDb(),running.submission_id,'web:default',2)).toBe('done');
     expect(prompts.some(p => p.includes("Authenticated peer B steering marker"))).toBe(true);
     const peerSource = getDb().query("SELECT state FROM service_effect_s01_sources WHERE source_id LIKE '%steer-B%'").get() as any;
     expect(peerSource.state).toBe("consumed");
     const body = { epoch: "fixture-epoch", messageId: "synthetic-message", semantic: { target: "inbox", content: "Actual authenticated peer queue ingress", mode: "queue", files: [] } };
     expect(await ingress(remoteId.toString(), { op: "message", body }, new Uint8Array())).toBeTruthy();
-    const queued = getDeferredQueuedFollowups("web:default");
-    expect(queued).toHaveLength(1);
-    expect(queued[0]!.queuedContent).toContain("Actual authenticated peer queue ingress");
-    expect(getDb().query("SELECT source_id FROM service_effect_s01_sources WHERE source_id=?").get(queued[0]!.source_id!)).toBeTruthy();
+    expect(getDeferredQueuedFollowups('web:default')).toEqual([]);
+    const queued=getDb().query("SELECT b.submission_id,b.source_id FROM piclaw_durable_bindings_v1 b JOIN messages m ON m.chat_jid=b.chat_jid AND m.id=b.source_id WHERE m.content='Actual authenticated peer queue ingress'").get() as {submission_id:number;source_id:string};
+    expect(queued.submission_id).toBeGreaterThan(0);
+    for(let n=0;n<500&&(getDb().query('SELECT status FROM submissions WHERE id=?').get(queued.submission_id) as any).status!=='done';n++)await Bun.sleep(5);
+    expect(getDb().query('SELECT status FROM submissions WHERE id=?').get(queued.submission_id)).toEqual({status:'done'});
+    const sdk=getDb().query('SELECT * FROM submissions ORDER BY id').all(),completedCalls=calls;
     await expect(ingress(remoteId.toString(), { op: "message", body: { ...body, epoch: "stale" } }, new Uint8Array())).rejects.toThrow();
     await backend.close(); backend = undefined;
     expect(closes).toBe(1);
     backend = await createDefaultApplicationRuntime(owner, async () => services, peerOptions);
     expect(calls).toBeGreaterThanOrEqual(6);
-    expect(getDeferredQueuedFollowups("web:default")[0]!.source_id).toBe(queued[0]!.source_id);
+    expect(calls).toBe(completedCalls);
+    expect(getDb().query('SELECT * FROM submissions ORDER BY id').all()).toEqual(sdk);
+    expect(getDb().query('SELECT state FROM service_effect_s01_sources WHERE source_id=?').get(queued.source_id)).toEqual({state:'consumed'});
     await backend.close(); backend = undefined;
     expect(closes).toBe(2);
   } finally { await backend?.close(); owner.release(); await closeDatabase(); }

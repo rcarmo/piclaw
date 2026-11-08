@@ -123,6 +123,13 @@ describe('canonical offline native contract', () => {
     expect(contract.tests).not.toContain('default-application-runtime.test.ts');
   });
 
+  test('retired financial/host-queue owners stay out of the mandatory import graph', () => {
+    for (const file of ['host-regrets-model.test.ts','host-request-write-admission.test.ts']) expect(contract.tests).not.toContain(file);
+    for (const file of ['host-regrets-tool.test.ts','newregrets-enabled-default-factory.test.ts','native-post-provider-contention.test.ts','native-goal-lifecycle.test.ts','goal-settlement.test.ts','model-failure.test.ts','threaded-queued-steering.test.ts']) expect(contract.tests).toContain(file);
+    const retired = /(?:from\s+|import\s*\()\s*["'][^"'\n]*(?:host-request-accounting|host-regrets-model|budget-request-reservations|budget\/model-request-accounting|db\/budget-limits\.[jt]s|queued-followup-lifecycle-service)["']/;
+    for (const file of contract.tests) expect(readFileSync(join(ROOT,'qualification/pi-durable-130',file),'utf8'),file).not.toMatch(retired);
+  });
+
   test('discovery drift, missing suites, duplicates and filtered inventory cannot qualify', () => {
     expect(contract.tests).toEqual([...contract.tests].sort());
     const files = ['a.test.ts', 'b.test.ts'];

@@ -1,11 +1,12 @@
 import { isolatedApplicationTest } from "./src/isolated-application-test.js";
+import { waitForSubmissionProjection } from './src/submission-projection.js';
 import "./src/test-guard.js";
 import { expect } from "bun:test";
 const applicationTest = isolatedApplicationTest(import.meta.url);
 import { cpSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
-import { getDeferredQueuedFollowups, storeChatMetadata } from "../../runtime/src/db.js";
+import { getDeferredQueuedFollowups } from "../../runtime/src/db.js";
 import { acquireRuntimeLock } from "../../runtime/src/runtime/single-instance.js";
 import { createDefaultApplicationRuntime } from "../../runtime/durable-engine/src/default-application-runtime.js";
 
@@ -51,20 +52,27 @@ applicationTest("Regrets-only actual factory executes default decision-off revie
       { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
     expect(admitted).not.toBeNull();
     const id = (getDb().query("SELECT id FROM messages WHERE rowid=?").get(admitted!.id) as any).id;
-    expect(await bound.dispatchAcceptedInput!("web:default", id, admitted!.id)!()).toBe("settled");
+    const receipt=await bound.dispatchAcceptedInput!("web:default",id,admitted!.id)!;
+    expect(await waitForSubmissionProjection(getDb(),receipt.submission_id,'web:default',0)).toBe('done');
     expect(result).toContain("reflections_path"); expect(result).toContain("disabled"); expect(result).not.toContain('"isError":true');
     expect(calls).toBe(2);
     expect(await pool.applySlashCommand("web:default", "/regrets")).toMatchObject({ status: "success" });
     expect(calls).toBe(2);
-    const queued = getDeferredQueuedFollowups("web:default");
+    const queued = getDb().query("SELECT s.source_id,m.content FROM service_effect_s01_sources s JOIN messages m ON m.chat_jid=s.chat_jid AND m.id=s.source_id WHERE s.chat_jid='web:default' AND m.content LIKE '%regrets_review%'").all() as {source_id:string;content:string}[];
     expect(queued).toHaveLength(1);
-    expect(queued[0]!.queuedContent).toContain("regrets_review");
+    expect(queued[0]!.content).toContain("regrets_review");
+    expect(getDeferredQueuedFollowups('web:default')).toEqual([]);
     const sourceId = queued[0]!.source_id;
     expect(sourceId).toBeTruthy();
     expect(getDb().query("SELECT source_id FROM service_effect_s01_sources WHERE source_id=?").get(sourceId!)).toBeTruthy();
+    const binding=getDb().query('SELECT submission_id FROM piclaw_durable_bindings_v1 WHERE source_id=?').get(sourceId) as {submission_id:number};
+    expect(await waitForSubmissionProjection(getDb(),binding.submission_id,'web:default',1)).toBe('done');
+    expect(calls).toBe(3);
+    const sdk=getDb().query('SELECT * FROM submissions ORDER BY id').all();
     await backend.close(); backend = undefined;
     backend = await createDefaultApplicationRuntime(owner, async () => services);
-    expect(calls).toBe(2);
-    expect(getDeferredQueuedFollowups("web:default")[0]!.source_id).toBe(sourceId);
+    expect(calls).toBe(3);
+    expect(getDb().query('SELECT * FROM submissions ORDER BY id').all()).toEqual(sdk);
+    expect(getDb().query("SELECT m.content FROM messages m JOIN service_effect_s01_sources s ON s.chat_jid=m.chat_jid AND s.source_id=m.id WHERE m.id=? AND s.state='consumed'").get(sourceId)).toEqual({content:queued[0]!.content});
   } finally { await backend?.close(); owner.release(); await closeDatabase(); }
 });
