@@ -14,6 +14,7 @@ import {createAgentPoolModelOptions} from '../../runtime/test/model-services-fix
 import Database from 'bun:sqlite';
 import {AgentQueue} from '../../runtime/src/queue.js';
 import {nativeGoalFixture} from './src/native-goal-default-fixture.js';
+import {taskModelRequestScope} from '../../runtime/durable-engine/src/task-model-boundary-shim.js';
 async function until(check:()=>boolean,ms=15000){const end=Date.now()+ms;while(!check()){if(Date.now()>=end)throw Error('Production scheduled boundary not reached');await Bun.sleep(10);}}
 test('default factory scheduled execution uses native SDK authority and leaves host execution/terminal ownership absent',async()=>{
   await stopSchedulerLoop();const f=await nativeGoalFixture();const sent:string[]=[];let stop:(()=>Promise<void>)|undefined;
@@ -158,3 +159,33 @@ for(const mode of modes)test(`direct production scheduled SDK invocation: ${mode
     timerSpy?.mockRestore();factorySpy?.mockRestore();inputSpy?.mockRestore();closeSpy?.mockRestore();await f.close();
   }
 },90000);
+
+
+for(const stage of ['model','tool'] as const)test(`scoped cancellation aborts only its scheduled ${stage} while a writer is held; sibling continues and cleanup joins`,async()=>{
+  await stopSchedulerLoop();const f=await nativeMessageFixture(),cancel=new AbortController(),signals=new Map<string,AbortSignal>(),inputs=new Map<string,AcceptedInput>(),held=barrier(),closed=Promise.withResolvers<void>();
+  let bundle:Awaited<ReturnType<typeof createApplicationBootstrapBundle>>|undefined,pool:AgentPool|undefined,runtime!:HostConversationRuntime,stop:(()=>Promise<void>)|undefined,writer:Database|undefined;
+  let dispatchSpy:ReturnType<typeof spyOn>|undefined,inputSpy:ReturnType<typeof spyOn>|undefined,factorySpy:ReturnType<typeof spyOn>|undefined,closeSpy:ReturnType<typeof spyOn>|undefined;
+  const factory=stores.createCurrentPiclawScheduledRunStore,sent:string[]=[];let returned=0;
+  try{
+    await f.base.close();const resolver=new InMemoryEffectPayloadResolver();
+    bundle=await createApplicationBootstrapBundle({root:f.root,path:(f.root.query('PRAGMA database_list').all()as {name:string;file:string}[]).find(row=>row.name==='main')!.file,ownership:{borrow:()=>f.ownerLease()},manifest:[{chatJid:f.chat,branchId:'main',conversationId:f.base.root.id}],sessions:new Map([[f.chat,'fixture-session']]),offlineInitialize:true,runtime:{incarnation:f.domain,sessionId:'fixture-session',now:()=>new Date().toISOString(),harnessOptions:f.options.harnessOptions},answers:{resolver,put:(ref,text)=>{resolver.putText(ref,text);}},onRuntime:r=>{runtime=r;}},context);
+    const run=runtime.runScheduledInput.bind(runtime);inputSpy=spyOn(runtime,'runScheduledInput').mockImplementation((input,id,signal)=>{inputs.set(input.sourceId,input);return run(input,id,signal);});
+    pool=new AgentPool({...createAgentPoolModelOptions(),...bundle.sessionOptions});const dispatch=pool.dispatchScheduledAgent.bind(pool);
+    dispatchSpy=spyOn(pool,'dispatchScheduledAgent').mockImplementation((lease,options)=>{const signal=lease.record.taskId==='a-cancel'?AbortSignal.any([options!.signal!,cancel.signal]):options!.signal;return dispatch(lease,{signal})!.finally(()=>returned++);});
+    const capture=(signal:AbortSignal|undefined,conversationId:number|undefined)=>{if(!conversationId||!signal)throw Error('Missing scoped tool execution');const binding=f.root.query('SELECT source_id FROM piclaw_durable_bindings_v1 WHERE conversation_id=?').get(conversationId)as {source_id:string};signals.set(binding.source_id,signal);};
+    if(stage==='tool'){f.base.host.toolHold=held;f.base.host.onToolEnter=capture;}else{f.base.host.modelHold=held;f.base.host.onModelEnter=signal=>capture(signal,taskModelRequestScope(signal)?.conversationId);}
+    factorySpy=spyOn(stores,'createCurrentPiclawScheduledRunStore').mockImplementation((db,options)=>{const result=factory(db,options);if(result.ok){const close=db.close.bind(db);closeSpy=spyOn(db,'close').mockImplementation(()=>{close();closed.resolve();});}return result;});
+    const due=new Date(Date.now()-1000).toISOString();for(const id of ['a-cancel','b-survive'])createTask({id,chat_jid:f.chat,prompt:stage==='tool'?'use-tool':'independent model result',task_kind:'agent',schedule_type:'once',schedule_value:due,next_run:due,status:'active',notify_on_complete:false,created_at:due});
+    stop=startSchedulerLoop({queue:{enqueueTask(){throw Error('Host lane must remain unused');}},agentPool:pool,sendMessage:async(_chat:string,text:string)=>{sent.push(text);}}as unknown as SchedulerDeps);
+    await until(()=>signals.size===2);await stop();const rows=f.root.query('SELECT task_id,run_id FROM service_effect_s07_occurrences ORDER BY task_id').all()as {task_id:string;run_id:string}[],first=rows[0]!.run_id,second=rows[1]!.run_id;
+    const input=inputs.get(first)!;let granted=false;
+    for(const forged of [{...input,conversationId:f.base.root.id},{...input,sourceId:'scheduled_run:'+'f'.repeat(64)}])await expect(runtime.withScheduledCancellation(forged,new AbortController().signal,async()=>{granted=true;})).rejects.toThrow();
+    await expect(runtime.withScheduledCancellation(input,new AbortController().signal,async()=>{granted=true;})).rejects.toThrow('already registered');expect(granted).toBe(false);
+    writer=new Database((f.root.query('PRAGMA database_list').all()as {name:string;file:string}[]).find(row=>row.name==='main')!.file);writer.exec('PRAGMA busy_timeout=0;BEGIN IMMEDIATE');cancel.abort(Error('cancel only first scheduled occurrence'));
+    await until(()=>signals.get(first)!.aborted);expect(writer.inTransaction).toBe(true);expect(signals.get(second)!.aborted).toBe(false);expect(returned).toBe(0);expect(f.base.host.effects).toBe(0);expect(f.root.query('SELECT * FROM task_run_logs').all()).toEqual([]);
+    writer.exec('ROLLBACK');await until(()=>returned===1);expect(signals.get(second)!.aborted).toBe(false);expect(f.base.host.effects).toBe(0);
+    held.release();await closed.promise;expect(returned).toBe(2);expect(f.base.host.effects).toBe(stage==='tool'?1:0);expect(sent).toEqual(['synthetic answer']);
+    expect(f.root.query('SELECT task_id,result_status FROM service_effect_s07_occurrences ORDER BY task_id').all()).toEqual([{task_id:'a-cancel',result_status:'error'},{task_id:'b-survive',result_status:'success'}]);
+    expect(f.root.query('SELECT count(*) n FROM task_run_logs').get()).toEqual({n:2});expect(f.root.query('SELECT * FROM service_effect_s02_commits').all()).toEqual([]);expect(f.root.query('PRAGMA foreign_key_check').all()).toEqual([]);
+  }finally{if(writer?.inTransaction)writer.exec('ROLLBACK');writer?.close();cancel.abort();held.release();await stop?.();await stopSchedulerLoop();await bundle?.close();await pool?.shutdown();dispatchSpy?.mockRestore();inputSpy?.mockRestore();factorySpy?.mockRestore();closeSpy?.mockRestore();await f.close();}
+},30000);

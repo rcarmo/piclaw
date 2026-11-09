@@ -1,8 +1,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { canonicalJson } from "../../src/utils/canonical-json.js";
-import type { Context } from "@earendil-works/chord/context";
-import type { AnyTask, RegistryReader, RegistrySnapshot, TaskDefinition, TaskRuntime } from "@earendil-works/pi-durable";
+import {withAbortSignal,type Context} from "@earendil-works/chord/context";
+import type { AnyTask, RegistryReader, RegistrySnapshot, TaskDefinition, TaskRuntime, ConversationId, ToolRegistration } from "@earendil-works/pi-durable";
 
 type Runtime = TaskRuntime<any, any, any, any>;
 type Definition = TaskDefinition<any, any, any, any>;
@@ -43,9 +43,11 @@ export function taskModelToolScope(api: Pick<TaskModelRequestScope, 'taskId' | '
  * callback. Uses exported definitions and RegistryReader, without SDK file or
  * persisted-task mutation. Includes checkpoint recovery and every phase entry.
  * Identity is not dispatch/exactly-once proof. This adapter does not decide
- * admission, suspend phases, retry bodies or own an execution queue.
+ * admission, suspend phases, retry bodies or own an execution queue. Optional
+ * cancellation forwards only to invocation/model/tool signals. SDK commit contexts
+ * and abort handlers remain intact so durable abort/cleanup can still be joined.
  */
-export function withTaskModelRequestScope(registry: RegistryReader): RegistryReader {
+export function withTaskModelRequestScope(registry: RegistryReader, cancellationFor?: (conversationId:ConversationId)=>Promise<AbortSignal|undefined>): RegistryReader {
   const wrapped = new WeakMap<AnyTask, AnyTask>();
   const wrap = (task: AnyTask): AnyTask => {
     const previous = wrapped.get(task);
@@ -54,13 +56,25 @@ export function withTaskModelRequestScope(registry: RegistryReader): RegistryRea
     // this executable-definition boundary; preserve input/checkpoint/outcomes.
     const definition = task.definition as Definition;
     const phases = Object.fromEntries(Object.entries(definition.phases).map(([phase, execute]) => [phase,
-      (record: Parameters<typeof execute>[0], runtime: Runtime, context: Context) => {
+      async (record: Parameters<typeof execute>[0], runtime: Runtime, context: Context) => {
         const requestPhase = definition.name === "pi.generation" && phase === "request"
           || definition.name === "pi.compaction" && phase === "summarize"
           || definition.name === 'pi.tool' && phase === 'call';
         const valid = record?.id === runtime.taskId && record.conversationId === runtime.conversationId
           && record.kind === definition.name && record.version === definition.version && record.state?.status === "running"
           && record.state.checkpoint?.phase === phase;
+        const cancellation=valid?await cancellationFor?.(runtime.conversationId):undefined;
+        if(cancellation){
+          const original=runtime,signal=AbortSignal.any([runtime.signal,cancellation]);
+          const wrapTool=(tool:ToolRegistration):ToolRegistration=>({...tool,execute(args,api,ctx){
+            signal.throwIfAborted();return tool.execute(args,api,withAbortSignal(signal,ctx));
+          }});
+          runtime=new Proxy(original,{get(target,key){
+            if(key==='signal')return signal;
+            if(key==='agent')return async(ctx:Context)=>{const agent=await target.agent(ctx);return {...agent,tools:agent.tools.map(wrapTool),callable:agent.callable.map(wrapTool)};};
+            const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
+          }});
+        }
         const checkpointHash = requestPhase && valid
           ? createHash("sha256").update(canonicalJson({ version: 1, kind: definition.name, taskVersion: definition.version,
             input: record.input, checkpoint: record.state.checkpoint })).digest("hex") : undefined;

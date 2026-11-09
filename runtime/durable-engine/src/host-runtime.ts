@@ -1,5 +1,5 @@
 import { captureInterruptedScheduledHarness } from "./host-scheduled-terminal.js";
-import { taskModelHookScope, taskModelToolScope } from "./task-model-boundary-shim.js";
+import { taskModelHookScope, taskModelToolScope, withTaskModelRequestScope } from "./task-model-boundary-shim.js";
 import { createTrackedBashOperations } from "../../src/tools/tracked-bash.js";
 import { withChatContext } from "../../src/core/chat-context.js";
 import { assertModelContextFits, projectModelContext, prepareModelContextAdmission, type ModelContextAdmission } from "./host-model-context.js";
@@ -291,7 +291,8 @@ export class HostConversationRuntime {
     return promise;
   }
   private constructor(private readonly options: RuntimeSnapshot, private readonly harness: Harness,
-    private readonly storage: Storage, private readonly context: Context) {
+    private readonly storage: Storage, private readonly context: Context,
+    private readonly scheduledSignals:Map<ConversationId,AbortSignal>) {
     harness.subscribeClose(() => { this.storageClosing = true; });
     this.storageEnded = harness.closed.then(end => {
       if (end.kind === "failed") options.onStorageFailure?.(end.error);
@@ -309,13 +310,26 @@ export class HostConversationRuntime {
     let harness: Harness | undefined;
     try {
       options.owner.assert();
-      harness = await Harness.open(storage, options.harnessOptions, context);
+      // Ephemeral signal forwarding only; SDK keeps durable task ownership.
+      const scheduledSignals=new Map<ConversationId,AbortSignal>();
+      const cancellationFor=async(id:ConversationId)=>{
+        if(!scheduledSignals.size)return;
+        const seen=new Set<ConversationId>();
+        for(;;){
+          const signal=scheduledSignals.get(id);if(signal)return signal;
+          if(seen.has(id)||seen.size>=256)throw Error('Invalid scheduled cancellation ownership tree');seen.add(id);
+          const conversation=await storage.conversation(id,withoutAbortSignal(context));
+          if(!conversation?.owner)return;
+          id=conversation.owner.conversationId; // Execution ownership, never history ancestry.
+        }
+      };
+      harness = await Harness.open(storage, {...options.harnessOptions,registry:withTaskModelRequestScope(options.harnessOptions.registry,cancellationFor)}, context);
       options.owner.assert();
       for (const id of options.existingConversationIds) {
         if (!await harness.conversation(id, context)) throw new Error("Missing manifest conversation");
         options.owner.assert();
       }
-      return new HostConversationRuntime(options, harness, storage, context);
+      return new HostConversationRuntime(options, harness, storage, context,scheduledSignals);
     } catch (error) {
       // Failed/uncertain cleanup never releases ownership.
       if (harness) await harness.close(context); else await storage.close(context);
@@ -2496,6 +2510,18 @@ export class HostConversationRuntime {
       await this.assertCompletedHandoff(input, submissionId);
       await this.progress(); this.harness.resume();
     });
+  }
+  /** Register before SDK admission; release only after its abort/cleanup join. */
+  async withScheduledCancellation<T>(input:AcceptedInput,signal:AbortSignal|undefined,body:()=>Promise<T>):Promise<T>{
+    const copy=inputSnapshot(input);this.fence();
+    if(copy.incarnation!==this.options.incarnation||!/^scheduled_run:[a-f0-9]{64}$/.test(copy.sourceId)||copy.requestId!==`scheduled:${copy.sourceId}`
+      ||this.options.conversationFor(copy.chatJid,copy.branchId)===copy.conversationId||this.options.operationConversationFor?.(copy)!==copy.conversationId)
+      throw Error('Exact scheduled cancellation scope required');
+    if(!await this.options.bindings.get(copy))throw Error('Scheduled cancellation binding missing');this.fence();
+    if(!signal)return body();signal.throwIfAborted();
+    if(this.scheduledSignals.has(copy.conversationId))throw Error('Scheduled cancellation scope already registered');
+    this.scheduledSignals.set(copy.conversationId,signal);
+    try{return await body();}finally{this.scheduledSignals.delete(copy.conversationId);}
   }
   /** The SDK owns the admitted scheduled fork's execution and immutable result.
    * S07 owns recurrence/history; lease loss aborts actual work and joins cleanup. */

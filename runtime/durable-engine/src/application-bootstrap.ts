@@ -882,10 +882,12 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       assertLive(); config.assertAdmission?.(); signal?.throwIfAborted();
       const input = await allocateScheduledConversation(lease);
       signal?.throwIfAborted();
-      const id = await runtime.submit(input); assertLive();
-      // S07 owns result/recurrence; its lease lifetime owns cancellation of this
-      // exact fork. No ordinary-message terminal owner or detached wait shim.
-      return runtime.runScheduledInput(input, id, signal);
+      return runtime.withScheduledCancellation(input,signal,async()=>{
+        const id = await runtime.submit(input); assertLive();
+        // Forward local cancellation before a blocked durable abort mark; still
+        // join SDK-owned abort and cleanup before releasing this scope.
+        return runtime.runScheduledInput(input, id, signal);
+      });
     }
     let inputProjection: Parameters<typeof admitWebMessage>[0] | undefined;
     const applicationInput = createApplicationHostInput({root,domain:r.incarnation,assertCurrent:assertLive,
