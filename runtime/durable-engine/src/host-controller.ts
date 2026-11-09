@@ -1,7 +1,7 @@
 // Explicitly opt-in, inactive composition. No registration, schema setup, import or queue.
 import { type Storage, type HarnessInspection } from "@earendil-works/pi-durable";
 import { withoutAbortSignal, type Context } from "@earendil-works/chord/context";
-import { HostConversationRuntime, type AcceptedInput, type RuntimeOptions } from "./host-runtime.js";
+import { HostConversationRuntime, isNativeScheduledInput, type AcceptedInput, type RuntimeOptions } from "./host-runtime.js";
 import { reconstituteAcceptedWork } from "./host-recovery.js";
 import type { HostCutoverController } from "./host-cutover.js";
 import { AcceptedReplyThreadUnavailableError } from "./host-message-thread.js";
@@ -235,7 +235,7 @@ export async function createHostController(config: HostControllerOptions, contex
         // only for cold-start operations: their previous dispatcher no longer exists.
         for (const entry of current) {
           assert();
-          if (entry.role !== "primary" || entry.binding?.submissionId == null || unavailableReplyThreads.has(entry.input.operationId)) continue;
+          if (entry.role !== "primary" || isNativeScheduledInput(entry.input) || entry.binding?.submissionId == null || unavailableReplyThreads.has(entry.input.operationId)) continue;
           const state = await activeRuntime.reconcile(entry.input);
           if ((state.status?.status === "unanswered" && state.status.reason === "model_error") ||
               (startupAnswers.has(entry.input.operationId) && state.status?.status === "done")) {

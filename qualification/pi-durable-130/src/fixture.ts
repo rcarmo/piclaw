@@ -25,7 +25,7 @@ export async function openFixture(owner: { acquired: boolean }, allocated = () =
     finalContent: undefined as AssistantMessage["content"] | undefined, tokens: 0,
     toolHold: undefined as ReturnType<typeof barrier> | undefined,
     toolEntered: barrier(),
-    onToolEnter: undefined as (() => void) | undefined,
+    onToolEnter: undefined as ((signal?:AbortSignal) => void) | undefined,
   };
   function gate(kind: "model" | "tool", key: string, payload: { [key: string]: string }) {
     if (!owner.acquired || !(kind === "model" ? host.modelAllowed : host.toolAllowed)) {
@@ -39,7 +39,7 @@ export async function openFixture(owner: { acquired: boolean }, allocated = () =
     name: "host_effect", description: "Synthetic host counter only", callers: ["model"], replay: "unsafe",
     parameters: Type.Object({ value: Type.String() }),
     execute: async (args, api, callContext) => {
-      host.onToolEnter?.();
+      host.onToolEnter?.(callContext.abortSignal);
       host.toolEntered.release();
       if (host.toolHold) await awaitWithContext(host.toolHold.promise, callContext);
       // Current host permission, not the phase's captured tool selection. No await after admission.

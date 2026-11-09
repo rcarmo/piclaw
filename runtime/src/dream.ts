@@ -383,7 +383,7 @@ async function createDreamBackup(chatJid: string, mode: "manual" | "auto", days:
   return backupPath;
 }
 
-export async function runDreamAgentTurn(options: { chatJid: string; days?: number; mode?: "manual" | "auto"; model?: string | null; agentPool: AgentPool; nativeAuthority?:{invocationId:string;assertCurrent():void} }): Promise<DreamAgentTurnResult> {
+export async function runDreamAgentTurn(options: { chatJid: string; days?: number; mode?: "manual" | "auto"; model?: string | null; agentPool: AgentPool; signal?:AbortSignal; nativeAuthority?:{invocationId:string;assertCurrent():void} }): Promise<DreamAgentTurnResult> {
   const inherited=options.nativeAuthority&&Object.freeze({invocationId:options.nativeAuthority.invocationId,assertCurrent:options.nativeAuthority.assertCurrent.bind(options.nativeAuthority)});
   inherited?.assertCurrent();
   const access = createDreamAccessGuard();
@@ -451,7 +451,7 @@ export async function runDreamAgentTurn(options: { chatJid: string; days?: numbe
     const dailyNotesRefreshed = refreshDailyNotes(chatJid, days);
     const execution = await (async () => {
       try {
-        const output = await options.agentPool.dispatchDreamOperation({invocationId:inherited?.invocationId??crypto.randomUUID(),chatJid,mode,days,model:requestedDreamModel,timeoutMs:getDreamAgentTimeoutMs(),acceptedAt:new Date().toISOString(),assertCurrent:checkAccess});
+        const output = await options.agentPool.dispatchDreamOperation({invocationId:inherited?.invocationId??crypto.randomUUID(),chatJid,mode,days,model:requestedDreamModel,timeoutMs:getDreamAgentTimeoutMs(),acceptedAt:new Date().toISOString(),assertCurrent:checkAccess,signal:options.signal});
         return { ok: true as const, output };
       } catch (error) { return { ok: false as const, error }; }
     })();

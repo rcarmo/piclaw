@@ -160,6 +160,7 @@
     "scheduled-allocation.test.ts",
     "scheduled-terminal-proof.test.ts",
     "scheduled.test.ts",
+    "scheduler-production-lifetime.test.ts",
     "schema-convergence.test.ts",
     "schema-ownership.test.ts",
     "scoped-compaction.test.ts",

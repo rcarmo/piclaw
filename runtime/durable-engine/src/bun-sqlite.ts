@@ -29,13 +29,13 @@ export class BunSqliteDatabase implements SqliteDatabase {
     check();
     return this.writeScope.run({ ...this.writeScope.getStore(), admission: check }, body);
   }
-  private allocatingSource = false;
+  private allocatingSource = 0;
 
   /** Compose public SDK writes and host correlation in the same physical transaction. */
   async withHostSourceGuard<T>(check: () => void, persist: (tx: SqliteExecutor) => Promise<void>, body: () => Promise<T>): Promise<T> {
-    if (!this.guard || this.allocatingSource || this.idleGuard) throw Error("Host source guard unavailable");
-    this.allocatingSource = true;
-    try { check(); return await this.writeScope.run({ ...this.writeScope.getStore(), source: { check, persist } }, body); } finally { this.allocatingSource = false; }
+    if (!this.guard || this.writeScope.getStore()?.source || this.idleGuard) throw Error("Host source guard unavailable");
+    this.allocatingSource++;
+    try { check(); return await this.writeScope.run({ ...this.writeScope.getStore(), source: { check, persist } }, body); } finally { this.allocatingSource--; }
   }
   private readonly identity?: ReturnType<typeof statSync>;
   constructor(private readonly path: string, private readonly guard?: { root: Database; assertOwner(): void; fenceTransactions?: boolean; contentionSignal?: AbortSignal }) {

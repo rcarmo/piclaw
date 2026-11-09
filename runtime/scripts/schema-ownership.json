@@ -14,7 +14,8 @@
     "host.chat-cursors/native-frontier-v1": "{\"base\":\"fc16a0c51d76b7200e263997619d434609afa043\",\"owner\":\"host.chat-cursors\",\"id\":\"native-frontier-v1\",\"migration_order\":1,\"checksum\":\"e5f26cdd5e61243ef522e2cedc1ec175c96df433feed354f6418479a988f72d5\"}",
     "host.chat-cursors/polling-frontier-v1": "{\"base\":\"fc16a0c51d76b7200e263997619d434609afa043\",\"owner\":\"host.chat-cursors\",\"id\":\"polling-frontier-v1\",\"migration_order\":1,\"checksum\":\"539339d735a1b5fa7411e90c948484746a7d71675ebb60e01b860f0d702fb0ef\"}",
     "service_effect_s01/native-harness-binding-v1": "{\"base\":\"75e5b08d5399beb1c3728e4d96ec6fdbebda08bf\",\"owner\":\"service_effect_s01\",\"id\":\"native-harness-binding-v1\",\"migration_order\":2,\"checksum\":\"e88db3dc4c81f5f3dd319ed92a2a79aa92e759d6ae12c6eb1180351daddc0742\"}",
-    "service_effect_s01/retire-harness-mirrors-v1": "{\"base\":\"75e5b08d5399beb1c3728e4d96ec6fdbebda08bf\",\"owner\":\"service_effect_s01\",\"id\":\"retire-harness-mirrors-v1\",\"migration_order\":2,\"checksum\":\"eb5306aba410376f94eb9d4a2c9bcdbbf9ba2fad0337b4d06994143640a9d809\"}"
+    "service_effect_s01/retire-harness-mirrors-v1": "{\"base\":\"75e5b08d5399beb1c3728e4d96ec6fdbebda08bf\",\"owner\":\"service_effect_s01\",\"id\":\"retire-harness-mirrors-v1\",\"migration_order\":2,\"checksum\":\"eb5306aba410376f94eb9d4a2c9bcdbbf9ba2fad0337b4d06994143640a9d809\"}",
+    "service_effect_s01/sdk-scheduled-admission-index-v1": "{\"base\":\"771e500528b3e64cd0634f66d068b7aeff785296\",\"owner\":\"service_effect_s01\",\"id\":\"sdk-scheduled-admission-index-v1\",\"migration_order\":3,\"checksum\":\"c8858ac8795d15c48f46fcf76b77bdc19c78b3e48d240be1c3751150ac9b944a\"}"
   },
   "owners": {
     "core:background-contexts": {
@@ -1825,7 +1826,8 @@
     "index:service_effect_s01_one_active_operation": {
       "owner": "core:service_effect_s01_operations",
       "fingerprints": [
-        "e846d9a8fb33c0620fe6c02a90fc6b8ad843268ab535964165186083b3fd8bf2"
+        "e846d9a8fb33c0620fe6c02a90fc6b8ad843268ab535964165186083b3fd8bf2",
+        "0a85736c5103d19b1bc3b5a74c138b73e2e9efd43c39124ec4ff408546de5ef7"
       ],
       "requiredIn": [
         "core",

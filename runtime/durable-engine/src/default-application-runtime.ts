@@ -1327,7 +1327,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
           if(interaction)terminalBroadcast?.("new_post",interaction as unknown as Record<string,unknown>);
           if(goal&&!result.answer?.processExit)wakeGoalFollowups(input.chatJid);
         },
-    onMaintenanceSettled(workId) { codexServices?.releaseTurn(workId); assert(); },
+    onExecutionSettled(workId) { codexServices?.releaseTurn(workId); assert(); },
     async onOperationSettled(operationId, processExit) {
       codexServices?.releaseTurn(operationId);
       assert();
@@ -1437,6 +1437,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   }
   if (!offlineMaintenance) await bundle.retryRecoveredWork();
   const dispatchDreamOperation=async(request:NativeDreamRequest):Promise<AgentOutput>=>{
+    const signal=request.signal??new AbortController().signal;signal.throwIfAborted();
     assertAdmission();const checkInvocation=request.assertCurrent.bind(request);checkInvocation();
     const invocation=Object.freeze({invocationId:request.invocationId,chatJid:request.chatJid,mode:request.mode,days:request.days,model:request.model,timeoutMs:request.timeoutMs,acceptedAt:request.acceptedAt});
     if(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(invocation.invocationId)||!invocation.chatJid||!['manual','auto'].includes(invocation.mode)||!Number.isSafeInteger(invocation.days)||invocation.days<1||!Number.isSafeInteger(invocation.timeoutMs)||invocation.timeoutMs<1)throw Error('Invalid Dream invocation');
@@ -1453,7 +1454,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     if(dreamOwners.has(payload.policy.sourceId))throw Error('Dream invocation already has a live owner');
     dreamOwners.set(payload.policy.sourceId,{payload,assertCurrent:checkInvocation});
     try{
-      assertDreamCurrent(payload);const result=await bundle.dispatchDreamPayload(payload,new AbortController().signal);checkInvocation();
+      assertDreamCurrent(payload);const result=await bundle.dispatchDreamPayload(payload,signal);checkInvocation();
       if(result.status==='success'&&codex&&result.result){
         try {
           result.result=await renderCodexAnswer(root,WORKSPACE_DIR,identity.chatJid,payload.policy.sourceId,result.result,()=>{assert();checkInvocation();});
