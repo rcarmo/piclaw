@@ -1,3 +1,4 @@
+import {historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import { waitForSubmissionProjection } from './src/submission-projection.js';
 import { repoRoot } from "./src/repo-root.js";
 import { isolatedApplicationTest } from "./src/isolated-application-test.js";
@@ -169,7 +170,7 @@ for (const scenario of ["write", "model", "sse", "broken-sse"] as const) applica
     const pool = new AgentPool({ credentialStore: createTestCredentialStore({}), modelRuntime: runtime, modelRegistry: services.modelRegistry, ...backend.sessionOptions } as never);
     const bound = backend.bind({ queue: base.queue, agentPool: pool });
     const channel = new WebChannel(bound);
-    const priorReservations = new Set((getDb().query("SELECT id FROM budget_request_reservations").all() as {id:string}[]).map(r=>r.id));
+    const priorReservations = new Set((historicalExpenseRows(getDb(),['budget_request_reservations'])[0] as {id:string}[]).map(r=>r.id));
     const priorBotCount = (getDb().query("SELECT count(*) AS n FROM messages WHERE is_bot_message=1").get() as {n:number}).n;
     const admitted = await admitWebMessage(channel, { chatJid: "web:default", content: "Reply with a short synthetic result", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" }, { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
     expect(admitted).not.toBeNull();
@@ -185,10 +186,10 @@ for (const scenario of ["write", "model", "sse", "broken-sse"] as const) applica
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       // Native model-error settlement consumes the accepted input once and releases the lane.
       expect(outcome).toBe(scenario === "broken-sse" ? "unanswered" : "done");
-      const reservations = (getDb().query("SELECT * FROM budget_request_reservations").all() as any[]).filter(r => !priorReservations.has(r.id));
+      const reservations = (historicalExpenseRows(getDb(),['budget_request_reservations'])[0] as any[]).filter(r => !priorReservations.has(r.id));
       expect(reservations).toEqual([]);
       expect(getDb().query("SELECT input_tokens,output_tokens,api_equivalent_cost_microusd FROM token_usage").all()).toEqual([{input_tokens:3,output_tokens:2,api_equivalent_cost_microusd:5}]);
-      const financeBefore=['budget_work','budget_request_reservations','budget_usage_events'].map(table=>getDb().query(`SELECT * FROM ${table}`).all());
+      const financeBefore=historicalExpenseRows(getDb(),['budget_work','budget_request_reservations','budget_usage_events']);
       const tree = JSON.stringify(await backend.sessionOptions.getDurableSession!("web:default")!.readTree!());
       expect(tree).not.toContain("owned synthetic codex terminal");
       expect(tree).not.toContain("PRIVATE_SYNTHETIC_CAPTURE_FAILURE");
@@ -223,7 +224,7 @@ for (const scenario of ["write", "model", "sse", "broken-sse"] as const) applica
       expect(backend.close()).toBe(closing);
       expect(await backend.close().catch(error => error)).toBe(firstError);
       expect(joined).toBe(1);
-      expect(['budget_work','budget_request_reservations','budget_usage_events'].map(table=>getDb().query(`SELECT * FROM ${table}`).all())).toEqual(financeBefore);
+      expect(historicalExpenseRows(getDb(),['budget_work','budget_request_reservations','budget_usage_events'])).toEqual(financeBefore);
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       expect(reservations).toEqual([]);
       backend = undefined;
@@ -232,7 +233,7 @@ for (const scenario of ["write", "model", "sse", "broken-sse"] as const) applica
     if (fixtureError) throw fixtureError;
     expect(outcome).toBe(scenario === "broken-sse" ? "unanswered" : "done");
     expect(calls).toBe((scenario === "write" || scenario === "model") ? 2 : 1);
-    const reservations = (getDb().query("SELECT * FROM budget_request_reservations").all() as any[]).filter(r => !priorReservations.has(r.id));
+    const reservations = (historicalExpenseRows(getDb(),['budget_request_reservations'])[0] as any[]).filter(r => !priorReservations.has(r.id));
     expect(reservations).toEqual([]);
     const reports=getDb().query("SELECT total_tokens,provider,model FROM token_usage ORDER BY id").all();
     expect(reports).toHaveLength(calls);

@@ -675,7 +675,7 @@ export function permanentDeleteArchivedBranch(chatJid: string): PermanentDeleteA
     deleteThinkingContentByChatJid(branch.chat_jid);
     db.prepare(`DELETE FROM messages WHERE chat_jid = ?`).run(branch.chat_jid);
     db.prepare(`DELETE FROM chat_cursors WHERE chat_jid = ?`).run(branch.chat_jid);
-    deleted.token_usage = db.prepare(`DELETE FROM token_usage WHERE chat_jid = ? AND ${unlinkedUsageReportPredicate("token_usage")}`).run(branch.chat_jid).changes;
+    deleted.token_usage = db.prepare(`DELETE FROM token_usage WHERE chat_jid = ? AND ${unlinkedUsageReportPredicate(db, "token_usage")}`).run(branch.chat_jid).changes;
     db.prepare(`DELETE FROM ssh_configs WHERE chat_jid = ?`).run(branch.chat_jid);
     db.prepare(`DELETE FROM proxmox_configs WHERE chat_jid = ?`).run(branch.chat_jid);
     db.prepare(`DELETE FROM portainer_configs WHERE chat_jid = ?`).run(branch.chat_jid);

@@ -25,7 +25,6 @@ import { initializeOwnedForkSchema } from "./owned-forks.js";
 import { initializeAuthLabelsSchema } from "./auth-labels-schema.js";
 import { initializePickerPins } from './picker-pins.js';
 import { initializeToolOutputOwnership } from './tool-output-ownership-schema.js';
-import { initializeBudgetLimitsSchema } from './budget-limits-schema.js';
 import { initializeAddonOperationsSchema } from './addon-operations-schema.js';
 import { initializeChatProjects } from './chat-project-schema.js';
 import { initializeScheduledHistorySchema } from './scheduled-history-schema.js';
@@ -879,7 +878,6 @@ function initializeSchema(database: Database): void {
   ensureMessageColumns(database);
   ensureKeychainNoteColumns(database);
   ensureTokenUsageColumns(database);
-  initializeBudgetLimitsSchema(database);
   initializeAddonOperationsSchema(database);
   ensureScheduledTaskColumns(database);
   installScheduledRunCompositionSchema(database);

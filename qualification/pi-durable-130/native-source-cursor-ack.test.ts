@@ -1,3 +1,4 @@
+import {historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import './src/test-guard.js';
 import {expect,spyOn} from 'bun:test';
 import {isolatedApplicationTest} from './src/isolated-application-test.js';
@@ -54,7 +55,7 @@ for(const fault of ['source-state','source-frontier','polling-cursor'] as const)
     expect(f.calls()).toBe(2);expect(f.root.query('SELECT * FROM submissions ORDER BY id').all()).toEqual(final);expect(f.root.query('SELECT * FROM entries ORDER BY id').all()).toEqual(finalEntries);
     expect(f.root.query('SELECT consumed_through_source_seq FROM service_effect_s01_chats WHERE chat_jid=?').get('web:default')).toEqual({consumed_through_source_seq:2});
     const repairedCursor=f.root.query('SELECT cursor_ts FROM chat_cursors WHERE chat_jid=?').get('web:default') as {cursor_ts:string};expect(repairedCursor.cursor_ts>=source.timestamp).toBe(true);
-    for(const table of ['service_effect_s01_operations','service_effect_s02_commits','budget_request_reservations','budget_usage_events'])expect(f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
+    for(const table of ['service_effect_s01_operations','service_effect_s02_commits','budget_request_reservations','budget_usage_events'])expect(table.startsWith('budget_') ? historicalExpenseRows(f.root,[table])[0] : f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
   }finally{f.root.exec('DROP TRIGGER IF EXISTS fail_native_source_ack');await f.close();}
 },30000);
 

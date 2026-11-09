@@ -1,3 +1,5 @@
+import {installHistoricalExpenseFixture} from '../../runtime/test/fixtures/historical-expense.js';
+import {historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import './src/test-guard.js';
 import { expect, spyOn } from 'bun:test';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -18,6 +20,7 @@ applicationTest('actual Dream retains source-bound tools, private history and no
     : [{ type: 'text', text: 'Private Dream completed' }]);
   const legacy = (['submit', 'wait', 'settle', 'reconcile'] as const).map(method => spyOn(HostConversationRuntime.prototype, method).mockImplementation(() => { throw Error('Dream must not use host lifecycle: ' + method); }));
   try {
+    installHistoricalExpenseFixture(f.root);
     f.root.query("INSERT INTO budget_work(id,chat_jid,execution_kind,status,created_at,updated_at) VALUES('retired-a2a-finance','operation:retired','background','paused','2026-01-01','2026-01-01')").run();
     f.root.query("INSERT INTO budget_caps(id,scope,metric,amount,work_id,created_at,updated_at) VALUES('retired-a2a-cap','task','api_usd_micros',0,'retired-a2a-finance','2026-01-01','2026-01-01')").run();
     f.root.query("INSERT INTO budget_request_reservations(id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,state,created_at,updated_at) VALUES('retired-a2a-hold','retired-a2a-finance','operation:retired','fixture','unpriced','opaque-old-account',?,'unresolved','2026-01-01','2026-01-01')").run('a'.repeat(64));
@@ -197,6 +200,6 @@ applicationTest('Dream automatic compaction retains its exact SDK task and input
     expect(compactions).toBeGreaterThan(0);
     const tasks = f.root.query("SELECT record FROM tasks WHERE kind=json_quote('pi.compaction')").all() as { record: string }[];
     expect(tasks).toHaveLength(1); expect(JSON.parse(tasks[0]!.record)).toMatchObject({ input: { reason: 'threshold' }, state: { status: 'terminal', outcome: { status: 'completed' } } });
-    for (const table of ['service_effect_s01_operations', 'service_effect_s02_commits']) expect(f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
+    for (const table of ['service_effect_s01_operations', 'service_effect_s02_commits']) expect(table.startsWith('budget_') ? historicalExpenseRows(f.root,[table])[0] : f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
   } finally { source.mockRestore(); settings.mockRestore(); await f.close(); }
 }, 30000);

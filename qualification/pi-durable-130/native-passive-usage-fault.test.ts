@@ -1,3 +1,5 @@
+import {installHistoricalExpenseFixture} from '../../runtime/test/fixtures/historical-expense.js';
+import {historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import './src/test-guard.js';
 import {expect} from 'bun:test';
 import {join} from 'node:path';
@@ -10,8 +12,9 @@ for(const fault of [false,true])applicationTest(`actual native tool and next mod
   const file=join(process.env.PICLAW_WORKSPACE!,'native-owned-write.txt');
   const f=await nativeGoalFixture(false,false,attempt=>attempt===1?[{type:'toolCall',id:'native-write',name:'write',arguments:{path:file,content:'One owned native tool effect'}}]:[{type:'text',text:'Native tool completed without financial admission'}]);
   try{
+    installHistoricalExpenseFixture(f.root);
     f.root.query("INSERT INTO budget_caps(id,scope,metric,amount,timezone,created_at,updated_at) VALUES ('historical-tool-cap','instance_daily','api_usd_micros',0,'UTC','2020-01-01T00:00:00.000Z','2020-01-01T00:00:00.000Z')").run();
-    const history=()=>['budget_caps','budget_work','budget_request_reservations','budget_usage_events'].map(table=>f.root.query(`SELECT * FROM ${table} ORDER BY rowid`).all()),before=history();
+    const history=()=>historicalExpenseRows(f.root,['budget_caps','budget_work','budget_request_reservations','budget_usage_events']),before=history();
     if(fault)f.root.exec("CREATE TEMP TRIGGER fail_passive_usage BEFORE INSERT ON token_usage BEGIN SELECT RAISE(ABORT,'synthetic reporting failure'); END");
     const accepted=await f.send('Write the explicitly approved fixture output and reply');await f.entered.promise;expect(existsSync(file)).toBe(false);f.held.release();
     await f.until(()=>f.root.query("SELECT 1 FROM messages WHERE is_bot_message=1 AND content='Native tool completed without financial admission'").get()!==null);

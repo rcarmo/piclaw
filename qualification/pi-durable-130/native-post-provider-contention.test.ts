@@ -1,3 +1,4 @@
+import {historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import './src/test-guard.js';
 import {expect,spyOn} from 'bun:test';
 import {Database} from 'bun:sqlite';
@@ -34,7 +35,7 @@ for(const stop of [false,true])applicationTest(`actual native SDK post-provider 
       await f.reopen();expect(f.calls()).toBe(1);expect(f.root.query('SELECT record FROM submissions WHERE id=?').get(accepted.submission_id)).toEqual(original);
       const position=f.backend.sessionOptions.getDurableSession!('web:default')!,scope=await position.readAbortScope!();expect(scope).not.toBeNull();
       expect(await position.abort!(scope!)).toBe(true);expect(f.status(accepted.submission_id)).toBe('unanswered');expect(f.calls()).toBe(1);
-      expect(f.root.query('SELECT * FROM budget_request_reservations').all()).toEqual([]);expect(f.root.query('SELECT * FROM budget_usage_events').all()).toEqual([]);expect(f.root.query('SELECT * FROM service_effect_s02_commits').all()).toEqual([]);
+      expect(historicalExpenseRows(f.root,['budget_request_reservations'])[0]).toEqual([]);expect(historicalExpenseRows(f.root,['budget_usage_events'])[0]).toEqual([]);expect(f.root.query('SELECT * FROM service_effect_s02_commits').all()).toEqual([]);
       return;
     }
     const deadline=Date.now()+22000;
@@ -45,7 +46,7 @@ for(const stop of [false,true])applicationTest(`actual native SDK post-provider 
     expect(JSON.parse(assistant.record).model[0]).toMatchObject({role:'assistant',stopReason:'stop',content:[{type:'text',text:'Original native response after contention'}],usage:{totalTokens:2}});
     expect(firstFailure).toBeGreaterThan(startedAt);expect(releasedAt-firstFailure).toBeGreaterThanOrEqual(10200);expect(lastFailure-firstFailure).toBeGreaterThanOrEqual(9800);expect(acquiredAt).toBeGreaterThanOrEqual(releasedAt);expect(ticks).toBeGreaterThan(20);
     const record=f.root.query('SELECT record FROM submissions WHERE id=?').get(accepted.submission_id),calls=f.calls();
-    expect(f.root.query('SELECT * FROM budget_request_reservations').all()).toEqual([]);expect(f.root.query('SELECT * FROM budget_usage_events').all()).toEqual([]);expect(f.root.query('SELECT * FROM service_effect_s01_operations').all()).toEqual([]);expect(f.root.query('SELECT * FROM service_effect_s02_commits').all()).toEqual([]);
+    expect(historicalExpenseRows(f.root,['budget_request_reservations'])[0]).toEqual([]);expect(historicalExpenseRows(f.root,['budget_usage_events'])[0]).toEqual([]);expect(f.root.query('SELECT * FROM service_effect_s01_operations').all()).toEqual([]);expect(f.root.query('SELECT * FROM service_effect_s02_commits').all()).toEqual([]);
     await f.reopen();expect(f.calls()).toBe(calls);expect(f.root.query('SELECT record FROM submissions WHERE id=?').get(accepted.submission_id)).toEqual(record);
   }finally{clearInterval(pulse);clearTimeout(releaseTimer);if(writer?.inTransaction)writer.exec('ROLLBACK');writer?.close();spy.mockRestore();await f.close();}
 },30000);

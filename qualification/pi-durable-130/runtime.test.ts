@@ -1,3 +1,5 @@
+import {installHistoricalExpenseFixture} from '../../runtime/test/fixtures/historical-expense.js';
+import {historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import { createHostCommandPolicy } from "../../runtime/durable-engine/src/host-command-policy.js";
 import "./src/test-guard.js";
 import { createInputHandoffCompletion } from "../../runtime/durable-engine/src/host-bindings.js";
@@ -1312,6 +1314,7 @@ for (const disposition of ['completed', 'failed'] as const) test(`runtime: histo
   // Seed inert pre-existing history; never reconstruct a financial owner or
   // modify/reapply migration SQL to manufacture financial authority.
   const binding={id:"historical-finishing",workId:"historical-finishing-work"};
+  installHistoricalExpenseFixture(f.db);
   f.db.query("INSERT INTO budget_work(id,chat_jid,execution_kind,created_at,updated_at) VALUES (?,?,'interactive',?,?)").run(binding.workId,input.chatJid,at,at);
   f.db.query("INSERT INTO budget_request_reservations(id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,amount_microusd,state,created_at,updated_at) VALUES (?,?,?,'fixture','fixture-model','old-account',?,60,'unresolved',?,?)").run(binding.id,binding.workId,input.chatJid,"a".repeat(64),at,at);
   const hold=f.db.query("SELECT * FROM budget_request_reservations WHERE id=?").get(binding.id),calls=f.base.host.modelCalls;
@@ -1353,12 +1356,13 @@ for (const state of ['dispatched', 'unresolved'] as const) test(`runtime: interr
     modelInvocation: { version: 1 as const, domain: 'runtime', operationId: input.operationId,
       conversationId: task.conversation_id, taskId: task.id, taskKind: 'pi.generation' as const, phase: 'request' as const, checkpointHash: 'd'.repeat(64) } };
   // Persisted financial facts are inert, including an attributed unknown send.
+  installHistoricalExpenseFixture(f.db);
   f.db.query("INSERT INTO budget_work(id,chat_jid,execution_kind,created_at,updated_at) VALUES (?,?,'interactive',?,?),(?,?,'interactive',?,?)").run(parentWorkId,input.chatJid,at,at,binding.workId,input.chatJid,at,at);
   f.db.query("UPDATE budget_work SET parent_work_id=? WHERE id=?").run(parentWorkId,binding.workId);
   f.db.query("INSERT INTO budget_request_reservations(id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,amount_microusd,state,created_at,updated_at,model_invocation_json,model_invocation_key_sha256) VALUES (?,?,?,?,?,?,?,60,?,?,?,?,?)").run(binding.id,binding.workId,input.chatJid,binding.providerId,binding.modelId,binding.accountRef,"a".repeat(64),state,at,at,JSON.stringify(binding.modelInvocation),"d".repeat(64));
   const hold=f.db.query("SELECT * FROM budget_request_reservations WHERE id=?").get(binding.id) as {terminal_evidence_version:number;terminal_receipt_json:string|null},calls=f.base.host.modelCalls;
-  const financial = () => ({ requests: f.db.query('SELECT * FROM budget_request_reservations').all(),
-    work: f.db.query('SELECT * FROM budget_work ORDER BY id').all(), usage: f.db.query('SELECT * FROM token_usage').all() });
+  const financial = () => ({ requests: historicalExpenseRows(f.db,['budget_request_reservations'])[0],
+    work: historicalExpenseRows(f.db,['budget_work'])[0], usage: f.db.query('SELECT * FROM token_usage').all() });
   const money = financial(), tasks = f.db.query('SELECT * FROM tasks ORDER BY id').all();
   expect(hold?.terminal_evidence_version).toBe(1);
   expect(hold?.terminal_receipt_json).toBeNull();

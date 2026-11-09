@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test";
-import "../helpers.js";
+import { createTempWorkspace } from "../helpers.js";
+import { join } from 'node:path';
+import { readUsageProjectionEvent } from '../../src/db/usage-report-projection.js';
 import * as dbApi from "../../src/db.js";
-import { getDb, initDatabase } from "../../src/db/connection.js";
+import { getDb, initDatabase, initializeDatabaseSchema } from "../../src/db/connection.js";
+import { installHistoricalExpenseFixture } from '../fixtures/historical-expense.js';
+import { Database } from 'bun:sqlite';
 import { recordMessageUsage } from "../../src/agent-pool/usage.js";
 
 function financialSnapshot() {
@@ -10,8 +14,37 @@ function financialSnapshot() {
   return tables.map(({name}) => [name, database.query(`SELECT * FROM ${name} ORDER BY rowid`).all()]);
 }
 
+test('fresh roots create passive reports without financial tables, triggers or migration receipts', () => {
+  initDatabase(); const database=getDb();
+  expect(database.query("SELECT name FROM main.sqlite_schema WHERE name GLOB 'budget_*'").all()).toEqual([]);
+  expect(database.query("SELECT * FROM piclaw_schema_migrations WHERE owner IN ('host.budget-request-reservations','host.usage-reports')").all()).toEqual([]);
+  expect(readUsageProjectionEvent(database,'absent-historical-event')).toBeNull();
+  recordMessageUsage('web:fresh-no-finance',{id:'fresh-usage',role:'assistant',provider:'fixture',usage:{input:1,output:2,providerCost:0}});
+  expect(database.query("SELECT total_tokens,provider_cost_total,cost_provenance FROM token_usage WHERE chat_jid='web:fresh-no-finance'").get()).toEqual({total_tokens:3,provider_cost_total:0,cost_provenance:'provider_reported'});
+  initializeDatabaseSchema(database);
+  expect(database.query("SELECT name FROM main.sqlite_schema WHERE name GLOB 'budget_*'").all()).toEqual([]);
+});
+
+test('historical financial schema and opaque evidence reopen without migration, repair or deletion', () => {
+  initDatabase(); const workspace=createTempWorkspace('historical-finance-');
+  const path=join(workspace.store,'historical.sqlite');let copy=new Database(path);
+  try{
+    initializeDatabaseSchema(copy);installHistoricalExpenseFixture(copy);
+    copy.exec("INSERT INTO budget_work(id,chat_jid,execution_kind,status,created_at,updated_at) VALUES('old','web:old','interactive','paused','old','old'); INSERT INTO budget_request_reservations(id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,state,created_at,updated_at) VALUES('unresolved','old','web:old','fixture','unpriced','opaque','binding','unresolved','old','old');");
+    const schema=copy.query('SELECT type,name,sql FROM main.sqlite_schema ORDER BY type,name').all();
+    const history=copy.query('SELECT * FROM budget_request_reservations').all();
+    const receipts=copy.query('SELECT * FROM piclaw_schema_migrations ORDER BY owner,id').all();
+    copy.close();copy=new Database(path);
+    initializeDatabaseSchema(copy);
+    expect(copy.query('SELECT type,name,sql FROM main.sqlite_schema ORDER BY type,name').all()).toEqual(schema);
+    expect(copy.query('SELECT * FROM budget_request_reservations').all()).toEqual(history);
+    expect(copy.query('SELECT * FROM piclaw_schema_migrations ORDER BY owner,id').all()).toEqual(receipts);
+    expect(copy.query('PRAGMA foreign_key_check').all()).toEqual([]);
+  }finally{copy.close();workspace.cleanup();}
+});
+
 test("passive token telemetry ignores historical caps/unknown prices and never settles financial history", () => {
-  initDatabase(); const database = getDb();
+  initDatabase(); const database = getDb();installHistoricalExpenseFixture(database);
   database.query(`INSERT INTO budget_work(id,chat_jid,execution_kind,status,created_at,updated_at)
     VALUES('retired-work','web:retired','interactive','paused','2026-01-01','2026-01-01')`).run();
   database.query(`INSERT INTO budget_caps(id,scope,metric,amount,work_id,created_at,updated_at)
@@ -45,7 +78,7 @@ test('scheduler polling neither delivers nor acknowledges historical expense-sto
   const {createTask}=await import('../../src/db/tasks.js');
   const {createCurrentPiclawScheduledRunStore}=await import('../../src/service-effects/current-piclaw/scheduled-run-store.js');
   const {pollScheduledRunsOnce}=await import('../../src/task-scheduler.js');
-  initDatabase();const database=getDb();
+  initDatabase();const database=getDb();installHistoricalExpenseFixture(database);
   database.query("INSERT INTO budget_work(id,chat_jid,execution_kind,status,created_at,updated_at) VALUES ('old-scheduled-expense-stop','web:retired-scheduler','scheduled','stopped','2020-01-01','2020-01-01')").run();
   database.query("INSERT INTO budget_decisions(id,work_id,boundary,decision,blockers_json,notification_key,notification_status,created_at) VALUES ('old-undelivered-decision','old-scheduled-expense-stop','model_call','stop','[]','old-notification','pending','2020-01-01')").run();
   createTask({id:'retirement-poll-candidate',chat_jid:'web:retired-scheduler',prompt:'Fixture must not execute',model:null,task_kind:'shell',command:'exit 0',cwd:null,timeout_sec:null,notify_on_complete:false,schedule_type:'once',schedule_value:'2020-01-01T00:00:00.000Z',next_run:'2020-01-01T00:00:00.000Z',status:'active',created_at:'2020-01-01T00:00:00.000Z'});

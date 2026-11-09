@@ -1,3 +1,5 @@
+import {installHistoricalExpenseFixture} from '../../runtime/test/fixtures/historical-expense.js';
+import {historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import './src/test-guard.js';
 import {expect,spyOn} from 'bun:test';
 import {join} from 'node:path';
@@ -24,7 +26,7 @@ for(const when of ['before-startup','after-startup'] as const)applicationTest(`n
   let calls=0;const deny=()=>{calls++;throw Error('Model metadata cannot invoke a provider');};
   runtime.registerNativeProvider({id:model.provider,name:'Fixture',getModels:()=>[model,other],auth:{apiKey:{name:'Keyless fixture',resolve:async()=>({auth:{},source:'fixture'})}},stream:deny,streamSimple:deny});
   await runtime.refresh({allowNetwork:false});await runtime.getAvailable();const modelRegistry=new PiclawModelRegistry(runtime),services={modelRuntime:runtime,modelRegistry,credentialStore:credentials,agentDir:getPiclawAgentDir()};
-  const seed=()=>root.query("INSERT INTO budget_caps(id,scope,metric,amount,timezone,created_at,updated_at) VALUES ('historical-zero','instance_daily','api_usd_micros',0,'UTC','2020-01-01T00:00:00.000Z','2020-01-01T00:00:00.000Z')").run();
+  const seed=()=>{installHistoricalExpenseFixture(root);return root.query("INSERT INTO budget_caps(id,scope,metric,amount,timezone,created_at,updated_at) VALUES ('historical-zero','instance_daily','api_usd_micros',0,'UTC','2020-01-01T00:00:00.000Z','2020-01-01T00:00:00.000Z')").run();};
   if(when==='before-startup')seed();
   const sdkSpies=[spyOn(SessionManager,'create'),spyOn(SessionManager,'open'),spyOn(SessionManager,'inMemory')];
   let backend:Awaited<ReturnType<typeof createDefaultApplicationRuntime>>|undefined,pool:AgentPool|undefined,channel:WebChannel|undefined;
@@ -34,7 +36,7 @@ for(const when of ['before-startup','after-startup'] as const)applicationTest(`n
     pool=new AgentPool({credentialStore:credentials,modelRuntime:runtime,modelRegistry,...backend.sessionOptions} as any);
     const bound=backend.bind({queue:base.queue,agentPool:pool});channel=new WebChannel(bound);
     if(when==='after-startup')seed();
-    const financial=()=>['budget_caps','budget_work','budget_request_reservations','budget_usage_events','token_usage'].map(table=>root.query(`SELECT * FROM ${table} ORDER BY rowid`).all());
+    const financial=()=>historicalExpenseRows(root,['budget_caps','budget_work','budget_request_reservations','budget_usage_events','token_usage']);
     const before=financial(),first=backend.sessionOptions.getDurableSession!('web:default')!,identity=first.sessionId;
     const catalogue=await pool.getAvailableModels('web:default',{includeProviderUsage:false,includeProviderDiagnostics:false});
     expect(catalogue.model_options?.find(entry=>entry.provider===model.provider&&entry.id===model.id)?.pricing).toMatchObject({input_per_million:0.25,output_per_million:1.25});
