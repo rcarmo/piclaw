@@ -28,6 +28,16 @@ Retention preview and apply observe a consistent SQLite transaction. Apply re-re
 
 The offline recovery qualifier includes historical work/request tables in its before/after fingerprint when present, without requiring them in a fresh recovery unit. Required SDK and accepted-source tables remain mandatory.
 
+## Scheduled-history reference follow-up
+
+S07 retention no longer joins or classifies financial reservation states. The existing store protects a terminal occurrence whenever an original `budget_work.scheduled_task_id` references its task, regardless of state or whether a reservation exists. A retained reservation table without the work table is insufficient evidence for deletion, so the store retains history conservatively. With neither table present, ordinary retention proceeds.
+
+One private structural-reference predicate serves native preview/apply and the old cleanup entry point. The legacy route retains its original selection and replay contracts; it does not acquire the stricter, different native eligibility policy. No other owner, queue, ledger, schema or financial lifecycle is introduced. Historical rows are read only, and the task-ID lookup can use the existing historical index.
+
+The predicate adds five net production lines to cover both entry points and incomplete historical schema. Combined with the preceding schema retirement, the #1878 production reduction is 396 physical lines. Tests and archived SQL remain separately charged.
+
+Coverage includes every original reservation state, opaque future state, work-only and request-only schemas, unrelated task references, malformed mappings, temporary shadows, references arriving between preview/apply, whole-page refusal, lost ACK/reopen replay and fresh occurrence admission for the same referenced task. A shared real SDK database control retains the original financial rows and SDK identities, retires only an unreferenced terminal occurrence, and makes no model or credential call.
+
 ## Tests and package boundary
 
 - Fresh-root regression proves no financial objects or financial migration receipts are created, while real usage reporting succeeds.
