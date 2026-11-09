@@ -326,9 +326,13 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
     if(hasScheduledHistoryProjection(this.database)&&this.database.query("SELECT 1 FROM main.task_run_logs WHERE occurrence_id=? OR (task_id=? AND ?='task_run_log:'||id)").get(row.run_id,row.task_id,row.result_ref))return false;
     if(this.database.query(`SELECT 1 FROM main.${LINKS} l JOIN main.service_effect_s05_outbox o ON o.outbox_id=l.outbox_id WHERE l.run_id=? AND
       (o.state IN ('pending','started','unknown') OR o.certainty='unknown' OR o.retry_at IS NOT NULL)`).get(row.run_id))return false;
-    const budget=this.database.query("SELECT 1 FROM main.sqlite_schema WHERE type='table' AND name='budget_request_reservations'").get();
-    if(budget&&this.database.query("SELECT 1 FROM main.budget_work w JOIN main.budget_request_reservations r ON r.work_id=w.id WHERE w.scheduled_task_id=? AND r.state IN ('reserved','dispatched','unresolved')").get(row.task_id))return false;
-    return true;
+    return !this.hasHistoricalTaskReference(row.task_id);
+  }
+  private hasHistoricalTaskReference(taskId:string):boolean {
+    // Historical task references are data, not a financial lifecycle. Missing
+    // work mapping with a retained request table cannot prove safe deletion.
+    const history=this.database.query("SELECT name FROM main.sqlite_schema WHERE type='table' AND name IN ('budget_work','budget_request_reservations')").all() as {name:string}[];
+    return history.length>0&&(!history.some(table=>table.name==='budget_work')||!!this.database.query("SELECT 1 FROM main.budget_work WHERE scheduled_task_id=?").get(taskId));
   }
 
   private async mutate<T>(
@@ -684,6 +688,7 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
       ).all(request.settledBefore, request.limit) as RunRow[];
       const runIds: string[] = [];
       for (const row of rows) {
+        if(this.hasHistoricalTaskReference(row.task_id))continue;
         this.retireRun(row);
         runIds.push(row.run_id);
       }
