@@ -5,18 +5,19 @@ import { writeFileSync } from "node:fs";
 import { createTempWorkspace, setEnv } from "../helpers.js";
 import { storeChatMetadata } from "../../src/db/messages.js";
 import { ensureChatBranch, archiveChatBranch, permanentDeleteArchivedBranch } from "../../src/db/chat-branches.js";
-import { initDatabase, closeDatabase, getDb } from "../../src/db/connection.js";
+import { initDatabase, closeDatabase, getDb, initializeDatabaseSchema } from "../../src/db/connection.js";
 import { storeTokenUsage, getTokenUsageTotals, pruneOldTokenUsage, type TokenUsageRecord } from "../../src/db/token-usage.js";
-import { initializeBudgetLimitsSchema } from "../../src/db/budget-limits-schema.js";
+import { installHistoricalExpenseFixture } from "../fixtures/historical-expense.js";
 import { recordMessageUsage } from "../../src/agent-pool/usage.js";
-import { decodeUsageReport, readUsageProjectionEvent, encodeUsageReport, usageReportMigration } from "../../src/db/usage-report-projection.js";
+import { decodeUsageReport, readUsageProjectionEvent, encodeUsageReport } from "../../src/db/usage-report-projection.js";
 import * as projectionApi from "../../src/db/usage-report-projection.js";
-beforeEach(async()=>{await closeDatabase();initDatabase();});
+beforeEach(async()=>{await closeDatabase();initDatabase();installHistoricalExpenseFixture(getDb());});
 afterEach(()=>closeDatabase());
 const binding = { id: "projection-request", workId: "projection-child", chatJid: "web:child", providerId: "fixture", modelId: "fixture-model", accountRef: "synthetic-account", amountMicros: 50 };
 const usage = (): TokenUsageRecord => ({ chat_jid: binding.chatJid, run_at: "2026-10-24T12:00:00.000Z", input_tokens: 10, output_tokens: 2, cache_read_tokens: 0, cache_write_tokens: 0, total_tokens: 12,
   cost_input: 0.00004, cost_output: 0, cost_cache_read: 0, cost_cache_write: 0, cost_total: 0.00004, model: binding.modelId, provider: binding.providerId,
   api_equivalent_cost_known: true, api_equivalent_cost_microusd: 40, valuation_provenance: "catalogue_estimate" });
+const usageReportMigration={owner:"host.usage-reports",id:"event-payload-v1"};
 const eventId = `usage:invocation:${binding.id}`;
 const historicalFinance=(database=getDb())=>['budget_work','budget_caps','budget_cap_revisions','budget_cap_windows','budget_request_reservations','budget_usage_events'].map(table=>database.query(`SELECT * FROM ${table} ORDER BY rowid`).all());
 const historicalReport=():TokenUsageRecord=>({...usage(),work_id:binding.workId,invocation_id:binding.id,usage_event_id:eventId,usage_source:'assistant'});
@@ -75,7 +76,7 @@ test("historical usage projection: reopen retains missing-report uncertainty and
   const workspace=createTempWorkspace('usage-projection-reopen-'),path=join(workspace.store,'reopen.db');writeFileSync(path,database.serialize());
   const reopened=new Database(path);
   try{
-    reopened.exec('PRAGMA foreign_keys=ON');initializeBudgetLimitsSchema(reopened);initializeBudgetLimitsSchema(reopened);
+    reopened.exec('PRAGMA foreign_keys=ON');initializeDatabaseSchema(reopened);initializeDatabaseSchema(reopened);
     expect(historicalFinance(reopened)).toEqual(history);expect(readUsageProjectionEvent(reopened,eventId)).toEqual(event);
     expect(reopened.query('SELECT * FROM token_usage').all()).toEqual([]);
     expect(reopened.query('PRAGMA foreign_key_check').all()).toHaveLength(1);
@@ -88,69 +89,33 @@ test("passive usage: failed report insertion changes neither prior reports nor h
   expect(()=>storeTokenUsage({...usage(),usage_event_id:'new-observation'})).toThrow('report fault');
   expect(database.query('SELECT * FROM token_usage').all()).toEqual(reports);expect(historicalFinance()).toEqual(history);
 });
-test("canonical usage projection: cutover captures weaker legacy provenance without inventing request IDs", () => {
-  const database = seedHistoricalProjection();
-  storeTokenUsage({ ...usage(), usage_event_id: null, invocation_id: null, cost_provenance: null });
-  legacyFixture(database);
-  const before = database.query("SELECT * FROM token_usage ORDER BY id").all();
-  const reservation = database.query("SELECT * FROM budget_request_reservations WHERE id=?").get(binding.id);
-  const markers = database.query("SELECT * FROM piclaw_schema_migrations WHERE owner<>? ORDER BY owner,id").all(usageReportMigration.owner);
-  const userVersion = database.query("PRAGMA user_version").get();
-  initializeBudgetLimitsSchema(database);
-  expect(database.query("SELECT * FROM piclaw_schema_migrations WHERE owner<>? ORDER BY owner,id").all(usageReportMigration.owner)).toEqual(markers);
-  expect(database.query("PRAGMA user_version").get()).toEqual(userVersion);
-  const event = readUsageProjectionEvent(database, eventId)!;
-  expect(decodeUsageReport(event)?.origin.kind).toBe("legacy_projection_capture");
-  expect(database.query("SELECT * FROM token_usage ORDER BY id").all()).toEqual(before);
-  expect(database.query("SELECT * FROM budget_request_reservations WHERE id=?").get(binding.id)).toEqual(reservation);
-  expect(database.query("SELECT count(*) n FROM budget_usage_events").get()).toEqual({ n: 1 });
-  database.exec("UPDATE token_usage SET cost_total=33 WHERE usage_event_id IS NOT NULL");
-  initializeBudgetLimitsSchema(database);
-  expect(readUsageProjectionEvent(database, eventId)).toEqual(event);
-  expect(decodeUsageReport(readUsageProjectionEvent(database,eventId)!)?.record.cost_total).toBe(0.00004);
-  expect(database.query("SELECT cost_total FROM token_usage WHERE usage_event_id IS NOT NULL").get()).toEqual({cost_total:33});
-  expect(getTokenUsageTotals(binding.chatJid).runs).toBe(2);
-  expect(getTokenUsageTotals(binding.chatJid).cost_total).toBeCloseTo(33.00004);
-});
-test("canonical usage projection: malformed legacy payload stays unavailable after cache correction", () => {
-  const database = seedHistoricalProjection(); legacyFixture(database);
-  database.exec("UPDATE token_usage SET input_tokens=-1");
-  initializeBudgetLimitsSchema(database);
-  expect(decodeUsageReport(readUsageProjectionEvent(database, eventId)!)).toBeNull();
-  database.exec("UPDATE token_usage SET input_tokens=10"); initializeBudgetLimitsSchema(database);
+test("historical usage projection: opening old event schema never backfills or reconstructs provider evidence", () => {
+  const database=seedHistoricalProjection();legacyFixture(database);
+  const before=historicalFinance(),schema=database.query('SELECT type,name,sql FROM main.sqlite_schema ORDER BY type,name').all();
+  const markers=database.query('SELECT * FROM piclaw_schema_migrations ORDER BY owner,id').all();
+  initializeDatabaseSchema(database);
+  expect(historicalFinance()).toEqual(before);expect(database.query('SELECT type,name,sql FROM main.sqlite_schema ORDER BY type,name').all()).toEqual(schema);
+  expect(database.query('SELECT * FROM piclaw_schema_migrations ORDER BY owner,id').all()).toEqual(markers);
+  expect(database.query('PRAGMA table_info(budget_usage_events)').all()).not.toContainEqual(expect.objectContaining({name:'report_payload_json'}));
   expect(decodeUsageReport(readUsageProjectionEvent(database,eventId)!)).toBeNull();
-  expect(database.query("SELECT state FROM budget_request_reservations").get()).toEqual({state:"settled"});
+  expect(historicalFinance()).toEqual(before);
 });
-test("canonical usage projection: migration fault restores trigger, columns, receipt and old evidence", () => {
-  const database = seedHistoricalProjection(); legacyFixture(database);
-  database.exec("CREATE TRIGGER reject_capture BEFORE UPDATE ON budget_usage_events BEGIN SELECT RAISE(ABORT,'capture fault'); END");
-  const before = database.query("SELECT name,sql FROM sqlite_schema WHERE name LIKE 'budget_usage%' ORDER BY name").all();
-  expect(() => initializeBudgetLimitsSchema(database)).toThrow("capture fault");
-  expect(database.query("SELECT name,sql FROM sqlite_schema WHERE name LIKE 'budget_usage%' ORDER BY name").all()).toEqual(before);
-  expect(database.query("SELECT 1 FROM piclaw_schema_migrations WHERE owner=?").get(usageReportMigration.owner)).toBeNull();
-  database.exec("DROP TRIGGER reject_capture");
-  expect(() => database.exec("UPDATE budget_usage_events SET accounted_at=accounted_at")).toThrow("immutable");
-});
-test("canonical usage projection: partial columns, receipt drift and temp shadows fail closed", () => {
-  const database = getDb();
-  const receipt = database.query("SELECT checksum FROM piclaw_schema_migrations WHERE owner=?").get(usageReportMigration.owner) as { checksum: string };
-  database.query("UPDATE piclaw_schema_migrations SET checksum='wrong' WHERE owner=?").run(usageReportMigration.owner);
-  expect(() => initializeBudgetLimitsSchema(database)).toThrow("schema or receipt");
-  database.query("UPDATE piclaw_schema_migrations SET checksum=? WHERE owner=?").run(receipt.checksum, usageReportMigration.owner);
-  const trigger = database.query("SELECT sql FROM sqlite_schema WHERE name='budget_usage_events_no_update'").get() as { sql: string };
-  database.exec("DROP TRIGGER budget_usage_events_no_update");
-  expect(() => initializeBudgetLimitsSchema(database)).toThrow("schema or receipt");
-  expect(database.query("SELECT 1 FROM sqlite_schema WHERE name='budget_usage_events_no_update'").get()).toBeNull();
-  database.exec(trigger.sql);
-  database.exec("CREATE TEMP TABLE token_usage(id INTEGER)");
-  expect(() => initializeBudgetLimitsSchema(database)).toThrow("schema shadow"); database.exec("DROP TABLE temp.token_usage");
-  legacyFixture(database); database.exec("ALTER TABLE budget_usage_events ADD COLUMN report_payload_json TEXT");
-  expect(() => initializeBudgetLimitsSchema(database)).toThrow("Unowned usage report schema");
+test("historical usage projection: partial financial schema and old receipt drift stay opaque during ordinary startup", () => {
+  const database=seedHistoricalProjection();
+  database.query("UPDATE piclaw_schema_migrations SET checksum='opaque-historical-checksum' WHERE owner=?").run(usageReportMigration.owner);
+  database.exec('DROP TRIGGER budget_usage_events_no_update');
+  const history=historicalFinance(),schema=database.query('SELECT type,name,sql FROM main.sqlite_schema ORDER BY type,name').all();
+  const markers=database.query('SELECT * FROM piclaw_schema_migrations ORDER BY owner,id').all();
+  initializeDatabaseSchema(database);
+  expect(historicalFinance()).toEqual(history);expect(database.query('SELECT type,name,sql FROM main.sqlite_schema ORDER BY type,name').all()).toEqual(schema);
+  expect(database.query('SELECT * FROM piclaw_schema_migrations ORDER BY owner,id').all()).toEqual(markers);
+  recordMessageUsage('web:no-financial-repair',{role:'assistant',id:'opaque-ledger-independent-report',usage:{input:1,output:1}});
+  expect(getTokenUsageTotals('web:no-financial-repair').total_tokens).toBe(2);expect(historicalFinance()).toEqual(history);
 });
 test("historical usage projection: unknown holds remain inert and unchanged during report cleanup", () => {
   const database=seedHistoricalHold(),history=historicalFinance();
   storeTokenUsage({...usage(),chat_jid:'web:legacy',usage_event_id:null,input_tokens:0,output_tokens:0,total_tokens:0});
-  initializeBudgetLimitsSchema(database);database.exec('DELETE FROM token_usage');
+  initializeDatabaseSchema(database);database.exec('DELETE FROM token_usage');
   expect(historicalFinance()).toEqual(history);
   expect(database.query('SELECT state FROM budget_request_reservations').get()).toEqual({state:'unresolved'});
 });
@@ -180,7 +145,7 @@ test("passive usage: legacy catalogue fallback is retained without promoting pro
   expect(readUsageProjectionEvent(database,'legacy-catalogue-event')).toBeNull();expect(historicalFinance()).toEqual(history);
 });
 test("passive usage: unavailable pricing remains unknown without denying token observation", () => {
-  const database=seedHistoricalProjection(),history=historicalFinance();
+  seedHistoricalProjection();const history=historicalFinance();
   storeTokenUsage({...usage(),work_id:binding.workId,usage_event_id:'unpriced-observation',cost_input:0,cost_total:0,provider_cost_total:null,catalogue_cost_total:null,cost_provenance:'unavailable',api_equivalent_cost_known:false,api_equivalent_cost_microusd:null,valuation_provenance:'unavailable'});
   expect(getTokenUsageTotals(binding.chatJid).unavailable_cost_runs).toBe(1);expect(getTokenUsageTotals(binding.chatJid).total_tokens).toBe(24);expect(getTokenUsageTotals(binding.chatJid).cost_total).toBe(0.00004);expect(historicalFinance()).toEqual(history);
 });
@@ -211,7 +176,7 @@ test("historical usage projection: a hold-linked legacy observation cannot be re
 test("historical usage projection: missing old event stays uncertain without fabricating another charge or settlement", () => {
   const database=seedHistoricalProjection();
   database.exec('DROP TRIGGER budget_usage_events_no_delete; DELETE FROM budget_usage_events; DELETE FROM token_usage');
-  const history=historicalFinance();initializeBudgetLimitsSchema(database);
+  const history=historicalFinance();initializeDatabaseSchema(database);
   expect(historicalFinance()).toEqual(history);expect(database.query('SELECT state FROM budget_request_reservations').get()).toEqual({state:'settled'});
   expect(database.query('SELECT * FROM budget_usage_events').all()).toEqual([]);expect(database.query('SELECT * FROM token_usage').all()).toEqual([]);
 });
@@ -278,10 +243,10 @@ test("historical usage projection: moved report key cannot duplicate an observat
 });
 test("historical usage projection: pre-cutover mapping and hashes cannot be rebound by a fresh provider report", async () => {
   const database=seedHistoricalProjection({...historicalReport(),response_model:binding.modelId,api:'fixture',usage_source:'assistant'});
-  legacyFixture(database);initializeBudgetLimitsSchema(database);
+  initializeDatabaseSchema(database);
   const history=historicalFinance(),reports=database.query('SELECT * FROM token_usage').all(),event=readUsageProjectionEvent(database,eventId)!;
   storeTokenUsage({...usage(),work_id:binding.workId,invocation_id:binding.id,usage_event_id:eventId,provider_cost_total:0.2,cost_total:0.2,cost_provenance:'provider_reported',response_model:binding.modelId,api:'fixture',usage_source:'assistant'});
   expect(historicalFinance()).toEqual(history);expect(database.query('SELECT * FROM token_usage').all()).toEqual(reports);
-  expect(decodeUsageReport(event)?.origin.kind).toBe('legacy_projection_capture');
+  expect(decodeUsageReport(event)?.origin.kind).toBe('host_request');
   expect(database.query('SELECT terminal_receipt_json FROM budget_request_reservations').get()).toEqual({terminal_receipt_json:null});
 });

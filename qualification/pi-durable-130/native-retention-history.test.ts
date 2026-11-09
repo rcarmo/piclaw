@@ -1,3 +1,4 @@
+import {historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import './src/test-guard.js';
 import {expect,test} from 'bun:test';
 import {nativeMessageFixture} from './src/native-message-fixture.js';
@@ -9,9 +10,9 @@ import {planUsageReportRetention,applyUsageReportRetention} from '../../runtime/
 test('retention fixture keeps historical work, holds, caps and recorded windows inert while retiring only unlinked observations',async()=>{
   const f=await nativeMessageFixture();
   try{
-    const schema=f.root.query('SELECT type,name,sql FROM sqlite_master ORDER BY type,name').all();
     const sdk=f.sdkSnapshot();seedRetentionHistoryFixture(f.root);
-    const history=()=>['budget_work','budget_caps','budget_cap_revisions','budget_cap_windows','budget_request_reservations','budget_usage_events'].map(table=>f.root.query(`SELECT * FROM ${table} ORDER BY rowid`).all());
+    const schema=f.root.query('SELECT type,name,sql FROM sqlite_master ORDER BY type,name').all();
+    const history=()=>historicalExpenseRows(f.root,['budget_work','budget_caps','budget_cap_revisions','budget_cap_windows','budget_request_reservations','budget_usage_events']);
     const original=history();
     expect(f.root.query('SELECT count(*) n FROM token_usage').get()).toEqual({n:8});
     expect(f.root.query('SELECT state,terminal_receipt_json FROM budget_request_reservations').all()).toEqual([{state:'reserved',terminal_receipt_json:null}]);

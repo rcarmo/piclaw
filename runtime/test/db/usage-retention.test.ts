@@ -1,16 +1,36 @@
+import {installHistoricalExpenseFixture} from '../fixtures/historical-expense.js';
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { join } from "node:path";
 import { writeFileSync } from "node:fs";
 import { planUsageReportRetention, applyUsageReportRetention } from "../../src/db/usage-report-retention.js";
 import { createTempWorkspace, setEnv } from "../helpers.js";
-import { initDatabase, closeDatabase, getDb } from "../../src/db/connection.js";
+import { initDatabase, closeDatabase, getDb, initializeDatabaseSchema } from "../../src/db/connection.js";
 import { storeTokenUsage, pruneOldTokenUsage, type TokenUsageRecord } from "../../src/db/token-usage.js";
 
 let workspace: ReturnType<typeof createTempWorkspace>, restore:()=>void;
-beforeEach(async()=>{workspace=createTempWorkspace("usage-retention-");restore=setEnv({PICLAW_WORKSPACE:workspace.workspace,PICLAW_STORE:workspace.store,PICLAW_DATA:workspace.data});await closeDatabase();initDatabase();});
+beforeEach(async()=>{workspace=createTempWorkspace("usage-retention-");restore=setEnv({PICLAW_WORKSPACE:workspace.workspace,PICLAW_STORE:workspace.store,PICLAW_DATA:workspace.data});await closeDatabase();initDatabase();installHistoricalExpenseFixture(getDb());});
 afterEach(async()=>{await closeDatabase();restore();workspace.cleanup();});
 const old="2000-01-01T00:00:00.000Z";
+
+test('fresh report retention needs no financial schema and revalidates newly present historical references',()=>{
+  const database=new Database(':memory:');
+  try{
+    initializeDatabaseSchema(database);
+    expect(database.query("SELECT name FROM main.sqlite_schema WHERE tbl_name GLOB 'budget_*'").all()).toEqual([]);
+    storeTokenUsage({chat_jid:'web:fresh',run_at:old,input_tokens:1,output_tokens:1,cache_read_tokens:0,cache_write_tokens:0,total_tokens:2,cost_input:0,cost_output:0,cost_cache_read:0,cost_cache_write:0,cost_total:0},database);
+    const plan=planUsageReportRetention(database,{before:'2026-01-01T00:00:00.000Z'});expect(plan.rows).toHaveLength(1);
+    // Another authorised operation may restore historical data between preview
+    // and apply. The actual write transaction must re-read its dependencies.
+    database.exec('CREATE TABLE budget_usage_events(token_usage_id INTEGER,usage_event_id TEXT);INSERT INTO budget_usage_events VALUES(1,NULL)');
+    const beforeRows=database.query('SELECT * FROM token_usage').all();
+    expect(()=>applyUsageReportRetention(database,plan)).toThrow('became referenced');
+    expect(database.query('SELECT * FROM token_usage').all()).toEqual(beforeRows);
+    database.exec('DELETE FROM budget_usage_events');
+    expect(applyUsageReportRetention(database,plan).removed).toEqual([1]);
+    expect(database.query("SELECT name FROM main.sqlite_schema WHERE name='budget_request_reservations'").get()).toBeNull();
+  }finally{database.close();}
+});
 const usage=(overrides:Partial<TokenUsageRecord>={}):TokenUsageRecord=>({chat_jid:"web:retention",run_at:old,input_tokens:1,output_tokens:1,cache_read_tokens:0,cache_write_tokens:0,total_tokens:2,cost_input:0,cost_output:0,cost_cache_read:0,cost_cache_write:0,cost_total:0,...overrides});
 function seed(count:number){getDb().transaction(()=>{for(let i=0;i<count;i++)storeTokenUsage(usage());}).immediate();}
 const before="2026-01-01T00:00:00.000Z";

@@ -1,3 +1,5 @@
+import {installHistoricalExpenseFixture} from '../../runtime/test/fixtures/historical-expense.js';
+import {historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import './src/test-guard.js';
 import {expect,spyOn} from 'bun:test';
 import {isolatedApplicationTest} from './src/isolated-application-test.js';
@@ -42,7 +44,8 @@ for(const reportingFault of [false,true])applicationTest(`actual factory manual 
   });
   try{
     const id=await seedHistory(f),beforeCalls=f.calls(),inputRows=f.root.query('SELECT * FROM submissions ORDER BY id').all(),sources=f.root.query('SELECT * FROM service_effect_s01_sources ORDER BY source_seq').all();
-    const financial=()=>['budget_work','budget_caps','budget_request_reservations','budget_usage_events'].map(table=>f.root.query(`SELECT * FROM ${table} ORDER BY rowid`).all()),before=financial();
+    const financial=()=>historicalExpenseRows(f.root,['budget_work','budget_caps','budget_request_reservations','budget_usage_events']),before=financial();
+    installHistoricalExpenseFixture(f.root);
     for(const table of ['budget_work','budget_request_reservations','budget_usage_events'])for(const action of ['INSERT','UPDATE'])f.root.exec(`CREATE TEMP TRIGGER no_finance_${table}_${action} BEFORE ${action} ON ${table} BEGIN SELECT RAISE(ABORT,'Retired financial owner must not run'); END`);
     if(reportingFault)f.root.exec("CREATE TEMP TRIGGER fail_compaction_report BEFORE INSERT ON token_usage BEGIN SELECT RAISE(ABORT,'Synthetic passive compaction report fault'); END");
     const position=f.backend.sessionOptions.getDurableSession!('web:default')!,identity=position.sessionId,model=await position.readModel!();
@@ -80,7 +83,8 @@ for(const threshold of ['blocking','background'] as const)for(const reportingFau
   });
   try{
     const id=await seedHistory(f),beforeCalls=f.calls();
-    const financial=()=>['budget_work','budget_caps','budget_request_reservations','budget_usage_events'].map(table=>f.root.query(`SELECT * FROM ${table} ORDER BY rowid`).all()),before=financial();
+    const financial=()=>historicalExpenseRows(f.root,['budget_work','budget_caps','budget_request_reservations','budget_usage_events']),before=financial();
+    installHistoricalExpenseFixture(f.root);
     for(const table of ['budget_work','budget_request_reservations','budget_usage_events'])for(const action of ['INSERT','UPDATE'])f.root.exec(`CREATE TEMP TRIGGER no_auto_finance_${table}_${action} BEFORE ${action} ON ${table} BEGIN SELECT RAISE(ABORT,'Retired automatic financial owner must not run'); END`);
     if(reportingFault)f.root.exec("CREATE TEMP TRIGGER fail_auto_compaction_report BEFORE INSERT ON token_usage BEGIN SELECT RAISE(ABORT,'Synthetic passive automatic report fault'); END");
     enabled=true;const accepted=await f.send('Continue after native automatic compaction');await f.until(()=>f.status(accepted.submission_id)==='done');
@@ -93,7 +97,7 @@ for(const threshold of ['blocking','background'] as const)for(const reportingFau
     expect(f.root.query("SELECT total_tokens FROM token_usage WHERE usage_source='compaction'").all()).toEqual(reportingFault?[]:[{total_tokens:2}]);
     expect(financial()).toEqual(before);const sdk=f.root.query('SELECT * FROM submissions ORDER BY id').all(),entries=f.root.query('SELECT * FROM entries ORDER BY id').all(),sources=f.root.query('SELECT * FROM service_effect_s01_sources ORDER BY source_seq').all();
     enabled=false;await f.reopen();expect(f.calls()).toBe(beforeCalls+2);expect(f.root.query('SELECT * FROM submissions ORDER BY id').all()).toEqual(sdk);expect(f.root.query('SELECT * FROM entries ORDER BY id').all()).toEqual(entries);expect(f.root.query('SELECT * FROM service_effect_s01_sources ORDER BY source_seq').all()).toEqual(sources);expect(financial()).toEqual(before);
-    for(const table of ['service_effect_s01_operations','service_effect_s02_commits'])expect(f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
+    for(const table of ['service_effect_s01_operations','service_effect_s02_commits'])expect(table.startsWith('budget_') ? historicalExpenseRows(f.root,[table])[0] : f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
   }finally{source.mockRestore();settings.mockRestore();await f.close();}
 },30000);
 
@@ -115,7 +119,7 @@ applicationTest('actual factory aborts the exact admitted manual compaction duri
     const task=JSON.parse((f.root.query('SELECT record FROM tasks WHERE id=?').get((target as any).taskId) as {record:string}).record);expect(task.state).toMatchObject({status:'terminal',outcome:{status:'aborted'}});
     expect(f.root.query("SELECT * FROM entries WHERE json_extract(record,'$.kind')='pi.compaction'").all()).toEqual([]);
     const sdk=f.root.query('SELECT * FROM submissions ORDER BY id').all(),entries=f.root.query('SELECT * FROM entries ORDER BY id').all();hold=false;await f.reopen();expect(f.calls()).toBe(beforeCalls);expect(f.root.query('SELECT * FROM submissions ORDER BY id').all()).toEqual(sdk);expect(f.root.query('SELECT * FROM entries ORDER BY id').all()).toEqual(entries);expect(f.root.query('SELECT * FROM service_effect_s01_sources ORDER BY source_seq').all()).toEqual(sources);
-    for(const table of ['budget_work','budget_request_reservations','budget_usage_events','service_effect_s01_operations','service_effect_s02_commits'])expect(f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
+    for(const table of ['budget_work','budget_request_reservations','budget_usage_events','service_effect_s01_operations','service_effect_s02_commits'])expect(table.startsWith('budget_') ? historicalExpenseRows(f.root,[table])[0] : f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
   }finally{release();settings.mockRestore();await f.close();}
 },30000);
 
@@ -140,7 +144,7 @@ applicationTest('actual factory background source capture can wait while the SDK
     release();await f.until(()=>(f.root.query("SELECT count(*) n FROM entries WHERE json_extract(record,'$.kind')='pi.compaction'").get() as {n:number}).n===1);
     expect(captures).toBe(1);expect(f.calls()).toBe(beforeCalls+2);
     const sdk=f.root.query('SELECT * FROM submissions ORDER BY id').all(),entries=f.root.query('SELECT * FROM entries ORDER BY id').all();enabled=false;await f.reopen();expect(f.calls()).toBe(beforeCalls+2);expect(f.root.query('SELECT * FROM submissions ORDER BY id').all()).toEqual(sdk);expect(f.root.query('SELECT * FROM entries ORDER BY id').all()).toEqual(entries);
-    for(const table of ['budget_work','budget_request_reservations','budget_usage_events','service_effect_s01_operations','service_effect_s02_commits'])expect(f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
+    for(const table of ['budget_work','budget_request_reservations','budget_usage_events','service_effect_s01_operations','service_effect_s02_commits'])expect(table.startsWith('budget_') ? historicalExpenseRows(f.root,[table])[0] : f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
   }finally{release();source.mockRestore();settings.mockRestore();await f.close();}
 },30000);
 
@@ -157,9 +161,10 @@ applicationTest('actual factory resumes only the original paused manual SDK task
     let taskId:number;
     try{expect((await harness.inspect(context)).scheduling).toBe('paused');taskId=await (await harness.conversation(id as any,context))!.compact('Recover this exact manual task',context);expect(f.calls()).toBe(beforeCalls);}finally{await harness.close(context);}
     const domain=(f.root.query("SELECT incarnation FROM piclaw_durable_bindings_v1 WHERE chat_jid='web:default' LIMIT 1").get() as {incarnation:string}).incarnation,work=`durable-maintenance:${domain}:${taskId!}`;
+    installHistoricalExpenseFixture(f.root);
     f.root.query("INSERT INTO budget_work(id,chat_jid,execution_kind,status,created_at,updated_at) VALUES (?,'web:default','side_prompt','active','2020-01-01','2020-01-01')").run(work);
     f.root.query("INSERT INTO budget_request_reservations(id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,amount_microusd,state,created_at,updated_at) VALUES ('historical-unscoped-summary',?,'web:default','fixture','lifecycle','historical-account',?,50,'unresolved','2020-01-01','2020-01-01')").run(work,'a'.repeat(64));
-    const financial=()=>['budget_work','budget_request_reservations','budget_usage_events'].map(table=>f.root.query(`SELECT * FROM ${table} ORDER BY rowid`).all()),before=financial();
+    const financial=()=>historicalExpenseRows(f.root,['budget_work','budget_request_reservations','budget_usage_events']),before=financial();
     await f.reopen();await f.backend.sessionOptions.getDurableSession!('web:default')!.reconcileMaintenance!();
     await f.until(()=>f.root.query("SELECT 1 FROM tasks WHERE id=? AND json_extract(record,'$.state.status')='terminal'").get(taskId!)!==null);
     const tasks=f.root.query("SELECT id,record FROM tasks WHERE kind=json_quote('pi.compaction')").all() as {id:number;record:string}[];expect(tasks.map(task=>task.id)).toEqual([taskId!]);expect(JSON.parse(tasks[0]!.record).state).toMatchObject({status:'terminal',outcome:{status:'completed'}});

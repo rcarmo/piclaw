@@ -1,3 +1,4 @@
+import {historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import { waitForSubmissionProjection } from './src/submission-projection.js';
 import { installApprovedAddonsFixture } from "./installed-addons-fixture.js";
 import { isolatedApplicationTest } from "./src/isolated-application-test.js";
@@ -89,7 +90,7 @@ applicationTest("all 23 installed: actual default factory public provider termin
     const pool = new AgentPool({ credentialStore: createTestCredentialStore({}), modelRuntime: runtime, modelRegistry: services.modelRegistry, ...backend.sessionOptions } as never);
     const bound = backend.bind({ queue: base.queue, agentPool: pool });
     const channel = new WebChannel(bound);
-    const priorReservations = new Set((getDb().query("SELECT id FROM budget_request_reservations").all() as {id:string}[]).map(r=>r.id));
+    const priorReservations = new Set((historicalExpenseRows(getDb(),['budget_request_reservations'])[0] as {id:string}[]).map(r=>r.id));
     const admitted = await admitWebMessage(channel, { chatJid: "web:default", content: "Reply with a short synthetic result", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" }, { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
     expect(admitted).not.toBeNull();
     const row = getDb().query("SELECT id FROM messages WHERE rowid=?").get(admitted!.id) as { id: string };
@@ -100,7 +101,7 @@ applicationTest("all 23 installed: actual default factory public provider termin
     if (fixtureError) throw fixtureError;
     expect(outcome).toBe("done");
     expect(calls).toBe(1);
-    const reservations = (getDb().query("SELECT * FROM budget_request_reservations").all() as any[]).filter(r => !priorReservations.has(r.id));
+    const reservations = (historicalExpenseRows(getDb(),['budget_request_reservations'])[0] as any[]).filter(r => !priorReservations.has(r.id));
     expect(reservations).toEqual([]);
     expect(getDb().query("SELECT total_tokens,provider,model FROM token_usage").all()).toEqual([{total_tokens:5,provider:model.provider,model:model.id}]);
     expect(fetchSpy).toHaveBeenCalledTimes(0);

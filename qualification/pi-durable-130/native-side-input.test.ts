@@ -1,3 +1,4 @@
+import {installHistoricalExpenseFixture} from '../../runtime/test/fixtures/historical-expense.js';
 import './src/test-guard.js';
 import {expect,spyOn} from 'bun:test';
 import {writeFileSync,readFileSync,existsSync,rmSync,mkdirSync} from 'node:fs';
@@ -38,6 +39,7 @@ async function sideFixture(){
 applicationTest('actual factory side request preserves isolated SDK history, current request identity, streaming and stored result across reopen without finance',async()=>{
   const s=await sideFixture(),{f,state}=s;
   try{
+    installHistoricalExpenseFixture(f.root);
     f.root.query("INSERT INTO budget_work(id,chat_jid,execution_kind,status,created_at,updated_at) VALUES ('historical-side','web:default','side_prompt','paused','2020-01-01','2020-01-01')").run();
     f.root.query("INSERT INTO budget_caps(id,scope,metric,amount,work_id,created_at,updated_at) VALUES ('historical-side-zero','task','api_usd_micros',0,'historical-side','2020-01-01','2020-01-01')").run();
     f.root.query("INSERT INTO budget_request_reservations(id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,state,created_at,updated_at) VALUES ('historical-side-hold','historical-side','web:default','fixture','lifecycle','historical-account',?,'unresolved','2020-01-01','2020-01-01')").run('a'.repeat(64));
