@@ -6,6 +6,51 @@ import { PROVIDER_MODEL_PRICING_REFERENCE_TAG, resolveProviderModelPricing } fro
 import { generateProviderModelEstimatedCostChart } from "../../skills/operator/token-chart/token-cost-by-provider-model-chart.ts";
 
 describe("provider/model pricing reference", () => {
+  test("prices native Fable and Mythos 5.2 with explicit Fast selectors and stable aliases", () => {
+    for (const family of ["fable", "mythos"]) {
+      const model = `claude-${family}-5.2`;
+      const standard = resolveProviderModelPricing("anthropic", model);
+      expect(standard).toMatchObject({ inputPerMTok: 8, outputPerMTok: 40, cacheReadPerMTok: 0.2, cacheWritePerMTok: 10 });
+      expect(standard.basis).toContain("2026-11-09");
+      expect(standard.notes).toContain("1h writes $16");
+      expect(resolveProviderModelPricing("anthropic", `claude-${family}-5-2`)).toEqual(standard);
+      expect(resolveProviderModelPricing(" ANTHROPIC ", ` claude_${family}_5_2 `)).toEqual(standard);
+      const fast = resolveProviderModelPricing("anthropic", `${model}-fast`);
+      expect(fast).toMatchObject({ inputPerMTok: 16, outputPerMTok: 80, cacheReadPerMTok: 0.4, cacheWritePerMTok: 20 });
+      expect(fast.notes).toContain("1h writes $32");
+      expect(fast.notes).toContain("not an upstream model ID");
+      expect(resolveProviderModelPricing("anthropic", `claude-${family}-5-2-fast`)).toEqual(fast);
+    }
+  });
+
+  test("does not invent 5.2 routes or Batch aliases from native availability", () => {
+    for (const family of ["fable", "mythos"]) {
+      for (const provider of ["openrouter", "github-copilot", "azure-foundry", "amazon-bedrock", "google-vertex", "unknown"]) {
+        for (const model of [`claude-${family}-5.2`, `claude-${family}-5-2`, `anthropic/claude-${family}-5.2`]) {
+          expect(resolveProviderModelPricing(provider, model).basis).toContain("Unpriced fallback");
+        }
+      }
+      expect(resolveProviderModelPricing("anthropic", `claude-${family}-5.2:batch`).basis).toContain("Unpriced fallback");
+    }
+    expect(resolveProviderModelPricing("anthropic", "claude-fable-5.1").inputPerMTok).toBe(10);
+    expect(resolveProviderModelPricing("anthropic", "claude-mythos-5.1").outputPerMTok).toBe(50);
+  });
+
+  test("the cost chart prices 5.2 input categories once without adding reasoning", () => {
+    const fixture = createTempWorkspace("claude52-pricing-");
+    const dbPath = join(fixture.store, "usage.db");
+    try {
+      const db = new Database(dbPath);
+      db.exec("CREATE TABLE token_usage (run_at TEXT, provider TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER)");
+      const insert = db.prepare("INSERT INTO token_usage VALUES (?, ?, ?, ?, ?, ?, ?)");
+      for (const model of ["claude-fable-5-2", "claude-mythos-5.2"]) insert.run("2026-11-09T12:00:00Z", "anthropic", model, 5_000, 10_000, 90_000, 5_000);
+      db.close();
+      const chart = generateProviderModelEstimatedCostChart({ days: 1, dbPath, now: new Date("2026-11-09T13:00:00Z") });
+      expect(chart.totalEstimatedCost).toBeCloseTo(1.016, 12);
+      expect(chart.seriesCount).toBe(2);
+      expect(chart.pricingReferenceTag).toBe(PROVIDER_MODEL_PRICING_REFERENCE_TAG);
+    } finally { fixture.cleanup(); }
+  });
   test("prices Terra 6.1 exact routes and Graphite aliases without inheriting other providers", () => {
     const expected = { canonicalModel: "GPT-6.1 Terra", inputPerMTok: 1, outputPerMTok: 5, cacheReadPerMTok: 0.05, cacheWritePerMTok: 1.25 };
     for (const provider of ["openai", "github-copilot", "openai-codex"]) {
