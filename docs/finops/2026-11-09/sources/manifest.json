@@ -1,0 +1,470 @@
+[
+  {
+    "file": "announcement.html.gz",
+    "encoding": "gzip",
+    "url": "https://www.anthropic.com/claude-fable-and-mythos-5-2",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:10:06.043Z",
+    "sha256": "fca35e6bfe910b1e1efa1e45d6e5c845c13444285d16846906333fdce4f48488",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "pricing.md",
+    "encoding": "identity",
+    "url": "https://platform.claude.com/docs/en/about-claude/pricing.md",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:10:06.310Z",
+    "sha256": "bffb57bc22ef9488ba9e5fbd1df97201f2ccc38fc524c61a12571335f1c82711",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "fable-model.md",
+    "encoding": "identity",
+    "url": "https://platform.claude.com/docs/en/models/fable-5-2/overview.md",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:11:09.065Z",
+    "sha256": "73f1e220aaebe9536ea719f2878bd93ff8699020a77b5acf6fbe4a76a9eede67",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "mythos-model.md",
+    "encoding": "identity",
+    "url": "https://platform.claude.com/docs/en/models/mythos-5-2/overview.md",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:11:09.065Z",
+    "sha256": "f7da60022a2762f0803071bfc60faa928dec7ebec3fe120b9966d30cfff4b3f0",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "migration.md",
+    "encoding": "identity",
+    "url": "https://platform.claude.com/docs/en/models/fable-5-2/migration-guide.md",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:11:09.065Z",
+    "sha256": "80241375d7b5ebad68e5659ad9b66b45140fba3ac6e479477316d8763851974f",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "thinking.md",
+    "encoding": "identity",
+    "url": "https://platform.claude.com/docs/en/build-with-claude/preserved-thinking.md",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:10:06.870Z",
+    "sha256": "d0170bdc1eada625a259d7dac48cf347de06c647681747f3b39c6c7b15cf2fbe",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "promotion.html.gz",
+    "encoding": "gzip",
+    "url": "https://support.claude.com/en/articles/17506494",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:10:07.647Z",
+    "sha256": "63e298a66f7bce140dbb4506ca5b7a159302df29e89a6b79abe60f5f562e3cf2",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "subscriptions.html.gz",
+    "encoding": "gzip",
+    "url": "https://claude.com/pricing",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:12:18.377Z",
+    "sha256": "b7a083b9ee989efd4ca26a7bccd4c7146720a6048f9927a2d11bf7a3c2994816",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "fable-plan.html.gz",
+    "encoding": "gzip",
+    "url": "https://support.claude.com/en/articles/15424964",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:12:19.081Z",
+    "sha256": "5ae57dd9d78f53f3601f581a98a2546f4a48cc8c2922fd160f285021baa32b12",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "api-credit-benefit.md",
+    "encoding": "identity",
+    "url": "https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers.md",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:16:03.964Z",
+    "sha256": "4b64907a52dd79a582fdb6757a6f513820aae908c25e5d434c550362651cb47e",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "copilot.md",
+    "encoding": "identity",
+    "url": "https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing.md",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:10:06.985Z",
+    "sha256": "bac0d70712e0d0b0e1eec56ae1173492eba14cb7c9dae4ee435c248682017a80",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "openrouter.json.gz",
+    "encoding": "gzip",
+    "url": "https://openrouter.ai/api/v1/models",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:10:07.028Z",
+    "sha256": "b0f36c5318dfa2054a79f389c4380ba9e0b53755f499d2db42ace43189e6f2f3",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "google-managed.md",
+    "encoding": "identity",
+    "url": "https://platform.claude.com/docs/en/build-with-claude/claude-models-on-google-cloud/google-managed.md",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:12:20.490Z",
+    "sha256": "bfccd49ab324afb4db495c4c77c04b75bd1b56af0e9d2185dc3bcf8dbc0dae07",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "google-anthropic.md",
+    "encoding": "identity",
+    "url": "https://platform.claude.com/docs/en/build-with-claude/claude-models-on-google-cloud/anthropic-managed.md",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:12:20.801Z",
+    "sha256": "88719f14a63e63da438d2e0670599079d93a4f584cdad92b461d129d7acbae4f",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "caching.md",
+    "encoding": "identity",
+    "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-caching.md",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:12:21.391Z",
+    "sha256": "1a5b8da5454ea0a29e97d93b35d7aafd3e13cff0e4f3d6e7ee274ce1500689a9",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "fast.md",
+    "encoding": "identity",
+    "url": "https://platform.claude.com/docs/en/build-with-claude/fast-mode.md",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:12:21.022Z",
+    "sha256": "df0b36c4b33a107c6c345c1d3ad4fc64ef6683e6d5d6ceff400e3547196bd04b",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws-region-index.json",
+    "encoding": "identity",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/current/region_index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "49162426630ce6c117c5daea47dca85efc6311d23f816cbb2286a75dbfb13ca8",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/af-south-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/af-south-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "9d5556909d8e3dd3a2cb1d1d21320f380be8114459ad5b118843ee5d76137507",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/ap-east-2.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-east-2/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "8d58cce1646a20893d9c2ec930e1ee8305c148a5451a876ccbc3555994ca2c43",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/ap-northeast-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-northeast-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "c07c5941649f5a385fb6372bf1f8828a56d1625ac47350a1af15112e7487a61d",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/ap-northeast-2.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-northeast-2/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "31490db5fe8d468e8a544120cedf64d4d666cd93e62aa8524cc1e33e34e63171",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/ap-northeast-3.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-northeast-3/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "0e07eed0ed50668510974664b1ab013d36b8b1366165d863423c6675e0052b72",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/ap-south-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-south-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "d4d34aa005d6cddd05d0b0c844ccd9ed6aefca21231ea0ffb7d31f7f015b744b",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/ap-south-2.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-south-2/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "5e77858764fdefbad032ee2c52fd65dfd57e888eeacd32b67d32c5e1a78f6d0c",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/ap-southeast-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-southeast-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "b82a1ef55d47294543caa21d5a00522fe093a50a75cbc0a1dd5900a3a36635e4",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/ap-southeast-2.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-southeast-2/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "c3b737e6c10529c26843cf8d04f786dcc774ff8f02bd9a036f34dbdbec956b33",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/ap-southeast-3.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-southeast-3/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "541338b9c49c8f7f9c486b68adfb1592c74ebc29f46fbf8f1632f7405d14e518",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/ap-southeast-4.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-southeast-4/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "29fe662c6c84687dbc91380c331b6c42b54ef74bf6e755147bf7eac063c1a5c1",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/ap-southeast-5.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-southeast-5/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "26b7ba22828f0be7a2f8bdf0c6b47f53eb7e1daf66a3d24f6c1ea2c54daa917a",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/ap-southeast-6.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-southeast-6/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "e640895baa70557e099fe710678c33baeaf8a09c153ac1314e40b755dc88d434",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/ap-southeast-7.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-southeast-7/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "634c7a26397d4e0cd631b4344449d1b694ee42a1d10041aac83ee03287f4071f",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/ca-central-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ca-central-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "1cddec10bf06c0302ffdd610e7293e30a17b9a2e856c73b11931bed86a55a30e",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/ca-west-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ca-west-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "d0603c21ef0fd9699d5c4d4d6c9926bd7f6d391256b4b8d2802468a4cdbcdb49",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/eu-central-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/eu-central-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "980b762980bfe5160b98099768218b8c13e00e79bc92ba05df093940e6735cd1",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/eu-central-2.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/eu-central-2/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "45b05115c05f918167babefdc71cec5d0c9db482c4b9bde86558a729d546b12f",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/eu-north-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/eu-north-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "db26394aabf8afe57c785ee3a6422cdf7aa0ef701c18ccabf58f29531495182b",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/eu-south-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/eu-south-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "5fa7d34b008c2a24e8304dff026dbaa8b07987476752aaea3666aa7577415c9e",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/eu-south-2.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/eu-south-2/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "65d9b12ac657d57873f0ba415ba79a3a6139e1486cd6245775e719ce2eb61106",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/eu-west-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/eu-west-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "5e1eff465ae301225e69c4bb8d3cfb620b6e352310eeefa057383512c82dbc53",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/eu-west-2.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/eu-west-2/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "f7b6bfe68064c1c9f0e369064a0faaedc50edb93357fc2a8f1c3e2db2366c4bc",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/eu-west-3.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/eu-west-3/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "4e8ff7335f98b48b12aaae07100760c6755545d3b34e4c179c5e709af9eebae7",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/il-central-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/il-central-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "d5940c604aa80009d17e21440ab9dba3f64a445f9a6f5ef6185ce32d183c0111",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/me-central-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/me-central-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "2877c6b528a6fbdf17d4ff27eec7576b129af12a173ad3d7c373ad9cde88b84c",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/me-south-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/me-south-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "55c0579418bb5331d998d1d338ac07ada6c9099bd2fb130bc4830016eedb065c",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/mx-central-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/mx-central-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "76e48679dee6f6f0dbc8a32bcb85ac81a794fca2c95e04319d4a4d0d68f767fe",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/sa-east-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/sa-east-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "90869cacb114a2c40464128240ef529c49ba34c210b70346e039749fc0f051df",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/us-east-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/us-east-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "7a9cb49ef6c87da72719bf587fb857f08ad1972d9222f4dfd0a79b3d0dc8207c",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/us-east-2.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/us-east-2/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "1c73866e205beba8dfc977b46ce59caec71e9d0d6f9a248cded794a46b160e0a",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/us-gov-east-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/us-gov-east-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "217be497af31d8c81e1926caff581731d77e4d1febd172c6cd21b6325f5b57b9",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/us-gov-west-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/us-gov-west-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "ab78626669607445136dece41d111e207d332637596b53dabcb317a9e283e5ed",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/us-west-1.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/us-west-1/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "a723e6f8d2db2e507b56628e7b722b02405ae83f64b03c27419cffb36824e904",
+    "hashBasis": "uncompressed source bytes"
+  },
+  {
+    "file": "aws/us-west-2.json.gz",
+    "encoding": "gzip",
+    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/us-west-2/index.json",
+    "status": 200,
+    "retrievedAt": "2026-11-09T19:14:37.698Z",
+    "sha256": "19842cfbeabc6dfe6ba702a885298b28626a6cfef2f38ed19efe4d76a77548e9",
+    "hashBasis": "uncompressed source bytes"
+  }
+]

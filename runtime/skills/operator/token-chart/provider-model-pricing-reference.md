@@ -1,8 +1,16 @@
 # Provider/model pricing reference
 
-_Reference tag: 2026-10-06_
+_Reference tag: 2026-11-09_
 
-This file records the sources and assumptions behind the token chart's **estimated API-equivalent** costs. The executable resolver is `provider-model-pricing-reference.ts`. The native Mistral `pricing-2026-10-06.json` addition takes precedence for Mistral Large 4; GPT-6.1 Sol retains its September 29 record. The September 22 and September 5 snapshots and older rules remain dated fallbacks. The new record does not infer prices for Copilot, OpenRouter or Azure.
+This file records the sources and assumptions behind the token chart's **estimated API-equivalent** costs. The executable resolver is `provider-model-pricing-reference.ts`. Dated additions take precedence only for their exact provider/model rows: Fable/Mythos 5.2 on November 9, Terra 6.1 on November 4, native Mistral Large 4 on October 6 and native GPT-6.1 Sol on September 29. Older snapshots and rules remain explicitly dated fallbacks.
+
+## 9 November 2026 — Claude Fable 5.2 and Mythos 5.2
+
+- Native Anthropic Standard prices per million tokens: **$8 input, $0.20 cache read, $10 5m write, $40 output**. One-hour writes cost $16 and are retained in the dossier, not represented by the estimator's single write meter. Both models have the same prices and no long-context premium across 1M context; Mythos requires verified-organisation access.
+- Explicit local `-fast` pricing selectors use **$16 input, $0.40 read, $20 5m write, $80 output**; 1h writes are $32. These selectors describe request pricing, not upstream model IDs. The estimator does not infer Fast, Batch or US-only geography from an ordinary model ID.
+- `claude-fable-5-2` / `claude-mythos-5-2` API IDs and dotted/Graphite spellings normalise to the same native rows. Provider matching remains exact. No 5.2 Copilot, OpenRouter, Azure or Google quote is inferred.
+- [Complete rate card and source evidence](../../../../docs/finops/2026-11-09/README.md) retain all 12 native Standard/Batch/Fast/global/US-only cards, subscription and API-credit terms, and 490 AWS prices across 35 regions. AWS global, commercial non-global and GovCloud tariffs stay distinct and are not flattened into a context-free estimator row. Unverified routes remain labelled.
+- Standard rates are 20% below 5.1. Equal-token pricing is not equal successful-task cost; thinking, cache misses and subagents can change the bill. This data update changes no model availability, authentication, default selection or historical usage.
 
 ## 6 October 2026 — Mistral Large 4
 

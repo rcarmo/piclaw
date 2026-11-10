@@ -1,0 +1,147 @@
+{
+  "formatVersion" : "v1.0",
+  "disclaimer" : "This pricing list is for informational purposes only. All prices are subject to the additional terms included in the pricing pages on http://aws.amazon.com. All Free Tier prices are also subject to the terms included at https://aws.amazon.com/free/",
+  "publicationDate" : "2026-11-09T18:09:52Z",
+  "regions" : {
+    "ca-west-1" : {
+      "regionCode" : "ca-west-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ca-west-1/index.json"
+    },
+    "us-east-1" : {
+      "regionCode" : "us-east-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/us-east-1/index.json"
+    },
+    "eu-west-1" : {
+      "regionCode" : "eu-west-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/eu-west-1/index.json"
+    },
+    "ca-central-1" : {
+      "regionCode" : "ca-central-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ca-central-1/index.json"
+    },
+    "ap-south-1" : {
+      "regionCode" : "ap-south-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-south-1/index.json"
+    },
+    "ap-northeast-2" : {
+      "regionCode" : "ap-northeast-2",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-northeast-2/index.json"
+    },
+    "us-west-2" : {
+      "regionCode" : "us-west-2",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/us-west-2/index.json"
+    },
+    "ap-southeast-3" : {
+      "regionCode" : "ap-southeast-3",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-southeast-3/index.json"
+    },
+    "us-gov-east-1" : {
+      "regionCode" : "us-gov-east-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/us-gov-east-1/index.json"
+    },
+    "eu-north-1" : {
+      "regionCode" : "eu-north-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/eu-north-1/index.json"
+    },
+    "eu-west-2" : {
+      "regionCode" : "eu-west-2",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/eu-west-2/index.json"
+    },
+    "ap-southeast-2" : {
+      "regionCode" : "ap-southeast-2",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-southeast-2/index.json"
+    },
+    "ap-southeast-1" : {
+      "regionCode" : "ap-southeast-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-southeast-1/index.json"
+    },
+    "sa-east-1" : {
+      "regionCode" : "sa-east-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/sa-east-1/index.json"
+    },
+    "mx-central-1" : {
+      "regionCode" : "mx-central-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/mx-central-1/index.json"
+    },
+    "ap-northeast-1" : {
+      "regionCode" : "ap-northeast-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-northeast-1/index.json"
+    },
+    "us-east-2" : {
+      "regionCode" : "us-east-2",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/us-east-2/index.json"
+    },
+    "ap-southeast-7" : {
+      "regionCode" : "ap-southeast-7",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-southeast-7/index.json"
+    },
+    "eu-west-3" : {
+      "regionCode" : "eu-west-3",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/eu-west-3/index.json"
+    },
+    "eu-central-2" : {
+      "regionCode" : "eu-central-2",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/eu-central-2/index.json"
+    },
+    "ap-southeast-5" : {
+      "regionCode" : "ap-southeast-5",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-southeast-5/index.json"
+    },
+    "eu-south-2" : {
+      "regionCode" : "eu-south-2",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/eu-south-2/index.json"
+    },
+    "ap-east-2" : {
+      "regionCode" : "ap-east-2",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-east-2/index.json"
+    },
+    "eu-south-1" : {
+      "regionCode" : "eu-south-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/eu-south-1/index.json"
+    },
+    "us-west-1" : {
+      "regionCode" : "us-west-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/us-west-1/index.json"
+    },
+    "me-south-1" : {
+      "regionCode" : "me-south-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/me-south-1/index.json"
+    },
+    "us-gov-west-1" : {
+      "regionCode" : "us-gov-west-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/us-gov-west-1/index.json"
+    },
+    "af-south-1" : {
+      "regionCode" : "af-south-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/af-south-1/index.json"
+    },
+    "eu-central-1" : {
+      "regionCode" : "eu-central-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/eu-central-1/index.json"
+    },
+    "ap-southeast-6" : {
+      "regionCode" : "ap-southeast-6",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-southeast-6/index.json"
+    },
+    "ap-southeast-4" : {
+      "regionCode" : "ap-southeast-4",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-southeast-4/index.json"
+    },
+    "ap-south-2" : {
+      "regionCode" : "ap-south-2",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-south-2/index.json"
+    },
+    "ap-northeast-3" : {
+      "regionCode" : "ap-northeast-3",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/ap-northeast-3/index.json"
+    },
+    "il-central-1" : {
+      "regionCode" : "il-central-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/il-central-1/index.json"
+    },
+    "me-central-1" : {
+      "regionCode" : "me-central-1",
+      "currentVersionUrl" : "/offers/v1.0/aws/AmazonBedrockFoundationModels/20261109180952/me-central-1/index.json"
+    }
+  }
+}
