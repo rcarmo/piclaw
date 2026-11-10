@@ -125,6 +125,11 @@ function usage(value?: Usage): Usage | undefined {
     const item: unknown = Object.getOwnPropertyDescriptor(value, key)?.value;
     if (typeof item === 'number' && Number.isFinite(item) && item >= 0) Object.assign(result, { [key]: item });
   }
+  if (typeof value.cost.totalFromProvider === 'boolean') result.cost.totalFromProvider = value.cost.totalFromProvider;
+  for(const key of ['providerCostCurrency','provider_cost_currency'] as const){
+    const item=Object.getOwnPropertyDescriptor(value,key)?.value;
+    if(typeof item==='string'&&item.trim())Object.assign(result,{[key]:item});
+  }
   for (const key of ['cacheReadReported', 'cacheWriteReported'] as const) {
     const item: unknown = Object.getOwnPropertyDescriptor(value, key)?.value;
     if (typeof item === 'boolean') Object.assign(result, { [key]: item });
@@ -310,7 +315,8 @@ export function createHostModels(
       if (message.provider !== model.provider || message.model !== model.id || message.api !== model.api) return;
       const projected = usage(message.usage);
       if (!projected || ![projected.input, projected.output, projected.cacheRead, projected.cacheWrite, projected.totalTokens,
-        ...Object.values(projected.cost)].every(value => typeof value === "number" && Number.isFinite(value) && value >= 0)) return;
+        projected.cost.input, projected.cost.output, projected.cost.cacheRead, projected.cost.cacheWrite, projected.cost.total]
+        .every(value => typeof value === "number" && Number.isFinite(value) && value >= 0)) return;
       terminalUsage = projected;
     };
     void (async () => {

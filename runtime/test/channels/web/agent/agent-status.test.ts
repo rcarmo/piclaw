@@ -267,6 +267,7 @@ describe("web agent status helpers", () => {
           cacheWriteReported: false,
           totalTokens: 5300,
           costTotal: 0.012,
+          costCurrency: null, providerCostCurrency: null,
           providerCostTotal: 0.012,
           catalogueCostTotal: 0.02,
           costProvenance: "provider_reported",
@@ -287,6 +288,7 @@ describe("web agent status helpers", () => {
           cacheWriteTokens: 2000,
           totalTokens: 10600,
           costTotal: 0.024,
+          costCurrency:null,providerCostCurrency:null,providerCostTotal:null,catalogueCostTotal:null,
           runs: 2,
           cacheHitRate: 60,
           costCoverage: {

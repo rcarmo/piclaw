@@ -119,7 +119,7 @@ async function fixture(multimodal = false, keyless = false, deferred = false, im
     }
     if (terminalError && terminalError !== "retry-once" && terminalError !== "retry-always" || terminalError === "retry-once" && calls === 2 || terminalError === "retry-always" && calls >= 2) {
       const error: AssistantMessage = { ...message, content: [], stopReason: "error" as const, errorMessage: errorText,
-        usage: { ...message.usage, cost: { input: 0.1, output: 0.2, cacheRead: 0, cacheWrite: 0, total: 0.3 } } };
+        usage: { ...message.usage, cost: { ...message.usage.cost, input: 0.1, output: 0.2, cacheRead: 0, cacheWrite: 0, total: 0.3 } } };
       if (terminalError === "retry-once" || terminalError === "retry-always") error.usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
       if (terminalError === "invalid-usage") error.usage.cost.total = -1;
       if (terminalError === "wrong-owner") error.provider = "different-provider";
@@ -1290,4 +1290,9 @@ test('Pi1.5 SDK payload hook stays task-bound, JSON-only and cannot replace the 
   const record={id:12,conversationId:34,kind:'pi.generation',version:1,input:{},state:{status:'running',checkpoint:{phase:'request'}}};
   await execute(record,{taskId:12,conversationId:34,signal},durableContext);replacement=true;await execute(record,{taskId:12,conversationId:34,signal},durableContext);
   expect(callbacks).toBe(2);let untrusted=false;expect(()=>f.models.streamSimple(f.model,context,{onPayload(){untrusted=true;}})).toThrow('Unqualified request option');expect(untrusted).toBe(false);
+});
+
+for(const billed of [false,true])test(`failed SDK outcome retains the provider-billed total marker: ${billed}`,async()=>{
+ const f=await fixture(false,false,false,false,true);f.message.usage.cost.totalFromProvider=billed;
+ const result=await f.models.completeSimple(f.model,context);expect(result.stopReason).toBe('error');expect(result.usage.cost.totalFromProvider).toBe(billed);expect(f.calls()).toBe(1);
 });

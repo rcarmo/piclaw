@@ -2,7 +2,7 @@
   "version": 1,
   "sources": {
     "core": "3c66c54de0bc4826dc51655bb5f009ce6f9905d9",
-    "sdk": "@earendil-works/pi-durable@1.4.0",
+    "sdk": "@earendil-works/pi-durable@1.5.1",
     "approved-variant:table:tasks:4ef5a9a019b90afd9b640bc034f451f8601869d6ed2ffd3f525414d008ea338e": "SDK 1.4.0 immutable SQLite migration 2 rebuilds tasks with sleeping status and a quoted final table header. Isolated v1-to-v2 proof preserves task rows/IDs byte-for-byte; only this table fingerprint changes. Retain the exact v1 fingerprint for read-only historical inventory. Opening v2 with SDK 1.3.0 is unsupported; no live migration is authorised here.",
     "nativeAddons": "e8aac2399148cbef638764ba2b5a1cd916cc5ecc",
     "approved-variant:table:chat_branches:ca1502052e5b89e1bea6419cf9448b2b81bf0c76dbfc585548d58bb2d11f5bc7": "Current migrateChatBranchAgentNameUniqueness rebuild quotes the table header; isolated historical chats/branches + legacy token_usage fixture; all other clauses/constraints unchanged. See runtime/src/db/connection.ts and qualification/pi-durable-130/schema-ownership-fixture.ts.",
@@ -1687,6 +1687,14 @@
       "fingerprints": [
         "1fce1571bbfeaa8f30e6c755459d11910cc37fbd714b0be15cdf046b4f4c7b96"
       ],
+      "requiredIn": [],
+      "table": "token_usage"
+    },
+    "index:idx_token_usage_chat_totals_covering_v2": {
+      "owner": "core:token_usage",
+      "fingerprints": [
+        "3617f93dd9dad159231cee00b68fa1264c040edc51afe6065fd496daabdf17f0"
+      ],
       "requiredIn": [
         "core",
         "native",
@@ -2977,7 +2985,8 @@
     "table:token_usage": {
       "owner": "core:token_usage",
       "fingerprints": [
-        "80e39ff09dbc05871052df8ee7f9191d655807aa8f9b46da9e96d635b036d48e"
+        "80e39ff09dbc05871052df8ee7f9191d655807aa8f9b46da9e96d635b036d48e",
+        "4030fa7183016951d99adb7dea468c15694edf665a18b53d0a2de194226751fd"
       ],
       "requiredIn": [
         "core",

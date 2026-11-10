@@ -44,7 +44,7 @@ describe("token-usage", () => {
     finally { db.prepare = original; }
     expect(query).toContain("FROM token_usage");
     expect(db.query("EXPLAIN QUERY PLAN " + query).all(chatJid)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ detail: "SEARCH token_usage USING COVERING INDEX idx_token_usage_chat_totals_covering (chat_jid=?)" }),
+      expect.objectContaining({ detail: "SEARCH token_usage USING COVERING INDEX idx_token_usage_chat_totals_covering_v2 (chat_jid=?)" }),
     ]));
     expect(totals).toEqual(db.query(query.replace("FROM token_usage", "FROM token_usage NOT INDEXED")).get(chatJid) as any);
     expect(totals).toMatchObject({ runs: 4, input_tokens: 9, provider_reported_cost_runs: 1,
@@ -69,9 +69,10 @@ describe("token-usage", () => {
       initializeDatabaseSchema(db);
       initializeDatabaseSchema(db);
       expect(db.query("SELECT id,chat_jid,run_at,input_tokens,total_tokens,cost_total FROM token_usage").all()).toEqual(original);
-      expect((db.query("PRAGMA index_info(idx_token_usage_chat_totals_covering)").all() as { name: string }[]).map(row => row.name)).toEqual([
+      expect((db.query("PRAGMA index_info(idx_token_usage_chat_totals_covering_v2)").all() as { name: string }[]).map(row => row.name)).toEqual([
         "chat_jid", "run_at", "id", "input_tokens", "output_tokens", "reasoning_tokens",
         "cache_read_tokens", "cache_write_tokens", "total_tokens", "cost_total", "cost_provenance",
+        "provider_cost_total", "provider_cost_currency", "catalogue_cost_total", "pricing_currency",
       ]);
       expect(db.query("SELECT name FROM sqlite_master WHERE name='idx_token_usage_chat_jid_run_at'").get()).not.toBeNull();
       db.query("INSERT INTO token_usage(chat_jid,run_at,total_tokens) VALUES(?,?,?)").run("test:legacy-covering", "2026-01-02T00:00:00Z", 3);
@@ -367,7 +368,7 @@ describe("token-usage", () => {
       cache_read_tokens: 0,
       cache_write_tokens: 0,
       total_tokens: 0,
-      cost_total: 0,
+      cost_total: null, cost_currency:null, provider_cost_total:null, provider_cost_currency:null, catalogue_cost_total:null,
       runs: 1,
       provider_reported_cost_runs: 0,
       catalogue_estimate_cost_runs: 0,
@@ -384,7 +385,7 @@ describe("token-usage", () => {
       cache_read_tokens: 0,
       cache_write_tokens: 0,
       total_tokens: 0,
-      cost_total: 0,
+      cost_total: null, cost_currency:null, provider_cost_total:null, provider_cost_currency:null, catalogue_cost_total:null,
       runs: 1,
       provider_reported_cost_runs: 0,
       catalogue_estimate_cost_runs: 0,
@@ -392,4 +393,30 @@ describe("token-usage", () => {
       legacy_cost_runs: 1,
     }]);
   });
+});
+
+for(const currencies of [['USD','USD'],['USD','EUR'],['USD',null],[null,null]] as const)test(`provider cost aggregation keeps units: ${currencies.join('/')}`,()=>{
+ initDatabase();const db=getDb(),chat='test:currency:'+JSON.stringify(currencies);
+ for(const [index,currency]of currencies.entries())storeTokenUsage({chat_jid:chat,run_at:'2026-11-10T00:00:00.000Z',provider:'currency-provider',model:'currency-model',input_tokens:1,output_tokens:1,cache_read_tokens:0,cache_write_tokens:0,total_tokens:2,cost_input:1,cost_output:0,cost_cache_read:0,cost_cache_write:0,cost_total:index,provider_cost_total:index,provider_cost_currency:currency,catalogue_cost_total:1,pricing_currency:'USD',cost_provenance:'provider_reported'});
+ const known=currencies[0]==='USD'&&currencies[1]==='USD';
+ for(const row of [getTokenUsageTotals(chat),getTokenUsageByProvider(chat)[0]!,getTokenUsageByModel(chat)[0]!])expect(row).toMatchObject({total_tokens:4,runs:2,cost_total:known?1:null,cost_currency:known?'USD':null,provider_cost_total:known?1:null,provider_cost_currency:known?'USD':null,catalogue_cost_total:2,provider_reported_cost_runs:2});
+ expect(getLatestTokenUsage(chat)).toMatchObject({provider_cost_total:1,provider_cost_currency:currencies[1]});
+ expect(db.query('SELECT provider_cost_total,provider_cost_currency FROM token_usage WHERE chat_jid=? ORDER BY id').all(chat)).toEqual(currencies.map((currency,index)=>({provider_cost_total:index,provider_cost_currency:currency})));
+});
+test('provider zero USD stays known while anonymous legacy amounts stay unclassified',()=>{
+ initDatabase();const chat='test:currency-zero';storeTokenUsage({chat_jid:chat,run_at:'2026-11-10T00:00:00.000Z',input_tokens:0,output_tokens:0,cache_read_tokens:0,cache_write_tokens:0,total_tokens:0,cost_input:0,cost_output:0,cost_cache_read:0,cost_cache_write:0,cost_total:0,provider_cost_total:0,provider_cost_currency:'USD',cost_provenance:'provider_reported'});
+ expect(getTokenUsageTotals(chat)).toMatchObject({cost_total:0,cost_currency:'USD',provider_cost_total:0,provider_cost_currency:'USD',catalogue_cost_total:null});
+ expect(getTokenUsageTotals('test:no-currency-observations')).toMatchObject({cost_total:null,cost_currency:null,provider_cost_total:null});
+});
+
+for(const custom of [false,true])test(`currency index upgrade preserves rows and ${custom?'an unknown old declaration':'retires only the known old declaration'}`,()=>{
+ const db=new Database(':memory:');try{
+ initializeDatabaseSchema(db);db.exec('DROP INDEX idx_token_usage_chat_totals_covering_v2');
+ const suffix=custom?" WHERE cost_total>0":"";
+ db.exec('CREATE INDEX idx_token_usage_chat_totals_covering ON token_usage (chat_jid, run_at, id, input_tokens, output_tokens, reasoning_tokens, cache_read_tokens, cache_write_tokens, total_tokens, cost_total, cost_provenance)'+suffix);
+ db.exec("INSERT INTO token_usage(chat_jid,run_at,provider_cost_total,cost_total) VALUES('historical-unknown','2026-01-01',5,5)");const before=db.query('SELECT * FROM token_usage').all(),index=db.query("SELECT sql FROM sqlite_schema WHERE name='idx_token_usage_chat_totals_covering'").get();
+ initializeDatabaseSchema(db);initializeDatabaseSchema(db);
+ expect(db.query('SELECT * FROM token_usage').all()).toEqual(before);expect(db.query("SELECT sql FROM sqlite_schema WHERE name='idx_token_usage_chat_totals_covering'").get()).toEqual(custom?index:null);
+ expect(db.query("SELECT name FROM sqlite_schema WHERE name='idx_token_usage_chat_totals_covering_v2'").get()).not.toBeNull();
+ }finally{db.close();}
 });
