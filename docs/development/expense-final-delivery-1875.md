@@ -46,11 +46,18 @@ Goal token budgets, context/output ceilings, provider-imposed quotas/errors and 
 ## Later reporting and qualification checkpoint
 
 - User deferred Cheapskate; it remains unchanged and is excluded from this delivery for now.
-- Add-ons PR236 merged asb12c0cc1 with the exact qualified tree. Fresh merged-source affected tests pass136/857assertions with7pre-existing opt-in skips; the Core default factory's three installed-add-on billing cases pass. Public package publication is pending: the first hosted attempt cancelled while installing browser dependencies; one unchanged retry was requested. No live installation or restart occurred.
+- Add-ons PR236 merged asb12c0cc1 with the exact qualified tree. Fresh merged-source affected tests pass136/857assertions with7pre-existing opt-in skips; the Core default factory's three installed-add-on billing cases pass. Publication succeeded on the unchanged second attempt after the first cancelled during browser-dependency installation. All seven public Core archives now match their catalogue manifests and50approved source-profile file fingerprints. No live installation or restart occurred.
 - Full host run at07b634b6c finished7156passed/71skipped/1failed. The only failure was an obsolete1.4.0 expected SDK label in the real MCP settings runtime test; the current1.5.1 expectation now passes. Features/native did not run after that failure.
 - Removed unused raw-cost accumulation and cost-column dependencies from token-only charts. Separate API-equivalent pricing references and all quoted rates are retained.
 - Unknown pricing now returns unavailable instead of synthetic zero rates. Cost charts preserve the known USD subtotal, keep full/day totals unknown where pricing is missing, retain observed documented-free zero, emit blank unknown CSV amounts and exclude records after the requested instant. Missing databases no longer fabricate zero observations. The same chart mode/layout is retained.
 - Fresh chart/reference/token-only/MCP controls pass35tests/205assertions; Root and script types pass. A bounded independent review found no concrete regression in this reporting/deletion diff. Full exact-head delivery gates remain outstanding.
+
+## Public seed qualification
+
+- Refresh the bundled catalogue, SHA256 pins and archives from merged add-ons commitb12c0cc1. The frozen Bun lock changes only the six updated first-party archive integrities; third-party versions stay unchanged. Initial plain install reused old cached file-URL packages, so the acquisition stage used targeted `bun update` and verified installed versions before publishing any seed.
+- Fresh offline preparation/first-workspace/retired-A2A controls pass14tests/71assertions.
+- A supplementary fixture seeds only the seven actual public packages through the existing first-workspace installer, then exercises the real SDK1.5.1 default factory. Estimate, billed-zero and billed-positive cases each pass with one provider call, immutable historical monetary rows and reopen/no-replay checks. Optional image/conversion tooling is outside this seven-package fixture; the original all23installed cases remain unchanged and passing.
+- Full exact-head host/features/native and final delivery review remain outstanding. Prior supplemental and failed runs remain separate receipts.
 
 ## Remaining adapters and their current consumers
 
