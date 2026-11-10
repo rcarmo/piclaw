@@ -21,7 +21,8 @@ const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 
 beforeAll(async () => {
   if (process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS !== '1') return;
   await Promise.all(([['chromium', chromium], ['webkit', webkit]] as const).map(async ([name, engine]) => {
-    browsers.set(name, await engine.launch({ headless: true }));
+    // Use software rendering without an X server in container CI.
+    browsers.set(name, await engine.launch({ headless: true, args: name === 'chromium' ? ['--use-angle=swiftshader', '--ozone-platform=headless'] : [] }));
   }));
   server = Bun.serve({ port: 0, async fetch(request) {
     const url = new URL(request.url);

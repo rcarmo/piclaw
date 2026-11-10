@@ -1,5 +1,6 @@
 import { admitSqliteWrite } from '../../src/db/sqlite-async-admission.js';
-// INACTIVE application-owned correlation store. No database opens or automatic migrations.
+// Application-owned exact source correlation. Schema initialization is explicit;
+// public pi-durable owns execution, results and durable cancellation.
 import type { Database } from "bun:sqlite";
 import { assertHostSchema, initializeHostSchemaTables } from "./host-schema.js";
 import { getQueuedInputIntent } from "../../src/service-effects/current-piclaw/queued-input-intent.js";

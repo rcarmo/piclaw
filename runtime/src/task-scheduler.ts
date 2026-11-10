@@ -2,8 +2,8 @@
  * task-scheduler.ts – Polls for due scheduled tasks and executes them.
  *
  * Runs a periodic loop (every SCHEDULER_POLL_INTERVAL ms) that queries the
- * database for active tasks whose `next_run` is in the past, then enqueues
- * each task on the AgentQueue for lane-aware execution.
+ * database for active tasks whose `next_run` is in the past. Public pi-durable
+ * executes native agent work directly; AgentQueue places other work.
  *
  * AI work executes only through an admitted S07 occurrence and native port.
  * Model overrides and history isolation belong to its private native context.
@@ -12,7 +12,7 @@
  *
  * Consumers:
  *   - runtime.ts calls startSchedulerLoop() at startup.
- *   - The AgentQueue (queue.ts) serialises task execution with user messages per chat lane while allowing unrelated chats to progress in parallel.
+ *   - AgentQueue (queue.ts) places non-agent work, including scheduled shell tasks.
  */
 
 import { waitForSqliteContention, admitSqliteWrite, type SyncSqliteOperation } from "./db/sqlite-async-admission.js";
@@ -76,7 +76,7 @@ function unsupportedScheduledRun(): ScheduledTaskRunOutcome {
  * Keeps the scheduler decoupled from concrete channel implementations.
  */
 export interface SchedulerDeps {
-  /** The shared lane-aware execution queue. */
+  /** Shared placement queue for non-agent work; not a native agent execution owner. */
   queue: AgentQueue;
   /** The agent pool for running agent turns. */
   agentPool: AgentPool;

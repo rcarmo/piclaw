@@ -1,12 +1,10 @@
 {
   "status": "pre-merge source/retention manifest; final qualified and merged commit bindings remain external receipts",
-  "coreSourceParent": "2263d126cd6c9f35f666b57f3f43c321ed29c2a3",
+  "coreSourceParent": "b4423d5cddef61f93a329bb8d8d4f7c6dc13c920",
   "coreBase": "34516cabd8e56f61bd1b7150e0c87c244694533e",
-  "addonSource": "b12c0cc1a04854719565702bf08069034243db14",
+  "addonSource": "609dc7bda3a47252481f3d8da1b838ec723798ad",
   "scopeExclusion": "Cheapskate explicitly deferred and unchanged",
-  "pendingDelivery": [
-    "add-ons PR237 documentation publication and corresponding Core exact pins"
-  ],
+  "pendingDelivery": [],
   "baselineEntries": 105,
   "deletedPaths": 36,
   "rows": [
@@ -239,7 +237,7 @@
       "deliveryOwner": "#1879",
       "originalSha256": "50d6b348ce98f00ebe377c63ae0c800c2b587e4bccfebba00fbc5322e415eda2",
       "state": "retained-decoupled",
-      "currentSha256": "367f5c689b0262fdc100f9dd689081610ec74cfb54a2998683b54460aef721b0",
+      "currentSha256": "53b7940dcf94c7222774f4ef41cf4b92a3dd82603e0ef2b8a772c3d9cabf66fc",
       "currentPurpose": "exact SDK conversation/input/request/source identity and nonfinancial publication fencing",
       "directImportCallers": [
         {
@@ -398,11 +396,11 @@
         },
         {
           "caller": "runtime/durable-engine/src/host-bindings.ts",
-          "line": 8
+          "line": 9
         },
         {
           "caller": "runtime/durable-engine/src/host-bindings.ts",
-          "line": 283
+          "line": 284
         },
         {
           "caller": "runtime/durable-engine/src/host-code-review-tool.ts",
@@ -1877,7 +1875,7 @@
       "deliveryOwner": "#1879",
       "originalSha256": "a2d0f1155e1e55121a796a8cb66242f2a81c3d9a9481b4ca4304dec4cfa96f72",
       "state": "retained-decoupled",
-      "currentSha256": "023aa0c7640a99dc4816687400e75b9a025f8b64a7e99f9d6c774ddd9d321559",
+      "currentSha256": "402b50753f9ad6d1e8904a115bbaa351d2dca7a9e7611f263cf544c6d6de0276",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
@@ -2218,7 +2216,7 @@
       "deliveryOwner": "#1880",
       "originalSha256": "a71b52ceb1f4f68760c2256bc16569b03ec76eb931363926ec82db86eb8e4120",
       "state": "retained-decoupled",
-      "currentSha256": "a71b52ceb1f4f68760c2256bc16569b03ec76eb931363926ec82db86eb8e4120",
+      "currentSha256": "bdc8863c7429e6a40ce1cebb52ad7e92074c8786ef6568657a1b038a9bc246f4",
       "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
       "directImportCallers": []
     },
@@ -2458,7 +2456,7 @@
       "deliveryOwner": "#1882",
       "originalSha256": "1af8f43680724ca4c05c9beede8db5903b013bc76e9bc5dbceb1235e3d823105",
       "state": "retained-decoupled",
-      "currentSha256": "1f14b47449f5a494c2f64f7fcc77486fa07f4372ee106f27f23e02f5600b0d21",
+      "currentSha256": "65ec001a5b9326efbbced719e2dacb2fdab4c1f57d504505fce578b21e2ec098",
       "currentPurpose": "exact approved add-on source/resource identity and public exported domain contracts",
       "directImportCallers": [
         {
@@ -2863,16 +2861,16 @@
       ]
     },
     "currentCoreHandwrittenProduction": {
-      "added": 589,
-      "removed": 561,
-      "net": 28
+      "added": 597,
+      "removed": 568,
+      "net": 29
     },
     "addon236Runtime": {
       "added": 28,
       "removed": 8,
       "net": 20
     },
-    "conservativeAttributedNet": -1605,
+    "conservativeAttributedNet": -1604,
     "accounting": "Only the two explicitly attributed accepted retirements are credited once. All new Core/236 runtime additions charged. Other large accepted finance/native-owner deletions deliberately uncredited; tests/docs/generated data/assets/qualification tooling/moves receive no backend deletion credit."
   }
 }

@@ -10,7 +10,7 @@ test('removal/retention witness binds every original Core path to current bytes 
 });
 test('retirement accounting charges current additions and does not credit unrelated/generated/test changes',()=>{
  const r=manifest.reduction;expect(r.conservativeAttributedNet).toBe(r.accepted1881.physical+r.accepted1878.physical+r.currentCoreHandwrittenProduction.net+r.addon236Runtime.net);
- expect(r.currentCoreHandwrittenProduction.net).toBe(28);expect(r.addon236Runtime.net).toBe(20);
+ expect(r.currentCoreHandwrittenProduction.net).toBe(29);expect(r.addon236Runtime.net).toBe(20);
  expect(r.accounting).toContain('credited once');expect(r.accounting).toContain('no backend deletion credit');
  expect(manifest.scopeExclusion).toContain('Cheapskate explicitly deferred');
 });

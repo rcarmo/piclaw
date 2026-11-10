@@ -236,13 +236,13 @@
 
     "@rcarmo/piclaw-addon-code-review": ["@rcarmo/piclaw-addon-code-review@code-review.tgz", { "dependencies": { "@lezer/common": "1.5.1", "@lezer/highlight": "1.2.3", "@lezer/javascript": "1.5.4", "@lezer/json": "1.0.3", "@lezer/markdown": "1.6.3", "@lezer/python": "1.1.18", "diff": "9.0.0", "marked": "18.1.0" } }, "sha512-B/ivCFMCgyaxGIvI0DRy4DjeFojnoxUZGA4ViYOpYFaSkY8x7x9l8rhJzx9n0qsp/626COkiUR5xzYjyg0vdiA=="],
 
-    "@rcarmo/piclaw-addon-delegate": ["@rcarmo/piclaw-addon-delegate@delegate.tgz", {}, "sha512-LeavuyRPbtnRQo20qhrt+TegysK/RlgdCIRPYedNdQsYF2VjY+zrbV56MYNEuMQs7TQVuFOPm0CNbhJ0shiglg=="],
+    "@rcarmo/piclaw-addon-delegate": ["@rcarmo/piclaw-addon-delegate@delegate.tgz", {}, "sha512-a7eAc5sT4JqOsssSUaekCFzy2akHPbIhTfVleYQUCsY3+XSLIAMC5+c14XXaavIEhWe6wDL+/V1VVq5YaXo+nA=="],
 
-    "@rcarmo/piclaw-addon-goal": ["@rcarmo/piclaw-addon-goal@goal.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-DDyq2PQCub24dNbFMyHVgxmlWkXqaKeC31ipjimfaqqLPek3ZAu6wwBCGEHr+jn1HpHI69aW5ZP6V7y0eMPJMA=="],
+    "@rcarmo/piclaw-addon-goal": ["@rcarmo/piclaw-addon-goal@goal.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-zhV/AZNtfDzSJvmrLw9GqRyOLzr+TCTh280qeEstzQ6KHFkb/MAVNXHo/hBuV5siV4WOySOjsgPqYOJMvKppJg=="],
 
-    "@rcarmo/piclaw-addon-observability": ["@rcarmo/piclaw-addon-observability@observability.tgz", { "dependencies": { "@azure/monitor-opentelemetry": "^1.19", "@opentelemetry/api": "^1.9", "@opentelemetry/resources": "^2.10.0" }, "peerDependencies": { "@earendil-works/pi-coding-agent": "*" } }, "sha512-krQKyn+imyt8WFy6AwvpGtPmVC+PJ2sCyGUq382RuSGlBecW6v8zf+/I7ks+3rSPcWuooPwkz4H7gJMnXPXSOw=="],
+    "@rcarmo/piclaw-addon-observability": ["@rcarmo/piclaw-addon-observability@observability.tgz", { "dependencies": { "@azure/monitor-opentelemetry": "^1.19", "@opentelemetry/api": "^1.9", "@opentelemetry/resources": "^2.10.0" }, "peerDependencies": { "@earendil-works/pi-coding-agent": "*" } }, "sha512-8EiAIDPIMJgYsMcKy04/i3n1c6o/WGQG2AsxiihM5vtiD+iCVhaf2wpPSOl/rBpGZ6LKCwQw4vhMnpRk8S9jTw=="],
 
-    "@rcarmo/piclaw-addon-plan-sidebar": ["@rcarmo/piclaw-addon-plan-sidebar@plan-sidebar.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-BGtQpKA7qmfktVgpPNQ9fQsaHouX/xHoZ52c/4ioiLb9vkctBRje0144w+hKSk+pFXkrA5ekJnYkncaA7UbqPg=="],
+    "@rcarmo/piclaw-addon-plan-sidebar": ["@rcarmo/piclaw-addon-plan-sidebar@plan-sidebar.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-VMSacc+bTEDIstPI0wwgTyudHuuEU/x3oPvpYWBIUgv6dSgm54KTvtFjdK0cuUf94S23tWLN6gG+LB9NX1SeCA=="],
 
     "@rcarmo/piclaw-addon-restic": ["@rcarmo/piclaw-addon-restic@restic.tgz", {}, "sha512-B/PeNwbjlbAM4MhGA4q3vIuuvgNO60oPaZJ3dSONR3XU4siOlyTYJw3ml+OfdWI6m7cXU7PbQv6Swta/EsP/Dg=="],
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "catalog": "https://raw.githubusercontent.com/rcarmo/piclaw-addons/main/catalog.json",
-  "catalogSha256": "d795239882a963838be9c2dea88d5f0a294a5438e893b2dd8f9547cd88f285fd",
+  "catalogSha256": "975e54a05902d6cb27f4b94879d46705e3f53c12e9dfcb032382e29f7790210a",
   "addons": [
     {
       "slug": "code-review",
@@ -15,28 +15,28 @@
       "name": "@rcarmo/piclaw-addon-delegate",
       "version": "0.2.22",
       "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-delegate-0.2.22.tgz",
-      "sha256": "e22eed0d3ace6b557a342c50bd1932299e9bac4d9608e642cac73a7ca8c573cc"
+      "sha256": "bcc4099820437478b5c342922495146c2de010bc712c3094c7b9452a4a7438f7"
     },
     {
       "slug": "goal",
       "name": "@rcarmo/piclaw-addon-goal",
       "version": "0.1.50",
       "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-goal-0.1.50.tgz",
-      "sha256": "ffb4f1f7db4ab88f45c6e0e44df9e300332780489724eed618e68bf8ae3c3845"
+      "sha256": "9b4cf770c2fbd9d794657d580b56236355fe17fae5f3c80f5220a2eca666e867"
     },
     {
       "slug": "observability",
       "name": "@rcarmo/piclaw-addon-observability",
-      "version": "0.1.21",
-      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-observability-0.1.21.tgz",
-      "sha256": "58dc5e05ca162ae0ae1db96a5b950f9d4ece0eb952240503525e8668ca200eed"
+      "version": "0.1.22",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-observability-0.1.22.tgz",
+      "sha256": "128e7a4871c6e316ce295277f3d6e2e619d8448ac5fc75893e9199e0b25c0181"
     },
     {
       "slug": "plan-sidebar",
       "name": "@rcarmo/piclaw-addon-plan-sidebar",
       "version": "0.1.27",
       "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-plan-sidebar-0.1.27.tgz",
-      "sha256": "2e54af9d48a1a124f224fa48012ae2fc8f90d06e384ccc65700e658b47c50a99"
+      "sha256": "4fbed26b2b20d75ecae796c613520a379c52a55d2e6476a31ba81f733d1e5570"
     },
     {
       "slug": "restic",
