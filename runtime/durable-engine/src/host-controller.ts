@@ -112,7 +112,7 @@ export async function createHostController(config: HostControllerOptions, contex
       }
       if (record.kind !== "pi.compaction" || !record.background || record.owner !== undefined ||
         (record.input as { reason?: string }).reason !== "threshold" || !manifest.some(binding => binding.conversationId === record.conversationId)) continue;
-      if (!compactions.some(status => status.conversationId === record.conversationId && status.taskId === record.id && status.reason === "threshold" && !status.blocking)) continue;
+      if (!compactions.some(status => status.conversationId === record.conversationId && status.taskId === record.id && status.trigger === "threshold" && !status.blocking)) continue;
       roots.add(record.id); backgroundCompactions.add(record.id);
     }
     for (const run of runs) {

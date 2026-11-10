@@ -135,6 +135,7 @@ export class BunSqliteDatabase implements SqliteDatabase {
     return {
       exec: async sql => { valid(); execSqliteMutation(this.db, sql); },
       run: async (sql, ...params) => { valid(); assertSqliteMutation(sql); this.db.query(sql).run(...params); },
+      runCounted: async (sql, ...params) => { valid(); assertSqliteMutation(sql); return this.db.query(sql).run(...params).changes; },
       get: async <T extends object>(sql: string, ...params: SqliteValue[]) => {
         valid(); return (prepareSqliteRead(this.db, sql).get(...params) ?? undefined) as T | undefined;
       },
@@ -149,6 +150,9 @@ export class BunSqliteDatabase implements SqliteDatabase {
   }
   run(sql: string, ...params: SqliteValue[]): Promise<void> {
     return this.guard ? this.transaction(tx => tx.run(sql, ...params)) : this.enqueue(() => this.executor(() => {}).run(sql, ...params));
+  }
+  runCounted(sql:string,...params:SqliteValue[]):Promise<number> {
+    return this.guard ? this.transaction(tx=>tx.runCounted(sql,...params)) : this.enqueue(()=>this.executor(()=>{}).runCounted(sql,...params));
   }
   get<T extends object>(sql: string, ...params: SqliteValue[]): Promise<T | undefined> {
     return this.enqueue(() => this.executor(() => {}).get<T>(sql, ...params));

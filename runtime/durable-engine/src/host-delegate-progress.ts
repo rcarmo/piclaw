@@ -52,7 +52,7 @@ export async function watchNativeDelegateProgress(child: Pick<Conversation, "wat
     if (active) {
       watch = await child.watch(context);
       await update(watch.value);
-      watch.start(view => (inFlight = update(view)));
+      watch.start(call => {if(call.kind==='failed'){active=false;return Promise.resolve();}return(inFlight=update(call.value));});
       void watch.closed.catch(() => { active = false; });
     }
   } catch { active = false; }
