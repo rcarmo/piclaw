@@ -2410,6 +2410,7 @@
           "semanticReaders": 0,
           "files": [
             "docs/development/native-ui-projections.md",
+            "docs/development/pi-1.5.1-qualification.md",
             "docs/development/schema-ownership.md"
           ],
           "readerFiles": []
