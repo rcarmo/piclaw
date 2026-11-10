@@ -39,6 +39,6 @@ try {
   assert.equal(JSON.stringify(host.session.sessionManager.getEntries()), history);
   await host.dispose(); assert.equal(transports[1].closed, true);
   const guard = (globalThis as any).__ADMISSION_ENFORCEMENT__; assert.equal(guard.networkAttempts, 0); assert.equal(guard.childProcessAttempts, 0);
-  console.log(JSON.stringify({ version: "1.5.1", closeFailureObserved: true, reloadResolved: true, firstTransportClosed: false, secondTransportClosed: true, transportCount: 2, surfacedErrors: errors.length, guard,
+  console.log(JSON.stringify({ version: "1.5.2", closeFailureObserved: true, reloadResolved: true, firstTransportClosed: false, secondTransportClosed: true, transportCount: 2, surfacedErrors: errors.length, guard,
     conclusion: "reload success is not proof of native transport shutdown; synthetic observation only, no Apply invocation or real sockets" }));
 } finally { await host.dispose(); rmSync(root, { recursive: true, force: true }); }

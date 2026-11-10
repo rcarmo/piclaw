@@ -12,11 +12,11 @@
     "rehearse": "bun src/rehearse.ts"
   },
   "dependencies": {
-    "@earendil-works/chord": "1.5.1",
-    "@earendil-works/pi-ai": "1.5.1",
-    "@earendil-works/pi-codemode": "1.5.1",
-    "@earendil-works/pi-durable": "1.5.1",
-    "@earendil-works/pi-telemetry": "1.5.1",
+    "@earendil-works/chord": "1.5.2",
+    "@earendil-works/pi-ai": "1.5.2",
+    "@earendil-works/pi-codemode": "1.5.2",
+    "@earendil-works/pi-durable": "1.5.2",
+    "@earendil-works/pi-telemetry": "1.5.2",
     "typebox": "1.4.3"
   },
   "devDependencies": {
@@ -24,10 +24,10 @@
     "typescript": "7.0.2"
   },
   "overrides": {
-    "@earendil-works/chord": "1.5.1",
-    "@earendil-works/pi-ai": "1.5.1",
-    "@earendil-works/pi-codemode": "1.5.1",
-    "@earendil-works/pi-durable": "1.5.1",
-    "@earendil-works/pi-telemetry": "1.5.1"
+    "@earendil-works/chord": "1.5.2",
+    "@earendil-works/pi-ai": "1.5.2",
+    "@earendil-works/pi-codemode": "1.5.2",
+    "@earendil-works/pi-durable": "1.5.2",
+    "@earendil-works/pi-telemetry": "1.5.2"
   }
 }

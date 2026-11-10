@@ -21,11 +21,11 @@ async function using(run: (fixture: Awaited<ReturnType<typeof openFixture>>) => 
 }
 
 describe("Q1 public candidate MemoryStorage only", () => {
-  test("independent public package graph is exactly 1.5.1", async () => {
+  test("independent public package graph is exactly 1.5.2", async () => {
     for (const name of ["chord", "pi-ai", "pi-codemode", "pi-durable"]) {
       // Package metadata is a filesystem read, not an unexported package subpath import.
       const pkg = await Bun.file(new URL(`../../runtime/durable-engine/node_modules/@earendil-works/${name}/package.json`, import.meta.url)).json();
-      expect(pkg.version).toBe("1.5.1");
+      expect(pkg.version).toBe("1.5.2");
       expect(import.meta.resolve(`../../runtime/durable-engine/node_modules/@earendil-works/${name}`)).toStartWith(new URL("../../runtime/durable-engine/node_modules/", import.meta.url).href);
     }
   });

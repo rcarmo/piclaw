@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.resolve("@earendil-works/pi-ai"))), "utf8"));
-if (manifest.version !== "1.5.1") throw new Error("Exact public pi-ai inventory target required");
+if (manifest.version !== "1.5.2") throw new Error("Exact public pi-ai inventory target required");
 
 let networkRequests = 0;
 const deny = () => { networkRequests++; throw new Error("Inventory network forbidden"); };
@@ -26,7 +26,7 @@ const customProviders = getProviderDefs().filter(provider => provider.isCustom).
   return { id: provider.id, authMode: requiresApiKey ? "custom_api_key" : "custom_no_key", requiresApiKey };
 });
 console.log(JSON.stringify({
-  version: manifest.version, gitHead: "dd30101cfc5b0609411dd80b6f93adbc14db14cf",
+  version: manifest.version, gitHead: "b4afdddf44e059c67ccf5097e5317d913521b470",
   source: "public_builtinProviders_auth_definitions", methodsExecuted: false,
   providers, customProviders, networkRequests, sdkFileSha256,
   externalIdentityRoutes: [

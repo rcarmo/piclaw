@@ -24,7 +24,7 @@ const denyBootstrap = () => { bootstrapRequests++; throw new Error("Unexpected p
 globalThis.fetch = Object.assign(denyBootstrap, { preconnect: denyBootstrap });
 
 const root = import.meta.resolve("@earendil-works/pi-ai");
-assert.equal(JSON.parse(await readFile(fileURLToPath(new URL("../package.json", root)), "utf8")).version, "1.5.1");
+assert.equal(JSON.parse(await readFile(fileURLToPath(new URL("../package.json", root)), "utf8")).version, "1.5.2");
 const fingerprints = {
   "anthropic.js":"835268caed5dab6a0c7f157c551ed59a00635c76305e6e0c41b579c41aa07bc5",
   "openrouter.js":"b69e807ed855095aa17b2c0d1a15f350c77e3a49f2a66853f227916daacb4703",
@@ -223,7 +223,7 @@ try {
     }
   }
   const copyCodeResults = await runCopyCodeCases(anthropicProvider().auth.oauth);
-  console.log(JSON.stringify({ version: "1.5.1", runtime: `Bun ${Bun.version}`,
+  console.log(JSON.stringify({ version: "1.5.2", runtime: `Bun ${Bun.version}`,
     scope: "public_anthropic_browser_copy_code_and_openrouter_methods_only", results, copyCodeResults, sdkFileSha256: fingerprints,
     credentialPersistence: "none", inference: "not_invoked", bootstrapRequests, networkGuard: "distinct_loopback_only_os_namespace_guarded_fetch_and_owned_ipv4_callbacks" }));
 } finally { globalThis.fetch = originalFetch; }

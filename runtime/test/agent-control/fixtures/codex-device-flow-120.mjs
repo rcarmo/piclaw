@@ -10,10 +10,10 @@ const denyBootstrap = () => { bootstrapRequests++; throw new Error("Unexpected p
 globalThis.fetch = Object.assign(denyBootstrap, { preconnect: denyBootstrap });
 const { builtinProviders } = await import("@earendil-works/pi-ai/providers/all");
 assert.equal(bootstrapRequests, 0);
-// Current 1.5.1 OAuth implementation hashes are independently measured; historical archives stay unchanged.
+// Current 1.5.2 OAuth implementation hashes are independently measured; historical archives stay unchanged.
 const manifestPath = fileURLToPath(new URL("../package.json", import.meta.resolve("@earendil-works/pi-ai")));
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-assert.equal(manifest.version, "1.5.1", "Exact published pi-ai 1.5.1 required");
+assert.equal(manifest.version, "1.5.2", "Exact published pi-ai 1.5.2 required");
 const sdkFileSha256 = {};
 for (const [path, expected] of [
   ["auth/oauth/openai-codex.js","0b94a219ddb5982f0ee543ef03138ed0254ce6ee0a57c9d89d39c242e2eaf6f6"],

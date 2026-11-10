@@ -68,5 +68,5 @@ try {
   assert.equal(closed, expected * 2); assert.deepEqual(errors, []);
   assert.deepEqual([readFileSync(globalPath, "utf8"), readFileSync(projectPath, "utf8")], before);
   const guard = (globalThis as any).__ADMISSION_ENFORCEMENT__; assert.equal(guard.networkAttempts, 0); assert.equal(guard.childProcessAttempts, 0);
-  console.log(JSON.stringify({ version: "1.5.1", mode, initialTransports: expected, reloadTransports: entries.length - expected, closedTransports: closed, guard, configUnmodified: true, actualLifecycle: "bind/reload/abort/await-runtime-dispose", noticesObserved: notices.length, scope: "public SDK project-trust/config read semantics; disabled server absence observed across two bounded80mssettle windows; management-write/real OAuth/provider gateway unqualified" }));
+  console.log(JSON.stringify({ version: "1.5.2", mode, initialTransports: expected, reloadTransports: entries.length - expected, closedTransports: closed, guard, configUnmodified: true, actualLifecycle: "bind/reload/abort/await-runtime-dispose", noticesObserved: notices.length, scope: "public SDK project-trust/config read semantics; disabled server absence observed across two bounded80mssettle windows; management-write/real OAuth/provider gateway unqualified" }));
 } finally { await host.dispose(); rmSync(root, { recursive: true, force: true }); }

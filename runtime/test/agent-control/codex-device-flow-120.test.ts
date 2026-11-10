@@ -14,7 +14,7 @@ test("public Codex device flow preserves endpoint, failure, cancellation and rea
     expect(err).toBe("");
     expect(exit).toBe(0);
     const result = JSON.parse(out);
-    expect(result.version).toBe("1.5.1");
+    expect(result.version).toBe("1.5.2");
     expect(result.runtime).toBe("Bun 1.4.4");
     expect(result.scope).toBe("public_builtin_openai_codex_synthetic_device_flow");
     expect(result.inferenceExecution).toBe("none");
@@ -25,8 +25,8 @@ test("public Codex device flow preserves endpoint, failure, cancellation and rea
     expect(result.results.find((row: any) => row.mode === "cancel").cancellationObserved).toBe(true);
     expect(result.results.find((row: any) => row.mode === "slow_down").slowDownDelayVerified).toBe(true);
     for (const runtime of ["bun"]) {
-      const receipt = JSON.parse(readFileSync(resolve(import.meta.dir, `../../../docs/design/earendil-agent-harness-integration-adr/evidence/receipts/earendil-151-codex-device-${runtime}.json`), "utf8"));
-      expect(receipt.version).toBe("1.5.1");
+      const receipt = JSON.parse(readFileSync(resolve(import.meta.dir, `../../../docs/design/earendil-agent-harness-integration-adr/evidence/receipts/earendil-152-codex-device-${runtime}.json`), "utf8"));
+      expect(receipt.version).toBe("1.5.2");
       expect(receipt.runtime).toBe("Bun 1.4.4");
       expect(receipt.results).toEqual(result.results);
       expect(receipt.sdkFileSha256).toEqual(result.sdkFileSha256);

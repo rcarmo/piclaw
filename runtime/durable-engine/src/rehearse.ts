@@ -86,7 +86,7 @@ export async function rehearse(args: string[]) {
     const rootRequire = createRequire(new URL("../../../package.json", import.meta.url));
     const packagePath = rootRequire.resolve("@earendil-works/pi-coding-agent/package.json");
     const pkg = JSON.parse(readFileSync(packagePath, "utf8"));
-    check(pkg.version === "1.5.1", "import_unsupported");
+    check(pkg.version === "1.5.2", "import_unsupported");
     const legacy = await import("../../src/durable-legacy-sdk.js");
     const bridge: GetLegacyContext = (entries, leaf) => {
       const detached = json([...entries]);

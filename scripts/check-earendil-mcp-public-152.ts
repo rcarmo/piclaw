@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
-/** Bun-only compile admission of exact 1.5.1 public MCP seams. No runtime mocks or MCP connections. */
+/** Bun-only compile admission of exact 1.5.2 public MCP seams. No runtime mocks or MCP connections. */
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 
-export const MCP_VERSION = "1.5.1";
-export const MCP_GIT_HEAD = "dd30101cfc5b0609411dd80b6f93adbc14db14cf";
+export const MCP_VERSION = "1.5.2";
+export const MCP_GIT_HEAD = "b4afdddf44e059c67ccf5097e5317d913521b470";
 export const missingSeams = [
   { symbol: "lazy", code: "TS2353", requirement: "MCP-08" },
   { symbol: "statusObserver", code: "TS2353", requirement: "MCP-12" },
@@ -70,7 +70,7 @@ export function matchNegativeDiagnostics(text: string) {
   return missingSeams.map(row => ({ ...row }));
 }
 
-export function checkMcpPublic151(repoRoot = resolve(import.meta.dir, "..")) {
+export function checkMcpPublic152(repoRoot = resolve(import.meta.dir, "..")) {
   if (!process.versions.bun) throw new Error("Bun execution is required.");
   const root = resolve(repoRoot);
   const packages = ["pi-coding-agent", "pi-mcp", "pi-codemode"].map(name => {
@@ -99,4 +99,4 @@ export function checkMcpPublic151(repoRoot = resolve(import.meta.dir, "..")) {
       scope: "public_type_contract_only", lifecycle: "separate_real_session_fixture", nativeParity: "not_qualified", productionActivation: false };
   } finally { rmSync(scratch, { recursive: true, force: true }); }
 }
-if (import.meta.main) console.log(JSON.stringify(checkMcpPublic151(), null, 2));
+if (import.meta.main) console.log(JSON.stringify(checkMcpPublic152(), null, 2));

@@ -16,19 +16,27 @@ test('one hundred queued leases retain renewal authority after a six-second WAL 
     process.env.PICLAW_DB_IN_MEMORY='0';initDatabase();const db=getDb();db.exec('PRAGMA foreign_keys=ON');const path=(db.query('PRAGMA database_list').all() as {name:string;file:string}[]).find(r=>r.name==='main')!.file;
     expect(path).toContain(ws.store);expect(db.query('PRAGMA journal_mode').get()).toEqual({journal_mode:'wal'});expect(db.query('PRAGMA busy_timeout').get()).toEqual({timeout:0});
     const built=createCurrentPiclawScheduledRunStore(db,{hitFault:()=>false,recordTrace(){},liveRenewalNow:()=>new Date().toISOString()});if(!built.ok)throw Error(built.error._tag);const store=built.value;
-    const renew=store.renew.bind(store),outcomes:Array<Awaited<ReturnType<typeof renew>>>=[];store.renew=async (request,context)=>{const result=await renew(request,context);outcomes.push(result);return result;};
+    const renew=store.renew.bind(store),outcomes:Array<{runId:string;result:Awaited<ReturnType<typeof renew>>}>=[],requests=new Map<string,Set<string>>();
+    store.renew=async (request,context)=>{const identities=requests.get(request.runId)??new Set<string>();identities.add(JSON.stringify(request));requests.set(request.runId,identities);const result=await renew(request,context);outcomes.push({runId:request.runId,result});return result;};
     const due=new Date(Date.now()-1000).toISOString(),ids=Array.from({length:100},(_,i)=>'task:capacity:'+String(i).padStart(3,'0'));
     for(const id of ids)createTask({id,chat_jid:'web:capacity',prompt:'fixture',task_kind:'shell',command:"printf 'must-not-execute'",cwd:'.',schedule_type:'once',schedule_value:due,next_run:due,status:'active',notify_on_complete:false,created_at:due});
     queue=new AgentQueue();queue.enqueue(async()=>{entered.resolve();await blocker.promise;},'fixture:blocker','scheduled-shell:web:capacity');await entered.promise;
     let deliveries=0;const deps={queue,agentPool:{isDurableRuntime:()=>true},sendMessage:async()=>{deliveries++;}} as unknown as SchedulerDeps;
+    // Drive one renewal round explicitly; acquisition and lease-expiry timers stay real.
     const original=globalThis.setTimeout,callbacks:Array<()=>Promise<void>>=[];
-    timerSpy=spyOn(globalThis,'setTimeout').mockImplementation(((fn:any,delay:number,...args:any[])=>{const t=original(fn,delay,...args);if(delay===20000)callbacks.push(async()=>{clearTimeout(t);await fn(...args);});return t;}) as any);
+    timerSpy=spyOn(globalThis,'setTimeout').mockImplementation(((fn:any,delay:number,...args:any[])=>{const t=original(fn,delay,...args);if(delay===20000){clearTimeout(t);callbacks.push(async()=>{await fn(...args);});}return t;}) as any);
     await pollScheduledRunsOnce(deps,store);expect(callbacks).toHaveLength(100);expect(queue.getMetrics().enqueued).toBe(101);expect(queue.getMetrics().started).toBe(1);
     const before=db.query('SELECT run_id,attempt,worker_id,lease_token_hash,lease_expires_at FROM service_effect_s07_occurrences ORDER BY run_id').all();expect(before).toHaveLength(100);
     writer=new Database(path);writer.exec('PRAGMA busy_timeout=0;BEGIN IMMEDIATE');let released=false,ticks=0;const pulse=setInterval(()=>ticks++,10);unlock=setTimeout(()=>{writer!.exec('ROLLBACK');released=true;},6000);
     try{
       const first=callbacks.slice();await Promise.all(first.map(run=>run()));await until(()=>released,3000);
-      const failed=outcomes.filter(r=>!r.ok);expect(failed).toHaveLength(100);expect(failed.every(r=>!r.ok&&r.error._tag==='storage_unavailable'&&r.error.certainty==='not_applied'&&r.error.retryable)).toBe(true);expect(outcomes.filter(r=>r.ok)).toHaveLength(100);
+      // Contention can require multiple safe retries per occurrence. Prove every
+      // original lease failed safely and then committed once, not a fixed retry count.
+      const failed=outcomes.filter(({result})=>!result.ok),succeeded=outcomes.filter(({result})=>result.ok);
+      expect(new Set(failed.map(r=>r.runId))).toEqual(new Set((before as Array<{run_id:string}>).map(r=>r.run_id)));
+      expect(failed.every(({result:r})=>!r.ok&&r.error._tag==='storage_unavailable'&&r.error.certainty==='not_applied'&&r.error.retryable)).toBe(true);
+      expect(succeeded).toHaveLength(100);expect(new Set(succeeded.map(r=>r.runId)).size).toBe(100);
+      expect(requests.size).toBe(100);expect([...requests.values()].every(identities=>identities.size===1)).toBe(true);
       expect((before as Array<{lease_expires_at:string}>).every(row=>Date.parse(row.lease_expires_at)>Date.now()+15000)).toBe(true);
       try{await until(()=>((db.query('SELECT count(*) AS n FROM service_effect_s07_lease_renewals').get() as {n:number}).n===100),8000);}catch(error){expect(db.query('SELECT count(*) AS n FROM service_effect_s07_lease_renewals').get()).toEqual({n:100});throw error;}
       expect(ticks).toBeGreaterThan(50);expect(db.query('SELECT count(*) AS n FROM service_effect_s07_lease_renewals').get()).toEqual({n:100});
@@ -53,7 +61,7 @@ test('a renewal waiting across actual lease expiry cannot revive the old occurre
     const due=new Date(Date.now()-1000).toISOString(),id='task:late-renewal';createTask({id,chat_jid:'web:late-renewal',prompt:'fixture',task_kind:'shell',command:"printf 'must-not-execute'",cwd:'.',schedule_type:'once',schedule_value:due,next_run:due,status:'active',notify_on_complete:false,created_at:due});
     queue=new AgentQueue();queue.enqueue(async()=>{entered.resolve();await blocker.promise;},'fixture:blocker','scheduled-shell:web:late-renewal');await entered.promise;
     let deliveries=0;const deps={queue,agentPool:{isDurableRuntime:()=>true},sendMessage:async()=>{deliveries++;}} as unknown as SchedulerDeps;
-    const original=globalThis.setTimeout,callbacks:Array<()=>Promise<void>>=[];timerSpy=spyOn(globalThis,'setTimeout').mockImplementation(((fn:any,delay:number,...args:any[])=>{const t=original(fn,delay,...args);if(delay===20000)callbacks.push(async()=>{clearTimeout(t);await fn(...args);});return t;}) as any);
+    const original=globalThis.setTimeout,callbacks:Array<()=>Promise<void>>=[];timerSpy=spyOn(globalThis,'setTimeout').mockImplementation(((fn:any,delay:number,...args:any[])=>{const t=original(fn,delay,...args);if(delay===20000){clearTimeout(t);callbacks.push(async()=>{await fn(...args);});}return t;}) as any);
     await pollScheduledRunsOnce(deps,store);expect(callbacks).toHaveLength(1);const before=db.query('SELECT run_id,attempt,worker_id,lease_token_hash,lease_expires_at FROM service_effect_s07_occurrences').get() as {run_id:string;attempt:number;worker_id:string;lease_token_hash:string;lease_expires_at:string};expect(Date.parse(before.lease_expires_at)).toBeGreaterThan(Date.now());
     writer=new Database(path);writer.exec('PRAGMA busy_timeout=0;BEGIN IMMEDIATE');let released=false;unlock=setTimeout(()=>{writer!.exec('ROLLBACK');released=true;},1800);
     await callbacks[0]!();expect(released).toBe(false);expect(writer.inTransaction).toBe(true);expect(Date.now()).toBeGreaterThanOrEqual(Date.parse(before.lease_expires_at));
@@ -76,7 +84,7 @@ test('one hundred queued leases renew with unchanged identities when the writer 
     for(let i=0;i<100;i++){const id='task:control:'+String(i).padStart(3,'0');createTask({id,chat_jid:'web:control',prompt:'fixture',task_kind:'shell',command:"printf 'must-not-execute'",cwd:'.',schedule_type:'once',schedule_value:due,next_run:due,status:'active',notify_on_complete:false,created_at:due});}
     queue=new AgentQueue();queue.enqueue(async()=>{entered.resolve();await blocker.promise;},'fixture:blocker','scheduled-shell:web:control');await entered.promise;
     let deliveries=0;const deps={queue,agentPool:{isDurableRuntime:()=>true},sendMessage:async()=>{deliveries++;}} as unknown as SchedulerDeps;
-    const original=globalThis.setTimeout,callbacks:Array<()=>Promise<void>>=[];timerSpy=spyOn(globalThis,'setTimeout').mockImplementation(((fn:any,delay:number,...args:any[])=>{const t=original(fn,delay,...args);if(delay===20000)callbacks.push(async()=>{clearTimeout(t);await fn(...args);});return t;}) as any);
+    const original=globalThis.setTimeout,callbacks:Array<()=>Promise<void>>=[];timerSpy=spyOn(globalThis,'setTimeout').mockImplementation(((fn:any,delay:number,...args:any[])=>{const t=original(fn,delay,...args);if(delay===20000){clearTimeout(t);callbacks.push(async()=>{await fn(...args);});}return t;}) as any);
     await pollScheduledRunsOnce(deps,store);expect(callbacks).toHaveLength(100);expect(queue.getMetrics().enqueued).toBe(101);expect(queue.getMetrics().started).toBe(1);
     const before=db.query('SELECT run_id,attempt,worker_id,lease_token_hash,lease_expires_at FROM service_effect_s07_occurrences ORDER BY run_id').all() as Array<{run_id:string;attempt:number;worker_id:string;lease_token_hash:string;lease_expires_at:string}>;expect(before).toHaveLength(100);
     await Promise.all(callbacks.slice().map(run=>run()));expect(db.query('SELECT count(*) AS n FROM service_effect_s07_lease_renewals').get()).toEqual({n:100});

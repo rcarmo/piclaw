@@ -14,7 +14,7 @@ const deny = () => { networkAttempts++; throw new Error("Network forbidden in sy
 globalThis.fetch = Object.assign(deny, { preconnect: deny }) as typeof fetch;
 const { createAgentSession, createAgentSessionRuntime, createMcpExtension, createToolSearchExtension, createCodemodeExtension, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager } = await import("@earendil-works/pi-coding-agent");
 const { InMemoryCredentialStore, createAssistantMessageEventStream } = await import("@earendil-works/pi-ai");
-assert.equal(JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.resolve("@earendil-works/pi-coding-agent"))), "utf8")).version, "1.5.1");
+assert.equal(JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.resolve("@earendil-works/pi-coding-agent"))), "utf8")).version, "1.5.2");
 const events: string[] = [], nested: Array<{ name: string; parent?: string }> = [];
 let generation = 0, blocked = false;
 const exposure = process.argv[2] ?? "deferred";
@@ -160,7 +160,7 @@ try {
   assert.ok(transports.every(transport => transport.closed)); assert.equal(networkAttempts, 0);
   assert.equal(scriptedResponses, 14);
   assert.deepEqual(events, ["start:1", "close:1", "start:2", "close:2"]);
-  console.log(JSON.stringify({ version: "1.5.1", runtime: `Bun ${Bun.version}`, transport: "synthetic_public_factory", exposure, deferredDiscovered: true, hiddenExcluded: true, codemodeSearchAndCall: true,
+  console.log(JSON.stringify({ version: "1.5.2", runtime: `Bun ${Bun.version}`, transport: "synthetic_public_factory", exposure, deferredDiscovered: true, hiddenExcluded: true, codemodeSearchAndCall: true,
     nestedPolicyAndParentId: true, missingRequiredArgumentBlocked: true, numericStringCoercionObserved: true, hiddenInvocationBlocked: true, restoredAfterReload: true, postReloadCallUsesNewTransport: true, sessionAndHistoryPreserved: true, transportsClosed: true, networkAttempts,
     scriptedResponses, externalInference: "not_invoked", topLevelToolHooks: "scripted_provider_real_session_pipeline", productionAdoption: false }));
 } finally {

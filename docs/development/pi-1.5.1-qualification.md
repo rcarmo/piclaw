@@ -1,4 +1,6 @@
-# Pi1.5.1 qualification
+# Pi1.5.1 qualification — historical snapshot
+
+This records the1.5.1 qualification at Core commit1f4149440. Its receipts remain unchanged. Current executable probes and delivery qualification moved to [Pi1.5.2](pi-1.5.2-qualification.md); use the historical commit to reproduce the commands below.
 
 The Root SDK loop contains nine packages, including the SDK-owned `pi-schema` dependency. The private durable engine keeps its separate exact-pinned graph. Historical1.4.0 receipts and dependency graphs remain unchanged.
 

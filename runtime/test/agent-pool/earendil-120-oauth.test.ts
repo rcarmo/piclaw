@@ -9,7 +9,7 @@ const document = { url: "https://client.example.invalid/document.json", redirect
 // Capture before setup assertions: Bun still runs afterAll when beforeAll fails.
 const originalFetch = globalThis.fetch;
 let externalAttempts = 0;
-beforeAll(() => { expect(version).toBe("1.5.1"); const deny = () => { externalAttempts++; throw Error("external network forbidden"); }; globalThis.fetch = Object.assign(deny, { preconnect: deny }) as typeof fetch; });
+beforeAll(() => { expect(version).toBe("1.5.2"); const deny = () => { externalAttempts++; throw Error("external network forbidden"); }; globalThis.fetch = Object.assign(deny, { preconnect: deny }) as typeof fetch; });
 afterAll(() => { globalThis.fetch = originalFetch; expect(externalAttempts).toBe(0); });
 async function fixture(options: { stored?: boolean; document?: boolean; declineDocument?: boolean; meta?: AuthorizationServerMetadata | undefined; invalidDocument?: string; failStore?: boolean; failTokenStore?: boolean } = {}) {
   const stateStore = new MemoryOAuthStateStore(); let fail = false;
@@ -80,6 +80,6 @@ test("token-store failure after successful exchange rejects without persisting t
   expect(f.calls).toEqual([issuer + "/token"]); expect(f.stateStore.load()?.tokens).toBeUndefined(); expect(f.redirects).toEqual([]);
 });
 
-for(const [redirect,expected]of [['http://127.0.0.1:1234/callback','native'],['http://localhost:1234/callback','native'],['piclaw-fixture:/callback','native'],['https://example.invalid/callback','web']]as const)test('1.5.1 OAuth registration application type '+expected+' '+redirect,async()=>{
+for(const [redirect,expected]of [['http://127.0.0.1:1234/callback','native'],['http://localhost:1234/callback','native'],['piclaw-fixture:/callback','native'],['https://example.invalid/callback','web']]as const)test('1.5.2 OAuth registration application type '+expected+' '+redirect,async()=>{
  let body:any;await registerClient(issuer,{clientMetadata:{redirect_uris:[redirect],client_name:'Synthetic'},metadata,fetch:async(_url,init)=>{body=JSON.parse(String(init?.body));return Response.json({client_id:'synthetic'});}});expect(body.application_type).toBe(expected);
 });
