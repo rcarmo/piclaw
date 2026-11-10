@@ -43,6 +43,15 @@ Goal token budgets, context/output ceilings, provider-imposed quotas/errors and 
 - Add-on candidate is nowe65c9f8. Its affected suite passes136tests/857assertions across17files, with7pre-existing opt-in skips. Independent bounded reviews withdrew initial signal-separation/dedup/zero-provenance concerns after complete context and controls were supplied. Those reviews are not full epic clearance.
 - Root/build and both private type projects pass. Full exact-head canonical reruns, UI/shipped-package acceptance and merged-source evidence remain outstanding. Current handwritten Core source delta against34516cabd is+519/−464, net+55; this final slice has no net-deletion claim. Qualification tooling, generated data/assets and historical deliveries are accounted separately and cannot earn duplicate backend-deletion credit.
 
+## Later reporting and qualification checkpoint
+
+- User deferred Cheapskate; it remains unchanged and is excluded from this delivery for now.
+- Add-ons PR236 merged asb12c0cc1 with the exact qualified tree. Fresh merged-source affected tests pass136/857assertions with7pre-existing opt-in skips; the Core default factory's three installed-add-on billing cases pass. Public package publication is pending: the first hosted attempt cancelled while installing browser dependencies; one unchanged retry was requested. No live installation or restart occurred.
+- Full host run at07b634b6c finished7156passed/71skipped/1failed. The only failure was an obsolete1.4.0 expected SDK label in the real MCP settings runtime test; the current1.5.1 expectation now passes. Features/native did not run after that failure.
+- Removed unused raw-cost accumulation and cost-column dependencies from token-only charts. Separate API-equivalent pricing references and all quoted rates are retained.
+- Unknown pricing now returns unavailable instead of synthetic zero rates. Cost charts preserve the known USD subtotal, keep full/day totals unknown where pricing is missing, retain observed documented-free zero, emit blank unknown CSV amounts and exclude records after the requested instant. Missing databases no longer fabricate zero observations. The same chart mode/layout is retained.
+- Fresh chart/reference/token-only/MCP controls pass35tests/205assertions; Root and script types pass. A bounded independent review found no concrete regression in this reporting/deletion diff. Full exact-head delivery gates remain outstanding.
+
 ## Remaining adapters and their current consumers
 
 | Adapter | Current nonfinancial consumer | Controls retained |

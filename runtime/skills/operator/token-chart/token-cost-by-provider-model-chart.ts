@@ -26,7 +26,7 @@ import { PROVIDER_MODEL_PRICING_REFERENCE_TAG, resolveProviderModelPricing } fro
 
 export interface ProviderModelEstimatedCostChartDataPoint {
   day: string;
-  total: number;
+  total: number | null;
 }
 
 export interface ProviderModelEstimatedCostChartResult {
@@ -34,7 +34,9 @@ export interface ProviderModelEstimatedCostChartResult {
   csv: string;
   dayTotals: ProviderModelEstimatedCostChartDataPoint[];
   seriesCount: number;
-  totalEstimatedCost: number;
+  totalEstimatedCost: number | null;
+  knownSubtotal: number;
+  unpricedGroups: number;
   pricingReferenceTag: string;
 }
 
@@ -80,8 +82,9 @@ function estimateCostUsd(provider: string, model: string, usage: {
   outputTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
-}): number {
+}): number | null {
   const pricing = resolveProviderModelPricing(provider, model);
+  if (!pricing) return null;
   return (
     (usage.inputTokens / 1_000_000) * pricing.inputPerMTok +
     (usage.outputTokens / 1_000_000) * pricing.outputPerMTok +
@@ -112,11 +115,13 @@ export function generateProviderModelEstimatedCostChart(options: {
   }
 
   const emptyResult: ProviderModelEstimatedCostChartResult = {
-    svg: `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" width="1700" height="860" viewBox="0 0 1700 860"><style>.title{font:700 28px system-ui,-apple-system,Segoe UI,sans-serif;fill:#f8fafc;}.subtitle{font:400 14px system-ui,-apple-system,Segoe UI,sans-serif;fill:#94a3b8;}</style><rect fill="#0b1020" x="0" y="0" width="1700" height="860" rx="18"/><text class="title" x="90" y="42">Estimated cost by provider + model — last ${days} days</text><text class="subtitle" x="90" y="64">No rows found. Pricing reference tag ${PROVIDER_MODEL_PRICING_REFERENCE_TAG}.</text></svg>`,
-    csv: `day,provider,model,estimated_cost_usd\n${dayKeys.map((day) => `${day},(none),(none),0`).join("\n")}`,
-    dayTotals: dayKeys.map((day) => ({ day, total: 0 })),
+    svg: `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" width="1700" height="860" viewBox="0 0 1700 860"><style>.title{font:700 28px system-ui,-apple-system,Segoe UI,sans-serif;fill:#f8fafc;}.subtitle{font:400 14px system-ui,-apple-system,Segoe UI,sans-serif;fill:#94a3b8;}</style><rect fill="#0b1020" x="0" y="0" width="1700" height="860" rx="18"/><text class="title" x="90" y="42">Estimated cost by provider + model — last ${days} days</text><text class="subtitle" x="90" y="64">Usage database unavailable; costs unknown. Pricing reference tag ${PROVIDER_MODEL_PRICING_REFERENCE_TAG}.</text></svg>`,
+    csv: "day,provider,model,estimated_cost_usd\n",
+    dayTotals: dayKeys.map((day) => ({ day, total: null })),
     seriesCount: 0,
-    totalEstimatedCost: 0,
+    totalEstimatedCost: null,
+    knownSubtotal: 0,
+    unpricedGroups: 0,
     pricingReferenceTag: PROVIDER_MODEL_PRICING_REFERENCE_TAG,
   };
 
@@ -137,11 +142,11 @@ export function generateProviderModelEstimatedCostChart(options: {
               SUM(COALESCE(cache_read_tokens,0)) AS cache_read_tokens,
               SUM(COALESCE(cache_write_tokens,0)) AS cache_write_tokens
        FROM token_usage
-       WHERE run_at >= ?
+       WHERE run_at >= ? AND run_at <= ?
        GROUP BY day, COALESCE(provider,'(unknown)'), COALESCE(model,'(unknown)')
        ORDER BY day, provider, model`
     )
-    .all(`${dayKeys[0]}T00:00:00Z`) as Array<{
+    .all(`${dayKeys[0]}T00:00:00Z`, now.toISOString()) as Array<{
     day: string;
     provider: string;
     model: string;
@@ -156,19 +161,18 @@ export function generateProviderModelEstimatedCostChart(options: {
   const seriesSet = new Set<SeriesKey>();
   const totalsBySeries = new Map<SeriesKey, number>();
 
-  for (const row of rows) {
+  const observations = rows.map(row => ({...row, cost: estimateCostUsd(row.provider,row.model,{
+    inputTokens:Number(row.input_tokens || 0),outputTokens:Number(row.output_tokens || 0),
+    cacheReadTokens:Number(row.cache_read_tokens || 0),cacheWriteTokens:Number(row.cache_write_tokens || 0),
+  })}));
+  const unpricedByDay = new Map<string,number>();
+  for (const row of observations) {
+    if(row.cost === null){unpricedByDay.set(row.day,(unpricedByDay.get(row.day) || 0)+1);continue;}
     const key = `${row.provider} / ${row.model}` as SeriesKey;
-    const estimatedCost = estimateCostUsd(row.provider, row.model, {
-      inputTokens: Number(row.input_tokens || 0),
-      outputTokens: Number(row.output_tokens || 0),
-      cacheReadTokens: Number(row.cache_read_tokens || 0),
-      cacheWriteTokens: Number(row.cache_write_tokens || 0),
-    });
-    if (estimatedCost <= 0) continue;
     seriesSet.add(key);
-    totalsBySeries.set(key, (totalsBySeries.get(key) || 0) + estimatedCost);
+    totalsBySeries.set(key,(totalsBySeries.get(key) || 0)+row.cost);
   }
-
+  const unpricedGroups = [...unpricedByDay.values()].reduce((sum,n)=>sum+n,0);
   const series = Array.from(seriesSet).sort((a, b) => {
     const left = splitSeriesKey(a);
     const right = splitSeriesKey(b);
@@ -184,16 +188,8 @@ export function generateProviderModelEstimatedCostChart(options: {
     values.set(day, new Map(series.map((key) => [key, 0])));
   }
 
-  for (const row of rows) {
-    const key = `${row.provider} / ${row.model}` as SeriesKey;
-    if (!seriesSet.has(key)) continue;
-    const estimatedCost = estimateCostUsd(row.provider, row.model, {
-      inputTokens: Number(row.input_tokens || 0),
-      outputTokens: Number(row.output_tokens || 0),
-      cacheReadTokens: Number(row.cache_read_tokens || 0),
-      cacheWriteTokens: Number(row.cache_write_tokens || 0),
-    });
-    values.get(row.day)?.set(key, estimatedCost);
+  for (const row of observations) {
+    if(row.cost !== null)values.get(row.day)?.set(`${row.provider} / ${row.model}`,row.cost);
   }
 
   const totalsByDay = new Map<string, number>();
@@ -257,6 +253,8 @@ export function generateProviderModelEstimatedCostChart(options: {
   const legendHeight = legendRows * rowHeight;
   const height = legendTop + legendHeight + 70;
 
+  const knownSubtotal = [...totalsByDay.values()].reduce((sum,value)=>sum+value,0);
+  const totalEstimatedCost = unpricedGroups ? null : knownSubtotal;
   const svg = new Array<string>();
   svg.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`);
   svg.push(`<style>
@@ -273,9 +271,10 @@ export function generateProviderModelEstimatedCostChart(options: {
   .legend-sub { font: 12px system-ui, -apple-system, Segoe UI, sans-serif; fill: #94a3b8; }
   .note { font: 11px system-ui, -apple-system, Segoe UI, sans-serif; fill: #64748b; }
 </style>`);
+  svg.push(`<desc>API-equivalent catalogue estimates, not provider bills. Unknown pricing is never zero. Dots mark observed known zero.</desc>`);
   svg.push(`<rect class="bg" x="0" y="0" width="${width}" height="${height}" rx="18"/>`);
   svg.push(`<text class="title" x="${marginLeft}" y="42">Estimated cost by provider + model — last ${days} days</text>`);
-  svg.push(`<text class="subtitle" x="${marginLeft}" y="64">Provider hues mirror the token chart • pricing reference tag ${PROVIDER_MODEL_PRICING_REFERENCE_TAG} • UTC dates</text>`);
+  svg.push(`<text class="subtitle" x="${marginLeft}" y="64">Known subtotal; ${unpricedGroups} unpriced series-days • pricing reference tag ${PROVIDER_MODEL_PRICING_REFERENCE_TAG} • UTC dates</text>`);
 
   for (const value of yScale.ticks) {
     const y = plotY1 - chartHeight * (value / yMax);
@@ -306,8 +305,11 @@ export function generateProviderModelEstimatedCostChart(options: {
     const label = dayDate.toLocaleDateString("en-US", { month: "short", day: "2-digit", timeZone: "UTC" });
     svg.push(`<text class="xlabel" x="${(x + barWidth / 2).toFixed(1)}" y="${plotY1 + 22}" text-anchor="middle">${label}</text>`);
     const dayTotal = totalsByDay.get(day) || 0;
+    const observed = observations.some(row=>row.day===day && row.cost!==null);
+    if(observed && dayTotal===0)svg.push(`<circle data-known-zero="${day}" cx="${(x+barWidth/2).toFixed(1)}" cy="${plotY1}" r="3" fill="#94a3b8"/>`);
+    const dayLabel = unpricedByDay.has(day) ? observed ? `${formatCompactUsd(dayTotal)} known + ?` : "unknown" : observed ? formatCompactUsd(dayTotal) : "—";
     const totalLabelY = plotY1 - chartHeight * (dayTotal / yMax) - 8;
-    svg.push(`<text class="toplabel" x="${(x + barWidth / 2).toFixed(1)}" y="${totalLabelY.toFixed(1)}" text-anchor="middle">${formatCompactUsd(dayTotal)}</text>`);
+    svg.push(`<text class="toplabel" x="${(x + barWidth / 2).toFixed(1)}" y="${totalLabelY.toFixed(1)}" text-anchor="middle">${dayLabel}</text>`);
   }
 
   svg.push(`<text class="legend-title" x="${marginLeft}" y="${legendTop - 22}">Provider / model</text>`);
@@ -336,24 +338,20 @@ export function generateProviderModelEstimatedCostChart(options: {
     svg.push(`<text class="legend-sub" x="${valueX}" y="${textY}" text-anchor="end">${formatCompactUsd(totalsBySeries.get(key) || 0)}</text>`);
   }
 
-  const totalEstimatedCost = Array.from(totalsByDay.values()).reduce((sum, value) => sum + value, 0);
-  svg.push(`<text class="note" x="${marginLeft}" y="${height - 28}">Estimated total over ${days} days: ${formatFixedUsd(totalEstimatedCost)} • Series: ${series.length} • Reference tag ${PROVIDER_MODEL_PRICING_REFERENCE_TAG}</text>`);
+  svg.push(`<text class="note" x="${marginLeft}" y="${height - 28}">Estimated total over ${days} days: ${totalEstimatedCost===null ? `unknown; known subtotal ${formatFixedUsd(knownSubtotal)}` : formatFixedUsd(totalEstimatedCost)} • Series: ${series.length} • Reference tag ${PROVIDER_MODEL_PRICING_REFERENCE_TAG}</text>`);
   svg.push(`</svg>`);
 
   const csvLines = ["day,provider,model,estimated_cost_usd"];
-  for (const day of dayKeys) {
-    for (const key of series) {
-      const [provider, model] = key.split(" / ");
-      csvLines.push(`${day},${JSON.stringify(provider)},${JSON.stringify(model)},${(values.get(day)?.get(key) || 0).toFixed(6)}`);
-    }
-  }
+  for (const row of observations)csvLines.push(`${row.day},${JSON.stringify(row.provider)},${JSON.stringify(row.model)},${row.cost===null?'':row.cost.toFixed(6)}`);
 
   return {
     svg: svg.join(""),
     csv: `${csvLines.join("\n")}\n`,
-    dayTotals: dayKeys.map((day) => ({ day, total: totalsByDay.get(day) || 0 })),
+    dayTotals: dayKeys.map((day) => ({ day, total: unpricedByDay.has(day) ? null : totalsByDay.get(day) || 0 })),
     seriesCount: series.length,
     totalEstimatedCost,
+    knownSubtotal,
+    unpricedGroups,
     pricingReferenceTag: PROVIDER_MODEL_PRICING_REFERENCE_TAG,
   };
 }
