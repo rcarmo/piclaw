@@ -1,6 +1,8 @@
 import { isRetryableAssistantError, type AssistantMessage } from "@earendil-works/pi-ai";
+import { GoalRequestDenied } from "./host-goal-input.js";
+import { isProxy } from "node:util/types";
 const phases = ["validation", "source", "admission", "provider", "conversion", "accounting"] as const;
-const categories = ["aborted", "timeout", "authentication", "rate_limit", "quota", "budget", "context_limit", "transport", "unavailable", "unknown"] as const;
+const categories = ["aborted", "timeout", "authentication", "rate_limit", "quota", "budget", "context_limit", "transport", "unavailable", "goal_lifecycle", "unknown"] as const;
 export type ModelFailurePhase = typeof phases[number];
 export interface ModelFailure {
   phase: ModelFailurePhase;
@@ -14,6 +16,10 @@ export interface ModelFailure {
 /** Inspect private errors, but export only fixed categories and an HTTP status.
  * Never retain exception text, headers, URLs, partial output or abort reasons. */
 export function classifyModelFailure(phase: ModelFailurePhase, error: unknown): ModelFailure {
+  // A local, invocation-bound Goal denial is not a provider error. Never accept
+  // provider wording or a forged code as authority for this classification.
+  if (phase === "source" && error && typeof error === "object" && !isProxy(error) && error instanceof GoalRequestDenied)
+    return { phase, category: "goal_lifecycle" };
   const parts: string[] = [], seen = new Set<object>();
   let status: unknown, aborted = false, node = error;
   for (let depth = 0; depth < 4; depth++) {
@@ -79,6 +85,7 @@ export function parseModelFailure(detail: unknown): ModelFailure | undefined {
   const body=detail.startsWith(compactionPrefix)?detail.slice(compactionPrefix.length):detail;
   const match = body.match(/^Host model request failed \[phase=(\w+); category=(\w+)(?:; http=([45](?:\d\d|:\d:\d)))?(?:; evidence=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|hex:(?:[0-9a-f]{2}:){15}[0-9a-f]{2}))?(?:; retry=(connection error|service unavailable|insufficient_quota))?(?:; context=(maximum context length exceeded))?(?:; upstream=hex:((?:[0-9a-f]{2}:){0,527}[0-9a-f]{2}))?\]$/);
   if (!match || !phases.includes(match[1] as ModelFailurePhase) || !categories.includes(match[2] as ModelFailure["category"])) return;
+  if (match[2] === "goal_lifecycle" && match[1] !== "source") return;
   if (match[5] && (match[5] === "insufficient_quota" ? match[2] !== "quota" && match[2] !== 'budget' : match[5] === "connection error" ? match[2] !== "transport" : match[2] !== "unavailable")) return;
   if (match[6] && match[2] !== "context_limit") return;
   const hex = match[4]?.startsWith("hex:") ? match[4].slice(4).replace(/:/g, "") : undefined;
@@ -94,12 +101,14 @@ export function parseModelFailure(detail: unknown): ModelFailure | undefined {
 
 export function modelFailureNotice(detail: unknown, submissionId: number): string {
   const failure = parseModelFailure(detail);
+  if (failure?.category === "goal_lifecycle") return `**Goal continuation skipped**\n\nThe queued Goal input is no longer valid because its lifecycle changed (for example, it completed, stopped or was replaced). This is a local Goal-lifecycle rejection, not a provider outage.\n\nEarlier tool actions are not undone. This input will not be replayed automatically.\n\nReference: native submission ${submissionId}.${failure.evidenceId ? `\n\nFailure details retained: ${failure.evidenceId}.` : ""}`;
   const reasons: Record<ModelFailure["category"], string> = {
     aborted: "The model request was interrupted.", timeout: "The model request timed out.",
     authentication: "Model authentication or access was rejected.", rate_limit: "The model provider rate-limited the request.",
     quota: "The provider rejected a quota, billing or subscription limit; automatic retry cannot resolve this limit.",
     budget: 'The model request was blocked by budget policy or could not be accounted safely.',
     context_limit: "The request exceeded the model's context or input limit.", transport: "The model connection failed.",
+    goal_lifecycle: "The Goal input lifecycle changed.",
     unavailable: "The model provider was unavailable.", unknown: "The model request failed or was denied.",
   };
   const reason = failure?.category === 'budget' ? reasons.budget : failure?.phase === "accounting" ? "The model request could not be reconciled safely; its outcome may be uncertain."

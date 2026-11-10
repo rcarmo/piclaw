@@ -5,12 +5,7 @@ import type { HostConversationRuntime } from "./host-runtime.js";
 import { accountCommittedGoalBatch, isGoalBudgetWrapup } from "./host-goal-usage.js";
 import { withExtensionKvAuthority } from "../../src/extension-kv-registry.js";
 import { withGoalSystemInstructions } from "./host-plan-context.js";
-
-/** Expected policy denial for one SDK request, never application ownership loss. */
-export class GoalRequestDenied extends Error {
-  readonly code = "goal_request_denied";
-  constructor(message: string) { super(message); this.name = "GoalRequestDenied"; }
-}
+import { GoalRequestDenied } from "./host-goal-input.js";
 
 type GoalState = { status: string; goal_id: string; lifecycle_generation: number; deadline_checkpoint?: unknown; budget_limit_reported: boolean };
 export function createHostGoalPrompt(addon: {
@@ -25,11 +20,26 @@ export function createHostGoalPrompt(addon: {
   accountTerminalGoalProgress(chat: string, expected: { goalId: string; generation: number }, tokens: number): unknown;
 }, options: {
   root: Database;
-  runtime(): Pick<HostConversationRuntime, "captureRunSource" | "readCapturedInputText" | "hasGoalTerminalResult" | "readCommittedRunUsage" | "prepareGoalContext">;
+  runtime(): Pick<HostConversationRuntime, "captureRunSource" | "readCapturedInputText" | "hasGoalTerminalResult" | "readCommittedRunUsage" | "prepareGoalContext" | "readMessageInbox" | "removeQueuedMessage">;
   assertOwner(): void;
   failClosed(error: unknown, api: Pick<Parameters<NonNullable<GenerationHooks["beforeRequest"]>>[1], "taskId" | "conversationId">): void;
 }) {
   const load = addon.loadThreadGoal.bind(addon), build = addon.buildGoalSystemPrompt.bind(addon);
+  // Goal commands/continuations can wait behind ordinary work which finishes or
+  // replaces their Goal. Withdraw only still-queued, lifecycle-tagged inputs;
+  // the SDK owns the placement race. Never abort a run or its human follow-ups.
+  const withdrawStaleQueuedInputs = async (runtime: ReturnType<typeof options.runtime>,
+    captured: Awaited<ReturnType<HostConversationRuntime["captureRunSource"]>>,
+    scope: <T>(body: () => T) => T) => {
+    if (!captured.native) return;
+    const binding = captured.inputs[0]!;
+    for (const item of await runtime.readMessageInbox(binding)) {
+      const stale = scope(() => !!addon.goalInputIdentity(item.content) &&
+        addon.resolveGoalInput(item.content, binding.chatJid).action === "handled");
+      if (stale) await runtime.removeQueuedMessage(binding, item.submissionId);
+      scope(() => {}); // Recheck the invocation/source after each SDK await.
+    }
+  };
   const beforeRequest: NonNullable<GenerationHooks["beforeRequest"]> = async (request, api, context) => {
     try {
     options.assertOwner();
@@ -41,6 +51,7 @@ export function createHostGoalPrompt(addon: {
       assertCurrent: authority.assertCurrent, write: authority.write }, () => { authority.assertCurrent(); return body(); });
     const texts = await runtime.readCapturedInputText(captured.inputs);
     authority.assertCurrent();
+    await withdrawStaleQueuedInputs(runtime, captured, scope);
     const autonomous = texts.some(text => addon.goalInputIdentity(text) !== null);
     const budgetWrapup = () => scope(() => isGoalBudgetWrapup(addon, captured.operation.chatJid, texts, source));
     const executable = () => scope(() => {
@@ -135,5 +146,18 @@ export function createHostGoalPrompt(addon: {
       throw Error("Goal request authority unavailable");
     }
   };
-  return defineExtension({ name: "app.host-goal-prompt", hooks: [{ task: "pi.generation", handlers: { beforeRequest } }] });
+  const onYield: NonNullable<GenerationHooks["onYield"]> = async (_answer, api) => {
+    try {
+      options.assertOwner();
+      const runtime = options.runtime();
+      const captured = await runtime.captureRunSource(api.conversationId, api.taskId);
+      const authority = createHostOperationAuthority(options.root, captured, options.assertOwner, true);
+      await withdrawStaleQueuedInputs(runtime, captured, body => withExtensionKvAuthority({ extensionId: "goal", chatJid: captured.operation.chatJid,
+        assertCurrent: authority.assertCurrent, write: authority.write }, () => { authority.assertCurrent(); return body(); }));
+    } catch (error) {
+      options.failClosed(error, api);
+      throw Error("Goal queue authority unavailable");
+    }
+  };
+  return defineExtension({ name: "app.host-goal-prompt", hooks: [{ task: "pi.generation", handlers: { beforeRequest, onYield } }] });
 }

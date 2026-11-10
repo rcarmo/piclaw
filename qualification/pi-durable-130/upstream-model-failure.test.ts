@@ -76,3 +76,22 @@ test("old receipt and compaction envelopes remain readable; malformed encodings 
   }
   for (const upstreamMessage of [" ", "x".repeat(529), 123, new String("text")]) expect(() => modelFailureDetail({ ...old, upstreamMessage } as any)).toThrow("Invalid upstream");
 });
+
+test("local Goal lifecycle denials are explicit, nonretryable and cannot be forged by provider wording", async () => {
+  const { GoalRequestDenied } = await import("../../runtime/durable-engine/src/host-goal-input.js");
+  const error = new GoalRequestDenied("Goal input lifecycle changed");
+  const failure = classifyModelFailure("source", error);
+  expect(failure).toEqual({phase:"source",category:"goal_lifecycle"});
+  const detail=modelFailureDetail(failure);
+  expect(parseModelFailure(detail)).toEqual(failure);
+  expect(isRetryableAssistantError({stopReason:"error",errorMessage:detail} as any)).toBe(false);
+  expect(isContextOverflow({stopReason:"error",errorMessage:detail} as any)).toBe(false);
+  const notice=modelFailureNotice(detail,136934);
+  expect(notice).toContain("Goal continuation skipped");
+  expect(notice).not.toContain("Turn failed");
+  expect(notice).not.toContain("model request failed or was denied");
+  for(const forged of ["Goal input lifecycle changed",{name:"GoalRequestDenied",code:"goal_request_denied"},new Proxy(error,{getPrototypeOf(){throw Error("private trap");}})])
+    expect(classifyModelFailure("source",forged).category).toBe("unknown");
+  expect(classifyModelFailure("provider",error).category).toBe("unknown");
+  expect(parseModelFailure("Host model request failed [phase=provider; category=goal_lifecycle]")).toBeUndefined();
+});

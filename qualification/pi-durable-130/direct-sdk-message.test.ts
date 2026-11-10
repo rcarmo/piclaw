@@ -195,3 +195,72 @@ applicationTest("SDK owns busy submit, follow-up, steering and source fences wit
     expect(database.query("SELECT * FROM service_effect_s01_operations").all()).toEqual([]);
   } finally {held.release();await stop();if(controller)await controller.close();else await runtime.close();await closeDatabase();lock.release();}
 },30000);
+
+for (const boundary of ["request", "yield"] as const) applicationTest(`Goal ${boundary} boundary withdraws stale queued continuations without failing or replaying human work`, async () => {
+  const { createHostGoalPrompt } = await import("../../runtime/durable-engine/src/host-goal-prompt.js");
+  process.env.PICLAW_DB_IN_MEMORY = "0"; initDatabase();
+  const database = getDb(); installTerminalSettlementCompositionSchema(database);
+  const path = (database.query("PRAGMA database_list").all() as {name:string;file:string}[]).find(row=>row.name==="main")!.file;
+  const lock = acquireRuntimeLock({lockPath:join(process.env.PICLAW_WORKSPACE!,"goal-queue.lock"),strictOwnership:true,disabled:false});
+  const assert = () => lock.assertCurrentOwner();
+  const storage = () => SqliteStorage.open(new BunSqliteDatabase(path,{root:database,assertOwner:assert,fenceTransactions:true}));
+  const fixture = await openFixture({acquired:true},()=>{},storage);
+  const chat = "web:goal-queue", domain = "goal-queue-test";
+  let runtime!: HostConversationRuntime, obsolete = false;
+  const denials: unknown[] = [];
+  const identity = (text: string) => text === "QUEUED_GOAL" ? {goalId:"finished-goal",generation:1} : null;
+  const goal = createHostGoalPrompt({
+    // The running input is ordinary work, not an autonomous Goal grant.
+    loadThreadGoal: () => null,
+    goalInputIdentity: identity,
+    resolveGoalInput: text => ({action:identity(text) && obsolete ? "handled" : "continue"}),
+    isGoalBudgetInput: () => false,
+    buildGoalSystemPrompt: () => "", buildGoalBudgetLimitPrompt: () => "",
+    claimGoalBudgetWrapup() {}, accountGoalProgress() {}, accountTerminalGoalProgress() {},
+  }, {root:database,runtime:()=>runtime,assertOwner:assert,failClosed:error=>{denials.push(error);}});
+  fixture.registry.install(goal);
+  await fixture.root.commit(tx=>configure(tx,fixture.root.id,{extensions:[fixture.registry.snapshot().extension("qualification")!,goal]}),context);
+  await fixture.close();
+  storeChatMetadata(chat,new Date().toISOString(),"Fixture");
+  const work = value(createCurrentPiclawServiceWorkStore(database,{hitFault:()=>false,recordTrace(){}}));
+  const terminal = value(createCurrentPiclawTerminalSettlementStore(database,new InMemoryEffectPayloadResolver(),{hitFault:()=>false,recordTrace(){}}));
+  initializeHostDurableBindings(database,assert);
+  const bindings = createHostDurableBindings(database,{domain,incarnation:domain,manifest:[{chatJid:chat,branchId:"main",conversationId:fixture.root.id}],assertOwner:assert,
+    async resolveContent(ref){const row=database.query("SELECT content FROM messages WHERE rowid=? AND chat_jid=?").get(Number(ref.slice(12)),chat) as {content:string}|null;if(!row)throw Error("Source unavailable");return row.content;}});
+  runtime = await HostConversationRuntime.open({incarnation:domain,sessionId:domain,owner:{assert,release(){}},openStorage:storage,
+    harnessOptions:{models:fixture.models,registry:withTaskModelRequestScope(fixture.registry),settings:{retry:{enabled:false},compaction:{enabled:false}}},
+    work,terminal,bindings,conversationFor:()=>fixture.root.id,existingConversationIds:[fixture.root.id],authorizeScheduling(){},putAnswer(){throw Error("No host answer owner");},now:()=>new Date().toISOString()},context);
+  const accept = (content:string):AcceptedInput => database.transaction(()=>{
+    const sourceId=crypto.randomUUID(),timestamp=new Date().toISOString();
+    const rowId=storeMessage({id:sourceId,chat_jid:chat,sender:"user",sender_name:"User",content,timestamp,is_from_me:false,is_bot_message:false});
+    const source=work.acceptSourceInTransaction(sealed({effect:effect(sourceId),chatJid:chat,sourceId,kind:"message",payloadRef:`message-row:${rowId}`,targetOperationId:null,parentSourceSeq:null,acceptedAt:timestamp,createWakeIntent:false}),database);
+    const requestId=`message:${rowId}:${sourceId}`;
+    return {incarnation:domain,conversationId:fixture.root.id,chatJid:chat,branchId:"main",operationId:`native-message:${fixture.root.id}:${source.sourceSeq}`,
+      sourceSeq:source.sourceSeq,sourceId,payloadRef:`message-row:${rowId}`,requestId,requestHash:hashCanonicalRequest({type:"input",requestId,content})};
+  }).immediate();
+  const held=barrier(),entered=barrier(); fixture.host.modelHold=held; fixture.host.onModelEnter=()=>entered.release();
+  // request: the running tool completes the Goal before its next model call.
+  // yield: another authorized action completes it while the final model is held.
+  fixture.host.onToolEnter=()=>{obsolete=true;};
+  try {
+    const first=accept(boundary==="request"?"use-tool running work":"running work"),stale=accept("QUEUED_GOAL"),human=accept("human follow-up");
+    const firstId=await runtime.submitMessage(first);await deadline(entered.promise);
+    const staleId=await runtime.submitMessage(stale,"followUp"),humanId=await runtime.submitMessage(human,"followUp");
+    const acceptedRow=database.query("SELECT content FROM messages WHERE id=?").get(stale.sourceId);
+    expect((await runtime.readMessageInbox(first)).map(item=>item.submissionId)).toEqual([staleId,humanId]);
+    if(boundary==="yield")obsolete=true;
+    fixture.host.modelHold=undefined;held.release();
+    expect(await deadline(runtime.waitForMessage(first,firstId))).toMatchObject({status:"done"});
+    expect(await deadline(runtime.waitForMessage(stale,staleId))).toMatchObject({status:"unanswered",reason:"aborted"});
+    expect(await deadline(runtime.waitForMessage(human,humanId))).toMatchObject({status:"done"});
+    expect(denials).toEqual([]);
+    expect(fixture.host.modelCalls).toBe(boundary==="request"?3:2);
+    expect(fixture.host.effects).toBe(boundary==="request"?1:0);
+    expect(fixture.host.transcripts.every(text=>!text.includes("QUEUED_GOAL"))).toBe(true);
+    expect(database.query("SELECT content FROM messages WHERE id=?").get(stale.sourceId)).toEqual(acceptedRow);
+    expect((await runtime.readMessageResult(stale))?.status).toMatchObject({status:"unanswered",reason:"aborted"});
+    expect(await runtime.submitMessage(stale)).toBe(staleId); // Idempotent; never replay the revoked input.
+    expect(fixture.host.modelCalls).toBe(boundary==="request"?3:2);
+    expect(database.query("SELECT * FROM service_effect_s01_operations").all()).toEqual([]);
+  } finally {held.release();await runtime.close();await closeDatabase();lock.release();}
+},30000);
