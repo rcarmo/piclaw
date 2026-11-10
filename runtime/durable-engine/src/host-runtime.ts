@@ -1,5 +1,5 @@
 import { captureInterruptedScheduledHarness } from "./host-scheduled-terminal.js";
-import { taskModelHookScope, taskModelToolScope } from "./task-model-boundary-shim.js";
+import { taskModelHookScope, taskModelToolScope, withTaskModelRequestScope } from "./task-model-boundary-shim.js";
 import { createTrackedBashOperations } from "../../src/tools/tracked-bash.js";
 import { withChatContext } from "../../src/core/chat-context.js";
 import { assertModelContextFits, projectModelContext, prepareModelContextAdmission, type ModelContextAdmission } from "./host-model-context.js";
@@ -42,6 +42,9 @@ export interface AcceptedInput {
 /** A message's persisted correlation identity, not a host operation/lifecycle. */
 export function isNativeMessageInput(input: AcceptedInput): boolean {
   return input.operationId === `native-message:${input.conversationId}:${input.sourceSeq}`;
+}
+export function isNativeScheduledInput(input: AcceptedInput): boolean {
+  return /^scheduled_run:[a-f0-9]{64}$/.test(input.sourceId) && input.operationId === `native-scheduled:${input.sourceId}`;
 }
 export interface CapturedRunSource {
   readonly inputs: readonly HostInputBinding[];
@@ -108,7 +111,7 @@ export interface RuntimeOptions {
   readonly replyThreadFor?: (input: AcceptedInput) => number | null;
   /** Public evidence preparation outside SQLite; effect is invocation-local. */
   readonly prepareTerminalEffect?: (input: AcceptedInput, answer?: SettledAnswer) => Promise<TerminalDatabaseEffect | undefined>;
-  readonly onMaintenanceSettled?: (workId: string) => void | Promise<void>;
+  readonly onExecutionSettled?: (workId: string) => void | Promise<void>;
   readonly cancelSideSource?: (input: AcceptedInput) => void | Promise<void>;
   /** Atomically persist operator cancellation against this exact operation version. */
   readonly cancelOperationSource?: (input: AcceptedInput, expectedVersion: number, retryTaskId?: number) => void | Promise<void>;
@@ -231,7 +234,7 @@ function runtimeSnapshot(o: RuntimeOptions): RuntimeSnapshot {
     materializeAnswer: materializeAnswer?.bind(o), now: now.bind(o),
     prepareTerminalEffect: o.prepareTerminalEffect?.bind(o),
     replyThreadFor: o.replyThreadFor?.bind(o),
-    onOperationSettled: o.onOperationSettled?.bind(o), onMaintenanceSettled: o.onMaintenanceSettled?.bind(o), cancelSideSource: o.cancelSideSource?.bind(o),
+    onOperationSettled: o.onOperationSettled?.bind(o), onExecutionSettled: o.onExecutionSettled?.bind(o), cancelSideSource: o.cancelSideSource?.bind(o),
     cancelOperationSource: o.cancelOperationSource?.bind(o),
     owner: Object.freeze({ assert: owner.assert.bind(owner), release: owner.release.bind(owner) }),
     work: Object.freeze({ getOperation: work.getOperation.bind(work), acceptCancellation: work.acceptCancellation.bind(work), finishHarness: work.finishHarness?.bind(work) }),
@@ -288,10 +291,11 @@ export class HostConversationRuntime {
     return promise;
   }
   private constructor(private readonly options: RuntimeSnapshot, private readonly harness: Harness,
-    private readonly storage: Storage, private readonly context: Context) {
+    private readonly storage: Storage, private readonly context: Context,
+    private readonly scheduledSignals:Map<ConversationId,AbortSignal>) {
     harness.subscribeClose(() => { this.storageClosing = true; });
     this.storageEnded = harness.closed.then(end => {
-      if (end.reason === "failed") options.onStorageFailure?.(end.error);
+      if (end.kind === "failed") options.onStorageFailure?.(end.error);
     });
     // Join notification/cleanup failures during close; never detach an unhandled rejection.
     void this.storageEnded.catch(() => {});
@@ -306,13 +310,26 @@ export class HostConversationRuntime {
     let harness: Harness | undefined;
     try {
       options.owner.assert();
-      harness = await Harness.open(storage, options.harnessOptions, context);
+      // Ephemeral signal forwarding only; SDK keeps durable task ownership.
+      const scheduledSignals=new Map<ConversationId,AbortSignal>();
+      const cancellationFor=async(id:ConversationId)=>{
+        if(!scheduledSignals.size)return;
+        const seen=new Set<ConversationId>();
+        for(;;){
+          const signal=scheduledSignals.get(id);if(signal)return signal;
+          if(seen.has(id)||seen.size>=256)throw Error('Invalid scheduled cancellation ownership tree');seen.add(id);
+          const conversation=await storage.conversation(id,withoutAbortSignal(context));
+          if(!conversation?.owner)return;
+          id=conversation.owner.conversationId; // Execution ownership, never history ancestry.
+        }
+      };
+      harness = await Harness.open(storage, {...options.harnessOptions,registry:withTaskModelRequestScope(options.harnessOptions.registry,cancellationFor)}, context);
       options.owner.assert();
       for (const id of options.existingConversationIds) {
         if (!await harness.conversation(id, context)) throw new Error("Missing manifest conversation");
         options.owner.assert();
       }
-      return new HostConversationRuntime(options, harness, storage, context);
+      return new HostConversationRuntime(options, harness, storage, context,scheduledSignals);
     } catch (error) {
       // Failed/uncertain cleanup never releases ownership.
       if (harness) await harness.close(context); else await storage.close(context);
@@ -417,7 +434,7 @@ export class HostConversationRuntime {
           listener(view);
         };
         await publish(watch.value);
-        watch.start(publish);
+        watch.start(async call=>{if(call.kind==='failed'){log.warn('Native conversation watch read failed',{operation:'durable.watch_failed',err:call.error});return;}await publish(call.value);});
         return async () => { await watch.stop(); };
       } catch (error) {
         // Allocation may finish after close/route revocation. Never abandon the
@@ -910,7 +927,7 @@ export class HostConversationRuntime {
           const view = await conversation.context(context); assertOwner();
           if (!entry || entry.conversationId !== id || entry.kind !== "pi.compaction" || (!scoped && view.head?.id !== entryId)) throw new Error("Compaction context not committed");
         }
-        await o.onMaintenanceSettled?.(`durable-maintenance:${o.incarnation}:${taskId}`); assertOwner();
+        await o.onExecutionSettled?.(`durable-maintenance:${o.incarnation}:${taskId}`); assertOwner();
         return { compacted: entryId !== undefined };
       };
       return settleTask();
@@ -1017,7 +1034,7 @@ export class HostConversationRuntime {
         if (!task || task.kind !== "pi.compaction" || task.conversationId !== scope.conversationId || task.abortRequested ||
           task.state.status !== "running" || !checkpoint || typeof checkpoint !== "object" || Array.isArray(checkpoint) || checkpoint.phase !== "summarize" ||
           !["threshold", "overflow"].includes(reason ?? "") ||
-          !live.compactions?.some(status => status.taskId === scope.taskId && status.reason === reason && status.blocking === (task.owner !== undefined)))
+          !live.compactions?.some(status => status.taskId === scope.taskId && status.trigger === reason && status.blocking === (task.owner !== undefined)))
           throw Error("Exact automatic compaction task required");
         if (task.owner !== undefined) {
           const owner = await tx.task(task.owner);
@@ -1044,7 +1061,7 @@ export class HostConversationRuntime {
           await submission?.wait(context); this.fence(); // Retain legacy deferred-write waiting.
         }
         await this.observe(async () => {
-          await this.options.onMaintenanceSettled?.(workId);
+          await this.options.onExecutionSettled?.(workId);
           this.options.owner.assert();
         });
       })().catch(() => { /* Close may detach the observer. */ });
@@ -1440,7 +1457,7 @@ export class HostConversationRuntime {
           const checkpoint = task.state.checkpoint;
           if (!checkpoint || typeof checkpoint !== "object" || Array.isArray(checkpoint) || checkpoint.phase !== "summarize" ||
               !["threshold", "overflow"].includes(reason ?? "") ||
-              !live.compactions?.some(slot => slot.taskId === task.id && slot.reason === reason && slot.blocking === (task.owner !== undefined)))
+              !live.compactions?.some(slot => slot.taskId === task.id && slot.trigger === reason && slot.blocking === (task.owner !== undefined)))
             throw Error("Exact Dream compaction task required");
           if (task.owner !== undefined) {
             const owner = await tx.task(task.owner);
@@ -1688,8 +1705,8 @@ export class HostConversationRuntime {
           !this.routed(input)) throw Error("Host binding conflict");
         await this.assertPublicRoute(input);
         const bound = await this.port(data.role === "intent").get(input); this.fence();
-        if (!bound || (isNativeMessageInput(input) ? bound.submissionId !== null && bound.submissionId !== submissionId : bound.submissionId !== submissionId)) throw Error("Host binding conflict");
-        if (isNativeMessageInput(input)) {
+        if (!bound || ((isNativeMessageInput(input)||isNativeScheduledInput(input)) ? bound.submissionId !== null && bound.submissionId !== submissionId : bound.submissionId !== submissionId)) throw Error("Host binding conflict");
+        if (isNativeMessageInput(input)||isNativeScheduledInput(input)) {
           if (operation) throw Error("Mixed host and SDK source ownership");
           const verified = await this.record(input); this.fence();
           if (verified?.id !== submissionId) throw Error("Native message evidence changed");
@@ -1843,10 +1860,10 @@ export class HostConversationRuntime {
   }
   /** Ordinary input goes straight to the public SDK inbox semantics. SQL bindings
    * prove accepted source/content identity only; no host operation is claimed. */
-  submitMessage(input: AcceptedInput, whenBusy: "steer" | "followUp" = "followUp"): Promise<SubmissionId> {
+  submitMessage(input: AcceptedInput, whenBusy: "steer" | "followUp" | "reject" = "followUp"): Promise<SubmissionId> {
     const copy = inputSnapshot(input);
     this.fence(); this.options.assertAdmission?.(copy);
-    if (!isNativeMessageInput(copy) || !["steer", "followUp"].includes(whenBusy)) throw Error("Native message source required");
+    if (isNativeScheduledInput(copy) ? whenBusy!=="reject" : !isNativeMessageInput(copy)||!["steer","followUp"].includes(whenBusy)) throw Error("Native accepted source required");
     return this.observe(async () => {
       if (!this.routed(copy)) throw Error("Host binding conflict");
       await this.assertPublicRoute(copy); this.fence();
@@ -1909,7 +1926,7 @@ export class HostConversationRuntime {
   }
   /** Postmortem source proof; never reconstructs execution authority. */
   captureInterruptedScheduledHarness(identity: import("../../src/service-effects/current-piclaw/scheduled-run-store.js").InterruptedHarnessIdentity) {
-    if (identity.sessionId !== this.options.sessionId) throw Error("Scheduled harness domain conflict");
+    if (identity.sessionId !== (identity.operationId===`native-scheduled:${identity.runId}`?this.options.incarnation:this.options.sessionId)) throw Error("Scheduled harness domain conflict");
     return this.observe(() => captureInterruptedScheduledHarness(this.storage, this.context, identity, () => this.fence()));
   }
   /** Passive storage-backed observation; caller already selected an authorised
@@ -1989,7 +2006,7 @@ export class HostConversationRuntime {
         const live=await tx.doc(LiveDoc,reader.binding.conversationId as ConversationId);
         const inbox=await tx.doc(InboxDoc,reader.binding.conversationId as ConversationId);
         if(retryOnly && !live.generation?.retry)return null;
-        const compaction=live.compactions?.find(item=>item.reason==="manual"||item.blocking);
+        const compaction=live.compactions?.find(item=>item.trigger==="manual"||item.blocking);
         return {taskId:live.run?.taskId??compaction?.taskId??null,
           submissionIds:[...(live.run?.inputs??[]),...inbox.items.filter(item=>item.mode!=="write").map(item=>item.id)]};
       },this.context);reader.check();
@@ -2049,7 +2066,7 @@ export class HostConversationRuntime {
       },this.context); this.fence();
       if (entry?.kind!=="host.accepted" || !entry.data) return false;
       const input = inputSnapshot(entry.data as unknown as AcceptedInput);
-      if (!isNativeMessageInput(input) || input.requestId!==inspected.requestId || input.conversationId!==inspected.conversationId || input.incarnation!==this.options.incarnation) return false;
+      if ((!isNativeMessageInput(input)&&!isNativeScheduledInput(input)) || input.requestId!==inspected.requestId || input.conversationId!==inspected.conversationId || input.incarnation!==this.options.incarnation) return false;
       const record = await this.record(input); this.fence();
       return record?.id===inspected.id;
     });
@@ -2103,7 +2120,7 @@ export class HostConversationRuntime {
         answer:Object.freeze({message,text,...(processExit?{processExit}: {})}),runId:`sdk-run:${copy.conversationId}:${sources[0]!.input.submissionId}`};
     });
   }
-  submit(input: AcceptedInput) { const copy = inputSnapshot(input); return this.admitInput(copy); }
+  submit(input: AcceptedInput) { const copy = inputSnapshot(input); return isNativeScheduledInput(copy) ? this.submitMessage(copy,"reject") : this.admitInput(copy); }
   /** Targets the accepted host operation, NOT an exact physical model generation. */
   submitIntent(input: AcceptedInput) { const copy = inputSnapshot(input); return this.admitInput(copy, true); }
   private admitInput(input: AcceptedInput, intent = false): Promise<SubmissionId> {
@@ -2493,6 +2510,64 @@ export class HostConversationRuntime {
       await this.assertCompletedHandoff(input, submissionId);
       await this.progress(); this.harness.resume();
     });
+  }
+  /** Register before SDK admission; release only after its abort/cleanup join. */
+  async withScheduledCancellation<T>(input:AcceptedInput,signal:AbortSignal|undefined,body:()=>Promise<T>):Promise<T>{
+    const copy=inputSnapshot(input);this.fence();
+    if(copy.incarnation!==this.options.incarnation||!/^scheduled_run:[a-f0-9]{64}$/.test(copy.sourceId)||copy.requestId!==`scheduled:${copy.sourceId}`
+      ||this.options.conversationFor(copy.chatJid,copy.branchId)===copy.conversationId||this.options.operationConversationFor?.(copy)!==copy.conversationId)
+      throw Error('Exact scheduled cancellation scope required');
+    if(!await this.options.bindings.get(copy))throw Error('Scheduled cancellation binding missing');this.fence();
+    if(!signal)return body();signal.throwIfAborted();
+    if(this.scheduledSignals.has(copy.conversationId))throw Error('Scheduled cancellation scope already registered');
+    this.scheduledSignals.set(copy.conversationId,signal);
+    try{return await body();}finally{this.scheduledSignals.delete(copy.conversationId);}
+  }
+  /** The SDK owns the admitted scheduled fork's execution and immutable result.
+   * S07 owns recurrence/history; lease loss aborts actual work and joins cleanup. */
+  async runScheduledInput(input: AcceptedInput, submissionId: SubmissionId, signal?: AbortSignal) {
+    const copy=inputSnapshot(input),cleanup=withoutAbortSignal(this.context);
+    const context=withAbortSignal(AbortSignal.any([...(signal?[signal]:[]),this.observations.signal]),this.context);
+    let conversation:Awaited<ReturnType<Harness['conversation']>>,owned=false;
+    try{return await this.observe(async()=>{
+      this.fence();
+      const parent=this.options.conversationFor(copy.chatJid,copy.branchId);
+      if(copy.incarnation!==this.options.incarnation||!parent||parent===copy.conversationId||!/^scheduled_run:[a-f0-9]{64}$/.test(copy.sourceId)||copy.requestId!==`scheduled:${copy.sourceId}`)throw Error('Exact scheduled fork required');
+      conversation=await this.harness.conversation(copy.conversationId,cleanup);this.fence();
+      const fork=await this.storage.conversation(copy.conversationId,cleanup);this.fence();
+      if(!conversation||!fork||fork.owner||(fork.parent&&fork.parent.conversationId!==parent))throw Error('Exact scheduled fork required');
+      const verify=async()=>{
+        const record=await this.storage.submissionByRequest(copy.conversationId,copy.requestId,cleanup);
+        if(!record||record.conversationId!==copy.conversationId||record.id!==submissionId||record.type!=='input'||record.entry===undefined)throw Error('Scheduled SDK identity changed');
+        const entryId=record.entry,entry=(await this.storage.entry(copy.conversationId,entryId,cleanup))?.entry;
+        if(entry?.kind!=='host.accepted'||entry.conversationId!==copy.conversationId||(entry.data as Record<string,unknown>)?.role!=='primary'||Object.entries(copy).some(([key,value])=>(entry.data as Record<string,unknown>)?.[key]!==value))throw Error('Scheduled SDK source changed');
+        return record;
+      };
+      let status=await verify();this.fence();owned=true;
+      if(status.status!=='done'&&status.status!=='unanswered'){
+        try{
+          context.abortSignal?.throwIfAborted();
+          if(isNativeScheduledInput(copy))this.options.bindings.assertSourceCurrent?.(copy);else await this.checked(copy);
+          const handle=await this.harness.submission(submissionId,context);this.fence();
+          if(!handle)throw Error('Scheduled SDK submission missing');
+          await handle.wait(context);
+        }catch(error){
+          if(!context.abortSignal?.aborted)throw error;
+          await conversation.abort(cleanup,{background:true});this.fence();
+        }
+        status=await verify();this.fence();
+      }
+      if(status.status!=='done')return{status:'error' as const,result:null,error:'Scheduled native work cancelled or unanswered'};
+      const answer=status.answer,entry=(await this.storage.entry(copy.conversationId,answer,cleanup))?.entry;this.fence();
+      if(entry?.kind!=='pi.assistant'||entry.conversationId!==copy.conversationId||entry.model?.length!==1||entry.model[0]?.role!=='assistant')throw Error('Scheduled SDK answer missing');
+      const message=entry.model[0];return{status:'success' as const,result:message.content.filter(part=>part.type==='text').map(part=>part.text).join(''),usage:message.usage};
+    });}finally{
+      if(owned&&conversation!){
+        if(this.closed||this.storageClosing)await this.storageEnded;
+        else try{await conversation.abort(cleanup,{background:true});await this.options.onExecutionSettled?.(isNativeScheduledInput(copy)?`sdk-run:${copy.conversationId}:${submissionId}`:copy.operationId);}
+        catch(error){log.warn('Scheduled cleanup awaits confirmed SDK close',{operation:'durable_scheduled.cleanup_pending',conversationId:copy.conversationId});await this.storageEnded;throw error;}
+      }
+    }
   }
   /** Waiting grants store-wide scheduling, like resume; no timeout aborts running work. */
   wait(input: AcceptedInput, submissionId: SubmissionId, signal?: AbortSignal): Promise<void> {

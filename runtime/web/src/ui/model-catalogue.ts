@@ -331,12 +331,12 @@ function formatCompactModelPrice(value: number): string {
 }
 
 export function formatModelCataloguePricing(pricing: ModelCataloguePricing | null): string {
-  if (!pricing) return "";
+  if (!pricing) return "Price unknown";
   const parts = [
     pricing.inputPerMillion == null ? "" : `In ${formatCompactModelPrice(pricing.inputPerMillion)}`,
     pricing.outputPerMillion == null ? "" : `Out ${formatCompactModelPrice(pricing.outputPerMillion)}`,
   ].filter(Boolean);
-  return parts.length ? `${parts.join(" · ")} / 1M` : "";
+  return parts.length ? `${parts.join(" · ")} / 1M` : "Price unknown";
 }
 
 export function buildModelSearchDocument(entry: ModelCatalogueEntry): string {

@@ -5,7 +5,8 @@ export { IMPORTER_VERSION, DEFAULT_IMPORT_LIMITS, DEFAULT_TREE_IMPORT_LIMITS, Le
 export type { LegacyImportBinding, LegacyTreeHostBinding, LegacyTreeImportBinding } from "./legacy-import-schema.js";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import type { JsonValue, Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
+import type { JsonValue } from "@earendil-works/chord/json";
 import type { Message } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "../../src/durable-legacy-sdk.js";
 import { CompactionEntry, SystemEntry, type Conversation, type EntryId, type ConversationId, type Tx } from "@earendil-works/pi-durable";

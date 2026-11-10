@@ -1,0 +1,46 @@
+[
+  {
+    "provider": "anthropic",
+    "model": "claude-fable-5.2",
+    "canonicalModel": "Claude Fable 5.2",
+    "basis": "public-first-party; Standard token categories; verified 2026-11-09 (https://platform.claude.com/docs/en/about-claude/pricing.md)",
+    "inputPerMTok": 8,
+    "outputPerMTok": 40,
+    "cacheReadPerMTok": 0.2,
+    "cacheWritePerMTok": 10,
+    "notes": "Native Standard global tariff across 1M context; 5m write meter, 1h writes $16/MTok. Batch/US-only modifiers require request metadata and are not inferred. Availability, app subscription allowance and actual invoices are separate; no other provider tariff is inherited."
+  },
+  {
+    "provider": "anthropic",
+    "model": "claude-fable-5.2-fast",
+    "canonicalModel": "Claude Fable 5.2",
+    "basis": "public-first-party; Fast input/output and published cache multipliers; verified 2026-11-09 (https://platform.claude.com/docs/en/about-claude/pricing.md)",
+    "inputPerMTok": 16,
+    "outputPerMTok": 80,
+    "cacheReadPerMTok": 0.4,
+    "cacheWritePerMTok": 20,
+    "notes": "Native Fast global tariff across 1M context; 5m write meter, 1h writes $32/MTok. Local pricing selector, not an upstream model ID; cannot combine Fast with Batch. Availability, app subscription allowance and actual invoices are separate; no other provider tariff is inherited."
+  },
+  {
+    "provider": "anthropic",
+    "model": "claude-mythos-5.2",
+    "canonicalModel": "Claude Mythos 5.2",
+    "basis": "public-first-party; Standard token categories; verified 2026-11-09 (https://platform.claude.com/docs/en/about-claude/pricing.md)",
+    "inputPerMTok": 8,
+    "outputPerMTok": 40,
+    "cacheReadPerMTok": 0.2,
+    "cacheWritePerMTok": 10,
+    "notes": "Native Standard global tariff across 1M context; 5m write meter, 1h writes $16/MTok. Batch/US-only modifiers require request metadata and are not inferred. Mythos access requires verified-organisation approval. Availability, app subscription allowance and actual invoices are separate; no other provider tariff is inherited."
+  },
+  {
+    "provider": "anthropic",
+    "model": "claude-mythos-5.2-fast",
+    "canonicalModel": "Claude Mythos 5.2",
+    "basis": "public-first-party; Fast input/output and published cache multipliers; verified 2026-11-09 (https://platform.claude.com/docs/en/about-claude/pricing.md)",
+    "inputPerMTok": 16,
+    "outputPerMTok": 80,
+    "cacheReadPerMTok": 0.4,
+    "cacheWritePerMTok": 20,
+    "notes": "Native Fast global tariff across 1M context; 5m write meter, 1h writes $32/MTok. Local pricing selector, not an upstream model ID; cannot combine Fast with Batch. Mythos access requires verified-organisation approval. Availability, app subscription allowance and actual invoices are separate; no other provider tariff is inherited."
+  }
+]

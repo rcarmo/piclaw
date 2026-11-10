@@ -25,7 +25,6 @@ import { initializeOwnedForkSchema } from "./owned-forks.js";
 import { initializeAuthLabelsSchema } from "./auth-labels-schema.js";
 import { initializePickerPins } from './picker-pins.js';
 import { initializeToolOutputOwnership } from './tool-output-ownership-schema.js';
-import { initializeBudgetLimitsSchema } from './budget-limits-schema.js';
 import { initializeAddonOperationsSchema } from './addon-operations-schema.js';
 import { initializeChatProjects } from './chat-project-schema.js';
 import { initializeScheduledHistorySchema } from './scheduled-history-schema.js';
@@ -427,6 +426,7 @@ function createSchema(database: Database): void {
       cost_cache_write REAL DEFAULT 0,
       cost_total REAL DEFAULT 0,
       provider_cost_total REAL,
+      provider_cost_currency TEXT,
       catalogue_cost_total REAL,
       cost_provenance TEXT,
       model TEXT,
@@ -618,6 +618,7 @@ function ensureTokenUsageColumns(database: Database): void {
     ['cache_read_reported', 'INTEGER'],
     ['cache_write_reported', 'INTEGER'],
     ['provider_cost_total', 'REAL'],
+    ['provider_cost_currency', 'TEXT'],
     ['catalogue_cost_total', 'REAL'],
     ['cost_provenance', 'TEXT'],
     ['work_id', 'TEXT'],
@@ -637,9 +638,14 @@ function ensureTokenUsageColumns(database: Database): void {
   database.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_token_usage_usage_event_id ON token_usage(usage_event_id) WHERE usage_event_id IS NOT NULL");
   // Context polling sums chat history on the main thread. Cover the existing
   // totals query after legacy columns exist, avoiding scattered table reads.
-  database.exec(`CREATE INDEX IF NOT EXISTS idx_token_usage_chat_totals_covering ON token_usage
+  const oldIndex="CREATE INDEX idx_token_usage_chat_totals_covering ON token_usage (chat_jid, run_at, id, input_tokens, output_tokens, reasoning_tokens, cache_read_tokens, cache_write_tokens, total_tokens, cost_total, cost_provenance)";
+  const prior=database.query("SELECT sql FROM main.sqlite_schema WHERE type='index' AND name='idx_token_usage_chat_totals_covering'").get() as {sql:string}|null;
+  // Retire only our exact old covering declaration; never erase an unknown index.
+  if(prior?.sql.replace(/\s+/g,' ').replace(/\s*\(/g,' (').trim()===oldIndex)database.exec('DROP INDEX main.idx_token_usage_chat_totals_covering');
+  database.exec(`CREATE INDEX IF NOT EXISTS idx_token_usage_chat_totals_covering_v2 ON token_usage
     (chat_jid, run_at, id, input_tokens, output_tokens, reasoning_tokens,
-     cache_read_tokens, cache_write_tokens, total_tokens, cost_total, cost_provenance)`);
+     cache_read_tokens, cache_write_tokens, total_tokens, cost_total, cost_provenance,
+     provider_cost_total, provider_cost_currency, catalogue_cost_total, pricing_currency)`);
 }
 
 function ensureScheduledTaskColumns(database: Database): void {
@@ -879,7 +885,6 @@ function initializeSchema(database: Database): void {
   ensureMessageColumns(database);
   ensureKeychainNoteColumns(database);
   ensureTokenUsageColumns(database);
-  initializeBudgetLimitsSchema(database);
   initializeAddonOperationsSchema(database);
   ensureScheduledTaskColumns(database);
   installScheduledRunCompositionSchema(database);

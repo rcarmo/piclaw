@@ -1,3 +1,4 @@
+import {installHistoricalExpenseFixture} from '../../runtime/test/fixtures/historical-expense.js';
 import './src/test-guard.js';
 import {expect,spyOn} from 'bun:test';
 import {writeFileSync,readFileSync,existsSync,rmSync,mkdirSync} from 'node:fs';
@@ -38,6 +39,7 @@ async function sideFixture(){
 applicationTest('actual factory side request preserves isolated SDK history, current request identity, streaming and stored result across reopen without finance',async()=>{
   const s=await sideFixture(),{f,state}=s;
   try{
+    installHistoricalExpenseFixture(f.root);
     f.root.query("INSERT INTO budget_work(id,chat_jid,execution_kind,status,created_at,updated_at) VALUES ('historical-side','web:default','side_prompt','paused','2020-01-01','2020-01-01')").run();
     f.root.query("INSERT INTO budget_caps(id,scope,metric,amount,work_id,created_at,updated_at) VALUES ('historical-side-zero','task','api_usd_micros',0,'historical-side','2020-01-01','2020-01-01')").run();
     f.root.query("INSERT INTO budget_request_reservations(id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,state,created_at,updated_at) VALUES ('historical-side-hold','historical-side','web:default','fixture','lifecycle','historical-account',?,'unresolved','2020-01-01','2020-01-01')").run('a'.repeat(64));
@@ -170,6 +172,22 @@ applicationTest('actual side automatic compaction stays in the exact private SDK
     expect(await f.pool.runSidePrompt('web:default','Side request with native automatic compaction',{requestId:'private-auto-summary',systemPrompt:'SIDE_SYSTEM_PREFIX'})).toEqual(result);expect(state.calls).toBe(2);enabled=false;
     const sdk=f.root.query('SELECT * FROM submissions ORDER BY id').all(),entries=f.root.query('SELECT * FROM entries ORDER BY id').all();await f.reopen();expect(await f.pool.runSidePrompt('web:default','Side request with native automatic compaction',{requestId:'private-auto-summary',systemPrompt:'SIDE_SYSTEM_PREFIX'})).toEqual(result);expect(state.calls).toBe(2);expect(f.root.query('SELECT * FROM submissions ORDER BY id').all()).toEqual(sdk);expect(f.root.query('SELECT * FROM entries ORDER BY id').all()).toEqual(entries);expect(s.history()).toEqual(parent);expect(s.financial()).toEqual(financial);
   }finally{settings.mockRestore();await s.close();}
+},30000);
+
+applicationTest('actual side SDK reporting retains reasoning-only usage across reopen without financial state',async()=>{
+  const s=await sideFixture(),{f,state}=s;
+  try{
+    const financial=s.financial();
+    state.usage={input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,reasoning:7,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}};
+    const result=await f.pool.runSidePrompt('web:default','Observe reasoning-only usage',{requestId:'side-reasoning-only'});
+    expect(result.status).toBe('success');
+    const report=()=>f.root.query('SELECT reasoning_tokens,total_tokens,provider_cost_total,cost_provenance FROM token_usage WHERE reasoning_tokens=7').all();
+    await f.until(()=>report().length===1);
+    expect(report()).toEqual([{reasoning_tokens:7,total_tokens:0,provider_cost_total:null,cost_provenance:'unavailable'}]);
+    expect(s.financial()).toEqual(financial);
+    const before=f.root.query('SELECT * FROM token_usage ORDER BY id').all();
+    await f.reopen();expect(state.calls).toBe(1);expect(f.root.query('SELECT * FROM token_usage ORDER BY id').all()).toEqual(before);expect(s.financial()).toEqual(financial);
+  }finally{await s.close();}
 },30000);
 
 for(const providerCost of [0,0.2])applicationTest(`actual factory passive metadata preserves provider cost ${providerCost}, catalogue valuation, reasoning and cache reporting without finance`,async()=>{

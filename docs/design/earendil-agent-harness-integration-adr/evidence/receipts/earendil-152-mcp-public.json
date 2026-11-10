@@ -1,0 +1,81 @@
+{
+  "compile": {
+    "version": "1.5.2",
+    "referenceGitHead": "b4afdddf44e059c67ccf5097e5317d913521b470",
+    "archiveIntegrity": "not_remeasured_by_compile_probe",
+    "runtime": "Bun 1.4.4",
+    "packages": [
+      {
+        "name": "@earendil-works/pi-coding-agent",
+        "version": "1.5.2"
+      },
+      {
+        "name": "@earendil-works/pi-mcp",
+        "version": "1.5.2"
+      },
+      {
+        "name": "@earendil-works/pi-codemode",
+        "version": "1.5.2"
+      }
+    ],
+    "positive": "pass",
+    "negative": [
+      {
+        "symbol": "lazy",
+        "code": "TS2353",
+        "requirement": "MCP-08"
+      },
+      {
+        "symbol": "statusObserver",
+        "code": "TS2353",
+        "requirement": "MCP-12"
+      },
+      {
+        "symbol": "resourceFilter",
+        "code": "TS2353",
+        "requirement": "MCP-06"
+      },
+      {
+        "symbol": "authStart",
+        "code": "TS2353",
+        "requirement": "MCP-10"
+      },
+      {
+        "symbol": "appRenderer",
+        "code": "TS2353",
+        "requirement": "MCP-11"
+      },
+      {
+        "symbol": "absoluteDeadlineMs",
+        "code": "TS2353",
+        "requirement": "MCP-07"
+      },
+      {
+        "symbol": "McpOAuthCredentialStore",
+        "code": "TS2740",
+        "requirement": "MCP-03"
+      },
+      {
+        "symbol": "socket",
+        "code": "TS2322",
+        "requirement": "MCP-08"
+      },
+      {
+        "symbol": "listPrompts",
+        "code": "TS2339",
+        "requirement": "MCP-11"
+      },
+      {
+        "symbol": "getPrompt",
+        "code": "TS2339",
+        "requirement": "MCP-11"
+      }
+    ],
+    "positiveSourceSha256": "4232d891be983ca72f4caf2c0b8a2787ccd2fec33f59cb553cac6edc1ff94637",
+    "negativeSourceSha256": "dbfdf7f339f2f52b1f2abedefd06f7f4b997ec3abf247aa24beaa29fcb5a3f87",
+    "scope": "public_type_contract_only",
+    "lifecycle": "separate_real_session_fixture",
+    "nativeParity": "not_qualified",
+    "productionActivation": false
+  }
+}

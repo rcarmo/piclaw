@@ -1,5 +1,6 @@
 import "./src/test-guard.js";
 import { expect, test } from "bun:test";
+import { admitSqliteWrite } from "../../runtime/src/db/sqlite-async-admission.js";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
@@ -567,9 +568,9 @@ test("actual web message admission runs Goal lifecycle guard inside its owned tr
     const legacy = scoped(() => addon.prepareGoalInput("🎯 Continue goal: Actual web source fence", chat).decision);
     expect(legacy.text).toContain("Continue working toward the active thread goal");
     expect(reconstructed(chat, legacy.text).text).toBe(legacy.text);
-    scoped(() => { addon.clearThreadGoal(chat); addon.createThreadGoal(chat, "Actual web source fence"); });
+    await admitSqliteWrite(root, () => scoped(() => { addon.clearThreadGoal(chat); addon.createThreadGoal(chat, "Actual web source fence"); }), () => lock.assertCurrentOwner());
     expect(() => reconstructed(chat, routed.content)).toThrow("Goal input is no longer executable");
-    scoped(() => addon.clearThreadGoal(chat));
+    await admitSqliteWrite(root, () => scoped(() => addon.clearThreadGoal(chat)), () => lock.assertCurrentOwner());
     const beforeRejected = root.query("SELECT id FROM messages WHERE chat_jid=?").all(chat);
     const denied = await web.handleRequest(new Request(`http://fixture/agent/default/message?chat_jid=${encodeURIComponent(chat)}`, {
       method: "POST", headers: { "Content-Type": "application/json", Origin: "http://fixture" },

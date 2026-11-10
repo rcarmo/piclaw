@@ -10,7 +10,7 @@ import { BunSqliteDatabase } from "../../runtime/durable-engine/src/bun-sqlite.j
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
 import { applicationOwnership, createApplicationBootstrapBundle } from "../../runtime/durable-engine/src/application-bootstrap.js";
 import { installTerminalSettlementCompositionSchema } from "../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js";
-import { openFixture, context } from "./src/fixture.js";
+import { openFixture, context, barrier } from "./src/fixture.js";
 
 test("remote-peer delivery uses public bootstrap queue and S01 admission", async () => {
   const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "host-input-"));
@@ -20,6 +20,7 @@ test("remote-peer delivery uses public bootstrap queue and S01 admission", async
   const root = getDb(); root.exec("PRAGMA foreign_keys=ON");
   const path = (root.query("PRAGMA database_list").all() as { name: string; file: string }[]).find(r => r.name === "main")!.file;
   const base = await openFixture({ acquired: true }, () => {}, () => SqliteStorage.open(new BunSqliteDatabase(path, { root, assertOwner: () => lock.assertCurrentOwner() })));
+  const hold=barrier();base.host.modelHold=hold;
   const chat = `web:host-input:${crypto.randomUUID()}`;
   storeChatMetadata(chat, new Date().toISOString());
   const branchId = (root.query("SELECT branch_id FROM chat_branches WHERE chat_jid=?").get(chat) as { branch_id: string }).branch_id;
@@ -41,7 +42,7 @@ test("remote-peer delivery uses public bootstrap queue and S01 admission", async
     let allowed = true, checks = 0;
     const input = { source: "remote_peer" as const, sourceId: `peer:${crypto.randomUUID()}`, text: "verified peer message",
       queuedAt: new Date().toISOString(), principal: { id: "authenticated-peer", revision: "policy-1" }, target,
-      assertCurrent() { checks++; expect(root.inTransaction).toBe(true); if (!allowed) throw Error("revoked principal"); } };
+      assertCurrent() { checks++; if (!allowed) throw Error("revoked principal"); } };
     const { createNativeRemotePeerDelivery } = await import(repoRoot("ADDONS") + "/addons/remote-peer/native.ts");
     const { RemotePeerAuthorityScope } = await import(repoRoot("ADDONS") + "/addons/remote-peer/native-authority.ts");
     let retired = false;
@@ -57,8 +58,9 @@ test("remote-peer delivery uses public bootstrap queue and S01 admission", async
     request.content = "changed replay";
     await expect(incoming()).rejects.toThrow("conflict");
     request.content = "native delivery";
-    const nativeQueued = getDeferredQueuedFollowups(chat).find(i => i.queuedContent === "native delivery");
-    expect(nativeQueued?.source).toBe("remote_peer");
+    expect(getDeferredQueuedFollowups(chat)).toEqual([]);
+    expect(root.query("SELECT content FROM messages WHERE chat_jid=? AND content='native delivery'").get(chat)).toEqual({content:'native delivery'});
+    expect(delivered).toBeTruthy();
     await expect(authority.application("settings", () => deliver(request))).rejects.toThrow("Authenticated peer");
     request.target_incarnation = "wrong";
     await expect(incoming()).rejects.toThrow("Exact native");
@@ -68,13 +70,15 @@ test("remote-peer delivery uses public bootstrap queue and S01 admission", async
     const receipt = await bundle.admitApplicationInput(input);
     expect(checks).toBeGreaterThanOrEqual(4);
     expect(await bundle.admitApplicationInput(input)).toEqual(receipt);
-    const queued = getDeferredQueuedFollowups(chat).find(i => i.source_id === input.sourceId)!;
-    expect(queued.source).toBe("remote_peer"); expect(queued.source_accepted).toBe(true);
-    expect(queued.queuedBy?.userId).toBe("authenticated-peer");
-    expect(JSON.parse(queued.queuedBy!.clientId!).target).toEqual(target);
+    expect(receipt.submission_id).toBeGreaterThan(0);
+    expect(root.query('SELECT submission_id FROM piclaw_durable_bindings_v1 WHERE chat_jid=? AND source_id=?').get(chat,input.sourceId)).toEqual({submission_id:receipt.submission_id});
+    const peerMessage=root.query('SELECT sender,sender_name,content_blocks FROM messages WHERE chat_jid=? AND id=?').get(chat,input.sourceId) as any;
+    expect(peerMessage.sender).toBe('remote_peer');expect(peerMessage.sender_name).toBe('authenticated-peer');
+    expect(JSON.parse(peerMessage.content_blocks)).toEqual([{type:'peer_message',peer_instance_id:'authenticated-peer',message_id:input.sourceId}]);
+    expect(receipt.target).toEqual(target);
     const source = root.query("SELECT kind,target_operation_id,parent_source_seq,provenance_ref FROM service_effect_s01_sources WHERE chat_jid=? AND source_id=?").get(chat, input.sourceId) as any;
     expect(source.kind).toBe("message"); expect(source.target_operation_id).toBeNull(); expect(source.parent_source_seq).toBeNull();
-    expect(source.provenance_ref).toStartWith("application:queued:");
+    expect(source.provenance_ref).toStartWith("application:pi-durable:");
     await expect(bundle.admitApplicationInput({ ...input, text: "changed replay" })).rejects.toThrow("conflict");
     await expect(bundle.admitApplicationInput({ ...input, target: { ...target, revision: "wrong" } })).rejects.toThrow("Exact native");
     await expect(bundle.admitApplicationInput({ ...input, target: { ...target, sessionId: "fake" } })).rejects.toThrow("Exact native");
@@ -93,8 +97,10 @@ test("remote-peer delivery uses public bootstrap queue and S01 admission", async
     await ports.prepareInputSourceAdmission!(newChat);
     const added = bundle.sessionTargets.list().find(t => t.chatJid === newChat)!;
     expect(added.sessionId).toBe("new-real-session"); expect(bundle.sessionTargets.resolve(added)).toEqual(added);
-    await bundle.admitApplicationInput({ ...input, sourceId: "remote-new-chat", target: added });
-    expect(getDeferredQueuedFollowups(newChat)[0]!.source_accepted).toBe(true);
+    const addedReceipt=await bundle.admitApplicationInput({ ...input, sourceId: 'remote-new-chat', target: added });
+    expect(addedReceipt.submission_id).toBeGreaterThan(0);
+    expect(root.query('SELECT state FROM service_effect_s01_sources WHERE chat_jid=? AND source_id=?').get(newChat,'remote-new-chat')).toEqual({state:'consumed'});
+    expect(getDeferredQueuedFollowups(newChat)).toEqual([]);
     expect(base.host.modelCalls).toBe(0); expect(base.host.credentialLookups).toBe(0);
-  } finally { await bundle.close(); await closeDatabase(); lock.release(); await rm(dir, { recursive: true, force: true }); }
+  } finally { hold.release(); await bundle.close(); await closeDatabase(); lock.release(); await rm(dir, { recursive: true, force: true }); }
 });

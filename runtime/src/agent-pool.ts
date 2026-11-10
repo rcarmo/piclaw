@@ -281,9 +281,9 @@ export class AgentPool {
   private readonly durableApplication: boolean;
   private readonly durableSessionLookup?: AgentPoolOptions["getDurableSession"];
   private readonly hostCommandDispatch?: AgentPoolOptions["dispatchHostCommand"];
-  dispatchScheduledAgent(lease: import("./service-effects/contracts/scheduled-run-store.js").ScheduledRunLease): Promise<AgentOutput> {
+  dispatchScheduledAgent(lease: import("./service-effects/contracts/scheduled-run-store.js").ScheduledRunLease, options?: { signal?: AbortSignal }): Promise<AgentOutput> {
     if (!this.scheduledDispatch) throw new Error("Durable scheduled dispatcher unavailable");
-    return this.scheduledDispatch(lease);
+    return this.scheduledDispatch(lease, options);
   }
 
   constructor(options: AgentPoolOptions) {

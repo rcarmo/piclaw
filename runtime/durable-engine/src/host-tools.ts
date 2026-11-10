@@ -1,6 +1,6 @@
 import type { ToolDefinition } from "../../src/durable-legacy-sdk.js";
-import type { Static, TSchema } from "@earendil-works/pi-ai";
-import type { JsonValue } from "@earendil-works/chord";
+import type { TSchema } from "typebox";
+import type { JsonValue } from "@earendil-works/chord/json";
 import { defineTool, type ToolRegistration, type ConversationId, type TaskId } from "@earendil-works/pi-durable";
 
 // Identity metadata only: no ownership, adoption, or execution ledger.
@@ -39,7 +39,7 @@ export interface HostToolEffectPort<P extends TSchema, D extends JsonValue> {
   /** Explicit host replay authorization, never inferred from readOnlyHint/name/callers. */
   readonly replay?: "safe" | "unsafe";
   readonly effectFence: "host-effect-port";
-  invoke(args: Static<P>, call: {
+  invoke(args: Parameters<ToolDefinition<P,D>["execute"]>[1], call: {
     readonly toolCallId: string;
     readonly conversationId: ConversationId;
     readonly taskId: TaskId;
@@ -78,7 +78,9 @@ export function createHostTool<P extends TSchema, D extends JsonValue>(
     name: tool.name, description: tool.description, parameters,
     prepareArguments: prepare ? raw => {
       checkAuthority();
-      try { return prepare(raw); }
+      // Both declarations describe the same JSON Schema; the legacy TypeBox
+      // helper and pi-schema express its generic static type differently.
+      try { return prepare(raw) as Parameters<ToolRegistration<P,D>["execute"]>[0]; }
       catch {
         checkAuthority();
         throw new Error("Host tool arguments failed");
@@ -98,7 +100,7 @@ export function createHostTool<P extends TSchema, D extends JsonValue>(
       let updateFailed = false;
       try {
         assertAllowed();
-        const result = await host.invoke(args, {
+        const result = await host.invoke(args as Parameters<ToolDefinition<P,D>["execute"]>[1], {
           toolCallId: api.callId, conversationId: api.conversationId, taskId: api.taskId, execute,
           assertAllowed, signal: context.abortSignal,
           onUpdate(update) {

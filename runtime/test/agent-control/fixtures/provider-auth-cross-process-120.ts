@@ -11,7 +11,7 @@ const [operation, authPath, profile, rejectionFence] = process.argv.slice(2);
 assert.ok(operation && authPath && profile);
 for (const name of ["@earendil-works/pi-ai", "@earendil-works/pi-coding-agent"]) {
   const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.resolve(name))), "utf8"));
-  assert.equal(manifest.version, "1.4.0");
+  assert.equal(manifest.version, "1.5.2");
 }
 const id = "synthetic-cross-process";
 const credential: OAuthCredential = { type: "oauth", access: "synthetic-rotated", refresh: "synthetic-rotated-refresh", expires: Date.now() + 3_600_000 };

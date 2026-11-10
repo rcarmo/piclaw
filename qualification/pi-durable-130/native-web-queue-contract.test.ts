@@ -1,3 +1,4 @@
+import {historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import './src/test-guard.js';
 import {expect} from 'bun:test';
 import {writeFileSync} from 'node:fs';
@@ -27,7 +28,7 @@ for(const command of ['queue','steer'] as const)for(const busy of [false,true])a
     const entry=f.root.query("SELECT record FROM entries WHERE json_extract(record,'$.kind')='host.accepted' AND json_extract(record,'$.data.sourceId')=?").all(row.id);expect(entry).toHaveLength(1);
     expect(f.root.query("SELECT queued_followups_json FROM chat_cursors WHERE chat_jid='web:default'").get()).toEqual({queued_followups_json:historical});
     const sdk=f.root.query('SELECT * FROM submissions ORDER BY id').all(),entries=f.root.query('SELECT * FROM entries ORDER BY id').all();await f.reopen();expect(f.calls()).toBe(busy?2:1);expect(f.root.query('SELECT * FROM submissions ORDER BY id').all()).toEqual(sdk);expect(f.root.query('SELECT * FROM entries ORDER BY id').all()).toEqual(entries);
-    for(const table of ['service_effect_s01_operations','service_effect_s02_commits','budget_work','budget_request_reservations','budget_usage_events'])expect(f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
+    for(const table of ['service_effect_s01_operations','service_effect_s02_commits','budget_work','budget_request_reservations','budget_usage_events'])expect(table.startsWith('budget_') ? historicalExpenseRows(f.root,[table])[0] : f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
   }finally{await f.close();}
 },5000);
 
@@ -64,7 +65,7 @@ for(const action of ['steer','remove'] as const)applicationTest(`native queue ${
     expect(f.calls()).toBe(1);const sources=f.root.query('SELECT * FROM service_effect_s01_sources ORDER BY source_seq').all();expect(sources).toHaveLength(3);
     f.held.release();await f.until(()=>f.status(first.submission_id)==='done');if(action==='steer')await f.until(()=>f.status(queued.submission_id)==='done');await f.until(()=>f.status(sibling.submission_id)==='done');
     const calls=f.calls(),sdk=f.root.query('SELECT * FROM submissions ORDER BY id').all();await f.reopen();expect(f.calls()).toBe(calls);expect(f.root.query('SELECT * FROM submissions ORDER BY id').all()).toEqual(sdk);expect(f.root.query('SELECT * FROM service_effect_s01_sources ORDER BY source_seq').all()).toEqual(sources);
-    for(const table of ['service_effect_s01_operations','service_effect_s02_commits'])expect(f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
+    for(const table of ['service_effect_s01_operations','service_effect_s02_commits'])expect(table.startsWith('budget_') ? historicalExpenseRows(f.root,[table])[0] : f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
   }finally{await f.close();}
 },5000);
 

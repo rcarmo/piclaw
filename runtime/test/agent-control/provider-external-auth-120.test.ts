@@ -163,14 +163,14 @@ test("public azure keeps endpoint setup separate from exact auth method metadata
   const { provider, auth } = expectAuthApisRequired("azure");
   expect({ package: `${manifest.name}@${manifest.version}`, id: provider.id, name: provider.name, baseUrl: provider.baseUrl,
     authName: auth.name, authKeys: Object.keys(auth).sort(), oauth: provider.auth.oauth }).toEqual({
-    package: "@earendil-works/pi-ai@1.4.0", id: "azure", name: "Azure", baseUrl: undefined,
+    package: "@earendil-works/pi-ai@1.5.2", id: "azure", name: "Azure", baseUrl: undefined,
     authName: "Azure OpenAI API key", authKeys: ["login", "name", "resolve"], oauth: undefined,
   });
 });
 
-// Measured installed 1.4.0 fingerprints (unchanged bytes); historical receipts remain immutable.
-test("external auth methods are bound to the exact published 1.4.0 payload", () => {
-  expect(manifest.version).toBe("1.4.0");
+// Measured installed 1.5.2 fingerprints (unchanged bytes); historical receipts remain immutable.
+test("external auth methods are bound to the exact published 1.5.2 payload", () => {
+  expect(manifest.version).toBe("1.5.2");
   const fingerprints = {
     "providers/amazon-bedrock.js": "2529299b0e820465cb3bcbec1ef4d4f2e3513385084e25b80c0e4c016779fa2e",
     "providers/google-vertex.js": "26c13449ea7b57d40878742db956210e70af0c89638cb87a1d9b4739f2bac59a",

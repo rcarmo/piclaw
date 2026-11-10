@@ -1,22 +1,22 @@
 import './src/test-guard.js';
 import {isolatedApplicationTest} from './src/isolated-application-test.js';
 import { hydrateMcpKeychainCredentials } from "../../runtime/src/secure/mcp-keychain.js";
-import { getConfigPath, getDataDir } from "../../runtime/src/core/config-context.js";
-import { expect, test, spyOn } from "bun:test";
+import { getConfigPath } from "../../runtime/src/core/config-context.js";
+import { expect, spyOn } from "bun:test";
 import { createTestCredentialStore } from "../../runtime/test/model-services-fixture.js";
-import type { Model, JsonObject, AssistantMessage } from "../../node_modules/@earendil-works/pi-ai";
-import { SessionManager, SettingsManager, ModelRuntime, ModelRegistry } from "../../node_modules/@earendil-works/pi-coding-agent";
+import type { Model } from "../../node_modules/@earendil-works/pi-ai";
+import { ModelRuntime, ModelRegistry } from "../../node_modules/@earendil-works/pi-coding-agent";
 import { BunSqliteDatabase } from "../../runtime/durable-engine/src/bun-sqlite.js";
 import { storeChatMetadata, storeMessage } from "../../runtime/src/db.js";
-import { existsSync, mkdirSync, writeFileSync, readFileSync, copyFileSync, symlinkSync, cpSync, renameSync, rmSync,linkSync,chmodSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
 import { acquireRuntimeLock } from "../../runtime/src/runtime/single-instance.js";
-import { createDefaultApplicationRuntime, assertFreshApplicationHistory } from "../../runtime/durable-engine/src/default-application-runtime.js";
+import { createDefaultApplicationRuntime } from "../../runtime/durable-engine/src/default-application-runtime.js";
 import type { RuntimeModelServices } from "../../runtime/src/agent-pool/model-services.js";
-import { Harness, AgentDoc, InboxDoc, configure, createRegistry, defineTask, defineExtension, type ConversationId } from "../../runtime/durable-engine/qualification/durable.ts";
+import { Harness, AgentDoc, createRegistry } from "../../runtime/durable-engine/qualification/durable.ts";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
-import { awaitWithContext, withAbortSignal, BACKGROUND_CONTEXT as context } from "../../runtime/durable-engine/qualification/context.ts";
+import { BACKGROUND_CONTEXT as context } from "../../runtime/durable-engine/qualification/context.ts";
 import { createHostModels } from "../../runtime/durable-engine/src/host-models.js";
 const applicationTest=isolatedApplicationTest(import.meta.url);
 applicationTest("deferred MCP preserves SDK selections and restores exact fetch factory default",async () => {
@@ -81,13 +81,23 @@ applicationTest("deferred MCP preserves SDK selections and restores exact fetch 
       await backend.close(); backend = undefined;
       expect(await inspect()).toEqual(selection);
     }
-    // Unknown historical names remain byte-for-byte selected during maintenance;
-    // normal startup still validates availability rather than silently dropping them.
+    // SDK-owned explicit selections remain byte-for-byte across startup too.
+    // The host must not recreate a competing tool-selection validator.
     await inspect(["mcp_x"]);
     backend = await createDefaultApplicationRuntime(owner, async () => services, { offlineMaintenance: true });
     await backend.close(); backend = undefined;
     expect(await inspect()).toEqual(["mcp_x"]);
-    await expect(createDefaultApplicationRuntime(owner, async () => services)).rejects.toThrow("Persisted host tool not available");
+    backend=await createDefaultApplicationRuntime(owner,async()=>services);
+    await backend.close();backend=undefined;
+    expect(await inspect()).toEqual(['mcp_x']);
+    // A future live-document format must fail before recovery/configuration;
+    // accepting current SDK versions must not turn this preflight permissive.
+    const revision = root.query(`SELECT r.document_id,r.seq,r.version FROM document_revisions r JOIN documents d ON d.id=r.document_id WHERE d.kind='"pi.live"' ORDER BY r.seq DESC LIMIT 1`).get() as {document_id:number;seq:number;version:number};
+    expect(revision).toBeDefined();
+    writeFileSync(join(workspace, "AGENTS.md"), "DEFERRED_POLICY_THREE");
+    root.query('UPDATE document_revisions SET version=99 WHERE document_id=? AND seq=?').run(revision.document_id,revision.seq);
+    try { await expect(createDefaultApplicationRuntime(owner,async()=>services)).rejects.toThrow('Invalid persisted document version'); }
+    finally { root.query('UPDATE document_revisions SET version=? WHERE document_id=? AND seq=?').run(revision.version,revision.document_id,revision.seq); }
     const leasesBefore = leaseSpy.mock.calls.length, connectsBefore = connectSpy.mock.calls.length;
     writeFileSync(join(workspace, ".pi/mcp.json"), JSON.stringify({ mcpServers: { fixture: { url: "https://invalid.invalid/mcp" } } }));
     await hydrateMcpKeychainCredentials(workspace, async () => { throw Error("No keychain access allowed"); });

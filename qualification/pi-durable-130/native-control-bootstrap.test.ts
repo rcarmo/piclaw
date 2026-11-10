@@ -1,6 +1,6 @@
 import { isolatedApplicationTest } from './src/isolated-application-test.js';
 import './src/test-guard.js';
-import {expect,spyOn} from 'bun:test';
+import {expect} from 'bun:test';
 import {Database} from 'bun:sqlite';
 import {createRecoverableRuntimeBackend,type RuntimeBackend} from '../../runtime/src/runtime/bootstrap.js';
 import {RuntimePreparationError} from '../../runtime/src/runtime/preparation-error.js';
@@ -42,7 +42,7 @@ for(const scenario of ['idle','busy','retry','storage-recovery','storage-reopen-
  const chat='web:native-critical',session='native-critical-session';storeChatMetadata(chat,new Date().toISOString());
  const branchId=(root.query('SELECT branch_id FROM chat_branches WHERE chat_jid=?').get(chat) as any).branch_id;
  const policy=createHostCommandPolicy(root,assert);const resolver=new InMemoryEffectPayloadResolver();let bundle:RuntimeBackend & {dispatchAcceptedInput:(...args:Parameters<Awaited<ReturnType<typeof createApplicationBootstrapBundle>>["dispatchAcceptedInput"]>)=>ReturnType<Awaited<ReturnType<typeof createApplicationBootstrapBundle>>["dispatchAcceptedInput"]>};
- let latest:Awaited<ReturnType<typeof createApplicationBootstrapBundle>>, writer:Database|undefined, prepares=0, storageFailures=0, reopenFailures=0, originalSubmission:number|undefined, restoreContention:(()=>void)|undefined;
+ let latest:Awaited<ReturnType<typeof createApplicationBootstrapBundle>>, writer:Database|undefined, prepares=0, storageFailures=0, reopenFailures=0, originalSubmission:number|undefined;
  try{
   const prepare=async()=>{
    prepares++;let notify!:(error:unknown)=>void;const storageFailure=new Promise<unknown>(resolve=>{notify=resolve;});
@@ -58,7 +58,7 @@ for(const scenario of ['idle','busy','retry','storage-recovery','storage-reopen-
    const native=latest;
    return {...native,storageFailure,async attachChannel(){
     const row=root.query("SELECT rowid,id FROM messages WHERE chat_jid=? AND is_bot_message=0").get(chat) as any;
-    if(row){const resume=native.dispatchAcceptedInput(chat,row.id,row.rowid);if(resume)void resume().catch(()=>{});}
+    if(row){const resume=native.dispatchAcceptedInput(chat,row.id,row.rowid);void resume.catch(()=>{});}
    }};
   };
   const backend=recovering?await createRecoverableRuntimeBackend(prepare):await prepare();
@@ -78,10 +78,9 @@ for(const scenario of ['idle','busy','retry','storage-recovery','storage-reopen-
   if(scenario==='retry')await control.setExecutionPolicy!('autoRetry',true);
   const bound=bundle.bind({queue:{} as any,agentPool:{} as any});
   const coordinator=bound.dispatchAcceptedInput!;
-  const waitForPending=coordinator.waitForPending.bind(coordinator);
   await admitWebMessage({pendingLinkPreviews:new Set<number>(),broadcastEvent(){}},{chatJid:chat,content:'Critical native fixture',isBot:false,mediaIds:[],agentId:'default',agentName:'Fixture'},{acceptSource:bound.getInputSourceAdmission!(chat)},assert,new AbortController().signal);
   const message=root.query('SELECT rowid,id FROM messages WHERE chat_jid=? AND is_bot_message=0').get(chat) as any;
-  const dispatch=coordinator(chat,message.id,message.rowid)!;const running=dispatch();void running.catch(()=>{});
+  const receipt=await coordinator(chat,message.id,message.rowid)!;
   for(let i=0;;i++){
    const retry=root.query("SELECT record FROM tasks WHERE status<>'terminal'").all().some((row:any)=>JSON.parse(row.record).state.checkpoint?.phase==='retry');
    if(scenario==='retry'?retry:calls>0)break;
@@ -91,44 +90,47 @@ for(const scenario of ['idle','busy','retry','storage-recovery','storage-reopen-
    const scope=await control.readAbortScope!();expect(scope).not.toBeNull();
    originalSubmission=(root.query("SELECT id FROM submissions WHERE conversation_id=? ORDER BY id DESC LIMIT 1").get(conversation.id) as any).id;
    const sources=root.query("SELECT count(*) AS n FROM service_effect_s01_sources").get();
-   for(const foreign of [{...scope!,operationId:'foreign'},{...scope!,conversationId:999999},{...scope!,sourceSeq:scope!.sourceSeq+1}])expect(await control.abort!(foreign)).toBe(false);
+   if(scope?.kind!=='sdk')throw Error('Exact SDK abort scope required');
+   for(const foreign of [{...scope,submissionIds:[999999]},{...scope,conversationId:999999},{operationId:'foreign',conversationId:scope.conversationId,sourceSeq:1}])expect(await control.abort!(foreign)).toBe(false);
    expect(root.query("SELECT count(*) AS n FROM service_effect_s01_sources").get()).toEqual(sources);
-   // Introduce a genuine second-connection writer only AFTER the host cancellation
-   // transaction commits, at the boundary before the SDK must persist its abort.
-   const transaction=root.transaction.bind(root);
-   const probe=spyOn(root,"transaction").mockImplementation(((fn:any)=>{
-    const target=transaction(fn),wrapped=(...args:any[])=>target(...args);
-    const descriptors=Object.getOwnPropertyDescriptors(target);
-    descriptors.immediate={...descriptors.immediate,value:(...args:any[])=>{
-     const result=Reflect.apply(target.immediate,target,args);
-     if(!writer&&(root.query("SELECT count(*) AS n FROM service_effect_s01_sources WHERE kind='cancellation'").get() as any).n){writer=new Database(path);writer.exec("PRAGMA busy_timeout=0; BEGIN IMMEDIATE");}
-     return result;
-    }};
-    return Object.defineProperties(wrapped,descriptors);
-   }) as Database["transaction"]);
-   restoreContention=()=>probe.mockRestore();
-   expect(await control.abort!()).toBe(true);
-   await running.catch(()=>{});expect(prepares).toBe(scenario==='storage-reopen-retry'?3:2);expect(storageFailures).toBe(1);
+   // Native abort belongs to the SDK, with no synthetic cancellation source.
+   // Hold its real WAL writer through the unchanged acquisition deadline.
+   writer=new Database(path);writer.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE');
+   const abortError=await control.abort!().then(()=>undefined,error=>error);
+   expect(abortError).toBeDefined();expect(isSqliteContention(abortError)).toBe(true);
+   for(let i=0;i<1000&&prepares<(scenario==='storage-reopen-retry'?3:2);i++)await Bun.sleep(10);
+   expect(prepares).toBe(scenario==='storage-reopen-retry'?3:2);expect(storageFailures).toBe(1);
    expect(reopenFailures).toBe(scenario==='storage-reopen-retry'?1:0);
-   expect(await waitForPending({chatJid:chat,messageId:message.id,rowId:message.rowid})).toBe("settled");
+   // Pi1.5.1 records an interrupted original attempt during recovery. That
+   // committed result needs no new abort, synthetic source or provider replay.
+   const recoveredControl=bundle.sessionOptions.getDurableSession!(chat)!;
+   const recoveredScope=await recoveredControl.readAbortScope!();
+   expect(recoveredScope?.kind).not.toBe('sdk');
+   const interrupted=JSON.parse((root.query('SELECT record FROM submissions WHERE id=?').get(receipt.submission_id) as {record:string}).record);
+   expect(interrupted).toMatchObject({id:originalSubmission,status:'unanswered',reason:'interrupted'});
+   expect(await recoveredControl.abort!(recoveredScope??undefined)).toBe(false);
+   for(let i=0;i<1000&&(root.query('SELECT status FROM submissions WHERE id=?').get(receipt.submission_id) as any).status!=='unanswered';i++)await Bun.sleep(10);
+   expect(root.query('SELECT status FROM submissions WHERE id=?').get(receipt.submission_id)).toEqual({status:'unanswered'});
    expect(root.query("SELECT id FROM submissions WHERE conversation_id=? ORDER BY id").all(conversation.id)).toEqual([{id:originalSubmission}]);
    expect(root.query("SELECT id FROM tasks WHERE status<>'terminal'").all()).toEqual([]);
    expect(root.query("SELECT operation_id FROM service_effect_s01_operations WHERE phase<>'terminal'").all()).toEqual([]);
-   expect(root.query("SELECT count(*) AS n FROM service_effect_s01_sources WHERE kind='cancellation'").get()).toEqual({n:1});
+   expect(root.query("SELECT count(*) AS n FROM service_effect_s01_sources WHERE kind='cancellation'").get()).toEqual({n:0});
    expect(await bundle.sessionOptions.getDurableSession!(chat)!.abort!()).toBe(false);
    await bound.prepareInputSourceAdmission!(chat);
    expect(bound.getInputSourceAdmission!(chat)).toBeDefined();
-   expect(calls).toBeGreaterThanOrEqual(1);expect(calls).toBeLessThanOrEqual(2);return;
+   expect(calls).toBe(1);return;
   }
   if(scenario==='busy'){
    const sourceBefore=root.query('SELECT count(*) AS n FROM service_effect_s01_sources').get();
    expect(await control.abortRetry!()).toBe(false);expect(root.query('SELECT count(*) AS n FROM service_effect_s01_sources').get()).toEqual(sourceBefore);
    await control.restart!();
   }else expect(await control.abortRetry!()).toBe(true);
-  await running;expect(calls).toBe(1);
+  for(let i=0;i<1000&&(root.query('SELECT status FROM submissions WHERE id=?').get(receipt.submission_id) as any).status!=='unanswered';i++)await Bun.sleep(5);
+  expect(root.query('SELECT status FROM submissions WHERE id=?').get(receipt.submission_id)).toEqual({status:'unanswered'});
+  expect(calls).toBe(1);
   expect(root.query("SELECT id FROM tasks WHERE status<>'terminal'").all()).toEqual([]);
   expect(root.query("SELECT operation_id FROM service_effect_s01_operations WHERE phase<>'terminal'").all()).toEqual([]);
   expect(await control.abortRetry!()).toBe(false);
-  expect(root.query("SELECT count(*) AS n FROM service_effect_s01_sources WHERE kind='cancellation'").get()).toEqual({n:1});
- }finally{restoreContention?.();if(writer?.inTransaction)writer.exec("ROLLBACK");writer?.close();await bundle!?.close();await closeDatabase();owner.release();await rm(dir,{recursive:true,force:true});}
+  expect(root.query("SELECT count(*) AS n FROM service_effect_s01_sources WHERE kind='cancellation'").get()).toEqual({n:0});
+ }finally{if(writer?.inTransaction)writer.exec("ROLLBACK");writer?.close();await bundle?.close();await closeDatabase();owner.release();await rm(dir,{recursive:true,force:true});}
 },scenario==='storage-recovery'||scenario==='storage-reopen-retry'?45000:15000);

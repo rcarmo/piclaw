@@ -52,6 +52,22 @@ describe("recordMessageUsage", () => {
     expect(row.run_at).toBe("2025-06-01T12:00:00.000Z");
   });
 
+  for (const [name, usage] of Object.entries({
+    reasoning: { reasoning: 7 },
+    camel: { reasoningTokens: 7 },
+    snake: { reasoning_tokens: 7 },
+    outputDetails: { output_tokens_details: { reasoning_tokens: 7 } },
+    completionDetails: { completion_tokens_details: { reasoning_tokens: 7 } },
+  })) test(`retains reasoning-only usage: ${name}`, () => {
+    initDatabase();
+    const chat = `test:reasoning-only-${name}`;
+    const message = { id: `reasoning-${name}`, role: "assistant", provider: "fixture", model: "fixture-model", usage };
+    recordMessageUsage(chat, message);
+    recordMessageUsage(chat, message);
+    const rows = getDb().query("SELECT reasoning_tokens,total_tokens,provider_cost_total,cost_provenance FROM token_usage WHERE chat_jid=?").all(chat);
+    expect(rows).toEqual([{ reasoning_tokens: 7, total_tokens: 0, provider_cost_total: null, cost_provenance: "unavailable" }]);
+  });
+
   test("preserves explicit cache reporting and provider cost provenance", () => {
     initDatabase();
     const db = getDb();
@@ -292,4 +308,14 @@ describe("recordMessageUsage", () => {
     const row = db.prepare("SELECT COUNT(*) AS count FROM token_usage WHERE chat_jid = ?").get("test:usage-zero") as any;
     expect(row.count).toBe(0);
   });
+});
+
+for(const actual of [0,0.2])test(`SDK provider billed total ${actual} stays distinct from category catalogue valuation`,()=>{
+ initDatabase();const chat=`test:sdk-billed:${actual}`;
+ recordMessageUsage(chat,{id:chat,role:'assistant',provider:'fixture',model:'billed-model',usage:{input:10,output:2,cacheRead:0,cacheWrite:0,totalTokens:12,cost:{input:0.00004,output:0.00002,cacheRead:0,cacheWrite:0,total:actual,totalFromProvider:true}}});
+ expect(getDb().query('SELECT provider_cost_total,catalogue_cost_total,cost_total,cost_provenance,api_equivalent_cost_microusd,pricing_currency FROM token_usage WHERE chat_jid=?').get(chat)).toEqual({provider_cost_total:actual,catalogue_cost_total:0.00004+0.00002,cost_total:actual,cost_provenance:'provider_reported',api_equivalent_cost_microusd:60,pricing_currency:'USD'});
+});
+test('all-zero SDK billed receipt is a real attributed observation',()=>{
+ initDatabase();const chat='test:sdk-billed-zero';recordMessageUsage(chat,{id:chat,role:'assistant',provider:'fixture',model:'zero-model',usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0,totalFromProvider:true}}});
+ expect(getDb().query('SELECT provider_cost_total,catalogue_cost_total,cost_provenance,total_tokens FROM token_usage WHERE chat_jid=?').get(chat)).toEqual({provider_cost_total:0,catalogue_cost_total:null,cost_provenance:'provider_reported',total_tokens:0});
 });

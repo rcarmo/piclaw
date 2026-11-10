@@ -102,7 +102,7 @@ export interface ApplicationBootstrapOptions {
    * still requires current active host policy; copied/import plans stay strict. */
   historicalBindings?: boolean;
   /** Publish the existing runtime before recovery can schedule any provider. */
-  onMaintenanceSettled?: (workId: string) => void | Promise<void>;
+  onExecutionSettled?: (workId: string) => void | Promise<void>;
   onOperationSettled?: RuntimeOptions["onOperationSettled"];
   /** Idempotent timeline/Goal projection of an actual immutable SDK result. */
   onMessageResult?(input: AcceptedInput, result: NativeMessageResult): Promise<void>;
@@ -248,7 +248,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       runtime: { ...r, work, terminal, bindings,
         completeInputHandoff: createInputHandoffCompletion(root, { domain: r.incarnation, incarnation: r.incarnation,
           sessionId: r.sessionId, bindings, work, assertCurrent(input) { assert(); config.assertAdmission?.(input); } }),
-        assertAdmission: config.assertAdmission, materializeAnswer: config.materializeAnswer, prepareTerminalEffect: config.prepareTerminalEffect, onOperationSettled: config.onOperationSettled, onMaintenanceSettled: config.onMaintenanceSettled, putAnswer: config.answers.put.bind(config.answers),
+        assertAdmission: config.assertAdmission, materializeAnswer: config.materializeAnswer, prepareTerminalEffect: config.prepareTerminalEffect, onOperationSettled: config.onOperationSettled, onExecutionSettled: config.onExecutionSettled, putAnswer: config.answers.put.bind(config.answers),
         replyThreadFor(input) { assert(); return resolveAcceptedMessageThread(root, input); },
         async cancelOperationSource(input, expectedVersion, retryTaskId) {
           await admitSqliteWrite(root, () => {
@@ -653,7 +653,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
           JOIN service_effect_s01_sources s ON s.source_seq=r.accepted_source_seq AND s.source_id=r.run_id
           JOIN service_effect_s01_operation_sources os ON os.chat_jid=s.chat_jid AND os.source_seq=s.source_seq AND os.operation_id=r.operation_id
           JOIN service_effect_s01_operations o ON o.operation_id=r.operation_id AND o.primary_source_seq=s.source_seq AND o.phase IN ('claimed','executing')
-          JOIN service_effect_s01_chats c ON c.chat_jid=s.chat_jid AND c.active_operation_id=o.operation_id
+          JOIN service_effect_s01_chats c ON c.chat_jid=s.chat_jid AND (c.active_operation_id=o.operation_id OR o.operation_id='native-scheduled:' || r.run_id)
           WHERE r.run_id=? AND r.state='source_bound' AND r.worker_id=? AND r.attempt=? AND r.task_revision=?
             AND r.lease_token_hash=? AND r.lease_expires_at>? AND s.kind='scheduled_agent' AND s.state='claimed'
             AND s.chat_jid=? AND s.payload_ref=?`)
@@ -877,19 +877,17 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
           sourceId, payloadRef: sourceId, requestId: sourceId, requestHash: hashCanonicalRequest({ type: "input", requestId: sourceId, content: prompt }) }, options.signal);
       } finally { unobserve?.(); }
     }
-    async function dispatchScheduledAgent(lease: ScheduledRunLease): Promise<import("../../src/agent-pool.js").AgentOutput> {
-      assertLive(); config.assertAdmission?.();
+    async function dispatchScheduledAgent(lease: ScheduledRunLease, options?: { signal?: AbortSignal }): Promise<import("../../src/agent-pool.js").AgentOutput> {
+      const signal = options?.signal;
+      assertLive(); config.assertAdmission?.(); signal?.throwIfAborted();
       const input = await allocateScheduledConversation(lease);
-      const id = await runtime.submit(input); assertLive();
-      const operation = value(await work.getOperation(input.operationId));
-      if (!operation) throw Error("Missing scheduled operation");
-      if (operation.harness?.sessionId !== r.sessionId || operation.harness.harnessOperationId !== String(id))
-        throw Error('Exact completed scheduled handoff required');
-      await runtime.wait(input, id, shutdown.signal); assertLive();
-      const state = await runtime.reconcile(input);
-      if (!state.answer) throw Error("Scheduled answer unavailable");
-      if (!await runtime.settle(input)) throw Error("Scheduled settlement pending");
-      return { status: "success", result: state.answer.text };
+      signal?.throwIfAborted();
+      return runtime.withScheduledCancellation(input,signal,async()=>{
+        const id = await runtime.submit(input); assertLive();
+        // Forward local cancellation before a blocked durable abort mark; still
+        // join SDK-owned abort and cleanup before releasing this scope.
+        return runtime.runScheduledInput(input, id, signal);
+      });
     }
     let inputProjection: Parameters<typeof admitWebMessage>[0] | undefined;
     const applicationInput = createApplicationHostInput({root,domain:r.incarnation,assertCurrent:assertLive,

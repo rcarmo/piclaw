@@ -1,0 +1,456 @@
+{
+  "version": "1.5.2",
+  "gitHead": "b4afdddf44e059c67ccf5097e5317d913521b470",
+  "source": "public_builtinProviders_auth_definitions",
+  "methodsExecuted": false,
+  "providers": [
+    {
+      "id": "amazon-bedrock",
+      "name": "Amazon Bedrock",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "ant-ling",
+      "name": "Ant Ling",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "anthropic",
+      "name": "Anthropic",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": true,
+      "oauthRefresh": true,
+      "oauthToAuth": true
+    },
+    {
+      "id": "azure",
+      "name": "Azure",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "baseten",
+      "name": "Baseten",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "cerebras",
+      "name": "Cerebras",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "cloudflare-ai-gateway",
+      "name": "Cloudflare AI Gateway",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "cloudflare-workers-ai",
+      "name": "Cloudflare Workers AI",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "deepseek",
+      "name": "DeepSeek",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "fireworks",
+      "name": "Fireworks",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "github-copilot",
+      "name": "GitHub Copilot",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": true,
+      "oauthRefresh": true,
+      "oauthToAuth": true
+    },
+    {
+      "id": "google",
+      "name": "Google",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "google-vertex",
+      "name": "Google Vertex AI",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "groq",
+      "name": "Groq",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "huggingface",
+      "name": "Hugging Face",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "kimi-coding",
+      "name": "Kimi For Coding",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": true,
+      "oauthRefresh": true,
+      "oauthToAuth": true
+    },
+    {
+      "id": "meta",
+      "name": "Meta",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": true,
+      "oauthRefresh": true,
+      "oauthToAuth": true
+    },
+    {
+      "id": "minimax",
+      "name": "MiniMax",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "minimax-cn",
+      "name": "MiniMax CN",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "mistral",
+      "name": "Mistral",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "moonshotai",
+      "name": "Moonshot AI",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "moonshotai-cn",
+      "name": "Moonshot AI CN",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "nvidia",
+      "name": "NVIDIA",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": true,
+      "oauthRefresh": true,
+      "oauthToAuth": true
+    },
+    {
+      "id": "openai-codex",
+      "name": "OpenAI Codex",
+      "apiKeyLogin": false,
+      "apiKeyResolve": false,
+      "oauthLogin": true,
+      "oauthRefresh": true,
+      "oauthToAuth": true
+    },
+    {
+      "id": "opencode",
+      "name": "OpenCode Zen",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "opencode-go",
+      "name": "OpenCode Go",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": true,
+      "oauthRefresh": true,
+      "oauthToAuth": true
+    },
+    {
+      "id": "qwen-token-plan",
+      "name": "Qwen Token Plan",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "qwen-token-plan-cn",
+      "name": "Qwen Token Plan CN",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "qwen-token-plan-individual",
+      "name": "Qwen Token Plan Individual",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "qwen-token-plan-individual-cn",
+      "name": "Qwen Token Plan Individual CN",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "radius",
+      "name": "Radius",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": true,
+      "oauthRefresh": true,
+      "oauthToAuth": true
+    },
+    {
+      "id": "together",
+      "name": "Together",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "typesafe",
+      "name": "TypeSafe",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "vercel-ai-gateway",
+      "name": "Vercel AI Gateway",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "xai",
+      "name": "xAI",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": true,
+      "oauthRefresh": true,
+      "oauthToAuth": true
+    },
+    {
+      "id": "xiaomi",
+      "name": "Xiaomi",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "xiaomi-token-plan-ams",
+      "name": "Xiaomi Token Plan AMS",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "xiaomi-token-plan-cn",
+      "name": "Xiaomi Token Plan CN",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "xiaomi-token-plan-sgp",
+      "name": "Xiaomi Token Plan SGP",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "zai",
+      "name": "Z.AI",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    },
+    {
+      "id": "zai-coding-cn",
+      "name": "Z.AI Coding CN",
+      "apiKeyLogin": true,
+      "apiKeyResolve": true,
+      "oauthLogin": false,
+      "oauthRefresh": false,
+      "oauthToAuth": false
+    }
+  ],
+  "customProviders": [
+    {
+      "id": "opencode-zen",
+      "authMode": "custom_no_key",
+      "requiresApiKey": false
+    },
+    {
+      "id": "azure-openai",
+      "authMode": "custom_no_key",
+      "requiresApiKey": false
+    },
+    {
+      "id": "ollama",
+      "authMode": "custom_no_key",
+      "requiresApiKey": false
+    },
+    {
+      "id": "llama-cpp",
+      "authMode": "custom_no_key",
+      "requiresApiKey": false
+    },
+    {
+      "id": "openai-compatible",
+      "authMode": "custom_api_key",
+      "requiresApiKey": true
+    }
+  ],
+  "networkRequests": 0,
+  "sdkFileSha256": {
+    "providers/all.js": "659c1eac079ce2bd0f695afa092c3aae16322bd25edb316cb0c2be225fc2badf"
+  },
+  "externalIdentityRoutes": [
+    {
+      "provider": "amazon-bedrock",
+      "route": "bearer_token_aws_profile_or_credential_chain",
+      "owner": "provider_api_key_setup",
+      "evidence": "source_annotation_not_auth_execution",
+      "source": "@earendil-works/pi-ai/dist/providers/amazon-bedrock.js"
+    },
+    {
+      "provider": "google-vertex",
+      "route": "api_key_ADC_or_service_account_file",
+      "owner": "provider_api_key_setup",
+      "evidence": "source_annotation_not_auth_execution",
+      "source": "@earendil-works/pi-ai/dist/providers/google-vertex.js"
+    },
+    {
+      "provider": "azure-openai",
+      "route": "optional_piclaw_api_key_or_managed_identity",
+      "owner": "optional_provider_bootstrap",
+      "evidence": "source_annotation_not_auth_execution",
+      "source": "runtime/src/runtime/provider-bootstrap.ts;runtime/extensions/integrations/azure-openai.ts"
+    },
+    {
+      "provider": "azure-foundry",
+      "route": "optional_piclaw_api_key_or_managed_identity",
+      "owner": "optional_provider_bootstrap",
+      "evidence": "source_annotation_not_auth_execution",
+      "source": "runtime/src/runtime/provider-bootstrap.ts;runtime/extensions/integrations/azure-openai.ts"
+    }
+  ]
+}

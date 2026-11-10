@@ -1,7 +1,7 @@
 // INACTIVE copied-authority preflight. No paths, storage opens, activation or source selection.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import { CompactionEntry, SystemEntry, type Conversation, type ConversationId, type Harness, type EntryRecord } from "@earendil-works/pi-durable";
 import { HostCutoverController } from "./host-cutover.js";
 import { assertApplicationBranchRoutes, type ApplicationBootstrapOptions } from "./application-bootstrap.js";

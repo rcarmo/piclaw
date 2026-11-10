@@ -12,7 +12,7 @@ async function disk(run: (path: string) => Promise<void>) {
 }
 
 describe("WAL FULL policy for historical separate fixtures, not shared application schema", () => {
-  test("copied host file uses production WAL initializer, retains FULL and owner busy_timeout on reopen", () => disk(async path => {
+  test("copied host file uses production WAL initializer, retains FULL and resets blocking busy_timeout on reopen", () => disk(async path => {
     const source = new Database(":memory:");
     try { source.exec("CREATE TABLE sample (n INTEGER)"); source.query("VACUUM INTO ?").run(path); }
     finally { source.close(); }
@@ -25,7 +25,7 @@ describe("WAL FULL policy for historical separate fixtures, not shared applicati
         configureHostWalFixtureDatabase(db);
         expect(db.query("PRAGMA journal_mode").get()).toEqual({ journal_mode: "wal" });
         expect(db.query("PRAGMA synchronous").get()).toEqual({ synchronous: 2 });
-        expect(db.query("PRAGMA busy_timeout").get()).toEqual({ timeout: 321 });
+        expect(db.query("PRAGMA busy_timeout").get()).toEqual({ timeout: 0 });
         db.query("INSERT INTO sample VALUES (?)").run(open);
         expect(await Bun.file(`${path}-wal`).exists()).toBe(true);
       } finally { db.close(); }

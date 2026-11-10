@@ -1,3 +1,5 @@
+import {installHistoricalExpenseFixture} from '../../runtime/test/fixtures/historical-expense.js';
+import {historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import "./src/test-guard.js";
 import { expect, test } from "bun:test";
 import { createTempWorkspace } from "../../runtime/test/helpers.js";
@@ -74,10 +76,11 @@ for (const model of [undefined, "qualification/synthetic"]) test(`allocation-onl
           { scope: "scheduled_run" as const, scheduledTaskId: lease.task.taskId },
           { scope: "instance_daily" as const, timezone: "UTC" },
         ]) {
+          installHistoricalExpenseFixture(db);
           db.query("INSERT INTO budget_caps(id,scope,scheduled_task_id,metric,amount,timezone,created_at,updated_at) VALUES (?,?,?,'api_usd_micros',0,'UTC',?,?)").run(`historical-${capInput.scope}`,capInput.scope,"scheduledTaskId" in capInput?capInput.scheduledTaskId??null:null,"2020-01-01T00:00:00.000Z","2020-01-01T00:00:00.000Z");
-          const history = db.query("SELECT * FROM budget_caps").all();
+          const history = historicalExpenseRows(db,['budget_caps'])[0];
           expect(bindings.resolveConversation(input)).toBe(input.conversationId);
-          expect(db.query("SELECT * FROM budget_caps").all()).toEqual(history);
+          expect(historicalExpenseRows(db,['budget_caps'])[0]).toEqual(history);
           expect(bindings.resolveConversation(input)).toBe(input.conversationId);
         }
         expect(bindings.resolveConversation({ ...input, conversationId: fixture.root.id })).toBeUndefined();
@@ -202,10 +205,11 @@ for (const failBinding of [false, true]) test(`side prompt allocation binds an e
     const bindings = createHostDurableBindings(db, { domain: "side-allocation", incarnation: "side-allocation", manifest, assertOwner: assert, resolveContent: async () => prompt });
     expect(bindings.resolveConversation(allocated)).toBe(allocated.conversationId);
     expect(bindings.resolveConversation({ ...allocated, requestHash: "0".repeat(64) })).toBeUndefined();
+    installHistoricalExpenseFixture(db);
     db.query("INSERT INTO budget_caps(id,scope,metric,amount,timezone,created_at,updated_at) VALUES ('historical-instance','instance_daily','api_usd_micros',0,'UTC',?,?)").run("2020-01-01T00:00:00.000Z","2020-01-01T00:00:00.000Z");
-    const capHistory = db.query("SELECT * FROM budget_caps").all();
+    const capHistory = historicalExpenseRows(db,['budget_caps'])[0];
     expect(bindings.resolveConversation(allocated)).toBe(allocated.conversationId);
-    expect(db.query("SELECT * FROM budget_caps").all()).toEqual(capHistory);
+    expect(historicalExpenseRows(db,['budget_caps'])[0]).toEqual(capHistory);
     db.query("UPDATE service_effect_s01_sources SET state='pending' WHERE source_id=?").run(id);
     expect(bindings.resolveConversation(allocated)).toBeUndefined();
     db.query("UPDATE service_effect_s01_sources SET state='claimed' WHERE source_id=?").run(id);

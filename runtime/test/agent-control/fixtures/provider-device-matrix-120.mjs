@@ -9,12 +9,12 @@ const denyBootstrap = () => { bootstrapRequests++; throw new Error("Unexpected p
 globalThis.fetch = Object.assign(denyBootstrap, { preconnect: denyBootstrap });
 const { builtinProviders } = await import("@earendil-works/pi-ai/providers/all");
 assert.equal(bootstrapRequests, 0);
-// Current 1.4.0 OAuth implementation hashes are independently measured; historical archives stay unchanged.
+// Current 1.5.2 OAuth implementation hashes are independently measured; historical archives stay unchanged.
 const root = import.meta.resolve("@earendil-works/pi-ai");
-assert.equal(JSON.parse(await readFile(fileURLToPath(new URL("../package.json", root)), "utf8")).version, "1.4.0");
+assert.equal(JSON.parse(await readFile(fileURLToPath(new URL("../package.json", root)), "utf8")).version, "1.5.2");
 const fingerprints = {
-  "github-copilot.js":"1ab09c4fa63ca084c2dea43174ab5a20373d4fedf2986eda7fc3430bfd962eab",
-  "kimi-coding.js":"f1a7eb1053d8a1aa4bda5695795a471c624e8110554fab149d1bb6d546fcf836",
+  "github-copilot.js":"22819bb759cbd2a9b846d1cfe8cf7ee9b93ccb8aecc70fc32f9a02daedd536a3",
+  "kimi-coding.js":"49d62d8a59e05e37ea6868c41784c52408797cb940dadc7b0de1cfb75176fcbd",
   "device-code.js":"8f197cc9af67be64b82939573d719d1b55388f96f2e53cb8c47f9618fc1297eb",
 };
 for (const [file, hash] of Object.entries(fingerprints)) assert.equal(createHash("sha256").update(await readFile(fileURLToPath(new URL(`auth/oauth/${file}`, root)))).digest("hex"), hash);
@@ -132,7 +132,7 @@ try {
         cancellationObserved: abortObserved, timerCancellationVerified: mode.includes("wait-cancel"), timingVerified: ["expiry", "pending-success", "slow-down"].includes(mode) });
     }
   }
-  console.log(JSON.stringify({ version: "1.4.0", runtime: typeof Bun === "undefined" ? `Node ${process.versions.node}` : `Bun ${Bun.version}`,
+  console.log(JSON.stringify({ version: "1.5.2", runtime: typeof Bun === "undefined" ? `Node ${process.versions.node}` : `Bun ${Bun.version}`,
     scope: "public_provider_device_methods_only", results, sdkFileSha256: fingerprints,
     credentialPersistence: "none", inference: "not_invoked", modelPolicyWrites: "none", networkGuard: "fetch_interception_no_os_sandbox" }));
 } finally { globalThis.fetch = originalFetch; }

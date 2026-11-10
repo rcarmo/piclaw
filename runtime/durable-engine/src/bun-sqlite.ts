@@ -29,13 +29,13 @@ export class BunSqliteDatabase implements SqliteDatabase {
     check();
     return this.writeScope.run({ ...this.writeScope.getStore(), admission: check }, body);
   }
-  private allocatingSource = false;
+  private allocatingSource = 0;
 
   /** Compose public SDK writes and host correlation in the same physical transaction. */
   async withHostSourceGuard<T>(check: () => void, persist: (tx: SqliteExecutor) => Promise<void>, body: () => Promise<T>): Promise<T> {
-    if (!this.guard || this.allocatingSource || this.idleGuard) throw Error("Host source guard unavailable");
-    this.allocatingSource = true;
-    try { check(); return await this.writeScope.run({ ...this.writeScope.getStore(), source: { check, persist } }, body); } finally { this.allocatingSource = false; }
+    if (!this.guard || this.writeScope.getStore()?.source || this.idleGuard) throw Error("Host source guard unavailable");
+    this.allocatingSource++;
+    try { check(); return await this.writeScope.run({ ...this.writeScope.getStore(), source: { check, persist } }, body); } finally { this.allocatingSource--; }
   }
   private readonly identity?: ReturnType<typeof statSync>;
   constructor(private readonly path: string, private readonly guard?: { root: Database; assertOwner(): void; fenceTransactions?: boolean; contentionSignal?: AbortSignal }) {
@@ -135,6 +135,7 @@ export class BunSqliteDatabase implements SqliteDatabase {
     return {
       exec: async sql => { valid(); execSqliteMutation(this.db, sql); },
       run: async (sql, ...params) => { valid(); assertSqliteMutation(sql); this.db.query(sql).run(...params); },
+      runCounted: async (sql, ...params) => { valid(); assertSqliteMutation(sql); return this.db.query(sql).run(...params).changes; },
       get: async <T extends object>(sql: string, ...params: SqliteValue[]) => {
         valid(); return (prepareSqliteRead(this.db, sql).get(...params) ?? undefined) as T | undefined;
       },
@@ -149,6 +150,9 @@ export class BunSqliteDatabase implements SqliteDatabase {
   }
   run(sql: string, ...params: SqliteValue[]): Promise<void> {
     return this.guard ? this.transaction(tx => tx.run(sql, ...params)) : this.enqueue(() => this.executor(() => {}).run(sql, ...params));
+  }
+  runCounted(sql:string,...params:SqliteValue[]):Promise<number> {
+    return this.guard ? this.transaction(tx=>tx.runCounted(sql,...params)) : this.enqueue(()=>this.executor(()=>{}).runCounted(sql,...params));
   }
   get<T extends object>(sql: string, ...params: SqliteValue[]): Promise<T | undefined> {
     return this.enqueue(() => this.executor(() => {}).get<T>(sql, ...params));

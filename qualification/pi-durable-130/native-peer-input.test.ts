@@ -1,3 +1,4 @@
+import {historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import './src/test-guard.js';
 import {expect} from 'bun:test';
 import {writeFileSync} from 'node:fs';
@@ -45,6 +46,6 @@ for(const ingress of ['peer-http','chat-tool','runtime-message'] as const)for(co
     const inputs=f.root.query("SELECT * FROM submissions WHERE json_extract(record,'$.type')='input' ORDER BY id").all();expect(inputs).toHaveLength(busy?2:1);
     const sdk=f.root.query('SELECT * FROM submissions ORDER BY id').all(),history=f.root.query('SELECT * FROM entries ORDER BY id').all(),sources=f.root.query('SELECT * FROM service_effect_s01_sources ORDER BY source_seq').all();
     await f.reopen();expect(f.calls()).toBe(busy?2:1);expect(f.root.query('SELECT * FROM submissions ORDER BY id').all()).toEqual(sdk);expect(f.root.query('SELECT * FROM entries ORDER BY id').all()).toEqual(history);expect(f.root.query('SELECT * FROM service_effect_s01_sources ORDER BY source_seq').all()).toEqual(sources);
-    for(const table of ['service_effect_s01_operations','service_effect_s02_commits','budget_work','budget_request_reservations','budget_usage_events'])expect(f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
+    for(const table of ['service_effect_s01_operations','service_effect_s02_commits','budget_work','budget_request_reservations','budget_usage_events'])expect(table.startsWith('budget_') ? historicalExpenseRows(f.root,[table])[0] : f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
   }finally{await f.close();}
 },5000);

@@ -1,4 +1,9 @@
-# Native background operation policy
+# Native background operation policy — archived delivery record
+
+This document preserves an earlier design and its measurements. Its add-on operation service, financial request/accounting owners, budget-resume paths and cap gates are removed; the old prepare/dispatch/reconcile add-on APIs are unavailable. Current Dream execution uses private SDK inputs/results with current access/FD-lock, exact model/source/deadline and tool/resource restrictions, independently of monetary history. Scheduled recurrence/leases/history stay with S07. The older sections below must not be used as current API or activation guidance. See [final delivery](expense-final-delivery-1875.md) and [usage reports](usage-report-projections.md).
+
+## Archived design and qualification
+
 
 The granted add-on path uses native dispatch and settlement, including API-equivalent task and calendar caps when a stored account and trusted model ceiling can be bound. `AgentPool.prepareAddonOperation()` derives authority from the persisted owner and current host grant, publishes a private context, and composes the accepted source/binding/budget identity without starting a model or tool. `dispatchAddonOperation()` uses that same identity through native submit/wait/settle; the real operation host selects it without calling the legacy runner.
 

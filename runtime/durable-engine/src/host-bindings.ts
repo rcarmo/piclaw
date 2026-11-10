@@ -1,11 +1,12 @@
 import { admitSqliteWrite } from '../../src/db/sqlite-async-admission.js';
-// INACTIVE application-owned correlation store. No database opens or automatic migrations.
+// Application-owned exact source correlation. Schema initialization is explicit;
+// public pi-durable owns execution, results and durable cancellation.
 import type { Database } from "bun:sqlite";
 import { assertHostSchema, initializeHostSchemaTables } from "./host-schema.js";
 import { getQueuedInputIntent } from "../../src/service-effects/current-piclaw/queued-input-intent.js";
 import type { ConversationId, SubmissionId } from "@earendil-works/pi-durable";
 import { hashCanonicalRequest } from "../../../runtime/src/service-effects/contracts/common.js";
-import { inputSnapshot, isNativeMessageInput, type AcceptedInput, type HostInputBinding, type HostDurableBindings } from "./host-runtime.js";
+import { inputSnapshot, isNativeMessageInput, isNativeScheduledInput, type AcceptedInput, type HostInputBinding, type HostDurableBindings } from "./host-runtime.js";
 
 export interface HostBindingOptions {
   readonly domain: string;
@@ -78,7 +79,7 @@ export function createHostDurableBindings(db: Database, options: HostBindingOpti
       JOIN service_effect_s07_occurrences r ON r.run_id=s.source_id AND r.operation_id=b.operation_id AND r.accepted_source_seq=s.source_seq
       JOIN service_effect_s07_tasks h ON h.task_id=r.task_id AND h.current_revision=r.task_revision AND h.status='active' AND h.next_run_at=r.scheduled_for
       JOIN service_effect_s01_operations o ON o.operation_id=b.operation_id AND o.chat_jid=b.chat_jid AND o.primary_source_seq=b.source_seq
-      JOIN service_effect_s01_chats ch ON ch.chat_jid=b.chat_jid AND ch.active_operation_id=o.operation_id
+      JOIN service_effect_s01_chats ch ON ch.chat_jid=b.chat_jid AND (ch.active_operation_id=o.operation_id OR o.operation_id='native-scheduled:' || r.run_id)
       WHERE b.domain=? AND b.incarnation=? AND b.operation_id=? AND b.source_seq=?
         AND s.kind='scheduled_agent' AND s.state='claimed' AND s.source_id=? AND s.payload_ref=?
         AND r.state='source_bound' AND r.lease_expires_at>? AND o.phase IN ('claimed','executing','settling')`)
@@ -235,6 +236,7 @@ export function createHostDurableBindings(db: Database, options: HostBindingOpti
       const i = capture(input);
       assertHostSchema(db);
       if (isNativeMessageInput(i)) { assertNativeMessage(i); return; }
+      if (isNativeScheduledInput(i)) { if(resolveConversation(i)!==i.conversationId)throw Error("Scheduled source authority unavailable"); assertOwner(); return; }
       // Unlike correlation replay, an effect requires a currently executing,
       // uncancelled operation and its exact still-claimed accepted source.
       const current = db.query(`SELECT 1 FROM service_effect_s01_sources s

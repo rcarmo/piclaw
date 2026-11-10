@@ -21,7 +21,7 @@ import {
   type ShellOutputUpdate,
   type ShellOutputView,
 } from "../contracts/execution-env.js";
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import type { TextLineEnvironment, TextLineReader, TextLineRecord } from './text-line-reader-compat.js';
 import { createLogger, debugSuppressedError } from '../../utils/logger.js';
 

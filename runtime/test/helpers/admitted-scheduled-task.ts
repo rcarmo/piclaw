@@ -4,7 +4,14 @@ import { createCurrentPiclawScheduledRunStore } from '../../src/service-effects/
 import { pollScheduledRunsOnce,type SchedulerDeps } from '../../src/task-scheduler.js';
 import type { ScheduledTask } from '../../src/types.js';
 
-/** Exercise a real S07 claim/queue/settlement around a caller-supplied native port. */
+/** Join the durable result in fixtures; AgentQueue does not own native agent completion. */
+export async function waitForAdmittedScheduledTask(id:string){
+  const deadline=Date.now()+1000;
+  while(Date.now()<deadline){const log=getTaskRunLogs(id)[0];if(log){await Bun.sleep(0);return log;}await Bun.sleep(1);}
+  throw Error('Admitted scheduled task did not settle');
+}
+
+/** Exercise a real S07 claim/settlement around a caller-supplied native port. */
 export async function runAdmittedScheduledTask(task:ScheduledTask,deps:SchedulerDeps){
   const database=getDb();
   database.exec('PRAGMA foreign_keys=ON');
@@ -14,8 +21,6 @@ export async function runAdmittedScheduledTask(task:ScheduledTask,deps:Scheduler
   try {
     await pollScheduledRunsOnce({...deps,queue},built.value);
     await queue.shutdown();
-    const log=getTaskRunLogs(task.id)[0];
-    if(!log)throw Error('Admitted scheduled task did not settle');
-    return log;
+    return await waitForAdmittedScheduledTask(task.id);
   }finally{await queue.shutdown();}
 }

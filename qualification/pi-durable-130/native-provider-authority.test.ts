@@ -1,3 +1,5 @@
+import {installHistoricalExpenseFixture} from '../../runtime/test/fixtures/historical-expense.js';
+import {historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import './src/test-guard.js';
 import {expect,spyOn} from 'bun:test';
 import {isolatedApplicationTest} from './src/isolated-application-test.js';
@@ -12,9 +14,10 @@ for(const auth of ['denied','expense-cap-changed'] as const)applicationTest(`act
   const f=await nativeGoalFixture(false,false,undefined,undefined,()=>{
     if(!armed)return;resolutions++;
     if(auth==='denied')throw Error('Invalid API key: '+secret);
+    installHistoricalExpenseFixture(f.root);
     f.root.query("INSERT INTO budget_caps(id,scope,metric,amount,timezone,created_at,updated_at) VALUES ('changed-during-auth','instance_daily','api_usd_micros',0,'UTC','2020-01-01','2020-01-01')").run();
   });
-  const snapshot=()=>financial.map(table=>f.root.query(`SELECT * FROM ${table} ORDER BY rowid`).all());
+  const snapshot=()=>historicalExpenseRows(f.root,financial);
   try{
     armed=true;const receipt=await f.send('One independently accepted request');
     if(auth==='expense-cap-changed'){await f.entered.promise;f.held.release();}
@@ -28,12 +31,12 @@ for(const auth of ['denied','expense-cap-changed'] as const)applicationTest(`act
     expect(replies).toHaveLength(1);expect(replies[0]!.content).not.toContain(secret);
     if(auth==='denied'){expect(replies[0]!.content).toContain('Turn failed');expect(f.status(receipt.submission_id)).toBe('unanswered');expect(result.usage.totalTokens).toBe(0);}
     else{expect(replies[0]!.content).toBe('Ordinary native reply');expect(f.status(receipt.submission_id)).toBe('done');expect(result.usage.totalTokens).toBe(2);}
-    expect(f.root.query('SELECT * FROM budget_work').all()).toEqual([]);expect(f.root.query('SELECT * FROM budget_request_reservations').all()).toEqual([]);expect(f.root.query('SELECT * FROM budget_usage_events').all()).toEqual([]);
+    expect(historicalExpenseRows(f.root,['budget_work'])[0]).toEqual([]);expect(historicalExpenseRows(f.root,['budget_request_reservations'])[0]).toEqual([]);expect(historicalExpenseRows(f.root,['budget_usage_events'])[0]).toEqual([]);
     expect(f.root.query('SELECT state FROM service_effect_s01_sources').all()).toEqual([{state:'consumed'}]);
     const before=snapshot(),sdk=f.root.query('SELECT * FROM submissions ORDER BY id').all(),entries=f.root.query('SELECT * FROM entries ORDER BY id').all(),messages=f.root.query('SELECT * FROM messages ORDER BY rowid').all();
     await f.reopen();expect(resolutions).toBe(1);expect(f.calls()).toBe(auth==='denied'?0:1);expect(snapshot()).toEqual(before);
     expect(f.root.query('SELECT * FROM submissions ORDER BY id').all()).toEqual(sdk);expect(f.root.query('SELECT * FROM entries ORDER BY id').all()).toEqual(entries);expect(f.root.query('SELECT * FROM messages ORDER BY rowid').all()).toEqual(messages);
-    for(const table of ['service_effect_s01_operations','service_effect_s02_commits'])expect(f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
+    for(const table of ['service_effect_s01_operations','service_effect_s02_commits'])expect(table.startsWith('budget_') ? historicalExpenseRows(f.root,[table])[0] : f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
   }finally{await f.close();}
 },30000);
 
@@ -62,6 +65,6 @@ applicationTest('actual factory mandatory event fence preserves original usage b
     expect(f.root.query('SELECT input_tokens,output_tokens,total_tokens FROM token_usage').all()).toEqual([{input_tokens:1,output_tokens:1,total_tokens:2}]);
     const sdk=f.root.query('SELECT * FROM submissions ORDER BY id').all(),entries=f.root.query('SELECT * FROM entries ORDER BY id').all();
     await f.reopen();expect(f.calls()).toBe(1);expect(f.root.query('SELECT * FROM submissions ORDER BY id').all()).toEqual(sdk);expect(f.root.query('SELECT * FROM entries ORDER BY id').all()).toEqual(entries);expect(observed).toHaveLength(1);
-    for(const table of ['service_effect_s01_operations','service_effect_s02_commits',...financial])expect(f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
+    for(const table of ['service_effect_s01_operations','service_effect_s02_commits',...financial])expect(table.startsWith('budget_') ? historicalExpenseRows(f.root,[table])[0] : f.root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
   }finally{spy.mockRestore();await f.close();}
 },30000);

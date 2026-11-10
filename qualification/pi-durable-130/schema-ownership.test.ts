@@ -1,3 +1,4 @@
+import {installHistoricalExpenseFixture} from '../../runtime/test/fixtures/historical-expense.js';
 import "./src/test-guard.js";
 import { isolatedApplicationTest } from "./src/isolated-application-test.js";
 import { expect } from "bun:test";
@@ -39,6 +40,12 @@ applicationTest("fresh core inventory owns every object and exact FTS shadow wit
     expect(db.query("SELECT * FROM sqlite_schema ORDER BY type,name").all()).toEqual(before);
     expect(db.query("SELECT * FROM piclaw_schema_migrations ORDER BY owner,migration_order").all()).toEqual(receipts);
     expect(readSchemaInventory(db)).toEqual(readSchemaInventory(db));
+    expect(db.query("SELECT name FROM main.sqlite_schema WHERE name GLOB 'budget_*'").all()).toEqual([]);
+    // Classify preserved historical objects without recreating them at startup.
+    installHistoricalExpenseFixture(db);
+    const historicalSchema=db.query('SELECT * FROM sqlite_schema ORDER BY type,name').all();
+    const history=inventory(db,'core');
+    expect(history.objects.filter(object=>object.name.startsWith('budget_')).every(object=>object.category==='retired')).toBe(true);
     for (const [kind, name] of [['trigger', 'budget_request_receipt_no_replace'], ['index', 'idx_budget_requests_model_invocation'],
       ['index', 'idx_budget_requests_domain_state'], ['index', 'idx_budget_work_status'], ['trigger', 'budget_request_invocation_insert']]) {
       db.exec(`SAVEPOINT terminal_inventory_negative; DROP ${kind} ${name}`);
@@ -51,7 +58,7 @@ applicationTest("fresh core inventory owns every object and exact FTS shadow wit
     db.exec('SAVEPOINT invocation_inventory_drift; DROP TRIGGER budget_request_invocation_insert; CREATE TRIGGER budget_request_invocation_insert BEFORE INSERT ON budget_request_reservations BEGIN SELECT 1; END');
     try { expect(() => inventory(db, 'core')).toThrow('Unapproved schema drift trigger:budget_request_invocation_insert'); }
     finally { db.exec('ROLLBACK TO invocation_inventory_drift; RELEASE invocation_inventory_drift'); }
-    expect(db.query('SELECT * FROM sqlite_schema ORDER BY type,name').all()).toEqual(before);
+    expect(db.query('SELECT * FROM sqlite_schema ORDER BY type,name').all()).toEqual(historicalSchema);
   } finally { await closeDatabase(); }
 });
 

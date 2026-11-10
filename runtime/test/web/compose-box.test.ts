@@ -146,7 +146,7 @@ test('resolveComposeRunUsageMeta formats latest usage with cache and provider-co
       },
     },
   }, 'openrouter/auto')).toMatchObject({
-    label: 'Last • 5K • CH60.0% • $0.0012',
+    label: 'Last • 5K • CH60.0% • 0.0012 (currency unknown)',
     cacheHitRate: 60,
     costTotal: 0.00123,
     costProvenance: 'provider_reported',
@@ -179,7 +179,7 @@ test('resolveComposeRunUsageMeta preserves explicit 0.0% and unavailable cache s
       costProvenance: 'provider_reported',
     } },
   });
-  expect(explicitZero?.label).toBe('Last • 1K • CH0.0% • $0.0000');
+  expect(explicitZero?.label).toBe('Last • 1K • CH0.0% • 0.0000 (currency unknown)');
   expect(explicitZero?.cacheHitRate).toBe(0);
 
   const unavailable = resolveComposeRunUsageMeta({
@@ -755,3 +755,9 @@ test('resolveUiOnlyCommandNotice surfaces only read-only thinking queries and le
 test('compact snapshot model count keeps the picker accessible without a selected model',()=>{
  expect(resolveComposeModelPickerState(null,{current:null,model_options:[],available_model_count:5})).toEqual({showPicker:true,label:'Select model',hasAvailableModels:true});
 });
+
+for(const [currency,label]of [['USD','$0.0000'],['EUR','EUR 0.0000'],[null,'0.0000 (currency unknown)']]as const)test(`latest usage preserves ${currency??'unknown'} provider units`,()=>{
+ const meta=resolveComposeRunUsageMeta({cacheUsage:{latest:{totalTokens:0,providerCostCurrency:currency,costTotal:0,costProvenance:'provider_reported'}}});expect(meta?.title).toContain(label);if(currency!=='USD')expect(meta?.title).not.toContain('$');
+});
+
+test('model picker always indicates absent catalogue price without claiming free service',()=>{expect(formatModelPickerPricing(null)).toBe('Price unknown');expect(formatModelPickerPricing({})).toBe('Price unknown');});

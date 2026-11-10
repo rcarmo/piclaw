@@ -1,0 +1,13 @@
+provider,model,tier,geography,unit,input,cache_read,cache_write_5m,cache_write_1h,output,basis
+"anthropic","claude-fable-5-2","standard","global","USD/MTok","8","0.2","10","16","40","Published category rates"
+"anthropic","claude-fable-5-2","standard","us-only","USD/MTok","8.8","0.22","11","17.6","44","Published tier/cache/data-residency multipliers"
+"anthropic","claude-fable-5-2","batch","global","USD/MTok","4","0.1","5","8","20","Published tier/cache/data-residency multipliers"
+"anthropic","claude-fable-5-2","batch","us-only","USD/MTok","4.4","0.11","5.5","8.8","22","Published tier/cache/data-residency multipliers"
+"anthropic","claude-fable-5-2","fast","global","USD/MTok","16","0.4","20","32","80","Published tier/cache/data-residency multipliers"
+"anthropic","claude-fable-5-2","fast","us-only","USD/MTok","17.6","0.44","22","35.2","88","Published tier/cache/data-residency multipliers"
+"anthropic","claude-mythos-5-2","standard","global","USD/MTok","8","0.2","10","16","40","Published category rates"
+"anthropic","claude-mythos-5-2","standard","us-only","USD/MTok","8.8","0.22","11","17.6","44","Published tier/cache/data-residency multipliers"
+"anthropic","claude-mythos-5-2","batch","global","USD/MTok","4","0.1","5","8","20","Published tier/cache/data-residency multipliers"
+"anthropic","claude-mythos-5-2","batch","us-only","USD/MTok","4.4","0.11","5.5","8.8","22","Published tier/cache/data-residency multipliers"
+"anthropic","claude-mythos-5-2","fast","global","USD/MTok","16","0.4","20","32","80","Published tier/cache/data-residency multipliers"
+"anthropic","claude-mythos-5-2","fast","us-only","USD/MTok","17.6","0.44","22","35.2","88","Published tier/cache/data-residency multipliers"

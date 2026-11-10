@@ -130,13 +130,15 @@ function normalizeRunAt(timestamp: unknown): string {
 
 function hasUsageTokensOrCost(usage: Record<string, unknown>): boolean {
   const cost = asRecord(usage.cost) ?? {};
-  return asOptionalNonNegativeNumber(usage.providerCost, usage.provider_cost) !== null || [
+  return (cost.totalFromProvider === true && asOptionalNonNegativeNumber(cost.total) !== null)
+    || asOptionalNonNegativeNumber(usage.providerCost, usage.provider_cost) !== null || [
     usage.input,
     usage.output,
     usage.cacheRead,
     usage.cacheWrite,
     usage.totalTokens,
     usage.total,
+    extractReasoningTokens(usage),
     cost.input,
     cost.output,
     cost.cacheRead,
@@ -165,12 +167,17 @@ function storeUsageRecord(chatJid: string, usage: Record<string, unknown>, metad
   const costOutput = asNumber(cost, "output");
   const costCacheRead = asNumber(cost, "cacheRead");
   const costCacheWrite = asNumber(cost, "cacheWrite");
-  const catalogueCostCandidate = asOptionalNonNegativeNumber(cost.total)
-    ?? costInput + costOutput + costCacheRead + costCacheWrite;
-  // Earendil's catalogue cost object has no field-presence signal: zero can mean
-  // unknown rates, so only a positive total is a trustworthy estimate.
+  // SDK category costs are catalogue-derived; its total may instead be an
+  // actual provider bill. Never value the catalogue using that billed total.
+  const categoryEstimate = costInput + costOutput + costCacheRead + costCacheWrite;
+  const catalogueCostCandidate = cost.totalFromProvider === true ? categoryEstimate
+    : asOptionalNonNegativeNumber(cost.total) ?? categoryEstimate;
+  // Zero category costs alone do not prove a known free catalogue tariff.
   const catalogueCostTotal = catalogueCostCandidate > 0 ? catalogueCostCandidate : null;
-  const providerCostTotal = asOptionalNonNegativeNumber(usage.providerCost, usage.provider_cost);
+  const providerCostTotal = (cost.totalFromProvider === true ? asOptionalNonNegativeNumber(cost.total) : null)
+    ?? asOptionalNonNegativeNumber(usage.providerCost, usage.provider_cost);
+  const providerCostCurrency = providerCostTotal === null ? null : cost.totalFromProvider === true ? "USD"
+    : firstString(usage.providerCostCurrency, usage.provider_cost_currency)?.toUpperCase() ?? null;
   const costTotal = providerCostTotal ?? catalogueCostTotal ?? 0;
   const costProvenance = providerCostTotal !== null
     ? "provider_reported"
@@ -216,6 +223,7 @@ function storeUsageRecord(chatJid: string, usage: Record<string, unknown>, metad
     cost_cache_write: costCacheWrite,
     cost_total: costTotal,
     provider_cost_total: providerCostTotal,
+    provider_cost_currency: providerCostCurrency,
     catalogue_cost_total: catalogueCostTotal,
     cost_provenance: costProvenance,
     model: asStringOrNull(metadata.model),

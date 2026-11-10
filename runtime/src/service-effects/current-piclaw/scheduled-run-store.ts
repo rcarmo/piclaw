@@ -179,12 +179,12 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
     return this.mutate("claimDue", effectId, null, null, () => this.claim(request));
   }
 
-  async renew(input: RenewScheduledRunRequest): Promise<ResultValue<ScheduledRunLease, ScheduledRunStoreError>> {
+  async renew(input: RenewScheduledRunRequest, context?: { signal?: AbortSignal; assertCurrent?: () => void }): Promise<ResultValue<ScheduledRunLease, ScheduledRunStoreError>> {
     const request = normaliseRenew(input);
     const effectId = request ? `renew:${request.runId}:${request.expectedAttempt}:${request.leaseExpiresAt}` : "invalid";
     this.trace("renew", effectId, null, request?.expectedTaskRevision ?? null, "call", null);
     if (!request) return this.failed("renew", effectId, null, null, errorOf("invalid_request"));
-    return this.mutate("renew", effectId, null, request.expectedTaskRevision, () => this.renewLease(request));
+    return this.mutate("renew", effectId, null, request.expectedTaskRevision, () => this.renewLease(request), null, context);
   }
 
   async bindAcceptedSource(input: BindScheduledSourceRequest): Promise<ResultValue<ScheduledRunRecord, ScheduledRunStoreError>> {
@@ -326,9 +326,13 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
     if(hasScheduledHistoryProjection(this.database)&&this.database.query("SELECT 1 FROM main.task_run_logs WHERE occurrence_id=? OR (task_id=? AND ?='task_run_log:'||id)").get(row.run_id,row.task_id,row.result_ref))return false;
     if(this.database.query(`SELECT 1 FROM main.${LINKS} l JOIN main.service_effect_s05_outbox o ON o.outbox_id=l.outbox_id WHERE l.run_id=? AND
       (o.state IN ('pending','started','unknown') OR o.certainty='unknown' OR o.retry_at IS NOT NULL)`).get(row.run_id))return false;
-    const budget=this.database.query("SELECT 1 FROM main.sqlite_schema WHERE type='table' AND name='budget_request_reservations'").get();
-    if(budget&&this.database.query("SELECT 1 FROM main.budget_work w JOIN main.budget_request_reservations r ON r.work_id=w.id WHERE w.scheduled_task_id=? AND r.state IN ('reserved','dispatched','unresolved')").get(row.task_id))return false;
-    return true;
+    return !this.hasHistoricalTaskReference(row.task_id);
+  }
+  private hasHistoricalTaskReference(taskId:string):boolean {
+    // Historical task references are data, not a financial lifecycle. Missing
+    // work mapping with a retained request table cannot prove safe deletion.
+    const history=this.database.query("SELECT name FROM main.sqlite_schema WHERE type='table' AND name IN ('budget_work','budget_request_reservations')").all() as {name:string}[];
+    return history.length>0&&(!history.some(table=>table.name==='budget_work')||!!this.database.query("SELECT 1 FROM main.budget_work WHERE scheduled_task_id=?").get(taskId));
   }
 
   private async mutate<T>(
@@ -338,13 +342,14 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
     version: number | null,
     action: () => ResultValue<T, ScheduledRunStoreError>,
     sourceSeq: number | null = null,
+    context?: { signal?: AbortSignal; assertCurrent?: () => void },
   ): Promise<ResultValue<T, ScheduledRunStoreError>> {
     // Preserve asynchronous entry without waiting behind unrelated mutations.
     await Promise.resolve();
     try {
       if (this.runtime.hitFault("before_effect", method)) return this.failed(method, effectId, operationId, version, errorOf("storage_unavailable"), sourceSeq);
-      const result = await admitSqliteWrite(this.database, action, undefined, undefined, undefined,
-        () => { if (method === "claimDue") this.runtime.assertClaimCurrent?.(); });
+      const result = await admitSqliteWrite(this.database, action, undefined, context?.signal, undefined,
+        () => { context?.assertCurrent?.(); if (method === "claimDue") this.runtime.assertClaimCurrent?.(); });
       if (!result.ok) return this.failed(method, effectId, operationId, version, result.error, sourceSeq);
       let lostAcknowledgement: boolean;
       try { lostAcknowledgement = this.runtime.hitFault("effect_then_lost_acknowledgement", method); }
@@ -598,7 +603,16 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
       AND (SELECT COUNT(*) FROM service_effect_s01_operation_sources os WHERE os.operation_id=o.operation_id)=1`).get(run.operation_id,snapshot.chatJid,run.accepted_source_seq,run.run_id) as {version:number;terminal_committed_at:string;harness_session_id:string|null;harness_operation_id:string|null}|null;
     const committedAt=row&&canonicalInstant(row.terminal_committed_at);
     if (!row || !Number.isSafeInteger(row.version) || row.version<=0 || !committedAt) return null;
-    const harness=row.harness_session_id===null?null:Object.freeze({sessionId:row.harness_session_id,submissionId:row.harness_operation_id!,runId:run.run_id,operationId:run.operation_id,sourceSeq:run.accepted_source_seq,chatJid:snapshot.chatJid});
+    let sessionId=row.harness_session_id,submissionId=row.harness_operation_id;
+    if(run.operation_id===`native-scheduled:${run.run_id}`){
+      // A native input has no host harness lifecycle. Its immutable routing ACK
+      // still requires actual public SDK terminal proof; missing ACK stays unknown.
+      if(!this.database.query("SELECT 1 FROM main.sqlite_schema WHERE type='table' AND name='piclaw_durable_bindings_v1'").get())return null;
+      const binding=this.database.query("SELECT incarnation,submission_id FROM main.piclaw_durable_bindings_v1 WHERE operation_id=? AND chat_jid=? AND source_seq=? AND source_id=? AND request_id=? AND payload_ref=?").get(run.operation_id,snapshot.chatJid,run.accepted_source_seq,run.run_id,`scheduled:${run.run_id}`,snapshot.payloadRef) as {incarnation:string;submission_id:number|null}|null;
+      if(!binding||!binding.incarnation||!Number.isSafeInteger(binding.submission_id)||(binding.submission_id??0)<=0)return null;
+      sessionId=binding.incarnation;submissionId=String(binding.submission_id);
+    }
+    const harness=sessionId===null?null:Object.freeze({sessionId,submissionId:submissionId!,runId:run.run_id,operationId:run.operation_id,sourceSeq:run.accepted_source_seq,chatJid:snapshot.chatJid});
     return {version:row.version,committedAt,harness};
   }
 
@@ -684,6 +698,7 @@ class CurrentPiclawScheduledRunStore implements ScheduledRunStore, ScheduledRunR
       ).all(request.settledBefore, request.limit) as RunRow[];
       const runIds: string[] = [];
       for (const row of rows) {
+        if(this.hasHistoricalTaskReference(row.task_id))continue;
         this.retireRun(row);
         runIds.push(row.run_id);
       }

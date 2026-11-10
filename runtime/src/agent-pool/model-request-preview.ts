@@ -51,9 +51,10 @@ export const previewSdkRequest: Preview = async (model, context, options = {}) =
         else {
           // Derive the SDK's allowance from its PUBLIC clamp, never copy its
           // private safety constant or mistake the helper for the final cap.
-          // An unsaturated probe avoids hiding that allowance behind the
-          // clamp's one-token floor for a genuinely too-small candidate.
-          const window = Number.MAX_SAFE_INTEGER;
+          // Use the physical window: the SDK can choose a different margin
+          // for a nearly-full window. Only probe a larger window when the
+          // one-token floor hides the margin and compaction is already needed.
+          const window = clampMaxTokensToContext(model, context, model.contextWindow) > 1 ? model.contextWindow : Number.MAX_SAFE_INTEGER;
           const room = clampMaxTokensToContext({ ...model, contextWindow: window }, context, window);
           const allowance = window - estimateContextTokens(context).tokens - room;
           captured = Number.isSafeInteger(allowance) && allowance >= 0 && Number.isSafeInteger(limit + allowance)

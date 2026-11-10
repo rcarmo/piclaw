@@ -1,7 +1,5 @@
 import "./src/test-guard.js";
 import { expect, test, spyOn } from "bun:test";
-import { Database } from "bun:sqlite";
-import { snapshotLegacyHostFrontier } from "../../runtime/src/agent-pool/legacy-host-frontier.js";
 import { mkdirSync, writeFileSync, readFileSync, rmSync, mkdtempSync, readdirSync, symlinkSync, watch } from "node:fs";
 import { join } from "node:path";
 import { buildSessionContext, convertToLlm, sessionEntryToContextMessages, SessionManager, createAgentSession, createAgentSessionRuntime, DefaultResourceLoader, SettingsManager } from "@earendil-works/pi-coding-agent";
@@ -269,11 +267,20 @@ for (const scenario of scenarios.filter(name => !process.env.PICLAW_WORKFLOW_CAS
             method: "POST", headers: { "Content-Type": "application/json", Origin: "http://fixture" }, body: JSON.stringify({ content: "continue original chat" }),
           }));
           expect(response.status).toBe(201);
-          for (let i = 0; i < 500 && candidateQueue.isLaneBusy("chat:web:workflow:0"); i++) await Bun.sleep(5);
+          const admission=await response.json() as {submission_id:number;row_id:number};
+          for(let i=0;i<500&&(db.query('SELECT status FROM submissions WHERE id=?').get(admission.submission_id) as {status:string}).status!=='done';i++)await Bun.sleep(5);
+          expect(db.query('SELECT status FROM submissions WHERE id=?').get(admission.submission_id)).toEqual({status:'done'});
           expect(candidateQueue.isLaneBusy("chat:web:workflow:0")).toBe(false);
-          expect(db.query("SELECT content FROM messages WHERE chat_jid='web:workflow:0' AND is_bot_message=1").all()).toEqual([{ content: "synthetic answer" }]);
-          const row = db.query("SELECT rowid,id FROM messages WHERE chat_jid='web:workflow:0' AND is_bot_message=0").get() as { rowid: number; id: string };
-          expect(db.query("SELECT operation_id FROM service_effect_s02_commits WHERE chat_jid='web:workflow:0'").all()).toEqual([{ operation_id: `message:${row.rowid}:1` }]);
+          // This low-level upgrade bundle has no onMessageResult projector.
+          // Execution/result belong to the SDK, never the retired host lane.
+          const answer=db.query("SELECT record FROM entries WHERE json_extract(record,'$.kind')='pi.assistant' ORDER BY id DESC LIMIT 1").get() as {record:string};
+          expect(JSON.parse(answer.record).model[0].content).toEqual([{type:'text',text:'synthetic answer'}]);
+          expect(policy.host.modelCalls).toBe(1);
+          expect(importer!.host.modelCalls).toBe(0);
+          expect(db.query("SELECT content FROM messages WHERE chat_jid='web:workflow:0' AND is_bot_message=1").all()).toEqual([]);
+          const row = db.query("SELECT rowid,id FROM messages WHERE chat_jid='web:workflow:0' AND rowid=?").get(admission.row_id) as { rowid: number; id: string };
+          expect(db.query("SELECT operation_id FROM service_effect_s02_commits WHERE chat_jid='web:workflow:0'").all()).toEqual([]);
+          expect(db.query("SELECT submission_id FROM piclaw_durable_bindings_v1 WHERE chat_jid='web:workflow:0' AND source_id=?").get(row.id)).toEqual({submission_id:admission.submission_id});
           expect(db.query("SELECT payload_ref FROM service_effect_s01_sources WHERE source_id=?").get(row.id)).toEqual({ payload_ref: `message-row:${row.rowid}` });
           expect(candidatePool.getSessionGenerationForChat("web:workflow:0")).toBe("original-0");
           expect(await candidatePool.getCurrentModelLabel("web:workflow:0")).toBe("qualification/synthetic");
@@ -282,11 +289,15 @@ for (const scenario of scenarios.filter(name => !process.env.PICLAW_WORKFLOW_CAS
               method: "POST", headers: { "Content-Type": "application/json", Origin: "http://fixture" }, body: JSON.stringify({ content: "continue sibling chat" }),
             }));
             expect(siblingResponse.status).toBe(201);
-            for (let i = 0; i < 500 && candidateQueue.isLaneBusy("chat:web:workflow:1"); i++) await Bun.sleep(5);
+            const siblingAdmission=await siblingResponse.json() as {submission_id:number};
+            for(let i=0;i<500&&(db.query('SELECT status FROM submissions WHERE id=?').get(siblingAdmission.submission_id) as {status:string}).status!=='done';i++)await Bun.sleep(5);
+            expect(db.query('SELECT status FROM submissions WHERE id=?').get(siblingAdmission.submission_id)).toEqual({status:'done'});
             expect(candidateQueue.isLaneBusy("chat:web:workflow:1")).toBe(false);
             expect(candidatePool.getSessionGenerationForChat("web:workflow:1")).toBe(scenario.startsWith("happy-multiple") ? "original-1" : "original-0");
-            expect(db.query("SELECT content FROM messages WHERE chat_jid='web:workflow:1' AND is_bot_message=1").all()).toEqual([{ content: "synthetic answer" }]);
-            expect(db.query("SELECT 1 FROM service_effect_s02_commits WHERE chat_jid='web:workflow:1'").all()).toHaveLength(1);
+            const siblingAnswer=db.query("SELECT record FROM entries WHERE json_extract(record,'$.kind')='pi.assistant' ORDER BY id DESC LIMIT 1").get() as {record:string};
+            expect(JSON.parse(siblingAnswer.record).model[0].content).toEqual([{type:'text',text:'synthetic answer'}]);
+            expect(db.query("SELECT content FROM messages WHERE chat_jid='web:workflow:1' AND is_bot_message=1").all()).toEqual([]);
+            expect(db.query("SELECT 1 FROM service_effect_s02_commits WHERE chat_jid='web:workflow:1'").all()).toHaveLength(0);
           }
           expect(policy.host.modelCalls).toBe(scenario === "happy-forks" || scenario.startsWith("happy-multiple") ? 2 : 1);
           expect(policy.host.credentialLookups).toBe(0);

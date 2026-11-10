@@ -2,8 +2,8 @@
  * task-scheduler.ts – Polls for due scheduled tasks and executes them.
  *
  * Runs a periodic loop (every SCHEDULER_POLL_INTERVAL ms) that queries the
- * database for active tasks whose `next_run` is in the past, then enqueues
- * each task on the AgentQueue for lane-aware execution.
+ * database for active tasks whose `next_run` is in the past. Public pi-durable
+ * executes native agent work directly; AgentQueue places other work.
  *
  * AI work executes only through an admitted S07 occurrence and native port.
  * Model overrides and history isolation belong to its private native context.
@@ -12,10 +12,10 @@
  *
  * Consumers:
  *   - runtime.ts calls startSchedulerLoop() at startup.
- *   - The AgentQueue (queue.ts) serialises task execution with user messages per chat lane while allowing unrelated chats to progress in parallel.
+ *   - AgentQueue (queue.ts) places non-agent work, including scheduled shell tasks.
  */
 
-import { admitSqliteWrite, type SyncSqliteOperation } from "./db/sqlite-async-admission.js";
+import { waitForSqliteContention, admitSqliteWrite, type SyncSqliteOperation } from "./db/sqlite-async-admission.js";
 import { randomUUID,createHash } from "node:crypto";
 import { nativeBackgroundSourceId } from './agent-pool/background-operation-contract.js';
 import { hostname } from "node:os";
@@ -76,7 +76,7 @@ function unsupportedScheduledRun(): ScheduledTaskRunOutcome {
  * Keeps the scheduler decoupled from concrete channel implementations.
  */
 export interface SchedulerDeps {
-  /** The shared lane-aware execution queue. */
+  /** Shared placement queue for non-agent work; not a native agent execution owner. */
   queue: AgentQueue;
   /** The agent pool for running agent turns. */
   agentPool: AgentPool;
@@ -135,7 +135,7 @@ function scheduledDreamInvocationId(runId:string):string{
   return[hex.slice(0,8),hex.slice(8,12),hex.slice(12,16),hex.slice(16,20),hex.slice(20)].join('-');
 }
 
-async function runInternalTask(task: ScheduledTask, deps: SchedulerDeps,nativeAuthority?:{invocationId:string;assertCurrent():void}): Promise<{ result: string | null; error: string | null; notify: boolean }> {
+async function runInternalTask(task: ScheduledTask, deps: SchedulerDeps,nativeAuthority?:{invocationId:string;assertCurrent():void},signal?:AbortSignal): Promise<{ result: string | null; error: string | null; notify: boolean }> {
   const action = (task.prompt || "").trim().toLowerCase();
   const dreamToken = parseDreamPromptToken(action);
 
@@ -146,7 +146,7 @@ async function runInternalTask(task: ScheduledTask, deps: SchedulerDeps,nativeAu
         days: dreamToken.days,
         mode: "auto",
         model: task.model,
-        agentPool: deps.agentPool,nativeAuthority,
+        agentPool: deps.agentPool,nativeAuthority,signal,
       });
       return {
         result: result.result,
@@ -188,7 +188,7 @@ async function runInternalTask(task: ScheduledTask, deps: SchedulerDeps,nativeAu
   return { result: null, error: `Unknown internal task: ${task.prompt || "(empty)"}`, notify: false };
 }
 
-async function runShellTask(task: ScheduledTask): Promise<{ result: string | null; error: string | null; notify: boolean }> {
+async function runShellTask(task: ScheduledTask, signal?: AbortSignal): Promise<{ result: string | null; error: string | null; notify: boolean }> {
   const validated = validateShellCommand(task.command);
   if (!validated.ok) return { result: null, error: validated.error || "Invalid command.", notify: false };
 
@@ -220,6 +220,7 @@ async function runShellTask(task: ScheduledTask): Promise<{ result: string | nul
         appendDecodedText(decoder.decode(chunk, { stream: true }));
       },
       timeout: task.timeout_sec ?? undefined,
+      signal,
       env: buildPiSessionEnv({
         sessionId: task.id,
         modelLabel: task.model,
@@ -247,7 +248,8 @@ interface ScheduledTaskRunOutcome {
   result: string | null;
   error: string | null;
   durationMs: number;
-  /** Durable delivery waits for the atomic S07/history commitment. */
+  /** Presentation only; S07 result/history commits before delivery. */
+  deliveryText?: string;
 }
 
 async function executeScheduledTask(
@@ -255,6 +257,7 @@ async function executeScheduledTask(
   deps: SchedulerDeps,
   claimActive: () => boolean,
   scheduledLease: ScheduledRunLease,
+  leaseSignal?: AbortSignal,
 ): Promise<ScheduledTaskRunOutcome> {
   if (!canRunLegacyScheduledWork()) return unsupportedScheduledRun();
   // Once denied, finally/catch paths must not restore models or persist results.
@@ -265,7 +268,7 @@ async function executeScheduledTask(
   if (!fresh || fresh.status !== "active" || fresh.revision !== task.revision) {
     return { status: "skipped", result: null, error: null, durationMs: 0 };
   }
-  const notifyOnComplete = fresh.notify_on_complete !== false && fresh.notify_on_complete !== 0;
+
 
   const appendRecoverySummary = (text: string | null, recoverySummary: string | null): string | null => {
     const normalizedText = typeof text === "string" && text.trim() ? text.trim() : "";
@@ -280,6 +283,7 @@ async function executeScheduledTask(
   schedulerMetrics.taskRunsStarted += 1;
   let result: string | null = null;
   let error: string | null = null;
+  let deliveryText: string | undefined;
   let loggedResult: string | null = null;
   let loggedError: string | null = null;
   try {
@@ -304,30 +308,23 @@ async function executeScheduledTask(
           }
         }};
       }
-      const out = await runInternalTask(task, deps, nativeAuthority);
+      const out = await runInternalTask(task, deps, nativeAuthority, leaseSignal);
       if (!mayContinue()) return unsupportedScheduledRun();
       if (out.error) error=out.error; else result=out.result;
     } else if (kind === "shell") {
-      const out = await runShellTask(task);
+      const out = await runShellTask(task, leaseSignal);
       if (!mayContinue()) return unsupportedScheduledRun();
       if (out.error) {
         error = out.error;
       } else if (out.result) {
         result = out.result;
-        if (out.notify) {
-          const t = formatOutbound(result, detectChannel(task.chat_jid));
-          if (t) {
-            await deps.sendMessage(task.chat_jid, t, { forceRoot: true, source: "scheduled" });
-            if (!mayContinue()) return unsupportedScheduledRun();
-            if (notifyOnComplete) await deps.sendNudge?.(t);
-          }
-        }
+        if (out.notify) deliveryText = result;
       }
     } else {
       if (!mayContinue()) return unsupportedScheduledRun();
       if(!deps.agentPool.dispatchScheduledAgent)throw Error('Native scheduled dispatcher unavailable');
       // Once entered, join the admitted occurrence even if its lease is revoked.
-      const dispatched=deps.agentPool.dispatchScheduledAgent(scheduledLease);
+      const dispatched=deps.agentPool.dispatchScheduledAgent(scheduledLease, { signal: leaseSignal });
       if(!dispatched)throw Error('Native scheduled dispatcher unavailable');
       const out=await dispatched;
       if (!mayContinue()) return unsupportedScheduledRun();
@@ -341,12 +338,7 @@ async function executeScheduledTask(
         loggedResult = appendRecoverySummary(out.result, recoverySummary);
         if (out.result) {
           result = out.result;
-          const t = formatOutbound(result, detectChannel(task.chat_jid));
-          if (t) {
-            await deps.sendMessage(task.chat_jid, t, { forceRoot: true, source: "scheduled" });
-            if (!mayContinue()) return unsupportedScheduledRun();
-            if (notifyOnComplete) await deps.sendNudge?.(t);
-          }
+          deliveryText = result;
         }
       }
     }
@@ -366,6 +358,7 @@ async function executeScheduledTask(
     result: effectiveResult,
     error: effectiveError,
     durationMs,
+    deliveryText,
   };
 }
 
@@ -599,7 +592,7 @@ function acceptScheduledAgentSource(lease: ScheduledRunLease, acceptedAt: string
   ).get(lease.task.chatJid, runId) as { source_seq: number; operation_id: string } | undefined;
   if (existing) return { sourceSeq: existing.source_seq, operationId: existing.operation_id };
 
-  const operationId = `scheduled_operation:${runId.slice("scheduled_run:".length)}`;
+  const operationId = `native-scheduled:${runId}`;
   const sourceHash = hashCanonicalRequest({
     chatJid: lease.task.chatJid,
     sourceId: runId,
@@ -612,7 +605,6 @@ function acceptScheduledAgentSource(lease: ScheduledRunLease, acceptedAt: string
     const chat = db.query(
       "SELECT next_source_seq,active_operation_id FROM service_effect_s01_chats WHERE chat_jid=?",
     ).get(lease.task.chatJid) as { next_source_seq: number; active_operation_id: string | null };
-    if (chat.active_operation_id) throw new Error(`Scheduled source owner conflict for ${lease.task.chatJid}.`);
     const sourceSeq = chat.next_source_seq;
     db.query("UPDATE service_effect_s01_chats SET next_source_seq=next_source_seq+1 WHERE chat_jid=? AND next_source_seq=?").run(lease.task.chatJid, sourceSeq);
     db.query(
@@ -627,7 +619,6 @@ function acceptScheduledAgentSource(lease: ScheduledRunLease, acceptedAt: string
     db.query(
       "INSERT INTO service_effect_s01_operation_sources(chat_jid,operation_id,source_seq) VALUES(?,?,?)",
     ).run(lease.task.chatJid, operationId, sourceSeq);
-    db.query("UPDATE service_effect_s01_chats SET active_operation_id=? WHERE chat_jid=?").run(operationId, lease.task.chatJid);
   return { sourceSeq, operationId };
 }
 
@@ -651,30 +642,34 @@ function settleScheduledAgentSource(
     ).run(status === "success" ? "consumed" : "disposed", status === "success" ? null : errorCode, chatJid, source.sourceSeq);
     if (status === "success") {
       db.query(
-        "UPDATE service_effect_s01_chats SET consumed_through_source_seq=MAX(consumed_through_source_seq,?) WHERE chat_jid=?",
-      ).run(source.sourceSeq, chatJid);
+        `UPDATE service_effect_s01_chats SET consumed_through_source_seq=COALESCE((SELECT MIN(source_seq)-1 FROM service_effect_s01_sources WHERE chat_jid=? AND state NOT IN ('consumed','disposed')),next_source_seq-1) WHERE chat_jid=?`,
+      ).run(chatJid, chatJid);
     }
 }
 
 interface LeaseController {
   lease: ScheduledRunLease;
   valid: boolean;
+  signal: AbortSignal;
   timer: ReturnType<typeof setTimeout> | null;
   stop: () => void;
 }
 
 function mayContinueClaim(controller: LeaseController): boolean {
-  if (!canRunLegacyScheduledWork()) controller.stop();
+  if (!canRunLegacyScheduledWork() || Date.now() >= Date.parse(controller.lease.record.leaseExpiresAt)) controller.stop();
   return controller.valid;
 }
 
 function startLeaseController(store: ScheduledRunStore, initial: ScheduledRunLease): LeaseController {
+  const lifetime = new AbortController(), assertBinding = captureHostDatabaseBinding(getDb());
   const controller: LeaseController = {
     lease: initial,
+    signal: lifetime.signal,
     valid: true,
     timer: null,
     stop: () => {
       controller.valid = false;
+      lifetime.abort();
       if (controller.timer) clearTimeout(controller.timer);
       controller.timer = null;
     },
@@ -686,36 +681,50 @@ function startLeaseController(store: ScheduledRunStore, initial: ScheduledRunLea
       const now = new Date().toISOString();
       const leaseExpiresAt = addCanonicalDuration(now, SCHEDULED_LEASE_DURATION_MS);
       if (!leaseExpiresAt) { controller.stop(); return; }
-      let renewed;
+      const request = Object.freeze({
+        runId: controller.lease.record.runId,
+        workerId: controller.lease.record.workerId,
+        expectedAttempt: controller.lease.record.attempt,
+        expectedTaskRevision: controller.lease.record.taskRevision,
+        leaseToken: controller.lease.leaseToken,
+        now, leaseExpiresAt,
+      });
+      const assertCurrent = () => {
+        assertBinding();
+        const head = mayContinueClaim(controller) ? getTaskById(controller.lease.record.taskId) : null;
+        if (!head || head.status !== 'active' || head.revision !== request.expectedTaskRevision || head.next_run !== controller.lease.record.scheduledFor) {
+          controller.stop(); throw Error('Scheduled renewal source revoked');
+        }
+      };
+      // This same controller owns expiry while acquisition is yielding. A
+      // retry renews only this exact request; it never repeats task execution.
+      controller.timer = setTimeout(controller.stop, Math.max(0, Date.parse(controller.lease.record.leaseExpiresAt) - Date.now()));
+      controller.timer.unref?.();
       try {
-        renewed = await store.renew({
-          runId: controller.lease.record.runId,
-          workerId: controller.lease.record.workerId,
-          expectedAttempt: controller.lease.record.attempt,
-          expectedTaskRevision: controller.lease.record.taskRevision,
-          leaseToken: controller.lease.leaseToken,
-          now,
-          leaseExpiresAt,
-        });
+        while (mayContinueClaim(controller)) {
+          const renewed = await store.renew(request, { signal: controller.signal, assertCurrent });
+          if (renewed.ok) {
+            if (!controller.valid) return; // Never revive an expiry/revocation fence.
+            controller.lease = renewed.value;
+            if (!mayContinueClaim(controller)) return;
+            break;
+          }
+          if (!mayContinueClaim(controller)) return;
+          if (renewed.error._tag !== 'storage_unavailable' || !renewed.error.retryable) {
+            log.warn('Scheduled run lease renewal failed', {operation:'renew_scheduled_run',runId:request.runId,errorTag:renewed.error._tag});
+            controller.stop(); return;
+          }
+          await waitForSqliteContention(performance.now() + 25, controller.signal);
+        }
       } catch (error) {
+        const expired = controller.signal.aborted;
         controller.stop();
-        if (canRunLegacyScheduledWork()) log.warn("Scheduled run lease renewal threw", { operation: "renew_scheduled_run", err: error });
+        if (!expired && canRunLegacyScheduledWork()) log.warn('Scheduled run lease renewal threw', {operation:'renew_scheduled_run',err:error});
         return;
       }
-      if (!mayContinueClaim(controller)) return;
-      if (!renewed.ok) {
-        log.warn("Scheduled run lease renewal failed", {
-          operation: "renew_scheduled_run",
-          runId: controller.lease.record.runId,
-          taskId: controller.lease.record.taskId,
-          taskRevision: controller.lease.record.taskRevision,
-          attempt: controller.lease.record.attempt,
-          errorTag: renewed.error._tag,
-        });
-        controller.stop();
-        return;
-      }
-      controller.lease = renewed.value;
+      if (!controller.valid) return;
+      if (controller.timer) clearTimeout(controller.timer);
+      controller.timer = null;
       schedule();
     }, SCHEDULED_LEASE_RENEW_MS);
     controller.timer.unref?.();
@@ -808,7 +817,7 @@ async function runClaimedScheduledTask(
       }
     }
 
-    const outcome = await executeScheduledTask(task, deps, () => controller.valid, controller.lease);
+    const outcome = await executeScheduledTask(task, deps, () => controller.valid, controller.lease, controller.signal);
     if (outcome.status === "skipped" && outcome.error !== null) { controller.stop(); return; }
     if (!mayContinueClaim(controller)) return;
     if (outcome.status === "skipped") {
@@ -855,6 +864,11 @@ async function runClaimedScheduledTask(
         && observed.value.durationMs === completeRequest.durationMs && observed.value.settledAt === completeRequest.completedAt
         && observed.value.resultRef === completeRequest.resultRef && observed.value.errorCode === completeRequest.errorCode) {
         completed = { ok: true, value: observed.value };
+      } else if (completed.error.retryable) {
+        // A failed observer is not proof of a failed commit. Re-observe the
+        // exact durable decision through its idempotent completion API.
+        completed = await store.complete(completeRequest);
+        completionMayHaveCommitted ||= !completed.ok && completed.error.certainty === 'unknown';
       }
     }
     if (!canRunLegacyScheduledWork()) return;
@@ -885,6 +899,18 @@ async function runClaimedScheduledTask(
       status: outcome.status,
       headDisposition: completed.value.headDisposition,
     });
+    if (outcome.deliveryText && canRunLegacyScheduledWork()) {
+      const text = formatOutbound(outcome.deliveryText, detectChannel(finalLease.task.chatJid));
+      try {
+        if (text) {
+          await deps.sendMessage(finalLease.task.chatJid, text, { forceRoot: true, source: 'scheduled' });
+          if (finalLease.task.notifyOnComplete && canRunLegacyScheduledWork()) await deps.sendNudge?.(text);
+        }
+      } catch (error) {
+        log.warn('Scheduled result delivery failed after settlement', {operation:'scheduler.delivery_failed',runId:finalLease.record.runId,err:error});
+      }
+    }
+
   } catch (error) {
     if (!canRunLegacyScheduledWork()) { controller.stop(); return; }
     log.error("Claimed scheduled run failed before settlement", {
@@ -903,7 +929,7 @@ export async function pollScheduledRunsOnce(deps: SchedulerDeps, store: Schedule
   await runSchedulerPoll(deps, store, () => true);
 }
 
-async function runSchedulerPoll(deps: SchedulerDeps, store: ScheduledRunStore & Partial<InterruptedScheduledRunReconciler>, isCurrent: () => boolean): Promise<void> {
+async function runSchedulerPoll(deps: SchedulerDeps, store: ScheduledRunStore & Partial<InterruptedScheduledRunReconciler>, isCurrent: () => boolean, ownTask: (run: () => Promise<void>) => () => Promise<void> = run => run): Promise<void> {
   const mayPoll = () => isCurrent() && canRunLegacyScheduledWork();
   if (!mayPoll()) return;
   schedulerMetrics.polls += 1;
@@ -936,13 +962,12 @@ async function runSchedulerPoll(deps: SchedulerDeps, store: ScheduledRunStore & 
   for (const lease of claimed.value) {
     if (!mayPoll()) return;
     const controller = startLeaseController(store, lease);
-    deps.queue.enqueueTask(
-      lease.record.runId,
-      () => runClaimedScheduledTask(store, controller, deps),
-      lease.task.kind === "shell" && deps.agentPool.isDurableRuntime?.() === true
-        ? `scheduled-shell:${lease.task.chatJid}`
-        : `chat:${lease.task.chatJid}`,
-    );
+    const run=ownTask(()=>runClaimedScheduledTask(store,controller,deps));
+    if(lease.task.kind==='agent'&&deps.agentPool.isDurableRuntime?.()===true){
+      // SDK scheduling owns admitted agent execution. Host lanes remain only
+      // for shell/internal work; this promise joins result persistence.
+      void run().catch(error=>log.error('Scheduled completion continuation failed',{operation:'scheduler.continuation_failed',runId:lease.record.runId,err:error}));
+    }else deps.queue.enqueueTask(lease.record.runId,run,lease.task.kind==='shell'&&deps.agentPool.isDurableRuntime?.()===true?`scheduled-shell:${lease.task.chatJid}`:`chat:${lease.task.chatJid}`);
     schedulerMetrics.tasksEnqueued += 1;
     log.info("Scheduled occurrence claimed", {
       operation: "claim_scheduled_run",
@@ -956,7 +981,7 @@ async function runSchedulerPoll(deps: SchedulerDeps, store: ScheduledRunStore & 
   }
 }
 
-/** One polling generation owns admission; accepted tasks remain queue-owned. */
+/** One polling generation owns admission; accepted work retains its store. */
 interface SchedulerLoop {
   stopped: boolean;
   timer: ReturnType<typeof setTimeout> | null;
@@ -975,7 +1000,7 @@ export class SchedulerStoreReleaseError extends Error {
 
 /**
  * Start the scheduler polling loop. Checks for due tasks every
- * SCHEDULER_POLL_INTERVAL ms and enqueues them on the shared AgentQueue.
+ * SCHEDULER_POLL_INTERVAL ms; the SDK places agents, AgentQueue places other work.
  *
  * Called once by runtime.ts during startup.
  */
@@ -992,17 +1017,12 @@ export function startSchedulerLoop(deps: SchedulerDeps): () => Promise<void> {
       return resource.close();
     }
   };
-  // Keep the store alive for work already handed to the queue, without making
-  // stop/join wait for agent execution (or cancelling its lease controller).
-  const pollDeps = { ...deps, queue: {
-    enqueueTask: (id: string, run: () => Promise<void>, lane?: string) => {
-      pendingTasks++;
-      deps.queue.enqueueTask(id, async () => {
-        try { await run(); }
-        finally { pendingTasks--; await releaseStore(); }
-      }, lane);
-    },
-  } as AgentQueue };
+  // Accepted work retains this SQL store, independently of polling or SDK
+  // task placement. No second agent execution queue or lifecycle owner.
+  const ownTask=(run:()=>Promise<void>)=>{
+    pendingTasks++;
+    return async()=>{try{await run();}finally{pendingTasks--;await releaseStore();}};
+  };
   let stopPromise: Promise<void> | null = null;
   const instance: SchedulerLoop = {
     stopped: false,
@@ -1038,7 +1058,7 @@ export function startSchedulerLoop(deps: SchedulerDeps): () => Promise<void> {
     instance.timer = null;
     instance.active = (async () => {
       try {
-        await runSchedulerPoll(pollDeps, resource.store, isCurrent);
+        await runSchedulerPoll(deps, resource.store, isCurrent, ownTask);
       } catch (e) {
         log.error("Scheduler poll failed", { operation: "start_scheduler_loop.poll", err: e });
       }
@@ -1055,7 +1075,7 @@ export function startSchedulerLoop(deps: SchedulerDeps): () => Promise<void> {
   return instance.stop;
 }
 
-/** Stop new admission and join the active poll, not queue-owned task execution. */
+/** Stop new admission and join the active poll, not already admitted execution. */
 export function stopSchedulerLoop(): Promise<void> {
   return schedulerLoop?.stop() ?? stoppedScheduler;
 }

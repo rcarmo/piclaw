@@ -6,6 +6,51 @@ import { PROVIDER_MODEL_PRICING_REFERENCE_TAG, resolveProviderModelPricing } fro
 import { generateProviderModelEstimatedCostChart } from "../../skills/operator/token-chart/token-cost-by-provider-model-chart.ts";
 
 describe("provider/model pricing reference", () => {
+  test("prices native Fable and Mythos 5.2 with explicit Fast selectors and stable aliases", () => {
+    for (const family of ["fable", "mythos"]) {
+      const model = `claude-${family}-5.2`;
+      const standard = resolveProviderModelPricing("anthropic", model);
+      expect(standard).toMatchObject({ inputPerMTok: 8, outputPerMTok: 40, cacheReadPerMTok: 0.2, cacheWritePerMTok: 10 });
+      expect(standard.basis).toContain("2026-11-09");
+      expect(standard.notes).toContain("1h writes $16");
+      expect(resolveProviderModelPricing("anthropic", `claude-${family}-5-2`)).toEqual(standard);
+      expect(resolveProviderModelPricing(" ANTHROPIC ", ` claude_${family}_5_2 `)).toEqual(standard);
+      const fast = resolveProviderModelPricing("anthropic", `${model}-fast`);
+      expect(fast).toMatchObject({ inputPerMTok: 16, outputPerMTok: 80, cacheReadPerMTok: 0.4, cacheWritePerMTok: 20 });
+      expect(fast.notes).toContain("1h writes $32");
+      expect(fast.notes).toContain("not an upstream model ID");
+      expect(resolveProviderModelPricing("anthropic", `claude-${family}-5-2-fast`)).toEqual(fast);
+    }
+  });
+
+  test("does not invent 5.2 routes or Batch aliases from native availability", () => {
+    for (const family of ["fable", "mythos"]) {
+      for (const provider of ["openrouter", "github-copilot", "azure-foundry", "amazon-bedrock", "google-vertex", "unknown"]) {
+        for (const model of [`claude-${family}-5.2`, `claude-${family}-5-2`, `anthropic/claude-${family}-5.2`]) {
+          expect(resolveProviderModelPricing(provider, model)).toBeNull();
+        }
+      }
+      expect(resolveProviderModelPricing("anthropic", `claude-${family}-5.2:batch`)).toBeNull();
+    }
+    expect(resolveProviderModelPricing("anthropic", "claude-fable-5.1").inputPerMTok).toBe(10);
+    expect(resolveProviderModelPricing("anthropic", "claude-mythos-5.1").outputPerMTok).toBe(50);
+  });
+
+  test("the cost chart prices 5.2 input categories once without adding reasoning", () => {
+    const fixture = createTempWorkspace("claude52-pricing-");
+    const dbPath = join(fixture.store, "usage.db");
+    try {
+      const db = new Database(dbPath);
+      db.exec("CREATE TABLE token_usage (run_at TEXT, provider TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER)");
+      const insert = db.prepare("INSERT INTO token_usage VALUES (?, ?, ?, ?, ?, ?, ?)");
+      for (const model of ["claude-fable-5-2", "claude-mythos-5.2"]) insert.run("2026-11-09T12:00:00Z", "anthropic", model, 5_000, 10_000, 90_000, 5_000);
+      db.close();
+      const chart = generateProviderModelEstimatedCostChart({ days: 1, dbPath, now: new Date("2026-11-09T13:00:00Z") });
+      expect(chart.totalEstimatedCost).toBeCloseTo(1.016, 12);
+      expect(chart.seriesCount).toBe(2);
+      expect(chart.pricingReferenceTag).toBe(PROVIDER_MODEL_PRICING_REFERENCE_TAG);
+    } finally { fixture.cleanup(); }
+  });
   test("prices Terra 6.1 exact routes and Graphite aliases without inheriting other providers", () => {
     const expected = { canonicalModel: "GPT-6.1 Terra", inputPerMTok: 1, outputPerMTok: 5, cacheReadPerMTok: 0.05, cacheWritePerMTok: 1.25 };
     for (const provider of ["openai", "github-copilot", "openai-codex"]) {
@@ -13,8 +58,8 @@ describe("provider/model pricing reference", () => {
       expect(resolveProviderModelPricing(provider, "gpt-6_1-terra")).toMatchObject(expected);
     }
     expect(resolveProviderModelPricing("openrouter", "openai/gpt-6.1-terra")).toMatchObject(expected);
-    expect(resolveProviderModelPricing("openrouter", "gpt-6.1-terra").basis).toContain("Unpriced fallback");
-    expect(resolveProviderModelPricing("azure-foundry", "gpt-6.1-terra").basis).toContain("Unpriced fallback");
+    expect(resolveProviderModelPricing("openrouter", "gpt-6.1-terra")).toBeNull();
+    expect(resolveProviderModelPricing("azure-foundry", "gpt-6.1-terra")).toBeNull();
     expect(resolveProviderModelPricing("github-copilot", "gpt-6.1-terra").notes).toContain("Above 272K");
   });
   test("keeps route-specific prices separate", () => {
@@ -36,12 +81,12 @@ describe("provider/model pricing reference", () => {
   });
 
   test("does not inherit a bare model from the wrong provider", () => {
-    expect(resolveProviderModelPricing("openrouter", "deepseek-v4-flash").basis).toContain("Unpriced fallback");
-    expect(resolveProviderModelPricing("openrouter", "mistral-large-3").basis).toContain("Unpriced fallback");
+    expect(resolveProviderModelPricing("openrouter", "deepseek-v4-flash")).toBeNull();
+    expect(resolveProviderModelPricing("openrouter", "mistral-large-3")).toBeNull();
   });
 
   test("leaves subscription-only research previews unpriced", () => {
-    expect(resolveProviderModelPricing("openai-codex", "gpt-5.3-codex-spark").basis).toContain("Unpriced fallback");
+    expect(resolveProviderModelPricing("openai-codex", "gpt-5.3-codex-spark")).toBeNull();
   });
 
   test("resolves current aliases without conflating GPT-5 Mini variants", () => {
@@ -109,7 +154,7 @@ describe("provider/model pricing reference", () => {
   test("refreshes September 22 launches without assuming Copilot availability", () => {
     expect(resolveProviderModelPricing("openai", "gpt-6-sol")).toMatchObject({ inputPerMTok: 2, outputPerMTok: 10, cacheReadPerMTok: 0.2, cacheWritePerMTok: 2.5 });
     expect(resolveProviderModelPricing("openai", "gpt-6-luna")).toMatchObject({ inputPerMTok: 0.1, outputPerMTok: 0.5, cacheReadPerMTok: 0.01, cacheWritePerMTok: 0.125 });
-    expect(resolveProviderModelPricing("github-copilot", "gpt-6-sol").basis).toContain("Unpriced");
+    expect(resolveProviderModelPricing("github-copilot", "gpt-6-sol")).toBeNull();
     expect(resolveProviderModelPricing("anthropic", "claude-opus-5-5")).toMatchObject({ inputPerMTok: 4, outputPerMTok: 20, cacheReadPerMTok: 0.2, cacheWritePerMTok: 5 });
     expect(resolveProviderModelPricing("anthropic", "claude-opus-5.5-fast")).toMatchObject({ inputPerMTok: 8, outputPerMTok: 40, cacheReadPerMTok: 0.4, cacheWritePerMTok: 10 });
     expect(resolveProviderModelPricing("github-copilot", "claude-sonnet-5")).toMatchObject({ inputPerMTok: 2, outputPerMTok: 10 });
@@ -129,9 +174,9 @@ describe("provider/model pricing reference", () => {
     expect(standard.notes).toContain("base tier only");
     expect(resolveProviderModelPricing("openai", "gpt-6-1-sol")).toEqual(standard);
     expect(resolveProviderModelPricing("openai", "gpt-6-sol").cacheReadPerMTok).toBe(0.2);
-    expect(resolveProviderModelPricing("github-copilot", "gpt-6.1-sol").basis).toContain("Unpriced");
-    expect(resolveProviderModelPricing("openrouter", "openai/gpt-6.1-sol").basis).toContain("Unpriced");
-    expect(resolveProviderModelPricing("openai-codex", "gpt-6.1-sol").basis).toContain("Unpriced");
+    expect(resolveProviderModelPricing("github-copilot", "gpt-6.1-sol")).toBeNull();
+    expect(resolveProviderModelPricing("openrouter", "openai/gpt-6.1-sol")).toBeNull();
+    expect(resolveProviderModelPricing("openai-codex", "gpt-6.1-sol")).toBeNull();
   });
 
   test("prices native Mistral Large 4 at undiscounted rates with an explicit write fallback", () => {
@@ -155,11 +200,11 @@ describe("provider/model pricing reference", () => {
   test("does not transfer Mistral Large 4 prices across routes, generations or unverified names", () => {
     for (const provider of ["openrouter", "github-copilot", "azure-foundry", "unknown"]) {
       for (const model of ["mistral-large-4", "mistral-large-4-0", "mistralai/mistral-large-4"]) {
-        expect(resolveProviderModelPricing(provider, model).basis).toContain("Unpriced");
+        expect(resolveProviderModelPricing(provider, model)).toBeNull();
       }
     }
-    expect(resolveProviderModelPricing("mistral", "mistral-large-latest").basis).toContain("Unpriced");
-    expect(resolveProviderModelPricing("mistral", "mistral-large-4-2610").basis).toContain("Unpriced");
+    expect(resolveProviderModelPricing("mistral", "mistral-large-latest")).toBeNull();
+    expect(resolveProviderModelPricing("mistral", "mistral-large-4-2610")).toBeNull();
     expect(resolveProviderModelPricing("azure-foundry", "mistral-large-3").inputPerMTok).toBe(0.5);
   });
 

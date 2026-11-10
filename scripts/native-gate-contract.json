@@ -3,7 +3,7 @@
   "fixtures": {
     "native": {
       "repository": "rcarmo/piclaw-addons",
-      "ref": "4429681f2b2cd708f52f7397e82f66ae2952f31b"
+      "ref": "609dc7bda3a47252481f3d8da1b838ec723798ad"
     },
     "contract": {
       "repository": "rcarmo/piclaw-addons",
@@ -86,11 +86,9 @@
     "host-proxmox-tool.test.ts",
     "host-recovery.test.ts",
     "host-regrets-bindings.test.ts",
-    "host-regrets-model.test.ts",
     "host-regrets-tool.test.ts",
     "host-remote-peer-service.test.ts",
     "host-remote-peer-tool.test.ts",
-    "host-request-write-admission.test.ts",
     "host-terminal-outcome.test.ts",
     "host-tool-binding-identity.test.ts",
     "idle-model.test.ts",
@@ -151,6 +149,7 @@
     "offline-maintenance-default-factory.test.ts",
     "owned-model-context-admission.test.ts",
     "ownership.test.ts",
+    "pi150-upgrade-smoke.test.ts",
     "plan.test.ts",
     "regrets-default-factory.test.ts",
     "rehearsal.test.ts",
@@ -162,6 +161,7 @@
     "scheduled-allocation.test.ts",
     "scheduled-terminal-proof.test.ts",
     "scheduled.test.ts",
+    "scheduler-production-lifetime.test.ts",
     "schema-convergence.test.ts",
     "schema-ownership.test.ts",
     "scoped-compaction.test.ts",

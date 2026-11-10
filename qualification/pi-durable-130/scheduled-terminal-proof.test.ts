@@ -1,6 +1,6 @@
 import './src/test-guard.js';
 import { expect, test } from 'bun:test';
-import { openFixture, context } from './src/fixture.js';
+import { openFixture, context, barrier } from './src/fixture.js';
 import type { Storage } from '../../runtime/durable-engine/qualification/durable.ts';
 import { captureInterruptedScheduledHarness } from '../../runtime/durable-engine/src/host-scheduled-terminal.js';
 
@@ -89,4 +89,22 @@ test('receipt outcome, accepted-entry provenance and synchronous owner fence are
     expect(fence).toThrow('owner revoked');
     await expect(captureInterruptedScheduledHarness(f.storage, context, f.identity, () => { throw Error('owner revoked'); })).rejects.toThrow('owner revoked');
   } finally { await f.close(); }
+});
+
+
+for(const stage of ['model','tool'] as const)test(`native scheduled SDK cancellation joins the actual pending ${stage} and requires an aborted generation`,async()=>{
+  const f=await openFixture({acquired:true}),entered=barrier(),held=barrier();
+  if(stage==='model'){f.host.modelHold=held;f.host.onModelEnter=()=>entered.release();}else{f.host.toolHold=held;f.host.onToolEnter=()=>entered.release();}
+  const identity={sessionId:'fixture-sdk-domain',submissionId:'',runId:'scheduled_run:aborted',operationId:'native-scheduled:scheduled_run:aborted',sourceSeq:9,chatJid:'web:fixture'};
+  const requestId=`scheduled:${identity.runId}`;
+  try{
+    const submitted=await f.root.submit({type:'input',requestId,content:stage==='tool'?'use-tool':'hold until cancelled',entry:{kind:'host.accepted',data:{incarnation:identity.sessionId,conversationId:f.root.id,chatJid:identity.chatJid,operationId:identity.operationId,sourceSeq:identity.sourceSeq,sourceId:identity.runId,requestId,role:'primary'}}},context);
+    identity.submissionId=String(submitted.id);await entered.promise;await f.root.abort(context,{background:true});
+    const status=await submitted.status(context);expect(status?.status).toBe('unanswered');expect(status?.reason).toBe('aborted');
+    const fence=await captureInterruptedScheduledHarness(f.storage,context,identity,()=>{});fence();
+    expect(await submitted.status(context)).toEqual(status);expect(f.host.effects).toBe(0);expect(f.host.modelCalls).toBe(stage==='tool'?1:0);expect(f.host.transcripts).toHaveLength(1);
+    const tasks=f.storage.scanTasks.bind(f.storage);
+    const live=override(f.storage,{async scanTasks(query,...args){const result=await tasks(query,...args);return {...result,items:result.items.map(task=>({...task,state:{status:'running'}}as never))};}});
+    await expect(captureInterruptedScheduledHarness(live,context,identity,()=>{})).rejects.toThrow('not terminal');
+  }finally{held.release();await f.close();}
 });

@@ -5,6 +5,7 @@
  *   "role": "module"
  * }
  */
+import claude52Pricing from "./pricing-2026-11-09.json";
 import terraPricing from "./pricing-2026-11-04.json";
 import latestPricing from "./pricing-2026-10-06.json";
 import september29Pricing from "./pricing-2026-09-29.json";
@@ -30,7 +31,7 @@ interface ProviderModelPricingRule extends ProviderModelPricingReference {
 
 // Tag this reference snapshot with the commit date that introduced it so future
 // updates can track pricing provenance without guessing.
-export const PROVIDER_MODEL_PRICING_REFERENCE_TAG = "2026-11-04";
+export const PROVIDER_MODEL_PRICING_REFERENCE_TAG = "2026-11-09";
 
 const ANTHROPIC_PRICING_SOURCE = "https://docs.anthropic.com/en/docs/about-claude/pricing";
 const OPENAI_PRICING_SOURCE = "https://developers.openai.com/api/docs/pricing";
@@ -567,6 +568,10 @@ function normalizeModel(model: string): string {
     "claude-opus-5-5-fast": "claude-opus-5.5-fast",
     "claude-fable-5-1": "claude-fable-5.1",
     "claude-mythos-5-1": "claude-mythos-5.1",
+    "claude-fable-5-2": "claude-fable-5.2",
+    "claude-fable-5-2-fast": "claude-fable-5.2-fast",
+    "claude-mythos-5-2": "claude-mythos-5.2",
+    "claude-mythos-5-2-fast": "claude-mythos-5.2-fast",
     "claude-opus-4-8": "claude-opus-4.8",
     "claude-opus-4-7": "claude-opus-4.7",
     "claude-opus-4-6": "claude-opus-4.6",
@@ -605,16 +610,7 @@ function normalizeModel(model: string): string {
   return aliasMap[trimmed] || trimmed;
 }
 
-const UNPRICED_FALLBACK: ProviderModelPricingReference = {
-  canonicalModel: "(unpriced)",
-  basis: `Unpriced fallback (${PROVIDER_MODEL_PRICING_REFERENCE_TAG})`,
-  inputPerMTok: 0,
-  outputPerMTok: 0,
-  cacheReadPerMTok: 0,
-  cacheWritePerMTok: 0,
-};
-
-export function resolveProviderModelPricing(provider: string, model: string): ProviderModelPricingReference {
+export function resolveProviderModelPricing(provider: string, model: string): ProviderModelPricingReference | null {
   const normalizedProvider = provider.trim().toLowerCase();
   const normalizedModel = normalizeModel(model);
   const rule = PRICING_RULES.find(
@@ -622,6 +618,13 @@ export function resolveProviderModelPricing(provider: string, model: string): Pr
       candidate.models.includes(normalizedModel) &&
       (!candidate.providers || candidate.providers.includes(normalizedProvider)),
   );
+  const claude52 = claude52Pricing.find((entry) =>
+    entry.provider === normalizedProvider && normalizeModel(entry.model) === normalizedModel,
+  );
+  if (claude52) {
+    const { provider: _provider, model: _model, ...reference } = claude52;
+    return reference;
+  }
   const terra = terraPricing.find((entry) =>
     entry.provider === normalizedProvider && normalizeModel(entry.model) === normalizedModel,
   );
@@ -672,9 +675,5 @@ export function resolveProviderModelPricing(provider: string, model: string): Pr
     };
   }
 
-  return {
-    ...UNPRICED_FALLBACK,
-    canonicalModel: model,
-    notes: `No pricing reference available for ${provider}/${normalizedModel}.`,
-  };
+  return null;
 }

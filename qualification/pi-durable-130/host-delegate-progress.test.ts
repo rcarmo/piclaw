@@ -2,11 +2,11 @@ import "./src/test-guard.js";
 import { expect, test } from "bun:test";
 import { watchNativeDelegateProgress } from "../../runtime/durable-engine/src/host-delegate-progress.ts";
 import { context, barrier } from "./src/fixture.ts";
-import type { Conversation, ConversationView } from "../../runtime/durable-engine/qualification/durable.ts";
+import type { Conversation, ConversationView, ConversationWatch } from "../../runtime/durable-engine/qualification/durable.ts";
 import type { NativeDelegateProgress } from "../../runtime/src/agent-pool/delegate-progress.ts";
 
 function fixture(publish?: (p: NativeDelegateProgress) => Promise<void>) {
-  let listener: (view: ConversationView) => Promise<void> = async () => {};
+  let listener: Parameters<ConversationWatch['start']>[0] = async () => {};
   let stops = 0, owned = true;
   const events: NativeDelegateProgress[] = [];
   const frame = (live: any, entries: any[] = []) => ({ docs: { "pi.live": live }, entries }) as unknown as ConversationView;
@@ -14,7 +14,7 @@ function fixture(publish?: (p: NativeDelegateProgress) => Promise<void>) {
     start(fn: typeof listener) { listener = fn; }, async stop() { stops++; } }; } } as unknown as Pick<Conversation, "watch">;
   const open = () => watchNativeDelegateProgress(child, { conversationId: 7, model: { provider: "qualification", modelId: "synthetic" },
     startedAt: Date.now(), assertCurrent() { if (!owned) throw Error("revoked"); }, async publish(p) { events.push(p); await publish?.(p); } }, context);
-  return { events, open, frame, emit: (live: any, entries?: any[]) => listener(frame(live, entries)),
+  return { events, open, frame, emit: (live: any, entries?: any[]) => listener({kind:'value',value:frame(live, entries),ops:[],retired:false},context),
     revoke() { owned = false; }, stops: () => stops };
 }
 test("child observer publishes bounded lifecycle/counts but never child text, reasoning or arguments", async () => {

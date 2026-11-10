@@ -1,4 +1,4 @@
-import {runAdmittedScheduledTask} from '../helpers/admitted-scheduled-task.js';
+import {runAdmittedScheduledTask,waitForAdmittedScheduledTask} from '../helpers/admitted-scheduled-task.js';
 /**
  * test/runtime/scheduler.test.ts – Tests for the task scheduler.
  *
@@ -351,7 +351,7 @@ test("runScheduledTask computes the next cron run from the task next_run anchor"
   expect(updated.next_run).toBe("2024-01-01T00:05:00.000Z");
 });
 
-test("durable polling queues one runId and binds scheduled-agent source before delivery", async () => {
+test("durable polling dispatches one SDK run without a host queue and binds source before delivery", async () => {
   const ws = getTestWorkspace();
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
 
@@ -381,7 +381,8 @@ test("durable polling queues one runId and binds scheduled-agent source before d
   });
 
   const queued: Array<{ id: string; run: () => Promise<void>; lane?: string }> = [];
-  let observedSourceBound = false;
+  let observedSourceBound = false, dispatched=0;
+  const delivered:Array<{source_id:string;run_id:string;state:string}>=[];
   const deps = {
     queue: {
       enqueueTask: (id: string, run: () => Promise<void>, lane?: string) => queued.push({ id, run, lane }),
@@ -391,20 +392,22 @@ test("durable polling queues one runId and binds scheduled-agent source before d
       restoreSessionPosition: async () => undefined,
       getCurrentModelLabel: async () => null,
       applyControlCommand: async () => ({ status: "success", message: "" }),
-      isDurableRuntime:()=>true,dispatchScheduledAgent: async () => {
+      isDurableRuntime:()=>true,dispatchScheduledAgent: async (lease:any) => {
+        if(lease.record.taskId!==taskId)return {status:'success',result:'other fixture task'};
+        dispatched++;
         const row = db.getDb().query("SELECT state FROM service_effect_s07_occurrences WHERE task_id=?").get(taskId) as { state: string };
         observedSourceBound = row.state === "source_bound";
         return { status: "success", result: "durable result" };
       },
     },
-    sendMessage: async () => {
+    sendMessage: async (chat:string) => {
+      if(chat!=='web:durable')return;
       const source = db.getDb().query(
         `SELECT s.source_id,r.run_id,r.state FROM service_effect_s01_sources s
          JOIN service_effect_s07_occurrences r ON r.run_id=s.source_id
          WHERE r.task_id=?`,
       ).get(taskId) as { source_id: string; run_id: string; state: string };
-      expect(source.source_id).toBe(source.run_id);
-      expect(source.state).toBe("source_bound");
+      delivered.push(source);
     },
   };
 
@@ -413,13 +416,12 @@ test("durable polling queues one runId and binds scheduled-agent source before d
   const durableRun = db.getDb().query(
     "SELECT run_id FROM service_effect_s07_occurrences WHERE task_id=?",
   ).get(taskId) as { run_id: string };
-  const durableQueued = queued.filter((item) => item.id === durableRun.run_id);
-  expect(durableQueued).toHaveLength(1);
-  expect(durableQueued[0].id).toMatch(/^scheduled_run:[0-9a-f]{64}$/);
-  expect(durableQueued[0].id).not.toContain(taskId);
-  expect(durableQueued[0].lane).toBe("chat:web:durable");
-
-  await durableQueued[0].run();
+  await waitForAdmittedScheduledTask(taskId);
+  expect(queued.filter((item) => item.id === durableRun.run_id)).toHaveLength(0);
+  expect(dispatched).toBe(1);
+  expect(durableRun.run_id).toMatch(/^scheduled_run:[0-9a-f]{64}$/);
+  expect(durableRun.run_id).not.toContain(taskId);
+  expect(delivered).toEqual([{source_id:durableRun.run_id,run_id:durableRun.run_id,state:'completed'}]);
   expect(observedSourceBound).toBe(true);
   const occurrence = db.getDb().query(
     "SELECT state,attempt,task_revision FROM service_effect_s07_occurrences WHERE task_id=?",
@@ -428,7 +430,7 @@ test("durable polling queues one runId and binds scheduled-agent source before d
   expect(db.getTaskById(taskId)?.next_run).not.toBe(scheduledFor);
   const source = db.getDb().query(
     "SELECT s.state,o.phase FROM service_effect_s01_sources s JOIN service_effect_s01_operations o ON o.chat_jid=s.chat_jid AND o.primary_source_seq=s.source_seq WHERE s.source_id=?",
-  ).get(durableQueued[0].id) as { state: string; phase: string };
+  ).get(durableRun.run_id) as { state: string; phase: string };
   expect(source).toEqual({ state: "consumed", phase: "terminal" });
   await scheduler.stopSchedulerLoop();
 });
