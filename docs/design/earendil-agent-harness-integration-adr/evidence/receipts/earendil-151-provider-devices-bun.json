@@ -1,0 +1,368 @@
+{
+  "version": "1.5.1",
+  "runtime": "Bun 1.4.4",
+  "scope": "public_provider_device_methods_only",
+  "results": [
+    {
+      "provider": "github-copilot",
+      "mode": "pending-success",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 2,
+        "copilotToken": 1,
+        "catalog": 1,
+        "unexpected": 0
+      },
+      "deviceEventObserved": true,
+      "cancellationObserved": false,
+      "timerCancellationVerified": false,
+      "timingVerified": true
+    },
+    {
+      "provider": "github-copilot",
+      "mode": "denied",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 1,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": true,
+      "cancellationObserved": false,
+      "timerCancellationVerified": false,
+      "timingVerified": false
+    },
+    {
+      "provider": "github-copilot",
+      "mode": "malformed-device",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 0,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": false,
+      "cancellationObserved": false,
+      "timerCancellationVerified": false,
+      "timingVerified": false
+    },
+    {
+      "provider": "github-copilot",
+      "mode": "malformed-token",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 1,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": true,
+      "cancellationObserved": false,
+      "timerCancellationVerified": false,
+      "timingVerified": false
+    },
+    {
+      "provider": "github-copilot",
+      "mode": "blocked-cancel",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 1,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": true,
+      "cancellationObserved": true,
+      "timerCancellationVerified": false,
+      "timingVerified": false
+    },
+    {
+      "provider": "github-copilot",
+      "mode": "expiry",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 0,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": true,
+      "cancellationObserved": false,
+      "timerCancellationVerified": false,
+      "timingVerified": true
+    },
+    {
+      "provider": "github-copilot",
+      "mode": "slow-down",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 2,
+        "copilotToken": 1,
+        "catalog": 1,
+        "unexpected": 0
+      },
+      "deviceEventObserved": true,
+      "cancellationObserved": false,
+      "timerCancellationVerified": false,
+      "timingVerified": true
+    },
+    {
+      "provider": "github-copilot",
+      "mode": "unsafe-device-uri",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 0,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": false,
+      "cancellationObserved": false,
+      "timerCancellationVerified": false,
+      "timingVerified": false
+    },
+    {
+      "provider": "github-copilot",
+      "mode": "initial-wait-cancel",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 0,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": true,
+      "cancellationObserved": false,
+      "timerCancellationVerified": true,
+      "timingVerified": false
+    },
+    {
+      "provider": "github-copilot",
+      "mode": "pending-wait-cancel",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 1,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": true,
+      "cancellationObserved": false,
+      "timerCancellationVerified": true,
+      "timingVerified": false
+    },
+    {
+      "provider": "github-copilot",
+      "mode": "slow-wait-cancel",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 1,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": true,
+      "cancellationObserved": false,
+      "timerCancellationVerified": true,
+      "timingVerified": false
+    },
+    {
+      "provider": "kimi-coding",
+      "mode": "pending-success",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 2,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": true,
+      "cancellationObserved": false,
+      "timerCancellationVerified": false,
+      "timingVerified": true
+    },
+    {
+      "provider": "kimi-coding",
+      "mode": "denied",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 1,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": true,
+      "cancellationObserved": false,
+      "timerCancellationVerified": false,
+      "timingVerified": false
+    },
+    {
+      "provider": "kimi-coding",
+      "mode": "malformed-device",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 0,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": false,
+      "cancellationObserved": false,
+      "timerCancellationVerified": false,
+      "timingVerified": false
+    },
+    {
+      "provider": "kimi-coding",
+      "mode": "malformed-token",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 1,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": true,
+      "cancellationObserved": false,
+      "timerCancellationVerified": false,
+      "timingVerified": false
+    },
+    {
+      "provider": "kimi-coding",
+      "mode": "blocked-cancel",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 1,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": true,
+      "cancellationObserved": true,
+      "timerCancellationVerified": false,
+      "timingVerified": false
+    },
+    {
+      "provider": "kimi-coding",
+      "mode": "expiry",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 0,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": true,
+      "cancellationObserved": false,
+      "timerCancellationVerified": false,
+      "timingVerified": true
+    },
+    {
+      "provider": "kimi-coding",
+      "mode": "slow-down",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 2,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": true,
+      "cancellationObserved": false,
+      "timerCancellationVerified": false,
+      "timingVerified": true
+    },
+    {
+      "provider": "kimi-coding",
+      "mode": "unsafe-device-uri",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 0,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": false,
+      "cancellationObserved": false,
+      "timerCancellationVerified": false,
+      "timingVerified": false
+    },
+    {
+      "provider": "kimi-coding",
+      "mode": "initial-wait-cancel",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 0,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": true,
+      "cancellationObserved": false,
+      "timerCancellationVerified": true,
+      "timingVerified": false
+    },
+    {
+      "provider": "kimi-coding",
+      "mode": "pending-wait-cancel",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 1,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": true,
+      "cancellationObserved": false,
+      "timerCancellationVerified": true,
+      "timingVerified": false
+    },
+    {
+      "provider": "kimi-coding",
+      "mode": "slow-wait-cancel",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 1,
+        "copilotToken": 0,
+        "catalog": 0,
+        "unexpected": 0
+      },
+      "deviceEventObserved": true,
+      "cancellationObserved": false,
+      "timerCancellationVerified": true,
+      "timingVerified": false
+    }
+  ],
+  "sdkFileSha256": {
+    "github-copilot.js": "22819bb759cbd2a9b846d1cfe8cf7ee9b93ccb8aecc70fc32f9a02daedd536a3",
+    "kimi-coding.js": "49d62d8a59e05e37ea6868c41784c52408797cb940dadc7b0de1cfb75176fcbd",
+    "device-code.js": "8f197cc9af67be64b82939573d719d1b55388f96f2e53cb8c47f9618fc1297eb"
+  },
+  "credentialPersistence": "none",
+  "inference": "not_invoked",
+  "modelPolicyWrites": "none",
+  "networkGuard": "fetch_interception_no_os_sandbox"
+}

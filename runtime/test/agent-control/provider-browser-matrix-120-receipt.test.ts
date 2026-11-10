@@ -13,9 +13,9 @@ const fingerprints = {
 const browserModes = ["manual-success", "callback-success", "callback-invalid-first", "callback-denied", "token-denied", "malformed-json", "cancel-prompt", "cancel-exchange", "pre-abort"];
 const copyModes = ["code-state", "bare-code", "query", "callback-url", "unrelated-url", "empty", "bad-state", "denied", "malformed-json", "cancel-prompt", "cancel-exchange", "refresh-denied", "cancel-refresh", "unknown-selection", "cancel-selection", "pre-abort-selection", "pre-abort-manual"];
 
-test("1.4.0 browser/copy-code receipt pins public implementation and distinct behaviour", () => {
-  const receipt = JSON.parse(readFileSync(resolve(import.meta.dir, "../../../docs/design/earendil-agent-harness-integration-adr/evidence/receipts/earendil-140-provider-browser-bun.json"), "utf8"));
-  expect(receipt).toMatchObject({ version: "1.4.0", runtime: "Bun 1.4.4", scope: "public_anthropic_browser_copy_code_and_openrouter_methods_only",
+test("1.5.1 browser/copy-code receipt pins public implementation and distinct behaviour", () => {
+  const receipt = JSON.parse(readFileSync(resolve(import.meta.dir, "../../../docs/design/earendil-agent-harness-integration-adr/evidence/receipts/earendil-151-provider-browser-bun.json"), "utf8"));
+  expect(receipt).toMatchObject({ version: "1.5.1", runtime: "Bun 1.4.4", scope: "public_anthropic_browser_copy_code_and_openrouter_methods_only",
     bootstrapRequests: 0, credentialPersistence: "none", inference: "not_invoked", networkGuard: "distinct_loopback_only_os_namespace_guarded_fetch_and_owned_ipv4_callbacks" });
   expect(receipt.sdkFileSha256).toEqual(fingerprints);
   const root = import.meta.resolve("@earendil-works/pi-ai");
@@ -55,7 +55,7 @@ test("1.4.0 browser/copy-code receipt pins public implementation and distinct be
   }
 });
 
-test("1.4.0 browser fixture refuses an ordinary network namespace before SDK imports", async () => {
+test("1.5.1 browser fixture refuses an ordinary network namespace before SDK imports", async () => {
   const child = Bun.spawn([process.execPath, "--no-env-file", resolve(import.meta.dir, "fixtures/provider-browser-matrix-120.mjs")], {
     env: { PATH: process.env.PATH, TMPDIR: process.env.TMPDIR, HOME: "/nonexistent", SYNTHETIC_PARENT_NETNS: readlinkSync("/proc/self/ns/net"), SYNTHETIC_EXPECT_UID: String(process.getuid?.()) }, stdout: "pipe", stderr: "pipe",
   });

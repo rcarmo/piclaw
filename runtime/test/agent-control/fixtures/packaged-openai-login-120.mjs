@@ -25,7 +25,7 @@ const { builtinProviders } = await import("@earendil-works/pi-ai/providers/all")
 assert.equal(bootstrapRequests, 0);
 
 const manifest = JSON.parse(await readFile(fileURLToPath(new URL("../package.json", import.meta.resolve("@earendil-works/pi-ai"))), "utf8"));
-assert.equal(manifest.version, "1.4.0", "Exact published pi-ai required");
+assert.equal(manifest.version, "1.5.1", "Exact published pi-ai required");
 
 // Leave the callback port free inside the owned namespace; no browser/account is opened.
 const sdkFileSha256 = {

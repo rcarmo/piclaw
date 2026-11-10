@@ -22,15 +22,15 @@ assert.match(processStatus, /Groups:\s*\n/);
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent"))));
 const aiRoot = dirname(dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-ai"))));
-assert.equal(JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")).version, "1.4.0");
-assert.equal(JSON.parse(readFileSync(join(aiRoot, "package.json"), "utf8")).version, "1.4.0");
+assert.equal(JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")).version, "1.5.1");
+assert.equal(JSON.parse(readFileSync(join(aiRoot, "package.json"), "utf8")).version, "1.5.1");
 const digest = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
 const bundle = join(packageRoot, "dist/bundle");
 const bundleFiles = [...new Bun.Glob("**/*.js").scanSync(bundle)].sort();
 const bundleSha256 = createHash("sha256").update(bundleFiles.map(file => `${file}\0${digest(join(bundle, file))}\n`).join("")).digest("hex");
 const sdkFileSha256 = Object.fromEntries(["openai-chatgpt.js", "openai-codex.js"].map(file => [file, digest(join(aiRoot, "dist/auth/oauth", file))]));
-const artifactPath = resolve(import.meta.dir, "../../fixtures/earendil-package-admission/cli-artifact-1.4.0.json");
-assert.equal(digest(artifactPath), "1811ff1a666369e313bfb86fafca17d2be86462d6e4fd1494443fd92ec4a60d4", "Exact artifact evidence changed.");
+const artifactPath = resolve(import.meta.dir, "../../fixtures/earendil-package-admission/cli-artifact-1.5.1.json");
+assert.equal(digest(artifactPath), "a14ffd81fe812a4be7999857c07163a3c92fcc763d9a6ef3e36f4eb02adca2af", "Exact artifact evidence changed.");
 const archived = JSON.parse(readFileSync(artifactPath, "utf8"));
 assert.equal(JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")).bin.pi, archived.bin);
 assert.equal(archived.bin, "dist/bundle/cli.js");
@@ -56,7 +56,7 @@ if (mode === "provider-only") {
     const authPath=join(agent,"auth.json"); assert.ok(!existsSync(authPath)||Object.keys(JSON.parse(readFileSync(authPath,"utf8"))).length===0);
     assert.equal(existsSync(launcher),false);
     const proof=JSON.parse(readFileSync(guard,"utf8")); assert.equal(proof.tokenRequests,0); assert.equal(proof.unexpected,0);
-    console.log(JSON.stringify({ version:"1.4.0", runtime:"Bun " + Bun.version, provider, mode, status:"pass", exitCode:1, diagnostic:"provider_requires_model", credentialPersistence:"none", tokenRequests:0, unexpectedFetchRequests:0, browserLauncher:"not_invoked", inference:"not_invoked", bundleSha256 }));
+    console.log(JSON.stringify({ version:"1.5.1", runtime:"Bun " + Bun.version, provider, mode, status:"pass", exitCode:1, diagnostic:"provider_requires_model", credentialPersistence:"none", tokenRequests:0, unexpectedFetchRequests:0, browserLauncher:"not_invoked", inference:"not_invoked", bundleSha256 }));
   } finally { clearTimeout(timer); if(child.exitCode===null)child.kill("SIGKILL"); await child.exited; }
   process.exit(0);
 }
@@ -82,7 +82,7 @@ const child = Bun.spawn([process.execPath, "--no-env-file", "--preload", resolve
 const watchdog = setTimeout(() => child.kill("SIGKILL"), 60_000);
 const started = Date.now(); let stage = "startup";
 try {
-  // 1.4.0's compact startup header replaces the old /help hint. Wait for
+  // 1.5.1's compact startup header replaces the old /help hint. Wait for
   // its real rendered onboarding marker rather than exhausting a fixed delay.
   while (!plainOutput().includes("Pi can explain its own features") && Date.now() - started < 20_000 && child.exitCode === null) await Bun.sleep(50);
   assert.ok(plainOutput().includes("Pi can explain its own features"), "CLI startup header did not render.");
@@ -157,7 +157,7 @@ try {
   assert.equal(await child.exited, 0, "CLI did not exit cleanly through the restored editor.");
   exchanged = JSON.parse(readFileSync(guard, "utf8"));
   assert.equal(exchanged.unexpected, 0); assert.equal(exchanged.tokenRequests, expectedRequests);
-  console.log(JSON.stringify({ version: "1.4.0", runtime: `Bun ${Bun.version}`, provider, mode, status: "pass", cliLogin: mode === "success" ? "completed" : "rejected_or_cancelled",
+  console.log(JSON.stringify({ version: "1.5.1", runtime: `Bun ${Bun.version}`, provider, mode, status: "pass", cliLogin: mode === "success" ? "completed" : "rejected_or_cancelled",
     credentialPersistence: mode === "success" ? "disposable_profile" : "none", tokenRequests: expectedRequests, unexpectedFetchRequests: 0, externalEgress: "os_namespace_denied",
     browserLauncher: "test_owned_noop", networkGuard: "distinct_loopback_only_os_namespace_and_stable_preload", cliExit: "restored_editor_quit_0",
     inference: "not_invoked", codexBrowserChoiceVerified: provider === "openai-codex", hostIdVerified: provider === "openai", bundleFileCount: bundleFiles.length, bundleSha256, sdkFileSha256 }));

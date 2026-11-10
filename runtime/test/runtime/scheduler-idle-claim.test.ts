@@ -110,9 +110,14 @@ test('an expired absent agent is still reclaimed by the existing explicit author
   try{
     const due=f.add('task:reclaim',{agent:true}),first=(await f.claim('reclaim:first',due))[0]!,expiry=new Date(Date.now()-1000).toISOString();
     f.db.query('UPDATE service_effect_s07_occurrences SET lease_expires_at=? WHERE run_id=?').run(expiry,first.record.runId);f.db.query('UPDATE service_effect_s07_leases SET lease_expires_at=? WHERE run_id=?').run(expiry,first.record.runId);
-    await f.poll();expect(f.calls()).toBe(1);expect(f.queued).toHaveLength(1);expect(f.db.query('SELECT attempt,state FROM service_effect_s07_occurrences WHERE run_id=?').get(first.record.runId)).toEqual({attempt:2,state:'claimed'});
+    const claim=f.store.claimDue.bind(f.store);
+    f.store.claimDue=async request=>{const result=await claim(request);updateTask('task:reclaim',{status:'paused'});return result;};
+    await f.poll();expect(f.calls()).toBe(1);expect(f.queued).toHaveLength(0);
+    const deadline=Date.now()+1000;
+    while((await f.store.get(first.record.runId)).value?.state!=='abandoned'&&Date.now()<deadline)await Bun.sleep(1);
+    expect((await f.store.get(first.record.runId)).value).toMatchObject({attempt:2,state:'abandoned'});
     expect(f.db.query('SELECT authority_kind,reconciliation_ref FROM service_effect_s07_leases WHERE run_id=? AND attempt=2').get(first.record.runId)).toEqual({authority_kind:'agent_reconciled_absent',reconciliation_ref:`scheduled_source_absent:${first.record.runId}:attempt:1`});
-    updateTask('task:reclaim',{status:'paused'});await f.queued[0]!();expect(f.dispatches()).toBe(0);
+    expect(f.dispatches()).toBe(0);
   }finally{await f.close();}
 },15000);
 
