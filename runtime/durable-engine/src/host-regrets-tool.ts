@@ -3,7 +3,7 @@ import { createHostTool, type HostToolEffectPort } from "./host-tools.js";
 import { createHostOperationAuthority } from "./host-operation-authority.js";
 import type { HostConversationRuntime } from "./host-runtime.js";
 import type { ToolDefinition } from "../../src/durable-legacy-sdk.js";
-import type { JsonValue } from "@earendil-works/chord";
+import type { JsonValue } from "@earendil-works/chord/json";
 
 export interface RegretsNativeExports<P> {
   createLateNightRegrets(ports: P): { tool: {
@@ -36,7 +36,7 @@ export function createHostRegretsTool<P>(addon: RegretsNativeExports<P>, options
 }
 
 import type { Extension, PromptInput } from "@earendil-works/pi-durable";
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 /** Per-request native API. Parent supplies currentOperation + Root bindings, not
  * discovery-time ports. In public SDK 1.4 the before-model surface is a section's
  * render(PromptInput, Context), not an Extension.beforeModelRequest property. */

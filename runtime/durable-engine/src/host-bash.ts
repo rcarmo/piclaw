@@ -1,6 +1,6 @@
 import { createBashTool, type BashToolOptions } from "../../src/durable-legacy-sdk.js";
 import { defineTool } from "@earendil-works/pi-durable";
-import type { JsonValue } from "@earendil-works/chord";
+import type { JsonValue } from "@earendil-works/chord/json";
 import { createTrackedBashOperations, type TrackedBashOperationsOptions } from "../../../runtime/src/tools/tracked-bash.ts";
 
 /** Opt-in local tracked-bash port only. Does not qualify arbitrary tools, SSH,

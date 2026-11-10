@@ -5,7 +5,7 @@ import { estimateContextTokens } from "@earendil-works/pi-ai/utils/estimate";
 import { SystemEntry, type ContextView, type PromptInput } from "@earendil-works/pi-durable";
 import { declarationsEqual, getCurrentTools, toToolDeclaration } from "@earendil-works/pi-ai/utils/transcript";
 import { awaitWithContext } from "@earendil-works/chord/context";
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 
 /** Ephemeral admitted-snapshot projection only. The SDK has no public preview
  * (request 11652 was auto-closed). Remove this gap adapter when one exists.

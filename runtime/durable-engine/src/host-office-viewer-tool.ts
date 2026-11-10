@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { ToolDefinition } from "../../src/durable-legacy-sdk.js";
 import type { TSchema } from "typebox";
-import type { JsonValue } from "@earendil-works/chord";
+import type { JsonValue } from "@earendil-works/chord/json";
 import { realpathSync, statSync } from "node:fs";
 import { resolve, relative, isAbsolute } from "node:path";
 import type { HostConversationRuntime } from "./host-runtime.js";
