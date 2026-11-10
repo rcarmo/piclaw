@@ -9,7 +9,7 @@ import {startSchedulerLoop,stopSchedulerLoop,pollScheduledRunsOnce,type Schedule
 import * as stores from '../../runtime/src/service-effects/current-piclaw/scheduled-run-store.js';
 import {InMemoryEffectPayloadResolver} from '../../runtime/src/service-effects/testing/in-memory-payload-resolver.js';
 import type {HostConversationRuntime,AcceptedInput} from '../../runtime/durable-engine/src/host-runtime.js';
-import type {ScheduledRunLease} from '../../runtime/src/service-effects/contracts/scheduled-run-store.js';
+import type {ScheduledRunLease,ScheduledRunStore} from '../../runtime/src/service-effects/contracts/scheduled-run-store.js';
 import {createAgentPoolModelOptions} from '../../runtime/test/model-services-fixture.js';
 import Database from 'bun:sqlite';
 import {AgentQueue} from '../../runtime/src/queue.js';
@@ -37,16 +37,17 @@ test('one hundred SDK-scheduled agents bypass a held host lane and renew through
   await stopSchedulerLoop();const f=await nativeMessageFixture(),queue=new AgentQueue(),hold=Promise.withResolvers<void>(),entered=Promise.withResolvers<void>(),closed=Promise.withResolvers<void>();
   let bundle:Awaited<ReturnType<typeof createApplicationBootstrapBundle>>|undefined,pool:AgentPool|undefined,stop:(()=>Promise<void>)|undefined,writer:Database|undefined,unlock:ReturnType<typeof setTimeout>|undefined;
   let timerSpy:ReturnType<typeof spyOn>|undefined,factorySpy:ReturnType<typeof spyOn>|undefined,closeSpy:ReturnType<typeof spyOn>|undefined;
-  const renewals:Array<()=>Promise<void>>=[],outcomes:Array<{ok:boolean}>=[],sent:string[]=[],factory=stores.createCurrentPiclawScheduledRunStore;
+  const renewals:Array<()=>Promise<void>>=[],outcomes:Array<{runId:string;result:Awaited<ReturnType<ScheduledRunStore['renew']>>}>=[],requests=new Map<string,Set<string>>(),sent:string[]=[],factory=stores.createCurrentPiclawScheduledRunStore;
   try{
     await f.base.close();const resolver=new InMemoryEffectPayloadResolver();
     bundle=await createApplicationBootstrapBundle({root:f.root,path:(f.root.query('PRAGMA database_list').all() as {name:string;file:string}[]).find(row=>row.name==='main')!.file,ownership:{borrow:()=>f.ownerLease()},manifest:[{chatJid:f.chat,branchId:'main',conversationId:f.base.root.id}],sessions:new Map([[f.chat,'fixture-session']]),offlineInitialize:true,runtime:{incarnation:f.domain,sessionId:'fixture-session',now:()=>new Date().toISOString(),harnessOptions:f.options.harnessOptions},answers:{resolver,put:(ref,text)=>{resolver.putText(ref,text);}}},context);
     pool=new AgentPool({...createAgentPoolModelOptions(),...bundle.sessionOptions});f.base.host.modelHold=barrier();
     queue.enqueue(async()=>{entered.resolve();await hold.promise;},'held-host-user-lane',`chat:${f.chat}`);await entered.promise;
     factorySpy=spyOn(stores,'createCurrentPiclawScheduledRunStore').mockImplementation((database,options)=>{
-      const made=factory(database,options);if(made.ok){const close=database.close.bind(database);closeSpy=spyOn(database,'close').mockImplementation(()=>{close();closed.resolve();});const renew=made.value.renew.bind(made.value);made.value.renew=async(request,scope)=>{const result=await renew(request,scope);outcomes.push(result);return result;};}return made;
+      const made=factory(database,options);if(made.ok){const close=database.close.bind(database);closeSpy=spyOn(database,'close').mockImplementation(()=>{close();closed.resolve();});const renew=made.value.renew.bind(made.value);made.value.renew=async(request,scope)=>{const identities=requests.get(request.runId)??new Set<string>();identities.add(JSON.stringify(request));requests.set(request.runId,identities);const result=await renew(request,scope);outcomes.push({runId:request.runId,result});return result;};}return made;
     });
-    const original=globalThis.setTimeout;timerSpy=spyOn(globalThis,'setTimeout').mockImplementation(((fn:any,delay:number,...args:any[])=>{const t=original(fn,delay,...args);if(delay===20000)renewals.push(async()=>{clearTimeout(t);await fn(...args);});return t;})as any);
+    // One explicitly invoked renewal round; real acquisition and expiry clocks remain intact.
+    const original=globalThis.setTimeout;timerSpy=spyOn(globalThis,'setTimeout').mockImplementation(((fn:any,delay:number,...args:any[])=>{const t=original(fn,delay,...args);if(delay===20000){clearTimeout(t);renewals.push(async()=>{await fn(...args);});}return t;})as any);
     const due=new Date(Date.now()-1000).toISOString();for(let i=0;i<100;i++)createTask({id:`native-capacity:${i}`,chat_jid:f.chat,prompt:'independent scheduled result',task_kind:'agent',schedule_type:'once',schedule_value:due,next_run:due,status:'active',notify_on_complete:false,created_at:due});
     stop=startSchedulerLoop({queue,agentPool:pool,sendMessage:async(_chat,text)=>{sent.push(text);}}as SchedulerDeps);
     await until(()=>(f.root.query("SELECT count(*) n FROM submissions WHERE json_extract(request_id,'$') LIKE 'scheduled:%'").get() as {n:number}).n===100,30000);
@@ -57,7 +58,12 @@ test('one hundred SDK-scheduled agents bypass a held host lane and renew through
     const path=(f.root.query('PRAGMA database_list').all() as {name:string;file:string}[]).find(row=>row.name==='main')!.file;writer=new Database(path);writer.exec('PRAGMA busy_timeout=0;BEGIN IMMEDIATE');let released=false,ticks=0;
     const pulse=setInterval(()=>ticks++,10);unlock=setTimeout(()=>{writer!.exec('ROLLBACK');released=true;},6000);
     try{await Promise.all(renewals.slice().map(run=>run()));}finally{clearInterval(pulse);}
-    expect(released).toBe(true);expect(outcomes.filter(result=>!result.ok)).toHaveLength(100);expect(outcomes.filter(result=>result.ok)).toHaveLength(100);expect(ticks).toBeGreaterThan(50);
+    expect(released).toBe(true);
+    const failed=outcomes.filter(({result})=>!result.ok),succeeded=outcomes.filter(({result})=>result.ok);
+    expect(new Set(failed.map(r=>r.runId))).toEqual(new Set(before.map(r=>r.run_id)));
+    expect(failed.every(({result:r})=>!r.ok&&r.error._tag==='storage_unavailable'&&r.error.certainty==='not_applied'&&r.error.retryable)).toBe(true);
+    expect(succeeded).toHaveLength(100);expect(new Set(succeeded.map(r=>r.runId)).size).toBe(100);
+    expect(requests.size).toBe(100);expect([...requests.values()].every(identities=>identities.size===1)).toBe(true);expect(ticks).toBeGreaterThan(50);
     expect(f.root.query('SELECT count(*) n FROM service_effect_s07_lease_renewals').get()).toEqual({n:100});
     const after=f.root.query('SELECT run_id,attempt,worker_id,lease_token_hash,lease_expires_at FROM service_effect_s07_occurrences ORDER BY run_id').all() as typeof before;
     expect(after.map(({lease_expires_at:_expiry,...identity})=>identity)).toEqual(before.map(({lease_expires_at:_expiry,...identity})=>identity));expect(after.every((row,i)=>row.lease_expires_at>before[i]!.lease_expires_at)).toBe(true);

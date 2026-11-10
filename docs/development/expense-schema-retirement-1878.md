@@ -1,4 +1,9 @@
-# Retire financial schema initialisation
+# Retire financial schema initialisation — archived delivery record
+
+This records the accepted #1878 slice. The final #1875 delivery also removes the caller-free payload encoder/decoder described as retained below. Old payload/hash bytes are opaque: startup does not decode, validate/repair, backfill or reconstruct financial reports. Structural references still protect history; current reporting is described in [Native usage reports](usage-report-projections.md).
+
+## Archived design and qualification
+
 
 #1878 removes financial schema creation and migration from ordinary startup. Fresh databases contain passive `token_usage` reporting without cap, reservation, allowance, window, decision, financial-work or expense-event tables.
 

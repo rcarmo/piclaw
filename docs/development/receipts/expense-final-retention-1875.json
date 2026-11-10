@@ -1,0 +1,2878 @@
+{
+  "status": "pre-merge source/retention manifest; final qualified and merged commit bindings remain external receipts",
+  "coreSourceParent": "2263d126cd6c9f35f666b57f3f43c321ed29c2a3",
+  "coreBase": "34516cabd8e56f61bd1b7150e0c87c244694533e",
+  "addonSource": "b12c0cc1a04854719565702bf08069034243db14",
+  "scopeExclusion": "Cheapskate explicitly deferred and unchanged",
+  "pendingDelivery": [
+    "add-ons PR237 documentation publication and corresponding Core exact pins"
+  ],
+  "baselineEntries": 105,
+  "deletedPaths": 36,
+  "rows": [
+    {
+      "repo": "core",
+      "path": "runtime/src/budget/admission.ts",
+      "originalDisposition": "DELETE",
+      "deliveryOwner": "#1877",
+      "originalSha256": "50b23f3c2571c73df4bd3ecaf861e7ee8ef543d95451794b6a9f6afcc85c6be8",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/budget/amount.ts",
+      "originalDisposition": "DELETE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "a764a637572edf15c696af79e53055100341b8d8eb8df1baf6ae90a347b9daf3",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/budget/calendar.ts",
+      "originalDisposition": "DELETE",
+      "deliveryOwner": "#1878",
+      "originalSha256": "0fad21c967ba6b6aedc8aafc68570f90f0fa00576202d174a052b34e9218fed6",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/budget/context.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "6e63bbcd195b57da0c330767e25606dcd38a74b5dbb028aabc3d314797c794bb",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/budget/evaluator.ts",
+      "originalDisposition": "DELETE",
+      "deliveryOwner": "#1877",
+      "originalSha256": "51d0d1fb978e98bea3a22a6897752801688ba5a1923c6974a61c896c6624b4f2",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/budget/model-request-accounting.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1882",
+      "originalSha256": "7fe48f2654b0f0ae7cb79c29d7eb885f4b96c6fb5f7f0e80143491a4c2379ee7",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/budget/provider-evidence.ts",
+      "originalDisposition": "DELETE",
+      "deliveryOwner": "#1878",
+      "originalSha256": "6a3abd4d8474371744ca9fc8b18662e263655bfebf3ccbf837919968a197ad2c",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/budget/request-cost-bound.ts",
+      "originalDisposition": "DELETE",
+      "deliveryOwner": "#1877",
+      "originalSha256": "fe6d661c4b4f522079dc6f90e503cdf71988773ac0092d7fd7570bf4b296ef94",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/budget/request-reservation-admission.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1877",
+      "originalSha256": "518e922d5a30a7a4065c7451741d4f78ad7fa2b3b20f4c58331411a3c58648a2",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/budget/scheduled-notifications.ts",
+      "originalDisposition": "DELETE",
+      "deliveryOwner": "#1879",
+      "originalSha256": "d0af0f85f353d70c2aa74a00c25382890d3e4e3a615b67036cc41eab8567bb39",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/budget/scheduled-readiness.ts",
+      "originalDisposition": "DELETE",
+      "deliveryOwner": "#1879",
+      "originalSha256": "c471529cd23f62e6fb7d462333c2958dc6d7d20393bf5a9fb7b21ee172e795da",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/budget/settings.ts",
+      "originalDisposition": "DELETE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "a6ccd7a86fae076c9d2478f76e1f62b691dcebc00da1e6f96d9b0e93ea46d344",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/budget/status.ts",
+      "originalDisposition": "DELETE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "2a9d9c1fd7b1772022add4cd8db40c1dc0daba705f39c9fd4fefe359aa71d9e6",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/budget/types.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "5488510770dda9c54b5392b6835b87126930ea77ea68e3a3e53c3b108fd79c02",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/budget/usage-total.ts",
+      "originalDisposition": "DELETE",
+      "deliveryOwner": "#1878",
+      "originalSha256": "4a561679db0d219d6137be6c744b6f7aa8ef5304f4f6ea577dbb99573b736951",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/budget/valuation.ts",
+      "originalDisposition": "RETAIN",
+      "deliveryOwner": "#1882",
+      "originalSha256": "1d0ce68094d27a55a87b418861fd6bbd226cad7d5e5010d43af1be8ae9bb58b9",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/application-bootstrap.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1877",
+      "originalSha256": "299765ed713e23d6f400821bcabe0913679344fcfc87b987f9b7c36ac32cd486",
+      "state": "retained-decoupled",
+      "currentSha256": "979125e98070d14bb11d0186c34d8c932bf3b716e6c6be1fd515ed4da6a66955",
+      "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/application-upgrade.ts",
+          "line": 4
+        },
+        {
+          "caller": "runtime/durable-engine/src/copied-upgrade.ts",
+          "line": 7
+        },
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 49
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/default-application-runtime.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1877",
+      "originalSha256": "a64d2881c5a7e657f71e965f4beb5a581dc07e9797edd1123af3739af3f0ca63",
+      "state": "retained-decoupled",
+      "currentSha256": "e718d4ceeecf14e543b299c397b63928051d2ab3a1e9ea5fd2cc061e4c0a0019",
+      "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/host-addon-background.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "377a9b3cebad89195575f958b87a72aba0568f80031d7f384186cd1a40fc484c",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/host-bindings.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1879",
+      "originalSha256": "50d6b348ce98f00ebe377c63ae0c800c2b587e4bccfebba00fbc5322e415eda2",
+      "state": "retained-decoupled",
+      "currentSha256": "367f5c689b0262fdc100f9dd689081610ec74cfb54a2998683b54460aef721b0",
+      "currentPurpose": "exact SDK conversation/input/request/source identity and nonfinancial publication fencing",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/application-bootstrap.ts",
+          "line": 31
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-recovery.ts",
+          "line": 8
+        },
+        {
+          "caller": "runtime/durable-engine/src/index.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/durable-engine/src/index.ts",
+          "line": 6
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/host-model-failure.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1877",
+      "originalSha256": "c377f0ada2d60e010200722d5947b3ab4330db6e2cea50bf8fff0efeb372de25",
+      "state": "retained-decoupled",
+      "currentSha256": "d721e72c39bfbe57a2dce998f2838fecac16ddd69106efc7ccb93ab796274191",
+      "currentPurpose": "bounded current provider failure notices/evidence plus read-only historical wire categories; classifier produces no local financial denial",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/application-bootstrap.ts",
+          "line": 8
+        },
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-model-failure-evidence.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-models.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-runtime.ts",
+          "line": 7
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-terminal-outcome.ts",
+          "line": 3
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/host-models.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1877",
+      "originalSha256": "e300445266a88780616938fe3ee0690b65a409d3ba364e0b1d741b5f52efb52e",
+      "state": "retained-decoupled",
+      "currentSha256": "7fa3f483094111bfd7072338e9524f9f761f8b662674c30adac9651045e45886",
+      "currentPurpose": "public SDK model conversion, actual usage facts and physical context/output bounds; source/auth/resource policy only",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 51
+        },
+        {
+          "caller": "runtime/durable-engine/src/index.ts",
+          "line": 7
+        },
+        {
+          "caller": "runtime/durable-engine/src/index.ts",
+          "line": 8
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/host-process-controls.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1877",
+      "originalSha256": "44d09380b46af4b3708ebfd7de3e68ab920655729e84bd334e7e4d2b9b42fee4",
+      "state": "retained-decoupled",
+      "currentSha256": "a1e6a79b016e3fd4268718f6e86f0538b9aabefc20088346c8750f570eea40f2",
+      "currentPurpose": "native idle/ownership and graceful process lifetime; no financial readiness",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 62
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/host-regrets-model.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1877",
+      "originalSha256": "9c945775d0e1f08bdba3f601a724f9950216299d751cc95a9690abe11678427a",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/host-regrets-bindings.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "4f8ab9d3ef9b8980e66377a947ec956a546d39462547594f7d52d5828e9f9752",
+      "state": "retained-decoupled",
+      "currentSha256": "60fad6c6ae8a2b6ec94a71fc01ba352f6539651ddc5ce7c7dba255003c05ae2f",
+      "currentPurpose": "invocation-local current source/auth/history/config/model ports and passive observations; historical API name only",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 16
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/host-request-accounting.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1877",
+      "originalSha256": "bc3ac91c5f1fe17d6a45a9377e41d6c49948a890efff9e33305e58c94df3c5e6",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/host-runtime.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1877",
+      "originalSha256": "2f6a632f863196fccd48a3f3912c8bef407fb2ca5d07c13d32400dcef84c87cc",
+      "state": "retained-decoupled",
+      "currentSha256": "202f132143d750a11df58c7d8b3c6db4bfdf432fdbd2de31f0eb1176bbdf079f",
+      "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/application-bootstrap.ts",
+          "line": 37
+        },
+        {
+          "caller": "runtime/durable-engine/src/application-bootstrap.ts",
+          "line": 116
+        },
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 92
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-bindings.ts",
+          "line": 8
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-bindings.ts",
+          "line": 283
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-code-review-tool.ts",
+          "line": 8
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-codex-artifacts.ts",
+          "line": 6
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-codex-process.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-codex-provider-tools.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-controller.ts",
+          "line": 4
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-delegate-tool.ts",
+          "line": 7
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-drawio-tool.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-editable-table-tool.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-goal-progress.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-goal-prompt.ts",
+          "line": 4
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-goal-settlement.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-goal-terminal.ts",
+          "line": 4
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-goal-tools.ts",
+          "line": 9
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-imap-tool.ts",
+          "line": 7
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-message-thread.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-observability.ts",
+          "line": 4
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-office-viewer-tool.ts",
+          "line": 7
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-operation-authority.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-plan-prompt.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-plan-tool.ts",
+          "line": 8
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-portainer-tool.ts",
+          "line": 7
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-process-controls.ts",
+          "line": 10
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-process-receipt.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-proxmox-tool.ts",
+          "line": 7
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-recovery.ts",
+          "line": 7
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-regrets-tool.ts",
+          "line": 4
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-remote-peer-tool.ts",
+          "line": 6
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-restic-tool.ts",
+          "line": 6
+        },
+        {
+          "caller": "runtime/durable-engine/src/index.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/durable-engine/src/index.ts",
+          "line": 4
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/host-background-policy.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "4d20dd2e285c91190ab8aa6c98c40977e2e55a85d648fc49cab3c0bbdc7f394d",
+      "state": "retained-decoupled",
+      "currentSha256": "bcc97eda4c2b40f91f2ad2b6dfc1de24d3737a1bd114fffed9c8a19e44342042",
+      "currentPurpose": "immutable accepted background intent, tool/resource ceilings and source/deadline bounds; no monetary parent",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/host-background-context.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-runtime.ts",
+          "line": 22
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/recovery-unit-qualification.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1878",
+      "originalSha256": "9fe03d11b8882b830796d4b522f4e0cae18ca506a1f08f5071265d9a3c664ae8",
+      "state": "retained-decoupled",
+      "currentSha256": "16aa078b6b94a6e69b5047e76d7b32d5423b57b2815e46087222ef0240f10462",
+      "currentPurpose": "generic exact schema/backup/recovery/reference inspection including inert old objects; no financial initializer or repair",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/addons/operation-contracts.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "ac567e97d78482ab1338bd63a3b1533c3f24c57b1ecea1514a1e04b34d1d4f35",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/addons/operation-host.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "40d9d04d1569da18dea47b86c262a6b6808a26fff4d6e0db173a776d51ecf2d5",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/addons/operation-outbound-admission.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "3c58a9b3a3c6bcf478ee8cf3b1fafc9a9808556cf7d6e5d43c02b1a38517f892",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/addons/operation-service.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "ef213b8eb1190e7b93e0ad502694c857e5a1ccd55a69b1e10e4d4ec7a1179842",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/addons/runtime-contributions.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "e9c7ff6cfeac8c892316c179cba2bcc440872be376215d8074a581e24acef3cb",
+      "state": "retained-decoupled",
+      "currentSha256": "6ec009a76d05c4e9f80b4e360be4bab827779982639fa39a40355d929312e12e",
+      "currentPurpose": "existing native domain/control/message transport boundary with no expense port",
+      "directImportCallers": [
+        {
+          "caller": "runtime/src/addons/runtime-messaging.ts",
+          "line": 12
+        },
+        {
+          "caller": "runtime/src/channels/web/agent/agent-control-plane-service.ts",
+          "line": 23
+        },
+        {
+          "caller": "runtime/src/channels/web/cards/adaptive-card-side-prompt-service.ts",
+          "line": 33
+        },
+        {
+          "caller": "runtime/src/runtime/bootstrap.ts",
+          "line": 206
+        },
+        {
+          "caller": "runtime/src/runtime/startup.ts",
+          "line": 44
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/agent-pool.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "e506827fe77e26e48c722ff15a957a5d37acfe9c66c32e4511a67f627c2cf94f",
+      "state": "retained-decoupled",
+      "currentSha256": "698a41ce5de659490249c13d11cb2d9508e6110b84a8bfcaae38f4cba0909c2d",
+      "currentPurpose": "existing native domain/control/message transport boundary with no expense port",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/application-bootstrap.ts",
+          "line": 880
+        },
+        {
+          "caller": "runtime/src/channels/web.ts",
+          "line": 17
+        },
+        {
+          "caller": "runtime/src/channels/web/agent/agent-commands.ts",
+          "line": 14
+        },
+        {
+          "caller": "runtime/src/channels/web/agent/agent-control-plane-service.ts",
+          "line": 12
+        },
+        {
+          "caller": "runtime/src/channels/web/agent/agent-debug.ts",
+          "line": 9
+        },
+        {
+          "caller": "runtime/src/channels/web/agent/agent-peer-message-relay-service.ts",
+          "line": 9
+        },
+        {
+          "caller": "runtime/src/channels/web/agent/agents-service.ts",
+          "line": 13
+        },
+        {
+          "caller": "runtime/src/channels/web/agent/system-metrics.ts",
+          "line": 13
+        },
+        {
+          "caller": "runtime/src/channels/web/core/web-channel-constructor-factory.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/channels/web/core/web-channel-contracts.ts",
+          "line": 9
+        },
+        {
+          "caller": "runtime/src/channels/web/endpoints/identity-endpoints.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/src/channels/web/sse/session-broadcast-service.ts",
+          "line": 11
+        },
+        {
+          "caller": "runtime/src/dream.ts",
+          "line": 6
+        },
+        {
+          "caller": "runtime/src/extensions/chat-tool-runtime.ts",
+          "line": 9
+        },
+        {
+          "caller": "runtime/src/runtime/bootstrap.ts",
+          "line": 10
+        },
+        {
+          "caller": "runtime/src/runtime/bootstrap.ts",
+          "line": 12
+        },
+        {
+          "caller": "runtime/src/runtime/startup.ts",
+          "line": 9
+        },
+        {
+          "caller": "runtime/src/task-scheduler.ts",
+          "line": 30
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/agent-pool/contracts.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1877",
+      "originalSha256": "b0f702a1b555904e4bbab8b5c93b7497b5277d8f25a95b1258b0fc4c10daed4a",
+      "state": "retained-decoupled",
+      "currentSha256": "09c5352613929a270d260401f6fc718bb9ef4b42b5ef41a847906f1e2bcec92d",
+      "currentPurpose": "existing native domain/control/message transport boundary with no expense port",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/application-bootstrap.ts",
+          "line": 22
+        },
+        {
+          "caller": "runtime/durable-engine/src/application-bootstrap.ts",
+          "line": 111
+        },
+        {
+          "caller": "runtime/durable-engine/src/application-bootstrap.ts",
+          "line": 112
+        },
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 55
+        },
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 855
+        },
+        {
+          "caller": "runtime/src/agent-pool.ts",
+          "line": 39
+        },
+        {
+          "caller": "runtime/src/agent-pool.ts",
+          "line": 61
+        },
+        {
+          "caller": "runtime/src/agent-pool.ts",
+          "line": 270
+        },
+        {
+          "caller": "runtime/src/agent-pool/recovery-summary.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/agent-pool/service-factory.ts",
+          "line": 16
+        },
+        {
+          "caller": "runtime/src/agent-pool/session-manager.ts",
+          "line": 46
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/agent-pool/background-operation-contract.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "cf1ea83a5a63179b03fdda6504605f7e0123606b18e564faae9b96f49d92e18d",
+      "state": "retained-decoupled",
+      "currentSha256": "2fd78d3c63473dccfd388876a1ea345a7ae3a2b119839e75ead02c0c177c62e4",
+      "currentPurpose": "immutable accepted background intent, tool/resource ceilings and source/deadline bounds; no monetary parent",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/application-bootstrap.ts",
+          "line": 39
+        },
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 28
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-background-context.ts",
+          "line": 4
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-background-policy.ts",
+          "line": 6
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-runtime.ts",
+          "line": 23
+        },
+        {
+          "caller": "runtime/src/task-scheduler.ts",
+          "line": 20
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/core/config-operations.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "0ecd5daa819b2730616d6efd4977c85b370a3aa2f25bd6003b223d4ea93db675",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/agent-pool/usage.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1882",
+      "originalSha256": "038e837c0eac41fba962ec002eb5bf7827c9062521bd1e6a0053df993ba2ffec",
+      "state": "retained-decoupled",
+      "currentSha256": "4e7f2ad328aa4119f9f14b9762fcc0d7238b09a0e902c80d7020e087c4fb539e",
+      "currentPurpose": "passive token/cost append, unit/provenance projection, idempotency and optional opaque historical references; no execution allowance",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/src/agent-pool/service-factory.ts",
+          "line": 135
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/channels/web/agent/agent-status.ts",
+      "originalDisposition": "RETAIN",
+      "deliveryOwner": "#1882",
+      "originalSha256": "1016da30df58b3fa67b95a3e32fe130807812066a2fad5abf8d279f12cf3ca66",
+      "state": "retained-decoupled",
+      "currentSha256": "f9da3cd70f9024b3941303d58bed9198895a782cc403bd59f78ee28bc879d818",
+      "currentPurpose": "existing model choice, price/unknown display and token/context/status DTO; same interaction and authority",
+      "directImportCallers": [
+        {
+          "caller": "runtime/src/channels/web.ts",
+          "line": 53
+        },
+        {
+          "caller": "runtime/src/channels/web.ts",
+          "line": 59
+        },
+        {
+          "caller": "runtime/src/channels/web/endpoints/channel-endpoint-context-factory.ts",
+          "line": 12
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/channels/web/endpoints/channel-endpoint-context-factory.ts",
+      "originalDisposition": "RETAIN",
+      "deliveryOwner": "#1882",
+      "originalSha256": "c5ad84715f91ee4dbbac8a267103ae4a14e30dc3f10975bfa5b5c7ead09761b0",
+      "state": "retained-decoupled",
+      "currentSha256": "ff6edd8df2942bb7911e098454485df8f56033441a989d61ad355b7bb52a360e",
+      "currentPurpose": "existing model choice, price/unknown display and token/context/status DTO; same interaction and authority",
+      "directImportCallers": [
+        {
+          "caller": "runtime/src/channels/web.ts",
+          "line": 26
+        },
+        {
+          "caller": "runtime/src/channels/web/core/web-channel-constructor-factory.ts",
+          "line": 30
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/channels/web/core/web-channel-contracts.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "98383ffa112e2169a0438042b5f2c5fffb794ba99ce7b79002daca6802f7b9b0",
+      "state": "retained-decoupled",
+      "currentSha256": "bfccdc6db3897810b76e0ca2f0a193524ede26a31cce3aa21373cbd105703306",
+      "currentPurpose": "existing model choice, price/unknown display and token/context/status DTO; same interaction and authority",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/host-goal-input.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/channels/web.ts",
+          "line": 20
+        },
+        {
+          "caller": "runtime/src/channels/web/agent/agent-control-plane-service.ts",
+          "line": 70
+        },
+        {
+          "caller": "runtime/src/channels/web/agent/agent-control-plane-service.ts",
+          "line": 71
+        },
+        {
+          "caller": "runtime/src/channels/web/agent/agent-peer-message-relay-service.ts",
+          "line": 15
+        },
+        {
+          "caller": "runtime/src/channels/web/agent/agent-status.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/src/channels/web/agent/agent-status.ts",
+          "line": 6
+        },
+        {
+          "caller": "runtime/src/channels/web/agent/command-model-state.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/channels/web/cards/adaptive-card-side-prompt-service.ts",
+          "line": 32
+        },
+        {
+          "caller": "runtime/src/channels/web/core/web-channel-constructor-factory.ts",
+          "line": 53
+        },
+        {
+          "caller": "runtime/src/channels/web/endpoints/channel-endpoint-context-factory.ts",
+          "line": 9
+        },
+        {
+          "caller": "runtime/src/channels/web/handlers/agent.ts",
+          "line": 16
+        },
+        {
+          "caller": "runtime/src/channels/web/handlers/mcp-settings.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/channels/web/handlers/picker-pins.ts",
+          "line": 13
+        },
+        {
+          "caller": "runtime/src/channels/web/handlers/posts.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/src/channels/web/handlers/scheduled-tasks-management.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/channels/web/handlers/workspace-indexing.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/src/channels/web/http/dispatch-agent.ts",
+          "line": 11
+        },
+        {
+          "caller": "runtime/src/channels/web/http/dispatch-content.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/src/channels/web/http/dispatch-shell.ts",
+          "line": 6
+        },
+        {
+          "caller": "runtime/src/channels/web/post-mutations.ts",
+          "line": 6
+        },
+        {
+          "caller": "runtime/src/channels/web/push/web-push-routes.ts",
+          "line": 18
+        },
+        {
+          "caller": "runtime/src/channels/web/request-router-service.ts",
+          "line": 30
+        },
+        {
+          "caller": "runtime/src/channels/web/runtime/threading.ts",
+          "line": 11
+        },
+        {
+          "caller": "runtime/src/channels/web/state-api.ts",
+          "line": 8
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/channels/web/handlers/budget-settings.ts",
+      "originalDisposition": "DELETE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "1ce6330bc294145bb2d99f8b523c22e8d1a05c5de51b0070c7940fa8d0a8b111",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/channels/web/handlers/scheduled-tasks-management.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1879",
+      "originalSha256": "37e91cad9972928be0fb262702630444fc5627f6d1a4474ccdbe475becfc4c1a",
+      "state": "retained-decoupled",
+      "currentSha256": "7dd7ec87e8e449a370d741ba1125ffaa626e017b5a87e679965b84963cbcbdae",
+      "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
+      "directImportCallers": [
+        {
+          "caller": "runtime/src/channels/web/http/dispatch-agent.ts",
+          "line": 40
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/channels/web/http/dispatch-agent.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "cdddbc02e1f46e6767bfd9f5602c55ef007d6083aff7af016550f74d1f73aa6f",
+      "state": "retained-decoupled",
+      "currentSha256": "75c707a6920b82c17900d7b11946312ca768a5bf790f9d38a2d97717782f6d6f",
+      "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
+      "directImportCallers": [
+        {
+          "caller": "runtime/src/channels/web/request-router-service.ts",
+          "line": 33
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/db.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1878",
+      "originalSha256": "6c86335009462360b92904139635d407adee431fa4764037428b7f94dd4382ff",
+      "state": "retained-decoupled",
+      "currentSha256": "0f77b78a496e2f4905e8b05cdfa1c4b5b1ffe12bff1161f21e7839c332d0701e",
+      "currentPurpose": "fresh canonical database/routing ownership, passive observations and historical data protection; no financial schema startup",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 42
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-goal-settlement.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/scripts/prune-archived-branches.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/addons/runtime-messaging.ts",
+          "line": 15
+        },
+        {
+          "caller": "runtime/src/agent-control/handlers/passkey.ts",
+          "line": 18
+        },
+        {
+          "caller": "runtime/src/agent-memory/daily-notes.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/src/agent-memory/refresh.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/src/agent-memory/startup-state.ts",
+          "line": 6
+        },
+        {
+          "caller": "runtime/src/agent-pool.ts",
+          "line": 45
+        },
+        {
+          "caller": "runtime/src/agent-pool/branch-manager.ts",
+          "line": 22
+        },
+        {
+          "caller": "runtime/src/agent-pool/compaction-prefill-estimate.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/agent-pool/compaction-telemetry.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/agent-pool/runtime-facade.ts",
+          "line": 18
+        },
+        {
+          "caller": "runtime/src/agent-pool/service-factory.ts",
+          "line": 8
+        },
+        {
+          "caller": "runtime/src/agent-pool/session-manager.ts",
+          "line": 21
+        },
+        {
+          "caller": "runtime/src/agent-pool/usage.ts",
+          "line": 10
+        },
+        {
+          "caller": "runtime/src/channels/web.ts",
+          "line": 40
+        },
+        {
+          "caller": "runtime/src/channels/web/agent/agent-control-plane-service.ts",
+          "line": 16
+        },
+        {
+          "caller": "runtime/src/channels/web/agent/agent-peer-message-relay-service.ts",
+          "line": 10
+        },
+        {
+          "caller": "runtime/src/channels/web/auth/auth-gateway.ts",
+          "line": 26
+        },
+        {
+          "caller": "runtime/src/channels/web/auth/session-auth.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/src/channels/web/auth/totp-auth.ts",
+          "line": 8
+        },
+        {
+          "caller": "runtime/src/channels/web/auth/webauthn-auth.ts",
+          "line": 21
+        },
+        {
+          "caller": "runtime/src/channels/web/cards/adaptive-card-side-prompt-service.ts",
+          "line": 11
+        },
+        {
+          "caller": "runtime/src/channels/web/cards/adaptive-card-side-prompt-service.ts",
+          "line": 28
+        },
+        {
+          "caller": "runtime/src/channels/web/cards/interaction-service.ts",
+          "line": 10
+        },
+        {
+          "caller": "runtime/src/channels/web/core/web-channel-constructor-factory.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/src/channels/web/core/web-channel-contracts.ts",
+          "line": 15
+        },
+        {
+          "caller": "runtime/src/channels/web/core/web-channel-runtime-public-surface-service.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/src/channels/web/endpoints/channel-endpoint-context-factory.ts",
+          "line": 7
+        },
+        {
+          "caller": "runtime/src/channels/web/export/export-timeline-endpoint.ts",
+          "line": 12
+        },
+        {
+          "caller": "runtime/src/channels/web/handlers/agent.ts",
+          "line": 34
+        },
+        {
+          "caller": "runtime/src/channels/web/handlers/posts.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/channels/web/handlers/scheduled-tasks-management.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/src/channels/web/handlers/session-recordings.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/src/channels/web/http/dispatch-auth.ts",
+          "line": 20
+        },
+        {
+          "caller": "runtime/src/channels/web/interaction-broadcaster.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/src/channels/web/media/link-previews.ts",
+          "line": 24
+        },
+        {
+          "caller": "runtime/src/channels/web/message-write-service.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/channels/web/messaging/message-store.ts",
+          "line": 16
+        },
+        {
+          "caller": "runtime/src/channels/web/messaging/message-store.ts",
+          "line": 20
+        },
+        {
+          "caller": "runtime/src/channels/web/oobe-instance-state.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/src/channels/web/push/web-push-service.ts",
+          "line": 9
+        },
+        {
+          "caller": "runtime/src/channels/web/runtime/runtime-state-service.ts",
+          "line": 14
+        },
+        {
+          "caller": "runtime/src/channels/web/server-lifecycle-gateway-service.ts",
+          "line": 7
+        },
+        {
+          "caller": "runtime/src/channels/web/terminal/terminal-session-service.ts",
+          "line": 8
+        },
+        {
+          "caller": "runtime/src/channels/web/timeline-service.ts",
+          "line": 20
+        },
+        {
+          "caller": "runtime/src/channels/web/vnc/vnc-history-scope.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/src/channels/web/vnc/vnc-session-service.ts",
+          "line": 4
+        },
+        {
+          "caller": "runtime/src/channels/web/workspace/file-service.ts",
+          "line": 17
+        },
+        {
+          "caller": "runtime/src/cli.ts",
+          "line": 15
+        },
+        {
+          "caller": "runtime/src/db.ts",
+          "line": 6
+        },
+        {
+          "caller": "runtime/src/dream.ts",
+          "line": 15
+        },
+        {
+          "caller": "runtime/src/extensions/chat-tool-runtime.ts",
+          "line": 13
+        },
+        {
+          "caller": "runtime/src/extensions/chat-tool.ts",
+          "line": 16
+        },
+        {
+          "caller": "runtime/src/extensions/file-attachments.ts",
+          "line": 20
+        },
+        {
+          "caller": "runtime/src/extensions/messages-crud.ts",
+          "line": 15
+        },
+        {
+          "caller": "runtime/src/extensions/scheduled-tasks.ts",
+          "line": 8
+        },
+        {
+          "caller": "runtime/src/extensions/sql-introspect.ts",
+          "line": 7
+        },
+        {
+          "caller": "runtime/src/ipc.ts",
+          "line": 29
+        },
+        {
+          "caller": "runtime/src/runtime/bootstrap.ts",
+          "line": 204
+        },
+        {
+          "caller": "runtime/src/runtime/message-loop.ts",
+          "line": 4
+        },
+        {
+          "caller": "runtime/src/runtime/startup.ts",
+          "line": 26
+        },
+        {
+          "caller": "runtime/src/runtime/state.ts",
+          "line": 16
+        },
+        {
+          "caller": "runtime/src/scheduled-task-query-service.ts",
+          "line": 8
+        },
+        {
+          "caller": "runtime/src/session-recordings/session-recordings.ts",
+          "line": 12
+        },
+        {
+          "caller": "runtime/src/task-scheduler.ts",
+          "line": 31
+        },
+        {
+          "caller": "runtime/src/tool-output.ts",
+          "line": 37
+        },
+        {
+          "caller": "runtime/src/workspace-index-core.ts",
+          "line": 16
+        },
+        {
+          "caller": "runtime/src/workspace-search.ts",
+          "line": 9
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/db/addon-operations.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "9ccebbee45523d4aa72326d1cf8d8266d511249a69cd59500218cfcd4d940002",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/db/budget-limits-schema.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1878",
+      "originalSha256": "933fe884c0c7556a8b3f632acf11ea63ba26f9f59678d40ca0d4b9d904e0f67f",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/db/budget-limits.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1878",
+      "originalSha256": "c8b7f6bf3714d543ccd1a4968b2e83aeef7deaf9bce95db9b878e12044f49680",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/db/budget-request-reservations.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1878",
+      "originalSha256": "e8700ffb68f8b73856793d9c5040a238989ac335dd624e1553900df4397807bd",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/db/connection.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1878",
+      "originalSha256": "cb401291005aabe1b6644163da800cad71a2f9e460de5c4006e0b3ec617bb54a",
+      "state": "retained-decoupled",
+      "currentSha256": "999ffa90f5313d0cda6d0b0797d9c37cb8a108e5e777fcf1bbf3024d279389a3",
+      "currentPurpose": "fresh canonical database/routing ownership, passive observations and historical data protection; no financial schema startup",
+      "directImportCallers": [
+        {
+          "caller": "runtime/scripts/purge-thinking-content.ts",
+          "line": 36
+        },
+        {
+          "caller": "runtime/src/addons/local-context.ts",
+          "line": 10
+        },
+        {
+          "caller": "runtime/src/addons/local-dispatch.ts",
+          "line": 6
+        },
+        {
+          "caller": "runtime/src/agent-pool.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/agent-pool/branch-manager.ts",
+          "line": 28
+        },
+        {
+          "caller": "runtime/src/agent-pool/owned-session-access.ts",
+          "line": 4
+        },
+        {
+          "caller": "runtime/src/agent-pool/owned-session-target.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/src/agent-pool/session.ts",
+          "line": 48
+        },
+        {
+          "caller": "runtime/src/channels/web/agent/agent-control-plane-service.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/channels/web/auth/single-user-passkeys.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/src/channels/web/auth/totp-auth.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/channels/web/auth/webauthn-auth.ts",
+          "line": 32
+        },
+        {
+          "caller": "runtime/src/channels/web/cards/adaptive-card-side-prompt-service.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/channels/web/endpoints/channel-endpoint-context-factory.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/channels/web/handlers/agent.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/channels/web/handlers/picker-pins.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/src/channels/web/handlers/posts.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/channels/web/http/dispatch-agent.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/channels/web/http/dispatch-auth.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/channels/web/media/link-previews.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/channels/web/media/media-service.ts",
+          "line": 17
+        },
+        {
+          "caller": "runtime/src/channels/web/messaging/message-store.ts",
+          "line": 26
+        },
+        {
+          "caller": "runtime/src/channels/web/oobe-instance-state.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/channels/web/post-mutations.ts",
+          "line": 8
+        },
+        {
+          "caller": "runtime/src/channels/web/push/web-push-routes.ts",
+          "line": 20
+        },
+        {
+          "caller": "runtime/src/channels/web/push/web-push-service.ts",
+          "line": 10
+        },
+        {
+          "caller": "runtime/src/channels/web/ui-state.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/channels/web/workspace/file-service.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/db.ts",
+          "line": 11
+        },
+        {
+          "caller": "runtime/src/db/chat-branches.ts",
+          "line": 11
+        },
+        {
+          "caller": "runtime/src/db/chat-cursors.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/src/db/chat-project.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/db/compaction-telemetry.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/db/extension-kv.ts",
+          "line": 9
+        },
+        {
+          "caller": "runtime/src/db/link-preview-image-cache.ts",
+          "line": 8
+        },
+        {
+          "caller": "runtime/src/db/media.ts",
+          "line": 19
+        },
+        {
+          "caller": "runtime/src/db/messages.ts",
+          "line": 22
+        },
+        {
+          "caller": "runtime/src/db/router-state.ts",
+          "line": 14
+        },
+        {
+          "caller": "runtime/src/db/ssh-configs.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/db/tasks.ts",
+          "line": 6
+        },
+        {
+          "caller": "runtime/src/db/thinking-cleanup.ts",
+          "line": 8
+        },
+        {
+          "caller": "runtime/src/db/token-usage.ts",
+          "line": 16
+        },
+        {
+          "caller": "runtime/src/db/tool-outputs.ts",
+          "line": 21
+        },
+        {
+          "caller": "runtime/src/db/web-sessions.ts",
+          "line": 13
+        },
+        {
+          "caller": "runtime/src/db/webauthn.ts",
+          "line": 10
+        },
+        {
+          "caller": "runtime/src/environment-overrides.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/ipc.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/note-retrieval/access.ts",
+          "line": 8
+        },
+        {
+          "caller": "runtime/src/note-retrieval/coordinator.ts",
+          "line": 6
+        },
+        {
+          "caller": "runtime/src/runtime/auth-maintenance.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/secure/keychain.ts",
+          "line": 25
+        },
+        {
+          "caller": "runtime/src/task-scheduler.ts",
+          "line": 32
+        },
+        {
+          "caller": "runtime/src/workspace-index-process.ts",
+          "line": 4
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/db/native-routing-policy.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1877",
+      "originalSha256": "c1021b07d77ad5745d8f31f364dac8f970e253cbae0f5a9e113c4ba6c532a169",
+      "state": "retained-decoupled",
+      "currentSha256": "fa047473557512f5f2732badf7b45a86840ebedd1e83f9c930096e988cedc03d",
+      "currentPurpose": "fresh canonical database/routing ownership, passive observations and historical data protection; no financial schema startup",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/application-bootstrap.ts",
+          "line": 44
+        },
+        {
+          "caller": "runtime/src/agent-pool.ts",
+          "line": 14
+        },
+        {
+          "caller": "runtime/src/agent-pool/branch-manager.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/src/db/chat-branches.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/db/owned-forks.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/src/runtime/startup.ts",
+          "line": 2
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/db/token-usage.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1882",
+      "originalSha256": "31be9463f499c85e8b9ea175236a8ad9f71fbdd82e08aaa15845ce4d6d8ccf51",
+      "state": "retained-decoupled",
+      "currentSha256": "d956722d47b74afd682b20d3a4339291b7912ea9d4486ffd631ff6f13dfb7249",
+      "currentPurpose": "passive token/cost append, unit/provenance projection, idempotency and optional opaque historical references; no execution allowance",
+      "directImportCallers": [
+        {
+          "caller": "runtime/src/db.ts",
+          "line": 128
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/db/usage-report-projection.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1882",
+      "originalSha256": "3994a99186c977b6d28126b84b9a59c6e0a97a6d3156c1be52a9ea9411316016",
+      "state": "retained-decoupled",
+      "currentSha256": "fa711f966d4639f02b0c7d5535d4809bcc369e8729936ae3f097b87294829fbc",
+      "currentPurpose": "passive token/cost append, unit/provenance projection, idempotency and optional opaque historical references; no execution allowance",
+      "directImportCallers": [
+        {
+          "caller": "runtime/src/db/chat-branches.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/db/token-usage.ts",
+          "line": 19
+        },
+        {
+          "caller": "runtime/src/db/usage-report-retention.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/src/runtime/startup.ts",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/db/usage-report-retention.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1882",
+      "originalSha256": "3107a8d27dda18df8559a9edbd5a9595f609da6668fbf48bd82c32b4188cdd54",
+      "state": "retained-decoupled",
+      "currentSha256": "341248867bd65f54c3bdf3d2b780e91dd0f2372835d81f6188ba4b08ad21a75a",
+      "currentPurpose": "passive token/cost append, unit/provenance projection, idempotency and optional opaque historical references; no execution allowance",
+      "directImportCallers": [
+        {
+          "caller": "runtime/src/db/token-usage.ts",
+          "line": 18
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/db/usage-report-types.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1882",
+      "originalSha256": "4277d69e3daf093b9b19b65f39105660ade4ff175a0a3be7668a65d9639e0b3c",
+      "state": "retained-decoupled",
+      "currentSha256": "70872ec84f08592064a3db2564eda1411d04014d28854294ef77f762708b2a68",
+      "currentPurpose": "passive token/cost append, unit/provenance projection, idempotency and optional opaque historical references; no execution allowance",
+      "directImportCallers": [
+        {
+          "caller": "runtime/src/db/token-usage.ts",
+          "line": 15
+        },
+        {
+          "caller": "runtime/src/db/token-usage.ts",
+          "line": 42
+        },
+        {
+          "caller": "runtime/src/db/token-usage.ts",
+          "line": 45
+        },
+        {
+          "caller": "runtime/src/db/token-usage.ts",
+          "line": 96
+        },
+        {
+          "caller": "runtime/src/db/usage-report-projection.ts",
+          "line": 2
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/extensions/budget-limits.ts",
+      "originalDisposition": "DELETE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "6db7fb4c10f6ff13d886aa5006efd597c6021d24f91052861858d38135447ebe",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/extensions/index.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "238ddb31696d86ee38e4e3a6d3567e662f3b4f4b81f60c2cfd11c51d1a5f7074",
+      "state": "retained-decoupled",
+      "currentSha256": "3f0a5a94e94222e9bd1f4e7f50008e5b21e0ff192e4998e6be4406d5d31f23a6",
+      "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
+      "directImportCallers": [
+        {
+          "caller": "runtime/src/agent-pool/session.ts",
+          "line": 44
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/extensions/scheduled-tasks.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1879",
+      "originalSha256": "0129ed2fa3337045b738de10daa1d3851a319f2a49493df8bd3f46b2694f0d97",
+      "state": "retained-decoupled",
+      "currentSha256": "cf2697c3cc525848d0db0fcf2ce181753751790447d4a3bf9f6d00f28f4d6976",
+      "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
+      "directImportCallers": [
+        {
+          "caller": "runtime/src/extensions/index.ts",
+          "line": 48
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/extensions/tool-capabilities.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "d9ac97d915129c33d421899c53dad4112f508194e2a5df11f7d42c08b85a1b84",
+      "state": "retained-decoupled",
+      "currentSha256": "1e3a58d9357c89212292ed55a93219224e46c5fd39165d121d3e154517567afd",
+      "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
+      "directImportCallers": [
+        {
+          "caller": "runtime/src/channels/web/http/dispatch-agent.ts",
+          "line": 21
+        },
+        {
+          "caller": "runtime/src/extensions/internal-tools.ts",
+          "line": 20
+        },
+        {
+          "caller": "runtime/src/extensions/tool-activation.ts",
+          "line": 8
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/scheduled-task-query-service.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1879",
+      "originalSha256": "0ed5c1c61cd23d04957393f009d297e7d02c6b49f7d77d16a4a0165a9c83b285",
+      "state": "retained-decoupled",
+      "currentSha256": "385999bf18620d68a065c86b98eb8f1176cd671f7e83333b3a5a4d4d5ce347ea",
+      "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
+      "directImportCallers": [
+        {
+          "caller": "runtime/src/channels/web/handlers/scheduled-tasks-management.ts",
+          "line": 4
+        },
+        {
+          "caller": "runtime/src/extensions/scheduled-tasks.ts",
+          "line": 13
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/service-effects/current-piclaw/scheduled-run-store.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1879",
+      "originalSha256": "d7fecbd4272a5f7be7cbe1feb0452b60b83f05eef0d774f80c4054b4253f96d2",
+      "state": "retained-decoupled",
+      "currentSha256": "5ce78b8663291e56111662d10bd00899f0f113736de98bd9112e8767148c18ce",
+      "currentPurpose": "S07 recurrence/lease/history/result certainty and structural old task references; SDK owns execution",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/host-runtime.ts",
+          "line": 1928
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-scheduled-terminal.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/src/task-scheduler.ts",
+          "line": 46
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/service-effects/tool-preparation/manifest.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "c91655267013334a8413b3610fa2d2e0e2697bee07a6978b0ae884bc00939e1d",
+      "state": "retained-decoupled",
+      "currentSha256": "e3056cddf3ed23df4160313cb54f9cad28c0d5284a5999e6237f2b9f525bd0cd",
+      "currentPurpose": "tool effect/read-only/replay and preparation classification; no financial tool or monetary admission",
+      "directImportCallers": [
+        {
+          "caller": "runtime/src/service-effects/tool-preparation/policy.ts",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/service-effects/tool-preparation/policy.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "088a134760842dddd7adb401426001eef2dbdef1dc9f422388f1ca688474228b",
+      "state": "retained-decoupled",
+      "currentSha256": "cf195054e118a0bc12f1e01cf847cc99d18cc4f7defe2c7a0779d252a12dc2af",
+      "currentPurpose": "tool effect/read-only/replay and preparation classification; no financial tool or monetary admission",
+      "directImportCallers": [
+        {
+          "caller": "runtime/src/service-effects/tool-preparation/validator.ts",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/task-scheduler.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1879",
+      "originalSha256": "a2d0f1155e1e55121a796a8cb66242f2a81c3d9a9481b4ca4304dec4cfa96f72",
+      "state": "retained-decoupled",
+      "currentSha256": "023aa0c7640a99dc4816687400e75b9a025f8b64a7e99f9d6c774ddd9d321559",
+      "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
+      "directImportCallers": [
+        {
+          "caller": "runtime/src/runtime/bootstrap.ts",
+          "line": 236
+        },
+        {
+          "caller": "runtime/src/runtime/bootstrap.ts",
+          "line": 237
+        },
+        {
+          "caller": "runtime/src/runtime/shutdown.ts",
+          "line": 8
+        },
+        {
+          "caller": "runtime/src/runtime/wiring.ts",
+          "line": 17
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/web/src/api.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "dd4c3fbbbf8d9e5763cbc6811a9f641d11aa9f57e736ac36b47399eae0848418",
+      "state": "retained-decoupled",
+      "currentSha256": "558f2180b7ea4b9c6e36df61fb39ff83e64d96bf1ab7eadf9018f5575df09bc5",
+      "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
+      "directImportCallers": [
+        {
+          "caller": "runtime/web/src/components/attachment-preview-modal.ts",
+          "line": 4
+        },
+        {
+          "caller": "runtime/web/src/components/compose-box.ts",
+          "line": 7
+        },
+        {
+          "caller": "runtime/web/src/components/compose-box.ts",
+          "line": 2992
+        },
+        {
+          "caller": "runtime/web/src/components/image-annotator.ts",
+          "line": 22
+        },
+        {
+          "caller": "runtime/web/src/components/post-highlights.ts",
+          "line": 12
+        },
+        {
+          "caller": "runtime/web/src/components/post.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/web/src/components/settings/environment.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/web/src/components/settings/models.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/web/src/components/settings/providers.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/web/src/components/settings/quick-actions.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/web/src/components/settings/recordings.ts",
+          "line": 12
+        },
+        {
+          "caller": "runtime/web/src/components/settings/scheduled-tasks.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/web/src/components/settings/workspace-indexing.ts",
+          "line": 7
+        },
+        {
+          "caller": "runtime/web/src/components/settings/workspace.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/web/src/components/status.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/web/src/components/system-meters-hud.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/web/src/components/timeline-quick-actions.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/web/src/components/workspace-explorer.ts",
+          "line": 20
+        },
+        {
+          "caller": "runtime/web/src/panes/file-conflict-monitor.ts",
+          "line": 14
+        },
+        {
+          "caller": "runtime/web/src/panes/settings-pane.ts",
+          "line": 11
+        },
+        {
+          "caller": "runtime/web/src/panes/workspace-preview-pane.ts",
+          "line": 10
+        },
+        {
+          "caller": "runtime/web/src/ui/app-chat-refresh-lifecycle.ts",
+          "line": 27
+        },
+        {
+          "caller": "runtime/web/src/ui/app-extension-ui-browser-actions.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/web/src/ui/app-followup-actions-orchestration.ts",
+          "line": 148
+        },
+        {
+          "caller": "runtime/web/src/ui/app-shell-bootstrap.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/web/src/ui/app-window-actions.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/web/src/ui/meters.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/web/src/ui/use-notifications.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/web/src/ui/use-sse-connection.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/web/src/ui/use-timeline.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/web/src/ui/workspace-markdown-image.ts",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/web/src/components/settings-dialog.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "b1967a9bc02e27e622fe853ae10880bb571128abdcfafd83726c5986fabe5a77",
+      "state": "retained-decoupled",
+      "currentSha256": "daf0286623116f094bd478076490a6a42e602b42e7fbaaf527ae6d82b21e9261",
+      "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
+      "directImportCallers": [
+        {
+          "caller": "runtime/web/src/components/settings-dialog-loader.ts",
+          "line": 45
+        },
+        {
+          "caller": "runtime/web/src/dev/settings-widget-fixture.ts",
+          "line": 2
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/web/src/components/settings/budget.ts",
+      "originalDisposition": "DELETE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "e181120bbf92fc850d07b3562965bd3b4c64a9ab16f533dd834805944d1914d8",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/web/src/ui/budget-settings-model.ts",
+      "originalDisposition": "DELETE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "1379f51e10d964bd59309d721ab1e9c86ff8c22cbdee3d99153b4e3834655764",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/web/src/components/settings/scheduled-tasks.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1879",
+      "originalSha256": "9c8dd948feaf9615832b8a4b81fb745f1a472e0dbe7d2478006becaa43f4ed02",
+      "state": "retained-decoupled",
+      "currentSha256": "c0b6074762a51740a6f98767e70fee7d7b8714bbff80245ef2259e0af4654c8a",
+      "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
+      "directImportCallers": [
+        {
+          "caller": "runtime/web/src/components/settings-dialog.ts",
+          "line": 64
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/web/src/dev/settings-widget-fixture.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "8151cb79e9ccec97c0eeb6c217dd6d7cfb0f441d81c2fd611ae85dce8554e849",
+      "state": "retained-decoupled",
+      "currentSha256": "7b7c567f17cbdddd6f0f8f7f2fd5ed1c78ce8298257c30fd27bc7a03df2c2dec",
+      "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/web/static/classic/css/settings.css",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "98c45f2eb8820c69855c66df641e2a6714e3d5c2b452d82cb4dd47fc17a864a8",
+      "state": "retained-decoupled",
+      "currentSha256": "4abbb81d1ccdf76c7b8594bed4cca8696d5a4bea0fdd56d1ce06bc180d5a6462",
+      "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/web/static/visual/css/shell.css",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "bcd8e8f4ad9b92e4cff696b276dc3742abaf628f778158bd1833a140880ecd81",
+      "state": "retained-decoupled",
+      "currentSha256": "e5594ad97dbbb022ed2fc6c55a625674bca6d8f8db5a2acf531574473fdba113",
+      "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "skel/.pi/skills/schedule/SKILL.md",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1879",
+      "originalSha256": "d7c7e4f1f241a72211903c7ee3ca84cd1e69453a37607fbad597571b48b2f05b",
+      "state": "retained-decoupled",
+      "currentSha256": "d7c7e4f1f241a72211903c7ee3ca84cd1e69453a37607fbad597571b48b2f05b",
+      "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/scripts/schema-ownership.json",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1878",
+      "originalSha256": "c7e461e26639a5d99f9ca8f9c3de6d013963f51978794b4c96e52581de243d8a",
+      "state": "retained-decoupled",
+      "currentSha256": "8d4e3e5ee1c9de7ff4b93b715a963a32c36f4584fbe604207d57f494d4b729ed",
+      "currentPurpose": "generic exact schema/backup/recovery/reference inspection including inert old objects; no financial initializer or repair",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/scripts/lib/native-recovery-unit.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1878",
+      "originalSha256": "a43a737e3f80bca463ca43b0badd9788767fe21c6280d46523b86d6345ea4270",
+      "state": "retained-decoupled",
+      "currentSha256": "a43a737e3f80bca463ca43b0badd9788767fe21c6280d46523b86d6345ea4270",
+      "currentPurpose": "generic exact schema/backup/recovery/reference inspection including inert old objects; no financial initializer or repair",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/recovery-unit-qualification.ts",
+          "line": 10
+        },
+        {
+          "caller": "runtime/scripts/lib/retention-storage-inventory.ts",
+          "line": 3
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/scripts/lib/retention-storage-inventory.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1878",
+      "originalSha256": "825fc9eaf265beb31884222c2aedc450041df02aa2cc31c56fe3abdb07693bc8",
+      "state": "retained-decoupled",
+      "currentSha256": "825fc9eaf265beb31884222c2aedc450041df02aa2cc31c56fe3abdb07693bc8",
+      "currentPurpose": "generic exact schema/backup/recovery/reference inspection including inert old objects; no financial initializer or repair",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "docs/budget-limits.md",
+      "originalDisposition": "DELETE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "3eee7cc58445a21197e85d8efc1bf3f2e45bf6c58dcc95e34829f055f0c57f2a",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "addons",
+      "path": "addons/a2a/handler.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "390bdab708643d2c142f83c41bf5d9802b3afa816f8db044c3aa7530a5197f34",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "addons",
+      "path": "addons/a2a/task-store.ts",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "4b9daefe2b7b3eeb5cad5555c1336aa88b2c1c94778fe4c3fdb38c65c638d846",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "addons",
+      "path": "addons/late-night-regrets/NATIVE.md",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "a71b52ceb1f4f68760c2256bc16569b03ec76eb931363926ec82db86eb8e4120",
+      "state": "retained-decoupled",
+      "currentSha256": "a71b52ceb1f4f68760c2256bc16569b03ec76eb931363926ec82db86eb8e4120",
+      "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "docs/addon-operations.md",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "b1766c73036910673ed93036189e8538b4adaf942c5f8836295b1d753b495327",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "displaced financial/execution owner removed; original bytes remain in Git",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "docs/addon-runtime-api.md",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "e1aaaf8a9a986f246b47beebdd097946479ce53b7fe381c99e9bec95bb922b3b",
+      "state": "retained-decoupled",
+      "currentSha256": "461cdd57b0b07f1ee00df4cfb4aa936459a996e8c3ec662b5e1de8325ab80d18",
+      "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "docs/development/native-background-operations.md",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1880",
+      "originalSha256": "7e548623dd8753d549b783ac2245ea0252c72109194f48655b1dcbfac6c42c7d",
+      "state": "retained-decoupled",
+      "currentSha256": "f4ee0aed7c83c222dea858c60b2788f86069e53f91fbc17e0442b8b0746af151",
+      "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "docs/development/shared-model-request-reservations.md",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1882",
+      "originalSha256": "2e3d8c40c8209ac4095a1a4709bbd3e5267ab27c8f4c5f0cbd3502d5b2878618",
+      "state": "retained-decoupled",
+      "currentSha256": "bb816078c121ed9a40558b52d392b536fea4ac649fa8cb8b42ff6b3392773982",
+      "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "docs/development/delegate-request-reservations.md",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1882",
+      "originalSha256": "a3d842635429ab0941d77c3b8f491f49aae7d8760838c0a70262a3b0b4814756",
+      "state": "retained-decoupled",
+      "currentSha256": "2e47c188ef21720c73da2e0f91db64ad198913ce972f4196dcfaa9b048715922",
+      "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "docs/development/usage-report-projections.md",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1882",
+      "originalSha256": "0d7ceb13d4444469aa373cf6914f68af9398c803ec2b34b524014186fbcdbbf2",
+      "state": "retained-decoupled",
+      "currentSha256": "5dcecd7fb11a0e58fcf79f3ddd192ecb4d9c60aad39dcf527b6b13e4542d814f",
+      "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "docs/README.md",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "6e601e712ee750ac327c72b7b556967c3e1f02754a1144396a49cf995eaf9624",
+      "state": "retained-decoupled",
+      "currentSha256": "9415f2443377c9ab3e3838cf2446339a38210724a397defa0319f3c721429fd3",
+      "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "docs/architecture.md",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "43057fe8e650387ce57e56464d7c6073cff0b789d82be0fe0eb7f035551d8ce0",
+      "state": "retained-decoupled",
+      "currentSha256": "22244b1948715373a6ee09f533b8f5020f4bbbac9537739b0184c4f5eaeff7db",
+      "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "docs/runtime-flows.md",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "4c23d1c993a261d4a5542acfab2f94a3b28afcc6445e15f4f4d4bac7679756a0",
+      "state": "retained-decoupled",
+      "currentSha256": "7c240d48d52686c0e2c308c42fa222f5b69bc9a5caa81220d933409cfb217e57",
+      "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "docs/tools-and-skills.md",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "92bf8e7afe1e2851b0f0f90262729411bd58776cbb38685ffd1dd5b1900350e6",
+      "state": "retained-decoupled",
+      "currentSha256": "68cc5fa794c960fdb09d9f5546fa6482909d20052bd31193776e64871d4f025c",
+      "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/docs/web-api-endpoint-inventory.md",
+      "originalDisposition": "DECOUPLE",
+      "deliveryOwner": "#1881",
+      "originalSha256": "0f64f0b61614b7b11b7db7f7502c0ef555fc697070d2e196cbd2c1dc2719a93d",
+      "state": "retained-decoupled",
+      "currentSha256": "f1986033986c9a61981c44d134bb10e474e731b9145027d4f022a7542c1e1232",
+      "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
+      "directImportCallers": []
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/host-goal-usage.ts",
+      "originalDisposition": "RETAIN",
+      "deliveryOwner": "#1882",
+      "originalSha256": "5188459eda50c68480f29afb3f44113d9e2ea0c295bf162021c61d165ae208dd",
+      "state": "retained-decoupled",
+      "currentSha256": "5188459eda50c68480f29afb3f44113d9e2ea0c295bf162021c61d165ae208dd",
+      "currentPurpose": "Goal token-budget/domain lifecycle and Plan context; nonfinancial counters and exact SDK outcome/source authority",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 85
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-goal-prompt.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-goal-settlement.ts",
+          "line": 4
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/host-goal-prompt.ts",
+      "originalDisposition": "RETAIN",
+      "deliveryOwner": "#1882",
+      "originalSha256": "f49d8a766fc3eabbf5b17ccee9f673d19f342e3dae79720722de13b3413d3dda",
+      "state": "retained-decoupled",
+      "currentSha256": "f49d8a766fc3eabbf5b17ccee9f673d19f342e3dae79720722de13b3413d3dda",
+      "currentPurpose": "Goal token-budget/domain lifecycle and Plan context; nonfinancial counters and exact SDK outcome/source authority",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 82
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-extension-catalog.ts",
+          "line": 219
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/host-goal-settlement.ts",
+      "originalDisposition": "RETAIN",
+      "deliveryOwner": "#1882",
+      "originalSha256": "d2563bf0e0aaa38aedca0cf8e29bbd90dcea1ed740061dd6a1e94e5c0f266c46",
+      "state": "retained-decoupled",
+      "currentSha256": "bab406d2e65fb7cbf29347563662a2ce022eecf715fbcca38f5de927c6f5107c",
+      "currentPurpose": "Goal token-budget/domain lifecycle and Plan context; nonfinancial counters and exact SDK outcome/source authority",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 86
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-extension-catalog.ts",
+          "line": 220
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-extension-catalog.ts",
+          "line": 224
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/host-goal-terminal.ts",
+      "originalDisposition": "RETAIN",
+      "deliveryOwner": "#1882",
+      "originalSha256": "284c05a4b7ec2a76e205eaeae8f8e9f0b4eb98a39bbd018adbf32a755b18e7ca",
+      "state": "retained-decoupled",
+      "currentSha256": "284c05a4b7ec2a76e205eaeae8f8e9f0b4eb98a39bbd018adbf32a755b18e7ca",
+      "currentPurpose": "Goal token-budget/domain lifecycle and Plan context; nonfinancial counters and exact SDK outcome/source authority",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 83
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/host-plan-context.ts",
+      "originalDisposition": "RETAIN",
+      "deliveryOwner": "#1882",
+      "originalSha256": "2c861195447520c053dd19f7c229691548817a9826bf32c07fe2f4da76dfd86f",
+      "state": "retained-decoupled",
+      "currentSha256": "2c861195447520c053dd19f7c229691548817a9826bf32c07fe2f4da76dfd86f",
+      "currentPurpose": "Goal token-budget/domain lifecycle and Plan context; nonfinancial counters and exact SDK outcome/source authority",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/host-goal-prompt.ts",
+          "line": 7
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-runtime.ts",
+          "line": 26
+        },
+        {
+          "caller": "runtime/durable-engine/src/session-tree.ts",
+          "line": 3
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/host-extension-catalog.ts",
+      "originalDisposition": "RETAIN",
+      "deliveryOwner": "#1882",
+      "originalSha256": "1af8f43680724ca4c05c9beede8db5903b013bc76e9bc5dbceb1235e3d823105",
+      "state": "retained-decoupled",
+      "currentSha256": "1f14b47449f5a494c2f64f7fcc77486fa07f4372ee106f27f23e02f5600b0d21",
+      "currentPurpose": "exact approved add-on source/resource identity and public exported domain contracts",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 63
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-addon-prompts.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-plan-prompt.ts",
+          "line": 4
+        },
+        {
+          "caller": "runtime/scripts/lib/native-recovery-unit.ts",
+          "line": 10
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/durable-engine/src/host-model-failure-evidence.ts",
+      "originalDisposition": "RETAIN",
+      "deliveryOwner": "#1882",
+      "originalSha256": "42c7e54c14f6487c3c262f1f3fa2440f1196b89d990f6f96cdadca090fccc5a1",
+      "state": "retained-decoupled",
+      "currentSha256": "35d0e8bafd9c31693f372a5f6c595ac14d01dfeae89e40bf69adc01fa99a0de2",
+      "currentPurpose": "bounded current provider failure notices/evidence plus read-only historical wire categories; classifier produces no local financial denial",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 45
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-models.ts",
+          "line": 6
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/agent-pool/model-request-preview.ts",
+      "originalDisposition": "RETAIN",
+      "deliveryOwner": "#1882",
+      "originalSha256": "ebebb96c1e450543115bb6044c7a7516f5fe79419adaa3c0a0a722f5eca5b78b",
+      "state": "retained-decoupled",
+      "currentSha256": "172abf4eb41efe43615fae1fb277579a99c71db9081c520356854fd70deca868",
+      "currentPurpose": "public SDK model conversion, actual usage facts and physical context/output bounds; source/auth/resource policy only",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 50
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-model-context.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-models.ts",
+          "line": 18
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/agent-pool/provider-usage.ts",
+      "originalDisposition": "RETAIN",
+      "deliveryOwner": "#1882",
+      "originalSha256": "cf798de30d41b9114ed684033145363088f0fa82695582d96b9213dbe4e9faad",
+      "state": "retained-decoupled",
+      "currentSha256": "cf798de30d41b9114ed684033145363088f0fa82695582d96b9213dbe4e9faad",
+      "currentPurpose": "passive token/cost append, unit/provenance projection, idempotency and optional opaque historical references; no execution allowance",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 52
+        },
+        {
+          "caller": "runtime/src/agent-control/handlers/info.ts",
+          "line": 4
+        },
+        {
+          "caller": "runtime/src/agent-pool/runtime-facade.ts",
+          "line": 24
+        },
+        {
+          "caller": "runtime/src/extensions/provider-quota.ts",
+          "line": 3
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/agent-pool/runtime-facade.ts",
+      "originalDisposition": "RETAIN",
+      "deliveryOwner": "#1882",
+      "originalSha256": "19afc92f568933da7824143d95dffc1083c2371cf4561abe473909ef5d8ed68f",
+      "state": "retained-decoupled",
+      "currentSha256": "19afc92f568933da7824143d95dffc1083c2371cf4561abe473909ef5d8ed68f",
+      "currentPurpose": "existing native domain/control/message transport boundary with no expense port",
+      "directImportCallers": [
+        {
+          "caller": "runtime/src/agent-pool.ts",
+          "line": 40
+        },
+        {
+          "caller": "runtime/src/agent-pool/service-factory.ts",
+          "line": 12
+        },
+        {
+          "caller": "runtime/src/channels/web/sse/session-broadcast-service.ts",
+          "line": 12
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/web/src/components/model-picker.ts",
+      "originalDisposition": "RETAIN",
+      "deliveryOwner": "#1882",
+      "originalSha256": "807d18e98d94e481f74a7bfd3c022cca08ca852bfffdb5fde07cc39ea0738af4",
+      "state": "retained-decoupled",
+      "currentSha256": "807d18e98d94e481f74a7bfd3c022cca08ca852bfffdb5fde07cc39ea0738af4",
+      "currentPurpose": "existing model choice, price/unknown display and token/context/status DTO; same interaction and authority",
+      "directImportCallers": [
+        {
+          "caller": "runtime/web/src/components/compose-box.ts",
+          "line": 27
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/web/src/ui/model-catalogue.ts",
+      "originalDisposition": "RETAIN",
+      "deliveryOwner": "#1882",
+      "originalSha256": "09ccf8480552c190ea967600d1357a7ac01206d913e447cdeeb89eb8518a3e4e",
+      "state": "retained-decoupled",
+      "currentSha256": "cbcaf5b2f8c554315e6f22b5fb2c74fd6d14664359dec998df3c27bed6aa51be",
+      "currentPurpose": "existing model choice, price/unknown display and token/context/status DTO; same interaction and authority",
+      "directImportCallers": [
+        {
+          "caller": "runtime/web/src/components/compose-box.ts",
+          "line": 31
+        },
+        {
+          "caller": "runtime/web/src/components/model-picker.ts",
+          "line": 7
+        },
+        {
+          "caller": "runtime/web/src/components/settings/models.ts",
+          "line": 8
+        },
+        {
+          "caller": "runtime/web/src/ui/model-catalogue-preferences.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/web/src/ui/model-settings-catalogue.ts",
+          "line": 9
+        }
+      ]
+    },
+    {
+      "repo": "core",
+      "path": "runtime/src/db/sqlite-async-admission.ts",
+      "originalDisposition": "RETAIN",
+      "deliveryOwner": "#1882",
+      "originalSha256": "85aec9aa4783caa08fefe622769ede422848d669ae988182d4650cec057bc740",
+      "state": "retained-decoupled",
+      "currentSha256": "a0305e6cc4850dd8efb85eed48bd771d4d02230e30a6447045513a74b205a66a",
+      "currentPurpose": "genuine asynchronous SQLite writer admission, cancellation and commit certainty",
+      "directImportCallers": [
+        {
+          "caller": "runtime/durable-engine/src/application-bootstrap.ts",
+          "line": 4
+        },
+        {
+          "caller": "runtime/durable-engine/src/bun-sqlite.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/durable-engine/src/default-application-runtime.ts",
+          "line": 6
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-application-input.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-bindings.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-code-review-tool.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-codex-artifacts.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-command-policy.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-extension-catalog.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-goal-command.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-goal-config.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-goal-tools.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-operation-authority.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-plan-tool.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-process-controls.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-regrets-bindings.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/durable-engine/src/host-schema.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/src/addons/local-dispatch.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/agent-pool.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/agent-pool/branch-manager.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/channels/web/auth/single-user-passkeys.ts",
+          "line": 4
+        },
+        {
+          "caller": "runtime/src/channels/web/auth/totp-auth.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/channels/web/auth/webauthn-auth.ts",
+          "line": 33
+        },
+        {
+          "caller": "runtime/src/channels/web/cards/adaptive-card-side-prompt-service.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/channels/web/handlers/agent.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/channels/web/handlers/agent.ts",
+          "line": 36
+        },
+        {
+          "caller": "runtime/src/channels/web/handlers/picker-pins.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/channels/web/handlers/scheduled-tasks-management.ts",
+          "line": 5
+        },
+        {
+          "caller": "runtime/src/channels/web/http/dispatch-auth.ts",
+          "line": 2
+        },
+        {
+          "caller": "runtime/src/channels/web/media/link-previews.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/channels/web/media/media-service.ts",
+          "line": 18
+        },
+        {
+          "caller": "runtime/src/channels/web/messaging/message-store.ts",
+          "line": 27
+        },
+        {
+          "caller": "runtime/src/channels/web/oobe-instance-state.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/channels/web/post-mutations.ts",
+          "line": 9
+        },
+        {
+          "caller": "runtime/src/channels/web/ui-state.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/channels/web/workspace/file-service.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/db/sqlite-checkpoint-worker.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/db/web-sessions.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/environment-overrides.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/extension-kv-registry.ts",
+          "line": 9
+        },
+        {
+          "caller": "runtime/src/extensions/messages-crud.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/ipc.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/note-retrieval/coordinator.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/runtime/auth-maintenance.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/secure/keychain.ts",
+          "line": 26
+        },
+        {
+          "caller": "runtime/src/service-effects/current-piclaw/operation-media-store.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/service-effects/current-piclaw/scheduled-run-store.ts",
+          "line": 3
+        },
+        {
+          "caller": "runtime/src/service-effects/current-piclaw/service-outbox-store.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/service-effects/current-piclaw/service-work-store.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/service-effects/current-piclaw/terminal-settlement-store.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/service-effects/current-piclaw/timeline-draft-store.ts",
+          "line": 1
+        },
+        {
+          "caller": "runtime/src/task-scheduler.ts",
+          "line": 18
+        },
+        {
+          "caller": "runtime/src/workspace-index-core.ts",
+          "line": 1
+        }
+      ]
+    }
+  ],
+  "edgeScope": "resolved lexical TS imports/reexports, including type edges; dynamic qualification is separate",
+  "reduction": {
+    "accepted1881": {
+      "physical": -1257,
+      "receipt": "expense-management-retirement-1881.csv",
+      "sha256": "347ea8ecac08206b46e510b842fbd35f7ef3472f2127dad5df5749d506fca359"
+    },
+    "accepted1878": {
+      "physical": -396,
+      "firstParentMerges": [
+        "a881ffacc1fb75358650b58a989c86423f3fbeae",
+        "771e500528b3e64cd0634f66d068b7aeff785296"
+      ]
+    },
+    "currentCoreHandwrittenProduction": {
+      "added": 589,
+      "removed": 561,
+      "net": 28
+    },
+    "addon236Runtime": {
+      "added": 28,
+      "removed": 8,
+      "net": 20
+    },
+    "conservativeAttributedNet": -1605,
+    "accounting": "Only the two explicitly attributed accepted retirements are credited once. All new Core/236 runtime additions charged. Other large accepted finance/native-owner deletions deliberately uncredited; tests/docs/generated data/assets/qualification tooling/moves receive no backend deletion credit."
+  }
+}

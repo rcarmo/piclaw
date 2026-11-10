@@ -1,4 +1,9 @@
-# Delegate request reservations
+# Delegate request reservations — archived delivery record
+
+This is historical design and qualification evidence. The reservation/admission/settlement implementation described below is removed under #1875; no ledger or always-allow replacement admits Delegate work. Current execution uses the public SDK and nonfinancial source/auth/resource controls. Historical monetary records remain opaque and unchanged. See [Native usage reports](usage-report-projections.md).
+
+## Archived design and qualification
+
 
 The request ledger adds atomic capacity holds to existing budget evaluation. Provider execution and parent/side reservation wiring are separate work. This slice makes no provider calls and registers no new add-on API.
 
