@@ -13,7 +13,8 @@ export async function captureInterruptedScheduledHarness(storage: Storage, conte
   const id = Number(identity.submissionId);
   if (!/^[1-9]\d*$/.test(identity.submissionId) || !Number.isSafeInteger(id)) throw Error('Invalid scheduled submission');
   const record = await storage.submission(id as SubmissionId, context); assertCurrent();
-  if (!record || record.id !== id || record.type !== 'input' || record.status !== 'unanswered' || record.reason !== 'model_error' ||
+  const native=identity.operationId===`native-scheduled:${identity.runId}`;
+  if (!record || record.id !== id || record.type !== 'input' || record.status !== 'unanswered' || (record.reason !== 'model_error' && !(native&&record.reason==='aborted')) ||
     record.requestId !== `scheduled:${identity.runId}` || record.entry === undefined) throw Error('Failed scheduled SDK receipt required');
   const placed = await storage.entry(record.conversationId, record.entry, context); assertCurrent();
   const data = placed?.entry.data as Record<string, unknown> | undefined;
@@ -32,8 +33,8 @@ export async function captureInterruptedScheduledHarness(storage: Storage, conte
       const page = await storage.scanTasks({ conversationId }, 100, cursor, context); assertCurrent();
       for (const task of page.items) {
         if (task.conversationId !== conversationId || task.state.status !== 'terminal' || ++taskCount > 10000) throw Error('Scheduled SDK work is not terminal');
-        if (conversationId === record.conversationId && task.kind === 'pi.generation' && task.state.outcome.status === 'failed' &&
-          task.state.outcome.error.message === record.detail) failedGeneration = true;
+        if (conversationId === record.conversationId && task.kind === 'pi.generation' &&
+          (record.reason==='aborted' ? task.state.outcome.status==='aborted' : task.state.outcome.status==='failed'&&task.state.outcome.error.message===record.detail)) failedGeneration = true;
       }
       cursor = page.next;
     } while (cursor);

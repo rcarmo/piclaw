@@ -438,6 +438,8 @@ export function createGitHubCopilotDynamicModelsProvider(
     // chat-capable model IDs and their context sizes, plus Copilot IDE headers.
     headers: { ...(base.headers ?? {}), ...COPILOT_HEADERS },
     getModels: () => lastGood.map(toStoredModel),
+    getAllModels: () => [...lastGood.map(toStoredModel), ...(base.getAllModels?.() ?? []).filter(model => !isModelType(model, 'chat'))],
+    refreshModelsAuth: 'credential', // Account catalogue requires OAuth; the inherited pi.dev catalogue does not.
     // Availability filtering stays upstream. We only widen it by IDs the account's
     // own live catalog confirmed, which covers models newer than the login-time
     // `availableModelIds` snapshot. Models present only in the cached/static

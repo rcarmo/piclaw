@@ -25,7 +25,9 @@ export interface TokenUsageSummary {
   cacheWriteTokens?: number;
   cacheReadReported?: boolean | null;
   totalTokens?: number;
-  costTotal?: number;
+  costTotal?: number | null;
+  costCurrency?: string | null;
+  providerCostCurrency?: string | null;
   costProvenance?: string | null;
   provider?: string | null;
   model?: string | null;

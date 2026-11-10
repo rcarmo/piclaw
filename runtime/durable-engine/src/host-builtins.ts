@@ -4,8 +4,8 @@ import {
   createReadToolDefinition, createWriteToolDefinition, createEditToolDefinition,
   createLsToolDefinition, createFindToolDefinition, type ToolDefinition,
 } from "../../src/durable-legacy-sdk.js";
-import type { JsonValue } from "@earendil-works/chord";
-import type { TSchema } from "@earendil-works/pi-ai";
+import type { JsonValue } from "@earendil-works/chord/json";
+import type { TSchema } from "typebox";
 import { createHostTool } from "./host-tools.js";
 import { createHostBashTool } from "./host-bash.js";
 import { runHostToolProcess } from "../../src/agent-pool/host-tool-process.js";

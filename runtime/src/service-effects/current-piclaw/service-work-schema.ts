@@ -65,6 +65,15 @@ ALTER TABLE ${SCHEMA_PREFIX}operations DROP COLUMN harness_watch_generation;
 const FRESH_BINDING = {owner:"service_effect_s01",id:"native-harness-binding-v1",order:2,sql:OPERATIONS_SQL};
 const ACTIVE_OPERATION_INDEX_SQL = `CREATE UNIQUE INDEX IF NOT EXISTS ${SCHEMA_PREFIX}one_active_operation
       ON ${SCHEMA_PREFIX}operations(chat_jid) WHERE phase <> 'terminal';`;
+// SDK-scheduled rows retain the existing S07 FK/source identity but own no
+// host execution slot. Any harness/cancellation/other phase remains exclusive.
+const SDK_ACTIVE_OPERATION_INDEX_SQL = `CREATE UNIQUE INDEX IF NOT EXISTS ${SCHEMA_PREFIX}one_active_operation
+      ON ${SCHEMA_PREFIX}operations(chat_jid) WHERE phase <> 'terminal' AND NOT (
+        operation_id GLOB 'native-scheduled:*' AND phase='claimed'
+        AND harness_session_id IS NULL AND harness_operation_id IS NULL AND cancellation_source_id IS NULL);`;
+const SDK_SOURCE_INDEX = {owner:'service_effect_s01',id:'sdk-scheduled-admission-index-v1',order:3,
+  sql:`DROP INDEX main.${SCHEMA_PREFIX}one_active_operation;
+${SDK_ACTIVE_OPERATION_INDEX_SQL}`};
 const OPEN_OPERATION_INDEX_SQL = `CREATE INDEX IF NOT EXISTS ${SCHEMA_PREFIX}open_operations
       ON ${SCHEMA_PREFIX}operations(chat_jid, phase, operation_id);`;
 
@@ -199,17 +208,18 @@ function preflightHarnessRetirement(database: Database): typeof HARNESS_RETIREME
   const current = operation !== null && normaliseSql(operation) === normaliseSql(OPERATIONS_SQL);
   if (operation !== null && !old && !current || archive !== null && normaliseSql(archive) !== normaliseSql(HARNESS_ARCHIVE_SQL)) invalidHarnessSchema();
   const receipts = schemaSql(database,"piclaw_schema_migrations") === null ? [] : database.query(
-    "SELECT id,migration_order FROM main.piclaw_schema_migrations WHERE owner='service_effect_s01' AND migration_order>=2").all() as {id:string;migration_order:number}[];
+    "SELECT id,migration_order FROM main.piclaw_schema_migrations WHERE owner='service_effect_s01' AND migration_order>=2 ORDER BY migration_order").all() as {id:string;migration_order:number}[];
+  const sdkIndex=receipts.find(receipt=>receipt.id===SDK_SOURCE_INDEX.id&&receipt.migration_order===3);
   if (receipts.length) {
     const expected = archive === null ? FRESH_BINDING : HARNESS_RETIREMENT;
-    if (receipts.length !== 1 || receipts[0]?.id !== expected.id || receipts[0]?.migration_order !== 2 || !current) invalidHarnessSchema();
+    if (receipts.length !== (sdkIndex?2:1) || receipts[0]?.id !== expected.id || receipts[0]?.migration_order !== 2 || !current) invalidHarnessSchema();
   } else if (archive !== null || current) invalidHarnessSchema();
   if (database.query(`SELECT 1 FROM sqlite_schema WHERE tbl_name=? COLLATE NOCASE AND
       (type='trigger' OR type='index' AND sql IS NOT NULL AND lower(name) NOT IN (?,?)) LIMIT 1`)
       .get(`${SCHEMA_PREFIX}operations`,`${SCHEMA_PREFIX}one_active_operation`,`${SCHEMA_PREFIX}open_operations`)) invalidHarnessSchema();
   if (database.query("SELECT 1 FROM sqlite_schema WHERE tbl_name=? COLLATE NOCASE AND type='index' AND sql IS NOT NULL LIMIT 1").get(HARNESS_ARCHIVE)) invalidHarnessSchema();
-  for (const [name,expected] of [[`${SCHEMA_PREFIX}one_active_operation`,ACTIVE_OPERATION_INDEX_SQL],[`${SCHEMA_PREFIX}open_operations`,OPEN_OPERATION_INDEX_SQL]]) {
-    const actual=schemaSql(database,name!);if(actual!==null&&normaliseSql(actual)!==normaliseSql(expected!))invalidHarnessSchema();
+  for (const [name,expected] of [[`${SCHEMA_PREFIX}one_active_operation`,sdkIndex?SDK_ACTIVE_OPERATION_INDEX_SQL:ACTIVE_OPERATION_INDEX_SQL],[`${SCHEMA_PREFIX}open_operations`,OPEN_OPERATION_INDEX_SQL]]) {
+    const actual=schemaSql(database,name!);if(sdkIndex&&name===`${SCHEMA_PREFIX}one_active_operation`&&actual===null||actual!==null&&normaliseSql(actual)!==normaliseSql(expected!))invalidHarnessSchema();
   }
   // Views/triggers could otherwise retain a deleted observation or change meaning.
   const schemas = (database.query('PRAGMA database_list').all() as {name:string}[]).some(row=>row.name==='temp') ? ['main','temp'] : ['main'];
@@ -318,7 +328,7 @@ export function installServiceWorkSchema(database: Database): void {
       ON ${SCHEMA_PREFIX}sources(chat_jid, state, source_seq);
     ${OPEN_OPERATION_INDEX_SQL}
   `);
-    applyOwnedMigrations(database, [QUEUE_UPGRADE,harnessRetirement]);
+    applyOwnedMigrations(database, [QUEUE_UPGRADE,harnessRetirement,SDK_SOURCE_INDEX]);
     if (normaliseSql(schemaSql(database,`${SCHEMA_PREFIX}operations`) ?? "") !== normaliseSql(OPERATIONS_SQL)) invalidHarnessSchema();
     if (harnessRetirement.id === HARNESS_RETIREMENT.id && normaliseSql(schemaSql(database,HARNESS_ARCHIVE) ?? "") !== normaliseSql(HARNESS_ARCHIVE_SQL)) invalidHarnessSchema();
     // A receipt must not hide schema drift or a missing prerequisite index.

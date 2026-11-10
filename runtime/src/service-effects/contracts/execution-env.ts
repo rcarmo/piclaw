@@ -1,8 +1,8 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import type { TruncationResult } from "@earendil-works/pi-coding-agent";
 import type { Result } from "./result.js";
 
-export type { Context } from "@earendil-works/chord";
+export type { Context } from "@earendil-works/chord/context";
 export { BACKGROUND_CONTEXT, createContextKey, withAbortSignal, withContextValue } from "@earendil-works/chord/context";
 export { Result } from "./result.js";
 export { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, truncateHead, truncateTail } from "@earendil-works/pi-coding-agent";

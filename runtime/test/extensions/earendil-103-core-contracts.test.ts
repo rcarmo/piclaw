@@ -20,8 +20,8 @@ test.skipIf(pkg.dependencies['@earendil-works/pi-coding-agent']!=='1.0.3')('exac
  expect(typeof createMcpExtension).toBe('function');expect(typeof createToolSearchExtension).toBe('function');expect(typeof createCodemodeExtension).toBe('function');
 });
 test('GPT-6.1 Sol is present only in the admitted provider catalogue entries',()=>{
- // Measured from SDK 1.4.0 dist/providers/data/{openai,azure,openai-codex}.json.
- for(const [provider,contextWindow] of [['openai',272000],['azure',272000],['openai-codex',500000]] as const){
+ // Measured from the SDK1.5.2 public built-in catalogue.
+ for(const [provider,contextWindow] of [['openai',272000],['azure',1050000],['openai-codex',500000]] as const){
   const model=getBuiltinModels(provider).find(entry=>entry.id==='gpt-6.1-sol');expect(model,`${provider}/gpt-6.1-sol`).toBeDefined();expect(isModelType(model!,'chat')).toBe(true);expect(model).toMatchObject({reasoning:true,contextWindow,maxTokens:128000,input:['text','image']});
  }
  expect(getBuiltinModels('anthropic').some(model=>model.id==='gpt-6.1-sol')).toBe(false);

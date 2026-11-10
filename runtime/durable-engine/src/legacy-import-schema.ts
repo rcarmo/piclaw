@@ -1,5 +1,5 @@
 /** Persisted copied-history documents. No preparation, import or storage execution. */
-import type { JsonValue } from "@earendil-works/chord";
+import type { JsonValue } from "@earendil-works/chord/json";
 import { defineDoc } from "@earendil-works/pi-durable";
 
 export const IMPORTER_VERSION = 2;

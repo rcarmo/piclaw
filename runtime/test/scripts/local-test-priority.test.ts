@@ -320,6 +320,17 @@ describe("local test entrypoint audit", () => {
     }finally{rmSync(directory,{recursive:true,force:true});}
   });
 
+  test('negative source prefilter preserves late findings and existing per-line exclusions',async()=>{
+    const directory=mkdtempSync(join(tmpdir(),'piclaw-audit-prefilter-'));
+    try{
+      writeFileSync(join(directory,'ordinary.json'),JSON.stringify({entries:Array.from({length:20000},()=>({latest:'ordinary data'}))}));
+      writeFileSync(join(directory,'late.sh'),'echo ordinary\n'.repeat(20000)+'bun test\n');
+      writeFileSync(join(directory,'cross-line.ts'),'const command = ["bun",\n"test"];\n');
+      writeFileSync(join(directory,'comments.sh'),'# bun test\n# test:local\nbun test\n');
+      expect(await auditLocalTestEntrypoints(directory,['ordinary.json','late.sh','cross-line.ts','comments.sh'])).toEqual(['late.sh:20001:bun test']);
+    }finally{rmSync(directory,{recursive:true,force:true});}
+  });
+
   test("detects raw test commands in arbitrary nested scripts, package manifests, and Makefiles", async () => {
     const directory = mkdtempSync(join(tmpdir(), "piclaw-entrypoint-audit-"));
     try {

@@ -7,7 +7,7 @@ import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite
 import { BunSqliteDatabase } from "../../runtime/durable-engine/src/index.js";
 import { barrier, context, openFixture } from "./src/fixture.js";
 import { value } from "./src/host-handoff.js";
-import { createScheduledRunDispatch, type ScheduledAgentInput } from "../../runtime/durable-engine/src/index.js";
+interface ScheduledAgentInput {requestId:string;chatJid:string;sourceSeq:number;operationId:string;payloadRef:string;modelLabel:string|null;signal:AbortSignal}
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
 import { createTask, getTaskById, getTaskRunLogs, updateTask } from "../../runtime/src/db/tasks.js";
 import { AgentQueue } from "../../runtime/src/queue.js";
@@ -34,7 +34,7 @@ function captureRenewals() {
   return { callbacks, restore: () => { globalThis.setTimeout = original; } };
 }
 
-async function setup(holdRootAdapter = false, rootOnDisk = false) {
+async function setup(rootOnDisk = false) {
   await mkdir(resolve(process.env.PICLAW_WORKSPACE!, ".piclaw"), { recursive: true });
   await writeFile(resolve(process.env.PICLAW_WORKSPACE!, ".piclaw/config.json"), JSON.stringify({ domains: { access: { mode: "single-user" } } }));
   process.env.PICLAW_DB_IN_MEMORY = rootOnDisk ? "0" : "1";
@@ -46,10 +46,8 @@ async function setup(holdRootAdapter = false, rootOnDisk = false) {
   const queue = new AgentQueue();
   const leases = new Map<string, ScheduledRunLease>();
   const payloads = new Map<string, string>();
-  const bridges = new Map<string, ReturnType<typeof createScheduledRunDispatch<string>>>();
   const inputs: ScheduledAgentInput[] = [], sent: string[] = [], cancelled: string[] = [];
-  const late = barrier(), rootAdapter = barrier();
-  if (!holdRootAdapter) rootAdapter.release();
+  const late = barrier();
   // The public authority fixture's get() returns a revision snapshot, whose
   // status is authored, not live. Read the actual EF-S07 head via the root DB
   // accessor instead. Test-only SQL; no candidate/private SDK table access.
@@ -68,13 +66,7 @@ async function setup(holdRootAdapter = false, rootOnDisk = false) {
       }
       return result;
     },
-    renew: async request => {
-      const result = await actual.renew(request);
-      // Qualification host wiring: root scheduler owns renewal. Forward its
-      // failure to the active durable dispatch; do not start another renew loop.
-      if (!result.ok) bridges.get(request.runId)?.fence();
-      return result;
-    },
+    renew: (request, context) => actual.renew(request, context),
     bindAcceptedSource: request => actual.bindAcceptedSource(request), complete: request => actual.complete(request),
     abandon: request => actual.abandon(request), get: id => actual.get(id), listRuns: request => actual.listRuns(request),
     cleanupTerminal: request => actual.cleanupTerminal(request),
@@ -116,17 +108,11 @@ async function setup(holdRootAdapter = false, rootOnDisk = false) {
     agentPool: {
       saveSessionPosition: async () => "dedicated-scheduled-fixture", restoreSessionPosition: async () => {},
       getCurrentModelLabel: async () => null,
-      dispatchScheduledAgent: async (lease: ScheduledRunLease) => {
+      dispatchScheduledAgent: async (lease: ScheduledRunLease, options?: {signal?:AbortSignal}) => {
         expect(leases.get(lease.record.runId)).toEqual(lease);
-        const records=value(await actual.listRuns({taskId:lease.record.taskId,state:'source_bound'}));
-        expect(records.some(record=>record.runId===lease.record.runId)).toBe(true);
-        if(payloads.get(lease.task.payloadRef)===undefined)throw Error('Missing scheduled payload');
-        await rootAdapter.promise;
-        if (holdRootAdapter) throw new Error("Isolated admission probe finished");
-        const bridge = createScheduledRunDispatch(store, lease, currentTask, dispatch);
-        bridges.set(lease.record.runId, bridge);
-        const first = bridge.run(); expect(bridge.run()).toBe(first);
-        return { status: "success", result: await first };
+        const record=value(await actual.get(lease.record.runId));
+        if(!record||record.acceptedSourceSeq===null||record.operationId===null||!options?.signal)throw Error('Real scheduler source/lifetime required');
+        return {status:'success',result:await dispatch({requestId:record.runId,chatJid:lease.task.chatJid,sourceSeq:record.acceptedSourceSeq,operationId:record.operationId,payloadRef:lease.task.payloadRef,modelLabel:lease.task.modelLabel,signal:options.signal})};
       },
     } as unknown as SchedulerDeps["agentPool"],
     sendMessage: async (_jid, text) => { sent.push(text); },
@@ -134,12 +120,12 @@ async function setup(holdRootAdapter = false, rootOnDisk = false) {
   const due = new Date(Date.now() - 1000).toISOString();
   createTask({ id: "scheduled-fixture", chat_jid: "web:scheduled-qualification", prompt: "synthetic scheduled input",
     schedule_type: "once", schedule_value: due, next_run: due, status: "active", notify_on_complete: false, created_at: due });
-  return { db, fixture, actual, store, queue, leases, bridges, inputs, sent, cancelled, late, currentTask, dispatch,
+  return { db, fixture, actual, store, queue, leases, inputs, sent, cancelled, late, currentTask, dispatch,
     setHoldLate: () => { holdLate = true; },
     poll: () => pollScheduledRunsOnce(deps, store),
     async close() {
-      stopSchedulerLoop(); for (const bridge of bridges.values()) bridge.fence();
-      fixture.host.modelHold?.release(); late.release(); rootAdapter.release();
+      await stopSchedulerLoop();
+      fixture.host.modelHold?.release(); late.release();
       await queue.shutdown(); await fixture.close(); await closeDatabase(); await rm(dir, { recursive: true, force: true });
     },
   };
@@ -162,12 +148,9 @@ test("actual root scheduler: duplicate polls -> one EF-S07 occurrence/source -> 
     expect(renewed.leaseExpiresAt! > beforeRenewal.leaseExpiresAt!).toBe(true);
     expect(renewed.attempt).toBe(1); expect(h.inputs[0]!.signal.aborted).toBe(false);
     if (renewed.operationId === null) throw new Error("Missing scheduled operation binding");
-    const check = await h.bridges.get(id)!.check(); expect(check.operationId).toBe(renewed.operationId);
-    // A forged stale attempt may observe the same runId but cannot dispatch.
-    let staleCalls = 0;
-    const lease = h.leases.get(id)!;
-    const stale = createScheduledRunDispatch(h.actual, { ...lease, record: { ...lease.record, attempt: lease.record.attempt + 1 } }, h.currentTask, async () => { staleCalls++; });
-    await expect(stale.run()).rejects.toThrow("fenced"); expect(staleCalls).toBe(0);
+    expect(h.inputs[0]!.operationId).toBe(renewed.operationId);
+    // Forged/unbound/stale scope probes run against the production SDK factory
+    // in scheduler-production-lifetime.test.ts, not a second dispatch oracle.
     h.fixture.host.modelHold.release();
     await until(() => h.queue.getMetrics().succeeded === 1);
     await h.poll();
@@ -209,7 +192,7 @@ for (const lostAcks of [1, 2, "unknown_then_not_applied", "unknown_probe_unavail
   try {
     await h.poll();
     await until(() => h.queue.getMetrics().succeeded === 1);
-    expect(calls).toBe(2);
+    expect(calls).toBe(lostAcks === "unknown_probe_unavailable"?3:2);
     expect(h.fixture.host.modelCalls).toBe(1);
     expect(h.inputs).toHaveLength(1);
     const id = h.inputs[0]!.requestId, committed = value(await h.actual.get(id))!;
@@ -217,7 +200,7 @@ for (const lostAcks of [1, 2, "unknown_then_not_applied", "unknown_probe_unavail
     if (lostAcks === "unknown_probe_unavailable") {
       expect(failedProbe).toBe(true);
       expect(h.db.query("SELECT terminal_disposition FROM service_effect_s01_operations WHERE operation_id=?").get(committed.operationId!))
-        .toEqual({ terminal_disposition: null });
+        .toEqual({ terminal_disposition: "completed" });
       await h.poll(); // Recovery must preserve the already committed success.
     }
     expect(h.db.query("SELECT s.state,o.phase,o.terminal_disposition FROM service_effect_s01_sources s JOIN service_effect_s01_operations o ON o.primary_source_seq=s.source_seq AND o.chat_jid=s.chat_jid WHERE s.source_id=?").get(id))
@@ -267,92 +250,14 @@ test("real renewal failure cancels pending durable work; late callback cannot se
     expect(h.db.query("SELECT terminal_disposition,terminal_error_code FROM service_effect_s01_operations WHERE operation_id=?").get(first.operationId))
       .toEqual({ terminal_disposition: "failed", terminal_error_code: "scheduled_run_interrupted" });
     expect(h.fixture.host.modelCalls).toBe(1); expect(h.inputs.map(input => input.requestId)).toEqual([first.requestId, successor]);
-    await expect(h.bridges.get(first.requestId)!.run()).rejects.toThrow("Scheduled occurrence fenced");
+    expect(first.signal.aborted).toBe(true);
     expect(h.db.query("SELECT count(*) AS n FROM service_effect_s05_outbox").get()).toEqual({ n: 0 });
   } finally { renewal.restore(); await h.close(); }
 }, 15000);
 
-// Isolate the qualification boundary from the legacy runner's error catch/log
-// path. Root still creates the real claim and accepted/bound source, but its
-// adapter remains held until shutdown. These probes do NOT claim to fix root
-// error logging or make async provider/effect admission atomic.
-for (const change of ["revision", "pause"] as const) {
-  for (const boundary of ["before run", "pending admission", "late result"] as const) {
-    test(`live EF-S07 ${change} fences ${boundary} with an unexpired lease and no renewal`, async () => {
-      const h = await setup(true);
-      const renewal = captureRenewals();
-      let bridge: ReturnType<typeof createScheduledRunDispatch<string>> | undefined;
-      let running: Promise<string> | undefined;
-      try {
-        await h.poll();
-        await until(() => !!h.db.query("SELECT run_id FROM service_effect_s07_occurrences WHERE state='source_bound'").get());
-        const lease = [...h.leases.values()][0]!;
-        const before = value(await h.actual.get(lease.record.runId))!;
-        const originalHead = await h.currentTask(lease.record.taskId);
-        bridge = createScheduledRunDispatch(h.store, lease, h.currentTask, h.dispatch);
-        if (boundary === "pending admission") h.fixture.host.modelHold = barrier();
-        if (boundary === "late result") h.setHoldLate();
-        if (boundary !== "before run") {
-          running = bridge.run();
-          // Observe the rejection immediately, even while cancellation is held.
-          void running.catch(() => {});
-          await until(() => h.inputs.length === 1);
-          if (boundary === "late result") await until(() => h.fixture.host.modelCalls === 1);
-        }
-        updateTask(lease.record.taskId, change === "revision"
-          ? { prompt: "revised successor payload" } : { status: "paused" });
-        const successor = getTaskById(lease.record.taskId)!;
-        const head = await h.currentTask(lease.record.taskId);
-        expect(head).toEqual({ revision: change === "revision" ? originalHead!.revision + 1 : originalHead!.revision,
-          status: change === "pause" ? "paused" : "active" });
-        // The occurrence itself is unchanged: this used to pass until renewal.
-        expect(value(await h.actual.get(lease.record.runId))).toEqual(before);
-        expect(before.leaseExpiresAt! > new Date().toISOString()).toBe(true);
-        if (boundary === "before run") {
-          await expect(bridge.run()).rejects.toThrow("fenced");
-          expect(h.inputs).toHaveLength(0);
-        } else if (boundary === "pending admission") {
-          await expect(bridge.check()).rejects.toThrow("fenced");
-          await until(() => h.cancelled.length === 1);
-          h.fixture.host.modelHold!.release();
-          await expect(running!).rejects.toThrow("fenced");
-        } else {
-          h.late.release();
-          await expect(running!).rejects.toThrow("fenced");
-        }
-        expect(bridge.signal.aborted).toBe(true);
-        expect(h.fixture.host.modelCalls).toBe(boundary === "late result" ? 1 : 0);
-        expect(h.fixture.host.effects).toBe(0);
-        expect(h.sent).toEqual([]); expect(getTaskRunLogs(lease.record.taskId)).toEqual([]);
-        expect(getTaskById(lease.record.taskId)).toEqual(successor);
-        expect(value(await h.actual.get(lease.record.runId))).toEqual(before);
-        expect(h.db.query("SELECT count(*) AS n FROM service_effect_s07_run_logs").get()).toEqual({ n: 0 });
-        expect(renewal.callbacks).toHaveLength(1); // None invoked; no synthetic expiry.
-      } finally {
-        bridge?.fence(); h.fixture.host.modelHold?.release(); h.late.release();
-        await running?.catch(() => {});
-        renewal.restore(); await h.close();
-      }
-    }, 15000);
-  }
-}
-
-test("unbound/stale lease and non-agent task cannot dispatch; explicit host fence before run admits no input", async () => {
-  const h = await setup();
-  try {
-    // Claim using the real store without enqueuing: no accepted source yet.
-    const lease = value(await h.actual.claimDue({ now: new Date().toISOString(), workerId: "qualification-worker", leaseTokenPrefix: "qualification-prefix",
-      leaseDurationMs: 60000, limit: 1, reclaimAuthorities: [] }))[0]!;
-    let calls = 0;
-    const dispatch = async () => { calls++; return "forbidden"; };
-    await expect(createScheduledRunDispatch(h.actual, lease, h.currentTask, dispatch).run()).rejects.toThrow("fenced");
-    const stopped = createScheduledRunDispatch(h.actual, lease, h.currentTask, dispatch); stopped.fence();
-    await expect(stopped.run()).rejects.toThrow("fenced");
-    expect(() => createScheduledRunDispatch(h.actual, { ...lease, task: { ...lease.task, kind: "shell", executionRepeatability: "repeatable" } }, h.currentTask, dispatch)).toThrow("agent occurrence");
-    expect(calls).toBe(0); expect(h.fixture.host.modelCalls).toBe(0); expect(h.sent).toEqual([]);
-  } finally { await h.close(); }
-}, 15000);
-
+// Live task-head and forged-scope negatives now exercise the real production
+// SDK dispatcher in scheduler-production-lifetime.test.ts. Retired callback
+// post-checks are not an execution or result authority.
 for (const second of ['success','unknown','unknown_probe_unavailable'] as const) test(`retryable not_applied completion preserves native result and late uncertainty: ${second}`, async()=>{
   const h=await setup(), complete=h.store.complete.bind(h.store), get=h.store.get.bind(h.store);
   let calls=0, failedProbe=false, original:Parameters<ScheduledRunStore['complete']>[0]|undefined, snapshot='';
@@ -371,12 +276,12 @@ for (const second of ['success','unknown','unknown_probe_unavailable'] as const)
   };
   try{
     await h.poll();await until(()=>h.queue.getMetrics().succeeded===1);
-    expect(calls).toBe(2);expect(h.fixture.host.modelCalls).toBe(1);expect(h.inputs).toHaveLength(1);
+    expect(calls).toBe(second==='unknown_probe_unavailable'?3:2);expect(h.fixture.host.modelCalls).toBe(1);expect(h.inputs).toHaveLength(1);
     const id=h.inputs[0]!.requestId, committed=value(await h.actual.get(id))!;
     expect(committed).toMatchObject({state:'completed',status:'success',resultRef:`task_run_result:${id}`,attempt:1});
     if(second==='unknown_probe_unavailable'){
       expect(failedProbe).toBe(true);
-      expect(h.db.query('SELECT terminal_disposition FROM service_effect_s01_operations WHERE operation_id=?').get(committed.operationId!)).toEqual({terminal_disposition:null});
+      expect(h.db.query('SELECT terminal_disposition FROM service_effect_s01_operations WHERE operation_id=?').get(committed.operationId!)).toEqual({terminal_disposition:'completed'});
     }
     await h.poll(); // Reconcile an existing receipt only, never dispatch this source again.
     expect(h.db.query('SELECT s.state,o.phase,o.terminal_disposition FROM service_effect_s01_sources s JOIN service_effect_s01_operations o ON o.primary_source_seq=s.source_seq AND o.chat_jid=s.chat_jid WHERE s.source_id=?').get(id))
@@ -391,7 +296,7 @@ for (const second of ['success','unknown','unknown_probe_unavailable'] as const)
 },15000);
 
 test('real six-second completion writer outage persists the same native result after retryable acquisition timeout',async()=>{
-  const h=await setup(false,true), complete=h.store.complete.bind(h.store);
+  const h=await setup(true), complete=h.store.complete.bind(h.store);
   const file=(h.db.query('PRAGMA database_list').all() as {name:string;file:string}[]).find(row=>row.name==='main')!.file;
   const writer=new Database(file), first=Promise.withResolvers<void>();
   const policy=h.db.query('PRAGMA busy_timeout').get();

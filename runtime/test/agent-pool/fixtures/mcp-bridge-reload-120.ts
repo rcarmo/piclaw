@@ -13,7 +13,7 @@ const require = createRequire(import.meta.url);
 const { createMcpAdapter } = require("pi-mcp-adapter") as { createMcpAdapter(options: unknown): ExtensionFactory };
 const version = require("@earendil-works/pi-coding-agent/package.json").version;
 const adapterVersion = require("pi-mcp-adapter/package.json").version;
-assert.equal(version, "1.4.0"); assert.equal(adapterVersion, "2.31.0");
+assert.equal(version, "1.5.2"); assert.equal(adapterVersion, "2.31.0");
 const mode = process.argv[2];
 assert(["success", "failed-initial", "failed-reload", "commit-failure", "unbound", "overlap", "disposed-barrier", "failed-barrier", "shutdown-error", "runtime-dispose"].includes(mode));
 const reloads = Number(process.argv[3] ?? 3); assert(Number.isInteger(reloads) && reloads > 0 && reloads <= 1000);

@@ -65,7 +65,7 @@ for(const [label,sql]of [
 for(const sql of [
   "DELETE FROM piclaw_schema_migrations WHERE owner='service_effect_s01' AND migration_order=2",
   "UPDATE piclaw_schema_migrations SET checksum='wrong' WHERE owner='service_effect_s01' AND migration_order=2",
-  "UPDATE piclaw_schema_migrations SET migration_order=3 WHERE owner='service_effect_s01' AND migration_order=2",
+  "UPDATE piclaw_schema_migrations SET migration_order=999 WHERE owner='service_effect_s01' AND migration_order=2",
   `DROP TABLE ${archive}`,
   "ALTER TABLE service_effect_s01_operations ADD COLUMN harness_state TEXT",
 ])test(`retired-root drift refuses unchanged: ${sql}`,()=>fixture(db=>{

@@ -1,5 +1,6 @@
 import { assertModelContextFits, type ModelContextAdmission } from "./host-model-context.js";
-import { Type, getSupportedThinkingLevels, type Api, type Model } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
+import { getSupportedThinkingLevels, type Api, type Model } from "@earendil-works/pi-ai";
 import { AgentDoc, configure, defineTool, type ConversationId, type TaskId } from "@earendil-works/pi-durable";
 
 export const hostModelToolNames = ["list_models", "get_model_state", "set_model", "switch_model", "switch_thinking"] as const;

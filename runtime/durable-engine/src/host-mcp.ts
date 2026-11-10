@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { JsonRpcMessage } from "@earendil-works/pi-mcp";
-import { Type } from "@earendil-works/pi-ai";
-import type { JsonValue } from "@earendil-works/chord";
+import { Type } from "typebox";
+import type { JsonValue } from "@earendil-works/chord/json";
 import { defineTool, type ToolExecutionApi } from "@earendil-works/pi-durable";
 import { McpClient } from "../../src/durable-legacy-sdk.js";
 import { getMcpBridgeReadSnapshot, acquireMcpSessionBridge, assertMcpBridgeSourcesCurrent } from "../../src/secure/mcp-keychain.js";

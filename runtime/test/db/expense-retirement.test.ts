@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import { createTempWorkspace } from "../helpers.js";
 import { join } from 'node:path';
-import { readUsageProjectionEvent } from '../../src/db/usage-report-projection.js';
 import * as dbApi from "../../src/db.js";
 import { getDb, initDatabase, initializeDatabaseSchema } from "../../src/db/connection.js";
 import { installHistoricalExpenseFixture } from '../fixtures/historical-expense.js';
@@ -18,7 +17,6 @@ test('fresh roots create passive reports without financial tables, triggers or m
   initDatabase(); const database=getDb();
   expect(database.query("SELECT name FROM main.sqlite_schema WHERE name GLOB 'budget_*'").all()).toEqual([]);
   expect(database.query("SELECT * FROM piclaw_schema_migrations WHERE owner IN ('host.budget-request-reservations','host.usage-reports')").all()).toEqual([]);
-  expect(readUsageProjectionEvent(database,'absent-historical-event')).toBeNull();
   recordMessageUsage('web:fresh-no-finance',{id:'fresh-usage',role:'assistant',provider:'fixture',usage:{input:1,output:2,providerCost:0}});
   expect(database.query("SELECT total_tokens,provider_cost_total,cost_provenance FROM token_usage WHERE chat_jid='web:fresh-no-finance'").get()).toEqual({total_tokens:3,provider_cost_total:0,cost_provenance:'provider_reported'});
   initializeDatabaseSchema(database);

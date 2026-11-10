@@ -29,7 +29,7 @@ import { nativeBackgroundIdentity,assertNativeBackgroundModel,createNativeBackgr
 import { join, extname } from "node:path";
 import { BACKGROUND_CONTEXT as context, withAbortSignal } from "@earendil-works/chord/context";
 import { apply } from "@earendil-works/chord/delta";
-import { Harness, AgentDoc, configure, createRegistry, defineDoc, defineExtension, defineTool, type ToolExecutionApi, type ToolHooks, type ConversationId } from "@earendil-works/pi-durable";
+import { Harness, AgentDoc, LiveDoc, configure, createRegistry, defineDoc, defineExtension, defineTool, type ToolExecutionApi, type ToolHooks, type ConversationId } from "@earendil-works/pi-durable";
 import { SqliteStorage } from "@earendil-works/pi-durable/storage/sqlite";
 import { createCodemodeTool } from "@earendil-works/pi-durable/codemode";
 import { CodemodeSandbox } from "@earendil-works/pi-codemode";
@@ -55,7 +55,7 @@ import { buildDreamPrompt } from '../../src/agent-memory/dream-prompt.js';
 import type { NativeDreamRequest,AgentOutput } from '../../src/agent-pool/contracts.js';
 import { createHostMcp } from "./host-mcp.js";
 import { createHostFetch } from "./host-fetch.js";
-import { taskModelRequestScope, taskModelHookScope, taskModelToolScope, withTaskModelRequestScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
+import { taskModelRequestScope, taskModelHookScope, taskModelToolScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
 import { createHostBuiltinTools } from "./host-builtins.js";
 import { createHostModelTools, hostModelToolNames, nativeToolInstructions } from "./host-model-controls.js";
 import { createHostCommandPolicy } from "./host-command-policy.js";
@@ -129,15 +129,17 @@ const isOldDefault = (tools: unknown) => Array.isArray(tools) &&
     (tools.length === 6 && defaultToolNames.slice(0, 6).every((name, i) => tools[i] === name)));
 
 
-/** Read-only preflight, before Harness.open can normalize pending work. All
- * configuration writes still go through public configure in one SDK commit. */
-function storedDocument(root: ReturnType<typeof getDb>, id: number): any {
-  let value: unknown;
+/** Read-only preflight before Harness.open can normalize pending work, also
+ * repeated synchronously under the configuration write lock. Opening another
+ * Session here would normalise work or re-enter that lock. This compatibility
+ * reader checks raw versions; configuration writes use public configure only. */
+function storedDocument(root: ReturnType<typeof getDb>, id: number, maxVersion = 1): any {
+  let value: unknown, baseVersion: number | undefined;
   const revisions = root.query("SELECT kind, version, content FROM document_revisions WHERE document_id=? ORDER BY seq").all(id) as { kind: string; version: number; content: string }[];
   for (const revision of revisions) {
-    if (revision.version !== 1) throw Error("Invalid persisted document version");
-    if (revision.kind === "base") value = JSON.parse(revision.content);
-    else if (revision.kind === "delta" && value) value = apply(value, JSON.parse(revision.content));
+    if (!Number.isSafeInteger(revision.version) || revision.version < 1 || revision.version > maxVersion) throw Error("Invalid persisted document version");
+    if (revision.kind === "base") { value = JSON.parse(revision.content); baseVersion = revision.version; }
+    else if (revision.kind === "delta" && value && revision.version === baseVersion) value = apply(value, JSON.parse(revision.content));
     else throw Error("Invalid persisted document");
   }
   if (!value) throw Error("Invalid persisted document");
@@ -149,7 +151,7 @@ function assertToolUpgradeIdle(root: ReturnType<typeof getDb>): void {
     throw Error("Host tool upgrade requires idle SDK work");
   const docs = root.query(`SELECT id, kind FROM documents WHERE kind IN ('"pi.inbox"','"pi.live"') AND retired_at IS NULL`).all() as { id: number; kind: string }[];
   for (const doc of docs) {
-    const state = storedDocument(root, doc.id);
+    const state = storedDocument(root, doc.id, doc.kind === '"pi.live"' ? LiveDoc.definition.version : 1);
     if (doc.kind === '"pi.inbox"' ? state.items?.length : state.run) throw Error("Host tool upgrade requires idle SDK work");
   }
   const exists = (table: string) => !!root.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table);
@@ -1102,7 +1104,9 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     assertOwner() { assert(); lifetime.signal.throwIfAborted(); observability.assertCurrent(); }, failClosed(error) { lifetime.abort(error); } }));
   if (goal) registry.install(createHostGoalTerminalFence(goal.addon, { root, runtime, assertOwner: assertGoal }));
   const commandPolicy = createHostCommandPolicy(root, () => { assert(); if (readAccessConfig().mode !== "single-user") throw Error("Native controls require single-user policy"); });
-  const harnessOptions = { models, registry: withTaskModelRequestScope(registry), settings: commandPolicy.settings };
+  // Preparation stays paused; the executing HostConversationRuntime installs
+  // the single task-source/cancellation adapter when it opens its Harness.
+  const harnessOptions = { models, registry, settings: commandPolicy.settings };
   const path = (root.query("PRAGMA database_list").all() as { name: string; file: string }[]).find(row => row.name === "main")?.file;
   if (!path) throw Error("Durable default requires a file-backed application database");
   const storage = new BunSqliteDatabase(path, { root, assertOwner: assert, fenceTransactions: true });
@@ -1327,7 +1331,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
           if(interaction)terminalBroadcast?.("new_post",interaction as unknown as Record<string,unknown>);
           if(goal&&!result.answer?.processExit)wakeGoalFollowups(input.chatJid);
         },
-    onMaintenanceSettled(workId) { codexServices?.releaseTurn(workId); assert(); },
+    onExecutionSettled(workId) { codexServices?.releaseTurn(workId); assert(); },
     async onOperationSettled(operationId, processExit) {
       codexServices?.releaseTurn(operationId);
       assert();
@@ -1437,6 +1441,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   }
   if (!offlineMaintenance) await bundle.retryRecoveredWork();
   const dispatchDreamOperation=async(request:NativeDreamRequest):Promise<AgentOutput>=>{
+    const signal=request.signal??new AbortController().signal;signal.throwIfAborted();
     assertAdmission();const checkInvocation=request.assertCurrent.bind(request);checkInvocation();
     const invocation=Object.freeze({invocationId:request.invocationId,chatJid:request.chatJid,mode:request.mode,days:request.days,model:request.model,timeoutMs:request.timeoutMs,acceptedAt:request.acceptedAt});
     if(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(invocation.invocationId)||!invocation.chatJid||!['manual','auto'].includes(invocation.mode)||!Number.isSafeInteger(invocation.days)||invocation.days<1||!Number.isSafeInteger(invocation.timeoutMs)||invocation.timeoutMs<1)throw Error('Invalid Dream invocation');
@@ -1453,7 +1458,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     if(dreamOwners.has(payload.policy.sourceId))throw Error('Dream invocation already has a live owner');
     dreamOwners.set(payload.policy.sourceId,{payload,assertCurrent:checkInvocation});
     try{
-      assertDreamCurrent(payload);const result=await bundle.dispatchDreamPayload(payload,new AbortController().signal);checkInvocation();
+      assertDreamCurrent(payload);const result=await bundle.dispatchDreamPayload(payload,signal);checkInvocation();
       if(result.status==='success'&&codex&&result.result){
         try {
           result.result=await renderCodexAnswer(root,WORKSPACE_DIR,identity.chatJid,payload.policy.sourceId,result.result,()=>{assert();checkInvocation();});
@@ -1534,7 +1539,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   return backend;
   } catch (error) {
     // A post-construction failure still owns a live SDK scheduler/storage graph.
-    // Join it before invalidating execution dependencies or financial ownership.
+    // Join it before invalidating execution dependencies or releasing ownership.
     if (typeof bundle !== 'undefined') {
       try { bundle.stop(); await bundle.close(); }
       catch (cleanup) { throw new RuntimeStartupCleanupError([error, cleanup], 'Application startup cleanup uncertain'); }

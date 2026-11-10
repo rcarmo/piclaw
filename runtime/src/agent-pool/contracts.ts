@@ -132,6 +132,7 @@ export interface SidePromptOptions {
 export interface NativeDreamRequest {
   invocationId:string;chatJid:string;mode:'manual'|'auto';days:number;model:string|null;timeoutMs:number;acceptedAt:string;
   assertCurrent():void;
+  signal?:AbortSignal;
 }
 
 /** Construction options for creating an AgentPool. */
@@ -144,7 +145,7 @@ export interface AgentPoolOptions {
   dispatchHostCommand?: (chatJid: string, rawText: string) => Promise<import("../agent-control/agent-control-types.js").AgentControlResult>;
   /** Select the durable backend for the entire pool. Captured bindings are exhaustive;
    * even an empty map disables all legacy session construction. No HTTP selection. */
-  dispatchScheduledAgent?: (lease: import("../service-effects/contracts/scheduled-run-store.js").ScheduledRunLease) => Promise<AgentOutput>;
+  dispatchScheduledAgent?: (lease: import("../service-effects/contracts/scheduled-run-store.js").ScheduledRunLease, options?: { signal?: AbortSignal }) => Promise<AgentOutput>;
   dispatchSidePrompt?: (chatJid: string, prompt: string, options: SidePromptOptions) => Promise<SidePromptResult>;
   getDurableSession?: (chatJid: string) => import("./durable-runtime-adapter.js").DurableSessionPositionPort | undefined;
   createSession?: (chatJid: string, sessionDir: string) => Promise<AgentSessionRuntime>;

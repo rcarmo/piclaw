@@ -1,4 +1,4 @@
-import { accessSync, constants, readFileSync, statSync } from "node:fs";
+import { accessSync, constants, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, delimiter, join, relative, resolve } from "node:path";
 import { createGrepToolDefinition, truncateHead, truncateLine, formatSize, DEFAULT_MAX_BYTES, type GrepToolInput, type GrepToolDetails } from "@earendil-works/pi-coding-agent";
@@ -36,50 +36,51 @@ export function createHostGrepDefinition(cwd: string, assert: () => void = () =>
       try { accessSync(path, constants.X_OK); return true; } catch { return false; }
     });
     if (!binary) throw Error("Host grep requires an installed ripgrep (rg) binary");
-    const args = ["--json", "--line-number", "--color=never", "--hidden"];
+    const args = ["--no-config", "--json", "--line-number", "--color=never", "--hidden"];
     if (input.ignoreCase) args.push("--ignore-case");
     if (input.literal) args.push("--fixed-strings");
-    if (input.glob) args.push("--glob", input.glob);
-    args.push("--", input.pattern, searchPath);
-    const limit = Math.max(1, input.limit ?? 100), context = input.context && input.context > 0 ? input.context : 0;
-    const matches: { path: string; line: number; text?: string }[] = [];
-    const result = await runHostToolProcess(binary, args, cwd, guard, signal, line => {
-      let event;
-      try { event = JSON.parse(line); } catch { return false; }
-      if (event.type !== "match") return false;
-      matches.push({ path: event.data.path.text, line: event.data.line_number, text: event.data.lines.text });
-      return matches.length >= limit;
+    if (input.glob) args.push("--glob", input.glob.replace(/^(!?)(?:\.\/)+/, "$1"));
+    const limit = Math.max(1, Math.floor(input.limit ?? 100));
+    const context = input.context && input.context > 0 ? Math.min(Math.floor(input.context), Number.MAX_SAFE_INTEGER) : 0;
+    if (context) args.push("--context", String(context));
+    args.push("--", input.pattern, directory ? "." : searchPath);
+    const output: string[] = [];
+    let matches = 0, limitHit = false, matchLimitReached = false, trailingEnd = 0, lastFile = "";
+    let linesTruncated = false, outputBytes = 0, outputLines = 0;
+    const text = (field: {text?: string; bytes?: string} | undefined) => field?.text ?? (field?.bytes ? Buffer.from(field.bytes, "base64").toString("utf8") : "");
+    const emit = (file: string, line: number, value: string, match: boolean) => {
+      lastFile = file;
+      const rel = relative(searchPath, resolve(directory ? searchPath : cwd, file));
+      const name = directory && rel && !rel.startsWith("..") ? rel.replace(/\\/g, "/") : basename(file);
+      const truncated = truncateLine(value.replace(/\r?\n?$/, ""));
+      linesTruncated ||= truncated.wasTruncated;
+      const formatted = (match ? `${name}:${line}: ` : `${name}-${line}- `) + truncated.text;
+      if (outputBytes - 1 <= DEFAULT_MAX_BYTES) output.push(formatted);
+      outputBytes += Buffer.byteLength(formatted, "utf8") + 1; outputLines++;
+    };
+    const result = await runHostToolProcess(binary, args, directory ? searchPath : cwd, guard, signal, line => {
+      let event; try { event = JSON.parse(line); } catch { return false; }
+      const match = event.type === "match";
+      if (!match && event.type !== "context") return false;
+      const file = text(event.data?.path), number = event.data?.line_number;
+      if (!file || typeof number !== "number") return false;
+      if (!limitHit) {
+        emit(file, number, text(event.data?.lines), match);
+        if (match && ++matches >= limit) { limitHit = true; trailingEnd = number + context; }
+        return false;
+      }
+      const inWindow = file === lastFile && number <= trailingEnd;
+      if (inWindow) emit(file, number, text(event.data?.lines), false);
+      if (match) matchLimitReached = true;
+      return matchLimitReached && !(inWindow && number < trailingEnd);
     });
     guard();
     if (!result.stopped && result.code !== 0 && result.code !== 1) throw Error(result.stderr.trim() || `ripgrep exited with code ${result.code}`);
-    if (!matches.length) return { content: [{ type: "text" as const, text: "No matches found" }], details: undefined };
-    const output: string[] = [], cache = new Map<string, string[]>();
-    let linesTruncated = false;
-    const emit = (prefix: string, text: string) => {
-      const truncated = truncateLine(text);
-      linesTruncated ||= truncated.wasTruncated;
-      output.push(prefix + truncated.text);
-    };
-    for (const match of matches) {
-      const rel = relative(searchPath, match.path);
-      const name = directory && rel && !rel.startsWith("..") ? rel.replace(/\\/g, "/") : basename(match.path);
-      if (!context && match.text !== undefined) emit(`${name}:${match.line}: `, match.text.replace(/\r\n/g, "\n").replace(/\r/g, "").replace(/\n$/, ""));
-      else {
-        let lines = cache.get(match.path);
-        if (!lines) {
-          guard();
-          try { lines = readFileSync(match.path, "utf8").replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n"); }
-          catch { guard(); lines = []; }
-          cache.set(match.path, lines);
-        }
-        if (!lines.length) output.push(`${name}:${match.line}: (unable to read file)`);
-        for (let n = Math.max(1, match.line - context); n <= Math.min(lines.length, match.line + context); n++)
-          emit(n === match.line ? `${name}:${n}: ` : `${name}-${n}- `, (lines[n - 1] ?? "").replace(/\r/g, ""));
-      }
-    }
+    if (!matches) return { content: [{ type: "text" as const, text: "No matches found" }], details: undefined };
     const truncation = truncateHead(output.join("\n"), { maxLines: Number.MAX_SAFE_INTEGER });
+    truncation.totalLines = outputLines; truncation.totalBytes = outputBytes - 1;
     const details: GrepToolDetails = {}, notices: string[] = [];
-    if (matches.length >= limit) { details.matchLimitReached = limit; notices.push(`${limit} matches limit reached. Use limit=${limit * 2} for more, or refine pattern`); }
+    if (matchLimitReached) { details.matchLimitReached = limit; notices.push(`${limit} matches limit reached. Use limit=${limit * 2} for more, or refine pattern`); }
     if (truncation.truncated) { details.truncation = truncation; notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`); }
     if (linesTruncated) { details.linesTruncated = true; notices.push("Some lines truncated to 500 chars. Use read tool to see full lines"); }
     guard();

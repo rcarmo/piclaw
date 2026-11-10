@@ -1,5 +1,5 @@
 import type { Conversation, ConversationView, ConversationWatch, LiveState, ModelRef } from "@earendil-works/pi-durable";
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import type { NativeDelegateProgress } from "../../src/agent-pool/delegate-progress.js";
 
 /** Best-effort UI observer, never submission/settlement authority. Child text and
@@ -52,7 +52,7 @@ export async function watchNativeDelegateProgress(child: Pick<Conversation, "wat
     if (active) {
       watch = await child.watch(context);
       await update(watch.value);
-      watch.start(view => (inFlight = update(view)));
+      watch.start(call => {if(call.kind==='failed'){active=false;return Promise.resolve();}return(inFlight=update(call.value));});
       void watch.closed.catch(() => { active = false; });
     }
   } catch { active = false; }

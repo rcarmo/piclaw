@@ -10,10 +10,11 @@ function formatCompact(value: number): string {
   return String(value);
 }
 
-function formatUsd(value: unknown): string | null {
+function formatUsd(value: unknown, currency: string | null = "USD"): string | null {
   const numeric = finiteNumber(value);
   if (numeric === null || numeric < 0) return null;
-  return `$${numeric.toFixed(numeric >= 0.01 ? 2 : 4)}`;
+  const amount=numeric.toFixed(numeric >= 0.01 ? 2 : 4);
+  return currency==="USD"?`$${amount}`:currency?`${currency} ${amount}`:`${amount} (currency unknown)`;
 }
 
 function requestedModelLabel(latest: TokenUsageSummary): string | null {
@@ -74,7 +75,8 @@ export function formatVisualLatestRunUsage(context: AgentContext | null, activeM
     : (cacheRead / denominator) * 100;
   const cacheLabel = cacheRate === null ? "CH—" : `CH${cacheRate.toFixed(1)}%`;
   const total = finiteNumber(latest.totalTokens);
-  const cost = formatUsd(latest.costTotal);
+  const currency=latest.costProvenance==="provider_reported"?latest.providerCostCurrency??null:"USD";
+  const cost = formatUsd(latest.costTotal,currency);
   const costLabel = latest.costProvenance === "provider_reported" ? cost
     : latest.costProvenance === "catalogue_estimate" && cost ? `~${cost}` : null;
   const tokenLines = [
@@ -137,7 +139,7 @@ export function formatVisualProviderUsage(usage: ProviderUsage | null): { label:
 }
 
 export function formatVisualModelPricing(pricing: ModelPricing | null | undefined): string {
-  if (!pricing) return "";
+  if (!pricing) return "Price unknown";
   const parts: Array<[string, unknown]> = [
     ["in", pricing.input_per_million],
     ["out", pricing.output_per_million],
@@ -149,5 +151,5 @@ export function formatVisualModelPricing(pricing: ModelPricing | null | undefine
     if (numeric === null || numeric < 0) return null;
     return `${label} $${numeric.toFixed(numeric >= 1 ? 2 : 4).replace(/0+$/, "").replace(/\.$/, "")}`;
   }).filter(Boolean);
-  return rates.length ? `${rates.join(" / ")} per 1M` : "";
+  return rates.length ? `${rates.join(" / ")} per 1M` : "Price unknown";
 }

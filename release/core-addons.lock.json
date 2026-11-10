@@ -1,42 +1,42 @@
 {
   "schemaVersion": 1,
   "catalog": "https://raw.githubusercontent.com/rcarmo/piclaw-addons/main/catalog.json",
-  "catalogSha256": "2d53e92a7bf3aa2f653a89eaa990d59eee66b3a48b25b2fd4eabc464c816000d",
+  "catalogSha256": "975e54a05902d6cb27f4b94879d46705e3f53c12e9dfcb032382e29f7790210a",
   "addons": [
     {
       "slug": "code-review",
       "name": "@rcarmo/piclaw-addon-code-review",
-      "version": "0.1.8",
-      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-code-review-0.1.8.tgz",
-      "sha256": "c3b85c224b549fa9b31aee2a86951a2d29e7eb0250ee327f53a9ef22c780e4cc"
+      "version": "0.1.11",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-code-review-0.1.11.tgz",
+      "sha256": "fe03dc2c4aa26cc68dc61b562f80fdcfee4021fd9342f29ba3fae0019e8f0ea9"
     },
     {
       "slug": "delegate",
       "name": "@rcarmo/piclaw-addon-delegate",
-      "version": "0.2.20",
-      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-delegate-0.2.20.tgz",
-      "sha256": "26d3cb40936df0085b2d18a41830b4b13079105c6b51090edb3a4a97db9f5981"
+      "version": "0.2.22",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-delegate-0.2.22.tgz",
+      "sha256": "bcc4099820437478b5c342922495146c2de010bc712c3094c7b9452a4a7438f7"
     },
     {
       "slug": "goal",
       "name": "@rcarmo/piclaw-addon-goal",
-      "version": "0.1.49",
-      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-goal-0.1.49.tgz",
-      "sha256": "30aa156f5c68ec24db71c470af04dbf58885bfbfb7dc7127ceb871adbcea2870"
+      "version": "0.1.50",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-goal-0.1.50.tgz",
+      "sha256": "9b4cf770c2fbd9d794657d580b56236355fe17fae5f3c80f5220a2eca666e867"
     },
     {
       "slug": "observability",
       "name": "@rcarmo/piclaw-addon-observability",
-      "version": "0.1.18",
-      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-observability-0.1.18.tgz",
-      "sha256": "acc1987630a51136ae5b52398ee189bbf2c67605d9a7ce02b0b82da728331cd2"
+      "version": "0.1.22",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-observability-0.1.22.tgz",
+      "sha256": "128e7a4871c6e316ce295277f3d6e2e619d8448ac5fc75893e9199e0b25c0181"
     },
     {
       "slug": "plan-sidebar",
       "name": "@rcarmo/piclaw-addon-plan-sidebar",
-      "version": "0.1.25",
-      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-plan-sidebar-0.1.25.tgz",
-      "sha256": "5f9f7b931bf9397ee47282da2fee99caafda0d62d4e1a28a124a1c2e3c30c35c"
+      "version": "0.1.27",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-plan-sidebar-0.1.27.tgz",
+      "sha256": "4fbed26b2b20d75ecae796c613520a379c52a55d2e6476a31ba81f733d1e5570"
     },
     {
       "slug": "restic",
@@ -48,9 +48,9 @@
     {
       "slug": "session-dashboard",
       "name": "@rcarmo/piclaw-addon-session-dashboard",
-      "version": "0.2.4",
-      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-session-dashboard-0.2.4.tgz",
-      "sha256": "fdaa1afd1bc42f1f2437959cb26badc673322129c885c289562ddc6771bafa36"
+      "version": "0.2.6",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-session-dashboard-0.2.6.tgz",
+      "sha256": "ffc1ebce17a5657138bf3f3d620b076a92d464da132972ee5c068c56e0d7ac21"
     }
   ]
 }

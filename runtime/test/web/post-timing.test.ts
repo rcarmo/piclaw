@@ -62,7 +62,7 @@ test('buildPostTimeTooltip includes persisted agent timing and token stats when 
   expect(tooltip).toContain('Sent');
   expect(tooltip).toContain('Agent reply took 38s');
   expect(tooltip).toContain('Tokens: 1,309 total · Input: 1,000 · Output: 234\nCache read: 50 · Cache write: 25');
-  expect(tooltip).toContain('Provider-reported cost: $0.0012');
+  expect(tooltip).toContain('Provider-reported cost: 0.0012 (currency unknown)');
   expect(tooltip).toContain('Started');
   expect(tooltip.split('\n')).toHaveLength(5);
   expect(tooltip).not.toMatch(/…|\.\.\./);
@@ -76,4 +76,8 @@ test('buildPostTimeTooltip labels catalogue estimates without inventing missing 
   expect(buildPostTimeTooltip({ timestamp: '2026-06-21T11:16:02.000Z' }, {
     usage: { input_tokens: 10, total_tokens: 10 },
   })).not.toContain('cost');
+});
+
+for(const [currency,label] of [['USD','$0.0000'],['EUR','EUR 0.0000'],[null,'0.0000 (currency unknown)']]as const)test(`post amount preserves ${currency??'unknown'} currency`,()=>{
+ const title=buildPostTimeTooltip({timestamp:'2026-11-10T00:00:00Z'},{usage:{provider_cost_total:0,provider_cost_currency:currency,cost_total:0,cost_provenance:'provider_reported'}});expect(title).toContain(label);if(currency!=='USD')expect(title).not.toContain('$');
 });
