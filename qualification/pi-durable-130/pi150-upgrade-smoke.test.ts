@@ -57,3 +57,22 @@ test('Pi1.5.0 SQLite history and live documents survive1.5.1 writes without repl
  expect((await previous.snapshot(priorSDK.LiveDoc,id,priorContext.BACKGROUND_CONTEXT)).compactionFailure.error).toBe('Written under1.5.1');expect(credentialReads).toBe(0);
  }finally{await current?.close(context);await previous.close(priorContext.BACKGROUND_CONTEXT);}
 },15000);
+
+test('Pi1.5.1 SQLite history and live documents survive1.5.2 writes without replay',async()=>{
+ const anchor='file:///workspace/piclaw-worktrees/local-pi-151-upgrade/runtime/durable-engine/package.json';
+ const priorSDK=await import(import.meta.resolve('@earendil-works/pi-durable',anchor)),priorAI=await import(import.meta.resolve('@earendil-works/pi-ai',anchor)),priorSQL=await import(import.meta.resolve('@earendil-works/pi-durable/storage/sqlite',anchor)),priorContext=await import(import.meta.resolve('@earendil-works/chord/context',anchor));
+ let credentialReads=0;const denied=async():Promise<never>=>{credentialReads++;throw Error('Patch compatibility must not access credentials');},path=join(process.env.PICLAW_WORKSPACE!,'pi150-to-pi151.sqlite');
+ const options={models:priorAI.createModels({authContext:{env:denied,fileExists:denied}}),registry:priorSDK.createRegistry()};
+ let previous=await priorSDK.Harness.open(await priorSQL.SqliteStorage.open(new BunSqliteDatabase(path)),options,priorContext.BACKGROUND_CONTEXT),current:Harness|undefined;
+ try{
+ const root=await previous.root(priorContext.BACKGROUND_CONTEXT),id=root.id;
+ await root.commit(async(tx:any)=>{await tx.appendEntry(id,{kind:'pi.user',model:[{role:'user',content:'Preserve1.5.1 state through patch upgrade',timestamp:1}]});const live=await tx.doc(priorSDK.LiveDoc,id);live.compactionFailure={taskId:999,trigger:'manual',error:'Existing1.5.1 receipt'};},priorContext.BACKGROUND_CONTEXT);
+ const before=(await root.context(priorContext.BACKGROUND_CONTEXT)).messages;await previous.close(priorContext.BACKGROUND_CONTEXT);
+ current=await Harness.open(await SqliteStorage.open(new BunSqliteDatabase(path)),{models:createModels({authContext:{env:denied,fileExists:denied}}),registry:createRegistry()},context);
+ expect((await current.inspect(context)).scheduling).toBe('paused');const loaded=(await current.conversation(id,context))!;expect((await loaded.context(context)).messages).toEqual(before);
+ await loaded.commit(async tx=>{const live=await tx.doc(LiveDoc,id);live.compactionFailure!.error='Written under1.5.2';},context);await current.close(context);current=undefined;
+ previous=await priorSDK.Harness.open(await priorSQL.SqliteStorage.open(new BunSqliteDatabase(path)),options,priorContext.BACKGROUND_CONTEXT);
+ expect((await (await previous.conversation(id,priorContext.BACKGROUND_CONTEXT))!.context(priorContext.BACKGROUND_CONTEXT)).messages).toEqual(before);
+ expect((await previous.snapshot(priorSDK.LiveDoc,id,priorContext.BACKGROUND_CONTEXT)).compactionFailure.error).toBe('Written under1.5.2');expect(credentialReads).toBe(0);
+ }finally{await current?.close(context);await previous.close(priorContext.BACKGROUND_CONTEXT);}
+},15000);
