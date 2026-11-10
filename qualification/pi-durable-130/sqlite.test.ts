@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { Database } from "bun:sqlite";
 import { join } from "node:path";
 import { SqliteStorage, applySqliteMigrations, SQLITE_MIGRATIONS, type SqliteExecutor } from "../../runtime/durable-engine/qualification/sqlite.ts";
+import {commitWrites} from "../../runtime/durable-engine/qualification/testing.ts";
 import { registerStorageConformance } from "../../runtime/durable-engine/qualification/testing.ts";
 import { AssistantEntry, Harness, defineTask, defineExtension, type TaskId } from "../../runtime/durable-engine/qualification/durable.ts";
 import { readSchemaInventory } from "../../runtime/scripts/lib/schema-ownership.js";
@@ -242,6 +243,8 @@ describe("host persistence transaction scope", () => {
     const db = new BunSqliteDatabase(path, { root, assertOwner() {}, fenceTransactions: true });
     const storage = await SqliteStorage.open(db);
     const before = root.query("SELECT next_seq FROM durable_metadata").get() as { next_seq: number };
+    const commitDocument=async()=>{const id=await storage.mintId<import('../../runtime/durable-engine/qualification/durable.ts').DocumentId>();
+      return commitWrites(storage,[{type:'document.create',record:{id,kind:`qualification.source-scope.${id}`,scope:{kind:'session'}},content:{kind:'base',version:1,value:{fixture:true}}}],context);};
     let observed: unknown = "pending", calls = 0, attempt = Promise.resolve<unknown>(undefined);
     try {
       const seq = await db.withHostSourceGuard(() => {}, async tx => {
@@ -254,14 +257,14 @@ describe("host persistence transaction scope", () => {
         expect(observed).toBeInstanceOf(Error);
         expect((observed as Error).message).toContain("transaction handle");
         await tx.run("INSERT INTO sample VALUES (1)");
-      }, () => storage.commit([], context));
+      }, () => commitDocument());
       await attempt;
       expect(typeof seq).toBe("number");
       expect(Number(seq)).toBe(before.next_seq);
       expect(root.query("SELECT next_seq FROM durable_metadata").get()).toEqual({ next_seq: before.next_seq + 1 });
       expect(await db.all("SELECT n FROM sample")).toEqual([{ n: 1 }]);
       expect(calls).toBe(1);
-      await storage.commit([], context);
+      await commitDocument();
       expect(root.query("SELECT next_seq FROM durable_metadata").get()).toEqual({ next_seq: before.next_seq + 2 });
     } finally { await attempt; await storage.close(context); root.close(); }
   }));
@@ -435,9 +438,9 @@ describe("public Harness on actual disk SQLite", () => {
       const entry = await fresh.storage.entry(answerId!, context);
       expect(entry?.entry.kind).toBe(AssistantEntry.kind);
       const watch = await fresh.root.watch(context); watch.start(async () => {});
-      const graph = await fresh.harness.taskGraph(context);
+      const graph = await fresh.harness.watchTaskGraph(context);
       await fresh.harness.inspect(context); await Bun.sleep(5);
-      graph.dispose(); await watch.stop();
+      await graph.stop(); await watch.stop();
       expect(fresh.host.modelCalls).toBe(0); expect(fresh.host.effects).toBe(0);
       expect(fresh.host.admissions).toEqual([]);
       // submit wakes scheduling: only AFTER checking current host authority.

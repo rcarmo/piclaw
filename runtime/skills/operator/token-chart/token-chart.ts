@@ -116,7 +116,6 @@ const outputs = new Map<string, number>();
 const reasonings = new Map<string, number>();
 const cacheReads = new Map<string, number>();
 const cacheWrites = new Map<string, number>();
-const costs = new Map<string, number>();
 
 const pad = (n: number) => n.toString().padStart(2, "0");
 const formatKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -143,7 +142,8 @@ const formatDayLocalLabel = (day: string) => {
   return `${dayNames[d.getDay()]} ${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-const formatUsdCompact = (value: number): string => {
+const formatUsdCompact = (value: number | null): string => {
+  if (value === null) return "unknown";
   if (!Number.isFinite(value) || value <= 0) return "$0";
   if (value >= 1_000) {
     const scaled = value / 1_000;
@@ -216,7 +216,7 @@ function runProviderModelCostMode() {
   });
 
   const summaryLines = [
-    `Estimated cost chart (provider + model): last ${targetDays} days • ${formatUsdCompact(result.totalEstimatedCost)} across ${result.seriesCount} active series • pricing ref ${result.pricingReferenceTag}`,
+    `Estimated cost chart (provider + model): last ${targetDays} days • ${formatUsdCompact(result.totalEstimatedCost)}${result.unpricedGroups ? ` (known subtotal ${formatUsdCompact(result.knownSubtotal)}; ${result.unpricedGroups} unpriced series-days)` : ""} across ${result.seriesCount} priced series • pricing ref ${result.pricingReferenceTag}`,
     ...result.dayTotals.map((point) => `• ${formatDayLocalLabel(point.day)}: ${formatUsdCompact(point.total)}`),
   ];
 
@@ -245,7 +245,6 @@ for (let i = 0; i < targetDays; i += 1) {
   reasonings.set(key, 0);
   cacheReads.set(key, 0);
   cacheWrites.set(key, 0);
-  costs.set(key, 0);
 }
 
 const inRange = (d: Date) => d >= start && d <= now;
@@ -257,8 +256,7 @@ function addTokens(
   reasoning: number,
   cacheRead: number,
   cacheWrite: number,
-  totalTokens: number,
-  costTotal: number
+  totalTokens: number
 ) {
   if (!ts || Number.isNaN(ts.getTime()) || !inRange(ts)) return;
   const key = formatKey(ts);
@@ -270,7 +268,6 @@ function addTokens(
   reasonings.set(key, (reasonings.get(key) || 0) + reasoning);
   cacheReads.set(key, (cacheReads.get(key) || 0) + cacheRead);
   cacheWrites.set(key, (cacheWrites.get(key) || 0) + cacheWrite);
-  costs.set(key, (costs.get(key) || 0) + costTotal);
 
 }
 
@@ -303,15 +300,8 @@ function addUsage(record: any) {
     (typeof usage.total === "number" && usage.total) ||
     input + output + cacheRead + cacheWrite;
 
-  const costObj = usage.cost || {};
-  const costTotal =
-    (typeof costObj.total === "number" && costObj.total) ||
-    (typeof costObj.input === "number" ? costObj.input : 0) +
-      (typeof costObj.output === "number" ? costObj.output : 0) +
-      (typeof costObj.cacheRead === "number" ? costObj.cacheRead : 0) +
-      (typeof costObj.cacheWrite === "number" ? costObj.cacheWrite : 0);
+  addTokens(ts, input, output, reasoning, cacheRead, cacheWrite, totalTokens);
 
-  addTokens(ts, input, output, reasoning, cacheRead, cacheWrite, totalTokens, costTotal);
 }
 
 function scanFile(filePath: string) {
@@ -364,8 +354,7 @@ function loadFromDb(): boolean {
     const hasReasoningColumn = tokenUsageColumns.some((column) => column.name === "reasoning_tokens");
     const rows = db
       .query(
-        `SELECT run_at, input_tokens, output_tokens, ${hasReasoningColumn ? "reasoning_tokens" : "0 AS reasoning_tokens"}, cache_read_tokens, cache_write_tokens, total_tokens,
-                cost_input, cost_output, cost_cache_read, cost_cache_write, cost_total
+        `SELECT run_at, input_tokens, output_tokens, ${hasReasoningColumn ? "reasoning_tokens" : "0 AS reasoning_tokens"}, cache_read_tokens, cache_write_tokens, total_tokens
          FROM token_usage
          WHERE run_at >= ? AND run_at <= ?`
       )
@@ -381,14 +370,8 @@ function loadFromDb(): boolean {
       const cacheRead = typeof row.cache_read_tokens === "number" ? row.cache_read_tokens : 0;
       const cacheWrite = typeof row.cache_write_tokens === "number" ? row.cache_write_tokens : 0;
       const totalTokens = typeof row.total_tokens === "number" ? row.total_tokens : input + output + cacheRead + cacheWrite;
-      const costTotal =
-        (typeof row.cost_total === "number" && row.cost_total) ||
-        (typeof row.cost_input === "number" ? row.cost_input : 0) +
-          (typeof row.cost_output === "number" ? row.cost_output : 0) +
-          (typeof row.cost_cache_read === "number" ? row.cost_cache_read : 0) +
-          (typeof row.cost_cache_write === "number" ? row.cost_cache_write : 0);
+      addTokens(ts, input, output, reasoning, cacheRead, cacheWrite, totalTokens);
 
-      addTokens(ts, input, output, reasoning, cacheRead, cacheWrite, totalTokens, costTotal);
     }
     return true;
   } catch (err) {
@@ -418,11 +401,9 @@ const sumOutput = dayKeys.reduce((acc, key) => acc + (outputs.get(key) || 0), 0)
 const sumReasoning = dayKeys.reduce((acc, key) => acc + (reasonings.get(key) || 0), 0);
 const sumCacheRead = dayKeys.reduce((acc, key) => acc + (cacheReads.get(key) || 0), 0);
 const sumCacheWrite = dayKeys.reduce((acc, key) => acc + (cacheWrites.get(key) || 0), 0);
-const sumCost = dayKeys.reduce((acc, key) => acc + (costs.get(key) || 0), 0);
 const cachedTotal = sumCacheRead + sumCacheWrite;
 const cachedPct = sumValue > 0 ? Math.round((cachedTotal / sumValue) * 1000) / 10 : 0;
 const uncachedTotal = uncachedValues.reduce((acc, value) => acc + value, 0);
-void sumCost;
 
 const niceNumber = (value: number, round: boolean): number => {
   if (value === 0) return 0;

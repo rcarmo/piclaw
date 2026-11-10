@@ -1,7 +1,7 @@
 import { admitSqliteWrite, type SyncSqliteOperation } from "../../src/db/sqlite-async-admission.js";
 import type Database from "bun:sqlite";
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { JsonValue } from "@earendil-works/chord";
+import type { JsonValue } from "@earendil-works/chord/json";
 import type { ExtensionContext, ToolDefinition } from "../../src/durable-legacy-sdk.js";
 import { createHostTool } from "./host-tools.js";
 import { createHostOperationAuthority } from "./host-operation-authority.js";

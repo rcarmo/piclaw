@@ -27,7 +27,7 @@ const approvedPlanFiles = Object.freeze({
 });
 const approvedDelegateFiles = Object.freeze({
   "index.ts": "73563d26795cbab5cd92e8d5f8dabe3d7477fa11dff35e0ed8b21d9ec3f5ab51",
-  "delegate.ts": "b0e3fd1d2edcd95cecedff84ac3204fba8bfdadaa70854e6009713e44ba8a402",
+  "delegate.ts": "6117acbdc9ad6e0e2a246c15e26eacf18b704fa1dab5936c10a48b9883be6e12",
   "compat/extension-kv.ts": "3e86c21a9bf94d43151311fe29a3de1778d7a0a2ae32b81bb634e9fd1b2de4ab"
 });
 // Candidate source profile; qualification tests exercise every backend import.
@@ -72,8 +72,8 @@ const approvedGoalFiles = Object.freeze({
   "compat/extension-kv.ts": "04240517e9e8664cae2d2badb99f382100a7af3e12679cfce97087870881551c"
 });
 const approvedObservabilityFiles = Object.freeze({
-  "usage-telemetry.ts": "9a9b9bffe72d31e2c80ba416cc6d31c5a70c6d75a9d75fb90420b4c28310e99b",
-  "package.json": "002e06e6ad6a49f847cd33400711aeecdd1f627fc9387e89c85e0dce7add3073",
+  "usage-telemetry.ts": "0a24374a9a6af4ff4dd7ef9fec97ec3f49639c34503b6f148e01ad8f00ceb4c2",
+  "package.json": "0fc81eb44c95becae9999ed54dbdc21ff293e1ecb289ee0387ab74da995bf6c4",
   "model-speed-telemetry.ts": "a6b46ba29c71f459880c560575851312779f84163427ace6d7b1abd9e53a4b81",
   "compat/extension-kv.ts": "04240517e9e8664cae2d2badb99f382100a7af3e12679cfce97087870881551c",
   "compat/log-sink.ts": "b7f04b776dc33ec8a2bbe4d803b2d7c2783b8d16b5fa4a1b54c85fb30d1ee19e",
@@ -100,7 +100,7 @@ const approvedResticFiles = Object.freeze({
   "contracts.ts": "d73eea35af0c00b1dc36a98c352389804147447b5228c18cee807110fbddb27c"
 });
 const profiles = {
-  observability: { label: "Observability", name: "@rcarmo/piclaw-addon-observability", version: "0.1.20", files: approvedObservabilityFiles,
+  observability: { label: "Observability", name: "@rcarmo/piclaw-addon-observability", version: "0.1.22", files: approvedObservabilityFiles,
     shadows: [...Object.keys(approvedObservabilityFiles).filter(file => file.endsWith(".ts")).flatMap(file => [file.replace(/\.ts$/, ".js"), file.replace(/\.ts$/, ".json"), file.replace(/\.ts$/, "/index.js"), file.replace(/\.ts$/, "/package.json")]), "compat/package.json"],
     events: ["resources_discover", "session_start", "before_agent_start"] },
   restic: { label: "Restic", name: "@rcarmo/piclaw-addon-restic", version: "0.1.5", files: approvedResticFiles,
@@ -114,7 +114,7 @@ const profiles = {
   plan: { label: "Plan", name: "@rcarmo/piclaw-addon-plan-sidebar", version: "0.1.27", files: approvedPlanFiles, shadows: ["compat/chat-context.js", "compat/extension-kv.js", "compat/package.json"], events: ["before_agent_start"] },
   code_review: { label: "Code Review", name: "@rcarmo/piclaw-addon-code-review", version: "0.1.11", files: approvedCodeReviewFiles,
     shadows: [...Object.keys(approvedCodeReviewFiles).flatMap(file => [file.replace(/\.ts$/, ".js"), file.replace(/\.ts$/, ".json"), file.replace(/\.ts$/, "/index.js"), file.replace(/\.ts$/, "/package.json")])], events: ["resources_discover"] },
-  delegate: { label: "Delegate", name: "@rcarmo/piclaw-addon-delegate", version: "0.2.21", files: approvedDelegateFiles, shadows: ["delegate.js", "delegate.json", "delegate/index.js", "delegate/package.json", "compat/extension-kv.js", "compat/package.json"], events: ["session_start", "model_select", "before_agent_start"] },
+  delegate: { label: "Delegate", name: "@rcarmo/piclaw-addon-delegate", version: "0.2.22", files: approvedDelegateFiles, shadows: ["delegate.js", "delegate.json", "delegate/index.js", "delegate/package.json", "compat/extension-kv.js", "compat/package.json"], events: ["session_start", "model_select", "before_agent_start"] },
 } as const;
 type Profile = keyof typeof profiles;
 export const applicationAddonSourceProfiles = { ...profiles, ...installedAddonProfiles };

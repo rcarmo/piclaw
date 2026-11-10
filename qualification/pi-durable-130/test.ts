@@ -21,11 +21,11 @@ async function using(run: (fixture: Awaited<ReturnType<typeof openFixture>>) => 
 }
 
 describe("Q1 public candidate MemoryStorage only", () => {
-  test("independent public package graph is exactly 1.4.0", async () => {
+  test("independent public package graph is exactly 1.5.2", async () => {
     for (const name of ["chord", "pi-ai", "pi-codemode", "pi-durable"]) {
       // Package metadata is a filesystem read, not an unexported package subpath import.
       const pkg = await Bun.file(new URL(`../../runtime/durable-engine/node_modules/@earendil-works/${name}/package.json`, import.meta.url)).json();
-      expect(pkg.version).toBe("1.4.0");
+      expect(pkg.version).toBe("1.5.2");
       expect(import.meta.resolve(`../../runtime/durable-engine/node_modules/@earendil-works/${name}`)).toStartWith(new URL("../../runtime/durable-engine/node_modules/", import.meta.url).href);
     }
   });
@@ -37,7 +37,7 @@ describe("Q1 public candidate MemoryStorage only", () => {
     const durable = anchored(engine.resolve("@earendil-works/pi-durable"));
     const ai = anchored(engine.resolve("@earendil-works/pi-ai"));
     const codemode = anchored(engine.resolve("@earendil-works/pi-codemode"));
-    const { estimateContextTokens, ...publicAI } = AI;
+    const { estimateContextTokens, Type: _fixtureSchemaBuilder, ...publicAI } = AI;
     const bridges = {
       "@earendil-works/pi-ai": publicAI,
       "@earendil-works/pi-ai/utils/estimate": { estimateContextTokens }, "@earendil-works/pi-durable": Durable,
@@ -81,12 +81,12 @@ describe("Q1 public candidate MemoryStorage only", () => {
     await f.root.context(context);
     const watch = await f.root.watch(context);
     watch.start(async () => {});
-    const graph = await f.harness.taskGraph(context);
+    const graph = await f.harness.watchTaskGraph(context);
     await Bun.sleep(10);
     expect(f.host.modelCalls).toBe(0);
     expect(f.host.effects).toBe(0);
     expect(f.host.admissions).toHaveLength(0);
-    graph.dispose(); await watch.stop();
+    await graph.stop(); await watch.stop();
   }));
   test("explicit conversation abort cancels placed work before model dispatch", () => using(async f => {
     f.host.modelHold = barrier();

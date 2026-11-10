@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { ToolDefinition } from "../../src/durable-legacy-sdk.js";
-import type { JsonValue } from "@earendil-works/chord";
+import type { JsonValue } from "@earendil-works/chord/json";
 import { createHostTool } from "./host-tools.js";
 import { createHostOperationAuthority } from "./host-operation-authority.js";
 import type { HostConversationRuntime } from "./host-runtime.js";

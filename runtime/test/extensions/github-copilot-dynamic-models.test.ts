@@ -349,9 +349,14 @@ describe("github-copilot dynamic models overlay", () => {
     credentials.set("github-copilot", oauth("tid=x;proxy-ep=proxy.business.githubcopilot.com;exp=1", { expires: Date.now() + 60 * 60_000 }));
     const runtime = await ModelRuntime.create({ credentials: credentialStore, modelsPath: null, modelsStore: new InMemoryModelsStore(), allowModelNetwork: false });
     const before = runtime.getProvider("github-copilot")!;
+    const nonChat = before.getAllModels!().filter(model => model.type && model.type !== 'chat');
+    expect(nonChat.length).toBeGreaterThan(0);
     registerGitHubCopilotDynamicModels(runtime);
-    setGitHubCopilotDynamicModelsFetchForTests((async () => new Response(JSON.stringify({ data: [makeLiveModel("gpt-5.6")] }), { status: 200 })) as any);
+    await runtime.refresh({allowNetwork:false}); await Bun.sleep(0); // Join SDK registration's metadata refresh.
+    let fetched=0;
+    setGitHubCopilotDynamicModelsFetchForTests((async () => {fetched++;return new Response(JSON.stringify({ data: [makeLiveModel("gpt-5.6")] }), { status: 200 });}) as any);
     const result = await runtime.refresh({ allowNetwork: true });
+    expect(result.aborted).toBe(false);expect(fetched).toBe(1);
     const after = runtime.getProvider("github-copilot")!;
     expect(result.errors.size).toBe(0);
     expect(after.auth.oauth?.name).toBe(before.auth.oauth?.name);
@@ -359,6 +364,7 @@ describe("github-copilot dynamic models overlay", () => {
     expect(typeof after.auth.oauth?.refresh).toBe("function");
     expect(typeof after.auth.oauth?.toAuth).toBe("function");
     expect(typeof after.streamSimple).toBe("function");
+    expect(after.getAllModels!().filter(model => model.type && model.type !== 'chat')).toEqual(nonChat);
     const imported = runtime.getModel("github-copilot", "gpt-5.6");
     expect(imported).toBeDefined();
     expect(imported?.baseUrl).toBe("https://api.individual.githubcopilot.com");

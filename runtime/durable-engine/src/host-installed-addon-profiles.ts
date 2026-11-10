@@ -387,14 +387,14 @@ export const installedAddonProfiles = {
   "late-night-regrets": {
     "label": "late-night-regrets",
     "name": "@rcarmo/piclaw-addon-late-night-regrets",
-    "version": "0.3.0",
+    "version": "0.3.1",
     "entry": "index.ts",
     "files": {
       "config.ts": "a9919b850fd052a6a46d1f3c971510423bfad37332c71fc80ddd5336920f4fe6",
       "decision.ts": "83fb25712e15b4d917919270ed0940115c9c8dd6537ab4c64f5d82292b803edc",
       "index.ts": "dd3164fef09c04243a378c5c87e9d16357c299884512dfe43fc7ef2f97451c66",
       "native.ts": "a543b5bde95b75f71527129d4617a4cc0f3b2a5b7563c7aaa9b50df36bf82c15",
-      "package.json": "b6006dd9a8d4ec24fb3f8e65222af4c4c8322dd34c8e36d0942688bc97f94222",
+      "package.json": "8ecfe371413a49e37ffef847fe484195f55497cc2c1be33563095cdf4cbba887",
       "ranker.ts": "3d1cdcfa6b3d09e89b95086c707427bed4630716fb884b99dc76c6ed9a2235d4",
       "reflection-prompt.ts": "ec4913d6c91baeb144178d3469d2a6065b3546bfa2bba513bfd9e667ff769711",
       "review.ts": "8f65dbac7cbe61de1b5c5794fb40b3056020b93a5da0f8e797bfe0c45e485d17",

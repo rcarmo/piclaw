@@ -234,19 +234,19 @@
 
     "@protobufjs/utf8": ["@protobufjs/utf8@1.1.2", "", {}, "sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug=="],
 
-    "@rcarmo/piclaw-addon-code-review": ["@rcarmo/piclaw-addon-code-review@code-review.tgz", { "dependencies": { "@lezer/common": "1.5.1", "@lezer/highlight": "1.2.3", "@lezer/javascript": "1.5.4", "@lezer/json": "1.0.3", "@lezer/markdown": "1.6.3", "@lezer/python": "1.1.18", "diff": "9.0.0", "marked": "18.1.0" } }, "sha512-i0WEWm4AQUi41HiTSQnvEEhjQlkb9oLR44CTlTXKJLdROlqncJtVjK2WQDNe2hzbgfpsm4cqRCsDjXLqafwgVA=="],
+    "@rcarmo/piclaw-addon-code-review": ["@rcarmo/piclaw-addon-code-review@code-review.tgz", { "dependencies": { "@lezer/common": "1.5.1", "@lezer/highlight": "1.2.3", "@lezer/javascript": "1.5.4", "@lezer/json": "1.0.3", "@lezer/markdown": "1.6.3", "@lezer/python": "1.1.18", "diff": "9.0.0", "marked": "18.1.0" } }, "sha512-B/ivCFMCgyaxGIvI0DRy4DjeFojnoxUZGA4ViYOpYFaSkY8x7x9l8rhJzx9n0qsp/626COkiUR5xzYjyg0vdiA=="],
 
-    "@rcarmo/piclaw-addon-delegate": ["@rcarmo/piclaw-addon-delegate@delegate.tgz", {}, "sha512-aA9uTo+5S9gSB2ysRpfLMFPGPzLB5XdZ5lSWN5g/ra9pzmTo/mLpFzbvI2UoyDzxS+QfNBUA0aDyTuLIz3V9OA=="],
+    "@rcarmo/piclaw-addon-delegate": ["@rcarmo/piclaw-addon-delegate@delegate.tgz", {}, "sha512-a7eAc5sT4JqOsssSUaekCFzy2akHPbIhTfVleYQUCsY3+XSLIAMC5+c14XXaavIEhWe6wDL+/V1VVq5YaXo+nA=="],
 
-    "@rcarmo/piclaw-addon-goal": ["@rcarmo/piclaw-addon-goal@goal.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-VGy7hYbAA1krRNHz+tFQ0xvHckTMz7Af6FiDwSEwGT8Jhqoo64NOY3fv+bbhP+gic5KwQ/00nobH6poYsDwqcQ=="],
+    "@rcarmo/piclaw-addon-goal": ["@rcarmo/piclaw-addon-goal@goal.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-zhV/AZNtfDzSJvmrLw9GqRyOLzr+TCTh280qeEstzQ6KHFkb/MAVNXHo/hBuV5siV4WOySOjsgPqYOJMvKppJg=="],
 
-    "@rcarmo/piclaw-addon-observability": ["@rcarmo/piclaw-addon-observability@observability.tgz", { "dependencies": { "@azure/monitor-opentelemetry": "^1.19", "@opentelemetry/api": "^1.9", "@opentelemetry/resources": "^2.10.0" }, "peerDependencies": { "@earendil-works/pi-coding-agent": "*" } }, "sha512-uu9DcatuE9O4hR3+WCoGDa1dj8lNuUomDCh7BELvGQgjCINJAmQJM2AUjaFS2BWVGLJvDBEgE27aZNXSalzIAQ=="],
+    "@rcarmo/piclaw-addon-observability": ["@rcarmo/piclaw-addon-observability@observability.tgz", { "dependencies": { "@azure/monitor-opentelemetry": "^1.19", "@opentelemetry/api": "^1.9", "@opentelemetry/resources": "^2.10.0" }, "peerDependencies": { "@earendil-works/pi-coding-agent": "*" } }, "sha512-8EiAIDPIMJgYsMcKy04/i3n1c6o/WGQG2AsxiihM5vtiD+iCVhaf2wpPSOl/rBpGZ6LKCwQw4vhMnpRk8S9jTw=="],
 
-    "@rcarmo/piclaw-addon-plan-sidebar": ["@rcarmo/piclaw-addon-plan-sidebar@plan-sidebar.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-C3oqrimOV7PhPwXDwu0yzFRKW44KbdE456bs7kEKsZLZwvnwsbLo+Hpv20Em6da2sDgtkJDdx1t7726SMJC4LA=="],
+    "@rcarmo/piclaw-addon-plan-sidebar": ["@rcarmo/piclaw-addon-plan-sidebar@plan-sidebar.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-VMSacc+bTEDIstPI0wwgTyudHuuEU/x3oPvpYWBIUgv6dSgm54KTvtFjdK0cuUf94S23tWLN6gG+LB9NX1SeCA=="],
 
     "@rcarmo/piclaw-addon-restic": ["@rcarmo/piclaw-addon-restic@restic.tgz", {}, "sha512-B/PeNwbjlbAM4MhGA4q3vIuuvgNO60oPaZJ3dSONR3XU4siOlyTYJw3ml+OfdWI6m7cXU7PbQv6Swta/EsP/Dg=="],
 
-    "@rcarmo/piclaw-addon-session-dashboard": ["@rcarmo/piclaw-addon-session-dashboard@session-dashboard.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*" } }, "sha512-orKfGCUxIOpbHZSjWLNYaUIJeG3G0UEi5NtDOdrKB5m+FPJw/LRU1L/p42e7b8mt3rz7dDLjz9MFPcNOcuDefQ=="],
+    "@rcarmo/piclaw-addon-session-dashboard": ["@rcarmo/piclaw-addon-session-dashboard@session-dashboard.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*" } }, "sha512-2TnL7KhdIchMUBk4ZCoAEAFJpY7RDHCFRAOI+nIZf1pogJI52QQPl2ttP2T6BnToJV5V+wjSzQsBnMvvqKlNtg=="],
 
     "@silvia-odwyer/photon-node": ["@silvia-odwyer/photon-node@0.3.4", "", {}, "sha512-bnly4BKB3KDTFxrUIcgCLbaeVVS8lrAkri1pEzskpmxu9MdfGQTy8b8EgcD83ywD3RPMsIulY8xJH5Awa+t9fA=="],
 

@@ -1,7 +1,7 @@
 import type Database from "bun:sqlite";
 import { admitSqliteWrite } from "../../src/db/sqlite-async-admission.js";
 import { randomUUID } from "node:crypto";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { defineTool, defineExtension, type ConversationId, type TaskId } from "@earendil-works/pi-durable";
 import { requestGracefulShutdown } from "../../src/runtime/shutdown-registry.js";
 import { getSessionIsolationLevel } from "../../src/core/config.js";

@@ -1,0 +1,424 @@
+{
+  "expected": {
+    "version": "1.5.2",
+    "gitHead": "b4afdddf44e059c67ccf5097e5317d913521b470"
+  },
+  "admitted": true,
+  "scope": "current manifest archive identity and export bytes plus installed full-tree measurement; not legacy import admission",
+  "tarballVerification": [
+    {
+      "name": "@earendil-works/chord",
+      "shasum": "b01a7ee817feabfe99da148780dfb22ea3e81f73",
+      "integrity": "sha512-3g088g7qVXL2cpRAKWjj9za6RLls9FBnuUo5c0hBZ0xCftBQjae0opS+34M22vdXTVE7BNqkRG/FPc9BsM7eEg==",
+      "tarball": "https://registry.npmjs.org/@earendil-works/chord/-/chord-1.5.2.tgz",
+      "installedTreeSha256": "73df7c122945f713939e68e3ac58aab3200c98fc5bc4e955a8234ad11fa8e962",
+      "archiveTreeSha256": "73df7c122945f713939e68e3ac58aab3200c98fc5bc4e955a8234ad11fa8e962",
+      "filesCompared": 1257
+    },
+    {
+      "name": "@earendil-works/pi-ai",
+      "shasum": "448dd234fdea6e09c3e2b39e2960c008a4b83728",
+      "integrity": "sha512-2tWPSnV3qzfiDIY3aWluBag3vC++Vs+VsXt/UquSU5onPMohPih72FUhIhaqmDdMYubOgB3Byl9uF4Vk40JLvQ==",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-1.5.2.tgz",
+      "installedTreeSha256": "26a8786cdbbc2ba403d38f6dbc9d0e2cae79c0b4a1bd4fedcbe586ec95632486",
+      "archiveTreeSha256": "26a8786cdbbc2ba403d38f6dbc9d0e2cae79c0b4a1bd4fedcbe586ec95632486",
+      "filesCompared": 886
+    },
+    {
+      "name": "@earendil-works/pi-agent-core",
+      "shasum": "c353fdcb19645ad22a32c830b92a1e9f3ff20951",
+      "integrity": "sha512-ie5mejS7mGfXt//9As7i3LfxVXdktZvF1JP4EQsUXTp4mU437h23MNGx7wXZ5VYs3YiG/Qnj3e7OZ2HC069OMw==",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-agent-core/-/pi-agent-core-1.5.2.tgz",
+      "installedTreeSha256": "2912f5129dd02273a3085cf62404d9f29292d6ce81f4e55741472aba69aa07a7",
+      "archiveTreeSha256": "2912f5129dd02273a3085cf62404d9f29292d6ce81f4e55741472aba69aa07a7",
+      "filesCompared": 26
+    },
+    {
+      "name": "@earendil-works/pi-codemode",
+      "shasum": "074bb3d2381d817ea68a5cec77ef94be1a6ff5fe",
+      "integrity": "sha512-HoZQ40a9RgdZ1VgmrX6x8887cNXedaRJT1l+Ie5YRIMK4gY7v0EpsiNqf6dmixrKylZlTgUSyR+vE8xhjfkr+w==",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-codemode/-/pi-codemode-1.5.2.tgz",
+      "installedTreeSha256": "f9e24e65d8f1fd0fced0ecd05953b6cc9ce825445360273a2c31363f0e3af27d",
+      "archiveTreeSha256": "f9e24e65d8f1fd0fced0ecd05953b6cc9ce825445360273a2c31363f0e3af27d",
+      "filesCompared": 66
+    },
+    {
+      "name": "@earendil-works/pi-coding-agent",
+      "shasum": "26300ab187a9b5a6db0efc8dd4d41a6c6bfcd610",
+      "integrity": "sha512-mUWI04rqF1Vd/m1q+Ps1XeWsTXEVvRUnsmRa83I3Dzua0Tx5bYS93imeqtIfrXf7PkkaR6ERz+AuQhIJlom5yA==",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-1.5.2.tgz",
+      "installedTreeSha256": "848e9168c218fc69ab66cc79615fb4c792388f5edc9a07d8d63f43800a9e7295",
+      "archiveTreeSha256": "848e9168c218fc69ab66cc79615fb4c792388f5edc9a07d8d63f43800a9e7295",
+      "filesCompared": 1324
+    },
+    {
+      "name": "@earendil-works/pi-mcp",
+      "shasum": "328afd5caff1c08e4de79d7c808944eda32622ec",
+      "integrity": "sha512-zU1UgeXDlbixPqGEWD7Ql0brEMIpYr7aEWjoEE5h5enJbM/kQ2jIr7lN8JoR80oUnq1fJSU7SC8kLx2Fx/IZYg==",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-mcp/-/pi-mcp-1.5.2.tgz",
+      "installedTreeSha256": "79c3c306728f6d491adc7710b22b13ac12a4f2850b565e2fed6bc4a2fa88cf58",
+      "archiveTreeSha256": "79c3c306728f6d491adc7710b22b13ac12a4f2850b565e2fed6bc4a2fa88cf58",
+      "filesCompared": 116
+    },
+    {
+      "name": "@earendil-works/pi-schema",
+      "shasum": "89b1aacfdb9023177026a3d7796d399fff840f31",
+      "integrity": "sha512-hJoyCXWUhsSrXY5wJo2Q4kHXUsR51pNhkJHAMkWRwVMLDRtMDPkKNaa+JlVRVqTw1hjdSxcVVaFLSDbKlaTXEQ==",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-schema/-/pi-schema-1.5.2.tgz",
+      "installedTreeSha256": "baee62e7f418d4b37c94599c17b15d995c0b2e896c767eeeeb22ae74f1231a6b",
+      "archiveTreeSha256": "baee62e7f418d4b37c94599c17b15d995c0b2e896c767eeeeb22ae74f1231a6b",
+      "filesCompared": 176
+    },
+    {
+      "name": "@earendil-works/pi-telemetry",
+      "shasum": "a35cfa0d39169dd3e1ea78e8974c3eec060100dc",
+      "integrity": "sha512-m+cumjIqNh1aMISi/9ttcG3ZOwIdriPbz/eMyWmRMJCGa/WcgY1RX4lrb7HvsHhSfI/JUeBESA4nOCr8C3y5ow==",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-telemetry/-/pi-telemetry-1.5.2.tgz",
+      "installedTreeSha256": "e5946b91343c730f2044f04e7991cf0954fcb62bcd091c4238f53bb29398023d",
+      "archiveTreeSha256": "e5946b91343c730f2044f04e7991cf0954fcb62bcd091c4238f53bb29398023d",
+      "filesCompared": 34
+    },
+    {
+      "name": "@earendil-works/pi-tui",
+      "shasum": "00a40058acf529763e5eaa4f504d30fa53d8423d",
+      "integrity": "sha512-WK8ih+c88GWizaB79y7Pq3PV7ySf5VI1pZ1i/6aBBjDOAiG2EE3ojKjl+pxQqLfyQGnzHYu4VfakOBJgumuoyw==",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-tui/-/pi-tui-1.5.2.tgz",
+      "installedTreeSha256": "13e4052a512e64ca8474e4fe56d9b6a2c08c9db2e1743bfbf9c3b5fcf0bab93c",
+      "archiveTreeSha256": "13e4052a512e64ca8474e4fe56d9b6a2c08c9db2e1743bfbf9c3b5fcf0bab93c",
+      "filesCompared": 204
+    }
+  ],
+  "registryReceipt": {
+    "packages": [
+      {
+        "name": "@earendil-works/chord",
+        "version": "1.5.2",
+        "shasum": "b01a7ee817feabfe99da148780dfb22ea3e81f73",
+        "integrity": "sha512-3g088g7qVXL2cpRAKWjj9za6RLls9FBnuUo5c0hBZ0xCftBQjae0opS+34M22vdXTVE7BNqkRG/FPc9BsM7eEg=="
+      },
+      {
+        "name": "@earendil-works/pi-ai",
+        "version": "1.5.2",
+        "shasum": "448dd234fdea6e09c3e2b39e2960c008a4b83728",
+        "integrity": "sha512-2tWPSnV3qzfiDIY3aWluBag3vC++Vs+VsXt/UquSU5onPMohPih72FUhIhaqmDdMYubOgB3Byl9uF4Vk40JLvQ=="
+      },
+      {
+        "name": "@earendil-works/pi-agent-core",
+        "version": "1.5.2",
+        "shasum": "c353fdcb19645ad22a32c830b92a1e9f3ff20951",
+        "integrity": "sha512-ie5mejS7mGfXt//9As7i3LfxVXdktZvF1JP4EQsUXTp4mU437h23MNGx7wXZ5VYs3YiG/Qnj3e7OZ2HC069OMw=="
+      },
+      {
+        "name": "@earendil-works/pi-codemode",
+        "version": "1.5.2",
+        "shasum": "074bb3d2381d817ea68a5cec77ef94be1a6ff5fe",
+        "integrity": "sha512-HoZQ40a9RgdZ1VgmrX6x8887cNXedaRJT1l+Ie5YRIMK4gY7v0EpsiNqf6dmixrKylZlTgUSyR+vE8xhjfkr+w=="
+      },
+      {
+        "name": "@earendil-works/pi-coding-agent",
+        "version": "1.5.2",
+        "shasum": "26300ab187a9b5a6db0efc8dd4d41a6c6bfcd610",
+        "integrity": "sha512-mUWI04rqF1Vd/m1q+Ps1XeWsTXEVvRUnsmRa83I3Dzua0Tx5bYS93imeqtIfrXf7PkkaR6ERz+AuQhIJlom5yA=="
+      },
+      {
+        "name": "@earendil-works/pi-mcp",
+        "version": "1.5.2",
+        "shasum": "328afd5caff1c08e4de79d7c808944eda32622ec",
+        "integrity": "sha512-zU1UgeXDlbixPqGEWD7Ql0brEMIpYr7aEWjoEE5h5enJbM/kQ2jIr7lN8JoR80oUnq1fJSU7SC8kLx2Fx/IZYg=="
+      },
+      {
+        "name": "@earendil-works/pi-schema",
+        "version": "1.5.2",
+        "shasum": "89b1aacfdb9023177026a3d7796d399fff840f31",
+        "integrity": "sha512-hJoyCXWUhsSrXY5wJo2Q4kHXUsR51pNhkJHAMkWRwVMLDRtMDPkKNaa+JlVRVqTw1hjdSxcVVaFLSDbKlaTXEQ=="
+      },
+      {
+        "name": "@earendil-works/pi-telemetry",
+        "version": "1.5.2",
+        "shasum": "a35cfa0d39169dd3e1ea78e8974c3eec060100dc",
+        "integrity": "sha512-m+cumjIqNh1aMISi/9ttcG3ZOwIdriPbz/eMyWmRMJCGa/WcgY1RX4lrb7HvsHhSfI/JUeBESA4nOCr8C3y5ow=="
+      },
+      {
+        "name": "@earendil-works/pi-tui",
+        "version": "1.5.2",
+        "shasum": "00a40058acf529763e5eaa4f504d30fa53d8423d",
+        "integrity": "sha512-WK8ih+c88GWizaB79y7Pq3PV7ySf5VI1pZ1i/6aBBjDOAiG2EE3ojKjl+pxQqLfyQGnzHYu4VfakOBJgumuoyw=="
+      }
+    ]
+  },
+  "providerAuthReceipt": {
+    "version": "1.5.2",
+    "gitHead": "b4afdddf44e059c67ccf5097e5317d913521b470",
+    "providers": [
+      {
+        "id": "amazon-bedrock",
+        "name": "Amazon Bedrock",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "ant-ling",
+        "name": "Ant Ling",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "anthropic",
+        "name": "Anthropic",
+        "apiKey": true,
+        "oauth": true
+      },
+      {
+        "id": "azure",
+        "name": "Azure",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "baseten",
+        "name": "Baseten",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "cerebras",
+        "name": "Cerebras",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "cloudflare-ai-gateway",
+        "name": "Cloudflare AI Gateway",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "cloudflare-workers-ai",
+        "name": "Cloudflare Workers AI",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "deepseek",
+        "name": "DeepSeek",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "fireworks",
+        "name": "Fireworks",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "github-copilot",
+        "name": "GitHub Copilot",
+        "apiKey": true,
+        "oauth": true
+      },
+      {
+        "id": "google",
+        "name": "Google",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "google-vertex",
+        "name": "Google Vertex AI",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "groq",
+        "name": "Groq",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "huggingface",
+        "name": "Hugging Face",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "kimi-coding",
+        "name": "Kimi For Coding",
+        "apiKey": true,
+        "oauth": true
+      },
+      {
+        "id": "meta",
+        "name": "Meta",
+        "apiKey": true,
+        "oauth": true
+      },
+      {
+        "id": "minimax",
+        "name": "MiniMax",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "minimax-cn",
+        "name": "MiniMax CN",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "mistral",
+        "name": "Mistral",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "moonshotai",
+        "name": "Moonshot AI",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "moonshotai-cn",
+        "name": "Moonshot AI CN",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "nvidia",
+        "name": "NVIDIA",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "openai",
+        "name": "OpenAI",
+        "apiKey": true,
+        "oauth": true
+      },
+      {
+        "id": "openai-codex",
+        "name": "OpenAI Codex",
+        "apiKey": false,
+        "oauth": true
+      },
+      {
+        "id": "opencode",
+        "name": "OpenCode Zen",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "opencode-go",
+        "name": "OpenCode Go",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "openrouter",
+        "name": "OpenRouter",
+        "apiKey": true,
+        "oauth": true
+      },
+      {
+        "id": "qwen-token-plan",
+        "name": "Qwen Token Plan",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "qwen-token-plan-cn",
+        "name": "Qwen Token Plan CN",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "qwen-token-plan-individual",
+        "name": "Qwen Token Plan Individual",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "qwen-token-plan-individual-cn",
+        "name": "Qwen Token Plan Individual CN",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "radius",
+        "name": "Radius",
+        "apiKey": true,
+        "oauth": true
+      },
+      {
+        "id": "together",
+        "name": "Together",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "typesafe",
+        "name": "TypeSafe",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "vercel-ai-gateway",
+        "name": "Vercel AI Gateway",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "xai",
+        "name": "xAI",
+        "apiKey": true,
+        "oauth": true
+      },
+      {
+        "id": "xiaomi",
+        "name": "Xiaomi",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "xiaomi-token-plan-ams",
+        "name": "Xiaomi Token Plan AMS",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "xiaomi-token-plan-cn",
+        "name": "Xiaomi Token Plan CN",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "xiaomi-token-plan-sgp",
+        "name": "Xiaomi Token Plan SGP",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "zai",
+        "name": "Z.AI",
+        "apiKey": true,
+        "oauth": false
+      },
+      {
+        "id": "zai-coding-cn",
+        "name": "Z.AI Coding CN",
+        "apiKey": true,
+        "oauth": false
+      }
+    ]
+  },
+  "runtimes": [
+    {
+      "sideEffectEnforcement": {
+        "mode": "Bun assessment guard",
+        "networkDenied": true,
+        "childProcessDenied": true,
+        "networkAttempts": 0,
+        "childProcessAttempts": 0
+      }
+    }
+  ]
+}

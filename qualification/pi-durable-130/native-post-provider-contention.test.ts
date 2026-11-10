@@ -31,10 +31,18 @@ for(const stop of [false,true])applicationTest(`actual native SDK post-provider 
       // Stop fences the failed acquisition before it can enter a write body.
       // The unpersisted response is not reconstructed from a financial receipt.
       while(!releasedAt)await new Promise(resolve=>setTimeout(resolve,10));
-      const original=f.root.query('SELECT record FROM submissions WHERE id=?').get(accepted.submission_id);
-      await f.reopen();expect(f.calls()).toBe(1);expect(f.root.query('SELECT record FROM submissions WHERE id=?').get(accepted.submission_id)).toEqual(original);
-      const position=f.backend.sessionOptions.getDurableSession!('web:default')!,scope=await position.readAbortScope!();expect(scope).not.toBeNull();
-      expect(await position.abort!(scope!)).toBe(true);expect(f.status(accepted.submission_id)).toBe('unanswered');expect(f.calls()).toBe(1);
+      const original=f.root.query('SELECT record FROM submissions WHERE id=?').get(accepted.submission_id) as {record:string};
+      await f.reopen();expect(f.calls()).toBe(1);
+      // Deferred SDK recovery may finish before or after open returns. Join its
+      // interrupted original attempt; never replay or invent an abort receipt.
+      await f.until(()=>f.status(accepted.submission_id)==='unanswered');
+      const terminal=f.root.query('SELECT record FROM submissions WHERE id=?').get(accepted.submission_id) as {record:string};
+      const previous=JSON.parse(original.record),interrupted=JSON.parse(terminal.record);
+      expect(interrupted).toMatchObject({id:accepted.submission_id,entry:previous.entry,conversationId:previous.conversationId,requestId:previous.requestId,status:'unanswered',reason:'interrupted'});
+      if(previous.status==='unanswered')expect(terminal).toEqual(original);else expect(previous.status).toBe('placed');
+      const position=f.backend.sessionOptions.getDurableSession!('web:default')!,scope=await position.readAbortScope!();
+      expect(await position.abort!(scope??undefined)).toBe(false);
+      expect(f.root.query('SELECT record FROM submissions WHERE id=?').get(accepted.submission_id)).toEqual(terminal);expect(f.calls()).toBe(1);
       expect(historicalExpenseRows(f.root,['budget_request_reservations'])[0]).toEqual([]);expect(historicalExpenseRows(f.root,['budget_usage_events'])[0]).toEqual([]);expect(f.root.query('SELECT * FROM service_effect_s02_commits').all()).toEqual([]);
       return;
     }

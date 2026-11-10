@@ -1,5 +1,5 @@
 import { defineTool,type ConversationId,type TaskId } from '@earendil-works/pi-durable';
-import type { JsonValue } from '@earendil-works/chord';
+import type { JsonValue } from "@earendil-works/chord/json";
 import { MessagesSchema,admitRegisteredMessagesTool } from '../../src/extensions/messages-crud.js';
 import { WorkspaceSearchSchema } from '../../src/extensions/workspace-search.js';
 import { searchWorkspace } from '../../src/workspace-search.js';

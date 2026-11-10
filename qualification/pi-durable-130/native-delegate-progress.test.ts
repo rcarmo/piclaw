@@ -51,7 +51,7 @@ test("actual native children publish independent tool/generation/completion deta
     const p=readNativeDelegateProgress(s.details??result?.details);return p?[{id:s.callId,status:s.status,...p}]:[];
   });
   try{
-    watch=await f.root.watch(context);latest=watch.value;watch.start(async view=>{latest=view;frames.push(details());});
+    watch=await f.root.watch(context);latest=watch.value;watch.start(async call=>{if(call.kind==='failed')throw call.error;latest=call.value;frames.push(details());});
     const submission=await f.root.submit({type:'input',content:'ROOT_PRIVATE',requestId:'progress-parent'},context);
     await Promise.all([toolEntered.promise,modelEntered.promise]);
     await until(()=>details().some((p:any)=>p.id==='A'&&p.phase==='tool')&&details().some((p:any)=>p.id==='B'&&p.phase==='generating'));

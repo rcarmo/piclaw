@@ -16,7 +16,7 @@ import {
 
 test("model catalogue formats compact input/output pricing", () => {
   expect(formatModelCataloguePricing({ inputPerMillion: 0.15, outputPerMillion: 3, cacheReadPerMillion: null, cacheWritePerMillion: null })).toBe("In $0.15 · Out $3 / 1M");
-  expect(formatModelCataloguePricing(null)).toBe("");
+  expect(formatModelCataloguePricing(null)).toBe("Price unknown");
 });
 
 test("normaliseModelCatalogue preserves provider/model identity and structured metadata", () => {

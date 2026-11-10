@@ -1,4 +1,9 @@
-# General expense-management retirement — #1881
+# General expense-management retirement — #1881 — archived delivery record
+
+This is the historical #1881 slice. Later deliveries remove the native/scheduled financial owners described as remaining below. The final source boundary, SDK execution ownership and retained reporting are tracked in [#1875 final delivery](expense-final-delivery-1875.md).
+
+## Archived design and qualification
+
 
 General expense management is removed from Core. Scheduled, native and add-on financial enforcement remains assigned to #1879, #1877 and #1880; schema retirement remains #1878. #1881 and #1875 remain open.
 

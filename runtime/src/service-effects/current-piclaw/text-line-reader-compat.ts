@@ -1,7 +1,7 @@
 import { open } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { FileError, Result, type ExecutionEnv, type Result as ResultValue } from "../contracts/execution-env.js";
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import { createLogger, debugSuppressedError } from '../../utils/logger.js';
 
 const log = createLogger('service-effects.text-line-reader');

@@ -225,7 +225,7 @@ The bound native SDK conversation owns its model/context. The web UI reads curre
 
 ## Scheduled tasks / IPC
 
-Native agent tasks use admitted S07 occurrences and private SDK contexts with exact source/lease/budget bindings. The scheduler reads the canonical versioned definition, dispatches that occurrence and commits result/history through its existing completion owner. It never switches/restores the public chat's model or navigates its session tree. Shell tasks and internal maintenance retain their separate host paths. See [versioned definitions](development/scheduled-task-definitions.md), [result history](development/scheduled-result-history.md) and [native caller decisions](development/native-prompt-retirement.md).
+Native agent tasks use admitted S07 occurrences and private SDK contexts with exact source/lease bindings. The scheduler reads the canonical versioned definition, dispatches that occurrence and commits result/history through its existing completion owner. It never switches/restores the public chat's model or navigates its session tree. Shell tasks and internal maintenance retain their separate host paths. See [versioned definitions](development/scheduled-task-definitions.md), [result history](development/scheduled-result-history.md) and [native caller decisions](development/native-prompt-retirement.md).
 
 ### Historical same-session scheduler (retired)
 

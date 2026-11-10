@@ -1,0 +1,107 @@
+{
+  "version": "1.5.2",
+  "runtime": "Bun 1.4.4",
+  "scope": "public_builtin_openai_codex_synthetic_device_flow",
+  "results": [
+    {
+      "mode": "success",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 2,
+        "token": 1,
+        "unknown": 0
+      },
+      "deviceEvent": {
+        "observed": true,
+        "intervalSeconds": 0,
+        "expiresInSeconds": 900
+      },
+      "cancellationObserved": false
+    },
+    {
+      "mode": "denied",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 1,
+        "token": 0,
+        "unknown": 0
+      },
+      "deviceEvent": {
+        "observed": true,
+        "intervalSeconds": 0,
+        "expiresInSeconds": 900
+      },
+      "cancellationObserved": false
+    },
+    {
+      "mode": "malformed_device",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 0,
+        "token": 0,
+        "unknown": 0
+      },
+      "deviceEvent": null,
+      "cancellationObserved": false
+    },
+    {
+      "mode": "malformed_token",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 1,
+        "token": 0,
+        "unknown": 0
+      },
+      "deviceEvent": {
+        "observed": true,
+        "intervalSeconds": 0,
+        "expiresInSeconds": 900
+      },
+      "cancellationObserved": false
+    },
+    {
+      "mode": "cancel",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 1,
+        "token": 0,
+        "unknown": 0
+      },
+      "deviceEvent": {
+        "observed": true,
+        "intervalSeconds": 0,
+        "expiresInSeconds": 900
+      },
+      "cancellationObserved": true
+    },
+    {
+      "mode": "slow_down",
+      "status": "pass",
+      "requests": {
+        "device": 1,
+        "poll": 2,
+        "token": 1,
+        "unknown": 0
+      },
+      "deviceEvent": {
+        "observed": true,
+        "intervalSeconds": 0,
+        "expiresInSeconds": 900
+      },
+      "cancellationObserved": false,
+      "slowDownDelayVerified": true
+    }
+  ],
+  "credentialPersistence": "none",
+  "inferenceExecution": "none",
+  "sdkFileSha256": {
+    "auth/oauth/openai-codex.js": "0b94a219ddb5982f0ee543ef03138ed0254ce6ee0a57c9d89d39c242e2eaf6f6",
+    "auth/oauth/device-code.js": "8f197cc9af67be64b82939573d719d1b55388f96f2e53cb8c47f9618fc1297eb"
+  },
+  "externalNetwork": "exact_auth_openai_fetch_interceptor_no_os_sandbox"
+}

@@ -1,0 +1,1273 @@
+[
+  {
+    "bugs": {
+      "url": "https://github.com/earendil-works/pi/issues"
+    },
+    "dist": {
+      "shasum": "8d4cbad8b576917395e20b08f5e461321ba96507",
+      "tarball": "https://registry.npmjs.org/@earendil-works/chord/-/chord-1.5.1.tgz",
+      "fileCount": 1240,
+      "integrity": "sha512-zSmZ4FINxIBsy0iq5TPJXSVBtxHenKthU+svqxH1RbPGIDID/yjCg+wKk6IzsAsJAPmUGoP5yxD0Ap11ZGkefA==",
+      "signatures": [
+        {
+          "sig": "MEUCIAuQGFzhniYEvZcLsGmMbEzAqouqme7mVuxLhNzqQHvAAiEAiSBjLJ6I5lh6ABycwZS1GMcWlT8z9knKBq/GPMrT7C4=",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        },
+        {
+          "sig": "MEUCIBvOidApoNsLGYSDUD2adzp4IX7lm6gZuBjRMoerzm3fAiEAk9O7+9gNX0AbNeceFXkOQsVNya3G3G03PbzNTqyMJDc=",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        }
+      ],
+      "attestations": {
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/@earendil-works%2fchord@1.5.1",
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      },
+      "unpackedSize": 10634895
+    },
+    "main": "./dist/index.js",
+    "name": "@earendil-works/chord",
+    "type": "module",
+    "_from": "file:/tmp/pi-package-artifacts-XfVuNb/tarballs/earendil-works-chord-1.5.1-cd2999e0520d.tgz",
+    "types": "./dist/index.d.ts",
+    "author": {
+      "name": "Earendil Works"
+    },
+    "engines": {
+      "node": ">=22.19.0"
+    },
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "source": "./src/index.ts"
+      },
+      "./app": {
+        "types": "./dist/node/app/index.d.ts",
+        "import": "./dist/node/app/index.js",
+        "source": "./src/node/app/index.ts"
+      },
+      "./tui": {
+        "types": "./dist/tui/index.d.ts",
+        "import": "./dist/tui/index.js",
+        "source": "./src/tui/index.ts"
+      },
+      "./web": {
+        "types": "./dist/web/index.d.ts",
+        "import": "./dist/web/index.js",
+        "source": "./src/web/index.ts"
+      },
+      "./http": {
+        "types": "./dist/node/http/index.d.ts",
+        "import": "./dist/node/http/index.js",
+        "source": "./src/node/http/index.ts"
+      },
+      "./json": {
+        "types": "./dist/json.d.ts",
+        "import": "./dist/json.js",
+        "source": "./src/json.ts"
+      },
+      "./sync": {
+        "types": "./dist/sync/index.d.ts",
+        "import": "./dist/sync/index.js",
+        "source": "./src/sync/index.ts"
+      },
+      "./delta": {
+        "types": "./dist/delta/index.d.ts",
+        "import": "./dist/delta/index.js",
+        "source": "./src/delta/index.ts"
+      },
+      "./react": {
+        "types": "./dist/react/index.d.ts",
+        "import": "./dist/react/index.js",
+        "source": "./src/react/index.ts"
+      },
+      "./watch": {
+        "types": "./dist/watch.d.ts",
+        "import": "./dist/watch.js",
+        "source": "./src/watch.ts"
+      },
+      "./output": {
+        "types": "./dist/output.d.ts",
+        "import": "./dist/output.js",
+        "source": "./src/output.ts"
+      },
+      "./sqlite": {
+        "types": "./dist/sqlite/index.d.ts",
+        "import": "./dist/sqlite/index.js",
+        "source": "./src/sqlite/index.ts"
+      },
+      "./context": {
+        "types": "./dist/context/index.d.ts",
+        "import": "./dist/context/index.js",
+        "source": "./src/context/index.ts"
+      },
+      "./plugins": {
+        "types": "./dist/node/plugins/index.d.ts",
+        "import": "./dist/node/plugins/index.js",
+        "source": "./src/node/plugins/index.ts"
+      },
+      "./workers": {
+        "types": "./dist/node/workers/index.d.ts",
+        "import": "./dist/node/workers/index.js",
+        "source": "./src/node/workers/index.ts"
+      },
+      "./surfaces": {
+        "types": "./dist/node/surfaces/index.d.ts",
+        "import": "./dist/node/surfaces/index.js",
+        "source": "./src/node/surfaces/index.ts"
+      },
+      "./app/files": {
+        "types": "./dist/node/app/files-entry.d.ts",
+        "import": "./dist/node/app/files-entry.js",
+        "source": "./src/node/app/files-entry.ts"
+      },
+      "./sqlite/node": {
+        "types": "./dist/sqlite/node.d.ts",
+        "import": "./dist/sqlite/node.js",
+        "source": "./src/sqlite/node.ts"
+      },
+      "./package.json": "./package.json",
+      "./tui/launcher": {
+        "types": "./dist/node/tui/index.d.ts",
+        "import": "./dist/node/tui/index.js",
+        "source": "./src/node/tui/index.ts"
+      },
+      "./workers/child": {
+        "types": "./dist/node/workers/child.d.ts",
+        "import": "./dist/node/workers/child.js",
+        "source": "./src/node/workers/child.ts"
+      },
+      "./plugins/runtime": {
+        "types": "./dist/node/plugins/runtime.d.ts",
+        "import": "./dist/node/plugins/runtime.js",
+        "source": "./src/node/plugins/runtime.ts"
+      },
+      "./telemetry-sqlite": {
+        "types": "./dist/telemetry-sqlite/index.d.ts",
+        "import": "./dist/telemetry-sqlite/index.js",
+        "source": "./src/telemetry-sqlite/index.ts"
+      },
+      "./sqlite/cloudflare": {
+        "types": "./dist/sqlite/cloudflare.d.ts",
+        "import": "./dist/sqlite/cloudflare.js",
+        "source": "./src/sqlite/cloudflare.ts"
+      },
+      "./telemetry-sqlite/node": {
+        "types": "./dist/telemetry-sqlite/node.d.ts",
+        "import": "./dist/telemetry-sqlite/node.js",
+        "source": "./src/telemetry-sqlite/node.ts"
+      }
+    },
+    "license": "MIT",
+    "scripts": {
+      "test": "vitest --run",
+      "build": "tsc -p tsconfig.build.json",
+      "clean": "node ../../scripts/package-files.mjs clean dist",
+      "prepublishOnly": "npm run clean && npm run build"
+    },
+    "_npmUser": {
+      "name": "GitHub Actions",
+      "email": "npm-oidc-no-reply@github.com",
+      "trustedPublisher": {
+        "id": "github",
+        "oidcConfigId": "9bb344c7-1b64-4b2b-a054-25c1ef29c6d7"
+      }
+    },
+    "homepage": "https://github.com/earendil-works/pi#readme",
+    "keywords": [
+      "application",
+      "plugins",
+      "rpc",
+      "contracts",
+      "state"
+    ],
+    "_resolved": "/tmp/pi-package-artifacts-XfVuNb/tarballs/earendil-works-chord-1.5.1-cd2999e0520d.tgz",
+    "_integrity": "sha512-zSmZ4FINxIBsy0iq5TPJXSVBtxHenKthU+svqxH1RbPGIDID/yjCg+wKk6IzsAsJAPmUGoP5yxD0Ap11ZGkefA==",
+    "repository": {
+      "url": "git+https://github.com/earendil-works/pi.git",
+      "type": "git",
+      "directory": "packages/chord"
+    },
+    "_npmVersion": "11.16.0",
+    "description": "Object runtime for apps across processes: contracts, documents, a store, links, plugins with hot reload, HTTP, workers, web and terminal clients",
+    "directories": {},
+    "maintainers": [
+      {
+        "name": "mitsuhiko",
+        "email": "armin.ronacher@active-4.com"
+      },
+      {
+        "name": "badlogic",
+        "email": "mario@badlogicgames.com"
+      },
+      {
+        "name": "rwachtler",
+        "email": "r.wachtler@outlook.com"
+      }
+    ],
+    "sideEffects": false,
+    "_nodeVersion": "22.23.4",
+    "dependencies": {
+      "@earendil-works/pi-schema": "1.5.1",
+      "@earendil-works/pi-telemetry": "1.5.1"
+    },
+    "_hasShrinkwrap": false,
+    "devDependencies": {
+      "ws": "8.21.0",
+      "react": "19.3.0",
+      "vitest": "4.1.12",
+      "@types/ws": "8.18.2",
+      "react-dom": "19.3.0",
+      "@types/react": "19.2.14",
+      "@types/react-dom": "19.2.3"
+    },
+    "peerDependencies": {
+      "ws": "8.21.0",
+      "react": "19.3.0",
+      "esbuild": "0.28.2"
+    },
+    "peerDependenciesMeta": {
+      "ws": {
+        "optional": true
+      },
+      "react": {
+        "optional": true
+      },
+      "esbuild": {
+        "optional": true
+      }
+    },
+    "_npmOperationalInternal": {
+      "tmp": "tmp/chord_1.5.1_1794267827432_0.4352157396913774",
+      "host": "s3://npm-registry-packages-npm-production"
+    },
+    "_id": "@earendil-works/chord@1.5.1",
+    "version": "1.5.1"
+  },
+  {
+    "bin": {
+      "pi-ai": "dist/cli.js"
+    },
+    "bugs": {
+      "url": "https://github.com/earendil-works/pi/issues"
+    },
+    "dist": {
+      "shasum": "072e18b2b4fa7b951e4b3bebaabe82b2dcfe3d36",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-1.5.1.tgz",
+      "fileCount": 886,
+      "integrity": "sha512-ukMQ78DE1ypirehoWOrg32dZNEQsY/VXRETPJf5qgdpaw8abq/jlALpQpiEpRDyCkCyX/9FPiQRIazw7FA1FCw==",
+      "signatures": [
+        {
+          "sig": "MEYCIQClWSLHcYZg9tm5kMJP7cZfdpQiyx++JQ72q5IoRwtyIgIhANZ5D3DmXMaULQUmZOuYCRT5bUaU5NI0+wNEWjzEzdse",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        },
+        {
+          "sig": "MEQCICxJjaYfVsHoeiJblon3Mxy/39C8dg6HBJtHMEuSLtBcAiB+hJPr8nx9wj+uZqhS3QLHdF9jrgzC2tY9Xs8cuONVQg==",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        }
+      ],
+      "attestations": {
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/@earendil-works%2fpi-ai@1.5.1",
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      },
+      "unpackedSize": 4506449
+    },
+    "main": "./dist/index.js",
+    "name": "@earendil-works/pi-ai",
+    "type": "module",
+    "_from": "file:/tmp/pi-package-artifacts-XfVuNb/tarballs/earendil-works-pi-ai-1.5.1-ba4310efc0c4.tgz",
+    "types": "./dist/index.d.ts",
+    "author": {
+      "name": "Mario Zechner"
+    },
+    "engines": {
+      "node": ">=22.19.0"
+    },
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./api/*": {
+        "types": "./dist/api/*.d.ts",
+        "import": "./dist/api/*.js"
+      },
+      "./oauth": {
+        "types": "./dist/oauth.d.ts",
+        "import": "./dist/oauth.js"
+      },
+      "./compat": {
+        "types": "./dist/compat.d.ts",
+        "import": "./dist/compat.js"
+      },
+      "./models": {
+        "types": "./dist/models.d.ts",
+        "import": "./dist/models.js"
+      },
+      "./utils/*": {
+        "types": "./dist/utils/*.d.ts",
+        "import": "./dist/utils/*.js"
+      },
+      "./bun-oauth": {
+        "types": "./dist/bun-oauth.d.ts",
+        "import": "./dist/bun-oauth.js"
+      },
+      "./lazy-oauth": {
+        "types": "./dist/lazy-oauth.d.ts",
+        "import": "./dist/lazy-oauth.js"
+      },
+      "./providers/*": {
+        "types": "./dist/providers/*.d.ts",
+        "import": "./dist/providers/*.js"
+      },
+      "./bedrock-provider": {
+        "types": "./dist/bedrock-provider.d.ts",
+        "import": "./dist/bedrock-provider.js"
+      },
+      "./lazy-bedrock-provider": {
+        "types": "./dist/lazy-bedrock-provider.d.ts",
+        "import": "./dist/lazy-bedrock-provider.js"
+      }
+    },
+    "license": "MIT",
+    "scripts": {
+      "test": "vitest --run",
+      "build": "npm run generate-models && npm run build:offline",
+      "clean": "node ../../scripts/package-files.mjs clean dist",
+      "build:offline": "npm run check:model-data && tsc -p tsconfig.build.json && node ../../scripts/package-files.mjs clean dist/providers/data && node ../../scripts/package-files.mjs copy src/providers/data dist/providers",
+      "prepublishOnly": "npm run clean && npm run build",
+      "generate-models": "node catalog/generate.ts --strict",
+      "check:model-data": "node scripts/check-model-data.ts",
+      "hydrate-model-data": "node catalog/generate.ts --strict --data-only",
+      "generate-model-catalog": "node catalog/generate.ts --strict --json-only --json-output ../../.artifacts/model-catalog"
+    },
+    "_npmUser": {
+      "name": "GitHub Actions",
+      "email": "npm-oidc-no-reply@github.com",
+      "trustedPublisher": {
+        "id": "github",
+        "oidcConfigId": "975b2765-9d44-42ba-a322-c1cbbce03f36"
+      }
+    },
+    "homepage": "https://github.com/earendil-works/pi#readme",
+    "keywords": [
+      "ai",
+      "llm",
+      "openai",
+      "anthropic",
+      "gemini",
+      "bedrock",
+      "unified",
+      "api"
+    ],
+    "_resolved": "/tmp/pi-package-artifacts-XfVuNb/tarballs/earendil-works-pi-ai-1.5.1-ba4310efc0c4.tgz",
+    "_integrity": "sha512-ukMQ78DE1ypirehoWOrg32dZNEQsY/VXRETPJf5qgdpaw8abq/jlALpQpiEpRDyCkCyX/9FPiQRIazw7FA1FCw==",
+    "repository": {
+      "url": "git+https://github.com/earendil-works/pi.git",
+      "type": "git",
+      "directory": "packages/ai"
+    },
+    "_npmVersion": "11.16.0",
+    "description": "Unified LLM API with automatic model discovery and provider configuration",
+    "directories": {},
+    "maintainers": [
+      {
+        "name": "mitsuhiko",
+        "email": "armin.ronacher@active-4.com"
+      },
+      {
+        "name": "badlogic",
+        "email": "mario@badlogicgames.com"
+      },
+      {
+        "name": "rwachtler",
+        "email": "r.wachtler@outlook.com"
+      }
+    ],
+    "sideEffects": [
+      "./dist/compat.js",
+      "./dist/images.js",
+      "./dist/providers/images/register-builtins.js"
+    ],
+    "_nodeVersion": "22.23.4",
+    "dependencies": {
+      "openai": "7.19.0",
+      "partial-json": "0.1.7",
+      "@google/genai": "2.21.0",
+      "http-proxy-agent": "9.1.0",
+      "@anthropic-ai/sdk": "0.129.0",
+      "https-proxy-agent": "9.1.0",
+      "@earendil-works/pi-schema": "1.5.1",
+      "@smithy/node-http-handler": "4.12.1",
+      "@earendil-works/pi-telemetry": "1.5.1",
+      "@aws-sdk/client-bedrock-runtime": "3.1127.0"
+    },
+    "_hasShrinkwrap": false,
+    "devDependencies": {
+      "canvas": "3.2.3",
+      "vitest": "4.1.12",
+      "typebox": "1.3.27",
+      "@types/node": "22.19.19"
+    },
+    "_npmOperationalInternal": {
+      "tmp": "tmp/pi-ai_1.5.1_1794267687279_0.5761651357172308",
+      "host": "s3://npm-registry-packages-npm-production"
+    },
+    "_id": "@earendil-works/pi-ai@1.5.1",
+    "version": "1.5.1"
+  },
+  {
+    "bugs": {
+      "url": "https://github.com/earendil-works/pi/issues"
+    },
+    "dist": {
+      "shasum": "3834ea3a5ed473411905b09dd5118dae4bbbdac8",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-agent-core/-/pi-agent-core-1.5.1.tgz",
+      "fileCount": 26,
+      "integrity": "sha512-jD4qinlcwO3AoN/97v0AG3b0Umz/7hIBlEStmz6M3AQNicWOU+UK851fdDvzvCCukpQBSyOraEGRFMTgj+xGpA==",
+      "signatures": [
+        {
+          "sig": "MEUCICgPH9Y4RZ+KUynNI0mR6A6py5cfx14Ckhosa2iH0MjmAiEA1uDv7C12XdwqaVA9btypI+P4/EGp44Ga2bl/CIg+B4s=",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        },
+        {
+          "sig": "MEUCIQD34Ctvw0VDcb5b605uq+A4r7EUgSnSRG1nwRIcMVT/GwIgaK26t9ibq2N/W91eCMgMJKXP+y/q0k604GHMaUonuOU=",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        }
+      ],
+      "attestations": {
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/@earendil-works%2fpi-agent-core@1.5.1",
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      },
+      "unpackedSize": 274063
+    },
+    "main": "./dist/index.js",
+    "name": "@earendil-works/pi-agent-core",
+    "type": "module",
+    "_from": "file:/tmp/pi-package-artifacts-XfVuNb/tarballs/earendil-works-pi-agent-core-1.5.1-8c3e2a8a795c.tgz",
+    "types": "./dist/index.d.ts",
+    "author": {
+      "name": "Mario Zechner"
+    },
+    "engines": {
+      "node": ">=22.19.0"
+    },
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "license": "MIT",
+    "scripts": {
+      "test": "vitest --run",
+      "build": "tsc -p tsconfig.build.json",
+      "clean": "node ../../scripts/package-files.mjs clean dist",
+      "prepublishOnly": "npm run build"
+    },
+    "_npmUser": {
+      "name": "GitHub Actions",
+      "email": "npm-oidc-no-reply@github.com",
+      "trustedPublisher": {
+        "id": "github",
+        "oidcConfigId": "88950ed8-2b60-49c0-8df2-7770367a49eb"
+      }
+    },
+    "homepage": "https://github.com/earendil-works/pi#readme",
+    "keywords": [
+      "ai",
+      "agent",
+      "llm",
+      "transport",
+      "state-management"
+    ],
+    "_resolved": "/tmp/pi-package-artifacts-XfVuNb/tarballs/earendil-works-pi-agent-core-1.5.1-8c3e2a8a795c.tgz",
+    "_integrity": "sha512-jD4qinlcwO3AoN/97v0AG3b0Umz/7hIBlEStmz6M3AQNicWOU+UK851fdDvzvCCukpQBSyOraEGRFMTgj+xGpA==",
+    "repository": {
+      "url": "git+https://github.com/earendil-works/pi.git",
+      "type": "git",
+      "directory": "packages/agent"
+    },
+    "_npmVersion": "11.16.0",
+    "description": "General-purpose agent with transport abstraction, state management, and attachment support",
+    "directories": {},
+    "maintainers": [
+      {
+        "name": "mitsuhiko",
+        "email": "armin.ronacher@active-4.com"
+      },
+      {
+        "name": "badlogic",
+        "email": "mario@badlogicgames.com"
+      },
+      {
+        "name": "rwachtler",
+        "email": "r.wachtler@outlook.com"
+      }
+    ],
+    "_nodeVersion": "22.23.4",
+    "dependencies": {
+      "@earendil-works/pi-ai": "1.5.1",
+      "@earendil-works/pi-schema": "1.5.1"
+    },
+    "_hasShrinkwrap": false,
+    "devDependencies": {
+      "vitest": "4.1.12",
+      "@types/node": "22.19.19"
+    },
+    "_npmOperationalInternal": {
+      "tmp": "tmp/pi-agent-core_1.5.1_1794267659814_0.5039221762555885",
+      "host": "s3://npm-registry-packages-npm-production"
+    },
+    "_id": "@earendil-works/pi-agent-core@1.5.1",
+    "version": "1.5.1"
+  },
+  {
+    "bugs": {
+      "url": "https://github.com/earendil-works/pi/issues"
+    },
+    "dist": {
+      "shasum": "10e2f4a9baf619c61214b6c799566153649579e2",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-codemode/-/pi-codemode-1.5.1.tgz",
+      "fileCount": 66,
+      "integrity": "sha512-xVuCpni7AuLPhvrN+oCP9Kcq0I2kY8SdtJRNMevQMmC2DcuQcgSWgOH2KOtuG0/Ihe1BZgPCahY4q5oiFMHw4g==",
+      "signatures": [
+        {
+          "sig": "MEUCIQCXUnK+WaaRxSiS8fMRcoie9Xi6dBn9mmMRkzTieUFgXwIgMRiZZuoeOqi+2oXHo2d400L8a7V9kqoriC51IkrhZYo=",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        },
+        {
+          "sig": "MEQCIHgqGQueS6eN3I26xKdtOUI+gxuy6TZWxgQf6DSAPoGRAiBSuwQXYzYfaqUCBfz//Zkj5BNzK42uq5oa6882uBT4pQ==",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        }
+      ],
+      "attestations": {
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/@earendil-works%2fpi-codemode@1.5.1",
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      },
+      "unpackedSize": 377554
+    },
+    "main": "./dist/index.js",
+    "name": "@earendil-works/pi-codemode",
+    "type": "module",
+    "_from": "file:/tmp/pi-package-artifacts-XfVuNb/tarballs/earendil-works-pi-codemode-1.5.1-c55b82a678bb.tgz",
+    "types": "./dist/index.d.ts",
+    "author": {
+      "name": "Earendil Works"
+    },
+    "engines": {
+      "node": ">=22.19.0"
+    },
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "source": "./src/index.ts"
+      },
+      "./source": {
+        "types": "./dist/source.d.ts",
+        "import": "./dist/source.js",
+        "source": "./src/source.ts"
+      },
+      "./worker": {
+        "types": "./dist/runtime/worker.d.ts",
+        "import": "./dist/runtime/worker.js",
+        "source": "./src/runtime/worker.ts"
+      },
+      "./portable": {
+        "types": "./dist/portable.d.ts",
+        "import": "./dist/portable.js",
+        "source": "./src/portable.ts"
+      },
+      "./cloudflare": {
+        "types": "./dist/cloudflare.d.ts",
+        "import": "./dist/cloudflare.js",
+        "source": "./src/cloudflare.ts"
+      },
+      "./declarations": {
+        "types": "./dist/declarations.d.ts",
+        "import": "./dist/declarations.js",
+        "source": "./src/declarations.ts"
+      }
+    },
+    "license": "MIT",
+    "scripts": {
+      "test": "vitest --run",
+      "build": "tsc -p tsconfig.build.json",
+      "clean": "node ../../scripts/package-files.mjs clean dist",
+      "prepublishOnly": "npm run clean && npm run build"
+    },
+    "_npmUser": {
+      "name": "GitHub Actions",
+      "email": "npm-oidc-no-reply@github.com",
+      "trustedPublisher": {
+        "id": "github",
+        "oidcConfigId": "9bbccde5-b504-4513-80eb-7a9dfb6d8e46"
+      }
+    },
+    "homepage": "https://github.com/earendil-works/pi#readme",
+    "keywords": [
+      "pi",
+      "codemode",
+      "sandbox",
+      "quickjs",
+      "wasm",
+      "cloudflare",
+      "durable-objects"
+    ],
+    "_resolved": "/tmp/pi-package-artifacts-XfVuNb/tarballs/earendil-works-pi-codemode-1.5.1-c55b82a678bb.tgz",
+    "_integrity": "sha512-xVuCpni7AuLPhvrN+oCP9Kcq0I2kY8SdtJRNMevQMmC2DcuQcgSWgOH2KOtuG0/Ihe1BZgPCahY4q5oiFMHw4g==",
+    "repository": {
+      "url": "git+https://github.com/earendil-works/pi.git",
+      "type": "git",
+      "directory": "packages/codemode"
+    },
+    "_npmVersion": "11.16.0",
+    "description": "Sandboxed JavaScript execution where the only capability is calling injected tools",
+    "directories": {},
+    "maintainers": [
+      {
+        "name": "mitsuhiko",
+        "email": "armin.ronacher@active-4.com"
+      },
+      {
+        "name": "badlogic",
+        "email": "mario@badlogicgames.com"
+      },
+      {
+        "name": "rwachtler",
+        "email": "r.wachtler@outlook.com"
+      }
+    ],
+    "_nodeVersion": "22.23.4",
+    "dependencies": {
+      "quickjs-wasi": "3.6.2"
+    },
+    "_hasShrinkwrap": false,
+    "devDependencies": {
+      "vitest": "4.1.12"
+    },
+    "_npmOperationalInternal": {
+      "tmp": "tmp/pi-codemode_1.5.1_1794267722880_0.4777948138740652",
+      "host": "s3://npm-registry-packages-npm-production"
+    },
+    "_id": "@earendil-works/pi-codemode@1.5.1",
+    "version": "1.5.1"
+  },
+  {
+    "bin": {
+      "pi": "dist/bundle/cli.js"
+    },
+    "bugs": {
+      "url": "https://github.com/earendil-works/pi/issues"
+    },
+    "dist": {
+      "shasum": "dc9b25ab283f38b991f0bbfb658bc453b28cb164",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-1.5.1.tgz",
+      "fileCount": 1324,
+      "integrity": "sha512-rdu4pRvpQba2ep83nqHaN8L1pvY1OQ3i/2FucogA/eyRxwoUXMUXdk1Z9JnZFJR+9ck9Gs1ajuSb9m7Hz7ejYw==",
+      "signatures": [
+        {
+          "sig": "MEUCIB9SzkNbbVLhQE5tGgAxe/8gmMeFjtiOKYKqVIsDygo2AiEAzsPZeL+eR6xGL8mYYt2fbuCS69YyCHVncmsT4jgXgc4=",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        },
+        {
+          "sig": "MEUCIERa+B5Nr2ckN0Y9n6euT71b0qdJ4ylI0fUWfO/f9Kq1AiEAohAlwQTOV3jrUwySDnptKuQ+mpJfTbroWZ3Qf4I2GPY=",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        }
+      ],
+      "attestations": {
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/@earendil-works%2fpi-coding-agent@1.5.1",
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      },
+      "unpackedSize": 24387860
+    },
+    "main": "./dist/index.js",
+    "name": "@earendil-works/pi-coding-agent",
+    "type": "module",
+    "_from": "file:/tmp/pi-package-artifacts-XfVuNb/tarballs/earendil-works-pi-coding-agent-1.5.1-addbb8a51be9.tgz",
+    "types": "./dist/index.d.ts",
+    "author": {
+      "name": "Mario Zechner"
+    },
+    "engines": {
+      "node": ">=22.19.0"
+    },
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./rpc-entry": {
+        "import": "./dist/bundle/rpc-entry.js"
+      }
+    },
+    "license": "MIT",
+    "scripts": {
+      "test": "vitest --run",
+      "build": "npm run build:unbundled && node ../../scripts/build-coding-agent-bundle.mjs",
+      "clean": "node ../../scripts/package-files.mjs clean dist",
+      "copy-assets": "node ../../scripts/package-files.mjs copy \"src/modes/interactive/theme/*.json\" dist/modes/interactive/theme && node ../../scripts/package-files.mjs copy \"src/modes/interactive/assets/*.png\" dist/modes/interactive/assets && node ../../scripts/package-files.mjs copy src/core/export-html/template.html src/core/export-html/template.css src/core/export-html/template.js dist/core/export-html && node ../../scripts/package-files.mjs copy \"src/core/export-html/vendor/*.js\" dist/core/export-html/vendor",
+      "build:binary": "npm --prefix ../tui run build && npm --prefix ../telemetry run build && npm --prefix ../ai run build && npm --prefix ../agent run build && npm run build && bun build --compile --no-compile-autoload-bunfig --no-compile-autoload-dotenv ./dist/bun/cli.js ./src/utils/image-resize-worker.ts ./src/extensions/codemode/worker.ts --outfile dist/pi && npm run copy-binary-assets",
+      "prepublishOnly": "npm run clean && npm run build",
+      "build:unbundled": "tsc -p tsconfig.build.json && node ../../scripts/package-files.mjs executable dist/cli.js dist/rpc-entry.js && npm run copy-assets",
+      "generate:schemas": "node --import ./src/experimental/source-resolver.ts scripts/generate-schemas.ts",
+      "copy-binary-assets": "node ../../scripts/package-files.mjs copy package.json README.md CHANGELOG.md docs examples ../../node_modules/@silvia-odwyer/photon-node/photon_rs_bg.wasm dist && node ../../scripts/package-files.mjs copy \"src/modes/interactive/theme/*.json\" dist/theme && node ../../scripts/package-files.mjs copy \"src/modes/interactive/assets/*.png\" dist/assets && node ../../scripts/package-files.mjs copy src/core/export-html/template.html dist/export-html && node ../../scripts/package-files.mjs copy \"src/core/export-html/vendor/*.js\" dist/export-html/vendor",
+      "generate:references": "node --import ./src/experimental/source-resolver.ts scripts/generate-references.ts"
+    },
+    "_npmUser": {
+      "name": "GitHub Actions",
+      "email": "npm-oidc-no-reply@github.com",
+      "trustedPublisher": {
+        "id": "github",
+        "oidcConfigId": "d271bff4-7c51-4c80-b055-5629ead5d835"
+      }
+    },
+    "homepage": "https://github.com/earendil-works/pi#readme",
+    "keywords": [
+      "coding-agent",
+      "ai",
+      "llm",
+      "cli",
+      "tui",
+      "agent"
+    ],
+    "piConfig": {
+      "configDir": ".pi"
+    },
+    "_resolved": "/tmp/pi-package-artifacts-XfVuNb/tarballs/earendil-works-pi-coding-agent-1.5.1-addbb8a51be9.tgz",
+    "overrides": {
+      "protobufjs": "7.6.6"
+    },
+    "_integrity": "sha512-rdu4pRvpQba2ep83nqHaN8L1pvY1OQ3i/2FucogA/eyRxwoUXMUXdk1Z9JnZFJR+9ck9Gs1ajuSb9m7Hz7ejYw==",
+    "repository": {
+      "url": "git+https://github.com/earendil-works/pi.git",
+      "type": "git",
+      "directory": "packages/coding-agent"
+    },
+    "_npmVersion": "11.16.0",
+    "description": "Coding agent CLI with read, bash, edit, write tools and session management",
+    "directories": {},
+    "maintainers": [
+      {
+        "name": "mitsuhiko",
+        "email": "armin.ronacher@active-4.com"
+      },
+      {
+        "name": "badlogic",
+        "email": "mario@badlogicgames.com"
+      },
+      {
+        "name": "rwachtler",
+        "email": "r.wachtler@outlook.com"
+      }
+    ],
+    "_nodeVersion": "22.23.4",
+    "dependencies": {
+      "diff": "8.0.4",
+      "jiti": "2.7.0",
+      "yaml": "2.9.0",
+      "chalk": "6.0.0",
+      "ignore": "7.0.8",
+      "semver": "7.8.5",
+      "undici": "8.12.3",
+      "typebox": "1.3.27",
+      "minimatch": "11.0.3",
+      "cross-spawn": "7.0.6",
+      "highlight.js": "10.7.3",
+      "quickjs-wasi": "3.6.2",
+      "lovely-mermaid": "0.3.3",
+      "brace-expansion": "5.0.12",
+      "hosted-git-info": "9.0.3",
+      "proper-lockfile": "4.1.2",
+      "@earendil-works/pi-ai": "1.5.1",
+      "@earendil-works/pi-mcp": "1.5.1",
+      "@earendil-works/pi-tui": "1.5.1",
+      "@silvia-odwyer/photon-node": "0.3.4",
+      "@earendil-works/pi-codemode": "1.5.1",
+      "@earendil-works/pi-agent-core": "1.5.1"
+    },
+    "_hasShrinkwrap": false,
+    "devDependencies": {
+      "marked": "18.0.11",
+      "vitest": "4.1.12",
+      "@types/node": "22.19.19",
+      "@types/semver": "7.7.1",
+      "@types/cross-spawn": "6.0.6",
+      "@types/hosted-git-info": "3.0.5",
+      "@types/proper-lockfile": "4.1.4"
+    },
+    "_npmOperationalInternal": {
+      "tmp": "tmp/pi-coding-agent_1.5.1_1794267912867_0.15272399347496624",
+      "host": "s3://npm-registry-packages-npm-production"
+    },
+    "_id": "@earendil-works/pi-coding-agent@1.5.1",
+    "version": "1.5.1"
+  },
+  {
+    "bugs": {
+      "url": "https://github.com/earendil-works/pi/issues"
+    },
+    "dist": {
+      "shasum": "64b274fed185a2fb97cbd1e42b53317becb5c79c",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-mcp/-/pi-mcp-1.5.1.tgz",
+      "fileCount": 116,
+      "integrity": "sha512-cUFhLnanLjBf8+NpHU+shJTzvcfLBjjDI02tI7hSmYnYqNfhqXhFPEkqT8G+/e+PX6r46DX1ZU54BTC5+p+MRA==",
+      "signatures": [
+        {
+          "sig": "MEQCIAlM5/7lvBNyFxcbdYzWxScHhuHHAG/2+guH1zwmdr6NAiArR9B33WRnxwBwiTgNtYrrnEdAm7qGb3dd83vzuDre8w==",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        },
+        {
+          "sig": "MEUCIQCFeHlaMwwRoeBlKJIqKBDG/4vb+u4aC2+9x+iYU0myOAIgZlK+1nZ8kZxWDEmb4FKlZniJrWt/53TDDYa32Xk0yik=",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        }
+      ],
+      "attestations": {
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/@earendil-works%2fpi-mcp@1.5.1",
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      },
+      "unpackedSize": 596087
+    },
+    "main": "./dist/index.js",
+    "name": "@earendil-works/pi-mcp",
+    "type": "module",
+    "_from": "file:/tmp/pi-package-artifacts-XfVuNb/tarballs/earendil-works-pi-mcp-1.5.1-7141612e76a7.tgz",
+    "types": "./dist/index.d.ts",
+    "author": {
+      "name": "Earendil Works"
+    },
+    "engines": {
+      "node": ">=22.19.0"
+    },
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "source": "./src/index.ts"
+      },
+      "./oauth": {
+        "types": "./dist/oauth/index.d.ts",
+        "import": "./dist/oauth/index.js",
+        "source": "./src/oauth/index.ts"
+      },
+      "./testing": {
+        "types": "./dist/testing/index.d.ts",
+        "import": "./dist/testing/index.js",
+        "source": "./src/testing/index.ts"
+      }
+    },
+    "license": "MIT",
+    "scripts": {
+      "test": "vitest --run",
+      "build": "tsc -p tsconfig.build.json",
+      "clean": "node ../../scripts/package-files.mjs clean dist",
+      "prepublishOnly": "npm run clean && npm run build"
+    },
+    "_npmUser": {
+      "name": "GitHub Actions",
+      "email": "npm-oidc-no-reply@github.com",
+      "trustedPublisher": {
+        "id": "github",
+        "oidcConfigId": "f490702b-168a-43b8-abc9-8ab9adf49e0b"
+      }
+    },
+    "homepage": "https://github.com/earendil-works/pi#readme",
+    "keywords": [
+      "mcp",
+      "model-context-protocol",
+      "client"
+    ],
+    "_resolved": "/tmp/pi-package-artifacts-XfVuNb/tarballs/earendil-works-pi-mcp-1.5.1-7141612e76a7.tgz",
+    "_integrity": "sha512-cUFhLnanLjBf8+NpHU+shJTzvcfLBjjDI02tI7hSmYnYqNfhqXhFPEkqT8G+/e+PX6r46DX1ZU54BTC5+p+MRA==",
+    "repository": {
+      "url": "git+https://github.com/earendil-works/pi.git",
+      "type": "git",
+      "directory": "packages/mcp"
+    },
+    "_npmVersion": "11.16.0",
+    "description": "Standalone Model Context Protocol client for pi and other applications",
+    "directories": {},
+    "maintainers": [
+      {
+        "name": "mitsuhiko",
+        "email": "armin.ronacher@active-4.com"
+      },
+      {
+        "name": "badlogic",
+        "email": "mario@badlogicgames.com"
+      },
+      {
+        "name": "rwachtler",
+        "email": "r.wachtler@outlook.com"
+      }
+    ],
+    "sideEffects": false,
+    "_nodeVersion": "22.23.4",
+    "dependencies": {
+      "cross-spawn": "7.0.6"
+    },
+    "_hasShrinkwrap": false,
+    "devDependencies": {
+      "vitest": "4.1.12",
+      "@types/cross-spawn": "6.0.6"
+    },
+    "_npmOperationalInternal": {
+      "tmp": "tmp/pi-mcp_1.5.1_1794267699202_0.4543587452229795",
+      "host": "s3://npm-registry-packages-npm-production"
+    },
+    "_id": "@earendil-works/pi-mcp@1.5.1",
+    "version": "1.5.1"
+  },
+  {
+    "bugs": {
+      "url": "https://github.com/earendil-works/pi/issues"
+    },
+    "dist": {
+      "shasum": "319315c373a954cad92185d867ab7b7a08b63273",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-schema/-/pi-schema-1.5.1.tgz",
+      "fileCount": 176,
+      "integrity": "sha512-QmvyJYVTva2ZT6/R2rFL64nmaiRmc6hCHv9ZoVNeyDhvLbRHIQLU8mI140vuX6JOnT7tCEd74GOyui/MIRF7ww==",
+      "signatures": [
+        {
+          "sig": "MEUCIBmkKL6KINY+nbiMeH2FfEZo0bTIzJY6F+ZzM1Cw8yk3AiEAwMuNn13WirLx9e0uTP1N65a48D7AZy2LA95TMMfRXWM=",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        },
+        {
+          "sig": "MEYCIQCyApkQleqALAYVIw+twZlE0Qne7NA09QMKVHbqpqoGGAIhAIQU6u4VNpWlZTUzjaoe86gfo1/l/zXsZd/N/eW3t+jb",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        }
+      ],
+      "attestations": {
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/@earendil-works%2fpi-schema@1.5.1",
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      },
+      "unpackedSize": 659918
+    },
+    "main": "./dist/index.js",
+    "name": "@earendil-works/pi-schema",
+    "type": "module",
+    "_from": "file:/tmp/pi-package-artifacts-XfVuNb/tarballs/earendil-works-pi-schema-1.5.1-426bf2258553.tgz",
+    "types": "./dist/index.d.ts",
+    "author": {
+      "name": "Earendil Works"
+    },
+    "engines": {
+      "node": ">=22.19.0"
+    },
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "source": "./src/index.ts"
+      },
+      "./formats": {
+        "types": "./dist/formats/index.d.ts",
+        "import": "./dist/formats/index.js",
+        "source": "./src/formats/index.ts"
+      }
+    },
+    "license": "MIT",
+    "scripts": {
+      "test": "vitest --run",
+      "bench": "node --expose-gc test/bench/all.ts",
+      "build": "tsc -p tsconfig.build.json",
+      "clean": "node ../../scripts/package-files.mjs clean dist",
+      "prepublishOnly": "npm run clean && npm run build"
+    },
+    "_npmUser": {
+      "name": "GitHub Actions",
+      "email": "npm-oidc-no-reply@github.com",
+      "trustedPublisher": {
+        "id": "github",
+        "oidcConfigId": "45e8680e-8117-4609-967c-c812664fb0cf"
+      }
+    },
+    "homepage": "https://github.com/earendil-works/pi#readme",
+    "keywords": [
+      "json-schema",
+      "validation",
+      "validator",
+      "csp"
+    ],
+    "_resolved": "/tmp/pi-package-artifacts-XfVuNb/tarballs/earendil-works-pi-schema-1.5.1-426bf2258553.tgz",
+    "_integrity": "sha512-QmvyJYVTva2ZT6/R2rFL64nmaiRmc6hCHv9ZoVNeyDhvLbRHIQLU8mI140vuX6JOnT7tCEd74GOyui/MIRF7ww==",
+    "repository": {
+      "url": "git+https://github.com/earendil-works/pi.git",
+      "type": "git",
+      "directory": "packages/schema"
+    },
+    "_npmVersion": "11.16.0",
+    "description": "JSON Schema validation without eval: drafts 2020-12 and 7, compiled into plain closures",
+    "directories": {},
+    "maintainers": [
+      {
+        "name": "mitsuhiko",
+        "email": "armin.ronacher@active-4.com"
+      },
+      {
+        "name": "badlogic",
+        "email": "mario@badlogicgames.com"
+      },
+      {
+        "name": "rwachtler",
+        "email": "r.wachtler@outlook.com"
+      }
+    ],
+    "sideEffects": false,
+    "_nodeVersion": "22.23.4",
+    "_hasShrinkwrap": false,
+    "devDependencies": {
+      "ajv": "8.20.0",
+      "zod": "4.6.7",
+      "vitest": "4.1.12",
+      "typebox": "1.3.27",
+      "ajv-formats": "3.0.1",
+      "ata-validator": "1.61.3",
+      "@oh-my-pi/omptype": "18.13.3",
+      "@cfworker/json-schema": "4.1.1"
+    },
+    "_npmOperationalInternal": {
+      "tmp": "tmp/pi-schema_1.5.1_1794267705749_0.9269515273811564",
+      "host": "s3://npm-registry-packages-npm-production"
+    },
+    "_id": "@earendil-works/pi-schema@1.5.1",
+    "version": "1.5.1"
+  },
+  {
+    "bugs": {
+      "url": "https://github.com/earendil-works/pi/issues"
+    },
+    "dist": {
+      "shasum": "b5cd20cdeabe66e59684dd1f65404abd3b08c0af",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-telemetry/-/pi-telemetry-1.5.1.tgz",
+      "fileCount": 34,
+      "integrity": "sha512-uFi8XzG10gMgz9LggOlQW4CvEe/t1wZ6bwLChx36rmyZE7ogg/jHKTGekG73o6Rkwxi0bqE2AnTk+RZ4GmYQ2w==",
+      "signatures": [
+        {
+          "sig": "MEQCIEkDpoSYEDPubVBm+bOwfXDrNiInAElnPzTnADKC88FMAiB24TWpqsI8pHbPkLr9nWxIb+6H/GzQ8jMTjw5yILSkuQ==",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        },
+        {
+          "sig": "MEYCIQComMqnfBYMxmSYQJTLcbI+3k0sI3LO6QZc8It9LpP2pwIhALbvgwjtzvNoTCxVbu9OoCHoX0U1UCeuZOonRTO40maI",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        }
+      ],
+      "attestations": {
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/@earendil-works%2fpi-telemetry@1.5.1",
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      },
+      "unpackedSize": 226323
+    },
+    "main": "./dist/index.js",
+    "name": "@earendil-works/pi-telemetry",
+    "type": "module",
+    "_from": "file:/tmp/pi-package-artifacts-XfVuNb/tarballs/earendil-works-pi-telemetry-1.5.1-b858bc5f31b5.tgz",
+    "types": "./dist/index.d.ts",
+    "author": {
+      "name": "Mario Zechner"
+    },
+    "engines": {
+      "node": ">=22.19.0"
+    },
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "source": "./src/index.ts"
+      },
+      "./render": {
+        "types": "./dist/render.d.ts",
+        "import": "./dist/render.js",
+        "source": "./src/render.ts"
+      },
+      "./testing": {
+        "types": "./dist/testing/index.d.ts",
+        "import": "./dist/testing/index.js",
+        "source": "./src/testing/index.ts"
+      }
+    },
+    "license": "MIT",
+    "scripts": {
+      "test": "vitest --run",
+      "build": "tsc -p tsconfig.build.json",
+      "clean": "node ../../scripts/package-files.mjs clean dist",
+      "prepublishOnly": "npm run clean && npm run build"
+    },
+    "_npmUser": {
+      "name": "GitHub Actions",
+      "email": "npm-oidc-no-reply@github.com",
+      "trustedPublisher": {
+        "id": "github",
+        "oidcConfigId": "ba700089-f70a-498f-9937-b92a7210819c"
+      }
+    },
+    "homepage": "https://github.com/earendil-works/pi#readme",
+    "keywords": [
+      "telemetry",
+      "tracing",
+      "observability"
+    ],
+    "_resolved": "/tmp/pi-package-artifacts-XfVuNb/tarballs/earendil-works-pi-telemetry-1.5.1-b858bc5f31b5.tgz",
+    "_integrity": "sha512-uFi8XzG10gMgz9LggOlQW4CvEe/t1wZ6bwLChx36rmyZE7ogg/jHKTGekG73o6Rkwxi0bqE2AnTk+RZ4GmYQ2w==",
+    "repository": {
+      "url": "git+https://github.com/earendil-works/pi.git",
+      "type": "git",
+      "directory": "packages/telemetry"
+    },
+    "_npmVersion": "11.16.0",
+    "description": "Vendor-neutral telemetry contracts and typed schema utilities for pi",
+    "directories": {},
+    "maintainers": [
+      {
+        "name": "mitsuhiko",
+        "email": "armin.ronacher@active-4.com"
+      },
+      {
+        "name": "badlogic",
+        "email": "mario@badlogicgames.com"
+      },
+      {
+        "name": "rwachtler",
+        "email": "r.wachtler@outlook.com"
+      }
+    ],
+    "_nodeVersion": "22.23.4",
+    "_hasShrinkwrap": false,
+    "devDependencies": {
+      "vitest": "4.1.12",
+      "@types/node": "22.19.19"
+    },
+    "_npmOperationalInternal": {
+      "tmp": "tmp/pi-telemetry_1.5.1_1794267711108_0.8069334751350083",
+      "host": "s3://npm-registry-packages-npm-production"
+    },
+    "_id": "@earendil-works/pi-telemetry@1.5.1",
+    "version": "1.5.1"
+  },
+  {
+    "bugs": {
+      "url": "https://github.com/earendil-works/pi/issues"
+    },
+    "dist": {
+      "shasum": "64b26a320aa10a737eaa37684d1914fb38b228bd",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-tui/-/pi-tui-1.5.1.tgz",
+      "fileCount": 204,
+      "integrity": "sha512-UZkaMYLuJrk2anJhZf06dNYdLWL8toqWNL807fhAorc8Lzy5vkxWNq/pC1f0CIM2EVdlctuRibWuIQGKYOgx+A==",
+      "signatures": [
+        {
+          "sig": "MEUCICiREjOnjDsKpt+MY0a4z4TYSthmMTNvXcRW0rHh540zAiEAu0Be2eYQwRq9FdvzIH8xUVYD0HkiyOrCQc4KgUVMXjE=",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        },
+        {
+          "sig": "MEUCIBCyWsBOGzAYjD7VIvEHxGg6crOdSmBG5BQnCnL6FG0OAiEAjID4nVsKTlTsD7/yW+tOroZ5IkrFQgf4ezB2odKjjN4=",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        }
+      ],
+      "attestations": {
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/@earendil-works%2fpi-tui@1.5.1",
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      },
+      "unpackedSize": 2458876
+    },
+    "main": "dist/index.js",
+    "name": "@earendil-works/pi-tui",
+    "type": "module",
+    "_from": "file:/tmp/pi-package-artifacts-XfVuNb/tarballs/earendil-works-pi-tui-1.5.1-51991a3182ee.tgz",
+    "types": "./dist/index.d.ts",
+    "author": {
+      "name": "Mario Zechner"
+    },
+    "engines": {
+      "node": ">=22.19.0"
+    },
+    "license": "MIT",
+    "scripts": {
+      "test": "node --test --test-reporter=dot --test-reporter-destination=stdout test/*.test.ts",
+      "build": "tsc -p tsconfig.build.json",
+      "clean": "node ../../scripts/package-files.mjs clean dist",
+      "prepublishOnly": "npm run clean && npm run build",
+      "build:native:linux": "native/linux/build.sh",
+      "build:native:win32": "node native/win32/build.mjs",
+      "build:native:darwin": "native/darwin/build.sh"
+    },
+    "_npmUser": {
+      "name": "GitHub Actions",
+      "email": "npm-oidc-no-reply@github.com",
+      "trustedPublisher": {
+        "id": "github",
+        "oidcConfigId": "82d0e3b7-9a54-4a61-9a80-9444873f243a"
+      }
+    },
+    "homepage": "https://github.com/earendil-works/pi#readme",
+    "keywords": [
+      "tui",
+      "terminal",
+      "ui",
+      "text-editor",
+      "differential-rendering",
+      "typescript",
+      "cli"
+    ],
+    "_resolved": "/tmp/pi-package-artifacts-XfVuNb/tarballs/earendil-works-pi-tui-1.5.1-51991a3182ee.tgz",
+    "_integrity": "sha512-UZkaMYLuJrk2anJhZf06dNYdLWL8toqWNL807fhAorc8Lzy5vkxWNq/pC1f0CIM2EVdlctuRibWuIQGKYOgx+A==",
+    "repository": {
+      "url": "git+https://github.com/earendil-works/pi.git",
+      "type": "git",
+      "directory": "packages/tui"
+    },
+    "_npmVersion": "11.16.0",
+    "description": "Terminal User Interface library with differential rendering for efficient text-based applications",
+    "directories": {},
+    "maintainers": [
+      {
+        "name": "mitsuhiko",
+        "email": "armin.ronacher@active-4.com"
+      },
+      {
+        "name": "badlogic",
+        "email": "mario@badlogicgames.com"
+      },
+      {
+        "name": "rwachtler",
+        "email": "r.wachtler@outlook.com"
+      }
+    ],
+    "_nodeVersion": "22.23.4",
+    "dependencies": {
+      "marked": "18.0.11",
+      "marked-cjk-friendly": "0.1.2",
+      "get-east-asian-width": "1.6.0"
+    },
+    "_hasShrinkwrap": false,
+    "devDependencies": {
+      "chalk": "6.0.0",
+      "@xterm/headless": "5.5.0"
+    },
+    "_npmOperationalInternal": {
+      "tmp": "tmp/pi-tui_1.5.1_1794267888017_0.46828718941493186",
+      "host": "s3://npm-registry-packages-npm-production"
+    },
+    "_id": "@earendil-works/pi-tui@1.5.1",
+    "version": "1.5.1"
+  }
+]

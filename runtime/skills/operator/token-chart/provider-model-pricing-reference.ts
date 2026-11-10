@@ -610,16 +610,7 @@ function normalizeModel(model: string): string {
   return aliasMap[trimmed] || trimmed;
 }
 
-const UNPRICED_FALLBACK: ProviderModelPricingReference = {
-  canonicalModel: "(unpriced)",
-  basis: `Unpriced fallback (${PROVIDER_MODEL_PRICING_REFERENCE_TAG})`,
-  inputPerMTok: 0,
-  outputPerMTok: 0,
-  cacheReadPerMTok: 0,
-  cacheWritePerMTok: 0,
-};
-
-export function resolveProviderModelPricing(provider: string, model: string): ProviderModelPricingReference {
+export function resolveProviderModelPricing(provider: string, model: string): ProviderModelPricingReference | null {
   const normalizedProvider = provider.trim().toLowerCase();
   const normalizedModel = normalizeModel(model);
   const rule = PRICING_RULES.find(
@@ -684,9 +675,5 @@ export function resolveProviderModelPricing(provider: string, model: string): Pr
     };
   }
 
-  return {
-    ...UNPRICED_FALLBACK,
-    canonicalModel: model,
-    notes: `No pricing reference available for ${provider}/${normalizedModel}.`,
-  };
+  return null;
 }
