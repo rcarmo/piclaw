@@ -291,7 +291,7 @@ export class HostConversationRuntime {
     private readonly storage: Storage, private readonly context: Context) {
     harness.subscribeClose(() => { this.storageClosing = true; });
     this.storageEnded = harness.closed.then(end => {
-      if (end.reason === "failed") options.onStorageFailure?.(end.error);
+      if (end.kind === "failed") options.onStorageFailure?.(end.error);
     });
     // Join notification/cleanup failures during close; never detach an unhandled rejection.
     void this.storageEnded.catch(() => {});
@@ -417,7 +417,7 @@ export class HostConversationRuntime {
           listener(view);
         };
         await publish(watch.value);
-        watch.start(publish);
+        watch.start(async call=>{if(call.kind==='failed'){log.warn('Native conversation watch read failed',{operation:'durable.watch_failed',err:call.error});return;}await publish(call.value);});
         return async () => { await watch.stop(); };
       } catch (error) {
         // Allocation may finish after close/route revocation. Never abandon the
@@ -1017,7 +1017,7 @@ export class HostConversationRuntime {
         if (!task || task.kind !== "pi.compaction" || task.conversationId !== scope.conversationId || task.abortRequested ||
           task.state.status !== "running" || !checkpoint || typeof checkpoint !== "object" || Array.isArray(checkpoint) || checkpoint.phase !== "summarize" ||
           !["threshold", "overflow"].includes(reason ?? "") ||
-          !live.compactions?.some(status => status.taskId === scope.taskId && status.reason === reason && status.blocking === (task.owner !== undefined)))
+          !live.compactions?.some(status => status.taskId === scope.taskId && status.trigger === reason && status.blocking === (task.owner !== undefined)))
           throw Error("Exact automatic compaction task required");
         if (task.owner !== undefined) {
           const owner = await tx.task(task.owner);
@@ -1440,7 +1440,7 @@ export class HostConversationRuntime {
           const checkpoint = task.state.checkpoint;
           if (!checkpoint || typeof checkpoint !== "object" || Array.isArray(checkpoint) || checkpoint.phase !== "summarize" ||
               !["threshold", "overflow"].includes(reason ?? "") ||
-              !live.compactions?.some(slot => slot.taskId === task.id && slot.reason === reason && slot.blocking === (task.owner !== undefined)))
+              !live.compactions?.some(slot => slot.taskId === task.id && slot.trigger === reason && slot.blocking === (task.owner !== undefined)))
             throw Error("Exact Dream compaction task required");
           if (task.owner !== undefined) {
             const owner = await tx.task(task.owner);
@@ -1989,7 +1989,7 @@ export class HostConversationRuntime {
         const live=await tx.doc(LiveDoc,reader.binding.conversationId as ConversationId);
         const inbox=await tx.doc(InboxDoc,reader.binding.conversationId as ConversationId);
         if(retryOnly && !live.generation?.retry)return null;
-        const compaction=live.compactions?.find(item=>item.reason==="manual"||item.blocking);
+        const compaction=live.compactions?.find(item=>item.trigger==="manual"||item.blocking);
         return {taskId:live.run?.taskId??compaction?.taskId??null,
           submissionIds:[...(live.run?.inputs??[]),...inbox.items.filter(item=>item.mode!=="write").map(item=>item.id)]};
       },this.context);reader.check();

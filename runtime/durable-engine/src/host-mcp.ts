@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { JsonRpcMessage } from "@earendil-works/pi-mcp";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import type { JsonValue } from "@earendil-works/chord";
 import { defineTool, type ToolExecutionApi } from "@earendil-works/pi-durable";
 import { McpClient } from "../../src/durable-legacy-sdk.js";

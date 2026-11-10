@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { ToolDefinition } from "../../src/durable-legacy-sdk.js";
-import type { TSchema } from "@earendil-works/pi-ai";
+import type { TSchema } from "typebox";
 import type { JsonValue } from "@earendil-works/chord";
 import { realpathSync, statSync } from "node:fs";
 import { resolve, relative, isAbsolute } from "node:path";

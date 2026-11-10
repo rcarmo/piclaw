@@ -93,8 +93,10 @@ const optionKeys = new Set([
 ]);
 function requestOptions(options: SimpleStreamOptions = {}, deferred = false): SimpleStreamOptions {
   if (Object.getPrototypeOf(options) !== Object.prototype) throw new Error("Only JSON data is qualified");
+  const scope=taskModelRequestScope(options.signal);
+  const sdkPayload=typeof options.onPayload==='function'&&scope?.taskKind==='pi.generation'&&scope.phase==='request'&&!!scope.checkpointHash;
   for (const [key, value] of Object.entries(options)) {
-    if (key !== "signal" && key !== "telemetry" && value !== undefined && !optionKeys.has(key) && !(deferred && key === "deferred")) {
+    if (!(key==='onPayload'&&sdkPayload) && key !== "signal" && key !== "telemetry" && value !== undefined && !optionKeys.has(key) && !(deferred && key === "deferred")) {
       throw new Error(`Unqualified request option: ${key}`);
     }
   }
@@ -103,8 +105,8 @@ function requestOptions(options: SimpleStreamOptions = {}, deferred = false): Si
   }
   // SDK spans stay in their originating island. The host transport retains its
   // own tracing; no span methods or callbacks cross this JSON-only bridge.
-  const { signal: _signal, telemetry: _telemetry, ...rest } = options;
-  return { ...data(rest), maxRetries: 0 };
+  const { signal: _signal, telemetry: _telemetry,onPayload, ...rest } = options;
+  return { ...data(rest), ...(onPayload?{onPayload}:{}), maxRetries: 0 };
 }
 
 function catalogCost(cost: AnyModel["cost"]): AnyModel["cost"] {
@@ -357,7 +359,7 @@ export function createHostModels(
         if (!listed || listed.api !== model.api) throw new Error("Model is not approved");
         transportAbort = new AbortController();
         const signal = AbortSignal.any([policy.signal, transportAbort.signal, ...(options?.signal ? [options.signal] : [])]);
-        const safeOptions = requestOptions(options, !!policy.deferred);
+        const {onPayload:sdkPayload,...safeOptions} = requestOptions(options, !!policy.deferred);
         signal.throwIfAborted();
         phase = "admission";
         await policy.authorize(ref, "chat", signal);
@@ -377,7 +379,19 @@ export function createHostModels(
         const physical = freeze(data(assertPhysicalCompatible()));
         phase = "conversion";
         codex = await policy.codex?.bind(physical, signal, options?.signal);
-        const hostOptions = { ...safeOptions, ...codex?.options, signal, transformHeaders: async (headers: Record<string, string | null>) => {
+        const hostOptions = { ...safeOptions, ...codex?.options, signal,
+          ...(sdkPayload?{onPayload:async(payload:unknown,actual:Model<Api>)=>{
+            signal.throwIfAborted();assertSource();policy.assertCurrent(ref,'chat',signal);assertPhysicalCompatible();
+            if(actual.provider!==physical.provider||actual.id!==physical.id||actual.api!==physical.api)throw Error('Provider payload owner changed');
+            // Pi1.5 supplies this task-bound hook even without extension hooks.
+            // Call it within its own island with detached data. The existing
+            // host bridge does not authorise provider-body replacement.
+            const original=freeze(data(payload));
+            const result=await sdkPayload(original,freeze(data(model)));
+            signal.throwIfAborted();assertSource();policy.assertCurrent(ref,'chat',signal);assertPhysicalCompatible();
+            if(result!==undefined&&JSON.stringify(data(result))!==JSON.stringify(original))throw Error('Provider payload replacement is not qualified');
+            return codex?.options.onPayload?codex.options.onPayload(payload,actual):payload;
+          }}:{}), transformHeaders: async (headers: Record<string, string | null>) => {
           signal.throwIfAborted(); assertSource();
           policy.assertCurrent(ref, "chat", signal); assertPhysicalCompatible();
           const transformed = await (codex ? codex.headers(headers) : headers);

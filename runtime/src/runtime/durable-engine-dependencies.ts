@@ -9,7 +9,7 @@ export const DURABLE_ENGINE_SDK_PACKAGES = ["chord", "pi-ai", "pi-codemode", "pi
 export function assertDurableEngineDependencies(directory = DURABLE_ENGINE_DIRECTORY): void {
   try {
     for (const shortName of DURABLE_ENGINE_SDK_PACKAGES) {
-      const name = `@earendil-works/${shortName}`, version = "1.4.0";
+      const name = `@earendil-works/${shortName}`, version = "1.5.0";
       const installed = JSON.parse(readFileSync(join(directory, "node_modules", name, "package.json"), "utf8"));
       if (installed.name !== name || installed.version !== version) {
         throw new Error(`Expected private ${name}@${version}`);

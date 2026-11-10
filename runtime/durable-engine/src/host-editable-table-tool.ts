@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { ToolDefinition } from "../../src/durable-legacy-sdk.js";
-import type { TSchema } from "@earendil-works/pi-ai";
+import type { TSchema } from "typebox";
 import type { JsonValue } from "@earendil-works/chord";
 import type { HostConversationRuntime } from "./host-runtime.js";
 import { createHostOperationAuthority } from "./host-operation-authority.js";
