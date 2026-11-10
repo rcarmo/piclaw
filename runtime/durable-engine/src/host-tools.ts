@@ -1,6 +1,6 @@
 import type { ToolDefinition } from "../../src/durable-legacy-sdk.js";
 import type { TSchema } from "typebox";
-import type { JsonValue } from "@earendil-works/chord";
+import type { JsonValue } from "@earendil-works/chord/json";
 import { defineTool, type ToolRegistration, type ConversationId, type TaskId } from "@earendil-works/pi-durable";
 
 // Identity metadata only: no ownership, adoption, or execution ledger.

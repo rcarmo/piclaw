@@ -1,5 +1,5 @@
 import type { Conversation, ConversationView, ConversationWatch, LiveState, ModelRef } from "@earendil-works/pi-durable";
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import type { NativeDelegateProgress } from "../../src/agent-pool/delegate-progress.js";
 
 /** Best-effort UI observer, never submission/settlement authority. Child text and

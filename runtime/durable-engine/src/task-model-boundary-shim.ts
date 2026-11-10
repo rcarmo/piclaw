@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { canonicalJson } from "../../src/utils/canonical-json.js";
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import type { AnyTask, RegistryReader, RegistrySnapshot, TaskDefinition, TaskRuntime } from "@earendil-works/pi-durable";
 
 type Runtime = TaskRuntime<any, any, any, any>;
