@@ -8,6 +8,7 @@ import { mkdirSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import Database from "bun:sqlite";
+import { fileURLToPath } from "node:url";
 import { PROVIDER_MODEL_PRICING_REFERENCE_TAG } from "../../skills/operator/token-chart/provider-model-pricing-reference.ts";
 
 test("token-chart --mode provider-model-cost renders an estimated cost chart with the pricing reference tag", () => {
@@ -89,8 +90,8 @@ test("token-chart --mode provider-model-cost renders an estimated cost chart wit
 
   const proc = Bun.spawnSync(
     [
-      "bun",
-      "/workspace/piclaw/runtime/skills/operator/token-chart/token-chart.ts",
+      process.execPath,
+      fileURLToPath(new URL("../../skills/operator/token-chart/token-chart.ts", import.meta.url)),
       "--days",
       "2",
       "--source",
@@ -109,7 +110,7 @@ test("token-chart --mode provider-model-cost renders an estimated cost chart wit
   const output = proc.stdout.toString();
 
   expect(output.startsWith("![token-chart](data:image/svg+xml;base64,")).toBe(true);
-  expect(output).toContain("Estimated cost chart (provider + model): last 2 days • $17.2 across 2 active series");
+  expect(output).toContain("Estimated cost chart (provider + model): last 2 days • $17.2 across 2 priced series");
   expect(output).toContain(`pricing ref ${PROVIDER_MODEL_PRICING_REFERENCE_TAG}`);
 
   rmSync(base, { recursive: true, force: true });

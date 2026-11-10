@@ -20,6 +20,15 @@ test("context-fit refusal explains the actual producer allowance without prompt 
   expect(error!.message).not.toContain(message.content);
 });
 
+test("producer safety room cannot hide transport framing that overflows the actual output cap", async () => {
+  const messages: Message[] = [{role:'toolResult',toolCallId:'id'.repeat(170000),toolName:'lookup',content:[{type:'text',text:'ok'}],isError:false,timestamp:1}];
+  expect(estimateContextTokens(messages).tokens).toBeLessThan(100);
+  expect(() => assertModelContextFits(messages,target)).not.toThrow();
+  const output = await outputPreview(messages,target);
+  expect(output.status).toBe('bounded');
+  expect(() => assertModelContextFits(messages,target,output)).toThrow('Candidate context estimate exceeded');
+});
+
 test("context guard still refuses oversized input and images", () => {
   expect(() => assertModelContextFits([{...message, content: "x".repeat(600000)}], target)).toThrow("compact first");
   expect(() => assertModelContextFits([{...message, content: [{type: "image", mimeType: "image/png", data: "fixture"}]}] as any, target)).toThrow("Non-text context overhead unavailable");

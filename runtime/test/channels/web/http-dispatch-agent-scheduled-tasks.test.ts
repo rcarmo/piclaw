@@ -1,3 +1,4 @@
+import {installHistoricalExpenseFixture} from '../../fixtures/historical-expense.js';
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import "../../helpers.js";
@@ -81,7 +82,7 @@ describe("scheduled task web management routes", () => {
   });
 
   test("retired expense actions cannot mutate historical records; schedule controls ignore caps", async () => {
-    insertTask();
+    insertTask();installHistoricalExpenseFixture(getDb());
     getDb().query(`INSERT INTO budget_caps(id,scope,metric,amount,scheduled_task_id,created_at,updated_at) VALUES(?,'scheduled_run','api_usd_micros',0,?,'2026-01-01','2026-01-01')`).run("scheduled-cap:task-web-ui", "task-web-ui");
     const before = getDb().query("SELECT * FROM budget_caps").all();
     const schema = getDb().query("SELECT type,name,sql FROM sqlite_master ORDER BY type,name").all();

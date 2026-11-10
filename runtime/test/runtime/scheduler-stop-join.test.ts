@@ -1,8 +1,9 @@
 import { expect, spyOn, test } from "bun:test";
+import {waitForAdmittedScheduledTask} from '../helpers/admitted-scheduled-task.js';
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { withTempWorkspaceEnv } from "../helpers.js";
-import { closeDatabase, createTask, getDb, getTaskRunLogs, initDatabase } from "../../src/db.js";
+import { closeDatabase, createTask, updateTask, getDb, getTaskRunLogs, initDatabase } from "../../src/db.js";
 import * as stores from "../../src/service-effects/current-piclaw/scheduled-run-store.js";
 import { getRuntimeTimingConfig } from "../../src/core/config.js";
 import { getSchedulerMetrics, resetSchedulerMetricsForTests, startSchedulerLoop, stopSchedulerLoop, SchedulerStoreReleaseError, type SchedulerDeps } from "../../src/task-scheduler.js";
@@ -123,29 +124,28 @@ test("stop joins a held claim, denies late admission, and old callbacks cannot a
 
 test("stop joins dispatch but not an active agent, including across restart", async () => {
   await fixture(async (deps, queued) => {
-    const admitted = Promise.withResolvers<void>(), entered = Promise.withResolvers<void>();
+    const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<{ status: "success"; result: string }>();
-    deps.queue.enqueueTask = (_id, run) => { queued.push(run); admitted.resolve(); };
     deps.agentPool.dispatchScheduledAgent = async () => { entered.resolve(); return await release.promise as any; };
     const stop = startSchedulerLoop(deps);
-    await admitted.promise;
-    const running = queued[0]();
     try {
       await entered.promise;
+      expect(queued).toHaveLength(0);
       await stop();
       expect(getTaskRunLogs("join-task")).toHaveLength(0);
       const stopNew = startSchedulerLoop(deps);
       expect(stop()).toBe(stop());
-      release.resolve({ status: "success", result: "done" }); await running;
+      release.resolve({ status: "success", result: "done" }); await waitForAdmittedScheduledTask('join-task');
       expect(getTaskRunLogs("join-task")[0]?.status).toBe("success");
       expect(startSchedulerLoop(deps)).toBe(stopNew);
       await stopNew();
-    } finally { release.resolve({ status: "success", result: "done" }); await running; }
+    } finally { release.resolve({ status: "success", result: "done" }); await waitForAdmittedScheduledTask('join-task'); }
   });
 });
 
-test("stop does not cancel or join accepted queue work, which can still settle", async () => {
+test("stop does not cancel or join accepted shell queue work, which can still settle", async () => {
   await fixture(async (deps, queued) => {
+    updateTask('join-task',{task_kind:'shell',command:'printf done'});
     const admitted = Promise.withResolvers<void>();
     deps.queue.enqueueTask = (_id, run) => { queued.push(run); admitted.resolve(); };
     const stop = startSchedulerLoop(deps);

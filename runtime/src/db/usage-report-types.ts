@@ -28,10 +28,12 @@ export interface TokenUsageRecord {
   cost_cache_read: number;
   /** Dollar cost attributed to cache-write tokens. */
   cost_cache_write: number;
-  /** Effective dollar cost for the run. */
+  /** Effective provider amount or USD catalogue estimate; consult provenance/currency. */
   cost_total: number;
   /** Provider-reported total cost, when available. */
   provider_cost_total?: number | null;
+  /** Observational currency for provider_cost_total; null means legacy/unknown. */
+  provider_cost_currency?: string | null;
   /** Catalogue-calculated total cost, when available. */
   catalogue_cost_total?: number | null;
   /** Provenance for cost_total. Null means a legacy row. */
@@ -48,7 +50,7 @@ export interface TokenUsageRecord {
   usage_source?: TokenUsageSource | string | null;
   /** Number of conversational turns in the run. */
   turns?: number | null;
-  /** Owning request/goal/scheduled-run identity for budget attribution. */
+  /** Historical correlation only; never an execution or financial admission owner. */
   work_id?: string | null;
   /** Billable provider invocation identity when available. */
   invocation_id?: string | null;

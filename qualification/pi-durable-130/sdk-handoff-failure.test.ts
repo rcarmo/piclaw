@@ -2,7 +2,7 @@ import './src/test-guard.js';
 import { expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { StorageWrite, SubmissionRecord } from '../../runtime/durable-engine/qualification/durable.ts';
+import type { StorageWrite, SubmissionRecord, Submission } from '../../runtime/durable-engine/qualification/durable.ts';
 import { SqliteStorage } from '../../runtime/durable-engine/qualification/sqlite.ts';
 import type { AcceptedInput } from '../../runtime/durable-engine/src/host-runtime.js';
 import { hashCanonicalRequest } from '../../runtime/src/service-effects/contracts/common.js';
@@ -45,17 +45,18 @@ test('SDK commit ACK lost: failed Session leaves original input uncertain and ho
     let committedWrites: readonly StorageWrite[] = [];
     database.close = async () => { await closeDatabase(); databaseCloses++; backendClosed.release(); };
     const lostAck = new Error('Qualification: real SDK storage commit succeeded but ACK was lost');
-    storage.commit = async (writes: readonly StorageWrite[], callContext) => {
+    storage.commit = async (batches: readonly (readonly StorageWrite[])[], receive, callContext) => {
+      const writes = batches.flat();
       const target = writes.find((write): write is Extract<StorageWrite, { type: 'submission' }> =>
         write.type === 'submission' && write.value.type === 'input' &&
         write.value.conversationId === input.conversationId && write.value.requestId === input.requestId);
       if (target) matches++;
-      const seq = await commit(writes, callContext); // Real durable transaction, never a synthetic submit.
+      const result = await commit(batches, receive, callContext); // Real durable transaction, never a synthetic submit.
       if (target && !injected) {
         injected = true; committed = structuredClone(target.value); committedWrites = structuredClone(writes);
         throw lostAck; // Fatal Storage guard path, not a post-submit host adapter fault.
       }
-      return seq;
+      return result;
     };
     const operationBefore = f.db.query('SELECT * FROM service_effect_s01_operations WHERE operation_id=?').get(input.operationId);
     const sourceBefore = work.getAcceptedSource(f.chatJid, source.sourceId);
@@ -135,18 +136,18 @@ test('SDK submit return lost: usable Session reconciles original producer withou
     // Access private runtime ownership only to inject at the public Harness API.
     // Wrap EVERY returned conversation: no assumption of handle caching.
     const harness = (f.runtime as unknown as { harness: import('../../runtime/durable-engine/qualification/durable.ts').Harness }).harness;
-    const originalConversation = harness.conversation;
+    const originalConversation = harness.conversation.bind(harness);
     let submits = 0, lost = false;
-    let actual: Awaited<ReturnType<NonNullable<Awaited<ReturnType<typeof originalConversation>>>['submit']>> | undefined;
+    let actual:Submission|undefined;
     const lostReturn = new Error('Qualification: public submit completed; host lost return');
     harness.conversation = async function (...args) {
-      const conversation = await originalConversation.apply(this, args);
+      const conversation = await originalConversation(...args);
       if (!conversation) return conversation;
-      const originalSubmit = conversation.submit;
+      const originalSubmit = conversation.submit.bind(conversation);
       return new Proxy(conversation, { get(target, property) {
-        if (property === 'submit') return async (...submitArgs: Parameters<typeof originalSubmit>) => {
+        if (property === 'submit') return async (draft:import('../../runtime/durable-engine/qualification/durable.ts').SubmissionDraft,callContext:typeof context) => {
           submits++;
-          const result = await originalSubmit.apply(target, submitArgs);
+          const result = await originalSubmit(draft,callContext);
           actual = result;
           if (!lost) { lost = true; throw lostReturn; }
           return result;

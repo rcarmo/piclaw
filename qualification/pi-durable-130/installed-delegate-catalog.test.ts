@@ -20,7 +20,7 @@ for (const mode of ["approved", "shadow", "dirty", "version", "handler", "execut
       hash.update(file + "\0"); hash.update(bytes);
       writeFileSync(join(pkg, `${file}.ts`), bytes);
     }
-    expect(hash.digest("hex")).toBe("4ef64555202d0f96c9cc647c4c8ba9cb6491e8c8afa8fb95c87be537946970bc");
+    expect(hash.digest("hex")).toBe("3876649c7ef34f291e5f26de4b668dcbfe2105be960eb1bb88b5014d57b5495a");
     copyFileSync(join(source, "addons/delegate/package.json"), join(pkg, "package.json"));
     if (mode === "shadow") writeFileSync(join(pkg, "delegate.js"), `import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(join(dir, "unqualified-module-io"))}, "BAD");
 export default function() {}\n`);

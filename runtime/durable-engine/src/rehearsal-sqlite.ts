@@ -35,6 +35,7 @@ export class RehearsalSqliteDatabase implements SqliteDatabase {
     return {
       exec: async sql => { valid(); this.db.exec(sql); },
       run: async (sql, ...params) => { valid(); this.db.query(sql).run(...params); },
+      runCounted: async (sql, ...params) => { valid(); return this.db.query(sql).run(...params).changes; },
       get: async <T extends object>(sql: string, ...params: SqliteValue[]) => {
         valid(); return (this.db.query(sql).get(...params) ?? undefined) as T | undefined;
       },
@@ -46,6 +47,9 @@ export class RehearsalSqliteDatabase implements SqliteDatabase {
 
   exec(sql: string) { return this.enqueue(() => this.executor(() => {}).exec(sql)); }
   run(sql: string, ...params: SqliteValue[]) { return this.enqueue(() => this.executor(() => {}).run(sql, ...params)); }
+  runCounted(sql:string,...params:SqliteValue[]):Promise<number> {
+    return this.enqueue(()=>this.executor(()=>{}).runCounted(sql,...params));
+  }
   get<T extends object>(sql: string, ...params: SqliteValue[]) {
     return this.enqueue(() => this.executor(() => {}).get<T>(sql, ...params));
   }

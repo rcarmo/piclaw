@@ -1,3 +1,4 @@
+import {installHistoricalExpenseFixture,historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import { waitForSubmissionProjection } from './src/submission-projection.js';
 import { installApprovedAddonsFixture } from "./installed-addons-fixture.js";
 import { isolatedApplicationTest } from "./src/isolated-application-test.js";
@@ -21,7 +22,7 @@ const rootUrl = new URL("../../package.json", import.meta.url).href;
 const { ModelRuntime } = await import(import.meta.resolve("@earendil-works/pi-coding-agent", rootUrl));
 const { createAssistantMessageEventStream, getCurrentTools } = await import(import.meta.resolve("@earendil-works/pi-ai", rootUrl));
 
-applicationTest("all 23 installed: actual default factory public provider terminal and reopen", async () => {
+for(const billed of [undefined,0,0.2]as const)applicationTest(`all23 installed: actual provider terminal/reopen with billed=${billed??"estimate"}`, async () => {
   const workspace = process.env.PICLAW_WORKSPACE!;
   // Explicit profile inventory: copies only, never mutate candidate dependencies.
   expect(Object.keys(applicationAddonSourceProfiles)).toHaveLength(23);
@@ -32,6 +33,7 @@ applicationTest("all 23 installed: actual default factory public provider termin
     discoveryFactory: () => {throw Error("mDNS forbidden");},
   };
   const model: Model<"openai-codex-responses"> = { provider: "openai-codex", id: "synthetic-codex", name: "Synthetic Codex", api: "openai-codex-responses", baseUrl: "https://fixture.invalid", input: ["text", "image"], reasoning: false, contextWindow: 100000, maxTokens: 1000, cost: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 } };
+  if(billed===0)model.cost={input:0,output:0,cacheRead:0,cacheWrite:0};
   const credentials: CredentialStore = {
     async read(id) { if (id !== model.provider) throw Error("Ambient credentials forbidden: " + id); return { type: "api_key", key: "synthetic-only" }; },
     async list() { return [{ providerId: model.provider, type: "api_key" }]; },
@@ -61,7 +63,7 @@ applicationTest("all 23 installed: actual default factory public provider termin
           expect((payload as any).tools.some((t:any) => t.type === name && !t.parameters)).toBe(true);
           expect((payload as any).tools.some((t:any) => t.type === "function" && t.name === name)).toBe(false);
         }
-        const message: AssistantMessage = { role: "assistant", provider: model.provider, model: model.id, api: model.api, timestamp: Date.now(), content: [{ type: "text", text: "owned synthetic codex terminal" }], stopReason: "stop", usage: { input: 3, output: 2, cacheRead: 0, cacheWrite: 0, totalTokens: 5, cost: { input: 0.000003, output: 0.000002, cacheRead: 0, cacheWrite: 0, total: 0.000005 } } };
+        const message: AssistantMessage = { role: "assistant", provider: model.provider, model: model.id, api: model.api, timestamp: Date.now(), content: [{ type: "text", text: "owned synthetic codex terminal" }], stopReason: "stop", usage: { input: 3, output: 2, cacheRead: 0, cacheWrite: 0, totalTokens: 5, cost: { input: billed===0?0:0.000003, output: billed===0?0:0.000002, cacheRead: 0, cacheWrite: 0, total: billed??0.000005,...(billed===undefined?{}:{totalFromProvider:true}) } } };
         stream.push({ type: "done", reason: message.stopReason, message }); stream.end(message);
       } catch (error) {
         fixtureError = error;
@@ -79,6 +81,8 @@ applicationTest("all 23 installed: actual default factory public provider termin
   mkdirSync(getPiclawAgentDir(), { recursive: true });
   writeFileSync(join(getPiclawAgentDir(), "auth.json"), JSON.stringify({ "openai-codex": { type: "oauth", access: "synthetic-only", refresh: "synthetic-refresh", expires: Date.now() + 3600000, accountId: "synthetic-account" } }));
   process.env.PICLAW_DB_IN_MEMORY = "0"; initDatabase();
+  if(billed===0.2){installHistoricalExpenseFixture(getDb());getDb().exec("INSERT INTO budget_work(id,chat_jid,execution_kind,status,created_at,updated_at) VALUES('inert-held','web:default','interactive','paused','old','old');INSERT INTO budget_caps(id,scope,metric,amount,timezone,created_at,updated_at) VALUES('inert-exhausted','instance_daily','api_usd_micros',0,'UTC','old','old');");getDb().query("INSERT INTO budget_request_reservations(id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,state,created_at,updated_at) VALUES('inert-request','inert-held','web:default','fixture','unpriced','opaque',?,'unresolved','old','old')").run('a'.repeat(64));}
+  const financialBefore=historicalExpenseRows(getDb(),['budget_work','budget_caps','budget_request_reservations','budget_usage_events']);
   const owner = acquireRuntimeLock({ lockPath: join(workspace, "codex-production-owner.lock"), strictOwnership: true, disabled: false });
   let backend: Awaited<ReturnType<typeof createDefaultApplicationRuntime>> | undefined;
   try {
@@ -89,7 +93,7 @@ applicationTest("all 23 installed: actual default factory public provider termin
     const pool = new AgentPool({ credentialStore: createTestCredentialStore({}), modelRuntime: runtime, modelRegistry: services.modelRegistry, ...backend.sessionOptions } as never);
     const bound = backend.bind({ queue: base.queue, agentPool: pool });
     const channel = new WebChannel(bound);
-    const priorReservations = new Set((getDb().query("SELECT id FROM budget_request_reservations").all() as {id:string}[]).map(r=>r.id));
+    const priorReservations = new Set((historicalExpenseRows(getDb(),['budget_request_reservations'])[0] as {id:string}[]).map(r=>r.id));
     const admitted = await admitWebMessage(channel, { chatJid: "web:default", content: "Reply with a short synthetic result", mediaIds: [], isBot: false, agentId: "default", agentName: "Fixture" }, { acceptSource: bound.getInputSourceAdmission!("web:default") }, () => owner.assertCurrentOwner(), new AbortController().signal);
     expect(admitted).not.toBeNull();
     const row = getDb().query("SELECT id FROM messages WHERE rowid=?").get(admitted!.id) as { id: string };
@@ -100,9 +104,11 @@ applicationTest("all 23 installed: actual default factory public provider termin
     if (fixtureError) throw fixtureError;
     expect(outcome).toBe("done");
     expect(calls).toBe(1);
-    const reservations = (getDb().query("SELECT * FROM budget_request_reservations").all() as any[]).filter(r => !priorReservations.has(r.id));
+    const reservations = (historicalExpenseRows(getDb(),['budget_request_reservations'])[0] as any[]).filter(r => !priorReservations.has(r.id));
     expect(reservations).toEqual([]);
     expect(getDb().query("SELECT total_tokens,provider,model FROM token_usage").all()).toEqual([{total_tokens:5,provider:model.provider,model:model.id}]);
+    expect(historicalExpenseRows(getDb(),['budget_work','budget_caps','budget_request_reservations','budget_usage_events'])).toEqual(financialBefore);
+    expect(getDb().query("SELECT provider_cost_total,provider_cost_currency,catalogue_cost_total,cost_provenance FROM token_usage").get()).toEqual({provider_cost_total:billed??null,provider_cost_currency:billed===undefined?null:"USD",catalogue_cost_total:billed===0?null:billed===undefined?0.000005:0.000003+0.000002,cost_provenance:billed===undefined?"catalogue_estimate":"provider_reported"});
     expect(fetchSpy).toHaveBeenCalledTimes(0);
     const terminals = getDb().query("SELECT content FROM messages WHERE is_bot_message=1 AND is_terminal_agent_reply=1 AND chat_jid=?").all("web:default");
     expect(terminals).toHaveLength(1);

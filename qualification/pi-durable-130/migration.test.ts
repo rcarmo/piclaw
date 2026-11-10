@@ -176,9 +176,9 @@ async function empty(f: Fixture) {
 }
 
 describe("H5 bounded copied existing-history qualification (not production migration)", () => {
-  test("current public SDK is 1.4.0; 5 copied records retain IDs, attachments, exact context and execute nothing", () => using(async f => {
+  test("current public SDK is 1.5.2; 5 copied records retain IDs, attachments, exact context and execute nothing", () => using(async f => {
     const pkg = await Bun.file(new URL("../../node_modules/@earendil-works/pi-coding-agent/package.json", import.meta.url)).json();
-    expect(pkg.version).toBe("1.4.0");
+    expect(pkg.version).toBe("1.5.2");
     expect(import.meta.resolve("@earendil-works/pi-coding-agent")).toBe(pathToFileURL(realpathSync(fileURLToPath(new URL(
       "../../node_modules/@earendil-works/pi-coding-agent/dist/index.js", import.meta.url)))).href);
     const manager = representative(), input = copied(manager), original = input.jsonl;

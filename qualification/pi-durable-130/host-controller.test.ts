@@ -5,6 +5,7 @@ import {createHostController,type HostControllerOptions} from '../../runtime/dur
 import {HostCutoverController,initializeCutoverManifest} from '../../runtime/durable-engine/src/host-cutover.js';
 import {AcceptedReplyThreadUnavailableError} from '../../runtime/durable-engine/src/host-message-thread.js';
 import {defineDoc,type Harness} from '../../runtime/durable-engine/qualification/durable.js';
+import { commitWrites } from '../../runtime/durable-engine/qualification/testing.ts';
 import {nativeMessageFixture} from './src/native-message-fixture.js';
 import {historicalIntentFixture} from './src/historical-intent-fixture.js';
 import {TestOwner} from './src/ownership.js';
@@ -67,7 +68,7 @@ for(const mode of ['idle','host-changed','candidate-document','retired-document'
     if(mode==='terminal-records'){
       const offline=await f.options.openStorage();try{
         const tasks=await offline.scanTasks({status:'terminal'},1000,undefined,context),submissions=await offline.scanSubmissions({status:'done'},1000,undefined,context);expect(tasks.items.length).toBeGreaterThan(0);expect(submissions.items.length).toBeGreaterThan(0);
-        await offline.commit([{type:'task',value:{...tasks.items[0]!,memos:undefined,state:{status:'terminal',outcome:{status:'completed',result:'historical-only-change'}}}},{type:'submission',value:{...submissions.items[0]!,requestId:'historical-only-terminal'}}],context);
+        await commitWrites(offline, [{type:'task',value:{...tasks.items[0]!,memos:undefined,state:{status:'terminal',outcome:{status:'completed',result:'historical-only-change'}}}},{type:'submission',value:{...submissions.items[0]!,requestId:'historical-only-terminal'}}], context);
       }finally{await offline.close(context);}
     }
     const get=f.bindings.get.bind(f.bindings);

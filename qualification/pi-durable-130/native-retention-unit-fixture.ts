@@ -1,3 +1,4 @@
+import {installHistoricalExpenseFixture} from '../../runtime/test/fixtures/historical-expense.js';
 import { expect } from "bun:test";
 import { Database } from "bun:sqlite";
 import { copyFileSync, constants, writeFileSync } from "node:fs";
@@ -22,6 +23,7 @@ const value=<T,E>(result:Result<T,E>):T=>{if(!result.ok)throw Error(JSON.stringi
 /** Literal historical fixture data only; no cap evaluator, reservation owner,
  * financial settlement, schema mutation or execution permission is installed. */
 export function seedRetentionHistoryFixture(database:Database){
+  installHistoricalExpenseFixture(database);
   const old="2000-01-01T00:00:00.000Z",recorded="2001-02-15T00:00:00.000Z";
   const usage:TokenUsageRecord={chat_jid:"web:default",run_at:old,input_tokens:1,output_tokens:1,cache_read_tokens:0,cache_write_tokens:0,total_tokens:2,cost_input:0,cost_output:0,cost_cache_read:0,cost_cache_write:0,cost_total:0};
   for(let i=0;i<5;i++)storeTokenUsage(usage,database);

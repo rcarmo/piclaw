@@ -64,13 +64,13 @@ test("visual latest-run telemetry preserves cache presence, reasoning, cost prov
     } },
   }, "openrouter/auto");
 
-  expect(meta?.label).toBe("Last • 5K • CH60.0% • $0.0012");
+  expect(meta?.label).toBe("Last • 5K • CH60.0% • 0.0012 (currency unknown)");
   expect(meta?.title).toContain("Latest run: openrouter/auto");
   expect(meta?.title).toContain("Tokens: 5K");
   expect(meta?.title).toContain("Reasoning: 40");
   expect(meta?.title).toContain("Cache read: 3K");
   expect(meta?.title).toContain("Cache write: 1K");
-  expect(meta?.title).toContain("Provider-reported cost: $0.0012");
+  expect(meta?.title).toContain("Provider-reported cost: 0.0012 (currency unknown)");
   expect(meta?.title.split("\n").every((line) => line.length < 80)).toBe(true);
 });
 
@@ -151,3 +151,9 @@ test('old-generation pushed context cannot resurrect superseded meters',()=>{
  expect(mergeVisualLiveContext(current,{tokens:900,percent:9,contextWindow:10000,sessionGeneration:'old'})).toBe(current);
  expect(mergeVisualLiveContext(current,{tokens:900,percent:9,contextWindow:10000})).toBe(current);
 });
+
+for(const [currency,label]of [['USD','$0.0000'],['EUR','EUR 0.0000'],[null,'0.0000 (currency unknown)']]as const)test(`visual usage preserves ${currency??'unknown'} provider units`,()=>{
+ const meta=formatVisualLatestRunUsage({tokens:null,contextWindow:0,percent:null,cacheUsage:{latest:{totalTokens:0,providerCostCurrency:currency,costTotal:0,costProvenance:'provider_reported'}}},null);expect(meta?.title).toContain(label);if(currency!=='USD')expect(meta?.title).not.toContain('$');
+});
+
+test('visual model picker explicitly indicates unknown catalogue prices',()=>{expect(formatVisualModelPricing(null)).toBe('Price unknown');expect(formatVisualModelPricing({input_per_million:null,output_per_million:null,cache_read_per_million:null,cache_write_per_million:null})).toBe('Price unknown');});

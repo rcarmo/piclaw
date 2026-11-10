@@ -1,3 +1,4 @@
+import {withTaskModelRequestScope} from "../../runtime/durable-engine/src/task-model-boundary-shim.js";
 import "./src/test-guard.js";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -118,7 +119,7 @@ async function fixture(multimodal = false, keyless = false, deferred = false, im
     }
     if (terminalError && terminalError !== "retry-once" && terminalError !== "retry-always" || terminalError === "retry-once" && calls === 2 || terminalError === "retry-always" && calls >= 2) {
       const error: AssistantMessage = { ...message, content: [], stopReason: "error" as const, errorMessage: errorText,
-        usage: { ...message.usage, cost: { input: 0.1, output: 0.2, cacheRead: 0, cacheWrite: 0, total: 0.3 } } };
+        usage: { ...message.usage, cost: { ...message.usage.cost, input: 0.1, output: 0.2, cacheRead: 0, cacheWrite: 0, total: 0.3 } } };
       if (terminalError === "retry-once" || terminalError === "retry-always") error.usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
       if (terminalError === "invalid-usage") error.usage.cost.total = -1;
       if (terminalError === "wrong-owner") error.provider = "different-provider";
@@ -727,7 +728,7 @@ test("image capability: authorization, real post-auth fence, and accepted SQLite
   const path = join(directory, "candidate.sqlite");
   const registry = createRegistry();
   const open = async () => Harness.open(await SqliteStorage.open(new BunSqliteDatabase(path)), {
-    models: f.models, registry, settings: { retry: { enabled: false }, compaction: { enabled: false } },
+    models: f.models, registry:withTaskModelRequestScope(registry), settings: { retry: { enabled: false }, compaction: { enabled: false } },
   }, durableContext);
   let harness = await open();
   try {
@@ -1041,7 +1042,7 @@ for (const archiveFails of [false, true]) for (const exhausted of [false, true])
   let effects = 0;
   const tool = defineTool({name: "fixture_tool", description: "Committed effect counter", callers: ["model"], replay: "unsafe", parameters: Type.Object({value:Type.Number()}), execute: async () => {effects++;return {output:[{type:"text",text:"effect committed"}]};}});
   const registry = createRegistry(); registry.install(defineExtension({name:"retained-retry-fixture", tools:[tool]}));
-  const harness = await Harness.open(await SqliteStorage.open(new BunSqliteDatabase(join(directory,"sdk.sqlite"))), {models:f.models, registry,
+  const harness = await Harness.open(await SqliteStorage.open(new BunSqliteDatabase(join(directory,"sdk.sqlite"))), {models:f.models, registry:withTaskModelRequestScope(registry),
     settings:{retry:{enabled:true,maxRetries:1,baseDelayMs:1},compaction:{enabled:false}}}, durableContext);
   try {
     const root = await harness.root(durableContext,{agent:{model:{provider:ref.provider,modelId:ref.id},tools:[tool]}});
@@ -1102,7 +1103,7 @@ test("abort during retry backoff survives reopen without replay", async () => {
   const tool = defineTool({ name: "fixture_tool", description: "Committed effect counter", callers: ["model"], replay: "unsafe", parameters: Type.Object({ value: Type.Number() }),
     execute: async () => { effects++; return { output: [{ type: "text", text: "effect committed" }] }; } });
   const registry = createRegistry(); registry.install(defineExtension({ name: "cancel-retry-fixture", tools: [tool] }));
-  const options = { models: f.models, registry, settings: { retry: { enabled: true, maxRetries: 2, baseDelayMs: 60_000 }, compaction: { enabled: false } } };
+  const options = { models: f.models, registry:withTaskModelRequestScope(registry), settings: { retry: { enabled: true, maxRetries: 2, baseDelayMs: 60_000 }, compaction: { enabled: false } } };
   let harness = await Harness.open(await SqliteStorage.open(new BunSqliteDatabase(path)), options, durableContext);
   let watch: Awaited<ReturnType<Awaited<ReturnType<typeof harness.root>>["watch"]>> | undefined;
   try {
@@ -1110,7 +1111,7 @@ test("abort during retry backoff survives reopen without replay", async () => {
     let reachedBackoff!: () => void;
     const backoff = new Promise<void>(resolve => { reachedBackoff = resolve; });
     watch = await root.watch(durableContext);
-    watch.start(async view => { if ((view.docs["pi.live"] as any)?.generation?.retry) reachedBackoff(); });
+    watch.start(async call => { if(call.kind==='failed')throw call.error;if ((call.value.docs["pi.live"] as any)?.generation?.retry) reachedBackoff(); });
     const submission = await root.submit({ type: "input", requestId: "cancel-backoff", content: "Perform one effect and continue" }, durableContext);
     await bounded(backoff);
     expect(f.calls()).toBe(2); expect(effects).toBe(1);
@@ -1246,7 +1247,7 @@ for (const archiveFails of [false, true]) test(`ChatGPT quota notice survives na
   const tool = defineTool({ name: "fixture_tool", description: "Committed effect counter", callers: ["model"], replay: "unsafe", parameters: Type.Object({ value: Type.Number() }),
     async execute() { effects++; return { output: [{ type: "text", text: "effect committed" }] }; } });
   const registry = createRegistry(); registry.install(defineExtension({ name: "quota-notice-fixture", tools: [tool] }));
-  const options = { models: f.models, registry, settings: { retry: { enabled: true, maxRetries: 2, baseDelayMs: 1 }, compaction: { enabled: false } } };
+  const options = { models: f.models, registry:withTaskModelRequestScope(registry), settings: { retry: { enabled: true, maxRetries: 2, baseDelayMs: 1 }, compaction: { enabled: false } } };
   const path = join(directory, "sdk.sqlite");
   let harness = await Harness.open(await SqliteStorage.open(new BunSqliteDatabase(path)), options, durableContext);
   try {
@@ -1270,4 +1271,28 @@ for (const archiveFails of [false, true]) test(`ChatGPT quota notice survives na
     await harness.waitForIdle(durableContext);
     expect(f.calls()).toBe(2); expect(effects).toBe(1); expect(retained).toBe(1);
   } finally { await harness.close(durableContext); await rm(directory, { recursive: true, force: true }); }
+});
+
+test('Pi1.5 SDK payload hook stays task-bound, JSON-only and cannot replace the authorised provider body',async()=>{
+  const {defineTask}=await import('../../runtime/durable-engine/qualification/durable.js');
+  const {withTaskModelRequestScope}=await import('../../runtime/durable-engine/src/task-model-boundary-shim.js');
+  const f=await fixture();let callbacks=0,replacement=false;
+  const signal=new AbortController().signal;
+  const task=defineTask({name:'pi.generation',version:1,initial:()=>({phase:'request' as const}),phases:{async request(){
+    const stream=f.models.streamSimple(f.model,context,{signal,onPayload:async payload=>{callbacks++;expect(Object.isFrozen(payload)).toBe(true);return replacement?{model:'foreign'}:payload;}});
+    expect((await stream.result()).stopReason).toBe('toolUse');
+    const callback=f.captured().options.onPayload,body={model:model.id,messages:[{role:'user',content:'synthetic'}]};
+    if(replacement)await expect(callback(body,model)).rejects.toThrow('replacement is not qualified');
+    else{expect(await callback(body,model)).toEqual(body);expect(body).toEqual({model:model.id,messages:[{role:'user',content:'synthetic'}]});}
+  }},async abort(){}});
+  const registry=createRegistry(),reader={subscribe:registry.subscribe.bind(registry),snapshot(){const snapshot=registry.snapshot();return new Proxy(snapshot,{get(target,key){if(key==='task')return(name:string)=>name==='pi.generation'?task:target.task(name);const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;}});}};
+  const execute=withTaskModelRequestScope(reader).snapshot().task('pi.generation')!.definition.phases.request as Function;
+  const record={id:12,conversationId:34,kind:'pi.generation',version:1,input:{},state:{status:'running',checkpoint:{phase:'request'}}};
+  await execute(record,{taskId:12,conversationId:34,signal},durableContext);replacement=true;await execute(record,{taskId:12,conversationId:34,signal},durableContext);
+  expect(callbacks).toBe(2);let untrusted=false;expect(()=>f.models.streamSimple(f.model,context,{onPayload(){untrusted=true;}})).toThrow('Unqualified request option');expect(untrusted).toBe(false);
+});
+
+for(const billed of [false,true])test(`failed SDK outcome retains the provider-billed total marker: ${billed}`,async()=>{
+ const f=await fixture(false,false,false,false,true);f.message.usage.cost.totalFromProvider=billed;
+ const result=await f.models.completeSimple(f.model,context);expect(result.stopReason).toBe('error');expect(result.usage.cost.totalFromProvider).toBe(billed);expect(f.calls()).toBe(1);
 });

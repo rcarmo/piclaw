@@ -1,3 +1,4 @@
+import {historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import { pathToFileURL } from "node:url";
 import { withExtensionKvAuthority } from "../../runtime/src/extension-kv-registry.js";
 import { addLogSink, removeLogSink, type LogRecord } from "../../runtime/src/utils/logger.js";
@@ -24,7 +25,7 @@ for(const {continuation,fault} of [{continuation:false,fault:"none"},{continuati
   cpSync(join(process.env.DURABLE_ADDONS_ROOT!,"addons/plan-sidebar"),plan,{recursive:true,filter:path=>!path.split("/").includes("node_modules")});
   symlinkSync(join(import.meta.dir,"../../node_modules"),join(plan,"node_modules"));
   process.env.PICLAW_DB_IN_MEMORY="0";initDatabase();const database=getDb();
-  const financial=()=>["budget_caps","budget_work","budget_request_reservations","budget_usage_events"].map(table=>database.query(`SELECT * FROM ${table}`).all());
+  const financial=()=>historicalExpenseRows(database,["budget_caps","budget_work","budget_request_reservations","budget_usage_events"]);
   const before=financial();
   const lock=acquireRuntimeLock({lockPath:join(workspace,"native-goal.lock"),strictOwnership:true,disabled:false});
   const credentials=createTestCredentialStore({});

@@ -448,10 +448,10 @@ function formatTokenUsagePart(label, value) {
     return numeric != null ? `${label} ${formatK(numeric)}` : null;
 }
 
-function formatUsageCost(value) {
+function formatUsageCost(value, currency = 'USD') {
     const numeric = finiteNumber(value);
     if (numeric == null || numeric < 0) return null;
-    return `$${numeric.toFixed(numeric >= 0.01 ? 2 : 4)}`;
+    const amount=numeric.toFixed(numeric >= 0.01 ? 2 : 4);return currency==='USD'?`$${amount}`:currency?`${currency} ${amount}`:`${amount} (currency unknown)`;
 }
 
 export function formatOpenRouterKeyUsageTitle(modelUsage) {
@@ -485,7 +485,7 @@ export function resolveComposeRunUsageMeta(contextUsage, activeModel = null) {
     const formattedRate = formatCacheHitRate(cacheHitRate);
     const cacheLabel = formattedRate ? `CH${formattedRate}` : 'CH—';
     const totalTokens = finiteNumber(latest.totalTokens);
-    const cost = formatUsageCost(latest.costTotal);
+    const cost = formatUsageCost(latest.costTotal,latest.costProvenance==='provider_reported'?latest.providerCostCurrency??null:'USD');
     const costProvenance = typeof latest.costProvenance === 'string' ? latest.costProvenance : null;
     const costLabel = costProvenance === 'provider_reported' ? cost
         : costProvenance === 'catalogue_estimate' && cost ? `~${cost}`
@@ -549,7 +549,7 @@ export function formatModelPickerDisplayLabel(label, contextWindow) {
 }
 
 export function formatModelPickerPricing(pricing) {
-    if (!pricing || typeof pricing !== 'object') return '';
+    if (!pricing || typeof pricing !== 'object') return 'Price unknown';
     const rates = [
         ['in', pricing.input_per_million ?? pricing.inputPerMillion],
         ['out', pricing.output_per_million ?? pricing.outputPerMillion],
@@ -560,7 +560,7 @@ export function formatModelPickerPricing(pricing) {
         if (numeric == null || numeric < 0) return null;
         return `${label} $${numeric.toFixed(numeric >= 1 ? 2 : 4).replace(/0+$/, '').replace(/\.$/, '')}`;
     }).filter(Boolean);
-    return rates.length > 0 ? `${rates.join(' / ')} per 1M` : '';
+    return rates.length > 0 ? `${rates.join(' / ')} per 1M` : 'Price unknown';
 }
 
 function normaliseComposeModelCatalogue(payload, preferenceRuntime) {

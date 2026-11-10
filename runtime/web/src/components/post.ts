@@ -273,7 +273,7 @@ function formatAgentCost(usage) {
     const provenance = usage.cost_provenance;
     const cost = provenance === 'provider_reported' ? providerCost ?? effectiveCost : effectiveCost;
     if (cost === null) return null;
-    const formatted = `$${cost.toFixed(cost >= 0.01 ? 2 : 4)}`;
+    const amount=cost.toFixed(cost >= 0.01 ? 2 : 4),currency=provenance==='provider_reported'?usage.provider_cost_currency:'USD',formatted=currency==='USD'?`$${amount}`:typeof currency==='string'&&currency.trim()?`${currency} ${amount}`:`${amount} (currency unknown)`;
     if (provenance === 'provider_reported') return `Provider-reported cost: ${formatted}`;
     if (provenance === 'catalogue_estimate') return `Catalogue cost estimate: ~${formatted}`;
     return null;

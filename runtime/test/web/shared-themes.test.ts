@@ -61,6 +61,15 @@ test("both skin catalogues share all identities and distinguish Monokai Original
   expect(normaliseWebThemeId("not-a-theme")).toBeNull();
 });
 
+test("Fallout renames Petrol & Copper across both skins without changing saved identity", () => {
+  expect(WEB_THEME_PRESETS.find((theme) => theme.id === "petrol")?.label).toBe("Fallout");
+  expect(THEME_PRESETS.find((theme) => theme.name === "petrol")?.label).toBe("Fallout");
+  expect(BUNDLED_THEMES.find((theme) => theme.id === "petrol")?.name).toBe("Fallout");
+  for (const name of ["petrol", "petrol-copper", "fallout", " Fallout "])
+    expect(normaliseWebThemeId(name)).toBe("petrol");
+  expect(WEB_THEME_PRESETS.find((theme) => theme.id === "petrol-light")?.label).toBe("Ivory & Petrol");
+});
+
 test("all palette variants have consistent aliases, readable text and complete syntax/ANSI roles", () => {
   for (const theme of WEB_THEME_PRESETS)
     for (const mode of ["light", "dark"] as const) {

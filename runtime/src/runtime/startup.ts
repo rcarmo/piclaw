@@ -112,9 +112,11 @@ export function cleanupOrphanedActiveChatArtifacts(): number {
       continue;
     }
 
-    db.prepare("DELETE FROM chat_branches WHERE chat_jid = ?").run(chatJid);
-    db.prepare("DELETE FROM chats WHERE jid = ?").run(chatJid);
-    db.prepare(`DELETE FROM token_usage WHERE chat_jid = ? AND ${unlinkedUsageReportPredicate("token_usage")}`).run(chatJid);
+    db.transaction(() => {
+      db.prepare("DELETE FROM chat_branches WHERE chat_jid = ?").run(chatJid);
+      db.prepare("DELETE FROM chats WHERE jid = ?").run(chatJid);
+      db.prepare(`DELETE FROM token_usage WHERE chat_jid = ? AND ${unlinkedUsageReportPredicate(db, "token_usage")}`).run(chatJid);
+    }).immediate();
 
     if (mainDirExists) rmSync(mainDir, { recursive: true, force: true });
     if (sideDirExists) rmSync(sideDir, { recursive: true, force: true });

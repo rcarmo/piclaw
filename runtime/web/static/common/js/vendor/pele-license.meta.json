@@ -1,11 +1,11 @@
 {
   "manifest_id": "pele-license",
   "package_name": "pele",
-  "package_version": "1.9.0",
+  "package_version": "1.13.0",
   "package_license": "MIT",
   "package_repository": "git+https://github.com/obsidianmd/pele.git",
   "package_versions": {
-    "pele": "1.9.0"
+    "pele": "1.13.0"
   },
   "package_licenses": {
     "pele": "MIT"

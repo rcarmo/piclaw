@@ -11,12 +11,13 @@ import type { ToolDefinition, ExtensionToolContext } from "../../node_modules/@e
 import type { AssistantMessage, CredentialStore, TranscriptContext } from "../../node_modules/@earendil-works/pi-ai";
 import type { JsonValue } from "../../runtime/durable-engine/qualification/chord.ts";
 import type { TSchema, Message } from "../../runtime/durable-engine/qualification/ai.ts";
-import { AssistantEntry, Harness, createRegistry, defineExtension, type Conversation, type GenerationHooks } from "../../runtime/durable-engine/qualification/durable.ts";
+import { AssistantEntry, Harness, createRegistry, defineExtension, type Conversation, type Submission, type GenerationHooks } from "../../runtime/durable-engine/qualification/durable.ts";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
 import { BunSqliteDatabase } from "../../runtime/durable-engine/src/index.js";
 import { TestOwner } from "./src/ownership.js";
 import { barrier, context } from "./src/fixture.js";
 import { createHostModels } from "../../runtime/durable-engine/src/index.js";
+import {withTaskModelRequestScope} from '../../runtime/durable-engine/src/task-model-boundary-shim.js';
 import { createHostTool } from "../../runtime/durable-engine/src/index.js";
 import { createHostBashTool } from "../../runtime/durable-engine/src/index.js";
 import { at, effect, sealed, value } from "./src/host-handoff.js";
@@ -172,7 +173,7 @@ test("vertical: copied existing chat -> host 1.2 models + actual Plan + guarded 
     const models = createHostModels(runtime, [ref], { signal: generation.signal, authorize: async () => assertAllowed(), assertCurrent: assertAllowed });
     owner.assert();
     const storage = await SqliteStorage.open(new BunSqliteDatabase(resolve(dir, "durable.sqlite")));
-    harness = await Harness.open(storage, { models, registry, settings: { retry: { enabled: false }, compaction: { enabled: false } } }, context);
+    harness = await Harness.open(storage, { models, registry:withTaskModelRequestScope(registry), settings: { retry: { enabled: false }, compaction: { enabled: false } } }, context);
     conversation = await harness.root(context, { agent: { model: { provider: ref.provider, modelId: ref.id }, extensions: [extension], tools: [plan, bash] } });
     // Public legacy fixture generation + public append only. These TWO known
     // messages are data-copy evidence, not a general legacy importer.
@@ -197,7 +198,7 @@ test("vertical: copied existing chat -> host 1.2 models + actual Plan + guarded 
       const claim = value(await work.claimNext(sealed({ effect: effect(`claim:${id}`), chatJid: jid, expectedFrontier: source.sourceSeq - 1, newOperationId: `host:${id}`, claimedAt: at })))!;
       return { source, operation: claim.operation };
     };
-    const settle = async (id: string, sourceSeq: number, submission: Awaited<ReturnType<Conversation["submit"]>>) => {
+    const settle = async (id: string, sourceSeq: number, submission: Submission) => {
       const status = await submission.status(context);
       let operation = value(await work.getOperation(`host:${id}`))!;
       if (status.type !== "input" || status.conversationId !== identity.conversationId || status.requestId !== id) throw new Error("Wrong submission owner");

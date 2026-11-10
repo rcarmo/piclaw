@@ -1,3 +1,4 @@
+import {installHistoricalExpenseFixture} from '../fixtures/historical-expense.js';
 /**
  * test/extensions/extensions-scheduled-tasks.test.ts – Tests for the scheduled-tasks extension.
  *
@@ -85,7 +86,7 @@ describe("scheduled-tasks extension", () => {
     initDatabase();
     getDb().query("DELETE FROM task_run_logs").run();
     getDb().query("DELETE FROM scheduled_tasks").run();
-    getDb().exec("DELETE FROM budget_cap_windows; DELETE FROM budget_caps;");
+
     fake = createFakeApi();
     scheduledTasks(fake.api);
   });
@@ -246,6 +247,7 @@ describe("scheduled-tasks extension", () => {
     expect(created.details.schedule_accepted).toBe(true);
     expect(created.details).not.toHaveProperty("budget_readiness");
     expect(created.details).not.toHaveProperty("budget_usd");
+    installHistoricalExpenseFixture(getDb());
     getDb().query(`INSERT INTO budget_caps(id,scope,metric,amount,scheduled_task_id,created_at,updated_at) VALUES(?,'scheduled_run','api_usd_micros',0,?,'2026-01-01','2026-01-01')`).run(`scheduled-cap:${id}`, id);
     const before = getDb().query("SELECT * FROM budget_caps").all();
     const detail = await tool.execute("get",{action:"get",id});

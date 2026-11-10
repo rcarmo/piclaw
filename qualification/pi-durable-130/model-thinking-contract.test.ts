@@ -11,6 +11,8 @@ import type { CredentialStore, Model, TranscriptContext } from '../../node_modul
 import { getSupportedThinkingLevels as privateLevels, estimateContextTokens as privateEstimate,
   type Model as PrivateModel } from '../../runtime/durable-engine/qualification/ai.ts';
 
+import {withTaskModelRequestScope} from '../../runtime/durable-engine/src/task-model-boundary-shim.ts';
+
 import { createHostModels, type HostModelPolicy } from '../../runtime/durable-engine/src/host-models.ts';
 
 import { AgentDoc, Harness, MemoryStorage, createRegistry } from '../../runtime/durable-engine/qualification/durable.ts';
@@ -196,7 +198,7 @@ test('thinking map is whitelisted, detached and immutable; caller/source mutatio
 test('real native configuration persists xhigh/max for the next actual wire request without replay or history edits', async () => {
   const f = await fixture();
   const reports: unknown[] = [];
-  const harness = await Harness.open(new MemoryStorage(), { models: f.models, registry: createRegistry(),
+  const harness = await Harness.open(new MemoryStorage(), { models: f.models, registry: withTaskModelRequestScope(createRegistry()),
     settings: { retry: { enabled: false }, compaction: { enabled: false } }, onReport: report => reports.push(report),
   }, context);
   try {

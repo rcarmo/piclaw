@@ -1,0 +1,4722 @@
+{
+  "checkedAt": "2026-11-09T19:17:44.501Z",
+  "scope": "Claude Fable 5.2 and Mythos 5.2 model-specific pricing; not all Claude model generations",
+  "status": "PASS",
+  "nativeRecords": [
+    {
+      "provider": "anthropic",
+      "model": "claude-fable-5-2",
+      "tier": "standard",
+      "geography": "global",
+      "currency": "USD",
+      "unit": "per million tokens",
+      "rates": {
+        "input": 8,
+        "cacheRead": 0.2,
+        "cacheWrite5m": 10,
+        "cacheWrite1h": 16,
+        "output": 40
+      },
+      "derivation": "Published category rates",
+      "availability": "Public API",
+      "longContextPremium": false
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-fable-5-2",
+      "tier": "standard",
+      "geography": "us-only",
+      "currency": "USD",
+      "unit": "per million tokens",
+      "rates": {
+        "input": 8.8,
+        "cacheRead": 0.22,
+        "cacheWrite5m": 11,
+        "cacheWrite1h": 17.6,
+        "output": 44
+      },
+      "derivation": "Published tier/cache/data-residency multipliers",
+      "availability": "Public API",
+      "longContextPremium": false
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-fable-5-2",
+      "tier": "batch",
+      "geography": "global",
+      "currency": "USD",
+      "unit": "per million tokens",
+      "rates": {
+        "input": 4,
+        "cacheRead": 0.1,
+        "cacheWrite5m": 5,
+        "cacheWrite1h": 8,
+        "output": 20
+      },
+      "derivation": "Published tier/cache/data-residency multipliers",
+      "availability": "Public API",
+      "longContextPremium": false
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-fable-5-2",
+      "tier": "batch",
+      "geography": "us-only",
+      "currency": "USD",
+      "unit": "per million tokens",
+      "rates": {
+        "input": 4.4,
+        "cacheRead": 0.11,
+        "cacheWrite5m": 5.5,
+        "cacheWrite1h": 8.8,
+        "output": 22
+      },
+      "derivation": "Published tier/cache/data-residency multipliers",
+      "availability": "Public API",
+      "longContextPremium": false
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-fable-5-2",
+      "tier": "fast",
+      "geography": "global",
+      "currency": "USD",
+      "unit": "per million tokens",
+      "rates": {
+        "input": 16,
+        "cacheRead": 0.4,
+        "cacheWrite5m": 20,
+        "cacheWrite1h": 32,
+        "output": 80
+      },
+      "derivation": "Published tier/cache/data-residency multipliers",
+      "availability": "Public API",
+      "longContextPremium": false
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-fable-5-2",
+      "tier": "fast",
+      "geography": "us-only",
+      "currency": "USD",
+      "unit": "per million tokens",
+      "rates": {
+        "input": 17.6,
+        "cacheRead": 0.44,
+        "cacheWrite5m": 22,
+        "cacheWrite1h": 35.2,
+        "output": 88
+      },
+      "derivation": "Published tier/cache/data-residency multipliers",
+      "availability": "Public API",
+      "longContextPremium": false
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-mythos-5-2",
+      "tier": "standard",
+      "geography": "global",
+      "currency": "USD",
+      "unit": "per million tokens",
+      "rates": {
+        "input": 8,
+        "cacheRead": 0.2,
+        "cacheWrite5m": 10,
+        "cacheWrite1h": 16,
+        "output": 40
+      },
+      "derivation": "Published category rates",
+      "availability": "Verified organizations only",
+      "longContextPremium": false
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-mythos-5-2",
+      "tier": "standard",
+      "geography": "us-only",
+      "currency": "USD",
+      "unit": "per million tokens",
+      "rates": {
+        "input": 8.8,
+        "cacheRead": 0.22,
+        "cacheWrite5m": 11,
+        "cacheWrite1h": 17.6,
+        "output": 44
+      },
+      "derivation": "Published tier/cache/data-residency multipliers",
+      "availability": "Verified organizations only",
+      "longContextPremium": false
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-mythos-5-2",
+      "tier": "batch",
+      "geography": "global",
+      "currency": "USD",
+      "unit": "per million tokens",
+      "rates": {
+        "input": 4,
+        "cacheRead": 0.1,
+        "cacheWrite5m": 5,
+        "cacheWrite1h": 8,
+        "output": 20
+      },
+      "derivation": "Published tier/cache/data-residency multipliers",
+      "availability": "Verified organizations only",
+      "longContextPremium": false
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-mythos-5-2",
+      "tier": "batch",
+      "geography": "us-only",
+      "currency": "USD",
+      "unit": "per million tokens",
+      "rates": {
+        "input": 4.4,
+        "cacheRead": 0.11,
+        "cacheWrite5m": 5.5,
+        "cacheWrite1h": 8.8,
+        "output": 22
+      },
+      "derivation": "Published tier/cache/data-residency multipliers",
+      "availability": "Verified organizations only",
+      "longContextPremium": false
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-mythos-5-2",
+      "tier": "fast",
+      "geography": "global",
+      "currency": "USD",
+      "unit": "per million tokens",
+      "rates": {
+        "input": 16,
+        "cacheRead": 0.4,
+        "cacheWrite5m": 20,
+        "cacheWrite1h": 32,
+        "output": 80
+      },
+      "derivation": "Published tier/cache/data-residency multipliers",
+      "availability": "Verified organizations only",
+      "longContextPremium": false
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-mythos-5-2",
+      "tier": "fast",
+      "geography": "us-only",
+      "currency": "USD",
+      "unit": "per million tokens",
+      "rates": {
+        "input": 17.6,
+        "cacheRead": 0.44,
+        "cacheWrite5m": 22,
+        "cacheWrite1h": 35.2,
+        "output": 88
+      },
+      "derivation": "Published tier/cache/data-residency multipliers",
+      "availability": "Verified organizations only",
+      "longContextPremium": false
+    }
+  ],
+  "aws": {
+    "regionsQueried": 35,
+    "with52": 35,
+    "commercialGlobalRates": {
+      "input": 8,
+      "cacheRead": 0.2,
+      "cacheWrite5m": 10,
+      "cacheWrite1h": 16,
+      "output": 40
+    },
+    "nonGlobalCommercialMultiplier": 1.1,
+    "govCloudMultiplier": 1.2,
+    "regionalRows": [
+      {
+        "region": "af-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "AFS1-MP:AFS1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|af-south-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "af-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "AFS1-MP:AFS1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|af-south-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "af-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "AFS1-MP:AFS1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|af-south-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "af-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "AFS1-MP:AFS1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|af-south-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "af-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "AFS1-MP:AFS1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|af-south-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "af-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "AFS1-MP:AFS1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|af-south-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "af-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "AFS1-MP:AFS1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|af-south-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "af-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "AFS1-MP:AFS1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|af-south-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "af-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "AFS1-MP:AFS1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|af-south-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "af-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "AFS1-MP:AFS1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|af-south-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-east-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APE2-MP:APE2_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-east-2|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-east-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APE2-MP:APE2_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-east-2|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-east-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APE2-MP:APE2_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-east-2|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-east-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APE2-MP:APE2_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-east-2|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-east-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APE2-MP:APE2_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-east-2|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-east-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APE2-MP:APE2_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-east-2|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-east-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APE2-MP:APE2_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-east-2|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-east-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APE2-MP:APE2_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-east-2|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-east-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APE2-MP:APE2_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-east-2|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-east-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APE2-MP:APE2_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-east-2|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "APN1-MP:APN1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "APN1-MP:APN1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APN1-MP:APN1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APN1-MP:APN1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APN1-MP:APN1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APN1-MP:APN1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "APN1-MP:APN1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "APN1-MP:APN1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "APN1-MP:APN1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APN1-MP:APN1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APN2-MP:APN2_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-2|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APN2-MP:APN2_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-2|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APN2-MP:APN2_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-2|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APN2-MP:APN2_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-2|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APN2-MP:APN2_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-2|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APN2-MP:APN2_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-2|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APN2-MP:APN2_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-2|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APN2-MP:APN2_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-2|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APN2-MP:APN2_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-2|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APN2-MP:APN2_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-2|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "APN3-MP:APN3_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-3|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APN3-MP:APN3_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-3|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APN3-MP:APN3_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-3|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APN3-MP:APN3_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-3|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APN3-MP:APN3_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-3|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "APN3-MP:APN3_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-3|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APN3-MP:APN3_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-3|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "APN3-MP:APN3_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-3|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "APN3-MP:APN3_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-3|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-northeast-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "APN3-MP:APN3_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-northeast-3|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS3-MP:APS3_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS3-MP:APS3_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS3-MP:APS3_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS3-MP:APS3_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS3-MP:APS3_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS3-MP:APS3_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS3-MP:APS3_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS3-MP:APS3_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS3-MP:APS3_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS3-MP:APS3_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS5-MP:APS5_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-2|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS5-MP:APS5_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-2|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS5-MP:APS5_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-2|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS5-MP:APS5_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-2|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS5-MP:APS5_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-2|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS5-MP:APS5_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-2|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS5-MP:APS5_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-2|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS5-MP:APS5_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-2|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS5-MP:APS5_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-2|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-south-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS5-MP:APS5_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-south-2|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS1-MP:APS1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS1-MP:APS1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS1-MP:APS1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS1-MP:APS1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS1-MP:APS1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS1-MP:APS1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS1-MP:APS1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS1-MP:APS1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS1-MP:APS1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS1-MP:APS1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS2-MP:APS2_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-2|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS2-MP:APS2_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-2|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS2-MP:APS2_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-2|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS2-MP:APS2_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-2|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS2-MP:APS2_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-2|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS2-MP:APS2_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-2|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS2-MP:APS2_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-2|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS2-MP:APS2_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-2|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS2-MP:APS2_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-2|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS2-MP:APS2_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-2|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS4-MP:APS4_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-3|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS4-MP:APS4_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-3|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS4-MP:APS4_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-3|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS4-MP:APS4_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-3|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS4-MP:APS4_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-3|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS4-MP:APS4_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-3|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS4-MP:APS4_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-3|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS4-MP:APS4_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-3|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS4-MP:APS4_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-3|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS4-MP:APS4_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-3|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-4",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS6-MP:APS6_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-4|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-4",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS6-MP:APS6_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-4|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-4",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS6-MP:APS6_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-4|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-4",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS6-MP:APS6_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-4|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-4",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS6-MP:APS6_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-4|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-4",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS6-MP:APS6_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-4|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-4",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS6-MP:APS6_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-4|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-4",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS6-MP:APS6_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-4|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-4",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS6-MP:APS6_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-4|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-4",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS6-MP:APS6_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-4|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-5",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS7-MP:APS7_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-5|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-5",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS7-MP:APS7_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-5|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-5",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS7-MP:APS7_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-5|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-5",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS7-MP:APS7_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-5|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-5",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS7-MP:APS7_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-5|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-5",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS7-MP:APS7_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-5|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-5",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS7-MP:APS7_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-5|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-5",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS7-MP:APS7_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-5|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-5",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS7-MP:APS7_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-5|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-5",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS7-MP:APS7_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-5|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-6",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS8-MP:APS8_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-6|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-6",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS8-MP:APS8_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-6|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-6",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS8-MP:APS8_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-6|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-6",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS8-MP:APS8_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-6|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-6",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS8-MP:APS8_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-6|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-6",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS8-MP:APS8_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-6|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-6",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS8-MP:APS8_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-6|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-6",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS8-MP:APS8_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-6|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-6",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS8-MP:APS8_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-6|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-6",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS8-MP:APS8_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-6|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-7",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS9-MP:APS9_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-7|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-7",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS9-MP:APS9_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-7|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-7",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS9-MP:APS9_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-7|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-7",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS9-MP:APS9_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-7|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-7",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS9-MP:APS9_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-7|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-7",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS9-MP:APS9_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-7|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-7",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS9-MP:APS9_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-7|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-7",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS9-MP:APS9_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-7|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-7",
+        "model": "Claude Fable 5.2",
+        "usageType": "APS9-MP:APS9_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-7|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ap-southeast-7",
+        "model": "Claude Mythos 5.2",
+        "usageType": "APS9-MP:APS9_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ap-southeast-7|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN1-MP:CAN1_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN1-MP:CAN1_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN1-MP:CAN1_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN1-MP:CAN1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN1-MP:CAN1_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN1-MP:CAN1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN1-MP:CAN1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN1-MP:CAN1_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN1-MP:CAN1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN1-MP:CAN1_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN1-MP:CAN1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN1-MP:CAN1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN1-MP:CAN1_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN1-MP:CAN1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN1-MP:CAN1_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN1-MP:CAN1_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN1-MP:CAN1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN1-MP:CAN1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN1-MP:CAN1_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN1-MP:CAN1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-central-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN2-MP:CAN2_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN2-MP:CAN2_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN2-MP:CAN2_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN2-MP:CAN2_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN2-MP:CAN2_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN2-MP:CAN2_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN2-MP:CAN2_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN2-MP:CAN2_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN2-MP:CAN2_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN2-MP:CAN2_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN2-MP:CAN2_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN2-MP:CAN2_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN2-MP:CAN2_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN2-MP:CAN2_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN2-MP:CAN2_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN2-MP:CAN2_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN2-MP:CAN2_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "CAN2-MP:CAN2_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN2-MP:CAN2_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "ca-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "CAN2-MP:CAN2_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|ca-west-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC1-MP:EUC1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC1-MP:EUC1_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC1-MP:EUC1_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC1-MP:EUC1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC1-MP:EUC1_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC1-MP:EUC1_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC1-MP:EUC1_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC1-MP:EUC1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC1-MP:EUC1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC1-MP:EUC1_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC1-MP:EUC1_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC1-MP:EUC1_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC1-MP:EUC1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC1-MP:EUC1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC1-MP:EUC1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC1-MP:EUC1_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC1-MP:EUC1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC1-MP:EUC1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC1-MP:EUC1_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC1-MP:EUC1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC2-MP:EUC2_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC2-MP:EUC2_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC2-MP:EUC2_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC2-MP:EUC2_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC2-MP:EUC2_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC2-MP:EUC2_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC2-MP:EUC2_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC2-MP:EUC2_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC2-MP:EUC2_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC2-MP:EUC2_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC2-MP:EUC2_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC2-MP:EUC2_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC2-MP:EUC2_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC2-MP:EUC2_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC2-MP:EUC2_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC2-MP:EUC2_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUC2-MP:EUC2_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC2-MP:EUC2_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC2-MP:EUC2_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-central-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUC2-MP:EUC2_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-central-2|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUN1-MP:EUN1_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUN1-MP:EUN1_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUN1-MP:EUN1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUN1-MP:EUN1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUN1-MP:EUN1_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUN1-MP:EUN1_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUN1-MP:EUN1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUN1-MP:EUN1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUN1-MP:EUN1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUN1-MP:EUN1_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUN1-MP:EUN1_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUN1-MP:EUN1_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUN1-MP:EUN1_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUN1-MP:EUN1_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUN1-MP:EUN1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUN1-MP:EUN1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUN1-MP:EUN1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUN1-MP:EUN1_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUN1-MP:EUN1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-north-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUN1-MP:EUN1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-north-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS1-MP:EUS1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS1-MP:EUS1_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS1-MP:EUS1_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS1-MP:EUS1_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS1-MP:EUS1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS1-MP:EUS1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS1-MP:EUS1_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS1-MP:EUS1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS1-MP:EUS1_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS1-MP:EUS1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS1-MP:EUS1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS1-MP:EUS1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS1-MP:EUS1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS1-MP:EUS1_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS1-MP:EUS1_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS1-MP:EUS1_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS1-MP:EUS1_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS1-MP:EUS1_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS1-MP:EUS1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS1-MP:EUS1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS2-MP:EUS2_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS2-MP:EUS2_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS2-MP:EUS2_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS2-MP:EUS2_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS2-MP:EUS2_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS2-MP:EUS2_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS2-MP:EUS2_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS2-MP:EUS2_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS2-MP:EUS2_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS2-MP:EUS2_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS2-MP:EUS2_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS2-MP:EUS2_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS2-MP:EUS2_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS2-MP:EUS2_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS2-MP:EUS2_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS2-MP:EUS2_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS2-MP:EUS2_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS2-MP:EUS2_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUS2-MP:EUS2_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-south-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUS2-MP:EUS2_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-south-2|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EU-MP:EU_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EU-MP:EU_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EU-MP:EU_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EU-MP:EU_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EU-MP:EU_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EU-MP:EU_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EU-MP:EU_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EU-MP:EU_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EU-MP:EU_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EU-MP:EU_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EU-MP:EU_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EU-MP:EU_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EU-MP:EU_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EU-MP:EU_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EU-MP:EU_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EU-MP:EU_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EU-MP:EU_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EU-MP:EU_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EU-MP:EU_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "EU-MP:EU_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW2-MP:EUW2_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW2-MP:EUW2_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW2-MP:EUW2_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW2-MP:EUW2_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW2-MP:EUW2_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW2-MP:EUW2_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW2-MP:EUW2_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW2-MP:EUW2_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW2-MP:EUW2_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW2-MP:EUW2_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW2-MP:EUW2_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW2-MP:EUW2_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW2-MP:EUW2_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW2-MP:EUW2_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW2-MP:EUW2_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW2-MP:EUW2_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW2-MP:EUW2_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW2-MP:EUW2_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW2-MP:EUW2_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW2-MP:EUW2_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-2|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW3-MP:EUW3_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW3-MP:EUW3_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW3-MP:EUW3_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW3-MP:EUW3_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW3-MP:EUW3_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW3-MP:EUW3_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW3-MP:EUW3_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW3-MP:EUW3_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW3-MP:EUW3_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW3-MP:EUW3_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW3-MP:EUW3_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW3-MP:EUW3_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW3-MP:EUW3_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW3-MP:EUW3_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW3-MP:EUW3_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Fable 5.2",
+        "usageType": "EUW3-MP:EUW3_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW3-MP:EUW3_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW3-MP:EUW3_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW3-MP:EUW3_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "eu-west-3",
+        "model": "Claude Mythos 5.2",
+        "usageType": "EUW3-MP:EUW3_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|eu-west-3|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "il-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "ILC1-MP:ILC1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|il-central-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "il-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "ILC1-MP:ILC1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|il-central-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "il-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "ILC1-MP:ILC1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|il-central-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "il-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "ILC1-MP:ILC1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|il-central-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "il-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "ILC1-MP:ILC1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|il-central-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "il-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "ILC1-MP:ILC1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|il-central-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "il-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "ILC1-MP:ILC1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|il-central-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "il-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "ILC1-MP:ILC1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|il-central-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "il-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "ILC1-MP:ILC1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|il-central-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "il-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "ILC1-MP:ILC1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|il-central-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "me-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "MEC1-MP:MEC1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-central-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "me-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "MEC1-MP:MEC1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-central-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "me-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "MEC1-MP:MEC1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-central-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "me-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "MEC1-MP:MEC1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-central-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "me-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "MEC1-MP:MEC1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-central-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "me-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "MEC1-MP:MEC1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-central-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "me-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "MEC1-MP:MEC1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-central-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "me-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "MEC1-MP:MEC1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-central-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "me-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "MEC1-MP:MEC1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-central-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "me-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "MEC1-MP:MEC1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-central-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "me-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "MES1-MP:MES1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-south-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "me-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "MES1-MP:MES1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-south-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "me-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "MES1-MP:MES1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-south-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "me-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "MES1-MP:MES1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-south-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "me-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "MES1-MP:MES1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-south-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "me-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "MES1-MP:MES1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-south-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "me-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "MES1-MP:MES1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-south-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "me-south-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "MES1-MP:MES1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-south-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "me-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "MES1-MP:MES1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-south-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "me-south-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "MES1-MP:MES1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|me-south-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "mx-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "MXC1-MP:MXC1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|mx-central-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "mx-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "MXC1-MP:MXC1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|mx-central-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "mx-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "MXC1-MP:MXC1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|mx-central-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "mx-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "MXC1-MP:MXC1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|mx-central-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "mx-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "MXC1-MP:MXC1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|mx-central-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "mx-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "MXC1-MP:MXC1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|mx-central-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "mx-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "MXC1-MP:MXC1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|mx-central-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "mx-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "MXC1-MP:MXC1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|mx-central-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "mx-central-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "MXC1-MP:MXC1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|mx-central-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "mx-central-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "MXC1-MP:MXC1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|mx-central-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "sa-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "SAE1-MP:SAE1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|sa-east-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "sa-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "SAE1-MP:SAE1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|sa-east-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "sa-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "SAE1-MP:SAE1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|sa-east-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "sa-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "SAE1-MP:SAE1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|sa-east-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "sa-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "SAE1-MP:SAE1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|sa-east-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "sa-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "SAE1-MP:SAE1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|sa-east-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "sa-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "SAE1-MP:SAE1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|sa-east-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "sa-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "SAE1-MP:SAE1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|sa-east-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "sa-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "SAE1-MP:SAE1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|sa-east-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "sa-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "SAE1-MP:SAE1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|sa-east-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE1-MP:USE1_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE1-MP:USE1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE1-MP:USE1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE1-MP:USE1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE1-MP:USE1_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE1-MP:USE1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE1-MP:USE1_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE1-MP:USE1_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE1-MP:USE1_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE1-MP:USE1_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE1-MP:USE1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE1-MP:USE1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE1-MP:USE1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE1-MP:USE1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE1-MP:USE1_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE1-MP:USE1_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE1-MP:USE1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE1-MP:USE1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE1-MP:USE1_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE1-MP:USE1_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE2-MP:USE2_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE2-MP:USE2_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE2-MP:USE2_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE2-MP:USE2_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE2-MP:USE2_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE2-MP:USE2_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE2-MP:USE2_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE2-MP:USE2_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE2-MP:USE2_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE2-MP:USE2_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE2-MP:USE2_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE2-MP:USE2_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE2-MP:USE2_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE2-MP:USE2_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE2-MP:USE2_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE2-MP:USE2_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USE2-MP:USE2_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE2-MP:USE2_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE2-MP:USE2_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-east-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USE2-MP:USE2_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-east-2|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "UGE1-MP:UGE1_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-east-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.24,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "UGE1-MP:UGE1_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-east-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 9.6,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "UGE1-MP:UGE1_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-east-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 48,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "UGE1-MP:UGE1_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-east-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 19.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "UGE1-MP:UGE1_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-east-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 12,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "UGE1-MP:UGE1_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-east-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 48,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "UGE1-MP:UGE1_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-east-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.24,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-east-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "UGE1-MP:UGE1_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-east-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 19.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "UGE1-MP:UGE1_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-east-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 9.6,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-east-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "UGE1-MP:UGE1_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-east-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 12,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "UGW1-MP:UGW1_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-west-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 48,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "UGW1-MP:UGW1_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-west-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 12,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "UGW1-MP:UGW1_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-west-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 9.6,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "UGW1-MP:UGW1_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-west-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 12,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "UGW1-MP:UGW1_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-west-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 19.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "UGW1-MP:UGW1_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-west-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 19.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "UGW1-MP:UGW1_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-west-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 9.6,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "UGW1-MP:UGW1_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-west-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.24,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "UGW1-MP:UGW1_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-west-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 48,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-gov-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "UGW1-MP:UGW1_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-gov-west-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.24,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW1-MP:USW1_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW1-MP:USW1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW1-MP:USW1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW1-MP:USW1_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW1-MP:USW1_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW1-MP:USW1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW1-MP:USW1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW1-MP:USW1_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW1-MP:USW1_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW1-MP:USW1_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW1-MP:USW1_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW1-MP:USW1_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW1-MP:USW1_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW1-MP:USW1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW1-MP:USW1_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW1-MP:USW1_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW1-MP:USW1_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW1-MP:USW1_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW1-MP:USW1_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-1",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW1-MP:USW1_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-1|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW2-MP:USW2_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW2-MP:USW2_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW2-MP:USW2_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW2-MP:USW2_cache_read_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Cache Read Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 0.22,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW2-MP:USW2_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW2-MP:USW2_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW2-MP:USW2_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW2-MP:USW2_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW2-MP:USW2_output_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Output Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 40,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW2-MP:USW2_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW2-MP:USW2_cache_write_tokens_1h_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Cache Write Tokens (1h TTL) - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 16,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW2-MP:USW2_cache_write_tokens_1h_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Cache Write Tokens (1h TTL) - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 17.6,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW2-MP:USW2_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW2-MP:USW2_cache_read_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Cache Read Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 0.2,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW2-MP:USW2_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW2-MP:USW2_input_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Input Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 8.8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW2-MP:USW2_cache_write_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Cache Write Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 11,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Mythos 5.2",
+        "usageType": "USW2-MP:USW2_cache_write_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Cache Write Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 10,
+        "effectiveDate": "2026-10-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW2-MP:USW2_input_tokens_global_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Input Tokens - Standard, Global",
+        "unit": "1M tokens",
+        "priceUSD": 8,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      },
+      {
+        "region": "us-west-2",
+        "model": "Claude Fable 5.2",
+        "usageType": "USW2-MP:USW2_output_tokens_standard-Units",
+        "description": "AWS Marketplace software usage|us-west-2|Output Tokens - Standard",
+        "unit": "1M tokens",
+        "priceUSD": 44,
+        "effectiveDate": "2026-11-01T00:00:00Z"
+      }
+    ],
+    "caveat": "A published SKU is not access permission. No Bedrock batch/fast/commitment price inferred where absent."
+  },
+  "subscriptions": {
+    "pro": {
+      "monthlyUSD": 20,
+      "annualUpfrontUSD": 200,
+      "fable": "Usage credits except launch week",
+      "apiCreditUSD": 0
+    },
+    "max": {
+      "monthlyUSD": 100,
+      "fable": "Up to half of included weekly allowance",
+      "claimableApiCreditUSD": 100
+    },
+    "ultra": {
+      "monthlyUSD": 200,
+      "fable": "Up to half of included weekly allowance",
+      "claimableApiCreditUSD": 200
+    },
+    "team": {
+      "standardMonthlyUSD": 25,
+      "standardAnnualEquivalentMonthlyUSD": 20,
+      "premiumMonthlyUSD": 125,
+      "premiumAnnualEquivalentMonthlyUSD": 100,
+      "claimableApiCreditPerSeat": {
+        "standard": 20,
+        "premium": 100
+      },
+      "pooledApiCreditCapUSD": 500
+    },
+    "enterprise": {
+      "selfServeSeatMonthlyUSD": 20,
+      "billedAnnually": true,
+      "minimumSeats": 20,
+      "usage": "Additional API-rated usage",
+      "legacy": "Contract-specific seat entitlements; no blanket included Fable allowance inferred",
+      "includedMonthlyApiCredit": false
+    },
+    "apiCredits": {
+      "claimRequired": true,
+      "eligibilityWaitDays": 7,
+      "rollover": false,
+      "extraClaudeCodeCovered": false,
+      "cloudMarketplaceCovered": false
+    }
+  },
+  "examples": {
+    "promptTokens": 100000,
+    "outputTokens": 10000,
+    "freshInputTokens": 5000,
+    "readTokens": 90000,
+    "writeTokens": 5000,
+    "assumption": "Same token counts, successful task count not assumed. No tools/runtime/tax included.",
+    "results": [
+      {
+        "tier": "standard",
+        "costUSD": 0.508
+      },
+      {
+        "tier": "batch",
+        "costUSD": 0.254
+      },
+      {
+        "tier": "fast",
+        "costUSD": 1.016
+      }
+    ]
+  },
+  "unverified": {
+    "copilot52": "Not listed in current billing table or local available models",
+    "openrouter52": "Absent from captured public model catalogue",
+    "googleManaged": "Exact 5.2 price row not independently retrievable; public pricing links redirect to general pages. Do not copy native/AWS prices into this route.",
+    "enterpriseDiscounts": "Contact sales",
+    "bedrockFastBatch": "No 5.2 fast/batch SKU in audited regional price files"
+  }
+}

@@ -13,18 +13,18 @@ test("native startup requires the private exact dependency graph, never an ances
   };
   try {
     mkdirSync(directory, { recursive: true });
-    writeFileSync(join(directory, "package.json"), JSON.stringify({ dependencies: { [name]: "1.4.0" } }));
+    writeFileSync(join(directory, "package.json"), JSON.stringify({ dependencies: { [name]: "1.5.2" } }));
     for (const shortName of DURABLE_ENGINE_SDK_PACKAGES) {
       const dependency = `@earendil-works/${shortName}`;
-      if (dependency !== name) manifest(join(directory, "node_modules", dependency), "1.4.0", dependency);
+      if (dependency !== name) manifest(join(directory, "node_modules", dependency), "1.5.2", dependency);
     }
-    manifest(join(root, "node_modules", name), "1.4.0");
+    manifest(join(root, "node_modules", name), "1.5.2");
     expect(() => assertDurableEngineDependencies(directory)).toThrow("legacy fallback is disabled");
     manifest(join(directory, "node_modules", name), "1.3.0");
     expect(() => assertDurableEngineDependencies(directory)).toThrow("incompatible");
-    manifest(join(directory, "node_modules", name), "1.4.0", "wrong-package");
+    manifest(join(directory, "node_modules", name), "1.5.2", "wrong-package");
     expect(() => assertDurableEngineDependencies(directory)).toThrow("incompatible");
-    manifest(join(directory, "node_modules", name), "1.4.0");
+    manifest(join(directory, "node_modules", name), "1.5.2");
     expect(() => assertDurableEngineDependencies(directory)).not.toThrow();
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

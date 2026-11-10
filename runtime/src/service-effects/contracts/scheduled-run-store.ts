@@ -228,6 +228,7 @@ export interface ScheduledRunStore {
   ): Promise<Result<readonly ScheduledRunLease[], ScheduledRunStoreError>>;
   renew(
     request: RenewScheduledRunRequest,
+    context?: { signal?: AbortSignal; assertCurrent?: () => void },
   ): Promise<Result<ScheduledRunLease, ScheduledRunStoreError>>;
   bindAcceptedSource(
     request: BindScheduledSourceRequest,

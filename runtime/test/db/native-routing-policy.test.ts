@@ -1,3 +1,4 @@
+import {installHistoricalExpenseFixture} from '../fixtures/historical-expense.js';
 import { beforeEach, afterEach, expect, test } from "bun:test";
 import { initDatabase, closeDatabase, getDb } from "../../src/db/connection.js";
 import { storeChatMetadata, storeMessage } from "../../src/db/messages.js";
@@ -105,7 +106,7 @@ test("native routing policy: owned and parent-linked SDK fork work retains scope
   expect(() => archiveChatBranch(chat)).toThrow("live SDK work");
 });
 test("native routing policy: historical expense holds remain inert and unchanged across archive", () => {
-  const branch = fixture(),database=getDb();
+  const branch = fixture(),database=getDb();installHistoricalExpenseFixture(database);
   database.query("INSERT INTO budget_work(id,chat_jid,execution_kind,created_at,updated_at) VALUES ('routing-work',?,'interactive',?,?)").run(chat,at,at);
   database.query("INSERT INTO budget_request_reservations(id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,amount_microusd,state,created_at,updated_at) VALUES ('routing-request','routing-work',?,'fixture','fixture','fixture',?,1,'reserved',?,?)").run(chat,'a'.repeat(64),at,at);
   const historical=()=>['budget_work','budget_request_reservations'].map(table=>database.query(`SELECT * FROM ${table} ORDER BY rowid`).all()),before=historical();

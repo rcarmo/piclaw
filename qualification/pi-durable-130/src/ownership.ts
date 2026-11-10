@@ -87,6 +87,7 @@ export class OwnedSqlite implements SqliteDatabase {
   }
   exec(sql: string) { return this.transaction(tx => tx.exec(sql)); }
   run(sql: string, ...params: SqliteValue[]) { return this.transaction(tx => tx.run(sql, ...params)); }
+  runCounted(sql:string,...params:SqliteValue[]){return this.transaction(tx=>tx.runCounted(sql,...params));}
   get<T extends object>(sql: string, ...params: SqliteValue[]) { return this.transaction(tx => tx.get<T>(sql, ...params)); }
   all<T extends object>(sql: string, ...params: SqliteValue[]) { return this.transaction(tx => tx.all<T>(sql, ...params)); }
   close() { return this.base.close(); }

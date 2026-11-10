@@ -5,7 +5,7 @@ import { estimateContextTokens } from "@earendil-works/pi-ai/utils/estimate";
 import { SystemEntry, type ContextView, type PromptInput } from "@earendil-works/pi-durable";
 import { declarationsEqual, getCurrentTools, toToolDeclaration } from "@earendil-works/pi-ai/utils/transcript";
 import { awaitWithContext } from "@earendil-works/chord/context";
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 
 /** Ephemeral admitted-snapshot projection only. The SDK has no public preview
  * (request 11652 was auto-closed). Remove this gap adapter when one exists.
@@ -121,9 +121,12 @@ export function assertModelContextFits(messages: readonly Message[], target: { c
   const framing = suffix.flatMap(message => message.role === "toolResult" ? [message.toolName, message.toolCallId]
     : message.role === "assistant" ? message.content.flatMap(block => block.type === "toolCall" ? [block.id] : []) : []);
   const framingTokens = framing.length ? estimateContextTokens([{ role: "user", content: framing.join("\n"), timestamp: 0 }]).tokens : 0;
-  const inputEstimate = Math.max(estimate.tokens, measuredTokens + estimate.trailingTokens) + framingTokens;
+  const measuredInputEstimate = Math.max(estimate.tokens, measuredTokens + estimate.trailingTokens);
+  const inputEstimate = measuredInputEstimate + framingTokens;
+  // SDK safety room can cover transport framing, but never measured cache input.
+  // Keep the reserve on the cache-inclusive estimate; check the physical cap too.
   if (!Number.isFinite(inputEstimate) || inputEstimate < 0 || inputEstimate > target.contextWindow ||
-    (output?.status === "bounded" && inputEstimate + output.reserveTokens > target.contextWindow)) {
+    (output?.status === "bounded" && (measuredInputEstimate + output.reserveTokens > target.contextWindow || inputEstimate + output.maxOutputTokens > target.contextWindow))) {
     const bytes = new TextEncoder().encode(JSON.stringify(messages)).length;
     throw Error(`Candidate context estimate exceeded; compact first (serialized input bytes=${bytes}, reported tokens=${estimate.usageTokens}, estimated context tokens=${estimate.tokens}, input token estimate=${inputEstimate}, producer output reserve=${output?.status === "bounded" ? output.reserveTokens : "unknown"}, context window=${target.contextWindow})`);
   }

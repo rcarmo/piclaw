@@ -1,3 +1,4 @@
+import {installHistoricalExpenseFixture} from '../../runtime/test/fixtures/historical-expense.js';
 import { handleAgentMessage } from "../../runtime/src/channels/web/handlers/agent.js";
 import { isolatedApplicationTest } from "./src/isolated-application-test.js";
 import "./src/test-guard.js";
@@ -27,7 +28,7 @@ for(const mode of ['reported','unknown-price','report-fault'] as const)applicati
   const pkg = join(workspace, ".pi/extensions/node_modules/@rcarmo/piclaw-addon-late-night-regrets");
   cpSync(join(process.env.DURABLE_ADDONS_ROOT!, "addons/late-night-regrets"), pkg, { recursive: true, filter: p => !p.split("/").includes("node_modules") });
   symlinkSync(join(import.meta.dir, "../../node_modules"), join(pkg, "node_modules"));
-  process.env.PICLAW_DB_IN_MEMORY = "0"; initDatabase();
+  process.env.PICLAW_DB_IN_MEMORY = "0"; initDatabase();installHistoricalExpenseFixture(getDb());
   const database = getDb();
   database.query("INSERT INTO budget_work(id,chat_jid,execution_kind,status,created_at,updated_at) VALUES('historical-regrets','web:default','interactive','paused','2026-01-01','2026-01-01')").run();
   database.query("INSERT INTO budget_caps(id,scope,metric,amount,work_id,created_at,updated_at) VALUES('historical-zero','task','api_usd_micros',0,'historical-regrets','2026-01-01','2026-01-01')").run();

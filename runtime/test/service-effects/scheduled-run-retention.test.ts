@@ -29,6 +29,89 @@ async function seed(count:number,withOutbox=false){const authority=createSchedul
   const leases=value(await store.claimDue({now:instant,limit:100,workerId:'worker:retention',leaseTokenPrefix:'retention',leaseDurationMs:60000,reclaimAuthorities:[]}));
   const requests=leases.map(lease=>completion(lease,withOutbox));for(const request of requests)value(await store.complete(request));return requests;}
 const snapshot=()=>['occurrences','leases','lease_renewals','source_bindings','run_logs','next_decisions','abandonments','outbox_links','decisions','tombstones'].map(name=>database.query(`SELECT * FROM service_effect_s07_${name} ORDER BY rowid`).all());
+function historicalReference(taskId:string,state?:string){
+  // Minimal historical data only: there is no evaluator or financial schema
+  // initializer, and eligibility must not depend on these opaque states.
+  database.exec('CREATE TABLE budget_work(id TEXT PRIMARY KEY,scheduled_task_id TEXT)');
+  database.query('INSERT INTO budget_work VALUES (?,?)').run('historical-reference',taskId);
+  if(state!==undefined){
+    database.exec('CREATE TABLE budget_request_reservations(id TEXT PRIMARY KEY,work_id TEXT REFERENCES budget_work(id),state TEXT)');
+    database.query('INSERT INTO budget_request_reservations VALUES (?,?,?)').run('historical-request','historical-reference',state);
+  }
+}
+const historicalRows=()=>['budget_work','budget_request_reservations'].map(table=>database.query('SELECT 1 FROM main.sqlite_schema WHERE name=?').get(table)?database.query(`SELECT rowid,* FROM main.${table}`).all():[]);
+
+for(const state of ['reserved','dispatched','unresolved','settled','released','opaque-future-state',undefined])test(`scheduled retention: historical task reference is state independent; state=${state??'no-reservation-table'}`,async()=>{
+  const [request]=await seed(1);const record=value(await store.get(request!.runId))!;
+  historicalReference(record.taskId,state);const history=historicalRows(),before=snapshot();
+  const plan=value(await store.planRetention({settledBefore:cutoff,limit:1}));expect(plan.rows).toEqual([]);
+  expect(value(await store.applyRetention(plan))).toEqual({removed:0,runIds:[]});expect(snapshot()).toEqual(before);
+  // The legacy cleanup entry point must not bypass the same retention rule.
+  expect(value(await store.cleanupTerminal({settledBefore:cutoff,limit:1}))).toEqual({removed:0,runIds:[]});
+  expect(snapshot().filter((_,index)=>index!==8)).toEqual(before.filter((_,index)=>index!==8));
+  database.close();store=open();expect(historicalRows()).toEqual(history);
+  expect(value(await store.get(request!.runId))?.retained).toBe(false);
+  expect(value(await store.complete(request!)).retained).toBe(false);
+  expect(database.query('PRAGMA foreign_key_check').all()).toEqual([]);
+});
+
+test('scheduled retention: unrelated historical work does not protect another task',async()=>{
+  await seed(1);historicalReference('unrelated-task','opaque-future-state');const history=historicalRows();
+  const plan=value(await store.planRetention({settledBefore:cutoff,limit:1}));expect(plan.rows).toHaveLength(1);
+  expect(value(await store.applyRetention(plan)).removed).toBe(1);expect(historicalRows()).toEqual(history);
+});
+
+test('scheduled retention: incomplete historical mapping cannot authorise deletion',async()=>{
+  await seed(1);database.exec("CREATE TABLE budget_request_reservations(id TEXT PRIMARY KEY,work_id TEXT,state TEXT);INSERT INTO budget_request_reservations VALUES('opaque-request','missing-work','opaque-state')");
+  const before=snapshot(),history=historicalRows();
+  const plan=value(await store.planRetention({settledBefore:cutoff,limit:1}));expect(plan.rows).toEqual([]);
+  expect(value(await store.cleanupTerminal({settledBefore:cutoff,limit:1})).removed).toBe(0);
+  expect(snapshot().filter((_,index)=>index!==8)).toEqual(before.filter((_,index)=>index!==8));expect(historicalRows()).toEqual(history);
+});
+
+test('scheduled retention: newly present historical reference revokes a whole approved page before deletion',async()=>{
+  await seed(2);const plan=value(await store.planRetention({settledBefore:cutoff,limit:2}));expect(plan.rows).toHaveLength(2);
+  historicalReference(value(await store.get(plan.rows[1]!.runId))!.taskId);const before=snapshot(),history=historicalRows();
+  const result=await store.applyRetention(plan);expect(result.ok).toBe(false);expect(!result.ok&&result.error._tag).toBe('invalid_transition');
+  expect(snapshot()).toEqual(before);expect(historicalRows()).toEqual(history);
+  const current=value(await store.planRetention({settledBefore:cutoff,limit:2}));expect(current.rows).toHaveLength(1);
+  expect(value(await store.applyRetention(current)).removed).toBe(1);expect(historicalRows()).toEqual(history);
+});
+
+test('scheduled retention: historical reference does not deny a fresh occurrence for the same task',async()=>{
+  const [original]=await seed(1);const taskId=value(await store.get(original!.runId))!.taskId;
+  historicalReference(taskId,'opaque-future-state');const history=historicalRows();
+  createScheduledTaskAuthority(database).update({...task(taskId),payloadRef:'fresh-payload:'+taskId,expectedRevision:1});
+  const lease=value(await store.claimDue({now:instant,limit:1,workerId:'worker:fresh',leaseTokenPrefix:'fresh',leaseDurationMs:60000,reclaimAuthorities:[]}))[0]!;
+  expect(lease.record.taskId).toBe(taskId);expect(lease.record.taskRevision).toBe(2);expect(lease.record.runId).not.toBe(original!.runId);
+  expect(value(await store.complete(completion(lease))).state).toBe('completed');expect(historicalRows()).toEqual(history);
+});
+
+test('scheduled retention: lost ACK replay after reopen never repeats deletion when a historical reference arrives later',async()=>{
+  const [request]=await seed(1),taskId=value(await store.get(request!.runId))!.taskId;
+  const plan=value(await store.planRetention({settledBefore:cutoff,limit:1}));lost=true;
+  const result=await store.applyRetention(plan);expect(result.ok).toBe(false);expect(!result.ok&&result.error.certainty).toBe('unknown');
+  database.close();store=open();historicalReference(taskId,'opaque-future-state');
+  const before=snapshot(),history=historicalRows();
+  expect(value(await store.applyRetention(JSON.parse(JSON.stringify(plan))))).toEqual({removed:1,runIds:[request!.runId]});
+  expect(snapshot()).toEqual(before);expect(historicalRows()).toEqual(history);expect(value(await store.get(request!.runId))?.retained).toBe(true);
+  expect(value(await store.complete(request!)).retained).toBe(true);
+});
+
+for(const table of ['budget_work','budget_request_reservations'])test(`scheduled retention: temporary historical shadow cannot authorise deletion; table=${table}`,async()=>{
+  await seed(1);const plan=value(await store.planRetention({settledBefore:cutoff,limit:1})),before=snapshot();
+  database.exec(`CREATE TEMP TABLE ${table}(opaque TEXT)`);
+  const preview=await store.planRetention({settledBefore:cutoff,limit:1});expect(preview.ok).toBe(false);expect(!preview.ok&&preview.error._tag).toBe('corrupt_state');
+  const applied=await store.applyRetention(plan);expect(applied.ok).toBe(false);expect(!applied.ok&&applied.error._tag).toBe('corrupt_state');
+  const legacy=await store.cleanupTerminal({settledBefore:cutoff,limit:1});expect(legacy.ok).toBe(false);expect(!legacy.ok&&legacy.error._tag).toBe('corrupt_state');
+  expect(snapshot()).toEqual(before);
+});
+
+test('scheduled retention: malformed historical mapping fails without modifying evidence',async()=>{
+  await seed(1);database.exec('CREATE TABLE budget_work(opaque TEXT)');const before=snapshot();
+  const result=await store.planRetention({settledBefore:cutoff,limit:1});expect(result.ok).toBe(false);expect(snapshot()).toEqual(before);
+});
+
 test('scheduled retention: dry-run, lost ACK, reopen and cursor preserve tombstone replay identities',async()=>{
   const requests=await seed(3),before=snapshot();const plan=value(await store.planRetention({settledBefore:cutoff,limit:1}));expect(plan.examined).toBe(1);expect(plan.rows).toHaveLength(1);expect(snapshot()).toEqual(before);
   const persisted=JSON.parse(JSON.stringify(plan));lost=true;const unknown=await store.applyRetention(persisted);expect(unknown.ok).toBe(false);expect(!unknown.ok&&unknown.error.certainty).toBe('unknown');

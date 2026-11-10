@@ -11,7 +11,7 @@ test("public Copilot and Kimi device methods execute synthetic polling, failure 
     const [exit, out, err] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
     expect(exit, err).toBe(0); expect(err).toBe("");
     const executed = JSON.parse(out);
-    expect(executed.version).toBe("1.4.0");
+    expect(executed.version).toBe("1.5.2");
     expect(executed.runtime).toBe("Bun 1.4.4");
     expect(executed.scope).toBe("public_provider_device_methods_only");
     expect(executed.inference).toBe("not_invoked");
@@ -21,8 +21,8 @@ test("public Copilot and Kimi device methods execute synthetic polling, failure 
     expect(executed.modelPolicyWrites).toBe("none");
     expect(executed.credentialPersistence).toBe("none");
     for (const runtime of ["bun"]) {
-      const archived = JSON.parse(readFileSync(resolve(import.meta.dir, `../../../docs/design/earendil-agent-harness-integration-adr/evidence/receipts/earendil-140-provider-devices-${runtime}.json`), "utf8"));
-      expect(archived.version).toBe("1.4.0");
+      const archived = JSON.parse(readFileSync(resolve(import.meta.dir, `../../../docs/design/earendil-agent-harness-integration-adr/evidence/receipts/earendil-152-provider-devices-${runtime}.json`), "utf8"));
+      expect(archived.version).toBe("1.5.2");
       expect(archived.runtime).toBe("Bun 1.4.4");
       expect(archived.results).toEqual(executed.results);
       expect(archived.sdkFileSha256).toEqual(executed.sdkFileSha256);

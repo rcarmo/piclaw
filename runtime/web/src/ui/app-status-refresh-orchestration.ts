@@ -57,6 +57,8 @@ function normalizeTokenUsageRecord(payload: unknown): Record<string, unknown> | 
     cacheWriteReported: booleanOrNull(data.cacheWriteReported),
     totalTokens: finiteOrNull(data.totalTokens),
     costTotal: finiteOrNull(data.costTotal),
+    costCurrency: stringOrNull(data.costCurrency),
+    providerCostCurrency: stringOrNull(data.providerCostCurrency),
     providerCostTotal: finiteOrNull(data.providerCostTotal),
     catalogueCostTotal: finiteOrNull(data.catalogueCostTotal),
     costProvenance: stringOrNull(data.costProvenance),

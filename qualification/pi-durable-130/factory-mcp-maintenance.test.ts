@@ -90,6 +90,14 @@ applicationTest("deferred MCP preserves SDK selections and restores exact fetch 
     backend=await createDefaultApplicationRuntime(owner,async()=>services);
     await backend.close();backend=undefined;
     expect(await inspect()).toEqual(['mcp_x']);
+    // A future live-document format must fail before recovery/configuration;
+    // accepting current SDK versions must not turn this preflight permissive.
+    const revision = root.query(`SELECT r.document_id,r.seq,r.version FROM document_revisions r JOIN documents d ON d.id=r.document_id WHERE d.kind='"pi.live"' ORDER BY r.seq DESC LIMIT 1`).get() as {document_id:number;seq:number;version:number};
+    expect(revision).toBeDefined();
+    writeFileSync(join(workspace, "AGENTS.md"), "DEFERRED_POLICY_THREE");
+    root.query('UPDATE document_revisions SET version=99 WHERE document_id=? AND seq=?').run(revision.document_id,revision.seq);
+    try { await expect(createDefaultApplicationRuntime(owner,async()=>services)).rejects.toThrow('Invalid persisted document version'); }
+    finally { root.query('UPDATE document_revisions SET version=? WHERE document_id=? AND seq=?').run(revision.version,revision.document_id,revision.seq); }
     const leasesBefore = leaseSpy.mock.calls.length, connectsBefore = connectSpy.mock.calls.length;
     writeFileSync(join(workspace, ".pi/mcp.json"), JSON.stringify({ mcpServers: { fixture: { url: "https://invalid.invalid/mcp" } } }));
     await hydrateMcpKeychainCredentials(workspace, async () => { throw Error("No keychain access allowed"); });

@@ -101,13 +101,14 @@ for(const scenario of ['idle','busy','retry','storage-recovery','storage-reopen-
    for(let i=0;i<1000&&prepares<(scenario==='storage-reopen-retry'?3:2);i++)await Bun.sleep(10);
    expect(prepares).toBe(scenario==='storage-reopen-retry'?3:2);expect(storageFailures).toBe(1);
    expect(reopenFailures).toBe(scenario==='storage-reopen-retry'?1:0);
-   // The failed write acknowledged no cancellation. After SDK reopen, an
-   // explicit operator abort targets the same submission, never a host replay.
+   // Pi1.5.1 records an interrupted original attempt during recovery. That
+   // committed result needs no new abort, synthetic source or provider replay.
    const recoveredControl=bundle.sessionOptions.getDurableSession!(chat)!;
    const recoveredScope=await recoveredControl.readAbortScope!();
-   if(recoveredScope?.kind!=='sdk')throw Error('Recovered SDK abort scope required');
-   expect(recoveredScope.submissionIds).toContain(receipt.submission_id);
-   expect(await recoveredControl.abort!(recoveredScope)).toBe(true);
+   expect(recoveredScope?.kind).not.toBe('sdk');
+   const interrupted=JSON.parse((root.query('SELECT record FROM submissions WHERE id=?').get(receipt.submission_id) as {record:string}).record);
+   expect(interrupted).toMatchObject({id:originalSubmission,status:'unanswered',reason:'interrupted'});
+   expect(await recoveredControl.abort!(recoveredScope??undefined)).toBe(false);
    for(let i=0;i<1000&&(root.query('SELECT status FROM submissions WHERE id=?').get(receipt.submission_id) as any).status!=='unanswered';i++)await Bun.sleep(10);
    expect(root.query('SELECT status FROM submissions WHERE id=?').get(receipt.submission_id)).toEqual({status:'unanswered'});
    expect(root.query("SELECT id FROM submissions WHERE conversation_id=? ORDER BY id").all(conversation.id)).toEqual([{id:originalSubmission}]);
@@ -117,7 +118,7 @@ for(const scenario of ['idle','busy','retry','storage-recovery','storage-reopen-
    expect(await bundle.sessionOptions.getDurableSession!(chat)!.abort!()).toBe(false);
    await bound.prepareInputSourceAdmission!(chat);
    expect(bound.getInputSourceAdmission!(chat)).toBeDefined();
-   expect(calls).toBeGreaterThanOrEqual(1);expect(calls).toBeLessThanOrEqual(2);return;
+   expect(calls).toBe(1);return;
   }
   if(scenario==='busy'){
    const sourceBefore=root.query('SELECT count(*) AS n FROM service_effect_s01_sources').get();

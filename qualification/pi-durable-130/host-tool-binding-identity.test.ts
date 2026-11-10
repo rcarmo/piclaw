@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "../../runtime/durable-engine/qualification/ai.ts";
 import { createHostTool, assertHostToolBinding } from "../../runtime/durable-engine/src/host-tools.ts";
 
 function fixture() {

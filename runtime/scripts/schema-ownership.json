@@ -2,7 +2,7 @@
   "version": 1,
   "sources": {
     "core": "3c66c54de0bc4826dc51655bb5f009ce6f9905d9",
-    "sdk": "@earendil-works/pi-durable@1.4.0",
+    "sdk": "@earendil-works/pi-durable@1.5.1",
     "approved-variant:table:tasks:4ef5a9a019b90afd9b640bc034f451f8601869d6ed2ffd3f525414d008ea338e": "SDK 1.4.0 immutable SQLite migration 2 rebuilds tasks with sleeping status and a quoted final table header. Isolated v1-to-v2 proof preserves task rows/IDs byte-for-byte; only this table fingerprint changes. Retain the exact v1 fingerprint for read-only historical inventory. Opening v2 with SDK 1.3.0 is unsupported; no live migration is authorised here.",
     "nativeAddons": "e8aac2399148cbef638764ba2b5a1cd916cc5ecc",
     "approved-variant:table:chat_branches:ca1502052e5b89e1bea6419cf9448b2b81bf0c76dbfc585548d58bb2d11f5bc7": "Current migrateChatBranchAgentNameUniqueness rebuild quotes the table header; isolated historical chats/branches + legacy token_usage fixture; all other clauses/constraints unchanged. See runtime/src/db/connection.ts and qualification/pi-durable-130/schema-ownership-fixture.ts.",
@@ -14,7 +14,8 @@
     "host.chat-cursors/native-frontier-v1": "{\"base\":\"fc16a0c51d76b7200e263997619d434609afa043\",\"owner\":\"host.chat-cursors\",\"id\":\"native-frontier-v1\",\"migration_order\":1,\"checksum\":\"e5f26cdd5e61243ef522e2cedc1ec175c96df433feed354f6418479a988f72d5\"}",
     "host.chat-cursors/polling-frontier-v1": "{\"base\":\"fc16a0c51d76b7200e263997619d434609afa043\",\"owner\":\"host.chat-cursors\",\"id\":\"polling-frontier-v1\",\"migration_order\":1,\"checksum\":\"539339d735a1b5fa7411e90c948484746a7d71675ebb60e01b860f0d702fb0ef\"}",
     "service_effect_s01/native-harness-binding-v1": "{\"base\":\"75e5b08d5399beb1c3728e4d96ec6fdbebda08bf\",\"owner\":\"service_effect_s01\",\"id\":\"native-harness-binding-v1\",\"migration_order\":2,\"checksum\":\"e88db3dc4c81f5f3dd319ed92a2a79aa92e759d6ae12c6eb1180351daddc0742\"}",
-    "service_effect_s01/retire-harness-mirrors-v1": "{\"base\":\"75e5b08d5399beb1c3728e4d96ec6fdbebda08bf\",\"owner\":\"service_effect_s01\",\"id\":\"retire-harness-mirrors-v1\",\"migration_order\":2,\"checksum\":\"eb5306aba410376f94eb9d4a2c9bcdbbf9ba2fad0337b4d06994143640a9d809\"}"
+    "service_effect_s01/retire-harness-mirrors-v1": "{\"base\":\"75e5b08d5399beb1c3728e4d96ec6fdbebda08bf\",\"owner\":\"service_effect_s01\",\"id\":\"retire-harness-mirrors-v1\",\"migration_order\":2,\"checksum\":\"eb5306aba410376f94eb9d4a2c9bcdbbf9ba2fad0337b4d06994143640a9d809\"}",
+    "service_effect_s01/sdk-scheduled-admission-index-v1": "{\"base\":\"771e500528b3e64cd0634f66d068b7aeff785296\",\"owner\":\"service_effect_s01\",\"id\":\"sdk-scheduled-admission-index-v1\",\"migration_order\":3,\"checksum\":\"c8858ac8795d15c48f46fcf76b77bdc19c78b3e48d240be1c3751150ac9b944a\"}"
   },
   "owners": {
     "core:background-contexts": {
@@ -72,137 +73,21 @@
         "runtime/src/db/addon-operations.ts"
       ]
     },
-    "core:budget_allowances": {
-      "category": "core",
-      "initializer": "runtime/src/db/budget-limits-schema.ts#initializeBudgetLimitsSchema",
+    "retired:expense-history": {
+      "category": "retired",
+      "initializer": "None; preserved historical financial schema, not created or migrated on startup",
       "writers": [
-        "runtime/src/db/budget-limits.ts"
+        "No active financial writer; original SQLite constraints remain as historical data"
       ],
-      "sourceOfTruth": "Host budget admission/audit ledger budget_allowances as defined by budget-limits-schema and its store APIs. Persisted cap, window, allowance, override, reservation, work and evidence identities are not reconstructed from transcript totals.",
-      "replayRetention": "No universal reconstruction or age-expiry guarantee. Preserve persisted identity, history and FK/receipt obligations; changes belong to the cited owner APIs. This read-only inventory adds no deletion, pruning, replay or migration authority.",
+      "sourceOfTruth": "Opaque original expense tables, immutable usage/request payloads and migration receipts. They cannot govern fresh SDK execution or become a replacement ledger.",
+      "replayRetention": "Preserve original tables, rows, foreign keys, triggers and receipts without repair, backfill, hold clearance or deletion. Existing report retention protects references when the corresponding historical tables exist.",
       "references": [
-        "runtime/src/db/budget-limits-schema.ts"
-      ]
-    },
-    "core:budget_cap_revisions": {
-      "category": "core",
-      "initializer": "runtime/src/db/budget-limits-schema.ts#initializeBudgetLimitsSchema",
-      "writers": [
-        "runtime/src/db/budget-limits-schema.ts",
-        "runtime/src/db/budget-limits.ts"
-      ],
-      "sourceOfTruth": "Append-only cap revision evidence.",
-      "replayRetention": "Schema aborts UPDATE/DELETE; no TTL established.",
-      "references": [
-        "runtime/src/db/budget-limits-schema.ts"
-      ]
-    },
-    "core:budget_cap_windows": {
-      "category": "core",
-      "initializer": "runtime/src/db/budget-limits-schema.ts#initializeBudgetLimitsSchema",
-      "writers": [
-        "runtime/src/db/budget-limits.ts"
-      ],
-      "sourceOfTruth": "Host budget admission/audit ledger budget_cap_windows as defined by budget-limits-schema and its store APIs. Persisted cap, window, allowance, override, reservation, work and evidence identities are not reconstructed from transcript totals.",
-      "replayRetention": "No universal reconstruction or age-expiry guarantee. Preserve persisted identity, history and FK/receipt obligations; changes belong to the cited owner APIs. This read-only inventory adds no deletion, pruning, replay or migration authority.",
-      "references": [
-        "runtime/src/db/budget-limits-schema.ts"
-      ]
-    },
-    "core:budget_caps": {
-      "category": "core",
-      "initializer": "runtime/src/db/budget-limits-schema.ts#initializeBudgetLimitsSchema",
-      "writers": [
-        "runtime/src/db/budget-limits.ts"
-      ],
-      "sourceOfTruth": "Host budget admission/audit ledger budget_caps as defined by budget-limits-schema and its store APIs. Persisted cap, window, allowance, override, reservation, work and evidence identities are not reconstructed from transcript totals.",
-      "replayRetention": "No universal reconstruction or age-expiry guarantee. Preserve persisted identity, history and FK/receipt obligations; changes belong to the cited owner APIs. This read-only inventory adds no deletion, pruning, replay or migration authority.",
-      "references": [
-        "runtime/src/db/budget-limits-schema.ts"
-      ]
-    },
-    "core:budget_decisions": {
-      "category": "core",
-      "initializer": "runtime/src/db/budget-limits-schema.ts#initializeBudgetLimitsSchema",
-      "writers": [
-        "runtime/src/db/budget-limits.ts"
-      ],
-      "sourceOfTruth": "Host budget admission/audit ledger budget_decisions as defined by budget-limits-schema and its store APIs. Persisted cap, window, allowance, override, reservation, work and evidence identities are not reconstructed from transcript totals.",
-      "replayRetention": "No universal reconstruction or age-expiry guarantee. Preserve persisted identity, history and FK/receipt obligations; changes belong to the cited owner APIs. This read-only inventory adds no deletion, pruning, replay or migration authority.",
-      "references": [
-        "runtime/src/db/budget-limits-schema.ts"
-      ]
-    },
-    "core:budget_overrides": {
-      "category": "core",
-      "initializer": "runtime/src/db/budget-limits-schema.ts#initializeBudgetLimitsSchema",
-      "writers": [
-        "runtime/src/db/budget-limits.ts"
-      ],
-      "sourceOfTruth": "Host budget admission/audit ledger budget_overrides as defined by budget-limits-schema and its store APIs. Persisted cap, window, allowance, override, reservation, work and evidence identities are not reconstructed from transcript totals.",
-      "replayRetention": "No universal reconstruction or age-expiry guarantee. Preserve persisted identity, history and FK/receipt obligations; changes belong to the cited owner APIs. This read-only inventory adds no deletion, pruning, replay or migration authority.",
-      "references": [
-        "runtime/src/db/budget-limits-schema.ts"
-      ]
-    },
-    "core:budget_provider_evidence": {
-      "category": "core",
-      "initializer": "runtime/src/db/budget-limits-schema.ts#initializeBudgetLimitsSchema",
-      "writers": [
-        "runtime/src/budget/provider-evidence.ts"
-      ],
-      "sourceOfTruth": "Host budget admission/audit ledger budget_provider_evidence as defined by budget-limits-schema and its store APIs. Persisted cap, window, allowance, override, reservation, work and evidence identities are not reconstructed from transcript totals.",
-      "replayRetention": "No universal reconstruction or age-expiry guarantee. Preserve persisted identity, history and FK/receipt obligations; changes belong to the cited owner APIs. This read-only inventory adds no deletion, pruning, replay or migration authority.",
-      "references": [
-        "runtime/src/db/budget-limits-schema.ts"
-      ]
-    },
-    "core:budget_request_reservations": {
-      "category": "core",
-      "initializer": "runtime/src/db/budget-limits-schema.ts#initializeBudgetLimitsSchema",
-      "writers": [
-        "runtime/src/db/budget-request-reservations.ts"
-      ],
-      "sourceOfTruth": "Host budget admission/audit ledger budget_request_reservations as defined by budget-limits-schema and its store APIs. Persisted cap, window, allowance, override, reservation, work and evidence identities are not reconstructed from transcript totals. Owned terminal-receipt-v1 and model-invocation-v1 migrations extend this same reservation with immutable safe terminal JSON/hash/original host time and exact logical SDK invocation metadata; neither is execution authority.",
-      "replayRetention": "No universal reconstruction or age-expiry guarantee. Preserve persisted identity, history and FK/receipt obligations; changes belong to the cited owner APIs. This read-only inventory adds no deletion, pruning, replay or migration authority. Actual event payloads bind request/settlement hashes and require their reservation proof for reconstruction. Missing settled-event evidence stays an uncertain capacity hold. Report pruning cannot release any request or retire this semantic reference; #1702 must coordinate retirement. Terminal receipts and logical invocation keys cannot be erased, replaced or reassigned; known terminal evidence cannot release its hold, and a settled receipt retains its financial binding. Retirement requires explicit coordination with this owner; no legacy receipt backfill or new automatic pruning is implied.",
-      "references": [
-        "runtime/src/db/budget-limits-schema.ts",
+        "runtime/src/db/connection.ts",
         "runtime/src/db/usage-report-projection.ts",
-        "runtime/src/budget/usage-total.ts",
-        "runtime/src/db/budget-request-reservations.ts",
-        "runtime/src/budget/model-request-accounting.ts",
-        "runtime/durable-engine/src/host-terminal-outcome.ts"
+        "runtime/test/fixtures/historical-expense-schema.sql"
       ]
     },
-    "core:budget_usage_events": {
-      "category": "core",
-      "initializer": "runtime/src/db/budget-limits-schema.ts#initializeBudgetLimitsSchema → runtime/src/db/usage-report-projection.ts#initializeUsageReportProjection",
-      "writers": [
-        "runtime/src/db/budget-limits.ts",
-        "runtime/src/db/usage-report-projection.ts (one-time owned cutover payload capture only)"
-      ],
-      "sourceOfTruth": "Immutable event identity, original work/chat/time and API-equivalent valuation. Version1 hash-bound report payload extends this same event; actual host-request origin binds reservation/settlement hashes. Recorder observations retain their weaker identity; cutover captures existing reports as legacy_projection_capture, never as independent original provider evidence. No SDK usage totals are added a second time.",
-      "replayRetention": "Keep events and their mandatory token_usage numeric FK parent while accounting/replay evidence is required. Report-only cleanup never deletes them or changes reservations. Missing/malformed pre-cutover payloads remain unavailable, never recaptured from a later cache. Explicit bounded report repair changes only numeric/metadata projections, preserving existing mutable chat routing. Global retirement remains owner-specific #1702; main SQLite backup carries all event payloads and receipts.",
-      "references": [
-        "runtime/src/db/budget-limits-schema.ts",
-        "runtime/src/db/usage-report-projection.ts",
-        "runtime/src/db/budget-request-reservations.ts",
-        "runtime/src/budget/evaluator.ts",
-        "runtime/src/budget/usage-total.ts"
-      ]
-    },
-    "core:budget_work": {
-      "category": "core",
-      "initializer": "runtime/src/db/budget-limits-schema.ts#initializeBudgetLimitsSchema",
-      "writers": [
-        "runtime/src/db/budget-limits.ts"
-      ],
-      "sourceOfTruth": "Host budget admission/audit ledger budget_work as defined by budget-limits-schema and its store APIs. Persisted cap, window, allowance, override, reservation, work and evidence identities are not reconstructed from transcript totals.",
-      "replayRetention": "No universal reconstruction or age-expiry guarantee. Preserve persisted identity, history and FK/receipt obligations; changes belong to the cited owner APIs. This read-only inventory adds no deletion, pruning, replay or migration authority.",
-      "references": [
-        "runtime/src/db/budget-limits-schema.ts"
-      ]
-    },
+
     "core:chat_branches": {
       "category": "core",
       "initializer": "runtime/src/db/connection.ts#createSchema",
@@ -1271,219 +1156,147 @@
   },
   "objects": {
     "index:idx_budget_allowances_work_cap": {
-      "owner": "core:budget_allowances",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "fd2044a46a9b80dd7b842620ea26169e49f6e1edd8af35865b71e253ecfca8cc"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_allowances"
     },
     "index:idx_budget_cap_revisions_recorded": {
-      "owner": "core:budget_cap_revisions",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "71e8cd1a70452e07a47a7303c06ace42917b8dc21ae509fa60af10caff9aa3de"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_cap_revisions"
     },
     "index:idx_budget_cap_windows_range": {
-      "owner": "core:budget_cap_windows",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "73c86988710bc66bf11e2d09873bb26eabe220d2602c2cd88d1012407d14d4dc"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_cap_windows"
     },
     "index:idx_budget_caps_enabled_scope": {
-      "owner": "core:budget_caps",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "d4d4c529ea26d34fbb88000c8e8686b0c96a5893bee730e2a94fb485a75e25c5"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_caps"
     },
     "index:idx_budget_caps_provider": {
-      "owner": "core:budget_caps",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "5e40d2cf60122b7a7a3a623fe87d63f058edb927fe9775e93782f65d79e94c5a"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_caps"
     },
     "index:idx_budget_caps_scheduled_task": {
-      "owner": "core:budget_caps",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "ee1e66e5d7b42bdce9ee3f61a97b2668adeb4c5d944d2ce961af04788ee2129d"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_caps"
     },
     "index:idx_budget_caps_work": {
-      "owner": "core:budget_caps",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "d1d8b50ff256cb107957a8c88b35147d8a773256b0709c2ddfdfc7bdcff53d7b"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_caps"
     },
     "index:idx_budget_decisions_work_time": {
-      "owner": "core:budget_decisions",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "92fc7c2bcd1640b231619e4eed6e994dd9068b134ad08d7471312c2ca8ff1d54"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_decisions"
     },
     "index:idx_budget_overrides_chat": {
-      "owner": "core:budget_overrides",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "f53b3f55b0675859a453875f4bbb89a1430d856542c4ef1abd88523e4252d8e7"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_overrides"
     },
     "index:idx_budget_provider_evidence_lookup": {
-      "owner": "core:budget_provider_evidence",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "3dd9537402b45d9fe344b67d6dfe06fa4b4241c7e8ca2e8b92496d166ad37c7d"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_provider_evidence"
     },
     "index:idx_budget_requests_state": {
-      "owner": "core:budget_request_reservations",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "8a056a5d1a4f14324be60892a5be136e53a0bc99e302df9469e43cd822680d62"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_request_reservations"
     },
     "index:idx_budget_requests_work_state": {
-      "owner": "core:budget_request_reservations",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "31abb6f52efcbd1c631929cb11558de19973adbdd485852a55904ce5534919d7"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_request_reservations"
     },
     "index:idx_budget_usage_chat_time": {
-      "owner": "core:budget_usage_events",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "4918dd3a735817cb9b468f25498e785a8e39dda8d7c02856650ea180b806996a"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_usage_events"
     },
     "index:idx_budget_usage_time": {
-      "owner": "core:budget_usage_events",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "2bb0ce056c74d30b86e16ad844ab43524c6e143372ac6a91c2cb31c45c56f3dc"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_usage_events"
     },
     "index:idx_budget_usage_work_time": {
-      "owner": "core:budget_usage_events",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "c47fa5584000156ca9020422ac675549356bfce2867bdd7de27a6b30eb9f1f77"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_usage_events"
     },
     "index:idx_budget_work_chat_status": {
-      "owner": "core:budget_work",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "2f7afdb8cb5987a911ba3471f99a61392ef0e589bc4f87845690f2cb704f49c9"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_work"
     },
     "index:idx_budget_work_parent": {
-      "owner": "core:budget_work",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "e171e5e7e6cc144b6ae3266b667e1e411b854a4664099678cb22669adfd783e9"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_work"
     },
     "index:idx_budget_work_scheduled_task": {
-      "owner": "core:budget_work",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "8f9958f2c6060437395f120e6593dd9d1e5796b4c2f8251b85607ec553bfdba1"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_work"
     },
     "index:idx_chat_branches_agent_name_active_unique": {
@@ -1875,6 +1688,13 @@
       "fingerprints": [
         "1fce1571bbfeaa8f30e6c755459d11910cc37fbd714b0be15cdf046b4f4c7b96"
       ],
+      "requiredIn": []
+    },
+    "index:idx_token_usage_chat_totals_covering_v2": {
+      "owner": "core:token_usage",
+      "fingerprints": [
+        "3617f93dd9dad159231cee00b68fa1264c040edc51afe6065fd496daabdf17f0"
+      ],
       "requiredIn": [
         "core",
         "native",
@@ -2005,7 +1825,8 @@
     "index:service_effect_s01_one_active_operation": {
       "owner": "core:service_effect_s01_operations",
       "fingerprints": [
-        "e846d9a8fb33c0620fe6c02a90fc6b8ad843268ab535964165186083b3fd8bf2"
+        "e846d9a8fb33c0620fe6c02a90fc6b8ad843268ab535964165186083b3fd8bf2",
+        "0a85736c5103d19b1bc3b5a74c138b73e2e9efd43c39124ec4ff408546de5ef7"
       ],
       "requiredIn": [
         "core",
@@ -2274,146 +2095,106 @@
       ]
     },
     "table:budget_allowances": {
-      "owner": "core:budget_allowances",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "52b34cc60a38e93ea60e29a9e6e067d1495e9700376d6b17e2b4d416093219cd"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "1c4aa95d10237d1ffcb34e05fff7c1e284910accf8aecc1a9275fa8c443fa295"
       ]
     },
     "table:budget_cap_revisions": {
-      "owner": "core:budget_cap_revisions",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "53ad30dbd546fab450061d2780704da43d816b85f63fea966f3903fbbb6b2f3e"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "693de4445519b0834c73c759ca8f22702a6f2222dfec5c45093d057bd4cfe18c"
       ]
     },
     "table:budget_cap_windows": {
-      "owner": "core:budget_cap_windows",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "2d17254b52590e8401530475b3e250fb9ee76edc8e1996a88358b0a2eb327ee7"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "a1d174d2719f33bd58bb44e1e742db484bf6b19808e283752826a5a1a883b8dc"
       ]
     },
     "table:budget_caps": {
-      "owner": "core:budget_caps",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "5c61aa8bd61e32641a2475d8d7ede5e9e82a3fed301c05074cd865d2faa8f653"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "1c4aa95d10237d1ffcb34e05fff7c1e284910accf8aecc1a9275fa8c443fa295"
       ]
     },
     "table:budget_decisions": {
-      "owner": "core:budget_decisions",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "794970305ee25f2cad560912ff69773e72c0b44708469b922e45d4ec5b728e53"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "1c4aa95d10237d1ffcb34e05fff7c1e284910accf8aecc1a9275fa8c443fa295"
       ]
     },
     "table:budget_overrides": {
-      "owner": "core:budget_overrides",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "d79172c005f529006d5bb3b8e389be977650b125ee2b760e54c030085c4ddb0c"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "4df83d554e85172db87bcf82b31076e72b2a46f9477ef3def31b2c077eac82b2"
       ]
     },
     "table:budget_provider_evidence": {
-      "owner": "core:budget_provider_evidence",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "cd5f4089cb8646d34370ec0c27b6e5547ae16c4bc9bc0bb41364c8531ce281fd"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "fb0924f2e135f26f59403f9f8c99f8366f788d067b611ec3fd3b47e7f468059e",
         "d1257325880e4ebe42ae43de565e1801c9159e3b263185f5c941b1db8bd4e594"
       ]
     },
     "table:budget_request_reservations": {
-      "owner": "core:budget_request_reservations",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "0f4122e34d1c9b32875480272a960d9888e4d59afde348ec22bfd4c3e8cceb3d",
         "620510c4f43e61dcb383c648eb7ca98b966cfe3b45fadcff8b19902483daf4eb"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "1c4aa95d10237d1ffcb34e05fff7c1e284910accf8aecc1a9275fa8c443fa295",
         "6e692cf7e3c2cc8a671d28d3aee38a283b705cff37e5b77ea5da9ef244bdbcdf"
       ]
     },
     "table:budget_usage_events": {
-      "owner": "core:budget_usage_events",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "0b9f5816168e506ed2328136b37e3bf769559f6502b7ecb829ca1e2586484783",
         "57f3a37a36caeff46f37a88f77f6a585b47660e295fa437d74a350c470d3c2ff"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "eb3300d5dd490bfb24fd2cc4135cddac4866e121ae28e234a741c36a6014cca3",
         "57dd1089ec3fa61e6b24a96966611d2828b07002a6e16a78afbde9aadee57a93"
       ]
     },
     "table:budget_work": {
-      "owner": "core:budget_work",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "2c6ad665b22a3c6a01fe70a54a54f950952e8f1faea8ff85233a4799fc7e0486"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "1c4aa95d10237d1ffcb34e05fff7c1e284910accf8aecc1a9275fa8c443fa295"
       ]
@@ -3205,7 +2986,8 @@
     "table:token_usage": {
       "owner": "core:token_usage",
       "fingerprints": [
-        "80e39ff09dbc05871052df8ee7f9191d655807aa8f9b46da9e96d635b036d48e"
+        "80e39ff09dbc05871052df8ee7f9191d655807aa8f9b46da9e96d635b036d48e",
+        "4030fa7183016951d99adb7dea468c15694edf665a18b53d0a2de194226751fd"
       ],
       "requiredIn": [
         "core",
@@ -3457,51 +3239,35 @@
       ]
     },
     "trigger:budget_cap_revisions_no_delete": {
-      "owner": "core:budget_cap_revisions",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "4982ef9c8e68d07219dd6212c357aba85711eaf8f3e009e08b6894f971603e95"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_cap_revisions"
     },
     "trigger:budget_cap_revisions_no_update": {
-      "owner": "core:budget_cap_revisions",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "200d4b39a87ce62c38ca30414de73d05318bd0cc79465e2775c6766f4cfcd69f"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_cap_revisions"
     },
     "trigger:budget_usage_events_no_delete": {
-      "owner": "core:budget_usage_events",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "891cf457423094f46508a9811a4fd66050713006f5d9057bb63072b141cd89d2"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_usage_events"
     },
     "trigger:budget_usage_events_no_update": {
-      "owner": "core:budget_usage_events",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "3e39031c6bc8b3603fdbba4d3cba1cef194d8d8cfb81a7d17807faec0407ef38"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_usage_events"
     },
     "trigger:messages_ad": {
@@ -4754,172 +4520,116 @@
       ]
     },
     "index:idx_budget_requests_domain_state": {
-      "owner": "core:budget_request_reservations",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "194e625af756b3df6ba42189fad4b3b4e5674474e795db32c3299d36ca421391"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_request_reservations"
     },
     "index:idx_budget_work_status": {
-      "owner": "core:budget_work",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "0f5055166a4220b24010a1fdb503832255e8da8ad2916ad10abda56c93d5148b"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_work"
     },
     "index:idx_budget_requests_model_invocation": {
-      "owner": "core:budget_request_reservations",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "b2f18d048e571ba1e9ed110462abbca43f3fa2a4632c7420a40637e5da9f9996"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_request_reservations"
     },
     "trigger:budget_request_invocation_insert": {
-      "owner": "core:budget_request_reservations",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "0f189387442e0f58d31c482aea2719d36b51cf14f68a0e8528810dfbc6f8fb50"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_request_reservations"
     },
     "trigger:budget_request_invocation_no_delete": {
-      "owner": "core:budget_request_reservations",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "70ab1d8f31af034cfd9602735b5bf296a848825b504969fabfae8f4f410caf78"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_request_reservations"
     },
     "trigger:budget_request_invocation_no_replace": {
-      "owner": "core:budget_request_reservations",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "20ba08ab93da55e7f02ddab62345f94d37614a9c9abfd6d0e078d5210abd3ee3",
         "0a0ce3e65d9c97e8a80f390adce04e4b515e4f18606c3aab28a833e72f3366dd"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_request_reservations"
     },
     "trigger:budget_request_invocation_no_update": {
-      "owner": "core:budget_request_reservations",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "9a728e20bbbe5bddc5f06ec5efdd2e3d2fbd2926665e7ec6886b64dd60b2fa68"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_request_reservations"
     },
     "trigger:budget_request_receipt_capture_state": {
-      "owner": "core:budget_request_reservations",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "b26830d09f3d0f5888d9183ef5863589c5dc69c5ce3571f7e14984facdac9853"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_request_reservations"
     },
     "trigger:budget_request_receipt_insert_state": {
-      "owner": "core:budget_request_reservations",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "b80fbf30ddbf924b3450ae6022ed3411c8b99dc9c7710aa5bcf37fffb2dd1b9e"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_request_reservations"
     },
     "trigger:budget_request_receipt_no_delete": {
-      "owner": "core:budget_request_reservations",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "76e05eabb7ce39778e7b654eaf17c3fd77742768d9df23fb3bd3dd7af26553a1"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_request_reservations"
     },
     "trigger:budget_request_receipt_no_replace": {
-      "owner": "core:budget_request_reservations",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "49e3a45dea35b8e462c06b02ce321727a92a493e54401da8db2f2d7a6846be07"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_request_reservations"
     },
     "trigger:budget_request_receipt_no_update": {
-      "owner": "core:budget_request_reservations",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "950ba7377a98d9fb303c0a2d5c02b21c2c2b0d9e47597da1cf59b98088d09310"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_request_reservations"
     },
     "trigger:budget_request_evidence_version_insert": {
-      "owner": "core:budget_request_reservations",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "7a5589ffc0e4aeef81dad415e6e0fa8dcd0eebef84593b91bddb89e99b094ffd"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_request_reservations"
     },
     "trigger:budget_request_evidence_version_update": {
-      "owner": "core:budget_request_reservations",
+      "owner": "retired:expense-history",
       "fingerprints": [
         "f1b7a57d084cee4204745b18f8094fd9ed886fd559c1d4132fdace91089d33d7"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "table": "budget_request_reservations"
     }
   },

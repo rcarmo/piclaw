@@ -1,3 +1,4 @@
+import {historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import "./src/test-guard.js";
 import { admitAddonLocalRequest } from "../../runtime/src/addons/local-context.js";
 import { getExtensionKvStore } from "../../runtime/src/extension-kv-registry.js";
@@ -50,7 +51,9 @@ for (const accounted of [false, true]) test(`all seven shipped consumers admit a
   const saved = { ...service.configurationSnapshot().config, excludes: ["native-owned-config"] };
   process.env.PICLAW_DB_IN_MEMORY = "0";
   const owner = acquireRuntimeLock({ lockPath: join(workspace, "core-consumers.lock"), strictOwnership: true, disabled: false });
-  initDatabase(); const root = getDb(); storeChatMetadata("web:default", new Date().toISOString());
+  initDatabase(); const root = getDb();
+  expect(root.query("SELECT name FROM main.sqlite_schema WHERE tbl_name GLOB 'budget_*'").all()).toEqual([]);
+  storeChatMetadata("web:default", new Date().toISOString());
   root.transaction(() => extensionKvSet("observability", "config", { instance_name: "native-persisted-instance", enabled: true, appinsights_enabled: false, graphite_enabled: false, appinsights_live_metrics: false }, "global")).immediate();
   const provider = accounted ? 'github-copilot' : 'synthetic';
   if (accounted) {
@@ -148,6 +151,7 @@ for (const accounted of [false, true]) test(`all seven shipped consumers admit a
     }
     expect(finalStatus).toBe('done');
     expect(calls).toBe(4);
+    expect(root.query("SELECT name FROM main.sqlite_schema WHERE tbl_name GLOB 'budget_*'").all()).toEqual([]);
     // Read the rows written by the real native SDK/accounting path using the
     // exact installed public-package collector, not a second SQL projection.
     {
@@ -166,7 +170,7 @@ for (const accounted of [false, true]) test(`all seven shipped consumers admit a
         expect(points.has('cost.api_equivalent_usd.known_subtotal')).toBe(false);
         expect(points.get('cost.api_equivalent_usd.unknown_rows')).toBe(4);
       }
-      for(const table of ['budget_work','budget_request_reservations','budget_usage_events'])expect(root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
+      for(const table of ['budget_work','budget_request_reservations','budget_usage_events'])expect(table.startsWith('budget_') ? historicalExpenseRows(root,[table])[0] : root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
       expect(points.get('tokens.reasoning')).toBe(4); expect(points.get('tokens.total')).toBe(8);
       expect(points.has('cost.estimated_usd')).toBe(false); expect(root.serialize()).toEqual(before);
     }

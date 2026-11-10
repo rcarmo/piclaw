@@ -29,7 +29,11 @@ export interface TokenUsageCounterSummary {
   cache_read_tokens: number;
   cache_write_tokens: number;
   total_tokens: number;
-  cost_total: number;
+  cost_total: number | null;
+  cost_currency?: string | null;
+  provider_cost_total?: number | null;
+  provider_cost_currency?: string | null;
+  catalogue_cost_total?: number | null;
   runs: number;
   provider_reported_cost_runs?: number;
   catalogue_estimate_cost_runs?: number;
@@ -41,6 +45,7 @@ export interface LatestTokenUsageCounterSummary extends TokenUsageCounterSummary
   cache_read_reported?: number | null;
   cache_write_reported?: number | null;
   provider_cost_total?: number | null;
+  provider_cost_currency?: string | null;
   catalogue_cost_total?: number | null;
   cost_provenance?: string | null;
   model?: string | null;

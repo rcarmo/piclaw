@@ -26,7 +26,11 @@ export interface TokenUsageTotalsSummary {
   cache_read_tokens: number;
   cache_write_tokens: number;
   total_tokens: number;
-  cost_total: number;
+  cost_total: number | null;
+  cost_currency: string | null;
+  provider_cost_total: number | null;
+  provider_cost_currency: string | null;
+  catalogue_cost_total: number | null;
   runs: number;
   provider_reported_cost_runs?: number;
   catalogue_estimate_cost_runs?: number;
@@ -50,6 +54,7 @@ export interface LatestTokenUsageSummary extends TokenUsageTotalsSummary {
   cache_read_reported: number | null;
   cache_write_reported: number | null;
   provider_cost_total: number | null;
+  provider_cost_currency: string | null;
   catalogue_cost_total: number | null;
   cost_provenance: TokenUsageCostProvenance | null;
   model: string | null;
@@ -102,23 +107,36 @@ function normalizeLimit(limit: number): number {
   return Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 5;
 }
 
+// Every sum retains its own unit. Unknown or unlike currencies produce no
+// monetary aggregate; individual observations/history remain available unchanged.
+const providerCurrency=`CASE WHEN cost_provenance='provider_reported' AND provider_cost_total IS NOT NULL THEN NULLIF(UPPER(TRIM(provider_cost_currency)),'') END`;
+const effectiveCurrency=`CASE WHEN cost_total IS NOT NULL THEN CASE cost_provenance WHEN 'provider_reported' THEN ${providerCurrency} WHEN 'catalogue_estimate' THEN NULLIF(UPPER(TRIM(pricing_currency)),'') END END`;
+const costSum=`COUNT(cost_total)=COUNT(${effectiveCurrency}) AND COUNT(DISTINCT ${effectiveCurrency})=1`;
+const actualSum=`COUNT(provider_cost_total)=COUNT(${providerCurrency}) AND COUNT(DISTINCT ${providerCurrency})=1`;
+const totalsSql=`
+      COALESCE(SUM(input_tokens),0) AS input_tokens,
+      COALESCE(SUM(output_tokens),0) AS output_tokens,
+      COALESCE(SUM(reasoning_tokens),0) AS reasoning_tokens,
+      COALESCE(SUM(cache_read_tokens),0) AS cache_read_tokens,
+      COALESCE(SUM(cache_write_tokens),0) AS cache_write_tokens,
+      COALESCE(SUM(total_tokens),0) AS total_tokens,
+      CASE WHEN ${costSum} THEN SUM(cost_total) END AS cost_total,
+      CASE WHEN ${costSum} THEN MIN(${effectiveCurrency}) END AS cost_currency,
+      CASE WHEN ${actualSum} THEN SUM(provider_cost_total) END AS provider_cost_total,
+      CASE WHEN ${actualSum} THEN MIN(${providerCurrency}) END AS provider_cost_currency,
+      CASE WHEN COUNT(catalogue_cost_total)>0 AND COUNT(catalogue_cost_total)=COUNT(CASE WHEN catalogue_cost_total IS NOT NULL AND pricing_currency='USD' THEN 1 END) THEN SUM(catalogue_cost_total) END AS catalogue_cost_total,
+      COUNT(*) AS runs,
+      COALESCE(SUM(cost_provenance='provider_reported'),0) AS provider_reported_cost_runs,
+      COALESCE(SUM(cost_provenance='catalogue_estimate'),0) AS catalogue_estimate_cost_runs,
+      COALESCE(SUM(cost_provenance='unavailable'),0) AS unavailable_cost_runs,
+      COALESCE(SUM(cost_provenance IS NULL),0) AS legacy_cost_runs`;
+
 /** Return overall token and cost totals for a chat. */
 export function getTokenUsageTotals(chatJid: string): TokenUsageTotalsSummary {
   const db = getDb();
   const row = db.prepare(
     `SELECT
-      COALESCE(SUM(input_tokens), 0) AS input_tokens,
-      COALESCE(SUM(output_tokens), 0) AS output_tokens,
-      COALESCE(SUM(reasoning_tokens), 0) AS reasoning_tokens,
-      COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
-      COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens,
-      COALESCE(SUM(total_tokens), 0) AS total_tokens,
-      COALESCE(SUM(cost_total), 0) AS cost_total,
-      COUNT(*) AS runs,
-      COALESCE(SUM(cost_provenance = 'provider_reported'), 0) AS provider_reported_cost_runs,
-      COALESCE(SUM(cost_provenance = 'catalogue_estimate'), 0) AS catalogue_estimate_cost_runs,
-      COALESCE(SUM(cost_provenance = 'unavailable'), 0) AS unavailable_cost_runs,
-      COALESCE(SUM(cost_provenance IS NULL), 0) AS legacy_cost_runs
+      ${totalsSql}
      FROM token_usage
      WHERE chat_jid = ?`
   ).get(chatJid) as TokenUsageTotalsSummary | undefined;
@@ -130,7 +148,11 @@ export function getTokenUsageTotals(chatJid: string): TokenUsageTotalsSummary {
     cache_read_tokens: 0,
     cache_write_tokens: 0,
     total_tokens: 0,
-    cost_total: 0,
+    cost_total: null,
+    cost_currency: null,
+    provider_cost_total: null,
+    provider_cost_currency: null,
+    catalogue_cost_total: null,
     runs: 0,
     provider_reported_cost_runs: 0,
     catalogue_estimate_cost_runs: 0,
@@ -158,6 +180,7 @@ export function getLatestTokenUsage(chatJid: string): LatestTokenUsageSummary | 
       cost_cache_write,
       cost_total,
       provider_cost_total,
+      provider_cost_currency,
       catalogue_cost_total,
       cost_provenance,
       model,
@@ -167,6 +190,7 @@ export function getLatestTokenUsage(chatJid: string): LatestTokenUsageSummary | 
       usage_source,
       turns,
       run_at,
+      CASE cost_provenance WHEN 'provider_reported' THEN NULLIF(UPPER(TRIM(provider_cost_currency)),'') WHEN 'catalogue_estimate' THEN NULLIF(UPPER(TRIM(pricing_currency)),'') END AS cost_currency,
       1 AS runs
      FROM token_usage
      WHERE chat_jid = ?
@@ -183,18 +207,7 @@ export function getTokenUsageByProvider(chatJid: string, limit = 5): TokenUsageB
   return db.prepare(
     `SELECT
       provider,
-      COALESCE(SUM(input_tokens), 0) AS input_tokens,
-      COALESCE(SUM(output_tokens), 0) AS output_tokens,
-      COALESCE(SUM(reasoning_tokens), 0) AS reasoning_tokens,
-      COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
-      COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens,
-      COALESCE(SUM(total_tokens), 0) AS total_tokens,
-      COALESCE(SUM(cost_total), 0) AS cost_total,
-      COUNT(*) AS runs,
-      COALESCE(SUM(cost_provenance = 'provider_reported'), 0) AS provider_reported_cost_runs,
-      COALESCE(SUM(cost_provenance = 'catalogue_estimate'), 0) AS catalogue_estimate_cost_runs,
-      COALESCE(SUM(cost_provenance = 'unavailable'), 0) AS unavailable_cost_runs,
-      COALESCE(SUM(cost_provenance IS NULL), 0) AS legacy_cost_runs
+      ${totalsSql}
      FROM token_usage
      WHERE chat_jid = ?
      GROUP BY provider
@@ -209,18 +222,7 @@ export function getTokenUsageByModel(chatJid: string, limit = 5): TokenUsageByMo
   return db.prepare(
     `SELECT
       COALESCE(response_model, model) AS model,
-      COALESCE(SUM(input_tokens), 0) AS input_tokens,
-      COALESCE(SUM(output_tokens), 0) AS output_tokens,
-      COALESCE(SUM(reasoning_tokens), 0) AS reasoning_tokens,
-      COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
-      COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens,
-      COALESCE(SUM(total_tokens), 0) AS total_tokens,
-      COALESCE(SUM(cost_total), 0) AS cost_total,
-      COUNT(*) AS runs,
-      COALESCE(SUM(cost_provenance = 'provider_reported'), 0) AS provider_reported_cost_runs,
-      COALESCE(SUM(cost_provenance = 'catalogue_estimate'), 0) AS catalogue_estimate_cost_runs,
-      COALESCE(SUM(cost_provenance = 'unavailable'), 0) AS unavailable_cost_runs,
-      COALESCE(SUM(cost_provenance IS NULL), 0) AS legacy_cost_runs
+      ${totalsSql}
      FROM token_usage
      WHERE chat_jid = ?
      GROUP BY COALESCE(response_model, model)
@@ -235,18 +237,7 @@ export function getTokenUsageBySource(chatJid: string, limit = 5): TokenUsageByS
   return db.prepare(
     `SELECT
       usage_source,
-      COALESCE(SUM(input_tokens), 0) AS input_tokens,
-      COALESCE(SUM(output_tokens), 0) AS output_tokens,
-      COALESCE(SUM(reasoning_tokens), 0) AS reasoning_tokens,
-      COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
-      COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens,
-      COALESCE(SUM(total_tokens), 0) AS total_tokens,
-      COALESCE(SUM(cost_total), 0) AS cost_total,
-      COUNT(*) AS runs,
-      COALESCE(SUM(cost_provenance = 'provider_reported'), 0) AS provider_reported_cost_runs,
-      COALESCE(SUM(cost_provenance = 'catalogue_estimate'), 0) AS catalogue_estimate_cost_runs,
-      COALESCE(SUM(cost_provenance = 'unavailable'), 0) AS unavailable_cost_runs,
-      COALESCE(SUM(cost_provenance IS NULL), 0) AS legacy_cost_runs
+      ${totalsSql}
      FROM token_usage
      WHERE chat_jid = ?
      GROUP BY usage_source

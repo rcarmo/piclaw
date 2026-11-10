@@ -29,10 +29,14 @@ export async function qualifyNativeRecoveryUnit(unitPath: string, environment: R
   if(fingerprintRecoveryFile(copy).sha256!==manifest.database.sha256) throw Error("Recovery unit changed before restore");
   const inspected = ["conversations","documents","document_revisions","entries","tasks","submissions","record_ids","piclaw_durable_bindings_v1","piclaw_durable_intent_bindings_v1",
     "service_effect_s01_chats","service_effect_s01_sources","service_effect_s01_operations","service_effect_s01_operation_sources",
-    "service_effect_s02_commits","service_effect_s05_outbox","budget_work","budget_request_reservations"];
+    "service_effect_s02_commits","service_effect_s05_outbox"];
   const source=new Database(copy,{readonly:true,strict:true,safeIntegers:true});
   let expected:string, conversations:{id:bigint|number}[];
-  try {expected=fingerprintSqliteTables(source,inspected);conversations=source.query("SELECT id FROM conversations ORDER BY id").all() as typeof conversations;}
+  try {
+    // Historical finance is data, never a prerequisite for a fresh recovery unit.
+    for(const table of ['budget_work','budget_request_reservations'])if(source.query("SELECT 1 FROM main.sqlite_schema WHERE type='table' AND name=?").get(table))inspected.push(table);
+    expected=fingerprintSqliteTables(source,inspected);conversations=source.query("SELECT id FROM conversations ORDER BY id").all() as typeof conversations;
+  }
   finally {source.close();}
   let credentialReads=0;
   const denied=async():Promise<never>=>{credentialReads++;throw Error("Recovery qualification denies credential access");};

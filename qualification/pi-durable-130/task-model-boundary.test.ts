@@ -382,3 +382,28 @@ for(const asynchronous of [false,true])test(`metadata scope propagates an entere
   try{await execute({},runtime,context);throw Error("Body failure was swallowed");}catch(error){expect(error).toBe(failure);}
   expect(bodies).toBe(1);expect(sleeps).toBe(0);expect(taskModelRequestScope(runtime.signal)).toBeUndefined();
 });
+
+
+test('scoped cancellation changes callback signals but preserves the SDK commit context and abort definition',async()=>{
+  const {withAbortSignal,awaitWithContext}=await import('@earendil-works/chord/context');
+  const sdk=new AbortController(),lease=new AbortController(),sdkContext=withAbortSignal(sdk.signal,context),held=Promise.withResolvers<void>(),entered=Promise.withResolvers<void>();
+  let externalSignal:AbortSignal|undefined,scopedSignal:AbortSignal|undefined;
+  const committedContexts:typeof context[]=[];
+  const abort=async()=>{},tool={name:'fixture',description:'fixture',parameters:{type:'object'},async execute(_args:unknown,_api:unknown,ctx:typeof context){externalSignal=ctx.abortSignal;entered.resolve();await awaitWithContext(held.promise,ctx);return{output:[]};}};
+  const task=defineTask({name:'qualification.cancel-context',version:1,initial:()=>({phase:'call' as const}),phases:{async call(record,runtime,ctx){
+    expect(ctx).toBe(sdkContext);expect(record.input).toEqual({untouched:true});scopedSignal=runtime.signal;
+    const agent=await runtime.agent(ctx);
+    try{await agent.tools[0]!.execute({},{}as never,ctx);}
+    finally{await runtime.commit(()=>undefined,ctx);}
+  }},abort});
+  const registry=createRegistry();registry.install(defineExtension({name:'cancel-context',tasks:[task]}));
+  const wrapped=withTaskModelRequestScope(registry,async id=>Number(id)===34?lease.signal:undefined).snapshot().task(task.definition.name)!;
+  expect(wrapped.definition.abort).toBe(task.definition.abort);
+  const runtime={taskId:12,conversationId:34,signal:sdk.signal,async agent(){return{tools:[tool],callable:[tool]};},
+    async commit(_change:unknown,ctx:typeof context){expect(this).toBe(runtime);expect(this.signal).toBe(sdk.signal);this.signal.throwIfAborted();ctx.abortSignal?.throwIfAborted();committedContexts.push(ctx);}};
+  const record={id:12,conversationId:34,kind:task.definition.name,version:1,input:{untouched:true},state:{status:'running',checkpoint:{phase:'call'}}};
+  const result=(wrapped.definition.phases.call as Function)(record,runtime,sdkContext).then(()=>undefined,(error:unknown)=>error);
+  await entered.promise;const reason=Error('only scoped callback cancelled');lease.abort(reason);expect(await result).toBe(reason);
+  expect(committedContexts).toEqual([sdkContext]);
+  expect(scopedSignal?.aborted).toBe(true);expect(externalSignal?.aborted).toBe(true);expect(sdk.signal.aborted).toBe(false);expect(sdkContext.abortSignal?.aborted).toBe(false);expect(record.state).toEqual({status:'running',checkpoint:{phase:'call'}});
+});

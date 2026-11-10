@@ -1,3 +1,4 @@
+import {commitWrites} from "../../runtime/durable-engine/qualification/testing.ts";
 import "./src/test-guard.js";
 import { expect, spyOn, test } from "bun:test";
 import { Database } from "bun:sqlite";
@@ -7,6 +8,7 @@ import { BunSqliteDatabase } from "../../runtime/durable-engine/src/index.js";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
 import type { DocumentId } from "../../runtime/durable-engine/qualification/durable.ts";
 import { admitSqliteWrite } from "../../runtime/src/db/sqlite-async-admission.js";
+import {installServiceWorkSchema} from "../../runtime/src/service-effects/current-piclaw/service-work-schema.js";
 import { barrier, context, openFixture } from "./src/fixture.js";
 
 async function disk(body: (path: string) => Promise<void>) {
@@ -312,11 +314,11 @@ test("actual SDK Harness commits and document materialization: SQL inventory, wr
     }
     return result;
   });
-  const querySpy = spyOn(Database.prototype, "query").mockImplementation(function (this: Database, ...args: Parameters<Database["query"]>) {
+  const querySpy = spyOn(Database.prototype, "query").mockImplementation((function (this: Database, ...args: Parameters<Database["query"]>) {
     const result = originalQuery.apply(this, args);
     if (this === sdk) inventory.add(args[0].replace(/\s+/g, " ").trim());
     return result;
-  });
+  }) as typeof Database.prototype.query);
   try {
     fixture = await openFixture({ acquired: true }, () => {}, async () => storage);
     // real 1.4 storage.js: commit -> metadata/get, checkGlobalIds,
@@ -335,7 +337,7 @@ test("actual SDK Harness commits and document materialization: SQL inventory, wr
       const id = await storage.mintId<DocumentId>();
       await db.withHostSourceGuard(() => {}, async tx => {
         persistCalls++; await tx.run("INSERT INTO probe VALUES(?)", n);
-      }, () => storage.commit([{ type: "document.create", record: {
+      }, () => commitWrites(storage,[{ type: "document.create", record: {
         id, kind: `qualification.sql-workload.${n}`, scope: { kind: "session" },
       }, content: { kind: "base", version: 1, value: { n } } }], context));
       label = "SqliteStorage.document.read";
@@ -399,4 +401,22 @@ test("entered external await holds writer; close seals immediately and joins ent
     finally { await db.close(); root.close(); }
   }
   expect(first).toBe(1); expect(second).toBe(1); expect(persists).toBe(1); expect(closed).toBe(true);
+}));
+
+
+test('parallel source scopes retain distinct SQL authority and persistence; one revocation cannot release the idle fence',()=>disk(async path=>{
+  const root=ownedRoot(path),db=guarded(path,root),writer=new Database(path),attempted=barrier();let revoked=false,aCallbacks=0,bCallbacks=0,aPersists=0,bPersists=0,bEntered=false;
+  const denial=Error('only source A revoked'),exec=Database.prototype.exec;
+  installServiceWorkSchema(root);writer.exec('PRAGMA busy_timeout=0;BEGIN IMMEDIATE');
+  const spy=spyOn(Database.prototype,'exec').mockImplementation(function(this:Database,sql:string){try{return exec.call(this,sql);}catch(error){if(this!==root&&this!==writer&&sql==='BEGIN IMMEDIATE'&&writer.inTransaction)attempted.release();throw error;}});
+  try{
+    const a=outcome(db.withHostSourceGuard(()=>{if(revoked)throw denial;},async tx=>{aPersists++;await tx.run('INSERT INTO probe VALUES(11)');},()=>db.transaction(async tx=>{aCallbacks++;await tx.run('INSERT INTO probe VALUES(10)');})));
+    await attempted.promise;
+    const b=outcome(db.withHostSourceGuard(()=>{},async tx=>{bPersists++;await tx.run('INSERT INTO probe VALUES(21)');},()=>{bEntered=true;return db.transaction(async tx=>{bCallbacks++;await tx.run('INSERT INTO probe VALUES(20)');});}));
+    expect(bEntered).toBe(true);revoked=true;expect((await a).error).toBe(denial);expect(writer.inTransaction).toBe(true);
+    await expect(db.withIdleModelGuard(async()=>{})).rejects.toThrow();
+    writer.exec('ROLLBACK');expect((await b).error).toBeUndefined();
+    expect([aCallbacks,aPersists,bCallbacks,bPersists]).toEqual([0,0,1,1]);expect(root.query('SELECT n FROM probe ORDER BY n').all()).toEqual([{n:20},{n:21}]);
+    await expect(db.withIdleModelGuard(async()=>42)).resolves.toBe(42);
+  }finally{if(writer.inTransaction)writer.exec('ROLLBACK');spy.mockRestore();writer.close();await db.close();root.close();}
 }));

@@ -1,3 +1,5 @@
+import {installHistoricalExpenseFixture} from '../../runtime/test/fixtures/historical-expense.js';
+import {historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import './src/test-guard.js';
 import { Database } from "bun:sqlite";
 import {mkdtempSync,rmSync} from 'node:fs';
@@ -12,7 +14,7 @@ import { initDatabase, getDb, closeDatabase } from '../../runtime/src/db/connect
 
 async function fixture(financial = false) {
   let root: Database;
-  if (financial) { initDatabase(); root = Database.deserialize(getDb().serialize()); await closeDatabase(); }
+  if (financial) { initDatabase();installHistoricalExpenseFixture(getDb()); root = Database.deserialize(getDb().serialize()); await closeDatabase(); }
   else root = new Database(":memory:");
   installTerminalSettlementCompositionSchema(root);
   const work = value(createCurrentPiclawServiceWorkStore(root, { hitFault: () => false, recordTrace() {} }));
@@ -43,8 +45,8 @@ for (const readonly of [false, true]) test(`captured tool authority ignores fina
     root.query("INSERT INTO budget_work(id,chat_jid,execution_kind,created_at,updated_at) VALUES (?,?,'interactive',?,?)").run("historical-request-work",captured.operation.chatJid,at,at);
     const receipt=JSON.stringify({version:1,requestId:"paid-pending",requestBindingSha256:"a".repeat(64),projectedOutcome:{role:"assistant",stopReason:"stop"}});
     root.query("INSERT INTO budget_request_reservations(id,work_id,chat_jid,provider_id,model_id,account_ref,binding_sha256,amount_microusd,state,created_at,updated_at,terminal_receipt_json,terminal_receipt_sha256,terminal_received_at) VALUES (?,?,?,'fixture','fixture','historical-account',?,100,'unresolved',?,?,?,?,?)").run("paid-pending","historical-request-work",captured.operation.chatJid,"a".repeat(64),at,at,receipt,"b".repeat(64),at);
-    const financialState = () => ({ request: root.query("SELECT * FROM budget_request_reservations").all(),
-      work: root.query("SELECT * FROM budget_work ORDER BY id").all(), reports: root.query("SELECT * FROM token_usage").all() });
+    const financialState = () => ({ request: historicalExpenseRows(root,['budget_request_reservations'])[0],
+      work: historicalExpenseRows(root,['budget_work'])[0], reports: root.query("SELECT * FROM token_usage").all() });
     const before = financialState(); financialChecks = 0; let entered = 0;
     expect(() => authority.assertSourceCurrent()).not.toThrow();
     expect(() => authority.assertCurrent()).not.toThrow();

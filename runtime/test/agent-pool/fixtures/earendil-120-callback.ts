@@ -17,5 +17,5 @@ try {
   assert.throws(() => listener.waitForCallback("duplicate", "/callback/a"), /already pending/);
   await listener.close(); await duplicateClosed;
   assert.equal(guard.externalAttempts, 0); assert.equal(guard.childAttempts, 0); assert.equal(guard.servers, 1); assert.equal(guard.closed, 1);
-  console.log(JSON.stringify({ version: "1.4.0", passed: ["correct-path", "wrong-path-denied", "rejected-state-consumed", "parallel-paths", "unknown-path", "unknown-state", "duplicate-state", "close-pending"], guard, transport: "owned ephemeral loopback HTTP only", realProvider: false }));
+  console.log(JSON.stringify({ version: "1.5.2", passed: ["correct-path", "wrong-path-denied", "rejected-state-consumed", "parallel-paths", "unknown-path", "unknown-state", "duplicate-state", "close-pending"], guard, transport: "owned ephemeral loopback HTTP only", realProvider: false }));
 } finally { if (guard.closed === 0) await listener.close(); }

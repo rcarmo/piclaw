@@ -13,6 +13,7 @@
   },
   "include": [
     "src/**/*.ts",
+    "pi150-upgrade-smoke.test.ts",
     "schema-ownership.test.ts",
     "schema-ownership-fixture.ts",
     "installed-addons-fixture.ts",
@@ -125,6 +126,8 @@
     "factory-mcp-maintenance.test.ts",
     "native-dream-codex.test.ts",
     "native-dream-retirement.test.ts",
-    "native-a2a-history.test.ts"
+    "native-a2a-history.test.ts",
+    "scheduler-production-lifetime.test.ts",
+    "sqlite-admission-workload.test.ts"
   ]
 }

@@ -1,3 +1,4 @@
+import {historicalExpenseRows} from '../../runtime/test/fixtures/historical-expense.js';
 import './src/test-guard.js';
 import { expect, spyOn } from 'bun:test';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -96,7 +97,7 @@ for (const reportingFault of [false, true]) applicationTest(`actual Dream Codex 
       while ((root.query('SELECT count(*) n FROM token_usage').get() as { n: number }).n < 2 && Date.now() < deadline) await Bun.sleep(10);
       expect(root.query('SELECT total_tokens FROM token_usage ORDER BY id').all()).toEqual([{ total_tokens: 5 }, { total_tokens: 5 }]);
     } else expect(root.query('SELECT * FROM token_usage').all()).toEqual([]);
-    for (const table of ['service_effect_s01_operations', 'service_effect_s02_commits', 'budget_work', 'budget_request_reservations', 'budget_usage_events', 'messages']) expect(root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
+    for (const table of ['service_effect_s01_operations', 'service_effect_s02_commits', 'budget_work', 'budget_request_reservations', 'budget_usage_events', 'messages']) expect(table.startsWith('budget_') ? historicalExpenseRows(root,[table])[0] : root.query(`SELECT * FROM ${table}`).all()).toEqual([]);
     const submissions = root.query('SELECT * FROM submissions ORDER BY id').all(), entries = root.query('SELECT * FROM entries ORDER BY id').all();
     expect(JSON.stringify(entries)).not.toContain('DREAM_ROUTING_');
     await backend.close(); backend = await createDefaultApplicationRuntime(owner, async () => services as never);

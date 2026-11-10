@@ -61,7 +61,11 @@ export async function auditLocalTestEntrypoints(
   const violations: string[] = [];
   for (const path of repositoryFiles(root, files)) {
     if (!isAuditedSource(path) || ALLOWLIST.has(path)) continue;
-    const lines = readFileSync(join(root, path), "utf8").split("\n");
+    const source = readFileSync(join(root, path), "utf8");
+    // Negative-only prefilter: every per-line match also exists in the full text.
+    // Keep the same files, patterns, comment rules and findings below.
+    if (!RAW_PATTERNS.some((pattern) => pattern.test(source))) continue;
+    const lines = source.split("\n");
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index];
       if (/^\s*(?:#|\/\/|\*)/.test(line)) continue;
