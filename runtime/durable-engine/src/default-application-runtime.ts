@@ -55,7 +55,7 @@ import { buildDreamPrompt } from '../../src/agent-memory/dream-prompt.js';
 import type { NativeDreamRequest,AgentOutput } from '../../src/agent-pool/contracts.js';
 import { createHostMcp } from "./host-mcp.js";
 import { createHostFetch } from "./host-fetch.js";
-import { taskModelRequestScope, taskModelHookScope, taskModelToolScope, withTaskModelRequestScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
+import { taskModelRequestScope, taskModelHookScope, taskModelToolScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
 import { createHostBuiltinTools } from "./host-builtins.js";
 import { createHostModelTools, hostModelToolNames, nativeToolInstructions } from "./host-model-controls.js";
 import { createHostCommandPolicy } from "./host-command-policy.js";
@@ -1102,7 +1102,9 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     assertOwner() { assert(); lifetime.signal.throwIfAborted(); observability.assertCurrent(); }, failClosed(error) { lifetime.abort(error); } }));
   if (goal) registry.install(createHostGoalTerminalFence(goal.addon, { root, runtime, assertOwner: assertGoal }));
   const commandPolicy = createHostCommandPolicy(root, () => { assert(); if (readAccessConfig().mode !== "single-user") throw Error("Native controls require single-user policy"); });
-  const harnessOptions = { models, registry: withTaskModelRequestScope(registry), settings: commandPolicy.settings };
+  // Preparation stays paused; the executing HostConversationRuntime installs
+  // the single task-source/cancellation adapter when it opens its Harness.
+  const harnessOptions = { models, registry, settings: commandPolicy.settings };
   const path = (root.query("PRAGMA database_list").all() as { name: string; file: string }[]).find(row => row.name === "main")?.file;
   if (!path) throw Error("Durable default requires a file-backed application database");
   const storage = new BunSqliteDatabase(path, { root, assertOwner: assert, fenceTransactions: true });
@@ -1535,7 +1537,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   return backend;
   } catch (error) {
     // A post-construction failure still owns a live SDK scheduler/storage graph.
-    // Join it before invalidating execution dependencies or financial ownership.
+    // Join it before invalidating execution dependencies or releasing ownership.
     if (typeof bundle !== 'undefined') {
       try { bundle.stop(); await bundle.close(); }
       catch (cleanup) { throw new RuntimeStartupCleanupError([error, cleanup], 'Application startup cleanup uncertain'); }

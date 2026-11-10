@@ -25,6 +25,15 @@ The final delivery of #1875 is not qualified or merged yet. Current source has n
 
 Goal token budgets, context/output ceilings, provider-imposed quotas/errors and operational limits are nonfinancial. Historical table/reference declarations and bounded retention protect data; they do not create or interpret a financial execution lifecycle. Pricing references on main, including #1983, are observational and remain shipped.
 
+## Qualification checkpoint
+
+- Qualification types pass with SDK1.5.1. Storage fault wrappers forward complete batches, the receiver and the original commit context; direct seeding uses public `commitWrites`. The owner-fenced SQLite adapter implements `runCounted` through its existing transaction.
+- Fresh isolated full scheduler fixture passes, including the actual60s expiry case. The fixture now uses the real default-factory lifetime contention policy; the initial12pass/1failure remains recorded. Production deadlines and resource policies are unchanged.
+- Fresh SQLite admission workload and75SQLite checks pass. Lost-return/storage ACK and vertical execution tests pass with their original uncertainty, cancellation and non-replay assertions. Public package smoke and portable document-version1/2 migration,99forward-version refusal and factory reopen checks pass.
+- Default-factory preparation retains the plain registry. The executing `HostConversationRuntime` installs the single task-source/cancellation adapter. The SDK still lacks the task-bound model callback required to remove that adapter; source identity and blocked-writer cancellation are current consumers.
+- Add-on candidate46c1af7 has Delegate0.2.22 and Observability0.1.21;65tests/404assertions pass. Their public package URLs are not published yet. Core's old release seed remains unchanged pending publication; this branch is not ready for distribution.
+- These are focused checkpoint results. Full exact-head canonical gates, independent review and merged-source acceptance remain outstanding.
+
 ## Completion work
 
 - Complete current caller/dynamic/shipped inventory, safe generic transition proof for historical budget-paused schedules, current add-on and fresh-workspace package checks.

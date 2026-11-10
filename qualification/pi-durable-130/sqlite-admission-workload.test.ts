@@ -1,3 +1,4 @@
+import {commitWrites} from "../../runtime/durable-engine/qualification/testing.ts";
 import "./src/test-guard.js";
 import { expect, spyOn, test } from "bun:test";
 import { Database } from "bun:sqlite";
@@ -336,7 +337,7 @@ test("actual SDK Harness commits and document materialization: SQL inventory, wr
       const id = await storage.mintId<DocumentId>();
       await db.withHostSourceGuard(() => {}, async tx => {
         persistCalls++; await tx.run("INSERT INTO probe VALUES(?)", n);
-      }, () => storage.commit([{ type: "document.create", record: {
+      }, () => commitWrites(storage,[{ type: "document.create", record: {
         id, kind: `qualification.sql-workload.${n}`, scope: { kind: "session" },
       }, content: { kind: "base", version: 1, value: { n } } }], context));
       label = "SqliteStorage.document.read";

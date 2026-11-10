@@ -3,7 +3,7 @@
   "fixtures": {
     "native": {
       "repository": "rcarmo/piclaw-addons",
-      "ref": "4429681f2b2cd708f52f7397e82f66ae2952f31b"
+      "ref": "46c1af7ccda7af56580cdbc08eeaf7d6b7414d55"
     },
     "contract": {
       "repository": "rcarmo/piclaw-addons",
@@ -149,6 +149,7 @@
     "offline-maintenance-default-factory.test.ts",
     "owned-model-context-admission.test.ts",
     "ownership.test.ts",
+    "pi150-upgrade-smoke.test.ts",
     "plan.test.ts",
     "regrets-default-factory.test.ts",
     "rehearsal.test.ts",

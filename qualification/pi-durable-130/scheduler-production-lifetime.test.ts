@@ -85,6 +85,10 @@ for(const mode of modes)test(`direct production scheduled SDK invocation: ${mode
     await f.base.close();
     bundle=await createApplicationBootstrapBundle({root:f.root,path:(f.root.query('PRAGMA database_list').all() as {name:string;file:string}[]).find(row=>row.name==='main')!.file,
       ownership:{borrow:()=>f.ownerLease()},manifest:[{chatJid:f.chat,branchId:'main',conversationId:f.base.root.id}],sessions:new Map([[f.chat,'fixture-session']]),offlineInitialize:true,
+      // Match the default factory's existing lifetime-bound SQL contention policy.
+      // Pi1.5 defers streaming progress; the finite offline-construction policy
+      // would fail that background store before the real60s lease expires.
+      contentionSignal:new AbortController().signal,
       runtime:{incarnation:f.domain,sessionId:'fixture-session',now:()=>new Date().toISOString(),harnessOptions:f.options.harnessOptions},answers:{resolver,put:(ref,text)=>{resolver.putText(ref,text);}},onRuntime:r=>{runtime=r;}},context);
     const direct=runtime.runScheduledInput.bind(runtime);
     inputSpy=spyOn(runtime,'runScheduledInput').mockImplementation((input,id,signal)=>{captured=input;submission=id;scheduledSignal=signal;return direct(input,id,signal);});

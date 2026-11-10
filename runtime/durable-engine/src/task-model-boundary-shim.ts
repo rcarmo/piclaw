@@ -39,7 +39,7 @@ export function taskModelToolScope(api: Pick<TaskModelRequestScope, 'taskId' | '
   scope.signal.throwIfAborted(); return scope;
 }
 
-/** TEMPORARY pi-durable 1.4 phase adapter. Replace with an SDK task-bound model-request
+/** Public phase adapter, still required with pi-durable 1.5.1. Replace with an SDK task-bound model-request
  * callback. Uses exported definitions and RegistryReader, without SDK file or
  * persisted-task mutation. Includes checkpoint recovery and every phase entry.
  * Identity is not dispatch/exactly-once proof. This adapter does not decide

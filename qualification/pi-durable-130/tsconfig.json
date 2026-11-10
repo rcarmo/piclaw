@@ -13,6 +13,7 @@
   },
   "include": [
     "src/**/*.ts",
+    "pi150-upgrade-smoke.test.ts",
     "schema-ownership.test.ts",
     "schema-ownership-fixture.ts",
     "installed-addons-fixture.ts",
