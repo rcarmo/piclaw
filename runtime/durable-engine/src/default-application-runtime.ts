@@ -29,7 +29,7 @@ import { nativeBackgroundIdentity,assertNativeBackgroundModel,createNativeBackgr
 import { join, extname } from "node:path";
 import { BACKGROUND_CONTEXT as context, withAbortSignal } from "@earendil-works/chord/context";
 import { apply } from "@earendil-works/chord/delta";
-import { Harness, AgentDoc, configure, createRegistry, defineDoc, defineExtension, defineTool, type ToolExecutionApi, type ToolHooks, type ConversationId } from "@earendil-works/pi-durable";
+import { Harness, AgentDoc, LiveDoc, configure, createRegistry, defineDoc, defineExtension, defineTool, type ToolExecutionApi, type ToolHooks, type ConversationId } from "@earendil-works/pi-durable";
 import { SqliteStorage } from "@earendil-works/pi-durable/storage/sqlite";
 import { createCodemodeTool } from "@earendil-works/pi-durable/codemode";
 import { CodemodeSandbox } from "@earendil-works/pi-codemode";
@@ -129,15 +129,17 @@ const isOldDefault = (tools: unknown) => Array.isArray(tools) &&
     (tools.length === 6 && defaultToolNames.slice(0, 6).every((name, i) => tools[i] === name)));
 
 
-/** Read-only preflight, before Harness.open can normalize pending work. All
- * configuration writes still go through public configure in one SDK commit. */
-function storedDocument(root: ReturnType<typeof getDb>, id: number): any {
-  let value: unknown;
+/** Read-only preflight before Harness.open can normalize pending work, also
+ * repeated synchronously under the configuration write lock. Opening another
+ * Session here would normalise work or re-enter that lock. This compatibility
+ * reader checks raw versions; configuration writes use public configure only. */
+function storedDocument(root: ReturnType<typeof getDb>, id: number, maxVersion = 1): any {
+  let value: unknown, baseVersion: number | undefined;
   const revisions = root.query("SELECT kind, version, content FROM document_revisions WHERE document_id=? ORDER BY seq").all(id) as { kind: string; version: number; content: string }[];
   for (const revision of revisions) {
-    if (revision.version !== 1) throw Error("Invalid persisted document version");
-    if (revision.kind === "base") value = JSON.parse(revision.content);
-    else if (revision.kind === "delta" && value) value = apply(value, JSON.parse(revision.content));
+    if (!Number.isSafeInteger(revision.version) || revision.version < 1 || revision.version > maxVersion) throw Error("Invalid persisted document version");
+    if (revision.kind === "base") { value = JSON.parse(revision.content); baseVersion = revision.version; }
+    else if (revision.kind === "delta" && value && revision.version === baseVersion) value = apply(value, JSON.parse(revision.content));
     else throw Error("Invalid persisted document");
   }
   if (!value) throw Error("Invalid persisted document");
@@ -149,7 +151,7 @@ function assertToolUpgradeIdle(root: ReturnType<typeof getDb>): void {
     throw Error("Host tool upgrade requires idle SDK work");
   const docs = root.query(`SELECT id, kind FROM documents WHERE kind IN ('"pi.inbox"','"pi.live"') AND retired_at IS NULL`).all() as { id: number; kind: string }[];
   for (const doc of docs) {
-    const state = storedDocument(root, doc.id);
+    const state = storedDocument(root, doc.id, doc.kind === '"pi.live"' ? LiveDoc.definition.version : 1);
     if (doc.kind === '"pi.inbox"' ? state.items?.length : state.run) throw Error("Host tool upgrade requires idle SDK work");
   }
   const exists = (table: string) => !!root.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table);

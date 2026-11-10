@@ -1688,8 +1688,7 @@
       "fingerprints": [
         "1fce1571bbfeaa8f30e6c755459d11910cc37fbd714b0be15cdf046b4f4c7b96"
       ],
-      "requiredIn": [],
-      "table": "token_usage"
+      "requiredIn": []
     },
     "index:idx_token_usage_chat_totals_covering_v2": {
       "owner": "core:token_usage",

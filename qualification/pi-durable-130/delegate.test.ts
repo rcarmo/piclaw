@@ -12,7 +12,7 @@ import { BACKGROUND_CONTEXT as context, withAbortSignal } from "../../runtime/du
 import { createHostTool } from "../../runtime/durable-engine/src/index.js";
 import { actualAddonGraph } from "./src/actual-addon-graph.ts";
 
-// Actual 0.2.20 closure, copied beside candidate dependencies, never live imports.
+// Actual 0.2.22 closure, copied beside candidate dependencies, never live imports.
 // Synthetic child executable and SQLite approval only: no real CLI/auth/network.
 test("actual Delegate: approved exact synthetic CLI via durable host context, persisted result/reopen, abort and deadline fences", async () => {
   const root = process.env.DURABLE_ADDONS_ROOT;
@@ -20,8 +20,8 @@ test("actual Delegate: approved exact synthetic CLI via durable host context, pe
   const files = ["index", "delegate", "compat/extension-kv"];
   const hash = createHash("sha256");
   for (const file of files) { hash.update(file + "\0"); hash.update(await Bun.file(resolve(root, "addons/delegate", file + ".ts")).text()); }
-  expect(hash.digest("hex")).toBe("4ef64555202d0f96c9cc647c4c8ba9cb6491e8c8afa8fb95c87be537946970bc");
-  expect((await Bun.file(resolve(root, "addons/delegate/package.json")).json()).version).toBe("0.2.21");
+  expect(hash.digest("hex")).toBe("3876649c7ef34f291e5f26de4b668dcbfe2105be960eb1bb88b5014d57b5495a");
+  expect((await Bun.file(resolve(root, "addons/delegate/package.json")).json()).version).toBe("0.2.22");
   const dir = mkdtempSync(join(tmpdir(), "durable-actual-delegate-"));
   const copy = mkdtempSync(resolve(import.meta.dir, "pinned-delegate-copy-"));
   const globals = globalThis as any;

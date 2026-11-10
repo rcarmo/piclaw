@@ -122,8 +122,10 @@ export function assertModelContextFits(messages: readonly Message[], target: { c
     : message.role === "assistant" ? message.content.flatMap(block => block.type === "toolCall" ? [block.id] : []) : []);
   const framingTokens = framing.length ? estimateContextTokens([{ role: "user", content: framing.join("\n"), timestamp: 0 }]).tokens : 0;
   const inputEstimate = Math.max(estimate.tokens, measuredTokens + estimate.trailingTokens) + framingTokens;
+  // SDK safety room already covers transport framing; do not charge it twice.
+  // Check its own estimate/reserve and the larger host input/actual output cap.
   if (!Number.isFinite(inputEstimate) || inputEstimate < 0 || inputEstimate > target.contextWindow ||
-    (output?.status === "bounded" && inputEstimate + output.reserveTokens > target.contextWindow)) {
+    (output?.status === "bounded" && (estimate.tokens + output.reserveTokens > target.contextWindow || inputEstimate + output.maxOutputTokens > target.contextWindow))) {
     const bytes = new TextEncoder().encode(JSON.stringify(messages)).length;
     throw Error(`Candidate context estimate exceeded; compact first (serialized input bytes=${bytes}, reported tokens=${estimate.usageTokens}, estimated context tokens=${estimate.tokens}, input token estimate=${inputEstimate}, producer output reserve=${output?.status === "bounded" ? output.reserveTokens : "unknown"}, context window=${target.contextWindow})`);
   }

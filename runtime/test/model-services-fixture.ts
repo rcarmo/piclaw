@@ -46,6 +46,7 @@ export function createTestModelRuntime(models: any[] = []): ModelRuntime {
     getError: () => undefined,
     hasConfiguredAuth: () => true,
     getAuth: async () => ({ auth: { apiKey: "test-key" } }),
+    settleCredentialWrites: async () => {},
     reloadConfig: async () => {},
     refresh: async () => ({ aborted: false, errors: new Map() }),
     registerProvider: () => {},
