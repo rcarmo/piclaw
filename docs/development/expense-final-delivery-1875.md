@@ -59,6 +59,12 @@ Goal token budgets, context/output ceilings, provider-imposed quotas/errors and 
 - A supplementary fixture seeds only the seven actual public packages through the existing first-workspace installer, then exercises the real SDK1.5.1 default factory. Estimate, billed-zero and billed-positive cases each pass with one provider call, immutable historical monetary rows and reopen/no-replay checks. Optional image/conversion tooling is outside this seven-package fixture; the original all23installed cases remain unchanged and passing.
 - Full exact-head host/features/native and final delivery review remain outstanding. Prior supplemental and failed runs remain separate receipts.
 
+## Cache-input regression correction
+
+The full3497cd806 run passed7157host checks,25feature checks,17web-build checks, both private type projects and88accepted-source checks. Canonical native completed152files with151passing and one real failure: the context guard let an underreported cache component borrow the SDK's safety reserve.
+
+The correction keeps that reserve on the cache-inclusive measured estimate. Transport framing still has its separate actual-output-cap check, avoiding double charging. The original failing control is unchanged; all five isolated context/output/admission files and engine types pass after the fix. No deadline, provider/context limit or test assertion was relaxed. A fresh exact-head full gate is still required.
+
 ## Remaining adapters and their current consumers
 
 | Adapter | Current nonfinancial consumer | Controls retained |
