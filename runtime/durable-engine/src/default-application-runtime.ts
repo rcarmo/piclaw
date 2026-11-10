@@ -1,5 +1,5 @@
 import { resolveAcceptedMessageThread } from "./host-message-thread.js";
-import { modelFailureNotice } from "./host-model-failure.js";
+import { modelFailureNotice, GoalRequestDenied } from "./host-model-failure.js";
 import { storeMessageInDatabase } from "../../src/db/messages.js";
 import { getIdentityConfig } from "../../src/core/config.js";
 import { recordMessageUsage } from "../../src/agent-pool/usage.js";
@@ -81,7 +81,7 @@ import { createHostResticTool } from "./host-restic-tool.js";
 import { createHostGoalTools } from "./host-goal-tools.js";
 import { createHostGoalPrompt } from "./host-goal-prompt.js";
 import { createHostGoalTerminalFence } from "./host-goal-terminal.js";
-import { createHostGoalInput, GoalRequestDenied } from "./host-goal-input.js";
+import { createHostGoalInput } from "./host-goal-input.js";
 import { isGoalBudgetWrapup } from "./host-goal-usage.js";
 import { createHostGoalSettlement, createNativeGoalProjection } from "./host-goal-settlement.js";
 import { createHostGoalProgressReader } from "./host-goal-progress.js";

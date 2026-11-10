@@ -1,12 +1,6 @@
 import { withExtensionKvAuthority } from "../../src/extension-kv-registry.js";
 import type { PreparedInputText } from "../../src/channels/web/core/web-channel-contracts.js";
 
-/** Expected policy denial for one SDK request, never application ownership loss. */
-export class GoalRequestDenied extends Error {
-  readonly code = "goal_request_denied";
-  constructor(message: string) { super(message); this.name = "GoalRequestDenied"; }
-}
-
 export interface GoalInputAddon {
   goalInputIdentity(text: string): { goalId: string; generation: number } | false | null;
   prepareGoalInput(text: string, chatJid: string): {

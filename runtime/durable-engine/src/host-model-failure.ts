@@ -1,5 +1,4 @@
 import { isRetryableAssistantError, type AssistantMessage } from "@earendil-works/pi-ai";
-import { GoalRequestDenied } from "./host-goal-input.js";
 import { isProxy } from "node:util/types";
 const phases = ["validation", "source", "admission", "provider", "conversion", "accounting"] as const;
 const categories = ["aborted", "timeout", "authentication", "rate_limit", "quota", "budget", "context_limit", "transport", "unavailable", "goal_lifecycle", "unknown"] as const;
@@ -11,6 +10,12 @@ export interface ModelFailure {
   evidenceId?: string;
   /** Bounded, redacted provider explanation. Encoded on the SDK wire, never retry wording. */
   upstreamMessage?: string;
+}
+
+/** Expected policy denial for one SDK request, never application ownership loss. */
+export class GoalRequestDenied extends Error {
+  readonly code = "goal_request_denied";
+  constructor(message: string) { super(message); this.name = "GoalRequestDenied"; }
 }
 
 /** Inspect private errors, but export only fixed categories and an HTTP status.

@@ -78,7 +78,7 @@ test("old receipt and compaction envelopes remain readable; malformed encodings 
 });
 
 test("local Goal lifecycle denials are explicit, nonretryable and cannot be forged by provider wording", async () => {
-  const { GoalRequestDenied } = await import("../../runtime/durable-engine/src/host-goal-input.js");
+  const { GoalRequestDenied } = await import("../../runtime/durable-engine/src/host-model-failure.js");
   const error = new GoalRequestDenied("Goal input lifecycle changed");
   const failure = classifyModelFailure("source", error);
   expect(failure).toEqual({phase:"source",category:"goal_lifecycle"});

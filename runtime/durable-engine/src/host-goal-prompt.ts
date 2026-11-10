@@ -5,7 +5,7 @@ import type { HostConversationRuntime } from "./host-runtime.js";
 import { accountCommittedGoalBatch, isGoalBudgetWrapup } from "./host-goal-usage.js";
 import { withExtensionKvAuthority } from "../../src/extension-kv-registry.js";
 import { withGoalSystemInstructions } from "./host-plan-context.js";
-import { GoalRequestDenied } from "./host-goal-input.js";
+import { GoalRequestDenied } from "./host-model-failure.js";
 
 type GoalState = { status: string; goal_id: string; lifecycle_generation: number; deadline_checkpoint?: unknown; budget_limit_reported: boolean };
 export function createHostGoalPrompt(addon: {
