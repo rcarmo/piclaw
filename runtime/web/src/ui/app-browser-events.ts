@@ -1,5 +1,6 @@
 import { requestOpenSettingsDialog } from '../components/settings-dialog-events.js';
 import { matchesKeyboardShortcutAction } from './keyboard-shortcuts.js';
+import { WORKSPACE_TREE_TOGGLE_EVENT } from './use-splitters.js';
 
 interface DocumentEventTargetLike {
   addEventListener(type: string, listener: (event: any) => void): void;
@@ -20,6 +21,7 @@ function isEditableKeyboardTarget(target: unknown): boolean {
 
 interface RuntimeLike {
   document?: DocumentEventTargetLike | null;
+  window?: { addEventListener?: (type: string, listener: () => void) => void; removeEventListener?: (type: string, listener: () => void) => void } | null;
 }
 
 export interface PaneOpenEventCallbacks {
@@ -98,6 +100,32 @@ export function watchDockToggleShortcut(onToggle?: () => void, runtime: RuntimeL
 
   doc.addEventListener('keydown', onKeyDown);
   return () => doc.removeEventListener('keydown', onKeyDown);
+}
+
+/**
+ * Show or hide the workspace file tree (default Ctrl/Cmd+Shift+E). It also
+ * works from editors and the compose box, where the chord does not insert text.
+ * Tree dividers request the same toggle through WORKSPACE_TREE_TOGGLE_EVENT.
+ */
+export function watchWorkspaceTreeShortcut(onToggle?: () => void, runtime: RuntimeLike = {}): () => void {
+  const doc = runtime.document ?? (typeof document !== 'undefined' ? document : null);
+  const win = runtime.window ?? (typeof window !== 'undefined' ? window : null);
+  if (!doc) return () => {};
+
+  const onKeyDown = (event: { isComposing?: boolean; defaultPrevented?: boolean; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; shiftKey?: boolean; key?: string; preventDefault?: () => void }) => {
+    if (event?.isComposing || event?.defaultPrevented) return;
+    if (!matchesKeyboardShortcutAction(event, 'toggleWorkspace')) return;
+    event.preventDefault?.();
+    onToggle?.();
+  };
+  const onRequest = () => onToggle?.();
+
+  doc.addEventListener('keydown', onKeyDown);
+  win?.addEventListener?.(WORKSPACE_TREE_TOGGLE_EVENT, onRequest);
+  return () => {
+    doc.removeEventListener('keydown', onKeyDown);
+    win?.removeEventListener?.(WORKSPACE_TREE_TOGGLE_EVENT, onRequest);
+  };
 }
 
 export interface ZenModeShortcutCallbacks {

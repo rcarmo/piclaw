@@ -26,7 +26,9 @@ for(const [engineName,engine]of Object.entries({chromium,webkit})) for(const ski
  await page.emulateMedia({colorScheme});
  await page.setViewportSize({width,height:900});
  const box=await splitter.boundingBox();expect(box).not.toBeNull();
- await page.mouse.move(box!.x+2,300);await page.mouse.down();await page.mouse.move(Math.round(width*2/3)+2,300,{steps:5});await page.mouse.up();
+ // The editor is right of the chat, so dragging its divider left widens it.
+ const paneBefore=(await page.locator('.editor-pane-container').boundingBox())!.width;
+ await page.mouse.move(box!.x+2,300);await page.mouse.down();await page.mouse.move(Math.round(box!.x+2+paneBefore-width*2/3),300,{steps:5});await page.mouse.up();
  const geometry=await page.evaluate(()=>{
  const chat=document.querySelector('.container')!,pane=document.querySelector('.editor-pane-container')!,input=document.querySelector('textarea')!,actions=document.querySelector('.compose-actions')!;
  const c=chat.getBoundingClientRect(),p=pane.getBoundingClientRect(),a=actions.getBoundingClientRect(),i=input.getBoundingClientRect();

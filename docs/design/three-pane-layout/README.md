@@ -45,3 +45,11 @@ A throwaway Playwright script exercised the mock-up in Chromium and WebKit at 14
 - The meters docked in the header.
 
 The script is not part of the repository test suite.
+
+## Implementation notes
+
+The Classic implementation keeps the existing shell markup and class names, and reorders the existing panes inside `.app-shell`. It differs from the mock-up in these places:
+
+- The system meters stay in the chat's top-right corner instead of a new chat header.
+- Narrow layouts keep the compose `@session` picker for sessions instead of adding a sessions drawer.
+- The plan sidebar docks by setting `--piclaw-shell-inset-right`. The add-on change is separate.

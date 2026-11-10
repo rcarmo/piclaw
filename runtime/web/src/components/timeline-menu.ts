@@ -58,32 +58,38 @@ export function TimelineMenu({
         return () => { host.remove(); portalRef.current = null; };
     }, []);
 
+    // The menu sits in the sessions pane header when that pane is visible,
+    // otherwise at the top-left of the chat. The workspace tree is on the right.
+    const [inSessions, setInSessions] = useState(false);
     useEffect(() => {
         const update = () => {
             const safeTop = getSafeAreaTop();
             const topOffset = safeTop > 0 ? safeTop + 4 : 8;
-            if (workspaceOpen) {
-                const sidebar = document.querySelector('.workspace-sidebar');
-                if (sidebar) {
-                    const r = sidebar.getBoundingClientRect();
-                    setPos({ top: r.top + topOffset, left: r.left + 8 });
-                }
-            } else {
-                setPos({ top: topOffset, left: 8 });
-            }
+            const sessions = document.querySelector('.sessions-sidebar');
+            const r = sessions?.getBoundingClientRect?.();
+            const visible = Boolean(r && r.width >= 120 && getComputedStyle(sessions).display !== 'none');
+            setInSessions(visible);
+            setPos(visible ? { top: r.top + topOffset, left: r.left + 8 } : { top: topOffset, left: 8 });
         };
         update();
         const observer = new ResizeObserver(update);
-        const sidebar = document.querySelector('.workspace-sidebar');
-        if (sidebar) observer.observe(sidebar);
+        const sessions = document.querySelector('.sessions-sidebar');
+        if (sessions) observer.observe(sessions);
         window.addEventListener('resize', update);
-        return () => { observer.disconnect(); window.removeEventListener('resize', update); };
+        window.addEventListener('piclaw:sessions-sidebar-toggle', update);
+        return () => {
+            observer.disconnect();
+            window.removeEventListener('resize', update);
+            window.removeEventListener('piclaw:sessions-sidebar-toggle', update);
+        };
     }, [workspaceOpen]);
 
     useEffect(() => {
+        // Keep the existing state classes; in-sessions only records the anchor.
         if (portalRef.current)
-            portalRef.current.className = `timeline-menu-portal ${workspaceOpen ? 'in-workspace' : 'in-chat'}`;
-    }, [workspaceOpen]);
+            portalRef.current.className = `timeline-menu-portal ${workspaceOpen ? 'in-workspace' : 'in-chat'}${inSessions ? ' in-sessions' : ''}`;
+    }, [workspaceOpen, inSessions]);
+
 
     useEffect(() => {
         if (!portalRef.current) return;

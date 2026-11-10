@@ -15,6 +15,7 @@
 @import "./overlays.css";
 @import "./responsive.css";
 @import "./settings.css";
+@import "./layout-three-pane.css";
 @import "../../common/css/settings-addon-buttons.css";
 @import "../../common/css/settings-addon-controls.css";
 

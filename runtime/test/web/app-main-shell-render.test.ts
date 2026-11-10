@@ -2,6 +2,9 @@ import { expect, mock, test } from 'bun:test';
 
 import { QueuedFollowupStack } from '../../web/src/components/compose-box.js';
 import { ChatSurface } from '../../web/src/components/chat-surface.js';
+import { SessionsSidebar } from '../../web/src/components/sessions-sidebar.js';
+import { SystemMetersHud } from '../../web/src/components/system-meters-hud.js';
+import { WorkspaceExplorer } from '../../web/src/components/workspace-explorer.js';
 import {
   buildMainShellClassName,
   extractPostedUserMessageId,
@@ -46,6 +49,51 @@ test('renderMainShell gives an open workspace a dismissible drawer backdrop', ()
   expect(backdrop.props['aria-hidden']).toBe('true');
   expect(backdrop.props.onClick).toBe(toggleWorkspace);
   expect(toggle.props['aria-expanded']).toBe('true');
+});
+
+test('renderMainShell orders panes as sessions | chat | file tree | editor and keeps pane markup', () => {
+  const tree = renderMainShell(createMainShellRenderOptions({
+    chatOnlyMode: false,
+    workspaceOpen: true,
+    editorOpen: true,
+    showEditorPaneContainer: true,
+  }));
+  const order: string[] = [];
+  let metersInsideContainer = false;
+  walkVNodes(tree, (node) => {
+    const classes = String(node.props?.class || '').split(/\s+/);
+    if (node.type === SessionsSidebar) order.push('sessions');
+    if (node.type === WorkspaceExplorer) order.push('tree');
+    for (const name of ['container', 'editor-splitter', 'editor-pane-container', 'workspace-splitter']) {
+      if (classes.includes(name)) order.push(name);
+    }
+    if (classes.includes('container')) walkVNodes(node.props?.children, (child) => { if (child.type === SystemMetersHud) metersInsideContainer = true; });
+  });
+  expect(order).toEqual(['sessions', 'container', 'workspace-splitter', 'tree', 'editor-splitter', 'editor-pane-container']);
+  expect(metersInsideContainer).toBe(true);
+});
+
+test('renderMainShell exposes the right-hand dividers as keyboard separators', () => {
+  const tree = renderMainShell(createMainShellRenderOptions({ chatOnlyMode: false, editorOpen: true, showEditorPaneContainer: true }));
+  const dividers: any[] = [];
+  walkVNodes(tree, (node) => {
+    const classes = String(node.props?.class || '').split(/\s+/);
+    if (classes.includes('editor-splitter') || classes.includes('workspace-splitter')) dividers.push(node.props);
+  });
+  expect(dividers).toHaveLength(2);
+  for (const props of dividers) {
+    expect(props.role).toBe('separator');
+    expect(props.tabIndex).toBe('0');
+    expect(typeof props.onKeyDown).toBe('function');
+  }
+});
+
+test('renderMainShell omits the sessions pane in chat-only and zen modes', () => {
+  for (const overrides of [{ chatOnlyMode: true }, { chatOnlyMode: false, zenMode: true }]) {
+    let sessions = 0;
+    walkVNodes(renderMainShell(createMainShellRenderOptions(overrides)), (node) => { if (node.type === SessionsSidebar) sessions += 1; });
+    expect(sessions).toBe(0);
+  }
 });
 
 test('renderMainShell omits the workspace drawer backdrop in zen mode', () => {
@@ -138,6 +186,8 @@ function createMainShellRenderOptions(overrides: Record<string, unknown> = {}) {
     toggleDock: noop,
     dockVisible: false,
     handleSplitterMouseDown: noop,
+    handleSplitterKeyDown: noop,
+    handleSplitterDoubleClick: noop,
     handleSplitterTouchStart: noop,
     showEditorPaneContainer: false,
     tabStripTabs: [],
@@ -167,6 +217,8 @@ function createMainShellRenderOptions(overrides: Record<string, unknown> = {}) {
     TERMINAL_TAB_PATH: 'terminal',
     dockContainerRef: { current: null },
     handleEditorSplitterMouseDown: noop,
+    handleEditorSplitterKeyDown: noop,
+    handleEditorSplitterDoubleClick: noop,
     handleEditorSplitterTouchStart: noop,
     searchQuery: null,
     isIOSDevice: () => false,

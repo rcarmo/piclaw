@@ -8,6 +8,8 @@ import { WorkspaceExplorer } from '../components/workspace-explorer.js';
 import { TabStrip } from '../components/tab-strip.js';
 import { MarkdownPreview } from '../components/markdown-preview.js';
 import { SystemMetersHud } from '../components/system-meters-hud.js';
+import { SessionsSidebar } from '../components/sessions-sidebar.js';
+import { setEditorPaneCollapsed } from './use-splitters.js';
 
 export interface MainShellRenderOptions {
   [key: string]: any;
@@ -131,6 +133,8 @@ export function renderMainShell(options: MainShellRenderOptions): any {
     dockVisible,
     handleSplitterMouseDown,
     handleSplitterTouchStart,
+    handleSplitterKeyDown,
+    handleSplitterDoubleClick,
     showEditorPaneContainer,
     tabStripTabs,
     tabStripActiveId,
@@ -160,6 +164,8 @@ export function renderMainShell(options: MainShellRenderOptions): any {
     dockContainerRef,
     handleEditorSplitterMouseDown,
     handleEditorSplitterTouchStart,
+    handleEditorSplitterKeyDown,
+    handleEditorSplitterDoubleClick,
     searchQuery,
     isIOSDevice,
     currentBranchRecord,
@@ -280,7 +286,6 @@ export function renderMainShell(options: MainShellRenderOptions): any {
 
   return html`
     <div class=${buildMainShellClassName({ workspaceOpen, editorOpen, chatOnlyMode, zenMode })} ref=${appShellRef}>
-      <${SystemMetersHud} mode="overlay" />
       ${isRenameBranchFormOpen && html`
         <div class="rename-branch-overlay" onPointerDown=${(event: any) => {
           if (event.target === event.currentTarget) {
@@ -330,131 +335,13 @@ export function renderMainShell(options: MainShellRenderOptions): any {
           </form>
         </div>
       `}
-      ${!chatOnlyMode && html`
-        <${WorkspaceExplorer}
-          onFileSelect=${addFileRef}
-          onFolderSelect=${addFolderRef}
-          visible=${workspaceOpen}
-          active=${workspaceOpen || editorOpen}
-          onOpenEditor=${openEditor}
-          onOpenTerminalTab=${openTerminalTab}
-          onOpenCdpTab=${openCdpTab}
-          onOpenVncTab=${openVncTab}
+      ${!chatOnlyMode && !zenMode && html`
+        <${SessionsSidebar}
+          activeChatAgents=${activeChatAgents}
+          currentChatJid=${currentChatJid}
+          onSwitchChat=${handleBranchPickerChange}
+          appShellRef=${appShellRef}
         />
-        ${workspaceOpen && !zenMode && html`
-          <div
-            class="workspace-drawer-backdrop"
-            onClick=${toggleWorkspace}
-            aria-hidden="true"
-          ></div>
-        `}
-        <button
-          class=${`workspace-toggle-tab${workspaceOpen ? ' open' : ' closed'}`}
-          onClick=${toggleWorkspace}
-          title=${workspaceOpen ? 'Hide workspace' : 'Show workspace'}
-          aria-label=${workspaceOpen ? 'Hide workspace' : 'Show workspace'}
-          aria-expanded=${workspaceOpen ? 'true' : 'false'}
-        >
-          <svg class="workspace-toggle-tab-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="6 3 11 8 6 13" />
-          </svg>
-        </button>
-        <div class="workspace-splitter" onMouseDown=${handleSplitterMouseDown} onTouchStart=${handleSplitterTouchStart}></div>
-      `}
-      ${showEditorPaneContainer && html`
-        <div class="editor-pane-container">
-          ${zenMode && html`<div class="zen-hover-zone"></div>`}
-          ${editorOpen && html`
-            <${TabStrip}
-              tabs=${tabStripTabs}
-              activeId=${tabStripActiveId}
-              onActivate=${handleTabActivate}
-              onClose=${handleTabClose}
-              onCloseOthers=${handleTabCloseOthers}
-              onCloseAll=${handleTabCloseAll}
-              onTogglePin=${handleTabTogglePin}
-              onTogglePreview=${handleTabTogglePreview}
-              onToggleDiff=${handleTabToggleDiff}
-              onEditSource=${handleTabEditSource}
-              previewTabs=${previewTabs}
-              diffTabs=${diffTabs}
-              paneOverrides=${tabPaneOverrides}
-              detachedTabs=${detachedTabs}
-              onReattachTab=${handleReattachPane}
-              onToggleDock=${hasDockPanes ? toggleDock : undefined}
-              dockVisible=${hasDockPanes && dockVisible}
-              onToggleZen=${toggleZenMode}
-              zenMode=${zenMode}
-              onPopOutTab=${isWebAppMode ? undefined : handlePopOutPane}
-            />
-          `}
-          ${editorOpen && activeDetachedTab && html`
-            <div class="editor-pane-host editor-pane-detached-host">
-              <div class="editor-empty-state">
-                <div class="editor-empty-state-title">${activeDetachedTab.label || activeDetachedTab.panePath || 'Detached pane'}</div>
-                <div class="editor-empty-state-body">This pane is detached into another window.</div>
-                <div class="editor-empty-state-actions">
-                  <button class="editor-empty-state-button" onClick=${() => handleReattachPane(activeDetachedTab.panePath)}>Reattach here</button>
-                </div>
-              </div>
-            </div>
-          `}
-          ${editorOpen && !activeDetachedTab && html`<div class="editor-pane-host" ref=${editorContainerRef}></div>`}
-          ${editorOpen && !activeDetachedTab && tabStripActiveId && previewTabs.has(tabStripActiveId) && html`
-            <${MarkdownPreview}
-              getContent=${() => editorInstanceRef.current?.getContent?.()}
-              subscribeContentChange=${(cb) => editorInstanceRef.current?.onContentChange?.(cb)}
-              path=${tabStripActiveId}
-              onClose=${() => handleTabTogglePreview(tabStripActiveId)}
-            />
-          `}
-          ${hasDockPanes && dockVisible && html`<div class="dock-splitter" onMouseDown=${handleDockSplitterMouseDown} onTouchStart=${handleDockSplitterTouchStart}></div>`}
-          ${hasDockPanes && html`<div class=${`dock-panel${dockVisible ? '' : ' hidden'}${editorOpen ? '' : ' standalone'}`}>
-            <div class="dock-panel-header">
-              <span class="dock-panel-title">Terminal</span>
-              <div class="dock-panel-actions">
-                ${!isWebAppMode && !detachedDockPane && html`
-                  <button class="dock-panel-action" onClick=${() => handlePopOutPane(TERMINAL_TAB_PATH, 'Terminal')} title="Open terminal in window" aria-label="Open terminal in window">
-                    <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                      <rect x="2.25" y="2.25" width="8.5" height="8.5" rx="1.5"/>
-                      <path d="M8.5 2.25h5.25v5.25"/>
-                      <path d="M13.75 2.25 7.75 8.25"/>
-                    </svg>
-                  </button>
-                `}
-                ${detachedDockPane && html`
-                  <button class="dock-panel-action" onClick=${() => handleReattachPane(TERMINAL_TAB_PATH)} title="Reattach terminal" aria-label="Reattach terminal">
-                    <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                      <rect x="2.25" y="2.25" width="11.5" height="11.5" rx="1.5"/>
-                      <path d="M5.25 8h5.5"/>
-                      <path d="M8 5.25v5.5"/>
-                    </svg>
-                  </button>
-                `}
-                <button class="dock-panel-close" onClick=${toggleDock} title="Hide terminal (Ctrl+\`)" aria-label="Hide terminal">
-                  <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                    <line x1="4" y1="4" x2="12" y2="12"/>
-                    <line x1="12" y1="4" x2="4" y2="12"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-            ${detachedDockPane
-              ? html`
-                <div class="dock-panel-body dock-panel-body-detached">
-                  <div class="editor-empty-state">
-                    <div class="editor-empty-state-title">Terminal detached</div>
-                    <div class="editor-empty-state-body">The terminal is open in another window.</div>
-                    <div class="editor-empty-state-actions">
-                      <button class="editor-empty-state-button" onClick=${() => handleReattachPane(TERMINAL_TAB_PATH)}>Reattach here</button>
-                    </div>
-                  </div>
-                </div>
-              `
-              : html`<div class="dock-panel-body" ref=${dockContainerRef}></div>`}
-          </div>`}
-        </div>
-        <div class="editor-splitter" onMouseDown=${handleEditorSplitterMouseDown} onTouchStart=${handleEditorSplitterTouchStart}></div>
       `}
       <${TimelineMenu}
         workspaceOpen=${workspaceOpen}
@@ -478,6 +365,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
         onPrefillCompose=${requestComposePrefill}
       />
       <div class="container">
+        <${SystemMetersHud} mode="overlay" />
         ${searchQuery && isIOSDevice() && html`<div class="search-results-spacer"></div>`}
         ${(currentHashtag || searchQuery) && html`
           <div class="hashtag-header">
@@ -604,6 +492,142 @@ export function renderMainShell(options: MainShellRenderOptions): any {
           }}
         />
       </div>
+      ${!chatOnlyMode && html`
+        <div class="workspace-splitter" onMouseDown=${handleSplitterMouseDown} onTouchStart=${handleSplitterTouchStart} onKeyDown=${handleSplitterKeyDown} onDblClick=${handleSplitterDoubleClick} role="separator" aria-orientation="vertical" aria-label="Resize file tree" tabIndex="0"></div>
+        <button
+          class=${`workspace-toggle-tab${workspaceOpen ? ' open' : ' closed'}`}
+          onClick=${toggleWorkspace}
+          title=${workspaceOpen ? 'Hide workspace' : 'Show workspace'}
+          aria-label=${workspaceOpen ? 'Hide workspace' : 'Show workspace'}
+          aria-expanded=${workspaceOpen ? 'true' : 'false'}
+        >
+          <svg class="workspace-toggle-tab-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="6 3 11 8 6 13" />
+          </svg>
+        </button>
+        <${WorkspaceExplorer}
+          onFileSelect=${addFileRef}
+          onFolderSelect=${addFolderRef}
+          visible=${workspaceOpen}
+          active=${workspaceOpen || editorOpen}
+          onOpenEditor=${openEditor}
+          onOpenTerminalTab=${openTerminalTab}
+          onOpenCdpTab=${openCdpTab}
+          onOpenVncTab=${openVncTab}
+        />
+        ${workspaceOpen && !zenMode && html`
+          <div
+            class="workspace-drawer-backdrop"
+            onClick=${toggleWorkspace}
+            aria-hidden="true"
+          ></div>
+        `}
+      `}
+      ${showEditorPaneContainer && html`
+        <div class="editor-splitter" onMouseDown=${handleEditorSplitterMouseDown} onTouchStart=${handleEditorSplitterTouchStart} onKeyDown=${handleEditorSplitterKeyDown} onDblClick=${handleEditorSplitterDoubleClick} role="separator" aria-orientation="vertical" aria-label="Resize editor" tabIndex="0"></div>
+        <div class="editor-pane-container">
+          ${zenMode && html`<div class="zen-hover-zone"></div>`}
+          ${editorOpen && html`
+            <${TabStrip}
+              tabs=${tabStripTabs}
+              activeId=${tabStripActiveId}
+              onActivate=${handleTabActivate}
+              onClose=${handleTabClose}
+              onCloseOthers=${handleTabCloseOthers}
+              onCloseAll=${handleTabCloseAll}
+              onTogglePin=${handleTabTogglePin}
+              onTogglePreview=${handleTabTogglePreview}
+              onToggleDiff=${handleTabToggleDiff}
+              onEditSource=${handleTabEditSource}
+              previewTabs=${previewTabs}
+              diffTabs=${diffTabs}
+              paneOverrides=${tabPaneOverrides}
+              detachedTabs=${detachedTabs}
+              onReattachTab=${handleReattachPane}
+              onToggleDock=${hasDockPanes ? toggleDock : undefined}
+              dockVisible=${hasDockPanes && dockVisible}
+              onToggleZen=${toggleZenMode}
+              zenMode=${zenMode}
+              onPopOutTab=${isWebAppMode ? undefined : handlePopOutPane}
+            />
+          `}
+          ${editorOpen && activeDetachedTab && html`
+            <div class="editor-pane-host editor-pane-detached-host">
+              <div class="editor-empty-state">
+                <div class="editor-empty-state-title">${activeDetachedTab.label || activeDetachedTab.panePath || 'Detached pane'}</div>
+                <div class="editor-empty-state-body">This pane is detached into another window.</div>
+                <div class="editor-empty-state-actions">
+                  <button class="editor-empty-state-button" onClick=${() => handleReattachPane(activeDetachedTab.panePath)}>Reattach here</button>
+                </div>
+              </div>
+            </div>
+          `}
+          ${editorOpen && !activeDetachedTab && html`<div class="editor-pane-host" ref=${editorContainerRef}></div>`}
+          ${editorOpen && !activeDetachedTab && tabStripActiveId && previewTabs.has(tabStripActiveId) && html`
+            <${MarkdownPreview}
+              getContent=${() => editorInstanceRef.current?.getContent?.()}
+              subscribeContentChange=${(cb) => editorInstanceRef.current?.onContentChange?.(cb)}
+              path=${tabStripActiveId}
+              onClose=${() => handleTabTogglePreview(tabStripActiveId)}
+            />
+          `}
+          ${hasDockPanes && dockVisible && html`<div class="dock-splitter" onMouseDown=${handleDockSplitterMouseDown} onTouchStart=${handleDockSplitterTouchStart}></div>`}
+          ${hasDockPanes && html`<div class=${`dock-panel${dockVisible ? '' : ' hidden'}${editorOpen ? '' : ' standalone'}`}>
+            <div class="dock-panel-header">
+              <span class="dock-panel-title">Terminal</span>
+              <div class="dock-panel-actions">
+                ${!isWebAppMode && !detachedDockPane && html`
+                  <button class="dock-panel-action" onClick=${() => handlePopOutPane(TERMINAL_TAB_PATH, 'Terminal')} title="Open terminal in window" aria-label="Open terminal in window">
+                    <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="2.25" y="2.25" width="8.5" height="8.5" rx="1.5"/>
+                      <path d="M8.5 2.25h5.25v5.25"/>
+                      <path d="M13.75 2.25 7.75 8.25"/>
+                    </svg>
+                  </button>
+                `}
+                ${detachedDockPane && html`
+                  <button class="dock-panel-action" onClick=${() => handleReattachPane(TERMINAL_TAB_PATH)} title="Reattach terminal" aria-label="Reattach terminal">
+                    <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="2.25" y="2.25" width="11.5" height="11.5" rx="1.5"/>
+                      <path d="M5.25 8h5.5"/>
+                      <path d="M8 5.25v5.5"/>
+                    </svg>
+                  </button>
+                `}
+                <button class="dock-panel-close" onClick=${toggleDock} title="Hide terminal (Ctrl+\`)" aria-label="Hide terminal">
+                  <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                    <line x1="4" y1="4" x2="12" y2="12"/>
+                    <line x1="12" y1="4" x2="4" y2="12"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            ${detachedDockPane
+              ? html`
+                <div class="dock-panel-body dock-panel-body-detached">
+                  <div class="editor-empty-state">
+                    <div class="editor-empty-state-title">Terminal detached</div>
+                    <div class="editor-empty-state-body">The terminal is open in another window.</div>
+                    <div class="editor-empty-state-actions">
+                      <button class="editor-empty-state-button" onClick=${() => handleReattachPane(TERMINAL_TAB_PATH)}>Reattach here</button>
+                    </div>
+                  </div>
+                </div>
+              `
+              : html`<div class="dock-panel-body" ref=${dockContainerRef}></div>`}
+          </div>`}
+        </div>
+        ${editorOpen && html`
+          <button type="button" class="editor-pane-back" onClick=${() => setEditorPaneCollapsed(appShellRef.current, true)} title="Back to chat" aria-label="Back to chat">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="10 3 5 8 10 13" /></svg>
+            <span>Chat</span>
+          </button>
+          <button type="button" class="editor-pane-restore" onClick=${() => setEditorPaneCollapsed(appShellRef.current, false)} title="Show editor" aria-label="Show editor">
+            <span>Editor</span>
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 3 11 8 6 13" /></svg>
+          </button>
+        `}
+      `}
     </div>
   `;
 }

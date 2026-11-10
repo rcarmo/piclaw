@@ -1,5 +1,5 @@
 import { useEffect } from '../vendor/preact-htm.js';
-import { watchChatSwitchShortcuts, watchDockToggleShortcut, watchKeyboardHelpShortcut, watchZenModeShortcuts, watchSettingsShortcut } from './app-browser-events.js';
+import { watchChatSwitchShortcuts, watchDockToggleShortcut, watchKeyboardHelpShortcut, watchWorkspaceTreeShortcut, watchZenModeShortcuts, watchSettingsShortcut } from './app-browser-events.js';
 import { isLikelySafariBrowser } from './app-pane-runtime-orchestration.js';
 
 export function shouldWatchDockShortcut(options: {
@@ -23,6 +23,7 @@ export function useAppShellShortcuts(options: {
   zenMode: boolean;
   previousChat?: () => void;
   nextChat?: () => void;
+  toggleWorkspace?: () => void;
 }): void {
   const {
     hasDockPanes,
@@ -33,7 +34,13 @@ export function useAppShellShortcuts(options: {
     zenMode,
     previousChat,
     nextChat,
+    toggleWorkspace,
   } = options;
+
+  useEffect(() => {
+    if (chatOnlyMode || typeof toggleWorkspace !== 'function') return;
+    return watchWorkspaceTreeShortcut(toggleWorkspace);
+  }, [chatOnlyMode, toggleWorkspace]);
 
   useEffect(() => {
     if (!shouldWatchDockShortcut({ hasDockPanes, chatOnlyMode })) return;
