@@ -43,9 +43,9 @@ import { BunSqliteDatabase } from "../../runtime/durable-engine/src/index.js";
 // Standalone qualification, intentionally NOT silently skipped or in the default
 // package suite until CI supplies the companion checkout. No installed/live paths.
 // DURABLE_ADDONS_ROOT must be a checkout of rcarmo/piclaw-addons at
-// de92bc95b5b3bb1505beec9617d3b8a5e4fa92d3. Verify all executable inputs below.
+// 4f93a1709f6e3d68a8df8daa36c1ad6379081273. Verify all executable inputs below.
 const root = process.env.DURABLE_ADDONS_ROOT;
-if (!root) throw new Error("Plan qualification requires DURABLE_ADDONS_ROOT (piclaw-addons de92bc95b5b3bb1505beec9617d3b8a5e4fa92d3)");
+if (!root) throw new Error("Plan qualification requires DURABLE_ADDONS_ROOT (piclaw-addons 4f93a1709f6e3d68a8df8daa36c1ad6379081273)");
 const addonDir = resolve(root, "addons/plan-sidebar");
 for (const [file, digest] of Object.entries({
   "index.ts": "303b6a270cdb0dfbdf0ffbce5ac02ee16574ea0da7e43d503f116137a1ee6579",
@@ -54,7 +54,7 @@ for (const [file, digest] of Object.entries({
 })) {
   expect(createHash("sha256").update(new Uint8Array(await Bun.file(resolve(addonDir, file)).arrayBuffer())).digest("hex")).toBe(digest);
 }
-expect((await Bun.file(resolve(addonDir, "package.json")).json()).version).toBe("0.1.27");
+expect((await Bun.file(resolve(addonDir, "package.json")).json()).version).toBe("0.1.28");
 
 type Definition = ToolDefinition<TSchema, JsonValue>;
 type HiddenMessage = { customType: string; content: { type: "text"; text: string }[]; display: boolean };
@@ -66,7 +66,7 @@ type Capture = {
   registerTool(definition: Definition): void;
 };
 
-planTest("actual Plan 0.1.27 factory: existing-chat KV, prepared tool, per-request context projection (not full SDK run equivalence), scope and effect fences; hidden-entry gap explicit", async () => {
+planTest("actual Plan 0.1.28 factory: existing-chat KV, prepared tool, per-request context projection (not full SDK run equivalence), scope and effect fences; hidden-entry gap explicit", async () => {
   const globals = globalThis as unknown as Record<string, unknown>;
   const keys = ["__piclawRuntimeInterop", "__piclaw_planSidebarApi", "__piclaw_registerAddonConfigApi", "__PICLAW_BROADCAST_EVENT__"];
   const saved = keys.map(key => Object.getOwnPropertyDescriptor(globals, key));
