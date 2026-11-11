@@ -130,6 +130,7 @@ export function composeMainAppShellOptions(input: ComposeMainAppShellOptionsInpu
     openTerminalTab: shellState.openTerminalTab,
     openVncTab: shellState.openVncTab,
     openPlanTab: shellState.openPlanTab,
+    openCdpTab: shellState.openCdpTab,
     fileRefs: composeState.fileRefs,
     folderRefs: composeState.folderRefs,
     messageRefs: composeState.messageRefs,

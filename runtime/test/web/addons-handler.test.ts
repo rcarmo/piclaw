@@ -1036,3 +1036,28 @@ test('handleUninstallAddon returns concise warning when bun remove resolver outp
     }
   });
 });
+
+test('handleAddonConfigApiRequest returns JSON 404 when no handler or command path exists', async () => {
+  await withTempWorkspaceEnv('piclaw-addon-config-missing-', {}, async () => {
+    const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+    const missing = await handleAddonConfigApiRequest(
+      new Request('https://example.test/agent/addons/api/plan-sidebar/plan'),
+      '/agent/addons/api/plan-sidebar/plan',
+      json,
+      { async applySlashCommand() { throw new Error('Native slash command unavailable'); } },
+      'web:test',
+    );
+    expect(missing?.status).toBe(404);
+    expect(await missing?.json()).toEqual({ error: 'Unknown add-on API: plan-sidebar/plan' });
+
+    const refused = await handleAddonConfigApiRequest(
+      new Request('https://example.test/agent/addons/api/plan-sidebar/plan'),
+      '/agent/addons/api/plan-sidebar/plan',
+      json,
+      { async applySlashCommand() { throw new Error('Native slash commands require single-user execution'); } },
+      'web:test',
+    );
+    expect(refused?.status).toBe(503);
+    expect(await refused?.json()).toEqual({ error: 'Native slash commands require single-user execution' });
+  });
+});

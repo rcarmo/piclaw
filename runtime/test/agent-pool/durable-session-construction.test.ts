@@ -7,7 +7,7 @@ import { AgentSessionManager } from "../../src/agent-pool/session-manager.js";
 import { createAgentPoolServices } from "../../src/agent-pool/service-factory.js";
 import { createAgentPoolModelOptions } from "../model-services-fixture.js";
 import { SESSIONS_DIR } from "../../src/core/config.js";
-import { archiveChatBranch, initDatabase, storeChatMetadata, getChatBranchByChatJid } from "../../src/db.js";
+import { archiveChatBranch, initDatabase, storeChatMetadata, storeMessage, getChatBranchByChatJid } from "../../src/db.js";
 import * as legacySession from "../../src/agent-pool/session.js";
 import { AgentToolFactory } from "../../src/agent-pool/tool-factory.js";
 import { AgentSessionBinder } from "../../src/agent-pool/session-binder.js";
@@ -293,6 +293,8 @@ for (const binding of ["missing", "foreign", "stale", "current", "cancelled", "r
     initDatabase();
     const chat = `web:native-restore-${binding}`;
     storeChatMetadata(chat, "2026-10-25T00:00:00.000Z");
+    // History means there is native state to bind; without it a missing session is restorable (below).
+    storeMessage({ id: `restore-history-${binding}`, chat_jid: chat, sender: "user", sender_name: "User", content: "earlier turn", timestamp: "2026-10-25T00:00:30.000Z", is_from_me: true, is_bot_message: false });
     getDb().query("UPDATE chat_branches SET archived_at=? WHERE chat_jid=?").run("2026-10-25T00:01:00.000Z", chat);
     const archived = getChatBranchByChatJid(chat)!;
     let factoryReads = 0, ownerChecks = 0;
@@ -338,3 +340,33 @@ for (const binding of ["missing", "foreign", "stale", "current", "cancelled", "r
     }
   });
 }
+
+test("native restore of a session that never ran restores its metadata without a native binding", async () => {
+  initDatabase();
+  const chat = "web:native-restore-never-ran";
+  storeChatMetadata(chat, "2026-10-25T00:00:00.000Z");
+  getDb().query("UPDATE chat_branches SET archived_at=? WHERE chat_jid=?").run("2026-10-25T00:01:00.000Z", chat);
+  const archived = getChatBranchByChatJid(chat)!;
+  let factoryReads = 0;
+  const options = {
+    ...createAgentPoolModelOptions(),
+    getDurableSession: () => undefined,
+    get createSession(): never { factoryReads++; throw Error("legacy factory accessed"); },
+  };
+  const legacyRestore = spyOn(AgentBranchManager.prototype, "restoreChatBranch").mockImplementation(() => { throw Error("legacy restore entered"); });
+  const legacyCreate = spyOn(SessionManager, "create").mockImplementation(() => { throw Error("JSONL forbidden"); });
+  let pool: AgentPool | undefined;
+  try {
+    pool = new AgentPool(options);
+    const restored = await pool.restoreChatBranch(chat, { agentName: "never-ran" });
+    expect(restored).toMatchObject({ branch_id: archived.branch_id, chat_jid: chat, archived_at: null, agent_name: "never-ran" });
+    expect(getChatBranchByChatJid(chat)).toEqual(restored);
+    expect(factoryReads).toBe(0);
+    expect(legacyRestore).not.toHaveBeenCalled();
+    expect(legacyCreate).not.toHaveBeenCalled();
+  } finally {
+    await pool?.shutdown();
+    legacyRestore.mockRestore();
+    legacyCreate.mockRestore();
+  }
+});

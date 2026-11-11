@@ -638,7 +638,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "e506827fe77e26e48c722ff15a957a5d37acfe9c66c32e4511a67f627c2cf94f",
       "state": "retained-decoupled",
-      "currentSha256": "698a41ce5de659490249c13d11cb2d9508e6110b84a8bfcaae38f4cba0909c2d",
+      "currentSha256": "4be85ddbd2344de1c350220981be9e1aa43b9853a594047f1a6a51663dc2c119",
       "currentPurpose": "existing native domain/control/message transport boundary with no expense port",
       "directImportCallers": [
         {
@@ -755,7 +755,7 @@
         },
         {
           "caller": "runtime/src/agent-pool.ts",
-          "line": 270
+          "line": 274
         },
         {
           "caller": "runtime/src/agent-pool/recovery-summary.ts",
@@ -1976,15 +1976,11 @@
         },
         {
           "caller": "runtime/web/src/components/workspace-explorer.ts",
-          "line": 20
+          "line": 19
         },
         {
           "caller": "runtime/web/src/panes/file-conflict-monitor.ts",
           "line": 14
-        },
-        {
-          "caller": "runtime/web/src/panes/settings-pane.ts",
-          "line": 11
         },
         {
           "caller": "runtime/web/src/panes/workspace-preview-pane.ts",
@@ -2039,16 +2035,16 @@
       "deliveryOwner": "#1881",
       "originalSha256": "b1967a9bc02e27e622fe853ae10880bb571128abdcfafd83726c5986fabe5a77",
       "state": "retained-decoupled",
-      "currentSha256": "daf0286623116f094bd478076490a6a42e602b42e7fbaaf527ae6d82b21e9261",
+      "currentSha256": "b268faee49e60007c1e1ac651594ed61af20fc47bcc264f852a4f92bb5f2942d",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
-          "caller": "runtime/web/src/components/settings-dialog-loader.ts",
-          "line": 45
-        },
-        {
           "caller": "runtime/web/src/dev/settings-widget-fixture.ts",
           "line": 2
+        },
+        {
+          "caller": "runtime/web/src/ui/app-shell-bootstrap.ts",
+          "line": 70
         }
       ]
     },

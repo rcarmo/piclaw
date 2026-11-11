@@ -224,6 +224,10 @@ export function createKnownModelCostResolver(agentDir: string): (provider: strin
  * model initialisation). Subsequent calls reuse the live session – no
  * process-spawn overhead, conversation context already loaded.
  */
+function chatHasStoredMessages(database: ReturnType<typeof getDb>, chatJid: string): boolean {
+  return Boolean(database.query("SELECT 1 FROM messages WHERE chat_jid = ? LIMIT 1").get(chatJid));
+}
+
 export class AgentPool {
   assertLegacyCaptureIdle(): void {
     if (!this.sessionManager) throw Error("Native host has no resident legacy authority");
@@ -543,6 +547,10 @@ export class AgentPool {
       const restored = restoreChatBranchIdentity({ chat_jid: chatJid,
         ...(agentName !== undefined ? { agent_name: agentName } : {}) });
       const position = this.durableSessionLookup?.(restored.chat_jid);
+      // A session that never ran a turn has no durable session and no history to
+      // bind; restoring it returns it to its pre-archive state. Anything with
+      // stored messages must still bind exactly to its current native session.
+      if (!position && !chatHasStoredMessages(database, restored.chat_jid)) return restored;
       if (!position || position.branchId !== restored.branch_id) throw Error("Exact native restore binding unavailable");
       if (position.assertCurrent !== undefined && typeof position.assertCurrent !== "function") {
         throw Error("Exact native restore binding invalid");
