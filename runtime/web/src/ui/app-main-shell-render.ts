@@ -1,6 +1,6 @@
 import { html } from '../vendor/preact-htm.js';
 import { OobePanel } from '../components/oobe-panel.js';
-import { SettingsDialogLoader } from '../components/settings-dialog-loader.js';
+import { SettingsTabBridge } from '../components/settings-tab-bridge.js';
 import { ChatSurface } from '../components/chat-surface.js';
 import { TimelineQuickActions } from '../components/timeline-quick-actions.js';
 import { TimelineMenu } from '../components/timeline-menu.js';
@@ -404,7 +404,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
             onDismiss=${oobePanelState.kind === 'provider-missing' ? handleDismissProviderMissingOobe : handleCompleteProviderReadyOobe}
           />
         `}
-        <${SettingsDialogLoader} />
+        <${SettingsTabBridge} openEditor=${openEditor} />
         <${ChatSurface}
           currentChatJid=${currentChatJid}
           posts=${posts}

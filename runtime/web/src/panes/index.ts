@@ -20,3 +20,4 @@ export { tabStore } from './tab-store.js';
 
 export { cdpPaneExtension, CDP_TAB_PATH } from './cdp-pane.js';
 export { planPaneExtension, PLAN_TAB_PATH } from './plan-pane.js';
+export { createSettingsPane, SETTINGS_TAB_PATH } from './settings-pane.js';

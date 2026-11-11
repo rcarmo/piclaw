@@ -1,4 +1,4 @@
-import { useRef } from '../vendor/preact-htm.js';
+import { useEffect, useRef } from '../vendor/preact-htm.js';
 import { setLocalStorageItem } from '../utils/storage.js';
 
 const MIN_CHAT_PANE_RATIO = 0.10;
@@ -53,6 +53,8 @@ export function resizeRightPaneWidth(startWidth, deltaX) {
 export const PANE_COLLAPSE_RATIO = 0.55;
 export const WORKSPACE_TREE_TOGGLE_EVENT = 'piclaw:workspace-tree-toggle';
 export const EDITOR_PANE_COLLAPSED_ATTRIBUTE = 'data-editor-collapsed';
+/** Ask for at least `detail.width` pixels of editor area (clamped to the room available). */
+export const EDITOR_MIN_WIDTH_EVENT = 'piclaw:editor-min-width';
 const KEYBOARD_STEP = 16;
 const KEYBOARD_LARGE_STEP = 64;
 
@@ -138,7 +140,8 @@ export function getShellWidth(shell) {
 
 export function useSplitters({ appShellRef, sidebarWidthRef, editorWidthRef, dockHeightRef }) {
   const sidebarClamp = (shell, width) => clampSidebarWidth(width, getShellWidth(shell), occupiedPaneWidth(shell, '.editor-pane-container'), occupiedSessionsWidth(shell));
-  const editorClamp = (shell, width) => clampEditorWidth(width, getShellWidth(shell), occupiedPaneWidth(shell, '.workspace-sidebar'), occupiedSessionsWidth(shell));
+  // The explorer lives inside the workbench side bar, which occupiedSessionsWidth already counts.
+  const editorClamp = (shell, width) => clampEditorWidth(width, getShellWidth(shell), 0, occupiedSessionsWidth(shell));
 
   const applySidebarWidth = (shell, width, persist) => {
     const w = sidebarClamp(shell, width);
@@ -156,6 +159,19 @@ export function useSplitters({ appShellRef, sidebarWidthRef, editorWidthRef, doc
     return w;
   };
   const toggleTree = () => window.dispatchEvent(new CustomEvent(WORKSPACE_TREE_TOGGLE_EVENT));
+
+  // Wide tabs (Settings) ask for room once when they open; the saved width is unchanged.
+  useEffect(() => {
+    const onRequest = (event) => {
+      const shell = appShellRef.current;
+      const wanted = Number(event?.detail?.width);
+      if (!shell || !Number.isFinite(wanted)) return;
+      const current = occupiedPaneWidth(shell, '.editor-pane-container') || editorWidthRef.current || 0;
+      if (current < wanted) applyEditorWidth(shell, wanted, false);
+    };
+    window.addEventListener(EDITOR_MIN_WIDTH_EVENT, onRequest);
+    return () => window.removeEventListener(EDITOR_MIN_WIDTH_EVENT, onRequest);
+  }, [appShellRef, editorWidthRef]);
 
   const startSidebarDrag = (e) => {
     e.preventDefault();

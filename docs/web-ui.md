@@ -18,6 +18,7 @@ Classic uses a workbench layout. On desktop screens (at least 1024 px wide, land
   - Archived sessions are listed in a collapsed **Archived** section with **Restore** and **Delete permanently**.
 - **Explorer:** the workspace file tree, rendered with [Pierre Trees](https://trees.software/) and loaded on first use. It has a filter box, file icons, keyboard navigation, folders that load as they are expanded, inline rename, drag-to-move and a context menu (right-click or the row's action button). Selecting a file opens it straight into the matching viewer or editor tab; there is no preview pane under the tree. The bar under the tree holds the selected item's actions, including add-on actions, and a **Folder sizes** chart that loads only when opened.
 - **Plan:** opens the current chat's plan as a tab in the editor area, with its progress, **Edit**, **Refresh**, **Reset** and **Submit to model**. It updates when the model changes the plan. Plans still need the plan-sidebar add-on for storage and the `plan` tool; its floating panel is not shown in Classic.
+- **Settings:** opens as a tab in the editor area, widened to 720 px when there is room, from the activity bar, the global menu, the keyboard shortcut or compose commands. Requests for a specific section switch the open tab to it.
 - **Chat:** keeps at least 320 px.
 - **Editor:** collapsing it keeps its tabs open.
 - **System meters:** shown at the foot of the side bar while it is visible, and in the status bar along the bottom of the window otherwise.

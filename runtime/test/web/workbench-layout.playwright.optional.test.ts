@@ -175,6 +175,18 @@ for (const engine of ['chromium', 'webkit']) {
     } finally { await page.close(); }
   }, 30000);
 
+  browserTest(`${engine}: Settings requests open the Settings tab and ask for editor room`, async () => {
+    const { page, errors } = await open(engine, 1440, 900);
+    try {
+      await page.evaluate(() => (window as any).requestOpenSettingsDialog({ section: 'keyboard' }));
+      await page.waitForFunction(() => (window as any).workbench.probes.widthRequests.length === 1);
+      expect(await page.evaluate(() => (window as any).workbench.probes.editors)).toEqual(['piclaw://settings']);
+      expect(await page.evaluate(() => (window as any).__piclawSettingsRequestedSection)).toBe('keyboard');
+      expect(await page.evaluate(() => (window as any).workbench.probes.widthRequests)).toEqual([720]);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+
   browserTest(`${engine} docked right slot keeps every flow pane inside the shell`, async () => {
     const { page, errors } = await open(engine, 1440, 900, '?editor=1');
     try {

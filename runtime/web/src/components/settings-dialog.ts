@@ -148,7 +148,13 @@ const BUILTIN_SECTIONS = [
     { id: 'addons', label: 'Add-ons', icon: iconAddons, searchable: true, placeholder: 'Filter add-ons…', order: 90 },
 ];
 
-export function SettingsDialogContent({ onClose }) {
+/**
+ * Settings content. `variant="tab"` renders it as a work-area tab in the
+ * Classic workbench (no backdrop, close button or Escape-to-close); the
+ * default is the modal dialog.
+ */
+export function SettingsDialogContent({ onClose = null, variant = 'dialog' }) {
+    const isTab = variant === 'tab';
     perf('SettingsDialogContent-render-start');
     const [activeSection, setActiveSection] = useState(() => {
         const requested = peekRequestedSettingsSection();
@@ -177,10 +183,11 @@ export function SettingsDialogContent({ onClose }) {
     }, []);
 
     useEffect(() => {
+        if (isTab || !onClose) return undefined;
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [onClose]);
+    }, [isTab, onClose]);
 
     useEffect(() => {
         const onOpenSettings = (event) => {
@@ -341,9 +348,8 @@ export function SettingsDialogContent({ onClose }) {
     const showRootLoading = !activeMeta;
     perf('SettingsDialogContent-render-end');
 
-    return html`
-        <div class="settings-dialog-backdrop" onClick=${(e) => { if (e.target === e.currentTarget) onClose(); }}>
-            <div ref=${dialogRef} data-testid="settings-dialog" class=${`settings-dialog${layoutMode.compact ? ' settings-dialog-compact' : ''}${layoutMode.narrow ? ' settings-dialog-narrow' : ''}`}>
+    const panel = html`
+            <div ref=${dialogRef} data-testid="settings-dialog" class=${`settings-dialog${isTab ? ' settings-tab' : ''}${layoutMode.compact ? ' settings-dialog-compact' : ''}${layoutMode.narrow ? ' settings-dialog-narrow' : ''}`}>
                 <div class="settings-dialog-header">
                     <span class="settings-dialog-title">${t('settings.title')}</span>
                     ${activeMeta?.searchable && html`
@@ -352,7 +358,7 @@ export function SettingsDialogContent({ onClose }) {
                             placeholder=${sectionPlaceholder(activeMeta)}
                             value=${filter} onInput=${e => setFilter(e.target.value)} />
                     `}
-                    <button class="settings-dialog-close" onClick=${onClose} title=${t('settings.close')}>✕</button>
+                    ${!isTab && html`<button class="settings-dialog-close" onClick=${onClose} title=${t('settings.close')}>✕</button>`}
                 </div>
                 <div class="settings-dialog-body">
                     <nav class="settings-nav">
@@ -382,6 +388,11 @@ export function SettingsDialogContent({ onClose }) {
                     </div>
                 `}
             </div>
+    `;
+    if (isTab) return panel;
+    return html`
+        <div class="settings-dialog-backdrop" onClick=${(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
+            ${panel}
         </div>
     `;
 }

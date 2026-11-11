@@ -2,6 +2,8 @@ import { html, render, useRef, useState, useCallback } from '../../../web/src/ve
 import { ChatSurface } from '../../../web/src/components/chat-surface.js';
 import { WorkbenchSidebar } from '../../../web/src/components/workbench-sidebar.js';
 import { WorkbenchStatusBar } from '../../../web/src/components/workbench-statusbar.js';
+import { SettingsTabBridge } from '../../../web/src/components/settings-tab-bridge.js';
+import { requestOpenSettingsDialog } from '../../../web/src/components/settings-dialog-events.js';
 import { useSplitters, setEditorPaneCollapsed } from '../../../web/src/ui/use-splitters.js';
 import { useAppShellShortcuts } from '../../../web/src/ui/app-shell-shortcuts.js';
 import { buildMainShellClassName } from '../../../web/src/ui/app-main-shell-render.js';
@@ -19,7 +21,9 @@ const chats = ['default', 'release-notes', 'proxmox', 'tree-eval', 'steering-lat
   context_percent: i === 0 ? 42 : null,
 }));
 // Probes: status polls, list refreshes, new-tab opens and settings requests.
-const probes = { statusCalls: [] as string[], refreshes: 0, opened: [] as string[], settings: 0, plans: 0, actions: [] as string[] };
+const probes = { statusCalls: [] as string[], refreshes: 0, opened: [] as string[], settings: 0, plans: 0, actions: [] as string[], editors: [] as string[], widthRequests: [] as number[] };
+window.addEventListener('piclaw:editor-min-width', (event) => probes.widthRequests.push((event as CustomEvent).detail.width));
+(window as any).requestOpenSettingsDialog = requestOpenSettingsDialog;
 chats.push({ chat_jid: 'web:attic', agent_name: 'attic', root_chat_jid: 'web:attic', is_active: false, archived_at: '2026-11-01T00:00:00Z' } as any);
 const sessionActions = {
   createRoot: async (name: string) => { probes.actions.push(`create:${name}`); },
@@ -60,6 +64,7 @@ function Fixture() {
       <button type="button" class="editor-pane-restore" onClick=${() => setEditorPaneCollapsed(shell.current, false)} aria-label="Show editor"><span>Editor</span></button>
     `}
     <${WorkbenchStatusBar} />
+    <${SettingsTabBridge} openEditor=${(path: string) => probes.editors.push(path)} />
   </div>`;
 }
 render(html`<${Fixture} />`, document.getElementById('app')!);

@@ -9,7 +9,8 @@ function isIgnoredPath(path: string): boolean {
     || legacyPath.startsWith('__vnc')
     || normalizedPath.startsWith('piclaw://terminal')
     || normalizedPath.startsWith('piclaw://vnc')
-    || normalizedPath.startsWith('piclaw://plan');
+    || normalizedPath.startsWith('piclaw://plan')
+    || normalizedPath.startsWith('piclaw://settings');
 }
 
 export function normalizeRecentFiles(value: unknown): string[] {
