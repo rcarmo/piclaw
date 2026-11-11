@@ -36,8 +36,9 @@ for (const bound of [true, false]) test(`durable command discovery never hydrate
     expect(result.unavailable_commands).toEqual(unsupported);
     const names = result.commands.map((command: any) => command.name);
     for (const name of unsupported) expect(names).not.toContain(name);
-    for (const name of ["/model", "/thinking", "/effort", "/context", "/ctx", "/queue", "/steer", "/shell", "!", "/theme", "/settings", "/meters", "/login"]) expect(names).toContain(name);
-    expect(result.commands).toHaveLength(42);
+    for (const name of ["/model", "/thinking", "/effort", "/context", "/ctx", "/queue", "/steer", "/shell", "!", "/theme", "/settings", "/login"]) expect(names).toContain(name);
+    expect(names).not.toContain("/meters");
+    expect(result.commands).toHaveLength(41);
     expect(result.unavailable).toEqual(["legacy-extension-commands", "prompt-templates", "skills"]);
 
     expect(new Set(result.commands.map((command: any) => command.name.toLowerCase())).size).toBe(result.commands.length);

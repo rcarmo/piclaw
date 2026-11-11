@@ -547,7 +547,6 @@ export interface ApplyStoredPaneLayoutActionOptions {
   shellElement: HTMLElement | null;
   editorWidthRef: RefBox<number>;
   dockHeightRef: RefBox<number>;
-  sidebarWidthRef: RefBox<number>;
   readStoredNumber: (key: string, fallback?: number | null) => number | null;
   hasWindow?: boolean;
 }
@@ -900,10 +899,9 @@ export function useBranchPaneLifecycle(options: UseBranchPaneLifecycleOptions) {
       shellElement,
       editorWidthRef,
       dockHeightRef,
-      sidebarWidthRef,
       readStoredNumber,
     });
-  }, [dockHeightRef, editorOpen, editorWidthRef, readStoredNumber, shellElement, sidebarWidthRef]);
+  }, [dockHeightRef, editorOpen, editorWidthRef, readStoredNumber, shellElement]);
 
   return {
     toggleWorkspace,

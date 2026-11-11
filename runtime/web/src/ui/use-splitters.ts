@@ -31,6 +31,11 @@ export function clampEditorWidth(width, viewportWidth = getViewportWidth(), side
   return Math.min(Math.max(Number(width) || 0, MIN_EDITOR_WIDTH), Math.max(MIN_EDITOR_WIDTH, Math.min(MAX_EDITOR_WIDTH, dynamicMax)));
 }
 
+/** First-open work-area width: 40% of the shell, as the divider's double-click reset. */
+export function defaultEditorWidth(shell) {
+  return Math.round(getShellWidth(shell) * 0.4);
+}
+
 export function occupiedPaneWidth(shell, selector) {
   const pane = shell.querySelector?.(selector);
   if (!pane || getComputedStyle(pane).position === 'fixed' || getComputedStyle(pane).position === 'absolute') return 0;
@@ -269,7 +274,7 @@ export function useSplitters({ appShellRef, sidebarWidthRef, editorWidthRef, doc
     const shell = appShellRef.current;
     if (!shell) return;
     if (isEditorPaneCollapsed(shell)) setEditorPaneCollapsed(shell, false);
-    applyEditorWidth(shell, Math.round(getShellWidth(shell) * 0.4), true);
+    applyEditorWidth(shell, defaultEditorWidth(shell), true);
   }).current;
 
   const handleDockSplitterMouseDown = useRef((e) => {

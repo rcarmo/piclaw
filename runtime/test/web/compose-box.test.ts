@@ -316,10 +316,8 @@ test('slash autocomplete includes all canonical control commands', () => {
   expect(missing).toEqual([]);
 });
 
-test('slash autocomplete exposes the local /meters HUD command with a description', () => {
-  const meters = SLASH_COMMANDS.find((item) => item.name === '/meters');
-  expect(meters).toBeTruthy();
-  expect(meters?.description).toContain('CPU/RAM HUD');
+test('slash autocomplete no longer offers /meters; the meters are always shown', () => {
+  expect(SLASH_COMMANDS.some((item) => item.name === '/meters')).toBe(false);
 });
 
 test('slash autocomplete exposes the local /help keyboard shortcut pane command', () => {

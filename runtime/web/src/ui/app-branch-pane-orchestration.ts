@@ -1,5 +1,5 @@
 import { buildChatWindowUrl } from './chat-window.js';
-import { clampEditorWidth, getShellWidth, occupiedPaneWidth, occupiedSessionsWidth } from './use-splitters.js';
+import { clampEditorWidth, defaultEditorWidth, getShellWidth, occupiedSessionsWidth } from './use-splitters.js';
 
 interface RefBox<T> {
   current: T;
@@ -172,7 +172,6 @@ export interface ApplyStoredPaneLayoutOptions {
   shellElement: HTMLElement | null;
   editorWidthRef: RefBox<number>;
   dockHeightRef: RefBox<number>;
-  sidebarWidthRef: RefBox<number>;
   readStoredNumber: (key: string, fallback?: number | null) => number | null;
 }
 
@@ -184,7 +183,6 @@ export function applyStoredPaneLayout(options: ApplyStoredPaneLayoutOptions): vo
     shellElement,
     editorWidthRef,
     dockHeightRef,
-    sidebarWidthRef,
     readStoredNumber,
   } = options;
 
@@ -192,9 +190,11 @@ export function applyStoredPaneLayout(options: ApplyStoredPaneLayoutOptions): vo
 
   if (!editorWidthRef.current) {
     const stored = readStoredNumber('editorWidth', null);
-    const fallback = sidebarWidthRef.current || 280;
-    const resolved = Number.isFinite(stored) ? Number(stored) : fallback;
-    editorWidthRef.current = clampEditorWidth(resolved, getShellWidth(shellElement), occupiedPaneWidth(shellElement, '.workspace-sidebar'), occupiedSessionsWidth(shellElement));
+    // Files and viewers open straight into the work area, so it starts at a
+    // readable width rather than the old explorer column's 280px.
+    const resolved = Number.isFinite(stored) ? Number(stored) : defaultEditorWidth(shellElement);
+    // The explorer lives in the workbench side bar, which occupiedSessionsWidth counts.
+    editorWidthRef.current = clampEditorWidth(resolved, getShellWidth(shellElement), 0, occupiedSessionsWidth(shellElement));
   }
   shellElement.style.setProperty('--editor-width', `${editorWidthRef.current}px`);
 

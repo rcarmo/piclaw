@@ -190,7 +190,6 @@ test('applyStoredPaneLayoutAction hydrates css vars and ref defaults', () => {
 
   const editorWidthRef = { current: 0 };
   const dockHeightRef = { current: 0 };
-  const sidebarWidthRef = { current: 280 };
 
   applyStoredPaneLayoutAction({
     hasWindow: true,
@@ -198,7 +197,6 @@ test('applyStoredPaneLayoutAction hydrates css vars and ref defaults', () => {
     shellElement: shell,
     editorWidthRef,
     dockHeightRef,
-    sidebarWidthRef,
     readStoredNumber: (key) => {
       if (key === 'editorWidth') return 320;
       if (key === 'dockHeight') return 220;

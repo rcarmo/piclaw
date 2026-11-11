@@ -25,8 +25,8 @@ export interface ServerUiOutputConfig {
   outputPad: number;
 }
 
+/** Meters are always shown; only their collapsed state is stored. */
 export interface ServerUiMetersConfig {
-  enabled: boolean;
   collapsed: boolean;
 }
 
@@ -52,7 +52,6 @@ function normalizeMetersConfig(value: unknown, fallback: ServerUiMetersConfig): 
   if (!value || typeof value !== "object") return fallback;
   const record = value as Record<string, unknown>;
   return {
-    enabled: typeof record.enabled === "boolean" ? record.enabled : fallback.enabled,
     collapsed: typeof record.collapsed === "boolean" ? record.collapsed : fallback.collapsed,
   };
 }
@@ -90,7 +89,7 @@ export function getServerUiThemeConfig(): ServerUiThemeConfig {
 }
 
 export function getServerUiMetersConfig(): ServerUiMetersConfig {
-  return normalizeMetersConfig(kvGet<unknown>(METERS_KEY), { enabled: false, collapsed: false });
+  return normalizeMetersConfig(kvGet<unknown>(METERS_KEY), { collapsed: false });
 }
 
 export function getServerUiOutputConfig(): ServerUiOutputConfig {
@@ -108,7 +107,7 @@ export function getServerUiState(): { ui_theme: ServerUiThemeConfig; ui_meters: 
 /** One admitted preference update/readback; legacy config remains read-only. */
 export type ServerUiStatePatch = {
   ui_theme?: Partial<ServerUiThemeConfig>;
-  ui_meters?: Partial<ServerUiMetersConfig> | 'toggle';
+  ui_meters?: Partial<ServerUiMetersConfig>;
   ui_output?: Partial<ServerUiOutputConfig>;
 };
 export async function admitServerUiState(patch: ServerUiStatePatch, authorise: (phase?: 'before' | 'after') => void,
@@ -131,8 +130,7 @@ export async function admitServerUiState(patch: ServerUiStatePatch, authorise: (
     }
     if (captured.ui_meters) {
       const current = getServerUiMetersConfig();
-      extensionKvSet(UI_EXTENSION_ID, METERS_KEY, captured.ui_meters === 'toggle'
-        ? { ...current, enabled: !current.enabled } : normalizeMetersConfig(captured.ui_meters, current), 'global');
+      extensionKvSet(UI_EXTENSION_ID, METERS_KEY, normalizeMetersConfig(captured.ui_meters, current), 'global');
     }
     if (captured.ui_output) {
       const current = getServerUiOutputConfig(), value = captured.ui_output;

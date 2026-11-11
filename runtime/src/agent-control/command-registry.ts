@@ -69,7 +69,6 @@ export const CONTROL_COMMAND_DEFINITIONS: ControlCommandDefinition[] = [
   { name: "/settings", description: "Open the settings dialog" },
   { name: "/theme", description: "Show or change the web UI theme" },
   { name: "/commands", description: "List available commands" },
-  { name: "/meters", description: "Show or hide CPU/RAM meters HUD" },
 ];
 
 const ALIAS_MAP = new Map<string, string>();

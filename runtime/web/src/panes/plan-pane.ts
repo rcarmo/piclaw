@@ -72,7 +72,13 @@ async function planRequest(chatJid: string, init?: RequestInit) {
   return payload?.plan || payload;
 }
 
-const STATUS_ICONS = { completed: '✓', in_progress: '◐', pending: '○' };
+// Drawn rather than typed: symbol-font fallbacks gave the half-circle glyph
+// different metrics from the others and clipped it.
+const STATUS_ICONS = {
+  completed: html`<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  in_progress: html`<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor"/></svg>`,
+  pending: html`<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>`,
+};
 const STATUS_LABELS = { completed: 'Completed', in_progress: 'In progress', pending: 'Pending' };
 
 function PlanPaneView({ onDirtyChange }) {
@@ -225,7 +231,7 @@ function PlanPaneView({ onDirtyChange }) {
             ${items.length === 0 && html`<li class="plan-pane-empty">No checklist items yet. Use Edit to add some, or ask the model to plan.</li>`}
             ${items.map((item, index) => html`
               <li key=${index} class=${`plan-pane-item ${item.status}`}>
-                <span class="plan-pane-item-icon" aria-label=${STATUS_LABELS[item.status]}>${STATUS_ICONS[item.status]}</span>
+                <span class="plan-pane-item-icon" role="img" aria-label=${STATUS_LABELS[item.status]}>${STATUS_ICONS[item.status]}</span>
                 <span class="plan-pane-item-step">${item.step}</span>
               </li>
             `)}

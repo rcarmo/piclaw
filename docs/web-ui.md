@@ -21,7 +21,7 @@ Classic uses a workbench layout. On desktop screens (at least 1024 px wide, land
 - **Settings:** opens as a tab in the editor area, widened to 720 px when there is room, from the activity bar, the global menu, the keyboard shortcut or compose commands. Requests for a specific section switch the open tab to it.
 - **Chat:** keeps at least 320 px.
 - **Editor:** collapsing it keeps its tabs open.
-- **System meters:** shown at the foot of the side bar while it is visible, and in the status bar along the bottom of the window otherwise.
+- **System meters:** always on. They sit at the foot of the side bar while it is visible, and in the status bar along the bottom of the window otherwise. Click them to collapse or expand.
 
 Below that width, the chat fills the screen and the side bar opens as a drawer from the left, for example from **Show workspace** in the global menu; the drawer has its own activity bar. On phones (under 640 px) an open editor covers the chat; **Chat** returns to the conversation and **Editor** brings the editor back. Phones have no status bar; the meters appear in the drawer.
 

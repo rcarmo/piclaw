@@ -13,7 +13,7 @@ run('Intel meters hide absent GPUs and expose accessible details on desktop/tabl
   const vendor=resolve(root,'web/src/vendor/preact-htm.js');
   const component=resolve(root,'web/src/components/system-meters-hud.ts');
   const entry=join(tmp,'entry.ts');
-  await Bun.write(entry,`import {html,render} from ${JSON.stringify(vendor)};import {SystemMetersHud} from ${JSON.stringify(component)};localStorage.setItem('piclaw_system_meters_enabled','true');render(html\`<\${SystemMetersHud}/>\`,document.getElementById('root'));`);
+  await Bun.write(entry,`import {html,render} from ${JSON.stringify(vendor)};import {SystemMetersHud} from ${JSON.stringify(component)};render(html\`<\${SystemMetersHud}/>\`,document.getElementById('root'));`);
   const build=await Bun.build({entrypoints:[entry],outdir:tmp,target:'browser',format:'esm'});expect(build.success).toBe(true);
   const gpu={id:'0000:00:02.0',name:'Intel Iris Xe',provider:'intel-drm-fdinfo',driver:'i915',status:'partial',sample_time_ms:Date.now(),busy_percent:63,engines:[{name:'render',capacity:1,busy_percent:63},{name:'video',capacity:2,busy_percent:0}],memory:{resident_bytes:677*1024**2,total_bytes:800*1024**2,shared_bytes:null},coverage:{clients:3,scanned_processes:90,unreadable_processes:1,unreadable_clients:0,truncated:false},history:[{timestamp_ms:Date.now()-2000,busy_percent:null,resident_bytes:null},{timestamp_ms:Date.now(),busy_percent:63,resident_bytes:677*1024**2}]};
   let devices:any[]=[];
@@ -23,7 +23,7 @@ run('Intel meters hide absent GPUs and expose accessible details on desktop/tabl
   browser=await chromium.launch({headless:true,args:['--no-sandbox','--disable-gpu']});
   const page=await browser.newPage({viewport:{width:1100,height:850},hasTouch:true});
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.addInitScript(()=>{localStorage.setItem('piclaw_system_meters_enabled','true');localStorage.setItem('piclaw_system_meters_collapsed','false');});
+  await page.addInitScript(()=>{localStorage.setItem('piclaw_system_meters_collapsed','false');});
   await page.goto(server.url.toString());
   await page.locator('.system-meters-row.cpu').waitFor();
   expect(await page.locator('.intel-gpu').count()).toBe(0);

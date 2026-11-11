@@ -19,7 +19,8 @@ function fixture() {
   return { channel, events };
 }
 const preferences = { ui_theme: { theme: 'DRACULA', tint: ' #abc ' }, ui_meters: { enabled: true, collapsed: true }, ui_output: { outputPad: 32 } };
-const normalized = { ui_theme: { theme: 'dracula', tint: '#abc' }, ui_meters: { enabled: true, collapsed: true }, ui_output: { outputPad: 24 } };
+// A stale client may still send the retired meters `enabled` flag; it is dropped.
+const normalized = { ui_theme: { theme: 'dracula', tint: '#abc' }, ui_meters: { collapsed: true }, ui_output: { outputPad: 24 } };
 const request = (body: unknown) => new Request('http://fixture/agent/ui-state', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://fixture' }, body: JSON.stringify(body) });
 
 test('golden: combined UI preferences retain normalization, response and existing events', () =>

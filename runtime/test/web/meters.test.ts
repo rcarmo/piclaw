@@ -2,12 +2,8 @@ import { afterEach, expect, test } from 'bun:test';
 import {
   METERS_COLLAPSED_EVENT_NAME,
   METERS_COLLAPSED_STORAGE_KEY,
-  METERS_EVENT_NAME,
-  METERS_STORAGE_KEY,
   applyMetersCollapsed,
-  applyMetersEnabled,
   readStoredMetersCollapsed,
-  readStoredMetersEnabled,
   toggleMetersCollapsed,
 } from '../../web/src/ui/meters.ts';
 import { SYSTEM_METERS_COMPACT_BREAKPOINT_PX, SYSTEM_METERS_POLL_MS, buildCompactMetersSummary, buildSparklinePath, formatBytesCompact, resolveCurrentRssBytes, resolveGpuMeterSnapshots, GpuSnapshotTracker, shouldShowRss, shouldShowVram } from '../../web/src/components/system-meters-hud.ts';
@@ -49,20 +45,6 @@ function makeWindow(initial = {}) {
 
 afterEach(() => {
   globalThis.window = originalWindow;
-});
-
-test('applyMetersEnabled persists state and dispatches a meters-change event', () => {
-  const win = makeWindow();
-  globalThis.window = win;
-
-  const next = applyMetersEnabled(true);
-
-  expect(next).toBe(true);
-  expect(win.localStorage.getItem(METERS_STORAGE_KEY)).toBe('true');
-  expect(readStoredMetersEnabled(false)).toBe(true);
-  expect(win.__events).toEqual([
-    { type: METERS_EVENT_NAME, detail: { enabled: true } },
-  ]);
 });
 
 test('applyMetersCollapsed persists state and dispatches a collapsed-change event', () => {
@@ -234,15 +216,16 @@ test('toggleMetersCollapsed flips the stored collapsed state', () => {
   expect(readStoredMetersCollapsed(false)).toBe(false);
 });
 
-test('applyMetersFromEvent applies server-persisted enabled and collapsed state', async () => {
+test('applyMetersFromEvent applies server-persisted collapsed state and ignores the retired enabled flag', async () => {
   const win = makeWindow();
   globalThis.window = win;
   const { applyMetersFromEvent } = await import('../../web/src/ui/meters.ts');
 
-  applyMetersFromEvent({ enabled: true, collapsed: true });
+  applyMetersFromEvent({ enabled: false, collapsed: true });
 
-  expect(readStoredMetersEnabled(false)).toBe(true);
   expect(readStoredMetersCollapsed(false)).toBe(true);
+  expect(win.localStorage.getItem('piclaw_system_meters_enabled')).toBeNull();
+  expect(win.__events).toEqual([{ type: METERS_COLLAPSED_EVENT_NAME, detail: { collapsed: true } }]);
 });
 
 test('aggregate GPU activity adds the GPU row without conflating it with VRAM percent',()=>{

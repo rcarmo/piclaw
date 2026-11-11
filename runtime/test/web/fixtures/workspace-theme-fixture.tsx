@@ -89,7 +89,6 @@ window.fetch = (async (input) => {
     return Response.json({ status: "ready" });
   return Response.json({});
 }) as typeof fetch;
-localStorage.setItem("piclaw_system_meters_enabled", "true");
 localStorage.setItem("piclaw_system_meters_collapsed", "false");
 localStorage.setItem("workspaceFolderPreviewDepth", "3");
 initTheme({ skin });

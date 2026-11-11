@@ -8,7 +8,7 @@ const services={fetchCommands:async()=>({commands:[]}),getAgentModels:async()=>(
 function Fixture(){
  const shell=useRef(null),timeline=useRef(null),host=useRef(null),sidebar=useRef(280),editor=useRef(500),dock=useRef(200);
  const splitters=useSplitters({appShellRef:shell,sidebarWidthRef:sidebar,editorWidthRef:editor,dockHeightRef:dock});
- useEffect(()=>{const terminal=terminalTabPaneExtension.mount(host.current,{mode:'view'});Object.assign(window,{terminalLayout:{terminal,shell:shell.current,restore(width:number){editor.current=0;applyStoredPaneLayout({editorOpen:true,shellElement:shell.current,editorWidthRef:editor,dockHeightRef:dock,sidebarWidthRef:sidebar,readStoredNumber:key=>key==='editorWidth'?width:null});}}});return()=>terminal.dispose();},[]);
+ useEffect(()=>{const terminal=terminalTabPaneExtension.mount(host.current,{mode:'view'});Object.assign(window,{terminalLayout:{terminal,shell:shell.current,restore(width:number){editor.current=0;applyStoredPaneLayout({editorOpen:true,shellElement:shell.current,editorWidthRef:editor,dockHeightRef:dock,readStoredNumber:key=>key==='editorWidth'?width:null});}}});return()=>terminal.dispose();},[]);
  // Shell order matches app-main-shell-render: chat, file tree, then the editor on the right (#1987).
  return html`<div class="app-shell workspace-collapsed editor-open" ref=${shell} style="--editor-width:500px;--sidebar-width:280px">
  <main class="container"><${ChatSurface} currentChatJid="web:fixture" posts=${posts} timelineRef=${timeline} hasMore=${false}

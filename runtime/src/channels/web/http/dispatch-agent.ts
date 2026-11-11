@@ -371,8 +371,7 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
       }
       if (body?.ui_meters && typeof body.ui_meters === "object") {
         const value = body.ui_meters as Record<string, unknown>;
-        patch.ui_meters = { ...(typeof value.enabled === 'boolean' ? { enabled: value.enabled } : {}),
-          ...(typeof value.collapsed === 'boolean' ? { collapsed: value.collapsed } : {}) };
+        patch.ui_meters = typeof value.collapsed === 'boolean' ? { collapsed: value.collapsed } : {};
       }
       if (body?.ui_output && typeof body.ui_output === "object") {
         const value = body.ui_output as Record<string, unknown>, pad = Number(value.outputPad ?? value.output_pad);

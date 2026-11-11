@@ -378,9 +378,6 @@ type MessageKey =
   | 'settings.general.browserNotifications'
   | 'settings.general.notifSecureHint'
   | 'settings.general.notifInsecureHint'
-  | 'settings.general.display'
-  | 'settings.general.systemMeters'
-  | 'settings.general.systemMetersHint'
   | 'settings.general.instanceConfig'
   | 'settings.general.composeUpload'
   | 'settings.general.composeUploadAria'
@@ -1022,9 +1019,6 @@ const EN: Record<MessageKey, string> = {
   'settings.general.browserNotifications': 'Browser notifications',
   'settings.general.notifSecureHint': 'Use the 🔔 bell button in the compose bar to enable/disable notifications. Web Push requires HTTPS or localhost.',
   'settings.general.notifInsecureHint': '⚠ Not available — requires a secure context (HTTPS or localhost). Access via SSH tunnel or reverse proxy with TLS to enable.',
-  'settings.general.display': 'Display',
-  'settings.general.systemMeters': 'System meters',
-  'settings.general.systemMetersHint': 'CPU/memory/network meters in the status bar. This browser only.',
   'settings.general.instanceConfig': 'Instance Configuration',
   'settings.general.composeUpload': 'Compose upload (MB)',
   'settings.general.composeUploadAria': 'compose upload limit',
@@ -1665,9 +1659,6 @@ const ZH_CN: Partial<Record<MessageKey, string>> = {
   'settings.general.browserNotifications': '浏览器通知',
   'settings.general.notifSecureHint': '使用输入栏中的 🔔 铃铛按钮来启用/禁用通知。Web Push 需要 HTTPS 或 localhost。',
   'settings.general.notifInsecureHint': '⚠ 不可用 — 需要安全上下文（HTTPS 或 localhost）。通过 SSH 隐道或带 TLS 的反向代理访问以启用。',
-  'settings.general.display': '显示',
-  'settings.general.systemMeters': '系统仪表',
-  'settings.general.systemMetersHint': '状态栏中的 CPU/内存/网络仪表。仅限此浏览器。',
   'settings.general.instanceConfig': '实例配置',
   'settings.general.composeUpload': '撰写上传（MB）',
   'settings.general.composeUploadAria': '撰写上传限制',
@@ -2308,9 +2299,6 @@ const JA: Partial<Record<MessageKey, string>> = {
   'settings.general.browserNotifications': 'ブラウザ通知',
   'settings.general.notifSecureHint': '入力バーの 🔔 ベルボタンで通知を有効/無効にします。Web Push には HTTPS または localhost が必要です。',
   'settings.general.notifInsecureHint': '⚠ 利用不可 — セキュアコンテキスト（HTTPS または localhost）が必要です。SSH トンネルまたは TLS 付きリバースプロキシ経由でアクセスして有効化してください。',
-  'settings.general.display': '表示',
-  'settings.general.systemMeters': 'システムメーター',
-  'settings.general.systemMetersHint': 'ステータスバーの CPU/メモリ/ネットワークメーター。このブラウザのみ。',
   'settings.general.instanceConfig': 'インスタンス設定',
   'settings.general.composeUpload': '作成アップロード（MB）',
   'settings.general.composeUploadAria': '作成アップロード上限',

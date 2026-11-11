@@ -25,9 +25,8 @@ beforeAll(async () => {
 }, 30000);
 afterAll(async () => { for (const browser of Object.values(browsers)) await browser.close(); server?.stop(true); });
 
-async function open(engine: string, width: number, height: number, query = '', meters = false) {
+async function open(engine: string, width: number, height: number, query = '') {
   const page = await browsers[engine].newPage({ viewport: { width, height }, hasTouch: width < 640 });
-  if (meters) await page.addInitScript(() => localStorage.setItem('piclaw_system_meters_enabled', 'true'));
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.route('**/*', (route) => new URL(route.request().url()).origin === server.url.origin ? route.continue() : route.abort());
@@ -45,7 +44,6 @@ const rect = (page: Page, selector: string) => page.evaluate((s) => {
 const settle = (page: Page) => page.waitForTimeout(320);
 const noOverflow = async (page: Page) => expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
 
-const METERS_EVENT = 'piclaw-meters-change';
 const explorerButton = '.workbench-activity-button[aria-label="Explorer"]';
 const sessionsButton = '.workbench-activity-button[aria-label="Sessions"]';
 const state = (page: Page) => page.evaluate(() => ({
@@ -125,10 +123,9 @@ for (const engine of ['chromium', 'webkit']) {
     } finally { await page.close(); }
   }, 30000);
 
-  browserTest(`${engine}: meters sit at the side bar foot, or in the status bar when it is collapsed`, async () => {
-    const { page, errors } = await open(engine, 1440, 900, '', true);
+  browserTest(`${engine}: meters are always on, at the side bar foot or in the status bar when it is collapsed`, async () => {
+    const { page, errors } = await open(engine, 1440, 900);
     try {
-      await page.evaluate((name) => window.dispatchEvent(new CustomEvent(name, { detail: { enabled: true } })), METERS_EVENT);
       await page.waitForSelector('.workbench-sidebar-footer .system-meters-hud', { state: 'attached', timeout: 5000 });
       expect(await page.locator('.workbench-statusbar').count()).toBe(0);
       expect(await page.locator('.system-meters-hud').count()).toBe(1);

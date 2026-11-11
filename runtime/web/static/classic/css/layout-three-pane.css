@@ -430,9 +430,18 @@
 }
 
 .plan-pane-item-icon {
+    display: inline-flex;
     flex: 0 0 16px;
-    text-align: center;
+    align-items: center;
+    justify-content: center;
+    /* One text line tall, so the icon centres on the step's first line. */
+    height: 1.4em;
     color: var(--text-secondary);
+}
+
+.plan-pane-item-icon svg {
+    width: 14px;
+    height: 14px;
 }
 
 .plan-pane-item.in_progress .plan-pane-item-icon {

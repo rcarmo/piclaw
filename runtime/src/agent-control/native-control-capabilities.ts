@@ -30,7 +30,7 @@ export function getNativeCommandCatalogue(port: DurableSessionPositionPort) {
   return CONTROL_COMMAND_DEFINITIONS.map(definition => {
     const type = parseControlCommand(definition.name)?.type ?? null;
     const status: NativeControlStatus = type ? capabilities[type]
-      : ["/theme", "/settings", "/meters"].includes(definition.name) ? "web UI" : "unavailable";
+      : ["/theme", "/settings"].includes(definition.name) ? "web UI" : "unavailable";
     return { ...definition, type, status };
   });
 }
