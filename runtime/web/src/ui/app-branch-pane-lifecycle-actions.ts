@@ -87,7 +87,6 @@ export function toggleWorkspaceVisibility(
 export interface HandleBranchPickerChangeActionOptions {
   nextChatJid: unknown;
   currentChatJid: string;
-  chatOnlyMode?: boolean;
   navigate: (url: string) => void;
   hasWindow?: boolean;
   currentHref?: string;
@@ -97,7 +96,6 @@ export function handleBranchPickerChangeAction(options: HandleBranchPickerChange
   const {
     nextChatJid,
     currentChatJid,
-    chatOnlyMode,
     navigate,
     hasWindow = typeof window !== 'undefined',
     currentHref = hasWindow ? window.location.href : 'http://localhost/',
@@ -107,7 +105,6 @@ export function handleBranchPickerChangeAction(options: HandleBranchPickerChange
     hasWindow,
     nextChatJid,
     currentChatJid,
-    chatOnlyMode,
     currentHref,
     navigate,
   });
@@ -165,7 +162,6 @@ export interface RenameCurrentBranchActionOptions {
   refreshCurrentChatBranches: () => void;
   navigate?: (url: string, options?: unknown) => void;
   baseHref?: string;
-  chatOnlyMode?: boolean;
   showIntentToast: (title: string, detail?: string | null, kind?: string, durationMs?: number) => void;
   closeRenameForm: () => void;
   hasWindow?: boolean;
@@ -195,7 +191,6 @@ export interface PruneCurrentBranchActionOptions {
   refreshActiveChatAgents: () => void;
   refreshCurrentChatBranches: () => void;
   showIntentToast: (title: string, detail?: string | null, kind?: string, durationMs?: number) => void;
-  chatOnlyMode?: boolean;
   navigate: (url: string) => void;
   confirm?: (message: string) => boolean;
   hasWindow?: boolean;
@@ -237,7 +232,6 @@ export interface RestoreBranchActionOptions {
   refreshActiveChatAgents: () => void;
   refreshCurrentChatBranches: () => void;
   showIntentToast: (title: string, detail?: string | null, kind?: string, durationMs?: number) => void;
-  chatOnlyMode?: boolean;
   navigate: (url: string) => void;
   hasWindow?: boolean;
   baseHref?: string;
@@ -303,7 +297,6 @@ export function runBranchLoaderModeEffect(options: RunBranchLoaderModeEffectOpti
 
 export interface CreateSessionFromComposeActionOptions {
   currentChatJid: string;
-  chatOnlyMode?: boolean;
   forkChatBranch: (chatJid: string) => Promise<any>;
   refreshActiveChatAgents: () => void;
   refreshCurrentChatBranches: () => void;
@@ -315,7 +308,6 @@ export interface CreateSessionFromComposeActionOptions {
 
 export interface CreateRootSessionFromComposeActionOptions {
   rootName: string;
-  chatOnlyMode?: boolean;
   createRootChatSession: (agentName: string) => Promise<any>;
   refreshActiveChatAgents: () => void;
   refreshCurrentChatBranches: () => void;
@@ -575,7 +567,6 @@ export function applyStoredPaneLayoutAction(options: ApplyStoredPaneLayoutAction
 export interface UseBranchPaneLifecycleOptions {
   setWorkspaceOpen: StateSetter<boolean>;
   currentChatJid: string;
-  chatOnlyMode?: boolean;
   navigate: (url: string, options?: Record<string, unknown>) => void;
 
   currentBranchRecord: BranchRecordLike | null;
@@ -636,7 +627,6 @@ export function useBranchPaneLifecycle(options: UseBranchPaneLifecycleOptions) {
   const {
     setWorkspaceOpen,
     currentChatJid,
-    chatOnlyMode,
     navigate,
     currentBranchRecord,
     renameBranchInFlightRef,
@@ -719,10 +709,9 @@ export function useBranchPaneLifecycle(options: UseBranchPaneLifecycleOptions) {
     handleBranchPickerChangeAction({
       nextChatJid,
       currentChatJid,
-      chatOnlyMode,
       navigate,
     });
-  }, [chatOnlyMode, currentChatJid, navigate]);
+  }, [currentChatJid, navigate]);
 
   const openRenameCurrentBranchForm = useCallback(() => {
     openRenameCurrentBranchFormAction({
@@ -755,11 +744,10 @@ export function useBranchPaneLifecycle(options: UseBranchPaneLifecycleOptions) {
       refreshActiveChatAgents,
       refreshCurrentChatBranches,
       navigate,
-      chatOnlyMode,
       showIntentToast,
       closeRenameForm: closeRenameCurrentBranchForm,
     });
-  }, [closeRenameCurrentBranchForm, currentBranchRecord, chatOnlyMode, getFormLock, navigate, openRenameCurrentBranchForm, refreshActiveChatAgents, refreshCurrentChatBranches, renameBranchInFlightRef, renameBranchLockUntilRef, renameChatBranch, setIsRenamingBranch, showIntentToast]);
+  }, [closeRenameCurrentBranchForm, currentBranchRecord, getFormLock, navigate, openRenameCurrentBranchForm, refreshActiveChatAgents, refreshCurrentChatBranches, renameBranchInFlightRef, renameBranchLockUntilRef, renameChatBranch, setIsRenamingBranch, showIntentToast]);
 
   const handlePruneCurrentBranch = useCallback(async (targetChatJid: string | null = null, options?: { confirmed?: boolean }) => {
     const target = typeof targetChatJid === 'string' && targetChatJid.trim()
@@ -779,7 +767,6 @@ export function useBranchPaneLifecycle(options: UseBranchPaneLifecycleOptions) {
         refreshActiveChatAgents,
         refreshCurrentChatBranches,
         showIntentToast,
-        chatOnlyMode,
         navigate,
         ...(options?.confirmed ? { confirm: () => true } : {}),
       });
@@ -791,7 +778,7 @@ export function useBranchPaneLifecycle(options: UseBranchPaneLifecycleOptions) {
       setCurrentChatBranches((prev) => filterRowsByChatJid(prev, target));
     }
     return pruned;
-  }, [activeChatAgents, chatOnlyMode, currentBranchRecord, currentChatBranches, currentChatJid, finishOptimisticSessionRemoval, navigate, optimisticallyRemoveSessionRows, pruneChatBranch, refreshActiveChatAgents, refreshCurrentChatBranches, setActiveChatAgents, setCurrentChatBranches, showIntentToast]);
+  }, [activeChatAgents, currentBranchRecord, currentChatBranches, currentChatJid, finishOptimisticSessionRemoval, navigate, optimisticallyRemoveSessionRows, pruneChatBranch, refreshActiveChatAgents, refreshCurrentChatBranches, setActiveChatAgents, setCurrentChatBranches, showIntentToast]);
 
   const handlePurgeArchivedBranch = useCallback(async (targetChatJid: string, options?: { confirmed?: boolean }) => {
     const target = typeof targetChatJid === 'string' ? targetChatJid.trim() : '';
@@ -830,10 +817,9 @@ export function useBranchPaneLifecycle(options: UseBranchPaneLifecycleOptions) {
       refreshActiveChatAgents,
       refreshCurrentChatBranches,
       showIntentToast,
-      chatOnlyMode,
       navigate,
     });
-  }, [chatOnlyMode, currentChatBranches, navigate, refreshActiveChatAgents, refreshCurrentChatBranches, restoreChatBranch, showIntentToast]);
+  }, [currentChatBranches, navigate, refreshActiveChatAgents, refreshCurrentChatBranches, restoreChatBranch, showIntentToast]);
 
   useEffect(() => runBranchLoaderModeEffect({
     branchLoaderMode,
@@ -846,26 +832,24 @@ export function useBranchPaneLifecycle(options: UseBranchPaneLifecycleOptions) {
   const handleCreateSessionFromCompose = useCallback(async () => {
     await createSessionFromComposeAction({
       currentChatJid,
-      chatOnlyMode,
       forkChatBranch,
       refreshActiveChatAgents,
       refreshCurrentChatBranches,
       showIntentToast,
       navigate,
     });
-  }, [chatOnlyMode, currentChatJid, forkChatBranch, navigate, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
+  }, [currentChatJid, forkChatBranch, navigate, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
 
   const handleCreateRootSessionFromCompose = useCallback(async (rootName: string) => {
     await createRootSessionFromComposeAction({
       rootName,
-      chatOnlyMode,
       createRootChatSession,
       refreshActiveChatAgents,
       refreshCurrentChatBranches,
       showIntentToast,
       navigate,
     });
-  }, [chatOnlyMode, createRootChatSession, navigate, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
+  }, [createRootChatSession, navigate, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
 
   const handlePopOutPane = useCallback(async (path: string, label?: string | null) => {
     return await popOutPaneAction({

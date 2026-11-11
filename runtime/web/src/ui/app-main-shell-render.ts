@@ -19,11 +19,10 @@ export interface MainShellRenderOptions {
 export function buildMainShellClassName(options: {
   workspaceOpen: boolean;
   editorOpen: boolean;
-  chatOnlyMode: boolean;
   zenMode: boolean;
 }): string {
-  const { workspaceOpen, editorOpen, chatOnlyMode, zenMode } = options;
-  return `app-shell${workspaceOpen ? '' : ' workspace-collapsed'}${editorOpen ? ' editor-open' : ''}${chatOnlyMode ? ' chat-only' : ''}${zenMode ? ' zen-mode' : ''}`;
+  const { workspaceOpen, editorOpen, zenMode } = options;
+  return `app-shell${workspaceOpen ? '' : ' workspace-collapsed'}${editorOpen ? ' editor-open' : ''}${zenMode ? ' zen-mode' : ''}`;
 }
 
 export function extractPostedUserMessageId(response: unknown): number | null {
@@ -113,7 +112,6 @@ export function renderMainShell(options: MainShellRenderOptions): any {
     appShellRef,
     workspaceOpen,
     editorOpen,
-    chatOnlyMode,
     zenMode,
     isRenameBranchFormOpen,
     closeRenameCurrentBranchForm,
@@ -284,7 +282,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
   };
 
   return html`
-    <div class=${buildMainShellClassName({ workspaceOpen, editorOpen, chatOnlyMode, zenMode })} ref=${appShellRef}>
+    <div class=${buildMainShellClassName({ workspaceOpen, editorOpen, zenMode })} ref=${appShellRef}>
       ${isRenameBranchFormOpen && html`
         <div class="rename-branch-overlay" onPointerDown=${(event: any) => {
           if (event.target === event.currentTarget) {
@@ -334,7 +332,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
           </form>
         </div>
       `}
-      ${!chatOnlyMode && !zenMode && html`
+      ${!zenMode && html`
         <${WorkbenchSidebar}
           activeChatAgents=${activeChatAgents}
           currentChatJid=${currentChatJid}
@@ -361,7 +359,6 @@ export function renderMainShell(options: MainShellRenderOptions): any {
       <${TimelineMenu}
         workspaceOpen=${workspaceOpen}
         toggleWorkspace=${toggleWorkspace}
-        chatOnlyMode=${chatOnlyMode}
         openEditor=${openEditor}
         onOpenTerminalTab=${openTerminalTab}
         onOpenCdpTab=${openCdpTab}
@@ -371,7 +368,6 @@ export function renderMainShell(options: MainShellRenderOptions): any {
         activeChatAgents=${activeChatAgents}
         currentChatJid=${currentChatJid}
         workspaceOpen=${workspaceOpen}
-        chatOnlyMode=${chatOnlyMode}
         onSwitchChat=${handleBranchPickerChange}
         onToggleWorkspace=${toggleWorkspace}
         onOpenTerminalTab=${openTerminalTab}
@@ -469,8 +465,8 @@ export function renderMainShell(options: MainShellRenderOptions): any {
             onDeleteSession: handlePruneCurrentBranch,
             onPurgeArchivedSession: handlePurgeArchivedBranch,
             onRestoreSession: handleRestoreBranch,
-            activeEditorPath: chatOnlyMode ? null : tabStripActiveId,
-            onAttachEditorFile: chatOnlyMode ? undefined : attachActiveEditorFile,
+            activeEditorPath: tabStripActiveId,
+            onAttachEditorFile: attachActiveEditorFile,
             onOpenFilePill: openFileFromPill,
             followupQueueCount,
             followupQueueItems,

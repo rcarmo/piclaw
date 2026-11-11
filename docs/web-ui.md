@@ -21,6 +21,8 @@ Classic uses a workbench layout. On desktop screens (at least 1024 px wide, land
 
 Below that width, the chat fills the screen and the side bar opens as a drawer from the left, for example from **Show workspace** in the global menu; the drawer has its own activity bar. On phones (under 640 px) an open editor covers the chat; **Chat** returns to the conversation and **Editor** brings the editor back. Phones have no status bar; the meters appear in the drawer.
 
+There is no separate chat-only mode. For an uncluttered chat, hide the side bar and close or collapse the editor. Pop-out chat windows start that way; each window keeps its own side bar and workspace state, and the shared setting is only the default for new windows.
+
 Add-ons that dock on the right edge can reserve space; see the [extension UI contract](extension-ui-contract.md#right-edge-docking).
 
 ## Login

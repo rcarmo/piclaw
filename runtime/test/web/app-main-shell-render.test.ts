@@ -17,22 +17,19 @@ test('buildMainShellClassName composes workspace/editor/chat/zen modifiers', () 
   expect(buildMainShellClassName({
     workspaceOpen: true,
     editorOpen: false,
-    chatOnlyMode: false,
     zenMode: false,
   })).toBe('app-shell');
 
   expect(buildMainShellClassName({
     workspaceOpen: false,
     editorOpen: true,
-    chatOnlyMode: true,
     zenMode: true,
-  })).toBe('app-shell workspace-collapsed editor-open chat-only zen-mode');
+  })).toBe('app-shell workspace-collapsed editor-open zen-mode');
 });
 
 test('renderMainShell hosts the explorer in the workbench side bar, left of the chat', () => {
   const setWorkspaceVisible = mock(() => {});
   const tree = renderMainShell(createMainShellRenderOptions({
-    chatOnlyMode: false,
     workspaceOpen: true,
     editorOpen: true,
     showEditorPaneContainer: true,
@@ -58,7 +55,7 @@ test('renderMainShell hosts the explorer in the workbench side bar, left of the 
 });
 
 test('renderMainShell exposes the editor divider as a keyboard separator', () => {
-  const tree = renderMainShell(createMainShellRenderOptions({ chatOnlyMode: false, editorOpen: true, showEditorPaneContainer: true }));
+  const tree = renderMainShell(createMainShellRenderOptions({ editorOpen: true, showEditorPaneContainer: true }));
   const dividers: any[] = [];
   walkVNodes(tree, (node) => {
     if (String(node.props?.class || '').split(/\s+/).includes('editor-splitter')) dividers.push(node.props);
@@ -69,16 +66,16 @@ test('renderMainShell exposes the editor divider as a keyboard separator', () =>
   expect(typeof dividers[0].onKeyDown).toBe('function');
 });
 
-test('renderMainShell omits the workbench side bar in chat-only and zen modes, and the status bar in zen', () => {
-  for (const [overrides, statusBars] of [[{ chatOnlyMode: true }, 1], [{ chatOnlyMode: false, zenMode: true }, 0]] as const) {
+test('renderMainShell always renders the workbench side bar and status bar, except in zen mode', () => {
+  for (const [overrides, count] of [[{}, 1], [{ zenMode: true }, 0]] as const) {
     let sidebars = 0;
     let bars = 0;
     walkVNodes(renderMainShell(createMainShellRenderOptions(overrides)), (node) => {
       if (node.type === WorkbenchSidebar) sidebars += 1;
       if (node.type === WorkbenchStatusBar) bars += 1;
     });
-    expect(sidebars).toBe(0);
-    expect(bars).toBe(statusBars);
+    expect(sidebars).toBe(count);
+    expect(bars).toBe(count);
   }
 });
 
@@ -137,7 +134,6 @@ function createMainShellRenderOptions(overrides: Record<string, unknown> = {}) {
     appShellRef: { current: null },
     workspaceOpen: false,
     editorOpen: false,
-    chatOnlyMode: true,
     zenMode: false,
     isRenameBranchFormOpen: false,
     closeRenameCurrentBranchForm: noop,

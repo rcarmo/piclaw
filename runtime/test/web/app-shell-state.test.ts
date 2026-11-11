@@ -96,7 +96,6 @@ test('readAppLocationModes parses the current shell mode flags from URL params',
 
   expect(readAppLocationModes(params)).toEqual({
     currentChatJid: 'web:branch',
-    chatOnlyMode: true,
     panePopoutMode: true,
     panePopoutPath: '/tabs/vnc',
     panePopoutLabel: 'VNC',
@@ -106,7 +105,6 @@ test('readAppLocationModes parses the current shell mode flags from URL params',
 
   expect(readAppLocationModes(new URLSearchParams())).toEqual({
     currentChatJid: 'web:default',
-    chatOnlyMode: false,
     panePopoutMode: false,
     panePopoutPath: '',
     panePopoutLabel: '',

@@ -85,10 +85,9 @@ export function shouldHidePanePopoutControls(
 /** Determine whether the editor-pane container should render in the current shell mode. */
 export function shouldShowEditorPaneContainer(
   panePopoutMode: boolean,
-  chatOnlyMode: boolean,
   editorOpen: boolean,
   hasDockPanes: boolean,
   dockVisible: boolean,
 ): boolean {
-  return panePopoutMode || (!chatOnlyMode && (editorOpen || (hasDockPanes && dockVisible)));
+  return panePopoutMode || editorOpen || (hasDockPanes && dockVisible);
 }

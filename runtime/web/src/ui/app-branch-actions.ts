@@ -86,7 +86,6 @@ export interface RenameCurrentBranchOptions {
   refreshCurrentChatBranches?: () => Promise<unknown> | unknown;
   navigate?: NavigateFn;
   baseHref?: string;
-  chatOnlyMode?: boolean;
   showIntentToast?: ToastFn;
   closeRenameForm?: () => void;
   now?: () => number;
@@ -108,7 +107,6 @@ export async function renameCurrentBranch(options: RenameCurrentBranchOptions): 
     refreshCurrentChatBranches,
     navigate,
     baseHref,
-    chatOnlyMode,
     showIntentToast,
     closeRenameForm,
     now = () => Date.now(),
@@ -187,7 +185,6 @@ export interface PruneCurrentBranchOptions {
   refreshCurrentChatBranches?: () => Promise<unknown> | unknown;
   showIntentToast?: ToastFn;
   baseHref: string;
-  chatOnlyMode?: boolean;
   navigate?: NavigateFn;
   confirm?: (message: string) => boolean;
 }
@@ -206,7 +203,6 @@ export async function pruneCurrentBranch(options: PruneCurrentBranchOptions): Pr
     refreshCurrentChatBranches,
     showIntentToast,
     baseHref,
-    chatOnlyMode,
     navigate,
     confirm = (message: string) => window.confirm(message),
   } = options;
@@ -265,7 +261,7 @@ export async function pruneCurrentBranch(options: PruneCurrentBranchOptions): Pr
     ]);
     const fallbackChatJid = isRootBranch ? 'web:default' : (branch?.root_chat_jid || 'web:default');
     showIntentToast?.(isRootBranch ? 'Session archived' : 'Branch pruned', `${label} has been archived.`, 'info', 3000);
-    const nextUrl = buildChatWindowUrl(baseHref, fallbackChatJid, { chatOnly: chatOnlyMode });
+    const nextUrl = buildChatWindowUrl(baseHref, fallbackChatJid);
     navigate?.(nextUrl);
     return true;
   } catch (error) {
@@ -336,7 +332,6 @@ export interface RestoreBranchOptions {
   refreshCurrentChatBranches?: () => Promise<unknown> | unknown;
   showIntentToast?: ToastFn;
   baseHref: string;
-  chatOnlyMode?: boolean;
   navigate?: NavigateFn;
 }
 
@@ -350,7 +345,6 @@ export async function restoreBranch(options: RestoreBranchOptions): Promise<bool
     refreshCurrentChatBranches,
     showIntentToast,
     baseHref,
-    chatOnlyMode,
     navigate,
   } = options;
 
@@ -368,7 +362,7 @@ export async function restoreBranch(options: RestoreBranchOptions): Promise<bool
     const nextChatJid = typeof branch?.chat_jid === 'string' && branch.chat_jid.trim() ? branch.chat_jid.trim() : normalized;
     const restoreDetail = describeBranchRestoreResult(previousBranch?.agent_name, branch?.agent_name, nextChatJid);
     showIntentToast?.('Branch restored', restoreDetail, 'info', 4200);
-    const nextUrl = buildChatWindowUrl(baseHref, nextChatJid, { chatOnly: chatOnlyMode });
+    const nextUrl = buildChatWindowUrl(baseHref, nextChatJid);
     navigate?.(nextUrl);
     return true;
   } catch (error) {
@@ -387,7 +381,7 @@ export interface RunBranchLoaderOptions {
   isCancelled?: () => boolean;
 }
 
-/** Kick off the lightweight branch-loader flow used by chat-only popup windows. */
+/** Kick off the lightweight branch-loader flow used by pop-out chat windows. */
 export async function runBranchLoader(options: RunBranchLoaderOptions): Promise<boolean> {
   const {
     branchLoaderSourceChatJid,

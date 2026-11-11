@@ -15,7 +15,6 @@ export function composeRenderedMainAppOptions(input: {
     branchLoaderMode: boolean;
     panePopoutMode: boolean;
     currentChatJid: string;
-    chatOnlyMode: boolean;
     panePopoutPath: string | null;
   };
   paneRuntime: Record<string, any>;
@@ -88,7 +87,6 @@ export function composeRenderedMainAppOptions(input: {
       appShellRef: input.surface.appShellRef,
       workspaceOpen: input.surface.workspaceOpen,
       editorOpen: input.editorState.editorOpen,
-      chatOnlyMode: input.routeState.chatOnlyMode,
       isRenameBranchFormOpen: input.surface.isRenameBranchFormOpen,
       renameBranchNameDraft: input.surface.renameBranchNameDraft,
       renameBranchNameInputRef: input.surface.renameBranchNameInputRef,

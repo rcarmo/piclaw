@@ -46,7 +46,6 @@ test('composeMainAppShellOptions composes pane-popout and main-shell payloads fr
       appShellRef: { current: null },
       workspaceOpen: true,
       editorOpen: true,
-      chatOnlyMode: false,
       isRenameBranchFormOpen: false,
       renameBranchNameDraft: '',
       renameBranchNameInputRef: { current: null },

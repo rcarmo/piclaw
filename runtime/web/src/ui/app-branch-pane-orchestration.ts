@@ -18,7 +18,6 @@ export interface NavigateToSelectedBranchOptions {
   hasWindow?: boolean;
   nextChatJid: unknown;
   currentChatJid: string;
-  chatOnlyMode?: boolean;
   currentHref: string;
   navigate?: (url: string) => void;
 }
@@ -29,7 +28,6 @@ export function navigateToSelectedBranch(options: NavigateToSelectedBranchOption
     hasWindow = typeof window !== 'undefined',
     nextChatJid,
     currentChatJid,
-    chatOnlyMode,
     currentHref,
     navigate,
   } = options;
@@ -37,7 +35,7 @@ export function navigateToSelectedBranch(options: NavigateToSelectedBranchOption
   if (!hasWindow) return false;
   const normalized = typeof nextChatJid === 'string' ? nextChatJid.trim() : '';
   if (!normalized || normalized === currentChatJid) return false;
-  const url = buildChatWindowUrl(currentHref, normalized, { chatOnly: chatOnlyMode });
+  const url = buildChatWindowUrl(currentHref, normalized);
   navigate?.(url);
   return true;
 }

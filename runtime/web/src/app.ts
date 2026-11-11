@@ -64,6 +64,7 @@ import {
     resolveOobePanelState,
 } from './ui/oobe-state.js';
 import { installPwaDisplayScaleSync } from './ui/pwa-display-scale.js';
+import { applyUnclutteredWindowHint } from './ui/workspace-visibility.js';
 
 const CURRENT_APP_ASSET_VERSION = getCurrentAppAssetVersion();
 const resolveRegisteredPane = (context) => paneRegistry.resolve(context);
@@ -104,7 +105,6 @@ const {
 function MainApp({ locationParams, navigate }) {
     const {
         currentChatJid,
-        chatOnlyMode,
         panePopoutMode,
         panePopoutPath,
         panePopoutLabel,
@@ -166,7 +166,6 @@ function MainApp({ locationParams, navigate }) {
         panePopoutMode,
         panePopoutPath,
         panePopoutLabel,
-        chatOnlyMode,
         terminalTabPath: TERMINAL_TAB_PATH,
         vncTabPrefix: VNC_TAB_PREFIX,
         getWorkspaceFile,
@@ -257,7 +256,6 @@ function MainApp({ locationParams, navigate }) {
             setSearchQuery: surface.setSearchQuery,
             setSearchOpen: surface.setSearchOpen,
             navigate,
-            chatOnlyMode,
             getThread,
             setPosts: timeline.setPosts,
         },
@@ -387,7 +385,6 @@ function MainApp({ locationParams, navigate }) {
         routeState: {
             currentChatJid,
             currentRootChatJid: surface.currentRootChatJid,
-            chatOnlyMode,
             navigate,
             branchLoaderMode,
             branchLoaderSourceChatJid,
@@ -603,7 +600,6 @@ function MainApp({ locationParams, navigate }) {
             branchLoaderMode,
             panePopoutMode,
             currentChatJid,
-            chatOnlyMode,
             panePopoutPath,
         },
         paneRuntime: pane.paneRuntime,
@@ -661,6 +657,8 @@ function App() {
 const appRoot = document.getElementById('app');
 if (typeof window !== 'undefined') {
     window.__PICLAW_APP_BOOTED__ = false;
+    // Pop-outs open uncluttered; must run before any layout state is read.
+    applyUnclutteredWindowHint(window);
 }
 if (appRoot) {
     render(null, appRoot);

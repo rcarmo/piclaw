@@ -50,7 +50,6 @@ test('activateComposeMessageRef switches sessions and clears search context', ()
       return refs;
     },
     navigate: (url) => navigateCalls.push(String(url)),
-    chatOnlyMode: true,
     baseHref: 'https://example.test/?chat_jid=web%3Adefault',
   });
 
@@ -61,7 +60,7 @@ test('activateComposeMessageRef switches sessions and clears search context', ()
     ['query', null],
     ['open', false],
   ]);
-  expect(navigateCalls).toEqual(['https://example.test/?chat_jid=web%3Aother&chat_only=1']);
+  expect(navigateCalls).toEqual(['https://example.test/?chat_jid=web%3Aother']);
 });
 
 test('activateComposeMessageRef clears search context without navigating when target chat is already active', () => {

@@ -204,7 +204,7 @@ test("buildChatWindowUrl preserves origin/path and adds branch params", () => {
   expect(parsed.pathname).toBe("/app");
   expect(parsed.searchParams.get("foo")).toBe("1");
   expect(parsed.searchParams.get("chat_jid")).toBe("web:research");
-  expect(parsed.searchParams.get("chat_only")).toBe("1");
+  expect(parsed.searchParams.get("chat_only")).toBeNull();
 });
 
 test("buildChatWindowUrl clears pane popout params from inherited URLs", () => {
@@ -217,12 +217,12 @@ test("buildChatWindowUrl clears pane popout params from inherited URLs", () => {
   expect(parsed.searchParams.get("pane_label")).toBeNull();
 });
 
-test("buildChatWindowUrl can omit chat_only when explicitly requested", () => {
-  const url = buildChatWindowUrl("https://example.com/", "web:default", { chatOnly: false });
+test("buildChatWindowUrl adds the uncluttered pop-out hint only when asked", () => {
+  const url = buildChatWindowUrl("https://example.com/", "web:default", { chatOnly: true });
   const parsed = new URL(url);
 
   expect(parsed.searchParams.get("chat_jid")).toBe("web:default");
-  expect(parsed.searchParams.get("chat_only")).toBeNull();
+  expect(parsed.searchParams.get("chat_only")).toBe("1");
 });
 
 test("buildBranchLoaderUrl preserves origin/path and adds loader params", () => {
@@ -234,7 +234,7 @@ test("buildBranchLoaderUrl preserves origin/path and adds loader params", () => 
   expect(parsed.searchParams.get("foo")).toBe("1");
   expect(parsed.searchParams.get("branch_loader")).toBe("1");
   expect(parsed.searchParams.get("branch_source_chat_jid")).toBe("web:research");
-  expect(parsed.searchParams.get("chat_only")).toBe("1");
+  expect(parsed.searchParams.get("chat_only")).toBeNull();
   expect(parsed.searchParams.get("chat_jid")).toBeNull();
 });
 

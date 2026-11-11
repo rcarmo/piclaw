@@ -42,7 +42,6 @@ interface UsePaneRuntimeOrchestrationOptions {
   panePopoutMode: boolean;
   panePopoutPath: string;
   panePopoutLabel: string;
-  chatOnlyMode: boolean;
   editorOpen: boolean;
   tabStripTabs: any[];
   tabStripActiveId: string | null;
@@ -315,7 +314,6 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
     panePopoutMode,
     panePopoutPath,
     panePopoutLabel,
-    chatOnlyMode,
     editorOpen,
     tabStripTabs,
     tabStripActiveId,
@@ -737,7 +735,6 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
 
   const showEditorPaneContainer = shouldShowEditorPaneContainer(
     panePopoutMode,
-    chatOnlyMode,
     editorOpen,
     hasDockPanes,
     dockVisible,
@@ -747,11 +744,11 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
   const zenDockWasVisibleRef = useRef(false);
 
   const enterZenMode = useCallback(() => {
-    if (!editorOpen || chatOnlyMode) return;
+    if (!editorOpen) return;
     zenDockWasVisibleRef.current = dockVisible;
     if (dockVisible) setDockVisible(false);
     setZenMode(true);
-  }, [chatOnlyMode, dockVisible, editorOpen]);
+  }, [dockVisible, editorOpen]);
 
   const exitZenMode = useCallback(() => {
     if (!zenMode) return;

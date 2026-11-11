@@ -15,7 +15,6 @@ test('navigateToSelectedBranch ignores same/blank chats and navigates when selec
     hasWindow: true,
     nextChatJid: 'web:main',
     currentChatJid: 'web:main',
-    chatOnlyMode: true,
     currentHref: 'https://example.test/?chat_jid=web%3Amain',
     navigate: (url) => calls.push(url),
   })).toBe(false);
@@ -24,7 +23,6 @@ test('navigateToSelectedBranch ignores same/blank chats and navigates when selec
     hasWindow: true,
     nextChatJid: ' web:branch ',
     currentChatJid: 'web:main',
-    chatOnlyMode: true,
     currentHref: 'https://example.test/?chat_jid=web%3Amain',
     navigate: (url) => calls.push(url),
   })).toBe(true);

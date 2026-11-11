@@ -84,7 +84,6 @@ test('handleBranchPickerChangeAction delegates branch navigation with chat-only 
     hasWindow: true,
     nextChatJid: 'web:child',
     currentChatJid: 'web:root',
-    chatOnlyMode: true,
     currentHref: 'https://example.test/?chat_jid=web%3Aroot',
     navigate: (url) => calls.push(url),
   })).toBe(true);
@@ -118,7 +117,6 @@ test('renameCurrentBranchAction renames the session without navigating when retu
       refreshCurrentChatBranches: () => undefined,
       navigate: (url) => navigateCalls.push(String(url)),
       baseHref: '',
-      chatOnlyMode: true,
       showIntentToast: (title, detail, kind, durationMs) => {
         toasts.push([title, String(detail || ''), String(kind || ''), Number(durationMs || 0)]);
       },

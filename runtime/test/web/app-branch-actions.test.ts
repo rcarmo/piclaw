@@ -114,7 +114,6 @@ test('pruneCurrentBranch archives non-default root sessions, blocks the default 
       toasts.push([title, message, kind, timeout]);
     },
     baseHref: 'https://example.test/?chat_jid=web%3Adefault',
-    chatOnlyMode: true,
     navigate: (url: string) => navigateCalls.push(url),
     confirm: () => true,
   });
@@ -135,7 +134,6 @@ test('pruneCurrentBranch archives non-default root sessions, blocks the default 
       toasts.push([title, message, kind, timeout]);
     },
     baseHref: 'https://example.test/?chat_jid=web%3Aroot',
-    chatOnlyMode: true,
     navigate: (url: string) => navigateCalls.push(url),
     confirm: () => true,
   });
@@ -157,7 +155,6 @@ test('pruneCurrentBranch archives non-default root sessions, blocks the default 
       toasts.push([title, message, kind, timeout]);
     },
     baseHref: 'https://example.test/?chat_jid=web%3Abranch',
-    chatOnlyMode: true,
     navigate: (url: string) => navigateCalls.push(url),
     confirm: () => true,
   });
@@ -188,7 +185,6 @@ test('pruneCurrentBranch blocks archiving a root session while child branches st
       toasts.push([title, message, kind, timeout]);
     },
     baseHref: 'https://example.test/?chat_jid=web%3Aroot',
-    chatOnlyMode: true,
     navigate: () => undefined,
     confirm: () => true,
   });
@@ -278,7 +274,6 @@ test('restoreBranch shows collision-aware messaging and navigates to restored br
       toasts.push([title, message, kind, timeout]);
     },
     baseHref: 'https://example.test/?chat_jid=web%3Aroot',
-    chatOnlyMode: true,
     navigate: (url: string) => navigateCalls.push(url),
   });
 

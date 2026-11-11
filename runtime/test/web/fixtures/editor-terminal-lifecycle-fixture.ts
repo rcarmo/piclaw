@@ -10,7 +10,7 @@ function App() {
   const [active, setActive] = useState(tabStore.getActiveId());
   useEffect(() => tabStore.onChange((tabs, id) => { setTabs(tabs); setActive(id); }), []);
   const runtime = usePaneRuntimeOrchestration({
-    panePopoutMode: false, panePopoutPath: '', panePopoutLabel: '', chatOnlyMode: false,
+    panePopoutMode: false, panePopoutPath: '', panePopoutLabel: '',
     editorOpen: tabs.length > 0, tabStripTabs: tabs, tabStripActiveId: active,
     previewTabs: new Set(), diffTabs: new Set(), tabPaneOverrides: new Map(),
     terminalTabPath: terminal, vncTabPrefix: 'piclaw://vnc',

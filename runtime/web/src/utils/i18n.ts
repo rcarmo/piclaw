@@ -208,10 +208,6 @@ type MessageKey =
   | 'palette.showWorkspace'
   | 'palette.hideWorkspaceDesc'
   | 'palette.showWorkspaceDesc'
-  | 'palette.exitChatOnly'
-  | 'palette.chatOnly'
-  | 'palette.exitChatOnlyDesc'
-  | 'palette.chatOnlyDesc'
   | 'palette.groupAgents'
   | 'palette.groupWorkspace'
   | 'palette.groupSlash'
@@ -675,8 +671,6 @@ type MessageKey =
   | 'menu.showWorkspace'
   | 'menu.hideWorkspace'
   | 'menu.openExplorer'
-  | 'menu.chatOnly'
-  | 'menu.exitChatOnly'
   | 'menu.openTerminal'
   | 'menu.openVnc'
   | 'menu.newFile'
@@ -861,10 +855,6 @@ const EN: Record<MessageKey, string> = {
   'palette.showWorkspace': 'Show workspace',
   'palette.hideWorkspaceDesc': 'Hide the workspace sidebar.',
   'palette.showWorkspaceDesc': 'Show the workspace sidebar.',
-  'palette.exitChatOnly': 'Exit chat-only mode',
-  'palette.chatOnly': 'Chat-only mode',
-  'palette.exitChatOnlyDesc': 'Return to the split workspace layout.',
-  'palette.chatOnlyDesc': 'Switch to the chat-only layout.',
   'palette.groupAgents': 'Agents',
   'palette.groupWorkspace': 'Workspace',
   'palette.groupSlash': 'Slash commands',
@@ -1322,8 +1312,6 @@ const EN: Record<MessageKey, string> = {
   'menu.showWorkspace': 'Show workspace',
   'menu.hideWorkspace': 'Hide workspace',
   'menu.openExplorer': 'Open explorer',
-  'menu.chatOnly': 'Chat-only mode',
-  'menu.exitChatOnly': 'Exit chat-only mode',
   'menu.openTerminal': 'Open terminal in tab',
   'menu.openVnc': 'Open VNC in tab',
   'menu.newFile': 'New file',
@@ -1509,10 +1497,6 @@ const ZH_CN: Partial<Record<MessageKey, string>> = {
   'palette.showWorkspace': '显示工作区',
   'palette.hideWorkspaceDesc': '隐藏工作区侧边栏。',
   'palette.showWorkspaceDesc': '显示工作区侧边栏。',
-  'palette.exitChatOnly': '退出仅聊天模式',
-  'palette.chatOnly': '仅聊天模式',
-  'palette.exitChatOnlyDesc': '返回分屏工作区布局。',
-  'palette.chatOnlyDesc': '切换到仅聊天布局。',
   'palette.groupAgents': '代理',
   'palette.groupWorkspace': '工作区',
   'palette.groupSlash': '斜杠命令',
@@ -1970,8 +1954,6 @@ const ZH_CN: Partial<Record<MessageKey, string>> = {
   'menu.showWorkspace': '显示工作区',
   'menu.hideWorkspace': '隐藏工作区',
   'menu.openExplorer': '打开资源管理器',
-  'menu.chatOnly': '仅聊天模式',
-  'menu.exitChatOnly': '退出仅聊天模式',
   'menu.openTerminal': '在标签页中打开终端',
   'menu.openVnc': '在标签页中打开 VNC',
   'menu.newFile': '新建文件',
@@ -2157,10 +2139,6 @@ const JA: Partial<Record<MessageKey, string>> = {
   'palette.showWorkspace': 'ワークスペースを表示',
   'palette.hideWorkspaceDesc': 'ワークスペースサイドバーを非表示にします。',
   'palette.showWorkspaceDesc': 'ワークスペースサイドバーを表示します。',
-  'palette.exitChatOnly': 'チャットのみモードを終了',
-  'palette.chatOnly': 'チャットのみモード',
-  'palette.exitChatOnlyDesc': '分割ワークスペースレイアウトに戻ります。',
-  'palette.chatOnlyDesc': 'チャットのみのレイアウトに切り替えます。',
   'palette.groupAgents': 'エージェント',
   'palette.groupWorkspace': 'ワークスペース',
   'palette.groupSlash': 'スラッシュコマンド',
@@ -2618,8 +2596,6 @@ const JA: Partial<Record<MessageKey, string>> = {
   'menu.showWorkspace': 'ワークスペースを表示',
   'menu.hideWorkspace': 'ワークスペースを非表示',
   'menu.openExplorer': 'エクスプローラーを開く',
-  'menu.chatOnly': 'チャットのみモード',
-  'menu.exitChatOnly': 'チャットのみモードを終了',
   'menu.openTerminal': 'ターミナルをタブで開く',
   'menu.openVnc': 'VNC をタブで開く',
   'menu.newFile': '新規ファイル',

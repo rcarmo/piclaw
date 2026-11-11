@@ -1,3 +1,4 @@
+import { isPopoutWindow } from './workspace-visibility.js';
 import { useCallback, useEffect, useMemo, useState } from '../vendor/preact-htm.js';
 import { isStandaloneWebAppMode } from './chat-window.js';
 import {
@@ -75,8 +76,8 @@ export interface PersistLastMainChatFromHrefOptions {
 /**
  * Persist the active main chat from the current location.
  * Skip popout/loader contexts so they do not clobber the remembered main session.
- * Also skip non-standalone `chat_only` windows to avoid desktop popup windows
- * overwriting the remembered main shell/PWA session.
+ * Also skip non-standalone pop-out windows so they do not overwrite the
+ * remembered main shell/PWA session.
  */
 export function persistLastMainChatFromHref(
   currentHref: string,
@@ -90,7 +91,7 @@ export function persistLastMainChatFromHref(
     return null;
   }
 
-  if (modes.chatOnlyMode && !standalone) {
+  if (isPopoutWindow() && !standalone) {
     return null;
   }
 

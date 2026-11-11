@@ -25,7 +25,7 @@ export interface BranchLoaderState {
 
 export function renderBranchLoaderMode(branchLoaderState: BranchLoaderState): any {
   return html`
-    <div class="app-shell chat-only">
+    <div class="app-shell branch-loader-shell">
       <div class="container" style=${{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '24px' }}>
         <div class="card" style=${{ width: 'min(560px, 100%)', padding: '24px' }}>
           <h1 style=${{ margin: '0 0 12px', fontSize: '1.1rem' }}>

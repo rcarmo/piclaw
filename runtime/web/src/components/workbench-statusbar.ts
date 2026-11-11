@@ -3,7 +3,7 @@
  * workbench-statusbar.ts — Visual-style status bar for the Classic workbench.
  *
  * Holds the system meters whenever the workbench side bar is not shown (it
- * is collapsed, on a narrow screen, or absent in chat-only windows). While the
+ * is collapsed or on a narrow screen. While the
  * side bar is shown, the meters sit at its foot instead.
  */
 import { html, useEffect, useState } from '../vendor/preact-htm.js';

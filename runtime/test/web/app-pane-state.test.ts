@@ -45,8 +45,8 @@ test('pane popout helpers compute title, menu actions, and VNC control visibilit
 });
 
 test('shouldShowEditorPaneContainer respects pane popout and dock visibility modes', () => {
-  expect(shouldShowEditorPaneContainer(true, true, false, false, false)).toBe(true);
-  expect(shouldShowEditorPaneContainer(false, false, true, false, false)).toBe(true);
-  expect(shouldShowEditorPaneContainer(false, false, false, true, true)).toBe(true);
-  expect(shouldShowEditorPaneContainer(false, true, true, true, true)).toBe(false);
+  expect(shouldShowEditorPaneContainer(true, false, false, false)).toBe(true);
+  expect(shouldShowEditorPaneContainer(false, true, false, false)).toBe(true);
+  expect(shouldShowEditorPaneContainer(false, false, true, true)).toBe(true);
+  expect(shouldShowEditorPaneContainer(false, false, true, false)).toBe(false);
 });

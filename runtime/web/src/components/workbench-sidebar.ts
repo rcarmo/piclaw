@@ -24,6 +24,7 @@ import {
 import { getLocalStorageItem, setLocalStorageItem } from '../utils/storage.js';
 import { getShellWidth, occupiedPaneWidth } from '../ui/use-splitters.js';
 import { SystemMetersHud } from './system-meters-hud.js';
+import { WINDOW_SIDEBAR_OPEN_STORAGE_KEY, persistWindowScopedPreference, readWindowScopedPreference } from '../ui/workspace-visibility.js';
 import { buildChatWindowUrl } from '../ui/chat-window.js';
 import { matchesKeyboardShortcutAction } from '../ui/keyboard-shortcuts.js';
 import {
@@ -53,8 +54,9 @@ export const SESSIONS_PREVIEW_INTERVAL_MS = 3000;
 /** At most this many other active sessions are polled for live previews. */
 export const SESSIONS_PREVIEW_LIMIT = 8;
 
+/** This window's side bar state; the shared value is the default for new windows. */
 export function readStoredSessionsOpen(): boolean {
-  return getLocalStorageItem(SESSIONS_OPEN_STORAGE_KEY) !== 'false';
+  return readWindowScopedPreference(WINDOW_SIDEBAR_OPEN_STORAGE_KEY, SESSIONS_OPEN_STORAGE_KEY, true);
 }
 
 export function clampSessionsWidth(width: unknown, maxWidth = SESSIONS_MAX_WIDTH): number {
@@ -194,7 +196,7 @@ export function WorkbenchSidebar({
   const setOpenPersisted = useCallback((next) => {
     setOpen(next);
     setOverride(Boolean(next) && autoHidden);
-    setLocalStorageItem(SESSIONS_OPEN_STORAGE_KEY, String(next));
+    persistWindowScopedPreference(WINDOW_SIDEBAR_OPEN_STORAGE_KEY, SESSIONS_OPEN_STORAGE_KEY, Boolean(next));
   }, [autoHidden]);
 
   const rightPanesWidth = useCallback(() => {
@@ -462,7 +464,7 @@ export function WorkbenchSidebar({
   const openSession = useCallback((event, jid, current) => {
     if (isNewTabSessionClick(event)) {
       event.preventDefault();
-      window.open(buildChatWindowUrl(window.location.href, jid, { chatOnly: false }), '_blank', 'noopener');
+      window.open(buildChatWindowUrl(window.location.href, jid), '_blank', 'noopener');
       return;
     }
     if (event.button === 0 && !current) onSwitchChat?.(jid);

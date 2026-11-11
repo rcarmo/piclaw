@@ -25,7 +25,6 @@ test('composeRenderedMainAppOptions builds final shell options from grouped app 
       branchLoaderMode: false,
       panePopoutMode: true,
       currentChatJid: 'web:default',
-      chatOnlyMode: false,
       panePopoutPath: '/terminal',
     },
     paneRuntime: {

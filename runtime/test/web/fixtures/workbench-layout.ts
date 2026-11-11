@@ -35,9 +35,9 @@ function Fixture() {
   const toggleWorkspace = useCallback(() => setWorkspaceOpen((open) => !open), []);
   const setWorkspaceVisible = useCallback((next: boolean) => setWorkspaceOpen(Boolean(next)), []);
   const splitters = useSplitters({ appShellRef: shell, sidebarWidthRef: sidebar, editorWidthRef: editor, dockHeightRef: dock });
-  useAppShellShortcuts({ hasDockPanes: false, chatOnlyMode: false, toggleDock: () => {}, toggleZenMode: () => {}, exitZenMode: () => {}, zenMode: false, toggleWorkspace });
+  useAppShellShortcuts({ hasDockPanes: false, toggleDock: () => {}, toggleZenMode: () => {}, exitZenMode: () => {}, zenMode: false, toggleWorkspace });
   (window as any).workbench = { shell: () => shell.current, current: () => current, workspaceOpen: () => workspaceOpen, probes };
-  return html`<div class=${buildMainShellClassName({ workspaceOpen, editorOpen, chatOnlyMode: false, zenMode: false })} ref=${shell} style="--editor-width:320px;--sidebar-width:280px">
+  return html`<div class=${buildMainShellClassName({ workspaceOpen, editorOpen, zenMode: false })} ref=${shell} style="--editor-width:320px;--sidebar-width:280px">
     <${WorkbenchSidebar} activeChatAgents=${chats} currentChatJid=${current} onSwitchChat=${setCurrent} appShellRef=${shell}
       loadSessionStatus=${loadSessionStatus} onRefreshSessions=${() => { probes.refreshes += 1; }}
       workspaceOpen=${workspaceOpen} setWorkspaceVisible=${setWorkspaceVisible} onOpenSettings=${() => { probes.settings += 1; }}

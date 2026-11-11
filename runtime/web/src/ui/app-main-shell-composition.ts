@@ -58,7 +58,6 @@ export function composeMainAppShellOptions(input: ComposeMainAppShellOptionsInpu
     appShellRef: shellState.appShellRef,
     workspaceOpen: shellState.workspaceOpen,
     editorOpen: shellState.editorOpen,
-    chatOnlyMode: shellState.chatOnlyMode,
     zenMode: paneRuntime.zenMode,
     isRenameBranchFormOpen: shellState.isRenameBranchFormOpen,
     closeRenameCurrentBranchForm: branchPaneActions.closeRenameCurrentBranchForm,

@@ -4,19 +4,12 @@ import { isLikelySafariBrowser } from './app-pane-runtime-orchestration.js';
 
 export function shouldWatchDockShortcut(options: {
   hasDockPanes: boolean;
-  chatOnlyMode: boolean;
 }): boolean {
-  const { hasDockPanes, chatOnlyMode } = options;
-  return Boolean(hasDockPanes && !chatOnlyMode);
-}
-
-export function shouldWatchZenShortcuts(chatOnlyMode: boolean): boolean {
-  return !chatOnlyMode;
+  return Boolean(options.hasDockPanes);
 }
 
 export function useAppShellShortcuts(options: {
   hasDockPanes: boolean;
-  chatOnlyMode: boolean;
   toggleDock: () => void;
   toggleZenMode: () => void;
   exitZenMode: () => void;
@@ -27,7 +20,6 @@ export function useAppShellShortcuts(options: {
 }): void {
   const {
     hasDockPanes,
-    chatOnlyMode,
     toggleDock,
     toggleZenMode,
     exitZenMode,
@@ -38,24 +30,23 @@ export function useAppShellShortcuts(options: {
   } = options;
 
   useEffect(() => {
-    if (chatOnlyMode || typeof toggleWorkspace !== 'function') return;
+    if (typeof toggleWorkspace !== 'function') return;
     return watchWorkspaceTreeShortcut(toggleWorkspace);
-  }, [chatOnlyMode, toggleWorkspace]);
+  }, [toggleWorkspace]);
 
   useEffect(() => {
-    if (!shouldWatchDockShortcut({ hasDockPanes, chatOnlyMode })) return;
+    if (!shouldWatchDockShortcut({ hasDockPanes })) return;
     return watchDockToggleShortcut(toggleDock);
-  }, [chatOnlyMode, hasDockPanes, toggleDock]);
+  }, [hasDockPanes, toggleDock]);
 
   useEffect(() => {
-    if (!shouldWatchZenShortcuts(chatOnlyMode)) return;
     return watchZenModeShortcuts({
       toggleZenMode,
       exitZenMode,
       zenMode,
       isZenModeActive: () => zenMode,
     });
-  }, [chatOnlyMode, exitZenMode, toggleZenMode, zenMode]);
+  }, [exitZenMode, toggleZenMode, zenMode]);
 
   useEffect(() => {
     if (typeof previousChat !== 'function' && typeof nextChat !== 'function') return;
