@@ -73,6 +73,8 @@ export interface AgentStatusContext {
   ): Promise<{ tokens: number | null; contextWindow: number | null; percent: number | null; sessionGeneration?: string } | null>;
   getSessionTreeSummaryForChat?(chatJid: string): Promise<{ leafId: string | null; total: number } | null>;
   getTokenUsageForChat(chatJid: string): AgentTokenUsageContext | null;
+  /** Last message time and latest reply excerpt per chat, for session lists. */
+  getChatActivitySummaries?(chatJids: readonly string[]): Map<string, { last_activity_at: string | null; last_reply: string | null }>;
   getAvailableModels(chatJid: string, options?: { includeProviderDiagnostics?: boolean; includeCatalogue?: boolean }): Promise<unknown>;
   getProviderReadyCompletedForInstance(req: Request): boolean | Promise<boolean>;
   getAddonApiHealthSnapshot?: typeof getAddonApiHealthSnapshot;

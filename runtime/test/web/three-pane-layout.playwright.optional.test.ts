@@ -172,4 +172,63 @@ for (const engine of ['chromium', 'webkit']) {
       expect(errors).toEqual([]);
     } finally { await page.close(); }
   }, 30000);
+
+  browserTest(`${engine} 1440px: session rows show activity, live previews, replies and context`, async () => {
+    const { page, errors } = await open(engine, 1440, 900);
+    try {
+      await page.waitForFunction(() => (window as any).threePane.probes.statusCalls.length > 0);
+      await page.waitForSelector('.sessions-sidebar-preview.live');
+      expect((await page.locator('.sessions-sidebar-active-count').textContent())?.trim()).toBe('1 active');
+      const proxmox = page.locator('.sessions-sidebar-item', { has: page.locator('.sessions-sidebar-handle', { hasText: '@proxmox' }) });
+      expect(await proxmox.locator('.sessions-sidebar-activity').count()).toBe(1);
+      expect((await proxmox.locator('.sessions-sidebar-age').textContent())?.trim()).toBe('Working');
+      expect((await proxmox.locator('.sessions-sidebar-preview.live').textContent())?.replace(/\s+/g, ' ').trim()).toBe('Tool bash: make test');
+      // Only other active sessions are polled; the current chat shows its own status.
+      expect(new Set(await page.evaluate(() => (window as any).threePane.probes.statusCalls))).toEqual(new Set(['web:proxmox']));
+      const current = page.locator('.sessions-sidebar-item.current');
+      expect((await current.locator('.sessions-sidebar-age').textContent())?.trim()).toBe('3m');
+      expect((await current.locator('.sessions-sidebar-preview').textContent())?.trim()).toBe('Summary for default The default session finished its last task.');
+      expect(await current.locator('.sessions-sidebar-context').getAttribute('aria-valuenow')).toBe('42');
+      const lunch = page.locator('.sessions-sidebar-open', { has: page.locator('.sessions-sidebar-handle', { hasText: '@lunch' }) });
+      const line = (await lunch.locator('.sessions-sidebar-preview').boundingBox())!, row = (await lunch.boundingBox())!;
+      expect(line.x + line.width).toBeLessThanOrEqual(row.x + row.width + 1);
+      // Ctrl/Cmd-click opens a new tab and leaves the current chat alone.
+      await lunch.click({ modifiers: [engine === 'webkit' ? 'Meta' : 'Control'] });
+      const opened = await page.evaluate(() => (window as any).threePane.probes.opened);
+      expect(opened).toHaveLength(1);
+      expect(new URL(opened[0]).searchParams.get('chat_jid')).toBe('web:lunch');
+      expect(new URL(opened[0]).searchParams.get('chat_only')).toBeNull();
+      expect(await page.evaluate(() => (window as any).threePane.current())).toBe('web:default');
+      await lunch.click();
+      expect(await page.evaluate(() => (window as any).threePane.current())).toBe('web:lunch');
+      // The window regaining focus refreshes the list.
+      await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+      expect(await page.evaluate(() => (window as any).threePane.probes.refreshes)).toBeGreaterThan(0);
+      await noOverflow(page);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+
+  browserTest(`${engine}: the sessions shortcut toggles the pane on desktop only, and hidden panes do not poll`, async () => {
+    const { page, errors } = await open(engine, 1440, 900);
+    try {
+      const key = engine === 'webkit' ? 'Meta+Shift+B' : 'Control+Shift+B';
+      await page.locator('.compose-box textarea').focus();
+      await page.keyboard.press(key); await settle(page);
+      expect(await page.locator('.sessions-sidebar').getAttribute('class')).toContain('collapsed');
+      expect(await page.locator('.sessions-toggle-tab').count()).toBe(1);
+      await page.evaluate(() => { (window as any).threePane.probes.statusCalls.length = 0; });
+      await page.waitForTimeout(3300);
+      expect(await page.evaluate(() => (window as any).threePane.probes.statusCalls.length)).toBe(0);
+      await page.keyboard.press(key); await settle(page);
+      expect(await page.locator('.sessions-sidebar').getAttribute('class')).not.toContain('collapsed');
+      await page.setViewportSize({ width: 900, height: 900 }); await settle(page);
+      await page.evaluate(() => { (window as any).threePane.probes.statusCalls.length = 0; });
+      await page.keyboard.press(key); await settle(page);
+      expect(await page.locator('.sessions-sidebar').getAttribute('class')).not.toContain('collapsed');
+      await page.waitForTimeout(3300);
+      expect(await page.evaluate(() => (window as any).threePane.probes.statusCalls.length)).toBe(0);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
 }

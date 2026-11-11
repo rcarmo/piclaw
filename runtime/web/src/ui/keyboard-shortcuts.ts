@@ -7,6 +7,7 @@ export type KeyboardShortcutActionId =
   | 'nextChat'
   | 'toggleDock'
   | 'toggleWorkspace'
+  | 'toggleSessions'
   | 'toggleZenMode';
 
 export interface KeyboardShortcutActionDefinition {
@@ -54,6 +55,12 @@ export const KEYBOARD_SHORTCUT_ACTIONS: KeyboardShortcutActionDefinition[] = [
     label: 'Toggle file tree',
     description: 'Show or hide the workspace file tree.',
     defaultBindings: ['ctrl+shift+e', 'meta+shift+e'],
+  },
+  {
+    id: 'toggleSessions',
+    label: 'Toggle sessions',
+    description: 'Show or hide the sessions pane on wide screens.',
+    defaultBindings: ['ctrl+shift+b', 'meta+shift+b'],
   },
   {
     id: 'toggleZenMode',

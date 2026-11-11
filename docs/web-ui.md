@@ -9,7 +9,10 @@ The UI supports one user across multiple sessions and browser tabs. Family accou
 
 On desktop screens (at least 1024 px wide, landscape), Classic shows the sessions pane on the left, the chat in the middle, then the file tree and the editor. The editor stays anchored to the right edge. Each pane has a divider that can be dragged or focused. Focused dividers respond to the arrow keys (Shift for larger steps), Home and End. Enter hides or shows the pane, and double-clicking a divider resets it.
 
-- **Sessions:** current, pinned and other sessions, with search and pinning shared with the compose session picker. The global menu sits in its header. When space is short, the pane narrows, then hides itself without changing the saved preference; its edge tab shows it again.
+- **Sessions:** current, pinned and other sessions, with search and pinning shared with the compose session picker. The global menu sits in its header. When space is short, the pane narrows, then hides itself without changing the saved preference; its edge tab shows it again. Ctrl/Cmd+Shift+B (configurable) shows or hides it.
+  - Each row shows the session's age or activity, its latest reply and, when known, its context use. The header counts active sessions.
+  - Other active sessions show their live draft, thinking or running tool, polled every 3 seconds. The list refreshes every 15 seconds and when the window regains focus, only while the pane is visible.
+  - Ctrl/Cmd-click or middle-click opens a session in a new tab.
 - **Chat:** keeps at least 320 px. The system meters appear in its top-right corner.
 - **Editor:** collapsing it keeps its tabs open.
 - **File tree:** shown or hidden with its edge tab, its divider or Ctrl/Cmd+Shift+E (configurable in Settings → Keyboard). Hiding it gives the space to the chat; the editor does not move.

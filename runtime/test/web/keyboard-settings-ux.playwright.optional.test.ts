@@ -96,7 +96,7 @@ for (const width of [1366, 820, 520, 390]) {
     const page = await openKeyboard("classic", width, width === 390 ? 844 : 760);
     try {
       const metrics = await keyboardMetrics(page, "classic");
-      expect(metrics.cardCount).toBe(7);
+      expect(metrics.cardCount).toBe(8);
       expect(metrics.outside).toEqual([]);
       expect(metrics.labelled).toBe(true);
       expect(metrics.reference).not.toBeNull();
@@ -114,7 +114,7 @@ for (const width of [1366, 820, 520, 390]) {
     const page = await openKeyboard("visual", width, width === 390 ? 844 : 760);
     try {
       const metrics = await keyboardMetrics(page, "visual");
-      expect(metrics.cardCount).toBe(7);
+      expect(metrics.cardCount).toBe(8);
       expect(metrics.outside).toEqual([]);
       expect(metrics.labelled).toBe(true);
       expect(metrics.reference).not.toBeNull();

@@ -260,6 +260,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
     handleComposeSubmitError,
     isComposeBoxAgentActive,
     activeChatAgents,
+    refreshActiveChatAgents,
     connectionStatus,
     stateAccessFailed,
     activeModel,
@@ -341,6 +342,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
           currentChatJid=${currentChatJid}
           onSwitchChat=${handleBranchPickerChange}
           appShellRef=${appShellRef}
+          onRefreshSessions=${refreshActiveChatAgents}
         />
       `}
       <${TimelineMenu}

@@ -53,3 +53,4 @@ The Classic implementation keeps the existing shell markup and class names, and 
 - The system meters stay in the chat's top-right corner instead of a new chat header.
 - Narrow layouts keep the compose `@session` picker for sessions instead of adding a sessions drawer.
 - The plan sidebar docks by setting `--piclaw-shell-inset-right`. The add-on change is separate.
+- Session rows include the session-dashboard add-on's summaries: activity state, live draft, thinking or tool previews, the latest reply and its age, and context use. `/agent/active-chats` now returns `last_activity_at` and a 400-character `last_reply` excerpt for each session.

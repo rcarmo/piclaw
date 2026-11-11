@@ -199,6 +199,40 @@ export function listRecentChatJids(limit = 10, options?: { excludeChatJids?: str
     .filter(Boolean);
 }
 
+export interface ChatActivitySummary {
+  last_activity_at: string | null;
+  last_reply: string | null;
+}
+
+/** Longest stored reply excerpt returned for session lists; clients shorten it further. */
+const CHAT_ACTIVITY_REPLY_EXCERPT_CHARS = 400;
+
+/**
+ * Last message time and an excerpt of the latest non-empty assistant reply for
+ * each chat with messages. Each probe uses an existing messages index.
+ */
+export function getChatActivitySummaries(chatJids: readonly string[]): Map<string, ChatActivitySummary> {
+  const jids = [...new Set(chatJids.map((jid) => String(jid || "").trim()).filter(Boolean))].slice(0, 900);
+  const summaries = new Map<string, ChatActivitySummary>();
+  if (jids.length === 0) return summaries;
+  const rows = getDb().prepare(
+    `WITH wanted(jid) AS (VALUES ${jids.map(() => "(?)").join(", ")})
+     SELECT w.jid AS chat_jid,
+            (SELECT m.timestamp FROM messages m WHERE m.chat_jid = w.jid ORDER BY m.timestamp DESC LIMIT 1) AS last_activity_at,
+            (SELECT substr(trim(m.content), 1, ${CHAT_ACTIVITY_REPLY_EXCERPT_CHARS})
+               FROM messages m
+              WHERE m.chat_jid = w.jid AND m.is_bot_message = 1 AND trim(coalesce(m.content, '')) <> ''
+              ORDER BY m.timestamp DESC
+              LIMIT 1) AS last_reply
+       FROM wanted w`
+  ).all(...jids) as Array<{ chat_jid: string; last_activity_at: string | null; last_reply: string | null }>;
+  for (const row of rows) {
+    if (!row.last_activity_at && !row.last_reply) continue;
+    summaries.set(row.chat_jid, { last_activity_at: row.last_activity_at || null, last_reply: row.last_reply || null });
+  }
+  return summaries;
+}
+
 /**
  * Persist a message into the `messages` table.
  * Returns the SQLite rowid of the inserted row (used as the interaction id

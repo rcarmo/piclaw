@@ -7,6 +7,7 @@ import {
   availableSessionsWidth,
   buildSessionsSidebarSections,
   clampSessionsWidth,
+  selectSessionsPreviewTargets,
 } from '../../web/src/components/sessions-sidebar.js';
 
 const chats = [
@@ -40,4 +41,15 @@ test('sessions pane width is clamped and shrinks before it hides', () => {
   expect(availableSessionsWidth({ viewportWidth: 1440, rightPanesWidth: 568 })).toBe(548);
   expect(availableSessionsWidth({ viewportWidth: 1024, rightPanesWidth: 488 })).toBe(212);
   expect(availableSessionsWidth({ viewportWidth: 1024, rightPanesWidth: 568 }) < SESSIONS_MIN_WIDTH).toBe(true);
+});
+
+test('live previews poll other active sessions only, up to the limit', () => {
+  const rows = [
+    ...chats,
+    { chat_jid: 'web:busy', agent_name: 'busy', is_active: true },
+    { chat_jid: 'web:gone', agent_name: 'gone', is_active: true, archived_at: '2026-11-01T00:00:00Z' },
+  ];
+  expect(selectSessionsPreviewTargets(rows, 'web:proxmox')).toEqual(['web:busy']);
+  expect(selectSessionsPreviewTargets(rows, 'web:default')).toEqual(['web:busy', 'web:proxmox']);
+  expect(selectSessionsPreviewTargets(rows, 'web:default', 1)).toEqual(['web:busy']);
 });

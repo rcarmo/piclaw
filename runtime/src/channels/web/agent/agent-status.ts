@@ -357,6 +357,13 @@ export function handleAgentActiveChatsRequest(channel: Pick<WebChannelLike, "age
         activity_status: !active ? "idle" : compacting ? "compacting" : retrying ? "retrying" : shell ? "bash_running" : streaming ? "streaming" : "working",
         activity_label: active ? (typeof data?.title === "string" && data.title ? data.title : "Active") : "Idle" }];
     }).sort((a, b) => Number(b.is_active) - Number(a.is_active) || String(a.chat_jid).localeCompare(String(b.chat_jid)));
+    // Session lists show when each chat last changed and its latest reply.
+    const activity = context.getChatActivitySummaries?.(chats.map((chat) => String(chat.chat_jid))) ?? new Map();
+    for (const chat of chats) {
+      const summary = activity.get(String(chat.chat_jid));
+      chat.last_activity_at = summary?.last_activity_at ?? null;
+      chat.last_reply = summary?.last_reply ?? null;
+    }
     return channel.json({ chats }, 200);
   });
   return appendServerTiming(result, {

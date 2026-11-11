@@ -8,7 +8,21 @@ import { buildMainShellClassName } from '../../../web/src/ui/app-main-shell-rend
 // Mirrors the pane order and class names rendered by app-main-shell-render (#1987): sessions | chat | tree | editor.
 const posts = Array.from({ length: 6 }, (_, i) => ({ id: i + 1, type: 'user', data: { content: `Message ${i + 1} with a path /workspace/example/source-file.ts`, timestamp: '2026-11-10T00:00:00Z' } }));
 const services = { fetchCommands: async () => ({ commands: [] }), getAgentModels: async () => ({ current: 'provider/model', thinking_level: 'high', supports_thinking: true, model_options: [] }) };
-const chats = ['default', 'release-notes', 'proxmox', 'tree-eval', 'steering-latency', 'lunch'].map((name, i) => ({ chat_jid: `web:${name}`, agent_name: name, root_chat_jid: `web:${name}`, is_active: i === 2 }));
+const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+const chats = ['default', 'release-notes', 'proxmox', 'tree-eval', 'steering-latency', 'lunch'].map((name, i) => ({
+  chat_jid: `web:${name}`, agent_name: name, root_chat_jid: `web:${name}`, is_active: i === 2,
+  activity_status: i === 2 ? 'working' : 'idle',
+  last_activity_at: minutesAgo(i * 7 + 3),
+  last_reply: i === 2 ? 'Previous proxmox reply' : `## Summary for ${name}\n\nThe **${name}** session finished its last task.`,
+  context_percent: i === 0 ? 42 : null,
+}));
+// Session activity probes (#1987): status polls, list refreshes and new-tab opens.
+const probes = { statusCalls: [] as string[], refreshes: 0, opened: [] as string[] };
+const loadSessionStatus = async (jid: string) => {
+  probes.statusCalls.push(jid);
+  return { status: 'active', data: { type: 'tool_call', turn_id: 't1', tool_name: 'bash', tool_args: { command: 'make test' } } };
+};
+window.open = ((url: string) => { probes.opened.push(String(url)); return null; }) as typeof window.open;
 const params = new URLSearchParams(location.search);
 
 function Fixture() {
@@ -19,9 +33,10 @@ function Fixture() {
   const toggleWorkspace = useCallback(() => setWorkspaceOpen((open) => !open), []);
   const splitters = useSplitters({ appShellRef: shell, sidebarWidthRef: sidebar, editorWidthRef: editor, dockHeightRef: dock });
   useAppShellShortcuts({ hasDockPanes: false, chatOnlyMode: false, toggleDock: () => {}, toggleZenMode: () => {}, exitZenMode: () => {}, zenMode: false, toggleWorkspace });
-  (window as any).threePane = { shell: () => shell.current, current: () => current, workspaceOpen: () => workspaceOpen };
+  (window as any).threePane = { shell: () => shell.current, current: () => current, workspaceOpen: () => workspaceOpen, probes };
   return html`<div class=${buildMainShellClassName({ workspaceOpen, editorOpen, chatOnlyMode: false, zenMode: false })} ref=${shell} style="--editor-width:320px;--sidebar-width:280px">
-    <${SessionsSidebar} activeChatAgents=${chats} currentChatJid=${current} onSwitchChat=${setCurrent} appShellRef=${shell} />
+    <${SessionsSidebar} activeChatAgents=${chats} currentChatJid=${current} onSwitchChat=${setCurrent} appShellRef=${shell}
+      loadSessionStatus=${loadSessionStatus} onRefreshSessions=${() => { probes.refreshes += 1; }} />
     <div class="container"><${ChatSurface} currentChatJid=${current} posts=${posts} timelineRef=${timeline} hasMore=${false}
       composeProps=${{ currentChatJid: current, onPost: () => {}, services, activeChatAgents: chats, agentModels: { current: 'provider/model', thinking_level: 'high' }, capabilities: { speech: true, media: true, location: false, notifications: false, modelPicker: true, commands: false } }} /></div>
     <div class="workspace-splitter" onMouseDown=${splitters.handleSplitterMouseDown} onTouchStart=${splitters.handleSplitterTouchStart} onKeyDown=${splitters.handleSplitterKeyDown} onDblClick=${splitters.handleSplitterDoubleClick} role="separator" aria-orientation="vertical" aria-label="Resize file tree" tabIndex="0"></div>

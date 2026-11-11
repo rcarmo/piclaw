@@ -15,7 +15,7 @@ function fixture() {
 test("five context projections retain exact own keys and allocation policy", () => {
   const { contexts } = fixture();
   const shapes = {
-    agentStatus: ["defaultChatJid", "json", "getAgentStatus", "getExtensionWorkingState", "getBuffer", "getContextUsageForChat", "getSessionTreeSummaryForChat", "getTokenUsageForChat", "getAvailableModels", "getProviderReadyCompletedForInstance"],
+    agentStatus: ["defaultChatJid", "json", "getAgentStatus", "getExtensionWorkingState", "getBuffer", "getContextUsageForChat", "getSessionTreeSummaryForChat", "getTokenUsageForChat", "getChatActivitySummaries", "getAvailableModels", "getProviderReadyCompletedForInstance"],
     content: ["defaultChatJid", "hiddenNativeRows", "json", "getBuffer", "getIdentity"],
     ui: ["json", "getWorkspaceVisible", "setWorkspaceVisible", "getWorkspaceShowHidden", "setWorkspaceShowHidden", "setPanelExpanded", "handleUiResponse"],
     agents: ["agentPool", "defaultChatJid", "defaultAgentId", "agentName", "agentAvatar", "userName", "userAvatar", "userAvatarBackground", "json"],

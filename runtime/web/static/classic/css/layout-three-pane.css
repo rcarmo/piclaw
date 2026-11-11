@@ -231,6 +231,106 @@
     text-overflow: ellipsis;
 }
 
+/* Session activity, carried over from the session-dashboard add-on. */
+.sessions-sidebar-active-count {
+    flex-shrink: 0;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--success-color) 16%, transparent);
+    color: var(--success-color);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.sessions-sidebar-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.sessions-sidebar-line .sessions-sidebar-handle {
+    flex: 1;
+    min-width: 0;
+}
+
+.sessions-sidebar-activity {
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success-color);
+    animation: sessions-sidebar-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes sessions-sidebar-pulse {
+    50% { opacity: 0.35; }
+}
+
+.sessions-sidebar-age {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.sessions-sidebar-age.active {
+    color: var(--success-color);
+    font-weight: 600;
+}
+
+.sessions-sidebar-preview {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+}
+
+.sessions-sidebar-preview.live {
+    color: var(--text-primary);
+}
+
+.sessions-sidebar-preview.tool {
+    -webkit-line-clamp: 1;
+    font-family: var(--font-family-mono, monospace);
+    font-size: 11.5px;
+}
+
+.sessions-sidebar-preview-label {
+    font-family: var(--font-family, inherit);
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--success-color);
+}
+
+.sessions-sidebar-context {
+    display: block;
+    height: 3px;
+    margin-top: 2px;
+    border-radius: 2px;
+    background: var(--border-color);
+    overflow: hidden;
+}
+
+.sessions-sidebar-context > span {
+    display: block;
+    height: 100%;
+    background: var(--accent-color);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sessions-sidebar-activity {
+        animation: none;
+    }
+}
+
 .sessions-splitter {
     width: 4px;
     flex-shrink: 0;
