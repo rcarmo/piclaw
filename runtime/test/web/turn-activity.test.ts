@@ -3,6 +3,7 @@ import "../helpers.js";
 
 import { beforeAll, describe, expect, test } from "bun:test";
 import { getDb, initDatabase } from "../../src/db/connection.js";
+import { getMessageByRowId } from "../../src/db/messages.js";
 import { projectTurnActivity, projectTurnStepDetail } from "../../src/channels/web/agent/turn-activity.js";
 import { answerEntryIdFromMessageId, handleTurnActivity } from "../../src/channels/web/handlers/turn-activity.js";
 import type { DurableTurnEntries } from "../../src/agent-pool/durable-runtime-adapter.js";
@@ -97,18 +98,27 @@ describe("turn activity projection", () => {
 
 describe("GET /agent/turn-activity", () => {
   const chat = "web:turn-activity";
-  const replyId = "native-answer:inc:7:8";
+  let replyId = "", legacyId = "", userId = "";
   beforeAll(() => {
     initDatabase();
     const db = getDb();
     db.prepare("INSERT OR IGNORE INTO chats(jid, name) VALUES (?, ?)").run(chat, chat);
-    db.prepare(`INSERT INTO messages(id, chat_jid, sender, sender_name, content, timestamp, is_from_me, is_bot_message, is_terminal_agent_reply)
-      VALUES (?, ?, 'web-agent', 'agent', 'All finished.', '2026-11-11T00:00:00.000Z', 0, 1, 1)`).run(replyId, chat);
+    const insert = (id: string, bot: number) => String(db.prepare(`INSERT INTO messages(id, chat_jid, sender, sender_name, content, timestamp, is_from_me, is_bot_message, is_terminal_agent_reply)
+      VALUES (?, ?, 'web-agent', 'agent', 'text', '2026-11-11T00:00:00.000Z', 0, ?, ?)`).run(id, chat, bot, bot).lastInsertRowid);
+    replyId = insert("native-answer:inc:7:8", 1);
+    legacyId = insert("legacy-reply", 1);
+    userId = insert("native-answer:inc:7:9", 0);
+  });
+
+  test("flags durable replies for on-demand activity", () => {
+    expect(getMessageByRowId(chat, Number(replyId))?.data.turn_activity).toBe(true);
+    expect(getMessageByRowId(chat, Number(legacyId))?.data.turn_activity).toBeUndefined();
+    expect(getMessageByRowId(chat, Number(userId))?.data.turn_activity).toBeUndefined();
   });
   const request = (params: Record<string, string>) => new URL(`http://local/agent/turn-activity?${new URLSearchParams(params)}`);
 
   test("parses only native answer ids", () => {
-    expect(answerEntryIdFromMessageId(replyId)).toBe(8);
+    expect(answerEntryIdFromMessageId("native-answer:inc:7:8")).toBe(8);
     expect(answerEntryIdFromMessageId("web-123")).toBeNull();
     expect(answerEntryIdFromMessageId("native-answer:inc:7:0")).toBeNull();
   });
@@ -129,7 +139,9 @@ describe("GET /agent/turn-activity", () => {
     expect((await handleTurnActivity(pool, request({ chat_jid: chat }))).status).toBe(400);
     for (const [params, reader] of [
       [{ chat_jid: "web:other", message_id: replyId }, pool],
-      [{ chat_jid: chat, message_id: "web-123" }, pool],
+      [{ chat_jid: chat, message_id: "native-answer:inc:7:8" }, pool],
+      [{ chat_jid: chat, message_id: legacyId }, pool],
+      [{ chat_jid: chat, message_id: userId }, pool],
       [{ chat_jid: chat, message_id: replyId }, { getTurnEntriesForChat: async () => null }],
       [{ chat_jid: chat, message_id: replyId }, { getTurnEntriesForChat: async () => { throw new Error("Host binding conflict"); } }],
       [{ chat_jid: chat, message_id: replyId }, undefined],

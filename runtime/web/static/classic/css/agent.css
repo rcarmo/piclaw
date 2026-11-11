@@ -1556,6 +1556,255 @@
     opacity: 0.7;
 }
 
+/* Turn activity: the collapsible "Worked for …" log above a durable reply.
+   Same card language as .post-thinking-visibility; steps and tool cards
+   disclose progressively and load full content on demand. */
+.turn-activity {
+    margin: 4px 0 8px 0;
+    font-size: 0.88em;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--chat-surface-radius, 8px);
+    color: var(--text-secondary);
+    overflow: hidden;
+}
+
+/* Zero-height until loaded: still laid out so the visibility observer fires. */
+.turn-activity.is-pending {
+    height: 0;
+    margin: 0;
+    border: 0;
+}
+
+.turn-activity-header,
+.turn-activity-tool-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-height: 28px;
+    padding: 4px 8px;
+    color: inherit;
+    background: transparent;
+    border: none;
+    font: inherit;
+    line-height: 1.35;
+    text-align: left;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.turn-activity-header:focus-visible,
+.turn-activity-tool-header:focus-visible,
+.turn-activity-more:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: -2px;
+}
+
+.turn-activity-toggle {
+    display: inline-flex;
+    flex: 0 0 auto;
+    width: 12px;
+    height: 12px;
+}
+
+.turn-activity-label {
+    flex: 0 0 auto;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--turn-color, var(--accent-color));
+}
+
+.turn-activity-meta {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.turn-activity-badge {
+    flex: 0 0 auto;
+    padding: 0 6px;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    font-size: 0.9em;
+    font-variant-numeric: tabular-nums;
+}
+
+.turn-activity-badge.is-error {
+    color: var(--danger-color, #dc2626);
+    border-color: color-mix(in srgb, var(--danger-color, #dc2626) 45%, transparent);
+}
+
+.turn-activity-detail {
+    border-top: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+    max-height: min(70vh, 720px);
+    overflow: auto;
+    overscroll-behavior: contain;
+}
+
+.turn-activity-steps,
+.turn-activity-nested {
+    list-style: none;
+    margin: 0;
+    padding: 4px 0;
+}
+
+.turn-activity-step {
+    padding: 2px 8px 2px 26px;
+    min-width: 0;
+}
+
+.turn-activity-step.turn-activity-tool {
+    padding: 0;
+}
+
+.turn-activity-markdown {
+    overflow-wrap: anywhere;
+}
+
+.turn-activity-markdown > :first-child { margin-top: 0; }
+.turn-activity-markdown > :last-child { margin-bottom: 0; }
+
+.turn-activity-thinking .turn-activity-markdown {
+    font-style: italic;
+    opacity: 0.85;
+}
+
+.turn-activity-thinking:not(.is-expanded) .turn-activity-markdown {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.turn-activity-text .turn-activity-markdown {
+    color: var(--text-primary);
+}
+
+.turn-activity-input {
+    border-left: 2px solid var(--accent-color);
+    margin-left: 26px;
+    padding-left: 8px;
+}
+
+.turn-activity-step-label,
+.turn-activity-section-label {
+    display: block;
+    margin: 6px 0 2px;
+    font-size: 0.85em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.75;
+}
+
+.turn-activity-tool-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: 0.95em;
+    color: var(--text-primary);
+}
+
+.turn-activity-duration {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.8;
+}
+
+.turn-activity-status {
+    display: inline-flex;
+    flex: 0 0 auto;
+    width: 14px;
+    height: 14px;
+}
+
+.turn-activity-status svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.turn-activity-status.is-ok { color: var(--success-color, #16a34a); }
+.turn-activity-status.is-error { color: var(--danger-color, #dc2626); }
+.turn-activity-status.is-aborted,
+.turn-activity-status.is-running { color: var(--text-secondary); }
+
+.turn-activity-tool.is-error > .turn-activity-tool-header {
+    background: color-mix(in srgb, var(--danger-color, #dc2626) 8%, transparent);
+}
+
+.turn-activity-tool-header:hover {
+    background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+}
+
+.turn-activity-tool-body {
+    padding: 0 8px 8px 26px;
+}
+
+.turn-activity-pre {
+    margin: 0;
+    padding: 6px 8px;
+    max-height: 320px;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: 0.92em;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    border: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+    border-radius: 6px;
+}
+
+.turn-activity-output.is-error {
+    border-color: color-mix(in srgb, var(--danger-color, #dc2626) 45%, transparent);
+}
+
+.turn-activity-nested-call {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 22px;
+}
+
+.turn-activity-more {
+    margin-top: 4px;
+    padding: 0;
+    min-height: 24px;
+    color: var(--accent-color);
+    background: transparent;
+    border: none;
+    font: inherit;
+    cursor: pointer;
+}
+
+.turn-activity-more:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.turn-activity-note {
+    font-style: italic;
+    opacity: 0.75;
+}
+
+.turn-activity-note.is-error {
+    color: var(--danger-color, #dc2626);
+    font-style: normal;
+}
+
 /* Connection status */
 .connection-status {
     position: fixed;

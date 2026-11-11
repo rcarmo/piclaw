@@ -2,7 +2,8 @@
  * web/handlers/turn-activity.ts – read the "Worked for …" log of one agent reply.
  *
  * GET /agent/turn-activity?chat_jid&message_id[&step&offset]
- * The reply's native-answer id names its committed answer entry; the agent pool
+ * message_id is the reply's timeline row id, as for /agent/thinking. The stored
+ * reply's native-answer id names its committed answer entry; the agent pool
  * reads that turn's committed window from the durable runtime. Responses are a
  * bounded projection (list) or one paged step (detail). Any lookup failure is a
  * uniform 404, so message ids cannot be probed across chats.
@@ -10,7 +11,7 @@
  * Consumers: http/dispatch-agent.ts.
  */
 
-import { getMessageRowIdById } from "../../../db/messages.js";
+import { getAgentMessageIdByRowId } from "../../../db/messages.js";
 import type { DurableTurnEntries } from "../../../agent-pool/durable-runtime-adapter.js";
 import { projectTurnActivity, projectTurnStepDetail } from "../agent/turn-activity.js";
 
@@ -34,8 +35,9 @@ export async function handleTurnActivity(pool: TurnActivityReader | undefined, u
   const chatJid = url.searchParams.get("chat_jid");
   const messageId = url.searchParams.get("message_id");
   if (!chatJid || !messageId) return json({ error: "Missing message_id or chat_jid" }, 400);
-  const answerEntryId = answerEntryIdFromMessageId(messageId);
-  if (answerEntryId === null || getMessageRowIdById(chatJid, messageId) === null || !pool?.getTurnEntriesForChat) {
+  const storedId = /^\d+$/.test(messageId) ? getAgentMessageIdByRowId(chatJid, Number(messageId)) : null;
+  const answerEntryId = storedId === null ? null : answerEntryIdFromMessageId(storedId);
+  if (answerEntryId === null || !pool?.getTurnEntriesForChat) {
     return json({ error: "Not found" }, 404);
   }
   let turn: DurableTurnEntries | null;

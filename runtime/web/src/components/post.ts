@@ -18,6 +18,7 @@ import { isIOSDevice } from '../ui/app-helpers.js';
 import { attachHeaderAnchor } from '../ui/scroll-anchor.js';
 import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
 import { ImageModal } from './image-modal.js';
+import { TurnActivity, hasTurnActivity } from './turn-activity.js';
 import { ImageAnnotator, canAnnotate } from './image-annotator.js';
 import { FilePill } from './file-pill.js';
 import { isSafeUploadFilename } from '../../../src/core/upload-limits.js';
@@ -2139,6 +2140,7 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
                 ${outcomeMarker && html`
                     <${OutcomePill} marker=${outcomeMarker} />
                 `}
+                ${isAgent && hasTurnActivity(post) && html`<${TurnActivity} key=${`turn-activity-${post.id}`} post=${post} chatJid=${post.chat_jid} />`}
                 ${isAgent && thinkingRef && html`<${ThinkingVisibilityPill} messageId=${post.id} chatJid=${post.chat_jid} lines=${thinkingRef.lines || 0} durationMs=${thinkingRef.duration_ms || 0} loadThinking=${loadThinking} />`}
                 ${isHardTruncated && truncatedInfo && html`
                     <div class="post-content truncated">

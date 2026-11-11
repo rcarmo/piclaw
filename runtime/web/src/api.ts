@@ -159,6 +159,14 @@ export async function searchPosts(query, limit = 50, offset = 0, chatJid = null,
     return request(`/search?q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}${chatQuery}${scopeQuery}${rootQuery}${imagesQuery}${attachmentsQuery}`);
 }
 
+/** Committed "Worked for …" log of one durable agent reply, or one paged step of it. */
+export async function getTurnActivity(chatJid, messageId, step = null, offset = 0) {
+    const params = new URLSearchParams({ chat_jid: String(chatJid || ''), message_id: String(messageId) });
+    if (step) params.set('step', step);
+    if (offset > 0) params.set('offset', String(offset));
+    return request(`/agent/turn-activity?${params}`);
+}
+
 /**
  * Get a thread by ID
  */
