@@ -5,6 +5,15 @@ import { chromium, type Browser } from 'playwright';
 const enabled = process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS === '1', browserTest = enabled ? test : test.skip;
 let server: ReturnType<typeof Bun.serve>, browser: Browser;
 const requests: string[] = [];
+const aborts: unknown[] = [];
+const liveActivity = {
+  answer_entry_id: null, started_at: null, ended_at: null, duration_ms: null, tool_ms: 0, output_tokens: 0, tools: 1, errors: 0, truncated: false,
+  steps: [
+    { id: 'thinking:20:0', kind: 'thinking', text: 'Scan the workspace first.', chars: 25 },
+    { id: 'tool:call-live', kind: 'tool', tool: { call_id: 'call-live', name: 'bash', title: 'bash: long scan', status: 'running', duration_ms: null,
+      args_preview: '{\n  "command": "long scan"\n}', output_preview: '', output_chars: 0, output_lines: 0, images: 0 } },
+  ],
+};
 const longOutput = Array.from({ length: 30 }, (_, index) => `line ${index + 1}`).join('\n');
 const activity = {
   answer_entry_id: 8, started_at: 1000, ended_at: 9000, duration_ms: 8000, tool_ms: 4900, output_tokens: 60, tools: 3, errors: 1, truncated: false,
@@ -26,12 +35,17 @@ beforeAll(async () => {
   if (!enabled) return;
   const build = await Bun.build({ entrypoints: [join(import.meta.dir, 'fixtures/turn-activity-fixture.ts')], target: 'browser', format: 'esm' });
   if (!build.success) throw new AggregateError(build.logs, 'Turn activity fixture build failed');
-  server = Bun.serve({ hostname: '127.0.0.1', port: Number(process.env.PICLAW_BROWSER_FIXTURE_PORT ?? 0), fetch(req) {
+  server = Bun.serve({ hostname: '127.0.0.1', port: Number(process.env.PICLAW_BROWSER_FIXTURE_PORT ?? 0), async fetch(req) {
     const url = new URL(req.url);
     if (url.pathname === '/fixture.js') return new Response(build.outputs[0], { headers: { 'Content-Type': 'text/javascript' } });
     if (url.pathname.startsWith('/static/')) return new Response(Bun.file(join(import.meta.dir, '../../web', url.pathname)));
+    if (url.pathname === '/agent/tool-abort') {
+      aborts.push(await req.json());
+      return Response.json({ status: 'ok', call_id: 'call-live', aborted: true });
+    }
     if (url.pathname === '/agent/turn-activity') {
       requests.push(url.search);
+      if (url.searchParams.get('live') === '1') return Response.json(liveActivity);
       if (url.searchParams.get('message_id') !== '41') return Response.json({ error: 'Not found' }, { status: 404 });
       const step = url.searchParams.get('step');
       if (!step) return Response.json(activity);
@@ -131,6 +145,54 @@ browserTest('turn activity loads when visible, discloses steps progressively and
     await page.locator('#post-41 .turn-activity-header').click();
     const overflow = await page.locator('#post-41 .turn-activity').evaluate((node) => node.scrollWidth - node.clientWidth);
     expect(overflow).toBeLessThanOrEqual(1);
+    expect(errors).toEqual([]);
+  } finally {
+    await page.close();
+  }
+}, 20000);
+
+browserTest('live turn shows elapsed work and streamed text, discloses running tools and stops one tool only', async () => {
+  requests.length = 0; aborts.length = 0;
+  const page = await browser.newPage({ viewport: { width: 1000, height: 700 } }), errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.setDefaultTimeout(4000);
+  const base = `http://127.0.0.1:${server.port}`;
+  await page.route('**/*', (route) => new URL(route.request().url()).origin === base ? route.continue() : route.abort());
+  try {
+    await page.goto(base);
+    await page.waitForFunction(() => Boolean((window as any).turnActivityFixture));
+    const status = { type: 'tool_call', title: 'bash: long scan', tool_call_id: 'call-live', status: 'running', started_at: new Date(Date.now() - 5000).toISOString(), output_preview: 'scanning step 1\nscanning step 2' };
+    await page.evaluate((value) => (window as any).turnActivityFixture.live(value), { status, draft: { text: 'Starting a **slow** scan.', fullText: 'Starting a **slow** scan.' }, thought: { text: '', fullText: '' }, turnId: 'turn-1' });
+    const live = page.locator('.turn-activity-live');
+    await live.scrollIntoViewIfNeeded();
+    const header = live.locator('.turn-activity-header');
+    expect(await header.innerText()).toMatch(/Working · [4-9](\.\d)?s/);
+    expect(await header.innerText()).toContain('bash: long scan');
+    expect(await header.getAttribute('aria-expanded')).toBe('false');
+    expect(await live.locator('.turn-activity-live-draft').innerText()).toContain('scan.');
+    await page.waitForTimeout(400);
+    expect(requests.filter((query) => query.includes('live=1'))).toEqual([]);
+
+    await header.click();
+    const tool = live.locator('.turn-activity-tool');
+    await tool.waitFor();
+    expect(requests.some((query) => query.includes('live=1'))).toBe(true);
+    await tool.locator('.turn-activity-tool-header').click();
+    expect(await tool.locator('.turn-activity-output').innerText()).toContain('scanning step 2');
+
+    // Keep running cancels; Stop tool only sends the call and the note.
+    await tool.locator('.turn-activity-stop').click();
+    await tool.getByRole('button', { name: 'Keep running' }).click();
+    expect(await tool.locator('.turn-activity-stop-confirm').count()).toBe(0);
+    await tool.locator('.turn-activity-stop').click();
+    await tool.getByLabel('Note for the agent (optional)').fill('skip it');
+    await tool.getByRole('button', { name: 'Stop tool only' }).click();
+    await tool.getByText('Stopping…').waitFor();
+    expect(aborts).toEqual([{ chat_jid: 'web:fixture', call_id: 'call-live', note: 'skip it' }]);
+
+    // The block leaves the timeline when the turn ends.
+    await page.evaluate(() => (window as any).turnActivityFixture.live({ status: { type: 'done' }, draft: { text: '', fullText: '' }, thought: { text: '', fullText: '' }, turnId: 'turn-1' }));
+    await live.waitFor({ state: 'detached' });
     expect(errors).toEqual([]);
   } finally {
     await page.close();

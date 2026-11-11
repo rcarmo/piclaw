@@ -102,6 +102,11 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
     handle: (channel, req) => channel.handleThoughtVisibility(req),
   },
   {
+    method: "POST",
+    path: "/agent/tool-abort",
+    handle: (channel, req) => channel.handleAgentToolAbort(req),
+  },
+  {
     method: "GET",
     path: "/agent/turn-activity",
     handle: (channel, _req, url) => handleTurnActivity(channel.agentPool, url),

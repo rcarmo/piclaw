@@ -1805,6 +1805,136 @@
     font-style: normal;
 }
 
+/* Live turn: the running "Working · elapsed" block at the end of the timeline. */
+.turn-activity-live-avatar {
+    background: transparent;
+    align-items: center;
+    justify-content: center;
+}
+
+.turn-activity-live-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--turn-color, var(--accent-color));
+    animation: turn-activity-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes turn-activity-pulse {
+    0%, 100% { opacity: 0.35; transform: scale(0.85); }
+    50% { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .turn-activity-live-dot { animation: none; }
+}
+
+.turn-activity.is-live {
+    margin-top: 2px;
+}
+
+.turn-activity-live-draft {
+    margin-top: 4px;
+}
+
+.turn-activity-live-thinking .turn-activity-markdown {
+    white-space: pre-wrap;
+}
+
+.turn-activity-tool-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.turn-activity-tool-row > .turn-activity-tool-header {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+}
+
+.turn-activity-stop {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    margin-right: 6px;
+    padding: 0;
+    color: var(--danger-color, #dc2626);
+    background: transparent;
+    border: 1px solid color-mix(in srgb, var(--danger-color, #dc2626) 40%, transparent);
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.turn-activity-stop svg {
+    width: 12px;
+    height: 12px;
+    fill: currentColor;
+}
+
+.turn-activity-stop:focus-visible,
+.turn-activity-stop-confirm :is(button, input):focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+}
+
+.turn-activity-stop-confirm {
+    /* Full row width inside its margins, so focusing the note never scrolls the log sideways. */
+    box-sizing: border-box;
+    flex: 0 0 calc(100% - 34px);
+    max-width: calc(100% - 34px);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0 8px 8px 26px;
+    padding: 8px;
+    background: var(--bg-primary);
+    border: 1px solid color-mix(in srgb, var(--danger-color, #dc2626) 40%, transparent);
+    border-radius: 6px;
+}
+
+.turn-activity-stop-confirm p {
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.turn-activity-stop-confirm input {
+    min-height: 28px;
+    padding: 4px 8px;
+    font: inherit;
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.turn-activity-stop-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.turn-activity-stop-actions button {
+    min-height: 28px;
+    padding: 0 10px;
+    font: inherit;
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.turn-activity-stop-actions button.is-danger {
+    color: #fff;
+    background: var(--danger-color, #dc2626);
+    border-color: var(--danger-color, #dc2626);
+}
+
 /* Connection status */
 .connection-status {
     position: fixed;

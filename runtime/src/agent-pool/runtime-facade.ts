@@ -368,6 +368,7 @@ export class AgentRuntimeFacade {
       validateDurableRuntimeMethod(port, "reconcileMaintenance");
       validateDurableRuntimeMethod(port, "readTree");
       validateDurableRuntimeMethod(port, "readTurn");
+      validateDurableRuntimeMethod(port, "abortTool");
       validateDurableRuntimeMethod(port, "readMetadata");
       validateDurableRuntimeMethod(port, "readReport");
       validateDurableRuntimeMethod(port, "assertCurrent");
@@ -860,11 +861,18 @@ export class AgentRuntimeFacade {
     return { leafId: snapshot.leafId, total: snapshot.total };
   }
 
-  /** Display-only committed activity window ending at one settled answer of this chat. */
-  async getTurnEntriesForChat(chatJid: string, answerEntryId: number): Promise<import("./durable-runtime-adapter.js").DurableTurnEntries | null> {
+  /** Display-only committed activity window ending at one settled answer of this chat, or the latest turn when omitted. */
+  async getTurnEntriesForChat(chatJid: string, answerEntryId?: number): Promise<import("./durable-runtime-adapter.js").DurableTurnEntries | null> {
     const durable = this.getDurableSession(chatJid);
-    if (!durable?.readTurn || !Number.isSafeInteger(answerEntryId) || answerEntryId <= 0) return null;
+    if (!durable?.readTurn || (answerEntryId !== undefined && (!Number.isSafeInteger(answerEntryId) || answerEntryId <= 0))) return null;
     return durable.readTurn(answerEntryId);
+  }
+
+  /** Cancel one running tool call of this chat's turn; the run continues. */
+  async abortToolCallForChat(chatJid: string, callId: string, note?: string): Promise<boolean> {
+    const durable = this.getDurableSession(chatJid);
+    if (!durable?.abortTool) throw new Error("Tool cancellation is unavailable.");
+    return durable.abortTool(callId, note);
   }
 
   async getSessionTreeForChat(chatJid: string): Promise<import("../agent-control/session-tree-snapshot.js").SessionTreeSnapshot> {

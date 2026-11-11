@@ -43,7 +43,8 @@ export interface TurnActivityStep {
 }
 
 export interface TurnActivity {
-  answer_entry_id: number;
+  /** Null for the running turn, which has no answer yet. */
+  answer_entry_id: number | null;
   started_at: number | null;
   ended_at: number | null;
   duration_ms: number | null;
@@ -108,8 +109,13 @@ function unionMs(spans: Array<[number, number]>): number {
   return end > start ? total + end - start : total;
 }
 
-/** Project a settled turn's committed entries; the final answer text stays in the reply post. */
-export function projectTurnActivity(turn: DurableTurnEntries, answerEntryId: number): TurnActivity {
+/**
+ * Project a turn's committed entries. For a settled turn the final answer text
+ * stays in the reply post; for the running turn (`answerEntryId` null) the
+ * timeline already streams its text, so `commentary: false` leaves it out.
+ */
+export function projectTurnActivity(turn: DurableTurnEntries, answerEntryId: number | null, options: { commentary?: boolean } = {}): TurnActivity {
+  const commentary = options.commentary !== false;
   const steps: TurnActivityStep[] = [];
   const toolSteps = new Map<string, NonNullable<TurnActivityStep["tool"]>>();
   const spans: Array<[number, number]> = [];
@@ -133,7 +139,7 @@ export function projectTurnActivity(turn: DurableTurnEntries, answerEntryId: num
       blocks(message).forEach((block, index) => {
         if (block.type === "thinking" && block.thinking?.trim()) {
           steps.push({ id: `thinking:${entry.id}:${index}`, kind: "thinking", text: clip(block.thinking, TEXT_PREVIEW), chars: block.thinking.length });
-        } else if (block.type === "text" && block.text?.trim() && !final) {
+        } else if (block.type === "text" && block.text?.trim() && !final && commentary) {
           steps.push({ id: `text:${entry.id}:${index}`, kind: "text", text: clip(block.text, TEXT_PREVIEW), chars: block.text.length });
         } else if (block.type === "toolCall" && block.id && block.name) {
           const args = argsText(block.arguments);

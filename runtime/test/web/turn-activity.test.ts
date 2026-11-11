@@ -134,6 +134,21 @@ describe("GET /agent/turn-activity", () => {
     expect(seen).toEqual([[chat, 8], [chat, 8]]);
   });
 
+  test("reads the running turn without commentary when asked for live activity", async () => {
+    const seen: Array<[string, number | undefined]> = [];
+    const pool = { getTurnEntriesForChat: async (jid: string, answer?: number) => { seen.push([jid, answer]); return sampleTurn(); } };
+    const response = await handleTurnActivity(pool, request({ chat_jid: chat, live: "1" }));
+    expect(response.status).toBe(200);
+    const body = await response.json() as any;
+    expect(body.answer_entry_id).toBeNull();
+    expect(body.steps.some((step: any) => step.kind === "text")).toBe(false);
+    // Without an answer the last turn's closing text is commentary, and is left out too.
+    expect(body.steps.map((step: any) => step.id)).toEqual(["thinking:2:0", "tool:call-a", "tool:call-b", "input:5", "tool:call-c", "thinking:8:0"]);
+    expect(seen).toEqual([[chat, undefined]]);
+    const step = await handleTurnActivity(pool, request({ chat_jid: chat, live: "1", step: "tool:call-b" }));
+    expect((await step.json()).output).toBe("nope");
+  });
+
   test("answers 400 for missing parameters and a uniform 404 otherwise", async () => {
     const pool = { getTurnEntriesForChat: async () => sampleTurn() };
     expect((await handleTurnActivity(pool, request({ chat_jid: chat }))).status).toBe(400);

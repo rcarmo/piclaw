@@ -530,19 +530,21 @@ export class HostConversationRuntime {
   }
   /** Read-only display window for one settled answer: the committed entries
    * after the previous final answer, from the first accepted input through this
-   * answer. Bounded; no model calls, estimates or legacy session hydration. */
-  readTurnEntries(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }, answerEntryId: number): Promise<import("../../src/agent-pool/durable-runtime-adapter.js").DurableTurnEntries | null> {
+   * answer. Without an answer id, the window ends at the newest entry: the
+   * running (or latest) turn. Bounded; no model calls, estimates or legacy
+   * session hydration. */
+  readTurnEntries(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }, answerEntryId?: number): Promise<import("../../src/agent-pool/durable-runtime-adapter.js").DurableTurnEntries | null> {
     const reader = this.sessionReader(binding);
     return this.observe(async () => {
       const conversation = await reader.conversation();
       const reversed: EntryRecord[] = [];
       let cursor: Cursor | undefined, truncated = false;
       scan: do {
-        const page = await conversation.entries({ order: "descending", maxEntryId: answerEntryId as import("@earendil-works/pi-durable").EntryId }, 100, cursor, this.context); reader.check();
+        const page = await conversation.entries({ order: "descending", ...(answerEntryId !== undefined ? { maxEntryId: answerEntryId as import("@earendil-works/pi-durable").EntryId } : {}) }, 100, cursor, this.context); reader.check();
         for (const entry of page.items) {
           if (!reversed.length) {
             const message = entry.model?.[0] as { role?: string; stopReason?: string } | undefined;
-            if (entry.id !== answerEntryId || entry.kind !== "pi.assistant" || message?.role !== "assistant") return null;
+            if (answerEntryId !== undefined && (entry.id !== answerEntryId || entry.kind !== "pi.assistant" || message?.role !== "assistant")) return null;
           } else {
             const message = entry.model?.[0] as { role?: string; stopReason?: string } | undefined;
             if (entry.kind === "pi.reset" || (entry.kind === "pi.assistant" && message?.role === "assistant" && message.stopReason !== "toolUse")) break scan;
@@ -2090,6 +2092,31 @@ export class HostConversationRuntime {
         await this.harness.abortTask(taskId,this.context);reader.check();
         await this.harness.waitForTask(taskId,this.context);reader.check();
       }
+    });
+  }
+  /** Cancel one running model-issued tool call and its owned work. The run, its
+   * other calls and queued input continue; the model receives the aborted
+   * result and, when given, the user's note. False once the call is not live. */
+  abortToolCall(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }, callId: string, note?: string): Promise<boolean> {
+    const reader = this.sessionReader(binding);
+    return this.observe(async () => {
+      const conversation = await reader.conversation();
+      const taskId = await conversation.commit(async tx => {
+        const live = await tx.doc(LiveDoc, reader.binding.conversationId as ConversationId);
+        const slot = live.tools?.find(tool => tool.callId === callId);
+        if (!slot?.taskId || slot.status === "done") return undefined;
+        const task = await tx.task(slot.taskId);
+        if (task?.kind !== "pi.tool" || task.conversationId !== reader.binding.conversationId || task.state.status === "terminal" || task.abortRequested) return undefined;
+        const message = note?.trim().slice(0, 2000);
+        if (message) {
+          slot.diagnostics ??= [];
+          slot.diagnostics.push({ severity: "error", code: "cancelled_by_user", message: `The user cancelled this tool with this note:\n${message}` });
+        }
+        return slot.taskId;
+      }, this.context); reader.check();
+      if (taskId === undefined) return false;
+      await this.harness.abortTask(taskId, this.context); reader.check();
+      return true;
     });
   }
   /** Immutable SDK/source correlation for passive reopen. This neither resumes

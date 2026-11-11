@@ -455,7 +455,11 @@ export class AgentPool {
     return this.runtimeFacade.getSessionTreeForChat(chatJid);
   }
 
-  getTurnEntriesForChat(chatJid: string, answerEntryId: number) {
+  abortToolCallForChat(chatJid: string, callId: string, note?: string) {
+    return this.runtimeFacade.abortToolCallForChat(chatJid, callId, note);
+  }
+
+  getTurnEntriesForChat(chatJid: string, answerEntryId?: number) {
     return this.runtimeFacade.getTurnEntriesForChat(chatJid, answerEntryId);
   }
 
