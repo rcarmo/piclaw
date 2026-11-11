@@ -12,7 +12,7 @@ export interface ObservabilityNativeExports {
 }
 
 /** Refresh request context through the SDK hook, never a legacy session event. */
-export function createHostObservabilityPrompt(addon: ObservabilityNativeExports, options: {
+export function createHostObservabilityPrompt(addon: Pick<ObservabilityNativeExports, "buildObservabilitySystemPrompt">, options: {
   root: Database;
   runtime(): Pick<HostConversationRuntime, "captureRunSource">;
   assertOwner(): void;
