@@ -63,7 +63,7 @@ describe("Earendil release churn gate", () => {
     const rootManifest = requireRecord(await Bun.file(resolve(repositoryRoot, "package.json")).json(), "repository package.json");
     const rootDependencies = requireRecord(rootManifest.dependencies, "repository dependencies");
     for (const directName of ["@earendil-works/chord", "@earendil-works/pi-agent-core", "@earendil-works/pi-ai", "@earendil-works/pi-coding-agent"]) expect(rootDependencies[directName]).toBe("1.5.2");
-    expect(rootDependencies.openai).toBe("7.31.0");
+    expect(rootDependencies.openai).toBe("7.52.0");
     const lock = await Bun.file(resolve(repositoryRoot, "bun.lock")).text();
     expect(receipt).toHaveLength(9);
     for (const evidence of receipt) {
@@ -74,7 +74,7 @@ describe("Earendil release churn gate", () => {
       expect(entry).toContain(`, "${evidence.dist.integrity}"],`);
       expect(lock.match(new RegExp(`${evidence.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}@1\\.5\\.2`, "g"))).toHaveLength(1);
     }
-    expect(lockPackageEntry(lock, "openai")?.startsWith('    "openai": ["openai@7.31.0",')).toBe(true);
+    expect(lockPackageEntry(lock, "openai")?.startsWith('    "openai": ["openai@7.52.0",')).toBe(true);
   });
 
   test("matches installed 1.5.2 family manifests and keeps inactive Harness evidence at 0.87.1", async () => {

@@ -300,8 +300,8 @@
     },
     {
       "path": "runtime/web/static/common/js/marked.min.js",
-      "bytes": 46683,
-      "sha256": "46bbef693cb146d74a33a98e206a0dd667e872d1e3c466c148ee9de0eb451f10",
+      "bytes": 49282,
+      "sha256": "d63eacc203659494f551b3eb934bf2f9b75bb6a4548b748071c79e96f747caf7",
       "manifests": [
         "runtime/vendor-manifests/marked-global.json"
       ],
@@ -412,14 +412,14 @@
     {
       "path": "runtime/web/static/common/js/vendor/katex.meta.json",
       "bytes": 1101,
-      "sha256": "ae8689cdd6b8422620982a31b7f1aa84595d3656b88ea9bfae71295f7a22bce4",
+      "sha256": "03642830aada3a4322f439ac8a31b8fc913ffe41c54218bd37192da84cb6a7c4",
       "manifests": [],
       "provenance": "unrecorded"
     },
     {
       "path": "runtime/web/static/common/js/vendor/katex.min.js",
-      "bytes": 274626,
-      "sha256": "acfa2a4555ec7b94c63346ae74816b9a70722b614a3fb0e18af01be511e3c179",
+      "bytes": 274835,
+      "sha256": "ab7e1221af44bbb4f66e7d698ef8bffafe2e81f854e80c0d3abf4d8454a17208",
       "manifests": [
         "runtime/vendor-manifests/katex-global.json"
       ],
@@ -427,8 +427,8 @@
     },
     {
       "path": "runtime/web/static/common/js/vendor/pele-license.meta.json",
-      "bytes": 1026,
-      "sha256": "dae3c728050e617f2e28bea9f7d2e80d92484ea83eaeb8e7665963eda67ddeb6",
+      "bytes": 1028,
+      "sha256": "c59fc76fac6cb05640f00c39335e31c0aafa41cbe0e1b8483a50148f089e1832",
       "manifests": [],
       "provenance": "unrecorded"
     },
@@ -441,8 +441,8 @@
     },
     {
       "path": "runtime/web/static/common/js/vendor/pele.js",
-      "bytes": 726976,
-      "sha256": "b709159845bdb14309991d768cca1d24d32dbd532d5a2e983c24ef497d03a201",
+      "bytes": 753751,
+      "sha256": "79036f84fc10c8296145f2e206b079258b8423d885e34d387bf98276b0123fb8",
       "manifests": [
         "runtime/vendor-manifests/pele.json"
       ],
@@ -450,15 +450,15 @@
     },
     {
       "path": "runtime/web/static/common/js/vendor/pele.meta.json",
-      "bytes": 1214,
-      "sha256": "1e01683b87f47e7b95db5353a08f2f041cb3484afff6c2c0389da1ad74240824",
+      "bytes": 1216,
+      "sha256": "660602faff28764f287e283bb2c649b083753bca39d5c3bb7741b7b4691825d5",
       "manifests": [],
       "provenance": "unrecorded"
     },
     {
       "path": "runtime/web/static/common/js/vendor/preact-htm.js",
-      "bytes": 16021,
-      "sha256": "263d372b74351afd74e1633debcde5dd4f93750e00f27a3405342fed68370d95",
+      "bytes": 16184,
+      "sha256": "1edda980b63fbaf6e18999ffea40c5116057593e1827335193dbde36cf714514",
       "manifests": [
         "runtime/vendor-manifests/preact-htm.json"
       ],
@@ -467,7 +467,7 @@
     {
       "path": "runtime/web/static/common/js/vendor/preact-htm.meta.json",
       "bytes": 1207,
-      "sha256": "0eb81645a479196c31e5b0bab95ea6974c406a4c25ac7fec5e53e585a3725c53",
+      "sha256": "15f6694e4493612c333993377795c2c1724b4c7ecba44c3d1c57985de77e9725",
       "manifests": [],
       "provenance": "unrecorded"
     },
