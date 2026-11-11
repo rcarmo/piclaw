@@ -161,6 +161,101 @@
     border-top: 1px solid var(--border-color);
 }
 
+/* ── Sessions view actions ── */
+.sessions-sidebar-toolbar {
+    display: inline-flex;
+    gap: 2px;
+    margin-left: auto;
+}
+
+.sessions-sidebar-tool,
+.sessions-sidebar-more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm, 4px);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.sessions-sidebar-tool svg,
+.sessions-sidebar-more svg {
+    width: 15px;
+    height: 15px;
+}
+
+.sessions-sidebar-tool:hover,
+.sessions-sidebar-tool:focus-visible,
+.sessions-sidebar-more:hover,
+.sessions-sidebar-more:focus-visible {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.sessions-sidebar-tool.danger:hover {
+    color: var(--danger-color);
+}
+
+.sessions-sidebar-item {
+    position: relative;
+}
+
+.sessions-sidebar-more {
+    opacity: 0;
+}
+
+.sessions-sidebar-item:hover .sessions-sidebar-more,
+.sessions-sidebar-item:focus-within .sessions-sidebar-more,
+.sessions-sidebar-item.menu-open .sessions-sidebar-more {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .sessions-sidebar-more {
+        opacity: 1;
+    }
+}
+
+.sessions-row-menu {
+    position: absolute;
+    top: calc(100% - 4px);
+    left: auto;
+    right: 4px;
+    z-index: 70;
+    min-width: 170px;
+}
+
+.sessions-row-menu .workspace-menu-item.danger {
+    color: var(--danger-color);
+}
+
+.sessions-sidebar-section-archived > summary {
+    cursor: pointer;
+    list-style: none;
+}
+
+.sessions-sidebar-section-archived > summary::-webkit-details-marker {
+    display: none;
+}
+
+.sessions-sidebar-section-archived > summary::before {
+    content: '▸ ';
+}
+
+.sessions-sidebar-section-archived[open] > summary::before {
+    content: '▾ ';
+}
+
+.sessions-sidebar-item.archived .sessions-sidebar-handle {
+    color: var(--text-secondary);
+}
+
 /* ── Pierre file tree (#1972) ── */
 .workspace-tree:has(> .workspace-tree-pierre) {
     display: flex;

@@ -7,6 +7,7 @@ import {
   availableSessionsWidth,
   buildSessionsSidebarSections,
   clampSessionsWidth,
+  buildArchivedSessions,
   resolveInitialWorkbenchView,
   selectSessionsPreviewTargets,
 } from '../../web/src/components/workbench-sidebar.js';
@@ -59,4 +60,13 @@ test('live previews poll other active sessions only, up to the limit', () => {
 test('the Explorer view is selected when the workspace starts open', () => {
   expect(resolveInitialWorkbenchView(true)).toBe('explorer');
   expect(resolveInitialWorkbenchView(false)).toBe('sessions');
+});
+
+test('archived sessions are listed separately, newest first, and follow the search', () => {
+  const rows = [
+    ...chats,
+    { chat_jid: 'web:older', agent_name: 'older', archived_at: '2026-10-01T00:00:00Z' },
+  ];
+  expect(buildArchivedSessions(rows, 'web:default').map((chat) => chat.chat_jid)).toEqual(['web:old', 'web:older']);
+  expect(buildArchivedSessions(rows, 'web:default', 'older').map((chat) => chat.chat_jid)).toEqual(['web:older']);
 });

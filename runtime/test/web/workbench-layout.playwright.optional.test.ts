@@ -145,6 +145,36 @@ for (const engine of ['chromium', 'webkit']) {
     } finally { await page.close(); }
   }, 30000);
 
+  browserTest(`${engine}: the Sessions view has header actions, a row menu and an archived section`, async () => {
+    const { page, errors } = await open(engine, 1440, 900);
+    page.on('dialog', (dialog) => dialog.type() === 'prompt' ? dialog.accept('ops-room') : dialog.accept());
+    try {
+      await settle(page);
+      const actions = () => page.evaluate(() => (window as any).workbench.probes.actions);
+      await page.locator('.sessions-sidebar-tool[aria-label="New session"]').click();
+      await page.locator('.sessions-sidebar-tool[aria-label="Fork the current session"]').click();
+      await page.waitForFunction(() => (window as any).workbench.probes.actions.length === 2);
+      expect(await actions()).toEqual(['create:ops-room', 'fork']);
+      const lunch = page.locator('.sessions-sidebar-item', { has: page.locator('.sessions-sidebar-handle', { hasText: '@lunch' }) }).first();
+      await lunch.click({ button: 'right' });
+      expect(await page.locator('.sessions-row-menu .workspace-menu-item').allTextContents()).toEqual(['Open in new tab', 'Open in new window', 'Archive']);
+      await page.locator('.sessions-row-menu .workspace-menu-item', { hasText: 'Archive' }).click();
+      await page.waitForSelector('.sessions-row-menu', { state: 'detached' });
+      const current = page.locator('.sessions-sidebar-item.current');
+      await current.locator('.sessions-sidebar-more').click();
+      expect(await page.locator('.sessions-row-menu .workspace-menu-item').allTextContents()).toEqual(['Open in new tab', 'Open in new window', 'Rename…', 'Fork', 'Archive']);
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('.sessions-row-menu', { state: 'detached' });
+      expect((await page.locator('.sessions-sidebar-section-archived summary').textContent())?.trim()).toBe('Archived (1)');
+      await page.locator('.sessions-sidebar-section-archived summary').click();
+      await page.locator('.sessions-sidebar-tool[aria-label="Restore @attic"]').click();
+      await page.locator('.sessions-sidebar-tool[aria-label="Delete @attic permanently"]').click();
+      await page.waitForFunction(() => (window as any).workbench.probes.actions.length === 5);
+      expect(await actions()).toEqual(['create:ops-room', 'fork', 'archive:web:lunch', 'restore:web:attic', 'purge:web:attic']);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+
   browserTest(`${engine} docked right slot keeps every flow pane inside the shell`, async () => {
     const { page, errors } = await open(engine, 1440, 900, '?editor=1');
     try {

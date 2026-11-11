@@ -344,6 +344,14 @@ export function renderMainShell(options: MainShellRenderOptions): any {
           setWorkspaceVisible=${setWorkspaceVisible}
           onOpenSettings=${requestOpenSettingsDialog}
           onOpenPlan=${openPlanTab}
+          sessionActions=${{
+            createRoot: handleCreateRootSessionFromCompose,
+            fork: handleCreateSessionFromCompose,
+            rename: openRenameCurrentBranchForm,
+            archive: handlePruneCurrentBranch,
+            restore: handleRestoreBranch,
+            purge: handlePurgeArchivedBranch,
+          }}
           explorer=${html`
             <${WorkspaceExplorer}
               onFileSelect=${addFileRef}

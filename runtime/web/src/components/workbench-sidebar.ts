@@ -71,6 +71,13 @@ export function readStoredSessionsWidth(): number {
 }
 
 /** Sidebar sections: the same groups as the compose session picker, without archived sessions. */
+/** Archived sessions, newest first, filtered with the same search as the other sections. */
+export function buildArchivedSessions(activeChatAgents, currentChatJid, query = '') {
+  const archived = resolveSessionPopupChats(activeChatAgents, currentChatJid).filter((chat) => chat?.archived_at);
+  return filterSessionPickerChats(archived, query)
+    .sort((a, b) => String(b.archived_at).localeCompare(String(a.archived_at)));
+}
+
 export function buildSessionsSidebarSections(activeChatAgents, currentChatJid, pinnedChatJids, query = '') {
   const chats = resolveSessionPopupChats(activeChatAgents, currentChatJid).filter((chat) => !chat?.archived_at);
   return groupSessionPickerChats(filterSessionPickerChats(chats, query), currentChatJid, pinnedChatJids)
@@ -133,6 +140,15 @@ const ACTIVITY_ICONS = {
   settings: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>`,
 };
 
+const SESSION_ICONS = {
+  add: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>`,
+  fork: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5" r="2" /><circle cx="18" cy="5" r="2" /><circle cx="12" cy="19" r="2" /><path d="M6 7v2a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V7M12 12v5" /></svg>`,
+  refresh: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8" /><path d="M21 3v5h-5" /></svg>`,
+  more: html`<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></svg>`,
+  restore: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></svg>`,
+  trash: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></svg>`,
+};
+
 const WORKBENCH_VIEWS: Array<{ id: WorkbenchView; label: string }> = [
   { id: 'sessions', label: 'Sessions' },
   { id: 'explorer', label: 'Explorer' },
@@ -151,6 +167,7 @@ export function WorkbenchSidebar({
   setWorkspaceVisible = null,
   onOpenSettings = null,
   onOpenPlan = null,
+  sessionActions = null,
 }) {
   const [storedOpen, setOpen] = useState(readStoredSessionsOpen);
   const [view, setView] = useState(() => resolveInitialWorkbenchView(workspaceOpen));
@@ -463,6 +480,37 @@ export function WorkbenchSidebar({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [selectView]);
 
+  // Row menu (right-click or the row's ⋯ button) and header actions.
+  const [menuFor, setMenuFor] = useState(null);
+  const menuForRef = useRef(null);
+  menuForRef.current = menuFor;
+  // Registered once so a key or click right after opening is never missed.
+  // Window capture runs before other Escape handlers (zen mode, dialogs) can stop it.
+  useEffect(() => {
+    const close = (event) => {
+      if (!menuForRef.current) return;
+      if (event.type === 'keydown' && event.key !== 'Escape') return;
+      if (event.type === 'pointerdown' && event.target?.closest?.('.sessions-row-menu, .sessions-sidebar-more')) return;
+      setMenuFor(null);
+    };
+    window.addEventListener('pointerdown', close, true);
+    window.addEventListener('keydown', close, true);
+    return () => {
+      window.removeEventListener('pointerdown', close, true);
+      window.removeEventListener('keydown', close, true);
+    };
+  }, []);
+
+  const runMenu = useCallback((action) => {
+    setMenuFor(null);
+    void action?.();
+  }, []);
+
+  const createRootSession = useCallback(() => {
+    const name = window.prompt('Name for the new session');
+    if (name && name.trim()) void sessionActions?.createRoot?.(name.trim());
+  }, [sessionActions]);
+
   const openSession = useCallback((event, jid, current) => {
     if (isNewTabSessionClick(event)) {
       event.preventDefault();
@@ -477,6 +525,10 @@ export function WorkbenchSidebar({
     [activeChatAgents, currentChatJid, pinned, query],
   );
   const pinnedSet = useMemo(() => new Set(pinned), [pinned]);
+  const archived = useMemo(
+    () => buildArchivedSessions(activeChatAgents, currentChatJid, query),
+    [activeChatAgents, currentChatJid, query],
+  );
   const total = sections.reduce((sum, section) => sum + section.items.length, 0);
   const activeCount = useMemo(
     () => resolveSessionPopupChats(activeChatAgents, currentChatJid).filter((chat) => chat?.is_active && !chat?.archived_at).length,
@@ -519,6 +571,11 @@ export function WorkbenchSidebar({
       <div class="sessions-sidebar-header">
         <span class="sessions-sidebar-title">Sessions</span>
         ${activeCount > 0 && html`<span class="sessions-sidebar-active-count" title=${`${activeCount} active`}>${activeCount} active</span>`}
+        <span class="sessions-sidebar-toolbar">
+          ${sessionActions?.createRoot && html`<button type="button" class="sessions-sidebar-tool" title="New session" aria-label="New session" onClick=${createRootSession}>${SESSION_ICONS.add}</button>`}
+          ${sessionActions?.fork && html`<button type="button" class="sessions-sidebar-tool" title="Fork the current session" aria-label="Fork the current session" onClick=${() => void sessionActions.fork()}>${SESSION_ICONS.fork}</button>`}
+          ${onRefreshSessions && html`<button type="button" class="sessions-sidebar-tool" title="Refresh sessions" aria-label="Refresh sessions" onClick=${() => { setNow(Date.now()); onRefreshSessions(); }}>${SESSION_ICONS.refresh}</button>`}
+        </span>
       </div>
       <label class="sessions-sidebar-search">
         <span class="sessions-sidebar-sr-only">Search sessions</span>
@@ -544,7 +601,8 @@ export function WorkbenchSidebar({
                 const reply = live ? '' : cleanSessionPreviewText(chat.last_reply);
                 const contextPercent = resolveSessionContextPercent(chat);
                 return html`
-                  <li key=${jid} class=${`sessions-sidebar-item${current ? ' current' : ''}${chat.is_active ? ' active' : ''}`}>
+                  <li key=${jid} class=${`sessions-sidebar-item${current ? ' current' : ''}${chat.is_active ? ' active' : ''}${menuFor === jid ? ' menu-open' : ''}`}
+                    onContextMenu=${(event) => { if (!sessionActions) return; event.preventDefault(); setMenuFor(jid); }}>
                     <button type="button" class="sessions-sidebar-open" title=${`${jid} — Ctrl/Cmd-click opens a new tab`} aria-current=${current ? 'page' : undefined}
                       onClick=${(event) => openSession(event, jid, current)}
                       onAuxClick=${(event) => { if (event.button === 1) openSession(event, jid, current); }}>
@@ -563,12 +621,47 @@ export function WorkbenchSidebar({
                       onClick=${() => setPinned(togglePinnedSessionChatJid(jid).pinnedChatJids)}>
                       <svg viewBox="0 0 24 24" fill=${isPinned ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6l-1 6 4 4H6l4-4z" /><path d="M12 13v8" /></svg>
                     </button>
+                    ${sessionActions && html`
+                      <button type="button" class="sessions-sidebar-more" aria-haspopup="menu" aria-expanded=${menuFor === jid ? 'true' : 'false'}
+                        title=${`Actions for ${handleLabel}`} aria-label=${`Actions for ${handleLabel}`}
+                        onClick=${() => setMenuFor(menuFor === jid ? null : jid)}>${SESSION_ICONS.more}</button>
+                    `}
+                    ${menuFor === jid && html`
+                      <div class="sessions-row-menu workspace-menu-dropdown" role="menu" aria-label=${`Actions for ${handleLabel}`}>
+                        <button type="button" class="workspace-menu-item" role="menuitem" onClick=${() => runMenu(() => window.open(buildChatWindowUrl(window.location.href, jid), '_blank', 'noopener'))}>Open in new tab</button>
+                        <button type="button" class="workspace-menu-item" role="menuitem" onClick=${() => runMenu(() => window.open(buildChatWindowUrl(window.location.href, jid, { chatOnly: true }), '_blank', 'noopener,popup'))}>Open in new window</button>
+                        ${current && sessionActions.rename && html`<button type="button" class="workspace-menu-item" role="menuitem" onClick=${() => runMenu(sessionActions.rename)}>Rename…</button>`}
+                        ${current && sessionActions.fork && html`<button type="button" class="workspace-menu-item" role="menuitem" onClick=${() => runMenu(sessionActions.fork)}>Fork</button>`}
+                        ${sessionActions.archive && html`<button type="button" class="workspace-menu-item danger" role="menuitem" onClick=${() => runMenu(() => sessionActions.archive(jid))}>Archive</button>`}
+                      </div>
+                    `}
                   </li>
                 `;
               })}
             </ul>
           </section>
         `)}
+        ${archived.length > 0 && html`
+          <details class="sessions-sidebar-section sessions-sidebar-section-archived">
+            <summary class="sessions-sidebar-section-heading">Archived (${archived.length})</summary>
+            <ul class="sessions-sidebar-items">
+              ${archived.map((chat) => {
+                const jid = chat.chat_jid;
+                const handle = normalizeHandle(chat.agent_name) || jid;
+                const handleLabel = handle.startsWith('@') ? handle : `@${handle}`;
+                return html`
+                  <li key=${jid} class="sessions-sidebar-item archived">
+                    <button type="button" class="sessions-sidebar-open" title=${jid} onClick=${(event) => openSession(event, jid, jid === currentChatJid)}>
+                      <span class="sessions-sidebar-line"><span class="sessions-sidebar-handle">${handleLabel}</span></span>
+                    </button>
+                    ${sessionActions?.restore && html`<button type="button" class="sessions-sidebar-tool" title=${`Restore ${handleLabel}`} aria-label=${`Restore ${handleLabel}`} onClick=${() => void sessionActions.restore(jid)}>${SESSION_ICONS.restore}</button>`}
+                    ${sessionActions?.purge && html`<button type="button" class="sessions-sidebar-tool danger" title=${`Delete ${handleLabel} permanently`} aria-label=${`Delete ${handleLabel} permanently`} onClick=${() => void sessionActions.purge(jid)}>${SESSION_ICONS.trash}</button>`}
+                  </li>
+                `;
+              })}
+            </ul>
+          </details>
+        `}
       </nav>
       </section>
       <section id="workbench-view-explorer" class="workbench-view workbench-view-explorer" role="tabpanel" aria-label="Explorer" hidden=${view !== 'explorer'}>

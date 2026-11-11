@@ -19,7 +19,16 @@ const chats = ['default', 'release-notes', 'proxmox', 'tree-eval', 'steering-lat
   context_percent: i === 0 ? 42 : null,
 }));
 // Probes: status polls, list refreshes, new-tab opens and settings requests.
-const probes = { statusCalls: [] as string[], refreshes: 0, opened: [] as string[], settings: 0, plans: 0 };
+const probes = { statusCalls: [] as string[], refreshes: 0, opened: [] as string[], settings: 0, plans: 0, actions: [] as string[] };
+chats.push({ chat_jid: 'web:attic', agent_name: 'attic', root_chat_jid: 'web:attic', is_active: false, archived_at: '2026-11-01T00:00:00Z' } as any);
+const sessionActions = {
+  createRoot: async (name: string) => { probes.actions.push(`create:${name}`); },
+  fork: async () => { probes.actions.push('fork'); },
+  rename: () => { probes.actions.push('rename'); },
+  archive: async (jid: string) => { probes.actions.push(`archive:${jid}`); },
+  restore: async (jid: string) => { probes.actions.push(`restore:${jid}`); },
+  purge: async (jid: string) => { probes.actions.push(`purge:${jid}`); },
+};
 const loadSessionStatus = async (jid: string) => {
   probes.statusCalls.push(jid);
   return { status: 'active', data: { type: 'tool_call', turn_id: 't1', tool_name: 'bash', tool_args: { command: 'make test' } } };
@@ -40,7 +49,7 @@ function Fixture() {
   return html`<div class=${buildMainShellClassName({ workspaceOpen, editorOpen, zenMode: false })} ref=${shell} style="--editor-width:320px;--sidebar-width:280px">
     <${WorkbenchSidebar} activeChatAgents=${chats} currentChatJid=${current} onSwitchChat=${setCurrent} appShellRef=${shell}
       loadSessionStatus=${loadSessionStatus} onRefreshSessions=${() => { probes.refreshes += 1; }}
-      workspaceOpen=${workspaceOpen} setWorkspaceVisible=${setWorkspaceVisible} onOpenSettings=${() => { probes.settings += 1; }} onOpenPlan=${() => { probes.plans += 1; }}
+      workspaceOpen=${workspaceOpen} setWorkspaceVisible=${setWorkspaceVisible} onOpenSettings=${() => { probes.settings += 1; }} onOpenPlan=${() => { probes.plans += 1; }} sessionActions=${sessionActions}
       explorer=${html`<aside class="workspace-sidebar"><div class="workspace-header"><div class="workspace-header-left"><span>Workspace</span></div></div><div class="workspace-tree">notes.md</div></aside>`} />
     <div class="container"><${ChatSurface} currentChatJid=${current} posts=${posts} timelineRef=${timeline} hasMore=${false}
       composeProps=${{ currentChatJid: current, onPost: () => {}, services, activeChatAgents: chats, agentModels: { current: 'provider/model', thinking_level: 'high' }, capabilities: { speech: true, media: true, location: false, notifications: false, modelPicker: true, commands: false } }} /></div>
