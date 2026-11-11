@@ -77,6 +77,8 @@ for (const engine of ["chromium", "webkit"])
             );
             if (skin === "classic") {
               await page.locator('.workspace-row[data-path="src"]').click();
+              // Folder sizes load on demand from the selection bar disclosure.
+              await page.locator(".workspace-folder-sizes > summary").click();
               await page
                 .locator(".workspace-folder-starburst-segment")
                 .first()

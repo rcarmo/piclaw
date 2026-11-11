@@ -49,7 +49,8 @@ browserTest('real explorer exposes registered file action on desktop/touch and o
   expect(await action.innerText()).toBe('');
   await action.click();
   await page.waitForFunction(()=>document.getElementById('pane')?.textContent==='REVIEW_SAVED_FILE');
-  expect(await page.evaluate(()=>({opens:(window as any).opens.length,edits:(window as any).edits.length,path:(window as any).selected.path}))).toEqual({opens:1,edits:0,path:'unchanged.ts'});
+  // Selecting the file opens it in a tab; the add-on action adds only its own readonly pane.
+  expect(await page.evaluate(()=>({opens:(window as any).opens.length,edits:(window as any).edits,path:(window as any).selected.path}))).toEqual({opens:1,edits:['unchanged.ts'],path:'unchanged.ts'});
   await page.setViewportSize({width:390,height:844});await action.click();
   await page.waitForFunction(()=>(window as any).opens.length===2);
   expect(await page.evaluate(()=>(window as any).opens.length)).toBe(2);

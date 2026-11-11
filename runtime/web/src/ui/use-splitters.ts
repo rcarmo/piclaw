@@ -37,9 +37,9 @@ export function occupiedPaneWidth(shell, selector) {
   return pane.getBoundingClientRect().width;
 }
 
-/** Width taken by the left sessions pane and its divider; it constrains the right-hand panes too. */
+/** Width taken by the left workbench side bar (activity bar and view) and its divider; it constrains the right-hand panes too. */
 export function occupiedSessionsWidth(shell) {
-  return occupiedPaneWidth(shell, '.sessions-sidebar') + occupiedPaneWidth(shell, '.sessions-splitter');
+  return occupiedPaneWidth(shell, '.workbench-sidebar') + occupiedPaneWidth(shell, '.workbench-splitter');
 }
 
 /**

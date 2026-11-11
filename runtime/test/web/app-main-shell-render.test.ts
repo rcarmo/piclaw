@@ -2,8 +2,8 @@ import { expect, mock, test } from 'bun:test';
 
 import { QueuedFollowupStack } from '../../web/src/components/compose-box.js';
 import { ChatSurface } from '../../web/src/components/chat-surface.js';
-import { SessionsSidebar } from '../../web/src/components/sessions-sidebar.js';
-import { SystemMetersHud } from '../../web/src/components/system-meters-hud.js';
+import { WorkbenchSidebar } from '../../web/src/components/workbench-sidebar.js';
+import { WorkbenchStatusBar } from '../../web/src/components/workbench-statusbar.js';
 import { WorkspaceExplorer } from '../../web/src/components/workspace-explorer.js';
 import {
   buildMainShellClassName,
@@ -29,87 +29,57 @@ test('buildMainShellClassName composes workspace/editor/chat/zen modifiers', () 
   })).toBe('app-shell workspace-collapsed editor-open chat-only zen-mode');
 });
 
-test('renderMainShell gives an open workspace a dismissible drawer backdrop', () => {
-  const toggleWorkspace = mock(() => {});
-  const tree = renderMainShell(createMainShellRenderOptions({
-    chatOnlyMode: false,
-    workspaceOpen: true,
-    toggleWorkspace,
-  }));
-  let backdrop: any = null;
-  let toggle: any = null;
-
-  walkVNodes(tree, (node) => {
-    if (node.props?.class === 'workspace-drawer-backdrop') backdrop = node;
-    if (String(node.props?.class || '').split(/\s+/).includes('workspace-toggle-tab')) toggle = node;
-  });
-
-  expect(backdrop).toBeTruthy();
-  expect(backdrop.type).toBe('div');
-  expect(backdrop.props['aria-hidden']).toBe('true');
-  expect(backdrop.props.onClick).toBe(toggleWorkspace);
-  expect(toggle.props['aria-expanded']).toBe('true');
-});
-
-test('renderMainShell orders panes as sessions | chat | file tree | editor and keeps pane markup', () => {
+test('renderMainShell hosts the explorer in the workbench side bar, left of the chat', () => {
+  const setWorkspaceVisible = mock(() => {});
   const tree = renderMainShell(createMainShellRenderOptions({
     chatOnlyMode: false,
     workspaceOpen: true,
     editorOpen: true,
     showEditorPaneContainer: true,
+    setWorkspaceVisible,
   }));
   const order: string[] = [];
-  let metersInsideContainer = false;
+  let sidebar: any = null;
   walkVNodes(tree, (node) => {
     const classes = String(node.props?.class || '').split(/\s+/);
-    if (node.type === SessionsSidebar) order.push('sessions');
-    if (node.type === WorkspaceExplorer) order.push('tree');
-    for (const name of ['container', 'editor-splitter', 'editor-pane-container', 'workspace-splitter']) {
+    if (node.type === WorkbenchSidebar) { sidebar = node; order.push('workbench'); }
+    if (node.type === WorkbenchStatusBar) order.push('statusbar');
+    for (const name of ['container', 'editor-splitter', 'editor-pane-container', 'workspace-splitter', 'workspace-toggle-tab', 'workspace-drawer-backdrop']) {
       if (classes.includes(name)) order.push(name);
     }
-    if (classes.includes('container')) walkVNodes(node.props?.children, (child) => { if (child.type === SystemMetersHud) metersInsideContainer = true; });
   });
-  expect(order).toEqual(['sessions', 'container', 'workspace-splitter', 'tree', 'editor-splitter', 'editor-pane-container']);
-  expect(metersInsideContainer).toBe(true);
+  // The right-hand side holds only the editor and viewer tabs.
+  expect(order).toEqual(['workbench', 'container', 'editor-splitter', 'editor-pane-container', 'statusbar']);
+  expect(sidebar.props.workspaceOpen).toBe(true);
+  expect(sidebar.props.setWorkspaceVisible).toBe(setWorkspaceVisible);
+  let explorers = 0;
+  walkVNodes(sidebar.props.explorer, (node) => { if (node.type === WorkspaceExplorer) explorers += 1; });
+  expect(explorers).toBe(1);
 });
 
-test('renderMainShell exposes the right-hand dividers as keyboard separators', () => {
+test('renderMainShell exposes the editor divider as a keyboard separator', () => {
   const tree = renderMainShell(createMainShellRenderOptions({ chatOnlyMode: false, editorOpen: true, showEditorPaneContainer: true }));
   const dividers: any[] = [];
   walkVNodes(tree, (node) => {
-    const classes = String(node.props?.class || '').split(/\s+/);
-    if (classes.includes('editor-splitter') || classes.includes('workspace-splitter')) dividers.push(node.props);
+    if (String(node.props?.class || '').split(/\s+/).includes('editor-splitter')) dividers.push(node.props);
   });
-  expect(dividers).toHaveLength(2);
-  for (const props of dividers) {
-    expect(props.role).toBe('separator');
-    expect(props.tabIndex).toBe('0');
-    expect(typeof props.onKeyDown).toBe('function');
-  }
+  expect(dividers).toHaveLength(1);
+  expect(dividers[0].role).toBe('separator');
+  expect(dividers[0].tabIndex).toBe('0');
+  expect(typeof dividers[0].onKeyDown).toBe('function');
 });
 
-test('renderMainShell omits the sessions pane in chat-only and zen modes', () => {
-  for (const overrides of [{ chatOnlyMode: true }, { chatOnlyMode: false, zenMode: true }]) {
-    let sessions = 0;
-    walkVNodes(renderMainShell(createMainShellRenderOptions(overrides)), (node) => { if (node.type === SessionsSidebar) sessions += 1; });
-    expect(sessions).toBe(0);
+test('renderMainShell omits the workbench side bar in chat-only and zen modes, and the status bar in zen', () => {
+  for (const [overrides, statusBars] of [[{ chatOnlyMode: true }, 1], [{ chatOnlyMode: false, zenMode: true }, 0]] as const) {
+    let sidebars = 0;
+    let bars = 0;
+    walkVNodes(renderMainShell(createMainShellRenderOptions(overrides)), (node) => {
+      if (node.type === WorkbenchSidebar) sidebars += 1;
+      if (node.type === WorkbenchStatusBar) bars += 1;
+    });
+    expect(sidebars).toBe(0);
+    expect(bars).toBe(statusBars);
   }
-});
-
-test('renderMainShell omits the workspace drawer backdrop in zen mode', () => {
-  const tree = renderMainShell(createMainShellRenderOptions({
-    chatOnlyMode: false,
-    workspaceOpen: true,
-    editorOpen: true,
-    zenMode: true,
-  }));
-  let backdropCount = 0;
-
-  walkVNodes(tree, (node) => {
-    if (node.props?.class === 'workspace-drawer-backdrop') backdropCount += 1;
-  });
-
-  expect(backdropCount).toBe(0);
 });
 
 test('extractPostedUserMessageId prefers user_message.id and falls back to row_id', () => {

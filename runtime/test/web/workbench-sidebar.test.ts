@@ -7,8 +7,9 @@ import {
   availableSessionsWidth,
   buildSessionsSidebarSections,
   clampSessionsWidth,
+  resolveInitialWorkbenchView,
   selectSessionsPreviewTargets,
-} from '../../web/src/components/sessions-sidebar.js';
+} from '../../web/src/components/workbench-sidebar.js';
 
 const chats = [
   { chat_jid: 'web:default', agent_name: 'default', root_chat_jid: 'web:default' },
@@ -38,9 +39,10 @@ test('sessions pane width is clamped and shrinks before it hides', () => {
   expect(clampSessionsWidth(10)).toBe(SESSIONS_MIN_WIDTH);
   expect(clampSessionsWidth(5000)).toBe(SESSIONS_MAX_WIDTH);
   expect(clampSessionsWidth(5000, 300)).toBe(300);
-  expect(availableSessionsWidth({ viewportWidth: 1440, rightPanesWidth: 568 })).toBe(548);
-  expect(availableSessionsWidth({ viewportWidth: 1024, rightPanesWidth: 488 })).toBe(212);
-  expect(availableSessionsWidth({ viewportWidth: 1024, rightPanesWidth: 568 }) < SESSIONS_MIN_WIDTH).toBe(true);
+  // The 48px activity bar always stays on wide screens.
+  expect(availableSessionsWidth({ viewportWidth: 1440, rightPanesWidth: 568 })).toBe(500);
+  expect(availableSessionsWidth({ viewportWidth: 1024, rightPanesWidth: 440 })).toBe(212);
+  expect(availableSessionsWidth({ viewportWidth: 1024, rightPanesWidth: 488 }) < SESSIONS_MIN_WIDTH).toBe(true);
 });
 
 test('live previews poll other active sessions only, up to the limit', () => {
@@ -52,4 +54,9 @@ test('live previews poll other active sessions only, up to the limit', () => {
   expect(selectSessionsPreviewTargets(rows, 'web:proxmox')).toEqual(['web:busy']);
   expect(selectSessionsPreviewTargets(rows, 'web:default')).toEqual(['web:busy', 'web:proxmox']);
   expect(selectSessionsPreviewTargets(rows, 'web:default', 1)).toEqual(['web:busy']);
+});
+
+test('the Explorer view is selected when the workspace starts open', () => {
+  expect(resolveInitialWorkbenchView(true)).toBe('explorer');
+  expect(resolveInitialWorkbenchView(false)).toBe('sessions');
 });

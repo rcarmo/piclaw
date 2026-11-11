@@ -7,17 +7,19 @@ The UI supports one user across multiple sessions and browser tabs. Family accou
 
 ## Layout
 
-On desktop screens (at least 1024 px wide, landscape), Classic shows the sessions pane on the left, the chat in the middle, then the file tree and the editor. The editor stays anchored to the right edge. Each pane has a divider that can be dragged or focused. Focused dividers respond to the arrow keys (Shift for larger steps), Home and End. Enter hides or shows the pane, and double-clicking a divider resets it.
+Classic uses a workbench layout. On desktop screens (at least 1024 px wide, landscape), an activity bar on the left selects the view shown in the side bar, the chat is in the middle, and editor and viewer tabs are on the right. Dividers can be dragged or focused. Focused dividers respond to the arrow keys (Shift for larger steps), Home and End. Enter hides or shows the pane, and double-clicking a divider resets it.
 
-- **Sessions:** current, pinned and other sessions, with search and pinning shared with the compose session picker. The global menu sits in its header. When space is short, the pane narrows, then hides itself without changing the saved preference; its edge tab shows it again. Ctrl/Cmd+Shift+B (configurable) shows or hides it.
-  - Each row shows the session's age or activity, its latest reply and, when known, its context use. The header counts active sessions.
-  - Other active sessions show their live draft, thinking or running tool, polled every 3 seconds. The list refreshes every 15 seconds and when the window regains focus, only while the pane is visible.
+- **Activity bar:** the global menu sits at the top, then **Sessions** and **Explorer**, with **Settings** at the bottom. Clicking the active view hides the side bar; the activity bar stays. Ctrl/Cmd+Shift+B shows Sessions and Ctrl/Cmd+Shift+E shows the Explorer; pressing either again hides the side bar. Both shortcuts can be changed in Settings → Keyboard. When space is short, the side bar narrows, then hides itself without changing the saved preference.
+- **Sessions:** current, pinned and other sessions, with search and pinning shared with the compose session picker. The activity bar badge counts active sessions.
+  - Each row shows the session's age or activity, its latest reply and, when known, its context use.
+  - Other active sessions show their live draft, thinking or running tool, polled every 3 seconds. The list refreshes every 15 seconds and when the window regains focus, only while the Sessions view is visible.
   - Ctrl/Cmd-click or middle-click opens a session in a new tab.
-- **Chat:** keeps at least 320 px. The system meters appear in its top-right corner.
+- **Explorer:** the workspace file tree. Selecting a file opens it straight into the matching viewer or editor tab; there is no preview pane under the tree. The bar under the tree holds the selected item's actions, including add-on actions, and a **Folder sizes** chart that loads only when opened.
+- **Chat:** keeps at least 320 px.
 - **Editor:** collapsing it keeps its tabs open.
-- **File tree:** shown or hidden with its edge tab, its divider or Ctrl/Cmd+Shift+E (configurable in Settings → Keyboard). Hiding it gives the space to the chat; the editor does not move.
+- **System meters:** shown at the foot of the side bar while it is visible, and in the status bar along the bottom of the window otherwise.
 
-Below that width, the chat fills the screen. Sessions use the compose `@session` picker, and the file tree opens as a drawer from the right. On phones (under 640 px) an open editor covers the chat; **Chat** returns to the conversation and **Editor** brings the editor back.
+Below that width, the chat fills the screen and the side bar opens as a drawer from the left, for example from **Show workspace** in the global menu; the drawer has its own activity bar. On phones (under 640 px) an open editor covers the chat; **Chat** returns to the conversation and **Editor** brings the editor back. Phones have no status bar; the meters appear in the drawer.
 
 Add-ons that dock on the right edge can reserve space; see the [extension UI contract](extension-ui-contract.md#right-edge-docking).
 

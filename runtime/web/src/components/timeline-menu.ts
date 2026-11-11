@@ -58,22 +58,22 @@ export function TimelineMenu({
         return () => { host.remove(); portalRef.current = null; };
     }, []);
 
-    // The menu sits in the sessions pane header when that pane is visible,
-    // otherwise at the top-left of the chat. The workspace tree is on the right.
+    // The menu sits at the top of the workbench activity bar when it is laid
+    // out (wide screens), otherwise at the top-left of the chat.
     const [inSessions, setInSessions] = useState(false);
     useEffect(() => {
         const update = () => {
             const safeTop = getSafeAreaTop();
             const topOffset = safeTop > 0 ? safeTop + 4 : 8;
-            const sessions = document.querySelector('.sessions-sidebar');
+            const sessions = document.querySelector('.workbench-sidebar');
             const r = sessions?.getBoundingClientRect?.();
-            const visible = Boolean(r && r.width >= 120 && getComputedStyle(sessions).display !== 'none');
+            const visible = Boolean(r && r.width >= 40 && getComputedStyle(sessions).display !== 'none' && getComputedStyle(sessions).position !== 'fixed');
             setInSessions(visible);
             setPos(visible ? { top: r.top + topOffset, left: r.left + 8 } : { top: topOffset, left: 8 });
         };
         update();
         const observer = new ResizeObserver(update);
-        const sessions = document.querySelector('.sessions-sidebar');
+        const sessions = document.querySelector('.workbench-sidebar');
         if (sessions) observer.observe(sessions);
         window.addEventListener('resize', update);
         window.addEventListener('piclaw:sessions-sidebar-toggle', update);

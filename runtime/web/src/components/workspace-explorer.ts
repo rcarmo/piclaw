@@ -4,7 +4,7 @@ import { workspaceChartColor } from '../ui/workspace-chart-colors.js';
 import { renderDisclosureTriangle } from '../ui/disclosure-triangle.js';
 import { useTranslation } from '../utils/i18n.js';
 import { LanguageSwitcher } from './language-switcher.js';
-import { getLocalStorageBoolean, getLocalStorageItem, getLocalStorageNumber, setLocalStorageItem } from '../utils/storage.js';
+import { getLocalStorageBoolean, getLocalStorageItem, setLocalStorageItem } from '../utils/storage.js';
 import {
     createWorkspaceFile,
     deleteWorkspaceFile,
@@ -665,7 +665,8 @@ export function WorkspaceExplorer({
     const [preview,       setPreview]       = useState(null);
     const [,             setDownloadId]    = useState(null);
     const [initialLoad,   setInitialLoad]   = useState(true);
-    const [loadingPreview,setLoadingPreview]= useState(false);
+    const [,             setLoadingPreview]= useState(false);
+    const [folderChartOpen, setFolderChartOpen] = useState(false);
     const [error,         setError]         = useState(null);
     const [showHidden,    setShowHidden]    = useState(() => getLocalStorageBoolean('workspaceShowHidden', false));
     const [dragActive,   setDragActive]    = useState(false);
@@ -717,12 +718,9 @@ export function WorkspaceExplorer({
     const mouseDragRef     = useRef({ path: null, dragging: false, startX: 0, startY: 0 });
     const dragExpandRef    = useRef({ path: null, timer: 0 });
     const suppressClickRef = useRef(false);
-    const previewHeightRef= useRef(0);
     const folderChartCacheRef = useRef(new Map());
     const folderChartPayloadRef = useRef(null);
     const folderChartPathRef = useRef(null);
-    const previewPaneHostRef = useRef(null);
-    const previewPaneInstanceRef = useRef(null);
     const headerMenuRef = useRef(null);
     const headerMenuButtonRef = useRef(null);
     const showHiddenRef   = useRef(showHidden);
@@ -1404,13 +1402,6 @@ export function WorkspaceExplorer({
 
     useEffect(() => {
         updateVisibility();
-        // Apply saved preview height
-        const saved = getLocalStorageNumber('previewHeight', null);
-        const h = Number.isFinite(saved) ? Math.min(Math.max(saved, 80), 600) : 280;
-        previewHeightRef.current = h;
-        if (sidebarRef.current) {
-            sidebarRef.current.style.setProperty('--preview-height', `${h}px`);
-        }
 
         const media = window.matchMedia('(min-width: 1024px) and (orientation: landscape)');
         const onVisibilityChange = () => scheduleVisibilityUpdate();
@@ -1463,7 +1454,7 @@ export function WorkspaceExplorer({
     };
 
     useEffect(() => {
-        if (!selectedPath || !selectedIsDir) {
+        if (!selectedPath || !selectedIsDir || !folderChartOpen) {
             setFolderChart(null);
             folderChartPayloadRef.current = null;
             folderChartPathRef.current = null;
@@ -1518,7 +1509,7 @@ export function WorkspaceExplorer({
                 if (selectedPathRef.current !== fetchPath) return;
                 setFolderChart({ loading: false, error: err?.message || 'Failed to load folder size chart', payload: lastPath === selectedPath ? lastPayload : null, disabled: false });
             });
-    }, [selectedPath, selectedIsDir, showHidden, folderPreviewDepth]);
+    }, [selectedPath, selectedIsDir, showHidden, folderPreviewDepth, folderChartOpen]);
 
     const canEdit = Boolean(preview && preview.kind === 'text' && !selectedIsDir && (!preview.size || preview.size <= 256 * 1024));
     const editTitle = canEdit
@@ -1606,42 +1597,6 @@ export function WorkspaceExplorer({
         }
     }, []);
 
-    useEffect(() => {
-        const container = previewPaneHostRef.current;
-
-        if (previewPaneInstanceRef.current) {
-            previewPaneInstanceRef.current.dispose();
-            previewPaneInstanceRef.current = null;
-        }
-
-        if (!container) return undefined;
-        container.innerHTML = '';
-
-        if (!selectedPath || selectedIsDir || !preview || preview.error) return undefined;
-
-        const context = {
-            path: selectedPath,
-            content: typeof preview.text === 'string' ? preview.text : undefined,
-            mtime: preview.mtime,
-            size: preview.size,
-            preview,
-            mode: 'view',
-        };
-        const extension = paneRegistry.resolve(context) || paneRegistry.get('workspace-preview-default');
-        if (!extension) return undefined;
-
-        const instance = extension.mount(container, context);
-        previewPaneInstanceRef.current = instance;
-
-        return () => {
-            if (previewPaneInstanceRef.current === instance) {
-                instance.dispose();
-                previewPaneInstanceRef.current = null;
-            }
-            container.innerHTML = '';
-        };
-    }, [selectedPath, selectedIsDir, preview]);
-
     const getEventTargetElement = (event) => {
         const target = event?.target;
         if (target instanceof Element) return target;
@@ -1716,6 +1671,8 @@ export function WorkspaceExplorer({
             const node = nodeMapRef.current.get(clickedPath);
             if (node) onFileSelectRef.current?.(node.path, node);
             if (!isActionClick && !isCaretClick) {
+                // Files open straight into a viewer or editor tab; metadata still loads for the actions bar.
+                onOpenEditorRef.current?.(clickedPath);
                 loadPreviewRef.current?.(clickedPath);
             }
         }
@@ -1951,75 +1908,6 @@ export function WorkspaceExplorer({
         }
     }, [resolveDropTargetFromElement, resolveDropTargetPath, startDragGhost, updateDragGhostPosition, updateDropTarget, scheduleDragExpand]);
 
-    // ── Preview-pane vertical resize — zero re-renders ────────────────────────
-    const handlePreviewSplitterMouseDown = useRef((e) => {
-        e.preventDefault();
-        const sidebar = sidebarRef.current;
-        if (!sidebar) return;
-        const startY  = e.clientY;
-        const startH  = previewHeightRef.current || 280;
-        const splitter = e.currentTarget;
-        splitter.classList.add('dragging');
-        document.body.style.cursor = 'row-resize';
-        document.body.style.userSelect = 'none';
-
-        let lastY = startY;
-        const onMove = (me) => {
-            lastY = me.clientY;
-            // dragging up (negative delta) grows the preview; down shrinks it
-            const maxH = sidebar.clientHeight - 80;
-            const h = Math.min(Math.max(startH - (me.clientY - startY), 80), maxH);
-            sidebar.style.setProperty('--preview-height', `${h}px`);
-            previewHeightRef.current = h;
-        };
-        const onUp = () => {
-            const maxH = sidebar.clientHeight - 80;
-            const h = Math.min(Math.max(startH - (lastY - startY), 80), maxH);
-            previewHeightRef.current = h;
-            splitter.classList.remove('dragging');
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-            setLocalStorageItem('previewHeight', String(Math.round(h)));
-            document.removeEventListener('mousemove', onMove);
-            document.removeEventListener('mouseup', onUp);
-        };
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
-    }).current;
-
-    const handlePreviewSplitterTouchStart = useRef((e) => {
-        e.preventDefault();
-        const sidebar = sidebarRef.current;
-        if (!sidebar) return;
-        const touch = e.touches[0];
-        if (!touch) return;
-        const startY = touch.clientY;
-        const startH = previewHeightRef.current || 280;
-        const splitter = e.currentTarget;
-        splitter.classList.add('dragging');
-        document.body.style.userSelect = 'none';
-
-        const onMove = (te) => {
-            const t = te.touches[0];
-            if (!t) return;
-            te.preventDefault();
-            const maxH = sidebar.clientHeight - 80;
-            const h = Math.min(Math.max(startH - (t.clientY - startY), 80), maxH);
-            sidebar.style.setProperty('--preview-height', `${h}px`);
-            previewHeightRef.current = h;
-        };
-        const onUp = () => {
-            splitter.classList.remove('dragging');
-            document.body.style.userSelect = '';
-            setLocalStorageItem('previewHeight', String(Math.round(previewHeightRef.current || startH)));
-            document.removeEventListener('touchmove', onMove);
-            document.removeEventListener('touchend', onUp);
-            document.removeEventListener('touchcancel', onUp);
-        };
-        document.addEventListener('touchmove', onMove, { passive: false });
-        document.addEventListener('touchend', onUp);
-        document.addEventListener('touchcancel', onUp);
-    }).current;
 
     const handleDownload = useCallback((path = selectedPath) => {
         if (!path) return;
@@ -2659,8 +2547,7 @@ export function WorkspaceExplorer({
                 `}
             </div>
             ${selectedPath && html`
-                <div class="workspace-preview-splitter-h" onMouseDown=${handlePreviewSplitterMouseDown} onTouchStart=${handlePreviewSplitterTouchStart}></div>
-                <div class="workspace-preview">
+                <div class="workspace-selection-bar">
                     ${addonActionError && html`<div role="alert">${addonActionError}</div>`}
                     <div class="workspace-preview-header">
                         <span class="workspace-preview-title">${selectedPath}</span>
@@ -2746,22 +2633,20 @@ export function WorkspaceExplorer({
                                 </a>`}
                         </div>
                     </div>
-                    ${loadingPreview && html`<div class="workspace-loading">Loading preview…</div>`}
                     ${preview?.error && html`<div class="workspace-error">${preview.error}</div>`}
                     ${selectedIsDir && html`
-                        <div class="workspace-preview-text">Folder selected — create file, upload files, or download as zip.</div>
-                        ${folderChart?.disabled && html`<div class="workspace-preview-text">Folder size preview scanning is disabled in Workspace settings.</div>`}
-                        ${folderChart?.loading && html`<div class="workspace-loading">Loading folder size preview…</div>`}
-                        ${folderChart?.error && html`<div class="workspace-error">${folderChart.error}</div>`}
-                        ${folderChart?.payload && folderChart.payload.segments?.length > 0 && html`
-                            <${FolderStarburstChart} payload=${folderChart.payload} />
-                        `}
-                        ${folderChart?.payload && (!folderChart.payload.segments || folderChart.payload.segments.length === 0) && html`
-                            <div class="workspace-preview-text">No file size data available for this folder yet.</div>
-                        `}
-                    `}
-                    ${preview && !preview.error && !selectedIsDir && html`
-                        <div class="workspace-preview-body" ref=${previewPaneHostRef}></div>
+                        <details class="workspace-folder-sizes" open=${folderChartOpen} onToggle=${(event) => setFolderChartOpen(event.currentTarget.open)}>
+                            <summary>Folder sizes</summary>
+                            ${folderChart?.disabled && html`<div class="workspace-preview-text">Folder size scanning is disabled in Workspace settings.</div>`}
+                            ${folderChart?.loading && html`<div class="workspace-loading">Loading folder sizes…</div>`}
+                            ${folderChart?.error && html`<div class="workspace-error">${folderChart.error}</div>`}
+                            ${folderChart?.payload && folderChart.payload.segments?.length > 0 && html`
+                                <${FolderStarburstChart} payload=${folderChart.payload} />
+                            `}
+                            ${folderChart?.payload && (!folderChart.payload.segments || folderChart.payload.segments.length === 0) && html`
+                                <div class="workspace-preview-text">No file size data available for this folder yet.</div>
+                            `}
+                        </details>
                     `}
                 </div>
             `}

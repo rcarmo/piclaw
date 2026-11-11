@@ -158,6 +158,8 @@ function readIsNarrowLayout() {
     return window.matchMedia(`(max-width: ${SYSTEM_METERS_COMPACT_BREAKPOINT_PX}px)`).matches;
 }
 
+const SYSTEM_METERS_ACTIVE_MODES = new Set(['overlay', 'sidebar', 'statusbar']);
+
 export function SystemMetersHud({ mode = 'overlay' }) {
     const [enabled, setEnabled] = useState(() => readStoredMetersEnabled(false));
     const [collapsed, setCollapsed] = useState(() => readStoredMetersCollapsed(false));
@@ -237,8 +239,8 @@ export function SystemMetersHud({ mode = 'overlay' }) {
         return () => mediaQuery.removeListener(sync);
     }, []);
 
-    const activeMode = 'overlay';
-    const isActiveInstance = mode === activeMode;
+    // Only one placement renders at a time: the side bar foot or the status bar.
+    const isActiveInstance = SYSTEM_METERS_ACTIVE_MODES.has(mode);
 
     useEffect(() => {
         if (!enabled || !isActiveInstance) return undefined;

@@ -70,12 +70,13 @@ interface BranchRecordLike {
 
 export function toggleWorkspaceVisibility(
   setWorkspaceOpen: StateSetter<boolean>,
-  options: { runtime?: any } = {},
+  options: { runtime?: any; next?: boolean } = {},
 ): void {
   const runtime = options.runtime ?? (typeof window !== 'undefined' ? window : null);
   const persistDesktopPreference = resolveWorkspaceLayoutBucket(runtime) === 'desktop';
   setWorkspaceOpen((prev) => {
-    const next = !prev;
+    const next = typeof options.next === 'boolean' ? options.next : !prev;
+    if (next === prev) return prev;
     if (persistDesktopPreference) {
       persistDesktopWorkspaceOpenPreference(next, runtime);
     }
@@ -709,6 +710,11 @@ export function useBranchPaneLifecycle(options: UseBranchPaneLifecycleOptions) {
     toggleWorkspaceVisibility(setWorkspaceOpen);
   }, [setWorkspaceOpen]);
 
+  /** Explicit show/hide, used by the workbench side bar when it switches views. */
+  const setWorkspaceVisible = useCallback((next: boolean) => {
+    toggleWorkspaceVisibility(setWorkspaceOpen, { next: Boolean(next) });
+  }, [setWorkspaceOpen]);
+
   const handleBranchPickerChange = useCallback((nextChatJid: unknown) => {
     handleBranchPickerChangeAction({
       nextChatJid,
@@ -917,6 +923,7 @@ export function useBranchPaneLifecycle(options: UseBranchPaneLifecycleOptions) {
 
   return {
     toggleWorkspace,
+    setWorkspaceVisible,
     handleBranchPickerChange,
     openRenameCurrentBranchForm,
     closeRenameCurrentBranchForm,
