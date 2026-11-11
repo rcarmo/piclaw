@@ -31,3 +31,25 @@ test('retired Regrets0.2.3 cannot re-enter legacy execution through the loader',
     await expect(loadApplicationExtensionCatalog({cwd:f.cwd,agentDir:join(f.cwd,'agent'),settingsManager:SettingsManager.inMemory()})).rejects.toThrow('Unqualified installed add-on package before evaluation');
   }finally{cleanup(f.cwd);}
 });
+
+test('installer preflight shares exact native package proof before activation', async()=>{
+  const {inspectAddonInstall}=await import('../../runtime/durable-engine/src/host-extension-catalog.ts');
+  const f=fixture();
+  try{
+    const obs=inspectAddonInstall('@rcarmo/piclaw-addon-observability','0.1.23');
+    expect(obs?.supportedVersion).toBe('0.1.22');
+    expect(obs?.problem).toContain('This Core release requires Observability 0.1.22');
+    const pkg=join(f.cwd,'.pi/extensions/node_modules/@rcarmo/piclaw-addon-plan-sidebar');
+    expect(inspectAddonInstall('@rcarmo/piclaw-addon-plan-sidebar','0.1.28',pkg)).toEqual({supportedVersion:'0.1.28'});
+    const file=join(pkg,'index.ts'),bytes=readFileSync(file);
+    writeFileSync(file,'throw Error("UNAPPROVED_MUST_NOT_EXECUTE")');
+    expect(inspectAddonInstall('@rcarmo/piclaw-addon-plan-sidebar','0.1.28',pkg)?.problem).toContain('does not match');
+    expect(()=>auditInstalledApplicationAddonSources(f.cwd)).toThrow();
+    writeFileSync(file,bytes);
+    writeFileSync(join(pkg,'compat/chat-context.js'),'throw Error("SHADOW_MUST_NOT_EXECUTE")');
+    expect(inspectAddonInstall('@rcarmo/piclaw-addon-plan-sidebar','0.1.28',pkg)?.problem).toContain('does not match');
+    rmSync(join(pkg,'compat/chat-context.js'));
+    expect(auditInstalledApplicationAddonSources(f.cwd).profiles.length).toBe(23);
+    expect(inspectAddonInstall('@third-party/unmanaged','1.0.0')).toBeUndefined();
+  }finally{cleanup(f.cwd);}
+});

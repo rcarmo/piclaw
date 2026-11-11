@@ -60,7 +60,7 @@ import { createHostBuiltinTools } from "./host-builtins.js";
 import { createHostModelTools, hostModelToolNames, nativeToolInstructions } from "./host-model-controls.js";
 import { createHostCommandPolicy } from "./host-command-policy.js";
 import { createHostProcessControls, nativeProcessToolNames, nativeProcessInstructions } from "./host-process-controls.js";
-import { loadApplicationExtensionCatalog, qualifyInstalledAddon, bindInstalledAddon, qualifyInstalledPlan, qualifyInstalledDelegate, qualifyInstalledCodeReview, qualifyInstalledEditableTable, qualifyInstalledOfficeViewer, qualifyInstalledDrawio, qualifyInstalledGoal, qualifyInstalledObservability, qualifyInstalledRestic, assertApplicationExtensionCatalogSupported } from "./host-extension-catalog.js";
+import { inspectAddonInstall, loadApplicationExtensionCatalog, qualifyInstalledAddon, bindInstalledAddon, qualifyInstalledPlan, qualifyInstalledDelegate, qualifyInstalledCodeReview, qualifyInstalledEditableTable, qualifyInstalledOfficeViewer, qualifyInstalledDrawio, qualifyInstalledGoal, qualifyInstalledObservability, qualifyInstalledRestic, assertApplicationExtensionCatalogSupported } from "./host-extension-catalog.js";
 import { createHostDelegateTool } from "./host-delegate-tool.js";
 import { createHostDelegateFileReader } from "./host-delegate-files.js";
 import { extensionKvGet } from "../../src/db/extension-kv.js";
@@ -1481,7 +1481,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     dispatchHostCommand: async () => { throw Error("Offline maintenance cannot admit conversations"); } } : {...bundle.sessionOptions,dispatchDreamOperation},
     bind(options) {
       assertAdmission(); nativeQueue=options.queue; // Resource-idle check for process controls only.
-      return Object.freeze({ ...bundle.bind(options), resumeNativeInputs(chatJid?: string) {
+      return Object.freeze({ ...bundle.bind(options), inspectAddonInstall, resumeNativeInputs(chatJid?: string) {
         assertAdmission();
         const targets = bundle.sessionTargets.list().filter(target => !chatJid || chatJid === "all" || target.chatJid === chatJid);
         if (chatJid && chatJid !== "all" && targets.length === 0) throw Error("Unbound native input target");

@@ -1,5 +1,6 @@
 import type { SyncSqliteOperation } from "../../src/db/sqlite-async-admission.js";
 import { assertHostToolDeclaration } from "./host-tools.js";
+import { InstalledAddonSourceChanged } from "./host-model-failure.js";
 import { installedAddonProfiles, type InstalledAddonProfile } from "./host-installed-addon-profiles.js";
 import { DefaultResourceLoader, type LoadExtensionsResult, type SettingsManager, type ToolDefinition, type RegisteredCommand } from "../../src/durable-legacy-sdk.js";
 import { getInstalledAddonExtensionPaths, resolveAddonPackageEntries, listInstalledAddonPackageDirs, readInstalledAddonPackage } from "../../src/addons/package-entries.js";
@@ -149,7 +150,12 @@ function captureApprovedSource(cwd: string, installedEntries: readonly string[],
     const candidates = [profile.name, ...(kind === "eml-viewer" ? ["piclaw-addon-eml-viewer"] : [])]
       .map(name => join(workspace, ".pi/extensions/node_modules", name)).filter(path => existsSync(path));
     if (candidates.length !== 1) return undefined;
-    const packageDir = candidates[0]!;
+    return captureApprovedPackage(workspace, candidates[0]!, installedEntries, kind);
+  } catch { return undefined; }
+}
+function captureApprovedPackage(workspace: string, packageDir: string, installedEntries: readonly string[], kind: SourceProfile): InstalledSource | undefined {
+  try {
+    const profile = sourceProfiles[kind];
     // Neither a renamed package nor a symlink out of the installed namespace
     // grants provenance. Entry/helper links may not escape the canonical root.
     if (realpathSync(packageDir) !== packageDir) return undefined;
@@ -178,6 +184,22 @@ function captureApprovedSource(cwd: string, installedEntries: readonly string[],
     return Object.freeze({ cwd: workspace, packageDir, entry, manifest, files });
   } catch { return undefined; }
 }
+/** Read-only install preflight using the same source proof as the loader. No
+ * factory evaluation or loaded-registration qualification is donated here. */
+export function inspectAddonInstall(name: string, version?: string, directory?: string): { supportedVersion: string; problem?: string } | undefined {
+  const match = Object.entries(sourceProfiles).find(([, profile]) => profile.name === name);
+  if (!match) return;
+  const [kind, profile] = match;
+  const supportedVersion = profile.version;
+  if (version !== supportedVersion) return { supportedVersion, problem: `This Core release requires ${profile.label} ${supportedVersion}. Update Core to a release supporting the requested add-on before installing it. The installed add-on has not been changed.` };
+  if (directory) {
+    const manifest = readInstalledAddonPackage(directory)?.manifest;
+    const entries = resolveAddonPackageEntries(directory, manifest?.pi?.extensions);
+    if (!captureApprovedPackage(directory, resolve(directory), entries, kind as SourceProfile))
+      return { supportedVersion, problem: `${profile.label} does not match the add-on source approved by this Core release. The installed add-on has not been changed.` };
+  }
+  return { supportedVersion };
+}
 function sameSource(a: InstalledSource | undefined, b: InstalledSource | undefined): boolean {
   return !!a && !!b && a.cwd === b.cwd && a.packageDir === b.packageDir && a.entry === b.entry && a.manifest === b.manifest && a.files === b.files;
 }
@@ -195,7 +217,7 @@ function qualifyInstalled(catalog: LoadExtensionsResult, cwd: string, kind: Prof
   const [extension, { source, definition, execute, declaration, handlerMap, handlers, tools, commands }] = candidates[0]!;
   const assertCurrent = () => {
     if (!catalog.extensions.includes(extension) || resolve(extension.resolvedPath) !== source.entry ||
-      !sameSource(source, captureApprovedSource(cwd, getInstalledAddonExtensionPaths(cwd), kind))) throw Error(`Installed ${profile.label} source changed`);
+      !sameSource(source, captureApprovedSource(cwd, getInstalledAddonExtensionPaths(cwd), kind))) throw new InstalledAddonSourceChanged(profile.label, profile.version);
     const names = kind === "observability" ? [] : kind === "goal" ? ["get_goal", "create_goal", "goal_complete", "goal_stop", "update_goal"] : [kind];
     if (definition?.name !== names[0] || extension.tools.size !== names.length || tools.length !== names.length ||
       names.some(name => !tools.some(prior => prior.name === name && extension.tools.get(name)?.definition === prior.definition && prior.definition.execute === prior.execute && JSON.stringify(prior.definition) === prior.declaration)) ||
@@ -495,7 +517,7 @@ export async function qualifyInstalledAddon(catalog: LoadExtensionsResult, cwd: 
   const prior = extension && loadedInstalledSources.get(catalog)?.get(extension);
   const modules: { file: string; exports: Record<string, unknown>; functions: Readonly<Record<string, unknown>> }[] = [];
   const assertCurrent = () => {
-    if (!sameSource(source, captureApprovedSource(cwd, getInstalledAddonExtensionPaths(cwd), kind))) throw Error(`Installed ${kind} source changed`);
+    if (!sameSource(source, captureApprovedSource(cwd, getInstalledAddonExtensionPaths(cwd), kind))) throw new InstalledAddonSourceChanged(profile.label, profile.version);
     if (extension) {
       if (!prior || !catalog.extensions.includes(extension) || extension.handlers !== prior.handlerMap ||
         extension.tools.size !== prior.tools.length || extension.commands.size !== prior.commands.length || extension.shortcuts.size ||

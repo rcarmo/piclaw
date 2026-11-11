@@ -215,7 +215,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "a64d2881c5a7e657f71e965f4beb5a581dc07e9797edd1123af3739af3f0ca63",
       "state": "retained-decoupled",
-      "currentSha256": "49cb9dac269968c5142726beaac1cb28d63ab4018495b59e4e0816bba48b509d",
+      "currentSha256": "0a975eaa3ede1121bb3e2343ff854f43535135b5769e097549eca9413caf91d0",
       "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
       "directImportCallers": []
     },
@@ -265,7 +265,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "c377f0ada2d60e010200722d5947b3ab4330db6e2cea50bf8fff0efeb372de25",
       "state": "retained-decoupled",
-      "currentSha256": "3591a6f20a9a3f9e6db848e65ae2b8fc77f33d23fa20e2b2e874f284a55726d9",
+      "currentSha256": "625b85e236f0d2827d30521d9b9ec0e5494f8c9603862a72fc989eff567fd09f",
       "currentPurpose": "bounded current provider failure notices/evidence plus read-only historical wire categories; classifier produces no local financial denial",
       "directImportCallers": [
         {
@@ -301,7 +301,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "e300445266a88780616938fe3ee0690b65a409d3ba364e0b1d741b5f52efb52e",
       "state": "retained-decoupled",
-      "currentSha256": "7fa3f483094111bfd7072338e9524f9f761f8b662674c30adac9651045e45886",
+      "currentSha256": "565bd338262db2249529079550f9b329013e1e2ca1c58568722ff62655d90cbb",
       "currentPurpose": "public SDK model conversion, actual usage facts and physical context/output bounds; source/auth/resource policy only",
       "directImportCallers": [
         {
@@ -889,7 +889,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "98383ffa112e2169a0438042b5f2c5fffb794ba99ce7b79002daca6802f7b9b0",
       "state": "retained-decoupled",
-      "currentSha256": "6db1dc207a916427686f56f59f23448c77a89de9b96c2b0ff498875503a285fa",
+      "currentSha256": "f515269d9f7ae776438a473bf035155101e78fabbb1df1f02d9567fdfc00ccb1",
       "currentPurpose": "existing model choice, price/unknown display and token/context/status DTO; same interaction and authority",
       "directImportCallers": [
         {
@@ -1028,7 +1028,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "cdddbc02e1f46e6767bfd9f5602c55ef007d6083aff7af016550f74d1f73aa6f",
       "state": "retained-decoupled",
-      "currentSha256": "75c707a6920b82c17900d7b11946312ca768a5bf790f9d38a2d97717782f6d6f",
+      "currentSha256": "f894b2e75287dbded36ce57062bba34615fc51bc4d51dff9c47f87fc195f0dc8",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
@@ -2456,7 +2456,7 @@
       "deliveryOwner": "#1882",
       "originalSha256": "1af8f43680724ca4c05c9beede8db5903b013bc76e9bc5dbceb1235e3d823105",
       "state": "retained-decoupled",
-      "currentSha256": "bef06fd1f1495bde0518ec70b890316f32ec83dda5fdbf851307c400908ca836",
+      "currentSha256": "ab19031b5bb5fa75e74fbefe396cb8809cac667036f7d30fb5fc24a0d5056e5e",
       "currentPurpose": "exact approved add-on source/resource identity and public exported domain contracts",
       "directImportCallers": [
         {
