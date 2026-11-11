@@ -11,6 +11,7 @@
 
 import type { DurableTurnEntries } from "../../../agent-pool/durable-runtime-adapter.js";
 import { formatToolTitle } from "./agent-utils.js";
+import { languageForPath, originalToolInput, readableToolInput, type EmittedOutput, type ReadableInput } from "./tool-presentation.js";
 
 export type TurnStepStatus = "ok" | "error" | "running" | "aborted";
 
@@ -192,6 +193,12 @@ export interface TurnStepDetail {
   kind: TurnActivityStep["kind"];
   text?: string;
   args?: string;
+  /** Arguments as the model wrote them, and a readable view when formatting helps. */
+  input?: { original: string; readable: ReadableInput | null };
+  /** What the tool emitted when the model saw something else (added by the handler). */
+  emitted?: EmittedOutput | null;
+  /** Highlighting language of the output when it is a file's source (read). */
+  output_language?: string;
   output?: string;
   output_offset?: number;
   output_chars?: number;
@@ -203,18 +210,23 @@ export function projectTurnStepDetail(turn: DurableTurnEntries, stepId: string, 
   const [kind, ...rest] = stepId.split(":");
   if (kind === "tool") {
     const callId = rest.join(":");
-    let args: string | undefined, output: string | undefined;
+    let args: string | undefined, output: string | undefined, input: TurnStepDetail["input"], outputLanguage: string | undefined;
     for (const entry of turn.entries) {
       const message = first(entry);
       if (entry.kind === "pi.assistant") {
         const call = blocks(message).find((block) => block.type === "toolCall" && block.id === callId);
-        if (call) args = argsText(call.arguments);
+        if (call) {
+          args = argsText(call.arguments);
+          const readable = readableToolInput(call.name ?? "", call.arguments);
+          if (call.name === "read") outputLanguage = languageForPath((call.arguments as { path?: unknown } | undefined)?.path);
+          input = { original: clip(originalToolInput(call.arguments), DETAIL_LIMIT), readable: readable ? { ...readable, text: clip(readable.text, DETAIL_LIMIT) } : null };
+        }
       } else if (entry.kind === "pi.tool-result" && message?.toolCallId === callId) output = resultText(message);
     }
     if (args === undefined) return null;
     const start = Math.max(0, Math.min(offset, output?.length ?? 0));
     const page = output?.slice(start, start + DETAIL_LIMIT) ?? "";
-    return { id: stepId, kind: "tool", args: clip(args, DETAIL_LIMIT), output: page, output_offset: start,
+    return { id: stepId, kind: "tool", args: clip(args, DETAIL_LIMIT), input, ...(outputLanguage ? { output_language: outputLanguage } : {}), output: page, output_offset: start,
       output_chars: output?.length ?? 0, truncated: start + page.length < (output?.length ?? 0) };
   }
   const entryId = Number(rest[0]);
@@ -231,4 +243,13 @@ export function projectTurnStepDetail(turn: DurableTurnEntries, stepId: string, 
   }
   if (text === undefined) return null;
   return { id: stepId, kind: kind as TurnActivityStep["kind"], text: clip(text, DETAIL_LIMIT), truncated: text.length > DETAIL_LIMIT };
+}
+
+/** A call's committed result: what the model saw and the tool's details, for the emitted view. */
+export function toolResultFor(turn: DurableTurnEntries, callId: string): { text: string; details: unknown } | null {
+  for (const entry of turn.entries) {
+    const message = first(entry);
+    if (entry.kind === "pi.tool-result" && message?.toolCallId === callId) return { text: resultText(message), details: message.details };
+  }
+  return null;
 }

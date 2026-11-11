@@ -89,6 +89,8 @@ describe("turn activity projection", () => {
     expect(tool?.output?.startsWith("line2")).toBe(true);
     expect(tool?.output_offset).toBe(6);
     expect(tool?.output_chars).toBe(2012);
+    expect(tool?.input).toEqual({ original: '{"command":"bun test"}', readable: { kind: "shell", label: "Command", language: "shell", text: "bun test", only: true } });
+    expect(projectTurnStepDetail(turn, "tool:call-c")?.input?.readable).toMatchObject({ kind: "code", label: "Script" });
     expect(projectTurnStepDetail(turn, "thinking:2:0")?.text).toBe("Plan: run the tests.");
     expect(projectTurnStepDetail(turn, "input:5")?.text).toBe("also check lint");
     expect(projectTurnStepDetail(turn, "thinking:2:1")).toBeNull();
@@ -130,7 +132,10 @@ describe("GET /agent/turn-activity", () => {
     expect(list.status).toBe(200);
     expect((await list.json()).tools).toBe(3);
     const step = await handleTurnActivity(pool, request({ chat_jid: chat, message_id: replyId, step: "tool:call-b" }));
-    expect((await step.json()).output).toBe("nope");
+    const detail = await step.json() as any;
+    expect(detail.output).toBe("nope");
+    // A read with nothing else emitted offers only the model's view.
+    expect(detail.emitted).toBeNull();
     expect(seen).toEqual([[chat, 8], [chat, 8]]);
   });
 

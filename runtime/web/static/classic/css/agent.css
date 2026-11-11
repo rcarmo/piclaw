@@ -1805,6 +1805,118 @@
     font-style: normal;
 }
 
+/* Tool card regions: Readable/Original input and As emitted/As seen by model output. */
+.turn-activity-region {
+    margin-top: 6px;
+}
+
+.turn-activity-region-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 26px;
+}
+
+.turn-activity-region-header .turn-activity-section-label {
+    flex: 1 1 auto;
+    /* Region titles can carry paths; keep their case. */
+    text-transform: none;
+    letter-spacing: 0;
+    margin: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.turn-activity-view-toggle {
+    display: inline-flex;
+    flex: 0 0 auto;
+    padding: 2px;
+    background: var(--bg-primary);
+    border: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+    border-radius: 6px;
+}
+
+.turn-activity-view-toggle button {
+    min-height: 22px;
+    padding: 0 8px;
+    font: inherit;
+    font-size: 0.9em;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.turn-activity-view-toggle button[aria-pressed="true"] {
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-color) 70%, transparent);
+}
+
+.turn-activity-copy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.turn-activity-copy:hover { border-color: color-mix(in srgb, var(--border-color) 70%, transparent); }
+.turn-activity-copy.is-success { color: var(--success-color, #16a34a); }
+.turn-activity-copy.is-error { color: var(--danger-color, #dc2626); }
+.turn-activity-copy:disabled { opacity: 0.4; cursor: default; }
+
+.turn-activity-copy svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.turn-activity-view-toggle button:focus-visible,
+.turn-activity-copy:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 1px;
+}
+
+.turn-activity-pre .diff-add { color: var(--success-color, #16a34a); background: color-mix(in srgb, var(--success-color, #16a34a) 9%, transparent); }
+.turn-activity-pre .diff-del { color: var(--danger-color, #dc2626); background: color-mix(in srgb, var(--danger-color, #dc2626) 9%, transparent); }
+.turn-activity-pre .diff-hunk { color: var(--text-secondary); font-style: italic; }
+
+.turn-activity-step:not(.turn-activity-tool) {
+    position: relative;
+}
+
+.turn-activity-text-actions {
+    position: absolute;
+    top: 0;
+    right: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.turn-activity-step:hover > .turn-activity-text-actions,
+.turn-activity-step:focus-within > .turn-activity-text-actions {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .turn-activity-text-actions { opacity: 1; }
+}
+
 /* Live turn: the running "Working · elapsed" block at the end of the timeline. */
 .turn-activity-live-avatar {
     background: transparent;

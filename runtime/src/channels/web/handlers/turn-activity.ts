@@ -14,7 +14,8 @@
 
 import { getAgentMessageIdByRowId } from "../../../db/messages.js";
 import type { DurableTurnEntries } from "../../../agent-pool/durable-runtime-adapter.js";
-import { projectTurnActivity, projectTurnStepDetail } from "../agent/turn-activity.js";
+import { projectTurnActivity, projectTurnStepDetail, toolResultFor } from "../agent/turn-activity.js";
+import { emittedToolOutput } from "../agent/tool-presentation.js";
 
 export interface TurnActivityReader {
   getTurnEntriesForChat?(chatJid: string, answerEntryId?: number): Promise<DurableTurnEntries | null>;
@@ -55,5 +56,12 @@ export async function handleTurnActivity(pool: TurnActivityReader | undefined, u
   if (!step) return json(projectTurnActivity(turn, answerEntryId, { commentary: !live }));
   const offset = Number(url.searchParams.get("offset") ?? 0);
   const detail = projectTurnStepDetail(turn, step, Number.isSafeInteger(offset) && offset > 0 ? offset : 0);
-  return detail ? json(detail) : json({ error: "Not found" }, 404);
+  if (!detail) return json({ error: "Not found" }, 404);
+  if (detail.kind === "tool") {
+    // The emitted view pages by bytes, independently of the model view.
+    const emittedOffset = Number(url.searchParams.get("emitted_offset") ?? 0);
+    const result = toolResultFor(turn, step.slice("tool:".length));
+    detail.emitted = result ? emittedToolOutput(chatJid, result.details, result.text, Number.isSafeInteger(emittedOffset) && emittedOffset > 0 ? emittedOffset : 0) : null;
+  }
+  return json(detail);
 }

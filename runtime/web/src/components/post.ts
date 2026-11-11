@@ -39,7 +39,7 @@ import {
     type PostAside,
 } from './post-highlights.js';
 import { buildSpeakablePostText, getSpeechPlaybackState, isSpeechSynthesisSupported, speakPostText, stopSpeechPlayback, subscribeSpeechPlayback } from './post-speech.ts';
-import { copyPlainTextSelectionFromElement, readSessionStorageFlagBestEffort, resolveLinkPreviewSiteName, writeClipboardDataViaExecCommand, writeClipboardTextBestEffort, writeSessionStorageFlagBestEffort } from './post-runtime-safety.js';
+import { copyPlainTextSelectionFromElement, copyTextToClipboard, readSessionStorageFlagBestEffort, resolveLinkPreviewSiteName, writeClipboardDataViaExecCommand, writeSessionStorageFlagBestEffort } from './post-runtime-safety.js';
 
 /**
  * File attachment component - keeps single-click download on the main card while
@@ -1047,36 +1047,6 @@ export function getLargeCodeBlockMetadata(text, options = {}) {
         visibleLines,
         omittedLines: Math.max(0, lines.length - visibleLines),
     };
-}
-
-async function copyTextToClipboard(text) {
-    const value = typeof text === 'string' ? text : '';
-    if (!value) return false;
-
-    if (writeClipboardDataViaExecCommand(document, { text: value })) {
-        return true;
-    }
-
-    if (await writeClipboardTextBestEffort(navigator.clipboard, value)) {
-        return true;
-    }
-
-    try {
-        const textarea = document.createElement('textarea');
-        textarea.value = value;
-        textarea.setAttribute('readonly', '');
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        textarea.style.pointerEvents = 'none';
-        document.body.appendChild(textarea);
-        textarea.select();
-        textarea.setSelectionRange(0, textarea.value.length);
-        const copied = document.execCommand('copy');
-        document.body.removeChild(textarea);
-        return copied;
-    } catch {
-        return false;
-    }
 }
 
 async function copyMessageToClipboard(markdown) {

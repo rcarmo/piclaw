@@ -52,7 +52,9 @@ beforeAll(async () => {
       if (step === 'tool:call-a') {
         const offset = Number(url.searchParams.get('offset') ?? 0), page = longOutput.slice(offset, offset + 100);
         return Response.json({ id: step, kind: 'tool', args: '{\n  "command": "bun test"\n}', output: page, output_offset: offset,
-          output_chars: longOutput.length, truncated: offset + page.length < longOutput.length });
+          output_chars: longOutput.length, truncated: offset + page.length < longOutput.length,
+          input: { original: '{"command":"cd /w && bun test"}', readable: { kind: 'shell', label: 'Command', language: 'shell', text: 'cd /w \\\n  && bun test' } },
+          emitted: { kind: 'text', label: 'Output', text: 'EMITTED full output', offset: 0, total: 19, truncated: false, source: 'tool-output' } });
       }
       if (step === 'thinking:2:0') return Response.json({ id: step, kind: 'thinking', text: activity.steps[0]!.text, truncated: false });
       return Response.json({ error: 'Not found' }, { status: 404 });
@@ -111,7 +113,22 @@ browserTest('turn activity loads when visible, discloses steps progressively and
     await bash.locator('.turn-activity-tool-header').click();
     expect(await bash.locator('.turn-activity-tool-header').getAttribute('aria-expanded')).toBe('true');
     expect(await bash.locator('.turn-activity-pre').first().innerText()).toContain('"command": "bun test"');
-    await bash.getByText(/Show full output/).click();
+    // Input: Readable by default, Original on request; copy works.
+    const inputRegion = bash.locator('.turn-activity-input-region');
+    await inputRegion.locator('pre[data-view="readable"]').waitFor();
+    expect((await inputRegion.locator('.turn-activity-section-label').innerText()).toLowerCase()).toBe('command');
+    expect(await inputRegion.locator('pre').innerText()).toContain('&& bun test');
+    await inputRegion.getByRole('button', { name: 'Original', exact: true }).click();
+    expect(await inputRegion.locator('pre').innerText()).toBe('{"command":"cd /w && bun test"}');
+    // Highlighted with the shared Lezer highlighter (token classes, escaped text).
+    expect(await inputRegion.locator('pre code.hljs.language-json span[class*="tok-"]').count()).toBeGreaterThan(0);
+    expect(await inputRegion.getByRole('button', { name: 'Original', exact: true }).getAttribute('aria-pressed')).toBe('true');
+    await inputRegion.locator('.turn-activity-copy').click();
+    await inputRegion.locator('.turn-activity-copy.is-success').waitFor();
+    // Output: As emitted by default, As seen by model on request, which pages.
+    const outputRegion = bash.locator('.turn-activity-output-region');
+    expect(await outputRegion.locator('pre').innerText()).toBe('EMITTED full output');
+    await outputRegion.getByRole('button', { name: 'As seen by model', exact: true }).click();
     for (let pageIndex = 0; pageIndex < 2; pageIndex++) {
       await bash.getByText('Load more').waitFor();
       await bash.getByText('Load more').click();

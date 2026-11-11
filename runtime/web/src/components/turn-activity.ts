@@ -15,6 +15,8 @@ import { abortAgentTool, getTurnActivity } from '../api.js';
 import { renderMarkdown, renderThinkingMarkdown } from '../markdown.js';
 import { renderDisclosureTriangle } from '../ui/disclosure-triangle.js';
 import { attachHeaderAnchor } from '../ui/scroll-anchor.js';
+import { copyTextToClipboard } from './post-runtime-safety.js';
+import { highlightCodeToHtml } from '../utils/code-highlighting.js';
 
 /** The server flags durable replies, whose committed turn can be read on demand. */
 export function hasTurnActivity(post) {
@@ -30,6 +32,13 @@ export function formatActivityDuration(ms) {
     const minutes = Math.floor(seconds / 60);
     if (minutes < 60) return `${minutes}m ${Math.round(seconds % 60)}s`;
     return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+function formatActivityBytes(bytes) {
+    if (!Number.isFinite(bytes) || bytes < 0) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function formatActivityTokens(count) {
@@ -98,20 +107,78 @@ function useStepDetail(chatJid, messageId, stepId) {
     const [failed, setFailed] = useState(false);
     const mounted = useRef(true);
     useEffect(() => () => { mounted.current = false; }, []);
-    const load = useCallback((offset = 0) => {
+    const request = useCallback((offset, emittedOffset, merge) => {
         setLoading(true);
         setFailed(false);
-        return getTurnActivity(chatJid, messageId, stepId, offset)
-            .then((next) => {
-                if (!mounted.current) return;
-                setDetail((previous) => (offset > 0 && previous
-                    ? { ...next, output: `${previous.output || ''}${next.output || ''}`, output_offset: previous.output_offset || 0 }
-                    : next));
-            })
+        return getTurnActivity(chatJid, messageId, stepId, offset, emittedOffset)
+            .then((next) => { if (mounted.current) setDetail((previous) => merge(previous, next)); })
             .catch(() => { if (mounted.current) setFailed(true); })
             .finally(() => { if (mounted.current) setLoading(false); });
     }, [chatJid, messageId, stepId]);
-    return { detail, loading, failed, load };
+    // The model view and the emitted view page independently.
+    const load = useCallback((offset = 0) => request(offset, 0, (previous, next) => (offset > 0 && previous
+        ? { ...previous, output: `${previous.output || ''}${next.output || ''}`, truncated: next.truncated }
+        : next)), [request]);
+    const loadEmitted = useCallback((offset) => request(0, offset, (previous, next) => (previous?.emitted && next?.emitted
+        ? { ...previous, emitted: { ...next.emitted, text: `${previous.emitted.text}${next.emitted.text}`, offset: previous.emitted.offset } }
+        : previous || next)), [request]);
+    return { detail, loading, failed, load, loadEmitted };
+}
+
+function CopyButton({ text, label }) {
+    const [state, setState] = useState('idle');
+    const copy = (event) => {
+        event.stopPropagation();
+        copyTextToClipboard(text)
+            .then((ok) => setState(ok ? 'copied' : 'failed'))
+            .catch(() => setState('failed'))
+            .finally(() => setTimeout(() => setState('idle'), 1600));
+    };
+    const title = state === 'copied' ? 'Copied' : state === 'failed' ? 'Copy failed' : `Copy ${label}`;
+    return html`
+        <button type="button" class=${`turn-activity-copy${state === 'copied' ? ' is-success' : state === 'failed' ? ' is-error' : ''}`} onClick=${copy} title=${title} aria-label=${title} disabled=${!text}>
+            ${state === 'copied'
+                ? html`<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 6L9 17l-5-5"></path></svg>`
+                : html`<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="9" width="10" height="10" rx="2"></rect><path d="M7 15H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1"></path></svg>`}
+        </button>
+    `;
+}
+
+function DiffText({ text }) {
+    return html`${text.split('\n').map((line, index) => html`<span key=${index} class=${line.startsWith('@@') ? 'diff-hunk' : line.startsWith('+') ? 'diff-add' : line.startsWith('-') ? 'diff-del' : ''}>${line}\n</span>`)}`;
+}
+
+/**
+ * One region of a tool card (input or output) with Kintsugi-style views:
+ * Readable/Original or As emitted/As seen by model, and a copy button for
+ * the view shown.
+ */
+function DetailRegion({ title, views, className = '' }) {
+    const [activeKey, setActiveKey] = useState(null);
+    const view = views.find((candidate) => candidate.key === activeKey) || views[0];
+    // The same highlighter, grammars and token theme as chat code blocks and the editor.
+    const highlighted = useMemo(() => {
+        if (!view?.language || view.kind === 'diff' || !view.text) return null;
+        try { return { __html: highlightCodeToHtml(view.text, view.language) }; } catch { return null; }
+    }, [view?.text, view?.language, view?.kind]);
+    if (!view) return null;
+    return html`
+        <section class=${`turn-activity-region ${className}`}>
+            <div class="turn-activity-region-header">
+                <span class="turn-activity-section-label">${title}${view.note ? html` <span class="turn-activity-note">${view.note}</span>` : null}</span>
+                ${views.length > 1 && html`
+                    <span class="turn-activity-view-toggle" role="group" aria-label=${`${title} view`}>
+                        ${views.map((candidate) => html`<button type="button" key=${candidate.key} aria-pressed=${candidate.key === view.key ? 'true' : 'false'}
+                            onClick=${(event) => { event.stopPropagation(); setActiveKey(candidate.key); }}>${candidate.label}</button>`)}
+                    </span>`}
+                <${CopyButton} text=${view.text} label=${`${title.toLowerCase()}${views.length > 1 ? ` (${view.label.toLowerCase()})` : ''}`} />
+            </div>
+            <pre class=${`turn-activity-pre ${view.className || ''}`} data-view=${view.key}>${view.kind === 'diff'
+                ? html`<${DiffText} text=${view.text} />`
+                : highlighted ? html`<code class=${`hljs language-${view.language}`} dangerouslySetInnerHTML=${highlighted}></code>` : view.text}</pre>
+            ${view.footer || null}
+        </section>
+    `;
 }
 
 function TextStep({ step, chatJid, messageId }) {
@@ -144,6 +211,7 @@ function TextStep({ step, chatJid, messageId }) {
         <li class=${`turn-activity-step ${className}${expanded ? ' is-expanded' : ''}`}>
             ${step.kind === 'input' && html`<span class="turn-activity-step-label">Steered</span>`}
             ${rendered ? html`<div class="turn-activity-markdown" ref=${bodyRef} dangerouslySetInnerHTML=${rendered}></div>` : html`<div class="turn-activity-markdown" ref=${bodyRef}>${text}</div>`}
+            <span class="turn-activity-text-actions"><${CopyButton} text=${text} label=${step.kind === 'thinking' ? 'reasoning' : step.kind === 'input' ? 'steering message' : 'commentary'} /></span>
             ${!expanded && (partial || clamped) && html`
                 <button type="button" class="turn-activity-more" onClick=${showMore}>Show more</button>
             `}
@@ -199,24 +267,37 @@ function ToolStopControl({ chatJid, callId, title }) {
 function ToolStep({ step, chatJid, messageId, liveOutput = '', live = false }) {
     const tool = step.tool;
     const [open, setOpen] = useState(false);
-    const { detail, loading, failed, load } = useStepDetail(chatJid, messageId, step.id);
+    const { detail, loading, failed, load, loadEmitted } = useStepDetail(chatJid, messageId, step.id);
     const bodyId = `turn-activity-${messageId}-${step.id}`.replace(/[^a-zA-Z0-9_-]/g, '-');
-    const fullOutput = tool.output_chars > (tool.output_preview || '').length;
+    const running = tool.status === 'running';
+    // A card loads its full detail (readable input, emitted output) when first opened.
+    useEffect(() => { if (open && !detail && !loading && !failed && !running) load(0); }, [open, detail, loading, failed, running, load]);
     const toggle = (event) => {
         event.stopPropagation();
         setOpen((value) => !value);
     };
-    const loadFull = (event) => {
-        event.stopPropagation();
-        load(0);
-    };
-    const loadMore = (event) => {
-        event.stopPropagation();
-        load((detail?.output_offset || 0) + (detail?.output || '').length);
-    };
-    const args = detail?.args ?? tool.args_preview;
+    const more = (label, onClick) => html`<button type="button" class="turn-activity-more" onClick=${(event) => { event.stopPropagation(); onClick(); }} disabled=${loading}>${label}</button>`;
+
+    const input = detail?.input;
+    const readableLanguage = input?.readable ? (input.readable.language || (input.readable.kind === 'json' ? 'json' : undefined)) : undefined;
+    const inputViews = input?.readable?.only
+        ? [{ key: 'readable', label: 'Readable', text: input.readable.text, kind: input.readable.kind, language: readableLanguage }]
+        : input?.readable
+        ? [{ key: 'readable', label: 'Readable', text: input.readable.text, kind: input.readable.kind, language: readableLanguage }, { key: 'original', label: 'Original', text: input.original, language: 'json' }]
+        : [{ key: 'original', label: 'Original', text: detail?.args ?? tool.args_preview, language: 'json' }];
+    const inputTitle = input?.readable?.label || 'Arguments';
+
     // A running call has no committed result yet; show its live output.
-    const output = detail ? detail.output : (tool.status === 'running' && liveOutput ? liveOutput : tool.output_preview);
+    const modelText = detail ? detail.output : (running && liveOutput ? liveOutput : tool.output_preview);
+    const modelView = { key: 'model', label: 'As seen by model', text: modelText || '', language: detail?.output_language, className: `turn-activity-output${tool.status === 'error' ? ' is-error' : ''}`,
+        note: tool.output_lines ? `${tool.output_lines} line${tool.output_lines === 1 ? '' : 's'}` : '',
+        footer: detail?.truncated ? more('Load more', () => load((detail.output_offset || 0) + (detail.output || '').length)) : null };
+    const emitted = detail?.emitted;
+    const outputViews = emitted
+        ? [{ key: 'emitted', label: 'As emitted', text: emitted.text, kind: emitted.kind, className: 'turn-activity-output',
+            note: emitted.total ? `${formatActivityBytes(emitted.total)}` : '',
+            footer: emitted.truncated ? more('Load more', () => loadEmitted(emitted.offset + new TextEncoder().encode(emitted.text).length)) : null }, modelView]
+        : (modelText ? [modelView] : []);
     const duration = formatActivityDuration(tool.duration_ms);
     return html`
         <li class=${`turn-activity-step turn-activity-tool is-${tool.status}${open ? ' is-open' : ''}`}>
@@ -228,12 +309,11 @@ function ToolStep({ step, chatJid, messageId, liveOutput = '', live = false }) {
                     ${tool.nested?.length ? html`<span class="turn-activity-badge">${tool.nested.length} call${tool.nested.length === 1 ? '' : 's'}</span>` : null}
                     ${duration && html`<span class="turn-activity-duration">${duration}</span>`}
                 </button>
-                ${live && tool.status === 'running' && html`<${ToolStopControl} chatJid=${chatJid} callId=${tool.call_id} title=${tool.title} />`}
+                ${live && running && html`<${ToolStopControl} chatJid=${chatJid} callId=${tool.call_id} title=${tool.title} />`}
             </div>
             <div id=${bodyId} class="turn-activity-tool-body" hidden=${!open}>
                 ${open && html`
-                    <div class="turn-activity-section-label">Arguments</div>
-                    <pre class="turn-activity-pre">${args}</pre>
+                    <${DetailRegion} key=${`input-${input ? 'full' : 'preview'}`} title=${inputTitle} views=${inputViews} className="turn-activity-input-region" />
                     ${tool.nested?.length ? html`
                         <div class="turn-activity-section-label">Calls</div>
                         <ol class="turn-activity-nested">
@@ -246,13 +326,10 @@ function ToolStep({ step, chatJid, messageId, liveOutput = '', live = false }) {
                             `)}
                         </ol>
                     ` : null}
-                    ${(output || tool.images > 0) && html`<div class="turn-activity-section-label">Output${tool.output_lines ? html` <span class="turn-activity-note">${tool.output_lines} line${tool.output_lines === 1 ? '' : 's'}</span>` : null}</div>`}
-                    ${output && html`<pre class=${`turn-activity-pre turn-activity-output${tool.status === 'error' ? ' is-error' : ''}`}>${output}</pre>`}
+                    ${outputViews.length > 0 && html`<${DetailRegion} key=${`output-${emitted ? 'emitted' : 'model'}`} title="Output" views=${outputViews} className="turn-activity-output-region" />`}
                     ${tool.images > 0 && html`<div class="turn-activity-note">${tool.images} image${tool.images === 1 ? '' : 's'} returned to the model</div>`}
-                    ${fullOutput && !detail && html`<button type="button" class="turn-activity-more" onClick=${loadFull} disabled=${loading}>Show full output (${tool.output_chars.toLocaleString()} characters)</button>`}
-                    ${detail?.truncated && html`<button type="button" class="turn-activity-more" onClick=${loadMore} disabled=${loading}>Load more</button>`}
                     ${loading && html`<span class="turn-activity-note">Loading…</span>`}
-                    ${failed && html`<span class="turn-activity-note is-error">Could not load the output.</span>`}
+                    ${failed && html`<span class="turn-activity-note is-error">Could not load the full detail.</span>`}
                 `}
             </div>
         </li>
