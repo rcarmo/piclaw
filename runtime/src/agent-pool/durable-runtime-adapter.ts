@@ -101,6 +101,32 @@ export interface DurableSessionPositionPort {
   /** Observe the same owned maintenance; never admit a new compaction. */
   readonly reconcileMaintenance?: () => Promise<void>;
   readonly readTree?: () => Promise<import("../agent-control/session-tree-snapshot.js").SessionTreeSnapshot>;
+  /** Display-only committed window ending at one settled answer; null when it is not this binding's. */
+  readonly readTurn?: (answerEntryId: number) => Promise<DurableTurnEntries | null>;
+}
+
+/** Wall-clock span and outcome of one durable task, as stamped by the Session. */
+export interface DurableTurnTask {
+  readonly kind: string;
+  readonly startedAt?: number;
+  readonly endedAt?: number;
+  readonly outcome: string;
+}
+
+/** Structural subset of a committed SDK entry; model messages are pi-ai messages. */
+export interface DurableTurnEntry {
+  readonly id: number;
+  readonly kind: string;
+  readonly model?: readonly unknown[];
+  readonly data?: unknown;
+  readonly byTaskId?: number;
+}
+
+/** Committed entries for one settled turn, read for presentation only. */
+export interface DurableTurnEntries {
+  readonly entries: readonly DurableTurnEntry[];
+  readonly tasks: Readonly<Record<number, DurableTurnTask>>;
+  readonly truncated: boolean;
 }
 
 export interface DurableConversationBinding {
@@ -137,6 +163,7 @@ export interface DurableConversationRuntimePort {
   readSessionMetadata?(binding: DurableConversationBinding & { readonly incarnation: string }): Promise<DurableSessionMetadata>;
   readSessionReport?(binding: DurableConversationBinding & { readonly incarnation: string }): Promise<DurableSessionReport>;
   readSessionTree?(binding: DurableConversationBinding & { readonly incarnation: string }): Promise<import("../agent-control/session-tree-snapshot.js").SessionTreeSnapshot>;
+  readTurnEntries?(binding: DurableConversationBinding & { readonly incarnation: string }, answerEntryId: number): Promise<DurableTurnEntries | null>;
   setSessionThinkingLevel?(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }, level: string): Promise<void>;
   setSessionModel?(binding: DurableConversationBinding & { readonly incarnation: string }, model: { provider: string; modelId: string }): Promise<void>;
   submit(input: DurableAcceptedInput): Promise<number>;
@@ -190,6 +217,7 @@ export function createDurableConversationAdapter(options: {
   const readTree = runtime.readSessionTree?.bind(runtime);
   const readMetadata = runtime.readSessionMetadata?.bind(runtime);
   const readReport = runtime.readSessionReport?.bind(runtime);
+  const readTurnEntries = runtime.readTurnEntries?.bind(runtime);
   function input(work: DurableConversationOperation, intent = false): DurableAcceptedInput {
     const { source, operation } = work.claimed;
     const binding = lookup(source.chatJid, work.branchId);
@@ -224,7 +252,8 @@ export function createDurableConversationAdapter(options: {
         reconcileMaintenance: reconcileMaintenance ? () => reconcileMaintenance(target) : undefined,
         readTree: readTree ? () => readTree(target) : undefined,
         readMetadata: readMetadata ? () => readMetadata(target) : undefined,
-        readReport: readReport ? () => readReport(target) : undefined });
+        readReport: readReport ? () => readReport(target) : undefined,
+        readTurn: readTurnEntries ? (answerEntryId: number) => readTurnEntries(target, answerEntryId) : undefined });
     },
     supportsIntent: !!submitIntent,
     validateIntent(work: DurableConversationOperation) { input(work, true); },

@@ -584,6 +584,28 @@ test("runtime: read-only session report uses committed native context and usage 
   expect(checks).toBe(3); expect(f.base.host.modelCalls).toBe(calls);
 }), 20000);
 
+test("runtime: turn entries read one answer's committed window without model replay", () => fixture(async f => {
+  const input = await f.accept();
+  const binding = { incarnation: input.incarnation, chatJid: input.chatJid, branchId: input.branchId, conversationId: input.conversationId };
+  f.grantKnown();
+  const id = await f.runtime.submit(input);
+  await f.runtime.wait(input, id);
+  const status = (await f.runtime.reconcile(input)).status;
+  const answer = status?.type === "input" && status.status === "done" ? status.answer : undefined;
+  expect(answer).toBeDefined();
+  const calls = f.base.host.modelCalls;
+  const turn = await f.runtime.readTurnEntries(binding, answer!);
+  expect(turn?.entries[0]?.kind).toBe("host.accepted");
+  expect(turn?.entries.at(-1)?.id).toBe(answer);
+  expect(turn?.truncated).toBe(false);
+  expect(Object.values(turn!.tasks).some(task => task.kind === "pi.generation" && task.outcome === "completed")).toBe(true);
+  expect(Object.isFrozen(turn)).toBe(true);
+  // Only a settled answer opens a window; the input entry itself does not.
+  expect(await f.runtime.readTurnEntries(binding, turn!.entries[0]!.id)).toBeNull();
+  await expect(f.runtime.readTurnEntries({ ...binding, incarnation: "foreign" }, answer!)).rejects.toThrow("Host binding conflict");
+  expect(f.base.host.modelCalls).toBe(calls);
+}), 20000);
+
 test("runtime: operator abort settles exact held run and attached steer once, preserving pending successor", () => fixture(async f => {
   f.base.host.modelHold = barrier(); f.grantKnown();
   const input = await f.accept();

@@ -455,6 +455,10 @@ export class AgentPool {
     return this.runtimeFacade.getSessionTreeForChat(chatJid);
   }
 
+  getTurnEntriesForChat(chatJid: string, answerEntryId: number) {
+    return this.runtimeFacade.getTurnEntriesForChat(chatJid, answerEntryId);
+  }
+
   getSessionTreeSummaryForChat(chatJid: string): Promise<{ leafId: string | null; total: number } | null> {
     return this.runtimeFacade.getSessionTreeSummaryForChat(chatJid);
   }
