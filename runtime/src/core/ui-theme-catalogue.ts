@@ -1915,7 +1915,7 @@ export const WEB_THEME_PRESETS: ThemePreset[] = [
   },
   {
     id: "petrol",
-    label: "Petrol & Copper",
+    label: "Fallout",
     mode: "dark",
     dark: {
       bgPrimary: "#102b30",
@@ -3046,6 +3046,7 @@ export const WEB_THEME_ALIASES: Record<string, string> = {
   synthwave: "synthwave-84",
   "synthwave-full": "synthwave-84-full",
   "petrol-copper": "petrol",
+  fallout: "petrol",
   "aubergine-gold": "aubergine",
   "burgundy-rose": "burgundy",
   "ivory-petrol": "petrol-light",
