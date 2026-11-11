@@ -20,7 +20,7 @@ import {
   togglePinnedSessionChatJid,
 } from '../ui/session-picker-preferences.js';
 import { getLocalStorageItem, setLocalStorageItem } from '../utils/storage.js';
-import { getShellWidth } from '../ui/use-splitters.js';
+import { getShellWidth, occupiedPaneWidth } from '../ui/use-splitters.js';
 import { buildChatWindowUrl } from '../ui/chat-window.js';
 import { matchesKeyboardShortcutAction } from '../ui/keyboard-shortcuts.js';
 import {
@@ -161,9 +161,8 @@ export function SessionsSidebar({
   const rightPanesWidth = useCallback(() => {
     const shell = appShellRef?.current;
     if (!shell) return 0;
-    return Array.from(shell.children)
-      .filter((child) => child.matches?.('.editor-pane-container, .editor-splitter, .workspace-sidebar, .workspace-splitter'))
-      .reduce((sum, child) => sum + (getComputedStyle(child).position === 'static' ? child.getBoundingClientRect().width : 0), 0);
+    return ['.editor-pane-container', '.editor-splitter', '.workspace-sidebar', '.workspace-splitter']
+      .reduce((sum, selector) => sum + occupiedPaneWidth(shell, selector), 0);
   }, [appShellRef]);
 
   const maxWidth = useCallback(() => {

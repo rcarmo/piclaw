@@ -222,6 +222,8 @@ for (const mode of [false, true, "snapshot-replace", "snapshot-stop", "snapshot-
       } catch (error) { usageErrors.push((error as Error).message); throw error; }
     },
     readCapturedInputText: inputs => f.runtime!.readCapturedInputText(inputs),
+    readMessageInbox: binding => f.runtime!.readMessageInbox(binding),
+    removeQueuedMessage: (binding, id) => f.runtime!.removeQueuedMessage(binding, id),
     hasGoalTerminalResult: readTerminalProof,
   }), failClosed() { requestFenced = true; } });
   f.base.registry.install(promptExtension);
@@ -382,10 +384,14 @@ for (const mode of [false, true, "snapshot-replace", "snapshot-stop", "snapshot-
     const laterId = await f.runtime!.submit(laterInput);
     value(await f.ports.work.bindHarness(sealed({ effect: effect(`${f.incarnation}:later-running`, laterInput.operationId, laterSource.sourceSeq), expectedVersion: laterClaim.operation.version, sessionId: f.incarnation, harnessOperationId: String(laterId) })));
     await f.runtime!.wait(laterInput, laterId);
-    expect(terminalProofs).toEqual([true, false, false, true, false, false, false, false]);
+    // The final-yield queue fence captures the later ordinary source once too;
+    // that capture must still fail to borrow the previous Goal's terminal proof.
+    expect(terminalProofs).toEqual([true, false, false, true, false, false, false, false, false]);
     expect(captures).toBe(3);
     expect(laterModelEntries).toBe(2);
-    expect(usageReads.map(entries => entries.length)).toEqual([0, 1, 2, 3, 0, 1]);
+    // Yield precedes the final assistant commit, so its usage window matches
+    // the last request rather than including an uncommitted final response.
+    expect(usageReads.map(entries => entries.length)).toEqual([0, 1, 2, 3, 0, 1, 1]);
     expect(usageReads.flat().every(entry => entry.conversationId === f.base.root.id && entry.tokens === 3)).toBe(true);
     const originalIds = usageReads[3]!.map(entry => entry.entryId);
     expect(originalIds).toEqual([...originalIds].sort((a, b) => a - b));

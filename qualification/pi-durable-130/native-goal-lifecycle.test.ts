@@ -80,3 +80,29 @@ applicationTest('native SDK Goal queue: revocation between the prompt hook and s
     expect(f.state()).toMatchObject({status:'stopped'});
   }finally{read.mockRestore();await f.close();}
 },30000);
+
+applicationTest('native SDK Goal completion withdraws an older queued Goal command without a false failure notice',async()=>{
+  const {pathToFileURL}=await import('node:url');
+  const {join}=await import('node:path');
+  const f=await fixture();
+  try{
+    const primary=await f.send('Finish unrelated running work');await f.entered.promise;
+    await f.command('/goal Already completed objective');await f.until(async()=> (await f.queue()).length===1);
+    const queued=(await f.queue())[0]!;
+    const original=f.root.query('SELECT id,content FROM messages WHERE is_bot_message=0 ORDER BY rowid').all();
+    const addon=await import(pathToFileURL(join(process.env.PICLAW_WORKSPACE!,'.pi/extensions/node_modules/@rcarmo/piclaw-addon-goal/index.ts')).href);
+    const complete=addon.createGoalTools(()=> 'web:default').find((tool:any)=>tool.name==='goal_complete');
+    await f.scope(()=>complete.execute('external-completion',{summary:'Verified complete before queued command ran',evidence:['Authorized completion while an ordinary turn was active']},undefined,undefined,{}));
+    expect(f.state()).toMatchObject({status:'complete',lifecycle_generation:2});
+    const human=await f.send('Keep this human follow-up','queue');
+    f.held.release();
+    await f.until(()=>f.status(queued.row_id)==='unanswered'&&f.status(human.submission_id)==='done');
+    expect(f.status(primary.submission_id)).toBe('done');expect(f.calls()).toBe(2);
+    const status=f.root.query("SELECT json_extract(record,'$.reason') reason FROM submissions WHERE id=?").get(queued.row_id);
+    expect(status).toEqual({reason:'aborted'});
+    expect(f.root.query('SELECT id,content FROM messages WHERE is_bot_message=0 ORDER BY rowid').all().slice(0,2)).toEqual(original);
+    const replies=f.root.query('SELECT content FROM messages WHERE is_bot_message=1').all() as {content:string}[];
+    expect(replies).toHaveLength(2);expect(replies.every(row=>!row.content.includes('Turn failed'))).toBe(true);
+    expect(f.root.query('SELECT * FROM service_effect_s01_operations').all()).toEqual([]);
+  }finally{await f.close();}
+},30000);

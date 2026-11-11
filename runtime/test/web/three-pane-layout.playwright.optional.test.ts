@@ -118,6 +118,22 @@ for (const engine of ['chromium', 'webkit']) {
     }, 30000);
   }
 
+  browserTest(`${engine} docked right slot keeps every flow pane inside the shell`, async () => {
+    const { page, errors } = await open(engine, 1440, 900, '?editor=1&tree=1');
+    try {
+      await page.evaluate(() => document.documentElement.style.setProperty('--piclaw-shell-inset-right', '400px'));
+      await settle(page); await settle(page);
+      const shell = (await rect(page, '.app-shell'))!;
+      const editor = (await rect(page, '.editor-pane-container'))!;
+      const chat = (await rect(page, '.container'))!;
+      expect(shell.right).toBe(1040);
+      expect(editor.right).toBeLessThanOrEqual(shell.right + 1);
+      expect(chat.width).toBeGreaterThanOrEqual(319);
+      await noOverflow(page);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+
   browserTest(`${engine} 1024px: sessions shrink, then hide, to keep the chat minimum`, async () => {
     const { page, errors } = await open(engine, 1024, 768, '?editor=1&tree=1');
     try {

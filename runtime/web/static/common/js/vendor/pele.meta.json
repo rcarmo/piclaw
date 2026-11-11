@@ -1,11 +1,11 @@
 {
   "manifest_id": "pele",
   "package_name": "pele",
-  "package_version": "1.9.0",
+  "package_version": "1.13.0",
   "package_license": "MIT",
   "package_repository": "git+https://github.com/obsidianmd/pele.git",
   "package_versions": {
-    "pele": "1.9.0",
+    "pele": "1.13.0",
     "dompurify": "3.4.17"
   },
   "package_licenses": {
@@ -22,13 +22,13 @@
     {
       "package_path": null,
       "output_file": "web/static/common/js/vendor/pele.js",
-      "sha256": "b709159845bdb14309991d768cca1d24d32dbd532d5a2e983c24ef497d03a201",
-      "size_bytes": 726976
+      "sha256": "79036f84fc10c8296145f2e206b079258b8423d885e34d387bf98276b0123fb8",
+      "size_bytes": 753751
     }
   ],
   "metadata_file": "web/static/common/js/vendor/pele.meta.json",
-  "sha256": "b709159845bdb14309991d768cca1d24d32dbd532d5a2e983c24ef497d03a201",
-  "size_bytes": 726976,
+  "sha256": "79036f84fc10c8296145f2e206b079258b8423d885e34d387bf98276b0123fb8",
+  "size_bytes": 753751,
   "build_command": [
     "bun",
     "build",

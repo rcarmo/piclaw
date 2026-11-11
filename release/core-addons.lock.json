@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "catalog": "https://raw.githubusercontent.com/rcarmo/piclaw-addons/main/catalog.json",
-  "catalogSha256": "975e54a05902d6cb27f4b94879d46705e3f53c12e9dfcb032382e29f7790210a",
+  "catalogSha256": "0cb2f61151f49d047668f8e1fe09f5cec23c2d17b5bb048cac324cb89ff5cab1",
   "addons": [
     {
       "slug": "code-review",
@@ -34,9 +34,9 @@
     {
       "slug": "plan-sidebar",
       "name": "@rcarmo/piclaw-addon-plan-sidebar",
-      "version": "0.1.27",
-      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-plan-sidebar-0.1.27.tgz",
-      "sha256": "4fbed26b2b20d75ecae796c613520a379c52a55d2e6476a31ba81f733d1e5570"
+      "version": "0.1.28",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-plan-sidebar-0.1.28.tgz",
+      "sha256": "1957d04e7e0aea95c450b69f6b119d057f57c13031e07595b9a8e5193f5f6907"
     },
     {
       "slug": "restic",

@@ -114,7 +114,9 @@ for (const width of [1366, 820, 520, 390]) {
     const page = await openKeyboard("visual", width, width === 390 ? 844 : 760);
     try {
       const metrics = await keyboardMetrics(page, "visual");
-      expect(metrics.cardCount).toBe(8);
+      expect(metrics.cardCount).toBe(6);
+      expect(await page.locator('#visual-settings-shortcut-toggleWorkspace').count()).toBe(0);
+      expect(await page.locator('#visual-settings-shortcut-toggleSessions').count()).toBe(0);
       expect(metrics.outside).toEqual([]);
       expect(metrics.labelled).toBe(true);
       expect(metrics.reference).not.toBeNull();

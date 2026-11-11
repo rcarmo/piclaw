@@ -62,6 +62,9 @@ for sha in "${shas[@]}"; do
   echo "[pre-push-ci] Checking commit ${sha:0:12} in a clean temporary worktree..." >&2
   git worktree add --detach --quiet "$worktree" "$sha"
   (
+    # Git exports routing variables to hooks. They must not bind CI or its
+    # nested fixture repositories back to the checkout initiating this push.
+    while IFS= read -r name; do unset "$name"; done < <(git rev-parse --local-env-vars)
     cd "$worktree"
     export HOME="${PICLAW_PRE_PUSH_HOME:-$tmp_parent/home}"
     export BUN_INSTALL_CACHE_DIR="${PICLAW_PRE_PUSH_CACHE_DIR:-$tmp_parent/bun-cache}"
