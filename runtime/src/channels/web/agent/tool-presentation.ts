@@ -29,6 +29,8 @@ export interface EmittedOutput {
   label: string;
   text: string;
   offset: number;
+  /** Byte offset of the next page; pages end on UTF-8 character boundaries. */
+  next_offset: number;
   total: number;
   truncated: boolean;
   source: "details" | "tool-output" | "log";
@@ -131,16 +133,32 @@ export function readableToolInput(name: string, args: unknown): ReadableInput | 
   return pretty !== JSON.stringify(record) ? { kind: "json", label: "Arguments", text: pretty } : null;
 }
 
-function readBytes(path: string, offset: number): { text: string; total: number; offset: number } | null {
+const isContinuation = (byte: number | undefined) => byte !== undefined && (byte & 0xc0) === 0x80;
+
+/**
+ * Decode one page from up to one byte more than a page, so it can end before a
+ * character the page boundary would cut. The next page starts at `next`.
+ */
+function utf8Page(bytes: Buffer, start: number, total: number): { text: string; offset: number; next: number } {
+  let end = Math.min(bytes.length, EMITTED_PAGE_BYTES);
+  if (start + end < total) {
+    let back = end;
+    while (back > 0 && isContinuation(bytes[back])) back--;
+    if (back > 0) end = back;
+  }
+  return { text: bytes.subarray(0, end).toString("utf8"), offset: start, next: start + end };
+}
+
+function readBytes(path: string, offset: number): { text: string; total: number; offset: number; next: number } | null {
   let fd: number | undefined;
   try {
     const total = statSync(path).size;
     const start = Math.max(0, Math.min(offset, total));
-    const length = Math.min(EMITTED_PAGE_BYTES, total - start);
+    const length = Math.min(EMITTED_PAGE_BYTES + 1, total - start);
     const buffer = Buffer.alloc(length);
     fd = openSync(path, "r");
     const read = readSync(fd, buffer, 0, length, start);
-    return { text: buffer.subarray(0, read).toString("utf8"), total, offset: start };
+    return { ...utf8Page(buffer.subarray(0, read), start, total), total };
   } catch {
     return null;
   } finally {
@@ -164,18 +182,18 @@ export function emittedToolOutput(chatJid: string, details: unknown, modelText: 
   if (typeof record.diff === "string" && record.diff) {
     const bytes = Buffer.from(record.diff, "utf8");
     const start = Math.max(0, Math.min(offset, bytes.length));
-    const page = bytes.subarray(start, start + EMITTED_PAGE_BYTES).toString("utf8");
-    return { kind: "diff", label: "Diff", text: page, offset: start, total: bytes.length, truncated: start + EMITTED_PAGE_BYTES < bytes.length, source: "details" };
+    const page = utf8Page(bytes.subarray(start, start + EMITTED_PAGE_BYTES + 1), start, bytes.length);
+    return { kind: "diff", label: "Diff", text: page.text, offset: start, next_offset: page.next, total: bytes.length, truncated: page.next < bytes.length, source: "details" };
   }
   const handle = /tool-output:([A-Za-z0-9_-]{1,128})/.exec(modelText)?.[1];
   if (handle) {
     const row = getDb().prepare("SELECT path FROM tool_outputs WHERE id = ? AND (chat_jid = ? OR chat_jid IS NULL)").get(handle, chatJid) as { path: string } | null;
     const page = row?.path ? readBytes(row.path, offset) : null;
-    if (page) return { kind: "text", label: "Output", text: page.text, offset: page.offset, total: page.total, truncated: page.offset + EMITTED_PAGE_BYTES < page.total, source: "tool-output" };
+    if (page) return { kind: "text", label: "Output", text: page.text, offset: page.offset, next_offset: page.next, total: page.total, truncated: page.next < page.total, source: "tool-output" };
   }
   if (isBashOutputLog(record.fullOutputPath)) {
     const page = readBytes(record.fullOutputPath, offset);
-    if (page && page.text !== modelText) return { kind: "text", label: "Output", text: page.text, offset: page.offset, total: page.total, truncated: page.offset + EMITTED_PAGE_BYTES < page.total, source: "log" };
+    if (page && page.text !== modelText) return { kind: "text", label: "Output", text: page.text, offset: page.offset, next_offset: page.next, total: page.total, truncated: page.next < page.total, source: "log" };
   }
   return null;
 }

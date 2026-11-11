@@ -296,7 +296,7 @@ function ToolStep({ step, chatJid, messageId, liveOutput = '', live = false }) {
     const outputViews = emitted
         ? [{ key: 'emitted', label: 'As emitted', text: emitted.text, kind: emitted.kind, className: 'turn-activity-output',
             note: emitted.total ? `${formatActivityBytes(emitted.total)}` : '',
-            footer: emitted.truncated ? more('Load more', () => loadEmitted(emitted.offset + new TextEncoder().encode(emitted.text).length)) : null }, modelView]
+            footer: emitted.truncated ? more('Load more', () => loadEmitted(emitted.next_offset)) : null }, modelView]
         : (modelText ? [modelView] : []);
     const duration = formatActivityDuration(tool.duration_ms);
     return html`

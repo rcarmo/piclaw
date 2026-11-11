@@ -56,7 +56,27 @@ describe("emitted output", () => {
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
   test("shows an edit's diff as emitted, paged by bytes", () => {
-    expect(emittedToolOutput(chat, { diff: "+ added" }, "Successfully replaced")).toEqual({ kind: "diff", label: "Diff", text: "+ added", offset: 0, total: 7, truncated: false, source: "details" });
+    expect(emittedToolOutput(chat, { diff: "+ added" }, "Successfully replaced")).toEqual({ kind: "diff", label: "Diff", text: "+ added", offset: 0, next_offset: 7, total: 7, truncated: false, source: "details" });
+  });
+
+  test("ends byte pages on UTF-8 character boundaries and resumes at the next offset", () => {
+    // A 3-byte character straddles the page boundary.
+    const diff = `${"a".repeat(EMITTED_PAGE_BYTES - 1)}€tail`;
+    const first = emittedToolOutput(chat, { diff }, "ok")!;
+    expect(first.next_offset).toBe(EMITTED_PAGE_BYTES - 1);
+    expect(first.text).not.toContain("\uFFFD");
+    expect(first.truncated).toBe(true);
+    const second = emittedToolOutput(chat, { diff }, "ok", first.next_offset)!;
+    expect(second.text).toBe("€tail");
+    expect(second.truncated).toBe(false);
+    expect(first.text + second.text).toBe(diff);
+    const log = join(tmpdir(), `pi-bash-${(Date.now() + 1).toString(16)}.log`);
+    writeFileSync(log, diff);
+    try {
+      const page = emittedToolOutput(chat, { fullOutputPath: log }, "[truncated]")!;
+      expect(page.next_offset).toBe(EMITTED_PAGE_BYTES - 1);
+      expect(page.text + emittedToolOutput(chat, { fullOutputPath: log }, "[truncated]", page.next_offset)!.text).toBe(diff);
+    } finally { rmSync(log, { force: true }); }
   });
 
   test("reads a stored full output only for its own chat", () => {
@@ -66,6 +86,7 @@ describe("emitted output", () => {
     expect(first?.text.length).toBe(EMITTED_PAGE_BYTES);
     expect(first?.truncated).toBe(true);
     const second = emittedToolOutput(chat, {}, "tool-output:out_mine", EMITTED_PAGE_BYTES);
+    expect(first?.next_offset).toBe(EMITTED_PAGE_BYTES);
     expect(second?.offset).toBe(EMITTED_PAGE_BYTES);
     expect(second?.truncated).toBe(false);
     expect(emittedToolOutput(chat, {}, "tool-output:out_other")).toBeNull();

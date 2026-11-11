@@ -15,6 +15,7 @@ const liveActivity = {
   ],
 };
 const longOutput = Array.from({ length: 30 }, (_, index) => `line ${index + 1}`).join('\n');
+const emittedPages = ['EMITTED full output', '€ final output'];
 const activity = {
   answer_entry_id: 8, started_at: 1000, ended_at: 9000, duration_ms: 8000, tool_ms: 4900, output_tokens: 60, tools: 3, errors: 1, truncated: false,
   steps: [
@@ -51,10 +52,14 @@ beforeAll(async () => {
       if (!step) return Response.json(activity);
       if (step === 'tool:call-a') {
         const offset = Number(url.searchParams.get('offset') ?? 0), page = longOutput.slice(offset, offset + 100);
+        const emittedOffset = Number(url.searchParams.get('emitted_offset') ?? 0);
+        const emittedText = emittedOffset === 0 ? emittedPages[0]! : emittedPages[1]!;
         return Response.json({ id: step, kind: 'tool', args: '{\n  "command": "bun test"\n}', output: page, output_offset: offset,
           output_chars: longOutput.length, truncated: offset + page.length < longOutput.length,
           input: { original: '{"command":"cd /w && bun test"}', readable: { kind: 'shell', label: 'Command', language: 'shell', text: 'cd /w \\\n  && bun test' } },
-          emitted: { kind: 'text', label: 'Output', text: 'EMITTED full output', offset: 0, total: 19, truncated: false, source: 'tool-output' } });
+          emitted: { kind: 'text', label: 'Output', text: emittedText, offset: emittedOffset,
+            next_offset: emittedOffset + Buffer.byteLength(emittedText), total: Buffer.byteLength(emittedPages.join('')),
+            truncated: emittedOffset === 0, source: 'tool-output' } });
       }
       if (step === 'thinking:2:0') return Response.json({ id: step, kind: 'thinking', text: activity.steps[0]!.text, truncated: false });
       return Response.json({ error: 'Not found' }, { status: 404 });
@@ -108,11 +113,10 @@ browserTest('turn activity loads when visible, discloses steps progressively and
     expect(await thinking.getAttribute('class')).toContain('is-expanded');
     expect(await thinking.innerText()).toContain('Fourth line hidden by the clamp.');
 
-    // Tool card: arguments, preview, then the full output in pages.
+    // Tool card: opening fetches full arguments and output; previews may already be replaced.
     const bash = page.locator('#post-41 .turn-activity-tool').first();
     await bash.locator('.turn-activity-tool-header').click();
     expect(await bash.locator('.turn-activity-tool-header').getAttribute('aria-expanded')).toBe('true');
-    expect(await bash.locator('.turn-activity-pre').first().innerText()).toContain('"command": "bun test"');
     // Input: Readable by default, Original on request; copy works.
     const inputRegion = bash.locator('.turn-activity-input-region');
     await inputRegion.locator('pre[data-view="readable"]').waitFor();
@@ -127,7 +131,10 @@ browserTest('turn activity loads when visible, discloses steps progressively and
     await inputRegion.locator('.turn-activity-copy.is-success').waitFor();
     // Output: As emitted by default, As seen by model on request, which pages.
     const outputRegion = bash.locator('.turn-activity-output-region');
-    expect(await outputRegion.locator('pre').innerText()).toBe('EMITTED full output');
+    expect(await outputRegion.locator('pre').innerText()).toBe(emittedPages[0]!);
+    await outputRegion.getByRole('button', { name: 'Load more', exact: true }).click();
+    await page.waitForFunction((text) => document.querySelector('#post-41 pre[data-view="emitted"]')?.textContent === text, emittedPages.join(''));
+    expect(await outputRegion.getByText('Load more').count()).toBe(0);
     await outputRegion.getByRole('button', { name: 'As seen by model', exact: true }).click();
     for (let pageIndex = 0; pageIndex < 2; pageIndex++) {
       await bash.getByText('Load more').waitFor();
@@ -135,7 +142,7 @@ browserTest('turn activity loads when visible, discloses steps progressively and
     }
     await page.waitForFunction(() => document.querySelector('#post-41 .turn-activity-output')?.textContent?.endsWith('line 30'));
     expect(await bash.getByText('Load more').count()).toBe(0);
-    expect(requests.filter((query) => query.includes('step=tool%3Acall-a'))).toEqual(['?chat_jid=web%3Afixture&message_id=41&step=tool%3Acall-a', '?chat_jid=web%3Afixture&message_id=41&step=tool%3Acall-a&offset=100', '?chat_jid=web%3Afixture&message_id=41&step=tool%3Acall-a&offset=200']);
+    expect(requests.filter((query) => query.includes('step=tool%3Acall-a'))).toEqual(['?chat_jid=web%3Afixture&message_id=41&step=tool%3Acall-a', `?chat_jid=web%3Afixture&message_id=41&step=tool%3Acall-a&emitted_offset=${Buffer.byteLength(emittedPages[0]!)}`, '?chat_jid=web%3Afixture&message_id=41&step=tool%3Acall-a&offset=100', '?chat_jid=web%3Afixture&message_id=41&step=tool%3Acall-a&offset=200']);
 
     // Untrusted output and commentary stay inert text.
     const failed = page.locator('#post-41 .turn-activity-tool.is-error');

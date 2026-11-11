@@ -100,7 +100,7 @@ describe("turn activity projection", () => {
 
 describe("GET /agent/turn-activity", () => {
   const chat = "web:turn-activity";
-  let replyId = "", legacyId = "", userId = "";
+  let replyId = "", legacyId = "", userId = "", failedId = "";
   beforeAll(() => {
     initDatabase();
     const db = getDb();
@@ -110,12 +110,15 @@ describe("GET /agent/turn-activity", () => {
     replyId = insert("native-answer:inc:7:8", 1);
     legacyId = insert("legacy-reply", 1);
     userId = insert("native-answer:inc:7:9", 0);
+    // A model-error reply has no answer entry, so there is no turn to read.
+    failedId = insert("native-answer:inc:7:failed-10", 1);
   });
 
   test("flags durable replies for on-demand activity", () => {
     expect(getMessageByRowId(chat, Number(replyId))?.data.turn_activity).toBe(true);
     expect(getMessageByRowId(chat, Number(legacyId))?.data.turn_activity).toBeUndefined();
     expect(getMessageByRowId(chat, Number(userId))?.data.turn_activity).toBeUndefined();
+    expect(getMessageByRowId(chat, Number(failedId))?.data.turn_activity).toBeUndefined();
   });
   const request = (params: Record<string, string>) => new URL(`http://local/agent/turn-activity?${new URLSearchParams(params)}`);
 
