@@ -9,12 +9,13 @@ function Fixture(){
  const shell=useRef(null),timeline=useRef(null),host=useRef(null),sidebar=useRef(280),editor=useRef(500),dock=useRef(200);
  const splitters=useSplitters({appShellRef:shell,sidebarWidthRef:sidebar,editorWidthRef:editor,dockHeightRef:dock});
  useEffect(()=>{const terminal=terminalTabPaneExtension.mount(host.current,{mode:'view'});Object.assign(window,{terminalLayout:{terminal,shell:shell.current,restore(width:number){editor.current=0;applyStoredPaneLayout({editorOpen:true,shellElement:shell.current,editorWidthRef:editor,dockHeightRef:dock,sidebarWidthRef:sidebar,readStoredNumber:key=>key==='editorWidth'?width:null});}}});return()=>terminal.dispose();},[]);
+ // Shell order matches app-main-shell-render: chat, file tree, then the editor on the right (#1987).
  return html`<div class="app-shell workspace-collapsed editor-open" ref=${shell} style="--editor-width:500px;--sidebar-width:280px">
- <aside class="workspace-sidebar">Workspace</aside><div class="workspace-splitter"></div>
- <section class="editor-pane-container"><div class="tab-strip">Terminal</div><div class="editor-pane-host" ref=${host}></div></section>
- <div class="editor-splitter" onMouseDown=${splitters.handleEditorSplitterMouseDown} onTouchStart=${splitters.handleEditorSplitterTouchStart}></div>
  <main class="container"><${ChatSurface} currentChatJid="web:fixture" posts=${posts} timelineRef=${timeline} hasMore=${false}
  composeProps=${{currentChatJid:'web:fixture',onPost:()=>{},services,agentModels:{current:'provider/a-very-long-model-name-that-needs-to-truncate',thinking_level:'high'},capabilities:{speech:true,media:true,location:true,notifications:true,modelPicker:true,commands:false}}}/></main>
+ <div class="workspace-splitter"></div><aside class="workspace-sidebar">Workspace</aside>
+ <div class="editor-splitter" onMouseDown=${splitters.handleEditorSplitterMouseDown} onTouchStart=${splitters.handleEditorSplitterTouchStart}></div>
+ <section class="editor-pane-container"><div class="tab-strip">Terminal</div><div class="editor-pane-host" ref=${host}></div></section>
  </div>`;
 }
 render(html`<${Fixture}/>`,document.getElementById('app')!);

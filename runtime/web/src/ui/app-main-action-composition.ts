@@ -288,10 +288,13 @@ export function useMainAppActionComposition(options: UseMainAppActionComposition
   }));
   const branchPaneActions = useBranchPaneLifecycle(composeBranchPaneActionOptions(options));
 
-  useAppShellShortcuts(composeShortcutOptions({
-    ...options,
-    handleBranchPickerChange: branchPaneActions.handleBranchPickerChange,
-  }));
+  useAppShellShortcuts({
+    ...composeShortcutOptions({
+      ...options,
+      handleBranchPickerChange: branchPaneActions.handleBranchPickerChange,
+    }),
+    toggleWorkspace: branchPaneActions.toggleWorkspace,
+  });
 
   return {
     followupActions,

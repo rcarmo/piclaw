@@ -13,6 +13,7 @@ import type { AgentStatusContext, AgentTokenUsageContext } from "../agent/agent-
 import type { ContentEndpointsContext } from "./content-endpoints.js";
 import type { AgentsEndpointContext, AvatarEndpointContext } from "./identity-endpoints.js";
 import type { UiEndpointsContext } from "./ui-endpoints.js";
+import { getChatActivitySummaries } from "../../../db/messages.js";
 
 /** Live identity/avatar snapshot consumed by endpoint context builders. */
 export interface WebChannelIdentitySnapshot {
@@ -107,6 +108,7 @@ export function createWebChannelEndpointContexts(
             ? (chatJid) => channel.agentPool.getSessionTreeSummaryForChat(chatJid)
             : undefined,
           getTokenUsageForChat,
+          getChatActivitySummaries,
           getAvailableModels: (chatJid, modelOptions) => channel.agentPool.getAvailableModels(chatJid, modelOptions),
           getProviderReadyCompletedForInstance: req => {
             const binding = captureHostDatabaseBinding(), gateway = channel.authGateway, request = captureWebRequestAuthority(gateway, req);

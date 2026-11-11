@@ -24,7 +24,8 @@ export function KeyboardSection() {
   }, [drafts]);
 
   const visibleActions = useMemo(
-    () => filterKeyboardShortcutActions(filter.value, drafts.value),
+    () => filterKeyboardShortcutActions(filter.value, drafts.value)
+      .filter((action) => action.id !== "toggleWorkspace" && action.id !== "toggleSessions"),
     [filter.value, drafts.value],
   );
 

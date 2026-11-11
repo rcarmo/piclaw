@@ -146,6 +146,16 @@ Extension authors should treat the bridge as a **transport + lightweight afforda
 | Need browser-only status updates for custom JS UI | `extension_ui_status` / `extension_ui_working` |
 | Need a bespoke browser-side request/response UI | `extension_ui_request` with your own browser listener |
 
+## Right-edge docking
+
+Classic reads `--piclaw-shell-inset-right` from `:root` and shrinks its shell by that amount. A browser add-on that docks a fixed panel or edge tab on the right can set the variable so the panel does not cover the workspace:
+
+```js
+document.documentElement.style.setProperty('--piclaw-shell-inset-right', `${panelWidth + tabWidth}px`);
+```
+
+Set it only for desktop layouts (`(min-width: 1024px) and (orientation: landscape)`), and set it to `0px` when the panel overlays on smaller screens. Pane sizes are clamped to the remaining shell width. The plan sidebar add-on uses this to dock as a column.
+
 ## Current non-goals / unsupported assumptions
 
 Extension authors should **not** assume Piclaw currently provides:

@@ -15,7 +15,7 @@ import { SettingsManager } from "../../node_modules/@earendil-works/pi-coding-ag
 import { loadApplicationExtensionCatalog, qualifyInstalledPlan, assertApplicationExtensionCatalogSupported } from "../../runtime/durable-engine/src/host-extension-catalog.ts";
 
 const root = process.env.DURABLE_ADDONS_ROOT;
-if (!root) throw Error("DURABLE_ADDONS_ROOT required: pinned Plan 0.1.27 sources, never live packages");
+if (!root) throw Error("DURABLE_ADDONS_ROOT required: pinned Plan 0.1.28 sources, never live packages");
 const pins = {
   "index.ts": "303b6a270cdb0dfbdf0ffbce5ac02ee16574ea0da7e43d503f116137a1ee6579",
   "compat/chat-context.ts": "8cfa6c16f0a27308ecc665f80ba107064d4fa8ac34122676ff0d1cb46e719da5",
@@ -59,7 +59,7 @@ test("installed pinned Plan executes the public registry definition against root
       expect(createHash("sha256").update(await Bun.file(source).bytes()).digest("hex")).toBe(hash);
       copyFileSync(source, join(pkg, file));
     }
-    writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "@rcarmo/piclaw-addon-plan-sidebar", version: "0.1.27", type: "module", pi: { extensions: ["./index.ts"] } }));
+    writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "@rcarmo/piclaw-addon-plan-sidebar", version: "0.1.28", type: "module", pi: { extensions: ["./index.ts"] } }));
     const agentDir = join(dir, "agent"); mkdirSync(agentDir);
     delete globals.__piclaw_registerAddonConfigApi;
     delete globals.__PICLAW_BROADCAST_EVENT__;
@@ -94,10 +94,10 @@ test("installed pinned Plan executes the public registry definition against root
     expect(prompt.message).toMatchObject({ customType: "plan_sidebar_context", display: false });
     // Restoring an untrusted declaration revokes qualification even though the
     // registered tool and exported builders are unchanged.
-    writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "@qualification/plan", version: "0.1.27", type: "module", pi: { extensions: ["./index.ts"] } }));
+    writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "@qualification/plan", version: "0.1.28", type: "module", pi: { extensions: ["./index.ts"] } }));
     expect(await qualifyInstalledPlan(catalog, dir)).toBeUndefined();
     expect(() => qualified!.assertCurrent()).toThrow("Installed Plan source changed");
-    writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "@rcarmo/piclaw-addon-plan-sidebar", version: "0.1.27", type: "module", pi: { extensions: ["./index.ts"] } }));
+    writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "@rcarmo/piclaw-addon-plan-sidebar", version: "0.1.28", type: "module", pi: { extensions: ["./index.ts"] } }));
     qualified!.assertCurrent();
     for (const file of Object.keys(pins)) {
       const path = join(pkg, file);
@@ -197,7 +197,7 @@ for (const scenario of ["renamed-after-load", "unqualified-name-before-load", "w
     mkdirSync(join(pkg, "compat"), { recursive: true });
     for (const file of Object.keys(pins)) copyFileSync(resolve(root!, "addons/plan-sidebar", file), join(pkg, file));
     const manifest = { name: scenario === "unqualified-name-before-load" ? "@qualification/plan" : canonicalName,
-      version: scenario === "unsupported-version" ? "99.0.0" : "0.1.27", type: "module", pi: { extensions: ["./index.ts"] } };
+      version: scenario === "unsupported-version" ? "99.0.0" : "0.1.28", type: "module", pi: { extensions: ["./index.ts"] } };
     writeFileSync(join(pkg, "package.json"), JSON.stringify(manifest));
     if (scenario === "unsupported-code") writeFileSync(join(pkg, "compat/chat-context.ts"), `${await Bun.file(join(pkg, "compat/chat-context.ts")).text()}\n// unsupported executable input\n`);
     if (scenario === "shadowed-helper") writeFileSync(join(pkg, "compat/chat-context.js"), 'export function getChatJid() { return "web:spoofed"; }');
@@ -269,7 +269,7 @@ test("same-path same-CWD unsupported Plan cache cannot qualify restored approved
   try {
     mkdirSync(join(pkg, "compat"), { recursive: true }); mkdirSync(agentDir);
     for (const file of Object.keys(pins)) copyFileSync(resolve(root!, "addons/plan-sidebar", file), join(pkg, file));
-    writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "@rcarmo/piclaw-addon-plan-sidebar", version: "0.1.27", type: "module", pi: { extensions: ["./index.ts"] } }));
+    writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "@rcarmo/piclaw-addon-plan-sidebar", version: "0.1.28", type: "module", pi: { extensions: ["./index.ts"] } }));
     const marker = join(dir, "factory-executions");
     writeFileSync(join(pkg, "index.ts"), `import { appendFileSync } from "node:fs";
       appendFileSync(${JSON.stringify(marker)}, "BAD\\n");

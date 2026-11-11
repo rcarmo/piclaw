@@ -25,7 +25,7 @@ test("HTTP roster, status, activity and branch reads bypass the retired facade",
     expect(response.status).toBe(200); expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(response.headers.get("x-request-id")).toBeString();
     const body = await response.json();
-    if (path.includes("active-chats")) expect(body.chats[0]).toMatchObject({ chat_jid: "web:branch", is_active: false, activity_status: "idle" });
+    if (path.includes("active-chats")) expect(body.chats[0]).toMatchObject({ chat_jid: "web:branch", is_active: false, activity_status: "idle", last_activity_at: null, last_reply: null });
     if (path.includes("branches?")) expect(body.chats).toEqual([{ chat_jid: "web:branch", agent_name: "Branch" }]);
   }
 });

@@ -45,3 +45,14 @@ A throwaway Playwright script exercised the mock-up in Chromium and WebKit at 14
 - The meters docked in the header.
 
 The script is not part of the repository test suite.
+
+## Implementation notes
+
+The Classic implementation keeps the existing shell markup and class names, and reorders the existing panes inside `.app-shell`. The user accepted the following design differences for now; the mock-up above remains a reference rather than the current implementation contract.
+
+- Desktop starts at 1024 px in landscape, and the chat retains a 320 px minimum.
+- The system meters stay in the chat's top-right corner instead of a new chat header.
+- Narrow layouts keep the compose `@session` picker for sessions instead of adding a sessions drawer.
+- Plan Sidebar 0.1.28 docks by setting `--piclaw-shell-inset-right`; the shell measures its remaining width and counts both in-flow dividers when fitting the sessions pane. The tree tab's negative margin keeps its net flex footprint at zero.
+- The new file-tree and sessions shortcuts are Classic-only controls. Visual keeps its existing six Keyboard controls without advertising the unwired actions.
+- Session rows include the session-dashboard add-on's summaries: activity state, live draft, thinking or tool previews, the latest reply and its age, and context use. `/agent/active-chats` now returns `last_activity_at` and a 400-character `last_reply` excerpt for each session.

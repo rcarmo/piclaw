@@ -6,8 +6,10 @@ import {
   watchKeyboardHelpShortcut,
   watchPaneOpenEvents,
   watchSettingsShortcut,
+  watchWorkspaceTreeShortcut,
   watchZenModeShortcuts,
 } from '../../web/src/ui/app-browser-events.js';
+import { WORKSPACE_TREE_TOGGLE_EVENT } from '../../web/src/ui/use-splitters.js';
 
 function createEventTarget() {
   const listeners = new Map<string, Set<(event: any) => void>>();
@@ -80,6 +82,24 @@ test('watchDockToggleShortcut fires on Ctrl+` only', () => {
 
   dispose();
   expect(doc.count('keydown')).toBe(0);
+});
+
+test('watchWorkspaceTreeShortcut toggles on Ctrl/Cmd+Shift+E, including in editors, and on divider requests', () => {
+  const doc = createEventTarget();
+  const win = createEventTarget();
+  let toggles = 0;
+  const dispose = watchWorkspaceTreeShortcut(() => { toggles += 1; }, { document: doc as any, window: win as any });
+
+  expect(doc.dispatch('keydown', { ctrlKey: true, shiftKey: false, key: 'e' }).prevented).toBeUndefined();
+  expect(doc.dispatch('keydown', { ctrlKey: true, shiftKey: true, key: 'E', isComposing: true }).prevented).toBeUndefined();
+  expect(doc.dispatch('keydown', { ctrlKey: true, shiftKey: true, key: 'E', target: { tagName: 'TEXTAREA' } }).prevented).toBe(true);
+  expect(doc.dispatch('keydown', { metaKey: true, shiftKey: true, key: 'e' }).prevented).toBe(true);
+  win.dispatch(WORKSPACE_TREE_TOGGLE_EVENT);
+  expect(toggles).toBe(3);
+
+  dispose();
+  expect(doc.count('keydown')).toBe(0);
+  expect(win.count(WORKSPACE_TREE_TOGGLE_EVENT)).toBe(0);
 });
 
 test('watchZenModeShortcuts toggles on Ctrl+Shift+Z and exits on Escape when active', () => {

@@ -200,7 +200,7 @@ describe("web channel endpoint facade service", () => {
     expect(activeResponse.status).toBe(200);
     expect((await activeResponse.json()).chats).toEqual(knownChats.map(chat => ({ ...chat, session_id: null,
       is_active: false, is_streaming: false, is_compacting: false, is_retrying: false, is_bash_running: false,
-      activity_status: "idle", activity_label: "Idle" })));
+      activity_status: "idle", activity_label: "Idle", last_activity_at: null, last_reply: null })));
 
     const branchesResponse = await facade.handleAgentBranches(
       new Request("https://example.com/agent/branches?root_chat_jid=web%3Aroot&include_archived=1")

@@ -1,0 +1,591 @@
+/*
+ * layout-three-pane.css - Classic three-pane layout (#1987).
+ * Ownership: sessions pane, right-hand workspace placement and pane allowances.
+ *
+ * Desktop (≥1024px landscape): sessions | chat | file tree | editor.
+ * Narrow: chat full width; the file tree opens as a drawer from the right and
+ * sessions use the existing compose @session picker.
+ *
+ * Existing pane markup and class names are unchanged; this file only overrides
+ * placement. Add-ons that dock to the right edge (for example the plan sidebar)
+ * can reserve space by setting --piclaw-shell-inset-right on :root.
+ */
+
+:root {
+    --piclaw-shell-inset-right: 0px;
+}
+
+.app-shell {
+    width: calc(100% - var(--piclaw-shell-inset-right, 0px));
+}
+
+/* The global menu no longer lives in the tree header. */
+.workspace-header-left {
+    padding-left: 0;
+}
+
+/* ── Sessions pane ── */
+.sessions-sidebar,
+.sessions-splitter,
+.sessions-toggle-tab {
+    display: none;
+}
+
+.sessions-sidebar {
+    flex-direction: column;
+    flex: 0 0 auto;
+    width: var(--sessions-width, 260px);
+    min-width: 0;
+    height: var(--app-height, 100dvh);
+    overflow: hidden;
+    background-color: var(--bg-secondary);
+    padding-top: env(safe-area-inset-top, 0px);
+    opacity: 1;
+    transition: width var(--ui-transition-fast), opacity var(--ui-transition-fast);
+}
+
+.sessions-sidebar.collapsed {
+    width: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.sessions-sidebar-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    min-height: 44px;
+    /* Room for the global menu button anchored here. */
+    padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) 44px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.sessions-sidebar-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.sessions-sidebar-collapse,
+.sessions-sidebar-pin {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.sessions-sidebar-collapse svg {
+    width: 12px;
+    height: 12px;
+}
+
+.sessions-sidebar-pin svg {
+    width: 15px;
+    height: 15px;
+}
+
+.sessions-sidebar-collapse:hover,
+.sessions-sidebar-collapse:focus-visible,
+.sessions-sidebar-pin:hover,
+.sessions-sidebar-pin:focus-visible {
+    color: var(--accent-color);
+    background: var(--accent-soft, rgba(29, 155, 240, 0.1));
+}
+
+.sessions-sidebar-pin {
+    opacity: 0;
+}
+
+.sessions-sidebar-item:hover .sessions-sidebar-pin,
+.sessions-sidebar-item:focus-within .sessions-sidebar-pin,
+.sessions-sidebar-pin.pinned {
+    opacity: 1;
+}
+
+.sessions-sidebar-pin.pinned {
+    color: var(--accent-color);
+}
+
+@media (hover: none) {
+    .sessions-sidebar-pin {
+        opacity: 0.6;
+    }
+}
+
+.sessions-sidebar-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+.sessions-sidebar-search {
+    display: block;
+    padding: var(--spacing-sm);
+}
+
+.sessions-sidebar-search input {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-full);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 13px;
+    outline: none;
+}
+
+.sessions-sidebar-search input:focus {
+    border-color: var(--accent-color);
+}
+
+.sessions-sidebar-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 var(--spacing-xs) var(--spacing-sm);
+}
+
+.sessions-sidebar-empty {
+    padding: var(--spacing-sm);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.sessions-sidebar-section-heading {
+    margin: 10px 8px 4px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.sessions-sidebar-items {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.sessions-sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    border-radius: var(--radius-md);
+}
+
+.sessions-sidebar-item:hover {
+    background: var(--bg-hover);
+}
+
+.sessions-sidebar-item.current {
+    background: var(--accent-soft, rgba(29, 155, 240, 0.1));
+}
+
+.sessions-sidebar-open {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.sessions-sidebar-handle {
+    font: 600 12.5px/1.35 var(--font-family-mono, monospace);
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sessions-sidebar-item.current .sessions-sidebar-handle {
+    color: var(--accent-color);
+}
+
+.sessions-sidebar-meta {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Session activity, carried over from the session-dashboard add-on. */
+.sessions-sidebar-active-count {
+    flex-shrink: 0;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--success-color) 16%, transparent);
+    color: var(--success-color);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.sessions-sidebar-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.sessions-sidebar-line .sessions-sidebar-handle {
+    flex: 1;
+    min-width: 0;
+}
+
+.sessions-sidebar-activity {
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success-color);
+    animation: sessions-sidebar-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes sessions-sidebar-pulse {
+    50% { opacity: 0.35; }
+}
+
+.sessions-sidebar-age {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.sessions-sidebar-age.active {
+    color: var(--success-color);
+    font-weight: 600;
+}
+
+.sessions-sidebar-preview {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+}
+
+.sessions-sidebar-preview.live {
+    color: var(--text-primary);
+}
+
+.sessions-sidebar-preview.tool {
+    -webkit-line-clamp: 1;
+    font-family: var(--font-family-mono, monospace);
+    font-size: 11.5px;
+}
+
+.sessions-sidebar-preview-label {
+    font-family: var(--font-family, inherit);
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--success-color);
+}
+
+.sessions-sidebar-context {
+    display: block;
+    height: 3px;
+    margin-top: 2px;
+    border-radius: 2px;
+    background: var(--border-color);
+    overflow: hidden;
+}
+
+.sessions-sidebar-context > span {
+    display: block;
+    height: 100%;
+    background: var(--accent-color);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sessions-sidebar-activity {
+        animation: none;
+    }
+}
+
+.sessions-splitter {
+    width: 4px;
+    flex-shrink: 0;
+    cursor: col-resize;
+    position: relative;
+    z-index: 50;
+    touch-action: none;
+}
+
+.sessions-splitter::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 1px;
+    background: var(--border-color);
+    transition: background 0.15s;
+}
+
+.sessions-splitter:hover::after,
+.sessions-splitter:focus-visible::after,
+.sessions-splitter.dragging::after,
+.workspace-splitter:focus-visible::after,
+.editor-splitter:focus-visible::after {
+    background: var(--accent-color);
+    width: 2px;
+}
+
+.sessions-splitter:focus-visible,
+.workspace-splitter:focus-visible,
+.editor-splitter:focus-visible {
+    outline: none;
+}
+
+.sessions-toggle-tab {
+    position: fixed;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    z-index: 9;
+    width: var(--workspace-tab-width, 20px);
+    height: 52px;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-left: 0;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    box-shadow: var(--shadow-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.sessions-toggle-tab:hover,
+.sessions-toggle-tab:focus-visible {
+    color: var(--text-primary);
+    border-color: var(--accent-color);
+}
+
+.sessions-toggle-tab-icon {
+    width: 12px;
+    height: 12px;
+}
+
+.app-shell.sessions-resizing .sessions-sidebar,
+.app-shell.sessions-resizing .container {
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sessions-sidebar {
+        transition: none;
+    }
+}
+
+/* ── Desktop placement ── */
+@media (min-width: 1024px) and (orientation: landscape) {
+    .sessions-sidebar {
+        display: flex;
+    }
+
+    .sessions-splitter {
+        display: block;
+    }
+
+    .sessions-toggle-tab {
+        display: flex;
+    }
+
+    /* Collapsed panes keep a thin divider so Enter, drag or double-click restores them. */
+    .sessions-splitter.at-edge::before,
+    .app-shell[data-editor-collapsed="true"] > .editor-splitter::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 4px;
+        height: 32px;
+        transform: translate(-50%, -50%);
+        border-radius: 999px;
+        background: var(--border-color);
+    }
+
+    /* The tree sits between the chat and the editor, so the editor keeps its
+       right-hand position while the tree collapses towards it. */
+    .app-shell.workspace-collapsed .workspace-sidebar {
+        transform: translateX(8px);
+    }
+
+    /* The tree tab is a zero-width flex item before the tree: it hangs over
+       the chat edge and follows the tree without fixed positioning. */
+    .app-shell > .workspace-toggle-tab,
+    .app-shell.workspace-collapsed > .workspace-toggle-tab,
+    .app-shell:not(.workspace-collapsed) > .workspace-toggle-tab {
+        position: relative;
+        top: auto;
+        left: auto;
+        right: auto;
+        transform: none;
+        align-self: center;
+        flex: 0 0 var(--workspace-tab-width, 20px);
+        margin-left: calc(-1 * var(--workspace-tab-width, 20px));
+        border: 1px solid var(--border-color);
+        border-right: 0;
+        border-radius: var(--radius-md) 0 0 var(--radius-md);
+    }
+
+    .app-shell > .workspace-toggle-tab .workspace-toggle-tab-icon {
+        transform: rotate(180deg);
+    }
+
+    .app-shell > .workspace-toggle-tab.open .workspace-toggle-tab-icon {
+        transform: none;
+    }
+
+    .app-shell[data-editor-collapsed="true"] > .editor-pane-container {
+        display: none;
+    }
+
+    .app-shell[data-editor-collapsed="true"] > .editor-splitter {
+        width: 10px;
+    }
+
+    /* Percentages follow the shell, which shrinks when an add-on docks on the right. */
+    .app-shell > .editor-pane-container {
+        max-width: calc(100% - var(--sessions-reserved, 0px) - var(--chat-pane-min-width, 320px) - 8px);
+    }
+
+    .app-shell:not(.workspace-collapsed) > .editor-pane-container {
+        max-width: calc(100% - var(--sidebar-width, 280px) - var(--sessions-reserved, 0px) - var(--chat-pane-min-width, 320px) - 16px);
+    }
+
+    .app-shell > .workspace-sidebar {
+        max-width: calc(100% - var(--sessions-reserved, 0px) - var(--chat-pane-min-width, 320px) - 8px);
+    }
+}
+
+/* ── Narrow placement: the tree drawer opens from the right ── */
+@media (max-width: 1023px), (orientation: portrait) {
+    .app-shell:not(.workspace-collapsed) > .workspace-sidebar {
+        inset: 0 0 0 auto;
+    }
+
+    .app-shell:not(.workspace-collapsed) > .workspace-toggle-tab {
+        left: auto;
+        right: calc(min(var(--sidebar-width, 280px), calc(100vw - 48px)) - var(--workspace-tab-width, 20px));
+        border-radius: var(--radius-md) 0 0 var(--radius-md);
+    }
+
+    .app-shell > .workspace-toggle-tab .workspace-toggle-tab-icon {
+        transform: rotate(180deg);
+    }
+
+    .app-shell > .workspace-toggle-tab.open .workspace-toggle-tab-icon {
+        transform: none;
+    }
+}
+
+/* ── Phone editor sheet ──
+   Below 640px the editor covers the chat instead of squeezing beside it.
+   "Chat" collapses it (tabs stay open); "Editor" brings it back. */
+.editor-pane-back,
+.editor-pane-restore {
+    display: none;
+}
+
+@media (max-width: 639px) {
+    .app-shell.editor-open:not([data-editor-collapsed="true"]) > .editor-pane-container {
+        position: absolute;
+        inset: 0;
+        z-index: 40;
+        width: 100% !important;
+        min-width: 0;
+        max-width: none;
+        background: var(--bg-primary);
+    }
+
+    .app-shell.editor-open > .editor-splitter {
+        display: none;
+    }
+
+    .app-shell[data-editor-collapsed="true"] > .editor-pane-container {
+        display: none;
+    }
+
+    .editor-pane-back,
+    .editor-pane-restore {
+        align-items: center;
+        gap: 4px;
+        min-height: 28px;
+        padding: 0 10px 0 8px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-full);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .editor-pane-back svg,
+    .editor-pane-restore svg {
+        width: 12px;
+        height: 12px;
+    }
+
+    /* Sits in the tab strip's leading space; the strip is shifted to make room. */
+    .app-shell.editor-open:not([data-editor-collapsed="true"]) > .editor-pane-back {
+        display: inline-flex;
+        position: absolute;
+        top: calc(env(safe-area-inset-top, 0px) + 4px);
+        left: 6px;
+        z-index: 41;
+    }
+
+    .app-shell.editor-open:not([data-editor-collapsed="true"]) > .editor-pane-container .tab-strip {
+        padding-left: 76px;
+    }
+
+    /* Next to the global menu button while the editor is collapsed. */
+    .app-shell.editor-open[data-editor-collapsed="true"] > .editor-pane-restore {
+        display: inline-flex;
+        position: absolute;
+        top: calc(env(safe-area-inset-top, 0px) + 8px);
+        left: 44px;
+        z-index: 12;
+    }
+
+    /* The global menu would cover the sheet's tab strip. */
+    body:has(.app-shell.editor-open:not([data-editor-collapsed="true"])) .timeline-menu-portal {
+        visibility: hidden;
+    }
+}

@@ -242,7 +242,7 @@
 
     "@rcarmo/piclaw-addon-observability": ["@rcarmo/piclaw-addon-observability@observability.tgz", { "dependencies": { "@azure/monitor-opentelemetry": "^1.19", "@opentelemetry/api": "^1.9", "@opentelemetry/resources": "^2.10.0" }, "peerDependencies": { "@earendil-works/pi-coding-agent": "*" } }, "sha512-8EiAIDPIMJgYsMcKy04/i3n1c6o/WGQG2AsxiihM5vtiD+iCVhaf2wpPSOl/rBpGZ6LKCwQw4vhMnpRk8S9jTw=="],
 
-    "@rcarmo/piclaw-addon-plan-sidebar": ["@rcarmo/piclaw-addon-plan-sidebar@plan-sidebar.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-VMSacc+bTEDIstPI0wwgTyudHuuEU/x3oPvpYWBIUgv6dSgm54KTvtFjdK0cuUf94S23tWLN6gG+LB9NX1SeCA=="],
+    "@rcarmo/piclaw-addon-plan-sidebar": ["@rcarmo/piclaw-addon-plan-sidebar@plan-sidebar.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-CX/BOhO3dRm8TV2GG1Az2Fp65NqznJ6gSvg7GLOysnhk9afB9JhrwUVgfcw+Bv1p4o69gMyFOahHa+Twr3n4iA=="],
 
     "@rcarmo/piclaw-addon-restic": ["@rcarmo/piclaw-addon-restic@restic.tgz", {}, "sha512-B/PeNwbjlbAM4MhGA4q3vIuuvgNO60oPaZJ3dSONR3XU4siOlyTYJw3ml+OfdWI6m7cXU7PbQv6Swta/EsP/Dg=="],
 

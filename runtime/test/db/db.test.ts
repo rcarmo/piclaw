@@ -1094,3 +1094,20 @@ test("invalid JSON in content_blocks/link_previews is handled gracefully", () =>
   expect(message?.data.content_blocks).toBeUndefined();
   expect(message?.data.link_previews).toBeUndefined();
 });
+
+test("chat activity summaries return the last message time and latest non-empty assistant reply", async () => {
+  const { getChatActivitySummaries } = await import("../../src/db/messages.js");
+  const chatJid = `web:activity-${Date.now()}`;
+  db.storeMessage(makeMessage(chatJid, "first reply", "2026-11-10T10:00:00.000Z", true));
+  db.storeMessage(makeMessage(chatJid, "latest **reply** " + "x".repeat(600), "2026-11-10T10:01:00.000Z", true));
+  db.storeMessage(makeMessage(chatJid, "   ", "2026-11-10T10:02:00.000Z", true));
+  db.storeMessage(makeMessage(chatJid, "user follow-up", "2026-11-10T10:03:00.000Z"));
+  const summaries = getChatActivitySummaries([chatJid, " ", "web:missing-activity", chatJid]);
+  const summary = summaries.get(chatJid)!;
+  expect(summary.last_activity_at).toBe("2026-11-10T10:03:00.000Z");
+  expect(summary.last_reply!.startsWith("latest **reply** x")).toBe(true);
+  expect(summary.last_reply!.length).toBe(400);
+  expect(summaries.has("web:missing-activity")).toBe(false);
+  expect(getChatActivitySummaries([]).size).toBe(0);
+});
+
