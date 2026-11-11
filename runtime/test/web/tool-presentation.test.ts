@@ -15,6 +15,14 @@ describe("shell commands", () => {
     expect(formatShellCommand("make build; make test || echo failed")).toBe("make build\nmake test \\\n  || echo failed");
   });
 
+  test("preserve comment semantics and clobber redirections in copied commands", () => {
+    // Splitting the comment at a semicolon must not turn its tail into a command.
+    expect(formatShellCommand("echo safe # ignored; echo SHOULD_NOT_RUN")).toBeNull();
+    expect(formatShellCommand("echo safe; # ignored && echo SHOULD_NOT_RUN")).toBeNull();
+    expect(formatShellCommand("echo x >|file && echo y")).toBe("echo x >|file \\\n  && echo y");
+    expect(formatShellCommand("echo '# literal' && echo y")).toBe("echo '# literal' \\\n  && echo y");
+  });
+
   test("leave quoted, nested and multi-line commands alone", () => {
     expect(formatShellCommand("echo 'a && b' && echo \"c | d\"")).toBe("echo 'a && b' \\\n  && echo \"c | d\"");
     expect(formatShellCommand("x=$(ls | wc -l) && echo $x")).toBe("x=$(ls | wc -l) \\\n  && echo $x");

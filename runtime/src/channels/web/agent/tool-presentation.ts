@@ -48,8 +48,9 @@ export function originalToolInput(args: unknown): string {
 
 /**
  * Split a one-line shell command at top-level `&&`, `||`, `|` and `;`, outside
- * quotes, `$(…)`, backticks and brackets. Commands that already span lines or
- * use heredocs are left alone. Null when nothing would change.
+ * quotes, `$(…)`, backticks and brackets. Commands with unquoted `#`, existing
+ * newlines or heredocs are left alone: splitting a comment could make its tail
+ * executable when copied. Null when nothing would change.
  */
 export function formatShellCommand(command: string): string | null {
   if (!command || command.includes("\n") || command.includes("<<")) return null;
@@ -66,11 +67,12 @@ export function formatShellCommand(command: string): string | null {
     }
     if (ch === "\\" && next !== undefined) { current += ch + next; i++; continue; }
     if (ch === "'" || ch === '"' || ch === "`") { quote = ch; current += ch; continue; }
+    if (ch === "#") return null;
     if (ch === "(" || ch === "{" || ch === "[") depth++;
     if (ch === ")" || ch === "}" || ch === "]") depth = Math.max(0, depth - 1);
     if (depth === 0) {
       if ((ch === "&" && next === "&") || (ch === "|" && next === "|")) { push(ch + next); i++; continue; }
-      if (ch === "|" && next !== "&") { push("|"); continue; }
+      if (ch === "|" && next !== "&" && command[i - 1] !== ">") { push("|"); continue; }
       if (ch === ";") { push(";"); continue; }
     }
     current += ch;
