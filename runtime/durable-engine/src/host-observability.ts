@@ -4,6 +4,8 @@ import { createHostOperationAuthority } from "./host-operation-authority.js";
 import type { HostConversationRuntime } from "./host-runtime.js";
 
 export interface ObservabilityNativeExports {
+  createNativeTelemetryContext(): import("@earendil-works/pi-telemetry").TelemetrySpan;
+  shutdownObservabilityRuntime(): Promise<void>;
   prepareObservabilityRuntime(assertCurrent: () => void): Promise<void>;
   buildObservabilitySystemPrompt(): string;
   bindObservabilityConfiguration(port: { assertCurrent(): void; read(): Record<string, unknown> | null; write(config: unknown): void | Promise<void> }): () => void;
