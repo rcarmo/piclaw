@@ -379,7 +379,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "2f6a632f863196fccd48a3f3912c8bef407fb2ca5d07c13d32400dcef84c87cc",
       "state": "retained-decoupled",
-      "currentSha256": "202f132143d750a11df58c7d8b3c6db4bfdf432fdbd2de31f0eb1176bbdf079f",
+      "currentSha256": "858f07f1882a941bcb960b6e8e0536d43383494c187ac2f33bbdcb42cf7fc371",
       "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
       "directImportCallers": [
         {
@@ -638,7 +638,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "e506827fe77e26e48c722ff15a957a5d37acfe9c66c32e4511a67f627c2cf94f",
       "state": "retained-decoupled",
-      "currentSha256": "698a41ce5de659490249c13d11cb2d9508e6110b84a8bfcaae38f4cba0909c2d",
+      "currentSha256": "64b2b60cf1917b80c1ac993b8c84242f75a7b08cc7df6a2ce6072ff327fe3217",
       "currentPurpose": "existing native domain/control/message transport boundary with no expense port",
       "directImportCallers": [
         {
@@ -889,7 +889,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "98383ffa112e2169a0438042b5f2c5fffb794ba99ce7b79002daca6802f7b9b0",
       "state": "retained-decoupled",
-      "currentSha256": "6db1dc207a916427686f56f59f23448c77a89de9b96c2b0ff498875503a285fa",
+      "currentSha256": "819c271805df52d35392cd341d68602cac7658e9be9d844d19e50ec35b8c9c5e",
       "currentPurpose": "existing model choice, price/unknown display and token/context/status DTO; same interaction and authority",
       "directImportCallers": [
         {
@@ -1028,7 +1028,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "cdddbc02e1f46e6767bfd9f5602c55ef007d6083aff7af016550f74d1f73aa6f",
       "state": "retained-decoupled",
-      "currentSha256": "75c707a6920b82c17900d7b11946312ca768a5bf790f9d38a2d97717782f6d6f",
+      "currentSha256": "4961d1078a96e4d5b12306cce652e6d308b24fa1097cf32d7a31600c251f9912",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
@@ -1824,7 +1824,7 @@
       "directImportCallers": [
         {
           "caller": "runtime/durable-engine/src/host-runtime.ts",
-          "line": 1928
+          "line": 1974
         },
         {
           "caller": "runtime/durable-engine/src/host-scheduled-terminal.ts",
@@ -1903,7 +1903,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "dd4c3fbbbf8d9e5763cbc6811a9f641d11aa9f57e736ac36b47399eae0848418",
       "state": "retained-decoupled",
-      "currentSha256": "558f2180b7ea4b9c6e36df61fb39ff83e64d96bf1ab7eadf9018f5575df09bc5",
+      "currentSha256": "72004faf1acd3fa47f5180b7873c750bafa431ffc073e23b0c41745501bd1856",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
@@ -2556,7 +2556,7 @@
       "deliveryOwner": "#1882",
       "originalSha256": "19afc92f568933da7824143d95dffc1083c2371cf4561abe473909ef5d8ed68f",
       "state": "retained-decoupled",
-      "currentSha256": "19afc92f568933da7824143d95dffc1083c2371cf4561abe473909ef5d8ed68f",
+      "currentSha256": "557a5ddba18aa17da6ff4b39211949e071a78e20fc7a03629751902bc5877f74",
       "currentPurpose": "existing native domain/control/message transport boundary with no expense port",
       "directImportCallers": [
         {

@@ -18,6 +18,7 @@ import { isIOSDevice } from '../ui/app-helpers.js';
 import { attachHeaderAnchor } from '../ui/scroll-anchor.js';
 import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
 import { ImageModal } from './image-modal.js';
+import { TurnActivity, hasTurnActivity } from './turn-activity.js';
 import { ImageAnnotator, canAnnotate } from './image-annotator.js';
 import { FilePill } from './file-pill.js';
 import { isSafeUploadFilename } from '../../../src/core/upload-limits.js';
@@ -38,7 +39,7 @@ import {
     type PostAside,
 } from './post-highlights.js';
 import { buildSpeakablePostText, getSpeechPlaybackState, isSpeechSynthesisSupported, speakPostText, stopSpeechPlayback, subscribeSpeechPlayback } from './post-speech.ts';
-import { copyPlainTextSelectionFromElement, readSessionStorageFlagBestEffort, resolveLinkPreviewSiteName, writeClipboardDataViaExecCommand, writeClipboardTextBestEffort, writeSessionStorageFlagBestEffort } from './post-runtime-safety.js';
+import { copyPlainTextSelectionFromElement, copyTextToClipboard, readSessionStorageFlagBestEffort, resolveLinkPreviewSiteName, writeClipboardDataViaExecCommand, writeSessionStorageFlagBestEffort } from './post-runtime-safety.js';
 
 /**
  * File attachment component - keeps single-click download on the main card while
@@ -1046,36 +1047,6 @@ export function getLargeCodeBlockMetadata(text, options = {}) {
         visibleLines,
         omittedLines: Math.max(0, lines.length - visibleLines),
     };
-}
-
-async function copyTextToClipboard(text) {
-    const value = typeof text === 'string' ? text : '';
-    if (!value) return false;
-
-    if (writeClipboardDataViaExecCommand(document, { text: value })) {
-        return true;
-    }
-
-    if (await writeClipboardTextBestEffort(navigator.clipboard, value)) {
-        return true;
-    }
-
-    try {
-        const textarea = document.createElement('textarea');
-        textarea.value = value;
-        textarea.setAttribute('readonly', '');
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        textarea.style.pointerEvents = 'none';
-        document.body.appendChild(textarea);
-        textarea.select();
-        textarea.setSelectionRange(0, textarea.value.length);
-        const copied = document.execCommand('copy');
-        document.body.removeChild(textarea);
-        return copied;
-    } catch {
-        return false;
-    }
 }
 
 async function copyMessageToClipboard(markdown) {
@@ -2139,6 +2110,7 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
                 ${outcomeMarker && html`
                     <${OutcomePill} marker=${outcomeMarker} />
                 `}
+                ${isAgent && hasTurnActivity(post) && html`<${TurnActivity} key=${`turn-activity-${post.id}`} post=${post} chatJid=${post.chat_jid} />`}
                 ${isAgent && thinkingRef && html`<${ThinkingVisibilityPill} messageId=${post.id} chatJid=${post.chat_jid} lines=${thinkingRef.lines || 0} durationMs=${thinkingRef.duration_ms || 0} loadThinking=${loadThinking} />`}
                 ${isHardTruncated && truncatedInfo && html`
                     <div class="post-content truncated">

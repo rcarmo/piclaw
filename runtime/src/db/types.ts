@@ -41,6 +41,8 @@ export interface InteractionData {
   /** Server-derived role. Untagged assistant rows are unknown, never disposable. */
   agent_message_role?: "final" | "intermediate" | "unknown";
   is_terminal_agent_reply?: boolean;
+  /** Durable agent reply whose committed turn activity can be read on demand. */
+  turn_activity?: boolean;
   /** ID of the pi-agent that produced this interaction (agent responses). */
   agent_id?: string;
   /** Web-channel thread id this interaction belongs to. */

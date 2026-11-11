@@ -413,7 +413,7 @@ function formatElapsed(isoString, nowMs = Date.now()) {
     return `${s}s`;
 }
 
-export function AgentStatus({ status, draft, plan, thought, pendingRequest, intent, extensionPanels = [], pendingPanelActions = new Set(), onExtensionPanelAction, turnId, steerQueued, onPanelToggle, showCorePanels = true, showExtensionPanels = true, loadWorkspaceBranch = getWorkspaceBranch }) {
+export function AgentStatus({ status, draft, plan, thought, pendingRequest, intent, extensionPanels = [], pendingPanelActions = new Set(), onExtensionPanelAction, turnId, steerQueued, onPanelToggle, showCorePanels = true, showExtensionPanels = true, showLivePanels = true, loadWorkspaceBranch = getWorkspaceBranch }) {
     const { t } = useTranslation();
     const delegates = resolveDelegateProgressRows(status?.delegate_progress);
     const THOUGHT_MAX_LINES = 9;
@@ -1066,7 +1066,7 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
                 totalLines: planInfo.totalLines,
                 panelKey: 'plan',
             })}
-            ${showCorePanels && hasDraft && renderThinkingPanel({
+            ${showCorePanels && showLivePanels && hasDraft && renderThinkingPanel({
                 panelTitle: panelTitle('Draft'),
                 text: draftInfo.text,
                 fullText: draftInfo.fullText,
@@ -1075,7 +1075,7 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
                 titleClass: 'thought',
                 panelKey: 'draft',
             })}
-            ${showCorePanels && hasThought && renderThinkingPanel({
+            ${showCorePanels && showLivePanels && hasThought && renderThinkingPanel({
                 panelTitle: panelTitle('Thoughts'),
                 text: thoughtInfo.text,
                 fullText: thoughtInfo.fullText,
@@ -1084,7 +1084,7 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
                 titleClass: 'thought',
                 panelKey: 'thought',
             })}
-            ${showCorePanels && hasToolOutput && renderThinkingPanel({
+            ${showCorePanels && showLivePanels && hasToolOutput && renderThinkingPanel({
                 panelTitle: panelTitle('Output'),
                 text: toolOutputInfo.text,
                 fullText: toolOutputInfo.fullText,
