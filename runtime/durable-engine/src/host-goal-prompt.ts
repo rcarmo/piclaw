@@ -1,7 +1,7 @@
 import type Database from "bun:sqlite";
 import { defineExtension, type GenerationHooks } from "@earendil-works/pi-durable";
 import { createHostOperationAuthority } from "./host-operation-authority.js";
-import type { HostConversationRuntime } from "./host-runtime.js";
+import { isNativeMessageInput, type HostConversationRuntime } from "./host-runtime.js";
 import { accountCommittedGoalBatch, isGoalBudgetWrapup } from "./host-goal-usage.js";
 import { withExtensionKvAuthority } from "../../src/extension-kv-registry.js";
 import { withGoalSystemInstructions } from "./host-plan-context.js";
@@ -31,7 +31,9 @@ export function createHostGoalPrompt(addon: {
   const withdrawStaleQueuedInputs = async (runtime: ReturnType<typeof options.runtime>,
     captured: Awaited<ReturnType<HostConversationRuntime["captureRunSource"]>>,
     scope: <T>(body: () => T) => T) => {
-    if (!captured.native) return;
+    // Scheduled/background generations have separate conversations and no
+    // public chat inbox authority, even when they share the native SDK path.
+    if (!captured.native || !captured.inputs.every(isNativeMessageInput)) return;
     const binding = captured.inputs[0]!;
     for (const item of await runtime.readMessageInbox(binding)) {
       const stale = scope(() => !!addon.goalInputIdentity(item.content) &&

@@ -2372,7 +2372,7 @@
       "deliveryOwner": "#1882",
       "originalSha256": "f49d8a766fc3eabbf5b17ccee9f673d19f342e3dae79720722de13b3413d3dda",
       "state": "retained-decoupled",
-      "currentSha256": "b2bf3db5db12c05577bbe64bf1d7d111817d0e6bbc25bdbafa8f300ed2dc9851",
+      "currentSha256": "93bf588042b2b7ee5f7893a4739ff466f1591a1abff6f582b0a9152773287a64",
       "currentPurpose": "Goal token-budget/domain lifecycle and Plan context; nonfinancial counters and exact SDK outcome/source authority",
       "directImportCallers": [
         {
