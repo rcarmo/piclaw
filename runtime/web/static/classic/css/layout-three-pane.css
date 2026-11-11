@@ -178,6 +178,191 @@
     padding: 4px 2px;
 }
 
+/* ── Plan tab pane ── */
+.plan-pane-host {
+    height: 100%;
+    overflow: hidden;
+}
+
+.plan-pane {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+}
+
+.plan-pane-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px 6px;
+}
+
+.plan-pane-title {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.plan-pane-chat {
+    font: 400 11px var(--font-family-mono, monospace);
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.plan-pane-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.plan-pane-progress-bar {
+    display: block;
+    width: 96px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border-color);
+    overflow: hidden;
+}
+
+.plan-pane-progress-bar > span {
+    display: block;
+    height: 100%;
+    background: var(--success-color);
+}
+
+.plan-pane-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 14px 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.plan-pane-toolbar button {
+    padding: 3px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.plan-pane-toolbar button.plan-pane-primary {
+    border-color: var(--accent-color);
+    background: var(--accent-color);
+    color: #fff;
+}
+
+.plan-pane-toolbar button:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.plan-pane-spacer {
+    flex: 1;
+}
+
+.plan-pane-items {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    padding: 8px 14px;
+    overflow: auto;
+    list-style: none;
+}
+
+.plan-pane-item {
+    display: flex;
+    gap: 8px;
+    padding: 5px 0;
+    font-size: 13px;
+    line-height: 1.4;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+}
+
+.plan-pane-item-icon {
+    flex: 0 0 16px;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.plan-pane-item.in_progress .plan-pane-item-icon {
+    color: var(--accent-color);
+}
+
+.plan-pane-item.in_progress .plan-pane-item-step {
+    font-weight: 600;
+}
+
+.plan-pane-item.completed .plan-pane-item-icon {
+    color: var(--success-color);
+}
+
+.plan-pane-item.completed .plan-pane-item-step {
+    color: var(--text-secondary);
+}
+
+.plan-pane-empty {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.plan-pane-editor {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 8px 14px;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font: 12.5px/1.5 var(--font-family-mono, monospace);
+    resize: none;
+}
+
+.plan-pane-status {
+    padding: 4px 14px 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.plan-pane-status.error {
+    color: var(--danger-color, #e5484d);
+}
+
+.plan-pane-status.warning {
+    color: var(--warning-color);
+}
+
+.plan-pane-unavailable {
+    padding: 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* The plan now lives in the editor area; the add-on's floating panel and its
+   right-edge reservation are not used in Classic. */
+.plan-sidebar-root {
+    display: none !important;
+}
+
+:root:has(.plan-sidebar-root) {
+    --piclaw-shell-inset-right: 0px !important;
+}
+
 /* ── Status bar (Visual-style footer) ── */
 .workbench-statusbar {
     position: fixed;

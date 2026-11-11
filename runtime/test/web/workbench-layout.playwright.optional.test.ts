@@ -100,6 +100,10 @@ for (const engine of ['chromium', 'webkit']) {
       expect(await state(page)).toEqual({ workspaceOpen: true, view: 'explorer', shown: 'shown' });
       await page.locator('.workbench-activity-settings').click();
       expect(await page.evaluate(() => (window as any).workbench.probes.settings)).toBe(1);
+      // Plan is a launcher: it opens the Plan tab and leaves the side bar view alone.
+      await page.locator('.workbench-activity-plan').click(); await settle(page);
+      expect(await page.evaluate(() => (window as any).workbench.probes.plans)).toBe(1);
+      expect(await state(page)).toEqual({ workspaceOpen: true, view: 'explorer', shown: 'shown' });
       expect(errors).toEqual([]);
     } finally { await page.close(); }
   }, 30000);

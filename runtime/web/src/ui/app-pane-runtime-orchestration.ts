@@ -1,3 +1,4 @@
+import { PLAN_TAB_PATH } from '../panes/plan-pane.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
 import {
   consumeEditorPopoutState,
@@ -380,6 +381,7 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
   }, [openEditor, terminalTabPath]);
 
   const openCdpTab = useCallback(() => { openEditor('piclaw://cdp-view', { label: 'Browser' }); }, [openEditor]);
+  const openPlanTab = useCallback(() => { openEditor(PLAN_TAB_PATH, { label: 'Plan' }); }, [openEditor]);
 
   const openVncTab = useCallback(() => {
     openEditor(vncTabPrefix, { label: 'VNC' });
@@ -1280,6 +1282,7 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
     openTerminalTab,
     openVncTab,
     openCdpTab,
+    openPlanTab,
     panePopoutTitle,
     panePopoutHasMenuActions,
     hidePanePopoutControls,

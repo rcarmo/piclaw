@@ -9,12 +9,13 @@ The UI supports one user across multiple sessions and browser tabs. Family accou
 
 Classic uses a workbench layout. On desktop screens (at least 1024 px wide, landscape), an activity bar on the left selects the view shown in the side bar, the chat is in the middle, and editor and viewer tabs are on the right. Dividers can be dragged or focused. Focused dividers respond to the arrow keys (Shift for larger steps), Home and End. Enter hides or shows the pane, and double-clicking a divider resets it.
 
-- **Activity bar:** the global menu sits at the top, then **Sessions** and **Explorer**, with **Settings** at the bottom. Clicking the active view hides the side bar; the activity bar stays. Ctrl/Cmd+Shift+B shows Sessions and Ctrl/Cmd+Shift+E shows the Explorer; pressing either again hides the side bar. Both shortcuts can be changed in Settings → Keyboard. When space is short, the side bar narrows, then hides itself without changing the saved preference.
+- **Activity bar:** the global menu sits at the top, then **Sessions** and **Explorer**, then **Plan**, with **Settings** at the bottom. Clicking the active view hides the side bar; the activity bar stays. Ctrl/Cmd+Shift+B shows Sessions and Ctrl/Cmd+Shift+E shows the Explorer; pressing either again hides the side bar. Both shortcuts can be changed in Settings → Keyboard. When space is short, the side bar narrows, then hides itself without changing the saved preference.
 - **Sessions:** current, pinned and other sessions, with search and pinning shared with the compose session picker. The activity bar badge counts active sessions.
   - Each row shows the session's age or activity, its latest reply and, when known, its context use.
   - Other active sessions show their live draft, thinking or running tool, polled every 3 seconds. The list refreshes every 15 seconds and when the window regains focus, only while the Sessions view is visible.
   - Ctrl/Cmd-click or middle-click opens a session in a new tab.
 - **Explorer:** the workspace file tree. Selecting a file opens it straight into the matching viewer or editor tab; there is no preview pane under the tree. The bar under the tree holds the selected item's actions, including add-on actions, and a **Folder sizes** chart that loads only when opened.
+- **Plan:** opens the current chat's plan as a tab in the editor area, with its progress, **Edit**, **Refresh**, **Reset** and **Submit to model**. It updates when the model changes the plan. Plans still need the plan-sidebar add-on for storage and the `plan` tool; its floating panel is not shown in Classic.
 - **Chat:** keeps at least 320 px.
 - **Editor:** collapsing it keeps its tabs open.
 - **System meters:** shown at the foot of the side bar while it is visible, and in the status bar along the bottom of the window otherwise.

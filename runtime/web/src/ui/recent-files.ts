@@ -8,7 +8,8 @@ function isIgnoredPath(path: string): boolean {
   return legacyPath.startsWith('__terminal')
     || legacyPath.startsWith('__vnc')
     || normalizedPath.startsWith('piclaw://terminal')
-    || normalizedPath.startsWith('piclaw://vnc');
+    || normalizedPath.startsWith('piclaw://vnc')
+    || normalizedPath.startsWith('piclaw://plan');
 }
 
 export function normalizeRecentFiles(value: unknown): string[] {

@@ -129,6 +129,7 @@ function readWideLayout(): boolean {
 const ACTIVITY_ICONS = {
   sessions: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><path d="M8 9h8M8 13h5" /></svg>`,
   explorer: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V7z" /><path d="M14 3v4h4" /><path d="M9 21h9a2 2 0 0 0 2-2V9" /></svg>`,
+  plan: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11" /><path d="m3.5 6 1.2 1.2L7 5" /><path d="m3.5 12 1.2 1.2L7 11" /><circle cx="5" cy="18" r="1.4" /></svg>`,
   settings: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>`,
 };
 
@@ -149,6 +150,7 @@ export function WorkbenchSidebar({
   workspaceOpen = false,
   setWorkspaceVisible = null,
   onOpenSettings = null,
+  onOpenPlan = null,
 }) {
   const [storedOpen, setOpen] = useState(readStoredSessionsOpen);
   const [view, setView] = useState(() => resolveInitialWorkbenchView(workspaceOpen));
@@ -500,6 +502,11 @@ export function WorkbenchSidebar({
             ${item.id === 'sessions' && activeCount > 0 && html`<span class="workbench-activity-badge" aria-label=${`${activeCount} active`}>${activeCount}</span>`}
           </button>
         `)}
+        ${onOpenPlan && html`
+          <button type="button" class="workbench-activity-button workbench-activity-plan" title="Plan — opens in the editor area" aria-label="Plan" onClick=${() => onOpenPlan()}>
+            ${ACTIVITY_ICONS.plan}
+          </button>
+        `}
         <span class="workbench-activity-spacer"></span>
         ${onOpenSettings && html`
           <button type="button" class="workbench-activity-button workbench-activity-settings" title="Settings" aria-label="Settings" onClick=${() => onOpenSettings()}>

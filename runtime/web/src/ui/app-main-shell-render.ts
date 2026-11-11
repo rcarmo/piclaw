@@ -127,6 +127,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
     openTerminalTab,
     openVncTab,
     openCdpTab,
+    openPlanTab,
     hasDockPanes,
     toggleDock,
     dockVisible,
@@ -342,6 +343,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
           workspaceOpen=${workspaceOpen}
           setWorkspaceVisible=${setWorkspaceVisible}
           onOpenSettings=${requestOpenSettingsDialog}
+          onOpenPlan=${openPlanTab}
           explorer=${html`
             <${WorkspaceExplorer}
               onFileSelect=${addFileRef}

@@ -7,6 +7,7 @@ import {
   terminalTabPaneExtension,
   vncPaneExtension,
   cdpPaneExtension,
+  planPaneExtension,
   workspacePreviewPaneExtension,
   workspaceMarkdownPreviewPaneExtension,
   officeViewerPaneExtension,
@@ -64,6 +65,7 @@ export function registerAppPaneExtensions(): void {
   paneRegistry.register(highlightPreviewerPaneExtension);
   paneRegistry.register(vncPaneExtension);
   paneRegistry.register(cdpPaneExtension);
+  paneRegistry.register(planPaneExtension);
   preloadEditorBundle();
   paneRegistry.register(terminalPaneExtension);
   paneRegistry.register(terminalTabPaneExtension);

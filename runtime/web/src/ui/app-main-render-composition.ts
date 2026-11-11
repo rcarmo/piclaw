@@ -143,6 +143,7 @@ export function composeRenderedMainAppOptions(input: {
       openEditor: input.editorState.openEditor,
       openTerminalTab: input.paneRuntime.openTerminalTab,
       openVncTab: input.paneRuntime.openVncTab,
+      openPlanTab: input.paneRuntime.openPlanTab,
     },
     agentState: {
       agentStatus: input.agentState.agentStatus,
