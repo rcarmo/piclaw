@@ -103,6 +103,7 @@ type MessageKey =
   | 'workspace.openInTab'
   | 'workspace.openInEditor'
   | 'workspace.renameSelected'
+  | 'workspace.renameEntry'
   | 'workspace.downloadSelectedFile'
   | 'workspace.downloadSelectedFolder'
   | 'workspace.deleteSelectedFile'
@@ -752,6 +753,7 @@ const EN: Record<MessageKey, string> = {
   'workspace.openInTab': 'Open in tab',
   'workspace.openInEditor': 'Open in editor',
   'workspace.renameSelected': 'Rename selected',
+  'workspace.renameEntry': 'Rename',
   'workspace.downloadSelectedFile': 'Download selected file',
   'workspace.downloadSelectedFolder': 'Download selected folder (zip)',
   'workspace.deleteSelectedFile': 'Delete selected file',
@@ -1394,6 +1396,7 @@ const ZH_CN: Partial<Record<MessageKey, string>> = {
   'workspace.openInTab': '在标签页打开',
   'workspace.openInEditor': '在编辑器打开',
   'workspace.renameSelected': '重命名所选',
+  'workspace.renameEntry': '重命名',
   'workspace.downloadSelectedFile': '下载所选文件',
   'workspace.downloadSelectedFolder': '下载所选文件夹（zip）',
   'workspace.deleteSelectedFile': '删除所选文件',
@@ -2036,6 +2039,7 @@ const JA: Partial<Record<MessageKey, string>> = {
   'workspace.openInTab': 'タブで開く',
   'workspace.openInEditor': 'エディタで開く',
   'workspace.renameSelected': '選択項目の名前を変更',
+  'workspace.renameEntry': '名前を変更',
   'workspace.downloadSelectedFile': '選択したファイルをダウンロード',
   'workspace.downloadSelectedFolder': '選択したフォルダをダウンロード（zip）',
   'workspace.deleteSelectedFile': '選択したファイルを削除',

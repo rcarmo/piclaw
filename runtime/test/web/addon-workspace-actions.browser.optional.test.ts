@@ -29,6 +29,7 @@ browserTest('real explorer exposes registered file action on desktop/touch and o
   const u=new URL(req.url);requests.push(u.pathname);
   if(u.pathname==='/')return new Response('<html><body><div id="explorer"></div><div id="pane"></div><script type="module" src="/fixture.js"></script></body></html>',{headers:{'content-type':'text/html'}});
   if(u.pathname==='/fixture.js')return new Response(Bun.file(join(root,'fixture.js')),{headers:{'content-type':'text/javascript'}});
+  if(u.pathname.startsWith('/static/'))return new Response(Bun.file(join(import.meta.dir,'../../web',u.pathname)),{headers:{'content-type':'text/javascript'}});
   if(u.pathname==='/workspace/tree')return Response.json({root:{name:'.',path:'.',type:'dir',children:[{name:'unchanged.ts',path:'unchanged.ts',type:'file',size:20}]}});
   if(u.pathname==='/workspace/file')return Response.json({path:'unchanged.ts',kind:'text',text:'const value = 1;',size:20});
   if(u.pathname==='/workspace/stat'){statCalls++;return Response.json({path:'unchanged.ts',type:'file',size:20});}
@@ -41,7 +42,7 @@ browserTest('real explorer exposes registered file action on desktop/touch and o
   const page=await browser.newPage();const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/*',route=>new URL(route.request().url()).origin===server.url.origin?route.continue():route.abort());
   await page.goto(server.url.href);
-  try { await page.locator('.workspace-row[data-path="unchanged.ts"]').click({timeout:5000}); }
+  try { await page.locator('[data-item-path="unchanged.ts"]').click({timeout:5000}); }
   catch(error) { console.error({errors,requests,body:await page.locator('body').innerText()});throw error; }
   const action=page.locator('.workspace-preview-actions button[aria-label="Review file"]');
   await action.waitFor();

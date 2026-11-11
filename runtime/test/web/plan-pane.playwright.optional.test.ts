@@ -58,12 +58,13 @@ browserTest('the Plan pane shows progress, edits, saves, resets and submits for 
 
     await page.getByRole('button', { name: 'Edit' }).click();
     await page.locator('.plan-pane-editor').fill('- [x] Inspect\n- [x] Build the pane\n- [-] Test');
-    expect(await page.evaluate(() => (window as any).planPane.instance.isDirty())).toBe(true);
+    // The dirty flag is reported from an effect after the edit renders.
+    await page.waitForFunction(() => (window as any).planPane.instance.isDirty() === true);
     await page.keyboard.press('Control+s');
     await page.waitForSelector('.plan-pane-item');
     expect(await page.locator('.plan-pane-progress').getAttribute('aria-valuenow')).toBe('67');
     expect(posts.at(-1)).toEqual({ kind: 'plan', body: { chat_jid: 'web:ops', markdown: '- [x] Inspect\n- [x] Build the pane\n- [-] Test' } });
-    expect(await page.evaluate(() => (window as any).planPane.instance.isDirty())).toBe(false);
+    await page.waitForFunction(() => (window as any).planPane.instance.isDirty() === false);
 
     // A model-side change refreshes the view.
     stored = { markdown: '- [x] Inspect\n- [x] Build the pane\n- [x] Test', updated_at: '2026-11-11T13:00:00.000Z' };

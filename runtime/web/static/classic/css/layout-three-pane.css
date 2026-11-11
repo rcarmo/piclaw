@@ -161,6 +161,47 @@
     border-top: 1px solid var(--border-color);
 }
 
+/* ── Pierre file tree (#1972) ── */
+.workspace-tree:has(> .workspace-tree-pierre) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+}
+
+.workspace-tree-pierre {
+    flex: 1 1 auto;
+    min-height: 0;
+    --trees-bg-override: transparent;
+    --trees-fg-override: var(--text-primary);
+    --trees-fg-muted-override: var(--text-secondary);
+    --trees-bg-muted-override: var(--bg-hover);
+    --trees-selected-bg-override: var(--accent-soft, rgba(29, 155, 240, 0.14));
+    --trees-selected-fg-override: var(--text-primary);
+    --trees-accent-override: var(--accent-color);
+    --trees-border-color-override: var(--border-color);
+    --trees-focus-ring-color-override: var(--accent-color);
+    --trees-search-bg-override: var(--bg-primary);
+    --trees-search-fg-override: var(--text-primary);
+    --trees-input-bg-override: var(--bg-primary);
+    --trees-font-family-override: var(--font-family, inherit);
+    --trees-font-size-override: var(--workspace-tree-font-size, 12px);
+}
+
+.workspace-tree-pierre > file-tree-container {
+    display: block;
+    height: 100%;
+}
+
+.workspace-tree-context-menu {
+    position: static;
+    min-width: 180px;
+}
+
+.workspace-tree-context-menu .workspace-menu-item.danger {
+    color: var(--danger-color);
+}
+
 /* ── Selected item actions, replacing the old preview pane ── */
 .workspace-selection-bar {
     flex: 0 0 auto;

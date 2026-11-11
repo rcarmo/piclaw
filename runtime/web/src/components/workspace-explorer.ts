@@ -1,7 +1,6 @@
 import { html, useCallback, useEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
 import { subscribeWorkspaceActions, workspaceActionContext, listWorkspaceActions, invokeWorkspaceAction } from '../ui/addon-workspace-actions.js';
 import { workspaceChartColor } from '../ui/workspace-chart-colors.js';
-import { renderDisclosureTriangle } from '../ui/disclosure-triangle.js';
 import { useTranslation } from '../utils/i18n.js';
 import { LanguageSwitcher } from './language-switcher.js';
 import { getLocalStorageBoolean, getLocalStorageItem, setLocalStorageItem } from '../utils/storage.js';
@@ -22,10 +21,8 @@ import { uploadFileBatch, uploadWorkspaceFile } from '../ui/upload-transfers.js'
 import { formatFileSize } from '../utils/format.js';
 import { paneRegistry } from '../panes/index.js';
 import { createVisibleInterval } from '../ui/visible-interval.js';
-import { focusAndSelectBestEffort } from './input-focus-safety.js';
 import {
     WORKSPACE_SCALE_STORAGE_KEY,
-    getWorkspaceScaleMetrics,
     readWorkspaceScaleEnvironment,
     resolveWorkspaceScale,
 } from '../ui/workspace-scale.js';
@@ -46,6 +43,7 @@ import {
     readStoredPwaDisplayScalePercent,
 } from '../ui/pwa-display-scale.js';
 import { getRecentFiles, openRecentFile } from '../ui/recent-files.js';
+import { loadWorkspaceTreeModule } from '../ui/workspace-tree-loader.js';
 
 const isHiddenNode = (node) => {
     if (!node || !node.name) return false;
@@ -591,36 +589,6 @@ function buildWorkspaceIndexTitle(snapshot) {
     return lines.join('\n');
 }
 
-function getWorkspaceTouchEventTargetElement(event) {
-    const target = event?.target;
-    if (target && typeof target === 'object') return target;
-    return target?.parentElement || null;
-}
-
-function isWorkspaceTouchDragHandleTarget(targetEl) {
-    return Boolean(targetEl?.closest?.('.workspace-node-icon, .workspace-label-text'));
-}
-
-export function getWorkspaceTouchStartIntent(event, renamingPath = null) {
-    const targetEl = getWorkspaceTouchEventTargetElement(event);
-    const row = targetEl?.closest?.('.workspace-row');
-    if (!row) return null;
-    const type = row.dataset.type;
-    const path = row.dataset.path;
-    if (!path || path === '.') return null;
-    if (renamingPath === path) return null;
-    const touch = event?.touches?.[0];
-    if (!touch) return null;
-
-    return {
-        type,
-        path,
-        dragPath: isWorkspaceTouchDragHandleTarget(targetEl) ? path : null,
-        startX: touch.clientX,
-        startY: touch.clientY,
-    };
-}
-
 export function buildWorkspaceMoveConfirmationMessage(sourcePath, targetPath, entryType, translate) {
     const sourceName = sourcePath.split('/').pop() || sourcePath;
     const sourceParent = sourcePath.includes('/')
@@ -660,8 +628,6 @@ export function WorkspaceExplorer({
     const [tree,          setTree]          = useState(null);
     const [expanded,      setExpanded]      = useState(new Set(['.']));
     const [selectedPath,  setSelectedPath]  = useState(null);
-    const [renamingPath, setRenamingPath]  = useState(null);
-    const [renameValue,  setRenameValue]   = useState('');
     const [preview,       setPreview]       = useState(null);
     const [,             setDownloadId]    = useState(null);
     const [initialLoad,   setInitialLoad]   = useState(true);
@@ -671,7 +637,6 @@ export function WorkspaceExplorer({
     const [showHidden,    setShowHidden]    = useState(() => getLocalStorageBoolean('workspaceShowHidden', false));
     const [dragActive,   setDragActive]    = useState(false);
     const [dragMode,     setDragMode]      = useState(null);
-    const [dragGhost,    setDragGhost]     = useState(null);
     const [dropTarget,   setDropTarget]    = useState(null);
     const [uploading,    setUploading]     = useState(false);
     const uploadingRef = useRef(false);
@@ -709,15 +674,10 @@ export function WorkspaceExplorer({
     const loadPreviewRef  = useRef(null);
     const loadSubtreeRef  = useRef(null);
     const sidebarRef      = useRef(null);
-    const treeListRef     = useRef(null);
-    const renameInputRef  = useRef(null);
     const uploadInputRef  = useRef(null);
     const uploadTargetRef = useRef('.');
     const uploadProgressTimerRef = useRef(0);
-    const touchDragRef     = useRef({ path: null, dragging: false, startX: 0, startY: 0 });
-    const mouseDragRef     = useRef({ path: null, dragging: false, startX: 0, startY: 0 });
     const dragExpandRef    = useRef({ path: null, timer: 0 });
-    const suppressClickRef = useRef(false);
     const folderChartCacheRef = useRef(new Map());
     const folderChartPayloadRef = useRef(null);
     const folderChartPathRef = useRef(null);
@@ -730,12 +690,8 @@ export function WorkspaceExplorer({
     const dropTargetRef   = useRef(dropTarget);
     const dragActiveRef   = useRef(dragActive);
     const dragModeRef     = useRef(dragMode);
-    const dragGhostRef    = useRef(null);
-    const dragGhostPosRef = useRef({ x: 0, y: 0 });
-    const dragGhostRafRef = useRef(0);
     const moveEntryToTargetRef = useRef(null);
     const selectedPathRef = useRef(selectedPath);
-    const renamingPathRef = useRef(renamingPath);
     const pendingProgrammaticFileClickRef = useRef(null);
     const previewRef      = useRef(preview);
 
@@ -922,18 +878,7 @@ export function WorkspaceExplorer({
     useEffect(() => { dragActiveRef.current = dragActive; }, [dragActive]);
     useEffect(() => { dragModeRef.current = dragMode; }, [dragMode]);
     useEffect(() => { selectedPathRef.current = selectedPath; }, [selectedPath]);
-    useEffect(() => { renamingPathRef.current = renamingPath; }, [renamingPath]);
     useEffect(() => { previewRef.current = preview; }, [preview]);
-
-    useEffect(() => {
-        if (!renamingPath) return;
-        const input = renameInputRef.current;
-        if (!input) return;
-        const timer = requestAnimationFrame(() => {
-            focusAndSelectBestEffort(input);
-        });
-        return () => cancelAnimationFrame(timer);
-    }, [renamingPath]);
 
     useEffect(() => {
         if (!headerMenuOpen) return undefined;
@@ -1136,37 +1081,6 @@ export function WorkspaceExplorer({
         dragExpandRef.current = { path: targetPath, timer };
     }, [clearDragExpandTimer]);
 
-    const updateDragGhostPosition = useCallback((x, y) => {
-        dragGhostPosRef.current = { x, y };
-        if (dragGhostRafRef.current) return;
-        dragGhostRafRef.current = requestAnimationFrame(() => {
-            dragGhostRafRef.current = 0;
-            const el = dragGhostRef.current;
-            if (!el) return;
-            const pos = dragGhostPosRef.current;
-            el.style.transform = `translate(${pos.x + 12}px, ${pos.y + 12}px)`;
-        });
-    }, []);
-
-    const startDragGhost = useCallback((path) => {
-        if (!path) return;
-        const node = nodeMapRef.current?.get(path);
-        const label = (node?.name || path.split('/').pop() || path).trim();
-        if (!label) return;
-        setDragGhost({ path, label });
-    }, []);
-
-    const clearDragGhost = useCallback(() => {
-        setDragGhost(null);
-        if (dragGhostRafRef.current) {
-            cancelAnimationFrame(dragGhostRafRef.current);
-            dragGhostRafRef.current = 0;
-        }
-        if (dragGhostRef.current) {
-            dragGhostRef.current.style.transform = 'translate(-9999px, -9999px)';
-        }
-    }, []);
-
     const resolveCreateTargetPath = useCallback((path) => {
         if (!path) return '.';
         const node = nodeMapRef.current?.get(path);
@@ -1178,33 +1092,14 @@ export function WorkspaceExplorer({
         return parent || '.';
     }, []);
 
-    const cancelRename = useCallback(() => {
-        setRenamingPath(null);
-        setRenameValue('');
-    }, []);
-
-    const beginRename = useCallback((path) => {
-        if (!path) return;
-        const node = nodeMapRef.current?.get(path);
-        const base = (node?.name || path.split('/').pop() || path).trim();
-        if (!base || path === '.') return;
-        setRenamingPath(path);
-        setRenameValue(base);
-    }, []);
-
-    const commitRename = useCallback(async () => {
-        const targetPath = renamingPathRef.current;
-        if (!targetPath) return;
-        const nextName = (renameValue || '').trim();
-        if (!nextName) {
-            cancelRename();
-            return;
-        }
-
+    /** Rename a workspace entry in place (the tree edits the name inline). */
+    const renameEntry = useCallback(async (targetPath, rawName) => {
+        if (!targetPath || targetPath === '.') return;
+        const nextName = String(rawName || '').trim();
         const node = nodeMapRef.current?.get(targetPath);
         const currentName = (node?.name || targetPath.split('/').pop() || targetPath).trim();
-        if (nextName === currentName) {
-            cancelRename();
+        if (!nextName || nextName === currentName) {
+            loadSubtreeRef.current?.(targetPath.includes('/') ? (targetPath.split('/').slice(0, -1).join('/') || '.') : '.');
             return;
         }
 
@@ -1215,7 +1110,6 @@ export function WorkspaceExplorer({
                 ? (targetPath.split('/').slice(0, -1).join('/') || '.')
                 : '.';
 
-            cancelRename();
             setError(null);
 
             // Notify listeners (tab store, etc.) about the rename
@@ -1252,7 +1146,7 @@ export function WorkspaceExplorer({
         } catch (err) {
             setError(err?.message || 'Failed to rename file');
         }
-    }, [cancelRename, renameValue, refreshWorkspaceIndexStatus]);
+    }, [refreshWorkspaceIndexStatus]);
 
     const createUntitledFile = useCallback(async (targetPath) => {
         const base = 'untitled';
@@ -1435,7 +1329,6 @@ export function WorkspaceExplorer({
     // ── Flattened visible rows ────────────────────────────────────────────────
     const rows = useMemo(() => flattenTree(tree, expanded, showHidden), [tree, expanded, showHidden]);
     const nodeMap = useMemo(() => new Map(rows.map(r => [r.node.path, r.node])), [rows]);
-    const workspaceScaleMetrics = useMemo(() => getWorkspaceScaleMetrics(explorerScale), [explorerScale]);
     nodeMapRef.current = nodeMap;
     const selectedNode = selectedPath ? nodeMapRef.current.get(selectedPath) : null;
     const selectedIsDir = selectedNode?.type === 'dir';
@@ -1603,81 +1496,6 @@ export function WorkspaceExplorer({
         return target?.parentElement || null;
     };
 
-    const isRowDragHandleTarget = (targetEl) => {
-        return Boolean(targetEl?.closest?.('.workspace-node-icon, .workspace-label-text'));
-    };
-
-    const isEditableKeyboardTarget = (targetEl) => {
-        if (!targetEl) return false;
-        if (targetEl.closest?.('input, textarea, [contenteditable="true"]')) return true;
-        return Boolean(targetEl.isContentEditable);
-    };
-
-    // ── Double-click to rename selected workspace entry ────────────────────
-    const handleTreeDblClick = useRef((e) => {
-        const targetEl = getEventTargetElement(e);
-        const rowEl = targetEl?.closest?.('[data-path]');
-        if (!rowEl) return;
-        const clickedPath = rowEl.dataset.path;
-        if (!clickedPath || clickedPath === '.') return;
-        const isActionClick = Boolean(targetEl?.closest?.('button')) || Boolean(targetEl?.closest?.('a')) || Boolean(targetEl?.closest?.('input'));
-        const isCaretClick = Boolean(targetEl?.closest?.('.workspace-caret'));
-        if (isActionClick || isCaretClick) return;
-        if (renamingPathRef.current === clickedPath) return;
-        beginRename(clickedPath);
-    }).current;
-
-    // ── Single stable click handler via event delegation ──────────────────────
-    // Created once; reads live state through refs so it never needs recreation.
-    const handleTreeClick = useRef((e) => {
-        if (suppressClickRef.current) {
-            suppressClickRef.current = false;
-            return;
-        }
-        const targetEl = getEventTargetElement(e);
-        const rowEl = targetEl?.closest?.('[data-path]');
-        treeListRef.current?.focus?.();
-        if (!rowEl) return;
-        const clickedPath = rowEl.dataset.path;
-        const clickedType = rowEl.dataset.type;
-        const isCaretClick = Boolean(targetEl?.closest?.('.workspace-caret'));
-        const isActionClick = Boolean(targetEl?.closest?.('button')) || Boolean(targetEl?.closest?.('a')) || Boolean(targetEl?.closest?.('input'));
-        const isSelected = selectedPathRef.current === clickedPath;
-        const renaming = renamingPathRef.current;
-
-        if (renaming) {
-            if (renaming === clickedPath) return;
-            cancelRename();
-        }
-
-        if (clickedType === 'dir') {
-            pendingProgrammaticFileClickRef.current = null;
-            setSelectedPath(clickedPath);
-            setPreview(null);
-            setDownloadId(null);
-            setLoadingPreview(false);
-            const wasExpanded = expandedRef.current.has(clickedPath);
-            if (!wasExpanded) loadSubtreeRef.current?.(clickedPath);
-            if (isSelected && !isCaretClick) return;
-            setExpanded(prev => {
-                const next = new Set(prev);
-                if (next.has(clickedPath)) next.delete(clickedPath);
-                else next.add(clickedPath);
-                return next;
-            });
-        } else {
-            pendingProgrammaticFileClickRef.current = null;
-            setSelectedPath(clickedPath);
-            const node = nodeMapRef.current.get(clickedPath);
-            if (node) onFileSelectRef.current?.(node.path, node);
-            if (!isActionClick && !isCaretClick) {
-                // Files open straight into a viewer or editor tab; metadata still loads for the actions bar.
-                onOpenEditorRef.current?.(clickedPath);
-                loadPreviewRef.current?.(clickedPath);
-            }
-        }
-    }).current;
-
     // Refresh button: force-invalidate signature so a changed tree is picked up
     // even if the visible signature hasn't changed (e.g. mtime-only updates).
     const handleRefreshClick = useRef(() => {
@@ -1724,7 +1542,8 @@ export function WorkspaceExplorer({
 
     const handleBackgroundClick = useRef((e) => {
         const targetEl = getEventTargetElement(e);
-        if (targetEl?.closest?.('[data-path]')) return;
+        // Row clicks inside the tree's shadow root arrive retargeted to its host.
+        if (targetEl?.closest?.('[data-path], .workspace-tree-pierre')) return;
         clearSelection();
     }).current;
 
@@ -1747,167 +1566,6 @@ export function WorkspaceExplorer({
             setPreview(prev => ({ ...(prev || {}), error: err.message || 'Failed to delete file' }));
         }
     }, [clearSelection]);
-
-    const scrollRowIntoView = useCallback((path) => {
-        const container = treeListRef.current;
-        if (!container || !path || typeof CSS === 'undefined' || typeof CSS.escape !== 'function') return;
-        const el = container.querySelector(`[data-path="${CSS.escape(path)}"]`);
-        el?.scrollIntoView?.({ block: 'nearest' });
-    }, []);
-
-    const handleTreeKeyDown = useCallback((e) => {
-        const targetEl = getEventTargetElement(e);
-        if (renamingPathRef.current || isEditableKeyboardTarget(targetEl)) return;
-        const currentRows = rows;
-        if (!currentRows || currentRows.length === 0) return;
-        const currentIndex = selectedPath
-            ? currentRows.findIndex((r) => r.node.path === selectedPath)
-            : -1;
-
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            const next = Math.min(currentIndex + 1, currentRows.length - 1);
-            const row = currentRows[next];
-            if (!row) return;
-            setSelectedPath(row.node.path);
-            if (row.node.type !== 'dir') {
-                onFileSelectRef.current?.(row.node.path, row.node);
-                loadPreviewRef.current?.(row.node.path);
-            } else { setPreview(null); setLoadingPreview(false); setDownloadId(null); }
-            scrollRowIntoView(row.node.path);
-            return;
-        }
-
-        if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            const next = currentIndex <= 0 ? 0 : currentIndex - 1;
-            const row = currentRows[next];
-            if (!row) return;
-            setSelectedPath(row.node.path);
-            if (row.node.type !== 'dir') {
-                onFileSelectRef.current?.(row.node.path, row.node);
-                loadPreviewRef.current?.(row.node.path);
-            } else { setPreview(null); setLoadingPreview(false); setDownloadId(null); }
-            scrollRowIntoView(row.node.path);
-            return;
-        }
-
-        if (e.key === 'ArrowRight' && currentIndex >= 0) {
-            const row = currentRows[currentIndex];
-            if (row?.node?.type === 'dir' && !expanded.has(row.node.path)) {
-                e.preventDefault();
-                loadSubtreeRef.current?.(row.node.path);
-                setExpanded((prev) => new Set([...prev, row.node.path]));
-            }
-            return;
-        }
-
-        if (e.key === 'ArrowLeft' && currentIndex >= 0) {
-            const row = currentRows[currentIndex];
-            if (row?.node?.type === 'dir' && expanded.has(row.node.path)) {
-                e.preventDefault();
-                setExpanded((prev) => {
-                    const next = new Set(prev);
-                    next.delete(row.node.path);
-                    return next;
-                });
-            }
-            return;
-        }
-
-        if (e.key === 'Enter' && currentIndex >= 0) {
-            e.preventDefault();
-            const row = currentRows[currentIndex];
-            if (!row) return;
-            const path = row.node.path;
-            if (row.node.type === 'dir') {
-                const wasExpanded = expandedRef.current.has(path);
-                if (!wasExpanded) loadSubtreeRef.current?.(path);
-                setExpanded((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(path)) next.delete(path);
-                    else next.add(path);
-                    return next;
-                });
-                setPreview(null);
-                setDownloadId(null);
-                setLoadingPreview(false);
-            } else {
-                onFileSelectRef.current?.(path, row.node);
-                loadPreviewRef.current?.(path);
-            }
-            return;
-        }
-
-        if ((e.key === 'Delete' || e.key === 'Backspace') && currentIndex >= 0) {
-            const row = currentRows[currentIndex];
-            if (!row || row.node.type === 'dir') return;
-            e.preventDefault();
-            deleteFileAtPath(row.node.path);
-            return;
-        }
-
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            clearSelection();
-        }
-    }, [clearSelection, deleteFileAtPath, expanded, rows, scrollRowIntoView, selectedPath]);
-
-    const handleRowTouchStart = useCallback((event) => {
-        const intent = getWorkspaceTouchStartIntent(event, renamingPathRef.current);
-        if (!intent) return;
-
-        touchDragRef.current = {
-            path: intent.dragPath,
-            dragging: false,
-            startX: intent.startX,
-            startY: intent.startY,
-        };
-    }, []);
-
-    const handleRowTouchEnd = useCallback(() => {
-        const dragState = touchDragRef.current;
-        if (dragState?.dragging && dragState.path) {
-            const target = dropTargetRef.current || resolveDropTargetPath();
-            const mover = moveEntryToTargetRef.current;
-            if (typeof mover === 'function') mover(dragState.path, target);
-        }
-
-        touchDragRef.current = { path: null, dragging: false, startX: 0, startY: 0 };
-        dragDepthRef.current = 0;
-        setDragActive(false);
-        setDragMode(null);
-        updateDropTarget(null);
-        clearDragExpandTimer();
-        clearDragGhost();
-    }, [resolveDropTargetPath, clearDragGhost, updateDropTarget, clearDragExpandTimer]);
-
-    const handleRowTouchMove = useCallback((event) => {
-        const dragState = touchDragRef.current;
-        const touch = event?.touches?.[0];
-        if (!touch || !dragState?.path) return;
-
-        const dx = Math.abs(touch.clientX - dragState.startX);
-        const dy = Math.abs(touch.clientY - dragState.startY);
-        const moved = dx > 8 || dy > 8;
-
-        if (!dragState.dragging && moved) {
-            dragState.dragging = true;
-            setDragActive(true);
-            setDragMode('move');
-            startDragGhost(dragState.path);
-        }
-
-        if (dragState.dragging) {
-            event.preventDefault();
-            updateDragGhostPosition(touch.clientX, touch.clientY);
-            const el = document.elementFromPoint(touch.clientX, touch.clientY);
-            const target = resolveDropTargetFromElement(el) || resolveDropTargetPath();
-            if (dropTargetRef.current !== target) updateDropTarget(target);
-            scheduleDragExpand(target);
-        }
-    }, [resolveDropTargetFromElement, resolveDropTargetPath, startDragGhost, updateDragGhostPosition, updateDropTarget, scheduleDragExpand]);
-
 
     const handleDownload = useCallback((path = selectedPath) => {
         if (!path) return;
@@ -2086,14 +1744,6 @@ export function WorkspaceExplorer({
         await uploadFilesToTarget(files, target);
     }, [resolveDropTargetPath, resolveDropTargetFromEvent, uploadFilesToTarget]);
 
-    const handleFolderUploadClick = useCallback((event) => {
-        event?.stopPropagation?.();
-        if (uploading) return;
-        const target = event?.currentTarget?.dataset?.uploadTarget || '.';
-        uploadTargetRef.current = target;
-        uploadInputRef.current?.click();
-    }, [uploading]);
-
     const handleFolderHintClick = useCallback((event) => {
         event?.preventDefault?.();
         event?.stopPropagation?.();
@@ -2138,8 +1788,8 @@ export function WorkspaceExplorer({
 
     const handleMenuRename = useCallback(() => {
         if (!selectedPath || selectedPath === '.') return;
-        runMenuAction(() => beginRename(selectedPath));
-    }, [runMenuAction, selectedPath, beginRename]);
+        runMenuAction(() => treeControllerRef.current?.startRename(selectedPath, selectedIsDir ? 'dir' : 'file'));
+    }, [runMenuAction, selectedPath, selectedIsDir]);
 
     const handleMenuDelete = useCallback(() => {
         if (!selectedPath || selectedIsDir) return;
@@ -2171,79 +1821,109 @@ export function WorkspaceExplorer({
         runMenuAction(() => window.dispatchEvent(new CustomEvent('piclaw:open-settings')));
     }, [runMenuAction]);
 
-    const handleRowMouseDown = useCallback((event) => {
-        if (!event || event.button !== 0) return;
-        const rowEl = event.currentTarget;
-        if (!rowEl || !rowEl.dataset) return;
-        const path = rowEl.dataset.path;
-        if (!path || path === '.') return;
-        if (renamingPathRef.current === path) return;
-        const targetEl = getEventTargetElement(event);
-        if (targetEl?.closest?.('button, a, input, .workspace-caret')) return;
-        if (!isRowDragHandleTarget(targetEl)) return;
+    // ── File tree (Pierre, #1972) ─────────────────────────────────────────────
+    // The tree renders and edits rows; this component keeps loading, actions and selection.
+    const selectEntry = useCallback((path, type) => {
+        pendingProgrammaticFileClickRef.current = null;
+        setSelectedPath(path);
+        if (type === 'dir') {
+            setPreview(null);
+            setDownloadId(null);
+            setLoadingPreview(false);
+            return;
+        }
+        const node = nodeMapRef.current.get(path);
+        if (node) onFileSelectRef.current?.(node.path, node);
+        // Files open straight into a viewer or editor tab; metadata still loads for the actions bar.
+        onOpenEditorRef.current?.(path);
+        loadPreviewRef.current?.(path);
+    }, []);
 
-        event.preventDefault();
-        mouseDragRef.current = {
-            path,
-            dragging: false,
-            startX: event.clientX,
-            startY: event.clientY,
-        };
-
-        const onMove = (me) => {
-            const dragState = mouseDragRef.current;
-            if (!dragState?.path) return;
-            const dx = Math.abs(me.clientX - dragState.startX);
-            const dy = Math.abs(me.clientY - dragState.startY);
-            const moved = dx > 4 || dy > 4;
-
-            if (!dragState.dragging && moved) {
-                dragState.dragging = true;
-                suppressClickRef.current = true;
-                setDragActive(true);
-                setDragMode('move');
-                startDragGhost(dragState.path);
-                updateDragGhostPosition(me.clientX, me.clientY);
-                document.body.style.userSelect = 'none';
-                document.body.style.cursor = 'grabbing';
+    const handleTreeExpandedChange = useCallback((paths) => {
+        setExpanded((previous) => {
+            const next = new Set(['.', ...paths]);
+            for (const path of paths) {
+                const node = nodeMapRef.current.get(path);
+                if (!previous.has(path) && node?.type === 'dir' && node.children === undefined) loadSubtreeRef.current?.(path);
             }
+            return next;
+        });
+    }, []);
 
-            if (dragState.dragging) {
-                me.preventDefault();
-                updateDragGhostPosition(me.clientX, me.clientY);
-                const el = document.elementFromPoint(me.clientX, me.clientY);
-                const target = resolveDropTargetFromElement(el) || resolveDropTargetPath();
-                if (dropTargetRef.current !== target) updateDropTarget(target);
-                scheduleDragExpand(target);
-            }
+    const buildTreeContextMenu = useCallback((item, close) => {
+        const menu = document.createElement('div');
+        menu.className = 'workspace-menu-dropdown workspace-tree-context-menu';
+        menu.setAttribute('role', 'menu');
+        const add = (label, run, options: { danger?: boolean } = {}) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = `workspace-menu-item${options.danger ? ' danger' : ''}`;
+            button.setAttribute('role', 'menuitem');
+            button.textContent = label;
+            button.addEventListener('click', () => { close(); run(); });
+            menu.appendChild(button);
         };
+        const node = nodeMapRef.current.get(item.path);
+        if (item.type === 'file') {
+            add(t('workspace.openInTab'), () => selectEntry(item.path, 'file'));
+            add(t('workspace.download'), () => triggerWorkspaceDownload(getWorkspaceFileDownloadUrl(item.path)));
+        } else {
+            add(t('workspace.newFile'), () => createUntitledFile(item.path));
+            add(t('workspace.uploadToFolder'), () => { uploadTargetRef.current = item.path; uploadInputRef.current?.click(); });
+            add(t('workspace.addFolderHint'), () => onFolderSelectRef.current?.(item.path, node));
+            add(t('workspace.downloadZip'), () => triggerWorkspaceDownload(getWorkspaceDownloadUrl(item.path, showHiddenRef.current)));
+        }
+        add(t('workspace.renameEntry'), () => treeControllerRef.current?.startRename(item.path, item.type));
+        if (item.type === 'file') add(t('workspace.deleteFile'), () => void deleteFileAtPath(item.path), { danger: true });
+        return menu;
+    }, [createUntitledFile, deleteFileAtPath, selectEntry, t]);
 
-        const onUp = () => {
-            document.removeEventListener('mousemove', onMove);
-            document.removeEventListener('mouseup', onUp);
+    const treeHostRef = useRef(null);
+    const treeControllerRef = useRef(null);
+    const treeCallbacksRef = useRef(null);
+    treeCallbacksRef.current = {
+        onSelect: selectEntry,
+        onExpandedChange: handleTreeExpandedChange,
+        onRename: (path, name) => void renameEntry(path, name),
+        onMove: (path, targetDir) => void moveEntryToTarget(path, targetDir),
+        renderContextMenu: buildTreeContextMenu,
+    };
+    const treeOptions = () => ({
+        root: tree,
+        expanded,
+        selectedPath,
+        onSelect: (...args) => treeCallbacksRef.current.onSelect(...args),
+        onExpandedChange: (...args) => treeCallbacksRef.current.onExpandedChange(...args),
+        onRename: (...args) => treeCallbacksRef.current.onRename(...args),
+        onMove: (...args) => treeCallbacksRef.current.onMove(...args),
+        renderContextMenu: (...args) => treeCallbacksRef.current.renderContextMenu(...args),
+    });
+    const treeOptionsRef = useRef(treeOptions);
+    treeOptionsRef.current = treeOptions;
+    const hasTree = Boolean(tree);
 
-            const dragState = mouseDragRef.current;
-            if (dragState?.dragging && dragState.path) {
-                const target = dropTargetRef.current || resolveDropTargetPath();
-                const mover = moveEntryToTargetRef.current;
-                if (typeof mover === 'function') mover(dragState.path, target);
-            }
-
-            mouseDragRef.current = { path: null, dragging: false, startX: 0, startY: 0 };
-            dragDepthRef.current = 0;
-            setDragActive(false);
-            setDragMode(null);
-            updateDropTarget(null);
-            clearDragExpandTimer();
-            clearDragGhost();
-            document.body.style.userSelect = '';
-            document.body.style.cursor = '';
-            setTimeout(() => { suppressClickRef.current = false; }, 0);
+    useEffect(() => {
+        const host = treeHostRef.current;
+        if (!hasTree || !host) return undefined;
+        let disposed = false;
+        loadWorkspaceTreeModule()
+            .then((module) => {
+                if (disposed) return;
+                treeControllerRef.current = module.mountWorkspaceTree(host, treeOptionsRef.current());
+            })
+            .catch((loadError) => {
+                if (!disposed) setError(`Failed to load the file tree: ${loadError?.message || loadError}`);
+            });
+        return () => {
+            disposed = true;
+            treeControllerRef.current?.dispose();
+            treeControllerRef.current = null;
         };
+    }, [hasTree]);
 
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
-    }, [resolveDropTargetFromElement, resolveDropTargetPath, startDragGhost, updateDragGhostPosition, clearDragGhost, updateDropTarget, scheduleDragExpand, clearDragExpandTimer]);
+    useEffect(() => {
+        treeControllerRef.current?.update(treeOptionsRef.current());
+    }, [tree, expanded, selectedPath]);
 
     const handleUploadInputChange = useCallback(async (event) => {
         const files = Array.from(event?.target?.files || []);
@@ -2444,106 +2124,7 @@ export function WorkspaceExplorer({
                 ${initialLoad && html`<div class="workspace-loading">Loading…</div>`}
                 ${error && html`<div class="workspace-error">${error}</div>`}
                 ${tree && html`
-                    <div
-                        class="workspace-tree-list"
-                        ref=${treeListRef}
-                        tabIndex="0"
-                        onClick=${handleTreeClick}
-                        onDblClick=${handleTreeDblClick}
-                        onKeyDown=${handleTreeKeyDown}
-                        onTouchStart=${handleRowTouchStart}
-                        onTouchEnd=${handleRowTouchEnd}
-                        onTouchMove=${handleRowTouchMove}
-                        onTouchCancel=${handleRowTouchEnd}
-                    >
-                        ${rows.map(({ node, depth }) => {
-                            const isDir     = node.type === 'dir';
-                            const isSelected= node.path === selectedPath;
-                            const isRenaming= node.path === renamingPath;
-                            const isOpen    = isDir && expanded.has(node.path);
-                            const isDropTarget = dropTarget && node.path === dropTarget;
-                            const childCount = Array.isArray(node.children) && node.children.length > 0
-                                ? node.children.length
-                                : (Number(node.child_count) || 0);
-                            return html`
-                                <div
-                                    key=${node.path}
-                                    class=${`workspace-row${isSelected ? ' selected' : ''}${isDropTarget ? ' drop-target' : ''}`}
-                                    style=${{ paddingLeft: `${8 + depth * workspaceScaleMetrics.indentPx}px` }}
-                                    data-path=${node.path}
-                                    data-type=${node.type}
-                                    onMouseDown=${handleRowMouseDown}
-                                >
-                                    <span class="workspace-caret" aria-hidden="true">
-                                        ${isDir ? renderDisclosureTriangle(isOpen ? 'down' : 'right') : null}
-                                    </span>
-                                    <svg class=${`workspace-node-icon${isDir ? ' folder' : ''}`}
-                                        viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                                        aria-hidden="true">
-                                        ${isDir
-                                            ? html`<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`
-                                            : html`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`}
-                                    </svg>
-                                    ${isRenaming
-                                        ? html`
-                                            <input
-                                                class="workspace-rename-input"
-                                                ref=${renameInputRef}
-                                                value=${renameValue}
-                                                onInput=${(e) => setRenameValue(e?.target?.value || '')}
-                                                onKeyDown=${(e) => {
-                                                    e.stopPropagation();
-                                                    if (e.key === 'Enter') {
-                                                        e.preventDefault();
-                                                        commitRename();
-                                                    } else if (e.key === 'Escape') {
-                                                        e.preventDefault();
-                                                        cancelRename();
-                                                    }
-                                                }}
-                                                onBlur=${cancelRename}
-                                                onClick=${(e) => e.stopPropagation()}
-                                            />
-                                        `
-                                        : html`<span class="workspace-label"><span class="workspace-label-text">${node.name}</span></span>`}
-                                    ${isDir && !isOpen && childCount > 0 && html`
-                                        <span class="workspace-count">${childCount}</span>
-                                    `}
-                                    ${isDir && html`
-                                        <button
-                                            class="workspace-folder-upload"
-                                            data-folder-hint-target=${node.path}
-                                            title=${t('workspace.addFolderHint')}
-                                            aria-label=${`Add folder hint for ${node.path}`}
-                                            onClick=${handleFolderHintClick}
-                                        >
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                                                <path d="M12 11v6"/>
-                                                <path d="M9 14h6"/>
-                                            </svg>
-                                        </button>
-                                        <button
-                                            class="workspace-folder-upload"
-                                            data-upload-target=${node.path}
-                                            title=${t('workspace.uploadToFolder')}
-                                            onClick=${handleFolderUploadClick}
-                                            disabled=${uploading}
-                                        >
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                                <polyline points="7 8 12 3 17 8"/>
-                                                <line x1="12" y1="3" x2="12" y2="15"/>
-                                            </svg>
-                                        </button>
-                                    `}
-                                </div>
-                            `;
-                        })}
-                    </div>
+                    <div class="workspace-tree-list workspace-tree-pierre" ref=${treeHostRef}></div>
                 `}
             </div>
             ${selectedPath && html`
@@ -2649,9 +2230,6 @@ export function WorkspaceExplorer({
                         </details>
                     `}
                 </div>
-            `}
-            ${dragGhost && html`
-                <div class="workspace-drag-ghost" ref=${dragGhostRef}>${dragGhost.label}</div>
             `}
         </aside>
     `;

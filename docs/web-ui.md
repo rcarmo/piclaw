@@ -14,7 +14,7 @@ Classic uses a workbench layout. On desktop screens (at least 1024 px wide, land
   - Each row shows the session's age or activity, its latest reply and, when known, its context use.
   - Other active sessions show their live draft, thinking or running tool, polled every 3 seconds. The list refreshes every 15 seconds and when the window regains focus, only while the Sessions view is visible.
   - Ctrl/Cmd-click or middle-click opens a session in a new tab.
-- **Explorer:** the workspace file tree. Selecting a file opens it straight into the matching viewer or editor tab; there is no preview pane under the tree. The bar under the tree holds the selected item's actions, including add-on actions, and a **Folder sizes** chart that loads only when opened.
+- **Explorer:** the workspace file tree, rendered with [Pierre Trees](https://trees.software/) and loaded on first use. It has a filter box, file icons, keyboard navigation, folders that load as they are expanded, inline rename, drag-to-move and a context menu (right-click or the row's action button). Selecting a file opens it straight into the matching viewer or editor tab; there is no preview pane under the tree. The bar under the tree holds the selected item's actions, including add-on actions, and a **Folder sizes** chart that loads only when opened.
 - **Plan:** opens the current chat's plan as a tab in the editor area, with its progress, **Edit**, **Refresh**, **Reset** and **Submit to model**. It updates when the model changes the plan. Plans still need the plan-sidebar add-on for storage and the `plan` tool; its floating panel is not shown in Classic.
 - **Chat:** keeps at least 320 px.
 - **Editor:** collapsing it keeps its tabs open.
