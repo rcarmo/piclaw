@@ -5,6 +5,7 @@ import {
   handleInjectQueuedFollowupAction,
   handleRemoveQueuedFollowupAction,
 } from './app-floating-widget-followup.js';
+import { moveFollowupQueueItem } from './app-followup-queue.js';
 
 type StateSetter<T> = (next: T | ((prev: T) => T)) => void;
 
@@ -135,24 +136,20 @@ export function useFollowupActionsOrchestration(options: UseFollowupActionsOrche
   }, [activeChatJidRef, clearQueuedSteerStateIfStale, currentChatJid, dismissedQueueRowIdsRef, followupQueueItemsRef, refreshQueueState, removeAgentQueueItem, setFollowupQueueItems, showIntentToast, steerAgentQueueItem]);
 
   const handleMoveQueuedFollowup = useCallback(async (fromIndex: number, toIndex: number) => {
-    // Optimistic local reorder
-    setFollowupQueueItems((prev: any[]) => {
-      if (!Array.isArray(prev) || fromIndex < 0 || toIndex < 0 || fromIndex >= prev.length || toIndex >= prev.length || fromIndex === toIndex) return prev;
-      const next = [...prev];
-      const [moved] = next.splice(fromIndex, 1);
-      next.splice(toIndex, 0, moved);
-      return next;
-    });
-    // Persist to backend
+    // Moves stay within steering or follow-ups: the SDK places all steering first.
+    const next = moveFollowupQueueItem(followupQueueItemsRef.current, fromIndex, toIndex);
+    if (!next) return;
+    setFollowupQueueItems(next);
     try {
-      const { reorderAgentQueueItem } = await import('../api.js');
-      await reorderAgentQueueItem(fromIndex, toIndex, currentChatJid);
+      const { reorderAgentQueue } = await import('../api.js');
+      await reorderAgentQueue(next.map((item: any) => item.row_id), currentChatJid);
     } catch (error) {
-      console.warn('Failed to persist queue reorder:', error);
-      // Refresh from backend to restore correct state
-      void refreshQueueState();
+      console.warn('[queue] Failed to reorder queued items:', error);
+      if (activeChatJidRef.current === currentChatJid) showIntentToast('Queue not reordered', 'The queue changed before the move. It shows the current order.', 'warning');
     }
-  }, [currentChatJid, refreshQueueState, setFollowupQueueItems]);
+    // The server's order is authoritative either way.
+    void refreshQueueState();
+  }, [activeChatJidRef, currentChatJid, followupQueueItemsRef, refreshQueueState, setFollowupQueueItems, showIntentToast]);
 
   const handleMessageResponse = useCallback((response: any) => {
     // Do not wait for SSE delivery or a refresh to echo an already stored row.

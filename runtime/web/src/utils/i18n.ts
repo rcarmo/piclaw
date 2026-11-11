@@ -60,6 +60,7 @@ type MessageKey =
   | 'compose.returnToEditor'
   | 'compose.injectSteer'
   | 'compose.steer'
+  | 'compose.queueSteering'
   | 'compose.cancelQueued'
   | 'compose.resizeInput'
   | 'compose.resizeInputHint'
@@ -715,6 +716,7 @@ const EN: Record<MessageKey, string> = {
   'compose.returnToEditor': 'Return queued message to editor',
   'compose.injectSteer': 'Inject queued follow-up as steer',
   'compose.steer': 'Steer',
+  'compose.queueSteering': 'Steering · after this step',
   'compose.cancelQueued': 'Cancel queued message',
   'compose.resizeInput': 'Resize message input',
   'compose.resizeInputHint': 'Drag to resize message input',
@@ -1363,6 +1365,7 @@ const ZH_CN: Partial<Record<MessageKey, string>> = {
   'compose.returnToEditor': '将排队消息返回编辑器',
   'compose.injectSteer': '作为引导插入排队的后续消息',
   'compose.steer': '引导',
+  'compose.queueSteering': '引导 · 在当前步骤之后',
   'compose.cancelQueued': '取消排队消息',
   'compose.resizeInput': '调整消息输入框大小',
   'compose.resizeInputHint': '拖动以调整消息输入框大小',
@@ -2011,6 +2014,7 @@ const JA: Partial<Record<MessageKey, string>> = {
   'compose.returnToEditor': 'キュー済みメッセージを入力欄に戻す',
   'compose.injectSteer': 'キュー済みフォローアップをステアとして挿入',
   'compose.steer': 'ステア',
+  'compose.queueSteering': 'ステア · このステップの後',
   'compose.cancelQueued': 'キュー済みメッセージをキャンセル',
   'compose.resizeInput': 'メッセージ入力欄のサイズ変更',
   'compose.resizeInputHint': 'ドラッグしてメッセージ入力欄のサイズを変更',

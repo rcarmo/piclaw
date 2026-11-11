@@ -32,16 +32,41 @@ export function filterQueuedTimelinePosts<T extends TimelinePostLike>(
   return filtered.length === items.length ? items : filtered;
 }
 
+/** Steering is placed after the current tool round, before any follow-up, so it is listed first. */
+export function orderFollowupQueueItems<T extends FollowupQueueItemLike>(items: T[]): T[] {
+  return [...items.filter((item) => item?.mode === 'steer'), ...items.filter((item) => item?.mode !== 'steer')];
+}
+
 export function normalizeFollowupQueueItems<T extends FollowupQueueItemLike>(
   items: T[] | null | undefined,
   dismissedRowIds: Set<string | number> | null | undefined,
 ): T[] {
   const dismissed = dismissedRowIds || new Set<string | number>();
   return Array.isArray(items)
-    ? items
+    ? orderFollowupQueueItems(items
         .map((item) => ({ ...item }))
-        .filter((item) => !dismissed.has(item.row_id as string | number))
+        .filter((item) => !dismissed.has(item.row_id as string | number)))
     : [];
+}
+
+/** Move one row within its mode group; null when the move crosses groups or is out of range. */
+export function moveFollowupQueueItem<T extends FollowupQueueItemLike>(items: T[], fromIndex: number, toIndex: number): T[] | null {
+  if (!Array.isArray(items) || fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= items.length || toIndex >= items.length) return null;
+  if ((items[fromIndex]?.mode === 'steer') !== (items[toIndex]?.mode === 'steer')) return null;
+  const next = [...items];
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved!);
+  return next;
+}
+
+/** Show a row in a delivery mode at once (steering on click, the previous mode on failure). */
+export function setFollowupQueueItemMode<T extends FollowupQueueItemLike>(items: T[], rowId: string | number, mode: unknown): T[] {
+  return orderFollowupQueueItems(items.map((item) => {
+    if (item?.row_id !== rowId) return item;
+    const next = { ...item };
+    if (mode === undefined) delete next.mode; else next.mode = mode;
+    return next;
+  }));
 }
 
 export function haveSameFollowupQueueRows(
@@ -49,7 +74,7 @@ export function haveSameFollowupQueueRows(
   next: Array<FollowupQueueItemLike> | null | undefined,
 ): boolean {
   if (!Array.isArray(previous) || !Array.isArray(next)) return false;
-  return previous.length === next.length && previous.every((item, index) => item?.row_id === next[index]?.row_id);
+  return previous.length === next.length && previous.every((item, index) => item?.row_id === next[index]?.row_id && item?.mode === next[index]?.mode);
 }
 
 export function removeFollowupQueueRow<T extends FollowupQueueItemLike>(
@@ -81,16 +106,17 @@ export function appendFollowupQueueItem(
     return currentItems;
   }
 
-  return [
+  return orderFollowupQueueItems([
     ...currentItems,
     {
       row_id: rowId,
+      ...(payload?.mode === 'steer' || payload?.mode === 'followUp' ? { mode: payload.mode } : {}),
       ...(typeof payload?.source === 'string' ? {source:payload.source}: {}),
       content,
       timestamp: payload?.timestamp || null,
       thread_id: payload?.thread_id ?? null,
     },
-  ];
+  ]);
 }
 
 export function shouldRefreshQueueStateFromResponse(response: Record<string, any> | null | undefined): boolean {

@@ -620,11 +620,12 @@ export async function steerAgentQueueItem(rowId, chatJid = null) {
     return response.json();
 }
 
-export async function reorderAgentQueueItem(fromIndex, toIndex, chatJid = null) {
+/** Persist the whole queue in a new order (row ids); 409 when the queue changed meanwhile. */
+export async function reorderAgentQueue(order, chatJid = null) {
     const response = await fetch(API_BASE + '/agent/queue-reorder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from_index: fromIndex, to_index: toIndex, chat_jid: chatJid || undefined }),
+        body: JSON.stringify({ order, chat_jid: chatJid || undefined }),
     });
 
     if (!response.ok) {
@@ -1128,6 +1129,7 @@ export class SSEClient {
         bindJsonEvent('agent_followup_queued');
         bindJsonEvent('agent_followup_consumed');
         bindJsonEvent('agent_followup_removed');
+        bindJsonEvent('agent_followup_reordered');
         bindJsonEvent('workspace_update');
         bindJsonEvent('agent_draft');
         bindJsonEvent('agent_draft_delta');

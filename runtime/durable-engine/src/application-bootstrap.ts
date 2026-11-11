@@ -419,13 +419,18 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       const items=await runtime.readMessageInbox({incarnation:r.incarnation,...scope});assertLive();
       return items.map(item=>{
         const row=root.query("SELECT timestamp,thread_id FROM messages WHERE chat_jid=? AND id=?").get(chat,item.input.sourceId) as {timestamp:string;thread_id:number|null}|null;
-        return {row_id:item.submissionId,content:item.content,timestamp:row?.timestamp??r.now(),thread_id:row?.thread_id??null,source:"native_sdk"};
+        return {row_id:item.submissionId,mode:item.mode,content:item.content,timestamp:row?.timestamp??r.now(),thread_id:row?.thread_id??null,source:"native_sdk"};
       });
     };
     const controlNativeQueue:NonNullable<WebChannelOpts["controlNativeQueue"]>=async(chat,id,action,authorise)=>{
       const scope=routeIndex.get(chat);if(!scope||!lookup(chat,scope.branchId))throw Error("Unbound native queue");
       const check=()=>{assertLive();authorise?.();if(routeIndex.get(chat)!==scope||!lookup(chat,scope.branchId))throw Error("Native queue authority changed");};check();
       return candidateDatabase.withAdmissionGuard(check,()=>action==="remove"?runtime.removeQueuedMessage({incarnation:r.incarnation,...scope},id):runtime.steerQueuedMessage({incarnation:r.incarnation,...scope},id));
+    };
+    const reorderNativeQueue:NonNullable<WebChannelOpts["reorderNativeQueue"]>=async(chat,ids,authorise)=>{
+      const scope=routeIndex.get(chat);if(!scope||!lookup(chat,scope.branchId))throw Error("Unbound native queue");
+      const check=()=>{assertLive();authorise?.();if(routeIndex.get(chat)!==scope||!lookup(chat,scope.branchId))throw Error("Native queue authority changed");};check();
+      return candidateDatabase.withAdmissionGuard(check,()=>runtime.reorderQueuedMessages({incarnation:r.incarnation,...scope},ids));
     };
     const getInputSourceAdmission = (chat: string, provenanceRef="application:pi-durable"): ReturnType<NonNullable<WebChannelOpts["getInputSourceAdmission"]>> => {
       const current = () => { const binding = routeIndex.get(chat); return binding && lookup(chat, binding.branchId); };
@@ -935,7 +940,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
         bound = true;
         return Object.freeze({ ...options, prepareInputSourceAdmission, getInputSourceAdmission,
           prepareInputText: prepareInputText ? (chat: string, text: string) => { assertLive(); if (!routeIndex.has(chat)) throw Error("Unbound input preparation"); return prepareInputText(chat, text); } : undefined,
-          dispatchAcceptedInput: dispatch, filterNativeTimeline, readNativeQueue, controlNativeQueue });
+          dispatchAcceptedInput: dispatch, filterNativeTimeline, readNativeQueue, controlNativeQueue, reorderNativeQueue });
       },
       /** Continue the existing command worker's same-task settlement; no queue replay. */
       reconcileMaintenance(chatJid: string): Promise<void> {

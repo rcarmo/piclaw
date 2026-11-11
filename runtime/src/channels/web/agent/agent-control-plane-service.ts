@@ -69,6 +69,7 @@ export interface WebAgentControlPlaneServiceOptions {
   captureWriteAuthority?(req: Request): () => void;
   readNativeQueue?: import("../core/web-channel-contracts.js").WebChannelLike["readNativeQueue"];
   controlNativeQueue?: import("../core/web-channel-contracts.js").WebChannelLike["controlNativeQueue"];
+  reorderNativeQueue?: import("../core/web-channel-contracts.js").WebChannelLike["reorderNativeQueue"];
   defaultChatJid: string;
   defaultAgentId: string;
   json(payload: unknown, status?: number): Response;
@@ -85,6 +86,7 @@ export interface WebAgentControlPlaneChannelLike {
   authGateway?: Parameters<typeof captureWebRequestAuthority>[0];
   readNativeQueue?: WebAgentControlPlaneServiceOptions["readNativeQueue"];
   controlNativeQueue?: WebAgentControlPlaneServiceOptions["controlNativeQueue"];
+  reorderNativeQueue?: WebAgentControlPlaneServiceOptions["reorderNativeQueue"];
   json(payload: unknown, status?: number): Response;
   broadcastEvent(eventType: string, data: unknown): void;
   queue: AgentQueueLike;
@@ -109,6 +111,7 @@ export function createWebAgentControlPlaneService(
     agentPool: channel.agentPool,
     get readNativeQueue(){return channel.readNativeQueue?.bind(channel);},
     get controlNativeQueue(){return channel.controlNativeQueue?.bind(channel);},
+    get reorderNativeQueue(){return channel.reorderNativeQueue?.bind(channel);},
     getAgentStatus: (chatJid) => channel.getAgentStatus?.(chatJid) ?? null,
   });
 }
@@ -246,8 +249,46 @@ export class WebAgentControlPlaneService {
     }
   }
 
-  async handleAgentQueueReorder(_req: Request): Promise<Response> {
-    return this.options.json({ error: "Queue reorder is not exposed by the native runtime." }, 409);
+  /**
+   * Body: `{ chat_jid, order: [row_id, ...] }`, the whole queue in its new order,
+   * or `{ chat_jid, from_index, to_index }` to move one item in the current queue.
+   * An order that no longer matches the queue changes nothing and answers 409.
+   */
+  async handleAgentQueueReorder(req: Request): Promise<Response> {
+    const authorise = this.options.captureWriteAuthority?.(req);
+    const parsed = await parseJsonObjectRequest(req);
+    if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
+    try {
+      const payload = parsed.payload as { chat_jid?: string; order?: unknown; from_index?: unknown; to_index?: unknown };
+      const chatJid = this.resolveChatJid(payload.chat_jid);
+      if (!this.options.readNativeQueue || !this.options.reorderNativeQueue) {
+        return this.options.json({ error: "Native queue control is unavailable." }, 503);
+      }
+      let ids: number[] | null = null;
+      if (Array.isArray(payload.order)) {
+        const order = payload.order.map((value) => this.parseRowId(value as number | string));
+        if (order.length > 0 && order.every((value) => value !== null)) ids = order as number[];
+      } else if (Number.isSafeInteger(payload.from_index) && Number.isSafeInteger(payload.to_index)) {
+        const current = (await this.options.readNativeQueue(chatJid)).map((item) => item.row_id);
+        const from = payload.from_index as number, to = payload.to_index as number;
+        if (from >= 0 && to >= 0 && from < current.length && to < current.length) {
+          const [moved] = current.splice(from, 1);
+          current.splice(to, 0, moved!);
+          ids = current;
+        }
+      }
+      if (!ids) return this.options.json({ error: "Missing or invalid order" }, 400);
+      if (getDeferredQueuedFollowups(chatJid).some((item) => ids!.includes(item.rowId))) {
+        return this.options.json({ error: "Ambiguous queued input; no item changed." }, 409);
+      }
+      const reordered = await this.options.reorderNativeQueue(chatJid, ids, authorise);
+      const items = await this.options.readNativeQueue(chatJid);
+      if (!reordered) return this.options.json({ error: "The queue changed; nothing was reordered.", reordered, items, count: items.length }, 409);
+      this.options.broadcastEvent("agent_followup_reordered", { chat_jid: chatJid, order: items.map((item) => item.row_id) });
+      return this.options.json({ status: "ok", reordered, items, count: items.length });
+    } catch {
+      return this.options.json({ error: "Unable to reorder queued follow-ups" }, 500);
+    }
   }
 
   async handleAgentQueueSteer(req: Request): Promise<Response> {

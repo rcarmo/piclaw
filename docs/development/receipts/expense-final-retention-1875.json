@@ -191,7 +191,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "299765ed713e23d6f400821bcabe0913679344fcfc87b987f9b7c36ac32cd486",
       "state": "retained-decoupled",
-      "currentSha256": "979125e98070d14bb11d0186c34d8c932bf3b716e6c6be1fd515ed4da6a66955",
+      "currentSha256": "3a5948d7b2e4495a26d443561dbab0ec829b422636e4218eb52800cf20d3ec44",
       "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
       "directImportCallers": [
         {
@@ -379,7 +379,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "2f6a632f863196fccd48a3f3912c8bef407fb2ca5d07c13d32400dcef84c87cc",
       "state": "retained-decoupled",
-      "currentSha256": "202f132143d750a11df58c7d8b3c6db4bfdf432fdbd2de31f0eb1176bbdf079f",
+      "currentSha256": "d5660ae6dde956058a343208754189ec09b4a01b635d40fd4c4a080eb0468e1b",
       "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
       "directImportCallers": [
         {
@@ -643,7 +643,7 @@
       "directImportCallers": [
         {
           "caller": "runtime/durable-engine/src/application-bootstrap.ts",
-          "line": 880
+          "line": 885
         },
         {
           "caller": "runtime/src/channels/web.ts",
@@ -889,7 +889,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "98383ffa112e2169a0438042b5f2c5fffb794ba99ce7b79002daca6802f7b9b0",
       "state": "retained-decoupled",
-      "currentSha256": "6db1dc207a916427686f56f59f23448c77a89de9b96c2b0ff498875503a285fa",
+      "currentSha256": "9060dac0548ec77b597e38f72f022f1db1cc67421264df23f7777e8077e8b330",
       "currentPurpose": "existing model choice, price/unknown display and token/context/status DTO; same interaction and authority",
       "directImportCallers": [
         {
@@ -1903,7 +1903,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "dd4c3fbbbf8d9e5763cbc6811a9f641d11aa9f57e736ac36b47399eae0848418",
       "state": "retained-decoupled",
-      "currentSha256": "558f2180b7ea4b9c6e36df61fb39ff83e64d96bf1ab7eadf9018f5575df09bc5",
+      "currentSha256": "1ed2ded91e827a8dbf4d2798060cd20c4bc49058dbe9ef234a185d6dec516e8b",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
@@ -1916,7 +1916,7 @@
         },
         {
           "caller": "runtime/web/src/components/compose-box.ts",
-          "line": 2992
+          "line": 2995
         },
         {
           "caller": "runtime/web/src/components/image-annotator.ts",
@@ -2000,7 +2000,7 @@
         },
         {
           "caller": "runtime/web/src/ui/app-followup-actions-orchestration.ts",
-          "line": 148
+          "line": 144
         },
         {
           "caller": "runtime/web/src/ui/app-shell-bootstrap.ts",

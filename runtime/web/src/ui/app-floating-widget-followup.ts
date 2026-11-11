@@ -14,7 +14,7 @@ import {
   openFloatingWidgetState,
 } from './app-floating-widget.js';
 import { resolveFollowupActionFailureToast, resolveFollowupQueueRemovalPlan } from './app-followup-actions.js';
-import { removeFollowupQueueRow } from './app-followup-queue.js';
+import { removeFollowupQueueRow, setFollowupQueueItemMode } from './app-followup-queue.js';
 import {
   buildFloatingWidgetDashboardSnapshot,
   readFulfilledResult,
@@ -141,6 +141,9 @@ export function handleInjectQueuedFollowupAction(options: FollowupActionOptions)
   const optimisticRemoval = resolveFollowupQueueRemovalPlan(followupQueueItemsRef.current, queuedItem);
   if (!optimisticRemoval) return;
   const { rowId } = optimisticRemoval;
+  // The item stays queued until the next tool round places it; show it as steering now.
+  const previousMode = followupQueueItemsRef.current.find((item) => item?.row_id === rowId)?.mode;
+  setFollowupQueueItems((current) => setFollowupQueueItemMode(current, rowId, 'steer'));
 
   steerAgentQueueItem(rowId, resolveQueueActionChatJid(currentChatJid))
     .then((response: any) => {
@@ -151,6 +154,8 @@ export function handleInjectQueuedFollowupAction(options: FollowupActionOptions)
       console.warn('[queue] Failed to steer queued item:', error);
       const failureToast = resolveFollowupActionFailureToast('steer');
       showIntentToast(failureToast.title, failureToast.detail, 'warning');
+      // Restore the row even if the refresh below cannot reach the server.
+      setFollowupQueueItems((current) => setFollowupQueueItemMode(current, rowId, previousMode));
       dismissedQueueRowIdsRef.current.delete(rowId);
       void refreshQueueState();
     });

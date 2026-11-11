@@ -63,7 +63,8 @@ test('steering keeps its SDK item visible until actual placement and refreshes o
     removeAgentQueueItem: async () => ({ ok: true }),
   });
 
-  expect(followupQueueItems).toEqual(followupQueueItemsRef.current);
+  // Still visible, now shown as steering until the SDK places it.
+  expect(followupQueueItems).toEqual([{ row_id: 'r1', content: 'Queued', mode: 'steer' }]);
   expect(dismissedQueueRowIdsRef.current.has('r1')).toBe(false);
 
   await Promise.resolve();

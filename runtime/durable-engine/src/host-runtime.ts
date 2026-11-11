@@ -1996,6 +1996,32 @@ export class HostConversationRuntime {
       return changed;
     });
   }
+  /** Reorders queued inputs in the SDK's public inbox. `ids` must name exactly the
+   * inputs readMessageInbox returns; writes keep their slots. Boundaries place
+   * queued items by position, so this order is the delivery order within each
+   * mode. Accepted submission IDs, content, status and history are unchanged. */
+  reorderQueuedMessages(binding:{incarnation:string;chatJid:string;branchId:string;conversationId:number},ids:readonly number[]):Promise<boolean>{
+    const reader=this.sessionReader(binding),order=[...ids];
+    return this.observe(async()=>{
+      const expected=await this.readMessageInbox(binding);reader.check();
+      if(order.length!==expected.length||new Set(order).size!==order.length||!expected.every(item=>order.includes(item.submissionId)))return false;
+      const conversation=await reader.conversation();
+      const changed=await conversation.commit(async tx=>{
+        const inbox=await tx.doc(InboxDoc,reader.binding.conversationId as ConversationId);
+        const slots=inbox.items.flatMap((item,index)=>item.mode!=="write"&&order.includes(item.id)?[index]:[]);
+        if(slots.length!==order.length||inbox.items.some(item=>item.mode!=="write"&&!order.includes(item.id)))return false;
+        for(const item of expected){
+          const record=await tx.submissionByRequest(reader.binding.conversationId as ConversationId,item.input.requestId);
+          if(record?.id!==item.submissionId||record.status!=="queued")return false;
+        }
+        const byId=new Map(slots.map(index=>[inbox.items[index]!.id as number,JSON.parse(JSON.stringify(inbox.items[index]!)) as (typeof inbox.items)[number]]));
+        if(slots.every((index,position)=>inbox.items[index]!.id===order[position]))return true;
+        slots.forEach((index,position)=>{inbox.items[index]=byId.get(order[position]!)!;});
+        return true;
+      },this.context);reader.check();
+      return changed;
+    });
+  }
   /** Actual SDK cleanup scope. Queued inputs and manual compaction are native
    * work even when no host operation or process-local worker exists. */
   readMessageAbortScope(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }, retryOnly=false): Promise<Extract<import("../../src/agent-pool/durable-runtime-adapter.js").DurableAbortScope,{kind:"sdk"}>|null> {
