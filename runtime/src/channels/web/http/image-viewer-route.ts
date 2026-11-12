@@ -63,7 +63,7 @@ function generateImageViewerPage(): string {
   }
   img {
     max-width: none; max-height: none;
-    transform-origin: center center;
+    flex: 0 0 auto;
     border-radius: 2px;
     background: var(--viewer-bg);
   }
@@ -101,7 +101,8 @@ function generateImageViewerPage(): string {
   <button aria-label="Zoom out" id="zoomOut">−</button>
   <span class="zoom-label" id="zoomLabel">100%</span>
   <button aria-label="Zoom in" id="zoomIn">+</button>
-  <button aria-label="Reset zoom" id="zoomReset">1:1</button>
+  <button aria-label="Fit to viewer" aria-pressed="true" id="zoomFit">Fit</button>
+  <button aria-label="Reset zoom to actual size" id="zoomReset">1:1</button>
 </div>
 <div id="stage" class="stage"><div class="inner"></div></div>
 <script>
@@ -142,27 +143,53 @@ function generateImageViewerPage(): string {
   document.title = fileName + ' · Image Viewer';
 
   var rawUrl = '/workspace/raw?path=' + encodeURIComponent(path);
+  // Images open fitted to the viewer (never enlarged past 100%) and refit as it
+  // resizes. Zooming switches to a fixed scale; Fit returns to fitting.
   var scale = 1;
+  var fit = true;
+  var PADDING = 24;
   var img = document.createElement('img');
   img.alt = fileName;
   img.src = rawUrl;
 
   var zoomLabel = document.getElementById('zoomLabel');
+  var fitButton = document.getElementById('zoomFit');
+  function naturalSize() {
+    var width = img.naturalWidth, height = img.naturalHeight;
+    // An SVG without intrinsic dimensions reports 0: treat the viewer as its size.
+    if (!width || !height) return { width: Math.max(1, stageEl.clientWidth - PADDING * 2), height: Math.max(1, stageEl.clientHeight - PADDING * 2) };
+    return { width: width, height: height };
+  }
+  function fitScale() {
+    var size = naturalSize();
+    var availableWidth = Math.max(1, stageEl.clientWidth - PADDING * 2);
+    var availableHeight = Math.max(1, stageEl.clientHeight - PADDING * 2);
+    return Math.min(1, availableWidth / size.width, availableHeight / size.height);
+  }
   function applyScale() {
-    img.style.transform = 'scale(' + scale + ')';
+    if (fit) scale = fitScale();
+    // Size the element, not a transform, so scrolling matches the zoom.
+    var size = naturalSize();
+    img.style.width = Math.max(1, Math.round(size.width * scale)) + 'px';
+    img.style.height = Math.max(1, Math.round(size.height * scale)) + 'px';
     zoomLabel.textContent = Math.round(scale * 100) + '%';
+    fitButton.setAttribute('aria-pressed', fit ? 'true' : 'false');
   }
   function clamp(v) { return Math.max(0.1, Math.min(8, v)); }
+  function zoomTo(next) { fit = false; scale = clamp(next); applyScale(); }
 
-  document.getElementById('zoomOut').addEventListener('click', function () { scale = clamp(scale / 1.25); applyScale(); });
-  document.getElementById('zoomIn').addEventListener('click', function () { scale = clamp(scale * 1.25); applyScale(); });
-  document.getElementById('zoomReset').addEventListener('click', function () { scale = 1; applyScale(); });
+  document.getElementById('zoomOut').addEventListener('click', function () { zoomTo(scale / 1.25); });
+  document.getElementById('zoomIn').addEventListener('click', function () { zoomTo(scale * 1.25); });
+  document.getElementById('zoomReset').addEventListener('click', function () { zoomTo(1); });
+  fitButton.addEventListener('click', function () { fit = true; applyScale(); });
   stageEl.addEventListener('wheel', function (e) {
     if (!e.ctrlKey && !e.metaKey) return;
     e.preventDefault();
-    scale = clamp(scale * (e.deltaY < 0 ? 1.08 : 1 / 1.08));
-    applyScale();
+    zoomTo(scale * (e.deltaY < 0 ? 1.08 : 1 / 1.08));
   }, { passive: false });
+  img.addEventListener('load', applyScale);
+  if (typeof ResizeObserver === 'function') new ResizeObserver(function () { if (fit) applyScale(); }).observe(stageEl);
+  else window.addEventListener('resize', function () { if (fit) applyScale(); });
 
   img.addEventListener('error', function () {
     stageEl.innerHTML = '<div class="inner"><div class="empty">Failed to load image.</div></div>';
