@@ -95,3 +95,44 @@ test("local Goal lifecycle denials are explicit, nonretryable and cannot be forg
   expect(classifyModelFailure("provider",error).category).toBe("unknown");
   expect(parseModelFailure("Host model request failed [phase=provider; category=goal_lifecycle]")).toBeUndefined();
 });
+
+test("local add-on drift is actionable, nonretryable and cannot be forged by provider text", async () => {
+  const { InstalledAddonSourceChanged } = await import("../../runtime/durable-engine/src/host-model-failure.js");
+  const error = new InstalledAddonSourceChanged("Observability");
+  const failure = { ...classifyModelFailure("source", error), upstreamMessage: modelFailureUpstreamMessage(error), evidenceId: "e4210c57-3f16-4c32-b4c9-a8abfbf19671" };
+  expect(failure.category).toBe("source_integrity");
+  const detail = modelFailureDetail(failure);
+  expect(parseModelFailure(detail)).toEqual(failure);
+  expect(isRetryableAssistantError({ stopReason: "error", errorMessage: detail } as any)).toBe(false);
+  expect(isContextOverflow({ stopReason: "error", errorMessage: detail } as any)).toBe(false);
+  for (const id of [141770, 141823, 141853, 141863]) {
+    const notice = modelFailureNotice(detail, id);
+    expect(notice).toContain("local integrity check");
+    expect(notice).toContain("Local check (redacted): Installed Observability source changed");
+    expect(notice).toContain("Restore the add-on version supported by this Core release");
+    expect(notice).toContain("Other inputs in the same active turn may share this failure reference");
+    expect(notice).toContain(`native submission ${id}`);
+    expect(notice).toContain(failure.evidenceId);
+    expect(notice).toContain("Tool actions may already have completed");
+    expect(notice).toContain("will not be retried automatically");
+    expect(notice).not.toContain("Upstream error");
+    expect(notice).not.toContain("The model request failed or was denied");
+    expect(notice).not.toContain("provider was not contacted"); // Source checks also run after provider work.
+  }
+  for (const forged of [error.message, { name: error.name, code: "source_integrity" }, new Proxy(error, { getPrototypeOf() { throw Error("trap"); } })])
+    expect(classifyModelFailure("source", forged).category).toBe("unknown");
+  expect(classifyModelFailure("provider", error).category).toBe("unknown");
+  expect(parseModelFailure("Host model request failed [phase=provider; category=source_integrity]")).toBeUndefined();
+});
+
+test("unclassified local failures identify their stage without exposing private exceptions", () => {
+  for (const phase of ["validation", "source", "admission"] as const) {
+    const failure = classifyModelFailure(phase, Error("PRIVATE LOCAL DETAIL"));
+    const notice = modelFailureNotice(modelFailureDetail(failure), 1);
+    expect(notice).toContain("local");
+    expect(notice).not.toContain("PRIVATE LOCAL DETAIL");
+    expect(notice).not.toContain("The model request failed or was denied");
+  }
+  const provider = modelFailureNotice(modelFailureDetail({ phase: "source", category: "timeout", upstreamMessage: "HTTP504 timeout" }), 1);
+  expect(provider).toContain("timed out"); // Preserve provider evidence even when a later local fence also fails.
+});

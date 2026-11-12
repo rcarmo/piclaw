@@ -82,6 +82,7 @@ export interface WebChannelConstructorFactoryRuntimeOpts {
   agentPool: AgentPool;
   prepareInputSourceAdmission?: WebChannelLike["prepareInputSourceAdmission"];
   prepareInputText?: WebChannelLike["prepareInputText"];
+  inspectAddonInstall?: WebChannelLike["inspectAddonInstall"];
   getInputSourceAdmission?: WebChannelLike["getInputSourceAdmission"];
   filterNativeTimeline?: WebChannelLike["filterNativeTimeline"];
   readNativeQueue?: WebChannelLike["readNativeQueue"];

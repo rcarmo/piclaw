@@ -6,6 +6,7 @@ import { ComposeBox } from './compose-box.js';
 import { FloatingWidgetPane } from './floating-widget-pane.js';
 import { AgentRequestModal, AgentStatus } from './status.js';
 import { Timeline } from './timeline.js';
+import { LiveTurnActivity } from './turn-activity.js';
 
 export interface ChatSurfaceProps {
   [key: string]: any;
@@ -82,9 +83,17 @@ export function ChatSurface(props: ChatSurfaceProps) {
     loadStatusWorkspaceBranch,
   } = props;
 
+  // The running turn lives in the timeline (Kintsugi-style); the status row keeps
+  // only its compact line, tool icons and git indicators.
+  const liveStatus = isCompactionStatus(agentStatus) ? null : agentStatus;
+  const liveTurn = reverse !== false && !searchQuery
+    ? html`<${LiveTurnActivity} chatJid=${currentChatJid} status=${liveStatus} draft=${agentDraft} thought=${agentThought} turnId=${currentTurnId} />`
+    : null;
+
   return html`
     <${Timeline}
       key=${currentChatJid}
+      footer=${liveTurn}
       posts=${posts}
       hasMore=${hasMore}
       onLoadMore=${onLoadMore}
@@ -110,7 +119,8 @@ export function ChatSurface(props: ChatSurfaceProps) {
       searchQuery=${searchQuery}
     />
     <${AgentStatus}
-      status=${isCompactionStatus(agentStatus) ? null : agentStatus}
+      status=${liveStatus}
+      showLivePanels=${false}
       draft=${agentDraft}
       plan=${agentPlan}
       thought=${agentThought}

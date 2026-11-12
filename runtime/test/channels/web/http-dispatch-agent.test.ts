@@ -214,3 +214,20 @@ describe("web http agent dispatch", () => {
     expect((await handleAgentRoutes(channel, whitelistReq, "/agent/whitelist", new URL(whitelistReq.url)))?.status).toBe(404);
   });
 });
+
+test('add-on install route forwards the native compatibility port before mutation', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () => Response.json({ addons: [{ slug: 'observability', name: '@rcarmo/piclaw-addon-observability', version: '0.1.23', install: { kind: 'tarball', spec: 'https://example.invalid/blocked.tgz' } }] })) as typeof fetch;
+  let calls = 0;
+  try {
+    const channel = { json: (body: unknown, status = 200) => Response.json(body, { status }), inspectAddonInstall: (name: string, version: string) => {
+      calls++; expect(name).toBe('@rcarmo/piclaw-addon-observability'); expect(version).toBe('0.1.23');
+      return { supportedVersion: '0.1.22', problem: 'This Core release requires Observability 0.1.22.' };
+    } } as any;
+    const url = new URL('https://example.test/agent/addons/install?catalog_url=https://example.test/route-native-incompatible.json');
+    const response = await handleAgentRoutes(channel, new Request(url, { method: 'POST', body: JSON.stringify({ slug: 'observability' }) }), url.pathname, url);
+    expect(response?.status).toBe(409);
+    expect((await response?.json()).error).toContain('requires Observability 0.1.22');
+    expect(calls).toBe(1);
+  } finally { globalThis.fetch = original; }
+});

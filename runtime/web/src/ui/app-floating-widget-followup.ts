@@ -136,10 +136,11 @@ export function handleInjectQueuedFollowupAction(options: FollowupActionOptions)
     setFollowupQueueItems,
     showIntentToast,
     steerAgentQueueItem,
+    isCurrent = () => true,
   } = options;
 
   const optimisticRemoval = resolveFollowupQueueRemovalPlan(followupQueueItemsRef.current, queuedItem);
-  if (!optimisticRemoval) return;
+  if (!optimisticRemoval || !isCurrent()) return;
   const { rowId } = optimisticRemoval;
   // The item stays queued until the next tool round places it; show it as steering now.
   const previousMode = followupQueueItemsRef.current.find((item) => item?.row_id === rowId)?.mode;
@@ -147,10 +148,12 @@ export function handleInjectQueuedFollowupAction(options: FollowupActionOptions)
 
   steerAgentQueueItem(rowId, resolveQueueActionChatJid(currentChatJid))
     .then((response: any) => {
+      if (!isCurrent()) return;
       if(response?.queued!=='steer')throw Error('Queue changed before steering');
       void refreshQueueState();
     })
     .catch((error) => {
+      if (!isCurrent()) return;
       console.warn('[queue] Failed to steer queued item:', error);
       const failureToast = resolveFollowupActionFailureToast('steer');
       showIntentToast(failureToast.title, failureToast.detail, 'warning');

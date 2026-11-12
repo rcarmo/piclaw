@@ -22,7 +22,7 @@ for(const mode of ['native','reopen','observability','lost-ack','lost-ack-observ
   const getSpy=spyOn(f.bindings,'get').mockImplementation(async input=>{const binding=await getBinding(input);if(input.sourceId===primarySource&&bindingFault)return bindingFault==='missing'?null:binding?{...binding,submissionId:((binding.submissionId??0)+1000) as never}:null;return binding;});
   const ackSpy=spyOn(f.bindings,'recordSubmission').mockImplementation(async(input,id)=>{if(lostAck&&input.sourceId!==primarySource)throw Error('synthetic accepted SDK ACK lost');await recordBinding(input,id);});
   const observability=mode.includes('observability')?createHostObservabilityPrompt({
-    async prepareObservabilityRuntime(){},buildObservabilitySystemPrompt(){return 'FIXTURE_OBSERVABILITY';},bindObservabilityConfiguration(){return()=>{};},
+    buildObservabilitySystemPrompt(){return 'FIXTURE_OBSERVABILITY';},
   },{root:f.root,runtime:()=>({async captureRunSource(conversation,task){const captured=await f.runtime.captureRunSource(conversation,task);expect(captured.native).toBeDefined();if(captured.inputs.length===2){captures++;for(const fault of ['missing','wrong-id'] as const){bindingFault=fault;try{await expect(f.runtime.captureRunSource(conversation,task)).rejects.toThrow('Host binding conflict');}finally{bindingFault=undefined;}}}return captured;}}),assertOwner:f.options.owner.assert,failClosed:error=>failures.push(error)}):undefined;
   try{
     const read=defineTool({name:'read',description:'Fixture reader',parameters:Type.Object({}),async execute(){return{output:[{type:'text',text:'READ'}]};}});

@@ -71,7 +71,8 @@ for (const accounted of [false, true]) test(`all seven shipped consumers admit a
   const stream = (_physical: unknown, input: unknown) => {
     expect(JSON.stringify(input)).toContain("## Observability");
     expect(JSON.stringify(input)).toContain(expectedInstance);
-    expect(JSON.stringify(input)).toContain("OTel tracing active");
+    expect(JSON.stringify(input)).toContain("OTel tracing inactive");
+    expect(JSON.stringify(input)).not.toContain("OTel tracing active");
     expect(JSON.stringify(input)).not.toContain("Live Metrics enabled.");
     const step = calls++, output = createAssistantMessageEventStream();
     const message = { role: "assistant" as const, api: model.api, provider: model.provider, model: model.id, timestamp: Date.now(),

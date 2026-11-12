@@ -107,6 +107,7 @@ export function useFollowupActionsOrchestration(options: UseFollowupActionsOrche
 
   const handleInjectQueuedFollowup = useCallback((queuedItem: any) => {
     runInjectQueuedFollowup({
+      isCurrent: () => activeChatJidRef.current === currentChatJid,
       queuedItem,
       followupQueueItemsRef,
       dismissedQueueRowIdsRef,
@@ -117,7 +118,7 @@ export function useFollowupActionsOrchestration(options: UseFollowupActionsOrche
       steerAgentQueueItem,
       removeAgentQueueItem,
     });
-  }, [currentChatJid, dismissedQueueRowIdsRef, followupQueueItemsRef, refreshQueueState, removeAgentQueueItem, setFollowupQueueItems, showIntentToast, steerAgentQueueItem]);
+  }, [activeChatJidRef, currentChatJid, dismissedQueueRowIdsRef, followupQueueItemsRef, refreshQueueState, removeAgentQueueItem, setFollowupQueueItems, showIntentToast, steerAgentQueueItem]);
 
   const handleRemoveQueuedFollowup = useCallback((queuedItem: any) => {
     return runRemoveQueuedFollowup({

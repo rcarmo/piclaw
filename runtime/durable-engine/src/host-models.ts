@@ -34,6 +34,8 @@ export interface HostModelEventObserver {
 export interface HostModelPolicy {
   /** Optional host-owned preview for a known SDK producer; never an execution grant. */
   previewRequest?: typeof previewSdkRequest;
+  /** Trusted host observer only; private request callbacks never cross the JSON bridge. */
+  captureTelemetry?(): SimpleStreamOptions["telemetry"];
   /** Invocation-local source fence retained through asynchronous credential resolution. */
   captureSourceGuard?(signal: AbortSignal | undefined): (() => void) | Promise<() => void>;
   /** Resolve once after source capture; ordinary requests without observers do
@@ -385,7 +387,10 @@ export function createHostModels(
         const physical = freeze(data(assertPhysicalCompatible()));
         phase = "conversion";
         codex = await policy.codex?.bind(physical, signal, options?.signal);
-        const hostOptions = { ...safeOptions, ...codex?.options, signal,
+        let telemetry: SimpleStreamOptions["telemetry"];
+        try { telemetry = policy.captureTelemetry?.(); }
+        catch { log.warn("Native host telemetry unavailable", { operation: "durable_model.telemetry_failed" }); }
+        const hostOptions = { ...safeOptions, ...codex?.options, signal, ...(telemetry ? { telemetry } : {}),
           ...(sdkPayload?{onPayload:async(payload:unknown,actual:Model<Api>)=>{
             signal.throwIfAborted();assertSource();policy.assertCurrent(ref,'chat',signal);assertPhysicalCompatible();
             if(actual.provider!==physical.provider||actual.id!==physical.id||actual.api!==physical.api)throw Error('Provider payload owner changed');
@@ -492,7 +497,7 @@ export function createHostModels(
         }
         // Provider explanation is redacted and byte-encoded separately from retry
         // classification. Never retain partial output or private exception stacks.
-        const upstreamMessage = providerError === undefined ? undefined : modelFailureUpstreamMessage(providerError);
+        const upstreamMessage = modelFailureUpstreamMessage(providerError ?? (failure.category === "source_integrity" ? cause : undefined));
         const error: AssistantMessage = { role: "assistant", content: [], api: model.api,
           provider: model.provider, model: model.id, timestamp: Date.now(),
           stopReason: "error", errorMessage: modelFailureDetail({ ...failure, ...(evidenceId ? { evidenceId } : {}), ...(upstreamMessage ? { upstreamMessage } : {}) }),
@@ -517,7 +522,7 @@ export function createHostModels(
       log.warn("Native model failure evidence could not be retained", { operation: "durable_model.evidence_failed", phase });
     }
     log.warn("Native model request failed", { operation: "durable_model.request_failed", provider: model.provider, model: model.id, ...failure, ...(evidenceId ? { evidenceId } : {}) });
-    const upstreamMessage = modelFailureUpstreamMessage(providerError ?? (phase === "provider" ? cause : undefined));
+    const upstreamMessage = modelFailureUpstreamMessage(providerError ?? (phase === "provider" || failure.category === "source_integrity" ? cause : undefined));
     return modelFailureDetail({ ...failure, ...(evidenceId ? { evidenceId } : {}), ...(upstreamMessage ? { upstreamMessage } : {}) });
   };
   const operationModel = (operation: "generateImages" | "classify", model: AnyModel) => {

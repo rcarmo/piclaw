@@ -1,69 +1,69 @@
-/* One token-to-role contract for chat code blocks and the CodeMirror editor.
+/* One token-to-role contract for chat code blocks, turn activity regions and the CodeMirror editor.
  * Do not collapse numbers/booleans/labels, or functions/variable definitions.
  */
-:root[data-color-theme] :is(:is(.post-content, .message-list__content, .workspace__preview-markdown) pre code, .cm-editor .cm-content) {
+:root[data-color-theme] :is(:is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region) pre code, .cm-editor .cm-content) {
     color: var(--text-code);
 }
-:root[data-color-theme] :is(:is(.post-content, .message-list__content, .workspace__preview-markdown) pre, .cm-editor .cm-scroller) {
+:root[data-color-theme] :is(:is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region) pre, .cm-editor .cm-scroller) {
     background-color: var(--bg-code);
 }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-keyword,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-keyword,
 :root .cm-editor .tok-keyword::selection { color: var(--syntax-keyword) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-string,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-string,
 :root .cm-editor .tok-string::selection { color: var(--syntax-string) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-regexp,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-regexp,
 :root .cm-editor .tok-regexp::selection { color: var(--syntax-regexp) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-number,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-number,
 :root .cm-editor .tok-number::selection { color: var(--syntax-number) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-bool,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-bool,
 :root .cm-editor .tok-bool::selection { color: var(--syntax-bool) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-atom,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-atom,
 :root .cm-editor .tok-atom::selection { color: var(--syntax-atom) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-labelName,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-labelName,
 :root .cm-editor .tok-labelName::selection { color: var(--syntax-label) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-variableName,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-variableName,
 :root .cm-editor .tok-variableName::selection { color: var(--syntax-variable) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-variableName.tok-definition,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-variableName.tok-definition,
 :root .cm-editor .tok-variableName.tok-definition::selection { color: var(--syntax-definition) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-variableName.tok-local,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-variableName.tok-local,
 :root .cm-editor .tok-variableName.tok-local::selection { color: var(--syntax-local) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-variableName2,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-variableName2,
 :root .cm-editor .tok-variableName2::selection { color: var(--syntax-variable2) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-propertyName,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-propertyName,
 :root .cm-editor .tok-propertyName::selection { color: var(--syntax-property) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-propertyName.tok-definition,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-propertyName.tok-definition,
 :root .cm-editor .tok-propertyName.tok-definition::selection { color: var(--syntax-propertyDefinition) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) :is(.tok-variableName, .tok-propertyName).tok-function,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) :is(.tok-variableName, .tok-propertyName).tok-function,
 :root .cm-editor :is(.tok-variableName, .tok-propertyName).tok-function::selection { color: var(--syntax-function) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-typeName,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-typeName,
 :root .cm-editor .tok-typeName::selection { color: var(--syntax-type) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-className,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-className,
 :root .cm-editor .tok-className::selection { color: var(--syntax-class) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-namespace,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-namespace,
 :root .cm-editor .tok-namespace::selection { color: var(--syntax-namespace) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-macroName,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-macroName,
 :root .cm-editor .tok-macroName::selection { color: var(--syntax-macro) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-comment,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-comment,
 :root .cm-editor .tok-comment::selection { color: var(--syntax-comment) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-meta,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-meta,
 :root .cm-editor .tok-meta::selection { color: var(--syntax-meta) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-operator,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-operator,
 :root .cm-editor .tok-operator::selection { color: var(--syntax-operator) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-punctuation,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-punctuation,
 :root .cm-editor .tok-punctuation::selection { color: var(--syntax-punctuation) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-link,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-link,
 :root .cm-editor .tok-link::selection { color: var(--syntax-link) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-heading,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-heading,
 :root .cm-editor .tok-heading::selection { color: var(--syntax-heading) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-invalid,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-invalid,
 :root .cm-editor .tok-invalid::selection { color: var(--syntax-invalid) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-deleted,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-deleted,
 :root .cm-editor .tok-deleted::selection { color: var(--syntax-deleted) !important; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-inserted,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-inserted,
 :root .cm-editor .tok-inserted::selection { color: var(--syntax-inserted) !important; }
 
 /* Typography accompanies colour in the shared highlighter contract. */
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-comment,
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-emphasis { font-style: italic; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) :is(.tok-heading, .tok-strong) { font-weight: bold; }
-:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown)) .tok-link { text-decoration: underline; }
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-comment,
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-emphasis { font-style: italic; }
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) :is(.tok-heading, .tok-strong) { font-weight: bold; }
+:root :is(.cm-editor, :is(.post-content, .message-list__content, .workspace__preview-markdown, .turn-activity-region)) .tok-link { text-decoration: underline; }

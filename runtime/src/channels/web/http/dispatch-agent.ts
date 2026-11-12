@@ -62,6 +62,7 @@ import {
   handleWebPushVapidPublicKey,
 } from "../push/web-push-routes.js";
 import { getThinkingContentForChat } from "../../../db/messages.js";
+import { handleTurnActivity } from "../handlers/turn-activity.js";
 import { readKeychainBootstrapKeyMaterial } from "../../../core/config.js";
 
 interface ExactAgentRoute {
@@ -99,6 +100,16 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
     method: "POST",
     path: "/agent/thought/visibility",
     handle: (channel, req) => channel.handleThoughtVisibility(req),
+  },
+  {
+    method: "POST",
+    path: "/agent/tool-abort",
+    handle: (channel, req) => channel.handleAgentToolAbort(req),
+  },
+  {
+    method: "GET",
+    path: "/agent/turn-activity",
+    handle: (channel, _req, url) => handleTurnActivity(channel.agentPool, url),
   },
   {
     method: "GET",
@@ -480,7 +491,7 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
   {
     method: "POST",
     path: "/agent/addons/install",
-    handle: (channel, req, url) => handleInstallAddon(req, (body, status) => channel.json(body, status), url),
+    handle: (channel, req, url) => handleInstallAddon(req, (body, status) => channel.json(body, status), url, channel.inspectAddonInstall),
   },
   {
     method: "POST",

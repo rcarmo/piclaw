@@ -157,6 +157,35 @@ describe('native queue reorder', () => {
   });
 });
 
+describe("single tool cancellation", () => {
+  const abortRequest = (body: unknown) => new Request("https://fixture/agent/tool-abort", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  test("stops one call with the caller's authority and a bounded note", async () => {
+    const calls: unknown[] = []; let authorised = 0;
+    const service = createService({
+      captureWriteAuthority: () => () => { authorised++; },
+      agentPool: { setSessionBinder: () => {}, abortToolCallForChat: async (...args: unknown[]) => { calls.push(args); return true; } } as any,
+    });
+    const response = await service.handleAgentToolAbort(abortRequest({ chat_jid: "web:target", call_id: "call-7", note: "x".repeat(2500) }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "ok", call_id: "call-7", aborted: true });
+    expect(authorised).toBe(1);
+    expect(calls).toEqual([["web:target", "call-7", "x".repeat(2000)]]);
+  });
+
+  test("reports a call that already finished, rejects bad ids and hides runtime errors", async () => {
+    const finished = createService({ agentPool: { setSessionBinder: () => {}, abortToolCallForChat: async () => false } as any });
+    expect(await (await finished.handleAgentToolAbort(abortRequest({ call_id: "call-1" }))).json()).toMatchObject({ aborted: false });
+    for (const body of [{}, { call_id: "" }, { call_id: 7 }, { call_id: "x".repeat(600) }]) {
+      expect((await finished.handleAgentToolAbort(abortRequest(body))).status).toBe(400);
+    }
+    const failing = createService({ agentPool: { setSessionBinder: () => {}, abortToolCallForChat: async () => { throw new Error("private engine detail"); } } as any });
+    const response = await failing.handleAgentToolAbort(abortRequest({ call_id: "call-1" }));
+    expect(response.status).toBe(500);
+    expect(await response.text()).not.toContain("private engine detail");
+  });
+});
+
 describe("native abort terminal status ownership", () => {
   for (const scenario of ["idle", "successor", "failure", "compaction"] as const) {
     test(`${scenario}: only the SDK watch may change its captured status`, async () => {

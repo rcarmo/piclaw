@@ -528,6 +528,52 @@ export class HostConversationRuntime {
         contextWindow: model?.contextWindow ?? null, observedTokens, observedModel, lastAnswer, usage };
     });
   }
+  /** Read-only display window for one settled answer: the committed entries
+   * after the previous final answer, from the first accepted input through this
+   * answer. Without an answer id, the window ends at the newest entry: the
+   * running (or latest) turn. Bounded; no model calls, estimates or legacy
+   * session hydration. */
+  readTurnEntries(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }, answerEntryId?: number): Promise<import("../../src/agent-pool/durable-runtime-adapter.js").DurableTurnEntries | null> {
+    const reader = this.sessionReader(binding);
+    return this.observe(async () => {
+      const conversation = await reader.conversation();
+      const reversed: EntryRecord[] = [];
+      let cursor: Cursor | undefined, truncated = false;
+      scan: do {
+        const page = await conversation.entries({ order: "descending", ...(answerEntryId !== undefined ? { maxEntryId: answerEntryId as import("@earendil-works/pi-durable").EntryId } : {}) }, 100, cursor, this.context); reader.check();
+        for (const entry of page.items) {
+          if (!reversed.length) {
+            const message = entry.model?.[0] as { role?: string; stopReason?: string } | undefined;
+            if (answerEntryId !== undefined && (entry.id !== answerEntryId || entry.kind !== "pi.assistant" || message?.role !== "assistant")) return null;
+          } else {
+            const message = entry.model?.[0] as { role?: string; stopReason?: string } | undefined;
+            if (entry.kind === "pi.reset" || (entry.kind === "pi.assistant" && message?.role === "assistant" && message.stopReason !== "toolUse")) break scan;
+          }
+          if (reversed.length >= 2000) { truncated = true; break scan; }
+          reversed.push(entry);
+        }
+        cursor = page.next;
+      } while (cursor !== undefined);
+      const entries = reversed.reverse();
+      const start = entries.findIndex(entry => entry.kind === "host.accepted");
+      if (start < 0 && !truncated) return null;
+      const window = start > 0 ? entries.slice(start) : entries;
+      const data = window[0]?.kind === "host.accepted" ? window[0].data as { chatJid?: string; branchId?: string } | undefined : undefined;
+      if (data && (data.chatJid !== reader.binding.chatJid || data.branchId !== reader.binding.branchId)) return null;
+      const tasks: Record<number, import("../../src/agent-pool/durable-runtime-adapter.js").DurableTurnTask> = {};
+      await this.harness.commit(async tx => {
+        for (const entry of window) {
+          if (entry.byTaskId === undefined || tasks[entry.byTaskId]) continue;
+          const task = await tx.task(entry.byTaskId);
+          if (!task || task.conversationId !== reader.binding.conversationId) continue;
+          tasks[entry.byTaskId] = { kind: task.kind, ...(task.startedAt !== undefined ? { startedAt: task.startedAt } : {}),
+            ...(task.endedAt !== undefined ? { endedAt: task.endedAt } : {}),
+            outcome: task.state.status === "terminal" ? task.state.outcome.status : task.state.status };
+        }
+      }, this.context); reader.check();
+      return freezeTree({ entries: structuredClone(window), tasks, truncated });
+    });
+  }
   /** Fork-aware public history across the explicit imported host-session bindings only. */
   readSessionTree(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<SessionTreeSnapshot> {
     const reader = this.sessionReader(binding), copy = reader.binding;
@@ -2072,6 +2118,31 @@ export class HostConversationRuntime {
         await this.harness.abortTask(taskId,this.context);reader.check();
         await this.harness.waitForTask(taskId,this.context);reader.check();
       }
+    });
+  }
+  /** Cancel one running model-issued tool call and its owned work. The run, its
+   * other calls and queued input continue; the model receives the aborted
+   * result and, when given, the user's note. False once the call is not live. */
+  abortToolCall(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }, callId: string, note?: string): Promise<boolean> {
+    const reader = this.sessionReader(binding);
+    return this.observe(async () => {
+      const conversation = await reader.conversation();
+      const taskId = await conversation.commit(async tx => {
+        const live = await tx.doc(LiveDoc, reader.binding.conversationId as ConversationId);
+        const slot = live.tools?.find(tool => tool.callId === callId);
+        if (!slot?.taskId || slot.status === "done") return undefined;
+        const task = await tx.task(slot.taskId);
+        if (task?.kind !== "pi.tool" || task.conversationId !== reader.binding.conversationId || task.state.status === "terminal" || task.abortRequested) return undefined;
+        const message = note?.trim().slice(0, 2000);
+        if (message) {
+          slot.diagnostics ??= [];
+          slot.diagnostics.push({ severity: "error", code: "cancelled_by_user", message: `The user cancelled this tool with this note:\n${message}` });
+        }
+        return slot.taskId;
+      }, this.context); reader.check();
+      if (taskId === undefined) return false;
+      await this.harness.abortTask(taskId, this.context); reader.check();
+      return true;
     });
   }
   /** Immutable SDK/source correlation for passive reopen. This neither resumes
