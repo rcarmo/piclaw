@@ -34,8 +34,7 @@ beforeAll(async () => {
       );
     },
   });
-  browsers.chromium = await chromium.launch();
-  browsers.webkit = await webkit.launch();
+  [browsers.chromium, browsers.webkit] = await Promise.all([chromium.launch(), webkit.launch()]);
 });
 afterAll(async () => {
   for (const b of Object.values(browsers)) await b.close();
