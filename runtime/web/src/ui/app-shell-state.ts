@@ -46,7 +46,6 @@ export interface StoredBtwSession {
 /** Parsed shell-mode flags derived from the current location. */
 export interface AppLocationModes {
   currentChatJid: string;
-  chatOnlyMode: boolean;
   panePopoutMode: boolean;
   panePopoutPath: string;
   panePopoutLabel: string;
@@ -220,7 +219,6 @@ export function readAppLocationModes(
 ): AppLocationModes {
   const defaultChatJid = options.defaultChatJid || 'web:default';
   const currentChatJid = readTextParam(locationParams, 'chat_jid', defaultChatJid);
-  const chatOnlyMode = readModeParam(locationParams?.get?.('chat_only') || locationParams?.get?.('chat-only'));
   const panePopoutMode = readModeParam(locationParams?.get?.('pane_popout'));
   const panePopoutPath = readTextParam(locationParams, 'pane_path');
   const panePopoutLabel = readTextParam(locationParams, 'pane_label');
@@ -229,7 +227,6 @@ export function readAppLocationModes(
 
   return {
     currentChatJid,
-    chatOnlyMode,
     panePopoutMode,
     panePopoutPath,
     panePopoutLabel,

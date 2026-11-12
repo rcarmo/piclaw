@@ -1,3 +1,4 @@
+import { PLAN_TAB_PATH } from '../panes/plan-loader.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
 import {
   consumeEditorPopoutState,
@@ -42,7 +43,6 @@ interface UsePaneRuntimeOrchestrationOptions {
   panePopoutMode: boolean;
   panePopoutPath: string;
   panePopoutLabel: string;
-  chatOnlyMode: boolean;
   editorOpen: boolean;
   tabStripTabs: any[];
   tabStripActiveId: string | null;
@@ -315,7 +315,6 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
     panePopoutMode,
     panePopoutPath,
     panePopoutLabel,
-    chatOnlyMode,
     editorOpen,
     tabStripTabs,
     tabStripActiveId,
@@ -382,6 +381,7 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
   }, [openEditor, terminalTabPath]);
 
   const openCdpTab = useCallback(() => { openEditor('piclaw://cdp-view', { label: 'Browser' }); }, [openEditor]);
+  const openPlanTab = useCallback(() => { openEditor(PLAN_TAB_PATH, { label: 'Plan' }); }, [openEditor]);
 
   const openVncTab = useCallback(() => {
     openEditor(vncTabPrefix, { label: 'VNC' });
@@ -737,7 +737,6 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
 
   const showEditorPaneContainer = shouldShowEditorPaneContainer(
     panePopoutMode,
-    chatOnlyMode,
     editorOpen,
     hasDockPanes,
     dockVisible,
@@ -747,11 +746,11 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
   const zenDockWasVisibleRef = useRef(false);
 
   const enterZenMode = useCallback(() => {
-    if (!editorOpen || chatOnlyMode) return;
+    if (!editorOpen) return;
     zenDockWasVisibleRef.current = dockVisible;
     if (dockVisible) setDockVisible(false);
     setZenMode(true);
-  }, [chatOnlyMode, dockVisible, editorOpen]);
+  }, [dockVisible, editorOpen]);
 
   const exitZenMode = useCallback(() => {
     if (!zenMode) return;
@@ -1283,6 +1282,7 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
     openTerminalTab,
     openVncTab,
     openCdpTab,
+    openPlanTab,
     panePopoutTitle,
     panePopoutHasMenuActions,
     hidePanePopoutControls,

@@ -1,22 +1,31 @@
 /*
- * layout-three-pane.css - Classic three-pane layout (#1987).
- * Ownership: sessions pane, right-hand workspace placement and pane allowances.
+ * layout-three-pane.css - Classic workbench layout (#1987 and follow-up).
+ * Ownership: activity bar, side bar views, status bar and pane allowances.
  *
- * Desktop (≥1024px landscape): sessions | chat | file tree | editor.
- * Narrow: chat full width; the file tree opens as a drawer from the right and
- * sessions use the existing compose @session picker.
+ * Wide (≥1024px landscape): activity bar | side bar (Sessions or Explorer) |
+ * chat | editor and viewer tabs. Clicking the active view collapses the side
+ * bar; the activity bar stays. Narrow: the side bar is a drawer from the left.
+ * The system meters sit at the foot of the side bar while it is shown, and in
+ * the status bar otherwise.
  *
- * Existing pane markup and class names are unchanged; this file only overrides
- * placement. Add-ons that dock to the right edge (for example the plan sidebar)
- * can reserve space by setting --piclaw-shell-inset-right on :root.
+ * Existing pane markup and class names are kept (.workspace-sidebar is now
+ * hosted inside the Explorer view). Add-ons that dock to the right edge (for
+ * example the plan sidebar) can reserve space with --piclaw-shell-inset-right.
  */
 
 :root {
     --piclaw-shell-inset-right: 0px;
+    --workbench-activity-width: 48px;
+    --workbench-statusbar-height: 24px;
 }
 
 .app-shell {
     width: calc(100% - var(--piclaw-shell-inset-right, 0px));
+}
+
+/* The status bar takes the bottom row whenever the side bar is not shown. */
+.app-shell:not([data-workbench-sidebar="shown"]):has(> .workbench-statusbar .system-meters-hud) {
+    height: calc(100% - var(--workbench-statusbar-height));
 }
 
 /* The global menu no longer lives in the tree header. */
@@ -24,39 +33,699 @@
     padding-left: 0;
 }
 
-/* ── Sessions pane ── */
-.sessions-sidebar,
-.sessions-splitter,
-.sessions-toggle-tab {
+/* ── Workbench side bar ── */
+.workbench-sidebar {
     display: none;
-}
-
-.sessions-sidebar {
-    flex-direction: column;
     flex: 0 0 auto;
-    width: var(--sessions-width, 260px);
     min-width: 0;
     height: var(--app-height, 100dvh);
-    overflow: hidden;
+    max-height: 100%;
     background-color: var(--bg-secondary);
     padding-top: env(safe-area-inset-top, 0px);
-    opacity: 1;
+    box-sizing: border-box;
+}
+
+.workbench-activity-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    flex: 0 0 var(--workbench-activity-width);
+    width: var(--workbench-activity-width);
+    /* The global menu button sits in the top slot. */
+    padding: 48px 0 8px;
+    box-sizing: border-box;
+    border-right: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.workbench-activity-button {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--workbench-activity-width);
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-left: 2px solid transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.workbench-activity-button svg {
+    width: 22px;
+    height: 22px;
+}
+
+.workbench-activity-button:hover,
+.workbench-activity-button:focus-visible {
+    color: var(--text-primary);
+    outline: none;
+}
+
+.workbench-activity-button.is-active {
+    color: var(--text-primary);
+    border-left-color: var(--accent-color);
+}
+
+.workbench-activity-badge {
+    position: absolute;
+    right: 7px;
+    bottom: 7px;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 3px;
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: var(--success-color);
+    color: var(--bg-primary);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 15px;
+    text-align: center;
+}
+
+.workbench-activity-spacer {
+    flex: 1;
+}
+
+.workbench-view-host {
+    display: flex;
+    flex-direction: column;
+    width: var(--workbench-sidebar-width, 260px);
+    min-width: 0;
+    overflow: hidden;
     transition: width var(--ui-transition-fast), opacity var(--ui-transition-fast);
 }
 
-.sessions-sidebar.collapsed {
+.workbench-sidebar.collapsed .workbench-view-host {
     width: 0;
     opacity: 0;
     pointer-events: none;
 }
 
+.workbench-view {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.workbench-view[hidden] {
+    display: none;
+}
+
+/* The workspace explorer fills the Explorer view instead of docking to the shell. */
+.workbench-view-explorer > .workspace-sidebar {
+    display: flex;
+    position: static;
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    height: auto;
+    min-height: 0;
+    padding-top: 0;
+    transform: none;
+    opacity: 1;
+    box-shadow: none;
+    border: 0;
+    background: transparent;
+}
+
+.workbench-sidebar-footer {
+    flex: 0 0 auto;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--border-color);
+}
+
+/* ── Sessions view actions ── */
+.sessions-sidebar-toolbar {
+    display: inline-flex;
+    gap: 2px;
+    margin-left: auto;
+}
+
+.sessions-sidebar-tool,
+.sessions-sidebar-more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm, 4px);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.sessions-sidebar-tool svg,
+.sessions-sidebar-more svg {
+    width: 15px;
+    height: 15px;
+}
+
+.sessions-sidebar-tool:hover,
+.sessions-sidebar-tool:focus-visible,
+.sessions-sidebar-more:hover,
+.sessions-sidebar-more:focus-visible {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.sessions-sidebar-tool.danger:hover {
+    color: var(--danger-color);
+}
+
+.sessions-sidebar-item {
+    position: relative;
+}
+
+.sessions-sidebar-more {
+    opacity: 0;
+}
+
+.sessions-sidebar-item:hover .sessions-sidebar-more,
+.sessions-sidebar-item:focus-within .sessions-sidebar-more,
+.sessions-sidebar-item.menu-open .sessions-sidebar-more {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .sessions-sidebar-more {
+        opacity: 1;
+    }
+}
+
+.sessions-row-menu {
+    position: absolute;
+    top: calc(100% - 4px);
+    left: auto;
+    right: 4px;
+    z-index: 70;
+    min-width: 170px;
+}
+
+.sessions-row-menu .workspace-menu-item.danger {
+    color: var(--danger-color);
+}
+
+.sessions-sidebar-section-archived > summary {
+    cursor: pointer;
+    list-style: none;
+}
+
+.sessions-sidebar-section-archived > summary::-webkit-details-marker {
+    display: none;
+}
+
+.sessions-sidebar-section-archived > summary::before {
+    content: '▸ ';
+}
+
+.sessions-sidebar-section-archived[open] > summary::before {
+    content: '▾ ';
+}
+
+.sessions-sidebar-item.archived .sessions-sidebar-handle {
+    color: var(--text-secondary);
+}
+
+/* ── Pierre file tree (#1972) ── */
+.workspace-tree:has(> .workspace-tree-pierre) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+}
+
+.workspace-tree-pierre {
+    flex: 1 1 auto;
+    min-height: 0;
+    --trees-bg-override: transparent;
+    --trees-fg-override: var(--text-primary);
+    --trees-fg-muted-override: var(--text-secondary);
+    --trees-bg-muted-override: var(--bg-hover);
+    --trees-selected-bg-override: var(--accent-soft, rgba(29, 155, 240, 0.14));
+    --trees-selected-fg-override: var(--text-primary);
+    --trees-accent-override: var(--accent-color);
+    --trees-border-color-override: var(--border-color);
+    --trees-focus-ring-color-override: var(--accent-color);
+    --trees-search-bg-override: var(--bg-primary);
+    --trees-search-fg-override: var(--text-primary);
+    --trees-input-bg-override: var(--bg-primary);
+    --trees-font-family-override: var(--font-family, inherit);
+    --trees-font-size-override: var(--workspace-tree-font-size, 12px);
+}
+
+.workspace-tree-pierre > file-tree-container {
+    display: block;
+    height: 100%;
+}
+
+.workspace-tree-context-menu {
+    position: static;
+    min-width: 180px;
+}
+
+.workspace-tree-context-menu .workspace-menu-item.danger {
+    color: var(--danger-color);
+}
+
+/* ── Selected item actions, replacing the old preview pane ── */
+.workspace-selection-bar {
+    flex: 0 0 auto;
+    max-height: 50%;
+    overflow: auto;
+    padding: var(--spacing-xs);
+    border-top: 1px solid var(--border-color);
+    background-color: var(--bg-primary);
+}
+
+.workspace-folder-sizes > summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding: 4px 2px;
+}
+
+/* ── Plan tab pane ── */
+.plan-pane-host {
+    height: 100%;
+    overflow: hidden;
+}
+
+.plan-pane {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+}
+
+.plan-pane-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px 6px;
+}
+
+.plan-pane-title {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.plan-pane-chat {
+    font: 400 11px var(--font-family-mono, monospace);
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.plan-pane-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.plan-pane-progress-bar {
+    display: block;
+    width: 96px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border-color);
+    overflow: hidden;
+}
+
+.plan-pane-progress-bar > span {
+    display: block;
+    height: 100%;
+    background: var(--success-color);
+}
+
+.plan-pane-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 14px 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.plan-pane-toolbar button {
+    padding: 3px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.plan-pane-toolbar button.plan-pane-primary {
+    border-color: var(--accent-color);
+    background: var(--accent-color);
+    color: #fff;
+}
+
+.plan-pane-toolbar button:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.plan-pane-spacer {
+    flex: 1;
+}
+
+.plan-pane-items {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    padding: 8px 14px;
+    overflow: auto;
+    list-style: none;
+}
+
+.plan-pane-item {
+    display: flex;
+    gap: 8px;
+    padding: 5px 0;
+    font-size: 13px;
+    line-height: 1.4;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+}
+
+.plan-pane-item-icon {
+    display: inline-flex;
+    flex: 0 0 16px;
+    align-items: center;
+    justify-content: center;
+    /* One text line tall, so the icon centres on the step's first line. */
+    height: 1.4em;
+    color: var(--text-secondary);
+}
+
+.plan-pane-item-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.plan-pane-item.in_progress .plan-pane-item-icon {
+    color: var(--accent-color);
+}
+
+.plan-pane-item.in_progress .plan-pane-item-step {
+    font-weight: 600;
+}
+
+.plan-pane-item.completed .plan-pane-item-icon {
+    color: var(--success-color);
+}
+
+.plan-pane-item.completed .plan-pane-item-step {
+    color: var(--text-secondary);
+}
+
+.plan-pane-empty {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.plan-pane-editor {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 8px 14px;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font: 12.5px/1.5 var(--font-family-mono, monospace);
+    resize: none;
+}
+
+.plan-pane-status {
+    padding: 4px 14px 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.plan-pane-status.error {
+    color: var(--danger-color, #e5484d);
+}
+
+.plan-pane-status.warning {
+    color: var(--warning-color);
+}
+
+.plan-pane-unavailable {
+    padding: 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* The plan now lives in the editor area; the add-on's floating panel and its
+   right-edge reservation are not used in Classic. */
+.plan-sidebar-root {
+    display: none !important;
+}
+
+:root:has(.plan-sidebar-root) {
+    --piclaw-shell-inset-right: 0px !important;
+}
+
+/* ── Settings tab (Visual-style settings editor) ── */
+.settings-tab-host {
+    height: 100%;
+    overflow: hidden;
+}
+
+.settings-dialog.settings-tab {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    animation: none;
+}
+
+.settings-tab-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px;
+    color: var(--text-secondary);
+}
+
+/* ── Status bar (Visual-style footer) ── */
+.workbench-statusbar {
+    position: fixed;
+    left: 0;
+    right: var(--piclaw-shell-inset-right, 0px);
+    bottom: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: var(--workbench-statusbar-height);
+    padding: 0 8px env(safe-area-inset-bottom, 0px);
+    box-sizing: content-box;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.workbench-statusbar-spacer {
+    flex: 1;
+}
+
+/* Phones keep the bottom edge for the compose box; the meters show in the drawer. */
+@media (max-width: 639px) {
+    .workbench-statusbar {
+        display: none;
+    }
+
+    .app-shell:not([data-workbench-sidebar="shown"]):has(> .workbench-statusbar .system-meters-hud) {
+        height: 100%;
+    }
+}
+
+/* Nothing to show while the meters are switched off. */
+.workbench-statusbar:not(:has(.system-meters-hud)),
+.workbench-sidebar-footer:not(:has(.system-meters-hud)) {
+    display: none;
+}
+
+/* Meters as a single inline row in the status bar. */
+.system-meters-hud-statusbar,
+.system-meters-hud-sidebar {
+    position: static;
+    inset: auto;
+    transform: none;
+    pointer-events: auto;
+}
+
+.system-meters-hud-statusbar .system-meters-card {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.system-meters-hud-statusbar .system-meters-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: var(--workbench-statusbar-height);
+}
+
+.system-meters-hud-statusbar .system-meters-spark {
+    width: 32px;
+    height: 10px;
+}
+
+.system-meters-hud-sidebar .system-meters-card {
+    width: 100%;
+    box-sizing: border-box;
+    box-shadow: none;
+}
+
+.workbench-splitter {
+    display: none;
+    width: 4px;
+    flex-shrink: 0;
+    cursor: col-resize;
+    position: relative;
+    z-index: 50;
+    touch-action: none;
+}
+
+.workbench-splitter::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 1px;
+    background: var(--border-color);
+    transition: background 0.15s;
+}
+
+.workbench-splitter:hover::after,
+.workbench-splitter:focus-visible::after,
+.workbench-splitter.dragging::after,
+.editor-splitter:focus-visible::after {
+    background: var(--accent-color);
+    width: 2px;
+}
+
+.workbench-splitter:focus-visible,
+.editor-splitter:focus-visible {
+    outline: none;
+}
+
+.app-shell.workbench-resizing .workbench-view-host,
+.app-shell.workbench-resizing .container {
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .workbench-view-host {
+        transition: none;
+    }
+}
+
+/* ── Wide placement ── */
+@media (min-width: 1024px) and (orientation: landscape) {
+    .workbench-sidebar {
+        display: flex;
+    }
+
+    .workbench-splitter {
+        display: block;
+    }
+
+    .workbench-splitter.at-edge {
+        display: none;
+    }
+
+    .app-shell[data-editor-collapsed="true"] > .editor-splitter::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 4px;
+        height: 32px;
+        transform: translate(-50%, -50%);
+        border-radius: 999px;
+        background: var(--border-color);
+    }
+
+    .app-shell[data-editor-collapsed="true"] > .editor-pane-container {
+        display: none;
+    }
+
+    .app-shell[data-editor-collapsed="true"] > .editor-splitter {
+        width: 10px;
+    }
+
+    /* Percentages follow the shell, which shrinks when an add-on docks on the right. */
+    .app-shell > .editor-pane-container {
+        max-width: calc(100% - var(--workbench-reserved, 0px) - var(--chat-pane-min-width, 320px) - 8px);
+    }
+}
+
+/* ── Narrow placement: the side bar is a drawer from the left ── */
+@media (max-width: 1023px), (orientation: portrait) {
+    .workbench-sidebar.drawer:not(.collapsed) {
+        display: flex;
+        position: fixed;
+        inset: 0 auto 0 0;
+        z-index: 60;
+        height: auto;
+        max-width: calc(100vw - 48px);
+        box-shadow: var(--shadow-lg, 0 8px 32px rgba(0, 0, 0, 0.25));
+    }
+
+    .workbench-sidebar.drawer .workbench-view-host {
+        width: min(300px, calc(100vw - 48px - var(--workbench-activity-width)));
+    }
+
+    .workbench-drawer-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 59;
+        background: rgba(0, 0, 0, 0.32);
+    }
+}
+
+/* ── Sessions view ── */
 .sessions-sidebar-header {
     display: flex;
     align-items: center;
     gap: var(--spacing-xs);
-    min-height: 44px;
-    /* Room for the global menu button anchored here. */
-    padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) 44px;
+    min-height: 36px;
+    padding: var(--spacing-xs) var(--spacing-sm);
     border-bottom: 1px solid var(--border-color);
 }
 
@@ -69,7 +738,6 @@
     white-space: nowrap;
 }
 
-.sessions-sidebar-collapse,
 .sessions-sidebar-pin {
     display: inline-flex;
     align-items: center;
@@ -95,8 +763,6 @@
     height: 15px;
 }
 
-.sessions-sidebar-collapse:hover,
-.sessions-sidebar-collapse:focus-visible,
 .sessions-sidebar-pin:hover,
 .sessions-sidebar-pin:focus-visible {
     color: var(--accent-color);
@@ -328,187 +994,6 @@
 @media (prefers-reduced-motion: reduce) {
     .sessions-sidebar-activity {
         animation: none;
-    }
-}
-
-.sessions-splitter {
-    width: 4px;
-    flex-shrink: 0;
-    cursor: col-resize;
-    position: relative;
-    z-index: 50;
-    touch-action: none;
-}
-
-.sessions-splitter::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 1px;
-    background: var(--border-color);
-    transition: background 0.15s;
-}
-
-.sessions-splitter:hover::after,
-.sessions-splitter:focus-visible::after,
-.sessions-splitter.dragging::after,
-.workspace-splitter:focus-visible::after,
-.editor-splitter:focus-visible::after {
-    background: var(--accent-color);
-    width: 2px;
-}
-
-.sessions-splitter:focus-visible,
-.workspace-splitter:focus-visible,
-.editor-splitter:focus-visible {
-    outline: none;
-}
-
-.sessions-toggle-tab {
-    position: fixed;
-    top: 50%;
-    left: 0;
-    transform: translateY(-50%);
-    z-index: 9;
-    width: var(--workspace-tab-width, 20px);
-    height: 52px;
-    padding: 0;
-    align-items: center;
-    justify-content: center;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-left: 0;
-    border-radius: 0 var(--radius-md) var(--radius-md) 0;
-    box-shadow: var(--shadow-sm);
-    color: var(--text-secondary);
-    cursor: pointer;
-}
-
-.sessions-toggle-tab:hover,
-.sessions-toggle-tab:focus-visible {
-    color: var(--text-primary);
-    border-color: var(--accent-color);
-}
-
-.sessions-toggle-tab-icon {
-    width: 12px;
-    height: 12px;
-}
-
-.app-shell.sessions-resizing .sessions-sidebar,
-.app-shell.sessions-resizing .container {
-    transition: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .sessions-sidebar {
-        transition: none;
-    }
-}
-
-/* ── Desktop placement ── */
-@media (min-width: 1024px) and (orientation: landscape) {
-    .sessions-sidebar {
-        display: flex;
-    }
-
-    .sessions-splitter {
-        display: block;
-    }
-
-    .sessions-toggle-tab {
-        display: flex;
-    }
-
-    /* Collapsed panes keep a thin divider so Enter, drag or double-click restores them. */
-    .sessions-splitter.at-edge::before,
-    .app-shell[data-editor-collapsed="true"] > .editor-splitter::before {
-        content: '';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 4px;
-        height: 32px;
-        transform: translate(-50%, -50%);
-        border-radius: 999px;
-        background: var(--border-color);
-    }
-
-    /* The tree sits between the chat and the editor, so the editor keeps its
-       right-hand position while the tree collapses towards it. */
-    .app-shell.workspace-collapsed .workspace-sidebar {
-        transform: translateX(8px);
-    }
-
-    /* The tree tab is a zero-width flex item before the tree: it hangs over
-       the chat edge and follows the tree without fixed positioning. */
-    .app-shell > .workspace-toggle-tab,
-    .app-shell.workspace-collapsed > .workspace-toggle-tab,
-    .app-shell:not(.workspace-collapsed) > .workspace-toggle-tab {
-        position: relative;
-        top: auto;
-        left: auto;
-        right: auto;
-        transform: none;
-        align-self: center;
-        flex: 0 0 var(--workspace-tab-width, 20px);
-        margin-left: calc(-1 * var(--workspace-tab-width, 20px));
-        border: 1px solid var(--border-color);
-        border-right: 0;
-        border-radius: var(--radius-md) 0 0 var(--radius-md);
-    }
-
-    .app-shell > .workspace-toggle-tab .workspace-toggle-tab-icon {
-        transform: rotate(180deg);
-    }
-
-    .app-shell > .workspace-toggle-tab.open .workspace-toggle-tab-icon {
-        transform: none;
-    }
-
-    .app-shell[data-editor-collapsed="true"] > .editor-pane-container {
-        display: none;
-    }
-
-    .app-shell[data-editor-collapsed="true"] > .editor-splitter {
-        width: 10px;
-    }
-
-    /* Percentages follow the shell, which shrinks when an add-on docks on the right. */
-    .app-shell > .editor-pane-container {
-        max-width: calc(100% - var(--sessions-reserved, 0px) - var(--chat-pane-min-width, 320px) - 8px);
-    }
-
-    .app-shell:not(.workspace-collapsed) > .editor-pane-container {
-        max-width: calc(100% - var(--sidebar-width, 280px) - var(--sessions-reserved, 0px) - var(--chat-pane-min-width, 320px) - 16px);
-    }
-
-    .app-shell > .workspace-sidebar {
-        max-width: calc(100% - var(--sessions-reserved, 0px) - var(--chat-pane-min-width, 320px) - 8px);
-    }
-}
-
-/* ── Narrow placement: the tree drawer opens from the right ── */
-@media (max-width: 1023px), (orientation: portrait) {
-    .app-shell:not(.workspace-collapsed) > .workspace-sidebar {
-        inset: 0 0 0 auto;
-    }
-
-    .app-shell:not(.workspace-collapsed) > .workspace-toggle-tab {
-        left: auto;
-        right: calc(min(var(--sidebar-width, 280px), calc(100vw - 48px)) - var(--workspace-tab-width, 20px));
-        border-radius: var(--radius-md) 0 0 var(--radius-md);
-    }
-
-    .app-shell > .workspace-toggle-tab .workspace-toggle-tab-icon {
-        transform: rotate(180deg);
-    }
-
-    .app-shell > .workspace-toggle-tab.open .workspace-toggle-tab-icon {
-        transform: none;
     }
 }
 

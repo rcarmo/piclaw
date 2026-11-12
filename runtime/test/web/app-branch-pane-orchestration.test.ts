@@ -15,7 +15,6 @@ test('navigateToSelectedBranch ignores same/blank chats and navigates when selec
     hasWindow: true,
     nextChatJid: 'web:main',
     currentChatJid: 'web:main',
-    chatOnlyMode: true,
     currentHref: 'https://example.test/?chat_jid=web%3Amain',
     navigate: (url) => calls.push(url),
   })).toBe(false);
@@ -24,7 +23,6 @@ test('navigateToSelectedBranch ignores same/blank chats and navigates when selec
     hasWindow: true,
     nextChatJid: ' web:branch ',
     currentChatJid: 'web:main',
-    chatOnlyMode: true,
     currentHref: 'https://example.test/?chat_jid=web%3Amain',
     navigate: (url) => calls.push(url),
   })).toBe(true);
@@ -165,9 +163,10 @@ test('closeTransferredPaneSource closes clean tabs and falls back to hiding dock
   expect(dockVisibility).toEqual([false]);
 });
 
-test('applyStoredPaneLayout hydrates editor/dock css vars from storage fallback rules', () => {
+test('applyStoredPaneLayout opens the work area at 40% of the shell when no width is stored', () => {
   const styleCalls: Array<[string, string]> = [];
   const shell = {
+    getBoundingClientRect: () => ({ width: 1500 }),
     style: {
       setProperty: (key: string, value: string) => styleCalls.push([key, value]),
     },
@@ -175,7 +174,6 @@ test('applyStoredPaneLayout hydrates editor/dock css vars from storage fallback 
 
   const editorWidthRef = { current: 0 };
   const dockHeightRef = { current: 0 };
-  const sidebarWidthRef = { current: 320 };
 
   applyStoredPaneLayout({
     hasWindow: true,
@@ -183,7 +181,6 @@ test('applyStoredPaneLayout hydrates editor/dock css vars from storage fallback 
     shellElement: shell,
     editorWidthRef,
     dockHeightRef,
-    sidebarWidthRef,
     readStoredNumber: (key) => {
       if (key === 'editorWidth') return null;
       if (key === 'dockHeight') return 250;
@@ -191,10 +188,10 @@ test('applyStoredPaneLayout hydrates editor/dock css vars from storage fallback 
     },
   });
 
-  expect(editorWidthRef.current).toBe(320);
+  expect(editorWidthRef.current).toBe(600);
   expect(dockHeightRef.current).toBe(250);
   expect(styleCalls).toEqual([
-    ['--editor-width', '320px'],
+    ['--editor-width', '600px'],
     ['--dock-height', '250px'],
   ]);
 });

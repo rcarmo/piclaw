@@ -7,6 +7,8 @@ import {
   terminalTabPaneExtension,
   vncPaneExtension,
   cdpPaneExtension,
+  planPaneExtension,
+  createSettingsPane,
   workspacePreviewPaneExtension,
   workspaceMarkdownPreviewPaneExtension,
   officeViewerPaneExtension,
@@ -64,6 +66,8 @@ export function registerAppPaneExtensions(): void {
   paneRegistry.register(highlightPreviewerPaneExtension);
   paneRegistry.register(vncPaneExtension);
   paneRegistry.register(cdpPaneExtension);
+  paneRegistry.register(planPaneExtension);
+  paneRegistry.register(createSettingsPane(() => import('../components/settings-dialog.js').then((mod) => mod.SettingsDialogContent)));
   preloadEditorBundle();
   paneRegistry.register(terminalPaneExtension);
   paneRegistry.register(terminalTabPaneExtension);

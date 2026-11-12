@@ -84,7 +84,6 @@ test('handleBranchPickerChangeAction delegates branch navigation with chat-only 
     hasWindow: true,
     nextChatJid: 'web:child',
     currentChatJid: 'web:root',
-    chatOnlyMode: true,
     currentHref: 'https://example.test/?chat_jid=web%3Aroot',
     navigate: (url) => calls.push(url),
   })).toBe(true);
@@ -118,7 +117,6 @@ test('renameCurrentBranchAction renames the session without navigating when retu
       refreshCurrentChatBranches: () => undefined,
       navigate: (url) => navigateCalls.push(String(url)),
       baseHref: '',
-      chatOnlyMode: true,
       showIntentToast: (title, detail, kind, durationMs) => {
         toasts.push([title, String(detail || ''), String(kind || ''), Number(durationMs || 0)]);
       },
@@ -192,7 +190,6 @@ test('applyStoredPaneLayoutAction hydrates css vars and ref defaults', () => {
 
   const editorWidthRef = { current: 0 };
   const dockHeightRef = { current: 0 };
-  const sidebarWidthRef = { current: 280 };
 
   applyStoredPaneLayoutAction({
     hasWindow: true,
@@ -200,7 +197,6 @@ test('applyStoredPaneLayoutAction hydrates css vars and ref defaults', () => {
     shellElement: shell,
     editorWidthRef,
     dockHeightRef,
-    sidebarWidthRef,
     readStoredNumber: (key) => {
       if (key === 'editorWidth') return 320;
       if (key === 'dockHeight') return 220;

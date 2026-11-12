@@ -134,7 +134,6 @@ export function composeSidepanelActionOptions(input: ComposeSidepanelActionOptio
 
 interface ComposeBranchPaneActionOptionsInput {
   currentChatJid: string;
-  chatOnlyMode: boolean;
   navigate: (url: string, options?: Record<string, unknown>) => void;
   setWorkspaceOpen: StateSetter<boolean>;
   currentBranchRecord: any;
@@ -189,7 +188,6 @@ export function composeBranchPaneActionOptions(input: ComposeBranchPaneActionOpt
   return {
     setWorkspaceOpen: input.setWorkspaceOpen,
     currentChatJid: input.currentChatJid,
-    chatOnlyMode: input.chatOnlyMode,
     navigate: input.navigate,
     currentBranchRecord: input.currentBranchRecord,
     renameBranchInFlightRef: input.renameBranchInFlightRef,
@@ -242,7 +240,6 @@ export function composeBranchPaneActionOptions(input: ComposeBranchPaneActionOpt
 
 interface ComposeShortcutOptionsInput {
   hasDockPanes: boolean;
-  chatOnlyMode: boolean;
   toggleDock: () => void;
   toggleZenMode: () => void;
   exitZenMode: () => void;
@@ -254,7 +251,6 @@ interface ComposeShortcutOptionsInput {
 export function composeShortcutOptions(input: ComposeShortcutOptionsInput & { handleBranchPickerChange?: (nextChatJid: unknown) => void }) {
   return {
     hasDockPanes: input.hasDockPanes,
-    chatOnlyMode: input.chatOnlyMode,
     toggleDock: input.toggleDock,
     toggleZenMode: input.toggleZenMode,
     exitZenMode: input.exitZenMode,

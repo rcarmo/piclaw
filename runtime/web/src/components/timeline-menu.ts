@@ -21,7 +21,6 @@ import { useTranslation } from '../utils/i18n.js';
 export function TimelineMenu({
     workspaceOpen,
     toggleWorkspace,
-    chatOnlyMode,
     openEditor,
     onOpenTerminalTab,
     onOpenVncTab, onOpenCdpTab,
@@ -58,22 +57,22 @@ export function TimelineMenu({
         return () => { host.remove(); portalRef.current = null; };
     }, []);
 
-    // The menu sits in the sessions pane header when that pane is visible,
-    // otherwise at the top-left of the chat. The workspace tree is on the right.
+    // The menu sits at the top of the workbench activity bar when it is laid
+    // out (wide screens), otherwise at the top-left of the chat.
     const [inSessions, setInSessions] = useState(false);
     useEffect(() => {
         const update = () => {
             const safeTop = getSafeAreaTop();
             const topOffset = safeTop > 0 ? safeTop + 4 : 8;
-            const sessions = document.querySelector('.sessions-sidebar');
+            const sessions = document.querySelector('.workbench-sidebar');
             const r = sessions?.getBoundingClientRect?.();
-            const visible = Boolean(r && r.width >= 120 && getComputedStyle(sessions).display !== 'none');
+            const visible = Boolean(r && r.width >= 40 && getComputedStyle(sessions).display !== 'none' && getComputedStyle(sessions).position !== 'fixed');
             setInSessions(visible);
             setPos(visible ? { top: r.top + topOffset, left: r.left + 8 } : { top: topOffset, left: 8 });
         };
         update();
         const observer = new ResizeObserver(update);
-        const sessions = document.querySelector('.sessions-sidebar');
+        const sessions = document.querySelector('.workbench-sidebar');
         if (sessions) observer.observe(sessions);
         window.addEventListener('resize', update);
         window.addEventListener('piclaw:sessions-sidebar-toggle', update);
@@ -161,16 +160,6 @@ export function TimelineMenu({
 
     const run = useCallback((fn) => { setOpen(false); fn?.(); }, []);
 
-    const toggleChatOnly = useCallback(() => {
-        const url = new URL(window.location.href);
-        if (chatOnlyMode) {
-            url.searchParams.delete('chat_only');
-        } else {
-            url.searchParams.set('chat_only', '1');
-        }
-        window.location.href = url.toString();
-    }, [chatOnlyMode]);
-
     const content = html`
         <button ref=${btnRef} class=${`timeline-menu-btn${open ? ' active' : ''}`} data-testid="hamburger"
             onClick=${() => setOpen(v => !v)} title=${t('menu.title')} aria-label=${t('menu.title')}
@@ -187,14 +176,11 @@ export function TimelineMenu({
                 <button class="workspace-menu-item" role="menuitem" onClick=${() => run(toggleWorkspace)}>
                     ${workspaceOpen ? t('menu.hideWorkspace') : t('menu.showWorkspace')}
                 </button>
-                ${!workspaceOpen && !chatOnlyMode && html`
+                ${!workspaceOpen && html`
                     <button class="workspace-menu-item" role="menuitem" onClick=${() => run(() => { toggleWorkspace(); })}>
                         ${t('menu.openExplorer')}
                     </button>
                 `}
-                <button class=${`workspace-menu-item${chatOnlyMode ? ' active' : ''}`} role="menuitem" onClick=${() => run(toggleChatOnly)}>
-                    ${chatOnlyMode ? t('menu.exitChatOnly') : t('menu.chatOnly')}
-                </button>
 
                 ${(onOpenTerminalTab || onOpenVncTab || onOpenCdpTab) && html`<div class="workspace-menu-separator"></div>`}
                 ${onOpenTerminalTab && html`<button class="workspace-menu-item" role="menuitem" onClick=${() => run(onOpenTerminalTab)}>${t('menu.openTerminal')}</button>`}

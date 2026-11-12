@@ -7,17 +7,25 @@ The UI supports one user across multiple sessions and browser tabs. Family accou
 
 ## Layout
 
-On desktop screens (at least 1024 px wide, landscape), Classic shows the sessions pane on the left, the chat in the middle, then the file tree and the editor. The editor stays anchored to the right edge. Each pane has a divider that can be dragged or focused. Focused dividers respond to the arrow keys (Shift for larger steps), Home and End. Enter hides or shows the pane, and double-clicking a divider resets it.
+Classic uses a workbench layout. On desktop screens (at least 1024 px wide, landscape), an activity bar on the left selects the view shown in the side bar, the chat is in the middle, and editor and viewer tabs are on the right. Dividers can be dragged or focused. Focused dividers respond to the arrow keys (Shift for larger steps), Home and End. Enter hides or shows the pane, and double-clicking a divider resets it.
 
-- **Sessions:** current, pinned and other sessions, with search and pinning shared with the compose session picker. The global menu sits in its header. When space is short, the pane narrows, then hides itself without changing the saved preference; its edge tab shows it again. Ctrl/Cmd+Shift+B (configurable) shows or hides it.
-  - Each row shows the session's age or activity, its latest reply and, when known, its context use. The header counts active sessions.
-  - Other active sessions show their live draft, thinking or running tool, polled every 3 seconds. The list refreshes every 15 seconds and when the window regains focus, only while the pane is visible.
+- **Activity bar:** the global menu sits at the top, then **Sessions** and **Explorer**, then **Plan**, with **Settings** at the bottom. Clicking the active view hides the side bar; the activity bar stays. Ctrl/Cmd+Shift+B shows Sessions and Ctrl/Cmd+Shift+E shows the Explorer; pressing either again hides the side bar. Both shortcuts can be changed in Settings → Keyboard. When space is short, the side bar narrows, then hides itself without changing the saved preference.
+- **Sessions:** current, pinned and other sessions, with search and pinning shared with the compose session picker. The activity bar badge counts active sessions.
+  - Each row shows the session's age or activity, its latest reply and, when known, its context use.
+  - Other active sessions show their live draft, thinking or running tool, polled every 3 seconds. The list refreshes every 15 seconds and when the window regains focus, only while the Sessions view is visible.
   - Ctrl/Cmd-click or middle-click opens a session in a new tab.
-- **Chat:** keeps at least 320 px. The system meters appear in its top-right corner.
+  - The header has **New session**, **Fork the current session** and **Refresh**. Each row has a menu (right-click or its ⋯ button) with **Open in new tab**, **Open in new window** and **Archive**, plus **Rename…** and **Fork** on the current session.
+  - Archived sessions are listed in a collapsed **Archived** section with **Restore** and **Delete permanently**.
+- **Explorer:** the workspace file tree, rendered with [Pierre Trees](https://trees.software/) and loaded on first use. It has a filter box, file icons, keyboard navigation, folders that load as they are expanded, inline rename, drag-to-move and a context menu (right-click or the row's action button). Selecting a file opens it straight into the matching viewer or editor tab; there is no preview pane under the tree. The bar under the tree holds the selected item's actions, including add-on actions, and a **Folder sizes** chart that loads only when opened.
+- **Plan:** opens the current chat's plan as a tab in the editor area, with its progress, **Edit**, **Refresh**, **Reset** and **Submit to model**. It updates when the model changes the plan. Plans still need the plan-sidebar add-on for storage and the `plan` tool; its floating panel is not shown in Classic.
+- **Settings:** opens as a tab in the editor area, widened to 720 px when there is room, from the activity bar, the global menu, the keyboard shortcut or compose commands. Requests for a specific section switch the open tab to it.
+- **Chat:** keeps at least 320 px.
 - **Editor:** collapsing it keeps its tabs open.
-- **File tree:** shown or hidden with its edge tab, its divider or Ctrl/Cmd+Shift+E (configurable in Settings → Keyboard). Hiding it gives the space to the chat; the editor does not move.
+- **System meters:** always on. They sit at the foot of the side bar while it is visible, and in the status bar along the bottom of the window otherwise. Click them to collapse or expand.
 
-Below that width, the chat fills the screen. Sessions use the compose `@session` picker, and the file tree opens as a drawer from the right. On phones (under 640 px) an open editor covers the chat; **Chat** returns to the conversation and **Editor** brings the editor back.
+Below that width, the chat fills the screen and the side bar opens as a drawer from the left, for example from **Show workspace** in the global menu; the drawer has its own activity bar. On phones (under 640 px) an open editor covers the chat; **Chat** returns to the conversation and **Editor** brings the editor back. Phones have no status bar; the meters appear in the drawer.
+
+There is no separate chat-only mode. For an uncluttered chat, hide the side bar and close or collapse the editor. Pop-out chat windows start that way; each window keeps its own side bar and workspace state, and the shared setting is only the default for new windows.
 
 Add-ons that dock on the right edge can reserve space; see the [extension UI contract](extension-ui-contract.md#right-edge-docking).
 

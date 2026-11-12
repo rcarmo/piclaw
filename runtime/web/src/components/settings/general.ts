@@ -1,5 +1,4 @@
 import { html, useState, useEffect, useCallback, useMemo, useRef } from '../../vendor/preact-htm.js';
-import { METERS_EVENT_NAME, applyMetersEnabled, readStoredMetersEnabled } from '../../ui/meters.js';
 import { NumberStepper } from './number-stepper.js';
 import { useTranslation } from '../../utils/i18n.js';
 import { AboutVersions } from '../about-dialog.js';
@@ -66,7 +65,6 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
     const [assistantName, setAssistantName] = useState('');
     const [assistantAvatar, setAssistantAvatar] = useState('');
     const [workspaceUploadLimitMb, setWorkspaceUploadLimitMb] = useState(256);
-    const [metersEnabled, setMetersEnabled] = useState(() => readStoredMetersEnabled(false));
     const [appliedHint, setAppliedHint] = useState(false);
     const savedSnapshotRef = useRef('');
     const saveTimerRef = useRef(null);
@@ -90,14 +88,6 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
     useEffect(() => {
         applyIncoming(settingsData || {});
     }, [settingsData, applyIncoming]);
-
-    useEffect(() => {
-        const onMetersChange = (event) => {
-            setMetersEnabled(Boolean(event?.detail?.enabled));
-        };
-        window.addEventListener(METERS_EVENT_NAME, onMetersChange);
-        return () => window.removeEventListener(METERS_EVENT_NAME, onMetersChange);
-    }, []);
 
     const currentSnapshot = useMemo(() => JSON.stringify(normalizeGeneralSettings({
         userName, userAvatar, assistantName, assistantAvatar,
@@ -177,19 +167,6 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
                     </div>
                 </div>
             `}
-
-            <h3 style="margin-top:20px">${t('settings.general.display')}</h3>
-            <div class="settings-row">
-                <label for=${fieldId('meters')}>${t('settings.general.systemMeters')}</label>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <input id=${fieldId('meters')} type="checkbox" checked=${metersEnabled}
-                        onChange=${() => {
-                            const next = applyMetersEnabled(!metersEnabled);
-                            setMetersEnabled(next);
-                        }} />
-                    <span class="settings-hint" style="margin:0">${t('settings.general.systemMetersHint')}</span>
-                </div>
-            </div>
 
             <h3 style="margin-top:20px">${t('settings.general.instanceConfig')}</h3>
             <div class="settings-row">

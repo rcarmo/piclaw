@@ -32,7 +32,6 @@ interface BranchRecord {
 
 export interface CreateSessionFromComposeOptions {
   currentChatJid: string;
-  chatOnlyMode?: boolean;
   forkChatBranch: (chatJid: string) => Promise<{ branch?: BranchRecord | null }>;
   refreshActiveChatAgents?: () => Promise<unknown> | unknown;
   refreshCurrentChatBranches?: () => Promise<unknown> | unknown;
@@ -45,7 +44,6 @@ export interface CreateSessionFromComposeOptions {
 export async function createSessionFromCompose(options: CreateSessionFromComposeOptions): Promise<boolean> {
   const {
     currentChatJid,
-    chatOnlyMode,
     forkChatBranch,
     refreshActiveChatAgents,
     refreshCurrentChatBranches,
@@ -56,7 +54,7 @@ export async function createSessionFromCompose(options: CreateSessionFromCompose
 
   if (typeof navigate === 'function') {
     try {
-      const loaderUrl = buildBranchLoaderUrl(baseHref, currentChatJid, { chatOnly: chatOnlyMode });
+      const loaderUrl = buildBranchLoaderUrl(baseHref, currentChatJid);
       navigate(loaderUrl);
       return true;
     } catch (error) {
@@ -80,7 +78,7 @@ export async function createSessionFromCompose(options: CreateSessionFromCompose
 
     const label = branch?.agent_name ? `@${branch.agent_name}` : nextChatJid;
     showIntentToast?.('New branch created', `Switched to ${label}.`, 'info', 2500);
-    const url = buildChatWindowUrl(baseHref, nextChatJid, { chatOnly: chatOnlyMode });
+    const url = buildChatWindowUrl(baseHref, nextChatJid);
     navigate?.(url);
     return true;
   } catch (error) {
@@ -91,7 +89,6 @@ export async function createSessionFromCompose(options: CreateSessionFromCompose
 
 export interface CreateRootSessionFromComposeOptions {
   rootName: string;
-  chatOnlyMode?: boolean;
   createRootChatSession?: (agentName: string) => Promise<{ branch?: BranchRecord | null }>;
   refreshActiveChatAgents?: () => Promise<unknown> | unknown;
   refreshCurrentChatBranches?: () => Promise<unknown> | unknown;
@@ -104,7 +101,6 @@ export interface CreateRootSessionFromComposeOptions {
 export async function createRootSessionFromCompose(options: CreateRootSessionFromComposeOptions): Promise<boolean> {
   const {
     rootName,
-    chatOnlyMode,
     createRootChatSession,
     refreshActiveChatAgents,
     refreshCurrentChatBranches,
@@ -134,7 +130,7 @@ export async function createRootSessionFromCompose(options: CreateRootSessionFro
 
     const label = branch?.agent_name ? `@${branch.agent_name}` : nextChatJid;
     showIntentToast?.('Root session created', `Switched to ${label}.`, 'info', 2500);
-    const url = buildChatWindowUrl(baseHref, nextChatJid, { chatOnly: chatOnlyMode });
+    const url = buildChatWindowUrl(baseHref, nextChatJid);
     navigate?.(url);
     return true;
   } catch (error) {

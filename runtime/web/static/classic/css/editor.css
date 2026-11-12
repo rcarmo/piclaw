@@ -1189,7 +1189,7 @@ html[data-iphone-standalone-compose-inset="1"] .container {
     /* Keep the collapsing sidebar anchored at the start of the flex row.
        Centre only the chat in the remaining space; centring the entire row
        moves the sidebar right while its width is still animating to zero. */
-    .app-shell.workspace-collapsed:not(.editor-open):not(.chat-only):not(.pane-popout) > .container {
+    .app-shell.workspace-collapsed:not(.editor-open):not(.pane-popout) > .container {
         flex: 0 1 auto;
         width: min(100%, var(--chat-max-width, 900px));
         margin: 0 auto;

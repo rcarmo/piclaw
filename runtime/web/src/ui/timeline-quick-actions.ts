@@ -53,12 +53,6 @@ export const WORKSPACE_QUICK_ACTIONS_CATALOG: TimelineQuickActionWorkspaceComman
     keywords: ['workspace', 'explorer', 'sidebar'],
   },
   {
-    id: 'toggle-chat-only',
-    label: 'Chat-only mode',
-    description: 'Toggle chat-only mode.',
-    keywords: ['chat', 'mode', 'layout'],
-  },
-  {
     id: 'open-terminal-tab',
     label: 'Open terminal in tab',
     description: 'Open the terminal pane in a workspace tab.',

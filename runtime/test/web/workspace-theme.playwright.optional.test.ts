@@ -76,7 +76,9 @@ for (const engine of ["chromium", "webkit"])
               Boolean((window as any).workspaceTheme),
             );
             if (skin === "classic") {
-              await page.locator('.workspace-row[data-path="src"]').click();
+              await page.locator('[data-item-path="src/"]').click();
+              // Folder sizes load on demand from the selection bar disclosure.
+              await page.locator(".workspace-folder-sizes > summary").click();
               await page
                 .locator(".workspace-folder-starburst-segment")
                 .first()
@@ -103,7 +105,7 @@ for (const engine of ["chromium", "webkit"])
                 : ".workspace__sunburst path";
             const selected =
               skin === "classic"
-                ? ".workspace-row.selected"
+                ? '[data-item-path][aria-selected="true"]'
                 : ".file-tree__item--selected";
             const initialCalls = await page.evaluate(
               () =>
@@ -220,7 +222,7 @@ for (const engine of ["chromium", "webkit"])
             });
             expect(
               await page
-                .locator(".file-tree__item--selected, .workspace-row.selected")
+                .locator('.file-tree__item--selected, [data-item-path][aria-selected="true"]')
                 .evaluate((e) => getComputedStyle(e).backgroundColor),
             ).not.toBe("rgba(0, 0, 0, 0)");
             expect(

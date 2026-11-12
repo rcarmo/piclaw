@@ -16,7 +16,7 @@ test("native catalogue classifies every core command and preserves registered al
   const catalogue = getNativeCommandCatalogue(port);
   for (const command of catalogue) {
     expect(["native", "web input", "web UI", "unavailable"]).toContain(command.status);
-    if (!command.type) expect(["/theme", "/settings", "/meters"]).toContain(command.name);
+    if (!command.type) expect(["/theme", "/settings"]).toContain(command.name);
     for (const alias of [command.name.replace(/-/g, "_"), ...(command.aliases ?? [])])
       expect(parseControlCommand(alias)?.type ?? null).toBe(command.type);
   }

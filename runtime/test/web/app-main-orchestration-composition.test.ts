@@ -43,7 +43,6 @@ test('composeMainAppLifecycleCompositionOptions forwards model bootstrap setters
     routeState: {
       currentChatJid: 'chat-1',
       currentRootChatJid: 'root-1',
-      chatOnlyMode: false,
       navigate: noop,
       branchLoaderMode: false,
       branchLoaderSourceChatJid: 'chat-1',

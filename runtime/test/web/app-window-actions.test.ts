@@ -27,7 +27,6 @@ test('createSessionFromCompose navigates immediately to the branch-loader route'
 
   const created = await createSessionFromCompose({
     currentChatJid: 'web:root',
-    chatOnlyMode: true,
     forkChatBranch: async () => {
       forkCalls += 1;
       return { branch: { chat_jid: 'web:new', agent_name: 'feature' } };
@@ -56,7 +55,6 @@ test('createRootSessionFromCompose creates and navigates to an independent root'
 
   const created = await createRootSessionFromCompose({
     rootName: 'Ops Room',
-    chatOnlyMode: true,
     createRootChatSession: async (agentName: string) => {
       expect(agentName).toBe('Ops Room');
       return { branch: { chat_jid: 'web:ops-room', agent_name: 'ops-room' } };
@@ -73,7 +71,7 @@ test('createRootSessionFromCompose creates and navigates to an independent root'
   expect(created).toBe(true);
   expect(refreshes.sort()).toEqual(['active', 'branches']);
   expect(toasts).toContainEqual(['Root session created', 'Switched to @ops-room.', 'info', 2500]);
-  expect(navigateCalls[0]).toBe('https://example.test/?chat_jid=web%3Aops-room&chat_only=1');
+  expect(navigateCalls[0]).toBe('https://example.test/?chat_jid=web%3Aops-room');
 });
 
 test('createRootSessionFromCompose falls back to the API helper when the injected service is missing', async () => {
@@ -93,7 +91,6 @@ test('createRootSessionFromCompose falls back to the API helper when the injecte
 
   const created = await createRootSessionFromCompose({
     rootName: 'API Root',
-    chatOnlyMode: false,
     refreshActiveChatAgents: async () => {},
     refreshCurrentChatBranches: async () => {},
     navigate: (url: string) => navigateCalls.push(url),

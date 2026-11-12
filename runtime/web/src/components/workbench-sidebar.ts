@@ -1,14 +1,16 @@
 // @ts-nocheck
 /**
- * sessions-sidebar.ts — Classic left sessions pane (#1987).
+ * workbench-sidebar.ts — Classic workbench side bar.
  *
- * Desktop-only list of the current, pinned and other sessions. It reuses the
- * compose session picker's grouping, search and pin preferences so both
- * surfaces stay in sync. Narrow layouts keep using the compose @session picker.
+ * A Visual-style activity bar selects one view at a time: Sessions or the
+ * workspace Explorer. Clicking the active view's icon collapses the side bar;
+ * the activity bar stays. On narrow screens the side bar is a drawer from the
+ * left. The system meters sit at the foot of the side bar while it is shown.
  *
- * Rows carry the session-dashboard add-on's summaries: activity state, a live
- * draft/thinking/tool preview for other active sessions, the latest reply and
- * its age, and context use. Data refreshes only while the pane is visible.
+ * Sessions reuses the compose picker's grouping, search and pin preferences,
+ * and carries the session-dashboard summaries: activity state, live previews
+ * for other active sessions, the latest reply and its age, and context use.
+ * Session data refreshes only while the Sessions view is visible.
  */
 import { html, useCallback, useEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
 import { resolveSessionPopupChats } from './compose-box.js';
@@ -21,6 +23,8 @@ import {
 } from '../ui/session-picker-preferences.js';
 import { getLocalStorageItem, setLocalStorageItem } from '../utils/storage.js';
 import { getShellWidth, occupiedPaneWidth } from '../ui/use-splitters.js';
+import { SystemMetersHud } from './system-meters-hud.js';
+import { WINDOW_SIDEBAR_OPEN_STORAGE_KEY, persistWindowScopedPreference, readWindowScopedPreference } from '../ui/workspace-visibility.js';
 import { buildChatWindowUrl } from '../ui/chat-window.js';
 import { matchesKeyboardShortcutAction } from '../ui/keyboard-shortcuts.js';
 import {
@@ -37,6 +41,10 @@ export const SESSIONS_WIDTH_STORAGE_KEY = 'sessionsWidth';
 export const SESSIONS_DEFAULT_WIDTH = 260;
 export const SESSIONS_MIN_WIDTH = 200;
 export const SESSIONS_MAX_WIDTH = 420;
+/** Width of the always-visible activity bar on wide screens. */
+export const ACTIVITY_BAR_WIDTH = 48;
+export const WORKBENCH_TOGGLE_EVENT = 'piclaw:sessions-sidebar-toggle';
+const WIDE_LAYOUT_QUERY = '(min-width: 1024px) and (orientation: landscape)';
 const KEYBOARD_STEP = 16;
 const KEYBOARD_LARGE_STEP = 64;
 /** Session list and reply refresh while the pane is visible. */
@@ -46,8 +54,9 @@ export const SESSIONS_PREVIEW_INTERVAL_MS = 3000;
 /** At most this many other active sessions are polled for live previews. */
 export const SESSIONS_PREVIEW_LIMIT = 8;
 
+/** This window's side bar state; the shared value is the default for new windows. */
 export function readStoredSessionsOpen(): boolean {
-  return getLocalStorageItem(SESSIONS_OPEN_STORAGE_KEY) !== 'false';
+  return readWindowScopedPreference(WINDOW_SIDEBAR_OPEN_STORAGE_KEY, SESSIONS_OPEN_STORAGE_KEY, true);
 }
 
 export function clampSessionsWidth(width: unknown, maxWidth = SESSIONS_MAX_WIDTH): number {
@@ -62,6 +71,13 @@ export function readStoredSessionsWidth(): number {
 }
 
 /** Sidebar sections: the same groups as the compose session picker, without archived sessions. */
+/** Archived sessions, newest first, filtered with the same search as the other sections. */
+export function buildArchivedSessions(activeChatAgents, currentChatJid, query = '') {
+  const archived = resolveSessionPopupChats(activeChatAgents, currentChatJid).filter((chat) => chat?.archived_at);
+  return filterSessionPickerChats(archived, query)
+    .sort((a, b) => String(b.archived_at).localeCompare(String(a.archived_at)));
+}
+
 export function buildSessionsSidebarSections(activeChatAgents, currentChatJid, pinnedChatJids, query = '') {
   const chats = resolveSessionPopupChats(activeChatAgents, currentChatJid).filter((chat) => !chat?.archived_at);
   return groupSessionPickerChats(filterSessionPickerChats(chats, query), currentChatJid, pinnedChatJids)
@@ -100,11 +116,45 @@ function samePreviews(left, right): boolean {
  * Width available to the sessions pane beside the chat minimum and the
  * right-hand panes. Below SESSIONS_MIN_WIDTH the pane hides itself.
  */
-export function availableSessionsWidth({ viewportWidth, rightPanesWidth, chatMinWidth = 320, splitterWidth = 4 }) {
-  return Math.floor(viewportWidth - rightPanesWidth - splitterWidth - chatMinWidth);
+export function availableSessionsWidth({ viewportWidth, rightPanesWidth, chatMinWidth = 320, splitterWidth = 4, activityBarWidth = ACTIVITY_BAR_WIDTH }) {
+  return Math.floor(viewportWidth - rightPanesWidth - splitterWidth - chatMinWidth - activityBarWidth);
 }
 
-export function SessionsSidebar({
+export type WorkbenchView = 'sessions' | 'explorer';
+
+/** Initial view: the Explorer when the workspace is already open, otherwise Sessions. */
+export function resolveInitialWorkbenchView(workspaceOpen: boolean): WorkbenchView {
+  return workspaceOpen ? 'explorer' : 'sessions';
+}
+
+function readWideLayout(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia(WIDE_LAYOUT_QUERY).matches
+    : true;
+}
+
+const ACTIVITY_ICONS = {
+  sessions: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><path d="M8 9h8M8 13h5" /></svg>`,
+  explorer: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V7z" /><path d="M14 3v4h4" /><path d="M9 21h9a2 2 0 0 0 2-2V9" /></svg>`,
+  plan: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11" /><path d="m3.5 6 1.2 1.2L7 5" /><path d="m3.5 12 1.2 1.2L7 11" /><circle cx="5" cy="18" r="1.4" /></svg>`,
+  settings: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>`,
+};
+
+const SESSION_ICONS = {
+  add: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>`,
+  fork: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5" r="2" /><circle cx="18" cy="5" r="2" /><circle cx="12" cy="19" r="2" /><path d="M6 7v2a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V7M12 12v5" /></svg>`,
+  refresh: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8" /><path d="M21 3v5h-5" /></svg>`,
+  more: html`<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></svg>`,
+  restore: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></svg>`,
+  trash: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></svg>`,
+};
+
+const WORKBENCH_VIEWS: Array<{ id: WorkbenchView; label: string }> = [
+  { id: 'sessions', label: 'Sessions' },
+  { id: 'explorer', label: 'Explorer' },
+];
+
+export function WorkbenchSidebar({
   activeChatAgents,
   currentChatJid,
   onSwitchChat,
@@ -112,14 +162,25 @@ export function SessionsSidebar({
   chatMinWidth = 320,
   onRefreshSessions = null,
   loadSessionStatus = fetchSessionStatus,
+  explorer = null,
+  workspaceOpen = false,
+  setWorkspaceVisible = null,
+  onOpenSettings = null,
+  onOpenPlan = null,
+  sessionActions = null,
 }) {
   const [storedOpen, setOpen] = useState(readStoredSessionsOpen);
+  const [view, setView] = useState(() => resolveInitialWorkbenchView(workspaceOpen));
+  const [wide, setWide] = useState(readWideLayout);
+  const [drawerOpen, setDrawerOpen] = useState(() => !readWideLayout() && workspaceOpen);
   // When the window cannot fit sessions, chat and the right-hand panes, hide
   // sessions first without changing the saved preference. Showing them again
   // explicitly overrides this until the layout changes.
   const [autoHidden, setAutoHidden] = useState(false);
   const [override, setOverride] = useState(false);
   const open = storedOpen && (!autoHidden || override);
+  // Shown: the view host is visible (desktop side bar or narrow drawer).
+  const shown = wide ? open : drawerOpen;
   const [query, setQuery] = useState('');
   const [pinned, setPinned] = useState(() => readSessionPickerPreferences().pinnedChatJids);
   // widthRef is the saved preference; the rendered width may be narrower when space is short.
@@ -144,7 +205,7 @@ export function SessionsSidebar({
   const applyWidth = useCallback((width) => {
     widthRef.current = width;
     const rendered = Math.max(SESSIONS_MIN_WIDTH, Math.min(width, availableRef.current));
-    appShellRef?.current?.style?.setProperty('--sessions-width', `${rendered}px`);
+    appShellRef?.current?.style?.setProperty('--workbench-sidebar-width', `${rendered}px`);
     const splitter = splitterRef.current;
     if (splitter) splitter.setAttribute('aria-valuenow', String(open ? rendered : 0));
   }, [appShellRef, open]);
@@ -154,21 +215,20 @@ export function SessionsSidebar({
   const setOpenPersisted = useCallback((next) => {
     setOpen(next);
     setOverride(Boolean(next) && autoHidden);
-    setLocalStorageItem(SESSIONS_OPEN_STORAGE_KEY, String(next));
-    window.dispatchEvent(new CustomEvent('piclaw:sessions-sidebar-toggle', { detail: { open: next } }));
+    persistWindowScopedPreference(WINDOW_SIDEBAR_OPEN_STORAGE_KEY, SESSIONS_OPEN_STORAGE_KEY, Boolean(next));
   }, [autoHidden]);
 
   const rightPanesWidth = useCallback(() => {
     const shell = appShellRef?.current;
     if (!shell) return 0;
-    return ['.editor-pane-container', '.editor-splitter', '.workspace-sidebar', '.workspace-splitter']
+    return ['.editor-pane-container', '.editor-splitter']
       .reduce((sum, selector) => sum + occupiedPaneWidth(shell, selector), 0);
   }, [appShellRef]);
 
   const maxWidth = useCallback(() => {
     const viewport = appShellRef?.current ? getShellWidth(appShellRef.current) : 0;
     if (!viewport) return SESSIONS_MAX_WIDTH;
-    return viewport - rightPanesWidth() - chatMinWidth - 8;
+    return viewport - rightPanesWidth() - chatMinWidth - ACTIVITY_BAR_WIDTH - 8;
   }, [appShellRef, chatMinWidth, rightPanesWidth]);
 
   useEffect(() => {
@@ -212,10 +272,57 @@ export function SessionsSidebar({
   }, [appShellRef, applyWidth, chatMinWidth, rightPanesWidth]);
 
   useEffect(() => {
-    // Right-hand panes keep room for the sessions pane at its minimum while it is shown.
-    appShellRef?.current?.style?.setProperty('--sessions-reserved', open ? `${SESSIONS_MIN_WIDTH + 4}px` : '0px');
-    window.dispatchEvent(new CustomEvent('piclaw:sessions-sidebar-toggle', { detail: { open } }));
-  }, [appShellRef, open]);
+    // Right-hand panes keep room for the activity bar, and for the side bar at its minimum while it is open.
+    const reserved = wide ? ACTIVITY_BAR_WIDTH + (open ? SESSIONS_MIN_WIDTH + 4 : 0) : 0;
+    appShellRef?.current?.style?.setProperty('--workbench-reserved', `${reserved}px`);
+    appShellRef?.current?.setAttribute?.('data-workbench-sidebar', shown ? 'shown' : 'hidden');
+    window.dispatchEvent(new CustomEvent(WORKBENCH_TOGGLE_EVENT, { detail: { open: shown, view } }));
+  }, [appShellRef, open, shown, view, wide]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    const query = window.matchMedia(WIDE_LAYOUT_QUERY);
+    const sync = () => {
+      setWide(query.matches);
+      if (query.matches) setDrawerOpen(false);
+    };
+    query.addEventListener?.('change', sync);
+    return () => query.removeEventListener?.('change', sync);
+  }, []);
+
+  const setShown = useCallback((next: boolean) => {
+    if (wide) setOpenPersisted(next);
+    else setDrawerOpen(next);
+  }, [setOpenPersisted, wide]);
+
+  // The workspace explorer is visible exactly when the Explorer view is shown.
+  // Keep the app's workspaceOpen state in step with the side bar, and follow
+  // external toggles (file-tree shortcut, timeline menu, quick actions).
+  const previousRef = useRef({ workspaceOpen, shown, view });
+  useEffect(() => {
+    const previous = previousRef.current;
+    previousRef.current = { workspaceOpen, shown, view };
+    if (workspaceOpen !== previous.workspaceOpen) {
+      if (workspaceOpen) {
+        if (view !== 'explorer') setView('explorer');
+        if (!shown) setShown(true);
+      } else if (view === 'explorer' && shown) {
+        setShown(false);
+      }
+      return;
+    }
+    const explorerShown = shown && view === 'explorer';
+    if (explorerShown !== workspaceOpen) setWorkspaceVisible?.(explorerShown);
+  }, [setShown, setView, setWorkspaceVisible, shown, view, workspaceOpen]);
+
+  const selectView = useCallback((next: WorkbenchView) => {
+    if (shown && view === next) {
+      setShown(false);
+      return;
+    }
+    setView(next);
+    if (!shown) setShown(true);
+  }, [setShown, setView, shown, view]);
 
   const resizeTo = useCallback((raw, persist = true) => {
     if (raw < SESSIONS_MIN_WIDTH * 0.55) {
@@ -235,7 +342,7 @@ export function SessionsSidebar({
     const shell = appShellRef?.current;
     splitter.setPointerCapture?.(event.pointerId);
     splitter.classList.add('dragging');
-    shell?.classList.add('sessions-resizing');
+    shell?.classList.add('workbench-resizing');
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
     const startX = event.clientX;
@@ -250,7 +357,7 @@ export function SessionsSidebar({
     };
     const onUp = () => {
       splitter.classList.remove('dragging');
-      shell?.classList.remove('sessions-resizing');
+      shell?.classList.remove('workbench-resizing');
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
       splitter.removeEventListener('pointermove', onMove);
@@ -277,14 +384,15 @@ export function SessionsSidebar({
 
   const onSplitterDoubleClick = useCallback(() => resizeTo(SESSIONS_DEFAULT_WIDTH), [resizeTo]);
 
-  // Shown means expanded, laid out (desktop) and in a visible tab.
+  // Sessions data refreshes only while the Sessions view is laid out in a visible tab.
+  const sessionsVisible = shown && view === 'sessions';
   const isShown = useCallback(() => {
-    if (!open || typeof document === 'undefined' || document.visibilityState === 'hidden') return false;
+    if (!sessionsVisible || typeof document === 'undefined' || document.visibilityState === 'hidden') return false;
     return Boolean(asideRef.current?.getClientRects?.().length);
-  }, [open]);
+  }, [sessionsVisible]);
 
   useEffect(() => {
-    if (!open || typeof window === 'undefined') return undefined;
+    if (!sessionsVisible || typeof window === 'undefined') return undefined;
     const refresh = () => {
       if (!isShown()) return;
       setNow(Date.now());
@@ -299,7 +407,7 @@ export function SessionsSidebar({
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [isShown, onRefreshSessions, open]);
+  }, [isShown, onRefreshSessions, sessionsVisible]);
 
   const previewTargets = useMemo(
     () => selectSessionsPreviewTargets(activeChatAgents, currentChatJid),
@@ -309,7 +417,7 @@ export function SessionsSidebar({
 
   useEffect(() => {
     const targets = previewTargetsKey ? previewTargetsKey.split('\n') : [];
-    if (!open || targets.length === 0) {
+    if (!sessionsVisible || targets.length === 0) {
       retainedPreviewsRef.current = new Map();
       setPreviews((previous) => (previous.size ? new Map() : previous));
       return undefined;
@@ -355,9 +463,9 @@ export function SessionsSidebar({
       cancelled = true;
       clearInterval(timer);
     };
-  }, [isShown, loadSessionStatus, open, previewTargetsKey]);
+  }, [isShown, loadSessionStatus, previewTargetsKey, sessionsVisible]);
 
-  // Configurable toggle (default Ctrl/Cmd+Shift+B); only where the pane can show.
+  // Configurable toggle (default Ctrl/Cmd+Shift+B) for the Sessions view.
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
     const onKeyDown = (event) => {
@@ -366,16 +474,47 @@ export function SessionsSidebar({
       const aside = asideRef.current;
       if (!aside || getComputedStyle(aside).display === 'none') return;
       event.preventDefault();
-      setOpenPersisted(!open);
+      selectView('sessions');
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, setOpenPersisted]);
+  }, [selectView]);
+
+  // Row menu (right-click or the row's ⋯ button) and header actions.
+  const [menuFor, setMenuFor] = useState(null);
+  const menuForRef = useRef(null);
+  menuForRef.current = menuFor;
+  // Registered once so a key or click right after opening is never missed.
+  // Window capture runs before other Escape handlers (zen mode, dialogs) can stop it.
+  useEffect(() => {
+    const close = (event) => {
+      if (!menuForRef.current) return;
+      if (event.type === 'keydown' && event.key !== 'Escape') return;
+      if (event.type === 'pointerdown' && event.target?.closest?.('.sessions-row-menu, .sessions-sidebar-more')) return;
+      setMenuFor(null);
+    };
+    window.addEventListener('pointerdown', close, true);
+    window.addEventListener('keydown', close, true);
+    return () => {
+      window.removeEventListener('pointerdown', close, true);
+      window.removeEventListener('keydown', close, true);
+    };
+  }, []);
+
+  const runMenu = useCallback((action) => {
+    setMenuFor(null);
+    void action?.();
+  }, []);
+
+  const createRootSession = useCallback(() => {
+    const name = window.prompt('Name for the new session');
+    if (name && name.trim()) void sessionActions?.createRoot?.(name.trim());
+  }, [sessionActions]);
 
   const openSession = useCallback((event, jid, current) => {
     if (isNewTabSessionClick(event)) {
       event.preventDefault();
-      window.open(buildChatWindowUrl(window.location.href, jid, { chatOnly: false }), '_blank', 'noopener');
+      window.open(buildChatWindowUrl(window.location.href, jid), '_blank', 'noopener');
       return;
     }
     if (event.button === 0 && !current) onSwitchChat?.(jid);
@@ -386,6 +525,10 @@ export function SessionsSidebar({
     [activeChatAgents, currentChatJid, pinned, query],
   );
   const pinnedSet = useMemo(() => new Set(pinned), [pinned]);
+  const archived = useMemo(
+    () => buildArchivedSessions(activeChatAgents, currentChatJid, query),
+    [activeChatAgents, currentChatJid, query],
+  );
   const total = sections.reduce((sum, section) => sum + section.items.length, 0);
   const activeCount = useMemo(
     () => resolveSessionPopupChats(activeChatAgents, currentChatJid).filter((chat) => chat?.is_active && !chat?.archived_at).length,
@@ -393,13 +536,46 @@ export function SessionsSidebar({
   );
 
   return html`
-    <aside ref=${asideRef} class=${`sessions-sidebar${open ? '' : ' collapsed'}`} aria-label="Sessions" aria-hidden=${open ? undefined : 'true'} inert=${open ? undefined : true}>
+    <aside ref=${asideRef} class=${`workbench-sidebar${shown ? '' : ' collapsed'}${wide ? '' : ' drawer'}`} data-view=${view} aria-label="Side bar">
+      <nav class="workbench-activity-bar" role="tablist" aria-orientation="vertical" aria-label="Views">
+        ${WORKBENCH_VIEWS.map((item) => html`
+          <button
+            key=${item.id}
+            type="button"
+            role="tab"
+            class=${`workbench-activity-button${view === item.id && shown ? ' is-active' : ''}`}
+            aria-selected=${view === item.id && shown ? 'true' : 'false'}
+            aria-controls=${`workbench-view-${item.id}`}
+            title=${item.id === 'explorer' ? `${item.label} (Ctrl/Cmd+Shift+E)` : `${item.label} (Ctrl/Cmd+Shift+B)`}
+            aria-label=${item.label}
+            onClick=${() => selectView(item.id)}
+          >
+            ${ACTIVITY_ICONS[item.id]}
+            ${item.id === 'sessions' && activeCount > 0 && html`<span class="workbench-activity-badge" aria-label=${`${activeCount} active`}>${activeCount}</span>`}
+          </button>
+        `)}
+        ${onOpenPlan && html`
+          <button type="button" class="workbench-activity-button workbench-activity-plan" title="Plan — opens in the editor area" aria-label="Plan" onClick=${() => onOpenPlan()}>
+            ${ACTIVITY_ICONS.plan}
+          </button>
+        `}
+        <span class="workbench-activity-spacer"></span>
+        ${onOpenSettings && html`
+          <button type="button" class="workbench-activity-button workbench-activity-settings" title="Settings" aria-label="Settings" onClick=${() => onOpenSettings()}>
+            ${ACTIVITY_ICONS.settings}
+          </button>
+        `}
+      </nav>
+      <div class="workbench-view-host" aria-hidden=${shown ? undefined : 'true'} inert=${shown ? undefined : true}>
+      <section id="workbench-view-sessions" class="workbench-view workbench-view-sessions" role="tabpanel" aria-label="Sessions" hidden=${view !== 'sessions'}>
       <div class="sessions-sidebar-header">
         <span class="sessions-sidebar-title">Sessions</span>
         ${activeCount > 0 && html`<span class="sessions-sidebar-active-count" title=${`${activeCount} active`}>${activeCount} active</span>`}
-        <button type="button" class="sessions-sidebar-collapse" onClick=${() => setOpenPersisted(false)} title="Hide sessions" aria-label="Hide sessions">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="10 3 5 8 10 13" /></svg>
-        </button>
+        <span class="sessions-sidebar-toolbar">
+          ${sessionActions?.createRoot && html`<button type="button" class="sessions-sidebar-tool" title="New session" aria-label="New session" onClick=${createRootSession}>${SESSION_ICONS.add}</button>`}
+          ${sessionActions?.fork && html`<button type="button" class="sessions-sidebar-tool" title="Fork the current session" aria-label="Fork the current session" onClick=${() => void sessionActions.fork()}>${SESSION_ICONS.fork}</button>`}
+          ${onRefreshSessions && html`<button type="button" class="sessions-sidebar-tool" title="Refresh sessions" aria-label="Refresh sessions" onClick=${() => { setNow(Date.now()); onRefreshSessions(); }}>${SESSION_ICONS.refresh}</button>`}
+        </span>
       </div>
       <label class="sessions-sidebar-search">
         <span class="sessions-sidebar-sr-only">Search sessions</span>
@@ -425,7 +601,8 @@ export function SessionsSidebar({
                 const reply = live ? '' : cleanSessionPreviewText(chat.last_reply);
                 const contextPercent = resolveSessionContextPercent(chat);
                 return html`
-                  <li key=${jid} class=${`sessions-sidebar-item${current ? ' current' : ''}${chat.is_active ? ' active' : ''}`}>
+                  <li key=${jid} class=${`sessions-sidebar-item${current ? ' current' : ''}${chat.is_active ? ' active' : ''}${menuFor === jid ? ' menu-open' : ''}`}
+                    onContextMenu=${(event) => { if (!sessionActions) return; event.preventDefault(); setMenuFor(jid); }}>
                     <button type="button" class="sessions-sidebar-open" title=${`${jid} — Ctrl/Cmd-click opens a new tab`} aria-current=${current ? 'page' : undefined}
                       onClick=${(event) => openSession(event, jid, current)}
                       onAuxClick=${(event) => { if (event.button === 1) openSession(event, jid, current); }}>
@@ -444,33 +621,72 @@ export function SessionsSidebar({
                       onClick=${() => setPinned(togglePinnedSessionChatJid(jid).pinnedChatJids)}>
                       <svg viewBox="0 0 24 24" fill=${isPinned ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6l-1 6 4 4H6l4-4z" /><path d="M12 13v8" /></svg>
                     </button>
+                    ${sessionActions && html`
+                      <button type="button" class="sessions-sidebar-more" aria-haspopup="menu" aria-expanded=${menuFor === jid ? 'true' : 'false'}
+                        title=${`Actions for ${handleLabel}`} aria-label=${`Actions for ${handleLabel}`}
+                        onClick=${() => setMenuFor(menuFor === jid ? null : jid)}>${SESSION_ICONS.more}</button>
+                    `}
+                    ${menuFor === jid && html`
+                      <div class="sessions-row-menu workspace-menu-dropdown" role="menu" aria-label=${`Actions for ${handleLabel}`}>
+                        <button type="button" class="workspace-menu-item" role="menuitem" onClick=${() => runMenu(() => window.open(buildChatWindowUrl(window.location.href, jid), '_blank', 'noopener'))}>Open in new tab</button>
+                        <button type="button" class="workspace-menu-item" role="menuitem" onClick=${() => runMenu(() => window.open(buildChatWindowUrl(window.location.href, jid, { chatOnly: true }), '_blank', 'noopener,popup'))}>Open in new window</button>
+                        ${current && sessionActions.rename && html`<button type="button" class="workspace-menu-item" role="menuitem" onClick=${() => runMenu(sessionActions.rename)}>Rename…</button>`}
+                        ${current && sessionActions.fork && html`<button type="button" class="workspace-menu-item" role="menuitem" onClick=${() => runMenu(sessionActions.fork)}>Fork</button>`}
+                        ${sessionActions.archive && html`<button type="button" class="workspace-menu-item danger" role="menuitem" onClick=${() => runMenu(() => sessionActions.archive(jid))}>Archive</button>`}
+                      </div>
+                    `}
                   </li>
                 `;
               })}
             </ul>
           </section>
         `)}
+        ${archived.length > 0 && html`
+          <details class="sessions-sidebar-section sessions-sidebar-section-archived">
+            <summary class="sessions-sidebar-section-heading">Archived (${archived.length})</summary>
+            <ul class="sessions-sidebar-items">
+              ${archived.map((chat) => {
+                const jid = chat.chat_jid;
+                const handle = normalizeHandle(chat.agent_name) || jid;
+                const handleLabel = handle.startsWith('@') ? handle : `@${handle}`;
+                return html`
+                  <li key=${jid} class="sessions-sidebar-item archived">
+                    <button type="button" class="sessions-sidebar-open" title=${jid} onClick=${(event) => openSession(event, jid, jid === currentChatJid)}>
+                      <span class="sessions-sidebar-line"><span class="sessions-sidebar-handle">${handleLabel}</span></span>
+                    </button>
+                    ${sessionActions?.restore && html`<button type="button" class="sessions-sidebar-tool" title=${`Restore ${handleLabel}`} aria-label=${`Restore ${handleLabel}`} onClick=${() => void sessionActions.restore(jid)}>${SESSION_ICONS.restore}</button>`}
+                    ${sessionActions?.purge && html`<button type="button" class="sessions-sidebar-tool danger" title=${`Delete ${handleLabel} permanently`} aria-label=${`Delete ${handleLabel} permanently`} onClick=${() => void sessionActions.purge(jid)}>${SESSION_ICONS.trash}</button>`}
+                  </li>
+                `;
+              })}
+            </ul>
+          </details>
+        `}
       </nav>
+      </section>
+      <section id="workbench-view-explorer" class="workbench-view workbench-view-explorer" role="tabpanel" aria-label="Explorer" hidden=${view !== 'explorer'}>
+        ${explorer}
+      </section>
+      ${shown && html`<footer class="workbench-sidebar-footer"><${SystemMetersHud} mode="sidebar" /></footer>`}
+      </div>
     </aside>
-    <div
-      ref=${splitterRef}
-      class=${`sessions-splitter${open ? '' : ' at-edge'}`}
-      role="separator"
-      aria-orientation="vertical"
-      aria-label="Resize sessions"
-      aria-valuemin="0"
-      aria-valuemax=${SESSIONS_MAX_WIDTH}
-      aria-valuenow=${open ? widthRef.current : 0}
-      tabIndex="0"
-      title="Drag to resize sessions; Enter to show or hide"
-      onPointerDown=${onPointerDown}
-      onKeyDown=${onSplitterKeyDown}
-      onDblClick=${onSplitterDoubleClick}
-    ></div>
-    ${!open && html`
-      <button type="button" class="sessions-toggle-tab" onClick=${() => setOpenPersisted(true)} title="Show sessions" aria-label="Show sessions" aria-expanded="false">
-        <svg class="sessions-toggle-tab-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 3 11 8 6 13" /></svg>
-      </button>
+    ${wide && html`
+      <div
+        ref=${splitterRef}
+        class=${`workbench-splitter${open ? '' : ' at-edge'}`}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize side bar"
+        aria-valuemin="0"
+        aria-valuemax=${SESSIONS_MAX_WIDTH}
+        aria-valuenow=${open ? widthRef.current : 0}
+        tabIndex="0"
+        title="Drag to resize the side bar; Enter to show or hide"
+        onPointerDown=${onPointerDown}
+        onKeyDown=${onSplitterKeyDown}
+        onDblClick=${onSplitterDoubleClick}
+      ></div>
     `}
+    ${!wide && drawerOpen && html`<div class="workbench-drawer-backdrop" aria-hidden="true" onClick=${() => setShown(false)}></div>`}
   `;
 }

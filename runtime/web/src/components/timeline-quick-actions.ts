@@ -51,16 +51,6 @@ export function shouldOpenTimelineQuickActionsFromKeyEvent(event) {
     return !matchesShortcut;
 }
 
-function toggleChatOnlyMode(chatOnlyMode) {
-    const url = new URL(window.location.href);
-    if (chatOnlyMode) {
-        url.searchParams.delete('chat_only');
-    } else {
-        url.searchParams.set('chat_only', '1');
-    }
-    window.location.href = url.toString();
-}
-
 function buildWorkspaceCommands(options) {
     const commands = [];
     const byId = new Map(WORKSPACE_QUICK_ACTIONS_CATALOG.map((entry) => [entry.id, entry]));
@@ -74,13 +64,9 @@ function buildWorkspaceCommands(options) {
         label: options.workspaceOpen ? t('palette.hideWorkspace') : t('palette.showWorkspace'),
         description: options.workspaceOpen ? t('palette.hideWorkspaceDesc') : t('palette.showWorkspaceDesc'),
     });
-    if (!options.workspaceOpen && !options.chatOnlyMode) {
+    if (!options.workspaceOpen) {
         add('open-explorer');
     }
-    add('toggle-chat-only', {
-        label: options.chatOnlyMode ? t('palette.exitChatOnly') : t('palette.chatOnly'),
-        description: options.chatOnlyMode ? t('palette.exitChatOnlyDesc') : t('palette.chatOnlyDesc'),
-    });
     if (typeof options.onOpenTerminalTab === 'function') add('open-terminal-tab');
     if (typeof options.onOpenVncTab === 'function') add('open-vnc-tab');
     add('open-settings');
@@ -127,7 +113,6 @@ export function TimelineQuickActions({
     activeChatAgents = [],
     currentChatJid = 'web:default',
     workspaceOpen = false,
-    chatOnlyMode = false,
     onSwitchChat,
     onToggleWorkspace,
     onOpenTerminalTab,
@@ -173,10 +158,9 @@ export function TimelineQuickActions({
 
     const workspaceCommands = useMemo(() => buildWorkspaceCommands({
         workspaceOpen,
-        chatOnlyMode,
         onOpenTerminalTab,
         onOpenVncTab,
-    }), [chatOnlyMode, onOpenTerminalTab, onOpenVncTab, workspaceOpen]);
+    }), [onOpenTerminalTab, onOpenVncTab, workspaceOpen]);
 
     const items = useMemo(() => buildTimelineQuickActionItems({
         agents: activeChatAgents,
@@ -269,7 +253,6 @@ export function TimelineQuickActions({
                         }
                     } else if (current.kind === 'workspace' && current.commandId) {
                         if (current.commandId === 'toggle-workspace' || current.commandId === 'open-explorer') onToggleWorkspace?.();
-                        if (current.commandId === 'toggle-chat-only') toggleChatOnlyMode(chatOnlyMode);
                         if (current.commandId === 'open-terminal-tab') onOpenTerminalTab?.();
                         if (current.commandId === 'open-vnc-tab') onOpenVncTab?.();
                         if (current.commandId === 'open-settings') window.dispatchEvent(new CustomEvent('piclaw:open-settings'));
@@ -295,7 +278,7 @@ export function TimelineQuickActions({
             window.removeEventListener('keydown', onKeyDown, true);
             document.removeEventListener('pointerdown', onPointerDown, true);
         };
-    }, [chatOnlyMode, highlightIndex, items, onOpenTerminalTab, onOpenVncTab, onPrefillCompose, onSwitchChat, onToggleWorkspace, open]);
+    }, [highlightIndex, items, onOpenTerminalTab, onOpenVncTab, onPrefillCompose, onSwitchChat, onToggleWorkspace, open]);
 
     useEffect(() => {
         const handleSettingsSaved = (event) => {
@@ -358,7 +341,6 @@ export function TimelineQuickActions({
                                         if (item.kind === 'agent' && item.chatJid) onSwitchChat?.(item.chatJid);
                                         if (item.kind === 'workspace' && item.commandId === 'toggle-workspace') onToggleWorkspace?.();
                                         if (item.kind === 'workspace' && item.commandId === 'open-explorer') onToggleWorkspace?.();
-                                        if (item.kind === 'workspace' && item.commandId === 'toggle-chat-only') toggleChatOnlyMode(chatOnlyMode);
                                         if (item.kind === 'workspace' && item.commandId === 'open-terminal-tab') onOpenTerminalTab?.();
                                         if (item.kind === 'workspace' && item.commandId === 'open-vnc-tab') onOpenVncTab?.();
                                         if (item.kind === 'workspace' && item.commandId === 'open-settings') window.dispatchEvent(new CustomEvent('piclaw:open-settings'));

@@ -78,7 +78,6 @@ test('composeSidepanelActionOptions preserves widget/dashboard and btw dependenc
 test('composeBranchPaneActionOptions and composeShortcutOptions preserve pane controls', () => {
   const branchResult = composeBranchPaneActionOptions({
     currentChatJid: 'chat-1',
-    chatOnlyMode: false,
     navigate: () => {},
     setWorkspaceOpen: () => {},
     currentBranchRecord: { chat_jid: 'chat-1' },
@@ -127,7 +126,6 @@ test('composeBranchPaneActionOptions and composeShortcutOptions preserve pane co
   });
   const shortcutResult = composeShortcutOptions({
     hasDockPanes: true,
-    chatOnlyMode: false,
     toggleDock: () => {},
     toggleZenMode: () => {},
     exitZenMode: () => {},

@@ -1,14 +1,15 @@
 import { html } from '../vendor/preact-htm.js';
 import { OobePanel } from '../components/oobe-panel.js';
-import { SettingsDialogLoader } from '../components/settings-dialog-loader.js';
+import { SettingsTabBridge } from '../components/settings-tab-bridge.js';
 import { ChatSurface } from '../components/chat-surface.js';
 import { TimelineQuickActions } from '../components/timeline-quick-actions.js';
 import { TimelineMenu } from '../components/timeline-menu.js';
 import { WorkspaceExplorer } from '../components/workspace-explorer.js';
 import { TabStrip } from '../components/tab-strip.js';
 import { MarkdownPreview } from '../components/markdown-preview.js';
-import { SystemMetersHud } from '../components/system-meters-hud.js';
-import { SessionsSidebar } from '../components/sessions-sidebar.js';
+import { WorkbenchSidebar } from '../components/workbench-sidebar.js';
+import { WorkbenchStatusBar } from '../components/workbench-statusbar.js';
+import { requestOpenSettingsDialog } from '../components/settings-dialog-events.js';
 import { setEditorPaneCollapsed } from './use-splitters.js';
 
 export interface MainShellRenderOptions {
@@ -18,11 +19,10 @@ export interface MainShellRenderOptions {
 export function buildMainShellClassName(options: {
   workspaceOpen: boolean;
   editorOpen: boolean;
-  chatOnlyMode: boolean;
   zenMode: boolean;
 }): string {
-  const { workspaceOpen, editorOpen, chatOnlyMode, zenMode } = options;
-  return `app-shell${workspaceOpen ? '' : ' workspace-collapsed'}${editorOpen ? ' editor-open' : ''}${chatOnlyMode ? ' chat-only' : ''}${zenMode ? ' zen-mode' : ''}`;
+  const { workspaceOpen, editorOpen, zenMode } = options;
+  return `app-shell${workspaceOpen ? '' : ' workspace-collapsed'}${editorOpen ? ' editor-open' : ''}${zenMode ? ' zen-mode' : ''}`;
 }
 
 export function extractPostedUserMessageId(response: unknown): number | null {
@@ -112,7 +112,6 @@ export function renderMainShell(options: MainShellRenderOptions): any {
     appShellRef,
     workspaceOpen,
     editorOpen,
-    chatOnlyMode,
     zenMode,
     isRenameBranchFormOpen,
     closeRenameCurrentBranchForm,
@@ -128,13 +127,10 @@ export function renderMainShell(options: MainShellRenderOptions): any {
     openTerminalTab,
     openVncTab,
     openCdpTab,
+    openPlanTab,
     hasDockPanes,
     toggleDock,
     dockVisible,
-    handleSplitterMouseDown,
-    handleSplitterTouchStart,
-    handleSplitterKeyDown,
-    handleSplitterDoubleClick,
     showEditorPaneContainer,
     tabStripTabs,
     tabStripActiveId,
@@ -261,6 +257,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
     isComposeBoxAgentActive,
     activeChatAgents,
     refreshActiveChatAgents,
+    setWorkspaceVisible,
     connectionStatus,
     stateAccessFailed,
     activeModel,
@@ -286,7 +283,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
   };
 
   return html`
-    <div class=${buildMainShellClassName({ workspaceOpen, editorOpen, chatOnlyMode, zenMode })} ref=${appShellRef}>
+    <div class=${buildMainShellClassName({ workspaceOpen, editorOpen, zenMode })} ref=${appShellRef}>
       ${isRenameBranchFormOpen && html`
         <div class="rename-branch-overlay" onPointerDown=${(event: any) => {
           if (event.target === event.currentTarget) {
@@ -336,19 +333,42 @@ export function renderMainShell(options: MainShellRenderOptions): any {
           </form>
         </div>
       `}
-      ${!chatOnlyMode && !zenMode && html`
-        <${SessionsSidebar}
+      ${!zenMode && html`
+        <${WorkbenchSidebar}
           activeChatAgents=${activeChatAgents}
           currentChatJid=${currentChatJid}
           onSwitchChat=${handleBranchPickerChange}
           appShellRef=${appShellRef}
           onRefreshSessions=${refreshActiveChatAgents}
+          workspaceOpen=${workspaceOpen}
+          setWorkspaceVisible=${setWorkspaceVisible}
+          onOpenSettings=${requestOpenSettingsDialog}
+          onOpenPlan=${openPlanTab}
+          sessionActions=${{
+            createRoot: handleCreateRootSessionFromCompose,
+            fork: handleCreateSessionFromCompose,
+            rename: openRenameCurrentBranchForm,
+            archive: handlePruneCurrentBranch,
+            restore: handleRestoreBranch,
+            purge: handlePurgeArchivedBranch,
+          }}
+          explorer=${html`
+            <${WorkspaceExplorer}
+              onFileSelect=${addFileRef}
+              onFolderSelect=${addFolderRef}
+              visible=${workspaceOpen}
+              active=${workspaceOpen || editorOpen}
+              onOpenEditor=${openEditor}
+              onOpenTerminalTab=${openTerminalTab}
+              onOpenCdpTab=${openCdpTab}
+              onOpenVncTab=${openVncTab}
+            />
+          `}
         />
       `}
       <${TimelineMenu}
         workspaceOpen=${workspaceOpen}
         toggleWorkspace=${toggleWorkspace}
-        chatOnlyMode=${chatOnlyMode}
         openEditor=${openEditor}
         onOpenTerminalTab=${openTerminalTab}
         onOpenCdpTab=${openCdpTab}
@@ -358,7 +378,6 @@ export function renderMainShell(options: MainShellRenderOptions): any {
         activeChatAgents=${activeChatAgents}
         currentChatJid=${currentChatJid}
         workspaceOpen=${workspaceOpen}
-        chatOnlyMode=${chatOnlyMode}
         onSwitchChat=${handleBranchPickerChange}
         onToggleWorkspace=${toggleWorkspace}
         onOpenTerminalTab=${openTerminalTab}
@@ -367,7 +386,6 @@ export function renderMainShell(options: MainShellRenderOptions): any {
         onPrefillCompose=${requestComposePrefill}
       />
       <div class="container">
-        <${SystemMetersHud} mode="overlay" />
         ${searchQuery && isIOSDevice() && html`<div class="search-results-spacer"></div>`}
         ${(currentHashtag || searchQuery) && html`
           <div class="hashtag-header">
@@ -386,7 +404,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
             onDismiss=${oobePanelState.kind === 'provider-missing' ? handleDismissProviderMissingOobe : handleCompleteProviderReadyOobe}
           />
         `}
-        <${SettingsDialogLoader} />
+        <${SettingsTabBridge} openEditor=${openEditor} />
         <${ChatSurface}
           currentChatJid=${currentChatJid}
           posts=${posts}
@@ -457,8 +475,8 @@ export function renderMainShell(options: MainShellRenderOptions): any {
             onDeleteSession: handlePruneCurrentBranch,
             onPurgeArchivedSession: handlePurgeArchivedBranch,
             onRestoreSession: handleRestoreBranch,
-            activeEditorPath: chatOnlyMode ? null : tabStripActiveId,
-            onAttachEditorFile: chatOnlyMode ? undefined : attachActiveEditorFile,
+            activeEditorPath: tabStripActiveId,
+            onAttachEditorFile: attachActiveEditorFile,
             onOpenFilePill: openFileFromPill,
             followupQueueCount,
             followupQueueItems,
@@ -494,37 +512,6 @@ export function renderMainShell(options: MainShellRenderOptions): any {
           }}
         />
       </div>
-      ${!chatOnlyMode && html`
-        <div class="workspace-splitter" onMouseDown=${handleSplitterMouseDown} onTouchStart=${handleSplitterTouchStart} onKeyDown=${handleSplitterKeyDown} onDblClick=${handleSplitterDoubleClick} role="separator" aria-orientation="vertical" aria-label="Resize file tree" tabIndex="0"></div>
-        <button
-          class=${`workspace-toggle-tab${workspaceOpen ? ' open' : ' closed'}`}
-          onClick=${toggleWorkspace}
-          title=${workspaceOpen ? 'Hide workspace' : 'Show workspace'}
-          aria-label=${workspaceOpen ? 'Hide workspace' : 'Show workspace'}
-          aria-expanded=${workspaceOpen ? 'true' : 'false'}
-        >
-          <svg class="workspace-toggle-tab-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="6 3 11 8 6 13" />
-          </svg>
-        </button>
-        <${WorkspaceExplorer}
-          onFileSelect=${addFileRef}
-          onFolderSelect=${addFolderRef}
-          visible=${workspaceOpen}
-          active=${workspaceOpen || editorOpen}
-          onOpenEditor=${openEditor}
-          onOpenTerminalTab=${openTerminalTab}
-          onOpenCdpTab=${openCdpTab}
-          onOpenVncTab=${openVncTab}
-        />
-        ${workspaceOpen && !zenMode && html`
-          <div
-            class="workspace-drawer-backdrop"
-            onClick=${toggleWorkspace}
-            aria-hidden="true"
-          ></div>
-        `}
-      `}
       ${showEditorPaneContainer && html`
         <div class="editor-splitter" onMouseDown=${handleEditorSplitterMouseDown} onTouchStart=${handleEditorSplitterTouchStart} onKeyDown=${handleEditorSplitterKeyDown} onDblClick=${handleEditorSplitterDoubleClick} role="separator" aria-orientation="vertical" aria-label="Resize editor" tabIndex="0"></div>
         <div class="editor-pane-container">
@@ -630,6 +617,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
           </button>
         `}
       `}
+      ${!zenMode && html`<${WorkbenchStatusBar} />`}
     </div>
   `;
 }

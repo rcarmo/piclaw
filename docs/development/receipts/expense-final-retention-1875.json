@@ -638,7 +638,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "e506827fe77e26e48c722ff15a957a5d37acfe9c66c32e4511a67f627c2cf94f",
       "state": "retained-decoupled",
-      "currentSha256": "64b2b60cf1917b80c1ac993b8c84242f75a7b08cc7df6a2ce6072ff327fe3217",
+      "currentSha256": "b2a6fe534df5e203595224d9f0c4caba95c3648de3097ade09db1a80d5484d6d",
       "currentPurpose": "existing native domain/control/message transport boundary with no expense port",
       "directImportCallers": [
         {
@@ -1028,7 +1028,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "cdddbc02e1f46e6767bfd9f5602c55ef007d6083aff7af016550f74d1f73aa6f",
       "state": "retained-decoupled",
-      "currentSha256": "6f549cf594e9cca6d1560b791ce686ef1600641899c80f67de43c1279ed07b2b",
+      "currentSha256": "72ec121733f0bbad3cc01a89663e949d14376d07b1db5609b1eb7963f52af737",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
@@ -2039,7 +2039,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "b1967a9bc02e27e622fe853ae10880bb571128abdcfafd83726c5986fabe5a77",
       "state": "retained-decoupled",
-      "currentSha256": "daf0286623116f094bd478076490a6a42e602b42e7fbaaf527ae6d82b21e9261",
+      "currentSha256": "b268faee49e60007c1e1ac651594ed61af20fc47bcc264f852a4f92bb5f2942d",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
@@ -2326,7 +2326,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "92bf8e7afe1e2851b0f0f90262729411bd58776cbb38685ffd1dd5b1900350e6",
       "state": "retained-decoupled",
-      "currentSha256": "68cc5fa794c960fdb09d9f5546fa6482909d20052bd31193776e64871d4f025c",
+      "currentSha256": "a5f4a659979f9b52cd98c91cd346e757bf289d850337bf7123faaf09f5bc4c79",
       "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
       "directImportCallers": []
     },

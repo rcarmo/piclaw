@@ -149,7 +149,8 @@ export function buildChatWindowUrl(baseHref, chatJid, options: ChatWindowOptions
     url.searchParams.delete('pane_popout');
     url.searchParams.delete('pane_path');
     url.searchParams.delete('pane_label');
-    if (options.chatOnly !== false) {
+    if (options.chatOnly === true) {
+        // Pop-outs start uncluttered; see applyUnclutteredWindowHint.
         url.searchParams.set('chat_only', '1');
     }
     return url.toString();
@@ -164,7 +165,8 @@ export function buildBranchLoaderUrl(baseHref, sourceChatJid, options: ChatWindo
     url.searchParams.delete('pane_popout');
     url.searchParams.delete('pane_path');
     url.searchParams.delete('pane_label');
-    if (options.chatOnly !== false) {
+    if (options.chatOnly === true) {
+        // Pop-outs start uncluttered; see applyUnclutteredWindowHint.
         url.searchParams.set('chat_only', '1');
     }
     return url.toString();

@@ -102,35 +102,35 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       await page.locator('textarea,[contenteditable="true"]').first().waitFor();
       await page.waitForFunction(()=>new URL(location.href).searchParams.get('chat_jid')==='web:default');
       if(skin==='classic') {
-        const toggle=page.locator('.workspace-toggle-tab');
+        const toggle=page.locator('.workbench-activity-button[aria-label="Explorer"]');
         await toggle.waitFor();
-        expect(await toggle.getAttribute('aria-expanded')).toBe('true');
+        expect(await toggle.getAttribute('aria-selected')).toBe('true');
         await toggle.click();
-        expect(await toggle.getAttribute('aria-expanded')).toBe('false');
+        expect(await toggle.getAttribute('aria-selected')).toBe('false');
         const second=await context.newPage();
         second.on('pageerror',e=>errors.push(e.message));
         await second.goto(server.url+'?skin='+skin+'&chat_jid='+encodeURIComponent(chatJid),{waitUntil:'load'});
-        const otherToggle=second.locator('.workspace-toggle-tab');
+        const otherToggle=second.locator('.workbench-activity-button[aria-label="Explorer"]');
         await otherToggle.waitFor();
-        expect(await otherToggle.getAttribute('aria-expanded')).toBe('false');
+        expect(await otherToggle.getAttribute('aria-selected')).toBe('false');
         await otherToggle.click();
-        expect(await otherToggle.getAttribute('aria-expanded')).toBe('true');
+        expect(await otherToggle.getAttribute('aria-selected')).toBe('true');
         await page.bringToFront();
         await page.evaluate(()=>{
           window.dispatchEvent(new Event('focus'));
           window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}));
           document.dispatchEvent(new Event('visibilitychange'));
         });
-        expect(await toggle.getAttribute('aria-expanded')).toBe('false');
+        expect(await toggle.getAttribute('aria-selected')).toBe('false');
         await page.reload({waitUntil:'load'});await toggle.waitFor();
-        expect(await toggle.getAttribute('aria-expanded')).toBe('false');
+        expect(await toggle.getAttribute('aria-selected')).toBe('false');
         await second.reload({waitUntil:'load'});await otherToggle.waitFor();
-        expect(await otherToggle.getAttribute('aria-expanded')).toBe('true');
+        expect(await otherToggle.getAttribute('aria-selected')).toBe('true');
         await second.close();
         await page.bringToFront();
-        expect(await toggle.getAttribute('aria-expanded')).toBe('false');
+        expect(await toggle.getAttribute('aria-selected')).toBe('false');
         await toggle.click();
-        await page.waitForFunction(()=>document.querySelector('.workspace-toggle-tab')?.getAttribute('aria-expanded')==='true');
+        await page.waitForFunction(()=>document.querySelector('.workbench-activity-button[aria-label="Explorer"]')?.getAttribute('aria-selected')==='true');
         const menuButton=page.getByTestId('hamburger');
         const openAbout=async()=>{
           await menuButton.click();
@@ -184,7 +184,7 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       expect(await about.getByRole('link').count()).toBe(3);
       expect(errors).toEqual([]);expect([...unhandled]).toEqual([]);
     } catch (error) {
-      console.log("SHELL_FAILURE", JSON.stringify({ engineName, skin, errors, unhandled: [...unhandled], requests, workspace: await page.locator('.workspace-sidebar,.workspace-menu-button,.workspace-toggle-tab').evaluateAll(nodes=>nodes.map(el=>({class:el.className,rect:el.getBoundingClientRect().toJSON(),display:getComputedStyle(el).display,visibility:getComputedStyle(el).visibility,expanded:el.getAttribute('aria-expanded')}))), state: await page.evaluate(()=>({url:location.href,local:localStorage.getItem('workspaceOpen.desktop'),session:sessionStorage.getItem('workspaceOpen.window')})), body: (await page.locator("body").innerText()).slice(-2500), badges: await page.locator(".model-badge-wrapper,.compose-model-meta").evaluateAll(nodes => nodes.map(n => n.outerHTML)), scripts: await page.locator("script[src]").evaluateAll(nodes => nodes.map(n => n.getAttribute("src"))) }));
+      console.log("SHELL_FAILURE", JSON.stringify({ engineName, skin, errors, unhandled: [...unhandled], requests, workspace: await page.locator('.workspace-sidebar,.workspace-menu-button,.workbench-activity-button').evaluateAll(nodes=>nodes.map(el=>({class:el.className,rect:el.getBoundingClientRect().toJSON(),display:getComputedStyle(el).display,visibility:getComputedStyle(el).visibility,expanded:el.getAttribute('aria-expanded')}))), state: await page.evaluate(()=>({url:location.href,local:localStorage.getItem('workspaceOpen.desktop'),session:sessionStorage.getItem('workspaceOpen.window')})), body: (await page.locator("body").innerText()).slice(-2500), badges: await page.locator(".model-badge-wrapper,.compose-model-meta").evaluateAll(nodes => nodes.map(n => n.outerHTML)), scripts: await page.locator("script[src]").evaluateAll(nodes => nodes.map(n => n.getAttribute("src"))) }));
       throw error;
     } finally { await context.close(); await browser.close(); }
   }, 90000);

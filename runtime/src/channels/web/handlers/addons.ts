@@ -819,7 +819,15 @@ export async function handleAddonConfigApiRequest(
     ? JSON.stringify(await req.json().catch(() => ({})))
     : undefined;
 
-  const result = await applyAddonConfigSlashCommand(agentPool, chatJid, commandBaseName, payload);
+  let result;
+  try {
+    result = await applyAddonConfigSlashCommand(agentPool, chatJid, commandBaseName, payload);
+  } catch (error) {
+    // No registered handler and no command path (native runtime): the add-on API does not exist.
+    const message = String((error as Error)?.message || error);
+    const missing = /slash command unavailable/i.test(message);
+    return fail({ error: missing ? `Unknown add-on API: ${parsed.addonId}/${parsed.action}` : message }, missing ? 404 : 503, error);
+  }
   if (result.status !== 'success') {
     const message = String(result.message || 'Add-on command failed');
     return fail({ error: message }, isUnknownAddonCommandMessage(message) ? 404 : 500, message);

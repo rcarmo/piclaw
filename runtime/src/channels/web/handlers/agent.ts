@@ -29,7 +29,6 @@ import {
   parseAgentMessageRequest,
 } from "../messaging/agent-message-service.js";
 import { handleUiThemeCommand } from "../theming/ui-theme-commands.js";
-import { handleUiMetersCommand } from "../ui-meters-commands.js";
 import { admitServerUiState } from "../ui-state.js";
 import { getDb, setChatCursor, type InteractionRow } from "../../../db.js";
 import { formatOutbound } from "../../../router.js";
@@ -204,9 +203,8 @@ export async function handleAgentMessage(
   }
   const trimmed = content.trim();
   const themeCommand = handleUiThemeCommand(trimmed);
-  const metersCommand = handleUiMetersCommand(trimmed);
   const isSettingsCommand = /^\/settings\s*$/i.test(trimmed);
-  const ordinaryInput = !command && !themeCommand && !metersCommand && !isSettingsCommand && !isSlashCommandInvocation(content);
+  const ordinaryInput = !command && !themeCommand && !isSettingsCommand && !isSlashCommandInvocation(content);
   if (ordinaryInput && (!lookupAdmission || !admitUserInput || !dispatchNative)) {
     return channel.json({ error: "Native input admission is unavailable." }, 503);
   }
@@ -386,30 +384,6 @@ export async function handleAgentMessage(
     );
   }
 
-  if (metersCommand) {
-    if (metersCommand.payload) {
-      const patch = metersCommand.payload.mode === "toggle" ? 'toggle' as const
-        : metersCommand.payload.mode === "set" ? { enabled: metersCommand.payload.enabled } : { collapsed: metersCommand.payload.collapsed };
-      const nextMeters = (await admitServerUiState({ ui_meters: patch }, revalidateInputAuthority, req.signal)).ui_meters;
-      try { channel.broadcastEvent("ui_meters", { chat_jid: chatJid, mode: "set", ...nextMeters }); }
-      catch (error) { try { log.warn('Committed meters awaiting publication', { error }); } catch { return channel.json({ thread_id: null, command: metersCommand, ui_only: true }, 200); } }
-    }
-
-    const formattedMetersMessage = formatOutbound(metersCommand.message, "web");
-    if (formattedMetersMessage) {
-      try {
-        await channel.sendMessage(chatJid, formattedMetersMessage, { forceRoot: true, authorise: revalidateInputAuthority, signal: req.signal });
-      } catch (error) {
-        try { log.error("Failed to send /meters response", { operation: "handle_agent_message.meters_response", chatJid, err: error }); }
-        catch { return channel.json({ thread_id: null, command: metersCommand, ui_only: true }, 200); }
-      }
-    }
-
-    return channel.json(
-      { thread_id: null, command: metersCommand, ui_only: true },
-      200
-    );
-  }
 
   if (isSettingsCommand) {
     channel.broadcastEvent("ui_open_tab", { chat_jid: chatJid, path: "piclaw://settings", label: "Settings" });

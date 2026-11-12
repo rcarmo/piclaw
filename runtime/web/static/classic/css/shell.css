@@ -15,11 +15,11 @@
     overflow: hidden;
 }
 
-.app-shell.chat-only {
+.app-shell.branch-loader-shell {
     justify-content: center;
 }
 
-.app-shell.chat-only .container {
+.app-shell.branch-loader-shell .container {
     width: 100%;
     max-width: min(100%, 980px);
     margin: 0 auto;

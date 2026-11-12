@@ -25,7 +25,6 @@ export function useMainAppPaneComposition(options: {
   panePopoutMode: boolean;
   panePopoutPath: string | null;
   panePopoutLabel: string | null;
-  chatOnlyMode: boolean;
   terminalTabPath: string;
   vncTabPrefix: string;
   getWorkspaceFile: (path: string, maxBytes: number, mode: string) => Promise<any>;
@@ -38,7 +37,6 @@ export function useMainAppPaneComposition(options: {
     panePopoutMode: options.panePopoutMode,
     panePopoutPath: options.panePopoutPath,
     panePopoutLabel: options.panePopoutLabel,
-    chatOnlyMode: options.chatOnlyMode,
     editorOpen: editorState.editorOpen,
     tabStripTabs: editorState.tabStripTabs,
     tabStripActiveId: editorState.tabStripActiveId,

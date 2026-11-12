@@ -1,7 +1,7 @@
 import { createVisibleInterval } from '../ui/visible-interval.js';
 import { html, useEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
 import { getSystemMetrics } from '../api.js';
-import { METERS_COLLAPSED_EVENT_NAME, METERS_EVENT_NAME, applyMetersCollapsed, readStoredMetersCollapsed, readStoredMetersEnabled } from '../ui/meters.js';
+import { METERS_COLLAPSED_EVENT_NAME, applyMetersCollapsed, readStoredMetersCollapsed } from '../ui/meters.js';
 import { renderDisclosureTriangle } from '../ui/disclosure-triangle.js';
 import { buildGpuCompactSummaryParts, GpuDetailsPopover, GpuMeterRows, GpuMeterHistory, getGpuMeterRows } from './intel-gpu-meters.js';
 
@@ -158,8 +158,9 @@ function readIsNarrowLayout() {
     return window.matchMedia(`(max-width: ${SYSTEM_METERS_COMPACT_BREAKPOINT_PX}px)`).matches;
 }
 
+const SYSTEM_METERS_ACTIVE_MODES = new Set(['overlay', 'sidebar', 'statusbar']);
+
 export function SystemMetersHud({ mode = 'overlay' }) {
-    const [enabled, setEnabled] = useState(() => readStoredMetersEnabled(false));
     const [collapsed, setCollapsed] = useState(() => readStoredMetersCollapsed(false));
     const [isNarrowLayout, setIsNarrowLayout] = useState(() => readIsNarrowLayout());
     const [metrics, setMetrics] = useState({
@@ -197,31 +198,14 @@ export function SystemMetersHud({ mode = 'overlay' }) {
     const [lastSuccessfulRefreshMs, setLastSuccessfulRefreshMs] = useState(null);
     const [nowMs, setNowMs] = useState(() => Date.now());
     const [gpuPollId, setGpuPollId] = useState(0);
-    const gpuRefreshGeneration = useRef(0);
-    const enabledRef = useRef(enabled);
-    enabledRef.current = enabled;
 
     useEffect(() => {
-        const onMetersChange = (event) => {
-            const nextEnabled = Boolean(event?.detail?.enabled);
-            enabledRef.current = nextEnabled;
-            if (!nextEnabled) gpuRefreshGeneration.current++;
-            if (!nextEnabled) {
-                gpuHistoryRef.current.clear(); gpuSnapshotTrackerRef.current.clear();
-                setMetrics(previous => ({ ...previous, gpus: [], gpu_provider: null, vram_percent: null, vram_series: [], vram_total_bytes: null, vram_used_bytes: null }));
-            }
-            setEnabled(nextEnabled);
-        };
         const onMetersCollapsedChange = (event) => {
             setCollapsed(Boolean(event?.detail?.collapsed));
             setOpenGpuId(null);
         };
-        window.addEventListener(METERS_EVENT_NAME, onMetersChange);
         window.addEventListener(METERS_COLLAPSED_EVENT_NAME, onMetersCollapsedChange);
-        return () => {
-            window.removeEventListener(METERS_EVENT_NAME, onMetersChange);
-            window.removeEventListener(METERS_COLLAPSED_EVENT_NAME, onMetersCollapsedChange);
-        };
+        return () => window.removeEventListener(METERS_COLLAPSED_EVENT_NAME, onMetersCollapsedChange);
     }, []);
 
     useEffect(() => {
@@ -237,19 +221,18 @@ export function SystemMetersHud({ mode = 'overlay' }) {
         return () => mediaQuery.removeListener(sync);
     }, []);
 
-    const activeMode = 'overlay';
-    const isActiveInstance = mode === activeMode;
+    // Only one placement renders at a time: the side bar foot or the status bar.
+    const isActiveInstance = SYSTEM_METERS_ACTIVE_MODES.has(mode);
 
     useEffect(() => {
-        if (!enabled || !isActiveInstance) return undefined;
+        if (!isActiveInstance) return undefined;
         let cancelled = false;
         let inFlight = false;
 
         const refresh = async () => {
-            if (cancelled || !enabledRef.current || inFlight) return;
+            if (cancelled || inFlight) return;
             inFlight = true;
-            const generation = gpuRefreshGeneration.current;
-            const current = () => !cancelled && enabledRef.current && generation === gpuRefreshGeneration.current;
+            const current = () => !cancelled;
             setLoading((prev) => (prev || metrics.cpu_series.length > 0 ? prev : true));
             try {
                 const next = await getSystemMetrics();
@@ -304,17 +287,17 @@ export function SystemMetersHud({ mode = 'overlay' }) {
             cancelled = true;
             stopVisibleInterval();
         };
-    }, [enabled, isActiveInstance]);
+    }, [isActiveInstance]);
 
     const cpuPath = useMemo(() => buildSparklinePath(metrics.cpu_series, 56, 16, { min: 0, max: 100 }), [metrics.cpu_series]);
     const ramPath = useMemo(() => buildSparklinePath(metrics.ram_series, 56, 16, { min: 0, max: 100 }), [metrics.ram_series]);
     const swapPath = useMemo(() => buildSparklinePath(metrics.swap_series, 56, 16, { min: 0, max: 100 }), [metrics.swap_series]);
     const bufferCachePath = useMemo(() => buildSparklinePath(metrics.buffer_cache_series_bytes), [metrics.buffer_cache_series_bytes]);
     const rssPath = useMemo(() => buildSparklinePath(metrics.process_rss_series_bytes), [metrics.process_rss_series_bytes]);
-    const gpuSnapshots = useMemo(() => enabled ? gpuSnapshotTrackerRef.current.resolve(metrics) : [], [metrics, enabled]);
+    const gpuSnapshots = useMemo(() => gpuSnapshotTrackerRef.current.resolve(metrics), [metrics]);
     const gpuMeters = useMemo(
-        () => enabled ? gpuHistoryRef.current.update(gpuSnapshots, { nowMs, pollId: gpuPollId, lastSuccessAtMs: lastSuccessfulRefreshMs }).filter(meter => getGpuMeterRows(meter).length > 0) : [],
-        [enabled, gpuSnapshots, nowMs, gpuPollId, lastSuccessfulRefreshMs],
+        () => gpuHistoryRef.current.update(gpuSnapshots, { nowMs, pollId: gpuPollId, lastSuccessAtMs: lastSuccessfulRefreshMs }).filter(meter => getGpuMeterRows(meter).length > 0),
+        [gpuSnapshots, nowMs, gpuPollId, lastSuccessfulRefreshMs],
     );
     const showBufferCache = Number(metrics.buffer_cache_bytes) > 0 && sanitizeSeries(metrics.buffer_cache_series_bytes).length > 0;
     const showSwap = optionalPercent(metrics.swap_percent) !== null && metrics.swap_total_bytes > 0;
@@ -328,12 +311,12 @@ export function SystemMetersHud({ mode = 'overlay' }) {
         setOpenGpuId((current) => trigger && current === id ? null : id);
     };
 
-    useEffect(() => { setOpenGpuId(null); }, [isNarrowLayout, enabled]);
+    useEffect(() => { setOpenGpuId(null); }, [isNarrowLayout]);
     useEffect(() => {
         if (openGpuId && (!gpuMeters.some(meter => meter.id === openGpuId) || !gpuTriggerRef.current?.isConnected)) setOpenGpuId(null);
     }, [gpuMeters, openGpuId]);
 
-    if (!enabled || !isActiveInstance) return null;
+    if (!isActiveInstance) return null;
 
     const title = collapsed
         ? 'Show system meters'

@@ -658,7 +658,6 @@ Direct commands (no LLM round-trip):
 | `/exit` | Exit the current piclaw process immediately so the service manager restarts it |
 | `/commands` | List available commands (shows sourceInfo provenance: scope, source, and origin for extension commands, templates, and skills) |
 | `/btw <question>` | Open a side-conversation panel in the web UI and stream an answer without interrupting the main chat |
-| `/meters on\|off\|toggle` | Toggle system meters, including optional [Intel GPU activity/memory](intel-gpu-meters.md) |
 | `/tasks [filter]` | List scheduled tasks (via extension) |
 | `/scheduled [filter]` | Alias for `/tasks` |
 | `/dream [days]` | Queue an out-of-band Dream cycle on a temporary `dream:` channel; runtime backs up notes, seeds daily notes from DB, the model follows Orient / Signal / Consolidate / Prune and Index, and runtime refreshes FTS at the end |
@@ -695,7 +694,7 @@ Adaptive Card and side-conversation helpers are intentionally explicit web-facin
 - card submissions are persisted as structured `adaptive_card_submission` blocks, so the timeline can render compact receipt UI and finished cards can display their submitted values read-only.
 - `/btw` is currently a thin consumer of the side-prompt substrate: it streams a side answer in the web panel, reseeds from current main-chat context, and only injects back into the main chat when explicitly requested.
 - `/btw` currently reuses the chat's model/thinking context but is still prompt-only rather than a full side tool-using agent loop.
-- `/theme`, `/tint`, and `/meters` are web-local UI commands handled without an LLM round-trip.
+- `/theme` and `/tint` are web-local UI commands handled without an LLM round-trip. System meters, including optional [Intel GPU activity/memory](intel-gpu-meters.md), are always shown; there is no command to hide them.
 - `/context` reports current context-window usage; the compose-footer indicator is refreshed on reconnect, when returning to the tab, and immediately after successful `/compact`. If the post-compaction rebuilt-session estimate is temporarily unavailable, Piclaw uses the report's safety-adjusted estimate and retains it as the endpoint fallback until live usage is available.
 - `/compact` attaches a full Markdown report. Provider-native reports show only Piclaw's explicitly marked readable continuity checkpoint when one exists; encrypted canonical state and arbitrary provider output are never included.
 

@@ -6,5 +6,5 @@ const surface = new URLSearchParams(location.search).get('surface') || 'workspac
 (window as any).opened = [];
 const open = (path: string) => { (window as any).opened.push(path); addRecentFile(path); };
 render(surface === 'workspace'
-  ? html`<div class="app-shell" style="height:100vh"><${WorkspaceExplorer} visible=${true} onOpenEditor=${open} /><${TimelineMenu} workspaceOpen=${true} toggleWorkspace=${() => {}} chatOnlyMode=${false} openEditor=${open} /><div class="container"></div></div>`
-  : html`<${TimelineMenu} workspaceOpen=${false} toggleWorkspace=${() => {}} chatOnlyMode=${false} openEditor=${open} />`, document.getElementById('app')!);
+  ? html`<div class="app-shell" style="height:100vh"><${WorkspaceExplorer} visible=${true} onOpenEditor=${open} /><${TimelineMenu} workspaceOpen=${true} toggleWorkspace=${() => {}} openEditor=${open} /><div class="container"></div></div>`
+  : html`<${TimelineMenu} workspaceOpen=${false} toggleWorkspace=${() => {}} openEditor=${open} />`, document.getElementById('app')!);
