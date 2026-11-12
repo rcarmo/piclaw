@@ -178,6 +178,10 @@ test('handleGetAddons merges add-ons from multiple catalog URLs', async () => {
 test('handleInstallAddon installs public tarball addons without repo-tree fallback', async () => {
   await withTempWorkspaceEnv('piclaw-addon-install-tarball-', {}, async (workspace) => {
     const originalFetch = globalThis.fetch;
+    const declarations = join(workspace.workspace, ".pi/extensions/package.json");
+    mkdirSync(dirname(declarations), { recursive: true });
+    writeFileSync(declarations, JSON.stringify({ dependencies: { "@rcarmo/piclaw-addon-goal": "file:KEEP-PINNED.tgz" } }));
+    const inspections: Array<string | undefined> = [];
     const bunCalls: Array<{ args: string[]; cwd: string }> = [];
     const tarballPath = createAddonTarball(workspace.workspace, 'piclaw-addon-observability-0.1.2.tgz', {
       'package.json': JSON.stringify({
@@ -207,7 +211,7 @@ test('handleInstallAddon installs public tarball addons without repo-tree fallba
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       if (href.includes('rcarmo/piclaw-addons/main/catalog.json')) {
-        return new Response(JSON.stringify({ source: 'default', addons: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify({ source: 'default', addons: [{ slug: 'goal', name: '@rcarmo/piclaw-addon-goal', version: '99.0.0', install: { kind: 'tarball', spec: 'https://example.invalid/DO-NOT-NORMALIZE.tgz' } }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       return new Response('not found', { status: 404 });
     }) as typeof fetch;
@@ -233,6 +237,7 @@ test('handleInstallAddon installs public tarball addons without repo-tree fallba
         }),
         (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }),
         new URL('https://example.test/agent/addons/install?catalog_url=https://example.com/catalog-observability.json'),
+        (name, version, directory) => { expect(name).toBe('@rcarmo/piclaw-addon-observability'); expect(version).toBe('0.1.2'); inspections.push(directory); return { supportedVersion: '0.1.2' }; },
       );
 
       expect(res.status).toBe(200);
@@ -242,10 +247,15 @@ test('handleInstallAddon installs public tarball addons without repo-tree fallba
         installedVersion: '0.1.2',
         installKind: 'tarball',
       }));
+      expect(inspections).toHaveLength(3);
+      expect(inspections[0]).toBeUndefined();
+      expect(inspections[1]).toBe(inspections[2]);
+      expect(inspections[1]).toContain('.staging');
       expect(bunCalls).toHaveLength(1);
       expect(bunCalls[0]?.args).toEqual(['bun', 'install', '--force', '--omit=peer']);
       expect(bunCalls[0]?.cwd).toContain(join('.pi', 'extensions', '.staging'));
       expect(JSON.parse(readFileSync(join(workspace.workspace, '.pi', 'extensions', 'package.json'), 'utf8')).dependencies).toEqual({
+        '@rcarmo/piclaw-addon-goal': 'file:KEEP-PINNED.tgz',
         '@rcarmo/piclaw-addon-observability': 'https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-observability-0.1.2.tgz',
       });
     } finally {
@@ -1034,5 +1044,56 @@ test('handleUninstallAddon returns concise warning when bun remove resolver outp
       setAddonInstallTestHooksForTests(null);
       globalThis.fetch = originalFetch;
     }
+  });
+});
+
+for (const unavailable of [false, true]) test(`native install compatibility rejects before any mutation; unavailable=${unavailable}`, async () => {
+  await withTempWorkspaceEnv('piclaw-addon-native-compat-', {}, async (workspace) => {
+    const originalFetch = globalThis.fetch;
+    const dir = join(workspace.workspace, '.pi/extensions');
+    const manifest = join(dir, 'package.json');
+    mkdirSync(dir, { recursive: true });
+    const original = JSON.stringify({ dependencies: { '@rcarmo/piclaw-addon-observability': 'file:approved-022.tgz', untouched: 'file:keep.tgz' } });
+    writeFileSync(manifest, original);
+    let downloads = 0, installs = 0;
+    globalThis.fetch = (async () => Response.json({ addons: [{ slug: 'observability', name: '@rcarmo/piclaw-addon-observability', version: '0.1.23', install: { kind: 'tarball', spec: 'https://example.invalid/obs023.tgz' } }] })) as typeof fetch;
+    setAddonInstallTestHooksForTests({ async downloadUrlToFile() { downloads++; }, async runBunCommand() { installs++; throw Error('Must not install'); } });
+    try {
+      const response = await handleInstallAddon(new Request('https://example.test/agent/addons/install', { method: 'POST', body: JSON.stringify({ slug: 'observability' }) }),
+        (body, status = 200) => Response.json(body, { status }), new URL(`https://example.test/?catalog_url=https://example.test/native-compat-${unavailable}.json`),
+        (name, version) => { expect(name).toBe('@rcarmo/piclaw-addon-observability'); expect(version).toBe('0.1.23'); if (unavailable) throw Error('PRIVATE RUNTIME DETAIL'); return { supportedVersion: '0.1.22', problem: 'This Core release requires Observability 0.1.22. Update Core before installing this add-on.' }; });
+      expect(response.status).toBe(unavailable ? 503 : 409);
+      const body = await response.json();
+      expect(body.code).toBe(unavailable ? 'addon_compatibility_unavailable' : 'addon_incompatible');
+      expect(body.error).toContain(unavailable ? 'compatibility could not be verified' : 'requires Observability 0.1.22');
+      expect(body.error).not.toContain('PRIVATE RUNTIME DETAIL');
+      expect(downloads).toBe(0); expect(installs).toBe(0);
+      expect(readFileSync(manifest, 'utf8')).toBe(original);
+    } finally { globalThis.fetch = originalFetch; setAddonInstallTestHooksForTests(null); }
+  });
+});
+
+for (const afterDependencies of [false, true]) test(`native candidate source rejection preserves installed files and every declared dependency; afterDependencies=${afterDependencies}`, async () => {
+  await withTempWorkspaceEnv('piclaw-addon-native-bytes-', {}, async (workspace) => {
+    const originalFetch = globalThis.fetch;
+    const name = '@rcarmo/piclaw-addon-observability', dir = join(workspace.workspace, '.pi/extensions');
+    const installed = join(dir, 'node_modules', name);
+    mkdirSync(installed, { recursive: true });
+    const declaration = JSON.stringify({ dependencies: { [name]: 'file:approved-022.tgz', '@rcarmo/piclaw-addon-goal': 'file:approved-goal.tgz' } });
+    writeFileSync(join(dir, 'package.json'), declaration);
+    writeFileSync(join(installed, 'index.ts'), 'APPROVED ORIGINAL');
+    const archive = createAddonTarball(workspace.workspace, 'bad-obs.tgz', { 'package.json': JSON.stringify({ name, version: '0.1.22', type: 'module', dependencies: { zod: '3.0.0' } }), 'index.ts': afterDependencies ? 'APPROVED CANDIDATE' : 'UNAPPROVED CANDIDATE' });
+    globalThis.fetch = (async () => Response.json({ addons: [{ slug: 'observability', name, version: '0.1.22', install: { kind: 'tarball', spec: 'https://example.invalid/candidate.tgz' } }, { slug: 'goal', name: '@rcarmo/piclaw-addon-goal', version: '99.0.0', install: { kind: 'tarball', spec: 'https://example.invalid/unrelated.tgz' } }] })) as typeof fetch;
+    let dependencies = 0;
+    setAddonInstallTestHooksForTests({ async downloadUrlToFile(_url, target) { writeFileSync(target, readFileSync(archive)); }, async runBunCommand(_args, cwd) { dependencies++; if (!afterDependencies) throw Error('Must reject before candidate dependency scripts'); writeFileSync(join(cwd, 'index.ts'), 'UNAPPROVED AFTER DEPENDENCIES'); return { ok: true, exitCode: 0, stdout: '', stderr: '' }; } });
+    try {
+      const response = await handleInstallAddon(new Request('https://example.test/agent/addons/install', { method: 'POST', body: JSON.stringify({ slug: 'observability' }) }), (body, status = 200) => Response.json(body, { status }), new URL('https://example.test/?catalog_url=https://example.test/native-bytes.json'),
+        (_name, _version, candidate) => ({ supportedVersion: '0.1.22', ...(candidate && (!afterDependencies || readFileSync(join(candidate, 'index.ts'), 'utf8') !== 'APPROVED CANDIDATE') ? { problem: 'Observability does not match the add-on source approved by this Core release.' } : {}) }));
+      expect(response.status).toBe(409);
+      expect((await response.json()).error).toContain('does not match');
+      expect(dependencies).toBe(afterDependencies ? 1 : 0);
+      expect(readFileSync(join(installed, 'index.ts'), 'utf8')).toBe('APPROVED ORIGINAL');
+      expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(declaration);
+    } finally { globalThis.fetch = originalFetch; setAddonInstallTestHooksForTests(null); }
   });
 });

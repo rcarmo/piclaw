@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { InstalledAddonSourceChanged, classifyModelFailure } from "../../runtime/durable-engine/src/host-model-failure.js";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
 import { extensionKvGet } from "../../runtime/src/db/extension-kv.js";
 import { registerRootExtensionKvStore } from "../../runtime/src/db/register-extension-kv.js";
@@ -97,6 +98,10 @@ test("installed pinned Plan executes the public registry definition against root
     writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "@qualification/plan", version: "0.1.28", type: "module", pi: { extensions: ["./index.ts"] } }));
     expect(await qualifyInstalledPlan(catalog, dir)).toBeUndefined();
     expect(() => qualified!.assertCurrent()).toThrow("Installed Plan source changed");
+    let sourceError: unknown; try { qualified!.assertCurrent(); } catch (error) { sourceError = error; }
+    expect(sourceError).toBeInstanceOf(InstalledAddonSourceChanged);
+    expect(classifyModelFailure("source", sourceError).category).toBe("source_integrity");
+    expect((sourceError as Error).message).toContain("This Core release supports Plan 0.1.28");
     writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "@rcarmo/piclaw-addon-plan-sidebar", version: "0.1.28", type: "module", pi: { extensions: ["./index.ts"] } }));
     qualified!.assertCurrent();
     for (const file of Object.keys(pins)) {

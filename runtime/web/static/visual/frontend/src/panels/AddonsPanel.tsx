@@ -86,16 +86,17 @@ export function AddonsPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slug }),
       });
-      if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || data.error) {
         log.warn("install failed:", res.status);
-        setActionError("Couldn't install add-on. Please try again.");
+        setActionError(typeof data?.error === "string" && data.error.trim() ? data.error : "Couldn't install add-on (HTTP " + res.status + "). Check its installed state before trying again.");
         return;
       }
       setNeedsRestart(true);
       await loadAddons();
     } catch (err) {
       log.warn("install failed:", err);
-      setActionError("Install failed.");
+      setActionError("Connection lost while installing the add-on. Check its installed state before trying again.");
     } finally {
       setActionState((prev) => {
         const next = { ...prev };
@@ -115,16 +116,17 @@ export function AddonsPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slug }),
       });
-      if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || data.error) {
         log.warn("uninstall failed:", res.status);
-        setActionError("Couldn't uninstall add-on. Please try again.");
+        setActionError(typeof data?.error === "string" && data.error.trim() ? data.error : "Couldn't uninstall add-on (HTTP " + res.status + "). Check its installed state before trying again.");
         return;
       }
       setNeedsRestart(true);
       await loadAddons();
     } catch (err) {
       log.warn("uninstall failed:", err);
-      setActionError("Uninstall failed.");
+      setActionError("Connection lost while removing the add-on. Check its installed state before trying again.");
     } finally {
       setActionState((prev) => {
         const next = { ...prev };

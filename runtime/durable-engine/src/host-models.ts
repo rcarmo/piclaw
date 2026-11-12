@@ -497,7 +497,7 @@ export function createHostModels(
         }
         // Provider explanation is redacted and byte-encoded separately from retry
         // classification. Never retain partial output or private exception stacks.
-        const upstreamMessage = providerError === undefined ? undefined : modelFailureUpstreamMessage(providerError);
+        const upstreamMessage = modelFailureUpstreamMessage(providerError ?? (failure.category === "source_integrity" ? cause : undefined));
         const error: AssistantMessage = { role: "assistant", content: [], api: model.api,
           provider: model.provider, model: model.id, timestamp: Date.now(),
           stopReason: "error", errorMessage: modelFailureDetail({ ...failure, ...(evidenceId ? { evidenceId } : {}), ...(upstreamMessage ? { upstreamMessage } : {}) }),
@@ -522,7 +522,7 @@ export function createHostModels(
       log.warn("Native model failure evidence could not be retained", { operation: "durable_model.evidence_failed", phase });
     }
     log.warn("Native model request failed", { operation: "durable_model.request_failed", provider: model.provider, model: model.id, ...failure, ...(evidenceId ? { evidenceId } : {}) });
-    const upstreamMessage = modelFailureUpstreamMessage(providerError ?? (phase === "provider" ? cause : undefined));
+    const upstreamMessage = modelFailureUpstreamMessage(providerError ?? (phase === "provider" || failure.category === "source_integrity" ? cause : undefined));
     return modelFailureDetail({ ...failure, ...(evidenceId ? { evidenceId } : {}), ...(upstreamMessage ? { upstreamMessage } : {}) });
   };
   const operationModel = (operation: "generateImages" | "classify", model: AnyModel) => {

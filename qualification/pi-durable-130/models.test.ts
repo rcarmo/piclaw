@@ -1297,6 +1297,21 @@ for(const billed of [false,true])test(`failed SDK outcome retains the provider-b
  const result=await f.models.completeSimple(f.model,context);expect(result.stopReason).toBe('error');expect(result.usage.cost.totalFromProvider).toBe(billed);expect(f.calls()).toBe(1);
 });
 
+test("typed add-on drift stops dispatch and preserves a safe actionable local notice", async () => {
+  const { InstalledAddonSourceChanged } = await import("../../runtime/durable-engine/src/host-model-failure.js");
+  const f = await fixture();
+  f.policy.captureSourceGuard = async () => () => { throw new InstalledAddonSourceChanged("Observability"); };
+  const result = await f.models.completeSimple(f.model, context);
+  expect(f.calls()).toBe(0);
+  expect(result.stopReason).toBe("error");
+  const failure = parseModelFailure(result.errorMessage);
+  expect(failure).toMatchObject({ phase: "source", category: "source_integrity", upstreamMessage: "Installed Observability source changed" });
+  const notice = modelFailureNotice(result.errorMessage, 141770);
+  expect(notice).toContain("Local check (redacted): Installed Observability source changed");
+  expect(notice).toContain("safely reload");
+  expect(notice).not.toContain(token);
+});
+
 test('host transport tracing uses only its trusted observer and never private island callbacks', async()=>{
  const f=await fixture();let ownedCalls=0,privateCalls=0;
  const noopSpan:any={addLink(){},addEvent(){},setAttributes(){},setStatus(){},async startSpan(_o:any,cb:any){ownedCalls++;return cb(noopSpan);}};
