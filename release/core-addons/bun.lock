@@ -240,7 +240,7 @@
 
     "@rcarmo/piclaw-addon-goal": ["@rcarmo/piclaw-addon-goal@goal.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-zhV/AZNtfDzSJvmrLw9GqRyOLzr+TCTh280qeEstzQ6KHFkb/MAVNXHo/hBuV5siV4WOySOjsgPqYOJMvKppJg=="],
 
-    "@rcarmo/piclaw-addon-observability": ["@rcarmo/piclaw-addon-observability@observability.tgz", { "dependencies": { "@azure/monitor-opentelemetry": "1.21.0", "@opentelemetry/api": "1.9.1", "@opentelemetry/resources": "2.12.1" }, "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "@earendil-works/pi-telemetry": "*" }, "optionalPeers": ["@earendil-works/pi-telemetry"] }, "sha512-sc5P+MlsHjoBWlWjsEysUpTKjwMzwQrk16bg9BQ2JCUZTbr5fUDHBe5v+OxYw3GU9IzG4FMbwvkLqI1U+sN+pw=="],
+    "@rcarmo/piclaw-addon-observability": ["@rcarmo/piclaw-addon-observability@observability.tgz", { "dependencies": { "@azure/monitor-opentelemetry": "1.21.0", "@opentelemetry/api": "1.9.1", "@opentelemetry/resources": "2.12.1" }, "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "@earendil-works/pi-telemetry": "*" }, "optionalPeers": ["@earendil-works/pi-telemetry"] }, "sha512-SIVfNbsEsi5bWadMWpmu8czUAzSbAzVPPWEMcNyxCTtJrpapqUWMDxYJEmmJumH+sWH++zyfsZOo7iB7YcPODg=="],
 
     "@rcarmo/piclaw-addon-plan-sidebar": ["@rcarmo/piclaw-addon-plan-sidebar@plan-sidebar.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-CX/BOhO3dRm8TV2GG1Az2Fp65NqznJ6gSvg7GLOysnhk9afB9JhrwUVgfcw+Bv1p4o69gMyFOahHa+Twr3n4iA=="],
 
