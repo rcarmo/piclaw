@@ -20,8 +20,7 @@ beforeAll(async () => {
     if (url.pathname === "/workspace/raw") return new Response(images[url.searchParams.get("path") || ""] ?? "", { headers: { "Content-Type": "image/svg+xml" } });
     return new Response(null, { status: 404 });
   } });
-  browsers.chromium = await chromium.launch();
-  browsers.webkit = await webkit.launch();
+  [browsers.chromium, browsers.webkit] = await Promise.all([chromium.launch(), webkit.launch()]);
 });
 afterAll(async () => { for (const browser of Object.values(browsers)) await browser.close(); server?.stop(true); });
 
