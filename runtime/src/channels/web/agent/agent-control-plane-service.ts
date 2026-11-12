@@ -250,6 +250,25 @@ export class WebAgentControlPlaneService {
     return this.options.json({ error: "Queue reorder is not exposed by the native runtime." }, 409);
   }
 
+  /** Body: `{ chat_jid, call_id, note? }`. Stops one running tool; the agent continues. */
+  async handleAgentToolAbort(req: Request): Promise<Response> {
+    const authorise = this.options.captureWriteAuthority?.(req);
+    const parsed = await parseJsonObjectRequest(req);
+    if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
+    const payload = parsed.payload as { chat_jid?: string; call_id?: unknown; note?: unknown };
+    const callId = typeof payload.call_id === "string" ? payload.call_id.trim() : "";
+    if (!callId || callId.length > 512) return this.options.json({ error: "Missing or invalid call_id" }, 400);
+    const note = typeof payload.note === "string" ? payload.note.slice(0, 2000) : undefined;
+    try {
+      const chatJid = this.resolveChatJid(payload.chat_jid);
+      authorise?.();
+      const aborted = await this.options.agentPool.abortToolCallForChat(chatJid, callId, note);
+      return this.options.json({ status: "ok", call_id: callId, aborted });
+    } catch {
+      return this.options.json({ error: "Unable to stop the tool." }, 500);
+    }
+  }
+
   async handleAgentQueueSteer(req: Request): Promise<Response> {
     const authorise = this.options.captureWriteAuthority?.(req);
     const parsed = await parseJsonObjectRequest(req);

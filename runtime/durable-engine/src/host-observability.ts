@@ -4,13 +4,15 @@ import { createHostOperationAuthority } from "./host-operation-authority.js";
 import type { HostConversationRuntime } from "./host-runtime.js";
 
 export interface ObservabilityNativeExports {
+  createNativeTelemetryContext(): import("@earendil-works/pi-telemetry").TelemetrySpan;
+  shutdownObservabilityRuntime(): Promise<void>;
   prepareObservabilityRuntime(assertCurrent: () => void): Promise<void>;
   buildObservabilitySystemPrompt(): string;
   bindObservabilityConfiguration(port: { assertCurrent(): void; read(): Record<string, unknown> | null; write(config: unknown): void | Promise<void> }): () => void;
 }
 
 /** Refresh request context through the SDK hook, never a legacy session event. */
-export function createHostObservabilityPrompt(addon: ObservabilityNativeExports, options: {
+export function createHostObservabilityPrompt(addon: Pick<ObservabilityNativeExports, "buildObservabilitySystemPrompt">, options: {
   root: Database;
   runtime(): Pick<HostConversationRuntime, "captureRunSource">;
   assertOwner(): void;

@@ -162,3 +162,34 @@ export function resolveLinkPreviewSiteName(siteName: unknown, safeUrl: string | 
     return safeUrl;
   }
 }
+
+/** Best-effort plain-text copy: execCommand, the async Clipboard API, then a hidden textarea. */
+export async function copyTextToClipboard(text) {
+    const value = typeof text === 'string' ? text : '';
+    if (!value) return false;
+
+    if (writeClipboardDataViaExecCommand(document as unknown as Parameters<typeof writeClipboardDataViaExecCommand>[0], { text: value })) {
+        return true;
+    }
+
+    if (await writeClipboardTextBestEffort(navigator.clipboard, value)) {
+        return true;
+    }
+
+    try {
+        const textarea = document.createElement('textarea');
+        textarea.value = value;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        textarea.style.pointerEvents = 'none';
+        document.body.appendChild(textarea);
+        textarea.select();
+        textarea.setSelectionRange(0, textarea.value.length);
+        const copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        return copied;
+    } catch {
+        return false;
+    }
+}

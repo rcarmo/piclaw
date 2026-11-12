@@ -131,31 +131,36 @@ windowsNativePtyTest("Bun native Windows PTY runs PowerShell without expect", as
 
 const nativePtyTest = process.platform === "linux" && typeof Bun.Terminal === "function" ? test : test.skip;
 
-nativePtyTest("Bun native Linux PTY provides a controlling TTY and foreground job control without script", async () => {
-  const setsid = "/usr/bin/setsid";
-  const proc = spawnBunNativePty(process.cwd(), { ...process.env, PS1: "", TERM: "xterm-256color" }, "/bin/bash", 80, 24, setsid);
-  expect(proc).not.toBeNull();
-  const output: string[] = [];
-  proc!.stdout.on("data", (chunk) => output.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8")));
-  const exited = new Promise<void>((resolve) => proc!.on("exit", () => resolve()));
-  try {
-    // Assert command output while the PTY is open, not against an exit/data
-    // callback race. Require a complete marker line rather than echoed input.
-    proc!.stdin.write("tty; /bin/sh -c 't=$(ps -o tpgid= -p $$); p=$(ps -o pgid= -p $$); [ $t -eq $p ] && echo PICLAW_JOB_CONTROL_OK'\n");
-    const deadline = Date.now() + 5_000;
-    while (!/^PICLAW_JOB_CONTROL_OK\r?$/m.test(output.join("")) && Date.now() < deadline) await Bun.sleep(10);
-    const text = output.join("");
-    expect(text).toMatch(/\/dev\/pts\/\d+/);
-    expect(text).toMatch(/^PICLAW_JOB_CONTROL_OK\r?$/m);
-    expect(text).not.toContain("no job control");
-    expect(text).not.toContain("can't access tty");
-    proc!.stdin.write("exit\n");
-    await Promise.race([
-      exited,
-      Bun.sleep(2_000).then(() => { throw new Error("native PTY shell did not exit"); }),
-    ]);
-  } finally { proc!.kill(); }
-}, 10_000);
+for (const omitTtyNewline of [false, true]) {
+  nativePtyTest(`Bun native Linux PTY provides a controlling TTY and foreground job control without script${omitTtyNewline ? " (tty emits no trailing newline)" : ""}`, async () => {
+    const setsid = "/usr/bin/setsid";
+    const proc = spawnBunNativePty(process.cwd(), { ...process.env, PS1: "", TERM: "xterm-256color" }, "/bin/bash", 80, 24, setsid);
+    expect(proc).not.toBeNull();
+    const output: string[] = [];
+    proc!.stdout.on("data", (chunk) => output.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8")));
+    const exited = new Promise<void>((resolve) => proc!.on("exit", () => resolve()));
+    try {
+      // Assert command output while the PTY is open, not against an exit/data
+      // callback race. Require a complete marker line rather than echoed input.
+      // Affected uutils tty versions omit the trailing newline (uutils/coreutils#10239).
+      // Own the separator: the job-control marker must still be a complete output line.
+      const ttySetup = omitTtyNewline ? 'tty() { local name; name=$(/usr/bin/tty) && printf "%s" "$name"; }; ' : "";
+      proc!.stdin.write(`${ttySetup}tty_name=$(tty) && printf '%s\\n' "$tty_name"; /bin/sh -c 't=$(ps -o tpgid= -p $$); p=$(ps -o pgid= -p $$); [ $t -eq $p ] && echo PICLAW_JOB_CONTROL_OK'\n`);
+      const deadline = Date.now() + 5_000;
+      while (!/^PICLAW_JOB_CONTROL_OK\r?$/m.test(output.join("")) && Date.now() < deadline) await Bun.sleep(10);
+      const text = output.join("");
+      expect(text).toMatch(/\/dev\/pts\/\d+/);
+      expect(text).toMatch(/^PICLAW_JOB_CONTROL_OK\r?$/m);
+      expect(text).not.toContain("no job control");
+      expect(text).not.toContain("can't access tty");
+      proc!.stdin.write("exit\n");
+      await Promise.race([
+        exited,
+        Bun.sleep(2_000).then(() => { throw new Error("native PTY shell did not exit"); }),
+      ]);
+    } finally { proc!.kill(); }
+  }, 10_000);
+}
 
 test("terminal session service resolves owner from web session cookie", () => {
   createWebSession("terminal-token", "user-1", 3600, "totp");
