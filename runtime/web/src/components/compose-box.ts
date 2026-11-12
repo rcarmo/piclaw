@@ -973,12 +973,15 @@ export function QueuedFollowupStack({
                 const rowText = typeof item?.content === 'string' ? goalInputDisplayText(item.content) : '';
                 const parsed = parseQueuedContent(rowText);
                 if (!parsed.text.trim() && parsed.fileRefs.length === 0 && parsed.folderRefs.length === 0 && parsed.messageRefs.length === 0 && parsed.attachmentRefs.length === 0) return null;
-                const canMoveUp = index > 0;
-                const canMoveDown = index < items.length - 1;
+                // Steering is placed before any follow-up, so items move only within their group.
+                const steering = item?.mode === 'steer';
+                const canMoveUp = index > 0 && (items[index - 1]?.mode === 'steer') === steering;
+                const canMoveDown = index < items.length - 1 && (items[index + 1]?.mode === 'steer') === steering;
                 const canReturnToEditor = true;
                 return html`
-                    <div class="compose-queue-stack-item" data-testid="queue-item" role="listitem">
+                    <div class=${`compose-queue-stack-item${steering ? ' is-steering' : ''}`} data-testid="queue-item" data-queue-mode=${steering ? 'steer' : 'followUp'} role="listitem">
                         <div class="compose-queue-stack-content" title=${rowText}>
+                            ${steering && html`<div class="compose-queue-stack-mode">${t('compose.queueSteering')}</div>`}
                             ${parsed.text.trim() && html`<div class="compose-queue-stack-text">${parsed.text}</div>`}
                             ${(parsed.messageRefs.length > 0 || parsed.fileRefs.length > 0 || parsed.folderRefs.length > 0 || parsed.attachmentRefs.length > 0) && html`
                                 <div class="compose-queue-stack-refs">
@@ -1071,7 +1074,7 @@ export function QueuedFollowupStack({
                                     </svg>
                                 </button>
                             `}
-                            <button
+                            ${!steering && html`<button
                                 class="compose-queue-stack-steer-btn"
                                 type="button"
                                 title=${t('compose.injectSteer')}
@@ -1083,7 +1086,7 @@ export function QueuedFollowupStack({
                                     <polyline points="14 12 18 8 22 12" />
                                 </svg>
                                 <span>${t('compose.steer')}</span>
-                            </button>
+                            </button>`}
                             <button
                                 class="compose-queue-stack-close-btn queue-remove"
                                 data-action="remove"

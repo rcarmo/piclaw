@@ -87,6 +87,7 @@ export interface WebChannelConstructorFactoryRuntimeOpts {
   filterNativeTimeline?: WebChannelLike["filterNativeTimeline"];
   readNativeQueue?: WebChannelLike["readNativeQueue"];
   controlNativeQueue?: WebChannelLike["controlNativeQueue"];
+  reorderNativeQueue?: WebChannelLike["reorderNativeQueue"];
   dispatchAcceptedInput?: WebChannelLike["dispatchAcceptedInput"];
   resumeNativeInputs?: WebChannelLike["resumeNativeInputs"];
 }

@@ -90,6 +90,16 @@ applicationTest("SDK owns busy submit, follow-up, steering and source fences wit
     const promoted=accept("promote this existing follow-up"),removed=accept("remove this queued input");
     const promotedId=await runtime.submitMessage(promoted,"followUp"),removedId=await runtime.submitMessage(removed,"followUp");
     const acceptedBefore=database.query("SELECT record FROM submissions WHERE id=?").get(promotedId);
+    // Reorder is positional in the SDK inbox: only an exact permutation of the
+    // current queue applies, and accepted submissions are not rewritten.
+    const queued=()=>runtime.readMessageInbox(queueBinding).then(items=>items.map(item=>item.submissionId));
+    expect(await queued()).toEqual([followup,steering,promotedId,removedId]);
+    expect(await runtime.reorderQueuedMessages(queueBinding,[steering,followup])).toBe(false);
+    expect(await runtime.reorderQueuedMessages(queueBinding,[steering,steering,followup,removedId])).toBe(false);
+    expect(await queued()).toEqual([followup,steering,promotedId,removedId]);
+    expect(await runtime.reorderQueuedMessages(queueBinding,[steering,promotedId,followup,removedId])).toBe(true);
+    expect(await queued()).toEqual([steering,promotedId,followup,removedId]);
+    expect(database.query("SELECT record FROM submissions WHERE id=?").get(promotedId)).toEqual(acceptedBefore);
     // Fault the public conversation calls, not SDK tables or accepted records.
     // The real mode transaction below must remain intact when only wake fails.
     const harness=Reflect.get(runtime,"harness") as import("../../runtime/durable-engine/qualification/durable.ts").Harness;
@@ -122,7 +132,8 @@ applicationTest("SDK owns busy submit, follow-up, steering and source fences wit
     expect(a.status).toBe("done");expect(b.status).toBe("done");expect(c.status).toBe("done");
     expect(a.answer).toBe(c.answer);expect(b.answer).not.toBe(a.answer);
     expect(fixture.host.effects).toBe(1);expect(fixture.host.modelCalls).toBe(3);
-    expect(captures.map(capture=>capture.inputs.map(input=>input.sourceId))).toEqual([[first.sourceId],[first.sourceId,steer.sourceId],[second.sourceId,promoted.sourceId]]);
+    // The reordered queue places promoted before the earlier follow-up.
+    expect(captures.map(capture=>capture.inputs.map(input=>input.sourceId))).toEqual([[first.sourceId],[first.sourceId,steer.sourceId],[promoted.sourceId,second.sourceId]]);
     expect(captures[0]!.operation.operationId).toBe(captures[1]!.operation.operationId);
     const firstAnswer=await runtime.readMessageResult(first),steerAnswer=await runtime.readMessageResult(steer),followupAnswer=await runtime.readMessageResult(second);
     expect(firstAnswer?.answer?.text).toBe("synthetic answer");
@@ -130,7 +141,7 @@ applicationTest("SDK owns busy submit, follow-up, steering and source fences wit
     expect(steerAnswer?.inputs).toEqual(firstAnswer?.inputs);
     expect(steerAnswer?.runId).toBe(firstAnswer?.runId);
     expect(firstAnswer?.runId).toBe(captures[0]!.operation.operationId);
-    expect(followupAnswer?.inputs.map(input=>input.sourceId)).toEqual([second.sourceId,promoted.sourceId]);
+    expect(followupAnswer?.inputs.map(input=>input.sourceId)).toEqual([promoted.sourceId,second.sourceId]);
     expect(followupAnswer?.runId).not.toBe(firstAnswer?.runId);
     const calls=fixture.host.modelCalls;
     expect(await runtime.submitMessage(first)).toBe(primary);

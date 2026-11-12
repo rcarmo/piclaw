@@ -191,7 +191,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "299765ed713e23d6f400821bcabe0913679344fcfc87b987f9b7c36ac32cd486",
       "state": "retained-decoupled",
-      "currentSha256": "979125e98070d14bb11d0186c34d8c932bf3b716e6c6be1fd515ed4da6a66955",
+      "currentSha256": "3a5948d7b2e4495a26d443561dbab0ec829b422636e4218eb52800cf20d3ec44",
       "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
       "directImportCallers": [
         {
@@ -379,7 +379,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "2f6a632f863196fccd48a3f3912c8bef407fb2ca5d07c13d32400dcef84c87cc",
       "state": "retained-decoupled",
-      "currentSha256": "858f07f1882a941bcb960b6e8e0536d43383494c187ac2f33bbdcb42cf7fc371",
+      "currentSha256": "1ff9812ba1fa52437b9fcc8d695e9c1e10ee8c8f30dabb5d2f4c5a16c475b78b",
       "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
       "directImportCallers": [
         {
@@ -889,7 +889,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "98383ffa112e2169a0438042b5f2c5fffb794ba99ce7b79002daca6802f7b9b0",
       "state": "retained-decoupled",
-      "currentSha256": "eb8303ea1995e5dda175651f430552c8e5ffb149e73db9f60d77363604e4ad75",
+      "currentSha256": "1841f4d31a1ef30dd1803ed9469cddb30bc8e03dc7a10385a4a74502ea4ccbcf",
       "currentPurpose": "existing model choice, price/unknown display and token/context/status DTO; same interaction and authority",
       "directImportCallers": [
         {
@@ -1903,7 +1903,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "dd4c3fbbbf8d9e5763cbc6811a9f641d11aa9f57e736ac36b47399eae0848418",
       "state": "retained-decoupled",
-      "currentSha256": "72004faf1acd3fa47f5180b7873c750bafa431ffc073e23b0c41745501bd1856",
+      "currentSha256": "ee38fc25af7243f17a2c085fb7b363515aeaa36cefeb5b3d928dec3d250cb4a4",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {

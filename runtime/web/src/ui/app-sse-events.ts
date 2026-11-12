@@ -465,6 +465,8 @@ export function handleAppSseEvent(
 
   if (eventType === 'agent_steer_queued') {
     if (!isCurrentChatEvent) return;
+    // A queued item promoted to steering stays queued until the next tool round.
+    void refreshQueueState();
     if (shouldIgnoreMismatchedTurn(turnId, currentTurnIdRef.current)) {
       return;
     }
@@ -493,6 +495,12 @@ export function handleAppSseEvent(
     if (isMainTimelineView(viewStateRef.current)) {
       void refreshTimeline();
     }
+    return;
+  }
+
+  if (eventType === 'agent_followup_reordered') {
+    if (!isCurrentChatEvent) return;
+    void refreshQueueState();
     return;
   }
 

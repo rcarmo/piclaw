@@ -833,6 +833,17 @@
     padding: 1px 6px;
 }
 
+/* A queued item promoted to steering: placed after the current tool round. */
+.compose-queue-stack-mode {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent-color);
+}
+
+.compose-queue-stack-item.is-steering {
+    border-left: 2px solid var(--accent-color);
+}
+
 .compose-queue-stack-actions {
     flex: 0 0 auto;
     display: inline-flex;

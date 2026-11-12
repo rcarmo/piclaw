@@ -94,6 +94,7 @@ export interface WebChannelOpts {
   filterNativeTimeline?: WebChannelLike["filterNativeTimeline"];
   readNativeQueue?: WebChannelLike["readNativeQueue"];
   controlNativeQueue?: WebChannelLike["controlNativeQueue"];
+  reorderNativeQueue?: WebChannelLike["reorderNativeQueue"];
   dispatchAcceptedInput?: WebChannelLike["dispatchAcceptedInput"];
   resumeNativeInputs?: WebChannelLike["resumeNativeInputs"];
 }
@@ -520,6 +521,7 @@ export class WebChannel implements WebChannelLike {
   declare filterNativeTimeline?: WebChannelOpts["filterNativeTimeline"];
   declare readNativeQueue?: WebChannelOpts["readNativeQueue"];
   declare controlNativeQueue?: WebChannelOpts["controlNativeQueue"];
+  declare reorderNativeQueue?: WebChannelOpts["reorderNativeQueue"];
   declare dispatchAcceptedInput?: WebChannelOpts["dispatchAcceptedInput"];
   declare resumeNativeInputs?: WebChannelOpts["resumeNativeInputs"];
   responses = new ResponseService();
