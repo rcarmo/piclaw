@@ -1,5 +1,6 @@
 export interface FollowupQueueItemLike {
   row_id?: string | number | null;
+  mode?: unknown;
   [key: string]: unknown;
 }
 
