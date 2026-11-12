@@ -159,6 +159,28 @@ export async function searchPosts(query, limit = 50, offset = 0, chatJid = null,
     return request(`/search?q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}${chatQuery}${scopeQuery}${rootQuery}${imagesQuery}${attachmentsQuery}`);
 }
 
+/** Stop one running tool call; the agent continues with an aborted result. */
+export async function abortAgentTool(chatJid, callId, note = '') {
+    return request('/agent/tool-abort', {
+        method: 'POST',
+        body: JSON.stringify({ chat_jid: chatJid || undefined, call_id: callId, ...(note.trim() ? { note: note.trim() } : {}) }),
+    });
+}
+
+/**
+ * Committed "Worked for …" log of one durable agent reply, or one paged step of
+ * it. A null messageId reads the running turn instead.
+ */
+export async function getTurnActivity(chatJid, messageId, step = null, offset = 0, emittedOffset = 0) {
+    const params = new URLSearchParams({ chat_jid: String(chatJid || '') });
+    if (messageId === null || messageId === undefined) params.set('live', '1');
+    else params.set('message_id', String(messageId));
+    if (step) params.set('step', step);
+    if (offset > 0) params.set('offset', String(offset));
+    if (emittedOffset > 0) params.set('emitted_offset', String(emittedOffset));
+    return request(`/agent/turn-activity?${params}`);
+}
+
 /**
  * Get a thread by ID
  */
@@ -620,11 +642,12 @@ export async function steerAgentQueueItem(rowId, chatJid = null) {
     return response.json();
 }
 
-export async function reorderAgentQueueItem(fromIndex, toIndex, chatJid = null) {
+/** Persist the whole queue in a new order (row ids); 409 when the queue changed meanwhile. */
+export async function reorderAgentQueue(order, chatJid = null) {
     const response = await fetch(API_BASE + '/agent/queue-reorder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from_index: fromIndex, to_index: toIndex, chat_jid: chatJid || undefined }),
+        body: JSON.stringify({ order, chat_jid: chatJid || undefined }),
     });
 
     if (!response.ok) {
@@ -1128,6 +1151,7 @@ export class SSEClient {
         bindJsonEvent('agent_followup_queued');
         bindJsonEvent('agent_followup_consumed');
         bindJsonEvent('agent_followup_removed');
+        bindJsonEvent('agent_followup_reordered');
         bindJsonEvent('workspace_update');
         bindJsonEvent('agent_draft');
         bindJsonEvent('agent_draft_delta');

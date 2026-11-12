@@ -99,3 +99,20 @@ test('shouldRefreshQueueStateFromResponse detects queued responses and queued co
   expect(shouldRefreshQueueStateFromResponse({ queued: 'sent', command: {} })).toBe(false);
   expect(shouldRefreshQueueStateFromResponse(null)).toBe(false);
 });
+
+test('steering rows sort first, keep their order and move only within their group', async () => {
+  const { normalizeFollowupQueueItems, moveFollowupQueueItem, setFollowupQueueItemMode, haveSameFollowupQueueRows } = await import('../../web/src/ui/app-followup-queue.ts');
+  const items = normalizeFollowupQueueItems([
+    { row_id: 1, mode: 'followUp' }, { row_id: 2, mode: 'steer' }, { row_id: 3, mode: 'followUp' }, { row_id: 4, mode: 'steer' },
+  ], new Set());
+  expect(items.map((item) => item.row_id)).toEqual([2, 4, 1, 3]);
+  expect(moveFollowupQueueItem(items, 3, 2)?.map((item) => item.row_id)).toEqual([2, 4, 3, 1]);
+  expect(moveFollowupQueueItem(items, 2, 1)).toBeNull();
+  expect(moveFollowupQueueItem(items, 0, 9)).toBeNull();
+  const steered = setFollowupQueueItemMode(items, 3, 'steer');
+  expect(steered.map((item) => [item.row_id, item.mode])).toEqual([[2, 'steer'], [4, 'steer'], [3, 'steer'], [1, 'followUp']]);
+  expect(setFollowupQueueItemMode(steered, 3, 'followUp').map((item) => item.row_id)).toEqual([2, 4, 3, 1]);
+  expect(setFollowupQueueItemMode([{ row_id: 5, mode: 'steer' }], 5, undefined)).toEqual([{ row_id: 5 }]);
+  expect(haveSameFollowupQueueRows(items, items.map((item) => ({ ...item })))).toBe(true);
+  expect(haveSameFollowupQueueRows([{ row_id: 1, mode: 'followUp' }], [{ row_id: 1, mode: 'steer' }])).toBe(false);
+});

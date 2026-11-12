@@ -55,18 +55,17 @@ export function buildPlanSubmissionPrompt(markdown: string): string {
 }
 
 function currentChatJid(): string {
-  try {
-    return new URL(window.location.href).searchParams.get('chat_jid')?.trim() || 'web:default';
-  } catch {
-    return 'web:default';
-  }
+  return new URL(location.href).searchParams.get('chat_jid')?.trim() || 'web:default';
 }
 
 async function planRequest(chatJid: string, init?: RequestInit) {
   const response = await fetch(`${PLAN_API}?chat_jid=${encodeURIComponent(chatJid)}`, { credentials: 'same-origin', ...init });
   // Without the add-on the route is unknown: 404, or a non-JSON server error page.
   const json = (response.headers.get('content-type') || '').includes('json');
-  if (response.status === 404 || (!response.ok && !json)) return { unavailable: true };
+  if (response.status === 404 || (!response.ok && !json)) {
+    if (init?.method === 'POST') throw new Error('Plan API unavailable. Edits were not saved or submitted.');
+    return { unavailable: true };
+  }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload?.ok === false) throw new Error(payload?.error || `${response.status} ${response.statusText}`);
   return payload?.plan || payload;
@@ -74,17 +73,33 @@ async function planRequest(chatJid: string, init?: RequestInit) {
 
 // Drawn rather than typed: symbol-font fallbacks gave the half-circle glyph
 // different metrics from the others and clipped it.
+const statusIcon = path => html`<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">${path}</svg>`;
 const STATUS_ICONS = {
-  completed: html`<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-  in_progress: html`<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor"/></svg>`,
-  pending: html`<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>`,
+  completed: statusIcon(html`<path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`),
+  in_progress: statusIcon(html`<circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor"/>`),
+  pending: statusIcon(html`<circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/>`),
 };
 const STATUS_LABELS = { completed: 'Completed', in_progress: 'In progress', pending: 'Pending' };
 
 function PlanPaneView({ onDirtyChange }) {
   const [chatJid, setChatJid] = useState(currentChatJid);
-  const [markdown, setMarkdown] = useState('');
-  const [draft, setDraft] = useState(null);
+  const drafts = useRef(new Map());
+  useEffect(() => {
+    const sync = () => setChatJid(currentChatJid());
+    window.addEventListener('popstate', sync);
+    window.addEventListener('piclaw:current-chat-changed', sync);
+    return () => { window.removeEventListener('popstate', sync); window.removeEventListener('piclaw:current-chat-changed', sync); };
+  }, []);
+  return html`<${ChatPlanPane} key=${chatJid} chatJid=${chatJid} drafts=${drafts.current} onDirtyChange=${onDirtyChange} />`;
+}
+
+function ChatPlanPane({ chatJid, drafts, onDirtyChange }) {
+  const retained = drafts.get(chatJid);
+  const [markdown, setMarkdown] = useState(retained?.markdown || '');
+  const [draft, setDraft] = useState(retained?.draft ?? null);
+  const active = useRef(true);
+  const requestSequence = useRef(0);
+  useEffect(() => () => { active.current = false; }, []);
   const [updatedAt, setUpdatedAt] = useState(null);
   const [status, setStatus] = useState({ text: 'Loading…', kind: 'info' });
   const [busy, setBusy] = useState(false);
@@ -92,17 +107,25 @@ function PlanPaneView({ onDirtyChange }) {
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const editing = draft !== null;
+  const warnChanged = () => setStatus({ text: 'Plan changed; save or cancel your edits.', kind: 'warning' });
+  const showError = error => setStatus({ text: String(error?.message || error), kind: 'error' });
 
-  useEffect(() => { onDirtyChange?.(editing && draft !== markdown); }, [draft, editing, markdown, onDirtyChange]);
+  useEffect(() => {
+    if (editing && draft !== markdown) drafts.set(chatJid, { draft, markdown });
+    onDirtyChange?.(drafts.size > 0);
+  }, [chatJid, draft, drafts, editing, markdown, onDirtyChange]);
 
   const load = useCallback(async (label = '') => {
     if (draftRef.current !== null) {
-      setStatus({ text: 'Plan changed elsewhere; save or cancel to update.', kind: 'warning' });
+      warnChanged();
       return;
     }
+    const sequence = ++requestSequence.current;
     setBusy(true);
     try {
       const plan = await planRequest(chatJid);
+      if (!active.current || sequence !== requestSequence.current) return;
+      if (draftRef.current !== null) { warnChanged(); return; }
       if (plan.unavailable) {
         setUnavailable(true);
         return;
@@ -112,7 +135,7 @@ function PlanPaneView({ onDirtyChange }) {
       setUpdatedAt(plan.updated_at || null);
       setStatus({ text: label || (plan.updated_at ? 'Loaded' : 'Default plan'), kind: 'info' });
     } catch (error) {
-      setStatus({ text: String(error?.message || error), kind: 'error' });
+      showError(error);
     } finally {
       setBusy(false);
     }
@@ -121,19 +144,14 @@ function PlanPaneView({ onDirtyChange }) {
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
-    const syncChat = () => setChatJid(currentChatJid());
     const onStatus = (event) => {
       const payload = event?.detail?.payload || event?.detail || {};
       if (!PLAN_CHANGE_KEYS.has(payload?.key)) return;
       if ((payload.chat_jid || 'web:default') !== chatJid) return;
       void load(payload.source === 'tool' ? 'Updated by the model' : 'Updated');
     };
-    window.addEventListener('popstate', syncChat);
-    window.addEventListener('piclaw:current-chat-changed', syncChat);
     window.addEventListener('piclaw-extension-ui:status', onStatus);
     return () => {
-      window.removeEventListener('popstate', syncChat);
-      window.removeEventListener('piclaw:current-chat-changed', syncChat);
       window.removeEventListener('piclaw-extension-ui:status', onStatus);
     };
   }, [chatJid, load]);
@@ -143,13 +161,15 @@ function PlanPaneView({ onDirtyChange }) {
     setBusy(true);
     try {
       const plan = await planRequest(chatJid, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_jid: chatJid, markdown: next }) });
+      if (!active.current) return null;
       setMarkdown(plan.markdown ?? next);
       setUpdatedAt(plan.updated_at || null);
+      drafts.delete(chatJid);
       setDraft(null);
       setStatus({ text: 'Saved', kind: 'ok' });
       return plan.markdown ?? next;
     } catch (error) {
-      setStatus({ text: String(error?.message || error), kind: 'error' });
+      showError(error);
       return null;
     } finally {
       setBusy(false);
@@ -161,12 +181,14 @@ function PlanPaneView({ onDirtyChange }) {
     setBusy(true);
     try {
       const plan = await planRequest(chatJid, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_jid: chatJid, action: 'reset' }) });
+      if (!active.current) return;
       setMarkdown(plan.markdown || '');
       setUpdatedAt(plan.updated_at || null);
+      drafts.delete(chatJid);
       setDraft(null);
       setStatus({ text: 'Reset', kind: 'ok' });
     } catch (error) {
-      setStatus({ text: String(error?.message || error), kind: 'error' });
+      showError(error);
     } finally {
       setBusy(false);
     }
@@ -174,9 +196,9 @@ function PlanPaneView({ onDirtyChange }) {
 
   const submit = useCallback(async () => {
     const saved = editing ? await save() : markdown;
-    if (saved === null) return;
+    if (saved === null || !active.current) return;
     if (!String(saved).trim()) {
-      setStatus({ text: 'Plan is empty; nothing to submit.', kind: 'error' });
+      setStatus({ text: 'Plan is empty.', kind: 'error' });
       return;
     }
     setBusy(true);
@@ -185,10 +207,14 @@ function PlanPaneView({ onDirtyChange }) {
         method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: buildPlanSubmissionPrompt(String(saved)), mode: 'auto' }),
       });
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || `${response.status} ${response.statusText}`);
+      }
+      if (!active.current) return;
       setStatus({ text: 'Submitted to model', kind: 'ok' });
     } catch (error) {
-      setStatus({ text: String(error?.message || error), kind: 'error' });
+      showError(error);
     } finally {
       setBusy(false);
     }
@@ -215,7 +241,7 @@ function PlanPaneView({ onDirtyChange }) {
       <div class="plan-pane-toolbar">
         ${editing
           ? html`<button type="button" class="plan-pane-primary" disabled=${busy} onClick=${() => void save()}>Save</button>
-                 <button type="button" disabled=${busy} onClick=${() => { setDraft(null); setStatus({ text: 'Edits discarded', kind: 'info' }); }}>Cancel</button>`
+                 <button type="button" disabled=${busy} onClick=${() => { drafts.delete(chatJid); setDraft(null); setStatus({ text: 'Edits discarded', kind: 'info' }); }}>Cancel</button>`
           : html`<button type="button" disabled=${busy} onClick=${() => setDraft(markdown)}>Edit</button>`}
         <button type="button" disabled=${busy || editing} onClick=${() => void load('Refreshed')}>Refresh</button>
         <button type="button" disabled=${busy} onClick=${() => void reset()}>Reset</button>
@@ -224,7 +250,11 @@ function PlanPaneView({ onDirtyChange }) {
       </div>
       ${editing
         ? html`<textarea class="plan-pane-editor" aria-label="Plan Markdown" spellcheck="false" value=${draft}
-            onInput=${(event) => setDraft(event.currentTarget.value)}
+            onInput=${(event) => {
+              const next = event.currentTarget.value;
+              drafts.set(chatJid, { draft: next, markdown });
+              setDraft(next);
+            }}
             onKeyDown=${(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 's') { event.preventDefault(); void save(); } }}></textarea>`
         : html`
           <ol class="plan-pane-items">

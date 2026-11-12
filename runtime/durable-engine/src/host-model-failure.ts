@@ -1,7 +1,7 @@
 import { isRetryableAssistantError, type AssistantMessage } from "@earendil-works/pi-ai";
 import { isProxy } from "node:util/types";
 const phases = ["validation", "source", "admission", "provider", "conversion", "accounting"] as const;
-const categories = ["aborted", "timeout", "authentication", "rate_limit", "quota", "budget", "context_limit", "transport", "unavailable", "goal_lifecycle", "unknown"] as const;
+const categories = ["aborted", "timeout", "authentication", "rate_limit", "quota", "budget", "context_limit", "transport", "unavailable", "goal_lifecycle", "source_integrity", "unknown"] as const;
 export type ModelFailurePhase = typeof phases[number];
 export interface ModelFailure {
   phase: ModelFailurePhase;
@@ -18,6 +18,11 @@ export class GoalRequestDenied extends Error {
   constructor(message: string) { super(message); this.name = "GoalRequestDenied"; }
 }
 
+/** A loaded add-on lost its source identity. Never infer this from provider text. */
+export class InstalledAddonSourceChanged extends Error {
+  constructor(label: string, version?: string) { super(`Installed ${label} source changed${version ? `. This Core release supports ${label} ${version}.` : ""}`); this.name = "InstalledAddonSourceChanged"; }
+}
+
 /** Inspect private errors, but export only fixed categories and an HTTP status.
  * Never retain exception text, headers, URLs, partial output or abort reasons. */
 export function classifyModelFailure(phase: ModelFailurePhase, error: unknown): ModelFailure {
@@ -25,6 +30,8 @@ export function classifyModelFailure(phase: ModelFailurePhase, error: unknown): 
   // provider wording or a forged code as authority for this classification.
   if (phase === "source" && error && typeof error === "object" && !isProxy(error) && error instanceof GoalRequestDenied)
     return { phase, category: "goal_lifecycle" };
+  if (phase === "source" && error && typeof error === "object" && !isProxy(error) && error instanceof InstalledAddonSourceChanged)
+    return { phase, category: "source_integrity" };
   const parts: string[] = [], seen = new Set<object>();
   let status: unknown, aborted = false, node = error;
   for (let depth = 0; depth < 4; depth++) {
@@ -90,7 +97,7 @@ export function parseModelFailure(detail: unknown): ModelFailure | undefined {
   const body=detail.startsWith(compactionPrefix)?detail.slice(compactionPrefix.length):detail;
   const match = body.match(/^Host model request failed \[phase=(\w+); category=(\w+)(?:; http=([45](?:\d\d|:\d:\d)))?(?:; evidence=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|hex:(?:[0-9a-f]{2}:){15}[0-9a-f]{2}))?(?:; retry=(connection error|service unavailable|insufficient_quota))?(?:; context=(maximum context length exceeded))?(?:; upstream=hex:((?:[0-9a-f]{2}:){0,527}[0-9a-f]{2}))?\]$/);
   if (!match || !phases.includes(match[1] as ModelFailurePhase) || !categories.includes(match[2] as ModelFailure["category"])) return;
-  if (match[2] === "goal_lifecycle" && match[1] !== "source") return;
+  if ((match[2] === "goal_lifecycle" || match[2] === "source_integrity") && match[1] !== "source") return;
   if (match[5] && (match[5] === "insufficient_quota" ? match[2] !== "quota" && match[2] !== 'budget' : match[5] === "connection error" ? match[2] !== "transport" : match[2] !== "unavailable")) return;
   if (match[6] && match[2] !== "context_limit") return;
   const hex = match[4]?.startsWith("hex:") ? match[4].slice(4).replace(/:/g, "") : undefined;
@@ -114,14 +121,19 @@ export function modelFailureNotice(detail: unknown, submissionId: number): strin
     budget: 'The model request was blocked by budget policy or could not be accounted safely.',
     context_limit: "The request exceeded the model's context or input limit.", transport: "The model connection failed.",
     goal_lifecycle: "The Goal input lifecycle changed.",
+    source_integrity: "A local integrity check stopped this turn because an installed add-on changed after it was loaded. This is a local installation problem, not a model-provider rejection.",
     unavailable: "The model provider was unavailable.", unknown: "The model request failed or was denied.",
   };
   const reason = failure?.category === 'budget' ? reasons.budget : failure?.phase === "accounting" ? "The model request could not be reconciled safely; its outcome may be uncertain."
     : failure?.phase === "conversion" ? "The model response could not be processed safely."
-    : failure ? reasons[failure.category] : "The model request failed or was denied; the underlying reason was not recorded.";
+    : failure?.phase === "source" && failure.category === "unknown" && !failure.upstreamMessage && failure.httpStatus === undefined ? "A local request-safety check failed. The available diagnostic does not establish a model-provider failure."
+    : failure?.phase === "validation" && failure.category === "unknown" ? "The request could not be validated locally."
+    : failure?.phase === "admission" && failure.category === "unknown" ? "The request could not be admitted locally."
+    : failure ? reasons[failure.category] : "The turn failed; the underlying reason was not recorded.";
   const retained = failure?.evidenceId ? `\n\nFailure details retained: ${failure.evidenceId}.` : "";
   const classified = failure?.phase === "accounting" ? ` Provider failure category: ${failure.category}.` : "";
-  const upstream = failure?.upstreamMessage ? `\n\nUpstream error (redacted): ${failure.upstreamMessage.replace(/[\\`*_{}\[\]<>#!|]/g, "\\$&")}` : "";
+  const upstream = failure?.upstreamMessage ? `\n\n${failure.category === "source_integrity" ? "Local check" : "Upstream error"} (redacted): ${failure.upstreamMessage.replace(/[\\`*_{}\[\]<>#!|]/g, "\\$&")}` : "";
+  const recovery = failure?.category === "source_integrity" ? "\n\nRestore the add-on version supported by this Core release, then safely reload the application to revalidate it. Continue from recorded progress after checking earlier tool results. Other inputs in the same active turn may share this failure reference." : "";
   const http = failure?.httpStatus ? ` HTTP ${failure.httpStatus}.` : "";
-  return `**Turn failed**\n\n${reason}${classified}${http}${upstream}\n\nTool actions may already have completed. Check their results before continuing; resending the whole request could repeat them. This turn will not be retried automatically.\n\nReference: native submission ${submissionId}.${retained}`;
+  return `**Turn failed**\n\n${reason}${classified}${http}${upstream}${recovery}\n\nTool actions may already have completed. Check their results before continuing; resending the whole request could repeat them. This turn will not be retried automatically.\n\nReference: native submission ${submissionId}.${retained}`;
 }

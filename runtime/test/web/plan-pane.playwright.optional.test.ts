@@ -96,3 +96,30 @@ browserTest('the Plan pane explains when the add-on is not installed', async () 
     expect(await page.locator('.plan-pane-unavailable').textContent()).toContain('plan-sidebar add-on');
   } finally { available = true; await page.close(); }
 }, 30000);
+
+browserTest('Plan drafts stay scoped to their chat and survive switching without being saved into another chat',async()=>{
+ const page=await browser.newPage();const writes:any[]=[];
+ await page.route('**/agent/addons/api/plan-sidebar/plan?*',async route=>{const chat=new URL(route.request().url()).searchParams.get('chat_jid');if(route.request().method()==='POST')writes.push({chat,body:route.request().postDataJSON()});await route.fulfill({json:{ok:true,plan:{markdown:`- [ ] ${chat}`,updated_at:null}}});});
+ const switchTo=async(chat:string)=>{await page.evaluate(chat=>{history.pushState({},'',`?chat_jid=${encodeURIComponent(chat)}`);window.dispatchEvent(new CustomEvent('piclaw:current-chat-changed'));},chat);};
+ try{
+  await page.goto(`${server.url}?chat_jid=chat-a`);await page.locator('.plan-pane-item').waitFor();await page.getByRole('button',{name:'Edit',exact:true}).click();await page.locator('textarea').fill('- [ ] PRIVATE A DRAFT');
+  await switchTo('chat-b');await page.waitForFunction(()=>document.querySelector('.plan-pane-chat')?.textContent?.trim()==='chat-b');
+  expect(await page.locator('textarea').count()).toBe(0);expect(await page.locator('.plan-pane-items').textContent()).not.toContain('PRIVATE A DRAFT');
+  await switchTo('chat-a');await page.locator('textarea').waitFor();expect(await page.locator('textarea').inputValue()).toBe('- [ ] PRIVATE A DRAFT');expect(writes).toEqual([]);
+ }finally{await page.close();}
+},30000);
+
+browserTest('missing Plan API refuses Save and never submits the unsaved draft',async()=>{
+ const page=await browser.newPage();let messages=0;
+ await page.route('**/agent/addons/api/plan-sidebar/plan?*',route=>route.request().method()==='POST'?route.fulfill({status:404,json:{error:'No plan API'}}):route.fulfill({json:{markdown:'- [ ] Original',updated_at:null}}));
+ await page.route('**/agent/default/message?*',route=>{messages++;return route.fulfill({json:{ok:true}});});
+ try{await page.goto(`${server.url}?chat_jid=chat-a`);await page.locator('.plan-pane-item').waitFor();await page.getByRole('button',{name:'Edit',exact:true}).click();await page.locator('textarea').fill('- [ ] Unsaved');await page.getByRole('button',{name:'Submit to model',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.plan-pane-status')?.classList.contains('error'));expect(messages).toBe(0);expect(await page.locator('textarea').inputValue()).toBe('- [ ] Unsaved');}
+ finally{await page.close();}
+},30000);
+
+browserTest('a late Plan response cannot replace a different chat plan',async()=>{
+ const page=await browser.newPage();let held:import('playwright').Route|undefined;
+ await page.route('**/agent/addons/api/plan-sidebar/plan?*',async route=>{if(new URL(route.request().url()).searchParams.get('chat_jid')==='chat-a'){held=route;return;}await route.fulfill({json:{markdown:'- [ ] B ONLY',updated_at:null}});});
+ try{await page.goto(`${server.url}?chat_jid=chat-a`);await page.waitForFunction(()=>document.querySelector('.plan-pane-chat')?.textContent?.trim()==='chat-a');await page.evaluate(()=>{history.pushState({},'','?chat_jid=chat-b');window.dispatchEvent(new CustomEvent('piclaw:current-chat-changed'));});await page.getByText('B ONLY',{exact:true}).waitFor();await held!.fulfill({json:{markdown:'- [ ] PRIVATE A LATE',updated_at:null}});await page.waitForTimeout(100);expect(await page.locator('.plan-pane-items').textContent()).toContain('B ONLY');expect(await page.locator('.plan-pane-items').textContent()).not.toContain('PRIVATE A LATE');}
+ finally{await page.close();}
+},30000);

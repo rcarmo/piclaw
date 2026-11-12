@@ -1,5 +1,6 @@
 import type { SyncSqliteOperation } from "../../src/db/sqlite-async-admission.js";
 import { assertHostToolDeclaration } from "./host-tools.js";
+import { InstalledAddonSourceChanged } from "./host-model-failure.js";
 import { installedAddonProfiles, type InstalledAddonProfile } from "./host-installed-addon-profiles.js";
 import { DefaultResourceLoader, type LoadExtensionsResult, type SettingsManager, type ToolDefinition, type RegisteredCommand } from "../../src/durable-legacy-sdk.js";
 import { getInstalledAddonExtensionPaths, resolveAddonPackageEntries, listInstalledAddonPackageDirs, readInstalledAddonPackage } from "../../src/addons/package-entries.js";
@@ -72,16 +73,17 @@ const approvedGoalFiles = Object.freeze({
   "compat/extension-kv.ts": "04240517e9e8664cae2d2badb99f382100a7af3e12679cfce97087870881551c"
 });
 const approvedObservabilityFiles = Object.freeze({
-  "usage-telemetry.ts": "0a24374a9a6af4ff4dd7ef9fec97ec3f49639c34503b6f148e01ad8f00ceb4c2",
-  "package.json": "0fc81eb44c95becae9999ed54dbdc21ff293e1ecb289ee0387ab74da995bf6c4",
-  "model-speed-telemetry.ts": "a6b46ba29c71f459880c560575851312779f84163427ace6d7b1abd9e53a4b81",
+  "usage-telemetry.ts": "f79384f2981138dc568318479181050cc29858065a4307224ab3bb13abe25056",
+  "package.json": "0ded941ca3f2a06341a2116d169e751b1b30987db97e28771f4553f1187bfffa",
+  "model-speed-telemetry.ts": "3bb502620a527baa86e87a3766afa9f6ca4171fbfefab81db55da22e6a8207fa",
   "compat/extension-kv.ts": "04240517e9e8664cae2d2badb99f382100a7af3e12679cfce97087870881551c",
   "compat/log-sink.ts": "b7f04b776dc33ec8a2bbe4d803b2d7c2783b8d16b5fa4a1b54c85fb30d1ee19e",
   "compat/config.ts": "b6b5f488fc7c537185d0144de8fa58029a56c8de33ab2972683556eb989e0768",
   "compat/logger.ts": "de0fddbd49d7b4d48e3b4ae8c0cf1ab188b4ba542f77c87d57ccb510318f85fa",
   "compat/keychain.ts": "db449b3c8fb9d0008d85b05c9f7717da0b728e0f9c033bac7b86f9e17eb93bb6",
-  "compaction-telemetry.ts": "d6e51e6c04c38e97e04508c27f589089c55e3fd8c86e9ca9422a89ecd22c6697",
-  "index.ts": "7ee12cf6aa95f1f9aae277ba4bf4085232718824a83ea139aab7ff20d41a642e"
+  "compaction-telemetry.ts": "1ec8ee2344ebd3508ada3f5deb0105de091d15678a93781e7cefe2a86e6b5227",
+  "index.ts": "fe0dbfae597997ad3c2497b9ac90824b5b7b50a05d7d34458385c44869235096",
+  "native-telemetry.ts": "d2d3b92cab5aaba662ef64634d7934ddd02788eaf287f6fe700d86f51ba70a79"
 });
 const approvedResticFiles = Object.freeze({
   "binary.ts": "ff426c8c97d6e7873fce405d948db9e89138f16a948885cd6f97cce77ca9c082",
@@ -100,7 +102,7 @@ const approvedResticFiles = Object.freeze({
   "contracts.ts": "d73eea35af0c00b1dc36a98c352389804147447b5228c18cee807110fbddb27c"
 });
 const profiles = {
-  observability: { label: "Observability", name: "@rcarmo/piclaw-addon-observability", version: "0.1.22", files: approvedObservabilityFiles,
+  observability: { label: "Observability", name: "@rcarmo/piclaw-addon-observability", version: "0.1.24", files: approvedObservabilityFiles,
     shadows: [...Object.keys(approvedObservabilityFiles).filter(file => file.endsWith(".ts")).flatMap(file => [file.replace(/\.ts$/, ".js"), file.replace(/\.ts$/, ".json"), file.replace(/\.ts$/, "/index.js"), file.replace(/\.ts$/, "/package.json")]), "compat/package.json"],
     events: ["resources_discover", "session_start", "before_agent_start"] },
   restic: { label: "Restic", name: "@rcarmo/piclaw-addon-restic", version: "0.1.5", files: approvedResticFiles,
@@ -149,7 +151,12 @@ function captureApprovedSource(cwd: string, installedEntries: readonly string[],
     const candidates = [profile.name, ...(kind === "eml-viewer" ? ["piclaw-addon-eml-viewer"] : [])]
       .map(name => join(workspace, ".pi/extensions/node_modules", name)).filter(path => existsSync(path));
     if (candidates.length !== 1) return undefined;
-    const packageDir = candidates[0]!;
+    return captureApprovedPackage(workspace, candidates[0]!, installedEntries, kind);
+  } catch { return undefined; }
+}
+function captureApprovedPackage(workspace: string, packageDir: string, installedEntries: readonly string[], kind: SourceProfile): InstalledSource | undefined {
+  try {
+    const profile = sourceProfiles[kind];
     // Neither a renamed package nor a symlink out of the installed namespace
     // grants provenance. Entry/helper links may not escape the canonical root.
     if (realpathSync(packageDir) !== packageDir) return undefined;
@@ -178,6 +185,22 @@ function captureApprovedSource(cwd: string, installedEntries: readonly string[],
     return Object.freeze({ cwd: workspace, packageDir, entry, manifest, files });
   } catch { return undefined; }
 }
+/** Read-only install preflight using the same source proof as the loader. No
+ * factory evaluation or loaded-registration qualification is donated here. */
+export function inspectAddonInstall(name: string, version?: string, directory?: string): { supportedVersion: string; problem?: string } | undefined {
+  const match = Object.entries(sourceProfiles).find(([, profile]) => profile.name === name);
+  if (!match) return;
+  const [kind, profile] = match;
+  const supportedVersion = profile.version;
+  if (version !== supportedVersion) return { supportedVersion, problem: `This Core release requires ${profile.label} ${supportedVersion}. Update Core to a release supporting the requested add-on before installing it. The installed add-on has not been changed.` };
+  if (directory) {
+    const manifest = readInstalledAddonPackage(directory)?.manifest;
+    const entries = resolveAddonPackageEntries(directory, manifest?.pi?.extensions);
+    if (!captureApprovedPackage(directory, resolve(directory), entries, kind as SourceProfile))
+      return { supportedVersion, problem: `${profile.label} does not match the add-on source approved by this Core release. The installed add-on has not been changed.` };
+  }
+  return { supportedVersion };
+}
 function sameSource(a: InstalledSource | undefined, b: InstalledSource | undefined): boolean {
   return !!a && !!b && a.cwd === b.cwd && a.packageDir === b.packageDir && a.entry === b.entry && a.manifest === b.manifest && a.files === b.files;
 }
@@ -195,7 +218,7 @@ function qualifyInstalled(catalog: LoadExtensionsResult, cwd: string, kind: Prof
   const [extension, { source, definition, execute, declaration, handlerMap, handlers, tools, commands }] = candidates[0]!;
   const assertCurrent = () => {
     if (!catalog.extensions.includes(extension) || resolve(extension.resolvedPath) !== source.entry ||
-      !sameSource(source, captureApprovedSource(cwd, getInstalledAddonExtensionPaths(cwd), kind))) throw Error(`Installed ${profile.label} source changed`);
+      !sameSource(source, captureApprovedSource(cwd, getInstalledAddonExtensionPaths(cwd), kind))) throw new InstalledAddonSourceChanged(profile.label, profile.version);
     const names = kind === "observability" ? [] : kind === "goal" ? ["get_goal", "create_goal", "goal_complete", "goal_stop", "update_goal"] : [kind];
     if (definition?.name !== names[0] || extension.tools.size !== names.length || tools.length !== names.length ||
       names.some(name => !tools.some(prior => prior.name === name && extension.tools.get(name)?.definition === prior.definition && prior.definition.execute === prior.execute && JSON.stringify(prior.definition) === prior.declaration)) ||
@@ -418,11 +441,11 @@ export async function qualifyInstalledObservability(catalog: LoadExtensionsResul
   if (!qualified) return undefined;
   const exports = await import(pathToFileURL(qualified.source.entry).href) as Partial<import("./host-observability.js").ObservabilityNativeExports>;
   qualified.assertCurrent();
-  if (typeof exports.bindObservabilityConfiguration !== "function" || typeof exports.prepareObservabilityRuntime !== "function" || typeof exports.buildObservabilitySystemPrompt !== "function") throw Error("Observability native lifecycle exports required");
-  const addon = Object.freeze({ bindObservabilityConfiguration: exports.bindObservabilityConfiguration, prepareObservabilityRuntime: exports.prepareObservabilityRuntime, buildObservabilitySystemPrompt: exports.buildObservabilitySystemPrompt });
+  if (typeof exports.createNativeTelemetryContext !== "function" || typeof exports.shutdownObservabilityRuntime !== "function" || typeof exports.bindObservabilityConfiguration !== "function" || typeof exports.prepareObservabilityRuntime !== "function" || typeof exports.buildObservabilitySystemPrompt !== "function") throw Error("Observability native lifecycle exports required");
+  const addon = Object.freeze({ createNativeTelemetryContext: exports.createNativeTelemetryContext, shutdownObservabilityRuntime: exports.shutdownObservabilityRuntime, bindObservabilityConfiguration: exports.bindObservabilityConfiguration, prepareObservabilityRuntime: exports.prepareObservabilityRuntime, buildObservabilitySystemPrompt: exports.buildObservabilitySystemPrompt });
   return Object.freeze({ ...qualified, addon, assertCurrent() {
     qualified.assertCurrent();
-    if (exports.bindObservabilityConfiguration !== addon.bindObservabilityConfiguration || exports.prepareObservabilityRuntime !== addon.prepareObservabilityRuntime || exports.buildObservabilitySystemPrompt !== addon.buildObservabilitySystemPrompt) throw Error("Observability public exports changed");
+    if (exports.createNativeTelemetryContext !== addon.createNativeTelemetryContext || exports.shutdownObservabilityRuntime !== addon.shutdownObservabilityRuntime || exports.bindObservabilityConfiguration !== addon.bindObservabilityConfiguration || exports.prepareObservabilityRuntime !== addon.prepareObservabilityRuntime || exports.buildObservabilitySystemPrompt !== addon.buildObservabilitySystemPrompt) throw Error("Observability public exports changed");
   } });
 }
 
@@ -495,7 +518,7 @@ export async function qualifyInstalledAddon(catalog: LoadExtensionsResult, cwd: 
   const prior = extension && loadedInstalledSources.get(catalog)?.get(extension);
   const modules: { file: string; exports: Record<string, unknown>; functions: Readonly<Record<string, unknown>> }[] = [];
   const assertCurrent = () => {
-    if (!sameSource(source, captureApprovedSource(cwd, getInstalledAddonExtensionPaths(cwd), kind))) throw Error(`Installed ${kind} source changed`);
+    if (!sameSource(source, captureApprovedSource(cwd, getInstalledAddonExtensionPaths(cwd), kind))) throw new InstalledAddonSourceChanged(profile.label, profile.version);
     if (extension) {
       if (!prior || !catalog.extensions.includes(extension) || extension.handlers !== prior.handlerMap ||
         extension.tools.size !== prior.tools.length || extension.commands.size !== prior.commands.length || extension.shortcuts.size ||

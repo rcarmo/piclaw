@@ -60,12 +60,14 @@ export function AddonsSection({ setStatus, filter = '' }) {
         setStatus?.(tr('settings.addons.installing', { slug }), 'info');
         try {
             const resp = await fetch(`/agent/addons/install${devParams()}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug }) });
-            const data = await resp.json();
-            if (data.error) { setStatus?.(data.error, 'error'); return; }
+            const data = await resp.json().catch(() => null);
+            if (!resp.ok || !data || data.error) {
+                setStatus?.(typeof data?.error === "string" && data.error.trim() ? data.error : "Couldn't install add-on (HTTP " + resp.status + "). Check its installed state before trying again.", 'error'); return;
+            }
             setRestartRequired(true);
             const summary = [data.message, data.warning].filter(Boolean).join(' ');
             setStatus?.(summary || tr('settings.addons.installedToast'), 'success'); await loadAddons();
-        } catch (e) { setStatus?.(String(e.message || e), 'error'); }
+        } catch (e) { setStatus?.("Connection lost while installing the add-on. Check its installed state before trying again.", 'error'); }
         finally { setBusy(null); }
     }, [busy, loadAddons, setStatus]);
 
@@ -75,12 +77,14 @@ export function AddonsSection({ setStatus, filter = '' }) {
         setStatus?.(tr('settings.addons.removing', { slug }), 'info');
         try {
             const resp = await fetch(`/agent/addons/uninstall${devParams()}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug }) });
-            const data = await resp.json();
-            if (data.error) { setStatus?.(data.error, 'error'); return; }
+            const data = await resp.json().catch(() => null);
+            if (!resp.ok || !data || data.error) {
+                setStatus?.(typeof data?.error === "string" && data.error.trim() ? data.error : "Couldn't remove add-on (HTTP " + resp.status + "). Check its installed state before trying again.", 'error'); return;
+            }
             setRestartRequired(true);
             const summary = [data.message, data.warning].filter(Boolean).join(' ');
             setStatus?.(summary || tr('settings.addons.removedToast'), 'success'); await loadAddons();
-        } catch (e) { setStatus?.(String(e.message || e), 'error'); }
+        } catch (e) { setStatus?.("Connection lost while removing the add-on. Check its installed state before trying again.", 'error'); }
         finally { setBusy(null); }
     }, [busy, loadAddons, setStatus]);
 

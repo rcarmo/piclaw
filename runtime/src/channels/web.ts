@@ -89,10 +89,12 @@ export interface WebChannelOpts {
   /** Internal host coordinator only; never derived from request fields. */
   prepareInputSourceAdmission?: WebChannelLike["prepareInputSourceAdmission"];
   prepareInputText?: WebChannelLike["prepareInputText"];
+  inspectAddonInstall?: WebChannelLike["inspectAddonInstall"];
   getInputSourceAdmission?: WebChannelLike["getInputSourceAdmission"];
   filterNativeTimeline?: WebChannelLike["filterNativeTimeline"];
   readNativeQueue?: WebChannelLike["readNativeQueue"];
   controlNativeQueue?: WebChannelLike["controlNativeQueue"];
+  reorderNativeQueue?: WebChannelLike["reorderNativeQueue"];
   dispatchAcceptedInput?: WebChannelLike["dispatchAcceptedInput"];
   resumeNativeInputs?: WebChannelLike["resumeNativeInputs"];
 }
@@ -420,6 +422,10 @@ export class WebChannel implements WebChannelLike {
     return await this.controlPlaneService.handleAgentQueueSteer(req);
   }
 
+  async handleAgentToolAbort(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentToolAbort(req);
+  }
+
   async handleAgentQueueReorder(req: Request): Promise<Response> {
     return await this.controlPlaneService.handleAgentQueueReorder(req);
   }
@@ -510,10 +516,12 @@ export class WebChannel implements WebChannelLike {
   agentPool!: AgentPool;
   declare prepareInputSourceAdmission?: WebChannelOpts["prepareInputSourceAdmission"];
   declare prepareInputText?: WebChannelOpts["prepareInputText"];
+  declare inspectAddonInstall?: WebChannelOpts["inspectAddonInstall"];
   declare getInputSourceAdmission?: WebChannelOpts["getInputSourceAdmission"];
   declare filterNativeTimeline?: WebChannelOpts["filterNativeTimeline"];
   declare readNativeQueue?: WebChannelOpts["readNativeQueue"];
   declare controlNativeQueue?: WebChannelOpts["controlNativeQueue"];
+  declare reorderNativeQueue?: WebChannelOpts["reorderNativeQueue"];
   declare dispatchAcceptedInput?: WebChannelOpts["dispatchAcceptedInput"];
   declare resumeNativeInputs?: WebChannelOpts["resumeNativeInputs"];
   responses = new ResponseService();

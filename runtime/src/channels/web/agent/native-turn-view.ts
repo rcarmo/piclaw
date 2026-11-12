@@ -50,7 +50,7 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
     const inbox=(view.docs["pi.inbox"]?.items??[]).filter((item:any)=>item.mode!=="write");
     const nextQueuedIds=new Set<number>(inbox.map((item:any)=>item.id));
     for(const item of inbox)if(!queuedIds.has(item.id)&&item.entry?.kind==="host.accepted"&&item.entry.data?.chatJid===chat&&typeof item.content==="string")
-      channel.broadcastEvent("agent_followup_queued",{chat_jid:chat,row_id:item.id,content:item.content,source:"native_sdk"});
+      channel.broadcastEvent("agent_followup_queued",{chat_jid:chat,row_id:item.id,mode:item.mode,content:item.content,source:"native_sdk"});
     for(const id of queuedIds)if(!nextQueuedIds.has(id))channel.broadcastEvent("agent_followup_consumed",{chat_jid:chat,row_id:id});
     queuedIds=nextQueuedIds;queued=inbox.length;
     if (!live.run) {

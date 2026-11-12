@@ -1,4 +1,4 @@
-import { planPaneExtension } from '../../../web/src/panes/plan-pane.js';
+import { planPaneExtension } from '../../../web/src/panes/plan-loader.js';
 
 const host = document.getElementById('pane')!;
 const instance = planPaneExtension.mount(host, { path: 'piclaw://plan', mode: 'edit' });

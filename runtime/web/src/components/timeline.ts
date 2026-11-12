@@ -130,7 +130,7 @@ function resolveThreadInfo(displayPosts) {
 }
 
 /** Timeline component. */
-function TimelineView({ posts, hasMore, onLoadMore, onPostClick, onHashtagClick, onMessageRef, onScrollToMessage, onFileRef, onOpenWidget, onOpenAttachmentPreview, onSaveAnnotations, onSubmitCardAction, renderPostAccessory, postCapabilities, emptyMessage, timelineRef, timelineId, agents, user, onDeletePost, reverse = true, removingPostIds, searchQuery }) {
+function TimelineView({ posts, hasMore, onLoadMore, onPostClick, onHashtagClick, onMessageRef, onScrollToMessage, onFileRef, onOpenWidget, onOpenAttachmentPreview, onSaveAnnotations, onSubmitCardAction, renderPostAccessory, postCapabilities, emptyMessage, timelineRef, timelineId, agents, user, onDeletePost, reverse = true, removingPostIds, searchQuery, footer = null }) {
     const [loadingMore, setLoadingMore] = useState(false);
     const [loadMoreFailed, setLoadMoreFailed] = useState(false);
     const [windowRange, setWindowRange] = useState({ start: 0, end: 0 });
@@ -388,6 +388,7 @@ function TimelineView({ posts, hasMore, onLoadMore, onPostClick, onHashtagClick,
                     />
                 `})}
                 ${shouldWindow && bottomSpacerHeight > 0 ? html`<div class="timeline-virtual-spacer" style=${{ height: `${bottomSpacerHeight}px` }}></div>` : null}
+                ${footer}
                 ${reverse ? null : loadMoreSentinel}
             </div>
         </div>

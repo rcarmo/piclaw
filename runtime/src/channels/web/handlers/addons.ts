@@ -17,6 +17,7 @@
 
 import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, mkdirSync, unlinkSync, writeFileSync, renameSync, symlinkSync } from "fs";
 import { join, dirname, extname, resolve } from "path";
+import type { WebChannelLike } from "../core/web-channel-contracts.js";
 import { getWorkspaceDir as getConfiguredWorkspaceDir } from "../../../core/config.js";
 import { requestGracefulShutdown } from "../../../runtime/shutdown-registry.js";
 import { createLogger } from "../../../utils/logger.js";
@@ -555,29 +556,6 @@ function setAddonDependencyRecord(addonsDir: string, addonName: string, spec: st
   }
 }
 
-function normalizeCatalogDependencySpecs(addonsDir: string, catalogAddons: CatalogAddon[]): { updated: number; errors: string[] } {
-  const pkgJsonPath = join(addonsDir, 'package.json');
-  if (!existsSync(pkgJsonPath)) return { updated: 0, errors: [] };
-  try {
-    const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf-8'));
-    if (!pkg.dependencies || typeof pkg.dependencies !== 'object') return { updated: 0, errors: [] };
-    let updated = 0;
-    for (const addon of catalogAddons) {
-      if (!addon?.name || !(addon.name in pkg.dependencies)) continue;
-      const plan = resolveAddonInstallSpec(addon);
-      // First-party catalog entries should always use public tarball URLs in package.json.
-      if (plan.kind !== 'tarball' || !/^https?:\/\//.test(plan.spec)) continue;
-      if (pkg.dependencies[addon.name] === plan.spec) continue;
-      pkg.dependencies[addon.name] = plan.spec;
-      updated++;
-    }
-    if (updated > 0) writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2));
-    return { updated, errors: [] };
-  } catch (error) {
-    return { updated: 0, errors: [String((error as { message?: string })?.message || error)] };
-  }
-}
-
 function describeAddonOperationFailure(action: 'install' | 'uninstall', error: unknown): string {
   const message = String((error as { message?: string })?.message || error || 'unknown error');
   if (getRuntimePlatform() === 'win32' && isAddonFsLockError(error)) {
@@ -618,11 +596,26 @@ async function extractTarballToDir(archivePath: string, destDir: string): Promis
   throw new Error(`Failed to extract add-on tarball: ${detail}`);
 }
 
+class AddonInstallCompatibilityError extends Error {
+  constructor(message: string, readonly status: 409 | 503 = 409) { super(message); }
+}
+function checkAddonInstall(inspect: WebChannelLike["inspectAddonInstall"], name: string, version?: string, directory?: string) {
+  let result: ReturnType<NonNullable<typeof inspect>>;
+  try { result = inspect?.(name, version, directory); }
+  catch (error) {
+    addonLog.warn("Native add-on compatibility check unavailable", { operation: "addons.install.compatibility_unavailable", addon: name, err: error });
+    throw new AddonInstallCompatibilityError("Add-on compatibility could not be verified. Wait for the native runtime to be available, then try again. The installed add-on has not been changed.", 503);
+  }
+  if (result?.problem) throw new AddonInstallCompatibilityError(result.problem);
+  return result;
+}
+
 async function installAddonFromTarball(
   addonsDir: string,
   destDir: string,
   addon: CatalogAddon,
   installPlan: { kind: string; spec: string },
+  inspect?: WebChannelLike["inspectAddonInstall"],
 ): Promise<{ installedVersion: string | null; warning?: string; peerOnly: boolean }> {
   const stagingRoot = join(addonsDir, ".staging");
   const stagingLeaf = `${addon.name.replace(/[\\/]+/g, "__")}-${Date.now()}`;
@@ -642,6 +635,7 @@ async function installAddonFromTarball(
       throw new Error(`Downloaded tarball package mismatch: expected ${addon.name}, got ${manifest.name}`);
     }
 
+    checkAddonInstall(inspect, manifest.name, manifest.version, installRoot);
     const peerOnly = !hasAddonRuntimeDependencies(manifest);
     if (!peerOnly) {
       const nestedInstall = await (addonInstallTestHooks?.runBunCommand || runBunCommand)(["bun", "install", "--force", "--omit=peer"], installRoot);
@@ -651,6 +645,7 @@ async function installAddonFromTarball(
       }
     }
 
+    checkAddonInstall(inspect, manifest.name, manifest.version, installRoot);
     ensureWritableAddonsNodeModulesDir(addonsDir);
     const cleanup = await removeAddonDirRobustly(destDir, addonsDir);
     mkdirSync(dirname(destDir), { recursive: true });
@@ -897,6 +892,7 @@ export async function handleInstallAddon(
   req: Request,
   json: (body: unknown, status?: number) => Response,
   url?: URL,
+  inspect?: WebChannelLike["inspectAddonInstall"],
 ): Promise<Response> {
   let body: unknown;
   try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
@@ -909,20 +905,22 @@ export async function handleInstallAddon(
   const addon = catalog?.addons?.find((a) => a.slug === slug);
   if (!addon) return json({ error: `Add-on "${slug}" not found in catalog` }, 404);
 
-  const addonsDir = ensureAddonsDir();
-  if (catalog?.addons?.length) normalizeCatalogDependencySpecs(addonsDir, catalog.addons);
-  const destDir = join(addonsDir, "node_modules", addon.name);
   const installPlan = resolveAddonInstallSpec(addon);
   const installPlanIsTarballUrl = installPlan.kind === 'tarball' && /^https?:\/\//.test(installPlan.spec);
 
   try {
+    const compatibility = checkAddonInstall(inspect, addon.name, addon.version);
+    if (compatibility && !installPlanIsTarballUrl)
+      throw new AddonInstallCompatibilityError("This native add-on requires a verified public tarball. The installed add-on has not been changed.");
+    const addonsDir = ensureAddonsDir();
+    const destDir = join(addonsDir, "node_modules", addon.name);
     if (installPlanIsTarballUrl) {
       addonLog.info("Installing add-on from public tarball URL", {
         operation: "addons.install.tarball",
         slug,
         spec: installPlan.spec,
       });
-      const tarballInstall = await installAddonFromTarball(addonsDir, destDir, addon, installPlan);
+      const tarballInstall = await installAddonFromTarball(addonsDir, destDir, addon, installPlan, inspect);
       return json({
         ok: true,
         slug,
@@ -965,6 +963,7 @@ export async function handleInstallAddon(
     const detail = packageInstall.stderr || packageInstall.stdout || `bun add exited ${packageInstall.exitCode}`;
     return json({ error: `Install failed: ${detail}` }, 500);
   } catch (e) {
+    if (e instanceof AddonInstallCompatibilityError) return json({ error: e.message, code: e.status === 409 ? "addon_incompatible" : "addon_compatibility_unavailable" }, e.status);
     return json({ error: `Install failed: ${describeAddonOperationFailure('install', e)}` }, 500);
   }
 }
@@ -998,7 +997,6 @@ export async function handleUninstallAddon(
   if (!addon) return json({ error: `Add-on "${slug}" not found in catalog` }, 404);
 
   const addonsDir = ensureAddonsDir();
-  if (catalog?.addons?.length) normalizeCatalogDependencySpecs(addonsDir, catalog.addons);
   const uninstallPlan = resolveAddonInstallSpec(addon);
   if (uninstallPlan.kind === 'tarball' && /^https?:\/\//.test(uninstallPlan.spec)) {
     setAddonDependencyRecord(addonsDir, addon.name, uninstallPlan.spec);

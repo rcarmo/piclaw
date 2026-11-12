@@ -128,6 +128,8 @@ export interface WebChannelLike
   /** Trusted host-only selection, captured before reading HTTP input; absent by default. */
   prepareInputSourceAdmission?(chatJid: string): Promise<void>;
   prepareInputText?(chatJid: string, text: string): PreparedInputText;
+  /** Read-only compatibility check from the active native source policy. */
+  inspectAddonInstall?(name: string, version?: string, directory?: string): { supportedVersion: string; problem?: string } | undefined;
   /** Trusted SQL-only source acceptance; never selected from request fields. */
   getInputSourceAdmission?(chatJid: string): StoreWebMessageOptions["acceptSource"];
   /** Reconcile existing native sources only; never scan/replay historical chat rows. */
@@ -135,6 +137,8 @@ export interface WebChannelLike
   filterNativeTimeline?(chatJid:string,rowIds:readonly number[]):Promise<readonly number[]>;
   readNativeQueue?(chatJid:string):Promise<import("../agent/native-queue-view.js").NativeQueueItem[]>;
   controlNativeQueue?(chatJid:string,submissionId:number,action:"remove"|"steer",authorise?:()=>void):Promise<boolean>;
+  /** Reorder the chat's queued inputs; false when `submissionIds` is not exactly the current queue. */
+  reorderNativeQueue?(chatJid:string,submissionIds:readonly number[],authorise?:()=>void):Promise<boolean>;
   dispatchAcceptedInput?(chatJid: string, messageId: string, rowId: number, whenBusy?: "steer" | "followUp"): Promise<{submission_id: number; queued: boolean}>;
   admitMessage(chatJid: string, content: string, isBot: boolean, mediaIds: number[], options: StoreWebMessageOptions,
     authorise?: (phase?: "before" | "after") => void, signal?: AbortSignal, deferBeforeInsert?: () => boolean): Promise<InteractionRow | null>;
@@ -207,6 +211,7 @@ export interface WebChannelLike
   handleAgentRunDrainQueue(req: Request): Promise<Response>;
   handleAgentQueueRemove(req: Request): Promise<Response>;
   handleAgentQueueSteer(req: Request): Promise<Response>;
+  handleAgentToolAbort(req: Request): Promise<Response>;
   handleAgentQueueReorder(req: Request): Promise<Response>;
   handleAgentModels(req: Request): Promise<Response>;
   handleSystemMetrics(req: Request): Response;

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "catalog": "https://raw.githubusercontent.com/rcarmo/piclaw-addons/main/catalog.json",
-  "catalogSha256": "0cb2f61151f49d047668f8e1fe09f5cec23c2d17b5bb048cac324cb89ff5cab1",
+  "catalog": "https://raw.githubusercontent.com/rcarmo/piclaw-addons/2f8b60eb442a0df237c78203b020e94d6a1604f1/catalog.json",
+  "catalogSha256": "1260dad5ebfcc45636005bdf3d13df3701d691891a4572b98ce22a5baa5ee2c5",
   "addons": [
     {
       "slug": "code-review",
@@ -27,9 +27,9 @@
     {
       "slug": "observability",
       "name": "@rcarmo/piclaw-addon-observability",
-      "version": "0.1.22",
-      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-observability-0.1.22.tgz",
-      "sha256": "128e7a4871c6e316ce295277f3d6e2e619d8448ac5fc75893e9199e0b25c0181"
+      "version": "0.1.24",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-observability-0.1.24.tgz",
+      "sha256": "27f395a1e415d81bceec69cc447a5a6d1de26ce2f6914227987d259ef1ac4bbe"
     },
     {
       "slug": "plan-sidebar",

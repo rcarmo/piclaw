@@ -191,7 +191,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "299765ed713e23d6f400821bcabe0913679344fcfc87b987f9b7c36ac32cd486",
       "state": "retained-decoupled",
-      "currentSha256": "979125e98070d14bb11d0186c34d8c932bf3b716e6c6be1fd515ed4da6a66955",
+      "currentSha256": "3a5948d7b2e4495a26d443561dbab0ec829b422636e4218eb52800cf20d3ec44",
       "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
       "directImportCallers": [
         {
@@ -215,7 +215,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "a64d2881c5a7e657f71e965f4beb5a581dc07e9797edd1123af3739af3f0ca63",
       "state": "retained-decoupled",
-      "currentSha256": "49cb9dac269968c5142726beaac1cb28d63ab4018495b59e4e0816bba48b509d",
+      "currentSha256": "c02902f12c597ee7b02f1854ec436cd447cb27a0705c42f8e157d377cb487f25",
       "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
       "directImportCallers": []
     },
@@ -265,7 +265,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "c377f0ada2d60e010200722d5947b3ab4330db6e2cea50bf8fff0efeb372de25",
       "state": "retained-decoupled",
-      "currentSha256": "3591a6f20a9a3f9e6db848e65ae2b8fc77f33d23fa20e2b2e874f284a55726d9",
+      "currentSha256": "625b85e236f0d2827d30521d9b9ec0e5494f8c9603862a72fc989eff567fd09f",
       "currentPurpose": "bounded current provider failure notices/evidence plus read-only historical wire categories; classifier produces no local financial denial",
       "directImportCallers": [
         {
@@ -301,7 +301,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "e300445266a88780616938fe3ee0690b65a409d3ba364e0b1d741b5f52efb52e",
       "state": "retained-decoupled",
-      "currentSha256": "7fa3f483094111bfd7072338e9524f9f761f8b662674c30adac9651045e45886",
+      "currentSha256": "92e8c15ebdac6c8d4e1df588bd2f316fd1b3a42da4020021ffb3131ea7341d8a",
       "currentPurpose": "public SDK model conversion, actual usage facts and physical context/output bounds; source/auth/resource policy only",
       "directImportCallers": [
         {
@@ -379,7 +379,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "2f6a632f863196fccd48a3f3912c8bef407fb2ca5d07c13d32400dcef84c87cc",
       "state": "retained-decoupled",
-      "currentSha256": "202f132143d750a11df58c7d8b3c6db4bfdf432fdbd2de31f0eb1176bbdf079f",
+      "currentSha256": "1ff9812ba1fa52437b9fcc8d695e9c1e10ee8c8f30dabb5d2f4c5a16c475b78b",
       "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
       "directImportCallers": [
         {
@@ -638,7 +638,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "e506827fe77e26e48c722ff15a957a5d37acfe9c66c32e4511a67f627c2cf94f",
       "state": "retained-decoupled",
-      "currentSha256": "4be85ddbd2344de1c350220981be9e1aa43b9853a594047f1a6a51663dc2c119",
+      "currentSha256": "b2a6fe534df5e203595224d9f0c4caba95c3648de3097ade09db1a80d5484d6d",
       "currentPurpose": "existing native domain/control/message transport boundary with no expense port",
       "directImportCallers": [
         {
@@ -755,7 +755,7 @@
         },
         {
           "caller": "runtime/src/agent-pool.ts",
-          "line": 274
+          "line": 270
         },
         {
           "caller": "runtime/src/agent-pool/recovery-summary.ts",
@@ -889,7 +889,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "98383ffa112e2169a0438042b5f2c5fffb794ba99ce7b79002daca6802f7b9b0",
       "state": "retained-decoupled",
-      "currentSha256": "6db1dc207a916427686f56f59f23448c77a89de9b96c2b0ff498875503a285fa",
+      "currentSha256": "1841f4d31a1ef30dd1803ed9469cddb30bc8e03dc7a10385a4a74502ea4ccbcf",
       "currentPurpose": "existing model choice, price/unknown display and token/context/status DTO; same interaction and authority",
       "directImportCallers": [
         {
@@ -1028,7 +1028,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "cdddbc02e1f46e6767bfd9f5602c55ef007d6083aff7af016550f74d1f73aa6f",
       "state": "retained-decoupled",
-      "currentSha256": "c140cfaef5be048042783b1932955139b70aed359d6b1e0ffe9fda2ff614f15a",
+      "currentSha256": "72ec121733f0bbad3cc01a89663e949d14376d07b1db5609b1eb7963f52af737",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
@@ -1824,7 +1824,7 @@
       "directImportCallers": [
         {
           "caller": "runtime/durable-engine/src/host-runtime.ts",
-          "line": 1928
+          "line": 1974
         },
         {
           "caller": "runtime/durable-engine/src/host-scheduled-terminal.ts",
@@ -1903,7 +1903,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "dd4c3fbbbf8d9e5763cbc6811a9f641d11aa9f57e736ac36b47399eae0848418",
       "state": "retained-decoupled",
-      "currentSha256": "558f2180b7ea4b9c6e36df61fb39ff83e64d96bf1ab7eadf9018f5575df09bc5",
+      "currentSha256": "ee38fc25af7243f17a2c085fb7b363515aeaa36cefeb5b3d928dec3d250cb4a4",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
@@ -1976,11 +1976,15 @@
         },
         {
           "caller": "runtime/web/src/components/workspace-explorer.ts",
-          "line": 19
+          "line": 20
         },
         {
           "caller": "runtime/web/src/panes/file-conflict-monitor.ts",
           "line": 14
+        },
+        {
+          "caller": "runtime/web/src/panes/settings-pane.ts",
+          "line": 11
         },
         {
           "caller": "runtime/web/src/panes/workspace-preview-pane.ts",
@@ -2039,12 +2043,12 @@
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
-          "caller": "runtime/web/src/dev/settings-widget-fixture.ts",
-          "line": 2
+          "caller": "runtime/web/src/components/settings-dialog-loader.ts",
+          "line": 45
         },
         {
-          "caller": "runtime/web/src/ui/app-shell-bootstrap.ts",
-          "line": 70
+          "caller": "runtime/web/src/dev/settings-widget-fixture.ts",
+          "line": 2
         }
       ]
     },
@@ -2452,7 +2456,7 @@
       "deliveryOwner": "#1882",
       "originalSha256": "1af8f43680724ca4c05c9beede8db5903b013bc76e9bc5dbceb1235e3d823105",
       "state": "retained-decoupled",
-      "currentSha256": "bef06fd1f1495bde0518ec70b890316f32ec83dda5fdbf851307c400908ca836",
+      "currentSha256": "c36e4e27f26a87f022bc86ebcad78c2ac889acc63e165544d14738ca5fd04713",
       "currentPurpose": "exact approved add-on source/resource identity and public exported domain contracts",
       "directImportCallers": [
         {
@@ -2552,7 +2556,7 @@
       "deliveryOwner": "#1882",
       "originalSha256": "19afc92f568933da7824143d95dffc1083c2371cf4561abe473909ef5d8ed68f",
       "state": "retained-decoupled",
-      "currentSha256": "19afc92f568933da7824143d95dffc1083c2371cf4561abe473909ef5d8ed68f",
+      "currentSha256": "557a5ddba18aa17da6ff4b39211949e071a78e20fc7a03629751902bc5877f74",
       "currentPurpose": "existing native domain/control/message transport boundary with no expense port",
       "directImportCallers": [
         {

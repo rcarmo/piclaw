@@ -63,7 +63,8 @@ test('steering keeps its SDK item visible until actual placement and refreshes o
     removeAgentQueueItem: async () => ({ ok: true }),
   });
 
-  expect(followupQueueItems).toEqual(followupQueueItemsRef.current);
+  // Still visible, now shown as steering until the SDK places it.
+  expect(followupQueueItems).toEqual([{ row_id: 'r1', content: 'Queued', mode: 'steer' }]);
   expect(dismissedQueueRowIdsRef.current.has('r1')).toBe(false);
 
   await Promise.resolve();
@@ -198,4 +199,14 @@ for(const changed of [false,true])test(`removal returns its real server acknowle
     removeAgentQueueItem:()=>ack.promise,steerAgentQueueItem:async()=>({queued:'steer'})});
   expect(writes).toBe(0);if(changed)current=false;ack.resolve({removed:true});expect(await pending).toBe(true);
   expect(writes).toBe(changed?0:1);expect(refreshes).toBe(changed?0:1);expect(dismissed.current.has(17)).toBe(!changed);
+});
+
+for (const rejected of [false,true]) test(`steer completion cannot update a different session; rejected=${rejected}`,async()=>{
+ let current=true,resolve!:(value:unknown)=>void,reject!:(error:Error)=>void;
+ const pending=new Promise((a,b)=>{resolve=a;reject=b;});let updates=0,refreshes=0,toasts=0;
+ handleInjectQueuedFollowupAction({queuedItem:{row_id:1},followupQueueItemsRef:{current:[{row_id:1,content:'A'}]},dismissedQueueRowIdsRef:{current:new Set()},currentChatJid:'chat-a',isCurrent:()=>current,refreshQueueState(){refreshes++;},setFollowupQueueItems(){updates++;},showIntentToast(){toasts++;},steerAgentQueueItem:()=>pending,removeAgentQueueItem:async()=>({})});
+ expect(updates).toBe(1);current=false;
+ if(rejected)reject(Error('Late rejection'));else resolve({queued:'steer'});
+ await Promise.resolve();await Promise.resolve();await Promise.resolve();
+ expect(updates).toBe(1);expect(refreshes).toBe(0);expect(toasts).toBe(0);
 });
