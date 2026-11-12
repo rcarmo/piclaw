@@ -857,6 +857,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   // expected Goal denials on the exact task-owned signal, never on the app lifetime.
   const goalRequestDenials = new WeakMap<AbortSignal, GoalRequestDenied>();
   const models = createHostModels(host.modelRuntime, available.map(model => ({ provider: model.provider, id: model.id })), { signal: lifetime.signal, codex: codexServices,
+    captureTelemetry: observability ? () => observability.addon.createNativeTelemetryContext() : undefined,
     previewRequest: (model, transcript, options) => previewHostRequest(host.modelRuntime, model, transcript, options ?? {}),
     async captureSourceGuard(signal) {
       const scope = taskModelRequestScope(signal);
@@ -1106,7 +1107,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   const commandPolicy = createHostCommandPolicy(root, () => { assert(); if (readAccessConfig().mode !== "single-user") throw Error("Native controls require single-user policy"); });
   // Preparation stays paused; the executing HostConversationRuntime installs
   // the single task-source/cancellation adapter when it opens its Harness.
-  const harnessOptions = { models, registry, settings: commandPolicy.settings };
+  const harnessOptions = { models, registry, settings: commandPolicy.settings, telemetry: observability?.addon.createNativeTelemetryContext() };
   const path = (root.query("PRAGMA database_list").all() as { name: string; file: string }[]).find(row => row.name === "main")?.file;
   if (!path) throw Error("Durable default requires a file-backed application database");
   const storage = new BunSqliteDatabase(path, { root, assertOwner: assert, fenceTransactions: true });
@@ -1528,7 +1529,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       // ownership; the operator's process-wide backstop still bounds shutdown.
       await bundle.close();
       await Promise.allSettled([...usageReports]);
-      const producerResults = await Promise.allSettled([closeRemote(), closeCodex()]);
+      const producerResults = await Promise.allSettled([closeRemote(), closeCodex(), observability?.addon.shutdownObservabilityRuntime()]);
       terminalLifetime.abort(); lifetime.abort(); closeResources(); releaseAdminKv?.(); closeInfrastructure(); releaseReviewSource?.(); releaseObservabilityConfiguration?.();
       const results = [...producerResults, ...await Promise.allSettled([mcp?.close(), closeSandbox(), drawioHost?.close()])];
       const failures: unknown[] = results.filter((result): result is PromiseRejectedResult => result.status === "rejected").map(result => result.reason);
@@ -1549,6 +1550,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       closeInfrastructure, releaseReviewSource, releaseObservabilityConfiguration]) {
       try { release?.(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     }
+    try { await observability?.addon.shutdownObservabilityRuntime(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     try { await closeRemote(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     try { await closeCodex(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     try { await mcp?.close(); } catch (cleanup) { cleanupFailures.push(cleanup); }

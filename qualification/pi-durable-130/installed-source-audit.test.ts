@@ -37,8 +37,8 @@ test('installer preflight shares exact native package proof before activation', 
   const f=fixture();
   try{
     const obs=inspectAddonInstall('@rcarmo/piclaw-addon-observability','0.1.23');
-    expect(obs?.supportedVersion).toBe('0.1.22');
-    expect(obs?.problem).toContain('This Core release requires Observability 0.1.22');
+    expect(obs?.supportedVersion).toBe('0.1.24');
+    expect(obs?.problem).toContain('This Core release requires Observability 0.1.24');
     const pkg=join(f.cwd,'.pi/extensions/node_modules/@rcarmo/piclaw-addon-plan-sidebar');
     expect(inspectAddonInstall('@rcarmo/piclaw-addon-plan-sidebar','0.1.28',pkg)).toEqual({supportedVersion:'0.1.28'});
     const file=join(pkg,'index.ts'),bytes=readFileSync(file);
@@ -52,4 +52,30 @@ test('installer preflight shares exact native package proof before activation', 
     expect(auditInstalledApplicationAddonSources(f.cwd).profiles.length).toBe(23);
     expect(inspectAddonInstall('@third-party/unmanaged','1.0.0')).toBeUndefined();
   }finally{cleanup(f.cwd);}
+});
+
+test('actual SDK Harness emits native spans through the add-on adapter without content or execution ownership', async()=>{
+ const {openFixture,context}=await import('./src/fixture.ts');
+ const {Harness,MemoryStorage}=await import('../../runtime/durable-engine/qualification/durable.ts');
+ const {pathToFileURL}=await import('node:url');
+ const helper=pathToFileURL(join(source!,'addons/observability/native-telemetry.ts')).href;
+ const {createOtelTelemetryContext}=await import(helper);
+ const api=await import(import.meta.resolve('@opentelemetry/api',helper));
+ const sdk=await import(import.meta.resolve('@opentelemetry/sdk-trace-base',helper));
+ const exporter=new sdk.InMemorySpanExporter(),provider=new sdk.BasicTracerProvider({spanProcessors:[new sdk.SimpleSpanProcessor(exporter)]});
+ const telemetry=createOtelTelemetryContext(()=>provider.getTracer('native-integration'),()=>api.metrics.getMeter('native-integration'));
+ const f=await openFixture({acquired:true});await f.close();
+ const harness=await Harness.open(new MemoryStorage(),{models:f.models,registry:f.registry,telemetry,settings:{retry:{enabled:false},compaction:{enabled:false}}},context);
+ try{
+  const root=await harness.root(context,{agent:{model:{provider:'qualification',modelId:'synthetic'},extensions:[],tools:[]}});
+  const result=await root.submit({type:'input',requestId:'observability-adapter',content:'PRIVATE PROMPT MUST NOT BE EXPORTED'},context);
+  expect((await result.wait(context)).status).toBe('done');expect(f.host.modelCalls).toBe(1);
+ }finally{await harness.close(context);}
+ await provider.forceFlush();
+ const spans=exporter.getFinishedSpans();expect(spans.some((s:any)=>s.name==='pi.durable.submit')).toBe(true);expect(spans.some((s:any)=>s.name==='pi.durable.phase')).toBe(true);
+ expect(JSON.stringify(spans.map((s:any)=>({name:s.name,attributes:s.attributes,events:s.events,status:s.status})))).not.toContain('PRIVATE PROMPT');
+ const runtime=readFileSync(new URL('../../runtime/durable-engine/src/default-application-runtime.ts',import.meta.url),'utf8');
+ expect(runtime).toContain('telemetry: observability?.addon.createNativeTelemetryContext()');
+ expect(runtime).toContain('observability?.addon.shutdownObservabilityRuntime()');
+ await provider.shutdown();
 });

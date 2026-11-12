@@ -421,6 +421,10 @@ export class WebChannel implements WebChannelLike {
     return await this.controlPlaneService.handleAgentQueueSteer(req);
   }
 
+  async handleAgentToolAbort(req: Request): Promise<Response> {
+    return await this.controlPlaneService.handleAgentToolAbort(req);
+  }
+
   async handleAgentQueueReorder(req: Request): Promise<Response> {
     return await this.controlPlaneService.handleAgentQueueReorder(req);
   }

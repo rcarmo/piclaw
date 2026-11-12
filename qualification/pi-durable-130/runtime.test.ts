@@ -584,6 +584,57 @@ test("runtime: read-only session report uses committed native context and usage 
   expect(checks).toBe(3); expect(f.base.host.modelCalls).toBe(calls);
 }), 20000);
 
+test("runtime: turn entries read one answer's committed window without model replay", () => fixture(async f => {
+  const input = await f.accept();
+  const binding = { incarnation: input.incarnation, chatJid: input.chatJid, branchId: input.branchId, conversationId: input.conversationId };
+  f.grantKnown();
+  const id = await f.runtime.submit(input);
+  await f.runtime.wait(input, id);
+  const status = (await f.runtime.reconcile(input)).status;
+  const answer = status?.type === "input" && status.status === "done" ? status.answer : undefined;
+  expect(answer).toBeDefined();
+  const calls = f.base.host.modelCalls;
+  const turn = await f.runtime.readTurnEntries(binding, answer!);
+  expect(turn?.entries[0]?.kind).toBe("host.accepted");
+  expect(turn?.entries.at(-1)?.id).toBe(answer);
+  expect(turn?.truncated).toBe(false);
+  expect(Object.values(turn!.tasks).some(task => task.kind === "pi.generation" && task.outcome === "completed")).toBe(true);
+  expect(Object.isFrozen(turn)).toBe(true);
+  // Only a settled answer opens a window; the input entry itself does not.
+  expect(await f.runtime.readTurnEntries(binding, turn!.entries[0]!.id)).toBeNull();
+  await expect(f.runtime.readTurnEntries({ ...binding, incarnation: "foreign" }, answer!)).rejects.toThrow("Host binding conflict");
+  expect(f.base.host.modelCalls).toBe(calls);
+}), 20000);
+
+test("runtime: one running tool call can be stopped while its run continues", () => fixture(async f => {
+  f.base.host.toolHold = barrier(); f.grantKnown();
+  const input = await f.accept("request-1", "use-tool");
+  const binding = { incarnation: input.incarnation, chatJid: input.chatJid, branchId: input.branchId, conversationId: input.conversationId };
+  const id = await f.runtime.submit(input);
+  const waiting = f.runtime.wait(input, id);
+  try {
+    await f.base.host.toolEntered.promise;
+    const tool = (await f.runtime.inspectProcessControl()).inspection.tasks.find(task => task.record.kind === "pi.tool")!.record;
+    const callId = (tool.input as { callId: string }).callId;
+    // The running turn reads without an answer: input through the pending call.
+    const live = await f.runtime.readTurnEntries(binding);
+    expect(live?.entries[0]?.kind).toBe("host.accepted");
+    expect(JSON.stringify(live?.entries.at(-1)?.model)).toContain(callId);
+    expect(await f.runtime.abortToolCall(binding, "missing-call")).toBe(false);
+    await expect(f.runtime.abortToolCall({ ...binding, incarnation: "foreign" }, callId)).rejects.toThrow("Host binding conflict");
+    expect(await f.runtime.abortToolCall(binding, callId, "wrong directory")).toBe(true);
+    await waiting;
+    const status = (await f.runtime.reconcile(input)).status;
+    expect(status?.status).toBe("done");
+    const turn = await f.runtime.readTurnEntries(binding, status?.type === "input" && status.status === "done" ? status.answer : undefined);
+    const result = turn!.entries.find(entry => entry.kind === "pi.tool-result")!.model![0] as { isError?: boolean; content?: unknown };
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("wrong directory");
+    expect(f.base.host.effects).toBe(0);
+    expect(await f.runtime.abortToolCall(binding, callId)).toBe(false);
+  } finally { f.base.host.toolHold?.release(); await waiting.catch(() => {}); }
+}), 20000);
+
 test("runtime: operator abort settles exact held run and attached steer once, preserving pending successor", () => fixture(async f => {
   f.base.host.modelHold = barrier(); f.grantKnown();
   const input = await f.accept();

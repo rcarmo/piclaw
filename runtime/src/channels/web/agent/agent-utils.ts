@@ -150,7 +150,8 @@ export function resolveMcpToolStatusIdentity(toolName: string, args: unknown): M
   return { operation: "status", server, tool: null, target: server, label: server ? `mcp: ${server} → status` : "mcp: status" };
 }
 
-function formatToolTitle(toolName: string, args: unknown): string {
+/** Short "tool: detail" label shared by live status and the turn activity log. */
+export function formatToolTitle(toolName: string, args: unknown): string {
   const mcpIdentity = resolveMcpToolStatusIdentity(toolName, args);
   if (mcpIdentity) return mcpIdentity.label;
   const record = extractToolArgs(args);

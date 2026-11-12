@@ -46,6 +46,8 @@ import { extractFtsFallbackTerms, isFtsOperatorQuery, prepareFtsQuery } from "..
  */
 interface StoredMessageRow {
   rowid: number;
+  /** Stable text id; native replies are `native-answer:<incarnation>:<conversation>:<entry>`. */
+  message_id?: string | null;
   chat_jid: string;
   sender: string;
   sender_name: string;
@@ -61,7 +63,7 @@ interface StoredMessageRow {
 }
 
 /** Column list used in SELECT queries to ensure a consistent shape. */
-const MESSAGE_COLUMNS = "rowid, chat_jid, sender, sender_name, content, screen_hint, content_blocks, link_previews, annotations, thread_id, timestamp, is_bot_message, is_terminal_agent_reply";
+const MESSAGE_COLUMNS = "rowid, chat_jid, sender, sender_name, content, screen_hint, content_blocks, link_previews, annotations, thread_id, timestamp, is_bot_message, is_terminal_agent_reply, id AS message_id";
 
 function ensureMonotonicMessageTimestampInDatabase(
   database: Database,
@@ -111,6 +113,8 @@ function buildInteraction(row: StoredMessageRow, mediaIds: number[] = []): Inter
   };
   if (row.is_bot_message) {
     data.is_terminal_agent_reply = Boolean(row.is_terminal_agent_reply);
+    // Durable replies have a committed turn the timeline can disclose on demand.
+    if (typeof row.message_id === "string" && /^native-answer:[^:]+:\d+:\d+$/.test(row.message_id)) data.turn_activity = true;
     data.agent_message_role = getAgentMessageRole(true, Boolean(row.is_terminal_agent_reply), contentBlocks ?? []) ?? "unknown";
   }
   if (row.screen_hint) data.screen_hint = row.screen_hint;
@@ -308,6 +312,15 @@ export function getMessageRowIdById(chatJid: string, messageId: string): number 
     .prepare("SELECT rowid as rowid FROM messages WHERE chat_jid = ? AND id = ?")
     .get(chatJid, messageId) as { rowid: number } | undefined;
   return row?.rowid ?? null;
+}
+
+/** Text id of one agent reply in this chat, by timeline row id; null for user posts or other chats. */
+export function getAgentMessageIdByRowId(chatJid: string, rowId: number): string | null {
+  if (!Number.isSafeInteger(rowId) || rowId <= 0) return null;
+  const row = getDb()
+    .prepare("SELECT id FROM messages WHERE chat_jid = ? AND rowid = ? AND is_bot_message = 1")
+    .get(chatJid, rowId) as { id: string } | null;
+  return typeof row?.id === "string" ? row.id : null;
 }
 
 /**
