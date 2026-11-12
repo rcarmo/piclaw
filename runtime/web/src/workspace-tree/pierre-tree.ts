@@ -13,6 +13,37 @@ import { FileTree } from '@pierre/trees';
 
 export const PLACEHOLDER_NAME = 'Loading…';
 
+const svgUrl = (path: string) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='${path}'/></svg>`)}")`;
+const FOLDER_ICON = svgUrl('M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z');
+const FOLDER_OPEN_ICON = svgUrl('m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2');
+
+/**
+ * Styles injected into the tree's shadow root: folder icons beside the
+ * disclosure chevron (Pierre's built-in sets draw none), and the side bar's
+ * full inner width with only a slim inset and scrollbar gutter.
+ */
+export const WORKSPACE_TREE_CSS = `
+  :host { --trees-padding-inline-override: 4px; --trees-scrollbar-gutter-override: 4px; }
+  [data-item-type="folder"] [data-item-section="content"]::before {
+    content: '';
+    display: inline-block;
+    flex: 0 0 auto;
+    width: 14px;
+    height: 14px;
+    margin-right: 5px;
+    vertical-align: -2px;
+    background-color: var(--trees-accent, currentColor);
+    opacity: 0.85;
+    -webkit-mask: ${FOLDER_ICON} center / contain no-repeat;
+    mask: ${FOLDER_ICON} center / contain no-repeat;
+  }
+  [data-item-type="folder"][aria-expanded="true"] [data-item-section="content"]::before {
+    -webkit-mask-image: ${FOLDER_OPEN_ICON};
+    mask-image: ${FOLDER_OPEN_ICON};
+  }
+  [data-item-type="folder"] [data-item-section="content"] { display: flex; align-items: center; min-width: 0; }
+`;
+
 export interface WorkspaceNodeLike {
   path: string;
   name?: string;
@@ -84,6 +115,7 @@ export function mountWorkspaceTree(host: HTMLElement, initial: WorkspaceTreeOpti
     initialExpansion: 'closed',
     search: true,
     density: 'compact',
+    unsafeCSS: WORKSPACE_TREE_CSS,
     labels: { searchPlaceholder: 'Search files' },
     onSelectionChange: (selected) => {
       if (suppressSelection) return;

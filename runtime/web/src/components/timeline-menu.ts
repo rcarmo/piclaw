@@ -1,6 +1,13 @@
 /**
- * timeline-menu.ts — Single hamburger menu, position:fixed.
- * Tracks .container/.workspace-sidebar for positioning.
+ * timeline-menu.ts — the single global menu, position:fixed.
+ *
+ * With the workbench activity bar shown, its button is the bar's top item and
+ * the menu opens beside the bar. With the activity bar hidden (or on narrow
+ * screens) it is the only chrome left, at the top-left of the chat.
+ *
+ * Sections: View (side bar views, Plan, system meters, the activity bar
+ * itself), Open in tab, Open recent, Workspace, then Settings, scale,
+ * language and About.
  */
 
 import { html, useState, useEffect, useRef, useCallback, useLayoutEffect, render } from '../vendor/preact-htm.js';
@@ -17,6 +24,32 @@ import { getRecentFiles, openRecentFile } from '../ui/recent-files.js';
 import { LanguageSwitcher } from './language-switcher.js';
 import { AboutDialog } from './about-dialog.js';
 import { useTranslation } from '../utils/i18n.js';
+import { WORKBENCH_TOGGLE_EVENT, dispatchWorkbenchCommand, readActivityBarHidden } from './workbench-sidebar.js';
+import { METERS_COLLAPSED_EVENT_NAME, readStoredMetersCollapsed, toggleMetersCollapsed } from '../ui/meters.js';
+
+/** Current side bar state, read from the shell when the menu opens. */
+function readWorkbenchState() {
+    if (typeof document === "undefined") return { open: false, view: "sessions", activityHidden: readActivityBarHidden() };
+    const shell = document.querySelector(".app-shell");
+    const aside = document.querySelector(".workbench-sidebar");
+    return {
+        open: shell?.getAttribute("data-workbench-sidebar") === "shown",
+        view: aside?.getAttribute("data-view") || "sessions",
+        activityHidden: readActivityBarHidden(),
+    };
+}
+
+const CHECK_ICON = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>`;
+
+function MenuCheckItem({ checked, label, hint = '', onSelect }) {
+    return html`
+        <button class="workspace-menu-item timeline-menu-check" role="menuitemcheckbox" aria-checked=${checked ? 'true' : 'false'} onClick=${onSelect}>
+            <span class="timeline-menu-check-mark" aria-hidden="true">${checked ? CHECK_ICON : null}</span>
+            <span class="timeline-menu-check-label">${label}</span>
+            ${hint && html`<span class="timeline-menu-hint">${hint}</span>`}
+        </button>
+    `;
+}
 
 export function TimelineMenu({
     workspaceOpen,
@@ -34,6 +67,26 @@ export function TimelineMenu({
         try { return localStorage.getItem('workspaceShowHidden') === 'true'; } catch { return false; }
     });
     const [pos, setPos] = useState({ top: 8, left: 8 });
+    const [workbench, setWorkbench] = useState(readWorkbenchState);
+    const [metersOn, setMetersOn] = useState(() => !readStoredMetersCollapsed(false));
+
+    useEffect(() => {
+        const syncWorkbench = (event) => {
+            const detail = event?.detail || {};
+            setWorkbench((previous) => ({
+                open: typeof detail.open === 'boolean' ? detail.open : previous.open,
+                view: detail.view || previous.view,
+                activityHidden: typeof detail.activityHidden === 'boolean' ? detail.activityHidden : previous.activityHidden,
+            }));
+        };
+        const syncMeters = (event) => setMetersOn(!(typeof event?.detail?.collapsed === 'boolean' ? event.detail.collapsed : readStoredMetersCollapsed(false)));
+        window.addEventListener(WORKBENCH_TOGGLE_EVENT, syncWorkbench);
+        window.addEventListener(METERS_COLLAPSED_EVENT_NAME, syncMeters);
+        return () => {
+            window.removeEventListener(WORKBENCH_TOGGLE_EVENT, syncWorkbench);
+            window.removeEventListener(METERS_COLLAPSED_EVENT_NAME, syncMeters);
+        };
+    }, []);
 
     const getSafeAreaTop = () => {
         if (typeof document === 'undefined') return 0;
@@ -68,7 +121,7 @@ export function TimelineMenu({
             const r = sessions?.getBoundingClientRect?.();
             const visible = Boolean(r && r.width >= 40 && getComputedStyle(sessions).display !== 'none' && getComputedStyle(sessions).position !== 'fixed');
             setInSessions(visible);
-            setPos(visible ? { top: r.top + topOffset, left: r.left + 8 } : { top: topOffset, left: 8 });
+            setPos(visible ? { top: r.top + safeTop, left: r.left } : { top: topOffset, left: 8 });
         };
         update();
         const observer = new ResizeObserver(update);
@@ -86,7 +139,7 @@ export function TimelineMenu({
     useEffect(() => {
         // Keep the existing state classes; in-sessions only records the anchor.
         if (portalRef.current)
-            portalRef.current.className = `timeline-menu-portal ${workspaceOpen ? 'in-workspace' : 'in-chat'}${inSessions ? ' in-sessions' : ''}`;
+            portalRef.current.className = `timeline-menu-portal ${workspaceOpen ? 'in-workspace' : 'in-chat'}${inSessions ? ' in-sessions in-activity-bar' : ''}`;
     }, [workspaceOpen, inSessions]);
 
 
@@ -162,7 +215,7 @@ export function TimelineMenu({
 
     const content = html`
         <button ref=${btnRef} class=${`timeline-menu-btn${open ? ' active' : ''}`} data-testid="hamburger"
-            onClick=${() => setOpen(v => !v)} title=${t('menu.title')} aria-label=${t('menu.title')}
+            onClick=${() => { setWorkbench(readWorkbenchState()); setMetersOn(!readStoredMetersCollapsed(false)); setOpen(v => !v); }} title=${t('menu.title')} aria-label=${t('menu.title')}
             aria-haspopup="menu" aria-expanded=${open ? 'true' : 'false'}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -173,22 +226,25 @@ export function TimelineMenu({
         </button>
         ${open && html`
             <div class="workspace-menu-dropdown timeline-menu-dropdown" ref=${menuRef} role="menu">
-                <button class="workspace-menu-item" role="menuitem" onClick=${() => run(toggleWorkspace)}>
-                    ${workspaceOpen ? t('menu.hideWorkspace') : t('menu.showWorkspace')}
+                <div class="workspace-menu-submenu-label">View</div>
+                <${MenuCheckItem} checked=${workbench.open && workbench.view === 'sessions'} label="Sessions" hint="Ctrl+Shift+B"
+                    onSelect=${() => run(() => dispatchWorkbenchCommand('view', { view: 'sessions' }))} />
+                <${MenuCheckItem} checked=${workbench.open && workbench.view === 'explorer'} label="Explorer" hint="Ctrl+Shift+E"
+                    onSelect=${() => run(() => dispatchWorkbenchCommand('view', { view: 'explorer' }))} />
+                <button class="workspace-menu-item timeline-menu-check" role="menuitem" onClick=${() => run(() => dispatchWorkbenchCommand('plan'))}>
+                    <span class="timeline-menu-check-mark" aria-hidden="true"></span>
+                    <span class="timeline-menu-check-label">Plan</span>
                 </button>
-                ${!workspaceOpen && html`
-                    <button class="workspace-menu-item" role="menuitem" onClick=${() => run(() => { toggleWorkspace(); })}>
-                        ${t('menu.openExplorer')}
-                    </button>
+                <${MenuCheckItem} checked=${metersOn} label="System meters" onSelect=${() => run(() => toggleMetersCollapsed())} />
+                <${MenuCheckItem} checked=${!workbench.activityHidden} label="Activity bar" onSelect=${() => run(() => dispatchWorkbenchCommand('activity-bar'))} />
+
+                ${(onOpenTerminalTab || onOpenVncTab || onOpenCdpTab) && html`
+                    <div class="workspace-menu-separator"></div>
+                    <div class="workspace-menu-submenu-label">Open in tab</div>
                 `}
-
-                ${(onOpenTerminalTab || onOpenVncTab || onOpenCdpTab) && html`<div class="workspace-menu-separator"></div>`}
-                ${onOpenTerminalTab && html`<button class="workspace-menu-item" role="menuitem" onClick=${() => run(onOpenTerminalTab)}>${t('menu.openTerminal')}</button>`}
-                ${onOpenCdpTab && html`<button class="workspace-menu-item" role="menuitem" onClick=${() => run(onOpenCdpTab)}>Open browser in tab</button>`}
-                ${onOpenVncTab && html`<button class="workspace-menu-item" role="menuitem" onClick=${() => run(onOpenVncTab)}>${t('menu.openVnc')}</button>`}
-
-                <div class="workspace-menu-separator"></div>
-                <button class="workspace-menu-item" role="menuitem" disabled=${!workspaceOpen} onClick=${() => run(() => window.dispatchEvent(new CustomEvent('piclaw:workspace-action', { detail: { action: 'new-file' } })))}>${t('menu.newFile')}</button>
+                ${onOpenTerminalTab && html`<button class="workspace-menu-item" role="menuitem" onClick=${() => run(onOpenTerminalTab)}>Terminal</button>`}
+                ${onOpenCdpTab && html`<button class="workspace-menu-item" role="menuitem" onClick=${() => run(onOpenCdpTab)}>Browser</button>`}
+                ${onOpenVncTab && html`<button class="workspace-menu-item" role="menuitem" onClick=${() => run(onOpenVncTab)}>VNC</button>`}
                 ${(() => {
                     const recent = getRecentFiles();
                     if (recent.length === 0) return null;
@@ -204,17 +260,17 @@ export function TimelineMenu({
                     `;
                 })()}
                 <div class="workspace-menu-separator"></div>
-                <button class="workspace-menu-item" role="menuitem" disabled=${!workspaceOpen} onClick=${() => run(() => window.dispatchEvent(new CustomEvent('piclaw:workspace-action', { detail: { action: 'refresh' } })))}>${t('menu.refreshTree')}</button>
-                <button class="workspace-menu-item" role="menuitem" disabled=${!workspaceOpen} onClick=${() => run(() => window.dispatchEvent(new CustomEvent('piclaw:workspace-action', { detail: { action: 'reindex' } })))}>${t('menu.reindex')}</button>
-                <button class=${`workspace-menu-item${showHidden ? ' active' : ''}`} role="menuitem" disabled=${!workspaceOpen} onClick=${() => run(() => {
+                <div class="workspace-menu-submenu-label">Workspace</div>
+                <button class="workspace-menu-item" role="menuitem" onClick=${() => run(() => window.dispatchEvent(new CustomEvent('piclaw:workspace-action', { detail: { action: 'refresh' } })))}>${t('menu.refreshTree')}</button>
+                <button class="workspace-menu-item" role="menuitem" onClick=${() => run(() => window.dispatchEvent(new CustomEvent('piclaw:workspace-action', { detail: { action: 'reindex' } })))}>${t('menu.reindex')}</button>
+                <${MenuCheckItem} checked=${showHidden} label="Show hidden files" onSelect=${() => run(() => {
                     const next = !showHidden;
                     setShowHidden(next);
                     try { localStorage.setItem('workspaceShowHidden', String(next)); } catch { setShowHidden(next); }
                     window.dispatchEvent(new CustomEvent('piclaw:toggle-hidden-files', { detail: { showHidden: next } }));
-                })}>
-                    ${showHidden ? t('menu.hideHidden') : t('menu.showHidden')}
-                </button>
-                <button class="workspace-menu-item" role="menuitem" onClick=${() => run(() => window.dispatchEvent(new CustomEvent('piclaw:open-settings')))}>${t('menu.settings')}</button>
+                })} />
+                <div class="workspace-menu-separator"></div>
+                <button class="workspace-menu-item" role="menuitem" onClick=${() => run(() => window.dispatchEvent(new CustomEvent('piclaw:open-settings')))}>${t('menu.settings')}…</button>
                 <div class="workspace-menu-separator"></div>
                 <div class="workspace-menu-scale-control" role="none">
                     <label for="timeline-pwa-display-scale">${t('menu.scale')}</label>

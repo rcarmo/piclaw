@@ -7,6 +7,17 @@ import { FloatingWidgetPane } from './floating-widget-pane.js';
 import { AgentRequestModal, AgentStatus } from './status.js';
 import { Timeline } from './timeline.js';
 import { LiveTurnActivity } from './turn-activity.js';
+import { getAgentAvatarUrl, getAgentName } from '../ui/agent-utils.js';
+
+/** The agent that answers in this timeline: the author of the latest agent post, else the default agent. */
+export function resolveLiveAgentId(posts, agents: Record<string, unknown> | null = {}) {
+  const list = Array.isArray(posts) ? posts : [];
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const id = list[index]?.data?.agent_id;
+    if (typeof id === 'string' && id) return id;
+  }
+  return agents && agents.default ? 'default' : null;
+}
 
 export interface ChatSurfaceProps {
   [key: string]: any;
@@ -83,11 +94,34 @@ export function ChatSurface(props: ChatSurfaceProps) {
     loadStatusWorkspaceBranch,
   } = props;
 
-  // The running turn lives in the timeline (Kintsugi-style); the status row keeps
-  // only its compact line, tool icons and git indicators.
+  // The running turn lives in the timeline (Kintsugi-style), posted as the
+  // agent: the status line with its tool icons and git indicators sits under
+  // the agent's avatar instead of floating above the compose box. Search and
+  // hashtag views have no live end of the timeline, so they keep it above.
   const liveStatus = isCompactionStatus(agentStatus) ? null : agentStatus;
-  const liveTurn = reverse !== false && !searchQuery
-    ? html`<${LiveTurnActivity} chatJid=${currentChatJid} status=${liveStatus} draft=${agentDraft} thought=${agentThought} turnId=${currentTurnId} />`
+  const statusPane = html`
+    <${AgentStatus}
+      status=${liveStatus}
+      showLivePanels=${false}
+      draft=${agentDraft}
+      plan=${agentPlan}
+      thought=${agentThought}
+      pendingRequest=${pendingRequest}
+      intent=${intent}
+      turnId=${currentTurnId}
+      steerQueued=${steerQueued}
+      onPanelToggle=${onPanelToggle}
+      showExtensionPanels=${false}
+      loadWorkspaceBranch=${loadStatusWorkspaceBranch}
+    />
+  `;
+  const timelineHostsStatus = reverse !== false && !searchQuery;
+  const statusVisible = Boolean(pendingRequest || intent || liveStatus?.type === 'intent' || liveStatus?.type === 'error');
+  const liveAgentId = resolveLiveAgentId(posts, agents);
+  const liveTurn = timelineHostsStatus
+    ? html`<${LiveTurnActivity} chatJid=${currentChatJid} status=${liveStatus} draft=${agentDraft} thought=${agentThought} turnId=${currentTurnId}
+        statusPane=${statusPane} statusVisible=${statusVisible}
+        agentName=${getAgentName(liveAgentId, agents || {})} agentAvatarUrl=${getAgentAvatarUrl(liveAgentId, agents || {})} />`
     : null;
 
   return html`
@@ -118,20 +152,7 @@ export function ChatSurface(props: ChatSurfaceProps) {
       removingPostIds=${removingPostIds}
       searchQuery=${searchQuery}
     />
-    <${AgentStatus}
-      status=${liveStatus}
-      showLivePanels=${false}
-      draft=${agentDraft}
-      plan=${agentPlan}
-      thought=${agentThought}
-      pendingRequest=${pendingRequest}
-      intent=${intent}
-      turnId=${currentTurnId}
-      steerQueued=${steerQueued}
-      onPanelToggle=${onPanelToggle}
-      showExtensionPanels=${false}
-      loadWorkspaceBranch=${loadStatusWorkspaceBranch}
-    />
+    ${!timelineHostsStatus && statusPane}
     <${BtwPanel}
       session=${btwSession}
       onClose=${onCloseBtw}

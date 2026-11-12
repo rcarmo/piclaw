@@ -123,21 +123,122 @@ for (const engine of ['chromium', 'webkit']) {
     } finally { await page.close(); }
   }, 30000);
 
-  browserTest(`${engine}: meters are always on, at the side bar foot or in the status bar when it is collapsed`, async () => {
+  browserTest(`${engine}: meters toggle from the activity bar, fill the side bar foot, or sit in the status bar`, async () => {
     const { page, errors } = await open(engine, 1440, 900);
+    // Live readings so the meter rows (and their plots) render.
+    await page.route('**/agent/system-metrics*', (route) => route.fulfill({ json: { cpu_percent: 12, ram_percent: 40, cpu_series: [5, 20, 12, 30, 12], ram_series: [38, 39, 40, 40, 40] } }));
     try {
       await page.waitForSelector('.workbench-sidebar-footer .system-meters-hud', { state: 'attached', timeout: 5000 });
-      expect(await page.locator('.workbench-statusbar').count()).toBe(0);
       expect(await page.locator('.system-meters-hud').count()).toBe(1);
+      // The plots stretch to the side bar's width.
+      const host = (await rect(page, '.workbench-view-host'))!;
+      await page.waitForSelector('.workbench-sidebar-footer .system-meters-spark', { timeout: 5000 });
+      expect((await rect(page, '.workbench-sidebar-footer .system-meters-spark'))!.width).toBeGreaterThan(host.width / 2);
+      // Off and on from the activity bar.
+      const meters = page.locator('.workbench-activity-meters');
+      expect(await meters.getAttribute('aria-pressed')).toBe('true');
+      await meters.click(); await settle(page);
+      expect(await meters.getAttribute('aria-pressed')).toBe('false');
+      expect(await page.locator('.system-meters-hud').count()).toBe(0);
+      expect((await rect(page, '.workbench-sidebar-footer'))).toBeNull();
+      await meters.click(); await settle(page);
+      await page.waitForSelector('.workbench-sidebar-footer .system-meters-hud', { state: 'attached', timeout: 5000 });
+      // Side bar collapsed: the meters move to the status bar, beside the model.
       await page.locator(sessionsButton).click(); await settle(page);
       await page.waitForSelector('.workbench-statusbar .system-meters-hud', { state: 'attached', timeout: 5000 });
       expect(await page.locator('.system-meters-hud').count()).toBe(1);
       const bar = (await rect(page, '.workbench-statusbar'))!, shell = await page.evaluate(() => document.querySelector('.app-shell')!.getBoundingClientRect().bottom);
       expect(bar.width).toBe(1440);
       expect(shell).toBeLessThanOrEqual(900 - 23);
-      // Phones keep the bottom edge for the compose box.
+      // Phones show the model and context in the status bar, without the meters, below the compose box.
       await page.setViewportSize({ width: 390, height: 844 }); await settle(page);
-      expect((await rect(page, '.workbench-statusbar'))!.visible).toBe(false);
+      expect((await rect(page, '.workbench-statusbar'))!.visible).toBe(true);
+      expect((await rect(page, '.workbench-statusbar .system-meters-hud'))?.visible ?? false).toBe(false);
+      const compose = (await page.locator('.compose-box').boundingBox())!, status = (await page.locator('.workbench-statusbar').boundingBox())!;
+      expect(compose.y + compose.height).toBeLessThanOrEqual(status.y + 1);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+
+  browserTest(`${engine}: the status bar holds the model and context instead of the compose box`, async () => {
+    const { page, errors } = await open(engine, 1440, 900);
+    try {
+      await page.waitForSelector('.workbench-statusbar .compose-model-hint', { timeout: 5000 });
+      expect(await page.locator('.compose-box .compose-meta-row').count()).toBe(0);
+      expect(await page.locator('.workbench-statusbar .compose-context-pie').count()).toBe(1);
+      expect((await page.locator('.workbench-statusbar .compose-model-hint').textContent())?.trim()).toContain('provider/model');
+      // The status bar starts at the left edge, under the activity bar, and is not covered by the side bar.
+      const hint = (await page.locator('.workbench-statusbar .compose-context-pie').boundingBox())!;
+      expect(await page.evaluate(({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('.workbench-statusbar')), { x: hint.x + 2, y: hint.y + hint.height / 2 })).toBe(true);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+
+  browserTest(`${engine}: the global menu sits in the activity bar and can hide it, leaving only the menu`, async () => {
+    const { page, errors } = await open(engine, 1440, 900);
+    try {
+      await settle(page);
+      const button = (await page.locator('[data-testid="hamburger"]').boundingBox())!;
+      expect(button.x).toBe(0);
+      expect(button.width).toBe(48);
+      await page.locator('[data-testid="hamburger"]').click();
+      const checked = () => page.$$eval('.timeline-menu-dropdown [role="menuitemcheckbox"]', (items) => items.map((item) => `${item.getAttribute('aria-checked') === 'true' ? '✓' : '·'} ${item.querySelector('.timeline-menu-check-label')?.textContent}`));
+      expect(await checked()).toEqual(['✓ Sessions', '· Explorer', '✓ System meters', '✓ Activity bar', '· Show hidden files']);
+      expect(await page.locator('.timeline-menu-dropdown').getByText('New file').count()).toBe(0);
+      const menu = (await page.locator('.timeline-menu-dropdown').boundingBox())!;
+      expect(menu.x).toBeGreaterThanOrEqual(48);
+      // Views from the menu.
+      await page.getByRole('menuitemcheckbox', { name: /Explorer/ }).click(); await settle(page);
+      expect(await state(page)).toEqual({ workspaceOpen: true, view: 'explorer', shown: 'shown' });
+      await page.locator('[data-testid="hamburger"]').click();
+      await page.getByRole('menuitem', { name: /Plan/ }).click();
+      expect(await page.evaluate(() => (window as any).workbench.probes.plans)).toBe(1);
+      // Hide the activity bar: no side bar or activity bar, only the menu.
+      await page.locator('[data-testid="hamburger"]').click();
+      await page.getByRole('menuitemcheckbox', { name: /Activity bar/ }).click(); await settle(page);
+      expect((await rect(page, '.workbench-sidebar'))!.visible).toBe(false);
+      expect((await rect(page, '.workbench-activity-bar'))!.visible).toBe(false);
+      expect(await page.evaluate(() => (document.querySelector('.app-shell') as HTMLElement).style.getPropertyValue('--workbench-reserved'))).toBe('0px');
+      // Nothing but the chat at the left edge, apart from the floating menu button.
+      expect(await page.evaluate(() => Boolean(document.elementFromPoint(4, 450)?.closest('.container, .app-shell')) && !document.elementFromPoint(4, 450)?.closest('.workbench-sidebar'))).toBe(true);
+      expect((await rect(page, '[data-testid="hamburger"]'))!.visible).toBe(true);
+      expect(await page.evaluate(() => localStorage.getItem('workbench.activityBarHidden'))).toBe('true');
+      // A view opens as a drawer over the chat; the backdrop closes it.
+      await page.locator('[data-testid="hamburger"]').click();
+      await page.getByRole('menuitemcheckbox', { name: /Sessions/ }).click(); await settle(page);
+      const drawer = (await rect(page, '.workbench-sidebar'))!;
+      expect(drawer.visible).toBe(true);
+      expect(drawer.x).toBe(0);
+      expect(await page.evaluate(() => getComputedStyle(document.querySelector('.workbench-sidebar')!).position)).toBe('fixed');
+      await page.locator('.workbench-drawer-backdrop').click({ position: { x: 1300, y: 300 } }); await settle(page);
+      expect((await rect(page, '.workbench-sidebar'))!.visible).toBe(false);
+      // Bring it back.
+      await page.locator('[data-testid="hamburger"]').click();
+      await page.getByRole('menuitemcheckbox', { name: /Activity bar/ }).click(); await settle(page);
+      expect((await rect(page, '.workbench-activity-bar'))!.width).toBe(48);
+      expect((await page.locator('[data-testid="hamburger"]').boundingBox())!.x).toBe(0);
+      await noOverflow(page);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+
+  browserTest(`${engine}: a running tool shows its status line under the agent's avatar in the timeline`, async () => {
+    const { page, errors } = await open(engine, 1440, 900, '?running=1');
+    try {
+      const live = page.locator('.turn-activity-live');
+      await live.waitFor();
+      expect(await live.locator('.turn-activity-live-avatar img').count()).toBe(1);
+      expect((await live.locator('.post-author').textContent())?.trim()).toBe('PiClaw');
+      const status = live.locator('.post-body .turn-activity-live-status .agent-status');
+      await status.waitFor();
+      expect(await status.innerText()).toContain('make test');
+      await live.locator('.agent-status-git-row').waitFor();
+      expect((await live.locator('.agent-status-git-label').innerText()).replace(/\s+/g, ' ')).toContain('main');
+      // Nothing floats above the compose box any more.
+      expect(await page.locator('.container > .agent-status-panel-core, .chat-surface-compose ~ .agent-status-panel-core').count()).toBe(0);
+      expect(await page.locator('.agent-status-panel-core').count()).toBe(1);
+      const avatar = (await live.locator('.turn-activity-live-avatar').boundingBox())!, line = (await status.boundingBox())!;
+      expect(line.x).toBeGreaterThan(avatar.x + avatar.width - 1);
       expect(errors).toEqual([]);
     } finally { await page.close(); }
   }, 30000);
@@ -153,13 +254,22 @@ for (const engine of ['chromium', 'webkit']) {
       await page.waitForFunction(() => (window as any).workbench.probes.actions.length === 2);
       expect(await actions()).toEqual(['create:ops-room', 'fork']);
       const lunch = page.locator('.sessions-sidebar-item', { has: page.locator('.sessions-sidebar-handle', { hasText: '@lunch' }) }).first();
+      // Row actions float over the row: the row keeps its full width.
+      const lunchRow = (await lunch.boundingBox())!, lunchOpen = (await lunch.locator('.sessions-sidebar-open').boundingBox())!;
+      expect(lunchOpen.width).toBeGreaterThanOrEqual(lunchRow.width - 1);
+      expect(await page.locator('.sessions-sidebar-pin').count()).toBe(0);
       await lunch.click({ button: 'right' });
-      expect(await page.locator('.sessions-row-menu .workspace-menu-item').allTextContents()).toEqual(['Open in new tab', 'Open in new window', 'Archive']);
+      expect(await page.locator('.sessions-row-menu .workspace-menu-item').allTextContents()).toEqual(['Pin', 'Open in new tab', 'Open in new window', 'Archive']);
+      await page.locator('.sessions-row-menu .workspace-menu-item', { hasText: 'Pin' }).click();
+      await page.waitForSelector('.sessions-row-menu', { state: 'detached' });
+      expect(await lunch.locator('.sessions-sidebar-pinned').count()).toBe(1);
+      await lunch.click({ button: 'right' });
+      expect((await page.locator('.sessions-row-menu .workspace-menu-item').first().textContent())?.trim()).toBe('Unpin');
       await page.locator('.sessions-row-menu .workspace-menu-item', { hasText: 'Archive' }).click();
       await page.waitForSelector('.sessions-row-menu', { state: 'detached' });
       const current = page.locator('.sessions-sidebar-item.current');
       await current.locator('.sessions-sidebar-more').click();
-      expect(await page.locator('.sessions-row-menu .workspace-menu-item').allTextContents()).toEqual(['Open in new tab', 'Open in new window', 'Rename…', 'Fork', 'Archive']);
+      expect(await page.locator('.sessions-row-menu .workspace-menu-item').allTextContents()).toEqual(['Pin', 'Open in new tab', 'Open in new window', 'Rename…', 'Fork', 'Archive']);
       await page.keyboard.press('Escape');
       await page.waitForSelector('.sessions-row-menu', { state: 'detached' });
       expect((await page.locator('.sessions-sidebar-section-archived summary').textContent())?.trim()).toBe('Archived (1)');
@@ -274,7 +384,9 @@ for (const engine of ['chromium', 'webkit']) {
       const current = page.locator('.sessions-sidebar-item.current');
       expect((await current.locator('.sessions-sidebar-age').textContent())?.trim()).toBe('3m');
       expect((await current.locator('.sessions-sidebar-preview').textContent())?.trim()).toBe('Summary for default The default session finished its last task.');
-      expect(await current.locator('.sessions-sidebar-context').getAttribute('aria-valuenow')).toBe('42');
+      expect(await current.locator('.sessions-sidebar-context-ring').getAttribute('aria-valuenow')).toBe('42');
+      // The activity label already says the session is active; no separate badge.
+      expect((await proxmox.locator('.sessions-sidebar-meta').allTextContents()).join(' ')).not.toContain('active');
       const lunch = page.locator('.sessions-sidebar-open', { has: page.locator('.sessions-sidebar-handle', { hasText: '@lunch' }) });
       const line = (await lunch.locator('.sessions-sidebar-preview').boundingBox())!, row = (await lunch.boundingBox())!;
       expect(line.x + line.width).toBeLessThanOrEqual(row.x + row.width + 1);

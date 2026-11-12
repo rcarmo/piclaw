@@ -69,3 +69,61 @@ browserTest('a long-press drag on a touch screen moves a file into a folder', as
     await rm(root, { recursive: true, force: true });
   }
 }, 60000);
+
+browserTest('the Explorer draws folder icons across the full width, with one New file action at its foot', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'workspace-tree-chrome-'));
+  const web = resolve(import.meta.dir, '../../web/src');
+  const entry = join(root, 'fixture.ts');
+  await writeFile(entry, `
+    import { html, render } from '${web}/vendor/preact-htm.js';
+    import { WorkspaceExplorer } from '${web}/components/workspace-explorer.ts';
+    render(html\`<\${WorkspaceExplorer} onOpenEditor=\${() => {}} />\`, document.getElementById('explorer'));
+  `);
+  const build = await Bun.build({ entrypoints: [entry], outdir: root, target: 'browser', format: 'esm', naming: 'fixture.js' });
+  expect(build.success).toBe(true);
+  const server = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(req) {
+    const url = new URL(req.url);
+    if (url.pathname === '/') return new Response('<html><head><link rel="stylesheet" href="/static/classic/dist/app.bundle.css"></head><body style="margin:0"><div class="workbench-view workbench-view-explorer" id="explorer" style="height:600px;width:300px;display:flex"></div><script type="module" src="/fixture.js"></script></body></html>', { headers: { 'content-type': 'text/html' } });
+    if (url.pathname === '/fixture.js') return new Response(Bun.file(join(root, 'fixture.js')), { headers: { 'content-type': 'text/javascript' } });
+    if (url.pathname.startsWith('/static/')) return new Response(Bun.file(join(import.meta.dir, '../../web', url.pathname)), { headers: { 'content-type': url.pathname.endsWith('.css') ? 'text/css' : 'text/javascript' } });
+    if (url.pathname === '/workspace/tree') return Response.json({ root: { name: '.', path: '.', type: 'dir', children: [
+      { name: 'docs', path: 'docs', type: 'dir', child_count: 1, children: [{ name: 'guide.md', path: 'docs/guide.md', type: 'file', size: 4 }] },
+      { name: 'notes.md', path: 'notes.md', type: 'file', size: 4 }] } });
+    return Response.json({});
+  } });
+  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  try {
+    const page = await browser.newPage({ viewport: { width: 800, height: 700 } });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.route('**/*', (route) => new URL(route.request().url()).origin === server.url.origin ? route.continue() : route.abort());
+    await page.goto(server.url.href);
+    await page.waitForSelector('[data-item-path="docs/"]');
+    // One New file action, in the action bar at the foot, even with nothing selected.
+    expect(await page.locator('.workspace-header .workspace-create').count()).toBe(0);
+    expect(await page.locator('.workspace-selection-bar .workspace-create').count()).toBe(1);
+    // Folders get a folder icon (open once expanded); rows span the side bar.
+    const icon = (path: string) => page.locator(`[data-item-path="${path}"]`).evaluate((row) => {
+      const before = getComputedStyle(row.querySelector('[data-item-section="content"]')!, '::before');
+      return { content: before.content, mask: before.maskImage || (before as any).webkitMaskImage };
+    });
+    const closed = await icon('docs/');
+    expect(closed.content).not.toBe('none');
+    expect(await page.locator('[data-item-path="notes.md"]').evaluate((row) => getComputedStyle(row.querySelector('[data-item-section="content"]')!, '::before').content)).toBe('none');
+    await page.locator('[data-item-path="docs/"]').click();
+    await page.waitForSelector('[data-item-path="docs/guide.md"]');
+    expect((await icon('docs/')).mask).not.toBe(closed.mask);
+    const host = (await page.locator('file-tree-container').boundingBox())!, row = (await page.locator('[data-item-path="docs/"]').boundingBox())!;
+    expect(row.x - host.x).toBeLessThanOrEqual(8);
+    expect(host.x + host.width - (row.x + row.width)).toBeLessThanOrEqual(10);
+    // Selecting a file does not repeat its path below the tree.
+    await page.locator('[data-item-path="notes.md"]').click();
+    await page.waitForTimeout(300);
+    expect(await page.locator('.workspace-preview-title').count()).toBe(0);
+    expect(errors).toEqual([]);
+  } finally {
+    await browser.close();
+    server.stop(true);
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60000);

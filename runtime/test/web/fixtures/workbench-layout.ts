@@ -2,6 +2,7 @@ import { html, render, useRef, useState, useCallback } from '../../../web/src/ve
 import { ChatSurface } from '../../../web/src/components/chat-surface.js';
 import { WorkbenchSidebar } from '../../../web/src/components/workbench-sidebar.js';
 import { WorkbenchStatusBar } from '../../../web/src/components/workbench-statusbar.js';
+import { TimelineMenu } from '../../../web/src/components/timeline-menu.js';
 import { SettingsTabBridge } from '../../../web/src/components/settings-tab-bridge.js';
 import { requestOpenSettingsDialog } from '../../../web/src/components/settings-dialog-events.js';
 import { useSplitters, setEditorPaneCollapsed } from '../../../web/src/ui/use-splitters.js';
@@ -39,6 +40,11 @@ const loadSessionStatus = async (jid: string) => {
 };
 window.open = ((url: string) => { probes.opened.push(String(url)); return null; }) as typeof window.open;
 const params = new URLSearchParams(location.search);
+// ?running=1: a turn is running a tool, so the agent status line is live.
+const runningStatus = params.get('running') === '1'
+  ? { type: 'tool_call', title: 'bash: make test', tool_name: 'bash', tool_args: { command: 'cd /workspace/piclaw && make test' }, started_at: new Date(Date.now() - 4000).toISOString(), turn_id: 'turn-1' }
+  : null;
+const contextUsage = { tokens: 42000, contextWindow: 100000, percent: 42 };
 
 function Fixture() {
   const shell = useRef(null), timeline = useRef(null), sidebar = useRef(280), editor = useRef(320), dock = useRef(200);
@@ -55,8 +61,11 @@ function Fixture() {
       loadSessionStatus=${loadSessionStatus} onRefreshSessions=${() => { probes.refreshes += 1; }}
       workspaceOpen=${workspaceOpen} setWorkspaceVisible=${setWorkspaceVisible} onOpenSettings=${() => { probes.settings += 1; }} onOpenPlan=${() => { probes.plans += 1; }} sessionActions=${sessionActions}
       explorer=${html`<aside class="workspace-sidebar"><div class="workspace-header"><div class="workspace-header-left"><span>Workspace</span></div></div><div class="workspace-tree">notes.md</div></aside>`} />
+    <${TimelineMenu} workspaceOpen=${workspaceOpen} toggleWorkspace=${toggleWorkspace} openEditor=${(path: string) => probes.editors.push(path)}
+      onOpenTerminalTab=${() => probes.actions.push('terminal')} />
     <div class="container"><${ChatSurface} currentChatJid=${current} posts=${posts} timelineRef=${timeline} hasMore=${false}
-      composeProps=${{ currentChatJid: current, onPost: () => {}, services, activeChatAgents: chats, agentModels: { current: 'provider/model', thinking_level: 'high' }, capabilities: { speech: true, media: true, location: false, notifications: false, modelPicker: true, commands: false } }} /></div>
+      agentStatus=${runningStatus} currentTurnId=${runningStatus ? 'turn-1' : null} loadStatusWorkspaceBranch=${async () => ({ branch: 'main', repo_path: 'piclaw' })}
+      composeProps=${{ currentChatJid: current, onPost: () => {}, services, activeChatAgents: chats, activeModel: 'provider/model', contextUsage, agentModels: { current: 'provider/model', thinking_level: 'high' }, capabilities: { speech: true, media: true, location: false, notifications: false, modelPicker: true, commands: false } }} /></div>
     ${editorOpen && html`
       <div class="editor-splitter" onMouseDown=${splitters.handleEditorSplitterMouseDown} onTouchStart=${splitters.handleEditorSplitterTouchStart} onKeyDown=${splitters.handleEditorSplitterKeyDown} onDblClick=${splitters.handleEditorSplitterDoubleClick} role="separator" aria-orientation="vertical" aria-label="Resize editor" tabIndex="0"></div>
       <div class="editor-pane-container"><div class="tab-strip"><button class="tab-item active">notes.md</button></div><div class="editor-pane-host"><pre>Editor content</pre></div></div>

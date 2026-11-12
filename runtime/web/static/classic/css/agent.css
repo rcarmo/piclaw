@@ -1917,28 +1917,42 @@
     .turn-activity-text-actions { opacity: 1; }
 }
 
-/* Live turn: the running "Working · elapsed" block at the end of the timeline. */
-.turn-activity-live-avatar {
-    background: transparent;
-    align-items: center;
-    justify-content: center;
+/* Live turn: the agent's running post at the end of the timeline. */
+.turn-activity-live-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
-.turn-activity-live-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--turn-color, var(--accent-color));
-    animation: turn-activity-pulse 1.4s ease-in-out infinite;
+/* The agent's avatar pulses in its turn colour while the turn runs. */
+.turn-activity-live.is-active .turn-activity-live-avatar {
+    box-shadow: 0 0 0 2px var(--turn-color, var(--accent-color));
+    animation: turn-activity-avatar-pulse 1.6s ease-in-out infinite;
 }
 
-@keyframes turn-activity-pulse {
-    0%, 100% { opacity: 0.35; transform: scale(0.85); }
-    50% { opacity: 1; transform: scale(1); }
+@keyframes turn-activity-avatar-pulse {
+    0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--turn-color, var(--accent-color)) 35%, transparent); }
+    50% { box-shadow: 0 0 0 2px var(--turn-color, var(--accent-color)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .turn-activity-live-dot { animation: none; }
+    .turn-activity-live.is-active .turn-activity-live-avatar { animation: none; }
+}
+
+/* The agent status line, formerly a pane above the compose box, nested under the avatar. */
+.turn-activity-live-status {
+    margin-top: 4px;
+    min-width: 0;
+}
+
+.turn-activity-live-status > .agent-status-panel-core {
+    max-height: none;
+    overflow: visible;
+    scrollbar-gutter: auto;
+}
+
+.turn-activity-live-status > .agent-status-panel-core > .agent-thinking[data-collapsible='true'] > .agent-thinking-title {
+    position: static;
 }
 
 .turn-activity.is-live {

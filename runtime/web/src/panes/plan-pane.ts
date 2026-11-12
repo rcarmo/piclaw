@@ -238,16 +238,6 @@ function ChatPlanPane({ chatJid, drafts, onDirtyChange }) {
           <span class="plan-pane-progress-text">${summary.completed}/${summary.total}</span>
         </div>
       </header>
-      <div class="plan-pane-toolbar">
-        ${editing
-          ? html`<button type="button" class="plan-pane-primary" disabled=${busy} onClick=${() => void save()}>Save</button>
-                 <button type="button" disabled=${busy} onClick=${() => { drafts.delete(chatJid); setDraft(null); setStatus({ text: 'Edits discarded', kind: 'info' }); }}>Cancel</button>`
-          : html`<button type="button" disabled=${busy} onClick=${() => setDraft(markdown)}>Edit</button>`}
-        <button type="button" disabled=${busy || editing} onClick=${() => void load('Refreshed')}>Refresh</button>
-        <button type="button" disabled=${busy} onClick=${() => void reset()}>Reset</button>
-        <span class="plan-pane-spacer"></span>
-        <button type="button" class="plan-pane-primary" disabled=${busy} onClick=${() => void submit()}>Submit to model</button>
-      </div>
       ${editing
         ? html`<textarea class="plan-pane-editor" aria-label="Plan Markdown" spellcheck="false" value=${draft}
             onInput=${(event) => {
@@ -266,6 +256,16 @@ function ChatPlanPane({ chatJid, drafts, onDirtyChange }) {
               </li>
             `)}
           </ol>`}
+      <div class="plan-pane-toolbar">
+        ${editing
+          ? html`<button type="button" class="plan-pane-primary" disabled=${busy} onClick=${() => void save()}>Save</button>
+                 <button type="button" disabled=${busy} onClick=${() => { drafts.delete(chatJid); setDraft(null); setStatus({ text: 'Edits discarded', kind: 'info' }); }}>Cancel</button>`
+          : html`<button type="button" disabled=${busy} onClick=${() => setDraft(markdown)}>Edit</button>`}
+        <button type="button" disabled=${busy || editing} onClick=${() => void load('Refreshed')}>Refresh</button>
+        <button type="button" disabled=${busy} onClick=${() => void reset()}>Reset</button>
+        <span class="plan-pane-spacer"></span>
+        <button type="button" class="plan-pane-primary" disabled=${busy} onClick=${() => void submit()}>Submit to model</button>
+      </div>
       <footer class=${`plan-pane-status ${status.kind}`} role="status">${status.text}${updatedAt && !editing ? html` · ${new Date(updatedAt).toLocaleTimeString()}` : ''}</footer>
     </section>
   `;

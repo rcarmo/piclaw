@@ -411,7 +411,7 @@ export function GpuMeterRows({ meters = [], compact = false, openGpuId = null, o
             onClick=${(event) => { event.stopPropagation(); onOpen(meter.id, event.currentTarget); }}
         >
             <span class="system-meters-label">${row.label}</span>
-            <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true"><path d=${row.path}></path></svg>
+            <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true"><path vector-effect="non-scaling-stroke" d=${row.path}></path></svg>
             <span class="system-meters-value">${row.value}</span>
         </button>
     `))}`;

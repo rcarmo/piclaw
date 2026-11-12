@@ -1,7 +1,8 @@
 import { goalInputDisplayText } from "../ui/goal-input-display.ts";
 import { createDictationComposerBinding } from '../ui/composer-dictation-binding.js';
 import { subscribeDictationProviders } from '../ui/composer-dictation-registry.js';
-import { html, useRef, useState, useEffect, useCallback, useMemo } from '../vendor/preact-htm.js';
+import { html, render, useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo } from '../vendor/preact-htm.js';
+import { STATUSBAR_COMPOSE_SLOT_EVENT, findStatusbarComposeSlot } from './workbench-statusbar-slot.js';
 import { useTranslation } from '../utils/i18n.js';
 import { isPopupTypeaheadKey, resolvePopupTypeaheadMatch, updatePopupTypeaheadBuffer } from '../ui/popup-typeahead.js';
 import { getAgentModels, sendAgentMessage } from '../api.js';
@@ -1592,6 +1593,16 @@ export function ComposeBox({
             ? 'Select a model (tap to open model picker)'
             : `Current model: ${modelHintLabel}${modelHintSuffix} (tap to open model picker)`));
     const showComposeMetaRow = !searchMode && (showModelPickerHint || runUsageMeta || contextUsage);
+    // The workbench status bar shows the model and context; without one (or
+    // in the fixture pages) they stay in the compose footer.
+    const [statusbarSlot, setStatusbarSlot] = useState(() => findStatusbarComposeSlot());
+    useEffect(() => {
+        if (typeof window === 'undefined') return undefined;
+        const sync = () => setStatusbarSlot(findStatusbarComposeSlot());
+        window.addEventListener(STATUSBAR_COMPOSE_SLOT_EVENT, sync);
+        sync();
+        return () => window.removeEventListener(STATUSBAR_COMPOSE_SLOT_EVENT, sync);
+    }, []);
 
     const emitModelState = (payload) => {
         if (!payload || typeof payload !== 'object') return;
@@ -3392,6 +3403,48 @@ export function ComposeBox({
         updateMentionAutocomplete(content);
     }, [allowMentions, mentionAgents, currentChatJid, content, searchMode]);
 
+    const composeMetaRow = showComposeMetaRow ? html`
+                    <div class="compose-meta-row">
+                        ${(showModelPickerHint || runUsageMeta) && html`
+                            <div class="compose-model-meta">
+                                ${showModelPickerHint && html`
+                                    <button
+                                        ref=${modelHintRef}
+                                        type="button"
+                                        class="compose-model-hint compose-model-hint-btn"
+                                        title=${modelHintTitle}
+                                        aria-label=${t('compose.openModelPicker')}
+                                        onClick=${toggleModelPopup}
+                                        disabled=${switchingModel}
+                                    >
+                                        ${switchingModel ? 'Switching…' : modelHintLabel}
+                                    </button>
+                                `}
+                                <div class="compose-model-meta-subline">
+                                    ${!switchingModel && modelUsageSectionLabel && html`
+                                        <span class="compose-model-usage-hint" title=${modelHintTitle}>
+                                            ${modelUsageSectionLabel}
+                                        </span>
+                                    `}
+                                </div>
+                            </div>
+                        `}
+                        ${!searchMode && contextUsage && html`
+                            <${ContextPie}
+                                usage=${contextUsage}
+                                onCompact=${allowModelCompaction ? handleContextCompact : undefined}
+                                compactionLabel=${statusNoticeIsCompaction ? statusNoticeElapsedLabel || '0:00' : ''}
+                                compactionTitle=${statusNoticeIsCompaction ? (statusNoticeTitle || 'Smart compaction') : ''}
+                            />
+                        `}
+                    </div>
+    ` : null;
+    useLayoutEffect(() => {
+        if (!statusbarSlot) return;
+        render(composeMetaRow, statusbarSlot);
+    });
+    useEffect(() => () => { if (statusbarSlot) render(null, statusbarSlot); }, [statusbarSlot]);
+
     return html`
         <div class="compose-box" data-testid="compose-box" aria-disabled=${disabled ? 'true' : 'false'}>
             <div
@@ -3912,42 +3965,7 @@ export function ComposeBox({
                             ${connectionStatusLabel}
                         </span>
                     `}
-                    ${showComposeMetaRow && html`
-                    <div class="compose-meta-row">
-                        ${(showModelPickerHint || runUsageMeta) && html`
-                            <div class="compose-model-meta">
-                                ${showModelPickerHint && html`
-                                    <button
-                                        ref=${modelHintRef}
-                                        type="button"
-                                        class="compose-model-hint compose-model-hint-btn"
-                                        title=${modelHintTitle}
-                                        aria-label=${t('compose.openModelPicker')}
-                                        onClick=${toggleModelPopup}
-                                        disabled=${switchingModel}
-                                    >
-                                        ${switchingModel ? 'Switching…' : modelHintLabel}
-                                    </button>
-                                `}
-                                <div class="compose-model-meta-subline">
-                                    ${!switchingModel && modelUsageSectionLabel && html`
-                                        <span class="compose-model-usage-hint" title=${modelHintTitle}>
-                                            ${modelUsageSectionLabel}
-                                        </span>
-                                    `}
-                                </div>
-                            </div>
-                        `}
-                        ${!searchMode && contextUsage && html`
-                            <${ContextPie}
-                                usage=${contextUsage}
-                                onCompact=${allowModelCompaction ? handleContextCompact : undefined}
-                                compactionLabel=${statusNoticeIsCompaction ? statusNoticeElapsedLabel || '0:00' : ''}
-                                compactionTitle=${statusNoticeIsCompaction ? (statusNoticeTitle || 'Smart compaction') : ''}
-                            />
-                        `}
-                    </div>
-                    `}
+                    ${showComposeMetaRow && !statusbarSlot && composeMetaRow}
                     <div class="compose-actions ${searchMode ? 'search-mode' : ''}">
                     ${searchMode && html`
                         <label class="compose-search-scope-wrap" title=${t('compose.searchScope')}>
