@@ -2,7 +2,7 @@
 
 Model selection estimates one prospective transcript in SDK token units. Instructions are resolved sections; selected tool declarations are positional system contributions. Neither is charged again after the SDK transcript or applicable provider usage already represents it.
 
-`host-model-context.ts` retains a small, read-only projection because pinned pi-durable 1.4.0 exposes committed `ContextView` and resolved `Agent`, but no non-persisting candidate preparation API. The upstream request is earendil-works/pi#11652; its automatic contributor-gate closure does not supply an API. The projection uses public SDK types and transcript helpers. It creates no durable entries, edits, tasks, configuration, recovery loop or provider request.
+`host-model-context.ts` retains a small, read-only projection because pinned pi-durable 1.5.2 exposes committed `ContextView` and resolved `Agent`, but no non-persisting candidate preparation API. The upstream request is earendil-works/pi#11652; its automatic contributor-gate closure does not supply an API. The projection uses public SDK types and transcript helpers. It creates no durable entries, edits, tasks, configuration, recovery loop or provider request.
 
 ## Snapshot and ordering
 
@@ -83,11 +83,37 @@ Observability's source-bound request hook is separately exercised through real c
 |Idle choice and persistence|Public private-engine conversation configuration through checked host admission|Chat/source/incarnation/config/history fences remain application policy.|
 |Selected prompt/schema preparation|Read-only `host-model-context.ts`, using public transcript types/helpers|Remove when a public non-persisting operation covers rendered sections, selected declarations and baseline provenance.|
 |Final output metadata|Root's87-line fixed public-adapter boundary|Remove when an approved public SDK operation supplies equivalent final auth-independent bounds. Unsupported producers stay unknown.|
-|Offline catalogue refresh|`PiclawModelRegistry` delegates refresh to the canonical runtime, forces offline and coalesces concurrent reloads|Stock1.4 `ModelRuntime.refresh` reloads configuration and does not supply this single-flight/offline enforcement. Remove the local wrapper when the SDK or retirement of its callers covers both guarantees.|
+|Offline catalogue refresh|`PiclawModelRegistry` delegates refresh to the canonical runtime, forces offline and coalesces concurrent reloads|Stock1.5.2 `ModelRuntime.refresh` reloads configuration and does not supply this single-flight/offline enforcement. Remove the local wrapper when the SDK or retirement of its callers covers both guarantees.|
 |Legacy affinity/session metadata|Explicit legacy-capture composition; native construction requires a durable lookup and forbids mixed capture|Native missing handles refuse instead of creating legacy sessions. Legacy read decorators are installed only during legacy session creation; broader retirement belongs to#1650.|
 |Installed native add-ons|One exact source profile per accepted backend; immutable native fixture|All23 backend profiles, aliases, shadows, escaped roots and retired Regrets negatives remain checked before evaluation. SDK lifecycle declarations are not execution authority.|
 |Client context/thinking/catalogue|Existing shared backend model state in Classic/Visual|No client fit arithmetic, preset catalogue or independent capability owner. Manual commands use admitted incoming storage and retain their existing lifecycle/status surface.|
 
 This census retains passive token/pricing/provider-cost reporting. Expense-policy deletion remains#1875's separate delivery and earns no reduction credit here. Additional source retirement requires a demonstrated native caller replacement, not relocation or a new facade.
 
-Separately authorised deployed native verification remains required. Source tests, the census and these timings do not qualify installation, restart, credentials, live provider requests or history migration.
+## Epic #1857 acceptance — 12 November 2026
+
+All ten native-linked repair children are closed: #1843, #1864, #1867, #1868, #1871, #1872, #1873, #1893, #1894 and #1895. The last source checkpoint, merged PR #1916, left deployment and read-only native verification outstanding. The authorised installation now runs merged Core `6cdc499759dbba1cd4bbcd1113777ebdfa631ffe` with separate stock Root/private SDK1.5.2 graphs. No local SDK patch or candidate fixture override is used.
+
+Current-source reconciliation retained the exceptions and removal conditions above. SDK1.5.2 still lacks non-persisting candidate preparation and equivalent final auth-independent output bounds. Removing those boundaries now would lose supported checks. The later cache-inclusive producer-reserve repairs are included in the current native regressions; no financial-policy deletion credit is assigned to this epic.
+
+Fresh focused qualification on that source passed:
+
+- 466 parent-terminal native tests in34 explicitly selected, separately isolated files. Coverage includes real generation/projection parity, dense Unicode and opaque metadata, cache/output accounting, thinking revocation, selection fences, Plan/Goal hook overflow, compaction, SQLite reopen/no-replay, Regrets and installed-source/default-factory checks.
+- 77 host/client tests in16 files and both private-engine/qualification strict type projects.
+- 24 browser journeys in Chromium/WebKit, covering both shipped shells, reload/reconnect/polling, desktop/touch model selection, unknown/zero percentages, empty catalogues, backend refusal, thinking changes and keyboard/touch native compaction.
+
+The initial browser run had17 passes/7 failures. Six failures exposed two stale fixtures that omitted the existing `/agent/system-metrics` endpoint; one WebKit Visual reload reported an access-control error. The fixture repair adds only the explicit metrics response. The complete rerun passed24/0 with the original page-error, unhandled-route, admission, focus and timing assertions intact. The initial failed receipt remains separate; the metrics response is not claimed to explain the separate WebKit error. No production code or shipped assets changed.
+
+Read-only deployed checks returned HTTP200 for `/agent/status`, `/agent/context` and `/agent/models`. The current model catalogue and thinking metadata are available, and context counts/percentage come from the backend. The actual installed source audit and private dependency guard pass for all22 installed profiles, including Observability0.1.24. Session Dashboard remains intentionally absent; its closed repair and negative/full-catalogue fixture coverage do not require reinstalling it. No model switch, compaction, credential lookup, live provider probe, history mutation, backup or further restart was performed during this reconciliation.
+
+Ten warm samples per workload on Smith's LXC, stock SDK1.5.2, measured the public-adapter output preview plus candidate fit check:
+
+| Workload | Median | Maximum | Output cap / reserve |
+|---|---:|---:|---:|
+|256-character input|0.095ms|0.273ms|32000 /36096|
+|80000-token measured prefix|0.084ms|0.147ms|15904 /20000|
+|500KB opaque signature|0.300ms|0.318ms|32000 /36096|
+
+Inputs remained unchanged and no provider request was sent. These are boundary-only warm timings, not full selection, cold-import or generation performance. Only aggregates are retained. The earlier SDK1.4 timings above remain dated evidence.
+
+This reconciliation adds zero production lines and earns no new deletion credit. The historical listed net−505 reduction through #1912 remains its original, bounded accounting; it is not a new whole-main measurement. The two fixture additions and this documentation update require normal PR review. Source, focused qualification and deployed observations are separate receipts; no new full-suite pass is inferred from them. Existing documented SDK-gap and unsupported-provider limits remain explicit.
