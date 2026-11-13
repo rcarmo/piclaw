@@ -33,6 +33,20 @@
     height: calc(100% - var(--workbench-statusbar-height) - var(--workbench-statusbar-inset));
 }
 
+/* iPad/iPhone Safari with the keyboard or its shortcut bar up: the app is sized
+   to the visible area (see installIOSBrowserKeyboardViewportFix), so the status
+   bar sits at the bottom of that area rather than behind the keyboard, and the
+   band Safari leaves around the shortcut bar takes the status bar colour. */
+html[data-ios-keyboard-viewport] {
+    --workbench-statusbar-inset: 0px;
+    background-color: var(--bg-secondary);
+}
+
+html[data-ios-keyboard-viewport] .workbench-statusbar {
+    top: calc(var(--app-height) - var(--workbench-statusbar-height) - 1px);
+    bottom: auto;
+}
+
 /* Panes sized to the viewport stop at the status bar. */
 .app-shell:has(> .workbench-statusbar) > .container,
 .app-shell:has(> .workbench-statusbar) > .editor-pane-container {

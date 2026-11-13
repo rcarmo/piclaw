@@ -506,4 +506,27 @@ for (const engine of ['chromium', 'webkit']) {
     }, 30000);
   }
 
+
+  browserTest(`${engine} 1194px: with the iPad keyboard up the status bar sits at the bottom of the visible area`, async () => {
+    const { page, errors } = await open(engine, 1194, 834);
+    try {
+      await page.waitForSelector('.workbench-statusbar');
+      // What the iOS browser keyboard fix writes while a text field is focused
+      // and the shortcut bar takes the bottom 92px.
+      await page.evaluate(() => { document.documentElement.style.setProperty('--app-height', '742px'); document.documentElement.setAttribute('data-ios-keyboard-viewport', '1');
+        // The fixture page pins body to 100%; the app itself sizes body by --app-height (base.css).
+        document.body.style.height = 'var(--app-height)'; });
+      await settle(page);
+      const m = await page.evaluate(() => {
+        const bar = document.querySelector('.workbench-statusbar')!.getBoundingClientRect();
+        const shell = document.querySelector('.app-shell')!.getBoundingClientRect();
+        return { barBottom: Math.round(bar.bottom), shellToBar: Math.round(bar.top - shell.bottom),
+          band: getComputedStyle(document.documentElement).backgroundColor === getComputedStyle(document.querySelector('.workbench-statusbar')!).backgroundColor };
+      });
+      // The status bar ends where the visible area ends, and the band behind the shortcut bar matches it.
+      expect(m).toEqual({ barBottom: 742, shellToBar: -1, band: true });
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+
 }
