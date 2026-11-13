@@ -56,7 +56,8 @@ let pendingCleanup: Promise<void> | undefined;
 let cleanupDatabase: Database | undefined;
 let dbFileIdentity: string | null = null;
 let dbInstance = 0;
-let dbRole: "root" | "index-worker" | undefined;
+type PublishedDatabaseRole = "root" | "index-worker" | "maintenance-reader" | "maintenance-writer";
+let dbRole: PublishedDatabaseRole | undefined;
 let cleanupFailure: RuntimeStartupCleanupError | undefined;
 function currentFileIdentity(pathname: string): string {
   const stat = fs.statSync(pathname);
@@ -754,6 +755,11 @@ export function openWorkspaceIndexDatabase(paths: Readonly<RuntimeConfigPaths> =
   openDatabase(paths, "index-worker", assertCurrent, expectedIdentity);
 }
 
+/** Open an existing store for explicit maintenance, without migration or checkpoint ownership. */
+export function openMaintenanceDatabase(paths: Readonly<RuntimeConfigPaths> = getRuntimeConfigPaths(), readOnly = true): void {
+  openDatabase(paths, readOnly ? "maintenance-reader" : "maintenance-writer");
+}
+
 function assertIndexStore(database: Database): void {
   for (const sql of [
     "SELECT path,mtime_ms,size_bytes,indexed_at FROM main.workspace_files LIMIT 0",
@@ -762,7 +768,7 @@ function assertIndexStore(database: Database): void {
   ]) database.query(sql).all();
 }
 
-function openDatabase(paths: Readonly<RuntimeConfigPaths>, role: "root" | "index-worker",
+function openDatabase(paths: Readonly<RuntimeConfigPaths>, role: PublishedDatabaseRole,
   assertCurrent: () => void = () => {}, expectedIdentity?: string): void {
   assertCurrent();
   if (cleanupFailure) throw cleanupFailure;
@@ -787,7 +793,8 @@ function openDatabase(paths: Readonly<RuntimeConfigPaths>, role: "root" | "index
     throw Error("Database bootstrap target changed; close the database before selecting another target.");
   }
   if (db && dbPathCache === nextCacheKey) {
-    if (role === "root" && dbRole !== "root") throw Error("Index worker connection cannot become a migration owner; close it first.");
+    if (role === "root" && dbRole !== "root") throw Error(`${dbRole === "index-worker" ? "Index worker" : "Maintenance"} connection cannot become a migration owner; close it first.`);
+    if (role.startsWith("maintenance-") && dbRole !== role) throw Error("Maintenance connection role cannot change before close.");
     if (expectedIdentity && dbFileIdentity !== expectedIdentity) throw Error("SQLite role database identity changed");
     if (!useMemory) {
       try {
@@ -811,6 +818,7 @@ function openDatabase(paths: Readonly<RuntimeConfigPaths>, role: "root" | "index
     }
   }
   if (role === "index-worker" && useMemory) throw Error("Index worker requires an existing file-backed database.");
+  if (role.startsWith("maintenance-") && useMemory) throw Error("Maintenance requires an existing file-backed database.");
   closeDatabase({ shrinkMemory: false });
   if (pendingCleanup) throw Error("Database cleanup is pending; await closeDatabase() before reopening");
   if (role === "root" && !useMemory) fs.mkdirSync(path.dirname(nextPath), { recursive: true });
@@ -822,7 +830,7 @@ function openDatabase(paths: Readonly<RuntimeConfigPaths>, role: "root" | "index
     if (role === "root") {
       initializeDatabaseSchema(database);
       if (!useMemory) releaseCheckpoint = registerSqliteCheckpoint(database, nextPath);
-    } else assertIndexStore(database);
+    } else if (role === "index-worker") assertIndexStore(database);
     if (!useMemory && identity !== currentFileIdentity(nextPath)) throw Error("Database file identity changed.");
     assertCurrent();
     log.info("Opened database connection", {

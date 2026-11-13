@@ -139,8 +139,9 @@ export function registerSqliteCheckpoint(database: Database, path: string, enabl
       current.worker = worker;
       worker.addEventListener("message", event => {
         if (event.data?.type === "closed") {
+          current.closed = true; current.ready = false;
           worker.terminate(); // The worker has positively acknowledged SQLite teardown.
-          current.closed = true; current.ready = false; current.shutdown.resolve();
+          current.shutdown.resolve();
           if (!current.handles.size && groups.get(key) === current) groups.delete(key);
           return;
         }

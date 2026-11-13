@@ -8,7 +8,7 @@
  * This keeps internal module boundaries hidden from the rest of the codebase.
  */
 
-export { initDatabase, getDb, backupDatabase, closeDatabase, shrinkDatabaseMemory, reclaimFreelistPages } from "./db/connection.js";
+export { initDatabase, openMaintenanceDatabase, getDb, backupDatabase, closeDatabase, shrinkDatabaseMemory, reclaimFreelistPages } from "./db/connection.js";
 export { createVerifiedSqliteBackup, verifySqliteBackup } from "./db/backup.js";
 export type { SqliteBackupManifest } from "./db/backup.js";
 export { applyOwnedMigrations, ensureOwnedMigrationLedger, listAppliedOwnedMigrations } from "./db/migrations.js";

@@ -44,6 +44,17 @@ for (const role of ["root", "sdk", "scheduler"] as SqliteConnectionRole[]) test(
   } finally { db.close(); }
 });
 
+test('role reconfiguration rejects a moved open descriptor even when its old filename now exists again', () => {
+  const ws = createTempWorkspace('sqlite-role-moved-'), path = join(ws.base, 'role.db'), moved = path + '.old';
+  const root = openSqliteRole(path, { role: 'root' }); let replacement: Database | undefined;
+  try {
+    root.exec('CREATE TABLE retained(n); PRAGMA wal_checkpoint(TRUNCATE)'); renameSync(path, moved);
+    replacement = new Database(path); replacement.exec('PRAGMA journal_mode=WAL');
+    expect(() => configureSqliteRole(root, path, { role: 'root' })).toThrow('descriptor identity changed');
+    expect(replacement.query('SELECT name FROM sqlite_master').all()).toEqual([]);
+  } finally { replacement?.close(); root.close(); ws.cleanup(); }
+});
+
 test("index-worker role cannot create a file even with create=true and rejects memory", () => {
   const ws = createTempWorkspace("sqlite-worker-existing-"), missing = join(ws.base, "missing.db");
   try {
