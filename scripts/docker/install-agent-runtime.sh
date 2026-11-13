@@ -233,13 +233,15 @@ PI_CODING_AGENT_VERSION="${PI_CODING_AGENT_VERSION:-0.74.0}"
 sudo BUN_INSTALL="$BUN_INSTALL" BUN_INSTALL_CACHE_DIR="$BUN_INSTALL_CACHE_DIR" "$BUN_INSTALL/bin/bun" add -g "@earendil-works/pi-coding-agent@${PI_CODING_AGENT_VERSION}"
 
 sudo chmod -R a+rX "$BUN_INSTALL"
-# Run the package-manager-selected binary under Bun without editing SDK bytes.
-sudo rm -f /usr/local/bin/pi
-sudo tee /usr/local/bin/pi > /dev/null <<EOF
+# Resolve the declared binary before replacing the public shim, never SDK bytes.
+PI_CLI="$("$BUN_INSTALL/bin/bun" -e 'const path = require("node:path"); const root = path.join(process.argv[1], "install/global/node_modules/@earendil-works/pi-coding-agent"); console.log(path.resolve(root, require(path.join(root, "package.json")).bin.pi));' "$BUN_INSTALL")"
+sudo rm -f "$BUN_INSTALL/bin/pi"
+sudo tee "$BUN_INSTALL/bin/pi" > /dev/null <<EOF
 #!/usr/bin/env sh
-exec "$BUN_INSTALL/bin/bun" "$BUN_INSTALL/bin/pi" "\$@"
+exec "$BUN_INSTALL/bin/bun" "$PI_CLI" "\$@"
 EOF
-sudo chmod 755 /usr/local/bin/pi
+sudo chmod 755 "$BUN_INSTALL/bin/pi"
+sudo ln -sf "$BUN_INSTALL/bin/pi" /usr/local/bin/pi
 
 # Install GitHub CLI via Homebrew.
 brew install gh

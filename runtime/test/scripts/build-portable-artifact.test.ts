@@ -39,7 +39,7 @@ describe("portable artifact Pi CLI bundling", () => {
       mkdirSync(join(root, "bun/bin"), { recursive: true });
       writeFileSync(join(app, "package.json"), JSON.stringify({ type: "module" }));
       writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "@earendil-works/pi-coding-agent", type: "module", bin: { pi: "dist/bundle/cli.js" } }));
-      const source = '#!/usr/bin/env node\nconsole.log(JSON.stringify({ bun: process.versions.bun, args: process.argv.slice(2) })); process.exitCode = 17;\n';
+      const source = '#!/usr/bin/env node\nconsole.log(JSON.stringify({ bun: process.versions.bun, args: process.argv.slice(2), pi: Bun.which("pi") })); process.exitCode = 17;\n';
       writeFileSync(cli, source);
       writeFileSync(join(pkg, "dist/cli.js"), "throw Error('obsolete CLI must not run');\n");
       copyFileSync(resolve(import.meta.dir, "../../scripts/pi-cli.ts"), join(app, "runtime/scripts/pi-cli.ts"));
@@ -50,7 +50,7 @@ describe("portable artifact Pi CLI bundling", () => {
       const child = Bun.spawn([join(root, "bin/pi"), "argument with spaces", "--literal=λ"], { cwd: root, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
       const [exit, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
       expect(exit, stderr).toBe(17);
-      expect(JSON.parse(stdout)).toEqual({ bun: process.versions.bun, args: ["argument with spaces", "--literal=λ"] });
+      expect(JSON.parse(stdout)).toEqual({ bun: process.versions.bun, args: ["argument with spaces", "--literal=λ"], pi: join(root, "bin/pi") });
       expect(readFileSync(cli, "utf8")).toBe(source);
       rmSync(cli);
       expect(() => assertBundledPiCli(app)).toThrow("declared Pi CLI entrypoint");
@@ -68,6 +68,8 @@ describe("portable artifact Pi CLI bundling", () => {
       expect(cmd).toContain('"%ROOT%\\bun\\bun.exe" "%ROOT%\\app\\runtime\\scripts\\pi-cli.ts" %*');
       expect(ps).toContain("& (Join-Path $Root 'bun/bun.exe') (Join-Path $Root 'app/runtime/scripts/pi-cli.ts') @args");
       expect(ps).toContain("exit $LASTEXITCODE");
+      expect(cmd).toContain("%ROOT%\\bin;%ROOT%\\app\\node_modules\\.bin");
+      expect(ps).toContain("(Join-Path $Root 'bin') + [IO.Path]::PathSeparator");
       expect(cmd + ps).not.toContain("pi-coding-agent");
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
