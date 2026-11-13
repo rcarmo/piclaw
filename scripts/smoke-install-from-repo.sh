@@ -39,4 +39,15 @@ test -f "$GLOBAL_DIR/node_modules/piclaw/package.json"
 jq -e 'has("patchedDependencies") | not' "$GLOBAL_DIR/node_modules/piclaw/package.json" >/dev/null
 "$GLOBAL_BIN/piclaw" --help >/dev/null
 
-printf '%s\n' "[repo-install-smoke] Git global install and CLI help passed"
+test -e "$GLOBAL_BIN/pi"
+bun -e 'const fs = require("node:fs"); if (fs.realpathSync(process.argv[1]) !== fs.realpathSync(process.argv[2])) throw Error("Pi did not link to Piclaw’s Bun launcher");' \
+  "$GLOBAL_BIN/pi" "$GLOBAL_DIR/node_modules/piclaw/runtime/scripts/pi-cli.ts"
+mkdir -p "$TMP_ROOT/node-guard"
+printf '#!/bin/sh\necho NODE_MUST_NOT_RUN >&2\nexit 91\n' > "$TMP_ROOT/node-guard/node"
+chmod 755 "$TMP_ROOT/node-guard/node"
+export PATH="$TMP_ROOT/node-guard:$PATH"
+EXPECTED_PI_VERSION="$(jq -r '.dependencies["@earendil-works/pi-coding-agent"]' "$GLOBAL_DIR/node_modules/piclaw/package.json")"
+test "$("$GLOBAL_BIN/pi" --version)" = "$EXPECTED_PI_VERSION"
+"$GLOBAL_BIN/pi" --help >/dev/null
+
+printf '%s\n' "[repo-install-smoke] Git global install and Piclaw/Pi CLI help passed under Bun"

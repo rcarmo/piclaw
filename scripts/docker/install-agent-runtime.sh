@@ -233,13 +233,13 @@ PI_CODING_AGENT_VERSION="${PI_CODING_AGENT_VERSION:-0.74.0}"
 sudo BUN_INSTALL="$BUN_INSTALL" BUN_INSTALL_CACHE_DIR="$BUN_INSTALL_CACHE_DIR" "$BUN_INSTALL/bin/bun" add -g "@earendil-works/pi-coding-agent@${PI_CODING_AGENT_VERSION}"
 
 sudo chmod -R a+rX "$BUN_INSTALL"
-sudo ln -sf "$BUN_INSTALL/bin/pi" /usr/local/bin/pi
-
-PI_CLI="$(readlink -f "$BUN_INSTALL/bin/pi")"
-if [ -f "$PI_CLI" ] && head -n1 "$PI_CLI" | grep -q 'env node'; then
-  sudo sed -i '1s/env node/env bun/' "$PI_CLI"
-fi
-sudo chmod +x "$PI_CLI"
+# Run the package-manager-selected binary under Bun without editing SDK bytes.
+sudo rm -f /usr/local/bin/pi
+sudo tee /usr/local/bin/pi > /dev/null <<EOF
+#!/usr/bin/env sh
+exec "$BUN_INSTALL/bin/bun" "$BUN_INSTALL/bin/pi" "\$@"
+EOF
+sudo chmod 755 /usr/local/bin/pi
 
 # Install GitHub CLI via Homebrew.
 brew install gh
