@@ -1,8 +1,8 @@
 import { isSqliteContention } from './sqlite-async-admission.js';
-import { Database } from "bun:sqlite";
+import Database, { constants } from "bun:sqlite";
 import { realpathSync, statSync } from "node:fs";
 
-declare const self: Worker & { close(): void };
+declare const self: Worker;
 let started = false, database: Database | undefined;
 let timer: ReturnType<typeof setInterval> | undefined;
 function closeSqlite(): void {
@@ -11,7 +11,6 @@ function closeSqlite(): void {
   database = undefined;
   // Positive acknowledgement follows SQLite teardown, not a termination request.
   self.postMessage({ type: "closed" });
-  self.close();
 }
 self.addEventListener("message", event => {
   if (event.data?.type === "close") {
@@ -26,6 +25,9 @@ self.addEventListener("message", event => {
     const current = statSync(path);
     if (realpathSync(path) !== path || current.nlink !== 1 || current.dev !== dev || current.ino !== ino)
       throw Error("Checkpoint database identity changed");
+    const moved = new Int32Array(2);
+    if (database && (database.fileControl("main", constants.SQLITE_FCNTL_HAS_MOVED, moved) !== 0 || moved[0] !== 0))
+      throw Error("Checkpoint database descriptor identity changed");
   };
   try {
     assertFile();

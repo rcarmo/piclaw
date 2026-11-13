@@ -1,4 +1,4 @@
-import type { Database } from "bun:sqlite";
+import { constants, type Database } from "bun:sqlite";
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
 const log = createLogger("db.checkpoint");
@@ -39,6 +39,9 @@ const pragma = (db: Database, name: string) =>
   (db.query(`PRAGMA ${name}`).get() as Record<string, any>)[name];
 
 function mainFile(database: Database, path: string) {
+  const moved = new Int32Array(2);
+  if (database.fileControl("main", constants.SQLITE_FCNTL_HAS_MOVED, moved) !== 0 || moved[0] !== 0)
+    throw Error("Checkpoint database descriptor identity changed");
   const opened = (database.query("PRAGMA database_list").all() as { name: string; file: string }[])
     .find(row => row.name === "main")?.file;
   if (!opened || !path || path.startsWith("file:")) throw Error("Unsupported checkpoint database path");
@@ -136,6 +139,7 @@ export function registerSqliteCheckpoint(database: Database, path: string, enabl
       current.worker = worker;
       worker.addEventListener("message", event => {
         if (event.data?.type === "closed") {
+          worker.terminate(); // The worker has positively acknowledged SQLite teardown.
           current.closed = true; current.ready = false; current.shutdown.resolve();
           if (!current.handles.size && groups.get(key) === current) groups.delete(key);
           return;
