@@ -457,4 +457,28 @@ for (const engine of ['chromium', 'webkit']) {
     } finally { await page.close(); }
   }, 30000);
 
+
+  for (const [width, height] of [[1440, 900], [390, 844]]) {
+    browserTest(`${engine} ${width}px: side bar meters have no outline box and cannot be compacted`, async () => {
+      const { page, errors } = await open(engine, width, height);
+      await page.route('**/agent/system-metrics*', (route) => route.fulfill({ json: { cpu_percent: 12, ram_percent: 40, cpu_series: [5, 20, 12, 30, 12], ram_series: [38, 39, 40, 40, 40] } }));
+      try {
+        if (width < 640) { await page.evaluate(() => window.dispatchEvent(new CustomEvent('piclaw:workspace-tree-toggle'))); await settle(page); await page.locator(sessionsButton).click(); await settle(page); }
+        const foot = page.locator('.workbench-sidebar-footer');
+        await foot.locator('.system-meters-row.cpu').waitFor({ timeout: 5000 });
+        // Full rows with plots, never the one-line summary, even on a phone.
+        expect(await foot.locator('.system-meters-compact-summary').count()).toBe(0);
+        expect(await foot.locator('.system-meters-row').count()).toBe(2);
+        const card = await foot.locator('.system-meters-card').evaluate((el) => { const cs = getComputedStyle(el); return { border: cs.borderTopWidth, background: cs.backgroundColor, shadow: cs.boxShadow }; });
+        expect(card).toEqual({ border: '0px', background: 'rgba(0, 0, 0, 0)', shadow: 'none' });
+        // Clicking a reading neither collapses nor hides the meters.
+        expect(await foot.locator('button.system-meters-row').count()).toBe(0);
+        await foot.locator('.system-meters-row.cpu').click(); await settle(page);
+        expect(await foot.locator('.system-meters-row').count()).toBe(2);
+        expect(await page.evaluate(() => localStorage.getItem('piclaw_system_meters_collapsed'))).not.toBe('true');
+        expect(errors).toEqual([]);
+      } finally { await page.close(); }
+    }, 30000);
+  }
+
 }
