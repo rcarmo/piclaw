@@ -141,15 +141,16 @@ export function groupSessionPickerChats<T extends Record<string, any>>(
   for (const chat of chats) {
     const jid = clean(chat.chat_jid);
     const archived = Boolean(chat.archived_at);
+    // Running sessions come straight after the current one, pinned or not.
     const section: SessionPickerSectionKey = archived ? "archived"
       : jid === current ? "current"
-        : pinned.has(jid) ? "pinned"
-          : Boolean(chat.is_active) ? "active"
+        : Boolean(chat.is_active) ? "active"
+          : pinned.has(jid) ? "pinned"
             : (clean(chat.root_chat_jid) || jid) === currentRoot ? "tree"
               : "other";
     buckets.get(section)!.push(chat);
   }
-  return (["current", "pinned", "active", "tree", "other", "archived"] as SessionPickerSectionKey[])
+  return (["current", "active", "pinned", "tree", "other", "archived"] as SessionPickerSectionKey[])
     .map(key => ({ key, label: SECTION_LABELS[key], items: buckets.get(key)! }))
     .filter(section => section.items.length > 0);
 }

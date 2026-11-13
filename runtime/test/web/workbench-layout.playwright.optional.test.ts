@@ -374,6 +374,9 @@ for (const engine of ['chromium', 'webkit']) {
       await page.waitForFunction(() => (window as any).workbench.probes.statusCalls.length > 0);
       await page.waitForSelector('.sessions-sidebar-preview.live');
       expect((await page.locator('.sessions-sidebar-active-count').textContent())?.trim()).toBe('1 active');
+      // Running sessions come straight after the current one.
+      expect(await page.locator('.sessions-sidebar-section-heading').allTextContents()).toEqual(['Current', 'Active', 'Other sessions', 'Archived (1)']);
+      expect((await page.locator('.sessions-sidebar-section-active .sessions-sidebar-handle').allTextContents())).toEqual(['@proxmox']);
       expect((await page.locator('.workbench-activity-badge').textContent())?.trim()).toBe('1');
       const proxmox = page.locator('.sessions-sidebar-item', { has: page.locator('.sessions-sidebar-handle', { hasText: '@proxmox' }) });
       expect(await proxmox.locator('.sessions-sidebar-activity').count()).toBe(1);

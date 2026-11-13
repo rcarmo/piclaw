@@ -24,8 +24,14 @@ test('sessions pane groups like the compose picker and leaves archived sessions 
   const sections = buildSessionsSidebarSections(chats, 'web:default', ['web:lunch']);
   expect(sections.map((section) => [section.key, section.items.map((chat) => chat.chat_jid)])).toEqual([
     ['current', ['web:default']],
-    ['pinned', ['web:lunch']],
     ['active', ['web:proxmox']],
+    ['pinned', ['web:lunch']],
+  ]);
+  // Active sessions sit directly under the current one, pinned or not.
+  expect(buildSessionsSidebarSections(chats, 'web:default', ['web:lunch', 'web:proxmox']).map((section) => [section.key, section.items.map((chat) => chat.chat_jid)])).toEqual([
+    ['current', ['web:default']],
+    ['active', ['web:proxmox']],
+    ['pinned', ['web:lunch']],
   ]);
 });
 
