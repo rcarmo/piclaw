@@ -1875,7 +1875,7 @@
       "deliveryOwner": "#1879",
       "originalSha256": "a2d0f1155e1e55121a796a8cb66242f2a81c3d9a9481b4ca4304dec4cfa96f72",
       "state": "retained-decoupled",
-      "currentSha256": "5adcdd8969206478e7ee39ff98173fe976e49f34dc348c541497c5cbff25adbc",
+      "currentSha256": "e6615515668dd004c6359a74a5155c44d8af432f604aef3a77a182691ebc5ca6",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
@@ -2456,7 +2456,7 @@
       "deliveryOwner": "#1882",
       "originalSha256": "1af8f43680724ca4c05c9beede8db5903b013bc76e9bc5dbceb1235e3d823105",
       "state": "retained-decoupled",
-      "currentSha256": "c36e4e27f26a87f022bc86ebcad78c2ac889acc63e165544d14738ca5fd04713",
+      "currentSha256": "38a080239d885571a766e428d81cd1fb8f55a1a60109618d0b7a7c521120e7c6",
       "currentPurpose": "exact approved add-on source/resource identity and public exported domain contracts",
       "directImportCallers": [
         {
@@ -2885,8 +2885,9 @@
       "runtime/src/service-effects/tool-preparation/policy.ts",
       "runtime/src/task-scheduler.ts",
       "docs/architecture.md",
-      "docs/tools-and-skills.md"
+      "docs/tools-and-skills.md",
+      "runtime/durable-engine/src/host-extension-catalog.ts"
     ],
-    "scope": "Reliability/maintenance/legacy SQL retirement; original105-row classifications/deleted paths/financial retirement accounting unchanged. No new deletion credit under1875."
+    "scope": "Reliability/maintenance/legacy SQL retirement and approved published add-on source pins; original classifications/deleted paths/financial accounting unchanged. No1875deletioncredit."
   }
 }
