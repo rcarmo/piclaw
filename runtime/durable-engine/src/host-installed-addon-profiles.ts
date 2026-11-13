@@ -387,14 +387,14 @@ export const installedAddonProfiles = {
   "late-night-regrets": {
     "label": "late-night-regrets",
     "name": "@rcarmo/piclaw-addon-late-night-regrets",
-    "version": "0.3.1",
+    "version": "0.3.2",
     "entry": "index.ts",
     "files": {
       "config.ts": "a9919b850fd052a6a46d1f3c971510423bfad37332c71fc80ddd5336920f4fe6",
       "decision.ts": "83fb25712e15b4d917919270ed0940115c9c8dd6537ab4c64f5d82292b803edc",
       "index.ts": "dd3164fef09c04243a378c5c87e9d16357c299884512dfe43fc7ef2f97451c66",
       "native.ts": "a543b5bde95b75f71527129d4617a4cc0f3b2a5b7563c7aaa9b50df36bf82c15",
-      "package.json": "8ecfe371413a49e37ffef847fe484195f55497cc2c1be33563095cdf4cbba887",
+      "package.json": "2c7826ecc0e4afaeb99c1d28de028a5d984b71bec9205da90c6d27eeba99d769",
       "ranker.ts": "3d1cdcfa6b3d09e89b95086c707427bed4630716fb884b99dc76c6ed9a2235d4",
       "reflection-prompt.ts": "ec4913d6c91baeb144178d3469d2a6065b3546bfa2bba513bfd9e667ff769711",
       "review.ts": "8f65dbac7cbe61de1b5c5794fb40b3056020b93a5da0f8e797bfe0c45e485d17",
@@ -847,12 +847,12 @@ export const installedAddonProfiles = {
   "mindmap": {
     "label": "mindmap",
     "name": "@rcarmo/piclaw-addon-mindmap",
-    "version": "0.1.4",
+    "version": "0.1.5",
     "entry": "index.ts",
     "files": {
-      "index.ts": "5ba0bca10a3fca97bd24eb97cf9a816ea0f1152d9fd0a2f1afac5a40d68a2049",
+      "index.ts": "37332f51a07b8603c3f1c1156273e1d0a46f8234a1f60eb3bcef067a88a79f28",
       "native-resources.ts": "87ba83a05c0b89b4202a03184f44bfe513dd1de8ef3e23afc95ffee446199bfe",
-      "package.json": "cba96f2d93ecdee2105ec75dccb8db576290a9a36f288046625c8e13fac76800"
+      "package.json": "38db50246c78966c0ba17b88f3b2a2c9cf85747bdc13bcc3586f95813a97a419"
     },
     "shadows": [
       "index.js",
