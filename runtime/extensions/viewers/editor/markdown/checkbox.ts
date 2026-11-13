@@ -57,10 +57,12 @@ function taskDecorator(node: SyntaxNode, view: EditorView): DecorationEntry[] {
             const text = doc.sliceString(child.from, child.to);
             const checked = text.includes('x') || text.includes('X');
 
-            // Replace the TaskMarker with a checkbox widget
+            // Replace the TaskMarker (and one following space, as list markers do)
+            // with a checkbox widget, so wrapped text can hang under the item text.
+            const markerEnd = doc.sliceString(child.to, child.to + 1) === ' ' ? child.to + 1 : child.to;
             entries.push({
                 from: child.from,
-                to: child.to,
+                to: markerEnd,
                 decoration: Decoration.replace({
                     widget: new CheckboxWidget(checked, child.from),
                 }),

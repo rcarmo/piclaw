@@ -114,6 +114,9 @@ function listItemDecorator(node: SyntaxNode, view: EditorView): DecorationEntry[
     const cursorLineNo = doc.lineAt(view.state.selection.main.head).number;
     const cursorOwnLines = cursorLineNo >= firstLine.number && cursorLineNo <= endLineNo;
 
+    // Width of the rendered marker, so wrapped text can hang under the item text.
+    let hang = '';
+
     // Find ListMark child.
     for (let child = node.firstChild; child; child = child.nextSibling) {
         if (child.type.name !== 'ListMark') continue;
@@ -138,6 +141,7 @@ function listItemDecorator(node: SyntaxNode, view: EditorView): DecorationEntry[
 
         if (!cursorOwnLines) {
             if (markerText === '-' || markerText === '*' || markerText === '+') {
+                hang = taskItem ? 'var(--cm-md-list-task-width)' : 'var(--cm-md-list-marker-width)';
                 if (taskItem) {
                     // Task lists should show only checkbox + text (no extra bullet marker).
                     entries.push({
@@ -155,6 +159,7 @@ function listItemDecorator(node: SyntaxNode, view: EditorView): DecorationEntry[
                     });
                 }
             } else if (/^\d+\.$/.test(markerText)) {
+                hang = 'var(--cm-md-list-number-width)';
                 entries.push({
                     from: child.from,
                     to: markerEnd,
@@ -177,13 +182,14 @@ function listItemDecorator(node: SyntaxNode, view: EditorView): DecorationEntry[
             ? 'cm-md-list-item-line cm-md-list-item-continuation'
             : 'cm-md-list-item-line';
         if (taskItem) cls += ' cm-md-list-item-task';
+        if (!continuation && hang) cls += ' cm-md-list-item-hang';
 
         entries.push({
             from: line.from,
             to: line.from,
             decoration: Decoration.line({
                 class: cls,
-                attributes: { style: baseStyle },
+                attributes: { style: !continuation && hang ? `${baseStyle} --cm-md-list-hang: ${hang};` : baseStyle },
             }),
         });
     }

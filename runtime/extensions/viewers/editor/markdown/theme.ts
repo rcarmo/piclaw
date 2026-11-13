@@ -365,11 +365,17 @@ export const markdownPreviewTheme = EditorView.theme({
     '.cm-md-blockquote-line.cm-md-list-item-line': {
         paddingLeft: 'calc(12px + var(--cm-md-list-indent, 0px))',
     },
+    '.cm-md-blockquote-line.cm-md-list-item-hang': {
+        paddingLeft: 'calc(12px + var(--cm-md-list-indent, 0px) + var(--cm-md-list-hang, 0px))',
+    },
     '.cm-md-blockquote-line.cm-md-list-item-continuation': {
         paddingLeft: 'calc(12px + var(--cm-md-list-indent, 0px) + var(--cm-md-list-continuation, 22px))',
     },
     '.cm-md-callout.cm-md-list-item-line': {
         paddingLeft: 'calc(12px + var(--cm-md-list-indent, 0px))',
+    },
+    '.cm-md-callout.cm-md-list-item-hang': {
+        paddingLeft: 'calc(12px + var(--cm-md-list-indent, 0px) + var(--cm-md-list-hang, 0px))',
     },
     '.cm-md-callout.cm-md-list-item-continuation': {
         paddingLeft: 'calc(12px + var(--cm-md-list-indent, 0px) + var(--cm-md-list-continuation, 22px))',
@@ -749,7 +755,7 @@ export const markdownPreviewTheme = EditorView.theme({
         width: '16px',
         height: '16px',
         verticalAlign: 'middle',
-        marginRight: '6px',
+        margin: '0 6px 0 3px',
         accentColor: 'var(--accent-color, #1d9bf0)',
     },
     '.cm-md-task-checked-text': {
@@ -766,12 +772,26 @@ export const markdownPreviewTheme = EditorView.theme({
     '.cm-md-list-item-continuation': {
         paddingLeft: 'calc(var(--cm-md-list-indent, 0px) + var(--cm-md-list-continuation, 22px))',
     },
+    // Marker boxes have fixed widths so a wrapped first line can hang under the
+    // item text: the line is padded by the marker width and outdented by the same.
+    '&': {
+        '--cm-md-list-marker-width': '22px',
+        '--cm-md-list-task-width': '25px',
+        '--cm-md-list-number-width': 'calc(1.8em + 6px)',
+    },
+    '.cm-md-list-item-hang': {
+        paddingLeft: 'calc(var(--cm-md-list-indent, 0px) + var(--cm-md-list-hang, 0px))',
+        textIndent: 'calc(-1 * var(--cm-md-list-hang, 0px))',
+    },
+    '.cm-md-list-item-hang .cm-md-bullet, .cm-md-list-item-hang .cm-md-list-number': {
+        textIndent: '0',
+    },
     '.cm-md-list-item-task .cm-md-checkbox': {
         marginRight: '6px',
     },
     '.cm-md-bullet': {
         display: 'inline-block',
-        minWidth: '1.1em',
+        width: '16px',
         textAlign: 'center',
         marginRight: '6px',
         color: 'var(--accent-color, #1d9bf0)',
