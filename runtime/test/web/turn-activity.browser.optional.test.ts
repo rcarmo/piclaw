@@ -222,3 +222,38 @@ browserTest('live turn shows elapsed work and streamed text, discloses running t
     await page.close();
   }
 }, 20000);
+
+for (const width of [390, 1000]) {
+  browserTest(`${width}px: a running tool's stop button stays at the end of its row`, async () => {
+    const tool = liveActivity.steps[1]!.tool!, title = tool.title;
+    tool.title = 'bash: for i in $(seq 1 15); do echo scanning step $i; sleep 1; done && bun run test:local --cwd runtime';
+    const page = await browser.newPage({ viewport: { width, height: 700 } }), errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.setDefaultTimeout(4000);
+    const base = `http://127.0.0.1:${server.port}`;
+    await page.route('**/*', (route) => new URL(route.request().url()).origin === base ? route.continue() : route.abort());
+    try {
+      await page.goto(base);
+      await page.waitForFunction(() => Boolean((window as any).turnActivityFixture));
+      const status = { type: 'tool_call', title: tool.title, tool_call_id: 'call-live', status: 'running', started_at: new Date().toISOString() };
+      await page.evaluate((value) => (window as any).turnActivityFixture.live(value), { status, draft: { text: '', fullText: '' }, thought: { text: '', fullText: '' }, turnId: 'turn-2' });
+      const live = page.locator('.turn-activity-live');
+      await live.locator('.turn-activity-header').click();
+      const row = live.locator('.turn-activity-tool-row');
+      await row.locator('.turn-activity-stop').waitFor();
+      await row.locator('.turn-activity-tool-header').hover();
+      const g = await row.evaluate((el) => {
+        const r = (node: Element) => node.getBoundingClientRect();
+        const box = r(el), head = r(el.querySelector('.turn-activity-tool-header')!), stop = r(el.querySelector('.turn-activity-stop')!);
+        return { rowRight: Math.round(box.right - stop.right), sameLine: stop.top >= head.top && stop.bottom <= head.bottom, afterTitle: stop.left >= head.right - 1, rowBackground: getComputedStyle(el).backgroundColor };
+      });
+      // A long command must not push the button onto a line of its own, and the
+      // hover highlight covers the button as part of the row.
+      expect({ ...g, rowBackground: g.rowBackground === 'rgba(0, 0, 0, 0)' ? 'none' : 'highlighted' }).toEqual({ rowRight: 4, sameLine: true, afterTitle: true, rowBackground: 'highlighted' });
+      expect(errors).toEqual([]);
+    } finally {
+      tool.title = title;
+      await page.close();
+    }
+  }, 20000);
+}
