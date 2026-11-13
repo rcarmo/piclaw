@@ -36,8 +36,8 @@ export const TOOLSETS: ToolsetDefinition[] = [
   },
   {
     name: "data",
-    description: "Structured data access for the shared message store, SQLite, and keychain.",
-    toolNames: ["messages", "introspect_sql", "keychain"],
+    description: "Structured message access and keychain controls.",
+    toolNames: ["messages", "keychain"],
   },
   {
     name: "workspace",

@@ -269,15 +269,6 @@ const TOOL_CAPABILITIES: Record<string, ToolCapability> = {
       negativeTerms: ["timeline search", "history", "notes"],
     }),
   },
-  introspect_sql: {
-    kind: "read-only",
-    weight: "standard",
-    recommend: rec({
-      domains: ["sql", "database", "data"],
-      verbs: ["inspect", "query", "check", "list"],
-      nouns: ["sql", "database", "table", "schema", "sqlite"],
-    }),
-  },
   keychain: {
     kind: "mixed",
     weight: "lightweight",

@@ -1,9 +1,9 @@
-import { Database } from "bun:sqlite";
+import { Database, constants } from "bun:sqlite";
 import { realpathSync, statSync } from "node:fs";
 import { isZfsFilesystem } from "./sqlite-checkpoint.js";
 import { RuntimeStartupCleanupError } from "../runtime/startup-cleanup-error.js";
 
-export type SqliteConnectionRole = "root" | "sdk" | "scheduler" | "index-worker";
+export type SqliteConnectionRole = "root" | "sdk" | "scheduler" | "index-worker" | "maintenance-reader" | "maintenance-writer";
 export interface SqliteRoleOptions {
   role: SqliteConnectionRole;
   create?: boolean;
@@ -19,6 +19,9 @@ const pragma = (db: Database, sql: string, key: string) =>
 
 function assertFile(database: Database, path: string, options: SqliteRoleOptions): void {
   if (path === ":memory:") return;
+  const moved = new Int32Array(2);
+  if (database.fileControl('main', constants.SQLITE_FCNTL_HAS_MOVED, moved) !== 0 || moved[0] !== 0)
+    throw Error('SQLite role database descriptor identity changed');
   const opened = (database.query("PRAGMA database_list").all() as { name: string; file: string }[])
     .find(row => row.name === "main")?.file;
   if (!opened || identity(opened) !== identity(path) ||
@@ -34,6 +37,7 @@ export function configureSqliteRole(database: Database, path: string, options: S
   options.assertOwner?.();
   const memory = path === ":memory:", root = options.role === "root";
   if (options.role === "index-worker" && memory) throw Error("Index worker requires an existing file-backed WAL database.");
+  if (options.role.startsWith("maintenance-") && memory) throw Error("Maintenance requires an existing file-backed WAL database.");
   assertFile(database, path, options);
   const foreignKeys = root ? pragma(database, "foreign_keys", "foreign_keys") : 1;
   const zfs = !memory && (options.zfs ?? isZfsFilesystem(path));
@@ -45,6 +49,7 @@ export function configureSqliteRole(database: Database, path: string, options: S
     database.exec("PRAGMA auto_vacuum=INCREMENTAL");
   if (!memory && pragma(database, "journal_mode", "journal_mode") !== "wal") {
     if (options.role === "index-worker") throw Error("Index worker requires an existing WAL database.");
+    if (options.role.startsWith("maintenance-")) throw Error("Maintenance requires an existing WAL database.");
     // Root bootstrap is offline, before readiness/models. Other owned openings
     // also fail promptly on transition conflicts rather than sleeping on a live loop.
     if (pragma(database, "journal_mode=WAL", "journal_mode") !== "wal") throw Error("SQLite did not enable WAL journal mode.");
@@ -66,7 +71,7 @@ export function configureSqliteRole(database: Database, path: string, options: S
 /** Open one owned handle. Failed configuration never publishes that handle. */
 export function openSqliteRole(path: string, options: SqliteRoleOptions): Database {
   options.assertOwner?.();
-  const create = options.role === "index-worker" ? false : options.create ?? options.role !== "scheduler";
+  const create = options.role === "index-worker" || options.role.startsWith("maintenance-") ? false : options.create ?? options.role !== "scheduler";
   let before = options.expectedIdentity;
   if (path !== ":memory:") {
     try {
@@ -78,7 +83,7 @@ export function openSqliteRole(path: string, options: SqliteRoleOptions): Databa
       if ((error as { code?: string }).code !== "ENOENT" || !create || before) throw error;
     }
   }
-  const database = new Database(path, { create, strict: options.role === "sdk" });
+  const database = new Database(path, { create, readonly: options.role === "maintenance-reader", strict: options.role === "sdk" });
   try {
     configureSqliteRole(database, path, { ...options, expectedIdentity: before });
     return database;

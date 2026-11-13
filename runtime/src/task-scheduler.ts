@@ -853,9 +853,19 @@ async function runClaimedScheduledTask(
     let completed = await store.complete(completeRequest);
     // Retry only completion persistence; retain uncertainty from either attempt.
     let completionMayHaveCommitted = !completed.ok && completed.error.certainty === "unknown";
-    if (!completed.ok && completed.error.retryable && canRunLegacyScheduledWork()) {
+    if (!completed.ok && completed.error.retryable) log.warn("Scheduled execution finished; completion persistence is pending", {
+      operation: "scheduler.completion_pending", runId: finalLease.record.runId,
+      taskId: finalLease.record.taskId, attempt: finalLease.record.attempt,
+    });
+    while (!completed.ok && completed.error.retryable && canRunLegacyScheduledWork()) {
+      // Retry this sealed SQL decision, never the successful execution. Keep the
+      // admitted store/result owner alive through repeated acquisition outages.
+      await waitForSqliteContention(performance.now() + 25);
       completed = await store.complete(completeRequest);
       completionMayHaveCommitted ||= !completed.ok && completed.error.certainty === "unknown";
+      // Once either attempt is uncertain, preserve the original read-back
+      // boundary before another mutation attempt or terminal classification.
+      if (completionMayHaveCommitted) break;
     }
     if (!completed.ok && completionMayHaveCommitted && canRunLegacyScheduledWork()) {
       const observed = await store.get(finalLease.record.runId);

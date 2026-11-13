@@ -73,17 +73,19 @@ const approvedGoalFiles = Object.freeze({
   "compat/extension-kv.ts": "04240517e9e8664cae2d2badb99f382100a7af3e12679cfce97087870881551c"
 });
 const approvedObservabilityFiles = Object.freeze({
-  "usage-telemetry.ts": "f79384f2981138dc568318479181050cc29858065a4307224ab3bb13abe25056",
-  "package.json": "0ded941ca3f2a06341a2116d169e751b1b30987db97e28771f4553f1187bfffa",
+  "usage-telemetry.ts": "15b3290c3a70edd3109e423eb96c098057b262a6a8a05d698c39dcad07c583c4",
+  "package.json": "514d8a5fd6fc33ecb9860d64833ff67a85d3023a4410de2563976b551eea4bd0",
   "model-speed-telemetry.ts": "3bb502620a527baa86e87a3766afa9f6ca4171fbfefab81db55da22e6a8207fa",
   "compat/extension-kv.ts": "04240517e9e8664cae2d2badb99f382100a7af3e12679cfce97087870881551c",
   "compat/log-sink.ts": "b7f04b776dc33ec8a2bbe4d803b2d7c2783b8d16b5fa4a1b54c85fb30d1ee19e",
   "compat/config.ts": "b6b5f488fc7c537185d0144de8fa58029a56c8de33ab2972683556eb989e0768",
   "compat/logger.ts": "de0fddbd49d7b4d48e3b4ae8c0cf1ab188b4ba542f77c87d57ccb510318f85fa",
   "compat/keychain.ts": "db449b3c8fb9d0008d85b05c9f7717da0b728e0f9c033bac7b86f9e17eb93bb6",
-  "compaction-telemetry.ts": "1ec8ee2344ebd3508ada3f5deb0105de091d15678a93781e7cefe2a86e6b5227",
-  "index.ts": "fe0dbfae597997ad3c2497b9ac90824b5b7b50a05d7d34458385c44869235096",
-  "native-telemetry.ts": "d2d3b92cab5aaba662ef64634d7934ddd02788eaf287f6fe700d86f51ba70a79"
+  "compaction-telemetry.ts": "232f9fd4d9db73405502495ff8a9887248cc34b6cb4b1ba45d014b4c91a73417",
+  "index.ts": "c715b0667528f9a14e3afb39f9ddd7146bd541f2298bec7a2c6d4af8d3328ce9",
+  "native-telemetry.ts": "d2d3b92cab5aaba662ef64634d7934ddd02788eaf287f6fe700d86f51ba70a79",
+  "usage-telemetry-job.ts": "64b885525e6fdf8f746719a5342772c9b9b05242b4d1e20af2e55f7ba27f9f82",
+  "usage-telemetry-worker.ts": "d4d58ce8883ddc2fe369a6b8bd5b85a291fabb212d1a69e44cebe34d9f7e56e3"
 });
 const approvedResticFiles = Object.freeze({
   "binary.ts": "ff426c8c97d6e7873fce405d948db9e89138f16a948885cd6f97cce77ca9c082",
@@ -102,7 +104,7 @@ const approvedResticFiles = Object.freeze({
   "contracts.ts": "d73eea35af0c00b1dc36a98c352389804147447b5228c18cee807110fbddb27c"
 });
 const profiles = {
-  observability: { label: "Observability", name: "@rcarmo/piclaw-addon-observability", version: "0.1.24", files: approvedObservabilityFiles,
+  observability: { label: "Observability", name: "@rcarmo/piclaw-addon-observability", version: "0.1.25", files: approvedObservabilityFiles,
     shadows: [...Object.keys(approvedObservabilityFiles).filter(file => file.endsWith(".ts")).flatMap(file => [file.replace(/\.ts$/, ".js"), file.replace(/\.ts$/, ".json"), file.replace(/\.ts$/, "/index.js"), file.replace(/\.ts$/, "/package.json")]), "compat/package.json"],
     events: ["resources_discover", "session_start", "before_agent_start"] },
   restic: { label: "Restic", name: "@rcarmo/piclaw-addon-restic", version: "0.1.5", files: approvedResticFiles,

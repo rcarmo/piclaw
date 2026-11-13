@@ -11,7 +11,8 @@ describe("core add-on release preparation", () => {
     const catalog = JSON.parse(readFileSync(join(repo, "release/core-addons/catalog.json"), "utf8"));
     const pins = readCoreAddonLock().addons;
     expect(coreCatalogEntries(catalog).map((item) => item.slug)).toEqual(pins.map((pin) => pin.slug));
-    expect(pins.length).toBeGreaterThan(0);
+    expect(pins).toHaveLength(6);
+    expect(pins.some(pin => pin.slug === 'session-dashboard')).toBe(false);
   });
 
   test("accepts a Windows CRLF checkout without weakening the catalog checksum", () => {

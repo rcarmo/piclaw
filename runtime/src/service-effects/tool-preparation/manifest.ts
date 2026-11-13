@@ -215,15 +215,6 @@ export const TOOL_PREPARATION_MANIFEST: readonly ToolPreparationSpec[] = Object.
     abortExpectation: "may_finish_late",
     protectedFields: [],
   }),
-  ...rows(["introspect_sql"], {
-    currentSource: "runtime/src/extensions/sql-introspect.ts",
-    effectClass: "query",
-    replay: "safe",
-    contextFields: ["chatJid"],
-    serviceEffector: null,
-    abortExpectation: "may_finish_late",
-    protectedFields: ["params.query", "result.content", "result.details"],
-  }),
   ...rows(["schedule_task"], {
     currentSource: source.scheduling,
     effectClass: "mutation",

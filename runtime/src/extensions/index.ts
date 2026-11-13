@@ -12,7 +12,6 @@
  *   - internalTools: list_tools for tool discovery.
  *   - runtimeScripts: list_scripts for packaged/workspace script discovery.
  *   - toolActivation: activate_tools/reset_active_tools for lazy tool activation.
- *   - sqlIntrospect: introspect_sql for read-only DB introspection.
  *   - scheduledTasks: /tasks and /scheduled commands for task listing.
  *   - workspaceSearch: search_workspace tool for FTS over workspace files.
  *   - dreamMaintenance: /dream memory-consolidation slash command.
@@ -44,7 +43,6 @@ import { createProviderQuotaExtension } from "./provider-quota.js";
 import { internalTools } from "./internal-tools.js";
 import { runtimeScripts } from "./runtime-scripts.js";
 import { toolActivation } from "./tool-activation.js";
-import { sqlIntrospect } from "./sql-introspect.js";
 import { scheduledTasks } from "./scheduled-tasks.js";
 import { workspaceSearch } from "./workspace-search.js";
 import { createMemorySearchExtension } from "./memory-search.js";
@@ -84,7 +82,6 @@ export function createBuiltinExtensionFactories(options?: {
     internalTools,
     runtimeScripts,
     toolActivation,
-    sqlIntrospect,
     scheduledTasks,
     workspaceSearch,
     createMemorySearchExtension(options?.chatJid),

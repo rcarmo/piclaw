@@ -37,8 +37,8 @@ test('installer preflight shares exact native package proof before activation', 
   const f=fixture();
   try{
     const obs=inspectAddonInstall('@rcarmo/piclaw-addon-observability','0.1.23');
-    expect(obs?.supportedVersion).toBe('0.1.24');
-    expect(obs?.problem).toContain('This Core release requires Observability 0.1.24');
+    expect(obs?.supportedVersion).toBe('0.1.25');
+    expect(obs?.problem).toContain('This Core release requires Observability 0.1.25');
     const pkg=join(f.cwd,'.pi/extensions/node_modules/@rcarmo/piclaw-addon-plan-sidebar');
     expect(inspectAddonInstall('@rcarmo/piclaw-addon-plan-sidebar','0.1.28',pkg)).toEqual({supportedVersion:'0.1.28'});
     const file=join(pkg,'index.ts'),bytes=readFileSync(file);

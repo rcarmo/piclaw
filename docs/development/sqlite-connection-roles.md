@@ -7,7 +7,7 @@ Root, native SDK and scheduler writers share a file through separate handles. `d
 | Policy | Root | Native SDK | Scheduler file handle |
 |---|---|---|---|
 | File journal / synchronous | WAL / FULL (`2`) | WAL / FULL (`2`) | WAL / FULL (`2`) |
-| Busy timeout, milliseconds | 5000 | 0 | 5000 |
+| Busy timeout, milliseconds | 0 | 0 | 0 |
 | Foreign keys | Preserve the existing setting | ON | ON |
 | Secure delete | ON (`1`) | ON (`1`) | ON (`1`) |
 | Page cache, non-ZFS | 1 MB | 2 MB | 2 MB |
@@ -19,11 +19,13 @@ Root, native SDK and scheduler writers share a file through separate handles. `d
 
 Root's schema batch temporarily enables foreign keys and restores the prior setting on success or failure. This does not globally enable legacy foreign keys. A standalone memory handle retains MEMORY journal, FULL, a 2 MB cache and its role-specific waits/FKs. The production memory scheduler instead borrows the root handle, enables FKs for its reference-counted store lifetime, and restores the original FK setting after the final borrower closes. It does not flatten the root handle's other policies to scheduler defaults.
 
-Root/scheduler WAL transitions retain bounded startup waits. SDK configuration uses busy-timeout zero and a single WAL transition attempt; it cannot enter the synchronous transition-retry loop. Its existing asynchronous writer admission still retries before entering the protected callback. [Host write admission](sqlite-write-admission.md) likewise never replays an entered callback.
+Root, SDK and scheduler configuration use busy-timeout zero and a single WAL transition attempt; none enters a synchronous transition-retry loop. Its existing asynchronous writer admission still retries before entering the protected callback. [Host write admission](sqlite-write-admission.md) likewise never replays an entered callback.
+
+Explicit maintenance uses two additional noncreating existing-WAL roles through the same opener: `maintenance-reader` opens SQLite readonly for dry-runs; `maintenance-writer` is selected only for an apply operation. Neither runs root migrations, converts file format or registers checkpoint workers. Roles cannot be changed in place or promoted to root. The thinking-purge and archived-branch CLIs close their owned handle on both success and failure. Index workers retain their separate existing-store probes and lifecycle.
 
 ## File identity and lifetime
 
-An opener checks the requested file identity before and after configuration and compares SQLite's opened main path with the supplied binding. SDK and scheduler shared opens also require the expected root identity/canonical path. Supported symlinks resolve to that same file; alternate hardlink WAL names are rejected for shared opens. Filesystem classification follows the real target without rewriting the caller's declared source path.
+An opener checks the requested file identity before and after configuration, compares SQLite's opened main path with the supplied binding, and verifies the open descriptor through `SQLITE_FCNTL_HAS_MOVED` (both return code and output flag). SDK and scheduler shared opens also require the expected root identity/canonical path. Supported symlinks resolve to that same file; alternate hardlink WAL names are rejected for shared opens. Filesystem classification follows the real target without rewriting the caller's declared source path.
 
 SDK owner checks and per-transaction guards remain in the adapter. Scheduler opens use the root binding; its lease/authority checks remain in the store. Configuration failure closes a newly owned handle before publication. A failed close produces `RuntimeStartupCleanupError`, preserving uncertain-cleanup ownership. Reconfiguring an existing caller-owned handle does not transfer its lifecycle to the helper. No file is deleted to repair an opening failure.
 
@@ -33,7 +35,7 @@ Root retains its existing bootstrap `STORE_DIR`, mode and cache-key precedence. 
 
 Eligible ZFS WAL/FULL writers register with the existing off-thread PASSIVE coordinator after opening. Root, SDK and scheduler file handles join one group by canonical file and device/inode identity. A scheduler's private handle joins only after store construction succeeds and unregisters before close. Store-construction failure closes the owned handle; queued scheduler work retains its store until it can settle. A memory FK-enable failure also releases its borrowed reference before a later loop starts. Memory borrowing and stop/join semantics remain intact.
 
-Non-ZFS, non-WAL and memory handles keep built-in checkpointing. A mismatched path, unsupported hardlink identity or non-FULL writer is rejected without disabling its existing checkpoint policy. Coordinator eligibility additionally requires a single file link. The worker checks the same file identity before opening and on every tick.
+Non-ZFS, non-WAL and memory handles keep built-in checkpointing. A mismatched path, unsupported hardlink identity or non-FULL writer is rejected without disabling its existing checkpoint policy. Coordinator eligibility additionally requires a single file link. The worker checks the same file identity before opening and on every tick, including the open descriptor. Confirmed SQLite closure is acknowledged before the parent terminates the worker and releases the registry lifetime.
 
 Automatic checkpoints are disabled only after worker readiness. Repeated registrations reference-count the original per-handle policy. Unregistering the last reference restores that policy. Worker startup, posting, readiness, identity or runtime failure restores positive custom policies; an originally disabled policy receives the safe 1000-page fallback while the failed group remains registered. Explicit unregister restores the caller's original value, including zero. Failed groups remain failed until all participants leave. Late participants also receive safe fallback without spawning another worker; late readiness cannot disable it or create overlapping replacements.
 

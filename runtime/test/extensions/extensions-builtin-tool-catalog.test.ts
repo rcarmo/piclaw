@@ -54,8 +54,6 @@ const EXPECTED_BUILTIN_TOOL_NAMES = [
   // tool-activation
   "activate_tools",
   "reset_active_tools",
-  // sql-introspect
-  "introspect_sql",
   // workspace-search
   "search_workspace",
   "refresh_workspace_index",

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Database } from "bun:sqlite";
+import { Database, constants } from "bun:sqlite";
 import { mkdirSync, mkdtempSync, rmSync, statSync, renameSync, symlinkSync, linkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +12,30 @@ function fixture() {
   db.exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE fixture(value BLOB)");
   return { root, path, db, close() { db.close(); rmSync(root, { recursive: true, force: true }); } };
 }
+test("registration rejects a replaced descriptor even when both path lookups identify the replacement", async () => {
+  const f = fixture(), movedPath = f.path + '.original';
+  let replacement: Database | undefined, stop: (() => void | Promise<void>) | undefined;
+  try {
+    f.db.exec('PRAGMA wal_checkpoint(TRUNCATE); PRAGMA wal_autocheckpoint=17');
+    renameSync(f.path, movedPath);
+    replacement = new Database(f.path);
+    replacement.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL');
+    const moved = new Int32Array(2);
+    expect(f.db.fileControl('main', constants.SQLITE_FCNTL_HAS_MOVED, moved)).toBe(0);
+    expect(moved[0]).toBe(1);
+    // database_list retains the original filename, so pathname-only comparison
+    // now compares the replacement to itself and misses the moved open handle.
+    expect((f.db.query('PRAGMA database_list').all() as any[]).find(row => row.name === 'main')!.file).toBe(f.path);
+    stop = registerSqliteCheckpoint(f.db, f.path, true);
+    expect(stop).toBeUndefined();
+    expect(f.db.query('PRAGMA wal_autocheckpoint').get()).toEqual({ wal_autocheckpoint: 17 });
+    expect(replacement.query('PRAGMA wal_autocheckpoint').get()).toEqual({ wal_autocheckpoint: 1000 });
+  } finally {
+    await stop?.(); replacement?.close();
+    rmSync(f.path, { force: true }); renameSync(movedPath, f.path); f.close();
+  }
+});
+
 test("checkpoint coordinator retains FULL durability and shares a worker across writers", async () => {
   const f = fixture(), second = new Database(f.path);
   const stop = registerSqliteCheckpoint(f.db, f.path, true)!, stopSecond = registerSqliteCheckpoint(second, f.path, true)!;
@@ -225,6 +249,7 @@ test("failed checkpoint close delivery retains the uncertain worker and refuses 
         if (failing) throw Error("post failure");
         if (data.type === "close") this.dispatchEvent(new MessageEvent("message", { data: { type: "closed" } }));
       }
+      terminate() {}
     } as any;
     const stop = registerSqliteCheckpoint(f.db, f.path, true)!;
     await expect(Promise.resolve(stop())).rejects.toThrow("post failure");
@@ -331,7 +356,7 @@ test('last checkpoint release waits for confirmed SQLite closure and excludes a 
       peer!.exec('BEGIN IMMEDIATE');
       confirm = () => { peer!.exec('ROLLBACK'); peer!.close(); peer = undefined; this.dispatchEvent(new MessageEvent('message', { data: { type: 'closed' } })); this.dispatchEvent(new Event('close')); };
     }
-    terminate() { this.beginClose(); }
+    terminate() { expect(peer).toBeUndefined(); }
   }
   globalThis.Worker = ClosingWorker as any;
   const stop = registerSqliteCheckpoint(f.db, f.path, true)!;

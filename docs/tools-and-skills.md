@@ -62,7 +62,7 @@ Add `tools.additionalDefaultTools` to `.piclaw/config.json` for more persistent 
   "tools": {
     "additionalDefaultTools": [
       "search_workspace",
-      "introspect_sql"
+      "list_models"
     ]
   }
 }
@@ -272,7 +272,7 @@ You can extend that baseline with `.piclaw/config.json`:
 - `env` — get, set, or clear persistent workspace-scoped environment variables (managed block in `/workspace/.env.sh`, with immediate `process.env` updates for later tool calls; `set` also accepts `$NAME`/`${NAME}` copies)
 - `schedule_task` — schedule agent prompts or shell commands (cron, interval, or one-shot)
 - `scheduled_tasks` — inspect scheduled-task records via a shared query surface (`list` / `get`, optional latest-run summaries)
-- `introspect_sql` — run read-only SQL queries against the messages database
+The legacy `introspect_sql` executor is retired. Native conversations do not register arbitrary SQL execution; use the existing authorised `messages` query surface.
 - `list_tools` — list available tools with compact summaries, active-state markers, toolset membership, capability metadata, and intent-based recommendations via `intent`
 - `list_scripts` — discover packaged skill scripts plus workspace skill/note scripts with compact summaries, role markers (`entrypoint` vs `module`), Bun invocation hints, and the same kind of query/intent shortlisting used for tool discovery
 - `activate_tools` — activate one or more available tools for the current session

@@ -33,7 +33,7 @@
  *     when capture is disabled (see I10 in the issues tracker).
  */
 
-import { getDb, initDatabase } from "../src/db/connection.js";
+import { closeDatabase, getDb, openMaintenanceDatabase } from "../src/db/connection.js";
 
 interface CliArgs {
   all: boolean;
@@ -145,7 +145,7 @@ async function main(): Promise<void> {
     args.dryRun = true;
   }
 
-  initDatabase();
+  openMaintenanceDatabase(undefined, args.dryRun);
   const db = getDb();
   const scope = buildScope(args);
 
@@ -190,7 +190,7 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
+main().finally(() => closeDatabase()).catch((err) => {
   console.error("Error:", err.message || err);
   process.exit(1);
 });

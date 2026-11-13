@@ -159,7 +159,6 @@ These are compiled into the package and registered via `extensionFactories` on t
 | `internalTools` | `list_tools` with capability metadata + intent-based shortlisting |
 | `runtimeScripts` | `list_scripts` for packaged/workspace script discovery and script-JDoc-powered recommendations |
 | `toolActivation` | `activate_tools`, `reset_active_tools` |
-| `sqlIntrospect` | `introspect_sql` (read-only SQLite queries) |
 | `scheduledTasks` | `schedule_task`, `scheduled_tasks`, `/tasks`, `/scheduled` |
 | `workspaceSearch` | `search_workspace`, `refresh_workspace_index` |
 | `workspaceMemoryBootstrap` | startup memory bootstrap hook (`before_agent_start`) |

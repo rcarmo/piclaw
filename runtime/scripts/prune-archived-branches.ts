@@ -1,5 +1,5 @@
 import { existsSync } from "fs";
-import { getDb, initDatabase, listChatBranches, permanentDeleteArchivedBranch, previewPermanentDeleteArchivedBranch } from "../src/db.js";
+import { closeDatabase, getDb, openMaintenanceDatabase, listChatBranches, permanentDeleteArchivedBranch, previewPermanentDeleteArchivedBranch } from "../src/db.js";
 import { listSessionArtifactPaths, removeSessionArtifacts } from "../src/agent-pool/branch-manager.js";
 
 type CliOptions = {
@@ -122,7 +122,7 @@ function buildPreview(chatJid: string): PreviewItem {
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
-  initDatabase();
+  openMaintenanceDatabase(undefined, options.mode === "dry-run");
 
   const targets = resolveTargetChatJids(options);
   const planned: PreviewItem[] = [];
@@ -186,7 +186,7 @@ async function main(): Promise<void> {
   }, null, 2));
 }
 
-main().catch((error) => {
+main().finally(() => closeDatabase()).catch((error) => {
   const message = error instanceof Error ? error.message : String(error);
   console.error(message || "prune-archived-branches failed");
   process.exit(1);

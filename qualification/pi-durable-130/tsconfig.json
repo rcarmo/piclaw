@@ -128,6 +128,7 @@
     "native-dream-retirement.test.ts",
     "native-a2a-history.test.ts",
     "scheduler-production-lifetime.test.ts",
-    "sqlite-admission-workload.test.ts"
+    "sqlite-admission-workload.test.ts",
+    "sqlite-restic-restore.test.ts"
   ]
 }
