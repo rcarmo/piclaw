@@ -489,6 +489,8 @@ export function LiveTurnActivity({ chatJid, status, draft, thought, turnId, stat
         event.stopPropagation();
         setExpanded((value) => { liveExpandedPreference = !value; return !value; });
     };
+    // The running tool's card beneath the Working block carries its own stop button.
+    const stoppableCallId = active && (status?.type === 'tool_call' || status?.type === 'tool_status') && status?.status === 'running' && typeof status?.tool_call_id === 'string' ? status.tool_call_id : '';
     const detailId = `turn-activity-live-${String(turnId || 'current').replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 
     return html`
@@ -517,7 +519,10 @@ export function LiveTurnActivity({ chatJid, status, draft, thought, turnId, stat
                         `}
                     </div>
                 </div>`}
-                ${statusPane && html`<div class="turn-activity-live-status">${statusPane}</div>`}
+                ${statusPane && html`<div class=${`turn-activity-live-status${stoppableCallId ? ' has-stop' : ''}`}>
+                    ${statusPane}
+                    ${stoppableCallId && html`<${ToolStopControl} key=${stoppableCallId} chatJid=${chatJid} callId=${stoppableCallId} title=${status.title || 'this tool'} />`}
+                </div>`}
                 ${renderedDraft && html`<div class="post-content turn-activity-live-draft" dangerouslySetInnerHTML=${renderedDraft}></div>`}
             </div>
         </div>
