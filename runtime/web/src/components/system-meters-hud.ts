@@ -222,7 +222,9 @@ export function SystemMetersHud({ mode = 'overlay' }) {
     }, []);
 
     // Only one placement renders at a time: the side bar foot or the status bar.
-    const isActiveInstance = SYSTEM_METERS_ACTIVE_MODES.has(mode);
+    // In the workbench the activity bar's Meters toggle switches them off entirely.
+    const workbenchPlacement = mode === 'sidebar' || mode === 'statusbar';
+    const isActiveInstance = SYSTEM_METERS_ACTIVE_MODES.has(mode) && !(workbenchPlacement && collapsed);
 
     useEffect(() => {
         if (!isActiveInstance) return undefined;
@@ -344,14 +346,14 @@ export function SystemMetersHud({ mode = 'overlay' }) {
                             ${metrics.cpu_percent !== null && html`<button class="system-meters-meter-button system-meters-row cpu" type="button" aria-label=${title} aria-expanded="true" onClick=${handleToggleCollapsed}>
                                 <span class="system-meters-label">CPU</span>
                                 <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true">
-                                    <path d=${cpuPath}></path>
+                                    <path vector-effect="non-scaling-stroke" d=${cpuPath}></path>
                                 </svg>
                                 <span class="system-meters-value">${formatPercent(metrics.cpu_percent)}</span>
                             </button>`}
                             ${metrics.ram_percent !== null && html`<button class="system-meters-meter-button system-meters-row ram" type="button" aria-label=${title} aria-expanded="true" onClick=${handleToggleCollapsed}>
                                 <span class="system-meters-label">RAM</span>
                                 <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true">
-                                    <path d=${ramPath}></path>
+                                    <path vector-effect="non-scaling-stroke" d=${ramPath}></path>
                                 </svg>
                                 <span class="system-meters-value">${formatPercent(metrics.ram_percent)}</span>
                             </button>`}
@@ -359,7 +361,7 @@ export function SystemMetersHud({ mode = 'overlay' }) {
                                 <button class="system-meters-meter-button system-meters-row rss" type="button" aria-label=${title} aria-expanded="true" onClick=${handleToggleCollapsed}>
                                     <span class="system-meters-label">RSS</span>
                                     <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true">
-                                        <path d=${rssPath}></path>
+                                        <path vector-effect="non-scaling-stroke" d=${rssPath}></path>
                                     </svg>
                                     <span class="system-meters-value">${formatBytesCompact(currentRssBytes)}</span>
                                 </button>
@@ -369,7 +371,7 @@ export function SystemMetersHud({ mode = 'overlay' }) {
                                 <button class="system-meters-meter-button system-meters-row buf" type="button" aria-label=${title} aria-expanded="true" onClick=${handleToggleCollapsed}>
                                     <span class="system-meters-label">BUF</span>
                                     <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true">
-                                        <path d=${bufferCachePath}></path>
+                                        <path vector-effect="non-scaling-stroke" d=${bufferCachePath}></path>
                                     </svg>
                                     <span class="system-meters-value">${formatBytesCompact(metrics.buffer_cache_bytes)}</span>
                                 </button>
@@ -378,7 +380,7 @@ export function SystemMetersHud({ mode = 'overlay' }) {
                                 <button class="system-meters-meter-button system-meters-row swap" type="button" aria-label=${title} aria-expanded="true" onClick=${handleToggleCollapsed}>
                                     <span class="system-meters-label">SWP</span>
                                     <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true">
-                                        <path d=${swapPath}></path>
+                                        <path vector-effect="non-scaling-stroke" d=${swapPath}></path>
                                     </svg>
                                     <span class="system-meters-value">${formatPercent(metrics.swap_percent)}</span>
                                 </button>

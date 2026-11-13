@@ -4,8 +4,11 @@
  *
  * A Visual-style activity bar selects one view at a time: Sessions or the
  * workspace Explorer. Clicking the active view's icon collapses the side bar;
- * the activity bar stays. On narrow screens the side bar is a drawer from the
- * left. The system meters sit at the foot of the side bar while it is shown.
+ * the activity bar stays. The activity bar can be hidden too (from the global
+ * menu), leaving only the menu button: the side bar then opens as a drawer, as
+ * it does on narrow screens. The global menu button sits in the activity
+ * bar's top slot. The system meters, toggled from the activity bar, sit at
+ * the foot of the side bar while it is shown.
  *
  * Sessions reuses the compose picker's grouping, search and pin preferences,
  * and carries the session-dashboard summaries: activity state, live previews
@@ -14,7 +17,7 @@
  */
 import { html, useCallback, useEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
 import { resolveSessionPopupChats } from './compose-box.js';
-import { filterSessionPickerChats, formatSessionPickerMetrics, groupSessionPickerChats } from '../ui/compose-session-switcher.js';
+import { filterSessionPickerChats, groupSessionPickerChats } from '../ui/compose-session-switcher.js';
 import { getBranchLifecycleBadges, normalizeHandle } from '../ui/branch-lifecycle.js';
 import {
   SESSION_PICKER_PREFERENCES_EVENT,
@@ -24,6 +27,7 @@ import {
 import { getLocalStorageItem, setLocalStorageItem } from '../utils/storage.js';
 import { getShellWidth, occupiedPaneWidth } from '../ui/use-splitters.js';
 import { SystemMetersHud } from './system-meters-hud.js';
+import { METERS_COLLAPSED_EVENT_NAME, readStoredMetersCollapsed, toggleMetersCollapsed } from '../ui/meters.js';
 import { WINDOW_SIDEBAR_OPEN_STORAGE_KEY, persistWindowScopedPreference, readWindowScopedPreference } from '../ui/workspace-visibility.js';
 import { buildChatWindowUrl } from '../ui/chat-window.js';
 import { matchesKeyboardShortcutAction } from '../ui/keyboard-shortcuts.js';
@@ -44,6 +48,19 @@ export const SESSIONS_MAX_WIDTH = 420;
 /** Width of the always-visible activity bar on wide screens. */
 export const ACTIVITY_BAR_WIDTH = 48;
 export const WORKBENCH_TOGGLE_EVENT = 'piclaw:sessions-sidebar-toggle';
+/** Commands from the global menu: { command: 'view', view } | { command: 'plan' } | { command: 'activity-bar' }. */
+export const WORKBENCH_COMMAND_EVENT = 'piclaw:workbench-command';
+export const ACTIVITY_BAR_HIDDEN_STORAGE_KEY = 'workbench.activityBarHidden';
+
+/** Whether the activity bar is hidden, leaving only the global menu button. */
+export function readActivityBarHidden(): boolean {
+  return getLocalStorageItem(ACTIVITY_BAR_HIDDEN_STORAGE_KEY) === 'true';
+}
+
+export function dispatchWorkbenchCommand(command: 'view' | 'plan' | 'activity-bar', detail: Record<string, unknown> = {}): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(WORKBENCH_COMMAND_EVENT, { detail: { ...detail, command } }));
+}
 const WIDE_LAYOUT_QUERY = '(min-width: 1024px) and (orientation: landscape)';
 const KEYBOARD_STEP = 16;
 const KEYBOARD_LARGE_STEP = 64;
@@ -95,6 +112,40 @@ async function fetchSessionStatus(chatJid: string) {
   return response.json();
 }
 
+/** The row's model, without the context figures the ring already shows. */
+function formatSessionPickerModel(chat): string {
+  const model = typeof chat?.model === 'string' && chat.model.trim() ? chat.model.trim() : (typeof chat?.model_label === 'string' ? chat.model_label.trim() : '');
+  return model;
+}
+
+/** Context use of one chat from /agent/context: tokens, window and percent. */
+async function fetchSessionContext(chatJid: string) {
+  const response = await fetch(`/agent/context?chat_jid=${encodeURIComponent(chatJid)}`, {
+    credentials: 'same-origin',
+    cache: 'no-store',
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) throw new Error(`Session context HTTP ${response.status}`);
+  return response.json();
+}
+
+/** Context use refreshes this often while the Sessions view is visible. */
+export const SESSIONS_CONTEXT_INTERVAL_MS = 60000;
+/** At most this many rows read their context per refresh. */
+export const SESSIONS_CONTEXT_LIMIT = 40;
+
+/** Context percent of a row: the listed value, else the one read from /agent/context. */
+export function resolveSessionRowContext(chat, fetched): { percent: number; label: string } | null {
+  const listed = resolveSessionContextPercent(chat);
+  const percent = listed ?? resolveSessionContextPercent({ context_percent: fetched?.percent, context_tokens: fetched?.tokens, context_window: fetched?.contextWindow });
+  if (percent == null) return null;
+  const tokens = Number(chat?.context_tokens ?? fetched?.tokens);
+  const window = Number(chat?.context_window ?? fetched?.contextWindow);
+  const compact = (value) => (value >= 1000 ? `${Math.round(value / 100) / 10}k` : String(Math.round(value)));
+  const detail = Number.isFinite(tokens) && Number.isFinite(window) && window > 0 ? ` (${compact(tokens)} / ${compact(window)} tokens)` : '';
+  return { percent, label: `Context ${Math.round(percent)}%${detail}` };
+}
+
 /** Other active sessions that get a live preview, current session excluded. */
 export function selectSessionsPreviewTargets(activeChatAgents, currentChatJid, limit = SESSIONS_PREVIEW_LIMIT): string[] {
   return resolveSessionPopupChats(activeChatAgents, currentChatJid)
@@ -136,6 +187,7 @@ function readWideLayout(): boolean {
 const ACTIVITY_ICONS = {
   sessions: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><path d="M8 9h8M8 13h5" /></svg>`,
   explorer: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V7z" /><path d="M14 3v4h4" /><path d="M9 21h9a2 2 0 0 0 2-2V9" /></svg>`,
+  meters: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4" /></svg>`,
   plan: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11" /><path d="m3.5 6 1.2 1.2L7 5" /><path d="m3.5 12 1.2 1.2L7 11" /><circle cx="5" cy="18" r="1.4" /></svg>`,
   settings: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>`,
 };
@@ -146,6 +198,7 @@ const SESSION_ICONS = {
   refresh: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8" /><path d="M21 3v5h-5" /></svg>`,
   more: html`<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></svg>`,
   restore: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></svg>`,
+  pin: html`<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6l-1 6 4 4H6l4-4z" /><path d="M12 13v8" /></svg>`,
   trash: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></svg>`,
 };
 
@@ -162,6 +215,7 @@ export function WorkbenchSidebar({
   chatMinWidth = 320,
   onRefreshSessions = null,
   loadSessionStatus = fetchSessionStatus,
+  loadSessionContext = fetchSessionContext,
   explorer = null,
   workspaceOpen = false,
   setWorkspaceVisible = null,
@@ -172,7 +226,11 @@ export function WorkbenchSidebar({
   const [storedOpen, setOpen] = useState(readStoredSessionsOpen);
   const [view, setView] = useState(() => resolveInitialWorkbenchView(workspaceOpen));
   const [wide, setWide] = useState(readWideLayout);
-  const [drawerOpen, setDrawerOpen] = useState(() => !readWideLayout() && workspaceOpen);
+  const [activityHidden, setActivityHidden] = useState(readActivityBarHidden);
+  // Narrow screens, and wide ones with the activity bar hidden, open the side bar as a drawer.
+  const drawerMode = !wide || activityHidden;
+  const [drawerOpen, setDrawerOpen] = useState(() => (!readWideLayout() || readActivityBarHidden()) && workspaceOpen);
+  const [metersOn, setMetersOn] = useState(() => !readStoredMetersCollapsed(false));
   // When the window cannot fit sessions, chat and the right-hand panes, hide
   // sessions first without changing the saved preference. Showing them again
   // explicitly overrides this until the layout changes.
@@ -180,7 +238,7 @@ export function WorkbenchSidebar({
   const [override, setOverride] = useState(false);
   const open = storedOpen && (!autoHidden || override);
   // Shown: the view host is visible (desktop side bar or narrow drawer).
-  const shown = wide ? open : drawerOpen;
+  const shown = drawerMode ? drawerOpen : open;
   const [query, setQuery] = useState('');
   const [pinned, setPinned] = useState(() => readSessionPickerPreferences().pinnedChatJids);
   // widthRef is the saved preference; the rendered width may be narrower when space is short.
@@ -189,6 +247,7 @@ export function WorkbenchSidebar({
   const splitterRef = useRef(null);
   const asideRef = useRef(null);
   const [previews, setPreviews] = useState(() => new Map());
+  const [contexts, setContexts] = useState(() => new Map());
   const retainedPreviewsRef = useRef(new Map());
   const [now, setNow] = useState(() => Date.now());
 
@@ -273,11 +332,12 @@ export function WorkbenchSidebar({
 
   useEffect(() => {
     // Right-hand panes keep room for the activity bar, and for the side bar at its minimum while it is open.
-    const reserved = wide ? ACTIVITY_BAR_WIDTH + (open ? SESSIONS_MIN_WIDTH + 4 : 0) : 0;
+    const reserved = drawerMode ? 0 : ACTIVITY_BAR_WIDTH + (open ? SESSIONS_MIN_WIDTH + 4 : 0);
     appShellRef?.current?.style?.setProperty('--workbench-reserved', `${reserved}px`);
     appShellRef?.current?.setAttribute?.('data-workbench-sidebar', shown ? 'shown' : 'hidden');
-    window.dispatchEvent(new CustomEvent(WORKBENCH_TOGGLE_EVENT, { detail: { open: shown, view } }));
-  }, [appShellRef, open, shown, view, wide]);
+    appShellRef?.current?.setAttribute?.('data-workbench-activity', activityHidden ? 'hidden' : 'shown');
+    window.dispatchEvent(new CustomEvent(WORKBENCH_TOGGLE_EVENT, { detail: { open: shown, view, activityHidden } }));
+  }, [activityHidden, appShellRef, drawerMode, open, shown, view]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
@@ -291,9 +351,9 @@ export function WorkbenchSidebar({
   }, []);
 
   const setShown = useCallback((next: boolean) => {
-    if (wide) setOpenPersisted(next);
-    else setDrawerOpen(next);
-  }, [setOpenPersisted, wide]);
+    if (drawerMode) setDrawerOpen(next);
+    else setOpenPersisted(next);
+  }, [drawerMode, setOpenPersisted]);
 
   // The workspace explorer is visible exactly when the Explorer view is shown.
   // Keep the app's workspaceOpen state in step with the side bar, and follow
@@ -323,6 +383,34 @@ export function WorkbenchSidebar({
     setView(next);
     if (!shown) setShown(true);
   }, [setShown, setView, shown, view]);
+
+  const toggleActivityBar = useCallback(() => {
+    setDrawerOpen(false);
+    setActivityHidden((hidden) => {
+      setLocalStorageItem(ACTIVITY_BAR_HIDDEN_STORAGE_KEY, hidden ? 'false' : 'true');
+      return !hidden;
+    });
+  }, []);
+
+  // Global menu commands: views, the Plan tab and the activity bar itself.
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const onCommand = (event) => {
+      const { command, view: target } = event?.detail || {};
+      if (command === 'view' && (target === 'sessions' || target === 'explorer')) selectView(target);
+      else if (command === 'plan') onOpenPlan?.();
+      else if (command === 'activity-bar') toggleActivityBar();
+    };
+    window.addEventListener(WORKBENCH_COMMAND_EVENT, onCommand);
+    return () => window.removeEventListener(WORKBENCH_COMMAND_EVENT, onCommand);
+  }, [onOpenPlan, selectView, toggleActivityBar]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const sync = (event) => setMetersOn(!(typeof event?.detail?.collapsed === 'boolean' ? event.detail.collapsed : readStoredMetersCollapsed(false)));
+    window.addEventListener(METERS_COLLAPSED_EVENT_NAME, sync);
+    return () => window.removeEventListener(METERS_COLLAPSED_EVENT_NAME, sync);
+  }, []);
 
   const resizeTo = useCallback((raw, persist = true) => {
     if (raw < SESSIONS_MIN_WIDTH * 0.55) {
@@ -465,14 +553,59 @@ export function WorkbenchSidebar({
     };
   }, [isShown, loadSessionStatus, previewTargetsKey, sessionsVisible]);
 
+  // Context use per row: rows the list does not size are read from /agent/context while visible.
+  const contextTargetsKey = useMemo(() => resolveSessionPopupChats(activeChatAgents, currentChatJid)
+    .filter((chat) => !chat?.archived_at && resolveSessionContextPercent(chat) == null)
+    .map((chat) => chat.chat_jid)
+    .slice(0, SESSIONS_CONTEXT_LIMIT)
+    .join('\n'), [activeChatAgents, currentChatJid]);
+
+  useEffect(() => {
+    const targets = contextTargetsKey ? contextTargetsKey.split('\n') : [];
+    if (!sessionsVisible || targets.length === 0) return undefined;
+    let cancelled = false;
+    let inFlight = false;
+    const poll = async () => {
+      if (inFlight || !isShown()) return;
+      inFlight = true;
+      try {
+        for (const jid of targets) {
+          if (cancelled) return;
+          try {
+            const usage = await loadSessionContext(jid);
+            if (cancelled) return;
+            setContexts((previous) => {
+              const current = previous.get(jid);
+              if (current && current.percent === usage?.percent && current.tokens === usage?.tokens) return previous;
+              const next = new Map(previous);
+              next.set(jid, { percent: usage?.percent ?? null, tokens: usage?.tokens ?? null, contextWindow: usage?.contextWindow ?? null });
+              return next;
+            });
+          } catch (error) {
+            // Keep the last known value; an unreadable chat shows no meter.
+            console.debug('[sessions] Context use unavailable; keeping the last value.', jid, error);
+          }
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+    void poll();
+    const timer = setInterval(() => void poll(), SESSIONS_CONTEXT_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [contextTargetsKey, currentChatJid, isShown, loadSessionContext, sessionsVisible]);
+
   // Configurable toggle (default Ctrl/Cmd+Shift+B) for the Sessions view.
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
     const onKeyDown = (event) => {
       if (event.isComposing || event.defaultPrevented) return;
       if (!matchesKeyboardShortcutAction(event, 'toggleSessions')) return;
-      const aside = asideRef.current;
-      if (!aside || getComputedStyle(aside).display === 'none') return;
+      // A hidden activity bar or a narrow screen opens the Sessions drawer.
+      if (!asideRef.current) return;
       event.preventDefault();
       selectView('sessions');
     };
@@ -536,7 +669,7 @@ export function WorkbenchSidebar({
   );
 
   return html`
-    <aside ref=${asideRef} class=${`workbench-sidebar${shown ? '' : ' collapsed'}${wide ? '' : ' drawer'}`} data-view=${view} aria-label="Side bar">
+    <aside ref=${asideRef} class=${`workbench-sidebar${shown ? '' : ' collapsed'}${drawerMode ? ' drawer' : ''}`} data-view=${view} aria-label="Side bar">
       <nav class="workbench-activity-bar" role="tablist" aria-orientation="vertical" aria-label="Views">
         ${WORKBENCH_VIEWS.map((item) => html`
           <button
@@ -559,6 +692,10 @@ export function WorkbenchSidebar({
             ${ACTIVITY_ICONS.plan}
           </button>
         `}
+        <button type="button" class=${`workbench-activity-button workbench-activity-meters${metersOn ? ' is-on' : ''}`} aria-pressed=${metersOn ? 'true' : 'false'}
+          title=${metersOn ? 'Hide system meters' : 'Show system meters'} aria-label="System meters" onClick=${() => toggleMetersCollapsed()}>
+          ${ACTIVITY_ICONS.meters}
+        </button>
         <span class="workbench-activity-spacer"></span>
         ${onOpenSettings && html`
           <button type="button" class="workbench-activity-button workbench-activity-settings" title="Settings" aria-label="Settings" onClick=${() => onOpenSettings()}>
@@ -593,46 +730,44 @@ export function WorkbenchSidebar({
                 const isPinned = pinnedSet.has(jid);
                 const handle = normalizeHandle(chat.agent_name) || jid;
                 const handleLabel = handle.startsWith("@") ? handle : `@${handle}`;
-                const badges = getBranchLifecycleBadges(chat, { currentChatJid }).filter((badge) => badge !== 'current');
-                const meta = [badges.join(' · '), formatSessionPickerMetrics(chat)].filter(Boolean).join(' · ');
+                // The activity label and dot already say a session is active.
+                const badges = getBranchLifecycleBadges(chat, { currentChatJid }).filter((badge) => badge !== 'current' && badge !== 'active');
+                const meta = [badges.join(' · '), formatSessionPickerModel(chat)].filter(Boolean).join(' · ');
                 const activity = formatSessionActivityStatus(chat);
                 const age = formatSessionActivityAge(chat.last_activity_at, now);
                 const live = !current ? previews.get(jid) : null;
                 const reply = live ? '' : cleanSessionPreviewText(chat.last_reply);
-                const contextPercent = resolveSessionContextPercent(chat);
+                const context = resolveSessionRowContext(chat, contexts.get(jid));
                 return html`
                   <li key=${jid} class=${`sessions-sidebar-item${current ? ' current' : ''}${chat.is_active ? ' active' : ''}${menuFor === jid ? ' menu-open' : ''}`}
-                    onContextMenu=${(event) => { if (!sessionActions) return; event.preventDefault(); setMenuFor(jid); }}>
+                    onContextMenu=${(event) => { event.preventDefault(); setMenuFor(jid); }}>
                     <button type="button" class="sessions-sidebar-open" title=${`${jid} — Ctrl/Cmd-click opens a new tab`} aria-current=${current ? 'page' : undefined}
                       onClick=${(event) => openSession(event, jid, current)}
                       onAuxClick=${(event) => { if (event.button === 1) openSession(event, jid, current); }}>
                       <span class="sessions-sidebar-line">
                         ${chat.is_active && html`<span class="sessions-sidebar-activity" aria-hidden="true"></span>`}
                         <span class="sessions-sidebar-handle">${handleLabel}</span>
+                        ${isPinned && html`<span class="sessions-sidebar-pinned" title="Pinned" aria-label="Pinned">${SESSION_ICONS.pin}</span>`}
                         ${(activity || age) && html`<span class=${`sessions-sidebar-age${activity ? ' active' : ''}`}>${activity || age}</span>`}
+                        ${context && html`<span class="sessions-sidebar-context-ring" role="meter" aria-label=${context.label} title=${context.label} aria-valuemin="0" aria-valuemax="100" aria-valuenow=${Math.round(context.percent)}
+                          style=${`--session-context: ${context.percent.toFixed(1)}%`}></span>`}
                       </span>
                       ${live && html`<span class=${`sessions-sidebar-preview live ${live.kind}`}><span class="sessions-sidebar-preview-label">${live.label}</span> ${live.text}</span>`}
                       ${reply && html`<span class="sessions-sidebar-preview">${reply}</span>`}
                       ${meta && html`<span class="sessions-sidebar-meta">${meta}</span>`}
-                      ${contextPercent != null && html`<span class="sessions-sidebar-context" role="meter" aria-label="Context use" aria-valuemin="0" aria-valuemax="100" aria-valuenow=${Math.round(contextPercent)}><span style=${`width:${contextPercent.toFixed(1)}%`}></span></span>`}
                     </button>
-                    <button type="button" class=${`sessions-sidebar-pin${isPinned ? ' pinned' : ''}`} aria-pressed=${isPinned ? 'true' : 'false'}
-                      title=${isPinned ? `Unpin ${handleLabel}` : `Pin ${handleLabel}`} aria-label=${isPinned ? `Unpin ${handleLabel}` : `Pin ${handleLabel}`}
-                      onClick=${() => setPinned(togglePinnedSessionChatJid(jid).pinnedChatJids)}>
-                      <svg viewBox="0 0 24 24" fill=${isPinned ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6l-1 6 4 4H6l4-4z" /><path d="M12 13v8" /></svg>
-                    </button>
-                    ${sessionActions && html`
-                      <button type="button" class="sessions-sidebar-more" aria-haspopup="menu" aria-expanded=${menuFor === jid ? 'true' : 'false'}
-                        title=${`Actions for ${handleLabel}`} aria-label=${`Actions for ${handleLabel}`}
-                        onClick=${() => setMenuFor(menuFor === jid ? null : jid)}>${SESSION_ICONS.more}</button>
-                    `}
+                    <button type="button" class="sessions-sidebar-more" aria-haspopup="menu" aria-expanded=${menuFor === jid ? 'true' : 'false'}
+                      title=${`Actions for ${handleLabel}`} aria-label=${`Actions for ${handleLabel}`}
+                      onClick=${() => setMenuFor(menuFor === jid ? null : jid)}>${SESSION_ICONS.more}</button>
                     ${menuFor === jid && html`
                       <div class="sessions-row-menu workspace-menu-dropdown" role="menu" aria-label=${`Actions for ${handleLabel}`}>
+                        <button type="button" class="workspace-menu-item" role="menuitem" aria-pressed=${isPinned ? 'true' : 'false'}
+                          onClick=${() => runMenu(() => setPinned(togglePinnedSessionChatJid(jid).pinnedChatJids))}>${isPinned ? 'Unpin' : 'Pin'}</button>
                         <button type="button" class="workspace-menu-item" role="menuitem" onClick=${() => runMenu(() => window.open(buildChatWindowUrl(window.location.href, jid), '_blank', 'noopener'))}>Open in new tab</button>
                         <button type="button" class="workspace-menu-item" role="menuitem" onClick=${() => runMenu(() => window.open(buildChatWindowUrl(window.location.href, jid, { chatOnly: true }), '_blank', 'noopener,popup'))}>Open in new window</button>
-                        ${current && sessionActions.rename && html`<button type="button" class="workspace-menu-item" role="menuitem" onClick=${() => runMenu(sessionActions.rename)}>Rename…</button>`}
-                        ${current && sessionActions.fork && html`<button type="button" class="workspace-menu-item" role="menuitem" onClick=${() => runMenu(sessionActions.fork)}>Fork</button>`}
-                        ${sessionActions.archive && html`<button type="button" class="workspace-menu-item danger" role="menuitem" onClick=${() => runMenu(() => sessionActions.archive(jid))}>Archive</button>`}
+                        ${current && sessionActions?.rename && html`<button type="button" class="workspace-menu-item" role="menuitem" onClick=${() => runMenu(sessionActions.rename)}>Rename…</button>`}
+                        ${current && sessionActions?.fork && html`<button type="button" class="workspace-menu-item" role="menuitem" onClick=${() => runMenu(sessionActions.fork)}>Fork</button>`}
+                        ${sessionActions?.archive && html`<button type="button" class="workspace-menu-item danger" role="menuitem" onClick=${() => runMenu(() => sessionActions.archive(jid))}>Archive</button>`}
                       </div>
                     `}
                   </li>
@@ -654,8 +789,10 @@ export function WorkbenchSidebar({
                     <button type="button" class="sessions-sidebar-open" title=${jid} onClick=${(event) => openSession(event, jid, jid === currentChatJid)}>
                       <span class="sessions-sidebar-line"><span class="sessions-sidebar-handle">${handleLabel}</span></span>
                     </button>
-                    ${sessionActions?.restore && html`<button type="button" class="sessions-sidebar-tool" title=${`Restore ${handleLabel}`} aria-label=${`Restore ${handleLabel}`} onClick=${() => void sessionActions.restore(jid)}>${SESSION_ICONS.restore}</button>`}
-                    ${sessionActions?.purge && html`<button type="button" class="sessions-sidebar-tool danger" title=${`Delete ${handleLabel} permanently`} aria-label=${`Delete ${handleLabel} permanently`} onClick=${() => void sessionActions.purge(jid)}>${SESSION_ICONS.trash}</button>`}
+                    ${(sessionActions?.restore || sessionActions?.purge) && html`<span class="sessions-sidebar-row-actions">
+                      ${sessionActions?.restore && html`<button type="button" class="sessions-sidebar-tool" title=${`Restore ${handleLabel}`} aria-label=${`Restore ${handleLabel}`} onClick=${() => void sessionActions.restore(jid)}>${SESSION_ICONS.restore}</button>`}
+                      ${sessionActions?.purge && html`<button type="button" class="sessions-sidebar-tool danger" title=${`Delete ${handleLabel} permanently`} aria-label=${`Delete ${handleLabel} permanently`} onClick=${() => void sessionActions.purge(jid)}>${SESSION_ICONS.trash}</button>`}
+                    </span>`}
                   </li>
                 `;
               })}
@@ -667,10 +804,10 @@ export function WorkbenchSidebar({
       <section id="workbench-view-explorer" class="workbench-view workbench-view-explorer" role="tabpanel" aria-label="Explorer" hidden=${view !== 'explorer'}>
         ${explorer}
       </section>
-      ${shown && html`<footer class="workbench-sidebar-footer"><${SystemMetersHud} mode="sidebar" /></footer>`}
+      ${shown && metersOn && html`<footer class="workbench-sidebar-footer"><${SystemMetersHud} mode="sidebar" /></footer>`}
       </div>
     </aside>
-    ${wide && html`
+    ${!drawerMode && html`
       <div
         ref=${splitterRef}
         class=${`workbench-splitter${open ? '' : ' at-edge'}`}
@@ -687,6 +824,6 @@ export function WorkbenchSidebar({
         onDblClick=${onSplitterDoubleClick}
       ></div>
     `}
-    ${!wide && drawerOpen && html`<div class="workbench-drawer-backdrop" aria-hidden="true" onClick=${() => setShown(false)}></div>`}
+    ${drawerMode && drawerOpen && html`<div class="workbench-drawer-backdrop" aria-hidden="true" onClick=${() => setShown(false)}></div>`}
   `;
 }

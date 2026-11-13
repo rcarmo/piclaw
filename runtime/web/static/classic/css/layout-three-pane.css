@@ -23,9 +23,15 @@
     width: calc(100% - var(--piclaw-shell-inset-right, 0px));
 }
 
-/* The status bar takes the bottom row whenever the side bar is not shown. */
-.app-shell:not([data-workbench-sidebar="shown"]):has(> .workbench-statusbar .system-meters-hud) {
-    height: calc(100% - var(--workbench-statusbar-height));
+/* The status bar takes the bottom row. */
+.app-shell:has(> .workbench-statusbar) {
+    height: calc(100% - var(--workbench-statusbar-height) - env(safe-area-inset-bottom, 0px));
+}
+
+/* Panes sized to the viewport stop at the status bar. */
+.app-shell:has(> .workbench-statusbar) > .container,
+.app-shell:has(> .workbench-statusbar) > .editor-pane-container {
+    max-height: 100%;
 }
 
 /* The global menu no longer lives in the tree header. */
@@ -206,19 +212,46 @@
     position: relative;
 }
 
-.sessions-sidebar-more {
+/* Row actions float over the row's right edge instead of taking width. */
+.sessions-sidebar-more,
+.sessions-sidebar-row-actions {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 1;
     opacity: 0;
+    background: var(--bg-hover);
+    box-shadow: -8px 0 8px -4px var(--bg-hover);
 }
 
-.sessions-sidebar-item:hover .sessions-sidebar-more,
-.sessions-sidebar-item:focus-within .sessions-sidebar-more,
+.sessions-sidebar-row-actions {
+    display: inline-flex;
+    gap: 2px;
+    border-radius: var(--radius-sm, 4px);
+}
+
+.sessions-sidebar-item.current .sessions-sidebar-more {
+    background: color-mix(in srgb, var(--accent-color) 10%, var(--bg-secondary));
+    box-shadow: -8px 0 8px -4px color-mix(in srgb, var(--accent-color) 10%, var(--bg-secondary));
+}
+
+.sessions-sidebar-item:hover :is(.sessions-sidebar-more, .sessions-sidebar-row-actions),
+.sessions-sidebar-item:focus-within :is(.sessions-sidebar-more, .sessions-sidebar-row-actions),
 .sessions-sidebar-item.menu-open .sessions-sidebar-more {
     opacity: 1;
 }
 
 @media (hover: none) {
-    .sessions-sidebar-more {
+    .sessions-sidebar-more,
+    .sessions-sidebar-row-actions {
         opacity: 1;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    /* Touch keeps the button visible; leave it room at the end of the row. */
+    .sessions-sidebar-open {
+        padding-right: 30px;
     }
 }
 
@@ -297,7 +330,7 @@
     color: var(--danger-color);
 }
 
-/* ── Selected item actions, replacing the old preview pane ── */
+/* ── Explorer actions at the foot of the tree (new file always; others for the selection) ── */
 .workspace-selection-bar {
     flex: 0 0 auto;
     max-height: 50%;
@@ -305,6 +338,11 @@
     padding: var(--spacing-xs);
     border-top: 1px solid var(--border-color);
     background-color: var(--bg-primary);
+}
+
+.workspace-selection-bar .workspace-preview-header {
+    justify-content: flex-start;
+    margin-bottom: 0;
 }
 
 .workspace-folder-sizes > summary {
@@ -376,13 +414,15 @@
     background: var(--success-color);
 }
 
+/* Plan actions sit at the bottom of the pane, above its status line. */
 .plan-pane-toolbar {
     display: flex;
+    flex: 0 0 auto;
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
-    padding: 4px 14px 8px;
-    border-bottom: 1px solid var(--border-color);
+    padding: 8px 14px;
+    border-top: 1px solid var(--border-color);
 }
 
 .plan-pane-toolbar button {
@@ -554,19 +594,68 @@
     flex: 1;
 }
 
-/* Phones keep the bottom edge for the compose box; the meters show in the drawer. */
+/* Model, usage and context, rendered here by the compose box. */
+.workbench-statusbar-compose {
+    display: flex;
+    align-items: center;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.workbench-statusbar .compose-meta-row {
+    flex: 0 1 auto;
+    gap: 8px;
+    min-height: 0;
+    padding: 0;
+}
+
+.workbench-statusbar .compose-model-meta,
+.workbench-statusbar .compose-model-meta-subline {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    width: auto;
+}
+
+.workbench-statusbar .compose-model-hint,
+.workbench-statusbar .compose-model-usage-hint {
+    max-width: 40vw;
+    font-size: 11px;
+    line-height: var(--workbench-statusbar-height);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.workbench-statusbar .compose-model-hint-btn {
+    align-self: center;
+}
+
+.workbench-statusbar .compose-context-pie {
+    order: -1;
+}
+
+.workbench-statusbar .compose-context-pie svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Phones: model and context only; the meters live in the side bar drawer. */
 @media (max-width: 639px) {
-    .workbench-statusbar {
+    .workbench-statusbar .system-meters-hud {
         display: none;
     }
 
-    .app-shell:not([data-workbench-sidebar="shown"]):has(> .workbench-statusbar .system-meters-hud) {
-        height: 100%;
+    .workbench-statusbar .compose-model-hint {
+        max-width: 55vw;
+    }
+
+    .workbench-statusbar .compose-model-usage-hint {
+        max-width: 30vw;
     }
 }
 
-/* Nothing to show while the meters are switched off. */
-.workbench-statusbar:not(:has(.system-meters-hud)),
 .workbench-sidebar-footer:not(:has(.system-meters-hud)) {
     display: none;
 }
@@ -605,8 +694,25 @@
 
 .system-meters-hud-sidebar .system-meters-card {
     width: 100%;
+    min-width: 0;
     box-sizing: border-box;
     box-shadow: none;
+}
+
+/* In the side bar the plots take whatever width the side bar has. */
+.system-meters-hud-sidebar .system-meters-row {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+}
+
+.system-meters-hud-sidebar .system-meters-spark {
+    width: 100%;
+    min-width: 0;
+}
+
+/* Menus opened in the side bar extend past it; keep them above its divider. */
+.workbench-sidebar {
+    position: relative;
+    z-index: 51;
 }
 
 .workbench-splitter {
@@ -695,28 +801,31 @@
     }
 }
 
-/* ── Narrow placement: the side bar is a drawer from the left ── */
-@media (max-width: 1023px), (orientation: portrait) {
-    .workbench-sidebar.drawer:not(.collapsed) {
-        display: flex;
-        position: fixed;
-        inset: 0 auto 0 0;
-        z-index: 60;
-        height: auto;
-        max-width: calc(100vw - 48px);
-        box-shadow: var(--shadow-lg, 0 8px 32px rgba(0, 0, 0, 0.25));
-    }
+/* ── Drawer placement: narrow screens, or any screen with the activity bar
+   hidden. Only the global menu button remains until the drawer opens. ── */
+.workbench-sidebar.drawer.collapsed {
+    display: none;
+}
 
-    .workbench-sidebar.drawer .workbench-view-host {
-        width: min(300px, calc(100vw - 48px - var(--workbench-activity-width)));
-    }
+.workbench-sidebar.drawer:not(.collapsed) {
+    display: flex;
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 60;
+    height: auto;
+    max-width: calc(100vw - 48px);
+    box-shadow: var(--shadow-lg, 0 8px 32px rgba(0, 0, 0, 0.25));
+}
 
-    .workbench-drawer-backdrop {
-        position: fixed;
-        inset: 0;
-        z-index: 59;
-        background: rgba(0, 0, 0, 0.32);
-    }
+.workbench-sidebar.drawer .workbench-view-host {
+    width: min(300px, calc(100vw - 48px - var(--workbench-activity-width)));
+}
+
+.workbench-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 59;
+    background: rgba(0, 0, 0, 0.32);
 }
 
 /* ── Sessions view ── */
@@ -738,55 +847,27 @@
     white-space: nowrap;
 }
 
-.sessions-sidebar-pin {
+/* A pinned session shows a small pin after its handle; pinning is in the row menu. */
+.sessions-sidebar-pinned {
     display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 auto;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-full);
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
+    flex-shrink: 0;
+    color: var(--accent-color);
 }
 
-.sessions-sidebar-collapse svg {
+.sessions-sidebar-pinned svg {
+    width: 11px;
+    height: 11px;
+}
+
+/* Context use as a small ring after the age. */
+.sessions-sidebar-context-ring {
+    flex-shrink: 0;
     width: 12px;
     height: 12px;
-}
-
-.sessions-sidebar-pin svg {
-    width: 15px;
-    height: 15px;
-}
-
-.sessions-sidebar-pin:hover,
-.sessions-sidebar-pin:focus-visible {
-    color: var(--accent-color);
-    background: var(--accent-soft, rgba(29, 155, 240, 0.1));
-}
-
-.sessions-sidebar-pin {
-    opacity: 0;
-}
-
-.sessions-sidebar-item:hover .sessions-sidebar-pin,
-.sessions-sidebar-item:focus-within .sessions-sidebar-pin,
-.sessions-sidebar-pin.pinned {
-    opacity: 1;
-}
-
-.sessions-sidebar-pin.pinned {
-    color: var(--accent-color);
-}
-
-@media (hover: none) {
-    .sessions-sidebar-pin {
-        opacity: 0.6;
-    }
+    border-radius: 50%;
+    background: conic-gradient(var(--accent-color) var(--session-context, 0%), var(--border-color) 0);
+    -webkit-mask: radial-gradient(closest-side, transparent 58%, #000 62%);
+    mask: radial-gradient(closest-side, transparent 58%, #000 62%);
 }
 
 .sessions-sidebar-sr-only {
@@ -917,8 +998,14 @@
 }
 
 .sessions-sidebar-line .sessions-sidebar-handle {
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 0;
+}
+
+/* Age, activity and context sit at the end of the line; the pin stays by the handle. */
+.sessions-sidebar-line .sessions-sidebar-age,
+.sessions-sidebar-line > :is(.sessions-sidebar-handle, .sessions-sidebar-pinned) + .sessions-sidebar-context-ring {
+    margin-left: auto;
 }
 
 .sessions-sidebar-activity {
@@ -974,21 +1061,6 @@
     text-transform: uppercase;
     letter-spacing: 0.03em;
     color: var(--success-color);
-}
-
-.sessions-sidebar-context {
-    display: block;
-    height: 3px;
-    margin-top: 2px;
-    border-radius: 2px;
-    background: var(--border-color);
-    overflow: hidden;
-}
-
-.sessions-sidebar-context > span {
-    display: block;
-    height: 100%;
-    background: var(--accent-color);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1073,4 +1145,83 @@
     body:has(.app-shell.editor-open:not([data-editor-collapsed="true"])) .timeline-menu-portal {
         visibility: hidden;
     }
+}
+
+/* ── Global menu ──
+   With the activity bar shown the menu button is the bar's top item and the
+   menu opens beside the bar; otherwise it floats at the chat's top-left. */
+.timeline-menu-portal.in-activity-bar .timeline-menu-btn {
+    width: var(--workbench-activity-width);
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-left: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--text-secondary);
+}
+
+.timeline-menu-portal.in-activity-bar .timeline-menu-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.timeline-menu-portal.in-activity-bar .timeline-menu-btn:hover,
+.timeline-menu-portal.in-activity-bar .timeline-menu-btn:focus-visible {
+    color: var(--text-primary);
+    outline: none;
+}
+
+.timeline-menu-portal.in-activity-bar .timeline-menu-btn.active {
+    color: var(--text-primary);
+    border-left-color: var(--accent-color);
+}
+
+.timeline-menu-portal.in-activity-bar .timeline-menu-dropdown {
+    top: 4px;
+    left: calc(var(--workbench-activity-width) + 4px);
+}
+
+.timeline-menu-dropdown {
+    min-width: 230px;
+}
+
+/* Every item lines up after the check column. */
+.timeline-menu-dropdown .workspace-menu-item:not(.timeline-menu-check) {
+    padding-left: 30px;
+}
+
+.timeline-menu-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+}
+
+.timeline-menu-check-mark {
+    display: inline-flex;
+    flex: 0 0 14px;
+    width: 14px;
+    height: 14px;
+    color: var(--accent-color);
+}
+
+.timeline-menu-check-mark svg {
+    width: 14px;
+    height: 14px;
+}
+
+.timeline-menu-check-label {
+    flex: 1;
+    min-width: 0;
+}
+
+.timeline-menu-hint {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.workbench-activity-meters.is-on {
+    color: var(--accent-color);
 }

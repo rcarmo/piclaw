@@ -12,14 +12,6 @@ var b,Ut,Kt,N,rt,Z,Ht,Y,Mt,lt,ot,Gt,V=Symbol.for("pv"),J={},tt=[],Xt=/^m(i|n|o|s
           <span class="plan-pane-progress-text">${L.completed}/${L.total}</span>
         </div>
       </header>
-      <div class="plan-pane-toolbar">
-        ${x?S`<button type="button" class="plan-pane-primary" disabled=${f} onClick=${()=>void H()}>Save</button>
-                 <button type="button" disabled=${f} onClick=${()=>{t.delete(e),i(null),s({text:"Edits discarded",kind:"info"})}}>Cancel</button>`:S`<button type="button" disabled=${f} onClick=${()=>i(a)}>Edit</button>`}
-        <button type="button" disabled=${f||x} onClick=${()=>void M("Refreshed")}>Refresh</button>
-        <button type="button" disabled=${f} onClick=${()=>void R()}>Reset</button>
-        <span class="plan-pane-spacer"></span>
-        <button type="button" class="plan-pane-primary" disabled=${f} onClick=${()=>void D()}>Submit to model</button>
-      </div>
       ${x?S`<textarea class="plan-pane-editor" aria-label="Plan Markdown" spellcheck="false" value=${_}
             onInput=${(c)=>{let d=c.currentTarget.value;t.set(e,{draft:d,markdown:a}),i(d)}}
             onKeyDown=${(c)=>{if((c.metaKey||c.ctrlKey)&&c.key==="s")c.preventDefault(),H()}}></textarea>`:S`
@@ -32,9 +24,17 @@ var b,Ut,Kt,N,rt,Z,Ht,Y,Mt,lt,ot,Gt,V=Symbol.for("pv"),J={},tt=[],Xt=/^m(i|n|o|s
               </li>
             `)}
           </ol>`}
+      <div class="plan-pane-toolbar">
+        ${x?S`<button type="button" class="plan-pane-primary" disabled=${f} onClick=${()=>void H()}>Save</button>
+                 <button type="button" disabled=${f} onClick=${()=>{t.delete(e),i(null),s({text:"Edits discarded",kind:"info"})}}>Cancel</button>`:S`<button type="button" disabled=${f} onClick=${()=>i(a)}>Edit</button>`}
+        <button type="button" disabled=${f||x} onClick=${()=>void M("Refreshed")}>Refresh</button>
+        <button type="button" disabled=${f} onClick=${()=>void R()}>Reset</button>
+        <span class="plan-pane-spacer"></span>
+        <button type="button" class="plan-pane-primary" disabled=${f} onClick=${()=>void D()}>Submit to model</button>
+      </div>
       <footer class=${`plan-pane-status ${p.kind}`} role="status">${p.text}${l&&!x?S` · ${new Date(l).toLocaleTimeString()}`:""}</footer>
     </section>
   `}class Vt{host;dirty=!1;dirtyListeners=[];constructor(e){this.host=document.createElement("div"),this.host.className="plan-pane-host",e.appendChild(this.host),ht(S`<${de} onDirtyChange=${(t)=>this.setDirty(t)} />`,this.host)}setDirty(e){if(this.dirty===e)return;this.dirty=e;for(let t of this.dirtyListeners)t(e)}getContent(){return}isDirty(){return this.dirty}onDirtyChange(e){this.dirtyListeners.push(e)}focus(){this.host.querySelector("textarea, button")?.focus()}dispose(){ht(null,this.host),this.host.remove(),this.dirtyListeners=[]}}var ye={id:"plan",label:"Plan",placement:"tabs",capabilities:["readonly"],canHandle(e){return e?.path===se?9000:!1},mount(e){return new Vt(e)}};export{se as PLAN_TAB_PATH,ce as buildPlanSubmissionPrompt,le as parsePlanChecklist,ye as planPaneExtension,ue as summarisePlan};
 
-//# debugId=C5BE5B3D859A52F864756E2164756E21
+//# debugId=56A89CD3D2577CAD64756E2164756E21
 //# sourceMappingURL=plan-pane.bundle.js.map

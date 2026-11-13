@@ -2063,13 +2063,6 @@ export function WorkspaceExplorer({
                     <span>${t('workspace.title')}</span>
                 </div>
                 <div class="workspace-header-actions">
-                    <button class="workspace-create" onClick=${handleCreateFileClick} title=${t('workspace.newFile')} disabled=${uploading}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <line x1="12" y1="5" x2="12" y2="19" />
-                            <line x1="5" y1="12" x2="19" y2="12" />
-                        </svg>
-                    </button>
                     <button class="workspace-refresh" onClick=${handleRefreshClick} title=${t('menu.refreshTree')}>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2127,13 +2120,12 @@ export function WorkspaceExplorer({
                     <div class="workspace-tree-list workspace-tree-pierre" ref=${treeHostRef}></div>
                 `}
             </div>
-            ${selectedPath && html`
+            ${tree && html`
                 <div class="workspace-selection-bar">
                     ${addonActionError && html`<div role="alert">${addonActionError}</div>`}
                     <div class="workspace-preview-header">
-                        <span class="workspace-preview-title">${selectedPath}</span>
                         <div class="workspace-preview-actions">
-                            ${addonActions.map(action => html`<button class="workspace-download" title=${action.title} aria-label=${action.label} onClick=${() => runAddonAction(action.id)}>${action.icon === 'review' ? html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M8 9h5M8 13h4M8 17h3"/><path d="m14 7 5-5 3 3-5 5-4 1 1-4Z"/></svg>` : action.label}</button>`)}
+                            ${selectedPath && addonActions.map(action => html`<button class="workspace-download" title=${action.title} aria-label=${action.label} onClick=${() => runAddonAction(action.id)}>${action.icon === 'review' ? html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M8 9h5M8 13h4M8 17h3"/><path d="m14 7 5-5 3 3-5 5-4 1 1-4Z"/></svg>` : action.label}</button>`)}
                             <button class="workspace-create" onClick=${handleCreateFileClick} title=${t('workspace.newFile')} disabled=${uploading}>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2141,7 +2133,7 @@ export function WorkspaceExplorer({
                                     <line x1="5" y1="12" x2="19" y2="12" />
                                 </svg>
                             </button>
-                            ${!selectedIsDir && html`
+                            ${selectedPath && !selectedIsDir && html`
                                 <button
                                     class="workspace-download workspace-edit"
                                     onClick=${() => canEdit && onOpenEditorRef.current?.(selectedPath, preview)}
@@ -2169,7 +2161,7 @@ export function WorkspaceExplorer({
                                     </svg>
                                 </button>
                             `}
-                            ${selectedIsDir
+                            ${!selectedPath ? null : selectedIsDir
                                 ? html`
                                     <button
                                         class="workspace-download"
@@ -2215,7 +2207,7 @@ export function WorkspaceExplorer({
                         </div>
                     </div>
                     ${preview?.error && html`<div class="workspace-error">${preview.error}</div>`}
-                    ${selectedIsDir && html`
+                    ${selectedPath && selectedIsDir && html`
                         <details class="workspace-folder-sizes" open=${folderChartOpen} onToggle=${(event) => setFolderChartOpen(event.currentTarget.open)}>
                             <summary>Folder sizes</summary>
                             ${folderChart?.disabled && html`<div class="workspace-preview-text">Folder size scanning is disabled in Workspace settings.</div>`}

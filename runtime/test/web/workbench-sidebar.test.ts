@@ -70,3 +70,40 @@ test('archived sessions are listed separately, newest first, and follow the sear
   expect(buildArchivedSessions(rows, 'web:default').map((chat) => chat.chat_jid)).toEqual(['web:old', 'web:older']);
   expect(buildArchivedSessions(rows, 'web:default', 'older').map((chat) => chat.chat_jid)).toEqual(['web:older']);
 });
+
+import { ACTIVITY_BAR_HIDDEN_STORAGE_KEY, WORKBENCH_COMMAND_EVENT, dispatchWorkbenchCommand, readActivityBarHidden, resolveSessionRowContext } from '../../web/src/components/workbench-sidebar.js';
+import { resolveLiveAgentId } from '../../web/src/components/chat-surface.js';
+
+test('session rows size their context from the list, else from /agent/context, with a readable label', () => {
+  expect(resolveSessionRowContext({ context_percent: 42, context_tokens: 42000, context_window: 100000 }, null)).toEqual({ percent: 42, label: 'Context 42% (42k / 100k tokens)' });
+  expect(resolveSessionRowContext({}, { percent: 7.5, tokens: 1500, contextWindow: 20000 })).toEqual({ percent: 7.5, label: 'Context 8% (1.5k / 20k tokens)' });
+  expect(resolveSessionRowContext({}, { tokens: 500, contextWindow: 1000 })?.percent).toBe(50);
+  expect(resolveSessionRowContext({}, { percent: null, tokens: null, contextWindow: null })).toBeNull();
+  expect(resolveSessionRowContext({}, undefined)).toBeNull();
+});
+
+test('the activity bar visibility is a stored preference and menu commands are window events', () => {
+  const store = new Map<string, string>();
+  const events: unknown[] = [];
+  const previous = { localStorage: (globalThis as any).localStorage, window: (globalThis as any).window };
+  const localStorage = { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => store.set(key, value), removeItem: (key: string) => store.delete(key) };
+  (globalThis as any).localStorage = localStorage;
+  (globalThis as any).window = { localStorage, dispatchEvent: (event: any) => { events.push([event.type, event.detail]); return true; } };
+  try {
+    expect(readActivityBarHidden()).toBe(false);
+    store.set(ACTIVITY_BAR_HIDDEN_STORAGE_KEY, 'true');
+    expect(readActivityBarHidden()).toBe(true);
+    dispatchWorkbenchCommand('view', { view: 'explorer' });
+    dispatchWorkbenchCommand('activity-bar');
+    expect(events).toEqual([[WORKBENCH_COMMAND_EVENT, { view: 'explorer', command: 'view' }], [WORKBENCH_COMMAND_EVENT, { command: 'activity-bar' }]]);
+  } finally {
+    (globalThis as any).localStorage = previous.localStorage;
+    (globalThis as any).window = previous.window;
+  }
+});
+
+test('the live turn posts as the latest answering agent, else the default agent', () => {
+  expect(resolveLiveAgentId([{ data: { agent_id: 'default' } }, { data: {} }, { data: { agent_id: 'scout' } }, { data: {} }])).toBe('scout');
+  expect(resolveLiveAgentId([{ data: {} }], { default: { name: 'Smith' } })).toBe('default');
+  expect(resolveLiveAgentId([], {})).toBeNull();
+});

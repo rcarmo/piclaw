@@ -17,6 +17,7 @@ import { renderDisclosureTriangle } from '../ui/disclosure-triangle.js';
 import { attachHeaderAnchor } from '../ui/scroll-anchor.js';
 import { copyTextToClipboard } from './post-runtime-safety.js';
 import { highlightCodeToHtml } from '../utils/code-highlighting.js';
+import { getAvatarInfo } from '../ui/agent-utils.js';
 
 /** The server flags durable replies, whose committed turn can be read on demand. */
 export function hasTurnActivity(post) {
@@ -431,7 +432,14 @@ function parseTime(value) {
 // Expanded/collapsed carries across turns within this page.
 let liveExpandedPreference = false;
 
-export function LiveTurnActivity({ chatJid, status, draft, thought, turnId }) {
+/**
+ * The running turn at the end of the timeline, posted as the agent: its avatar
+ * and name, the "Working · elapsed" disclosure and, beneath them, the agent
+ * status line (tool icon, git branch, hints and elapsed time) that used to
+ * float above the compose box. A pending approval, intent or error keeps the
+ * block (and its status line) visible between turns.
+ */
+export function LiveTurnActivity({ chatJid, status, draft, thought, turnId, statusPane = null, statusVisible = false, agentName = '', agentAvatarUrl = null }) {
     const active = isLiveTurnActive(status, draft, thought);
     const [expanded, setExpanded] = useState(liveExpandedPreference);
     const [activity, setActivity] = useState(null);
@@ -464,11 +472,13 @@ export function LiveTurnActivity({ chatJid, status, draft, thought, turnId }) {
         try { return { __html: renderMarkdown(draftText.replace(/<\/?internal>/gi, ''), null) }; } catch { return null; }
     }, [draftText]);
 
-    if (!active) return null;
+    if (!active && !(statusPane && statusVisible)) return null;
 
     const startedAt = parseTime(status?.started_at) ?? firstSeen.current.at;
     const elapsed = formatActivityDuration(Math.max(0, now - startedAt));
-    const current = typeof status?.title === 'string' && status.type !== 'thinking' ? status.title : '';
+    // The status line beneath carries the current tool; the header only repeats it without one.
+    const current = !statusPane && typeof status?.title === 'string' && status.type !== 'thinking' ? status.title : '';
+    const avatar = getAvatarInfo(agentName, agentAvatarUrl, true);
     const liveOutputs = new Map();
     if (status?.tool_call_id && (status?.output_preview || status?.outputPreview)) liveOutputs.set(status.tool_call_id, status.output_preview || status.outputPreview);
     for (const tool of status?.active_tools || []) if (tool?.tool_call_id && tool.output_preview) liveOutputs.set(tool.tool_call_id, tool.output_preview);
@@ -482,10 +492,13 @@ export function LiveTurnActivity({ chatJid, status, draft, thought, turnId }) {
     const detailId = `turn-activity-live-${String(turnId || 'current').replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 
     return html`
-        <div class="post agent-post turn-activity-live" aria-live="off">
-            <div class="post-avatar turn-activity-live-avatar" aria-hidden="true"><span class="turn-activity-live-dot"></span></div>
+        <div class=${`post agent-post turn-activity-live${active ? ' is-active' : ''}`} aria-live="off">
+            <div class=${`post-avatar agent-avatar turn-activity-live-avatar${avatar.image ? ' has-image' : ''}`} aria-hidden="true" style=${avatar.image ? 'background-color: transparent' : `background-color: ${avatar.color}`}>
+                ${avatar.image ? html`<img src=${avatar.image} alt="" />` : avatar.letter}
+            </div>
             <div class="post-body">
-                <div class=${`turn-activity is-live${expanded ? ' is-expanded' : ''}${activity?.errors ? ' has-errors' : ''}`}>
+                ${agentName && html`<div class="post-meta turn-activity-live-meta"><span class="post-author">${agentName}</span></div>`}
+                ${active && html`<div class=${`turn-activity is-live${expanded ? ' is-expanded' : ''}${activity?.errors ? ' has-errors' : ''}`}>
                     <button type="button" class="turn-activity-header" onClick=${toggle} aria-expanded=${expanded ? 'true' : 'false'} aria-controls=${detailId}>
                         <span class="turn-activity-toggle" aria-hidden="true">${renderDisclosureTriangle(expanded ? 'down' : 'right')}</span>
                         <span class="turn-activity-label">Working · ${elapsed}</span>
@@ -503,7 +516,8 @@ export function LiveTurnActivity({ chatJid, status, draft, thought, turnId }) {
                             ${!activity && html`<p class="turn-activity-note">Loading…</p>`}
                         `}
                     </div>
-                </div>
+                </div>`}
+                ${statusPane && html`<div class="turn-activity-live-status">${statusPane}</div>`}
                 ${renderedDraft && html`<div class="post-content turn-activity-live-draft" dangerouslySetInnerHTML=${renderedDraft}></div>`}
             </div>
         </div>

@@ -55,6 +55,11 @@ browserTest('the Plan pane shows progress, edits, saves, resets and submits for 
     expect(await page.locator('.plan-pane-item.in_progress .plan-pane-item-step').textContent()).toBe('Build the pane');
     expect(await page.locator('.plan-pane-progress').getAttribute('aria-valuenow')).toBe('33');
     expect((await page.locator('.plan-pane-chat').textContent())?.trim()).toBe('web:ops');
+    // The plan actions sit at the bottom of the pane, just above its status line.
+    const items = (await page.locator('.plan-pane-items').boundingBox())!, toolbar = (await page.locator('.plan-pane-toolbar').boundingBox())!, status = (await page.locator('.plan-pane-status').boundingBox())!, pane = (await page.locator('.plan-pane').boundingBox())!;
+    expect(toolbar.y).toBeGreaterThanOrEqual(items.y + items.height - 1);
+    expect(toolbar.y + toolbar.height).toBeLessThanOrEqual(status.y + 1);
+    expect(status.y + status.height).toBeGreaterThanOrEqual(pane.y + pane.height - 1);
 
     await page.getByRole('button', { name: 'Edit' }).click();
     await page.locator('.plan-pane-editor').fill('- [x] Inspect\n- [x] Build the pane\n- [-] Test');

@@ -25,3 +25,12 @@ test('loaded nodes flatten to tree paths, with placeholders only for unloaded no
   expect(isPlaceholderPath('notes/today.md')).toBe(false);
   expect(buildTreePaths(null)).toEqual({ paths: [], counts: new Map() });
 });
+
+import { WORKSPACE_TREE_CSS } from '../../web/src/workspace-tree/pierre-tree.js';
+
+test('the tree draws folder icons (closed and open) and uses the side bar width', () => {
+  expect(WORKSPACE_TREE_CSS).toContain('[data-item-type="folder"] [data-item-section="content"]::before');
+  expect(WORKSPACE_TREE_CSS).toContain('[data-item-type="folder"][aria-expanded="true"]');
+  expect(WORKSPACE_TREE_CSS).toContain('--trees-padding-inline-override: 4px');
+  expect(WORKSPACE_TREE_CSS).toMatch(/mask: url\("data:image\/svg\+xml,/);
+});
