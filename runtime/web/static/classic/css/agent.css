@@ -1974,10 +1974,21 @@
     min-width: 0;
 }
 
+/* A zero basis keeps a long title from pushing the stop button onto a line of
+   its own; only the stop confirmation wraps below the header. */
 .turn-activity-tool-row > .turn-activity-tool-header {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     width: auto;
     min-width: 0;
+}
+
+/* Highlight the whole row, stop button included, rather than the header alone. */
+.turn-activity-tool-row:has(> :is(.turn-activity-tool-header, .turn-activity-stop):hover) {
+    background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+}
+
+.turn-activity-tool-row > .turn-activity-tool-header:hover {
+    background: transparent;
 }
 
 .turn-activity-stop {
@@ -1985,9 +1996,9 @@
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
-    width: 26px;
-    height: 26px;
-    margin-right: 6px;
+    width: 22px;
+    height: 22px;
+    margin-right: 4px;
     padding: 0;
     color: var(--danger-color, #dc2626);
     background: transparent;
