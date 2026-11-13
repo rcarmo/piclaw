@@ -324,6 +324,12 @@ export function SystemMetersHud({ mode = 'overlay' }) {
         ? 'Show system meters'
         : (loading ? 'Updating system meters… Click to collapse.' : 'System meters — click to collapse.');
 
+    // In the side bar the meters always show full rows and are switched on and
+    // off only from the activity bar, so their readings are not collapse buttons.
+    const inSidebar = mode === 'sidebar';
+    const compactLayout = isNarrowLayout && !inSidebar;
+    const Row = inSidebar ? 'div' : 'button';
+
     const handleToggleCollapsed = (event) => {
         event?.stopPropagation?.();
         const nextCollapsed = !collapsed;
@@ -332,58 +338,60 @@ export function SystemMetersHud({ mode = 'overlay' }) {
         applyMetersCollapsed(nextCollapsed);
     };
 
+    const rowProps = inSidebar ? {} : { type: 'button', 'aria-label': title, 'aria-expanded': 'true', onClick: handleToggleCollapsed };
+
     return html`
         <div class=${`system-meters-hud system-meters-hud-${mode}${collapsed ? ' is-collapsed' : ''}`} aria-live="polite">
             <div class="system-meters-card" role="group" aria-label="System meters">
                 ${collapsed
                     ? html`<button class="system-meters-meter-button system-meters-collapse-tab" type="button" title=${title} aria-label=${title} aria-expanded="false" onClick=${handleToggleCollapsed}>${renderDisclosureTriangle('left')}</button>`
-                    : isNarrowLayout
+                    : compactLayout
                         ? html`<div class="system-meters-compact-summary">
                             <button class="system-meters-meter-button system-meters-compact-system" type="button" title=${title} aria-label=${title} aria-expanded="true" onClick=${handleToggleCollapsed}>${compactSummary}</button>
                             <${GpuMeterRows} meters=${gpuMeters} compact=${true} openGpuId=${openGpuId} onOpen=${handleGpuOpen} />
                         </div>`
                         : html`
-                            ${metrics.cpu_percent !== null && html`<button class="system-meters-meter-button system-meters-row cpu" type="button" aria-label=${title} aria-expanded="true" onClick=${handleToggleCollapsed}>
+                            ${metrics.cpu_percent !== null && html`<${Row} class="system-meters-meter-button system-meters-row cpu" ...${rowProps}>
                                 <span class="system-meters-label">CPU</span>
                                 <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true">
                                     <path vector-effect="non-scaling-stroke" d=${cpuPath}></path>
                                 </svg>
                                 <span class="system-meters-value">${formatPercent(metrics.cpu_percent)}</span>
-                            </button>`}
-                            ${metrics.ram_percent !== null && html`<button class="system-meters-meter-button system-meters-row ram" type="button" aria-label=${title} aria-expanded="true" onClick=${handleToggleCollapsed}>
+                            </${Row}>`}
+                            ${metrics.ram_percent !== null && html`<${Row} class="system-meters-meter-button system-meters-row ram" ...${rowProps}>
                                 <span class="system-meters-label">RAM</span>
                                 <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true">
                                     <path vector-effect="non-scaling-stroke" d=${ramPath}></path>
                                 </svg>
                                 <span class="system-meters-value">${formatPercent(metrics.ram_percent)}</span>
-                            </button>`}
+                            </${Row}>`}
                             ${showRss && html`
-                                <button class="system-meters-meter-button system-meters-row rss" type="button" aria-label=${title} aria-expanded="true" onClick=${handleToggleCollapsed}>
+                                <${Row} class="system-meters-meter-button system-meters-row rss" ...${rowProps}>
                                     <span class="system-meters-label">RSS</span>
                                     <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true">
                                         <path vector-effect="non-scaling-stroke" d=${rssPath}></path>
                                     </svg>
                                     <span class="system-meters-value">${formatBytesCompact(currentRssBytes)}</span>
-                                </button>
+                                </${Row}>
                             `}
                             ${gpuMeters.length > 0 && html`<${GpuMeterRows} meters=${gpuMeters} openGpuId=${openGpuId} onOpen=${handleGpuOpen} />`}
                             ${showBufferCache && html`
-                                <button class="system-meters-meter-button system-meters-row buf" type="button" aria-label=${title} aria-expanded="true" onClick=${handleToggleCollapsed}>
+                                <${Row} class="system-meters-meter-button system-meters-row buf" ...${rowProps}>
                                     <span class="system-meters-label">BUF</span>
                                     <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true">
                                         <path vector-effect="non-scaling-stroke" d=${bufferCachePath}></path>
                                     </svg>
                                     <span class="system-meters-value">${formatBytesCompact(metrics.buffer_cache_bytes)}</span>
-                                </button>
+                                </${Row}>
                             `}
                             ${showSwap && html`
-                                <button class="system-meters-meter-button system-meters-row swap" type="button" aria-label=${title} aria-expanded="true" onClick=${handleToggleCollapsed}>
+                                <${Row} class="system-meters-meter-button system-meters-row swap" ...${rowProps}>
                                     <span class="system-meters-label">SWP</span>
                                     <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true">
                                         <path vector-effect="non-scaling-stroke" d=${swapPath}></path>
                                     </svg>
                                     <span class="system-meters-value">${formatPercent(metrics.swap_percent)}</span>
-                                </button>
+                                </${Row}>
                             `}
                         `}
             </div>

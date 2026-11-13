@@ -17,6 +17,11 @@
     --piclaw-shell-inset-right: 0px;
     --workbench-activity-width: 48px;
     --workbench-statusbar-height: 24px;
+    /* The home indicator on iPhone and iPad home-screen apps is a 5px bar about
+       8px above the bottom edge, so a status bar row only needs to clear the
+       top 12px of the inset; a full inset left a 20-34px blank band under it. */
+    --workbench-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+    --workbench-statusbar-inset: max(0px, calc(var(--workbench-safe-area-bottom) - 12px));
 }
 
 .app-shell {
@@ -25,7 +30,7 @@
 
 /* The status bar takes the bottom row. */
 .app-shell:has(> .workbench-statusbar) {
-    height: calc(100% - var(--workbench-statusbar-height) - env(safe-area-inset-bottom, 0px));
+    height: calc(100% - var(--workbench-statusbar-height) - var(--workbench-statusbar-inset));
 }
 
 /* Panes sized to the viewport stop at the status bar. */
@@ -163,8 +168,13 @@
 
 .workbench-sidebar-footer {
     flex: 0 0 auto;
-    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+    padding: 6px 8px;
     border-top: 1px solid var(--border-color);
+}
+
+/* The docked side bar ends above the status bar; only the drawer reaches the bottom edge. */
+.workbench-sidebar.drawer .workbench-sidebar-footer {
+    padding-bottom: calc(6px + var(--workbench-safe-area-bottom));
 }
 
 /* ── Sessions view actions ── */
@@ -249,9 +259,10 @@
         box-shadow: none;
     }
 
-    /* Touch keeps the button visible; leave it room at the end of the row. */
-    .sessions-sidebar-open {
-        padding-right: 30px;
+    /* Touch keeps the button visible; leave it room at the end of the first
+       line, where the age and context ring sit. The preview keeps its width. */
+    .sessions-sidebar-open > .sessions-sidebar-line {
+        padding-right: 24px;
     }
 }
 
@@ -582,7 +593,7 @@
     align-items: center;
     gap: 8px;
     height: var(--workbench-statusbar-height);
-    padding: 0 8px env(safe-area-inset-bottom, 0px);
+    padding: 0 8px var(--workbench-statusbar-inset);
     box-sizing: content-box;
     border-top: 1px solid var(--border-color);
     background: var(--bg-secondary);
@@ -692,11 +703,26 @@
     height: 10px;
 }
 
+/* The side bar foot already frames the meters; no card outline of their own. */
 .system-meters-hud-sidebar .system-meters-card {
     width: 100%;
     min-width: 0;
     box-sizing: border-box;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
     box-shadow: none;
+}
+
+.system-meters-hud-sidebar .system-meters-card:hover {
+    transform: none;
+}
+
+.system-meters-hud-sidebar .system-meters-row {
+    cursor: default;
 }
 
 /* In the side bar the plots take whatever width the side bar has. */
