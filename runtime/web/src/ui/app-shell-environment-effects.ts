@@ -11,7 +11,7 @@ import {
 import { initTheme, reapplyStoredTheme } from './theme.js';
 import { useTimestampRefresh } from './app-helpers.js';
 import { watchReturnToApp, watchStandaloneWebAppMode } from './app-resume.js';
-import { installStandaloneMobileViewportFix } from './mobile-viewport.js';
+import { installIOSBrowserKeyboardViewportFix, installStandaloneMobileViewportFix } from './mobile-viewport.js';
 import { BTW_SESSION_KEY } from './app-shell-state.js';
 import { formatSessionBrowserTitle } from './browser-title.js';
 
@@ -189,6 +189,7 @@ export function useAppShellEnvironmentEffects(options: UseAppShellEnvironmentEff
   }, [setWorkspaceOpen]);
 
   useEffect(() => installStandaloneMobileViewportFix(), []);
+  useEffect(() => installIOSBrowserKeyboardViewportFix(), []);
 
   useEffect(() => {
     persistBtwSession(btwSession);

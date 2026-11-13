@@ -377,3 +377,74 @@ export function installStandaloneMobileViewportFix(runtime = {}) {
     doc.documentElement?.removeAttribute?.('data-iphone-standalone-compose-inset');
   };
 }
+
+/**
+ * iPad and iPhone Safari in browser mode (not installed to the home screen).
+ * The software keyboard, or the shortcut bar shown with a hardware keyboard,
+ * shrinks the visual viewport but not 100dvh, so Safari pans the page up to
+ * keep the focused field visible. That hides the top of the app and leaves a
+ * blank band under the status bar that the whole page can be scrolled into.
+ * While a text field is focused, size the app to the visible area and undo the
+ * panning; on blur, hand height back to the stylesheet's 100dvh.
+ */
+export function shouldUseIOSBrowserKeyboardViewportFix(runtime: { window?: any; navigator?: any } = {}) {
+  return isIOSStandaloneRuntime(runtime) && !isStandaloneWebAppMode(runtime);
+}
+
+export function installIOSBrowserKeyboardViewportFix(runtime: { window?: any; document?: any; navigator?: any } = {}) {
+  if (!shouldUseIOSBrowserKeyboardViewportFix(runtime)) return () => {};
+  const win = runtime.window ?? (typeof window !== 'undefined' ? window : null);
+  const doc = runtime.document ?? (typeof document !== 'undefined' ? document : null);
+  const root = doc?.documentElement;
+  if (!win || !root) return () => {};
+
+  let active = false;
+  const timers = new Set();
+  const resetScroll = () => {
+    try {
+      win.scrollTo?.(0, 0);
+      if (doc.scrollingElement) doc.scrollingElement.scrollTop = 0;
+      root.scrollTop = 0;
+      if (doc.body) doc.body.scrollTop = 0;
+    } catch (error) {
+      console.debug('[mobile-viewport] Ignoring scroll reset failure.', error);
+    }
+  };
+  const sync = () => {
+    const height = Math.round(Number(win.visualViewport?.height || 0));
+    active = isTextEntryFocused(doc) && height > 0;
+    if (active) {
+      root.style.setProperty('--app-height', `${height}px`);
+      root.setAttribute?.('data-ios-keyboard-viewport', '1');
+      resetScroll();
+    } else {
+      root.style.removeProperty?.('--app-height');
+      root.removeAttribute?.('data-ios-keyboard-viewport');
+    }
+  };
+  // The keyboard animates in and out after focus changes; settle a few times.
+  const settle = () => {
+    sync();
+    for (const delay of [50, 150, 300, 600]) {
+      const timer = win.setTimeout?.(() => { timers.delete(timer); sync(); }, delay);
+      if (timer) timers.add(timer);
+    }
+  };
+  const onViewportScroll = () => { if (active) resetScroll(); };
+
+  const viewport = win.visualViewport;
+  doc.addEventListener('focusin', settle, true);
+  doc.addEventListener('focusout', settle, true);
+  viewport?.addEventListener?.('resize', sync);
+  viewport?.addEventListener?.('scroll', onViewportScroll);
+  return () => {
+    for (const timer of timers) win.clearTimeout?.(timer);
+    timers.clear();
+    doc.removeEventListener('focusin', settle, true);
+    doc.removeEventListener('focusout', settle, true);
+    viewport?.removeEventListener?.('resize', sync);
+    viewport?.removeEventListener?.('scroll', onViewportScroll);
+    root.style.removeProperty?.('--app-height');
+    root.removeAttribute?.('data-ios-keyboard-viewport');
+  };
+}

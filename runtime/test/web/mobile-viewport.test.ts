@@ -11,7 +11,9 @@ function readCssRule(css: string, selector: string): string {
 }
 
 import {
+  installIOSBrowserKeyboardViewportFix,
   installStandaloneMobileViewportFix,
+  shouldUseIOSBrowserKeyboardViewportFix,
   readViewportHeight,
   shouldUseStandaloneMobileViewportFix,
   syncStandaloneMobileViewport,
@@ -435,5 +437,79 @@ test('installStandaloneMobileViewportFix restores standalone 100vh on focusout a
 
   expect(cssVars.get('--app-height')).toBe('100vh');
 
+  dispose();
+});
+
+// iPad and iPhone Safari (browser mode, not installed): the keyboard or the
+// hardware-keyboard shortcut bar shrinks the visual viewport but not 100dvh, so
+// Safari pans the page up and leaves a blank band under the status bar. While a
+// text field is focused the app is sized to the visible area instead.
+function fakeIOSBrowser({ height = 860, focused = true } = {}) {
+  const cssVars = new Map<string, string>();
+  const attrs = new Map<string, string>();
+  type Listener = () => void;
+  const listeners = new Map<string, Set<Listener>>();
+  const on = (type: string, listener: Listener) => { const set = listeners.get(type) ?? new Set<Listener>(); set.add(listener); listeners.set(type, set); };
+  const off = (type: string, listener: Listener) => { listeners.get(type)?.delete(listener); };
+  const scrolls: number[] = [];
+  const documentElement = {
+    style: { setProperty: (n: string, v: string) => cssVars.set(n, v), removeProperty: (n: string) => cssVars.delete(n) },
+    setAttribute: (n: string, v: string) => attrs.set(n, v), removeAttribute: (n: string) => attrs.delete(n),
+    scrollTop: 0, scrollLeft: 0,
+  };
+  const document = {
+    documentElement,
+    activeElement: focused ? ({ tagName: 'TEXTAREA', type: 'textarea' } as any) : null,
+    addEventListener: (t: string, l: Listener) => on(`doc:${t}`, l), removeEventListener: (t: string, l: Listener) => off(`doc:${t}`, l),
+  };
+  const window = {
+    matchMedia: () => ({ matches: false }),
+    visualViewport: { height, addEventListener: (t: string, l: Listener) => on(`vv:${t}`, l), removeEventListener: (t: string, l: Listener) => off(`vv:${t}`, l) },
+    innerHeight: 950,
+    addEventListener: (t: string, l: Listener) => on(`win:${t}`, l), removeEventListener: (t: string, l: Listener) => off(`win:${t}`, l),
+    requestAnimationFrame: (cb: () => void) => { cb(); return 1; }, cancelAnimationFrame: () => {},
+    setTimeout: () => 0, clearTimeout: () => {},
+    scrollTo: (_x: number, y: number) => scrolls.push(y),
+  };
+  const navigator = { standalone: false, userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15', platform: 'MacIntel', maxTouchPoints: 5 };
+  const dispatch = (key: string) => { for (const l of listeners.get(key) ?? []) l(); };
+  return { cssVars, attrs, scrolls, document, window, navigator, dispatch, listeners };
+}
+
+test('the iOS browser keyboard viewport fix applies to iPad/iPhone Safari only, not installed apps, Android or desktops', () => {
+  const ipad = fakeIOSBrowser();
+  expect(shouldUseIOSBrowserKeyboardViewportFix({ window: ipad.window, navigator: ipad.navigator })).toBe(true);
+  expect(shouldUseIOSBrowserKeyboardViewportFix({ window: { matchMedia: () => ({ matches: true }) }, navigator: { ...ipad.navigator, standalone: true } })).toBe(false);
+  expect(shouldUseIOSBrowserKeyboardViewportFix({ window: ipad.window, navigator: { userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) Chrome/124 Mobile Safari/537.36', maxTouchPoints: 5 } })).toBe(false);
+  expect(shouldUseIOSBrowserKeyboardViewportFix({ window: ipad.window, navigator: { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)', platform: 'MacIntel', maxTouchPoints: 0 } })).toBe(false);
+});
+
+test('iPad Safari sizes the app to the visible area while a text field is focused and stops the page panning', () => {
+  const env = fakeIOSBrowser({ height: 858 });
+  const dispose = installIOSBrowserKeyboardViewportFix({ window: env.window, document: env.document, navigator: env.navigator });
+  env.dispatch('doc:focusin');
+  expect(env.cssVars.get('--app-height')).toBe('858px');
+  expect(env.attrs.get('data-ios-keyboard-viewport')).toBe('1');
+  expect(env.scrolls.length).toBeGreaterThan(0);
+  // Safari panning the visual viewport while the keyboard is up is undone.
+  env.scrolls.length = 0;
+  env.dispatch('vv:scroll');
+  expect(env.scrolls).toEqual([0]);
+  // The keyboard closing restores the stylesheet's 100dvh and normal panning.
+  env.document.activeElement = null;
+  env.dispatch('doc:focusout');
+  expect(env.cssVars.has('--app-height')).toBe(false);
+  expect(env.attrs.has('data-ios-keyboard-viewport')).toBe(false);
+  env.scrolls.length = 0;
+  env.dispatch('vv:scroll');
+  expect(env.scrolls).toEqual([]);
+  dispose();
+  expect([...env.listeners.values()].every((set) => set.size === 0)).toBe(true);
+});
+
+test('the iOS browser keyboard viewport fix is inert elsewhere', () => {
+  const env = fakeIOSBrowser();
+  const dispose = installIOSBrowserKeyboardViewportFix({ window: env.window, document: env.document, navigator: { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)', platform: 'MacIntel', maxTouchPoints: 0 } });
+  expect(env.listeners.size).toBe(0);
   dispose();
 });
