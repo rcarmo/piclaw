@@ -73,21 +73,22 @@ optionalBrowserTest("desktop session picker has stable geometry, one-line header
     expect(await row.locator(".compose-session-row-jid").textContent()).toBe("web:root-1:branch:8");
     expect(await row.locator(".compose-session-row-metrics").textContent()).toBe(" · anthropic/claude · 42K / 128K (33% context)");
     expect((await row.textContent())?.match(/web:root-1:branch:8/g)).toHaveLength(1);
-    await pin.click();
+    // Running sessions stay under Active even when pinned; pin an idle one to see the Pinned section.
+    await page.getByRole("button", { name: "Pin @session-07" }).click();
     expect(await page.locator("#session-picker-action").textContent()).toBe("none");
     expect(await page.locator(".compose-session-section-heading").allTextContents()).toContain("Pinned");
-    expect(await page.getByRole("button", { name: "Unpin @session-08" }).getAttribute("aria-pressed")).toBe("true");
-    await page.waitForFunction((expected) => document.querySelector('[role="listbox"]')?.getAttribute("aria-activedescendant")?.includes(expected), encodeURIComponent("web:root-1:branch:8"));
-    expect(await page.evaluate(() => localStorage.getItem("piclaw:session-picker-preferences:v1"))).toContain("web:root-1:branch:8");
+    expect(await page.getByRole("button", { name: "Unpin @session-07" }).getAttribute("aria-pressed")).toBe("true");
+    await page.waitForFunction((expected) => document.querySelector('[role="listbox"]')?.getAttribute("aria-activedescendant")?.includes(expected), encodeURIComponent("web:root-1:branch:7"));
+    expect(await page.evaluate(() => localStorage.getItem("piclaw:session-picker-preferences:v1"))).toContain("web:root-1:branch:7");
     await page.reload({ waitUntil: "networkidle" });
     await page.getByTestId("session-switcher").click();
-    expect(await page.getByRole("button", { name: "Unpin @session-08" }).count()).toBe(1);
+    expect(await page.getByRole("button", { name: "Unpin @session-07" }).count()).toBe(1);
     expect(await page.getByRole("button", { name: "New branch" }).count()).toBe(1);
     expect(await page.locator('.compose-model-popup-actions button[title="Rename the current session"]').count()).toBe(1);
     const search = page.locator(".compose-session-search");
     expect(await search.evaluate(node => document.activeElement === node)).toBe(true);
-    await search.fill("session-08");
-    const pinnedGeometry = await page.getByRole("button", { name: "Unpin @session-08" }).locator("..").evaluate(row => {
+    await search.fill("session-07");
+    const pinnedGeometry = await page.getByRole("button", { name: "Unpin @session-07" }).locator("..").evaluate(row => {
       const bounds = row.getBoundingClientRect();
       const heading = [...document.querySelectorAll<HTMLElement>(".compose-session-section-heading")].find(node => node.textContent === "Pinned")!;
       return { rowTop: bounds.top, headingBottom: heading.getBoundingClientRect().bottom, position: getComputedStyle(heading).position };
