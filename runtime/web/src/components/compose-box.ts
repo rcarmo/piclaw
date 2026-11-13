@@ -3443,6 +3443,20 @@ export function ComposeBox({
         if (!statusbarSlot) return;
         render(composeMetaRow, statusbarSlot);
     });
+    // With the model hint in the status bar, the picker opens above the hint.
+    const [modelPopupAnchor, setModelPopupAnchor] = useState(null);
+    useLayoutEffect(() => {
+        if (!showModelPopup || !statusbarSlot) { setModelPopupAnchor(null); return undefined; }
+        const measure = () => {
+            const rect = modelHintRef.current?.getBoundingClientRect?.();
+            const bar = statusbarSlot.closest?.('.workbench-statusbar')?.getBoundingClientRect?.();
+            if (!rect || !bar) return;
+            setModelPopupAnchor({ left: Math.round(rect.left), bottom: Math.round(window.innerHeight - bar.top + 6) });
+        };
+        measure();
+        window.addEventListener('resize', measure);
+        return () => window.removeEventListener('resize', measure);
+    }, [showModelPopup, statusbarSlot]);
     useEffect(() => () => { if (statusbarSlot) render(null, statusbarSlot); }, [statusbarSlot]);
 
     return html`
@@ -3677,6 +3691,7 @@ export function ComposeBox({
                     `}
                     ${showModelPopup && !searchMode && html`
                         <${ClassicModelPicker}
+                            anchor=${modelPopupAnchor}
                             entries=${modelOptions}
                             loading=${loadingModels}
                             switching=${switchingModel}

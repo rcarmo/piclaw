@@ -481,4 +481,29 @@ for (const engine of ['chromium', 'webkit']) {
     }, 30000);
   }
 
+  for (const [width, height] of [[1440, 900], [820, 1100]]) {
+    browserTest(`${engine} ${width}px: context sits after the model stats and the model picker opens from the status bar`, async () => {
+      const { page, errors } = await open(engine, width, height);
+      try {
+        await page.waitForSelector('.workbench-statusbar .compose-context-pie', { timeout: 5000 });
+        const box = async (s: string) => (await page.locator(s).first().boundingBox())!;
+        const hint = await box('.workbench-statusbar .compose-model-hint');
+        const stats = await page.locator('.workbench-statusbar .compose-model-usage-hint').count() ? await box('.workbench-statusbar .compose-model-usage-hint') : hint;
+        const pie = await box('.workbench-statusbar .compose-context-pie');
+        // Model, then its usage, then the context indicator.
+        expect(pie.x).toBeGreaterThanOrEqual(Math.max(hint.x + hint.width, stats.x + stats.width) - 1);
+        await page.locator('.workbench-statusbar .compose-model-hint').click();
+        await page.waitForSelector('.compose-model-catalogue');
+        const popup = await box('.compose-model-catalogue'), bar = await box('.workbench-statusbar');
+        // The picker opens just above its trigger in the status bar, not over the compose box.
+        expect(Math.round(bar.y - (popup.y + popup.height))).toBeGreaterThanOrEqual(2);
+        expect(Math.round(bar.y - (popup.y + popup.height))).toBeLessThanOrEqual(10);
+        expect(Math.abs(popup.x - Math.max(12, hint.x))).toBeLessThanOrEqual(1);
+        expect(popup.x + popup.width).toBeLessThanOrEqual(width);
+        expect(popup.y).toBeGreaterThanOrEqual(0);
+        expect(errors).toEqual([]);
+      } finally { await page.close(); }
+    }, 30000);
+  }
+
 }

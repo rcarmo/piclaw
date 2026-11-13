@@ -22,6 +22,7 @@ function formatModelBadges(entry) {
 }
 
 export function ClassicModelPicker({
+    anchor = null,
     entries,
     loading = false,
     switching = false,
@@ -147,7 +148,8 @@ export function ClassicModelPicker({
 
     return html`
         <div
-            class="compose-model-popup compose-model-catalogue"
+            class=${`compose-model-popup compose-model-catalogue${anchor ? ' is-statusbar-anchored' : ''}`}
+            style=${anchor ? `--model-popup-left: ${anchor.left}px; --model-popup-bottom: ${anchor.bottom}px` : undefined}
             data-compose-model-catalogue="true"
             ref=${rootRef}
             onKeyDown=${handleKeyboard}

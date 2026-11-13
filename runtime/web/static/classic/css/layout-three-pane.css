@@ -643,13 +643,21 @@
     align-self: center;
 }
 
-.workbench-statusbar .compose-context-pie {
-    order: -1;
-}
-
 .workbench-statusbar .compose-context-pie svg {
     width: 14px;
     height: 14px;
+}
+
+/* The model picker opens just above its trigger in the status bar rather than
+   over the compose box. Phones keep the full-screen picker sheet. */
+@media (min-width: 640px) {
+    .compose-model-catalogue.is-statusbar-anchored {
+        position: fixed;
+        left: clamp(12px, var(--model-popup-left, 12px), calc(100vw - min(680px, 100vw - 24px) - 12px));
+        right: auto;
+        bottom: var(--model-popup-bottom, 30px);
+        max-height: min(70vh, 620px, calc(100vh - var(--model-popup-bottom, 30px) - 12px));
+    }
 }
 
 /* Phones: model and context only; the meters live in the side bar drawer. */
