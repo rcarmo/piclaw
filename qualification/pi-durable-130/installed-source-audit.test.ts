@@ -55,10 +55,15 @@ test('installer preflight shares exact native package proof before activation', 
 });
 
 test('actual SDK Harness emits native spans through the add-on adapter without content or execution ownership', async()=>{
+ const installed=fixture();
+ try{
+ const {installApprovedAddonsFixture}=await import('./installed-addons-fixture.ts');
+ installApprovedAddonsFixture(installed.cwd);
+ expect(auditInstalledApplicationAddonSources(installed.cwd).profiles.length).toBe(23);
  const {openFixture,context}=await import('./src/fixture.ts');
  const {Harness,MemoryStorage}=await import('../../runtime/durable-engine/qualification/durable.ts');
  const {pathToFileURL}=await import('node:url');
- const helper=pathToFileURL(join(source!,'addons/observability/native-telemetry.ts')).href;
+ const helper=pathToFileURL(join(installed.cwd,'.pi/extensions/node_modules/@rcarmo/piclaw-addon-observability/native-telemetry.ts')).href;
  const {createOtelTelemetryContext}=await import(helper);
  const api=await import(import.meta.resolve('@opentelemetry/api',helper));
  const sdk=await import(import.meta.resolve('@opentelemetry/sdk-trace-base',helper));
@@ -78,4 +83,5 @@ test('actual SDK Harness emits native spans through the add-on adapter without c
  expect(runtime).toContain('telemetry: observability?.addon.createNativeTelemetryContext()');
  expect(runtime).toContain('observability?.addon.shutdownObservabilityRuntime()');
  await provider.shutdown();
+ }finally{cleanup(installed.cwd);}
 });
