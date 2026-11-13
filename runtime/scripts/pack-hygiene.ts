@@ -9,6 +9,7 @@ export const REQUIRED_PACK_ENTRIES = [
   "runtime/durable-engine/bun.lock",
   "runtime/durable-engine/src/default-application-runtime.ts",
   "runtime/durable-engine/src/legacy-import-schema.ts",
+  "runtime/scripts/pi-cli.ts",
   "runtime/scripts/lib/sqlite-session-archive.ts",
   "runtime/scripts/import-jsonl-sessions.ts",
   "runtime/scripts/benchmark-sqlite-session-layouts.ts",

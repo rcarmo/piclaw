@@ -26,10 +26,11 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { pipeline } from "node:stream/promises";
+import { resolvePiCli } from "../../runtime/scripts/pi-cli.ts";
 
 interface Options {
   outputDir: string;
@@ -164,27 +165,27 @@ function findPackedTarball(packDir: string): string {
 }
 
 function buildUnixPiclawLauncherScript(): string {
-  return `#!/usr/bin/env sh\nset -eu\nSELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nROOT=$(CDPATH= cd -- "$SELF_DIR/.." && pwd)\nexport BUN_INSTALL="$ROOT/bun"\nexport PATH="$ROOT/bun/bin:$ROOT/app/node_modules/.bin:$PATH"\nexec "$ROOT/bun/bin/bun" "$ROOT/app/runtime/src/index.ts" "$@"\n`;
+  return `#!/usr/bin/env sh\nset -eu\nSELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nROOT=$(CDPATH= cd -- "$SELF_DIR/.." && pwd)\nexport BUN_INSTALL="$ROOT/bun"\nexport PATH="$ROOT/bun/bin:$ROOT/bin:$ROOT/app/node_modules/.bin:$PATH"\nexec "$ROOT/bun/bin/bun" "$ROOT/app/runtime/src/index.ts" "$@"\n`;
 }
 
 function buildUnixPiLauncherScript(): string {
-  return `#!/usr/bin/env sh\nset -eu\nSELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nROOT=$(CDPATH= cd -- "$SELF_DIR/.." && pwd)\nexport BUN_INSTALL="$ROOT/bun"\nexport PATH="$ROOT/bun/bin:$ROOT/app/node_modules/.bin:$PATH"\nexec "$ROOT/bun/bin/bun" "$ROOT/app/node_modules/@earendil-works/pi-coding-agent/dist/cli.js" "$@"\n`;
+  return `#!/usr/bin/env sh\nset -eu\nSELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nROOT=$(CDPATH= cd -- "$SELF_DIR/.." && pwd)\nexport BUN_INSTALL="$ROOT/bun"\nexport PATH="$ROOT/bun/bin:$ROOT/bin:$ROOT/app/node_modules/.bin:$PATH"\nexec "$ROOT/bun/bin/bun" "$ROOT/app/runtime/scripts/pi-cli.ts" "$@"\n`;
 }
 
 function buildWindowsPiclawCmdLauncher(): string {
-  return `@echo off\r\nsetlocal\r\nset "SELF_DIR=%~dp0"\r\nfor %%I in ("%SELF_DIR%..") do set "ROOT=%%~fI"\r\nset "BUN_INSTALL=%ROOT%\\bun"\r\nset "PATH=%ROOT%\\bun;%ROOT%\\app\\node_modules\\.bin;%PATH%"\r\n"%ROOT%\\bun\\bun.exe" "%ROOT%\\app\\runtime\\src\\index.ts" %*\r\n`;
+  return `@echo off\r\nsetlocal\r\nset "SELF_DIR=%~dp0"\r\nfor %%I in ("%SELF_DIR%..") do set "ROOT=%%~fI"\r\nset "BUN_INSTALL=%ROOT%\\bun"\r\nset "PATH=%ROOT%\\bun;%ROOT%\\bin;%ROOT%\\app\\node_modules\\.bin;%PATH%"\r\n"%ROOT%\\bun\\bun.exe" "%ROOT%\\app\\runtime\\src\\index.ts" %*\r\n`;
 }
 
 function buildWindowsPiCmdLauncher(): string {
-  return `@echo off\r\nsetlocal\r\nset "SELF_DIR=%~dp0"\r\nfor %%I in ("%SELF_DIR%..") do set "ROOT=%%~fI"\r\nset "BUN_INSTALL=%ROOT%\\bun"\r\nset "PATH=%ROOT%\\bun;%ROOT%\\app\\node_modules\\.bin;%PATH%"\r\n"%ROOT%\\bun\\bun.exe" "%ROOT%\\app\\node_modules\\@earendil-works\\pi-coding-agent\\dist\\cli.js" %*\r\n`;
+  return `@echo off\r\nsetlocal\r\nset "SELF_DIR=%~dp0"\r\nfor %%I in ("%SELF_DIR%..") do set "ROOT=%%~fI"\r\nset "BUN_INSTALL=%ROOT%\\bun"\r\nset "PATH=%ROOT%\\bun;%ROOT%\\bin;%ROOT%\\app\\node_modules\\.bin;%PATH%"\r\n"%ROOT%\\bun\\bun.exe" "%ROOT%\\app\\runtime\\scripts\\pi-cli.ts" %*\r\n`;
 }
 
 function buildWindowsPiclawPowerShellLauncher(): string {
-  return `$ErrorActionPreference = 'Stop'\r\n$Root = Resolve-Path (Join-Path $PSScriptRoot '..')\r\n$env:BUN_INSTALL = Join-Path $Root 'bun'\r\n$env:PATH = (Join-Path $Root 'bun') + [IO.Path]::PathSeparator + (Join-Path $Root 'app/node_modules/.bin') + [IO.Path]::PathSeparator + $env:PATH\r\n& (Join-Path $Root 'bun/bun.exe') (Join-Path $Root 'app/runtime/src/index.ts') @args\r\nexit $LASTEXITCODE\r\n`;
+  return `$ErrorActionPreference = 'Stop'\r\n$Root = Resolve-Path (Join-Path $PSScriptRoot '..')\r\n$env:BUN_INSTALL = Join-Path $Root 'bun'\r\n$env:PATH = (Join-Path $Root 'bun') + [IO.Path]::PathSeparator + (Join-Path $Root 'bin') + [IO.Path]::PathSeparator + (Join-Path $Root 'app/node_modules/.bin') + [IO.Path]::PathSeparator + $env:PATH\r\n& (Join-Path $Root 'bun/bun.exe') (Join-Path $Root 'app/runtime/src/index.ts') @args\r\nexit $LASTEXITCODE\r\n`;
 }
 
 function buildWindowsPiPowerShellLauncher(): string {
-  return `$ErrorActionPreference = 'Stop'\r\n$Root = Resolve-Path (Join-Path $PSScriptRoot '..')\r\n$env:BUN_INSTALL = Join-Path $Root 'bun'\r\n$env:PATH = (Join-Path $Root 'bun') + [IO.Path]::PathSeparator + (Join-Path $Root 'app/node_modules/.bin') + [IO.Path]::PathSeparator + $env:PATH\r\n& (Join-Path $Root 'bun/bun.exe') (Join-Path $Root 'app/node_modules/@earendil-works/pi-coding-agent/dist/cli.js') @args\r\nexit $LASTEXITCODE\r\n`;
+  return `$ErrorActionPreference = 'Stop'\r\n$Root = Resolve-Path (Join-Path $PSScriptRoot '..')\r\n$env:BUN_INSTALL = Join-Path $Root 'bun'\r\n$env:PATH = (Join-Path $Root 'bun') + [IO.Path]::PathSeparator + (Join-Path $Root 'bin') + [IO.Path]::PathSeparator + (Join-Path $Root 'app/node_modules/.bin') + [IO.Path]::PathSeparator + $env:PATH\r\n& (Join-Path $Root 'bun/bun.exe') (Join-Path $Root 'app/runtime/scripts/pi-cli.ts') @args\r\nexit $LASTEXITCODE\r\n`;
 }
 
 function buildUnixInstallScript(bundleName: string): string {
@@ -403,25 +404,13 @@ function downloadBunReleaseBinary(bunTarget: string, workdir: string): string {
   return binary;
 }
 
-function bundledPiCliPath(appDir: string): string {
-  return join(appDir, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
-}
-
-function assertBundledPiCli(appDir: string): void {
-  const piPackageJson = join(appDir, "node_modules", "@earendil-works", "pi-coding-agent", "package.json");
-  const piCli = bundledPiCliPath(appDir);
-
-  if (!existsSync(piPackageJson)) throw new Error("Portable bundle is missing @earendil-works/pi-coding-agent");
-  if (!existsSync(piCli)) throw new Error("Portable bundle is missing the Pi CLI entrypoint: node_modules/@earendil-works/pi-coding-agent/dist/cli.js");
-}
-
-export function rewriteBundledPiCliShebang(appDir: string): void {
-  const piCli = bundledPiCliPath(appDir);
-  const text = readFileSync(piCli, "utf8");
-  if (/^#!\/usr\/bin\/env bun\r?\n/.test(text)) return;
-  if (!/^#!\/usr\/bin\/env node\r?\n/.test(text)) return;
-  writeFileSync(piCli, text.replace(/^#!\/usr\/bin\/env node\r?\n/, "#!/usr/bin/env bun\n"), { mode: 0o755 });
-  chmodSync(piCli, 0o755);
+export function assertBundledPiCli(appDir: string): string {
+  if (!existsSync(join(appDir, "runtime", "scripts", "pi-cli.ts"))) {
+    throw new Error("Portable bundle is missing the Bun Pi launcher");
+  }
+  const piCli = resolvePiCli(appDir);
+  if (!existsSync(piCli)) throw new Error(`Portable bundle is missing the declared Pi CLI entrypoint: ${piCli}`);
+  return piCli;
 }
 
 function copyBundledBun(bundleDir: string, info: PlatformInfo, workdir: string): void {
@@ -439,7 +428,7 @@ function copyBundledBun(bundleDir: string, info: PlatformInfo, workdir: string):
   chmodSync(join(bunTargetDir, "bun"), 0o755);
 }
 
-function writeLaunchers(bundleDir: string, platform: PlatformInfo["platform"], bundleName: string): void {
+export function writeLaunchers(bundleDir: string, platform: PlatformInfo["platform"], bundleName: string): void {
   mkdirSync(join(bundleDir, "bin"), { recursive: true });
   if (platform === "windows") {
     writeFileSync(join(bundleDir, "bin", "piclaw.cmd"), buildWindowsPiclawCmdLauncher());
@@ -514,8 +503,7 @@ async function buildPortableArtifact(options: Options): Promise<void> {
     });
     run("bun", ["run", "scripts/postinstall.ts"], { cwd: appDir, env: installEnv });
 
-    assertBundledPiCli(appDir);
-    rewriteBundledPiCliShebang(appDir);
+    const piCli = assertBundledPiCli(appDir);
     copyBundledBun(bundleDir, info, workdir);
     renameSync(appDir, join(bundleDir, "app"));
     writeLaunchers(bundleDir, info.platform, info.bundleName);
@@ -532,7 +520,7 @@ async function buildPortableArtifact(options: Options): Promise<void> {
       bun: info.bunTarget ?? basename(process.execPath),
       bunTarget: info.bunTarget,
       launchers: info.platform === "windows" ? ["bin/piclaw.cmd", "bin/piclaw.ps1", "bin/pi.cmd", "bin/pi.ps1"] : ["bin/piclaw", "bin/pi"],
-      piCli: "app/node_modules/@earendil-works/pi-coding-agent/dist/cli.js",
+      piCli: `app/${relative(appDir, piCli).replaceAll("\\", "/")}`,
       builtAt: new Date().toISOString(),
     }, null, 2) + "\n");
 

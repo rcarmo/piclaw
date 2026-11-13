@@ -96,7 +96,12 @@ timeout -k 10s "${STATIC_TIMEOUT_SEC}s" \
     echo "=== Bun ===" && bun --version
     echo "=== Restic ===" && restic version
     echo "=== Restic Azure ===" && if command -v strings >/dev/null 2>&1; then strings "$(command -v restic)" | grep -qi azure.Config && echo "ok"; else echo "skipped (strings missing)"; fi
-    echo "=== Pi CLI ===" && test -x "$(command -v pi)" && echo "ok"
+    node_guard="$(mktemp -d)"
+    trap '\''rm -rf "$node_guard"'\'' EXIT
+    printf "#!/bin/sh\necho NODE_MUST_NOT_RUN >&2\nexit 91\n" > "$node_guard/node"
+    chmod 755 "$node_guard/node"
+    export PATH="$node_guard:$PATH"
+    echo "=== Pi CLI ===" && pi --version && pi --help >/dev/null
     echo "=== Piclaw CLI ===" && test -x "$(command -v piclaw)" && echo "ok"
   ' | tee "$STATIC_OUTPUT"
 

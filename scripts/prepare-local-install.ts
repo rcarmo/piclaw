@@ -81,7 +81,8 @@ export async function prepareLocalInstallArchive({
 
   const globalPackage = {
     dependencies: {
-      "@earendil-works/pi-coding-agent": piAgentVersion,
+      // Piclaw owns the Bun-backed `pi` bin and pins its SDK dependency itself.
+      // A second direct global coding-agent install can overwrite that bin.
       "@earendil-works/pi-agent-core": piAgentVersion,
       "@earendil-works/pi-ai": piAgentVersion,
       "@earendil-works/pi-tui": piAgentVersion,

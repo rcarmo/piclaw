@@ -7,6 +7,7 @@
   "main": "runtime/src/index.ts",
   "bin": {
     "piclaw": "runtime/src/index.ts",
+    "pi": "runtime/scripts/pi-cli.ts",
     "imgcat": "runtime/scripts/imgcat.ts"
   },
   "imports": {
