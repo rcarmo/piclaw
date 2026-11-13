@@ -2072,6 +2072,35 @@
     border-color: var(--danger-color, #dc2626);
 }
 
+/* Stop button inside the running tool card beneath the Working block. */
+.turn-activity-live-status.has-stop {
+    position: relative;
+}
+
+.turn-activity-live-status.has-stop .agent-status {
+    padding-right: 40px;
+}
+
+.turn-activity-live-status.has-stop > .turn-activity-stop {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    margin: 0;
+}
+
+.turn-activity-live-status.has-stop > .turn-activity-note {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+}
+
+.turn-activity-live-status.has-stop > .turn-activity-stop-confirm {
+    flex: none;
+    width: 100%;
+    max-width: none;
+    margin: 6px 0 0;
+}
+
 /* Connection status */
 .connection-status {
     position: fixed;

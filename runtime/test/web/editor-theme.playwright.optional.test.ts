@@ -240,3 +240,36 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
     } finally { await browser.close(); }
   }, 60000);
 }
+
+for (const [name, engine] of Object.entries({ chromium, webkit })) {
+  browserTest(`${name}: wrapped Markdown list items hang under their own text in Live Preview`, async () => {
+    const browser = await engine.launch(); const page = await browser.newPage({ viewport: { width: 700, height: 900 } });
+    const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+    const long = 'This list item is long enough to wrap onto a second visual line inside the editor pane. '.repeat(3).trim();
+    const doc = `Intro paragraph.\n\n- ${long}\n\n1. ${long}\n\n- [ ] ${long}\n\n- Parent\n  - ${long}\n`;
+    try {
+      await page.route('**/*', r => new URL(r.request().url()).origin === server.url.origin ? r.continue() : r.abort());
+      await page.goto(`${server.url}?skin=classic`); await page.waitForFunction(() => !!(window as any).editorFixture);
+      await page.evaluate((doc) => (window as any).editorFixture.mount('preview', doc), doc);
+      await page.locator('.cm-md-bullet').first().waitFor();
+      await page.waitForTimeout(300);
+      // For each wrapped item: where its text starts on the first line, and where the wrapped line starts.
+      const rows = await page.evaluate(() => [...document.querySelectorAll('.cm-line.cm-md-list-item-line:not(.cm-md-list-item-continuation)')].flatMap((line) => {
+        const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+        let node: Node | null; const rects: DOMRect[] = [];
+        while ((node = walker.nextNode())) {
+          const at = (node.textContent || '').indexOf('This list item');
+          if (at < 0) continue;
+          const range = document.createRange(); range.setStart(node, at); range.setEnd(node, (node.textContent || '').length);
+          rects.push(...range.getClientRects());
+        }
+        if (rects.length < 2) return [];
+        const first = rects[0], wrapped = rects.find((r) => r.top > first.top + 4)!;
+        return [{ kind: line.querySelector('.cm-md-bullet') ? 'bullet' : line.querySelector('.cm-md-list-number') ? 'number' : line.querySelector('.cm-md-checkbox') ? 'task' : 'other', offset: Math.round(wrapped.left - first.left) }];
+      }));
+      expect(rows.map(r => r.kind)).toEqual(['bullet', 'number', 'task', 'bullet']);
+      for (const row of rows) expect(Math.abs(row.offset), row.kind).toBeLessThanOrEqual(2);
+      expect(errors).toEqual([]);
+    } finally { await browser.close(); }
+  }, 60000);
+}

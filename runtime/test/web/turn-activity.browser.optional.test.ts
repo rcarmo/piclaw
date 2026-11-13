@@ -257,3 +257,50 @@ for (const width of [390, 1000]) {
     }
   }, 20000);
 }
+
+for (const width of [390, 1000]) {
+  browserTest(`${width}px: the running tool card under the Working block has its own stop button`, async () => {
+    aborts.length = 0;
+    const page = await browser.newPage({ viewport: { width, height: 700 } }), errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.setDefaultTimeout(4000);
+    const base = `http://127.0.0.1:${server.port}`;
+    await page.route('**/*', (route) => new URL(route.request().url()).origin === base ? route.continue() : route.abort());
+    try {
+      await page.goto(base);
+      await page.waitForFunction(() => Boolean((window as any).turnActivityFixture));
+      const status = { type: 'tool_call', title: 'bash: for i in $(seq 1 15); do echo scanning step $i; sleep 1; done && bun run test', tool_call_id: 'call-live', status: 'running', started_at: new Date(Date.now() - 4000).toISOString() };
+      await page.evaluate((value) => (window as any).turnActivityFixture.live(value), { status, draft: { text: '', fullText: '' }, thought: { text: '', fullText: '' }, turnId: 'turn-3', withStatusPane: true });
+      const pane = page.locator('.turn-activity-live-status');
+      const stop = pane.locator('.turn-activity-stop');
+      await stop.waitFor();
+      const g = await pane.evaluate((el) => {
+        const card = el.querySelector('.agent-status')!.getBoundingClientRect(), stop = el.querySelector('.turn-activity-stop')!.getBoundingClientRect(), text = el.querySelector('.agent-status-text')!.getBoundingClientRect();
+        return { insideRight: Math.round(card.right - stop.right), insideTop: stop.top >= card.top && stop.bottom <= card.bottom, clearOfText: text.right <= stop.left };
+      });
+      // Inside the card at its top-right corner, clear of the tool title.
+      expect(g.insideRight).toBeGreaterThanOrEqual(4);
+      expect(g.insideRight).toBeLessThanOrEqual(12);
+      expect({ insideTop: g.insideTop, clearOfText: g.clearOfText }).toEqual({ insideTop: true, clearOfText: true });
+      await stop.click();
+      const form = pane.locator('.turn-activity-stop-confirm');
+      const [formBox, cardBox] = await Promise.all([form.boundingBox(), pane.locator('.agent-status').boundingBox()]);
+      expect(formBox!.y).toBeGreaterThanOrEqual(cardBox!.y + cardBox!.height - 1);
+      expect(formBox!.x + formBox!.width).toBeLessThanOrEqual(width);
+      await pane.getByLabel('Note for the agent (optional)').fill('enough');
+      await pane.getByRole('button', { name: 'Stop tool only' }).click();
+      await pane.getByText('Stopping…').waitFor();
+      expect(aborts).toEqual([{ chat_jid: 'web:fixture', call_id: 'call-live', note: 'enough' }]);
+      // Output updates arrive as tool_status events for the same call; the button stays.
+      await page.evaluate((value) => (window as any).turnActivityFixture.live(value), { status: { ...status, type: 'tool_status', tool_call_id: 'call-next' }, draft: { text: '', fullText: '' }, thought: { text: '', fullText: '' }, turnId: 'turn-3', withStatusPane: true });
+      await pane.locator('.turn-activity-stop').waitFor();
+      // Nothing to stop while the agent is only thinking.
+      await page.evaluate((value) => (window as any).turnActivityFixture.live(value), { status: { type: 'thinking', title: 'Thinking' }, draft: { text: '', fullText: '' }, thought: { text: 'hmm', fullText: 'hmm' }, turnId: 'turn-4', withStatusPane: true });
+      await page.waitForTimeout(200);
+      expect(await page.locator('.turn-activity-live-status .turn-activity-stop').count()).toBe(0);
+      expect(errors).toEqual([]);
+    } finally {
+      await page.close();
+    }
+  }, 20000);
+}
