@@ -4,6 +4,9 @@ import { initDatabase, closeDatabase, getDb } from '../../src/db/connection.js';
 import { createTask, getTaskRunLogs } from '../../src/db/tasks.js';
 import { startSchedulerLoop, stopSchedulerLoop, type SchedulerDeps } from '../../src/task-scheduler.js';
 import * as stores from '../../src/service-effects/current-piclaw/scheduled-run-store.js';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import Database from 'bun:sqlite';
 
 for (const deliveryFails of [false,true]) test(`completion precedes delivery and retains a known result after delivery failure=${deliveryFails}`, async () => {
   await stopSchedulerLoop(); await closeDatabase();
@@ -25,6 +28,79 @@ for (const deliveryFails of [false,true]) test(`completion precedes delivery and
     await closeDatabase();initDatabase();expect(getTaskRunLogs('task:known-result')).toEqual(logs);
   }finally{await stopSchedulerLoop();await closeDatabase();restore();ws.cleanup();}
 },15000);
+
+test('successful shell result survives repeated retryable completion outages without re-executing the command', async () => {
+  await stopSchedulerLoop(); await closeDatabase();
+  const ws = createTempWorkspace('scheduler-repeated-completion-');
+  const restore = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data, PICLAW_DB_IN_MEMORY: '0' });
+  const admitted = Promise.withResolvers<void>(), queued: Array<() => Promise<void>> = [], requests: string[] = [];
+  const original = stores.createCurrentPiclawScheduledRunStore;
+  let factory: ReturnType<typeof spyOn> | undefined, deliveries = 0;
+  try {
+    process.env.PICLAW_DB_IN_MEMORY = '0';
+    initDatabase();
+    factory = spyOn(stores, 'createCurrentPiclawScheduledRunStore').mockImplementation((...args) => {
+      const made = original(...args);
+      if (made.ok) {
+        const complete = made.value.complete.bind(made.value);
+        made.value.complete = async request => {
+          requests.push(JSON.stringify(request));
+          if (requests.length <= 4) return { ok: false, error: { _tag: 'storage_unavailable', certainty: 'not_applied', retryable: true } };
+          return complete(request);
+        };
+      }
+      return made;
+    });
+    const due = new Date(Date.now() - 1000).toISOString();
+    createTask({ id: 'task:repeated-completion', chat_jid: 'web:completion', prompt: 'fixture', task_kind: 'shell', command: "printf x >> once.txt; printf known-result", cwd: ws.workspace, schedule_type: 'once', schedule_value: due, next_run: due, status: 'active', notify_on_complete: false, created_at: due });
+    const stop = startSchedulerLoop({ queue: { enqueueTask(_id: string, run: () => Promise<void>) { queued.push(run); admitted.resolve(); } }, agentPool: { isDurableRuntime: () => true }, sendMessage: async () => { deliveries++; expect(getTaskRunLogs('task:repeated-completion')).toHaveLength(1); } } as unknown as SchedulerDeps);
+    await admitted.promise; await stop(); await queued[0]!();
+    expect(requests).toHaveLength(5); expect(new Set(requests).size).toBe(1);
+    expect(readFileSync(join(ws.workspace, 'once.txt'), 'utf8')).toBe('x');
+    const rows = getTaskRunLogs('task:repeated-completion'); expect(rows).toHaveLength(1); expect(rows[0]!.result).toContain('known-result'); expect(deliveries).toBe(1);
+    await closeDatabase(); initDatabase(); expect(getTaskRunLogs('task:repeated-completion')).toEqual(rows);
+    expect(readFileSync(join(ws.workspace, 'once.txt'), 'utf8')).toBe('x');
+  } finally { factory?.mockRestore(); await stopSchedulerLoop(); await closeDatabase(); restore(); ws.cleanup(); }
+}, 15000);
+
+test('successful shell completion survives a real twelve-second WAL outage after scheduler stop', async () => {
+  await stopSchedulerLoop(); await closeDatabase();
+  const ws = createTempWorkspace('scheduler-completion-wal-');
+  const restore = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data, PICLAW_DB_IN_MEMORY: '0' });
+  const admitted = Promise.withResolvers<void>(), queued: Array<() => Promise<void>> = [], requests: string[] = [];
+  const original = stores.createCurrentPiclawScheduledRunStore;
+  let factory: ReturnType<typeof spyOn> | undefined, writer: Database | undefined, unlock: ReturnType<typeof setTimeout> | undefined, released = false, beats = 0;
+  const pulse = setInterval(() => { beats++; }, 10);
+  try {
+    process.env.PICLAW_DB_IN_MEMORY = '0';
+    initDatabase();
+    const path = (getDb().query('PRAGMA database_list').all() as { name: string; file: string }[]).find(row => row.name === 'main')!.file;
+    factory = spyOn(stores, 'createCurrentPiclawScheduledRunStore').mockImplementation((...args) => {
+      const made = original(...args);
+      if (made.ok) {
+        const complete = made.value.complete.bind(made.value);
+        made.value.complete = async request => {
+          requests.push(JSON.stringify(request));
+          if (!writer) {
+            writer = new Database(path); writer.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE');
+            unlock = setTimeout(() => { writer!.exec('ROLLBACK'); released = true; }, 12000);
+          }
+          return complete(request);
+        };
+      }
+      return made;
+    });
+    const due = new Date(Date.now() - 1000).toISOString();
+    createTask({ id: 'task:wal-completion', chat_jid: 'web:completion-wal', prompt: 'fixture', task_kind: 'shell', command: "printf x >> once.txt; printf retained-wal-result", cwd: ws.workspace, schedule_type: 'once', schedule_value: due, next_run: due, status: 'active', notify_on_complete: false, created_at: due });
+    const stop = startSchedulerLoop({ queue: { enqueueTask(_id: string, run: () => Promise<void>) { queued.push(run); admitted.resolve(); } }, agentPool: { isDurableRuntime: () => true }, sendMessage: async () => { expect(getTaskRunLogs('task:wal-completion')).toHaveLength(1); } } as unknown as SchedulerDeps);
+    await admitted.promise; await stop(); await queued[0]!();
+    expect(released).toBe(true); expect(requests.length).toBeGreaterThanOrEqual(3); expect(new Set(requests).size).toBe(1); expect(beats).toBeGreaterThan(50);
+    expect(readFileSync(join(ws.workspace, 'once.txt'), 'utf8')).toBe('x');
+    const rows = getTaskRunLogs('task:wal-completion'); expect(rows).toHaveLength(1); expect(rows[0]!.result).toContain('retained-wal-result');
+    await closeDatabase(); initDatabase(); expect(getTaskRunLogs('task:wal-completion')).toEqual(rows);
+    expect(readFileSync(join(ws.workspace, 'once.txt'), 'utf8')).toBe('x'); expect(getDb().query('PRAGMA foreign_key_check').all()).toEqual([]);
+  } finally { clearInterval(pulse); if (unlock) clearTimeout(unlock); if (writer?.inTransaction) writer.exec('ROLLBACK'); writer?.close(); factory?.mockRestore(); await stopSchedulerLoop(); await closeDatabase(); restore(); ws.cleanup(); }
+}, 30000);
 
 test('a lost renewal ACK retries the same request without duplicating committed renewal',async()=>{
   await stopSchedulerLoop();await closeDatabase();const ws=createTempWorkspace('scheduler-renewal-ack-'),restore=setEnv({PICLAW_WORKSPACE:ws.workspace,PICLAW_STORE:ws.store,PICLAW_DATA:ws.data});
