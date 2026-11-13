@@ -3,7 +3,7 @@
   "fixtures": {
     "native": {
       "repository": "rcarmo/piclaw-addons",
-      "ref": "2f8b60eb442a0df237c78203b020e94d6a1604f1"
+      "ref": "614ed16f8d1ab8837e6ab920ff7e674bd2cc18d5"
     },
     "contract": {
       "repository": "rcarmo/piclaw-addons",
