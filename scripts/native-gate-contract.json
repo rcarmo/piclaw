@@ -172,6 +172,7 @@
     "single-database.test.ts",
     "sqlite-admission-workload.test.ts",
     "sqlite-fixture-policy.test.ts",
+    "sqlite-restic-restore.test.ts",
     "sqlite.test.ts",
     "task-model-boundary.test.ts",
     "task-model-compaction-recovery.test.ts",
