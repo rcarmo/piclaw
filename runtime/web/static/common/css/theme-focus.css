@@ -5,11 +5,13 @@
     caret-color: var(--accent-color);
     accent-color: var(--accent-color);
 }
-:root :is(input, textarea, select, [contenteditable="true"], .custom-select__trigger):focus:not(:where(.compose-input-wrapper textarea, .chat__input)),
+:root :is(input, textarea, select, [contenteditable="true"], .custom-select__trigger):focus:not(:where(.compose-input-wrapper textarea, .chat__input, .cm-content)),
 :root :is(button, a[href], [role="button"], [role="combobox"], [role="listbox"], [tabindex]:not([tabindex="-1"])):focus-visible:not(:where(.compose-input-wrapper textarea, .chat__input)) {
     outline: 2px solid var(--focus-ring, var(--accent-color)) !important;
     outline-offset: 2px;
 }
+/* CodeMirror documents (.cm-content) are exempt: the caret and active line
+ * already show focus, and a ring around the whole document is distracting. */
 /* Overlay the existing field border rather than drawing a second contour
  * outside it. Button/link keyboard indicators retain their separate offset. */
 :root :is(input, textarea, select, [contenteditable="true"], .custom-select__trigger):focus {
@@ -45,7 +47,7 @@
     text-shadow: none;
 }
 @media (forced-colors: active) {
-    :root :is(input, textarea, select, [contenteditable="true"], .custom-select__trigger):focus:not(:where(.compose-input-wrapper textarea, .chat__input)),
+    :root :is(input, textarea, select, [contenteditable="true"], .custom-select__trigger):focus:not(:where(.compose-input-wrapper textarea, .chat__input, .cm-content)),
     :root :is(button, a[href], [role="button"], [role="combobox"], [role="listbox"], [tabindex]:not([tabindex="-1"])):focus-visible:not(:where(.compose-input-wrapper textarea, .chat__input)) {
         outline-color: Highlight !important;
     }
