@@ -5,6 +5,8 @@ import { EditorView } from '#editor-vendor/codemirror';
 export function editorTheme(dark: boolean) {
     return EditorView.theme({
         '&': { color: 'var(--text-code)', backgroundColor: 'var(--bg-code)' },
+        // The caret and active line show focus; no dotted outline around the editor.
+        '&.cm-focused': { outline: 'none' },
         '.cm-scroller': { backgroundColor: 'var(--bg-code)' },
         '.cm-content': { color: 'var(--text-code)' },
         '.cm-gutters': { color: 'var(--text-secondary)', backgroundColor: 'var(--bg-code)', borderColor: 'var(--border-color)' },

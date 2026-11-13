@@ -191,3 +191,52 @@ for (const [name, engine] of Object.entries({chromium, webkit})) for (const skin
     } finally {await browser.close();}
   },60000);
 }
+
+for (const [name, engine] of Object.entries({ chromium, webkit })) for (const skin of ['classic', 'visual']) {
+  browserTest(`${name} ${skin}: a focused editor draws no focus ring around its text`, async () => {
+    const browser = await engine.launch(); const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+    try {
+      await page.route('**/*', r => new URL(r.request().url()).origin === server.url.origin ? r.continue() : r.abort());
+      await page.goto(`${server.url}?skin=${skin}`); await page.waitForFunction(() => !!(window as any).editorFixture);
+      for (const mode of ['code', 'preview']) {
+        await page.evaluate(mode => (window as any).editorFixture.mount(mode), mode);
+        await page.waitForTimeout(200);
+        await page.locator('.cm-content').first().click({ position: { x: 40, y: 10 } });
+        // The caret and active line already show where typing goes; the shared
+        // 2px focus ring around the whole document is noise, as is CodeMirror's dotted one.
+        const rings = await page.evaluate(() => [document.activeElement as HTMLElement, document.activeElement!.closest('.cm-editor') as HTMLElement]
+          .map(el => ({ focused: el.matches(':focus, .cm-focused'), outline: getComputedStyle(el).outlineStyle })));
+        expect(rings, mode).toEqual([{ focused: true, outline: 'none' }, { focused: true, outline: 'none' }]);
+      }
+      expect(errors).toEqual([]);
+    } finally { await browser.close(); }
+  }, 60000);
+}
+
+for (const [name, engine] of Object.entries({ chromium, webkit })) {
+  browserTest(`${name}: Markdown wraps long lines, including fenced code, in Live Preview and raw modes`, async () => {
+    const browser = await engine.launch(); const page = await browser.newPage({ viewport: { width: 900, height: 900 } });
+    const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+    const long = 'This long line should wrap inside the editor rather than running off to the right edge. '.repeat(6).trim();
+    const doc = `# Heading\n\n${long}\n\n- ${long}\n\n> ${long}\n\n\`\`\`\n${long}\n\`\`\`\n`;
+    try {
+      await page.route('**/*', r => new URL(r.request().url()).origin === server.url.origin ? r.continue() : r.abort());
+      await page.goto(`${server.url}?skin=classic`); await page.waitForFunction(() => !!(window as any).editorFixture);
+      for (const mode of ['preview', 'raw']) {
+        await page.evaluate(({ mode, doc }) => (window as any).editorFixture.mount(mode, doc), { mode, doc });
+        await page.waitForTimeout(300);
+        if (mode === 'preview') await page.locator('.cm-md-code-content').first().waitFor();
+        // One unwrapped line (a fenced code line, for instance) widens every line,
+        // so check the whole document fits and the code line itself wraps.
+        const fit = await page.evaluate(() => {
+          const scroller = document.querySelector('.cm-scroller') as HTMLElement;
+          const code = [...document.querySelectorAll('.cm-line')].find(line => line.textContent?.startsWith('This long') && line.closest('.cm-content') && (line.classList.contains('cm-md-code-line') || line.previousElementSibling?.textContent === '```')) as HTMLElement | undefined;
+          return { overflow: scroller.scrollWidth - scroller.clientWidth, codeWraps: !!code && code.getBoundingClientRect().height > 40 };
+        });
+        expect(fit, mode).toEqual({ overflow: 0, codeWraps: true });
+      }
+      expect(errors).toEqual([]);
+    } finally { await browser.close(); }
+  }, 60000);
+}

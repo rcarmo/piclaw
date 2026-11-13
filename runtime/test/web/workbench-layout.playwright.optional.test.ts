@@ -410,4 +410,100 @@ for (const engine of ['chromium', 'webkit']) {
     } finally { await page.close(); }
   }, 30000);
 
+
+  browserTest(`${engine} 1194px touch: session row menus sit clear of the age and context ring`, async () => {
+    const context = await browsers[engine].newContext({ viewport: { width: 1194, height: 834 }, hasTouch: true, isMobile: true });
+    const page = await context.newPage();
+    try {
+      await page.route('**/*', (route) => new URL(route.request().url()).origin === server.url.origin ? route.continue() : route.abort());
+      await page.goto(`${server.url}`);
+      await page.waitForSelector('.sessions-sidebar-context-ring');
+      await page.waitForSelector('.sessions-sidebar-preview.live');
+      // Touch screens keep the row menu button visible, so it needs its own room.
+      expect(await page.evaluate(() => matchMedia('(hover: none)').matches)).toBe(true);
+      const clashes = await page.evaluate(() => [...document.querySelectorAll('.sessions-sidebar-item')].flatMap((row) => {
+        const button = row.querySelector('.sessions-sidebar-more');
+        if (!button) return [];
+        const more = button.getBoundingClientRect();
+        return [...row.querySelectorAll('.sessions-sidebar-age, .sessions-sidebar-context-ring')].filter((el) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.right > more.left && r.left < more.right && r.bottom > more.top && r.top < more.bottom;
+        }).map((el) => `${row.querySelector('.sessions-sidebar-handle')?.textContent} ${el.className}`);
+      }));
+      expect(clashes).toEqual([]);
+      expect(await page.locator('.sessions-sidebar-item .sessions-sidebar-context-ring').count()).toBeGreaterThan(0);
+    } finally { await context.close(); }
+  }, 30000);
+
+  browserTest(`${engine} 1440px: the home-indicator inset adds only what the status bar needs`, async () => {
+    const { page, errors } = await open(engine, 1440, 900);
+    try {
+      await page.waitForSelector('.workbench-sidebar-footer .system-meters-hud', { state: 'attached', timeout: 5000 });
+      // Stand in for an iPad home-screen app, where env(safe-area-inset-bottom) is 20px.
+      await page.evaluate(() => document.documentElement.style.setProperty('--workbench-safe-area-bottom', '20px'));
+      await settle(page);
+      const m = await page.evaluate(() => {
+        const bar = document.querySelector('.workbench-statusbar')!, foot = document.querySelector('.workbench-sidebar-footer')!;
+        return {
+          barHeight: Math.round(bar.getBoundingClientRect().height),
+          barPadding: getComputedStyle(bar).paddingBottom,
+          footPadding: getComputedStyle(foot).paddingBottom,
+          shellGap: Math.round(bar.getBoundingClientRect().top - document.querySelector('.app-shell')!.getBoundingClientRect().bottom),
+        };
+      });
+      // 24px row + 1px border + 8px: the row clears the indicator without a 20px blank band.
+      expect(m).toEqual({ barHeight: 33, barPadding: '8px', footPadding: '6px', shellGap: -1 });
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+
+
+  for (const [width, height] of [[1440, 900], [390, 844]]) {
+    browserTest(`${engine} ${width}px: side bar meters have no outline box and cannot be compacted`, async () => {
+      const { page, errors } = await open(engine, width, height);
+      await page.route('**/agent/system-metrics*', (route) => route.fulfill({ json: { cpu_percent: 12, ram_percent: 40, cpu_series: [5, 20, 12, 30, 12], ram_series: [38, 39, 40, 40, 40] } }));
+      try {
+        if (width < 640) { await page.evaluate(() => window.dispatchEvent(new CustomEvent('piclaw:workspace-tree-toggle'))); await settle(page); await page.locator(sessionsButton).click(); await settle(page); }
+        const foot = page.locator('.workbench-sidebar-footer');
+        await foot.locator('.system-meters-row.cpu').waitFor({ timeout: 5000 });
+        // Full rows with plots, never the one-line summary, even on a phone.
+        expect(await foot.locator('.system-meters-compact-summary').count()).toBe(0);
+        expect(await foot.locator('.system-meters-row').count()).toBe(2);
+        const card = await foot.locator('.system-meters-card').evaluate((el) => { const cs = getComputedStyle(el); return { border: cs.borderTopWidth, background: cs.backgroundColor, shadow: cs.boxShadow }; });
+        expect(card).toEqual({ border: '0px', background: 'rgba(0, 0, 0, 0)', shadow: 'none' });
+        // Clicking a reading neither collapses nor hides the meters.
+        expect(await foot.locator('button.system-meters-row').count()).toBe(0);
+        await foot.locator('.system-meters-row.cpu').click(); await settle(page);
+        expect(await foot.locator('.system-meters-row').count()).toBe(2);
+        expect(await page.evaluate(() => localStorage.getItem('piclaw_system_meters_collapsed'))).not.toBe('true');
+        expect(errors).toEqual([]);
+      } finally { await page.close(); }
+    }, 30000);
+  }
+
+  for (const [width, height] of [[1440, 900], [820, 1100]]) {
+    browserTest(`${engine} ${width}px: context sits after the model stats and the model picker opens from the status bar`, async () => {
+      const { page, errors } = await open(engine, width, height);
+      try {
+        await page.waitForSelector('.workbench-statusbar .compose-context-pie', { timeout: 5000 });
+        const box = async (s: string) => (await page.locator(s).first().boundingBox())!;
+        const hint = await box('.workbench-statusbar .compose-model-hint');
+        const stats = await page.locator('.workbench-statusbar .compose-model-usage-hint').count() ? await box('.workbench-statusbar .compose-model-usage-hint') : hint;
+        const pie = await box('.workbench-statusbar .compose-context-pie');
+        // Model, then its usage, then the context indicator.
+        expect(pie.x).toBeGreaterThanOrEqual(Math.max(hint.x + hint.width, stats.x + stats.width) - 1);
+        await page.locator('.workbench-statusbar .compose-model-hint').click();
+        await page.waitForSelector('.compose-model-catalogue');
+        const popup = await box('.compose-model-catalogue'), bar = await box('.workbench-statusbar');
+        // The picker opens just above its trigger in the status bar, not over the compose box.
+        expect(Math.round(bar.y - (popup.y + popup.height))).toBeGreaterThanOrEqual(2);
+        expect(Math.round(bar.y - (popup.y + popup.height))).toBeLessThanOrEqual(10);
+        expect(Math.abs(popup.x - Math.max(12, hint.x))).toBeLessThanOrEqual(1);
+        expect(popup.x + popup.width).toBeLessThanOrEqual(width);
+        expect(popup.y).toBeGreaterThanOrEqual(0);
+        expect(errors).toEqual([]);
+      } finally { await page.close(); }
+    }, 30000);
+  }
+
 }
