@@ -18,12 +18,29 @@ const FOLDER_ICON = svgUrl('M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1
 const FOLDER_OPEN_ICON = svgUrl('m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2');
 
 /**
- * Styles injected into the tree's shadow root: folder icons beside the
+ * Styles injected into the tree's shadow root: file-type icon colours taken
+ * from the theme's terminal palette (Pierre's own palette only as a fallback),
+ * folder icons beside the
  * disclosure chevron (Pierre's built-in sets draw none), and the side bar's
  * full inner width with only a slim inset and scrollbar gutter.
  */
 export const WORKSPACE_TREE_CSS = `
   :host { --trees-padding-inline-override: 4px; --trees-scrollbar-gutter-override: 4px; }
+  :host {
+    --trees-icon-gray: var(--text-secondary, light-dark(#84848a, #adadb1));
+    --trees-icon-red: var(--term-red, light-dark(#d52c36, #ff6762));
+    --trees-icon-yellow: var(--term-yellow, light-dark(#d5a910, #ffd452));
+    --trees-icon-green: var(--term-green, light-dark(#199f43, #5ecc71));
+    --trees-icon-cyan: var(--term-cyan, light-dark(#1ca1c7, #68cdf2));
+    --trees-icon-blue: var(--term-blue, light-dark(#1a85d4, #69b1ff));
+    --trees-icon-purple: var(--term-magenta, light-dark(#a631be, #d568ea));
+    --trees-icon-vermilion: color-mix(in srgb, var(--trees-icon-red) 70%, var(--trees-icon-yellow));
+    --trees-icon-orange: color-mix(in srgb, var(--trees-icon-red) 45%, var(--trees-icon-yellow));
+    --trees-icon-teal: color-mix(in srgb, var(--trees-icon-green) 50%, var(--trees-icon-cyan));
+    --trees-icon-indigo: color-mix(in srgb, var(--trees-icon-blue) 60%, var(--trees-icon-purple));
+    --trees-icon-pink: color-mix(in srgb, var(--trees-icon-purple) 50%, var(--trees-icon-red));
+    --trees-icon-mauve: color-mix(in srgb, var(--trees-icon-purple) 40%, var(--trees-icon-gray));
+  }
   [data-item-type="folder"] [data-item-section="content"]::before {
     content: '';
     display: inline-block;
