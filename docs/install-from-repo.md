@@ -17,7 +17,7 @@ Pin a tag for repeatable installs; `main` may contain packaging or dependency ch
 
 The package exposes `piclaw`, `pi` and `imgcat`, alongside built web assets, core viewers, skills and bundled extensions such as `cdp_browser` and `pi-mcp-adapter`. The `pi` launcher runs the pinned `@earendil-works/pi-coding-agent` CLI in Bun; Node is not required and the SDK files are not modified. It preserves arguments, terminal streams, signals, the working directory and Pi’s normal configuration paths.
 
-Check the installed Pi CLI with `pi --version` or `pi --help`. A `postinstall` repair step handles incomplete source checkouts or damaged package trees. A normal tagged install needs no development dependencies or manual rebuild.
+Check the installed Pi CLI with `pi --version` or `pi --help`. Avoid separately installing `@earendil-works/pi-coding-agent` globally in the same prefix: both packages own the `pi` command. Piclaw already includes the pinned Pi dependency. A `postinstall` repair step handles incomplete source checkouts or damaged package trees. A normal tagged install needs no development dependencies or manual rebuild.
 
 Draw.io, the Office backend and Windows desktop automation are [optional add-ons](settings-and-addons.md); the core installer does not install them. npm installation parity is outside this experimental path's scope.
 
