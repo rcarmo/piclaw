@@ -612,7 +612,7 @@ Add more always-active tools in `.piclaw/config.json` under `tools.additionalDef
   "tools": {
     "additionalDefaultTools": [
       "search_workspace",
-      "introspect_sql"
+      "list_models"
     ]
   }
 }
@@ -623,7 +623,7 @@ A comma-separated string is also accepted:
 ```json
 {
   "tools": {
-    "additionalDefaultTools": "search_workspace, introspect_sql"
+    "additionalDefaultTools": "search_workspace, list_models"
   }
 }
 ```

@@ -166,7 +166,7 @@ const entries = Object.freeze([
     safeProof: "Deterministic bounded catalogue or selected-state snapshot with no mutation path.",
     authorityRationale: "Harness/catalogue query; no Piclaw service-operation authority is mutated.",
   }),
-  ...policy(["introspect_sql", "session_status"], {
+  ...policy(["session_status"], {
     effectClass: "query", replay: "safe", contextFields: ["chatJid"], abortExpectation: "may_finish_late", ...DIRECT_QUERY,
     safeProof: "Read-only bounded service/session snapshot; grammar and action surface reject writes.",
     authorityRationale: "Service projection query; no service-operation authority is mutated.",

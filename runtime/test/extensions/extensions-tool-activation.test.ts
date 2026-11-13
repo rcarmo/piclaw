@@ -78,7 +78,7 @@ describe("tool-activation extension", () => {
     await sessionStart!.handler({}, {});
     expect(fake.api.getActiveTools()).toEqual(getEffectiveDefaultActiveToolNames(availableTools));
     expect(fake.api.getActiveTools()).toContain("search_workspace");
-    expect(fake.api.getActiveTools()).toContain("introspect_sql");
+    expect(fake.api.getActiveTools()).not.toContain("introspect_sql"); // Unknown third-party SQL is not silently declared safe.
     expect(fake.api.getActiveTools()).toContain("list_models");
     expect(fake.api.getActiveTools()).toContain("schedule_task");
     expect(fake.api.getActiveTools()).toContain("read_attachment");
@@ -170,7 +170,7 @@ describe("tool-activation extension", () => {
     const resetResult = await resetActiveTools.execute("t3", {});
     expect(resetResult.details.availability).toBe("same_turn");
     expect(fake.api.getActiveTools()).toEqual(getEffectiveDefaultActiveToolNames(availableTools));
-    expect(fake.api.getActiveTools()).toContain("introspect_sql");
+    expect(fake.api.getActiveTools()).not.toContain("introspect_sql");
     expect(fake.api.getActiveTools()).toContain("list_models");
     expect(fake.api.getActiveTools()).toContain("schedule_task");
     expect(fake.api.getActiveTools()).toContain("read_attachment");

@@ -2,7 +2,7 @@
  * test/agent-pool/agent-pool-tools.test.ts – Tests for built-in extension tool registration.
  *
  * Verifies that builtinExtensionFactories register the expected tools
- * (attach_file, messages, model control, tool discovery + activation, SQL introspection, workspace search,
+ * (attach_file, messages, model control, tool discovery + activation, workspace search,
  * adaptive cards, dashboard widget posting, graceful exit, and bundled core controls).
  * bun_run, keychain, ssh, and proxmox are provided by packaged runtime extensions rather than builtin factories.
  * and slash commands (/tasks, /scheduled, /theme, /tint) on a mock ExtensionAPI.
@@ -80,7 +80,7 @@ describe("builtin extension factories", () => {
     expect(fake.tools.has("list_scripts")).toBe(true);
     expect(fake.tools.has("activate_tools")).toBe(true);
     expect(fake.tools.has("reset_active_tools")).toBe(true);
-    expect(fake.tools.has("introspect_sql")).toBe(true);
+    expect(fake.tools.has("introspect_sql")).toBe(false); // Retired legacy SQL execution.
     expect(fake.tools.has("send_adaptive_card")).toBe(true);
     expect(fake.tools.has("send_dashboard_widget")).toBe(true);
     expect(fake.tools.has("exit_process")).toBe(false); // Native process controls own exit; the legacy extension is retired.

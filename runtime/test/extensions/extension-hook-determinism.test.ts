@@ -18,7 +18,6 @@ describe("built-in extension hook determinism", () => {
       "internalTools",
       "runtimeScripts",
       "toolActivation",
-      "sqlIntrospect",
       "workspaceSearch",
       "workspaceMemoryBootstrap",
       "sendAdaptiveCard",
@@ -33,7 +32,7 @@ describe("built-in extension hook determinism", () => {
     expect(audit.context_hook_order).toEqual(["fileAttachments", "contextPrune", "llmContextNormalizer"]);
     expect(audit.final_system_prompt).toContain("## File Attachments");
     expect(audit.final_system_prompt).toContain("## Script discovery");
-    expect(audit.final_system_prompt).toContain("## Database Introspection");
+    expect(audit.final_system_prompt).not.toContain("## Database Introspection");
     expect(audit.final_system_prompt).toContain("## Workspace search");
     expect(audit.final_system_prompt).toContain("## Workspace memory bootstrap");
     expect(audit.final_system_prompt).toContain("## Dashboard widget posting");

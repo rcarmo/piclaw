@@ -348,7 +348,7 @@ describe("feature: tool catalog", () => {
       "attach_file", "read_attachment", "export_attachment", "messages",
       "get_model_state", "list_models", "switch_model", "switch_thinking",
       "list_tools", "list_scripts",
-      "activate_tools", "reset_active_tools", "introspect_sql",
+      "activate_tools", "reset_active_tools",
       "search_workspace", "refresh_workspace_index",
       "send_adaptive_card", "send_dashboard_widget", "session_control",
       "open_workspace_file", "env",
