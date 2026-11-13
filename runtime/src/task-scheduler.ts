@@ -863,6 +863,9 @@ async function runClaimedScheduledTask(
       await waitForSqliteContention(performance.now() + 25);
       completed = await store.complete(completeRequest);
       completionMayHaveCommitted ||= !completed.ok && completed.error.certainty === "unknown";
+      // Once either attempt is uncertain, preserve the original read-back
+      // boundary before another mutation attempt or terminal classification.
+      if (completionMayHaveCommitted) break;
     }
     if (!completed.ok && completionMayHaveCommitted && canRunLegacyScheduledWork()) {
       const observed = await store.get(finalLease.record.runId);
