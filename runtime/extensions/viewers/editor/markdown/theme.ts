@@ -194,7 +194,9 @@ export const markdownPreviewTheme = EditorView.theme({
     },
     '.cm-md-code-content': {
         display: 'inline',
-        whiteSpace: 'pre',
+        // Follow the editor: wrap with line wrapping on, as other lines do. A
+        // fixed `pre` line widened the whole document and stopped every line wrapping.
+        whiteSpace: 'inherit',
         margin: '0',
         padding: '0',
         lineHeight: '1.35',

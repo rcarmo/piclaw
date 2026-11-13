@@ -13,13 +13,13 @@ theme.initTheme({ skin: skin as 'classic' | 'visual' });
 let instance: any;
 const prose = 'Plain text selection must track the active theme. Repeat selection here.\n\n';
 const markdown = prose + '# Heading\n\n**Strong** and *emphasis* with `inline code`.\n\n```javascript\nconst greeting = "hello"; // comment\nfunction greet(name) { return greeting + name + 42; }\n```\n\n> [!warning] Warning\n> Body text\n\n| Name | Value |\n| --- | --- |\n| plain | **bold** |\n\nUnresolved [^missing].\n';
-function mount(mode = 'preview') {
+function mount(mode = 'preview', contentOverride?: string) {
   instance?.dispose();
   document.querySelector('#editor')!.innerHTML = '';
   localStorage.setItem('piclaw_md_live_preview', mode === 'preview' ? 'true' : 'false');
   localStorage.setItem('piclaw_vim_mode', mode === 'vim' ? 'true' : 'false');
   const path = ['preview','raw','diff'].includes(mode) ? 'fixture.md' : mode === 'code' ? 'fixture.js' : 'fixture.txt';
-  const content = mode === 'code' ? 'const greeting = "hello"; // comment\nfunction greet(name) { return greeting + name + 42; }' : mode === 'large' ? prose.repeat(800) : markdown;
+  const content = contentOverride ?? (mode === 'code' ? 'const greeting = "hello"; // comment\nfunction greet(name) { return greeting + name + 42; }' : mode === 'large' ? prose.repeat(800) : markdown);
   instance = new StandaloneEditorInstance(document.querySelector('#editor')!, { path, content, viewState: {cursorLine:1,cursorCol:1,scrollTop:0} } as any);
   if(mode === 'diff') {
     instance.view.dispatch({ changes: {from:0,to:5,insert:'Changed'} });
