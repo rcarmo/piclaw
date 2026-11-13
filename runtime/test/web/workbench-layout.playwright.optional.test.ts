@@ -410,4 +410,51 @@ for (const engine of ['chromium', 'webkit']) {
     } finally { await page.close(); }
   }, 30000);
 
+
+  browserTest(`${engine} 1194px touch: session row menus sit clear of the age and context ring`, async () => {
+    const context = await browsers[engine].newContext({ viewport: { width: 1194, height: 834 }, hasTouch: true, isMobile: true });
+    const page = await context.newPage();
+    try {
+      await page.route('**/*', (route) => new URL(route.request().url()).origin === server.url.origin ? route.continue() : route.abort());
+      await page.goto(`${server.url}`);
+      await page.waitForSelector('.sessions-sidebar-context-ring');
+      await page.waitForSelector('.sessions-sidebar-preview.live');
+      // Touch screens keep the row menu button visible, so it needs its own room.
+      expect(await page.evaluate(() => matchMedia('(hover: none)').matches)).toBe(true);
+      const clashes = await page.evaluate(() => [...document.querySelectorAll('.sessions-sidebar-item')].flatMap((row) => {
+        const button = row.querySelector('.sessions-sidebar-more');
+        if (!button) return [];
+        const more = button.getBoundingClientRect();
+        return [...row.querySelectorAll('.sessions-sidebar-age, .sessions-sidebar-context-ring')].filter((el) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.right > more.left && r.left < more.right && r.bottom > more.top && r.top < more.bottom;
+        }).map((el) => `${row.querySelector('.sessions-sidebar-handle')?.textContent} ${el.className}`);
+      }));
+      expect(clashes).toEqual([]);
+      expect(await page.locator('.sessions-sidebar-item .sessions-sidebar-context-ring').count()).toBeGreaterThan(0);
+    } finally { await context.close(); }
+  }, 30000);
+
+  browserTest(`${engine} 1440px: the home-indicator inset adds only what the status bar needs`, async () => {
+    const { page, errors } = await open(engine, 1440, 900);
+    try {
+      await page.waitForSelector('.workbench-sidebar-footer .system-meters-hud', { state: 'attached', timeout: 5000 });
+      // Stand in for an iPad home-screen app, where env(safe-area-inset-bottom) is 20px.
+      await page.evaluate(() => document.documentElement.style.setProperty('--workbench-safe-area-bottom', '20px'));
+      await settle(page);
+      const m = await page.evaluate(() => {
+        const bar = document.querySelector('.workbench-statusbar')!, foot = document.querySelector('.workbench-sidebar-footer')!;
+        return {
+          barHeight: Math.round(bar.getBoundingClientRect().height),
+          barPadding: getComputedStyle(bar).paddingBottom,
+          footPadding: getComputedStyle(foot).paddingBottom,
+          shellGap: Math.round(bar.getBoundingClientRect().top - document.querySelector('.app-shell')!.getBoundingClientRect().bottom),
+        };
+      });
+      // 24px row + 1px border + 8px: the row clears the indicator without a 20px blank band.
+      expect(m).toEqual({ barHeight: 33, barPadding: '8px', footPadding: '6px', shellGap: -1 });
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+
 }
