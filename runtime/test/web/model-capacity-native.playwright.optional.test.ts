@@ -100,6 +100,7 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       }
       else if (url.pathname === "/agent/models") body = modelPayload();
       else if (url.pathname === "/agent/context") body = contextPayload();
+      else if (url.pathname === "/agent/system-metrics") body = { cpu_percent: 2, ram_percent: 12 };
       else if (url.pathname === "/timeline") body = { posts: [], has_more: false, chat_jid: chatJid, user: { name: "Fixture User" }, agent: { name: "Fixture" } };
       else if (url.pathname === "/agent/addons/web-entries") body = { entries: [] };
       else if (url.pathname === "/agent/roster") body = { agents: [], default_agent: "fixture" };
