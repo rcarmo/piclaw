@@ -191,3 +191,25 @@ for (const [name, engine] of Object.entries({chromium, webkit})) for (const skin
     } finally {await browser.close();}
   },60000);
 }
+
+for (const [name, engine] of Object.entries({ chromium, webkit })) for (const skin of ['classic', 'visual']) {
+  browserTest(`${name} ${skin}: a focused editor draws no focus ring around its text`, async () => {
+    const browser = await engine.launch(); const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+    try {
+      await page.route('**/*', r => new URL(r.request().url()).origin === server.url.origin ? r.continue() : r.abort());
+      await page.goto(`${server.url}?skin=${skin}`); await page.waitForFunction(() => !!(window as any).editorFixture);
+      for (const mode of ['code', 'preview']) {
+        await page.evaluate(mode => (window as any).editorFixture.mount(mode), mode);
+        await page.waitForTimeout(200);
+        await page.locator('.cm-content').first().click({ position: { x: 40, y: 10 } });
+        // The caret and active line already show where typing goes; the shared
+        // 2px focus ring around the whole document is noise, as is CodeMirror's dotted one.
+        const rings = await page.evaluate(() => [document.activeElement as HTMLElement, document.activeElement!.closest('.cm-editor') as HTMLElement]
+          .map(el => ({ focused: el.matches(':focus, .cm-focused'), outline: getComputedStyle(el).outlineStyle })));
+        expect(rings, mode).toEqual([{ focused: true, outline: 'none' }, { focused: true, outline: 'none' }]);
+      }
+      expect(errors).toEqual([]);
+    } finally { await browser.close(); }
+  }, 60000);
+}
