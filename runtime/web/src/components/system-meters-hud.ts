@@ -170,6 +170,10 @@ export function SystemMetersHud({ mode = 'overlay' }) {
         cpu_series: [],
         ram_series: [],
         swap_series: [],
+        io_pressure_some_percent: null,
+        io_pressure_full_percent: null,
+        io_pressure_some_series: [],
+        io_pressure_full_series: [],
         gpu_busy_percent: null,
         gpu_busy_series: [],
         vram_percent: null,
@@ -243,6 +247,10 @@ export function SystemMetersHud({ mode = 'overlay' }) {
                     cpu_percent: optionalPercent(next?.cpu_percent),
                     ram_percent: optionalPercent(next?.ram_percent),
                     swap_percent: optionalPercent(next?.swap_percent),
+                    io_pressure_some_percent: optionalPercent(next?.io_pressure_some_percent),
+                    io_pressure_full_percent: optionalPercent(next?.io_pressure_full_percent),
+                    io_pressure_some_series: Array.isArray(next?.io_pressure_some_series) ? next.io_pressure_some_series.slice(-30) : [],
+                    io_pressure_full_series: Array.isArray(next?.io_pressure_full_series) ? next.io_pressure_full_series.slice(-30) : [],
                     gpu_busy_percent: optionalPercent(next?.gpu_busy_percent),
                     gpu_busy_series: Array.isArray(next?.gpu_busy_series) ? next.gpu_busy_series.slice(-30).map(optionalPercent) : [],
                     vram_percent: next?.vram_percent !== null && next?.vram_percent !== undefined && Number.isFinite(Number(next.vram_percent)) ? Number(next.vram_percent) : null,
@@ -291,6 +299,7 @@ export function SystemMetersHud({ mode = 'overlay' }) {
         };
     }, [isActiveInstance]);
 
+    const ioPressure = useMemo(() => resolveIoPressureMeter(metrics), [metrics]);
     const cpuPath = useMemo(() => buildSparklinePath(metrics.cpu_series, 56, 16, { min: 0, max: 100 }), [metrics.cpu_series]);
     const ramPath = useMemo(() => buildSparklinePath(metrics.ram_series, 56, 16, { min: 0, max: 100 }), [metrics.ram_series]);
     const swapPath = useMemo(() => buildSparklinePath(metrics.swap_series, 56, 16, { min: 0, max: 100 }), [metrics.swap_series]);
@@ -339,6 +348,14 @@ export function SystemMetersHud({ mode = 'overlay' }) {
     };
 
     const rowProps = inSidebar ? {} : { type: 'button', 'aria-label': title, 'aria-expanded': 'true', onClick: handleToggleCollapsed };
+    const ioMeter = ioPressure && html`<${Row} class=${`system-meters-meter-button io-pressure ${compactLayout ? 'system-meters-compact-io' : 'system-meters-row'}`} ...${rowProps} title=${ioPressure.title}>
+        <span class="system-meters-label">I/O</span>
+        <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true">
+            <path class="io-pressure-some" vector-effect="non-scaling-stroke" d=${ioPressure.somePath}></path>
+            ${ioPressure.fullPath && html`<path class="io-pressure-full" vector-effect="non-scaling-stroke" d=${ioPressure.fullPath}></path>`}
+        </svg>
+        <span class="system-meters-value">${ioPressure.value}</span>
+    </${Row}>`;
 
     return html`
         <div class=${`system-meters-hud system-meters-hud-${mode}${collapsed ? ' is-collapsed' : ''}`} aria-live="polite">
@@ -348,6 +365,7 @@ export function SystemMetersHud({ mode = 'overlay' }) {
                     : compactLayout
                         ? html`<div class="system-meters-compact-summary">
                             <button class="system-meters-meter-button system-meters-compact-system" type="button" title=${title} aria-label=${title} aria-expanded="true" onClick=${handleToggleCollapsed}>${compactSummary}</button>
+                            ${ioMeter}
                             <${GpuMeterRows} meters=${gpuMeters} compact=${true} openGpuId=${openGpuId} onOpen=${handleGpuOpen} />
                         </div>`
                         : html`
@@ -365,6 +383,7 @@ export function SystemMetersHud({ mode = 'overlay' }) {
                                 </svg>
                                 <span class="system-meters-value">${formatPercent(metrics.ram_percent)}</span>
                             </${Row}>`}
+                            ${ioMeter}
                             ${showRss && html`
                                 <${Row} class="system-meters-meter-button system-meters-row rss" ...${rowProps}>
                                     <span class="system-meters-label">RSS</span>
@@ -398,4 +417,23 @@ export function SystemMetersHud({ mode = 'overlay' }) {
             ${!collapsed && gpuMeters.length > 0 && html`<${GpuDetailsPopover} meters=${gpuMeters} openGpuId=${openGpuId} onOpen=${handleGpuOpen} triggerRef=${gpuTriggerRef} />`}
         </div>
     `;
+}
+
+/** Missing PSI is unknown, never a zero-valued history point. */
+export function resolveIoPressureMeter(metrics) {
+    const some = optionalPercent(metrics?.io_pressure_some_percent);
+    const full = optionalPercent(metrics?.io_pressure_full_percent);
+    const history = (input) => {
+        const points = Array.isArray(input) ? input.slice(-30).map(optionalPercent) : [];
+        return points.some(value => value === null) ? [] : points;
+    };
+    const someSeries = history(metrics?.io_pressure_some_series);
+    if (some === null || !someSeries.length) return null;
+    const percent = value => `${Number(value.toFixed(2))}%`;
+    return {
+        value: percent(some),
+        title: `I/O pressure (Linux PSI, 10s average): some ${percent(some)}, full ${full === null ? 'unavailable' : percent(full)}. Solid: at least one task stalled; dashed: all non-idle tasks stalled. Kernel-visible scope, not disk utilisation or throughput.`,
+        somePath: buildSparklinePath(someSeries, 56, 16, { min: 0, max: 100 }),
+        fullPath: full === null ? '' : buildSparklinePath(history(metrics?.io_pressure_full_series), 56, 16, { min: 0, max: 100 }),
+    };
 }

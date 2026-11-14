@@ -59,6 +59,10 @@ export interface SystemMetricsSnapshot {
   cpu_percent: number;
   ram_percent: number;
   swap_percent: number | null;
+  io_pressure_some_percent: number | null;
+  io_pressure_full_percent: number | null;
+  io_pressure_some_series: number[];
+  io_pressure_full_series: number[];
   cpu_series: number[];
   ram_series: number[];
   swap_series: number[];
@@ -172,6 +176,36 @@ export function parseLinuxSwapMeminfo(text: string): SwapUsageSnapshot | null {
   const usedBytes = Math.max(0, totalBytes - Math.min(freeBytes, totalBytes));
   const percent = totalBytes > 0 ? (usedBytes / totalBytes) * 100 : 0;
   return { totalBytes, usedBytes, percent: roundPercent(percent) };
+}
+
+export interface LinuxIoPressureSnapshot {
+  somePercent: number;
+  fullPercent: number | null;
+}
+
+/** PSI avg10 is stall time as a percentage, not disk utilisation or throughput. */
+export function parseLinuxIoPressure(text: string): LinuxIoPressureSnapshot | null {
+  const lines = text.split("\n");
+  const read = (kind: string): number | null => {
+    const line = lines.find(line => line.startsWith(`${kind} `));
+    const raw = line?.match(/(?:^|\s)avg10=(\d+(?:\.\d+)?)(?=\s|$)/)?.[1];
+    const value = raw === undefined ? NaN : Number(raw);
+    return Number.isFinite(value) && value <= 100 ? value : null;
+  };
+  const somePercent = read("some");
+  return somePercent === null ? null : { somePercent, fullPercent: read("full") };
+}
+
+export function readLinuxIoPressure(
+  platform: NodeJS.Platform = process.platform,
+  readText: () => string = () => fs.readFileSync("/proc/pressure/io", "utf8"),
+): LinuxIoPressureSnapshot | null {
+  if (platform !== "linux") return null;
+  try {
+    return parseLinuxIoPressure(readText());
+  } catch {
+    return null;
+  }
 }
 
 function parseKbLine(text: string, label: string): number | null {
@@ -316,6 +350,8 @@ export class SystemMetricsSampler {
   private cpuSeries: number[] = [];
   private ramSeries: number[] = [];
   private swapSeries: number[] = [];
+  private ioPressureSomeSeries: number[] = [];
+  private ioPressureFullSeries: number[] = [];
   private vramSeries: number[] = [];
   private gpuBusySeries: Array<number | null> = [];
   private gpuSampleTimes: number[] = [];
@@ -329,6 +365,7 @@ export class SystemMetricsSampler {
     private readonly maxSamples = 30,
     private readonly sampleIntervalMs = 2000,
     private readonly gpuVramReader: () => GpuVramUsageSnapshot | null = readGpuVramUsage,
+    private readonly ioPressureReader: () => LinuxIoPressureSnapshot | null = readLinuxIoPressure,
   ) {}
 
   readSnapshot(runtimeMemorySnapshot?: AgentPoolMemoryInstrumentationSnapshot | null, gpus: IntelGpuSnapshot[] = [], collectGpu = true): SystemMetricsSnapshot {
@@ -343,6 +380,9 @@ export class SystemMetricsSampler {
 
     const ramUsage = readRamUsage();
     const swapUsage = readSwapUsage();
+    const ioPressure = this.ioPressureReader();
+    this.ioPressureSomeSeries = ioPressure === null ? [] : pushSample(this.ioPressureSomeSeries, ioPressure.somePercent, this.maxSamples);
+    this.ioPressureFullSeries = ioPressure?.fullPercent == null ? [] : pushSample(this.ioPressureFullSeries, ioPressure.fullPercent, this.maxSamples);
     const gpuVramUsage = collectGpu ? this.gpuVramReader() : null;
     const cpuValue = roundPercent(cpuPercent);
     const ramValue = ramUsage.percent;
@@ -380,6 +420,10 @@ export class SystemMetricsSampler {
       cpu_percent: cpuValue,
       ram_percent: ramValue,
       swap_percent: swapValue,
+      io_pressure_some_percent: ioPressure?.somePercent ?? null,
+      io_pressure_full_percent: ioPressure?.fullPercent ?? null,
+      io_pressure_some_series: [...this.ioPressureSomeSeries],
+      io_pressure_full_series: [...this.ioPressureFullSeries],
       cpu_series: [...this.cpuSeries],
       ram_series: [...this.ramSeries],
       swap_series: [...this.swapSeries],
