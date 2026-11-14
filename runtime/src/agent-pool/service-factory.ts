@@ -10,7 +10,6 @@ import { readAccessConfig } from '../core/config-access.js';
 import { createChatSshCoreExtension, resolveSshCoreConfigFromChatConfig } from "../extensions/ssh-core.js";
 import { AgentBranchManager } from "./branch-manager.js";
 import { AgentRuntimeFacade } from "./runtime-facade.js";
-import type { AgentSessionBinder } from "./session-binder.js";
 import type { AgentSessionManager, PoolEntry } from "./session-manager.js";
 import type { AgentToolFactory, AgentBashOperations } from "./tool-factory.js";
 import type { AgentPoolOptions } from "./contracts.js";
@@ -42,11 +41,10 @@ export interface AgentPoolServiceFactoryOptions extends AgentPoolLogHooks {
   createSession?: AgentPoolOptions["createSession"];
 }
 
-type SessionBinderService = Pick<AgentSessionBinder, "setBinder" | "bindSession">;
 type ToolFactoryService = Pick<AgentToolFactory, "createDefaultTools" | "createCustomToolOverrides">;
 type SessionManagerService = Pick<AgentSessionManager,
   "assertLegacyCaptureIdle" | "blockMcpAdmissions" | "fenceMcpAndSnapshot" | "resumeMcpAdmissions" | "quarantineMcpRuntime"
-  | "acquireEvictionProtection" | "getOrCreate" | "refreshRuntime" | "prewarm" | "cancelPrewarm" | "hasPendingSessionWork"
+  | "acquireEvictionProtection" | "getOrCreate" | "refreshRuntime" | "hasPendingSessionWork"
   | "recreate" | "hasProtectedRun" | "hasActiveMemoryReclamationWork" | "getInstrumentationSnapshot" | "evictIdle" | "shutdown">;
 type BranchManagerService = Pick<AgentBranchManager,
   "renameChatBranch" | "pruneChatBranch" | "createRootChatSession"
@@ -56,7 +54,6 @@ type BranchManagerService = Pick<AgentBranchManager,
 export interface AgentPoolServices {
   mcpSettings: McpCodemodeController;
   attachments: ReturnType<typeof getAttachmentRegistry>;
-  sessionBinder?: SessionBinderService;
   sessionManager?: SessionManagerService;
   runtimeFacade: AgentRuntimeFacade;
   branchManager: BranchManagerService;
@@ -95,11 +92,6 @@ export function createAgentPoolServices(options: AgentPoolServiceFactoryOptions)
 
   const durable = getDurableSession !== undefined;
 
-  const sessionBinder: SessionBinderService | undefined = durable ? undefined : new (require("./session-binder.js") as { AgentSessionBinder: new (...args: any[]) => SessionBinderService }).AgentSessionBinder({
-    pool: options.pool,
-    onError: options.onError,
-  });
-
   const toolFactory: ToolFactoryService | undefined = durable ? undefined : new (require("./tool-factory.js") as { AgentToolFactory: new (...args: any[]) => ToolFactoryService }).AgentToolFactory({
     workspaceDir: options.workspaceDir,
     bashOperations: options.bashOperations,
@@ -134,7 +126,6 @@ export function createAgentPoolServices(options: AgentPoolServiceFactoryOptions)
     bindSession: async (runtime: AgentSessionRuntime, chatJid: string) => {
       (require("./usage.js") as { installSessionUsageRecorder: (session: unknown, chatJid: string, onWarn?: AgentPoolLogHooks["onWarn"]) => void })
         .installSessionUsageRecorder(runtime.session, chatJid, options.onWarn);
-      await sessionBinder!.bindSession(runtime, chatJid);
     },
     onInfo: options.onInfo,
     onWarn: options.onWarn,
@@ -150,7 +141,7 @@ export function createAgentPoolServices(options: AgentPoolServiceFactoryOptions)
   return {
     mcpSettings: new McpCodemodeController(sessionManager),
     attachments,
-    ...(durable ? {} : {sessionBinder,sessionManager}),
+    ...(durable ? {} : {sessionManager}),
     runtimeFacade,
     branchManager,
   };

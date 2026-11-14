@@ -339,57 +339,9 @@ test("AgentSessionManager caps cached main sessions by evicting the oldest idle 
   await fixture.manager.shutdown();
 });
 
-test("AgentSessionManager lightweight prewarm primes caches without creating a runtime", async () => {
-  const lightweight: string[] = [];
-  let createCalls = 0;
-  const fixture = createManager({
-    lightweightPrewarmSession: async (chatJid: string) => {
-      lightweight.push(chatJid);
-    },
-    createSession: async () => {
-      createCalls += 1;
-      return createRuntime({ dispose() {} }) as any;
-    },
-  });
 
-  expect(fixture.manager.prewarm("web:recent", { mode: "lightweight" })).toBe(true);
-  await Bun.sleep(20);
 
-  expect(lightweight).toEqual(["web:recent"]);
-  expect(createCalls).toBe(0);
-  expect(fixture.pool.size).toBe(0);
 
-  await fixture.manager.shutdown();
-});
-
-test("AgentSessionManager serializes queued prewarms and honors priority ordering", async () => {
-  const created: string[] = [];
-  let activeCreates = 0;
-  let maxConcurrentCreates = 0;
-
-  const fixture = createManager({
-    createSession: async (chatJid: string) => {
-      created.push(chatJid);
-      activeCreates += 1;
-      maxConcurrentCreates = Math.max(maxConcurrentCreates, activeCreates);
-      await Bun.sleep(10);
-      activeCreates -= 1;
-      return createRuntime({ dispose() {} }) as any;
-    },
-  });
-
-  expect(fixture.manager.prewarm("web:older")).toBe(true);
-  expect(fixture.manager.prewarm("web:newer")).toBe(true);
-  expect(fixture.manager.prewarm("web:priority", { priority: true })).toBe(true);
-  expect(fixture.manager.prewarm("web:older")).toBe(false);
-
-  await Bun.sleep(50);
-
-  expect(created).toEqual(["web:older", "web:priority", "web:newer"]);
-  expect(maxConcurrentCreates).toBe(1);
-
-  await fixture.manager.shutdown();
-});
 
 test("AgentSessionManager fails loudly and clears the cache when a deferred branch seed is invalid", async () => {
   const ws = createTempWorkspace("piclaw-session-manager-invalid-seed-");
@@ -417,8 +369,6 @@ test("AgentSessionManager fails loudly and clears the cache when a deferred bran
   expect(fixture.pool.has(chatJid)).toBe(false);
   expect(createCalls).toBe(1);
   expect(disposed).toBe(1);
-  fixture.manager.prewarm(chatJid);
-  expect(createCalls).toBe(1);
 });
 
 test("AgentSessionManager disposes an existing runtime and restores its deferred seed when realization fails", async () => {
@@ -529,39 +479,18 @@ test("AgentSessionManager disposes a broken existing runtime only once across co
   expect(disposed).toBe(1);
 });
 
-test("AgentSessionManager priority prewarms bypass the recent-chat cooldown and prune expired entries", async () => {
-  const fixture = createManager({
-    createSession: async () => createRuntime({ dispose() {} }),
-  });
-  const originalDateNow = Date.now;
-  Date.now = () => 100_000;
 
-  try {
-    (fixture.manager as any).prewarmCooldownByChat.set("web:recent", 99_500);
-    expect(fixture.manager.prewarm("web:recent")).toBe(false);
-    expect(fixture.manager.prewarm("web:recent", { priority: true })).toBe(true);
 
-    (fixture.manager as any).queuedPrewarms.clear();
-    (fixture.manager as any).prewarmQueue.length = 0;
-    (fixture.manager as any).prewarmCooldownByChat.set("web:stale", 69_000);
-    expect(fixture.manager.prewarm("web:fresh")).toBe(true);
-    expect((fixture.manager as any).prewarmCooldownByChat.has("web:stale")).toBe(false);
-  } finally {
-    Date.now = originalDateNow;
-    await fixture.manager.shutdown();
-  }
-});
-
-test("AgentSessionManager rejects new prewarms once shutdown starts", async () => {
+test("AgentSessionManager rejects new sessions once shutdown starts", async () => {
   const fixture = createManager({
     createSession: async () => createRuntime({ dispose() {} }),
   });
 
   await fixture.manager.shutdown();
-  expect(fixture.manager.prewarm("web:after-shutdown")).toBe(false);
+  await expect(fixture.manager.getOrCreate("web:after-shutdown")).rejects.toThrow("blocked");
 });
 
-test("AgentSessionManager does not retain a prewarm-created runtime when shutdown starts mid-create", async () => {
+test("AgentSessionManager joins and disposes an admitted runtime when shutdown starts mid-create", async () => {
   let disposed = 0;
   let releaseCreate!: () => void;
   const createGate = new Promise<void>((resolve) => {
@@ -579,7 +508,7 @@ test("AgentSessionManager does not retain a prewarm-created runtime when shutdow
     },
   });
 
-  expect(fixture.manager.prewarm("web:shutdown-race")).toBe(true);
+  const admitted = fixture.manager.getOrCreate("web:shutdown-race").catch(error => error);
   await Bun.sleep(10);
   let shutdownCompleted = false;
   const shutdown = fixture.manager.shutdown().then(() => { shutdownCompleted = true; });
@@ -587,6 +516,7 @@ test("AgentSessionManager does not retain a prewarm-created runtime when shutdow
   expect(shutdownCompleted).toBe(false);
   expect(disposed).toBe(0);
   releaseCreate();
+  expect(await admitted).toBeInstanceOf(Error);
   await shutdown;
   await waitFor(() => disposed === 1, 1_000, 10);
 
