@@ -57,7 +57,9 @@ applicationTest("Remote Peer actual factory uses network-free transport, execute
       calls++;
       prompts.push(JSON.stringify(input.messages));
       entered?.();
-      const last = input.messages.at(-1);
+      // Request-only Core guidance may trail the conversation. It does not
+      // turn a committed tool result into another synthetic tool request.
+      const last = input.messages.filter((message: any) => message.role !== "system").at(-1);
       const tool = last?.role === "toolResult" ? last : undefined;
       if (tool) result = JSON.stringify(tool);
       const message = { role: "assistant", api: model.api, provider: model.provider, model: model.id, timestamp: Date.now(),

@@ -28,7 +28,7 @@ The Plan hook runs before request-only prompt sections so its comparison uses th
 
 ## Authority and lifecycle
 
-The hook reads the native document through the public SDK Hook API and requires captured native source authority. Source, cancellation and database ownership checks still run at the physical SQL write boundaries through the existing `withAdmissionGuard`. The tool has no S01/harness fallback.
+The readonly hook reads the native document through the public SDK Hook API. Its live generation, cancellation and accepted-input provenance are checked during capture and materialisation, including current private side forks. This context read grants no authority to execute a Plan tool. Source and database ownership checks still run at physical SQL write boundaries through the existing `withAdmissionGuard`. Plan tool execution requires direct native input authority and has no S01/harness fallback.
 
 Current-native Plan0.1.28 extension-KV records are an exact-chat, read-only seed when the document is absent. Reads do not create documents. The SDK document always wins after adoption; Core never mirrors writes, changes legacy timestamps or deletes old rows. Malformed or mismatched records fail closed. This is not a v3 store importer.
 

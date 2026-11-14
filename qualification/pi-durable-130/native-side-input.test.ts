@@ -49,6 +49,10 @@ applicationTest('actual factory side request preserves isolated SDK history, cur
     const result=await f.pool.runSidePrompt('web:default','Isolated side request',options);expect(result).toMatchObject({status:'success',result:'Native isolated side reply',model:'fixture/lifecycle',usage:{totalTokens:2}});
     expect(state.calls).toBe(1);expect(events).toContain('text_delta');expect(events).toContain('done');expect(text.join('')).toBe('Native isolated side reply');expect(JSON.stringify(state.contexts.at(-1))).toContain('SIDE_SYSTEM_PREFIX\\n\\nIsolated side request');
     expect(s.history()).toEqual(parent);expect(s.financial()).toEqual(financial);expect(position.sessionId).toBe(identity);expect(await position.readModel!()).toBe(model);
+    // Readonly Core Plan context may accompany a live SDK side generation, but
+    // must not create active Plan state or restore a legacy Plan writer.
+    expect(f.root.query('SELECT id FROM documents WHERE kind=?').all(JSON.stringify('app.plan'))).toEqual([]);
+    expect(f.root.query("SELECT * FROM extension_kv WHERE extension_id='plan-sidebar'").all()).toEqual([]);
     const side=f.root.query("SELECT conversation_id,request_id,source_id FROM piclaw_durable_bindings_v1 WHERE source_id LIKE 'side-prompt:%'").get() as {conversation_id:number;request_id:string;source_id:string};expect(side.conversation_id).not.toBe(s.parent);expect(side.request_id).toBe(side.source_id);
     expect(await f.pool.runSidePrompt('web:default','Isolated side request',{requestId:options.requestId,systemPrompt:options.systemPrompt})).toEqual(result);expect(state.calls).toBe(1);
     for(const changed of [{prompt:'Changed body',system:options.systemPrompt},{prompt:'Isolated side request',system:'Changed prefix'}])expect((await f.pool.runSidePrompt('web:default',changed.prompt,{requestId:options.requestId,systemPrompt:changed.system})).status).toBe('error');
