@@ -92,14 +92,20 @@ export async function projectModelContext(view: ContextView, input: Omit<PromptI
   return leading([...view.messages, ...additions], initial ? additions[0] : undefined);
 }
 
+/** Per-image allowance for images no reported usage has measured yet. Encoded
+ * bytes are not tokens and provider image costs differ, so reserve a generous
+ * ceiling instead of the SDK's flat estimate. Usage reported after an image
+ * includes the producer's actual cost; the provider remains the final limit. */
+const UNMEASURED_IMAGE_TOKENS = 8192;
+const SDK_IMAGE_TOKENS = estimateContextTokens([{ role: "user", content: [{ type: "image", mimeType: "image/png", data: "" }], timestamp: 0 }]).tokens;
+
 /** Selection preflight, not dispatch authority. Refuse oversized input and known
  * producer bounds; unknown output stays unknown and is left to the SDK/provider.
  */
-export function assertModelContextFits(messages: readonly Message[], target: { contextWindow: number; maxTokens: number }, output?: SimpleRequestPreview): void {
+export function assertModelContextFits(messages: readonly Message[], target: { contextWindow: number; maxTokens: number; input?: readonly string[] }, output?: SimpleRequestPreview): void {
   if (!Number.isFinite(target.contextWindow) || target.contextWindow <= 0 || !Number.isFinite(target.maxTokens) || target.maxTokens <= 0) throw Error("Model context unavailable");
   if (output?.status === "bounded" && (output.authIndependent !== true || !Number.isSafeInteger(output.maxOutputTokens) || output.maxOutputTokens <= 0 ||
     !Number.isSafeInteger(output.reserveTokens) || output.reserveTokens < output.maxOutputTokens)) throw Error("Model context unavailable");
-  if (messages.some(message => typeof message.content !== "string" && message.content.some(block => block.type === "image"))) throw Error("Non-text context overhead unavailable");
   if (messages.some(message => message.role === "assistant" &&
     [message.usage.input, message.usage.output, message.usage.cacheRead, message.usage.cacheWrite, message.usage.totalTokens]
       .some(value => !Number.isFinite(value) || value < 0))) throw Error("Model context usage unavailable");
@@ -121,14 +127,18 @@ export function assertModelContextFits(messages: readonly Message[], target: { c
   const framing = suffix.flatMap(message => message.role === "toolResult" ? [message.toolName, message.toolCallId]
     : message.role === "assistant" ? message.content.flatMap(block => block.type === "toolCall" ? [block.id] : []) : []);
   const framingTokens = framing.length ? estimateContextTokens([{ role: "user", content: framing.join("\n"), timestamp: 0 }]).tokens : 0;
-  const measuredInputEstimate = Math.max(estimate.tokens, measuredTokens + estimate.trailingTokens);
+  // Text-only targets receive SDK placeholders, already within the flat estimate.
+  const images = target.input && !target.input.includes("image") ? 0 : suffix.reduce((count, message) =>
+    count + ((message.role === "user" || message.role === "toolResult") && typeof message.content !== "string"
+      ? message.content.filter(block => block.type === "image").length : 0), 0);
+  const measuredInputEstimate = Math.max(estimate.tokens, measuredTokens + estimate.trailingTokens) + images * (UNMEASURED_IMAGE_TOKENS - SDK_IMAGE_TOKENS);
   const inputEstimate = measuredInputEstimate + framingTokens;
   // SDK safety room can cover transport framing, but never measured cache input.
   // Keep the reserve on the cache-inclusive estimate; check the physical cap too.
   if (!Number.isFinite(inputEstimate) || inputEstimate < 0 || inputEstimate > target.contextWindow ||
     (output?.status === "bounded" && (measuredInputEstimate + output.reserveTokens > target.contextWindow || inputEstimate + output.maxOutputTokens > target.contextWindow))) {
     const bytes = new TextEncoder().encode(JSON.stringify(messages)).length;
-    throw Error(`Candidate context estimate exceeded; compact first (serialized input bytes=${bytes}, reported tokens=${estimate.usageTokens}, estimated context tokens=${estimate.tokens}, input token estimate=${inputEstimate}, producer output reserve=${output?.status === "bounded" ? output.reserveTokens : "unknown"}, context window=${target.contextWindow})`);
+    throw Error(`Candidate context estimate exceeded; compact first (serialized input bytes=${bytes}, reported tokens=${estimate.usageTokens}, estimated context tokens=${estimate.tokens}, input token estimate=${inputEstimate}, producer output reserve=${output?.status === "bounded" ? output.reserveTokens : "unknown"}, context window=${target.contextWindow}${images ? `, unmeasured images=${images}` : ""})`);
   }
 }
 

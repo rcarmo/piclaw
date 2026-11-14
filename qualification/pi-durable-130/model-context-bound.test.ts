@@ -29,9 +29,42 @@ test("producer safety room cannot hide transport framing that overflows the actu
   expect(() => assertModelContextFits(messages,target,output)).toThrow('Candidate context estimate exceeded');
 });
 
-test("context guard still refuses oversized input and images", () => {
+test("context guard still refuses oversized input", () => {
   expect(() => assertModelContextFits([{...message, content: "x".repeat(600000)}], target)).toThrow("compact first");
-  expect(() => assertModelContextFits([{...message, content: [{type: "image", mimeType: "image/png", data: "fixture"}]}] as any, target)).toThrow("Non-text context overhead unavailable");
+});
+
+// Image history must not make model switching impossible. Reported usage after an
+// image already includes its provider cost; unmeasured images reserve a ceiling.
+const image = (data = "fixture") => ({ type: "image", mimeType: "image/png", data }) as const;
+const imageUser = (count: number, timestamp = 2, data?: string) =>
+  ({ role: "user", content: [{ type: "text", text: "screenshot" }, ...Array.from({ length: count }, () => image(data))], timestamp }) as Message;
+const imageTool = (timestamp = 2) => ({ role: "toolResult", toolCallId: "view", toolName: "view_image",
+  content: [{ type: "text", text: "(see attached image)" }, image()], isError: false, timestamp }) as Message;
+const visionTarget = { ...target, input: ["text", "image"] as const };
+
+test("measured image history no longer blocks switching", () => {
+  const measured = { ...measuredAssistant(50000), timestamp: 3 };
+  expect(() => assertModelContextFits([imageUser(10, 1), imageTool(2), measured], visionTarget)).not.toThrow();
+  expect(() => assertModelContextFits([imageUser(10, 1), measured], target)).not.toThrow();
+});
+
+test("encoded image bytes are not counted as text tokens", () => {
+  expect(() => assertModelContextFits([imageUser(1, 1, "A".repeat(4000000))], visionTarget)).not.toThrow();
+});
+
+test("unmeasured images reserve a conservative ceiling and still refuse overflow", () => {
+  const measured = measuredAssistant(50000);
+  expect(() => assertModelContextFits([measured, imageUser(1), imageTool(3)], visionTarget)).not.toThrow();
+  let error: Error | undefined;
+  try { assertModelContextFits([measured, imageUser(7)], visionTarget); } catch (e) { error = e as Error; }
+  expect(error?.message).toStartWith("Candidate context estimate exceeded; compact first");
+  expect(error?.message).toContain("unmeasured images=7");
+  expect(() => assertModelContextFits([imageUser(13, 1)], visionTarget)).toThrow("Candidate context estimate exceeded");
+});
+
+test("text-only targets receive SDK image placeholders, not image ceilings", () => {
+  const textTarget = { ...target, input: ["text"] as const };
+  expect(() => assertModelContextFits([measuredAssistant(50000), imageUser(20)], textTarget)).not.toThrow();
 });
 
 function measuredAssistant(tokens: number, signature = "") {

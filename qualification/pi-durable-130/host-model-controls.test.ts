@@ -166,3 +166,25 @@ for (const reject of [false, true]) test(`owned model selection uses prepared se
   }
   expect(preparations).toBe(1); expect(checks).toBe(1); expect(f.stats().reads).toBe(0);
 });
+test("set_model succeeds after viewed images and persists only the requested model", async () => {
+  // Reproduces "Non-text context overhead unavailable" after view_image results.
+  const usage = (input: number) => ({ input, output: 10, cacheRead: 0, cacheWrite: 0, totalTokens: input + 10, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } });
+  const messages = [
+    { role: "user", content: "show the screenshot", timestamp: 1 },
+    { role: "assistant", api: "openai-responses", provider: "first", model: "one", stopReason: "toolUse", timestamp: 2, usage: usage(500),
+      content: [{ type: "toolCall", id: "view", name: "view_image", arguments: { path: "shot.png" } }] },
+    { role: "toolResult", toolCallId: "view", toolName: "view_image", isError: false, timestamp: 3,
+      content: [{ type: "text", text: "(see attached image)" }, { type: "image", mimeType: "image/png", data: "A".repeat(200000) }] },
+    { role: "assistant", api: "openai-responses", provider: "first", model: "one", stopReason: "stop", timestamp: 4, usage: usage(2100),
+      content: [{ type: "text", text: "Looks fine." }] },
+  ];
+  const f = fixture([], messages);
+  const changed = await f.run("set_model", { model: "second/two", thinking_level: "high" });
+  expect(changed.error).toBeUndefined();
+  expect(changed.model).toBe("second/two");
+  expect(f.state()).toEqual({ model: { provider: "second", modelId: "two" }, thinkingLevel: "high", tools: ["bash"] });
+  // A target that cannot hold the measured context is still refused unchanged.
+  const before = structuredClone(f.state());
+  await expect(f.run("set_model", { model: "second/tiny" })).rejects.toThrow("compact first");
+  expect(f.state()).toEqual(before);
+});
