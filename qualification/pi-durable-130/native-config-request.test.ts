@@ -24,7 +24,7 @@ async function fixture(run: (f: { root: Database; request(method: string, action
   const source = process.env.DURABLE_CORE_ADDONS_ROOT;
   if (!source) throw Error('Pinned native fixture required; never use installed packages');
   const workspace = process.env.PICLAW_WORKSPACE!;
-  for (const slug of ['goal', 'plan-sidebar', ...globalPorts]) {
+  for (const slug of ['goal', ...globalPorts]) {
     const pkg = join(workspace, '.pi/extensions/node_modules/@rcarmo/piclaw-addon-' + slug);
     cpSync(join(source, 'addons', slug), pkg, { recursive: true, filter: path => basename(path) !== 'node_modules' });
     symlinkSync(join(import.meta.dir, slug === 'observability' ? 'node_modules' : '../../node_modules'), join(pkg, 'node_modules'));

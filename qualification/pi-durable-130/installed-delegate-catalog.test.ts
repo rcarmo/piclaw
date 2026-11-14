@@ -42,7 +42,7 @@ export default function() {}\n`);
       expect(qualified!.definition.parameters).toHaveProperty("properties.task_category");
       expect(qualified!.nativeLifecycle.events).toEqual(["session_start", "model_select", "before_agent_start"]);
       expect(() => assertApplicationExtensionCatalogSupported(catalog!)).toThrow("delegate: no operation-owned host effect port");
-      assertApplicationExtensionCatalogSupported(catalog, undefined, qualified);
+      assertApplicationExtensionCatalogSupported(catalog, qualified);
       if (mode === "handler") qualified!.extension.handlers.set("session_start", [async () => {}]);
       if (mode === "execute") qualified!.definition.execute = async () => { throw Error("must not run"); };
       if (mode === "schema") qualified!.definition.description += " changed";

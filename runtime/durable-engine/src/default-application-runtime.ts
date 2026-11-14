@@ -60,7 +60,7 @@ import { createHostBuiltinTools } from "./host-builtins.js";
 import { createHostModelTools, hostModelToolNames, nativeToolInstructions } from "./host-model-controls.js";
 import { createHostCommandPolicy } from "./host-command-policy.js";
 import { createHostProcessControls, nativeProcessToolNames, nativeProcessInstructions } from "./host-process-controls.js";
-import { inspectAddonInstall, loadApplicationExtensionCatalog, qualifyInstalledAddon, bindInstalledAddon, qualifyInstalledPlan, qualifyInstalledDelegate, qualifyInstalledCodeReview, qualifyInstalledEditableTable, qualifyInstalledOfficeViewer, qualifyInstalledDrawio, qualifyInstalledGoal, qualifyInstalledObservability, qualifyInstalledRestic, assertApplicationExtensionCatalogSupported } from "./host-extension-catalog.js";
+import { inspectAddonInstall, loadApplicationExtensionCatalog, qualifyInstalledAddon, bindInstalledAddon, qualifyInstalledDelegate, qualifyInstalledCodeReview, qualifyInstalledEditableTable, qualifyInstalledOfficeViewer, qualifyInstalledDrawio, qualifyInstalledGoal, qualifyInstalledObservability, qualifyInstalledRestic, assertApplicationExtensionCatalogSupported } from "./host-extension-catalog.js";
 import { createHostDelegateTool } from "./host-delegate-tool.js";
 import { createHostDelegateFileReader } from "./host-delegate-files.js";
 import { extensionKvGet } from "../../src/db/extension-kv.js";
@@ -68,7 +68,9 @@ import { createHostProxmoxTool, type ProxmoxNativeExports } from "./host-proxmox
 import { createHostPortainerTool, type PortainerNativeExports } from "./host-portainer-tool.js";
 import { createHostImapTool, type ImapNativeExports } from "./host-imap-tool.js";
 import { infrastructurePrompt, infrastructureLifecycle } from "./host-addon-prompts.js";
-import { createHostPlanTool } from "./host-plan-tool.js";
+import { createPlanTool } from "./plan-tool.js";
+import { readLegacyPlan } from "../../src/plan/legacy.js";
+import { parsePlanMarkdown, type SessionPlan } from "../../src/plan/markdown.js";
 import { createHostOperationAuthority } from "./host-operation-authority.js";
 import { hashCanonicalRequest } from "../../src/service-effects/contracts/common.js";
 import { createHostCodeReviewTool } from "./host-code-review-tool.js";
@@ -85,7 +87,7 @@ import { createHostGoalInput } from "./host-goal-input.js";
 import { isGoalBudgetWrapup } from "./host-goal-usage.js";
 import { createHostGoalSettlement, createNativeGoalProjection } from "./host-goal-settlement.js";
 import { createHostGoalProgressReader } from "./host-goal-progress.js";
-import { createHostGoalPlanReader } from "./host-goal-plan.js";
+
 import { registerAddonConfigApi } from "../../src/channels/web/handlers/addon-config-api.js";
 import { createHostGoalConfig } from "./host-goal-config.js";
 import { createHostGoalCommand } from "./host-goal-command.js";
@@ -285,7 +287,6 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   // Source qualification alone is never a native binding/provider receipt.
   const codex = await qualifyInstalledAddon(catalog, WORKSPACE_DIR, "codex-conversion");
   const codexHost = codex ? await getModels() : undefined;
-  const plan = await qualifyInstalledPlan(catalog, WORKSPACE_DIR);
   const observability = await qualifyInstalledObservability(catalog, WORKSPACE_DIR);
   const restic = await qualifyInstalledRestic(catalog, WORKSPACE_DIR);
   const readObservabilityConfiguration = () => {
@@ -694,23 +695,22 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     tools: [infrastructureTools[index]!], lifecycle: infrastructureLifecycle(qualified), commands: {},
   }));
   try {
-    assert(); assertApplicationExtensionCatalogSupported(catalog, plan, delegate, codeReview, editableTable, officeViewer, drawio, goal, observability, restic, [...receipts, ...resourceReceipts, ...(remoteReceipt ? [remoteReceipt] : []), ...(regretsReceipt ? [regretsReceipt] : []), ...(codexReceipt ? [codexReceipt] : [])]);
-    if (goal && !plan) throw Error("Native Goal requires qualified Plan");
+    assert(); assertApplicationExtensionCatalogSupported(catalog, delegate, codeReview, editableTable, officeViewer, drawio, goal, observability, restic, [...receipts, ...resourceReceipts, ...(remoteReceipt ? [remoteReceipt] : []), ...(regretsReceipt ? [regretsReceipt] : []), ...(codexReceipt ? [codexReceipt] : [])]);
   } catch (error) { closeResources(); throw error; } finally { catalog.runtime.invalidate("Application extension preflight ended"); }
   let infrastructureClosed = false;
   const closeInfrastructure = () => { if (infrastructureClosed) return; infrastructureClosed = true; for (const qualified of infrastructure) if (qualified.kind === "imap") (qualified.nativeExports["index.ts"]!.disposeImapPool as () => void)(); };
-  const baseApplicationToolNames: readonly string[] = [...defaultToolNames, ...hostModelToolNames, ...nativeProcessToolNames, ...(codexGroup?.tools.map(tool => tool.name) ?? []), "codemode", ...(remotePeer ? ["remote_peer"] : []), ...(regrets ? ["regrets_review"] : []), ...infrastructureTools.map(tool => tool.name), ...(restic ? ["restic"] : []), ...(goal ? ["get_goal", "create_goal", "goal_complete", "goal_stop", "update_goal"] : []), ...(plan ? ["plan"] : []), ...(delegate ? ["delegate"] : []), ...(codeReview ? ["code_review"] : []), ...(editableTable ? ["editable_table"] : []), ...(officeViewer ? ["open_office_viewer"] : []), ...(drawio ? ["open_drawio_editor"] : [])];
+  const baseApplicationToolNames: readonly string[] = [...defaultToolNames, ...hostModelToolNames, ...nativeProcessToolNames, ...(codexGroup?.tools.map(tool => tool.name) ?? []), "codemode", ...(remotePeer ? ["remote_peer"] : []), ...(regrets ? ["regrets_review"] : []), ...infrastructureTools.map(tool => tool.name), ...(restic ? ["restic"] : []), ...(goal ? ["get_goal", "create_goal", "goal_complete", "goal_stop", "update_goal"] : []), "plan", ...(delegate ? ["delegate"] : []), ...(codeReview ? ["code_review"] : []), ...(editableTable ? ["editable_table"] : []), ...(officeViewer ? ["open_office_viewer"] : []), ...(drawio ? ["open_drawio_editor"] : [])];
   const fetchDefault = [...baseApplicationToolNames, "fetch"];
   const previousDefault = baseApplicationToolNames.filter(name => name !== "codemode");
   let previousModelDefault: readonly string[] = [];
   let previousProcessDefault: readonly string[] = [];
   const completeToolSet = (value: unknown, names: readonly string[]) => Array.isArray(value) && value.length === names.length && new Set(value).size === names.length && names.every(name => value.includes(name));
-  const isFactoryDefault = (value: unknown) => isOldDefault(value) || completeToolSet(value, defaultToolNames) ||
-    completeToolSet(value, previousDefault) || completeToolSet(value, fetchDefault) ||
-    completeToolSet(value, baseApplicationToolNames) || completeToolSet(value, previousModelDefault) ||
-    completeToolSet(value, previousModelDefault.filter(name => name !== "codemode")) ||
-    completeToolSet(value, previousProcessDefault) || completeToolSet(value, previousProcessDefault.filter(name => name !== "fetch")) ||
-    completeToolSet(value, previousProcessDefault.filter(name => !(hostModelToolNames as readonly string[]).includes(name)));
+  const isFactoryDefault = (value: unknown) => isOldDefault(value) || [
+    defaultToolNames, previousDefault, fetchDefault, baseApplicationToolNames, previousModelDefault,
+    previousModelDefault.filter(name => name !== "codemode"), previousProcessDefault,
+    previousProcessDefault.filter(name => name !== "fetch"),
+    previousProcessDefault.filter(name => !(hostModelToolNames as readonly string[]).includes(name)),
+  ].some(names => completeToolSet(value, names) || completeToolSet(value, names.filter(name => name !== "plan")));
   let drawioHost: ReturnType<DrawioNativeExports["bindDrawioVendorHost"]> | undefined;
   let sandbox: CodemodeSandbox | undefined;
   let sandboxClose: Promise<void> | undefined;
@@ -725,7 +725,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     // Native consumers are qualified separately from generic installed add-ons.
     // Keep their exact namespaces and source assertions after legacy preflight ends.
     const nativeConfigOwners = new Map<string, { assertCurrent(): void } | undefined>([
-      ["goal", goal], ["observability", observability], ["plan-sidebar", plan],
+      ["goal", goal], ["observability", observability],
       ["delegate", delegate], ["code-review", codeReview],
     ]);
     releaseAdminKv = registerAddonConfigKvAuthority((extensionId, chatJid, request) => {
@@ -1019,9 +1019,11 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   if (restic) tools.push(createHostResticTool(restic.addon, { root, runtime,
     assertOwner() { assert(); lifetime.signal.throwIfAborted(); restic.assertCurrent(); } }));
   if (goal) tools.push(...createHostGoalTools(goal.addon.createGoalTools, { root, runtime, assertOwner: assertGoal, resolveGoalInput: goal.addon.resolveGoalInput }));
-  if (plan) tools.push(createHostPlanTool(plan.definition as Parameters<typeof createHostPlanTool>[0], { root, assertOwner: () => {
-    assert(); lifetime.signal.throwIfAborted(); plan.assertCurrent();
-  }, runtime, createTool: plan.addon.createPlanTool }));
+  const notifyPlan = (plan: SessionPlan, source: "tool" | "api", action: string) => {
+    terminalBroadcast?.("extension_ui_status", { key: "plan.changes", addon: "core", chat_jid: plan.chat_jid, updated_at: plan.updated_at, source, action });
+  };
+  tools.push(createPlanTool({ runtime, assertOwner() { assert(); lifetime.signal.throwIfAborted(); },
+    readLegacy: chat => readLegacyPlan(root, chat), changed: (plan, action) => notifyPlan(plan, "tool", action) }));
   if (codeReview) tools.push(createHostCodeReviewTool(codeReview.addon, { root, cwd: WORKSPACE_DIR, runtime,
     assertOwner() { assert(); lifetime.signal.throwIfAborted(); codeReview.assertCurrent(); } }));
   if (officeViewer) tools.push(createHostOfficeViewerTool(officeViewer.definition as Parameters<typeof createHostOfficeViewerTool>[0], { root, runtime, workspace: WORKSPACE_DIR,
@@ -1098,8 +1100,8 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       goalRequestDenials.set(scope.signal, error);
     } else lifetime.abort(error);
   } }));
-  if (plan) registry.install(createHostPlanPrompt(plan.addon, { root, runtime,
-    assertOwner() { assert(); lifetime.signal.throwIfAborted(); plan.assertCurrent(); }, failClosed(error) { lifetime.abort(error); } }));
+  registry.install(createHostPlanPrompt({ root, runtime,
+    assertOwner() { assert(); lifetime.signal.throwIfAborted(); }, failClosed(error) { lifetime.abort(error); } }));
   if (regretsPrompt) registry.install(regretsPrompt);
   if (observability) registry.install(createHostObservabilityPrompt(observability.addon, { root, runtime,
     assertOwner() { assert(); lifetime.signal.throwIfAborted(); observability.assertCurrent(); }, failClosed(error) { lifetime.abort(error); } }));
@@ -1257,11 +1259,11 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       const goalAdmission = (chat: string) => { assertAdmission(); assertGoal(); if (!bundle.sessionTargets.list().some(binding => binding.chatJid === chat)) throw Error("Unbound Goal chat"); };
       const goalInput = goal ? createHostGoalInput(goal.addon, goalAdmission) : undefined;
       const goalCommand = goal ? createHostGoalCommand(goal.addon, { root, assertAdmission: goalAdmission, admit: input => bundle.admitHostFollowup(input) }) : undefined;
-      const goalProjectionOptions:Parameters<typeof createHostGoalSettlement>[1]|undefined=goal?{root,runtime,assertOwner:assertGoal,continuation:{
+      const goalProjectionOptions:Parameters<typeof createNativeGoalProjection>[1]|undefined=goal?{root,runtime,assertOwner:assertGoal,continuation:{
         addon:goal.addon,prepare:createHostGoalProgressReader(goal.addon,{runtime,assertOwner:assertGoal}),
-        readPlan:createHostGoalPlanReader(root,plan!.addon,goal.addon),admit:input=>bundle.admitHostFollowup(input),
+        admit:input=>bundle.admitHostFollowup(input),
       }}:undefined;
-      const goalSettlement=goal&&goalProjectionOptions?createHostGoalSettlement(goal.addon,goalProjectionOptions):undefined;
+      const goalSettlement=goal&&goalProjectionOptions?createHostGoalSettlement(goal.addon,{root,runtime,assertOwner:assertGoal}):undefined;
       const nativeGoalProjection=goal&&goalProjectionOptions?createNativeGoalProjection(goal.addon,goalProjectionOptions):undefined;
       bundle = await createApplicationBootstrapBundle({ root, path, ownership, offlineInitialize: true, answers, contentionSignal: lifetime.signal,
         background:{contexts:backgroundContexts,payloads:backgroundPayloads,
@@ -1305,7 +1307,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
             :modelFailureNotice(status.status==="unanswered"?status.detail:undefined,status.id);
           if(!content.trim())return; // A tool-only turn without its verified exit receipt is not a timeline reply.
           const applyGoal=status.status==="done"&&!result.answer?.processExit&&nativeGoalProjection?await nativeGoalProjection(primary,result):undefined;
-          const rowId=await admitSqliteWrite(root,()=>{
+          const publish = (plan?: ReturnType<NonNullable<typeof goal>["addon"]["summarizeGoalPlan"]>) => admitSqliteWrite(root,()=>{
             assert();if(getDb()!==root)throw Error("Native reply database binding changed");
             const threadId=resolveAcceptedMessageThread(root,primary);
             const prior=root.query("SELECT rowid,thread_id,is_bot_message,is_terminal_agent_reply FROM messages WHERE chat_jid=? AND id=?").get(input.chatJid,messageId) as {rowid:number;thread_id:number|null;is_bot_message:number;is_terminal_agent_reply:number}|null;
@@ -1322,10 +1324,12 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
                 if(publication?.rowid!==rowId)throw Error("Native Goal publication identity changed");
               };
               const authority={extensionId:"goal",chatJid:input.chatJid,assertCurrent:check,write<T>(body:()=>T):T{check();const value=body();check();return value;}};
-              withExtensionKvAuthority(authority,()=>applyGoal(authority,new Date().toISOString()));
+              withExtensionKvAuthority(authority,()=>applyGoal(authority,new Date().toISOString(),plan));
             }
             return rowId;
           },assert,terminalLifetime.signal);
+          const rowId = applyGoal ? await runtime().withPlanSnapshot(input.chatJid, () => readLegacyPlan(root, input.chatJid), assertGoal,
+            plan => publish(goal!.addon.summarizeGoalPlan(parsePlanMarkdown(plan.markdown).plan))) : await publish();
           codexServices?.releaseTurn(result.runId);
           processControls!.onMessagePublished(primary,rowId,result.answer?.processExit);
           const interaction=getMessageByRowId(input.chatJid,rowId);
@@ -1482,7 +1486,11 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     dispatchHostCommand: async () => { throw Error("Offline maintenance cannot admit conversations"); } } : {...bundle.sessionOptions,dispatchDreamOperation},
     bind(options) {
       assertAdmission(); nativeQueue=options.queue; // Resource-idle check for process controls only.
-      return Object.freeze({ ...bundle.bind(options), inspectAddonInstall, resumeNativeInputs(chatJid?: string) {
+      return Object.freeze({ ...bundle.bind(options), inspectAddonInstall,
+        handlePlanRequest(request: Request, chat: string, check: () => void) {
+          assertAdmission(); return runtime().handlePlanRequest(request, chat, check, () => readLegacyPlan(root, chat),
+            (plan, action) => notifyPlan(plan, "api", action));
+        }, resumeNativeInputs(chatJid?: string) {
         assertAdmission();
         const targets = bundle.sessionTargets.list().filter(target => !chatJid || chatJid === "all" || target.chatJid === chatJid);
         if (chatJid && chatJid !== "all" && targets.length === 0) throw Error("Unbound native input target");

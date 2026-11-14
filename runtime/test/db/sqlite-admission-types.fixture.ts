@@ -5,7 +5,6 @@ import { withExtensionKvAuthority, type ExtensionKvAuthority, type ExtensionKvSt
 import type { BunSqliteDatabase } from '../../../runtime/durable-engine/src/bun-sqlite.js';
 import type { createHostOperationAuthority } from '../../../runtime/durable-engine/src/host-operation-authority.js';
 import type { createHostGoalTools } from '../../../runtime/durable-engine/src/host-goal-tools.js';
-import type { createHostPlanTool } from '../../../runtime/durable-engine/src/host-plan-tool.js';
 import type { CodeReviewNativeExports } from '../../../runtime/durable-engine/src/host-code-review-tool.js';
 import type { CodexArtifactBinding } from '../../../runtime/durable-engine/src/host-codex-artifacts.js';
 import type { HostRegretsBindingOptions } from '../../../runtime/durable-engine/src/host-regrets-bindings.js';
@@ -40,9 +39,6 @@ authority.admitWrite!(async () => {});
 declare const goal: NonNullable<Parameters<Parameters<typeof createHostGoalTools>[0]>[1]>;
 // @ts-expect-error Goal admission must not erase the contract
 goal.write(async () => {});
-declare const plan: Parameters<Parameters<typeof createHostPlanTool>[1]['createTool']>[0];
-// @ts-expect-error Plan admission must not erase the contract
-plan(async () => {});
 declare const review: Parameters<CodeReviewNativeExports['setReviewDatabaseSource']>[0];
 // @ts-expect-error Code Review admission must not erase the contract
 review.admitWrite!(async () => {});

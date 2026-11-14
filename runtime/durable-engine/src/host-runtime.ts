@@ -1,3 +1,6 @@
+import { PlanDoc } from "./plan-document.js";
+import { handleNativePlanRequest } from "./plan-http.js";
+import { DEFAULT_PLAN, type SessionPlan } from "../../src/plan/markdown.js";
 import { captureInterruptedScheduledHarness } from "./host-scheduled-terminal.js";
 import { taskModelHookScope, taskModelToolScope, withTaskModelRequestScope } from "./task-model-boundary-shim.js";
 import { createTrackedBashOperations } from "../../src/tools/tracked-bash.js";
@@ -299,6 +302,38 @@ export class HostConversationRuntime {
     });
     // Join notification/cleanup failures during close; never detach an unhandled rejection.
     void this.storageEnded.catch(() => {});
+  }
+
+  /** Borrow the existing SDK SQLite admission scope. It rechecks the source at
+   * physical write/COMMIT boundaries; it owns no state, queue or transaction. */
+  withSourceWriteGuard<T>(check: () => void, body: () => Promise<T>): Promise<T> {
+    const guard = this.options.withPromptContextGuard;
+    if (!guard) throw Error("Native source write guard required");
+    return guard(check, body);
+  }
+  handlePlanRequest(request: Request, chat: string, check: () => void, legacy: () => SessionPlan | undefined,
+    changed: (plan: SessionPlan, action: "write" | "reset") => void): Promise<Response> {
+    const current = () => { request.signal.throwIfAborted(); this.observations.signal.throwIfAborted(); this.fence(); check(); };
+    return this.observe(() => this.withSourceWriteGuard(current, () => handleNativePlanRequest(this.harness, request, chat,
+      withAbortSignal(AbortSignal.any([request.signal, this.observations.signal]), this.context), current, legacy, changed)));
+  }
+  /** Hold the SDK mutation line while publishing a Goal decision against its
+   * current Plan. No SDK reads occur inside the Root SQL publication callback. */
+  withPlanSnapshot<T>(chat: string, legacy: () => SessionPlan | undefined, check: () => void,
+    publish: (plan: SessionPlan) => Promise<T>): Promise<T> {
+    const current = () => { this.observations.signal.throwIfAborted(); this.fence(); check(); };
+    return this.observe(() => this.withSourceWriteGuard(current, async () => {
+      const context = withAbortSignal(this.observations.signal, this.context);
+      current(); const existing = await this.harness.snapshot(PlanDoc, chat, context); current();
+      const seed = existing ?? legacy() ?? { chat_jid: chat, markdown: DEFAULT_PLAN, updated_at: null };
+      if (seed.chat_jid !== chat) throw Error("Plan identity mismatch");
+      return this.harness.commit(async tx => {
+        current(); const plan = await tx.doc(PlanDoc, chat, seed); current();
+        if (plan.chat_jid !== chat) throw Error("Plan identity mismatch");
+        const result = await publish({ chat_jid: chat, markdown: plan.markdown, updated_at: plan.updated_at });
+        current(); return result;
+      }, context);
+    }));
   }
 
   static async open(config: RuntimeOptions, context: Context): Promise<HostConversationRuntime> {

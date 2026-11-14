@@ -41,6 +41,7 @@ for(const mode of ['reported','unknown-price','report-fault'] as const)applicati
   const owner = acquireRuntimeLock({ lockPath: join(workspace, "enabled-regrets.lock"), strictOwnership: true, disabled: false });
   const model: any = { provider: "openai-codex", id: "synthetic", name: "Synthetic", type: "chat", api: "openai-completions", baseUrl: "https://synthetic.invalid", input: ["text"], reasoning: false, contextWindow: 100000, maxTokens: 4096, cost: { input: mode==='unknown-price'?0:1, output: mode==='unknown-price'?0:1, cacheRead: mode==='unknown-price'?0:1, cacheWrite: mode==='unknown-price'?0:1 } };
   const root = await ModelRuntime.create({ modelsPath: null, refreshOnCreate: false, credentials: { read: async () => undefined, get: async () => undefined, set: async () => {}, delete: async () => {}, list: async () => [] } as any });
+  const humanRequests = ["Please explain the baseline", "Please be concise. Review recent exchanges"];
   let mainCalls = 0, decisionCalls = 0, nativeToolResult = "", decisionWires = 0;
   const dispatchEvidence: any[] = [];
   let publicCompleteCalls = 0;
@@ -68,7 +69,10 @@ for(const mode of ['reported','unknown-price','report-fault'] as const)applicati
       content = [{ type: "text", text: JSON.stringify({ decisions: packet.exchanges.map((e: any) => ({ rowid: e.rowid, choice: "review" })) }) }];
     } else {
       mainCalls++;
-      const users = context.messages.filter((m: any) => m.role === "user");
+      // Core Plan contributes a hidden user-role snapshot. Route this synthetic
+      // provider by its actual human inputs, without removing model context.
+      const users = context.messages.filter((m: any) => m.role === "user" && humanRequests.includes(
+        typeof m.content === "string" ? m.content : (m.content ?? []).filter((p: any) => p.type === "text").map((p: any) => p.text).join("\n")));
       if (tool) nativeToolResult = JSON.stringify(tool);
       content = users.length < 2 || tool ? [{ type: "text", text: "Baseline complete" }] : [{ type: "toolCall", id: "enabled-regrets-call", name: "regrets_review", arguments: {} }];
     }
@@ -109,7 +113,7 @@ for(const mode of ['reported','unknown-price','report-fault'] as const)applicati
     (channel as any).getAcceptedQueuedSteering=()=>{throw Error("Host steering selection must not govern native submission");};
     pool.isActive=()=>true; pool.isStreaming=()=>false; // Reproduced stale host lifecycle window.
     let completed=0;
-    for (const content of ["Please explain the baseline", "Please be concise. Review recent exchanges"]) {
+    for (const content of humanRequests) {
       const request=new Request("https://fixture/agent/default/message",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({content})});
       const response=await handleAgentMessage(channel,request,"/agent/default/message","web:default","default");
       expect(response.status).toBe(201);

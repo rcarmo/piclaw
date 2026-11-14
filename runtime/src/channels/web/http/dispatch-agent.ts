@@ -1,3 +1,4 @@
+import { handlePlan } from "../handlers/plan.js";
 import { captureHostDatabaseBinding } from "../../../db/connection.js";
 import { captureWebRequestAuthority } from "../auth/auth-gateway.js";
 import { createLogger } from '../../../utils/logger.js';
@@ -72,6 +73,8 @@ interface ExactAgentRoute {
 }
 
 const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
+  { method: "GET", path: "/agent/plan", handle: handlePlan },
+  { method: "POST", path: "/agent/plan", handle: handlePlan },
   { method: "GET", path: "/agent/settings/mcp", handle: handleMcpSettings },
   { method: "POST", path: "/agent/settings/mcp/preview", handle: handleMcpSettings },
   { method: "POST", path: "/agent/settings/mcp/apply", handle: handleMcpSettings },

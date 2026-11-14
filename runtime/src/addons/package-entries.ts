@@ -52,7 +52,7 @@ export function getInstalledAddonExtensionPaths(workspaceDir: string): string[] 
   const paths: string[] = [];
   for (const packageDir of listInstalledAddonPackageDirs(join(workspaceDir, ".pi", "extensions", "node_modules"))) {
     const addon = readInstalledAddonPackage(packageDir);
-    if (addon) paths.push(...resolveAddonPackageEntries(packageDir, addon.manifest.pi?.extensions));
+    if (addon) paths.push(...resolveActiveAddonEntries(packageDir, addon.manifest, addon.manifest.pi?.extensions));
   }
   return paths;
 }
@@ -102,4 +102,13 @@ export function resolveAddonPackageEntries(packageDir: string, declared: unknown
     }
   }
   return entries;
+}
+
+/** Core owns Plan. Filter known retired entries before evaluation (including old
+ * aggregate installs), not after their import-time hooks/API have registered. */
+export function resolveActiveAddonEntries(packageDir: string, manifest: AddonPackageManifest, declared: unknown): string[] {
+  if (manifest.name === "@rcarmo/piclaw-addon-plan-sidebar") return [];
+  return resolveAddonPackageEntries(packageDir, declared).filter(entry =>
+    manifest.name !== "@rcarmo/piclaw-addons" || (relative(packageDir, entry).replaceAll("\\", "/").startsWith("addons/")
+      && !relative(packageDir, entry).replaceAll("\\", "/").startsWith("addons/plan-sidebar/")));
 }

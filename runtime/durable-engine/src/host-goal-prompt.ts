@@ -1,3 +1,6 @@
+import { PlanDoc } from "./plan-document.js";
+import { readLegacyPlan } from "../../src/plan/legacy.js";
+import { DEFAULT_PLAN, parsePlanMarkdown } from "../../src/plan/markdown.js";
 import type Database from "bun:sqlite";
 import { defineExtension, type GenerationHooks } from "@earendil-works/pi-durable";
 import { createHostOperationAuthority } from "./host-operation-authority.js";
@@ -7,11 +10,13 @@ import { withExtensionKvAuthority } from "../../src/extension-kv-registry.js";
 import { withGoalSystemInstructions } from "./host-plan-context.js";
 import { GoalRequestDenied } from "./host-model-failure.js";
 
-type GoalState = { status: string; goal_id: string; lifecycle_generation: number; deadline_checkpoint?: unknown; budget_limit_reported: boolean };
+type GoalState = { status: string; goal_id: string; lifecycle_generation: number; completion_probe_count: number; deadline_checkpoint?: unknown; budget_limit_reported: boolean };
 export function createHostGoalPrompt(addon: {
   loadThreadGoal(chat: string): GoalState | null;
   buildGoalSystemPrompt(goal: any): string;
   buildGoalBudgetLimitPrompt(goal: any): string;
+  buildVisibleGoalPrompt(goal: any, reason: "finalize"): string;
+  buildGoalFinalizationPrompt(goal: any, probes: number, items: { step: string; status: string }[]): string;
   claimGoalBudgetWrapup(chat: string, expected: { goalId: string; generation: number }): unknown;
   isGoalBudgetInput(text: string): boolean;
   goalInputIdentity(text: string): { goalId: string; generation: number } | false | null;
@@ -129,7 +134,19 @@ export function createHostGoalPrompt(addon: {
     // The queue stores the short visible input plus its lifecycle identity.
     // Append expanded continuation instructions once as durable hidden user
     // context, preserving previous snapshots and their exact cache prefixes.
+    const finalization = scope(() => addon.buildVisibleGoalPrompt(goal, "finalize"));
+    const isFinalization = (text: string) => text === finalization || text.startsWith(finalization + "\n\n<piclaw_goal_input>");
+    let completedPlan: { step: string; status: string }[] | undefined;
+    if (texts.some(isFinalization)) {
+      const nativePlan = await api.snapshot(PlanDoc, captured.operation.chatJid, context); authority.assertCurrent();
+      const plan = nativePlan ?? readLegacyPlan(options.root, captured.operation.chatJid)
+        ?? { chat_jid: captured.operation.chatJid, markdown: DEFAULT_PLAN, updated_at: null };
+      if (plan.chat_jid !== captured.operation.chatJid) throw Error("Goal Plan identity mismatch");
+      completedPlan = parsePlanMarkdown(plan.markdown).plan;
+    }
     const continuations = scope(() => texts.flatMap(text => {
+      if (completedPlan && isFinalization(text)) return [{ type: "text" as const,
+        text: addon.buildGoalFinalizationPrompt(goal, Math.max(1, goal.completion_probe_count), completedPlan) + text.slice(finalization.length) }];
       const decision = addon.resolveGoalInput(text, captured.operation.chatJid);
       return decision.action === "transform" && decision.text ? [{ type: "text" as const, text: decision.text }] : [];
     }));

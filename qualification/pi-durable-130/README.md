@@ -1,5 +1,14 @@
 # Native qualification
 
+## Current Core Plan ownership (#1991)
+
+Plan now uses the existing application Harness and a session-scoped `app.plan` document family keyed by exact chat/branch JID. Native tool and hook APIs replace the installed Plan declaration, KV writer and qualification. Existing current-native KV records are retained as read-only seeds; no v3 importer or mirror is used.
+
+`plan.test.ts` exercises actual fresh/existing default applications, ignored legacy modules, prompt/tool execution, authenticated Core HTTP, stale writes and reopen. The `native-plan-*` tests cover SDK document/commit/rollback/alias/concurrency/cancellation boundaries; `native-goal-plan.test.ts` verifies actual native Goal finalization uses the SDK checklist even with a poisoned legacy global. Existing hidden-context and source/SQL boundary tests remain required. See [the current contract](../../docs/native-plan-context.md).
+
+Older dated receipts below describe their original source and do not establish current ownership.
+
+
 `make ci-native` runs the required offline native gate; `make ci-full` requires both host and native qualification. See [Native validation](../../docs/native-validation.md) for exact preparation and all five required exports.
 
 The shared [gate contract](../../scripts/native-gate-contract.json) pins two add-on checkouts and all 109 native files, including Goal. ADDONS/CORE/GOAL use one native checkout; CONTRACT uses separate historical source. Catalogue dependencies come from frozen `qualification/pi-durable-130/node_modules`, never a live profile. Root Pi 1.2.0 and the private engine's Pi 1.3.0 graph stay isolated. The runner verifies existing provenance, runs both private type projects and required accepted-source integration, then requires terminal Bun reports for the complete native inventory. No skip, filter, empty run or missing fixture can qualify this gate. It performs no source acquisition or dependency installation.

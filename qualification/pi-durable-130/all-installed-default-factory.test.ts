@@ -25,7 +25,7 @@ const { createAssistantMessageEventStream, getCurrentTools } = await import(impo
 for(const billed of [undefined,0,0.2]as const)applicationTest(`all23 installed: actual provider terminal/reopen with billed=${billed??"estimate"}`, async () => {
   const workspace = process.env.PICLAW_WORKSPACE!;
   // Explicit profile inventory: copies only, never mutate candidate dependencies.
-  expect(Object.keys(applicationAddonSourceProfiles)).toHaveLength(23);
+  expect(Object.keys(applicationAddonSourceProfiles)).toHaveLength(22);
   const installed = installApprovedAddonsFixture(workspace);
   writeFileSync(join(workspace, "all-installed-inventory.json"), JSON.stringify(installed,null,2));
   const peerOptions = {

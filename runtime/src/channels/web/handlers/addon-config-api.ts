@@ -9,6 +9,7 @@ import {
   listInstalledAddonPackageDirs,
   readInstalledAddonPackage,
   resolveAddonPackageEntries,
+  resolveActiveAddonEntries,
 } from "../../../addons/package-entries.js";
 
 const log = createLogger("web.addon-config-api");
@@ -76,7 +77,7 @@ export function getInstalledAddonConfigEntryPaths(workspaceDir = getWorkspaceDir
   for (const packageDir of listInstalledAddonPackageDirs(addonsNodeModulesDir)) {
     const addonPackage = readInstalledAddonPackage(packageDir);
     if (!addonPackage) continue;
-    entryPaths.push(...resolveAddonPackageEntries(packageDir, addonPackage.manifest.pi?.extensions));
+    entryPaths.push(...resolveActiveAddonEntries(packageDir, addonPackage.manifest, addonPackage.manifest.pi?.extensions));
   }
   return entryPaths;
 }

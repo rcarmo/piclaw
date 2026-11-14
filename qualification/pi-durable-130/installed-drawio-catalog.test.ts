@@ -14,7 +14,7 @@ test("actual Draw.io public factory and owned vendor prepare/close", async () =>
   try {
     const q = await qualifyInstalledDrawio(catalog, dir);
     expect(q).toBeDefined();
-    assertApplicationExtensionCatalogSupported(catalog, undefined, undefined, undefined, undefined, undefined, q);
+    assertApplicationExtensionCatalogSupported(catalog, undefined, undefined, undefined, undefined, q);
     const host = q!.addon.bindDrawioVendorHost({ assertCurrent: q!.assertCurrent, baseDir: pkg, cwd: dir, cacheDir: join(dir, "cache") });
     try {
       await host.prepare();

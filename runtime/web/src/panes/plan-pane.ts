@@ -3,16 +3,13 @@
  * plan-pane.ts — the session plan as a work-area tab (Classic workbench).
  *
  * Shows the current chat's plan checklist with progress, and edits it as
- * Markdown. Storage, the model-facing `plan` tool and prompt injection still
- * come from the plan-sidebar add-on (see #1991); this pane uses its API and
- * replaces the add-on's floating panel in Classic.
+ * Markdown. Core owns the native document, tool, prompt and HTTP endpoint.
  */
 import { html, render, useCallback, useEffect, useRef, useState } from '../vendor/preact-htm.js';
 import type { PaneContext, PaneInstance, WebPaneExtension } from './pane-types.js';
 
 export const PLAN_TAB_PATH = 'piclaw://plan';
-const PLAN_API = '/agent/addons/api/plan-sidebar/plan';
-const PLAN_CHANGE_KEYS = new Set(['plan.changes', 'plan-sidebar.plan-updated']);
+const PLAN_API = '/agent/plan';
 
 export type PlanItemStatus = 'pending' | 'in_progress' | 'completed';
 export interface PlanItem { step: string; status: PlanItemStatus }
@@ -35,7 +32,7 @@ export function summarisePlan(items: PlanItem[]): { total: number; completed: nu
   return { total, completed, percent: total ? Math.round((completed / total) * 100) : 0 };
 }
 
-/** The same submission prompt the add-on panel sends. */
+/** Preserve the accepted Plan submission prompt. */
 export function buildPlanSubmissionPrompt(markdown: string): string {
   return [
     'Use this `plan` tool checklist as the working plan.',
@@ -60,7 +57,7 @@ function currentChatJid(): string {
 
 async function planRequest(chatJid: string, init?: RequestInit) {
   const response = await fetch(`${PLAN_API}?chat_jid=${encodeURIComponent(chatJid)}`, { credentials: 'same-origin', ...init });
-  // Without the add-on the route is unknown: 404, or a non-JSON server error page.
+  // Backend failure must preserve unsaved edits and never submit them.
   const json = (response.headers.get('content-type') || '').includes('json');
   if (response.status === 404 || (!response.ok && !json)) {
     if (init?.method === 'POST') throw new Error('Plan API unavailable. Edits were not saved or submitted.');
@@ -68,7 +65,7 @@ async function planRequest(chatJid: string, init?: RequestInit) {
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload?.ok === false) throw new Error(payload?.error || `${response.status} ${response.statusText}`);
-  return payload?.plan || payload;
+  return { ...(payload?.plan || payload), etag: response.headers.get('etag') };
 }
 
 // Drawn rather than typed: symbol-font fallbacks gave the half-circle glyph
@@ -101,6 +98,7 @@ function ChatPlanPane({ chatJid, drafts, onDirtyChange }) {
   const requestSequence = useRef(0);
   useEffect(() => () => { active.current = false; }, []);
   const [updatedAt, setUpdatedAt] = useState(null);
+  const [etag, setEtag] = useState(retained?.etag ?? null);
   const [status, setStatus] = useState({ text: 'Loading…', kind: 'info' });
   const [busy, setBusy] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
@@ -111,9 +109,9 @@ function ChatPlanPane({ chatJid, drafts, onDirtyChange }) {
   const showError = error => setStatus({ text: String(error?.message || error), kind: 'error' });
 
   useEffect(() => {
-    if (editing && draft !== markdown) drafts.set(chatJid, { draft, markdown });
+    if (editing && draft !== markdown) drafts.set(chatJid, { draft, markdown, etag });
     onDirtyChange?.(drafts.size > 0);
-  }, [chatJid, draft, drafts, editing, markdown, onDirtyChange]);
+  }, [chatJid, draft, drafts, editing, markdown, etag, onDirtyChange]);
 
   const load = useCallback(async (label = '') => {
     if (draftRef.current !== null) {
@@ -133,6 +131,7 @@ function ChatPlanPane({ chatJid, drafts, onDirtyChange }) {
       setUnavailable(false);
       setMarkdown(plan.markdown || '');
       setUpdatedAt(plan.updated_at || null);
+      setEtag(plan.etag);
       setStatus({ text: label || (plan.updated_at ? 'Loaded' : 'Default plan'), kind: 'info' });
     } catch (error) {
       showError(error);
@@ -146,7 +145,7 @@ function ChatPlanPane({ chatJid, drafts, onDirtyChange }) {
   useEffect(() => {
     const onStatus = (event) => {
       const payload = event?.detail?.payload || event?.detail || {};
-      if (!PLAN_CHANGE_KEYS.has(payload?.key)) return;
+      if (payload?.key !== 'plan.changes') return;
       if ((payload.chat_jid || 'web:default') !== chatJid) return;
       void load(payload.source === 'tool' ? 'Updated by the model' : 'Updated');
     };
@@ -160,10 +159,11 @@ function ChatPlanPane({ chatJid, drafts, onDirtyChange }) {
     const next = draftRef.current ?? markdown;
     setBusy(true);
     try {
-      const plan = await planRequest(chatJid, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_jid: chatJid, markdown: next }) });
+      const plan = await planRequest(chatJid, { method: 'POST', headers: { 'Content-Type': 'application/json', 'If-Match': etag || '' }, body: JSON.stringify({ chat_jid: chatJid, markdown: next }) });
       if (!active.current) return null;
       setMarkdown(plan.markdown ?? next);
       setUpdatedAt(plan.updated_at || null);
+      setEtag(plan.etag);
       drafts.delete(chatJid);
       setDraft(null);
       setStatus({ text: 'Saved', kind: 'ok' });
@@ -174,16 +174,17 @@ function ChatPlanPane({ chatJid, drafts, onDirtyChange }) {
     } finally {
       setBusy(false);
     }
-  }, [chatJid, markdown]);
+  }, [chatJid, markdown, etag]);
 
   const reset = useCallback(async () => {
     if (!window.confirm('Reset this chat plan to the default checklist?')) return;
     setBusy(true);
     try {
-      const plan = await planRequest(chatJid, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_jid: chatJid, action: 'reset' }) });
+      const plan = await planRequest(chatJid, { method: 'POST', headers: { 'Content-Type': 'application/json', 'If-Match': etag || '' }, body: JSON.stringify({ chat_jid: chatJid, action: 'reset' }) });
       if (!active.current) return;
       setMarkdown(plan.markdown || '');
       setUpdatedAt(plan.updated_at || null);
+      setEtag(plan.etag);
       drafts.delete(chatJid);
       setDraft(null);
       setStatus({ text: 'Reset', kind: 'ok' });
@@ -192,7 +193,7 @@ function ChatPlanPane({ chatJid, drafts, onDirtyChange }) {
     } finally {
       setBusy(false);
     }
-  }, [chatJid]);
+  }, [chatJid, etag]);
 
   const submit = useCallback(async () => {
     const saved = editing ? await save() : markdown;
@@ -221,7 +222,7 @@ function ChatPlanPane({ chatJid, drafts, onDirtyChange }) {
   }, [chatJid, editing, markdown, save]);
 
   if (unavailable) {
-    return html`<div class="plan-pane plan-pane-unavailable" role="status">Plans need the plan-sidebar add-on. Install it from Settings → Add-ons, then reopen this tab.</div>`;
+    return html`<div class="plan-pane plan-pane-unavailable" role="status">Core Plan is unavailable. Refresh after the native backend is ready.</div>`;
   }
 
   const items = parsePlanChecklist(markdown);
