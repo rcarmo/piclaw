@@ -348,7 +348,7 @@ export function KeychainSection({ filter = '' }) {
                             const notesSaving = savingNote === e.name;
                             return html`
                             <tr class="settings-keychain-row" key=${e.name}>
-                                <td class="settings-keychain-name">${e.name}</td>
+                                <td class="settings-keychain-name">${e.name}<span class="settings-keychain-type-inline">${e.type}</span></td>
                                 <td><span class="settings-keychain-type-badge">${e.type}</span></td>
                                 <td class="settings-keychain-env">${e.envVar ? html`<code>$${e.envVar}</code>` : '—'}</td>
                                 <td class="settings-keychain-date">${formatDate(e.updatedAt)}</td>

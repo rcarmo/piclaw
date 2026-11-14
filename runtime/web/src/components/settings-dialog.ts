@@ -68,13 +68,19 @@ const BUILTIN_SECTION_LOADERS: Record<BuiltinSectionId, () => Promise<SettingsSe
     addons: () => import('./settings/addons.js').then(mod => mod.AddonsSection),
 };
 
-// Extension panes are loaded lazily only when the user opens those sections.
-// Extension pane loaders — each loads ONE module on demand, not all at once.
-const EXTENSION_SETTINGS_PANE_LOADERS_MAP: Record<string, () => Promise<void>> = {
-    'editor-settings': () => import('./settings/editor-settings.js').then(() => {}),
-    'developer': () => import('./settings/developer-settings.js').then(() => {}),
-};
-const loadedExtensionPanes = new Set<string>();
+// Core-owned extension panes self-register when their module loads. Their nav
+// entries are listed up front (ids match registerSettingsPane) so they remain
+// reachable; each module loads only when its pane is opened.
+const iconEditorPane = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
+const iconDeveloperPane = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`;
+const LAZY_EXTENSION_PANES = [
+    { id: 'editor', label: 'Editor', icon: iconEditorPane, order: 150, load: () => import('./settings/editor-settings.js') },
+    { id: 'developer', label: 'Developer', icon: iconDeveloperPane, order: 900, load: () => import('./settings/developer-settings.js') },
+];
+const lazyExtensionPaneLoads = new Map<string, Promise<unknown>>();
+const isKnownSettingsSection = (id) => Object.hasOwn(BUILTIN_SECTION_LOADERS, id)
+    || LAZY_EXTENSION_PANES.some(pane => pane.id === id)
+    || getRegisteredSettingsPanes().some(pane => pane.id === id);
 
 function loadBuiltinSection(id) {
     const cached = builtinSectionComponentCache.get(id);
@@ -158,8 +164,7 @@ export function SettingsDialogContent({ onClose = null, variant = 'dialog' }) {
     perf('SettingsDialogContent-render-start');
     const [activeSection, setActiveSection] = useState(() => {
         const requested = peekRequestedSettingsSection();
-        return requested && (Object.hasOwn(BUILTIN_SECTION_LOADERS, requested) || Object.hasOwn(EXTENSION_SETTINGS_PANE_LOADERS_MAP, requested)
-            || getRegisteredSettingsPanes().some(pane => pane.id === requested)) ? requested : 'general';
+        return requested && isKnownSettingsSection(requested) ? requested : 'general';
     });
     const [settingsData, setSettingsData] = useState(_settingsDataCache);
     const [statusMessage, setStatusMessage] = useState(null);
@@ -192,8 +197,7 @@ export function SettingsDialogContent({ onClose = null, variant = 'dialog' }) {
     useEffect(() => {
         const onOpenSettings = (event) => {
             const requestedSection = normalizeSettingsSectionId(event?.detail?.section);
-            if (requestedSection && (Object.hasOwn(BUILTIN_SECTION_LOADERS, requestedSection) || Object.hasOwn(EXTENSION_SETTINGS_PANE_LOADERS_MAP, requestedSection)
-                || getRegisteredSettingsPanes().some(pane => pane.id === requestedSection))) {
+            if (requestedSection && isKnownSettingsSection(requestedSection)) {
                 setActiveSection(requestedSection);
                 setFilter('');
             }
@@ -244,7 +248,7 @@ export function SettingsDialogContent({ onClose = null, variant = 'dialog' }) {
 
     const builtinSections = [...BUILTIN_SECTIONS].sort((a, b) => (a.order ?? 500) - (b.order ?? 500));
     const extensionPanes = getRegisteredSettingsPanes();
-    const extensionSections = extensionPanes
+    const extensionSections = [...extensionPanes, ...LAZY_EXTENSION_PANES.filter(lazy => !extensionPanes.some(pane => pane.id === lazy.id))]
         .map(p => ({
             id: p.id,
             label: p.label,
@@ -269,6 +273,16 @@ export function SettingsDialogContent({ onClose = null, variant = 'dialog' }) {
     useEffect(() => {
         if (activeMeta?.isExtension) {
             setLoadingSectionId(null);
+            const lazy = LAZY_EXTENSION_PANES.find(pane => pane.id === activeSection);
+            if (lazy && !activeMeta.component && !lazyExtensionPaneLoads.has(lazy.id)) {
+                const load = lazy.load();
+                lazyExtensionPaneLoads.set(lazy.id, load);
+                load.then(() => forceUpdate(n => n + 1)).catch((error) => {
+                    lazyExtensionPaneLoads.delete(lazy.id);
+                    console.error(`[settings-dialog] Failed to load settings pane "${lazy.id}".`, error);
+                    setStatusMessage({ text: `${lazy.label} settings could not be loaded.`, type: 'error' });
+                });
+            }
             return;
         }
         let cancelled = false;
@@ -299,12 +313,6 @@ export function SettingsDialogContent({ onClose = null, variant = 'dialog' }) {
     const switchSection = useCallback((id) => {
         setActiveSection(id);
         setFilter('');
-        // Lazy-load extension pane module if not yet loaded
-        const extLoader = EXTENSION_SETTINGS_PANE_LOADERS_MAP[id];
-        if (extLoader && !loadedExtensionPanes.has(id)) {
-            loadedExtensionPanes.add(id);
-            extLoader().then(() => forceUpdate(n => n + 1)).catch((e) => { void e; });
-        }
     }, []);
 
     const mergeSettingsData = useCallback((patch) => {

@@ -572,6 +572,10 @@
     width: 100%;
 }
 
+/* Phones: QR above full-width fields so the secret is never truncated. */
+.settings-dialog-narrow .settings-totp-grid { grid-template-columns: minmax(0, 1fr); }
+.settings-dialog-narrow .settings-totp-qr { min-height: 0; max-width: 220px; justify-self: center; }
+
 .settings-subsection-list {
     display: grid;
     gap: 10px;
@@ -810,6 +814,8 @@
     text-transform: capitalize;
 }
 
+/* One column grid for the header and every tool row (subgrid), so headers
+ * size their columns instead of overflowing into neighbouring cells. */
 .settings-tool-list {
     display: flex;
     flex-direction: column;
@@ -825,6 +831,28 @@
     padding: 3px 6px;
     border-radius: 4px;
     font-size: 0.84em;
+}
+
+.settings-toolset .settings-tool-list {
+    display: grid;
+    grid-template-columns: auto minmax(7rem, 12rem) auto auto minmax(0, 1fr) auto;
+    column-gap: 10px;
+    row-gap: 2px;
+}
+
+.settings-toolset .settings-tool-row {
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    gap: 0;
+    column-gap: 10px;
+}
+
+.settings-dialog-narrow .settings-toolset .settings-tool-summary { display: none; }
+
+.settings-toolset .settings-tool-row > :first-child,
+.settings-toolset .settings-tool-row > .settings-tool-kind {
+    justify-self: center;
+    text-align: center;
 }
 
 .settings-tool-row-header {
@@ -894,6 +922,28 @@
     flex-shrink: 0;
     text-transform: capitalize;
 }
+
+/* ── Environment ──────────────────────────────────────────────────────── */
+
+.settings-env-add {
+    display: grid;
+    grid-template-columns: minmax(0, 0.7fr) minmax(0, 1fr) auto;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.settings-env-add input[type="text"] { max-width: none; min-width: 0; }
+
+.settings-env-row {
+    grid-template-columns: minmax(0, 0.45fr) minmax(0, 1fr) auto auto;
+}
+
+.settings-dialog-narrow .settings-env-add { grid-template-columns: minmax(0, 1fr) auto; }
+.settings-dialog-narrow .settings-env-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+
+.settings-dialog-narrow .settings-env-add > input:first-child,
+.settings-dialog-narrow .settings-env-row > .settings-tool-name { grid-column: 1 / -1; }
 
 /* ── Add-on tags ───────────────────────────────────────────────────────── */
 
@@ -2004,7 +2054,7 @@
 /* ── Model catalogue master/detail ───────────────────────────── */
 
 .model-catalogue-settings {
-    container-type: inline-size;
+    container: model-catalogue / inline-size;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -2134,6 +2184,10 @@
     border: 1px solid var(--border-color, rgba(128,128,128,0.25));
     border-radius: 8px;
     background: var(--bg-primary);
+}
+
+.model-catalogue-settings__list {
+    container: model-catalogue-list / inline-size;
 }
 
 .model-catalogue-settings__list:focus {
@@ -2311,7 +2365,20 @@
     border-top: 1px solid var(--border-color, rgba(128,128,128,0.2));
 }
 
-@container (max-width: 760px) {
+/* Beside the detail panel the list is narrower than the full table. Drop the
+ * family and mode columns (both shown in the detail panel) rather than clip
+ * prices behind a horizontal scrollbar. */
+@container model-catalogue-list (max-width: 640px) {
+    .model-catalogue-settings__columns,
+    .model-catalogue-settings__row {
+        grid-template-columns: 34px minmax(140px, 1.8fr) minmax(68px, 0.75fr) minmax(60px, 0.65fr) minmax(60px, 0.65fr);
+        min-width: 0;
+    }
+    .model-catalogue-settings__row-family,
+    .model-catalogue-settings__row-mode { display: none; }
+}
+
+@container model-catalogue (max-width: 760px) {
     .model-catalogue-settings__filter-toggle { display: block; }
     .model-catalogue-settings__filters:not(.expanded) { display: none; }
     .model-catalogue-settings__filters.expanded { margin-top: 6px; }
@@ -2341,7 +2408,7 @@
     .model-catalogue-settings__filters { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
 }
 
-@container (max-width: 640px) {
+@container model-catalogue (max-width: 640px) {
     .model-catalogue-settings__header,
     .model-catalogue-settings__scope { align-items: stretch; flex-direction: column; }
     .model-catalogue-settings__filters { grid-template-columns: 1fr; }
@@ -2626,6 +2693,24 @@
 .settings-keychain-table th:nth-child(3) { width: 28%; }
 .settings-keychain-table th:nth-child(4) { width: 16%; }
 .settings-keychain-table th:nth-child(5) { width: 18%; }
+.settings-keychain-table th { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Narrow dialogs keep name, variable and actions; the type moves under the
+ * name and the date is omitted, rather than breaking headers mid-word. */
+.settings-keychain-type-inline { display: none; }
+.settings-dialog-narrow .settings-keychain-type-inline {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 400;
+}
+.settings-dialog-narrow .settings-keychain-table th:nth-child(2),
+.settings-dialog-narrow .settings-keychain-table th:nth-child(4),
+.settings-dialog-narrow .settings-keychain-row > td:nth-child(2),
+.settings-dialog-narrow .settings-keychain-row > td:nth-child(4) { display: none; }
+.settings-dialog-narrow .settings-keychain-table th:nth-child(1) { width: 38%; }
+.settings-dialog-narrow .settings-keychain-table th:nth-child(3) { width: 36%; }
+.settings-dialog-narrow .settings-keychain-table th:nth-child(5) { width: 26%; }
 .settings-keychain-table td {
     padding: 7px 10px;
     font-size: 0.88em;
