@@ -24,13 +24,15 @@ for (const [theme, css] of [['classic', classicCss]] as const) {
   test(`${theme} settings stylesheet reserves compact bookmark space`, () => {
     const card = cssRuleBody(css, '.settings-addon-card');
     const coreHeader = cssRuleBody(css, '.settings-addon-card.core .settings-addon-card-header');
-    const coreActions = cssRuleBody(css, '.settings-addon-card.core .settings-addon-actions');
+    const actions = cssRuleBody(css, '.settings-addon-actions');
     const bookmark = cssRuleBody(css, '.settings-addon-core-bookmark');
     const svg = cssRuleBody(css, '.settings-addon-core-bookmark svg');
 
     expect(card).toContain('position: relative;');
     expect(coreHeader).toContain('padding-right: 36px;');
-    expect(coreActions).toContain('right: 50px;');
+    // Actions flow inside the padded header, so the bookmark space also clears them.
+    expect(actions).toContain('margin-left: auto;');
+    expect(actions).not.toContain('position: absolute;');
     expect(bookmark).toContain('position: absolute;');
     expect(bookmark).toContain('top: -1px;');
     expect(bookmark).toContain('right: 10px;');

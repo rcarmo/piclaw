@@ -134,7 +134,7 @@ const iconKeychain = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="
 const iconAddons = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`;
 
 // Built-in sections (order 0-100)
-type SettingsSectionMeta = { id: string; label: string; icon: unknown; searchable?: boolean; placeholder?: string; order?: number; isExtension?: boolean; component?: any };
+type SettingsSectionMeta = { id: string; label: string; icon: unknown; searchable?: boolean; placeholder?: string; order?: number; isExtension?: boolean; isCore?: boolean; component?: any };
 
 const BUILTIN_SECTIONS: SettingsSectionMeta[] = [
     { id: 'general', label: 'General', icon: iconGeneral, searchable: false, order: 10 },
@@ -248,21 +248,27 @@ export function SettingsDialogContent({ onClose = null, variant = 'dialog' }) {
         return () => window.removeEventListener('resize', updateLayoutMode);
     }, []);
 
-    const builtinSections = [...BUILTIN_SECTIONS].sort((a, b) => (a.order ?? 500) - (b.order ?? 500));
     const extensionPanes = getRegisteredSettingsPanes();
-    const extensionSections = [...extensionPanes, ...LAZY_EXTENSION_PANES.filter(lazy => !extensionPanes.some(pane => pane.id === lazy.id))]
-        .map(p => ({
-            id: p.id,
-            label: p.label,
-            icon: p.icon,
-            searchable: p.searchable || false,
-            placeholder: p.searchPlaceholder,
-            order: p.order ?? 500,
-            isExtension: true,
-            component: p.component,
-        }))
+    const toSection = (p, isCore = false) => ({
+        id: p.id,
+        label: p.label,
+        icon: p.icon,
+        searchable: p.searchable || false,
+        placeholder: p.searchPlaceholder,
+        order: p.order ?? 500,
+        isExtension: true,
+        isCore,
+        component: p.component,
+    });
+    // Core-owned Editor and Developer panes sit with the built-in sections;
+    // only registered add-on panes go below the separator.
+    const corePaneSections = LAZY_EXTENSION_PANES.map(lazy => toSection(extensionPanes.find(pane => pane.id === lazy.id) || lazy, true));
+    const builtinSections = [...BUILTIN_SECTIONS, ...corePaneSections].sort((a, b) => (a.order ?? 500) - (b.order ?? 500));
+    const extensionSections = extensionPanes
+        .filter(pane => !LAZY_EXTENSION_PANES.some(lazy => lazy.id === pane.id))
+        .map(pane => toSection(pane))
         .sort(compareSettingsPanesAlphabetically);
-    const allSections = [...builtinSections, ...extensionSections];
+    const allSections: SettingsSectionMeta[] = [...builtinSections, ...extensionSections];
 
     const activeMeta = allSections.find(s => s.id === activeSection) || BUILTIN_SECTIONS.find(s => s.id === activeSection);
 
@@ -371,13 +377,16 @@ export function SettingsDialogContent({ onClose = null, variant = 'dialog' }) {
                     ${!isTab && html`<button class="settings-dialog-close" onClick=${onClose} title=${t('settings.close')}>✕</button>`}
                 </div>
                 <div class="settings-dialog-body">
-                    <nav class="settings-nav">
+                    <nav class="settings-nav" aria-label=${t('settings.title')}>
                         ${allSections.map((s, i) => {
-                            const prevIsBuiltin = i > 0 && !allSections[i - 1].isExtension;
-                            const showSep = s.isExtension && prevIsBuiltin;
+                            const isAddon = (section) => section.isExtension && !section.isCore;
+                            const showSep = isAddon(s) && i > 0 && !isAddon(allSections[i - 1]);
                             return html`
-                                ${showSep && html`<div class="settings-nav-separator"></div>`}
-                                <button class=${`settings-nav-item ${s.id === activeSection ? 'active' : ''}`} onClick=${() => switchSection(s.id)}>
+                                ${showSep && html`<div class="settings-nav-separator" role="separator"></div>`}
+                                <button type="button" class=${`settings-nav-item ${s.id === activeSection ? 'active' : ''}`}
+                                    aria-label=${sectionLabel(s)} title=${sectionLabel(s)}
+                                    aria-current=${s.id === activeSection ? 'page' : undefined}
+                                    onClick=${() => switchSection(s.id)}>
                                     <span class="settings-nav-icon">${typeof s.icon === 'string' && s.icon.trim().startsWith('<')
                                         ? html`<span dangerouslySetInnerHTML=${{ __html: s.icon }}></span>`
                                         : s.icon}</span>
@@ -386,7 +395,7 @@ export function SettingsDialogContent({ onClose = null, variant = 'dialog' }) {
                             `;
                         })}
                     </nav>
-                    <main class=${`settings-content${activeMeta?.isExtension ? ' settings-addon-pane' : ''}`}>
+                    <main class=${`settings-content${activeMeta?.isExtension && !activeMeta?.isCore ? ' settings-addon-pane' : ''}`}>
                         ${showRootLoading ? renderSectionLoading(t('settings.loading')) : renderSection()}
                     </main>
                 </div>
@@ -413,7 +422,7 @@ export function SettingsDialog() {
         const handler = (event) => {
             const section = normalizeSettingsSectionId(event?.detail?.section);
             if (section) {
-                try { window.__piclawSettingsRequestedSection = section; } catch (e) { void e; }
+                try { (window as any).__piclawSettingsRequestedSection = section; } catch (e) { void e; }
             }
             setOpen(true);
         };
@@ -421,7 +430,7 @@ export function SettingsDialog() {
         const pending = consumeRequestedSettingsOpenState();
         if (pending.open) {
             if (pending.section) {
-                try { window.__piclawSettingsRequestedSection = pending.section; } catch (e) { void e; }
+                try { (window as any).__piclawSettingsRequestedSection = pending.section; } catch (e) { void e; }
             }
             setOpen(true);
         }

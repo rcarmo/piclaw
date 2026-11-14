@@ -185,3 +185,83 @@ for (const engine of ['chromium', 'webkit']) {
     } finally { await desktop.page.close(); }
   }, 60000);
 }
+
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine}: navigation groups core panes, names every item and marks the open pane`, async () => {
+    for (const width of [390, 1280]) {
+      const { page, errors } = await openSettings(engine, width, 'editor');
+      try {
+        const nav = await page.locator('.settings-nav').evaluate(element => [...element.children].map(child => child.classList.contains('settings-nav-separator')
+          ? '|' : `${child.getAttribute('aria-label')}${child.getAttribute('aria-current') === 'page' ? '*' : ''}`));
+        const separator = nav.indexOf('|');
+        expect(separator).toBeGreaterThan(0);
+        expect(nav.slice(0, separator)).toEqual(expect.arrayContaining(['Editor*', 'Developer']));
+        expect(nav.slice(separator + 1)).not.toContain('Editor');
+        expect(nav.filter(name => name !== '|').every(name => name && name !== 'null')).toBe(true);
+        expect(nav.filter(name => name.endsWith('*'))).toEqual(['Editor*']);
+        // Core panes keep core control styling rather than the add-on button contract.
+        expect(await page.locator('.settings-content').getAttribute('class')).not.toContain('settings-addon-pane');
+        expect(errors).toEqual([]);
+      } finally { await page.close(); }
+    }
+  }, 60000);
+
+  browserTest(`${engine} 390px: add-on card actions sit beside the title without covering text or the core ribbon`, async () => {
+    const { page, errors } = await openSettings(engine, 390, 'addons');
+    try {
+      const cards = await page.locator('.settings-addon-card').evaluateAll(cards => cards.map(card => {
+        const box = (selector: string) => { const e = card.querySelector(selector); if (!e) return null; const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; };
+        return { actions: box('.settings-addon-actions'), body: box('.settings-addon-card-body'), ribbon: box('.settings-addon-core-bookmark'), card: card.getBoundingClientRect().toJSON() };
+      }));
+      expect(cards.length).toBeGreaterThan(1);
+      const overlaps = (a: any, b: any) => Boolean(a && b) && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      for (const card of cards) {
+        expect(overlaps(card.actions, card.body)).toBe(false);
+        expect(overlaps(card.actions, card.ribbon)).toBe(false);
+        expect(card.actions!.right).toBeLessThanOrEqual(card.card!.right + 1);
+      }
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+
+  browserTest(`${engine}: avatar pickers are labelled keyboard buttons sharing a row with their name field`, async () => {
+    for (const width of [390, 1280]) {
+      const { page, errors } = await openSettings(engine, width, 'general');
+      try {
+        const avatars = page.locator('button.settings-avatar-inline');
+        expect(await avatars.count()).toBe(2);
+        expect(await avatars.first().getAttribute('aria-label')).toMatch(/: User$/);
+        await avatars.first().focus();
+        expect(await page.evaluate(() => document.activeElement?.classList.contains('settings-avatar-inline'))).toBe(true);
+        const rows = await page.locator('.settings-identity-field').evaluateAll(fields => fields.map(field => {
+          const [a, b] = [field.querySelector('button')!.getBoundingClientRect(), field.querySelector('input[type=text]')!.getBoundingClientRect()];
+          return { sameRow: Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) <= 2, heightDiff: Math.abs(a.height - b.height) };
+        }));
+        expect(rows.every(row => row.sameRow)).toBe(true);
+        if (width < 600) expect(rows.every(row => row.heightDiff <= 2)).toBe(true);
+        expect(errors).toEqual([]);
+      } finally { await page.close(); }
+    }
+  }, 60000);
+
+  browserTest(`${engine}: block errors share one alert style; empty Quick Actions lists read naturally`, async () => {
+    const { page, errors } = await openSettings(engine, 1280, 'authentication');
+    try {
+      const alert = page.locator('.passkey-settings__notice--error');
+      await alert.waitFor();
+      const style = await alert.evaluate(element => { const s = getComputedStyle(element); return { left: s.borderLeftWidth, color: s.color, text: getComputedStyle(document.querySelector('.settings-dialog')!).color, fontSize: s.fontSize }; });
+      expect(style.left).toBe('3px');
+      expect(style.fontSize).toBe('13px');
+      await page.locator('.settings-nav-item', { hasText: 'Quick Actions' }).click();
+      await page.getByText('No slash commands are available.', { exact: true }).waitFor();
+      // Pane actions form a left-aligned toolbar; the primary keeps its accent styling.
+      const toolbar = await page.locator('.settings-actions > button').evaluateAll(buttons => buttons.map(button => {
+        const r = button.getBoundingClientRect(); return { top: Math.round(r.top), color: getComputedStyle(button).color };
+      }));
+      expect(toolbar).toHaveLength(2);
+      expect(toolbar[0].top).toBe(toolbar[1].top);
+      expect(toolbar[0].color).not.toBe(toolbar[1].color);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+}

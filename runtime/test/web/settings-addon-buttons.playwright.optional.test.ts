@@ -82,7 +82,8 @@ for (const theme of ["light", "dark"]) {
     browserTest(`Classic ${theme} buttons match the real widget-token Regenerate at ${width}px`, async () => {
       const page = await open("classic", theme, width);
       try {
-        await page.evaluate(() => window.dispatchEvent(new CustomEvent("piclaw:open-settings", { detail: { section: "general" } })));
+        // The widget-token Regenerate control lives in Authentication → API access.
+        await page.evaluate(() => window.dispatchEvent(new CustomEvent("piclaw:open-settings", { detail: { section: "authentication" } })));
         const regenerate = page.locator(".settings-widget-token-regenerate");
         await regenerate.waitFor();
         await page.mouse.move(0, 0);

@@ -13,7 +13,7 @@ export function resolveAvatarPreview(value, kind) {
     return kind === 'agent' || kind === 'user' ? `/avatar/${kind}` : '';
 }
 
-function AvatarField({ value, kind, onChange }) {
+function AvatarField({ value, kind, label, onChange }) {
     const { t } = useTranslation();
     const inputRef = useRef(null);
     const [preview, setPreview] = useState(resolveAvatarPreview(value, kind));
@@ -33,12 +33,13 @@ function AvatarField({ value, kind, onChange }) {
     }, [onChange]);
 
     return html`
-        <div class="settings-avatar-inline" onClick=${() => inputRef.current?.click()} title=${t('settings.general.avatarUpload')}>
+        <button type="button" class="settings-avatar-inline" data-settings-button="unstyled" onClick=${() => inputRef.current?.click()}
+            title=${t('settings.general.avatarUpload')} aria-label=${`${t('settings.general.avatarUpload')}: ${label}`}>
             ${preview
-                ? html`<img src=${preview} alt="avatar" />`
-                : html`<span class="settings-avatar-placeholder">+</span>`}
-            <input type="file" accept="image/*" ref=${inputRef} style="display:none" onChange=${handleFileSelect} />
-        </div>
+                ? html`<img src=${preview} alt="" />`
+                : html`<span class="settings-avatar-placeholder" aria-hidden="true">+</span>`}
+        </button>
+        <input type="file" accept="image/*" ref=${inputRef} style="display:none" tabindex="-1" aria-hidden="true" onChange=${handleFileSelect} />
     `;
 }
 
@@ -138,13 +139,17 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
             <h3>${t('settings.general.identity')}</h3>
             <div class="settings-row">
                 <label for=${fieldId('user')}>${t('settings.general.userLabel')}</label>
-                <${AvatarField} kind="user" value=${userAvatar} onChange=${setUserAvatar} />
-                <input id=${fieldId('user')} type="text" value=${userName} onInput=${e => setUserName(e.target.value)} placeholder=${t('settings.general.yourName')} />
+                <div class="settings-identity-field">
+                    <${AvatarField} kind="user" label=${t('settings.general.userLabel')} value=${userAvatar} onChange=${setUserAvatar} />
+                    <input id=${fieldId('user')} type="text" value=${userName} onInput=${e => setUserName(e.target.value)} placeholder=${t('settings.general.yourName')} />
+                </div>
             </div>
             <div class="settings-row">
                 <label for=${fieldId('agent')}>${t('settings.general.agentLabel')}</label>
-                <${AvatarField} kind="agent" value=${assistantAvatar} onChange=${setAssistantAvatar} />
-                <input id=${fieldId('agent')} type="text" value=${assistantName} onInput=${e => setAssistantName(e.target.value)} placeholder=${t('settings.general.agentName')} />
+                <div class="settings-identity-field">
+                    <${AvatarField} kind="agent" label=${t('settings.general.agentLabel')} value=${assistantAvatar} onChange=${setAssistantAvatar} />
+                    <input id=${fieldId('agent')} type="text" value=${assistantName} onInput=${e => setAssistantName(e.target.value)} placeholder=${t('settings.general.agentName')} />
+                </div>
             </div>
 
             <h3 style="margin-top:20px">${t('settings.general.notifications')}</h3>

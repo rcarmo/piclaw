@@ -85,9 +85,9 @@ const mockSettingsData = {
     qrSvg: '<svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg"><rect width="96" height="96" rx="10" fill="#fff"/><g fill="#111"><rect x="10" y="10" width="22" height="22"/><rect x="64" y="10" width="22" height="22"/><rect x="10" y="64" width="22" height="22"/><rect x="40" y="14" width="8" height="8"/><rect x="52" y="26" width="8" height="8"/><rect x="42" y="42" width="10" height="10"/><rect x="62" y="46" width="8" height="8"/><rect x="76" y="60" width="8" height="8"/><rect x="48" y="72" width="8" height="8"/></g></svg>',
   },
   providers: [
-    { id: 'openai', label: 'OpenAI', authType: 'api_key', configured: true },
-    { id: 'anthropic', label: 'Anthropic', authType: 'api_key', configured: false },
-    { id: 'github-copilot', label: 'GitHub Copilot', authType: 'oauth', configured: true },
+    { id: 'openai', name: 'OpenAI', label: 'OpenAI', authType: 'api_key', configured: true, hasApiKey: true },
+    { id: 'anthropic', name: 'Anthropic', label: 'Anthropic', authType: 'api_key', configured: false, hasApiKey: true },
+    { id: 'github-copilot', name: 'GitHub Copilot', label: 'GitHub Copilot', authType: 'oauth', configured: true, hasOAuth: true },
   ],
   models: fixtureModelOptions.map((model) => model.label),
   model_options: fixtureModelOptions,
@@ -126,10 +126,10 @@ const mockAddonsPayload = {
   sources: ['fixture-catalog'],
   failed_sources: [],
   addons: [
-    { slug: 'goal', name: 'Goal', description: 'Persisted thread goals and bounded autonomous continuation.', tags: ['automation', 'core'], installed: true, enabled: true, version: '0.1.46', bundled: false },
-    { slug: 'observability', name: 'Observability', description: 'Local metrics and tracing panels.', tags: ['metrics'], installed: true, enabled: true, version: '0.2.0', bundled: false },
+    { slug: 'goal', name: 'Goal', description: 'Persisted thread goals and bounded autonomous continuation.', tags: ['automation', 'core'], installed: true, enabled: true, version: '0.1.46', installedVersion: '0.1.46', bundled: false },
+    { slug: 'observability', name: 'Observability', description: 'Local metrics and tracing panels.', tags: ['metrics'], installed: true, enabled: true, version: '0.2.0', installedVersion: '0.2.0', bundled: false },
     { slug: 'portainer', name: 'Portainer', description: 'Container management add-on.', installed: false, enabled: false, version: '0.3.0', bundled: false },
-    { slug: 'proxmox', name: 'Proxmox', description: 'Proxmox inventory and workflow add-on.', installed: true, enabled: false, version: '0.4.0', bundled: false },
+    { slug: 'proxmox', name: 'Proxmox', description: 'Proxmox inventory and workflow add-on.', installed: true, enabled: false, version: '0.4.0', installedVersion: '0.4.0', bundled: false },
   ],
 };
 

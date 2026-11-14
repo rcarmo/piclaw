@@ -73,7 +73,7 @@ test('both Sessions panes omit retired policy controls and keep active budget/is
 
 test("general settings passes explicit avatar kinds to both identity fields", () => {
   const source = readFileSync(join(runtimeRoot, "web/src/components/settings/general.ts"), "utf8");
-  expect(source).toContain('<${AvatarField} kind="user" value=${userAvatar}');
-  expect(source).toContain('<${AvatarField} kind="agent" value=${assistantAvatar}');
+  expect(source).toContain('<${AvatarField} kind="user" label=${t(\'settings.general.userLabel\')} value=${userAvatar}');
+  expect(source).toContain('<${AvatarField} kind="agent" label=${t(\'settings.general.agentLabel\')} value=${assistantAvatar}');
   expect(source).not.toContain("/workspace/file?path=");
 });

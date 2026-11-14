@@ -31,8 +31,25 @@ Intentional test updates:
 
 The compose type baseline drops from 291 to 283 diagnostics: typing the section metadata removed eight `isExtension`/`component` errors, and two existing diagnostics moved lines.
 
+## Follow-up pass
+
+| Area | Problem | Change |
+|---|---|---|
+| Navigation | Core Editor and Developer panes were listed among add-ons and styled with the add-on button contract; on phones the icon-only items had no accessible name; no item was marked as current | Core panes sit in the built-in group with core styling; every item has `aria-label`, `title` and `type="button"`; the open pane has `aria-current="page"`; the phone strip fades at its trailing edge |
+| Add-ons | Absolutely positioned actions covered the description (and approached the core ribbon) once cards narrowed | Actions flow at the end of the card header |
+| General | Avatar pickers were clickable `div`s without a name or keyboard access; on phones the picker sat on its own row | Labelled buttons beside their name field; 44 px on phones |
+| Errors | Six different presentations of a block error | One alert style (tinted background, danger border, primary text, 13 px); inline field errors stay red text |
+| Quick Actions | Toolbar buttons centred on phones; `Save & apply` lost its primary style inside `.settings-row`; empty list said "match this filter" without a filter | Left-aligned `.settings-actions` toolbar; separate empty message |
+
+Three Settings browser suites had been failing on `main`, so they no longer protected Settings. They now pass:
+
+- The shell placement and passkey suites did not mock `/agent/system-metrics`, which the always-on meters poll. A route was added.
+- The widget-token Regenerate comparison opened General; that control now lives in Authentication → API access. Add-on buttons now match it: UI font, 13 px, control height.
+- In a narrow work-area tab at 1024 px, the Sessions isolation select and its hint overflowed the pane. Settings rows now wrap, and selects can shrink.
+
+The compose type baseline drops to 281: two `__piclawSettingsRequestedSection` writes are now typed instead of tracked by line number.
+
 ## Not covered
 
 - Registered add-on panes from the add-ons repository were reviewed from source only. They use inline styles and fixed colours; moving them to shared settings classes is separate work.
 - Remaining polish: button variants, card styles, provider labels, add-on card badges and the phone navigation's scroll affordance.
-- Six shell-placement and passkey browser suites, and the widget-token Regenerate comparison, fail on unmodified `main` as well; they are unchanged here.
