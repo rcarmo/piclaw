@@ -3232,7 +3232,7 @@ export function ComposeBox({
             return Boolean(target.closest('input, textarea, select, [contenteditable="true"], .compose-box, .compose-model-popup, .compose-session-popup, .settings-dialog, .workspace-sidebar, .editor-pane-container, .dock-panel, .timeline-menu-dropdown, .rename-branch-overlay, .agent-request-modal, .attachment-preview-modal, .vnc-pane-shell, .kanban-plugin, .timeline-quick-actions'));
         };
         const onGlobalKeyDown = (event) => {
-            if (event.ctrlKey || event.metaKey || event.altKey) return;
+            if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
             const textarea = textareaRef.current;
             if (!textarea) return;
             const isFocused = document.activeElement === textarea;

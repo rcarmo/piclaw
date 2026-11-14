@@ -16,6 +16,7 @@
 :root {
     --piclaw-shell-inset-right: 0px;
     --workbench-activity-width: 48px;
+    --workbench-statusbar-row-height: 24px;
     --workbench-statusbar-height: 24px;
     /* The home indicator on iPhone and iPad home-screen apps is a 5px bar about
        8px above the bottom edge, so a status bar row only needs to clear the
@@ -596,7 +597,7 @@ html[data-ios-keyboard-viewport] .workbench-statusbar {
     color: var(--text-secondary);
 }
 
-/* ── Status bar (Visual-style footer) ── */
+/* ── Status bar ── */
 .workbench-statusbar {
     position: fixed;
     left: 0;
@@ -606,7 +607,7 @@ html[data-ios-keyboard-viewport] .workbench-statusbar {
     display: flex;
     align-items: center;
     gap: 8px;
-    height: var(--workbench-statusbar-height);
+    min-height: var(--workbench-statusbar-row-height);
     padding: 0 8px var(--workbench-statusbar-inset);
     box-sizing: content-box;
     border-top: 1px solid var(--border-color);
@@ -647,7 +648,7 @@ html[data-ios-keyboard-viewport] .workbench-statusbar {
 .workbench-statusbar .compose-model-usage-hint {
     max-width: 40vw;
     font-size: 11px;
-    line-height: var(--workbench-statusbar-height);
+    line-height: var(--workbench-statusbar-row-height);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -671,21 +672,6 @@ html[data-ios-keyboard-viewport] .workbench-statusbar {
         right: auto;
         bottom: var(--model-popup-bottom, 30px);
         max-height: min(70vh, 620px, calc(100vh - var(--model-popup-bottom, 30px) - 12px));
-    }
-}
-
-/* Phones: model and context only; the meters live in the side bar drawer. */
-@media (max-width: 639px) {
-    .workbench-statusbar .system-meters-hud {
-        display: none;
-    }
-
-    .workbench-statusbar .compose-model-hint {
-        max-width: 55vw;
-    }
-
-    .workbench-statusbar .compose-model-usage-hint {
-        max-width: 30vw;
     }
 }
 
@@ -717,12 +703,78 @@ html[data-ios-keyboard-viewport] .workbench-statusbar {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    height: var(--workbench-statusbar-height);
+    height: var(--workbench-statusbar-row-height);
 }
 
 .system-meters-hud-statusbar .system-meters-spark {
     width: 32px;
     height: 10px;
+}
+
+/* Footer details open into the visible area, not below the viewport. */
+.system-meters-hud-statusbar .system-meters-gpu-popover {
+    top: auto;
+    bottom: calc(100% + 6px);
+    right: 8px;
+    max-height: min(65vh, 520px, calc(var(--app-height) - var(--workbench-statusbar-height) - var(--workbench-statusbar-inset) - 16px));
+}
+
+/* Match drawer placement: each group gets the full width without smaller text.
+   No row gaps or fixed two-row reservation; the observer follows actual wrapping. */
+@media (max-width: 1023px), (orientation: portrait) {
+    :root {
+        --workbench-statusbar-row-height: 20px;
+    }
+
+    .workbench-statusbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+    }
+
+    .workbench-statusbar-spacer {
+        display: none;
+    }
+
+    .workbench-statusbar .compose-meta-row,
+    .workbench-statusbar .compose-model-meta {
+        flex: 1 1 auto;
+    }
+
+    .workbench-statusbar .compose-model-meta {
+        flex-wrap: wrap;
+        gap: 0 8px;
+    }
+
+    .workbench-statusbar .compose-model-hint {
+        max-width: 100%;
+    }
+
+    .workbench-statusbar .compose-model-usage-hint {
+        max-width: none;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .system-meters-hud-statusbar .system-meters-card {
+        flex-wrap: wrap;
+        min-width: 0;
+        row-gap: 0;
+    }
+
+    .system-meters-hud-statusbar .system-meters-card:hover {
+        transform: none;
+    }
+
+    .system-meters-hud-statusbar .system-meters-row {
+        width: auto;
+        flex: 0 0 auto;
+    }
+
+    .system-meters-hud-statusbar .system-meters-compact-summary {
+        row-gap: 0;
+        line-height: var(--workbench-statusbar-row-height);
+    }
 }
 
 /* The side bar foot already frames the meters; no card outline of their own. */

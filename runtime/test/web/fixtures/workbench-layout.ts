@@ -12,7 +12,9 @@ import { buildMainShellClassName } from '../../../web/src/ui/app-main-shell-rend
 // Mirrors the structure rendered by app-main-shell-render: activity bar and side bar
 // (Sessions or Explorer) | chat | editor and viewer tabs, plus the status bar.
 const posts = Array.from({ length: 6 }, (_, i) => ({ id: i + 1, type: 'user', data: { content: `Message ${i + 1} with a path /workspace/example/source-file.ts`, timestamp: '2026-11-10T00:00:00Z' } }));
-const services = { fetchCommands: async () => ({ commands: [] }), getAgentModels: async () => ({ current: 'provider/model', thinking_level: 'high', supports_thinking: true, model_options: [] }) };
+const params = new URLSearchParams(location.search);
+const model = params.has('long-model') ? 'provider/a-long-model-name-with-a-large-context-window' : 'provider/model';
+const services = { fetchCommands: async () => ({ commands: [] }), getAgentModels: async () => ({ current: model, thinking_level: 'high', supports_thinking: true, model_options: [] }) };
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 const chats = ['default', 'release-notes', 'proxmox', 'tree-eval', 'steering-latency', 'lunch'].map((name, i) => ({
   chat_jid: `web:${name}`, agent_name: name, root_chat_jid: `web:${name}`, is_active: i === 2,
@@ -39,12 +41,14 @@ const loadSessionStatus = async (jid: string) => {
   return { status: 'active', data: { type: 'tool_call', turn_id: 't1', tool_name: 'bash', tool_args: { command: 'make test' } } };
 };
 window.open = ((url: string) => { probes.opened.push(String(url)); return null; }) as typeof window.open;
-const params = new URLSearchParams(location.search);
 // ?running=1: a turn is running a tool, so the agent status line is live.
 const runningStatus = params.get('running') === '1'
   ? { type: 'tool_call', title: 'bash: make test', tool_name: 'bash', tool_args: { command: 'cd /workspace/piclaw && make test' }, started_at: new Date(Date.now() - 4000).toISOString(), turn_id: 'turn-1' }
   : null;
-const contextUsage = { tokens: 42000, contextWindow: 100000, percent: 42 };
+const contextUsage = { tokens: 42000, contextWindow: 100000, percent: 42,
+  ...(params.has('usage') ? { cacheUsage: { latest: { provider: 'provider', model: model.slice('provider/'.length), totalTokens: 12000,
+    inputTokens: 1000, cacheReadTokens: 3000, cacheReadReported: true, costTotal: 0.01, costProvenance: 'provider_reported', providerCostCurrency: 'USD' } } } : {}),
+};
 
 function Fixture() {
   const shell = useRef(null), timeline = useRef(null), sidebar = useRef(280), editor = useRef(320), dock = useRef(200);
@@ -65,7 +69,7 @@ function Fixture() {
       onOpenTerminalTab=${() => probes.actions.push('terminal')} />
     <div class="container"><${ChatSurface} currentChatJid=${current} posts=${posts} timelineRef=${timeline} hasMore=${false}
       agentStatus=${runningStatus} currentTurnId=${runningStatus ? 'turn-1' : null} loadStatusWorkspaceBranch=${async () => ({ branch: 'main', repo_path: 'piclaw' })}
-      composeProps=${{ currentChatJid: current, onPost: () => {}, services, activeChatAgents: chats, activeModel: 'provider/model', contextUsage, agentModels: { current: 'provider/model', thinking_level: 'high' }, capabilities: { speech: true, media: true, location: false, notifications: false, modelPicker: true, commands: false } }} /></div>
+      composeProps=${{ currentChatJid: current, onPost: () => {}, services, activeChatAgents: chats, activeModel: model, contextUsage, modelUsage: params.has('quota') ? { hint_short: '5h 92% · weekly 86% · resets in 4h 25m' } : null, agentModels: { current: model, thinking_level: 'high' }, capabilities: { speech: true, media: true, location: false, notifications: false, modelPicker: true, commands: false } }} /></div>
     ${editorOpen && html`
       <div class="editor-splitter" onMouseDown=${splitters.handleEditorSplitterMouseDown} onTouchStart=${splitters.handleEditorSplitterTouchStart} onKeyDown=${splitters.handleEditorSplitterKeyDown} onDblClick=${splitters.handleEditorSplitterDoubleClick} role="separator" aria-orientation="vertical" aria-label="Resize editor" tabIndex="0"></div>
       <div class="editor-pane-container"><div class="tab-strip"><button class="tab-item active">notes.md</button></div><div class="editor-pane-host"><pre>Editor content</pre></div></div>

@@ -150,10 +150,10 @@ for (const engine of ['chromium', 'webkit']) {
       const bar = (await rect(page, '.workbench-statusbar'))!, shell = await page.evaluate(() => document.querySelector('.app-shell')!.getBoundingClientRect().bottom);
       expect(bar.width).toBe(1440);
       expect(shell).toBeLessThanOrEqual(900 - 23);
-      // Phones show the model and context in the status bar, without the meters, below the compose box.
+      // Phones stack the meters below the model/context, all below the compose box.
       await page.setViewportSize({ width: 390, height: 844 }); await settle(page);
       expect((await rect(page, '.workbench-statusbar'))!.visible).toBe(true);
-      expect((await rect(page, '.workbench-statusbar .system-meters-hud'))?.visible ?? false).toBe(false);
+      expect((await rect(page, '.workbench-statusbar .system-meters-hud'))?.visible ?? false).toBe(true);
       const compose = (await page.locator('.compose-box').boundingBox())!, status = (await page.locator('.workbench-statusbar').boundingBox())!;
       expect(compose.y + compose.height).toBeLessThanOrEqual(status.y + 1);
       expect(errors).toEqual([]);
