@@ -173,9 +173,8 @@
     padding: 20px 28px;
 }
 
-/* Match General's Widget bearer token Regenerate control. Keep browser-native
- * button typography, as used by .settings-row and the keychain submit control.
- * Visual retains the shared stylesheet's defaults.
+/* Match the widget-token Regenerate control (Authentication → API access),
+ * which uses the shared Settings button base: UI font, 13px, control height.
  */
 .settings-content.settings-addon-pane {
     /* Match ordinary Classic fields; these tokens never restyle built-ins. */
@@ -188,11 +187,11 @@
     --settings-addon-control-accent: var(--accent-color);
     --settings-addon-label-size: 0.88em;
     --settings-addon-help-size: 0.82em;
-    --settings-addon-button-min-height: auto;
+    --settings-addon-button-min-height: var(--settings-control-height, 30px);
     --settings-addon-button-min-width: 70px;
     --settings-addon-button-font-size: var(--settings-text-sm, 13px);
     --settings-addon-button-font-weight: normal;
-    --settings-addon-button-line-height: normal;
+    --settings-addon-button-line-height: 1.2;
     --settings-addon-button-white-space: nowrap;
     --settings-addon-button-transition: all 0s;
     --settings-addon-button-hover-border: var(--border-color, rgba(128,128,128,0.3));
@@ -201,7 +200,7 @@
 }
 
 .settings-content.settings-addon-pane :where(button:not(.settings-number-step-btn):not(.settings-panel__stepper-btn):not([role="tab"]):not([role="switch"]):not([data-settings-button="unstyled"])) {
-    font-family: revert !important;
+    font-family: inherit !important;
 }
 
 .settings-content.settings-addon-pane .settings-addon-control {
@@ -214,10 +213,15 @@
 
 .settings-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 12px;
     margin-bottom: 12px;
 }
+
+/* Settings can open as a work-area tab narrower than its dialog breakpoints;
+ * rows wrap and selects shrink rather than overflow the pane. */
+.settings-row select { max-width: 100%; min-width: 0; }
 
 .settings-row label {
     min-width: 130px;
