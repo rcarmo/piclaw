@@ -59,7 +59,9 @@ test("build:web produces bundle assets", async () => {
 
   // Compact Delegate rows add 1.7KB raw / 0.7KB gzip over the prior bundle; the
   // workbench UX pass (timeline status line, global menu, footer, session context) ~6KB raw / 1.9KB gzip.
-  expect(statSync(appBundlePath).size).toBeLessThan(1_510_000);
-  expect(gzipSync(appBundle).byteLength).toBeLessThan(417_500);
+  // The MCP management redesign adds 9.8KB raw / 2.5KB gzip against 78d7852f2.
+  // Account for that feature while retaining ~4.9KB raw / 1.8KB gzip headroom.
+  expect(statSync(appBundlePath).size).toBeLessThan(1_520_000);
+  expect(gzipSync(appBundle).byteLength).toBeLessThan(420_000);
   expect(statSync(editorBundlePath).size).toBeLessThan(500_000);
 }, WEB_BUILD_TEST_TIMEOUT_MS);
