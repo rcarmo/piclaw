@@ -24,8 +24,21 @@ Companion cleanup is tracked in [piclaw-addons #243](https://github.com/rcarmo/p
 
 ## Qualification
 
-Validation logs and the Classic case audit are retained under `/workspace/tmp/piclaw/runs/remove-visual-1990/`. Build, runtime/web type gates and circular-dependency checks pass. The configured compose gate retains its existing 291 out-of-seam diagnostics; raw frontend compilation is not clean.
+Code qualification used `f2df7eee9` (includes main `33d335ee3`). Logs are retained under `/workspace/tmp/piclaw/runs/remove-visual-1990/`.
 
-Lint and unused-export commands already fail on the untouched base. Normalised candidate diagnostics match that base. The broad optional browser suite also contains existing failures and environment-dependent cases; focused and paired baseline results must accompany the PR. No full-green browser claim follows from the focused tests.
+| Check | Result |
+|---|---|
+| Full host gate | 7,182 tests, 25 feature tests and 17 build tests pass; zero failures |
+| Final focused browsers | 165 pass, zero failures; Chromium/WebKit, editor, workbench, timeline, queue, reconnect, audio, MCP, widgets, keyboard and real Sample Addon/Delegate Settings panes |
+| Types, build, circular dependencies, stale bundles, environment surface | Pass; the configured compose gate retains its existing 291 out-of-seam diagnostics, so raw frontend compilation is not clean |
+| Lint and unused exports | Commands fail; normalised diagnostics match untouched main |
+| Last complete native attempt | Both private type projects and accepted-source integration pass; all 153 native files execute, 152 pass and `addon-host-services.test.ts` hits its existing five-second scenario deadline |
+| Focused native comparisons | The last failing file passes separately on both candidate and main. Four different deadline failures from the earlier complete attempt also pass separately on both. Neither result makes a complete native gate green |
+
+Earlier attempts are retained: the initial native preflight lacked private dev tooling (provisioned outside the gate), the first complete run had four deadline failures, and another stopped on the accepted-source audit deadline. The last receipt remains **INCOMPLETE**: `/workspace/tmp/piclaw/tests/native-gate-JWuQdh/receipt.json`. No deadline or assertion was relaxed.
+
+The broad exploratory browser run exposed stale fixture coupling, which was repaired before the final 165-case run. Existing Classic failures were reproduced in paired base suites (including picker, Settings placement, theme effects and SVG limits); unrelated environment-dependent VNC/provider-auth cases also failed in the sweep. There is no final full-green browser claim. Keep the removal PR in draft until the remaining qualification limits are accepted or resolved.
+
+Against main `33d335ee3`, the handwritten production paths (`runtime/src`, `runtime/web/src`, and the removed Visual tree, excluding `dist` and binary assets) have 16 added and 40,892 deleted lines: **40,876 net lines removed**. Generated outputs, tests, documentation and tooling are excluded from that number.
 
 This source change does not install software, alter live configuration or restart a service.
