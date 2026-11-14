@@ -53,6 +53,66 @@ const state = (page: Page) => page.evaluate(() => ({
 }));
 
 for (const engine of ['chromium', 'webkit']) {
+  for (const width of [320, 390, 1440]) {
+    browserTest(`${engine} ${width}px: session search has an inline clear button with pointer and keyboard support`, async () => {
+      const { page, errors } = await open(engine, width, width < 640 ? 844 : 900);
+      try {
+        if (width < 640) {
+          await page.locator('[data-testid="hamburger"]').tap();
+          await page.getByRole('menuitemcheckbox', { name: /Sessions/ }).tap();
+          await settle(page);
+        }
+        const search = page.getByRole('searchbox', { name: 'Search sessions', exact: true });
+        const clear = page.getByRole('button', { name: 'Clear session search', exact: true });
+        const handles = page.locator('.sessions-sidebar-list .sessions-sidebar-handle:visible');
+        const allHandles = await handles.allTextContents();
+        expect(allHandles.length).toBeGreaterThan(1);
+        expect(await clear.count()).toBe(0);
+        await search.fill('prox');
+        expect(await handles.allTextContents()).toEqual(['@proxmox']);
+        expect(await clear.count()).toBe(1);
+        // The control floats inside the input, with text space reserved for it.
+        const field = (await search.boundingBox())!, button = (await clear.boundingBox())!;
+        expect(button.x).toBeGreaterThanOrEqual(field.x);
+        expect(button.x + button.width).toBeLessThanOrEqual(field.x + field.width);
+        expect(button.y).toBeGreaterThanOrEqual(field.y);
+        expect(button.y + button.height).toBeLessThanOrEqual(field.y + field.height);
+        expect(Math.abs(button.y + button.height / 2 - field.y - field.height / 2)).toBeLessThanOrEqual(1);
+        expect(button.width).toBeGreaterThanOrEqual(24);
+        expect(await search.evaluate(el => parseFloat(getComputedStyle(el).paddingRight))).toBeGreaterThanOrEqual(button.width + 4);
+        // getComputedStyle does not expose this browser-internal pseudo-element.
+        expect(await page.evaluate(() => Array.from(document.styleSheets).some(sheet => Array.from(sheet.cssRules).some(rule =>
+          rule instanceof CSSStyleRule && rule.selectorText.includes('.sessions-sidebar-search input::-webkit-search-cancel-button') && rule.style.display === 'none',
+        )))).toBe(true);
+        // No mouse hover is needed to discover or tap the button.
+        await search.evaluate(el => el.blur());
+        expect(await clear.isVisible()).toBe(true);
+        await search.focus();
+        if (width < 640) await clear.tap(); else await clear.click();
+        expect(await search.inputValue()).toBe('');
+        expect(await search.evaluate(el => document.activeElement === el)).toBe(true);
+        expect(await clear.count()).toBe(0);
+        expect(await handles.allTextContents()).toEqual(allHandles);
+        // It is keyboard reachable, including when the filter has no results.
+        await search.fill('no-such-session');
+        expect(await page.locator('.sessions-sidebar-empty').innerText()).toContain('No sessions match');
+        await search.press('Tab');
+        expect(await clear.evaluate(el => document.activeElement === el)).toBe(true);
+        await page.keyboard.press('Enter');
+        expect(await search.inputValue()).toBe('');
+        expect(await search.evaluate(el => document.activeElement === el)).toBe(true);
+        expect(await handles.allTextContents()).toEqual(allHandles);
+        await search.fill('lunch'); await search.press('Tab'); await page.keyboard.press('Space');
+        expect(await search.inputValue()).toBe('');
+        expect(await clear.count()).toBe(0);
+        expect(await page.evaluate(() => (window as any).workbench.current())).toBe('web:default');
+        expect(await page.evaluate(() => (window as any).workbench.probes.actions)).toEqual([]);
+        await noOverflow(page);
+        expect(errors).toEqual([]);
+      } finally { await page.close(); }
+    }, 30000);
+  }
+
   for (const [width, height] of [[1440, 900], [1280, 800]]) {
     browserTest(`${engine} ${width}px: activity bar, side bar, chat and editor in that order`, async () => {
       const { page, errors } = await open(engine, width, height, '?editor=1');
@@ -150,10 +210,10 @@ for (const engine of ['chromium', 'webkit']) {
       const bar = (await rect(page, '.workbench-statusbar'))!, shell = await page.evaluate(() => document.querySelector('.app-shell')!.getBoundingClientRect().bottom);
       expect(bar.width).toBe(1440);
       expect(shell).toBeLessThanOrEqual(900 - 23);
-      // Phones show the model and context in the status bar, without the meters, below the compose box.
+      // Phones stack the meters below the model/context, all below the compose box.
       await page.setViewportSize({ width: 390, height: 844 }); await settle(page);
       expect((await rect(page, '.workbench-statusbar'))!.visible).toBe(true);
-      expect((await rect(page, '.workbench-statusbar .system-meters-hud'))?.visible ?? false).toBe(false);
+      expect((await rect(page, '.workbench-statusbar .system-meters-hud'))?.visible ?? false).toBe(true);
       const compose = (await page.locator('.compose-box').boundingBox())!, status = (await page.locator('.workbench-statusbar').boundingBox())!;
       expect(compose.y + compose.height).toBeLessThanOrEqual(status.y + 1);
       expect(errors).toEqual([]);
