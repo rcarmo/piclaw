@@ -10,9 +10,12 @@ import { installTerminalSettlementCompositionSchema } from "../../runtime/src/se
 import { createCurrentPiclawServiceWorkStore } from "../../runtime/src/service-effects/current-piclaw/service-work-store.js";
 import { createCurrentPiclawTerminalSettlementStore } from "../../runtime/src/service-effects/current-piclaw/terminal-settlement-store.js";
 import { InMemoryEffectPayloadResolver } from "../../runtime/src/service-effects/testing/in-memory-payload-resolver.js";
-import { createHostGoalSettlement, withGoalSettlementAuthority } from "../../runtime/durable-engine/src/host-goal-settlement.js";
+import { prepareGoalProjection, withGoalSettlementAuthority } from "../../runtime/durable-engine/src/host-goal-settlement.js";
 import { createHostGoalCommand } from "../../runtime/durable-engine/src/host-goal-command.js";
-import { createHostGoalPlanReader } from "../../runtime/durable-engine/src/host-goal-plan.js";
+import { parsePlanMarkdown } from "../../runtime/src/plan/markdown.js";
+import { PlanDoc } from "../../runtime/durable-engine/src/plan-document.js";
+import { createSession, MemoryStorage } from "../../runtime/durable-engine/qualification/durable.js";
+import { BACKGROUND_CONTEXT as context } from "../../runtime/durable-engine/qualification/context.js";
 import { getExtensionKvStore } from "../../runtime/src/extension-kv-registry.js";
 import { hashCanonicalRequest } from "../../runtime/src/service-effects/contracts/common.js";
 import { value, effect, sealed, at } from "./src/host-handoff.js";
@@ -99,19 +102,17 @@ for (const mode of ["continue", "human", "human-pending", "human-error", "human-
   if (mode === "pending" || mode === "human-pending" || mode === "budget-pending") value(await work.acceptSource(sealed({ effect: effect("pending-user"), chatJid, sourceId: "pending-user", kind: "message", payloadRef: "pending-user", targetOperationId: null, parentSourceSeq: null, acceptedAt: at, createWakeIntent: false })));
   const initial = extensionKvGet("goal", "thread-goal", "chat", chatJid) as { goal_id: string };
   const continuationId = budget ? `goal-budget:${initial.goal_id}:2` : "goal-continuation:op";
-  const planRoot = process.env.DURABLE_ADDONS_ROOT;
-  if (!planRoot) throw Error("DURABLE_ADDONS_ROOT required for actual Plan qualification");
-  const planAddon = await import(pathToFileURL(join(planRoot, "addons/plan-sidebar/index.ts")).href);
-  const readPlan = createHostGoalPlanReader(db, planAddon, addon);
+  const session = createSession(new MemoryStorage());
   const planMarkdown = mode === "finalize" ? "- [x] Continue work" : "- [ ] Continue work";
-  const fingerprint = addon.summarizeGoalPlan(planAddon.parsePlanMarkdown(planMarkdown).plan).fingerprint;
+  const fingerprint = addon.summarizeGoalPlan(parsePlanMarkdown(planMarkdown).plan).fingerprint;
   // Stalled setup used synthetic fingerprint above; replace with actual Plan fingerprint.
   if (mode === "stalled") withExtensionKvAuthority(setup, () => {
     const stored = addon.loadThreadGoal(chatJid);
     getExtensionKvStore().set("goal", "thread-goal", { ...stored, last_auto_continue_fingerprint: fingerprint }, "chat", chatJid);
   });
-  let planReads = 0, goalAfterOrdinary = false;
-  const prepare = createHostGoalSettlement(addon, { root: db, assertOwner() {}, runtime: () => ({
+  let goalAfterOrdinary = false;
+  let currentPlan: ReturnType<typeof addon.summarizeGoalPlan> | undefined;
+  const prepare = prepareGoalProjection(addon, { root: db, assertOwner() {}, runtime: () => ({
     async readAcceptedInputText() { return human ? "check pending PRs" : text; },
     async readSettledInputUsage() { return {
       inputs: [{ entryId: 1, text }, ...(ordinary ? [{ entryId: mode === "ordinary-empty" ? 4 : 10, text: "Ordinary human work" }] : []),
@@ -122,10 +123,6 @@ for (const mode of ["continue", "human", "human-pending", "human-error", "human-
   }), continuation: {
     addon,
     async prepare() { return { message: { role: "assistant", stopReason: mode === "error" || mode === "human-error" ? "error" : "stop" }, hadToolActivity: false }; },
-    readPlan(chat, assertCurrent) {
-      assertCurrent(); expect(db.inTransaction).toBe(true); expect(chat).toBe(chatJid); planReads++;
-      return readPlan(chat, assertCurrent);
-    },
     admit(next) { return admissions.admit(next); },
   } });
   const input = { incarnation: "fixture", conversationId: 1, chatJid, branchId: "main", operationId: "op", sourceSeq: source.sourceSeq,
@@ -138,10 +135,9 @@ for (const mode of ["continue", "human", "human-pending", "human-error", "human-
   }
   const apply = await prepare(input);
   if (mode === "human-paused") withExtensionKvAuthority(setup, () => addon.applyGoalCommand(chatJid, "pause"));
-  withExtensionKvAuthority({ ...setup, extensionId: "plan-sidebar" }, () => {
-    getExtensionKvStore().set("plan-sidebar", "plan", { markdown: planMarkdown, updated_at: at }, "chat", chatJid);
-  }); // Change persisted Plan AFTER preparation, BEFORE transaction.
-  expect(planReads).toBe(0);
+  await session.commit(async tx => { await tx.doc(PlanDoc, chatJid, { chat_jid: chatJid, markdown: planMarkdown, updated_at: at }); }, context);
+  // Change the native document AFTER preparation. Root publication below runs
+  // while the actual SDK mutation line is held; there is no KV Plan reader.
   let fail = true, calls = 0, deniedExternalBudget = 0, retained: (() => void) | undefined;
   const terminal = value(createCurrentPiclawTerminalSettlementStore(db, new InMemoryEffectPayloadResolver(), {
     hitFault: () => false, recordTrace() {}, validateOwnership: () => true,
@@ -152,11 +148,17 @@ for (const mode of ["continue", "human", "human-pending", "human-error", "human-
       withGoalSettlementAuthority(db, commit, scope, authority => {
         retained = authority.assertCurrent;
       });
-      apply!(commit, scope);
+      withGoalSettlementAuthority(db, commit, scope, authority => apply!(authority, commit.committedAt, currentPlan));
       if (fail) throw Error("rollback after Goal mutation");
       return undefined;
     },
   }));
+  const commitTerminal = (request: Parameters<typeof terminal.commitTerminal>[0]) => session.commit(async tx => {
+    expect(db.inTransaction).toBe(false);
+    const document = await tx.doc(PlanDoc, chatJid, { chat_jid: chatJid, markdown: "SHOULD_NOT_RESEED", updated_at: null });
+    currentPlan = addon.summarizeGoalPlan(parsePlanMarkdown(document.markdown).plan);
+    try { return await terminal.commitTerminal(request); } finally { currentPlan = undefined; }
+  }, context);
   try {
     const request = sealed({ effect: effect("terminal", "op", source.sourceSeq), expectedChatJid: chatJid, expectedVersion: finished.version, expectedHarness: finished.harness!, disposition: "completed" as const,
       errorCode: null, terminalAuthorityRef: null,
@@ -166,7 +168,7 @@ for (const mode of ["continue", "human", "human-pending", "human-error", "human-
       withExtensionKvAuthority(setup, () => getExtensionKvStore().set("goal", "thread-goal",
         { ...before, status: "budget_limited", lifecycle_generation: 2, budget_limit_reported: false }, "chat", chatJid));
       fail = false;
-      expect((await terminal.commitTerminal(request)).ok).toBe(false);
+      expect((await commitTerminal(request)).ok).toBe(false);
       expect(extensionKvGet("goal", "thread-goal", "chat", chatJid)).toMatchObject({ tokens_used: 0, status: "budget_limited", budget_limit_reported: false });
       expect(extensionKvGet("goal", "committed-usage:1", "chat", chatJid)).toBeNull();
       expect(admissions.read(chatJid)).toHaveLength(0);
@@ -174,18 +176,19 @@ for (const mode of ["continue", "human", "human-pending", "human-error", "human-
       deniedExternalBudget = 1;
       fail = true;
     }
-    expect((await terminal.commitTerminal(request)).ok).toBe(false);
+    expect((await commitTerminal(request)).ok).toBe(false);
     expect(extensionKvGet("goal", "thread-goal", "chat", chatJid)).toMatchObject({ tokens_used: 0 });
     expect(extensionKvGet("goal", "committed-usage:1", "chat", chatJid)).toBeNull();
     expect(admissions.read(chatJid)).toHaveLength(0);
     expect(db.query("SELECT * FROM service_effect_s01_sources WHERE source_id=?").all(continuationId)).toHaveLength(0);
     fail = false;
-    value(await terminal.commitTerminal(request));
+    value(await commitTerminal(request));
     expect(extensionKvGet("goal", "thread-goal", "chat", chatJid)).toMatchObject({ tokens_used: tokens });
     if (!tokens) expect(extensionKvGet("goal", "committed-usage:1", "chat", chatJid)).toBeNull();
-    value(await terminal.commitTerminal(request));
+    value(await commitTerminal(request));
     expect(calls).toBe(2 + deniedExternalBudget);
-    expect(planReads).toBe(budget || mode === "pending" || mode === "error" || (human && mode !== "human") ? 0 : 2); // Replay never re-reads.
+    expect((await session.snapshot(PlanDoc, chatJid, context))?.markdown).toBe(planMarkdown);
+    expect(db.query("SELECT * FROM extension_kv WHERE extension_id='plan-sidebar'").all()).toEqual([]);
     const queued = admissions.read(chatJid);
     if (budget) {
       expect(queued).toHaveLength(1);
@@ -220,5 +223,5 @@ for (const mode of ["continue", "human", "human-pending", "human-error", "human-
     }
     expect(() => retained!()).toThrow("scope ended");
     expect(() => db.transaction(() => retained!()).immediate()).toThrow("scope ended");
-  } finally { addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); await closeDatabase(); }
+  } finally { await session.close(context); addon.resetGoalAddonForTests(); resetExtensionKvStoreForTests(); await closeDatabase(); }
 });

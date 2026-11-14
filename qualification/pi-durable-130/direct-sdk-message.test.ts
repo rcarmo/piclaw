@@ -227,6 +227,7 @@ for (const boundary of ["request", "yield"] as const) applicationTest(`Goal ${bo
     resolveGoalInput: text => ({action:identity(text) && obsolete ? "handled" : "continue"}),
     isGoalBudgetInput: () => false,
     buildGoalSystemPrompt: () => "", buildGoalBudgetLimitPrompt: () => "",
+    buildVisibleGoalPrompt() { throw Error("No active Goal"); }, buildGoalFinalizationPrompt() { throw Error("No active Goal"); },
     claimGoalBudgetWrapup() {}, accountGoalProgress() {}, accountTerminalGoalProgress() {},
   }, {root:database,runtime:()=>runtime,assertOwner:assert,failClosed:error=>{denials.push(error);}});
   fixture.registry.install(goal);

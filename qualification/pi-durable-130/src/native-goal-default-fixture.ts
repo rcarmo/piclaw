@@ -19,9 +19,6 @@ import {createAssistantMessageEventStream} from '../../../node_modules/@earendil
 const barrier=()=>{let release!:()=>void;const promise=new Promise<void>(resolve=>{release=resolve;});return {promise,release};};
 export async function nativeGoalFixture(completeReplacement=false,holdGoalAuth=false,program?:(attempt:number,transcript:any)=>any[],beforeAttach?:(channel:WebChannel)=>void,onAuth?:()=>void|Promise<void>){
   const workspace=process.env.PICLAW_WORKSPACE!,pkg=installGoalFixture(workspace);
-  const plan=join(workspace,'.pi/extensions/node_modules/@rcarmo/piclaw-addon-plan-sidebar');
-  cpSync(join(process.env.DURABLE_ADDONS_ROOT!,'addons/plan-sidebar'),plan,{recursive:true,filter:path=>!path.split('/').includes('node_modules')});
-  symlinkSync(join(import.meta.dir,'../../../node_modules'),join(plan,'node_modules'));
   process.env.PICLAW_DB_IN_MEMORY='0';initDatabase();const root=getDb();
   const owner=acquireRuntimeLock({lockPath:join(workspace,'native-goal-lifecycle.lock'),strictOwnership:true,disabled:false});
   const credentials=createTestCredentialStore({});

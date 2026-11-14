@@ -26,6 +26,7 @@ import {
   listInstalledAddonPackageDirs,
   readInstalledAddonPackage,
   resolveAddonPackageEntries,
+  resolveActiveAddonEntries,
 } from "../../../addons/package-entries.js";
 import {
   recordAddonApiFailure,
@@ -227,7 +228,7 @@ export function getInstalledAddonWebEntries(workspaceDir = getWorkspaceDir()): I
     const manifest = addonPackage.manifest as AddonPackageManifest;
     const packageName = typeof manifest.name === 'string' ? manifest.name.trim() : '';
     if (!packageName) continue;
-    for (const fullPath of resolveAddonPackageEntries(packageDir, manifest.pi?.web?.entries)) {
+    for (const fullPath of resolveActiveAddonEntries(packageDir, manifest, manifest.pi?.web?.entries)) {
       const normalizedEntry = fullPath.slice(packageDir.length + 1).split('\\').join('/');
       entries.push({
         packageName,

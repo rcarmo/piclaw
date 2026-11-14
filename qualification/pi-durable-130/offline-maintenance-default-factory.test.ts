@@ -22,7 +22,7 @@ applicationTest("all 23 installed: explicit offline maintenance preserves enable
   const source = realpathSync(process.env.DURABLE_ADDONS_ROOT!);
   const workspace = process.env.PICLAW_WORKSPACE!;
   // Explicit profile inventory: copies only, never mutate candidate dependencies.
-  expect(Object.keys(applicationAddonSourceProfiles)).toHaveLength(23);
+  expect(Object.keys(applicationAddonSourceProfiles)).toHaveLength(22);
   const rootModules = realpathSync(join(repoRoot("CORE"), "node_modules"));
   const catDeps = realpathSync(process.env.DURABLE_CATALOG_DEPENDENCIES ?? join(source, "node_modules"));
   const installed = [];

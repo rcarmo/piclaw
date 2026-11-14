@@ -97,6 +97,7 @@ export interface WebChannelOpts {
   reorderNativeQueue?: WebChannelLike["reorderNativeQueue"];
   dispatchAcceptedInput?: WebChannelLike["dispatchAcceptedInput"];
   resumeNativeInputs?: WebChannelLike["resumeNativeInputs"];
+  handlePlanRequest?: WebChannelLike["handlePlanRequest"];
 }
 
 /** Web channel: HTTP/SSE server, API endpoints, and agent event bridge. */
@@ -524,6 +525,7 @@ export class WebChannel implements WebChannelLike {
   declare reorderNativeQueue?: WebChannelOpts["reorderNativeQueue"];
   declare dispatchAcceptedInput?: WebChannelOpts["dispatchAcceptedInput"];
   declare resumeNativeInputs?: WebChannelOpts["resumeNativeInputs"];
+  declare handlePlanRequest?: WebChannelOpts["handlePlanRequest"];
   responses = new ResponseService();
   requestRouter!: RequestRouterService;
   endpointContexts!: WebChannelEndpointContexts;

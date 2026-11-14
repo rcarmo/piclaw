@@ -70,6 +70,7 @@ export interface WebChannelConstructorFactoryChannel {
   sendMessage: WebChannelLike["sendMessage"];
   admitMessage: WebChannelLike["admitMessage"];
   resumeNativeInputs?: WebChannelLike["resumeNativeInputs"];
+  handlePlanRequest?: WebChannelLike["handlePlanRequest"];
 }
 
 export interface WebChannelConstructorFactoryDefaults {
@@ -90,6 +91,7 @@ export interface WebChannelConstructorFactoryRuntimeOpts {
   reorderNativeQueue?: WebChannelLike["reorderNativeQueue"];
   dispatchAcceptedInput?: WebChannelLike["dispatchAcceptedInput"];
   resumeNativeInputs?: WebChannelLike["resumeNativeInputs"];
+  handlePlanRequest?: WebChannelLike["handlePlanRequest"];
 }
 
 export interface WebChannelConstructorFactoryOptions extends WebChannelConstructorFactoryDefaults {

@@ -134,6 +134,7 @@ export interface WebChannelLike
   getInputSourceAdmission?(chatJid: string): StoreWebMessageOptions["acceptSource"];
   /** Reconcile existing native sources only; never scan/replay historical chat rows. */
   resumeNativeInputs?(chatJid?: string): void;
+  handlePlanRequest?(request: Request, chatJid: string, assertCurrent: () => void): Promise<Response>;
   filterNativeTimeline?(chatJid:string,rowIds:readonly number[]):Promise<readonly number[]>;
   readNativeQueue?(chatJid:string):Promise<import("../agent/native-queue-view.js").NativeQueueItem[]>;
   controlNativeQueue?(chatJid:string,submissionId:number,action:"remove"|"steer",authorise?:()=>void):Promise<boolean>;

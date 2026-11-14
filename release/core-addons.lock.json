@@ -32,13 +32,6 @@
       "sha256": "5b5e59cda8478222290d326965e2cef1e7303461ac47951cc4926cc3dcce107c"
     },
     {
-      "slug": "plan-sidebar",
-      "name": "@rcarmo/piclaw-addon-plan-sidebar",
-      "version": "0.1.28",
-      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-plan-sidebar-0.1.28.tgz",
-      "sha256": "93da9c8c958a11ebf4cfd56d740896a517fa252c31e79a3206f9a23d55fece26"
-    },
-    {
       "slug": "restic",
       "name": "@rcarmo/piclaw-addon-restic",
       "version": "0.1.5",

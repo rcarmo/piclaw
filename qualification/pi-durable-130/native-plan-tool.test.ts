@@ -15,7 +15,7 @@ test('direct native Plan tool: actions, aliases, adoption, scope, rollback and n
   let next: any, legacyReads = 0, current = true, native = true, notificationFails = false;
   const legacy = { chat_jid: chat, markdown: '- [ ] legacy', updated_at: 'old-timestamp' };
   const tool = createPlanTool({
-    runtime: () => ({ async captureToolSource() { return { operation: { chatJid: chat }, native: native ? { assertCurrent() { if (!current) throw Error('revoked'); } } : undefined } as any; } }),
+    runtime: () => ({ withSourceWriteGuard: async (check, body) => { check(); return body(); }, async captureToolSource() { return { operation: { chatJid: chat }, native: native ? { assertCurrent() { if (!current) throw Error('revoked'); } } : undefined } as any; } }),
     assertOwner() {},
     readLegacy(jid) { expect(jid).toBe(chat); legacyReads++; return legacy; },
     changed(plan, action) { if (notificationFails) throw Error('private-notification-failure'); changes.push({ plan, action }); },

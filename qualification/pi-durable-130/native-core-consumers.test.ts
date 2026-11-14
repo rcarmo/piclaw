@@ -21,8 +21,8 @@ import { createRuntimeBaseServices } from "../../runtime/src/runtime/composition
 import { registerOwnedAddonConfigApi, handleRegisteredAddonConfigApiRequest } from "../../runtime/src/channels/web/handlers/addon-config-api.js";
 import type { RuntimeModelServices } from "../../runtime/src/agent-pool/model-services.js";
 
-const slugs = ["code-review", "delegate", "goal", "observability", "plan-sidebar", "restic", "session-dashboard"];
-for (const accounted of [false, true]) test(`all seven shipped consumers admit actual native startup and Restic effects without legacy sessions; accounted=${accounted}`, async () => {
+const slugs = ["code-review", "delegate", "goal", "observability", "restic", "session-dashboard"];
+for (const accounted of [false, true]) test(`all six remaining add-on consumers admit actual native startup and Restic effects without legacy sessions; accounted=${accounted}`, async () => {
   if (!process.env.PICLAW_NATIVE_CORE_CHILD) {
     const env = { ...process.env };
     delete env.PICLAW_TEST_FS_ISOLATION_ACTIVE; delete env.PICLAW_TEST_FS_ISOLATION_ROOT;

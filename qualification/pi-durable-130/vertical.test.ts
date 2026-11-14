@@ -1,3 +1,6 @@
+import { PlanDoc } from "../../runtime/durable-engine/src/plan-document.js";
+import { createPlanTool } from "../../runtime/durable-engine/src/plan-tool.js";
+import { buildPlanTurnMessage } from "../../runtime/src/plan/markdown.js";
 import "./src/test-guard.js";
 import { expect, test } from "bun:test";
 import assert from "node:assert/strict";
@@ -37,15 +40,6 @@ type Hook = (event: { systemPrompt: string }, ctx: { sessionManager: { getSessio
 // provider below cooperatively fences its OWN synthetic admission; host 1.2's
 // public dispatch await-gap remains an activation blocker for real providers.
 test("vertical: copied existing chat -> host 1.2 models + actual Plan + guarded local bash -> EF terminal; cancelled auth admits no further effects", async () => {
-  const addonRoot = process.env.DURABLE_ADDONS_ROOT;
-  if (!addonRoot) throw new Error("DURABLE_ADDONS_ROOT required (pinned Plan 0.1.28 checkout)");
-  const addon = resolve(addonRoot, "addons/plan-sidebar");
-  for (const [file, hash] of Object.entries({
-    "index.ts": "303b6a270cdb0dfbdf0ffbce5ac02ee16574ea0da7e43d503f116137a1ee6579",
-    "compat/chat-context.ts": "8cfa6c16f0a27308ecc665f80ba107064d4fa8ac34122676ff0d1cb46e719da5",
-    "compat/extension-kv.ts": "02ae106a2d7ceee64286cac755943d53ed2fe725ef666640a889b6d63315324c",
-  })) expect(createHash("sha256").update(await Bun.file(resolve(addon, file)).bytes()).digest("hex")).toBe(hash);
-  expect((await Bun.file(resolve(addon, "package.json")).json()).version).toBe("0.1.28");
   const dir = await mkdtemp(resolve(process.env.PICLAW_WORKSPACE!, "vertical-"));
   process.env.PICLAW_DB_IN_MEMORY = "1";
   initDatabase(); getDb().query("VACUUM INTO ?").run(resolve(dir, "host.sqlite")); await closeDatabase();
@@ -53,7 +47,6 @@ test("vertical: copied existing chat -> host 1.2 models + actual Plan + guarded 
   const owner = TestOwner.acquire(resolve(dir, "host.sqlite"));
   const db = new Database(owner.path, { strict: true });
   db.exec("PRAGMA foreign_keys=ON"); installTerminalSettlementCompositionSchema(db);
-  db.exec("CREATE TABLE vertical_kv (chat TEXT PRIMARY KEY, value TEXT NOT NULL)");
   const jid = "web:vertical-existing", branch = "existing-main", token = "SYNTHETIC_VERTICAL_HOST_ONLY_TOKEN";
   db.query("INSERT INTO chats (jid,name,last_message_time) VALUES (?,?,?)").run(jid, "Existing vertical chat", at);
   db.query("INSERT INTO chat_branches (branch_id,chat_jid,root_chat_jid,agent_name,created_at,updated_at) VALUES (?,?,?,?,?,?)").run(branch, jid, jid, "host-selected-agent", at, at);
@@ -64,45 +57,16 @@ test("vertical: copied existing chat -> host 1.2 models + actual Plan + guarded 
   const priorBranch = db.query("SELECT * FROM chat_branches").all();
   let allowed = true, prepared = false, active = "happy", planWrites = 0, shellCalls = 0, admissions = 0;
   const assertAllowed = () => { owner.assert(); if (!allowed) throw new Error("Private host authority revoked"); };
-  const local = new AsyncLocalStorage<{ assertAllowed(): void }>();
-  const globals = globalThis as unknown as Record<string, unknown>;
-  const keys = ["__piclawRuntimeInterop", "__piclaw_planSidebarApi", "__piclaw_registerAddonConfigApi", "__PICLAW_BROADCAST_EVENT__"];
-  const saved = keys.map(key => Object.getOwnPropertyDescriptor(globals, key));
   let harness: Awaited<ReturnType<typeof Harness.open>> | undefined;
   const authEntered = barrier(), authRelease = barrier();
   let holdAuth = false;
   try {
-    const kvScope = (extension: string, key: string, scope: string, chat: string) => {
-      expect([extension, key, scope, chat]).toEqual(["plan-sidebar", "plan", "chat", jid]);
-      if (!local.getStore()) throw new Error("Missing invocation scope");
-      local.getStore()!.assertAllowed();
-    };
-    globals.__piclawRuntimeInterop = { getExtensionKvStore: () => ({
-      get(extension: string, key: string, scope: string, chat: string) {
-        kvScope(extension, key, scope, chat);
-        return JSON.parse((db.query("SELECT value FROM vertical_kv WHERE chat=?").get(chat) as { value: string }).value);
-      },
-      set(extension: string, key: string, data: unknown, scope: string, chat: string) {
-        kvScope(extension, key, scope, chat); // synchronous SQL effect fence
-        db.query("INSERT OR REPLACE INTO vertical_kv VALUES (?,?)").run(chat, JSON.stringify(data)); planWrites++;
-      },
-    }) };
-    delete globals.__piclaw_registerAddonConfigApi;
-    globals.__PICLAW_BROADCAST_EVENT__ = () => local.getStore()!.assertAllowed();
-    db.query("INSERT INTO vertical_kv VALUES (?,?)").run(jid, JSON.stringify({ chat_jid: jid, markdown: "- [ ] EXISTING_PLAN", updated_at: at }));
-    const actual = await import(`${resolve(addon, "index.ts")}?vertical-1650`);
-    const chat = await import(resolve(addon, "compat/chat-context.ts")) as { withChatContext<T>(jid: string, channel: string, fn: () => Promise<T>): Promise<T> };
-    const scoped = <T>(check: () => void, fn: () => Promise<T>) => local.run({ assertAllowed: check }, () => chat.withChatContext(jid, "web", fn));
-    let definition: ToolDefinition<TSchema, JsonValue> | undefined, hook: Hook | undefined;
-    actual.default({ on(event: string, fn: Hook) { expect(event).toBe("before_agent_start"); hook = fn; }, registerTool(tool: ToolDefinition<TSchema, JsonValue>) { definition = tool; } });
-    if (!definition || !hook) throw new Error("Actual Plan registration missing");
-    const planHook = hook;
-    const plan = createHostTool(definition, { authority: { check: assertAllowed }, effectFence: "host-effect-port",
-      invoke(args, call) {
-        if ((args as { chat_jid?: string }).chat_jid && (args as { chat_jid?: string }).chat_jid !== jid) throw new Error("Cross-chat override");
-        return scoped(call.assertAllowed, () => call.execute(call.toolCallId, args, call.signal, call.onUpdate,
-          { sessionManager: { getSessionDir: () => dir } } as ExtensionToolContext));
-      } });
+    const originalPlan = { chat_jid: jid, markdown: "- [ ] EXISTING_PLAN", updated_at: at };
+    // Explicitly synthetic source capture; actual default composition is tested separately.
+    const plan = createPlanTool({ assertOwner: assertAllowed, readLegacy: () => originalPlan,
+      changed() { planWrites++; }, runtime: () => ({ withSourceWriteGuard: async (check, body) => { check(); return body(); }, async captureToolSource() {
+        return { operation: { chatJid: jid }, native: { assertCurrent: assertAllowed } } as any;
+      } }) });
     const bash = createHostBashTool({ cwd: dir, authority: { assertAllowed }, shellPath: () => { assertAllowed(); shellCalls++; return "/bin/bash"; } });
     let conversation: Conversation;
     const handlers: Pick<GenerationHooks, "beforeRequest"> = { async beforeRequest(request, api, ctx) {
@@ -119,7 +83,8 @@ test("vertical: copied existing chat -> host 1.2 models + actual Plan + guarded 
           if (!entry || entry.kind !== "host.plan.hidden") throw new Error("Invalid mapping");
           return entry;
         }
-        const result = await scoped(assertAllowed, () => planHook({ systemPrompt: "" }, { sessionManager: { getSessionDir: () => dir } }));
+        const document = await tx.doc(PlanDoc, jid, originalPlan);
+        const result = { message: buildPlanTurnMessage(document) };
         if (!result.message) throw new Error("Missing Plan snapshot");
         const data = JSON.parse(JSON.stringify(result.message)) as Hidden;
         const entry = await tx.appendEntry(conversation.id, { kind: "host.plan.hidden", data, model: [{ role: "user", content: data.content, timestamp: 1 }] });
@@ -243,7 +208,7 @@ test("vertical: copied existing chat -> host 1.2 models + actual Plan + guarded 
     expect(toolResults.map(message => message.toolName)).toEqual(["plan", "plan", "bash"]);
     expect(toolResults.every(message => !message.isError)).toBe(true);
     expect(toolResults.at(-1)?.content).toEqual([{ type: "text", text: "vertical-fixture" }]);
-    expect(JSON.parse((db.query("SELECT value FROM vertical_kv WHERE chat=?").get(jid) as { value: string }).value).markdown).toBe("- [x] VERTICAL_DONE");
+    expect((await harness.snapshot(PlanDoc, jid, context))?.markdown).toBe("- [x] VERTICAL_DONE");
     expect((await conversation.agent(context)).tools.map(tool => tool.name).sort()).toEqual(["bash", "plan"]);
     expect(models.getAllModels().map(model => [model.provider, model.id])).toEqual([[ref.provider, ref.id]]);
     expect(plan.replay).toBe("unsafe"); expect(bash.replay).toBe("unsafe");
@@ -280,7 +245,6 @@ test("vertical: copied existing chat -> host 1.2 models + actual Plan + guarded 
     }
   } finally {
     authRelease.release(); await harness?.close(context);
-    keys.forEach((key, index) => { const descriptor = saved[index]; if (descriptor) Object.defineProperty(globals, key, descriptor); else delete globals[key]; });
     db.close(); owner.releaseAfterClose(); owner.closeConnection(); await rm(dir, { recursive: true, force: true });
   }
 }, 20000);

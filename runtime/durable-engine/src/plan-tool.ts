@@ -27,7 +27,7 @@ export function preparePlanArguments(args: unknown): unknown {
  * Source capture binds the product chat identity; there is no S01/harness path.
  * The readonly legacy reader is only a seed when the SDK document is absent. */
 export function createPlanTool(options: {
-  runtime(): Pick<HostConversationRuntime, 'captureToolSource'>;
+  runtime(): Pick<HostConversationRuntime, 'captureToolSource' | 'withSourceWriteGuard'>;
   assertOwner(): void;
   readLegacy(chatJid: string): SessionPlan | undefined;
   changed(plan: SessionPlan, action: PlanAction): void;
@@ -45,7 +45,8 @@ export function createPlanTool(options: {
           && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
         if (!plain(raw)) throw Error('Plain Plan arguments required');
         const args = structuredClone(raw);
-        const captured = await options.runtime().captureToolSource(api.conversationId, api.taskId, api.callId);
+        const runtime = options.runtime();
+        const captured = await runtime.captureToolSource(api.conversationId, api.taskId, api.callId);
         checkOwner();
         if (!captured.native) throw Error('Native Plan source required');
         const chat = captured.operation.chatJid;
@@ -70,7 +71,7 @@ export function createPlanTool(options: {
         }
         const action = args.action as PlanAction;
         const legacy = current ? snapshot(current) : seed();
-        const plan = await api.commit(async tx => {
+        const plan = await runtime.withSourceWriteGuard(check, () => api.commit(async tx => {
           check();
           const draft = await tx.doc(PlanDoc, chat, legacy);
           check();
@@ -84,7 +85,7 @@ export function createPlanTool(options: {
           if (Buffer.byteLength(JSON.stringify(next), 'utf8') > 65_536) throw Error('Plan value exceeds maximum size');
           draft.markdown = next.markdown; draft.updated_at = next.updated_at;
           check(); return next;
-        }, context);
+        }, context));
         check();
         // Notification follows the stored SDK commit, never a draft or failed write.
         try { options.changed(plan, action); }

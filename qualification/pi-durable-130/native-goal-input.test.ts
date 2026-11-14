@@ -21,9 +21,6 @@ import { createAssistantMessageEventStream } from "../../node_modules/@earendil-
 const applicationTest=isolatedApplicationTest(import.meta.url);
 for(const {continuation,fault} of [{continuation:false,fault:"none"},{continuation:true,fault:"none"},{continuation:false,fault:"rollback"},{continuation:false,fault:"postcommit"},{continuation:false,fault:"tokens"}]) applicationTest(`actual native Goal ${continuation?"atomic continuation then completion":"completion"}/${fault} retains tokens without host turn/financial settlement`,async()=>{
   const workspace=process.env.PICLAW_WORKSPACE!;const goalPackage=installGoalFixture(workspace);
-  const plan=join(workspace,".pi/extensions/node_modules/@rcarmo/piclaw-addon-plan-sidebar");
-  cpSync(join(process.env.DURABLE_ADDONS_ROOT!,"addons/plan-sidebar"),plan,{recursive:true,filter:path=>!path.split("/").includes("node_modules")});
-  symlinkSync(join(import.meta.dir,"../../node_modules"),join(plan,"node_modules"));
   process.env.PICLAW_DB_IN_MEMORY="0";initDatabase();const database=getDb();
   const financial=()=>historicalExpenseRows(database,["budget_caps","budget_work","budget_request_reservations","budget_usage_events"]);
   const before=financial();

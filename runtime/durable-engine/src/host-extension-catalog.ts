@@ -1,4 +1,3 @@
-import type { SyncSqliteOperation } from "../../src/db/sqlite-async-admission.js";
 import { assertHostToolDeclaration } from "./host-tools.js";
 import { InstalledAddonSourceChanged } from "./host-model-failure.js";
 import { installedAddonProfiles, type InstalledAddonProfile } from "./host-installed-addon-profiles.js";
@@ -11,21 +10,6 @@ import { pathToFileURL } from "node:url";
 import type { CodeReviewNativeExports } from "./host-code-review-tool.js";
 import type { EditableTableNativeExports } from "./host-editable-table-tool.js";
 import type { DrawioNativeExports } from "./host-drawio-tool.js";
-export interface PlanPromptExports {
-  createPlanTool(write?: <T>(body: SyncSqliteOperation<T>) => Promise<T>): ToolDefinition<any, any, any>;
-  parsePlanMarkdown(markdown: string): { plan: { step: string; status: "pending" | "in_progress" | "completed" }[] };
-  loadSessionPlan(chatJid: string): { chat_jid: string; markdown: string; updated_at: string | null };
-  buildPlanSystemPrompt(plan: ReturnType<PlanPromptExports["loadSessionPlan"]>): string;
-  buildPlanTurnMessage(plan: ReturnType<PlanPromptExports["loadSessionPlan"]>): { customType: string; content: { type: "text"; text: string }[]; display: boolean } | undefined;
-}
-
-// Core policy for the effect proof in qualification/plan.test.ts. This is not
-// an add-on lockfile: other installed content still loads, but gets no exemption.
-const approvedPlanFiles = Object.freeze({
-  "index.ts": "303b6a270cdb0dfbdf0ffbce5ac02ee16574ea0da7e43d503f116137a1ee6579",
-  "compat/chat-context.ts": "8cfa6c16f0a27308ecc665f80ba107064d4fa8ac34122676ff0d1cb46e719da5",
-  "compat/extension-kv.ts": "02ae106a2d7ceee64286cac755943d53ed2fe725ef666640a889b6d63315324c"
-});
 const approvedDelegateFiles = Object.freeze({
   "index.ts": "73563d26795cbab5cd92e8d5f8dabe3d7477fa11dff35e0ed8b21d9ec3f5ab51",
   "delegate.ts": "6117acbdc9ad6e0e2a246c15e26eacf18b704fa1dab5936c10a48b9883be6e12",
@@ -115,7 +99,6 @@ const profiles = {
   open_drawio_editor: { label: "Draw.io", name: "@rcarmo/piclaw-addon-drawio-editor", version: "31.4.4", files: approvedDrawioFiles, shadows: ["index.js", "tool.js", "tool.json", "tool/index.js", "tool/package.json"], events: [] as readonly string[] },
   open_office_viewer: { label: "Office Viewer", name: "@rcarmo/piclaw-addon-office-viewer", version: "0.1.3", files: approvedOfficeViewerFiles, shadows: ["index.js"], events: [] as readonly string[] },
   editable_table: { label: "Editable Table", name: "@rcarmo/piclaw-addon-editable-table", version: "0.1.4", files: approvedEditableTableFiles, shadows: ["index.js", "tool.js", "tool.json", "tool/index.js", "tool/package.json", "shared.js", "shared.json", "shared/index.js", "shared/package.json"], events: ["resources_discover"] },
-  plan: { label: "Plan", name: "@rcarmo/piclaw-addon-plan-sidebar", version: "0.1.28", files: approvedPlanFiles, shadows: ["compat/chat-context.js", "compat/extension-kv.js", "compat/package.json"], events: ["before_agent_start"] },
   code_review: { label: "Code Review", name: "@rcarmo/piclaw-addon-code-review", version: "0.1.11", files: approvedCodeReviewFiles,
     shadows: [...Object.keys(approvedCodeReviewFiles).flatMap(file => [file.replace(/\.ts$/, ".js"), file.replace(/\.ts$/, ".json"), file.replace(/\.ts$/, "/index.js"), file.replace(/\.ts$/, "/package.json")])], events: ["resources_discover"] },
   delegate: { label: "Delegate", name: "@rcarmo/piclaw-addon-delegate", version: "0.2.22", files: approvedDelegateFiles, shadows: ["delegate.js", "delegate.json", "delegate/index.js", "delegate/package.json", "compat/extension-kv.js", "compat/package.json"], events: ["session_start", "model_select", "before_agent_start"] },
@@ -190,6 +173,7 @@ function captureApprovedPackage(workspace: string, packageDir: string, installed
 /** Read-only install preflight using the same source proof as the loader. No
  * factory evaluation or loaded-registration qualification is donated here. */
 export function inspectAddonInstall(name: string, version?: string, directory?: string): { supportedVersion: string; problem?: string } | undefined {
+  if (name === "@rcarmo/piclaw-addon-plan-sidebar") return { supportedVersion: "built-in", problem: "Plan is built into Core. The retired Plan Sidebar add-on is not loaded and need not be installed." };
   const match = Object.entries(sourceProfiles).find(([, profile]) => profile.name === name);
   if (!match) return;
   const [kind, profile] = match;
@@ -243,17 +227,17 @@ export type GoalNativeExports = Parameters<typeof import("./host-goal-config.js"
   & Parameters<typeof import("./host-goal-input.js").createHostGoalInput>[0]
   & Parameters<typeof import("./host-goal-prompt.js").createHostGoalPrompt>[0]
   & Parameters<typeof import("./host-goal-settlement.js").createHostGoalSettlement>[0]
-  & Parameters<typeof import("./host-goal-plan.js").createHostGoalPlanReader>[2]
+  & { summarizeGoalPlan(items: unknown): { available: boolean; total: number; allCompleted: boolean; fingerprint: string; plan: { step: string; status: string }[] } }
   & Parameters<typeof import("./host-goal-command.js").createHostGoalCommand>[0]
   & Parameters<typeof import("./host-goal-progress.js").createHostGoalProgressReader>[0]
-  & NonNullable<Parameters<typeof import("./host-goal-settlement.js").createHostGoalSettlement>[1]["continuation"]>["addon"]
+  & NonNullable<Parameters<typeof import("./host-goal-settlement.js").createNativeGoalProjection>[1]["continuation"]>["addon"]
   & { createGoalTools: Parameters<typeof import("./host-goal-tools.js").createHostGoalTools>[0]; decideGoalPlanProgress: (...args: any[]) => unknown };
 /** Exact source and declaration qualification; application installs native lifecycle. */
 export async function qualifyInstalledGoal(catalog: LoadExtensionsResult, cwd: string) {
   const qualified = qualifyInstalledTool(catalog, cwd, "goal");
   if (!qualified) return undefined;
   const exports = await import(pathToFileURL(qualified.source.entry).href);
-  const names = ["createGoalTools", "loadThreadGoal", "buildGoalSystemPrompt", "buildGoalBudgetLimitPrompt", "buildVisibleGoalPrompt", "claimGoalBudgetWrapup", "isGoalBudgetInput", "prepareGoalInput", "goalInputIdentity", "resolveGoalInput", "accountGoalProgress", "accountTerminalGoalProgress", "shouldContinueGoalAfterMessage", "decideGoalPlanProgress", "applyGoalPlanProgress", "summarizeGoalPlan", "isGoalProgressTool", "applyGoalCommand", "applyGoalConfig", "goalResponse"] as const;
+  const names = ["createGoalTools", "loadThreadGoal", "buildGoalSystemPrompt", "buildGoalFinalizationPrompt", "buildGoalBudgetLimitPrompt", "buildVisibleGoalPrompt", "claimGoalBudgetWrapup", "isGoalBudgetInput", "prepareGoalInput", "goalInputIdentity", "resolveGoalInput", "accountGoalProgress", "accountTerminalGoalProgress", "shouldContinueGoalAfterMessage", "decideGoalPlanProgress", "applyGoalPlanProgress", "summarizeGoalPlan", "isGoalProgressTool", "applyGoalCommand", "applyGoalConfig", "goalResponse"] as const;
   qualified.assertCurrent();
   if (names.some(name => typeof exports[name] !== "function")) throw Error("Goal public native exports required");
   const addon = Object.freeze(Object.fromEntries(names.map(name => [name, exports[name]]))) as unknown as GoalNativeExports;
@@ -269,17 +253,6 @@ export async function qualifyInstalledGoal(catalog: LoadExtensionsResult, cwd: s
     if (names.some(name => exports[name] !== addon[name])) throw Error("Goal public exports changed");
   } });
 }
-export async function qualifyInstalledPlan(catalog: LoadExtensionsResult, cwd: string) {
-  const qualified = qualifyInstalledTool(catalog, cwd, "plan");
-  if (!qualified) return undefined;
-  const { source, assertCurrent } = qualified;
-  const exports = await import(pathToFileURL(source.entry).href) as Partial<PlanPromptExports>;
-  assertCurrent();
-  if (typeof exports.parsePlanMarkdown !== "function" || typeof exports.loadSessionPlan !== "function" || typeof exports.buildPlanSystemPrompt !== "function" || typeof exports.buildPlanTurnMessage !== "function" || typeof exports.createPlanTool !== "function") throw Error("Installed Plan prompt exports required");
-  const addon: PlanPromptExports = Object.freeze({ createPlanTool: exports.createPlanTool, parsePlanMarkdown: exports.parsePlanMarkdown, loadSessionPlan: exports.loadSessionPlan, buildPlanSystemPrompt: exports.buildPlanSystemPrompt, buildPlanTurnMessage: exports.buildPlanTurnMessage });
-  return Object.freeze({ ...qualified, addon });
-}
-
 export interface DelegatePolicyExports {
   buildModelCandidates(models: { provider: string; id: string; fullId: string }[], config: unknown): { id: string }[];
 }
@@ -362,6 +335,7 @@ function assertApprovedApplicationSources(cwd: string, {installedEntries,snapsho
   const approvedPackages = new Set(snapshots.flatMap(snapshot => snapshot.before ? [snapshot.before.packageDir] : []));
   for (const packageDir of listInstalledAddonPackageDirs(join(cwd, ".pi/extensions/node_modules"))) {
     const manifest = readInstalledAddonPackage(packageDir)?.manifest;
+    if (manifest?.name === "@rcarmo/piclaw-addon-plan-sidebar") continue;
     if ((manifest?.name?.includes("piclaw-addon-") || manifest?.pi) && !approvedPackages.has(packageDir))
       throw Error(`Unqualified installed add-on package before evaluation: ${packageDir}`);
   }
@@ -457,9 +431,9 @@ export async function qualifyInstalledObservability(catalog: LoadExtensionsResul
  * hooks through a fabricated AgentSession context. Keep all diagnostics so a
  * successful startup can never silently mean missing installed capabilities.
  */
-export function assertApplicationExtensionCatalogSupported(catalog: LoadExtensionsResult, plan?: Awaited<ReturnType<typeof qualifyInstalledPlan>>, delegate?: Awaited<ReturnType<typeof qualifyInstalledDelegate>>, codeReview?: Awaited<ReturnType<typeof qualifyInstalledCodeReview>>, editableTable?: Awaited<ReturnType<typeof qualifyInstalledEditableTable>>, officeViewer?: ReturnType<typeof qualifyInstalledOfficeViewer>, drawio?: Awaited<ReturnType<typeof qualifyInstalledDrawio>>, goal?: Awaited<ReturnType<typeof qualifyInstalledGoal>>, observability?: Awaited<ReturnType<typeof qualifyInstalledObservability>>, restic?: Awaited<ReturnType<typeof qualifyInstalledRestic>>, receipts: readonly InstalledAddonBindingReceipt[] = []): void {
+export function assertApplicationExtensionCatalogSupported(catalog: LoadExtensionsResult, delegate?: Awaited<ReturnType<typeof qualifyInstalledDelegate>>, codeReview?: Awaited<ReturnType<typeof qualifyInstalledCodeReview>>, editableTable?: Awaited<ReturnType<typeof qualifyInstalledEditableTable>>, officeViewer?: ReturnType<typeof qualifyInstalledOfficeViewer>, drawio?: Awaited<ReturnType<typeof qualifyInstalledDrawio>>, goal?: Awaited<ReturnType<typeof qualifyInstalledGoal>>, observability?: Awaited<ReturnType<typeof qualifyInstalledObservability>>, restic?: Awaited<ReturnType<typeof qualifyInstalledRestic>>, receipts: readonly InstalledAddonBindingReceipt[] = []): void {
   const bindings = receipts.map(receipt => validateInstalledAddonReceipt(catalog, receipt));
-  observability?.assertCurrent(); restic?.assertCurrent(); goal?.assertCurrent(); plan?.assertCurrent(); delegate?.assertCurrent(); codeReview?.assertCurrent(); editableTable?.assertCurrent(); officeViewer?.assertCurrent(); drawio?.assertCurrent();
+  observability?.assertCurrent(); restic?.assertCurrent(); goal?.assertCurrent(); delegate?.assertCurrent(); codeReview?.assertCurrent(); editableTable?.assertCurrent(); officeViewer?.assertCurrent(); drawio?.assertCurrent();
   const blocked: string[] = catalog.errors.map(error => `${error.path}: extension load failed`);
   for (const [kind, source] of loadedProfileSources.get(catalog) ?? []) {
     if (!sameSource(source, captureApprovedSource(source.cwd, getInstalledAddonExtensionPaths(source.cwd), kind)))
@@ -472,7 +446,6 @@ export function assertApplicationExtensionCatalogSupported(catalog: LoadExtensio
       if (bindings.some(binding => binding.qualified.extension === extension && binding.qualified.capabilities.tools.includes(definition.name))) continue;
       if (extension === restic?.extension && definition === restic.definition) continue;
       if (extension === goal?.extension && extension.tools.get(definition.name)?.definition === definition) continue;
-      if (extension === plan?.extension && definition === plan.definition) continue;
       if (extension === delegate?.extension && definition === delegate.definition) continue;
       if (extension === codeReview?.extension && definition === codeReview.definition) continue;
       if (extension === editableTable?.extension && definition === editableTable.definition) continue;
@@ -484,7 +457,6 @@ export function assertApplicationExtensionCatalogSupported(catalog: LoadExtensio
       if (bindings.some(binding => binding.qualified.extension === extension && binding.qualified.capabilities.events.includes(event))) continue;
       if (extension === observability?.extension && (profiles.observability.events as readonly string[]).includes(event)) continue; // Native request hook, process startup and static skill metadata.
       if (extension === goal?.extension) continue; // Replaced by native request/terminal hooks, not invoked.
-      if (extension === plan?.extension && event === "before_agent_start") continue;
       // Static skill discovery only: no session lifecycle or fabricated context.
       if (extension === codeReview?.extension && event === "resources_discover") continue;
       if (extension === editableTable?.extension && event === "resources_discover") continue;

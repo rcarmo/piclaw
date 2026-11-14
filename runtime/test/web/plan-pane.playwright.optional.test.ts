@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { chromium, type Browser } from 'playwright';
+import { chromium, webkit, type Browser } from 'playwright';
 
-// The Classic Plan tab pane against a mocked plan-sidebar add-on API.
+// The Classic Plan tab pane against a mocked Core native Plan endpoint.
 const enabled = process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS === '1';
 const browserTest = enabled ? test : test.skip;
 let server: ReturnType<typeof Bun.serve>;
@@ -20,17 +20,18 @@ beforeAll(async () => {
     const url = new URL(req.url);
     if (url.pathname === '/fixture.js') return new Response(js, { headers: { 'content-type': 'text/javascript' } });
     if (url.pathname.startsWith('/static/')) return new Response(Bun.file(join(import.meta.dir, '../../web', url.pathname)));
-    if (url.pathname === '/agent/addons/api/plan-sidebar/plan') {
+    if (url.pathname === '/agent/plan') {
       if (!available) return new Response('<!doctype html><title>Error</title>', { status: 500, headers: { 'content-type': 'text/html' } });
       if (req.method === 'POST') {
         const body = await req.json();
+        if (req.headers.get('if-match') !== JSON.stringify(stored.updated_at)) return Response.json({error:'Plan changed; refresh before saving. Your edits were not saved.'},{status:409});
         posts.push({ kind: 'plan', body });
         stored = body.action === 'reset'
           ? { markdown: '- [ ] Inspect current state', updated_at: '2026-11-11T11:00:00.000Z' }
           : { markdown: body.markdown, updated_at: '2026-11-11T12:00:00.000Z' };
-        return Response.json({ ok: true, plan: { chat_jid: body.chat_jid, ...stored } });
+        return Response.json({ ok: true, plan: { chat_jid: body.chat_jid, ...stored } }, { headers: { ETag: JSON.stringify(stored.updated_at) } });
       }
-      return Response.json({ chat_jid: url.searchParams.get('chat_jid'), ...stored });
+      return Response.json({ chat_jid: url.searchParams.get('chat_jid'), ...stored }, { headers: { ETag: JSON.stringify(stored.updated_at) } });
     }
     if (url.pathname === '/agent/default/message') {
       posts.push({ kind: 'message', chat: url.searchParams.get('chat_jid'), body: await req.json() });
@@ -39,7 +40,7 @@ beforeAll(async () => {
     if (url.pathname === '/') return new Response('<!doctype html><link rel="stylesheet" href="/static/classic/dist/app.bundle.css"><style>html,body{height:100%;margin:0}#pane{height:600px;width:520px}</style><div id="pane"></div><script type="module" src="/fixture.js"></script>', { headers: { 'content-type': 'text/html' } });
     return Response.json({});
   } });
-  browser = await chromium.launch({ headless: true });
+  browser = await (process.env.PICLAW_PLAN_TEST_BROWSER === 'webkit' ? webkit : chromium).launch({ headless: true });
 }, 30000);
 afterAll(async () => { await browser?.close(); server?.stop(true); });
 
@@ -92,19 +93,19 @@ browserTest('the Plan pane shows progress, edits, saves, resets and submits for 
   } finally { await page.close(); }
 }, 30000);
 
-browserTest('the Plan pane explains when the add-on is not installed', async () => {
+browserTest('the Plan pane explains when the native backend is unavailable', async () => {
   available = false;
   const page = await browser.newPage();
   try {
     await page.goto(`${server.url}?chat_jid=web%3Aops`);
     await page.waitForSelector('.plan-pane-unavailable');
-    expect(await page.locator('.plan-pane-unavailable').textContent()).toContain('plan-sidebar add-on');
+    expect(await page.locator('.plan-pane-unavailable').textContent()).toContain('Core Plan is unavailable');
   } finally { available = true; await page.close(); }
 }, 30000);
 
 browserTest('Plan drafts stay scoped to their chat and survive switching without being saved into another chat',async()=>{
  const page=await browser.newPage();const writes:any[]=[];
- await page.route('**/agent/addons/api/plan-sidebar/plan?*',async route=>{const chat=new URL(route.request().url()).searchParams.get('chat_jid');if(route.request().method()==='POST')writes.push({chat,body:route.request().postDataJSON()});await route.fulfill({json:{ok:true,plan:{markdown:`- [ ] ${chat}`,updated_at:null}}});});
+ await page.route('**/agent/plan?*',async route=>{const chat=new URL(route.request().url()).searchParams.get('chat_jid');if(route.request().method()==='POST')writes.push({chat,body:route.request().postDataJSON()});await route.fulfill({json:{ok:true,plan:{markdown:`- [ ] ${chat}`,updated_at:null}}});});
  const switchTo=async(chat:string)=>{await page.evaluate(chat=>{history.pushState({},'',`?chat_jid=${encodeURIComponent(chat)}`);window.dispatchEvent(new CustomEvent('piclaw:current-chat-changed'));},chat);};
  try{
   await page.goto(`${server.url}?chat_jid=chat-a`);await page.locator('.plan-pane-item').waitFor();await page.getByRole('button',{name:'Edit',exact:true}).click();await page.locator('textarea').fill('- [ ] PRIVATE A DRAFT');
@@ -116,7 +117,7 @@ browserTest('Plan drafts stay scoped to their chat and survive switching without
 
 browserTest('missing Plan API refuses Save and never submits the unsaved draft',async()=>{
  const page=await browser.newPage();let messages=0;
- await page.route('**/agent/addons/api/plan-sidebar/plan?*',route=>route.request().method()==='POST'?route.fulfill({status:404,json:{error:'No plan API'}}):route.fulfill({json:{markdown:'- [ ] Original',updated_at:null}}));
+ await page.route('**/agent/plan?*',route=>route.request().method()==='POST'?route.fulfill({status:404,json:{error:'No plan API'}}):route.fulfill({json:{markdown:'- [ ] Original',updated_at:null}}));
  await page.route('**/agent/default/message?*',route=>{messages++;return route.fulfill({json:{ok:true}});});
  try{await page.goto(`${server.url}?chat_jid=chat-a`);await page.locator('.plan-pane-item').waitFor();await page.getByRole('button',{name:'Edit',exact:true}).click();await page.locator('textarea').fill('- [ ] Unsaved');await page.getByRole('button',{name:'Submit to model',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.plan-pane-status')?.classList.contains('error'));expect(messages).toBe(0);expect(await page.locator('textarea').inputValue()).toBe('- [ ] Unsaved');}
  finally{await page.close();}
@@ -124,7 +125,24 @@ browserTest('missing Plan API refuses Save and never submits the unsaved draft',
 
 browserTest('a late Plan response cannot replace a different chat plan',async()=>{
  const page=await browser.newPage();let held:import('playwright').Route|undefined;
- await page.route('**/agent/addons/api/plan-sidebar/plan?*',async route=>{if(new URL(route.request().url()).searchParams.get('chat_jid')==='chat-a'){held=route;return;}await route.fulfill({json:{markdown:'- [ ] B ONLY',updated_at:null}});});
+ await page.route('**/agent/plan?*',async route=>{if(new URL(route.request().url()).searchParams.get('chat_jid')==='chat-a'){held=route;return;}await route.fulfill({json:{markdown:'- [ ] B ONLY',updated_at:null}});});
  try{await page.goto(`${server.url}?chat_jid=chat-a`);await page.waitForFunction(()=>document.querySelector('.plan-pane-chat')?.textContent?.trim()==='chat-a');await page.evaluate(()=>{history.pushState({},'','?chat_jid=chat-b');window.dispatchEvent(new CustomEvent('piclaw:current-chat-changed'));});await page.getByText('B ONLY',{exact:true}).waitFor();await held!.fulfill({json:{markdown:'- [ ] PRIVATE A LATE',updated_at:null}});await page.waitForTimeout(100);expect(await page.locator('.plan-pane-items').textContent()).toContain('B ONLY');expect(await page.locator('.plan-pane-items').textContent()).not.toContain('PRIVATE A LATE');}
  finally{await page.close();}
 },30000);
+
+browserTest('stale Core Plan save preserves the dirty draft and never submits it', async () => {
+  const page = await browser.newPage();
+  try {
+    await page.goto(`${server.url}?chat_jid=web%3Astale`);
+    await page.locator('.plan-pane-item').first().waitFor();
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await page.locator('textarea').fill('- [-] My unsaved edits');
+    stored = { markdown: '- [x] Remote change', updated_at: '2026-11-14T18:00:00.000Z' };
+    const before = posts.filter(post => post.kind === 'message').length;
+    await page.getByRole('button', { name: 'Submit to model', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('.plan-pane-status')?.textContent?.includes('Plan changed; refresh before saving'));
+    expect(await page.locator('textarea').inputValue()).toBe('- [-] My unsaved edits');
+    expect(posts.filter(post => post.kind === 'message')).toHaveLength(before);
+    expect(stored.markdown).toBe('- [x] Remote change');
+  } finally { await page.close(); }
+}, 30000);

@@ -45,18 +45,17 @@ type GoalProjectionOptions = {
   root: Database;
   runtime(): Pick<HostConversationRuntime, "readAcceptedInputText" | "readSettledInputUsage" | "hasSettledGoalTerminalResult">;
   assertOwner(): void;
-  /** Committed activity is prepared outside SQLite; current Plan is read inside
-   * the terminal transaction. Admission is synchronous and uses the source port. */
+  /** Committed activity is prepared outside SQLite. The native caller holds
+   * the SDK mutation line and passes its current Plan into Root publication. */
   continuation?: {
     addon: GoalContinuationAddon;
     prepare(input: AcceptedInput): Promise<{ message: unknown; hadToolActivity: boolean }>;
-    readPlan(chatJid: string, assertCurrent: () => void): GoalPlanState;
     admit(input: { sourceId: string; chatJid: string; text: string; queuedAt: string }, onlyIfIdle?: boolean): number | null;
   };
 };
-export type GoalProjection = (authority: ExtensionKvAuthority, committedAt: string) => void;
+export type GoalProjection = (authority: ExtensionKvAuthority, committedAt: string, plan?: GoalPlanState) => void;
 
-function prepareGoalProjection(addon: Parameters<typeof accountCommittedGoalBatch>[0], options: GoalProjectionOptions) {
+export function prepareGoalProjection(addon: Parameters<typeof accountCommittedGoalBatch>[0], options: GoalProjectionOptions) {
   return async (input: AcceptedInput, answer?: SettledAnswer, nativeResult?: NativeMessageResult): Promise<GoalProjection | undefined> => {
     const captured = Object.freeze({ ...input });
     options.assertOwner();
@@ -93,7 +92,7 @@ function prepareGoalProjection(addon: Parameters<typeof accountCommittedGoalBatc
     const usage = Object.freeze(receipts.map(receipt => Object.freeze({ ...receipt })));
     const progress = !answer?.processExit && options.continuation ? structuredClone(await options.continuation.prepare(captured)) : undefined;
     options.assertOwner();
-    return (authority, committedAt) => {
+    return (authority, committedAt, plan) => {
       options.assertOwner();
       if (authority.chatJid !== captured.chatJid) throw Error("Goal settlement chat conflict");
       const source = { operationId: nativeResult?.runId ?? captured.operationId, conversationId: captured.conversationId };
@@ -126,7 +125,7 @@ function prepareGoalProjection(addon: Parameters<typeof accountCommittedGoalBatc
       if (!nativeResult && (getDeferredQueuedFollowups(captured.chatJid).length || options.root.query(
         "SELECT 1 FROM service_effect_s01_sources WHERE chat_jid=? AND state IN ('pending','claimed') LIMIT 1",
       ).get(captured.chatJid))) return;
-      const plan = options.continuation.readPlan(captured.chatJid, authority.assertCurrent);
+      if (!plan) throw Error("Current native Plan snapshot required");
       authority.assertCurrent();
       const next = options.continuation.addon.applyGoalPlanProgress(current, plan, progress.hadToolActivity);
       if (next.decision.action === "stop") return;
@@ -143,7 +142,7 @@ function prepareGoalProjection(addon: Parameters<typeof accountCommittedGoalBatc
 
 /** Historical S02 callers still prove their real terminal row. Native callers
  * below use the SDK result and the existing publication transaction instead. */
-export function createHostGoalSettlement(addon: Parameters<typeof accountCommittedGoalBatch>[0], options: GoalProjectionOptions):
+export function createHostGoalSettlement(addon: Parameters<typeof accountCommittedGoalBatch>[0], options: Omit<GoalProjectionOptions, "continuation">):
   (input: AcceptedInput, answer?: SettledAnswer) => Promise<TerminalDatabaseEffect | undefined> {
   const prepare=prepareGoalProjection(addon,options);
   return async(input,answer)=>{
