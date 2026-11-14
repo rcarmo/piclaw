@@ -140,10 +140,26 @@ const mockScheduledTasksPayload = {
 };
 
 const mockKeychainPayload = {
+  ok: true,
   entries: [
     { name: 'github/piclaw-bot-pat', type: 'token', envVar: 'GITHUB_PICLAW_BOT_PAT', updatedAt: new Date().toISOString(), userNote: 'Fixture note', agentNote: 'Use only through env injection.' },
     { name: 'ssh/relay.local', type: 'secret', envVar: 'SSH_RELAY_LOCAL', updatedAt: new Date().toISOString(), userNote: '', agentNote: '' },
   ],
+};
+
+const mockMcpServers = [
+  { name: 'knowledge-service', enabled: true, localOverride: false, source: 'user', withheldFields: ['headers'], patch: { url: 'https://knowledge.example.test/mcp', auth: 'bearer', bearerTokenKeychain: 'services/reader', lifecycle: 'lazy', directTools: false } },
+  { name: 'local-tools', enabled: false, localOverride: true, source: 'project', withheldFields: ['args', 'env'], patch: { command: 'example-service', disabled: true } },
+];
+const mockMcpPolicy = {
+  ok: true, revision: 'fixture', effect: 'abort_active_turns_and_update_codemode',
+  nativeBlockReason: 'Native is unavailable for this configuration.', nativeBlockers: [],
+  persisted: { policy: { engine: 'adapter', codemode: 'auto' } },
+  runtime: { configuredFactory: 'adapter', observedPolicy: { engine: 'adapter', codemode: 'auto' }, connectionStatus: 'unknown', applyAvailable: true },
+  readiness: { adapter: true, native: false, codemode: true },
+  servers: mockMcpServers.map((server) => ({ name: server.name, nativeProjectionStatus: 'mapped' })),
+  plan: { policy: { engine: 'adapter', codemode: 'auto' }, applicable: true, codemodeEnabled: false, issues: [] },
+  applyAvailable: true,
 };
 
 let mockMode = new URLSearchParams(window.location.search).get('real') !== '1';
@@ -181,6 +197,8 @@ function installMockFetch() {
       Object.assign(mockSettingsData, JSON.parse(String(init?.body || '{}')));
       return json({ ok: true, settings: mockSettingsData });
     }
+    if (url.pathname === '/agent/settings/mcp') return json(mockMcpPolicy);
+    if (url.pathname === '/agent/settings/mcp/servers') return json({ ok: true, revision: 'fixture', servers: mockMcpServers, preview: null, applyAvailable: true, phase: 'ready' });
     if (url.pathname.startsWith('/agent/settings/')) return json({ ok: true, settings: mockSettingsData, items: [], entries: [] });
     if (url.pathname === '/agent/client-perf') return json({ ok: true });
 
@@ -219,7 +237,7 @@ function FixtureApp() {
   const [renderKey, setRenderKey] = useState(0);
 
   const sections = useMemo(() => [
-    'general', 'sessions', 'compaction', 'keyboard', 'workspace', 'environment', 'providers', 'models', 'theme', 'scheduled-tasks', 'quick-actions', 'keychain', 'tools', 'addons',
+    'general', 'theme', 'sessions', 'recordings', 'compaction', 'keyboard', 'quick-actions', 'workspace', 'environment', 'keychain', 'providers', 'models', 'mcp', 'tools', 'authentication', 'scheduled-tasks', 'addons', 'editor', 'developer',
     'fixture-b-cheapskate', 'fixture-z-observability', 'fixture-a-portainer', 'fixture-m-proxmox',
   ], []);
 

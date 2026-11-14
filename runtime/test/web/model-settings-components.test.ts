@@ -108,7 +108,7 @@ test('Settings layouts become single-column with 44px controls on phones', () =>
     expect(css).toContain('grid-template-columns: 1fr');
     expect(css).toContain('grid-template-columns: 20px minmax(0, 1fr)');
     expect(css).toContain('model-catalogue-settings__row-mobile-meta');
-    expect(css).toContain('@container (max-width: 760px)');
+    expect(css).toContain('@container model-catalogue (max-width: 760px)');
     expect(css).toContain('min-width: 610px');
     expect(css).toContain('.model-catalogue-settings__filters:not(.expanded)');
   }

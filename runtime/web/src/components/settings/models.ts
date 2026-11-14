@@ -401,7 +401,7 @@ export function ModelsSection({ filter = '', onFilterChange = null }) {
                     aria-activedescendant=${projection.renderedEntries.some((entry) => entry.key === selectedKey) ? settingsOptionId(selectedKey) : undefined}
                     onKeyDown=${handleListKeyDown}
                 >
-                    <div class="model-catalogue-settings__columns" aria-hidden="true"><span>Pin</span><span>Model</span><span>Family</span><span>Context</span><span>Mode</span><span>Input / 1M</span><span>Output / 1M</span></div>
+                    <div class="model-catalogue-settings__columns" aria-hidden="true"><span>Pin</span><span>Model</span><span class="model-catalogue-settings__row-family">Family</span><span class="model-catalogue-settings__row-context">Context</span><span class="model-catalogue-settings__row-mode">Mode</span><span class="model-catalogue-settings__row-input-price">Input / 1M</span><span class="model-catalogue-settings__row-output-price">Output / 1M</span></div>
                     ${projection.groups.map((provider) => html`
                         <div class="model-catalogue-settings__provider" key=${provider.key} role="group" aria-label=${provider.label}>
                             <div class="model-catalogue-settings__provider-heading"><span>${provider.label}</span><span>${provider.totalCount}</span></div>

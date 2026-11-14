@@ -330,6 +330,7 @@ type MessageKey =
   | 'settings.environment.kindProcess'
   | 'settings.environment.clear'
   | 'settings.environment.noMatch'
+  | 'settings.environment.empty'
   | 'settings.environment.refreshedToast'
   | 'settings.environment.savedToast'
   | 'settings.environment.clearedToast'
@@ -973,6 +974,7 @@ const EN: Record<MessageKey, string> = {
   'settings.environment.kindProcess': 'process',
   'settings.environment.clear': 'Clear',
   'settings.environment.noMatch': 'No environment variables match "{filter}".',
+  'settings.environment.empty': 'No environment variables to show.',
   'settings.environment.refreshedToast': 'Environment refreshed.',
   'settings.environment.savedToast': 'Saved environment override for {name}.',
   'settings.environment.clearedToast': 'Cleared environment override for {name}.',
@@ -1614,6 +1616,7 @@ const ZH_CN: Partial<Record<MessageKey, string>> = {
   'settings.environment.kindProcess': '进程',
   'settings.environment.clear': '清除',
   'settings.environment.noMatch': '没有匹配 “{filter}” 的环境变量。',
+  'settings.environment.empty': '没有可显示的环境变量。',
   'settings.environment.refreshedToast': '环境已刷新。',
   'settings.environment.savedToast': '已保存 {name} 的环境覆盖。',
   'settings.environment.clearedToast': '已清除 {name} 的环境覆盖。',
@@ -2255,6 +2258,7 @@ const JA: Partial<Record<MessageKey, string>> = {
   'settings.environment.kindProcess': 'プロセス',
   'settings.environment.clear': 'クリア',
   'settings.environment.noMatch': '「{filter}」に一致する環境変数はありません。',
+  'settings.environment.empty': '表示する環境変数はありません。',
   'settings.environment.refreshedToast': '環境を更新しました。',
   'settings.environment.savedToast': '{name} の環境オーバーライドを保存しました。',
   'settings.environment.clearedToast': '{name} の環境オーバーライドをクリアしました。',

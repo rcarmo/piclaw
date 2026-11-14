@@ -94,7 +94,7 @@ for (const engine of ['chromium', 'webkit']) for (const skin of ['classic']) for
                 expect(await page.getByRole('button', {name:'Apply MCP settings'}).isDisabled()).toBe(true);
                 expect(await page.getByText('Experimental Native configuration is incompatible. Use Adapter or remove the listed unsupported settings.', {exact:true}).count()).toBe(0);
                 expect(await page.locator('.mcp-settings img').count()).toBe(0);
-                expect(await page.locator(".mcp-settings > ul").getByText(unsafeName, { exact: true }).count()).toBe(1);
+                expect(await page.locator(".mcp-compatibility-list").getByText(unsafeName, { exact: true }).count()).toBe(1);
                 await page.getByLabel('Engine to preview').selectOption('native');
                 expect(previews).toHaveLength(0);
                 await page.getByRole('button', { name: 'Preview compatibility' }).click();
@@ -118,7 +118,7 @@ for (const engine of ['chromium', 'webkit']) for (const skin of ['classic']) for
                 await page.getByRole('button', { name: 'Refresh MCP status' }).click();
                 await page.getByText('Loading MCP settings…', { exact: true }).waitFor();
                 expect(await page.getByLabel('Engine to preview').count()).toBe(0);
-                expect(await page.locator(".mcp-settings > ul").getByText(unsafeName, { exact: true }).count()).toBe(0);
+                expect(await page.locator(".mcp-compatibility-list").getByText(unsafeName, { exact: true }).count()).toBe(0);
                 const refreshDeadline = Date.now() + 3000; while (!held && Date.now() < refreshDeadline) await Bun.sleep(5); expect(held).toBe(true);
                 release!(); await page.getByLabel('Engine to preview').waitFor();
                 await page.getByLabel('Codemode to preview').selectOption('on');
@@ -148,7 +148,7 @@ for (const engine of ['chromium', 'webkit']) for (const skin of ['classic']) for
                 authorized = false;
                 await page.getByRole('button', { name: 'Refresh MCP status' }).click();
                 await page.getByRole('alert').waitFor();
-                expect(await page.locator(".mcp-settings > ul").getByText(unsafeName, { exact: true }).count()).toBe(0);
+                expect(await page.locator(".mcp-compatibility-list").getByText(unsafeName, { exact: true }).count()).toBe(0);
                 expect(await page.getByLabel('Engine to preview').count()).toBe(0);
                 expect(readFileSync(config, 'utf8')).toBe(saved);
                 expect(calls.every(path => ['/agent/settings/mcp', '/agent/settings/mcp/preview', '/agent/settings/mcp/apply', '/agent/settings/mcp/servers'].includes(path))).toBe(true);

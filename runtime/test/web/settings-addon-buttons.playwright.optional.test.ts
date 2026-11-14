@@ -119,13 +119,13 @@ for (const skin of ["classic"]) {
           for (const id of ["row", "inline", "telegram"]) expect(await style(page, id)).toEqual(plain);
           expect(plain.radius).toBe("6px");
           expect(parseFloat(plain.height)).toBeGreaterThanOrEqual(26);
-          expect(await page.locator("#telegram span").evaluate(el => getComputedStyle(el).fontSize)).toBe(width <= 640 ? "10.584px" : "12.6px");
+          expect(await page.locator("#telegram span").evaluate(el => getComputedStyle(el).fontSize)).toBe("13px");
           expect((await style(page, "outside")).padding).toBe("1px");
           expect((await style(page, "custom")).padding).toBe("1px");
           expect((await style(page, "tab")).padding).toBe("2px");
           expect((await style(page, "switch")).padding).toBe("3px");
           expect(await page.locator("#hidden").isVisible()).toBe(false);
-          expect(await page.locator("#stepper").evaluate(el => getComputedStyle(el).width)).toBe("32px");
+          expect(await page.locator("#stepper").evaluate(el => getComputedStyle(el).width)).toBe(width <= 640 ? "44px" : "32px");
           expect(await page.locator(".settings-addon-pane").evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
         } finally { await page.close(); }
       });

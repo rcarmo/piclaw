@@ -106,7 +106,7 @@ export function EnvironmentSection({ settingsData, filter = '', setStatus, merge
 
             <div class="settings-row" style="align-items:flex-start; gap:10px;">
                 <label>${t('settings.environment.addOverride')}</label>
-                <div style="display:grid; grid-template-columns:minmax(180px, 0.7fr) minmax(240px, 1fr) auto; gap:8px; flex:1;">
+                <div class="settings-env-add">
                     <input
                         type="text"
                         value=${newName}
@@ -140,7 +140,7 @@ export function EnvironmentSection({ settingsData, filter = '', setStatus, merge
                     const dirty = draft !== row.value;
                     const saving = savingName === name;
                     return html`
-                        <div class="settings-tool-row" key=${name} style="grid-template-columns:minmax(180px,0.45fr) minmax(240px,1fr) auto auto; align-items:center;">
+                        <div class="settings-tool-row settings-env-row" key=${name}>
                             <span class="settings-tool-name" title=${name}>${name}</span>
                             <input
                                 type="text"
@@ -159,7 +159,7 @@ export function EnvironmentSection({ settingsData, filter = '', setStatus, merge
                         </div>
                     `;
                 })}
-                ${filteredVariables.length === 0 && html`<p class="settings-hint">${t('settings.environment.noMatch', { filter })}</p>`}
+                ${filteredVariables.length === 0 && html`<p class="settings-hint">${String(filter || '').trim() ? t('settings.environment.noMatch', { filter }) : t('settings.environment.empty')}</p>`}
             </div>
         </div>
     `;
