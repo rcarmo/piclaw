@@ -472,7 +472,10 @@ describe("WP-3C hermetic add-on package-tree oracle", () => {
     expect(sessionSource).not.toContain("export function getInstalledAddonExtensionPaths");
     expect(sessionSource).toMatch(/import\s*\{\s*getInstalledAddonExtensionPaths,?\s*\}\s*from\s*["']\.\.\/addons\/package-entries\.js["']/);
     expect(sessionSource).toContain("getInstalledAddonExtensionPaths(getWorkspaceDir())");
-    expect(resolverSource).toMatch(/resolveAddonPackageEntries\(packageDir,\s*\w+\.manifest\.pi\?\.extensions\)/);
+    // Activation filtering may remove retired packages, but must still use the
+    // same lexical/realpath containment owner before returning any entry.
+    expect(resolverSource).toMatch(/resolveActiveAddonEntries\(packageDir,\s*\w+\.manifest,\s*\w+\.manifest\.pi\?\.extensions\)/);
+    expect(resolverSource).toContain("return resolveAddonPackageEntries(packageDir, declared).filter(");
     expect(resolverSource).toContain("statSync(fullPath).isFile()");
     expect(resolverSource).toContain("realpathSync(fullPath)");
     expect(resolverSource).toContain("isInside(realPackageDir, realEntryPath)");
