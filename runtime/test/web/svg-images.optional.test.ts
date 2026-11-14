@@ -192,18 +192,18 @@ browserTest('limits reject before parsing bytes and at node/depth boundaries (00
       DOMParser.prototype.parseFromString = function(...args) { xmlCalls++; return original.apply(this, args); };
       try { api.sanitizeSvgImage('x'.repeat(limits.bytes+1)); api.sanitizeSvgImage('✓'.repeat(limits.bytes)); }
       finally { DOMParser.prototype.parseFromString = original; }
-      const skinBounds = ['classic'].map(skin => {
+      const skinBounds = Object.fromEntries(['classic'].map(skin => {
         const root=document.querySelector('#post')!;
-        return [bytes(limits.bytes+1), nodes(limits.nodes+1), depth(limits.depth+1)].map(source => {
+        return [skin, [bytes(limits.bytes+1), nodes(limits.nodes+1), depth(limits.depth+1)].map(source => {
           root.innerHTML=api[skin]('```svg\n'+source+'\n```',null);
           return root.querySelectorAll('img,svg').length === 0 && root.querySelector('code')?.textContent === source+'\n';
-        });
-      });
+        })];
+      }));
       return { outcomes, xmlCalls, skinBounds };
     });
     expect(results.outcomes).toEqual([true,true,false,true,true,false,true,true,false]);
     expect(results.xmlCalls).toBe(0);
-    expect(results.skinBounds).toEqual([[true,true,true],[true,true,true]]);
+    expect(results.skinBounds).toEqual({ classic: [true,true,true] });
   });
 });
 

@@ -7,6 +7,7 @@ import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite
 import { TestOwner } from "./src/ownership.js";
 import { BunSqliteDatabase } from "../../runtime/durable-engine/src/index.js";
 import { openFixture, context, barrier } from "./src/fixture.js";
+import { awaitWithContext } from "../../runtime/durable-engine/qualification/context.ts";
 import { hostHandoff, at, effect, sealed, value } from "./src/host-handoff.js";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
 import { installTerminalSettlementCompositionSchema } from "../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js";
@@ -22,7 +23,8 @@ import type { TerminalSettlementStore } from "../../runtime/src/service-effects/
 // before reacquisition, and closing the old writer before voluntary release.
 const incarnation = "disposable-cross-store";
 const requestId = "cross-store-request";
-type Window = "accepted" | "submitted" | "answer" | "terminal";
+type Window = "accepted" | "submitted" | "request" | "answer" | "terminal";
+type Preparation = { entered: ReturnType<typeof barrier>; hold: ReturnType<typeof barrier> };
 
 async function seed(directory: string) {
   process.env.PICLAW_DB_IN_MEMORY = "1";
@@ -34,7 +36,7 @@ async function seed(directory: string) {
   finally { db.close(); }
 }
 
-async function open(directory: string) {
+async function open(directory: string, preparation?: Preparation) {
   const hostPath = join(directory, "host.sqlite");
   const owner = TestOwner.acquire(hostPath); // authoritative owner lives in HOST DB
   const db = new Database(hostPath, { strict: true });
@@ -57,7 +59,12 @@ async function open(directory: string) {
       owner.assert();
       const binding = db.query("SELECT incarnation,generation FROM qualification_owner WHERE singleton=1").get() as { incarnation: string; generation: number };
       if (binding.incarnation !== incarnation || binding.generation !== owner.token.generation) throw new Error("before-open binding missing");
-    }, () => SqliteStorage.open(new BunSqliteDatabase(join(directory, "durable.sqlite"))));
+    }, () => SqliteStorage.open(new BunSqliteDatabase(join(directory, "durable.sqlite"))), preparation ? async (_target, callContext) => {
+      // Public environment resolution is in prepare, before the request checkpoint.
+      preparation.entered.release();
+      await awaitWithContext(preparation.hold.promise, callContext);
+      return undefined;
+    } : undefined);
     const fixture = current;
     // Durable synthetic-call receipt, not an effect mirror or a real provider.
     let calls = 0;
@@ -119,9 +126,16 @@ async function submission(current: Awaited<ReturnType<typeof openFixture>>) {
 }
 
 async function child(directory: string, window: Window) {
-  const f = await open(directory);
-  if (window === "submitted") f.current.host.modelHold = barrier();
+  const preparation = window === "submitted" ? { entered: barrier(), hold: barrier() } : undefined;
+  const f = await open(directory, preparation);
+  const entered = barrier();
+  if (window === "request") {
+    f.current.host.modelHold = barrier();
+    f.current.host.onModelEnter = () => entered.release();
+  }
   await f.handoff(requestId, "hello", window === "accepted" ? "accepted" : "submitted");
+  if (preparation) await preparation.entered.promise;
+  if (window === "request") await entered.promise;
   if (window === "answer" || window === "terminal") {
     await (await submission(f.current))!.wait(context); // explicit execution, not reconciliation
   }
@@ -132,7 +146,9 @@ async function child(directory: string, window: Window) {
     catch (error) { if (!String(error).includes("storage_unavailable")) throw error; lost = true; }
     if (!lost) throw new Error("expected actual EF-S02 lost acknowledgement");
   }
-  console.log(JSON.stringify({ ready: window, generation: f.owner.token.generation, modelCalls: f.current.host.modelCalls }));
+  const task = (await f.current.harness.inspect(context)).tasks.find(task => task.record.kind === "pi.generation")?.record;
+  const phase = task && "checkpoint" in task.state ? (task.state.checkpoint as { phase: string }).phase : undefined;
+  console.log(JSON.stringify({ ready: window, generation: f.owner.token.generation, modelCalls: f.current.host.modelCalls, phase }));
   setInterval(() => {}, 1000); // parent kills this exact owned PID; no graceful close
 }
 
@@ -176,6 +192,7 @@ if (process.argv.includes("--cross-store-child")) {
         c = spawn(directory, window);
         const ready = await c.ready;
         expect(ready.ready).toBe(window);
+        if (window === "submitted") expect(ready.phase).toBe("prepare");
         expect(() => TestOwner.acquire(join(directory, "host.sqlite"))).toThrow("owner busy");
         c.process.kill("SIGKILL");
         await c.process.exited; // confirmed/reaped death, never a lease timeout
@@ -220,6 +237,35 @@ if (process.argv.includes("--cross-store-child")) {
       }
     }, 20000);
   }
+
+  test("cross-store SIGKILL in request stays interrupted with retries disabled and is never replayed", async () => {
+    const directory = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "cross-store-request-"));
+    let c: ReturnType<typeof spawn> | undefined;
+    let recovered: Awaited<ReturnType<typeof open>> | undefined;
+    try {
+      await seed(directory);
+      c = spawn(directory, "request");
+      expect((await c.ready).phase).toBe("request");
+      c.process.kill("SIGKILL");
+      await c.process.exited;
+      expect(c.process.signalCode).toBe("SIGKILL");
+      recovered = await open(directory);
+      expect((await recovered.current.harness.inspect(context)).scheduling).toBe("paused");
+      const handle = (await submission(recovered.current))!;
+      expect(await handle.wait(context)).toMatchObject({ status: "unanswered", reason: "interrupted" });
+      expect(await recovered.handoff(requestId, "hello")).toBeNull();
+      expect(modelCalls(directory)).toBe(0);
+      expect(recovered.current.host.modelCalls).toBe(0);
+      expect(recovered.current.host.effects).toBe(0);
+      expect(recovered.db.query("SELECT * FROM service_effect_s02_commits").all()).toEqual([]);
+      expect(recovered.db.query("SELECT * FROM service_effect_s05_outbox").all()).toEqual([]);
+      expect(recovered.db.query("SELECT * FROM messages WHERE is_bot_message=1").all()).toEqual([]);
+    } finally {
+      if (c) { if (c.process.exitCode === null) c.process.kill("SIGKILL"); await c.process.exited; }
+      await recovered?.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  }, 20000);
 
   test("cross-store host token revocation during payload await rolls back actual EF-S02 inside HOST transaction", async () => {
     const directory = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "cross-store-fence-"));

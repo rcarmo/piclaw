@@ -1,7 +1,7 @@
 import { BACKGROUND_CONTEXT as context, awaitWithContext, withAbortSignal } from "../../../runtime/durable-engine/qualification/context.ts";
 import { Type, createModels, createProvider, type AssistantMessage, type Model } from "../../../runtime/durable-engine/qualification/ai.ts";
 import { AssistantMessageEventStream } from "../../../runtime/durable-engine/qualification/event-stream.ts";
-import { AssistantEntry, Harness, MemoryStorage, createRegistry, defineExtension, defineTool, type Submission, type Storage } from "../../../runtime/durable-engine/qualification/durable.ts";
+import { AssistantEntry, Harness, MemoryStorage, createRegistry, defineExtension, defineTool, type HarnessOptions, type Submission, type Storage } from "../../../runtime/durable-engine/qualification/durable.ts";
 import { hashCanonicalRequest, type EffectIdentity } from "../../../runtime/src/service-effects/contracts/common.js";
 
 export { context };
@@ -13,7 +13,7 @@ export function barrier() {
 
 // Synthetic host authority; a boolean is NOT an exclusive owner/lease implementation.
 // Storage factory runs behind the fence, before constructing any file-backed resource.
-export async function openFixture(owner: { acquired: boolean }, allocated = () => {}, openStorage?: () => Promise<Storage>) {
+export async function openFixture(owner: { acquired: boolean }, allocated = () => {}, openStorage?: () => Promise<Storage>, env?: HarnessOptions["env"]) {
   if (!owner.acquired) throw new Error("Host owner must be acquired before open");
   allocated(); // All candidate resources are constructed AFTER the owner fence.
   const host = {
@@ -99,7 +99,7 @@ export async function openFixture(owner: { acquired: boolean }, allocated = () =
   }));
   const reports: unknown[] = [];
   const storage = openStorage ? await openStorage() : new MemoryStorage();
-  const harness = await Harness.open(storage, { models, registry,
+  const harness = await Harness.open(storage, { models, registry, env,
     settings: { retry: { enabled: false }, compaction: { enabled: false } }, onReport: error => reports.push(error),
   }, context);
   const root = await harness.root(context, { agent: { model: { provider: model.provider, modelId: model.id }, extensions: [extension], tools: [tool] } });
