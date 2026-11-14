@@ -11,11 +11,14 @@
 .system-meters-row.buf { --meter-color: var(--chart-3); }
 .system-meters-row.rss { --meter-color: var(--chart-6); }
 .system-meters-row.vram { --meter-color: var(--chart-5); }
+.io-pressure { --meter-color: var(--chart-4); }
 .system-meters-row.intel-gpu,
 .system-meters-compact-gpu.intel-gpu { --meter-color: var(--chart-1); }
 .system-meters-row.intel-gmem,
 .system-meters-compact-gpu.intel-gmem { --meter-color: var(--chart-5); }
-:root :is(.system-meters-row, .system-meters-compact-gpu) .system-meters-spark path { stroke: var(--meter-color); }
+:root :is(.system-meters-row, .system-meters-compact-gpu, .system-meters-compact-io) .system-meters-spark path { stroke: var(--meter-color); }
+/* Full I/O stall is secondary: dashed, so it remains distinct in forced colours. */
+:root .io-pressure .system-meters-spark .io-pressure-full { stroke: var(--text-secondary); stroke-dasharray: 3 2; }
 /* Visual normally shows inline stats, but shared meter HUDs/popouts use the
  * same sparkline contract when mounted under either skin. */
 :root[data-color-theme="synthwave-84"][data-synthwave-glow="on"] .system-meters-spark {

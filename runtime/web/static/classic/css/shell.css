@@ -206,13 +206,15 @@
     line-height: 1;
 }
 
-.system-meters-compact-gpu {
+.system-meters-compact-gpu,
+.system-meters-compact-io {
     display: inline-flex;
     align-items: center;
     gap: 4px;
 }
 
-.system-meters-compact-gpu .system-meters-spark {
+.system-meters-compact-gpu .system-meters-spark,
+.system-meters-compact-io .system-meters-spark {
     width: 40px;
     height: 14px;
     flex: 0 0 40px;
