@@ -246,6 +246,7 @@ export function WorkbenchSidebar({
   const availableRef = useRef(Infinity);
   const splitterRef = useRef(null);
   const asideRef = useRef(null);
+  const searchRef = useRef(null);
   const [previews, setPreviews] = useState(() => new Map());
   const [contexts, setContexts] = useState(() => new Map());
   const retainedPreviewsRef = useRef(new Map());
@@ -714,10 +715,12 @@ export function WorkbenchSidebar({
           ${onRefreshSessions && html`<button type="button" class="sessions-sidebar-tool" title="Refresh sessions" aria-label="Refresh sessions" onClick=${() => { setNow(Date.now()); onRefreshSessions(); }}>${SESSION_ICONS.refresh}</button>`}
         </span>
       </div>
-      <label class="sessions-sidebar-search">
-        <span class="sessions-sidebar-sr-only">Search sessions</span>
-        <input type="search" value=${query} placeholder="Search sessions" autocomplete="off" onInput=${(event) => setQuery(event.currentTarget.value)} />
-      </label>
+      <div class="sessions-sidebar-search">
+        <label class="sessions-sidebar-sr-only" for="sessions-sidebar-search">Search sessions</label>
+        <input ref=${searchRef} id="sessions-sidebar-search" type="search" value=${query} placeholder="Search sessions" autocomplete="off" onInput=${(event) => setQuery(event.currentTarget.value)} />
+        ${query && html`<button type="button" class="sessions-sidebar-search-clear" title="Clear session search" aria-label="Clear session search"
+          onMouseDown=${(event) => event.preventDefault()} onClick=${() => { setQuery(''); searchRef.current?.focus(); }}>×</button>`}
+      </div>
       <nav class="sessions-sidebar-list" aria-label="Session list">
         ${total === 0 && html`<div class="sessions-sidebar-empty">${query ? `No sessions match “${query}”.` : 'No sessions.'}</div>`}
         ${sections.map((section) => html`

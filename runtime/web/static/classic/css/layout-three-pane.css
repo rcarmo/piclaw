@@ -199,7 +199,8 @@ html[data-ios-keyboard-viewport] .workbench-statusbar {
 }
 
 .sessions-sidebar-tool,
-.sessions-sidebar-more {
+.sessions-sidebar-more,
+.sessions-sidebar-search-clear {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -223,7 +224,9 @@ html[data-ios-keyboard-viewport] .workbench-statusbar {
 .sessions-sidebar-tool:hover,
 .sessions-sidebar-tool:focus-visible,
 .sessions-sidebar-more:hover,
-.sessions-sidebar-more:focus-visible {
+.sessions-sidebar-more:focus-visible,
+.sessions-sidebar-search-clear:hover,
+.sessions-sidebar-search-clear:focus-visible {
     background: var(--bg-hover);
     color: var(--text-primary);
 }
@@ -928,13 +931,23 @@ html[data-ios-keyboard-viewport] .workbench-statusbar {
 }
 
 .sessions-sidebar-search {
-    display: block;
+    position: relative;
+    display: flex;
+    align-items: center;
     padding: var(--spacing-sm);
+}
+
+.sessions-sidebar-search-clear {
+    position: absolute;
+    right: calc(var(--spacing-sm) + 4px);
+    font-size: 18px;
+    line-height: 1;
 }
 
 .sessions-sidebar-search input {
     width: 100%;
-    padding: 6px 10px;
+    min-width: 0;
+    padding: 6px 34px 6px 10px;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-full);
     background: var(--bg-primary);
@@ -946,6 +959,11 @@ html[data-ios-keyboard-viewport] .workbench-statusbar {
 
 .sessions-sidebar-search input:focus {
     border-color: var(--accent-color);
+}
+
+/* One consistent clear control, including Safari and Chromium's search fields. */
+.sessions-sidebar-search input::-webkit-search-cancel-button {
+    display: none;
 }
 
 .sessions-sidebar-list {
