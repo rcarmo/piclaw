@@ -159,7 +159,7 @@ export function EnvironmentSection({ settingsData, filter = '', setStatus, merge
                         </div>
                     `;
                 })}
-                ${filteredVariables.length === 0 && html`<p class="settings-hint">${t('settings.environment.noMatch', { filter })}</p>`}
+                ${filteredVariables.length === 0 && html`<p class="settings-hint">${String(filter || '').trim() ? t('settings.environment.noMatch', { filter }) : t('settings.environment.empty')}</p>`}
             </div>
         </div>
     `;

@@ -49,7 +49,6 @@
     width: auto;
     min-width: 0;
     max-width: 100%;
-    max-height: 54px;
     display: flex;
     flex-wrap: nowrap;
     gap: 6px;
@@ -191,7 +190,7 @@
     --settings-addon-help-size: 0.82em;
     --settings-addon-button-min-height: auto;
     --settings-addon-button-min-width: 70px;
-    --settings-addon-button-font-size: calc(var(--font-size-md, 15px) * 0.84);
+    --settings-addon-button-font-size: var(--settings-text-sm, 13px);
     --settings-addon-button-font-weight: normal;
     --settings-addon-button-line-height: normal;
     --settings-addon-button-white-space: nowrap;
@@ -208,13 +207,6 @@
 .settings-content.settings-addon-pane .settings-addon-control {
     /* Native Classic input/textarea fonts are role-specific. */
     font-family: revert;
-}
-
-@media (max-width: 640px) {
-    .settings-content.settings-addon-pane {
-        /* Settings content uses 0.9em on phones; Regenerate uses 0.84em. */
-        --settings-addon-button-font-size: calc(var(--font-size-md, 15px) * 0.9 * 0.84);
-    }
 }
 
 .settings-section { margin-bottom: 28px; }
@@ -311,7 +303,7 @@
     border-radius: 6px;
     background: var(--bg-hover, var(--bg-secondary));
     color: var(--text-primary);
-    font-size: 0.84em;
+    font-size: var(--settings-text-sm, 13px);
     cursor: pointer;
     min-width: 70px;
 }
@@ -1363,7 +1355,6 @@
     .settings-nav-item {
         padding: 6px 10px;
         white-space: nowrap;
-        font-size: 0.8em;
         flex-shrink: 0;
     }
 
@@ -1372,7 +1363,6 @@
 
     .settings-content {
         padding: 12px 14px;
-        font-size: 0.9em;
     }
 
     .settings-section h3 {
@@ -3330,3 +3320,64 @@
     font-size: 0.88em;
     color: var(--text-secondary);
 }
+
+/* ── Shared base controls, legibility floor and touch targets ─────────────
+ * Nested em sizes used to compound to 7–11px (worse on phones). Small text
+ * now floors at 12px; controls share one look; narrow dialogs use 44px
+ * targets like the Models and MCP panes. Registered add-on panes keep their
+ * own button contract (.settings-addon-pane). */
+.settings-dialog {
+    --settings-text-xs: 12px;
+    --settings-text-sm: 13px;
+    --settings-control-height: 30px;
+}
+.settings-dialog-narrow { --settings-control-height: 44px; }
+
+:where(.settings-content:not(.settings-addon-pane)) :where(button:not([role="tab"]):not([role="switch"]):not([data-settings-button="unstyled"]):not(.settings-dialog-close):not(.settings-nav-item)) {
+    min-height: var(--settings-control-height);
+    padding: 4px 12px;
+    border: 1px solid var(--border-color, rgba(128,128,128,0.3));
+    border-radius: 6px;
+    background: var(--bg-secondary, var(--bg-primary));
+    color: var(--text-primary);
+    font: inherit;
+    font-size: var(--settings-text-sm);
+    line-height: 1.2;
+    cursor: pointer;
+}
+:where(.settings-content:not(.settings-addon-pane)) :where(button:not([role="tab"]):not([role="switch"]):not([data-settings-button="unstyled"]):not(.settings-dialog-close):not(.settings-nav-item)):hover:not(:disabled) {
+    border-color: var(--accent-color);
+}
+:where(.settings-content:not(.settings-addon-pane)) :where(button):disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+:where(.settings-content:not(.settings-addon-pane)) :where(select) {
+    min-height: var(--settings-control-height);
+    padding: 4px 8px;
+    border: 1px solid var(--border-color, rgba(128,128,128,0.3));
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: var(--settings-text-sm);
+}
+.settings-dialog-narrow :is(.settings-addon-btn, .settings-btn, .settings-secondary-btn, .settings-keychain-add-btn, .settings-keychain-save-btn, .settings-number-step-btn, .settings-header-filter),
+.settings-dialog-narrow .settings-content :is(input:not([type]), input[type="text"], input[type="search"], input[type="number"], input[type="password"], input[type="url"], select) {
+    min-height: 44px;
+}
+.settings-dialog-narrow .settings-number-step-btn { min-width: 44px; }
+
+.settings-dialog :is(.passkey-settings__meta dt, .passkey-settings__help, .passkey-settings__badge, .mcp-server-meta, .mcp-server-card-meta, .settings-task-row-main span, .mcp-current, .mcp-badge, .mcp-server-card small, .model-catalogue-settings__columns, .model-catalogue-settings__row, .model-catalogue-settings__row-mobile-meta, .model-catalogue-settings__provider-heading, .model-catalogue-settings__group-heading, .model-catalogue-settings__facts dd, .settings-tool-summary, .settings-hint, .settings-tool-kind, .settings-tool-source, .settings-tool-row-header, .settings-tag, .settings-task-pill, .settings-addon-version, .settings-keychain-type-badge, .settings-keychain-date, .settings-keychain-reveal-label, .settings-shortcut-default, .settings-task-row-times, .settings-provider-id, .settings-tint-hex, .language-switcher-label, .settings-theme-table th, .settings-keychain-table th) {
+    font-size: max(var(--settings-text-xs), 0.84em);
+}
+.settings-dialog :is(.mcp-compatibility-list, .settings-btn, .settings-secondary-btn, .settings-row label, .settings-addon-btn, .settings-keychain-table td, .settings-keychain-name, .settings-tool-name, .settings-addon-card-body, .settings-shortcut-description, .settings-keychain-save-btn, .settings-keychain-add-btn, .settings-keychain-delete-btn, .settings-theme-table) {
+    font-size: max(var(--settings-text-sm), 0.88em);
+}
+.settings-dialog .settings-content :is(code, small, dt, kbd) { font-size: max(var(--settings-text-xs), 0.9em); }
+.settings-header-filter,
+.settings-output-pad-number { min-height: var(--settings-control-height); }
+.settings-dialog-narrow :is(.settings-dialog-close, .settings-nav-item, .model-catalogue-settings__pin) { min-width: 44px; min-height: 44px; }
+.settings-dialog-narrow .settings-content :is(summary, input[type="color"]) { min-height: 44px; }
+.settings-content summary { min-height: var(--settings-control-height); padding-block: 6px; box-sizing: border-box; }
+.settings-dialog-narrow .settings-content :is(input[type="checkbox"], input[type="radio"]) { width: 22px; height: 22px; }

@@ -19,7 +19,7 @@ export function AuthenticationSection({ settingsData, setStatus, mergeSettingsDa
     render(h(PasskeySettings, {}), element);
     return () => render(null, element);
   }, []);
-    return html`<div class="settings-section"><h2>${t('settings.section.authentication')}</h2>
+    return html`<div class="settings-section"><h3>${t('settings.section.authentication')}</h3>
             <div class="settings-totp-panel">
                 <div class="settings-totp-header">
                     <div>

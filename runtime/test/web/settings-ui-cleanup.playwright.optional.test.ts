@@ -128,3 +128,60 @@ for (const engine of ['chromium', 'webkit']) {
     }
   }, 60000);
 }
+
+const ALL_SECTIONS = ['general', 'theme', 'sessions', 'recordings', 'compaction', 'keyboard', 'quick-actions', 'workspace', 'environment', 'keychain', 'providers', 'models', 'mcp', 'tools', 'authentication', 'scheduled-tasks', 'addons', 'editor', 'developer', 'fixture-a-portainer'];
+
+for (const engine of ['chromium', 'webkit']) for (const width of [390, 1280]) {
+  browserTest(`${engine} ${width}px: every Settings pane keeps text at 12px or larger and controls at target size`, async () => {
+    const problems: string[] = [];
+    for (const section of ALL_SECTIONS) {
+      const { page, errors } = await openSettings(engine, width, section);
+      try {
+        const found = await page.evaluate(({ narrow }) => {
+          const dialog = document.querySelector('.settings-dialog')!, out: string[] = [];
+          const visible = (e: Element) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && !e.closest('.sr-only'); };
+          const walker = document.createTreeWalker(dialog, NodeFilter.SHOW_TEXT);
+          while (walker.nextNode()) {
+            const node = walker.currentNode, element = node.parentElement!;
+            if (!node.textContent?.trim() || !visible(element)) continue;
+            const size = parseFloat(getComputedStyle(element).fontSize);
+            if (size < 12) out.push(`text ${size}px "${node.textContent.trim().slice(0, 24)}"`);
+          }
+          for (const element of dialog.querySelectorAll('button, select, summary, input:not([type=hidden]):not([type=range])')) {
+            if (!visible(element)) continue;
+            const r = element.getBoundingClientRect(), type = (element as HTMLInputElement).type;
+            const min = type === 'checkbox' || type === 'radio' ? (narrow ? 20 : 12) : narrow ? 44 : 28;
+            if (Math.round(r.height) < min) out.push(`${element.tagName.toLowerCase()}[${type || ''}].${element.className} ${Math.round(r.height)}px < ${min}`);
+          }
+          return out;
+        }, { narrow: width < 600 });
+        problems.push(...found.map(problem => `${section}: ${problem}`), ...errors.map(error => `${section}: pageerror ${error}`));
+      } finally { await page.close(); }
+    }
+    expect(problems).toEqual([]);
+  }, 180000);
+}
+
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine}: phone header names the open pane; empty Environment reads naturally; Authentication uses section headings`, async () => {
+    const phone = await openSettings(engine, 390, 'keychain');
+    try {
+      expect(await phone.page.locator('.settings-dialog-title').innerText()).toBe('Keychain');
+      await phone.page.locator('.settings-nav-item').nth(1).click();
+      await phone.page.waitForFunction(() => document.querySelector('.settings-dialog-title')?.textContent === 'Appearance');
+      expect(phone.errors).toEqual([]);
+    } finally { await phone.page.close(); }
+    const desktop = await openSettings(engine, 1280, 'environment');
+    try {
+      expect(await desktop.page.locator('.settings-dialog-title').innerText()).toBe('Settings');
+      await desktop.page.getByText('No environment variables to show.', { exact: true }).waitFor();
+      expect(await desktop.page.getByText('match ""').count()).toBe(0);
+      await desktop.page.locator('.settings-header-filter').fill('MISSING');
+      await desktop.page.getByText('No environment variables match "MISSING".').waitFor();
+      await desktop.page.locator('.settings-nav-item', { hasText: 'Authentication' }).click();
+      await desktop.page.locator('.settings-content h3', { hasText: 'Authentication' }).waitFor();
+      expect(await desktop.page.locator('.settings-content h2').count()).toBe(0);
+      expect(desktop.errors).toEqual([]);
+    } finally { await desktop.page.close(); }
+  }, 60000);
+}

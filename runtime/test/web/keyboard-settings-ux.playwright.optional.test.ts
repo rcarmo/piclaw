@@ -88,7 +88,10 @@ for (const width of [1366, 820, 520, 390]) {
         background: metrics.reference?.background,
         border: metrics.reference?.border,
       });
-      expect(Math.abs((metrics.input?.height || 0) - (metrics.reference?.height || 0))).toBeLessThanOrEqual(2);
+      // Narrow dialogs give every Settings text control a 44px touch target; the
+      // off-dialog reference row cannot reflect that, so check it directly.
+      const expectedHeight = width <= 720 ? 44 : (metrics.reference?.height || 0);
+      expect(Math.abs((metrics.input?.height || 0) - expectedHeight)).toBeLessThanOrEqual(2);
     } finally { await page.close(); }
   });
 

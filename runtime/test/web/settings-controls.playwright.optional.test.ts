@@ -158,8 +158,9 @@ for (const skin of ["classic"]) for (const width of [1366, 820, 520, 390]) for (
       };
       const reference = await page.locator('input[placeholder="Your name"]').evaluate(shell);
       {
-        // Captured from unmodified 060b72e6b ordinary Classic General controls.
-        expect(reference).toMatchObject({ fontSize: width <= 640 ? "11.088px" : "13.2px", lineHeight: "normal", padding: "6px 10px", radius: "6px" });
+        // Ordinary Classic General controls. Phones no longer shrink Settings
+        // text (was 11.088px), so field text stays above the 12px floor.
+        expect(reference).toMatchObject({ fontSize: width <= 640 ? "12.32px" : "13.2px", lineHeight: "normal", padding: "6px 10px", radius: "6px" });
         expect(reference.border).toMatch(/^1px solid /);
       }
       await page.evaluate(() => window.dispatchEvent(new CustomEvent("piclaw:open-settings", { detail: { section: "contract" } })));
