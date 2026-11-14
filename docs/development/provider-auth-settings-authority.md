@@ -4,7 +4,7 @@ The Settings endpoint must use the same provider-owned method inventory as `/log
 
 Use `getProviderDefs(registry, modelRuntime)` directly. The existing helper already handles display names, external/custom configuration and authoritative capability failure. Registry display metadata may be unavailable during refresh; it must not override runtime authentication capabilities. No provider login, model selection, credential write or network call occurs while reading Settings.
 
-Production change relative to the preceding lifecycle cleanup: **4 lines added, 10 deleted; net six lines removed**, no new wrapper, cache or state owner.
+The Settings change adds four production lines and deletes ten. Remove one orphaned config import left by prewarm retirement as well: **4 lines added, 11 deleted; net seven lines removed**, no new wrapper, cache or state owner.
 
 Regression coverage compares every current public provider with the endpoint, checks OpenAI and OpenAI Codex separately, and checks empty/failed authoritative inventories. Extension-only providers, local no-key configuration and secret-free output remain covered.
 

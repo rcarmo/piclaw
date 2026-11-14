@@ -19,7 +19,6 @@ import {
   seedSessionManagerFromDeferredBranchSeed,
 } from "./branch-seeding.js";
 import { getChatBranchByChatJid, getDb } from "../db.js";
-import { readAccessConfig } from "../core/config-access.js";
 import { ChatAccessDenied } from "../db/session-ownership.js";
 import { readOwnedForkSeed, finishOwnedForkSeed } from "../db/owned-forks.js";
 import { requireOwnedSessionExecution } from "./owned-session-access.js";
