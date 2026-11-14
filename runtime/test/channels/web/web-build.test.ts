@@ -61,7 +61,9 @@ test("build:web produces bundle assets", async () => {
   // workbench UX pass (timeline status line, global menu, footer, session context) ~6KB raw / 1.9KB gzip.
   // The MCP management redesign adds 9.8KB raw / 2.5KB gzip against 78d7852f2.
   // Account for that feature while retaining ~4.9KB raw / 1.8KB gzip headroom.
-  expect(statSync(appBundlePath).size).toBeLessThan(1_520_000);
+  // Settings cleanup (#2021, #2022, label association and shared form rows)
+  // then used that headroom (~6KB raw); keep ~4.7KB raw headroom again.
+  expect(statSync(appBundlePath).size).toBeLessThan(1_525_000);
   expect(gzipSync(appBundle).byteLength).toBeLessThan(420_000);
   expect(statSync(editorBundlePath).size).toBeLessThan(500_000);
 }, WEB_BUILD_TEST_TIMEOUT_MS);

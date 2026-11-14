@@ -7,6 +7,7 @@ import {
 } from '../../ui/workspace-settings.js';
 import { NumberStepper } from './number-stepper.js';
 import { useTranslation } from '../../utils/i18n.js';
+import { useSettingsFieldIds } from './field-ids.js';
 
 function normalizeWorkspaceSettings(data: Record<string, any> = {}) {
     const workspace = data.workspaceSettings || {};
@@ -20,6 +21,7 @@ function normalizeWorkspaceSettings(data: Record<string, any> = {}) {
 }
 
 export function WorkspaceSection({ settingsData, setStatus, mergeSettingsData }) {
+    const fieldId = useSettingsFieldIds('workspace');
     const { t } = useTranslation();
     const [webTerminalEnabled, setWebTerminalEnabled] = useState(true);
     const [vncAllowDirect, setVncAllowDirect] = useState(true);
@@ -125,25 +127,25 @@ export function WorkspaceSection({ settingsData, setStatus, mergeSettingsData })
             `}
 
             <h3>${t('settings.workspace.access')}</h3>
-            <div class="settings-row">
-                <label>${t('settings.workspace.enableTerminal')}</label>
-                <input type="checkbox" checked=${webTerminalEnabled} onChange=${e => setWebTerminalEnabled(e.target.checked)} />
+            <div class="settings-row settings-dense-row settings-dense-row-checkbox">
+                <label for=${fieldId('terminal')}>${t('settings.workspace.enableTerminal')}</label>
+                <input id=${fieldId('terminal')} type="checkbox" checked=${webTerminalEnabled} onChange=${e => setWebTerminalEnabled(e.target.checked)} />
             </div>
-            <div class="settings-row">
-                <label>${t('settings.workspace.allowVnc')}</label>
-                <input type="checkbox" checked=${vncAllowDirect} onChange=${e => setVncAllowDirect(e.target.checked)} />
+            <div class="settings-row settings-dense-row settings-dense-row-checkbox">
+                <label for=${fieldId('vnc')}>${t('settings.workspace.allowVnc')}</label>
+                <input id=${fieldId('vnc')} type="checkbox" checked=${vncAllowDirect} onChange=${e => setVncAllowDirect(e.target.checked)} />
             </div>
             <p class="settings-hint">${t('settings.workspace.accessHint')}</p>
 
             <h3 style="margin-top:20px">Timeline SVG</h3>
-            <div class="settings-row">
-                <label>Sanitize SVG code fences</label>
-                <input type="checkbox" checked=${sanitizeSvgFences} onChange=${e => setSanitizeSvgFences(e.target.checked)} />
+            <div class="settings-row settings-dense-row settings-dense-row-checkbox">
+                <label for=${fieldId('svg')}>Sanitize SVG code fences</label>
+                <input id=${fieldId('svg')} type="checkbox" checked=${sanitizeSvgFences} onChange=${e => setSanitizeSvgFences(e.target.checked)} />
+                <span class="settings-hint">Enabled by default: fenced SVG is rendered as a bounded static image. Disable only for trusted SVG that needs timeline interaction; its source will run in this page.</span>
             </div>
-            <p class="settings-hint">Enabled by default: fenced SVG is rendered as a bounded static image. Disable only for trusted SVG that needs timeline interaction; its source will run in this page.</p>
 
             <h3 style="margin-top:20px">${t('settings.workspace.guardrails')}</h3>
-            <div class="settings-row">
+            <div class="settings-row settings-dense-row">
                 <label>${t('settings.workspace.maxDepth')}</label>
                 <${NumberStepper}
                     label=${t('settings.workspace.maxDepthAria')}
@@ -154,9 +156,9 @@ export function WorkspaceSection({ settingsData, setStatus, mergeSettingsData })
                     width="80px"
                     onChange=${setTreeMaxDepth}
                 />
-                <span class="settings-hint" style="margin:0">${t('settings.workspace.maxDepthHintPre')} <code>/workspace/tree</code> ${t('settings.workspace.maxDepthHintPost')}</span>
+                <span class="settings-hint">${t('settings.workspace.maxDepthHintPre')} <code>/workspace/tree</code> ${t('settings.workspace.maxDepthHintPost')}</span>
             </div>
-            <div class="settings-row">
+            <div class="settings-row settings-dense-row">
                 <label>${t('settings.workspace.maxEntries')}</label>
                 <${NumberStepper}
                     label=${t('settings.workspace.maxEntriesAria')}
@@ -168,11 +170,11 @@ export function WorkspaceSection({ settingsData, setStatus, mergeSettingsData })
                     width="92px"
                     onChange=${setTreeMaxEntries}
                 />
-                <span class="settings-hint" style="margin:0">${t('settings.workspace.maxEntriesHint')}</span>
+                <span class="settings-hint">${t('settings.workspace.maxEntriesHint')}</span>
             </div>
 
             <h3 style="margin-top:20px">${t('settings.workspace.thisBrowser')}</h3>
-            <div class="settings-row">
+            <div class="settings-row settings-dense-row">
                 <label>${t('settings.workspace.refreshInterval')}</label>
                 <${NumberStepper}
                     label=${t('settings.workspace.refreshIntervalAria')}
@@ -185,7 +187,7 @@ export function WorkspaceSection({ settingsData, setStatus, mergeSettingsData })
                     onChange=${(value) => applyBrowserPatch({ refreshIntervalSec: value })}
                 />
             </div>
-            <div class="settings-row">
+            <div class="settings-row settings-dense-row">
                 <label>${t('settings.workspace.folderDepth')}</label>
                 <${NumberStepper}
                     label=${t('settings.workspace.folderDepthAria')}
@@ -196,7 +198,7 @@ export function WorkspaceSection({ settingsData, setStatus, mergeSettingsData })
                     width="80px"
                     onChange=${(value) => applyBrowserPatch({ folderPreviewDepth: value })}
                 />
-                <span class="settings-hint" style="margin:0">${t('settings.workspace.folderDepthHintPre')} <code>0</code> ${t('settings.workspace.folderDepthHintPost')}</span>
+                <span class="settings-hint">${t('settings.workspace.folderDepthHintPre')} <code>0</code> ${t('settings.workspace.folderDepthHintPost')}</span>
             </div>
             <p class="settings-hint">${t('settings.workspace.footerHint')}</p>
         </div>

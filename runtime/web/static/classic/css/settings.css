@@ -321,9 +321,28 @@
     --settings-dense-label-width: 220px;
     --settings-dense-control-width: 190px;
     display: grid;
-    grid-template-columns: var(--settings-dense-label-width) var(--settings-dense-control-width) minmax(0, 1fr);
+    grid-template-columns: minmax(120px, var(--settings-dense-label-width)) minmax(0, var(--settings-dense-control-width)) minmax(0, 1fr);
     align-items: center;
     column-gap: 12px;
+}
+
+/* Text fields and lists span the control and help columns. */
+.settings-dense-row-wide > :nth-child(2) {
+    grid-column: 2 / -1;
+    width: 100%;
+    max-width: 520px;
+}
+
+.settings-dialog-narrow .settings-dense-row {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 6px;
+}
+
+.settings-dialog-narrow .settings-dense-row > *,
+.settings-dialog-narrow .settings-dense-row-compound > .settings-hint {
+    grid-column: 1;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .settings-dense-row > label {
@@ -350,7 +369,7 @@
 }
 
 .settings-dense-row-checkbox {
-    grid-template-columns: var(--settings-dense-label-width) var(--settings-dense-control-width) minmax(0, 1fr);
+    grid-template-columns: minmax(120px, var(--settings-dense-label-width)) minmax(0, var(--settings-dense-control-width)) minmax(0, 1fr);
 }
 
 .settings-dense-row-compound {

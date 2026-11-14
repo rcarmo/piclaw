@@ -34,6 +34,7 @@ import { html, useState, useEffect, useCallback, useRef } from '../vendor/preact
 import { useTranslation } from '../utils/i18n.js';
 import { BodyPortal } from './body-portal.js';
 import { compareSettingsPanesAlphabetically, getRegisteredSettingsPanes } from './settings/pane-registry.js';
+import { iconDeveloperPane, iconEditorPane } from './settings/core-pane-icons.js';
 import { consumeRequestedSettingsOpenState, normalizeSettingsSectionId, peekRequestedSettingsSection, requestOpenSettingsDialog } from './settings-dialog-events.js';
 // General is statically imported — it's always the first visible section.
 import { GeneralSection } from './settings/general.js';
@@ -71,8 +72,6 @@ const BUILTIN_SECTION_LOADERS: Record<BuiltinSectionId, () => Promise<SettingsSe
 // Core-owned extension panes self-register when their module loads. Their nav
 // entries are listed up front (ids match registerSettingsPane) so they remain
 // reachable; each module loads only when its pane is opened.
-const iconEditorPane = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
-const iconDeveloperPane = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`;
 const LAZY_EXTENSION_PANES: Array<{ id: string; label: string; icon: unknown; order: number; load: () => Promise<unknown>; searchable?: boolean; searchPlaceholder?: string; component?: any }> = [
     { id: 'editor', label: 'Editor', icon: iconEditorPane, order: 150, load: () => import('./settings/editor-settings.js') },
     { id: 'developer', label: 'Developer', icon: iconDeveloperPane, order: 900, load: () => import('./settings/developer-settings.js') },

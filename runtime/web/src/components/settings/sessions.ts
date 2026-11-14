@@ -4,6 +4,7 @@
 import { html, useState, useEffect, useCallback, useMemo, useRef } from '../../vendor/preact-htm.js';
 import { NumberStepper } from './number-stepper.js';
 import { useTranslation } from '../../utils/i18n.js';
+import { useSettingsFieldIds } from './field-ids.js';
 
 function normalizeSessionSettings(data: Record<string, any> = {}) {
     return {
@@ -15,6 +16,7 @@ function normalizeSessionSettings(data: Record<string, any> = {}) {
 }
 
 export function SessionsSection({ settingsData, setStatus, mergeSettingsData }) {
+    const fieldId = useSettingsFieldIds('sessions');
     const { t } = useTranslation();
 
     const [toolUseBudget, setToolUseBudget] = useState(64);
@@ -82,7 +84,7 @@ export function SessionsSection({ settingsData, setStatus, mergeSettingsData }) 
                 </div>
             `}
             <h3 style="margin-top:20px">${t('settings.sessions.agentBehaviour')}</h3>
-            <div class="settings-row">
+            <div class="settings-row settings-dense-row">
                 <label>${t('settings.sessions.toolBudget')}</label>
                 <${NumberStepper}
                     label=${t('settings.sessions.toolBudgetAria')}
@@ -93,11 +95,11 @@ export function SessionsSection({ settingsData, setStatus, mergeSettingsData }) 
                     width="80px"
                     onChange=${setToolUseBudget}
                 />
-                <span class="settings-hint" style="margin:0">${t('settings.sessions.toolBudgetHint')}</span>
+                <span class="settings-hint">${t('settings.sessions.toolBudgetHint')}</span>
             </div>
-            <div class="settings-row">
-                <label>${t('settings.sessions.isolation')}</label>
-                <select value=${sessionIsolation} onChange=${e => setSessionIsolation(e.target.value)}>
+            <div class="settings-row settings-dense-row">
+                <label for=${fieldId('isolation')}>${t('settings.sessions.isolation')}</label>
+                <select id=${fieldId('isolation')} value=${sessionIsolation} onChange=${e => setSessionIsolation(e.target.value)}>
                     <option value="none">${t('settings.sessions.isolationNone')}</option>
                     <option value="summary">${t('settings.sessions.isolationSummary')}</option>
                     <option value="full">${t('settings.sessions.isolationFull')}</option>

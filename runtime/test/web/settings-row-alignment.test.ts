@@ -16,7 +16,8 @@ test("Classic Compaction opts into dense rows without changing shared Settings r
   expect(classicComponent).not.toContain("smartCompactionMethod");
   expect(classicComponent).not.toContain("compactionModel");
   expect(classicCss).toContain(".settings-dense-row {");
-  expect(classicCss).toContain("grid-template-columns: var(--settings-dense-label-width) var(--settings-dense-control-width) minmax(0, 1fr)");
+  // Stable columns that can still shrink inside a narrow Settings tab.
+  expect(classicCss).toContain("grid-template-columns: minmax(120px, var(--settings-dense-label-width)) minmax(0, var(--settings-dense-control-width)) minmax(0, 1fr)");
   expect(classicCss).toContain(".settings-dense-row-compound");
   expect(classicCss).toContain(".settings-row {\n    display: flex;");
 });

@@ -265,3 +265,29 @@ for (const engine of ['chromium', 'webkit']) {
     } finally { await page.close(); }
   }, 30000);
 }
+
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine}: form panes share the dense label/control/help grid and name every control`, async () => {
+    const panes: Record<string, number> = { sessions: 2, workspace: 7, editor: 5, developer: 1, compaction: 9 };
+    for (const width of [390, 1280]) for (const [section, rows] of Object.entries(panes)) {
+      const { page, errors } = await openSettings(engine, width, section);
+      try {
+        const found = await page.evaluate(() => {
+          const content = document.querySelector('.settings-content')!;
+          const dense = [...content.querySelectorAll('.settings-dense-row')] as HTMLElement[];
+          const plain = [...content.querySelectorAll('.settings-row:not(.settings-dense-row)')].filter(row => row.closest('.settings-section') && !row.closest('.workspace-indexing, .settings-identity-field'));
+          const columns = new Set(dense.map(row => Math.round(row.children[1].getBoundingClientRect().left)));
+          const unnamed = [...content.querySelectorAll('.settings-dense-row :is(input, select, textarea)')]
+            .filter(control => !(control as HTMLInputElement).labels?.length && !control.getAttribute('aria-label'))
+            .map(control => control.outerHTML.slice(0, 80));
+          return { dense: dense.length, plain: plain.length, columns: columns.size, unnamed, overflow: content.scrollWidth - content.clientWidth };
+        });
+        expect(found.dense).toBeGreaterThanOrEqual(rows);
+        expect(found.columns).toBe(1); // every control starts in the same column (or stacks on phones)
+        expect(found.unnamed).toEqual([]);
+        expect(found.overflow).toBeLessThanOrEqual(1);
+        expect(errors).toEqual([]);
+      } finally { await page.close(); }
+    }
+  }, 120000);
+}
