@@ -17,16 +17,13 @@ beforeAll(async () => {
       build.onResolve({ filter: /^svg-test-entry$/ }, () => ({ path: 'entry', namespace: 'svg-test' }));
       build.onLoad({ filter: /.*/, namespace: 'svg-test' }, () => ({ loader: 'ts', contents: `
         import { classicSvgTest } from ${JSON.stringify(resolve(repo, 'runtime/web/src/components/post.ts'))};
-        import { renderMarkdown as visual, renderThinkingMarkdown as visualThinking } from ${JSON.stringify(resolve(repo, 'runtime/web/static/visual/frontend/src/utils/markdown-pipeline.ts'))};
         import { renderThinkingMarkdown as classicThinking } from ${JSON.stringify(resolve(repo, 'runtime/web/src/markdown.ts'))};
-        import { bindCodeCopyButtons } from ${JSON.stringify(resolve(repo, 'runtime/web/static/visual/frontend/src/components/message-list/useScrollManager.ts'))};
         import { sanitizeSvgImage, SVG_IMAGE_LIMITS } from ${JSON.stringify(resolve(repo, 'runtime/web/src/utils/svg-images.ts'))};
-        import { initTheme, selectLocalTheme } from ${JSON.stringify(resolve(repo, 'runtime/web/src/ui/theme.ts'))};
+        import { initTheme } from ${JSON.stringify(resolve(repo, 'runtime/web/src/ui/theme.ts'))};
         import { WEB_THEME_PRESETS } from ${JSON.stringify(resolve(repo, 'runtime/src/core/ui-theme-catalogue.ts'))};
+        import { selectLocalTheme } from ${JSON.stringify(resolve(repo, 'runtime/test/web/fixtures/select-theme.ts'))};
         import { renderMermaidDiagrams as classicMermaid } from ${JSON.stringify(resolve(repo, 'runtime/web/src/markdown.ts'))};
-        import { renderMermaidDiagrams as visualMermaid } from ${JSON.stringify(resolve(repo, 'runtime/web/static/visual/frontend/src/utils/mermaid-render.ts'))};
-        import { importVSCodeTheme, applyTheme, resetTheme } from ${JSON.stringify(resolve(repo, 'runtime/web/static/visual/frontend/src/utils/theme-importer.ts'))};
-        Object.assign(window, { svgTest: { ...classicSvgTest, visual, classicThinking, visualThinking, bindCodeCopyButtons, sanitizeSvgImage, initTheme,selectLocalTheme,importVSCodeTheme,applyTheme,resetTheme,presets:WEB_THEME_PRESETS,classicMermaid,visualMermaid,limits: SVG_IMAGE_LIMITS } });
+        Object.assign(window, { svgTest: { ...classicSvgTest, classicThinking, sanitizeSvgImage, initTheme,selectLocalTheme,presets:WEB_THEME_PRESETS,classicMermaid,limits: SVG_IMAGE_LIMITS } });
       ` }));
       build.onResolve({ filter: /^#editor-vendor\/codemirror$/ }, () => ({ path: resolve(repo, 'runtime/extensions/viewers/editor/vendor/codemirror.js') }));
       build.onLoad({ filter: /\/web\/src\/components\/post\.ts$/ }, (args) => ({ loader: 'ts', contents: readFileSync(args.path, 'utf8') + '\nexport const classicSvgTest = { classic: renderMarkdown, enhanceCodeBlocks };' }));
@@ -59,23 +56,7 @@ async function fixture(run: (page: Page, requests: string[], dialogs: string[]) 
 
 const safe = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 300"><title>A &amp; B</title><defs><linearGradient id="paint"><stop offset="0" stop-color="red"/></linearGradient><clipPath id="clip"><rect width="600" height="300"/></clipPath></defs><g clip-path="url(#clip)"><rect width="600" height="300" fill="url(#paint)" onload="alert(1)" style="fill:url(https://bad.invalid)"/><text x="5" y="20">Hello</text></g></svg>\n';
 
-browserTest('visual: legacy null options render without a project and explicit options still link references', async () => {
-  await fixture(async page => {
-    const result = await page.evaluate(() => {
-      const visual = (window as any).svgTest.visual;
-      return {
-        plain: visual('Before #42 and #bug', null),
-        linked: visual('Before #42 and #bug', { projectRepository: 'https://github.com/rcarmo/piclaw' }),
-      };
-    });
-    expect(result.plain).toContain('#42');
-    expect(result.plain).not.toContain('/issues/42');
-    expect(result.linked).toContain('https://github.com/rcarmo/piclaw/issues/42');
-    expect(result.linked).toContain('data-hashtag="bug"');
-  });
-}, 30_000);
-
-for (const skin of ['classic', 'visual']) {
+for (const skin of ['classic']) {
   browserTest(`${skin}: disabled SVG-fence sanitization restores trusted inline interaction`, async () => {
     await fixture(async page => {
       const result = await page.evaluate((skin) => {
@@ -102,7 +83,7 @@ for (const skin of ['classic', 'visual']) {
         const output = api[skin]('```svg\n' + source + '```', null);
         root.innerHTML = output;
         const modelSvgCount = root.querySelectorAll('svg').length;
-        const cleanup = skin === 'classic' ? api.enhanceCodeBlocks(root) : api.bindCodeCopyButtons(root);
+        const cleanup = api.enhanceCodeBlocks(root);
         (window as any).svgCleanup = cleanup;
         document.execCommand = (command) => {
           if (command !== 'copy') return false;
@@ -126,7 +107,7 @@ for (const skin of ['classic', 'visual']) {
       const desktop = await page.locator('#post img').boundingBox();
       expect(desktop!.width).toBeLessThanOrEqual(900); expect(desktop!.width / desktop!.height).toBeCloseTo(2, 1);
       await page.locator('summary').focus(); await page.keyboard.press('Enter');
-      const button = page.locator(skin === 'classic' ? '.post-code-copy-btn' : '.code-block__copy');
+      const button = page.locator('.post-code-copy-btn');
       await button.focus(); await page.keyboard.press('Enter');
       await page.waitForFunction(() => (window as any).copied !== undefined);
       expect(await page.evaluate(() => (window as any).copied)).toBe(safe);
@@ -136,7 +117,7 @@ for (const skin of ['classic', 'visual']) {
         root.innerHTML = api[skin]('```svg\n' + source.slice(0, -8), null);
         const incompleteImages = root.querySelectorAll('img').length;
         for (let i = 0; i < 3; i++) root.innerHTML = api[skin]('```svg\n' + source + '```', null);
-        const cleanup = skin === 'classic' ? api.enhanceCodeBlocks(root) : api.bindCodeCopyButtons(root);
+        const cleanup = api.enhanceCodeBlocks(root);
         const counts = { incompleteImages, images: root.querySelectorAll('img').length, code: root.querySelectorAll('pre code').length, buttons: root.querySelectorAll('.post-code-copy-btn, .code-block__copy').length };
         cleanup(); return counts;
       }, { skin, source: safe });
@@ -211,7 +192,7 @@ browserTest('limits reject before parsing bytes and at node/depth boundaries (00
       DOMParser.prototype.parseFromString = function(...args) { xmlCalls++; return original.apply(this, args); };
       try { api.sanitizeSvgImage('x'.repeat(limits.bytes+1)); api.sanitizeSvgImage('✓'.repeat(limits.bytes)); }
       finally { DOMParser.prototype.parseFromString = original; }
-      const skinBounds = ['classic', 'visual'].map(skin => {
+      const skinBounds = ['classic'].map(skin => {
         const root=document.querySelector('#post')!;
         return [bytes(limits.bytes+1), nodes(limits.nodes+1), depth(limits.depth+1)].map(source => {
           root.innerHTML=api[skin]('```svg\n'+source+'\n```',null);
@@ -249,7 +230,7 @@ browserTest('benchmark and bounded-cache rerenders avoid repeated XML parsing', 
   });
 });
 
-for (const skin of ['classic', 'visual']) {
+for (const skin of ['classic']) {
   browserTest(`${skin}: exact CRLF/entity source, fallback copy and Markdown context`, async () => {
     await fixture(async page => {
       const source = '<svg><title>&lt;label&gt;</title>\r\n<rect width="10" height="10"/></svg>\r\n';
@@ -259,19 +240,19 @@ for (const skin of ['classic', 'visual']) {
         root.innerHTML=api[skin](text,null);
         const image=root.querySelector('img')!;
         const first={label:image.alt, linkText:root.querySelector('a')?.textContent, text:root.textContent};
-        const cleanup=skin==='classic'?api.enhanceCodeBlocks(root):api.bindCodeCopyButtons(root);
+        const cleanup=api.enhanceCodeBlocks(root);
         (window as any).svgCleanup=cleanup;
         Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text: string) => { (window as any).copied = text; } } });
         document.execCommand=(command)=>{if(command!=='copy')return false;const data=new DataTransfer();document.dispatchEvent(new ClipboardEvent('copy',{clipboardData:data,bubbles:true,cancelable:true}));(window as any).copied=data.getData('text/plain')||(document.activeElement as HTMLTextAreaElement)?.value;return true;};
         return first;
       },{skin,source});
       expect(result.label).toBe('<label>'); expect(result.linkText).toBe('link'); expect(result.text).toContain('After');
-      await page.locator('summary').click(); await page.locator(skin==='classic'?'.post-code-copy-btn':'.code-block__copy').click();
+      await page.locator('summary').click(); await page.locator('.post-code-copy-btn').click();
       await page.waitForFunction(()=>(window as any).copied!==undefined);
       expect(await page.evaluate(()=>(window as any).copied)).toBe(source);
       const fallback='<svg><script>alert(1)</script></svg>\n';
-      await page.evaluate(({skin,source})=>{const api=(window as any).svgTest,root=document.querySelector('#post')!;(window as any).svgCleanup();delete (window as any).copied;root.innerHTML=api[skin]('```svg\n'+source+'```',null);(window as any).svgCleanup=skin==='classic'?api.enhanceCodeBlocks(root):api.bindCodeCopyButtons(root);},{skin,source:fallback});
-      await page.locator(skin==='classic'?'.post-code-copy-btn':'.code-block__copy').click();
+      await page.evaluate(({skin,source})=>{const api=(window as any).svgTest,root=document.querySelector('#post')!;(window as any).svgCleanup();delete (window as any).copied;root.innerHTML=api[skin]('```svg\n'+source+'```',null);(window as any).svgCleanup=api.enhanceCodeBlocks(root);},{skin,source:fallback});
+      await page.locator('.post-code-copy-btn').click();
       await page.waitForFunction(()=>(window as any).copied!==undefined);
       expect(await page.evaluate(()=>(window as any).copied)).toBe(fallback);
       const failure = await page.evaluate(async () => {
@@ -295,7 +276,7 @@ browserTest('cache is bounded, invalid results are reused and non-SVG messages d
       const original=DOMParser.prototype.parseFromString;let xml=0;
       DOMParser.prototype.parseFromString=function(...args){if(args[1]==='image/svg+xml')xml++;return original.apply(this,args);};
       try{
-        api.classic('ordinary **message**',null);api.visual('ordinary **message**');const ordinary=xml;
+        api.classic('ordinary **message**',null);const ordinary=xml;
         const invalid='<svg><unknown cache="fixture"/></svg>';api.sanitizeSvgImage(invalid);api.sanitizeSvgImage(invalid);const invalidCalls=xml;
         for(let i=0;i<12;i++)api.sanitizeSvgImage('<svg><title>evict-'+i+'</title></svg>');
         const before=xml;api.sanitizeSvgImage(invalid);
@@ -306,15 +287,15 @@ browserTest('cache is bounded, invalid results are reused and non-SVG messages d
   });
 });
 
-for (const skin of ['classic','visual']) browserTest(`${skin}: SVG defaults, explicit paints, live palettes and preview surfaces agree`,async()=>{
+for (const skin of ['classic']) browserTest(`${skin}: SVG defaults, explicit paints, live palettes and preview surfaces agree`,async()=>{
   await fixture(async(page)=>{
     await page.emulateMedia({colorScheme:'dark'});
     const result=await page.evaluate((skin)=>{
       const api=(window as any).svgTest,post=document.getElementById('post')!;
-      api.initTheme({skin});api.selectLocalTheme('paper');
+      api.initTheme();api.selectLocalTheme('paper');
       const source='<svg viewBox="0 0 240 120"><title>Theme defaults</title><rect x="5" y="5" width="40" height="40"/><rect x="60" y="5" width="40" height="40" fill="currentColor"/><rect x="110" y="5" width="40" height="40" fill="#e04020"/><rect x="160" y="5" width="40" height="40" fill="var(--svg-accent)"/><text x="8" y="80">Theme text</text></svg>\n';
       post.innerHTML=api[skin]('\x60\x60\x60svg\n'+source+'\x60\x60\x60',null);
-      (window as any).svgCleanup=skin==='classic'?api.enhanceCodeBlocks(post):api.bindCodeCopyButtons(post);
+      (window as any).svgCleanup=api.enhanceCodeBlocks(post);
       const img=post.querySelector('img')!;
       const parse=()=>new DOMParser().parseFromString(atob(img.src.split(',')[1]),'image/svg+xml');
       const probe=document.createElement('span');document.body.append(probe);const color=(name:string)=>{probe.style.color='var('+name+')';return getComputedStyle(probe).color;};
@@ -337,13 +318,13 @@ for (const skin of ['classic','visual']) browserTest(`${skin}: SVG defaults, exp
   });
 },30000);
 
-for(const skin of ['classic','visual']) browserTest(`${skin}: actual Mermaid SVG follows selected palette, not OS, without rerender`,async()=>{
+for(const skin of ['classic']) browserTest(`${skin}: actual Mermaid SVG follows selected palette, not OS, without rerender`,async()=>{
   await fixture(async(page)=>{
     await page.addScriptTag({content:readFileSync(resolve(repo,'runtime/web/static/common/js/vendor/pele.js'),'utf8')});
     await page.emulateMedia({colorScheme:'dark'});
     const result=await page.evaluate(async(skin)=>{
       const api=(window as any).svgTest,post=document.getElementById('post')!;
-      api.initTheme({skin});api.selectLocalTheme('paper');post.innerHTML=api[skin]('\x60\x60\x60mermaid\ngraph LR\nA[Input] --> B[Output]\n\x60\x60\x60',null);
+      api.initTheme();api.selectLocalTheme('paper');post.innerHTML=api[skin]('\x60\x60\x60mermaid\ngraph LR\nA[Input] --> B[Output]\n\x60\x60\x60',null);
       await api[skin+'Mermaid'](post);
       const svg=post.querySelector('svg')!;if(!svg)throw Error(post.innerHTML);const text=svg.querySelector('text')!;const initial=getComputedStyle(text).fill;
       api.selectLocalTheme('as400');const changed=getComputedStyle(text).fill;
@@ -354,20 +335,18 @@ for(const skin of ['classic','visual']) browserTest(`${skin}: actual Mermaid SVG
   });
 },30000);
 
-for(const skin of ['classic','visual']) browserTest(`${skin}: rasterized SVG defaults and authored paints survive surface/import changes`,async()=>{
+for(const skin of ['classic']) browserTest(`${skin}: rasterized SVG defaults and authored paints survive surface/import changes`,async()=>{
  await fixture(async(page)=>{
   await page.evaluate((skin)=>{
-   const api=(window as any).svgTest,post=document.getElementById('post')!;api.initTheme({skin});api.selectLocalTheme('paper');
+   const api=(window as any).svgTest,post=document.getElementById('post')!;api.initTheme();api.selectLocalTheme('paper');
    post.innerHTML=api[skin]('\x60\x60\x60svg\n<svg width="120" height="40"><rect width="40" height="40"/><rect x="40" width="40" height="40" fill="#ff3300"/><rect x="80" width="40" height="40" fill="var(--svg-accent)"/></svg>\n\x60\x60\x60',null);
-   (window as any).svgCleanup=skin==='classic'?api.enhanceCodeBlocks(post):api.bindCodeCopyButtons(post);
+   (window as any).svgCleanup=api.enhanceCodeBlocks(post);
   },skin);
   const pixels=()=>page.evaluate(async()=>{const image=document.querySelector<HTMLImageElement>('.model-svg-image')!;await image.decode();const canvas=document.createElement('canvas');canvas.width=120;canvas.height=40;const c=canvas.getContext('2d')!;c.drawImage(image,0,0);return [20,60,100].map(x=>Array.from(c.getImageData(x,20,1,1).data));});
   const light=await pixels();expect(light[1]).toEqual([255,51,0,255]);
   await page.evaluate(()=>(window as any).svgTest.selectLocalTheme('as400'));const green=await pixels();expect(green[0][0]).toBe(0);expect(green[0][2]).toBe(0);expect(green[1]).toEqual(light[1]);expect(green[0]).not.toEqual(light[0]);
-  await page.evaluate(()=>{const a=(window as any).svgTest;a.applyTheme(a.importVSCodeTheme({type:'dark',colors:{'editor.background':'#121212','editor.foreground':'#ccddee',focusBorder:'#faab22'}}));});
-  expect((await pixels())[2]).toEqual([250,171,34,255]);
   await page.locator('.model-svg-surface').selectOption('light');expect((await pixels())[0]).toEqual([24,33,43,255]);
-  await page.evaluate(()=>{const a=(window as any).svgTest;a.resetTheme();a.selectLocalTheme('synthwave-84-full');});
+  await page.evaluate(()=>{const a=(window as any).svgTest;a.selectLocalTheme('synthwave-84-full');});
   await page.locator('.model-svg-surface').selectOption('theme');
   const dir=resolve(repo,'.artifacts/svg-themes');mkdirSync(dir,{recursive:true});
   await page.locator('#post').screenshot({path:resolve(dir,`${process.env.PICLAW_OPTIONAL_BROWSER||'chromium'}-${skin}-theme-svg.png`)});
@@ -377,12 +356,12 @@ for(const skin of ['classic','visual']) browserTest(`${skin}: rasterized SVG def
 
 browserTest('theme tokens are a finite safe paint set; authored root colours and gradient references win',async()=>{
  await fixture(async(page)=>{
-  const result=await page.evaluate(()=>{const a=(window as any).svgTest;a.initTheme({skin:'classic'});a.selectLocalTheme('as400');const src='<svg color="#123456" fill="#abcdef"><defs><linearGradient id="g"><stop stop-color="var(--svg-accent)"/></linearGradient></defs><rect fill="url(#g)"/><path stroke="var(--arbitrary)"/><circle fill="var(--svg-accent, url(https://bad.invalid))"/></svg>';const out=a.sanitizeSvgImage(src);const xml=atob(out.src.split(',')[1]);return {xml,docColor:new DOMParser().parseFromString(xml,'image/svg+xml').documentElement.getAttribute('color')};});
+  const result=await page.evaluate(()=>{const a=(window as any).svgTest;a.initTheme();a.selectLocalTheme('as400');const src='<svg color="#123456" fill="#abcdef"><defs><linearGradient id="g"><stop stop-color="var(--svg-accent)"/></linearGradient></defs><rect fill="url(#g)"/><path stroke="var(--arbitrary)"/><circle fill="var(--svg-accent, url(https://bad.invalid))"/></svg>';const out=a.sanitizeSvgImage(src);const xml=atob(out.src.split(',')[1]);return {xml,docColor:new DOMParser().parseFromString(xml,'image/svg+xml').documentElement.getAttribute('color')};});
   expect(result.docColor).toBe('#123456');expect(result.xml).toContain('fill="#abcdef"');expect(result.xml).toContain('url(#g)');expect(result.xml).not.toMatch(/var\(|bad.invalid|arbitrary/);
  });
 });
 
-for(const skin of ['classic','visual'])browserTest(`${skin}: literal fenced/inline bytes and actual copy handlers survive entity/tag syntax`,async()=>{
+for(const skin of ['classic'])browserTest(`${skin}: literal fenced/inline bytes and actual copy handlers survive entity/tag syntax`,async()=>{
   await fixture(async page=>{
     const result=await page.evaluate(async skin=>{
       const api=(window as any).svgTest,root=document.querySelector('#post')!;
@@ -403,8 +382,8 @@ for(const skin of ['classic','visual'])browserTest(`${skin}: literal fenced/inli
         root.innerHTML=api[skin](item.source,null);
         const node=root.querySelector('pre code')!;
         const text=node?.textContent;
-        const cleanup=skin==='classic'?api.enhanceCodeBlocks(root):api.bindCodeCopyButtons(root);
-        copied=undefined;(root.querySelector(skin==='classic'?'.post-code-copy-btn':'.code-block__copy') as HTMLElement)?.click();
+        const cleanup=api.enhanceCodeBlocks(root);
+        copied=undefined;(root.querySelector('.post-code-copy-btn') as HTMLElement)?.click();
         for(let i=0;i<20&&copied===undefined;i++)await new Promise(r=>setTimeout(r,5));
         checks.push({text,copied,expected:item.expected,diagrams:root.querySelectorAll('.mermaid-container').length});cleanup();
         root.innerHTML=api[skin+'Thinking'](item.source);
@@ -420,7 +399,7 @@ for(const skin of ['classic','visual'])browserTest(`${skin}: literal fenced/inli
   });
 },30000);
 
-for(const skin of ['classic','visual'])browserTest(`${skin}: language fences are projected only from real parser code tokens`,async()=>{
+for(const skin of ['classic'])browserTest(`${skin}: language fences are projected only from real parser code tokens`,async()=>{
   await fixture(async page=>{
     const result=await page.evaluate(skin=>{
       const api=(window as any).svgTest,root=document.querySelector('#post')!,calls:any[]=[];

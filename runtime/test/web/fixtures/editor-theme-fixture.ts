@@ -1,15 +1,16 @@
+import { selectLocalTheme } from './select-theme.js';
 const { StandaloneEditorInstance } = new URLSearchParams(location.search).has('bundle')
   ? await import('/static/classic/dist/editor.bundle.js')
   : await import('../../../extensions/viewers/editor/editor-extension');
 import * as theme from '../../../web/src/ui/theme';
 import { WEB_THEME_PRESETS } from '../../../src/core/ui-theme-catalogue';
-import { importVSCodeTheme, applyTheme } from '../../../web/static/visual/frontend/src/utils/theme-importer';
+
 import { SearchQuery, setSearchQuery, openSearchPanel } from '#editor-vendor/codemirror';
 import { revealText } from '../../../extensions/viewers/editor/search-reveal';
-const skin = new URLSearchParams(location.search).get('skin') || 'classic';
+
 localStorage.setItem('piclaw_vim_mode', 'false');
 localStorage.setItem('piclaw_md_live_preview', 'true');
-theme.initTheme({ skin: skin as 'classic' | 'visual' });
+theme.initTheme();
 let instance: any;
 const prose = 'Plain text selection must track the active theme. Repeat selection here.\n\n';
 const markdown = prose + '# Heading\n\n**Strong** and *emphasis* with `inline code`.\n\n```javascript\nconst greeting = "hello"; // comment\nfunction greet(name) { return greeting + name + 42; }\n```\n\n> [!warning] Warning\n> Body text\n\n| Name | Value |\n| --- | --- |\n| plain | **bold** |\n\nUnresolved [^missing].\n';
@@ -27,7 +28,7 @@ function mount(mode = 'preview', contentOverride?: string) {
   }
 }
 Object.assign(window, { editorFixture: {
-  ...theme, presets:WEB_THEME_PRESETS, importVSCodeTheme, applyTheme, mount,
+  ...theme, selectLocalTheme, presets:WEB_THEME_PRESETS, mount,
   views: () => [instance.view, instance.baselineView].filter(Boolean),
   select: (from=0,to=10) => { instance.view.dispatch({selection:{anchor:from,head:to}}); instance.view.focus(); },
   search: () => { openSearchPanel(instance.view); instance.view.dispatch({effects:setSearchQuery.of(new SearchQuery({search:'selection'}))}); },

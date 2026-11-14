@@ -32,11 +32,11 @@ beforeAll(async () => {
   browser = await chromium.launch({ headless: !headed });
   server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
     const url = new URL(req.url);
-    const skin = url.searchParams.get("skin") === "visual" ? "visual" : "classic";
+    const skin = "classic";
     if (url.pathname === "/blank") return new Response("<!doctype html><title>Idle baseline</title><p>Idle baseline</p>", { headers: { "content-type": "text/html" } });
     if (url.pathname === "/") return new Response(Bun.file(join(webRoot, `static/${skin}/index.html`)), { headers: { "content-type": "text/html" } });
-    if (useBaselineAssets && ["/static/classic/dist/app.bundle.js", "/static/visual/dist/app.bundle.js"].includes(url.pathname)) {
-      const name = url.pathname.includes("/visual/") ? "visual.bundle.js" : "app.bundle.js";
+    if (useBaselineAssets && ["/static/classic/dist/app.bundle.js"].includes(url.pathname)) {
+      const name = "app.bundle.js";
       return new Response(Bun.file(resolve(output, "../baseline-assets/" + name)), { headers: { "content-type": "text/javascript" } });
     }
     if (url.pathname === "/editor-vendor/codemirror.js") return new Response(Bun.file(resolve(webRoot, "../extensions/viewers/editor/vendor/codemirror.js")), { headers: { "content-type": "text/javascript" } });
@@ -130,8 +130,8 @@ async function open(skin: string, postCount: number, instrument: boolean, reduce
     else { unhandled.add(u.pathname); return route.fulfill({ status: 404, json: { error: "Unhandled fixture route" } }); }
     return route.fulfill({ json: body });
   });
-  await page.goto(skin === "blank" ? server.url + "blank" : `${server.url}?skin=${skin}`, { waitUntil: "load" });
-  if (skin !== "blank") {
+  await page.goto(`${server.url}?skin=${skin}`, { waitUntil: "load" });
+  {
     try { await page.locator('textarea,[contenteditable="true"]').first().waitFor({ timeout: 12000 }); }
     catch (error) { console.log("BOOT_FAILURE", JSON.stringify({ skin, errors, requests, unhandled: [...unhandled], body: (await page.locator("body").innerText()).slice(0, 1800) })); await context.close(); throw error; }
   }
@@ -143,20 +143,12 @@ async function counters(page: Page) {
 const cases = [
   { id: "blank", skin: "blank", posts: 0, traffic: false, instrument: true },
   { id: "classic-idle", skin: "classic", posts: 10, traffic: false, instrument: true },
-  { id: "visual-idle", skin: "visual", posts: 10, traffic: false, instrument: true },
   { id: "classic-minimal", skin: "classic", posts: 10, traffic: true, instrument: true },
-  { id: "visual-minimal", skin: "visual", posts: 10, traffic: true, instrument: true },
   { id: "classic-long", skin: "classic", posts: 200, traffic: true, instrument: true },
-  { id: "visual-long", skin: "visual", posts: 200, traffic: true, instrument: true },
   { id: "classic-control", skin: "classic", posts: 10, traffic: false, instrument: false },
-  { id: "visual-control", skin: "visual", posts: 10, traffic: false, instrument: false },
-  { id: "visual-mobile", skin: "visual", posts: 10, traffic: false, instrument: true, width: 390 },
-  { id: "visual-full", skin: "visual", posts: 10, traffic: false, instrument: true, motion: "no-preference" as const, theme: "synthwave-84-full" },
   { id: "classic-full", skin: "classic", posts: 10, traffic: false, instrument: true, motion: "no-preference" as const, theme: "synthwave-84-full" },
   { id: "classic-motion", skin: "classic", posts: 10, traffic: false, instrument: true, motion: "no-preference" as const },
-  { id: "visual-motion", skin: "visual", posts: 10, traffic: false, instrument: true, motion: "no-preference" as const },
   { id: "classic-hidden-simulated", skin: "classic", posts: 10, traffic: true, instrument: true, hidden: true },
-  { id: "visual-hidden-simulated", skin: "visual", posts: 10, traffic: true, instrument: true, hidden: true },
 ];
 if (selected?.some(id => !cases.some(c => c.id === id))) throw new Error("Unknown idle profile case");
 for (const config of cases.filter(c => !selected || selected.includes(c.id))) browserTest(`browser idle profile ${config.id}`, async () => {

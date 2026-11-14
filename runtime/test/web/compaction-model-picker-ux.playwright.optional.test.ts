@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { build } from "esbuild";
+
 import { chromium, webkit, type Browser, type Page } from "playwright";
 
 const enabled = process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS === "1";
@@ -19,13 +19,11 @@ beforeAll(async () => {
     target: "browser", format: "esm", external: ["#editor-vendor/codemirror"], write: false });
   if (!classic.success) throw Error(JSON.stringify(classic.logs));
   fixtures.set("classic", await classic.outputs[0]!.text());
-  const visual = await build({ entryPoints: [join(runtimeRoot, "test/web/fixtures/visual-compaction-settings-fixture.tsx")],
-    bundle: true, write: false, format: "esm", platform: "browser", target: "es2022", jsx: "automatic", jsxImportSource: "preact" });
-  fixtures.set("visual", visual.outputFiles[0]!.text);
+
   server = Bun.serve({ port: 0, async fetch(req) {
-    const url = new URL(req.url), skin = url.pathname === "/visual" ? "visual" : "classic";
-    if (url.pathname === "/classic" || url.pathname === "/visual") return new Response(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/${skin}/dist/app.bundle.css"></head><body><div id="${skin === "classic" ? "settings-widget" : "visual-compaction-settings"}-fixture-root"></div><script type="module" src="/${skin}.js"></script></body></html>`, { headers: { "content-type": "text/html" } });
-    if (url.pathname === "/classic.js" || url.pathname === "/visual.js") return new Response(fixtures.get(url.pathname.slice(1, -3)), { headers: { "content-type": "text/javascript" } });
+    const url = new URL(req.url), skin = "classic";
+    if (url.pathname === "/classic") return new Response(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/${skin}/dist/app.bundle.css"></head><body><div id="${"settings-widget"}-fixture-root"></div><script type="module" src="/${skin}.js"></script></body></html>`, { headers: { "content-type": "text/html" } });
+    if (url.pathname === "/classic.js") return new Response(fixtures.get(url.pathname.slice(1, -3)), { headers: { "content-type": "text/javascript" } });
     if (!url.pathname.startsWith("/static/") || url.pathname.includes("..")) return new Response("not found", { status: 404 });
     try { return new Response(await readFile(join(runtimeRoot, "web/static", url.pathname.slice(8))), { headers: { "content-type": url.pathname.endsWith(".css") ? "text/css" : "text/javascript" } }); }
     catch { return new Response("not found", { status: 404 }); }
@@ -37,10 +35,10 @@ beforeAll(async () => { if (enabled) browsers.set("chromium", await chromium.lau
 beforeAll(async () => { if (enabled) browsers.set("webkit", await webkit.launch({ headless: true })); });
 afterAll(async () => { for (const browser of browsers.values()) await browser.close(); browsers.clear(); server?.stop(true); });
 
-async function open(engine: "chromium" | "webkit", skin: "classic" | "visual", width: number, legacyModel = ""): Promise<Page> {
+async function open(engine: "chromium" | "webkit", skin: "classic", width: number, legacyModel = ""): Promise<Page> {
   const page = await browsers.get(engine)!.newPage({ viewport: { width, height: 760 }, hasTouch: width <= 520, colorScheme: "dark" });
   await page.goto(`${baseUrl}/${skin}?section=compaction&width=${Math.min(width - 32, 1100)}&height=700&compaction_model=${encodeURIComponent(legacyModel)}`, { waitUntil: "networkidle" });
-  const root = skin === "classic" ? ".settings-content" : ".settings-panel__content";
+  const root = ".settings-content";
   await page.locator(root).waitFor({ state: "visible" });
   await page.evaluate(() => {
     const prior = window.fetch.bind(window); (window as any).__compactionRequests = [];
@@ -53,15 +51,15 @@ async function open(engine: "chromium" | "webkit", skin: "classic" | "visual", w
   return page;
 }
 
-function controls(page: Page, skin: "classic" | "visual") {
-  const root = page.locator(skin === "classic" ? ".settings-content" : ".settings-panel__content");
-  const row = root.locator(skin === "classic" ? ".settings-row" : ".settings-panel__field").filter({ has: page.locator("label", { hasText: "Enable automatic compaction" }) });
+function controls(page: Page, _skin) {
+  const root = page.locator(".settings-content");
+  const row = root.locator(".settings-row").filter({ has: page.locator("label", { hasText: "Enable automatic compaction" }) });
   return { root, row, toggle: row.locator('input[type="checkbox"]') };
 }
 async function waitSaves(page: Page, count: number) {
   await page.waitForFunction(n => (window as any).__compactionRequests.filter((r: any) => r.path === "/agent/settings/compaction" && r.method === "POST").length === n, count);
 }
-async function assertNativeOnly(page: Page, skin: "classic" | "visual") {
+async function assertNativeOnly(page: Page, skin: "classic") {
   const { root } = controls(page, skin);
   expect(await root.locator("select").count()).toBe(0);
   expect(await root.locator("#compactionModel,.compaction-model-probe-result,.compaction-latency-estimate").count()).toBe(0);
@@ -74,7 +72,7 @@ async function assertNativeOnly(page: Page, skin: "classic" | "visual") {
   }
 }
 
-for (const engine of ["chromium", "webkit"] as const) for (const skin of ["classic", "visual"] as const) {
+for (const engine of ["chromium", "webkit"] as const) for (const skin of ["classic"] as const) {
   browserTest(`${engine}/${skin}: desktop compaction is keyboard-operable and never offers a provider probe`, async () => {
     const page = await open(engine, skin, 1200);
     try {

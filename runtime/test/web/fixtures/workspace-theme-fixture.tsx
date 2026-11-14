@@ -1,10 +1,8 @@
-import { initTheme, selectLocalTheme } from "../../../web/src/ui/theme";
+import { initTheme } from "../../../web/src/ui/theme";
+import { selectLocalTheme } from './select-theme.js';
 import { WEB_THEME_PRESETS } from "../../../src/core/ui-theme-catalogue";
 import { workspaceChartColor } from "../../../web/src/ui/workspace-chart-colors";
-const skin =
-  new URLSearchParams(location.search).get("skin") === "visual"
-    ? "visual"
-    : "classic";
+
 const file = (name: string, path: string, size: number) => ({
   name,
   path,
@@ -91,10 +89,10 @@ window.fetch = (async (input) => {
 }) as typeof fetch;
 localStorage.setItem("piclaw_system_meters_collapsed", "false");
 localStorage.setItem("workspaceFolderPreviewDepth", "3");
-initTheme({ skin });
+initTheme();
 selectLocalTheme("synthwave-84-full");
 const host = document.getElementById("explorer-host")!;
-if (skin === "classic") {
+{
   const { html, render } = await import("../../../web/src/vendor/preact-htm");
   const { WorkspaceExplorer } =
     await import("../../../web/src/components/workspace-explorer");
@@ -107,26 +105,6 @@ if (skin === "classic") {
     />`,
     host,
   );
-} else {
-  const { h, render } = await import("preact");
-  const { useState } = await import("preact/hooks");
-  const { FileTree } =
-    await import("../../../web/static/visual/frontend/src/components/FileTree");
-  const { FolderPreview } =
-    await import("../../../web/static/visual/frontend/src/panels/workspace/FolderPreview");
-  function Explorer() {
-    const [node, setNode] = useState(src);
-    return h(
-      "div",
-      {},
-      h(FileTree, { onFileSelect: setNode }),
-      h(FolderPreview, { node, onMutate: () => {} }),
-    );
-  }
-  render(h(Explorer, {}), host);
-  const { SystemStats } =
-    await import("../../../web/static/visual/frontend/src/components/SystemStats");
-  render(h(SystemStats, { stats: metrics, isStale: false }), document.getElementById("visual-stats")!);
 }
 const { html, render } = await import("../../../web/src/vendor/preact-htm");
 const { SystemMetersHud } =
@@ -135,16 +113,12 @@ render(
   html`<${SystemMetersHud} mode="overlay" />`,
   document.getElementById("meter-host")!,
 );
-const { importVSCodeTheme, applyTheme, resetTheme } =
-  await import("../../../web/static/visual/frontend/src/utils/theme-importer");
+
 Object.assign(window, {
   workspaceTheme: {
     selectLocalTheme,
     presets: WEB_THEME_PRESETS,
     calls,
     workspaceChartColor,
-    importVSCodeTheme,
-    applyTheme,
-    resetTheme,
   },
 });

@@ -1,12 +1,11 @@
 import { WEB_THEME_PRESETS, normaliseWebThemeId, type ThemePalette, type ThemePreset, type ThemeMode } from '../../../src/core/ui-theme-catalogue.js';
-import { paletteVariables, visualDefaultPalette, themeForeground } from './theme-palette.js';
+import { paletteVariables, themeForeground } from './theme-palette.js';
 import { applyThemeChrome, watchThemeChrome } from './theme-chrome.js';
 import { getLocalStorageItem, setLocalStorageItem } from '../utils/storage.js';
 
 const THEME_STORAGE_KEY = 'piclaw_theme';
 const TINT_STORAGE_KEY = 'piclaw_tint';
 const MODE_STORAGE_KEY = 'piclaw_theme_mode';
-let themeSkin: 'classic' | 'visual' = 'classic';
 let appliedKeys = new Set<string>();
 
 const DEFAULT_LIGHT = WEB_THEME_PRESETS[0].light!;
@@ -121,7 +120,6 @@ function resolveModeForPreset(preset: ThemePreset): ThemeMode {
 
 function resolvePalette(themeName: string, mode: ThemeMode): ThemePalette {
     const preset = resolvePreset(themeName);
-    if (themeName === 'default' && themeSkin === 'visual') return visualDefaultPalette(mode);
     if (mode === 'dark' && preset.dark) return preset.dark;
     if (mode === 'light' && preset.light) return preset.light;
     return preset.dark || preset.light || DEFAULT_LIGHT;
@@ -283,14 +281,12 @@ function applyThemeState(nextTheme: Partial<ThemeState>, options: { persist?: bo
 }
 
 function handleSystemThemeChange() {
-    if (document.documentElement.dataset.customTheme === 'true') return;
     const preset = resolvePreset(currentTheme.theme);
     if (preset.mode !== 'auto') return;
     applyThemeState(currentTheme, { persist: false });
 }
 
 export function reapplyStoredTheme() {
-    if (typeof document !== 'undefined' && document.documentElement.dataset.customTheme === 'true') return;
     if (typeof window === 'undefined') return;
 
     const storedTheme = normalizeThemeName(getLocalStorageItem(THEME_STORAGE_KEY) || 'default');
@@ -305,8 +301,7 @@ function updateThemeVisibility() {
     document.documentElement.dataset.themeMotion = document.hidden ? 'paused' : 'running';
 }
 
-export function initTheme(options: {skin?: 'classic' | 'visual'} = {}) {
-    if (options.skin) themeSkin = options.skin;
+export function initTheme() {
     if (typeof window === 'undefined') return () => {};
 
     reapplyStoredTheme();
@@ -346,7 +341,6 @@ export function applyThemeFromEvent(payload: any) {
     const hasTintValue = payload.tint !== undefined;
     if (!hasThemeValue && !hasTintValue) return;
 
-    const customOverride = document.documentElement.dataset.customTheme === 'true';
     const currentChatJid = resolveCurrentChatJid();
     const eventChatJid = payload.chat_jid || payload.chatJid || null;
     const theme = payload.theme ?? payload.name ?? payload.colorTheme;
@@ -355,7 +349,7 @@ export function applyThemeFromEvent(payload: any) {
     // /theme and /tint are now instance-wide settings persisted server-side.
     // Apply immediately for global events and for chat-affined echoes that
     // target the currently viewed chat.
-    if (!customOverride && (!eventChatJid || eventChatJid === currentChatJid)) {
+    if (!eventChatJid || eventChatJid === currentChatJid) {
         applyThemeState({ theme: theme || 'default', tint }, { persist: false });
     }
 
@@ -375,7 +369,3 @@ export function setThemeModePreference(mode: 'auto' | 'light' | 'dark'): void {
     reapplyStoredTheme();
 }
 export function getThemeModePreference(): string {return getLocalStorageItem(MODE_STORAGE_KEY) || 'auto';}
-export function selectLocalTheme(id:string):void {
-    if (typeof document !== 'undefined') { document.documentElement.dataset.customTheme='false'; document.getElementById('piclaw-theme-override')?.remove(); }
-    applyThemeState({theme:id,tint:null});
-}

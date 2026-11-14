@@ -28,10 +28,8 @@ async function authenticate(page: import("playwright").Page): Promise<void> {
   await page.context().addCookies([{ name: "piclaw_session", value: token, domain: url.hostname, path: "/" }]);
 }
 
-async function waitForShell(page: import("playwright").Page, skin: "classic" | "visual"): Promise<void> {
-  const selector = skin === "classic"
-    ? ".compose-box, .compose-editor, [data-testid=compose-box]"
-    : ".chat-panel, .message-list, textarea";
+async function waitForShell(page: import("playwright").Page, skin: "classic"): Promise<void> {
+  const selector = ".compose-box, .compose-editor, [data-testid=compose-box]";
   await page.waitForSelector(selector, { timeout: 60_000 });
   await page.waitForTimeout(500);
 }
@@ -52,26 +50,6 @@ async function captureClassic(context: import("playwright").BrowserContext): Pro
   }
 }
 
-async function captureVisual(context: import("playwright").BrowserContext): Promise<void> {
-  const page = await context.newPage();
-  try {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`${baseURL.replace(/\/+$/, "")}/static/visual/index.html`, { waitUntil: "domcontentloaded" });
-    await waitForShell(page, "visual");
-    await page.screenshot({ path: join(outputDir, "visual-timeline.png"), fullPage: false, animations: "disabled" });
-
-    await page.evaluate(() => {
-      localStorage.setItem("piclaw-active-panel", "settings");
-      localStorage.setItem("piclaw-settings-category", "workspace");
-    });
-    await page.reload({ waitUntil: "domcontentloaded" });
-    await page.locator(".settings-panel").waitFor({ state: "visible", timeout: 10_000 });
-    await page.screenshot({ path: join(outputDir, "visual-settings.png"), fullPage: false, animations: "disabled" });
-  } finally {
-    await page.close();
-  }
-}
-
 const browser = await chromium.launch({ headless: true });
 try {
   const context = await browser.newContext();
@@ -79,7 +57,6 @@ try {
     const page = await context.newPage();
     try { await authenticate(page); } finally { await page.close(); }
     await captureClassic(context);
-    await captureVisual(context);
   } finally {
     await context.close();
   }

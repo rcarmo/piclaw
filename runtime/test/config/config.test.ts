@@ -448,7 +448,6 @@ test("config and env fallback chains handle booleans and session settings", () =
       trustProxy: false,
       composeUploadLimitMb: 256,
       workspaceUploadLimitMb: 256,
-      uiMode: "classic",
     });
   } finally {
     ws.cleanup();
@@ -744,7 +743,6 @@ test("web runtime config getter groups auth/session/proxy settings", () => {
       trustProxy: false,
       composeUploadLimitMb: 256,
       workspaceUploadLimitMb: 256,
-      uiMode: "classic",
     });
     expect(snapshot["call:getWebRuntimeConfig"]).toEqual(snapshot.WEB_RUNTIME_CONFIG);
   } finally {
@@ -861,7 +859,6 @@ test("in-process module init handles deprecated env warnings, argv parsing, and 
       trustProxy: false,
       composeUploadLimitMb: 256,
       workspaceUploadLimitMb: 256,
-      uiMode: "classic",
     });
     expect(snapshot["same:getWebRuntimeConfig:WEB_RUNTIME_CONFIG"]).toBe(true);
     expect(snapshot["call:getWebRuntimeConfig"]).toEqual(snapshot.WEB_RUNTIME_CONFIG);

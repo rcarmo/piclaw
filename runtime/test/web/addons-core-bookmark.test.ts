@@ -5,7 +5,6 @@ import { join } from 'node:path';
 const runtimeRoot = join(import.meta.dir, '../..');
 const source = readFileSync(join(runtimeRoot, 'web/src/components/settings/addons.ts'), 'utf8');
 const classicCss = readFileSync(join(runtimeRoot, 'web/static/classic/css/settings.css'), 'utf8');
-const visualCss = readFileSync(join(runtimeRoot, 'web/static/visual/css/settings.css'), 'utf8');
 
 function cssRuleBody(css: string, selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -21,7 +20,7 @@ test('Add-Ons settings detects core tags and renders an accessible compact bookm
   expect(source).toContain('class="settings-addon-core-bookmark-highlight"');
 });
 
-for (const [theme, css] of [['classic', classicCss], ['visual', visualCss]] as const) {
+for (const [theme, css] of [['classic', classicCss]] as const) {
   test(`${theme} settings stylesheet reserves compact bookmark space`, () => {
     const card = cssRuleBody(css, '.settings-addon-card');
     const coreHeader = cssRuleBody(css, '.settings-addon-card.core .settings-addon-card-header');

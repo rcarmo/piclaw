@@ -1,7 +1,5 @@
 import { html, render } from '../../../web/src/vendor/preact-htm.js';
 import { FloatingWidgetPane } from '../../../web/src/components/floating-widget-pane.js';
-import { WidgetPane } from '../../../web/static/visual/frontend/src/components/WidgetPane';
-import { h, render as renderVisual } from 'preact';
 
 const content = `<iframe src="/child"></iframe><script>
 window.result = {};
@@ -27,14 +25,12 @@ addEventListener('securitypolicyviolation', event => violations.push(event.effec
 (window as any).widgetEvents = [];
 window.addEventListener('piclaw:widget-submission', e => (window as any).widgetEvents.push({ kind: 'widget.submit', payload: (e as CustomEvent).detail }));
 window.addEventListener('piclaw:widget-close', () => (window as any).widgetEvents.push({ kind: 'widget.close' }));
-const mode = new URL(location.href).searchParams.get('mode');
+
 const source = new URL(location.href).searchParams.get('static') ? 'message' : 'live';
 const styledContent='<link rel="stylesheet" href="/fixture.css"><div id="styled">Styled</div>'+content;
 const widget = { title: 'Runtime fixture', widgetId: 'runtime-fixture', source, status: 'final', artifact: { kind: 'html', html: styledContent } };
 function mount() {
-  if (mode === 'visual') {
-    renderVisual(h(WidgetPane, { tabMode: true, widgetHtml: styledContent, widgetTitle: 'Runtime fixture', widgetSource: source }), document.getElementById('app')!);
-  } else {
+  {
     render(html`<${FloatingWidgetPane} widget=${widget} onClose=${() => {}} onWidgetEvent=${(data: any) => (window as any).widgetEvents.push(data)} />`, document.getElementById('app')!);
   }
 }

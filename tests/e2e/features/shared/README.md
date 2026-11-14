@@ -1,8 +1,8 @@
 # Shared implemented UX contracts
 
-Import `tests/e2e/features/shared/**/*.feature` together with either the Classic or Visual root. Shared scenarios have one stable ID across both skins. This root contains eight SVG scenarios/outlines and nineteen example rows.
+Import `tests/e2e/features/shared/**/*.feature` together with the Classic root. Shared scenarios have one stable ID in Classic. This root contains eight SVG scenarios/outlines and nineteen example rows.
 
-[SVG images](svg-images.feature) are implemented by the same browser helper in both renderers. `runtime/test/web/svg-images.optional.test.ts` exercises production rendering and copy handlers in Chromium and WebKit; CI runs both. [Evidence and coverage](../canonical/audit/svg-images.md) map scenarios to direct assertions. Gherkin import still requires step bindings; source parsing alone is not implementation evidence.
+[SVG images](svg-images.feature) are implemented by the same browser helper in the renderer. `runtime/test/web/svg-images.optional.test.ts` exercises production rendering and copy handlers in Chromium and WebKit; CI runs both. [Evidence and coverage](../canonical/audit/svg-images.md) map scenarios to direct assertions. Gherkin import still requires step bindings; source parsing alone is not implementation evidence.
 
 ## SVG subset and limits
 

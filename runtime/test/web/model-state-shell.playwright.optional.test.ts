@@ -11,7 +11,7 @@ beforeAll(() => {
   if (!enabled) return;
   server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
     const url = new URL(req.url);
-    if (url.pathname === "/") return new Response(Bun.file(join(webRoot, `static/${url.searchParams.get("skin") === "visual" ? "visual" : "classic"}/index.html`)), { headers: { "content-type": "text/html" } });
+    if (url.pathname === "/") return new Response(Bun.file(join(webRoot, `static/${"classic"}/index.html`)), { headers: { "content-type": "text/html" } });
     if (url.pathname === "/editor-vendor/codemirror.js") return new Response(Bun.file(resolve(webRoot, "../extensions/viewers/editor/vendor/codemirror.js")), { headers: { "content-type": "text/javascript" } });
     if (url.pathname.startsWith("/static/")) {
       const path = resolve(webRoot, url.pathname.slice(1));
@@ -23,7 +23,7 @@ beforeAll(() => {
 afterAll(() => server?.stop(true));
 
 for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
-  for (const skin of ["classic", "visual"]) browserTest(`${engineName}: ${skin} shipped shell hydrates after forced reload and follows status updates`, async () => {
+  for (const skin of ["classic"]) browserTest(`${engineName}: ${skin} shipped shell hydrates after forced reload and follows status updates`, async () => {
     const browser = await engine.launch({ headless: true });
     const context = await browser.newContext({ viewport: { width: 1024, height: 768 }, reducedMotion: "reduce", serviceWorkers: "block" });
     const page = await context.newPage();
@@ -93,15 +93,15 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       else { unhandled.add(url.pathname); return route.fulfill({ status: 404, json: { error: "Unhandled fixture route" } }); }
       return route.fulfill({ json: body });
     });
-    const badge = page.locator(skin === "classic" ? ".compose-model-hint-btn" : ".model-badge").filter({ visible: true }).first();
-    const ring = page.locator(skin === "classic" ? ".compose-context-pie" : ".context-ring").filter({ visible: true }).first();
+    const badge = page.locator(".compose-model-hint-btn").filter({ visible: true }).first();
+    const ring = page.locator(".compose-context-pie").filter({ visible: true }).first();
     const waitModel = async (value: string) => {
-      await page.waitForFunction(({ skin, value }) => Array.from(document.querySelectorAll(skin === "classic" ? ".compose-model-hint-btn" : ".model-badge")).some(el => el.textContent?.includes(value)), { skin, value }, { timeout: 10000 });
+      await page.waitForFunction(({ _skin, value }) => Array.from(document.querySelectorAll(".compose-model-hint-btn")).some(el => el.textContent?.includes(value)), { skin, value }, { timeout: 10000 });
       expect(await badge.innerText()).toContain(value);
     };
     const waitContext = async (value: number) => {
-      const label = `${value / 1000}${skin === "classic" ? "K" : "k"}`;
-      await page.waitForFunction(({ skin, label }) => Array.from(document.querySelectorAll(skin === "classic" ? ".compose-context-pie" : ".context-ring")).some(el => el.getAttribute("title")?.includes(`Context: ${label} /`)), { skin, label }, { timeout: 10000 });
+      const label = `${value / 1000}${"K"}`;
+      await page.waitForFunction(({ _skin, label }) => Array.from(document.querySelectorAll(".compose-context-pie")).some(el => el.getAttribute("title")?.includes(`Context: ${label} /`)), { skin, label }, { timeout: 10000 });
       expect(await ring.getAttribute("title")).toContain(`Context: ${label} /`);
     };
     const emit = (kind: string, payload: unknown) => page.evaluate(({ kind, payload }) => (window as any).emitShellEvent(kind, payload), { kind, payload });
@@ -124,7 +124,7 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       await emit("agent_status", { chat_jid: chatJid, type: "context_usage", context_usage: contextPayload() });
       await waitContext(3000);
       await emit("agent_status", { chat_jid: "web:other", type: "context_usage", context_usage: { ...contextPayload(), tokens: 9999 } });
-      expect(await ring.getAttribute("title")).toContain(skin === "classic" ? "Context: 3K /" : "Context: 3k /");
+      expect(await ring.getAttribute("title")).toContain("Context: 3K /");
       // A reconnect must hydrate model data even without a model_changed event.
       // Visual's setup check legitimately reads the catalogue during boot.
       const cataloguesBeforeReconnect = requests.filter(request => request === "GET /agent/models").length;

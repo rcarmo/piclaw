@@ -36,7 +36,7 @@ beforeAll(async () => {
       const file = resolve(webRoot, url.pathname.slice(1));
       if (file.startsWith(webRoot + '/static/')) return new Response(Bun.file(file));
     }
-    if (url.pathname === '/') return new Response(`<!doctype html><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/static/${url.searchParams.get('skin') === 'visual' ? 'visual' : 'classic'}/css/styles.css"><script type="importmap">{"imports":{"#editor-vendor/codemirror":"/editor-vendor/codemirror.js"}}</script><main id="app"></main><script type="module" src="/fixture.js"></script>`, { headers: { 'Content-Type': 'text/html' } });
+    if (url.pathname === '/') return new Response(`<!doctype html><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/static/${'classic'}/css/styles.css"><script type="importmap">{"imports":{"#editor-vendor/codemirror":"/editor-vendor/codemirror.js"}}</script><main id="app"></main><script type="module" src="/fixture.js"></script>`, { headers: { 'Content-Type': 'text/html' } });
     return new Response(null, { status: 404 });
   } });
   const options = { env: { ...process.env, LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8' } };
@@ -46,7 +46,7 @@ beforeAll(async () => {
 
 afterAll(async () => { for (const browser of browsers.values()) await browser.close(); server?.stop(true); });
 
-for (const engine of ['chromium', 'webkit']) for (const skin of ['classic', 'visual']) for (const activation of ['keyboard', 'touch']) {
+for (const engine of ['chromium', 'webkit']) for (const skin of ['classic']) for (const activation of ['keyboard', 'touch']) {
   browserTest(`${engine} ${skin} ${activation}: stored executable filename survives stale or missing message labels`, async () => {
     const context = await browsers.get(engine)!.newContext({ acceptDownloads: true, viewport: { width: activation === 'touch' ? 390 : 1100, height: 780 }, hasTouch: activation === 'touch' });
     try {
@@ -63,7 +63,7 @@ for (const engine of ['chromium', 'webkit']) for (const skin of ['classic', 'vis
         if (scenario.label !== null) params.set('label', scenario.label);
         await page.goto(`${origin}/?${params}`);
         const received = page.waitForEvent('download');
-        const trigger = skin === 'classic' ? page.locator('.file-attachment-main') : page.getByTitle('Download', { exact: true });
+        const trigger = page.locator('.file-attachment-main');
         if (activation === 'touch') await trigger.tap();
         else { await trigger.focus(); await page.keyboard.press('Enter'); }
         const download = await received;

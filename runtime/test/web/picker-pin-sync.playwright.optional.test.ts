@@ -106,7 +106,7 @@ beforeAll(async () => {
           Bun.file(join(import.meta.dir, "../../web", u.pathname)),
         );
       const skin =
-        u.searchParams.get("skin") === "visual" ? "visual" : "classic";
+        "classic";
       return new Response(
         `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/${skin}/css/styles.css"><style>body{padding:16px}#app{position:relative;min-height:400px}.compose-model-popup{position:relative!important;bottom:auto!important;top:auto!important}.session-pill__dropdown{position:relative;bottom:auto;top:auto}</style></head><body><div id="errors" role="alert"></div><pre id="state"></pre><div id="app"></div><script type="module" src="/fixture.js"></script></body></html>`,
         { headers: { "Content-Type": "text/html" } },
@@ -176,8 +176,8 @@ for (const engine of ["chromium", "webkit"])
         await pa.waitForFunction(() =>
           (window as any).pinFixture?.state().models.includes("test/legacy"),
         );
-        await pb.goto(server.url + "?skin=visual");
-        await po.goto(server.url + "?skin=visual");
+        await pb.goto(server.url + "?skin=classic");
+        await po.goto(server.url + "?skin=classic");
         await pb.waitForFunction(() =>
           (window as any).pinFixture?.state().sessions.includes("web:legacy"),
         );
@@ -358,7 +358,7 @@ for (const engine of ['chromium','webkit']) browserTest(`${engine}: stopped sync
 },10000);
 
 for (const engine of ["chromium", "webkit"])
-  for (const skin of ["classic", "visual"])
+  for (const skin of ["classic"])
     browserTest(`${engine}/${skin}: restart reads stay silent, retain pins and recover on reconnect`, async () => {
       const owner = `restart-${engine}-${skin}`;
       const c = await context(engine, owner, true), p = await c.newPage();
@@ -424,7 +424,7 @@ for (const engine of ["chromium", "webkit"])
       } finally { await c.close(); }
     }, 20000);
 
-for (const skin of ["classic", "visual"])
+for (const skin of ["classic"])
   browserTest(`${skin}: passive legacy import failure stays silent and retries without losing pins`, async () => {
     const owner = `import-restart-${skin}`, c = await context("chromium", owner, true), p = await c.newPage();
     p.setDefaultTimeout(5000);

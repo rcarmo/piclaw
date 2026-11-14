@@ -1,9 +1,8 @@
 #!/usr/bin/env bun
 
 import { chromium } from "playwright";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 
 const runtimeRoot = join(import.meta.dir, "..");
 const args = process.argv.slice(2);
@@ -16,17 +15,6 @@ const phase = option("--phase") || "current";
 if (!/^[a-z0-9-]+$/i.test(phase)) throw new Error(`Invalid --phase: ${phase}`);
 await mkdir(outputDir, { recursive: true });
 
-const buildDir = await mkdtemp(join(tmpdir(), "piclaw-settings-row-alignment-"));
-const visualBundle = join(buildDir, "visual-compaction.js");
-const build = Bun.spawn([
-  "bun", "build", "test/web/fixtures/visual-compaction-settings-fixture.tsx",
-  "--target=browser", "--format=esm", "--jsx=automatic", "--jsx-import-source=preact",
-  "--outfile", visualBundle,
-], { cwd: runtimeRoot, stdout: "pipe", stderr: "pipe" });
-const [buildExit, buildError] = await Promise.all([build.exited, new Response(build.stderr).text()]);
-if (buildExit !== 0) throw new Error(buildError || "visual Compaction fixture build failed");
-const visualFixture = await readFile(visualBundle);
-
 const server = Bun.serve({
   port: 0,
   async fetch(request) {
@@ -34,10 +22,6 @@ const server = Bun.serve({
     if (url.pathname === "/classic") {
       return new Response(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/classic/dist/app.bundle.css"></head><body><div id="settings-widget-fixture-root"></div><script type="module" src="/static/classic/dist/settings-widget-fixture.bundle.js"></script></body></html>`, { headers: { "content-type": "text/html" } });
     }
-    if (url.pathname === "/visual") {
-      return new Response(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/visual/dist/app.bundle.css"></head><body><div id="visual-compaction-settings-fixture-root"></div><script type="module" src="/visual-compaction.js"></script></body></html>`, { headers: { "content-type": "text/html" } });
-    }
-    if (url.pathname === "/visual-compaction.js") return new Response(visualFixture, { headers: { "content-type": "text/javascript" } });
     if (!url.pathname.startsWith("/static/") || url.pathname.includes("..")) return new Response("not found", { status: 404 });
     try {
       const body = await readFile(join(runtimeRoot, "web/static", url.pathname.slice("/static/".length)));
@@ -48,9 +32,9 @@ const server = Bun.serve({
 
 function round(value: number): number { return Math.round(value * 10) / 10; }
 
-async function measure(page: import("playwright").Page, skin: "classic" | "visual") {
-  return page.evaluate((kind) => {
-    const rows = Array.from(document.querySelectorAll(kind === "classic" ? ".settings-section .settings-row" : ".settings-panel__section > .settings-panel__field")) as HTMLElement[];
+async function measure(page: import("playwright").Page, skin: "classic") {
+  return page.evaluate((_kind) => {
+    const rows = Array.from(document.querySelectorAll(".settings-section .settings-row")) as HTMLElement[];
     const rect = (element: HTMLElement | null) => {
       if (!element) return null;
       const value = element.getBoundingClientRect();
@@ -76,20 +60,16 @@ async function measure(page: import("playwright").Page, skin: "classic" | "visua
 const browser = await chromium.launch({ headless: true });
 const captures: any[] = [];
 try {
-  for (const skin of ["classic", "visual"] as const) {
+  for (const skin of ["classic"] as const) {
     for (const viewport of [{ width: 1366, height: 820, label: "desktop" }, { width: 820, height: 760, label: "tablet" }, { width: 520, height: 780, label: "phone-wide" }, { width: 390, height: 844, label: "phone" }]) {
       const page = await browser.newPage({ viewport, colorScheme: "dark" });
-      if (skin === "classic") {
+
         const dialogWidth = Math.max(360, Math.min(viewport.width - 32, 1120));
         const dialogHeight = Math.max(420, Math.min(viewport.height - 32, 760));
         await page.goto(`http://127.0.0.1:${server.port}/classic?section=compaction&width=${dialogWidth}&height=${dialogHeight}`, { waitUntil: "networkidle" });
         await page.waitForSelector(".settings-section .settings-row", { state: "visible" });
-      } else {
-        await page.goto(`http://127.0.0.1:${server.port}/visual`, { waitUntil: "networkidle" });
-        await page.waitForSelector(".settings-panel__section > .settings-panel__field", { state: "visible" });
-      }
       await page.waitForTimeout(100);
-      const root = page.locator(skin === "classic" ? ".settings-dialog" : ".settings-panel");
+      const root = page.locator(".settings-dialog");
       const screenshot = `${phase}-${skin}-${viewport.label}-${viewport.width}x${viewport.height}.png`;
       await root.screenshot({ path: join(outputDir, screenshot) });
       const rows = await measure(page, skin);
@@ -107,7 +87,6 @@ try {
 } finally {
   await browser.close();
   server.stop(true);
-  await rm(buildDir, { recursive: true, force: true });
 }
 await writeFile(join(outputDir, `${phase}-metrics.json`), JSON.stringify({ phase, captures }, null, 2));
 console.log(JSON.stringify(captures.map(({ phase, skin, label, width, controlStartSpread, helpStartSpread, screenshot }) => ({ phase, skin, label, width, controlStartSpread, helpStartSpread, screenshot })), null, 2));

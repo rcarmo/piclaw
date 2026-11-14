@@ -6,7 +6,7 @@ const web = join(import.meta.dir, '../../web');
 const source = (path: string) => readFileSync(join(web, path), 'utf8');
 
 test('General no longer owns authentication, API tokens or recovery saves', () => {
-  for (const path of ['src/components/settings/general.ts', 'static/visual/frontend/src/panels/settings/GeneralSection.tsx']) {
+  for (const path of ['src/components/settings/general.ts']) {
     const text = source(path);
     for (const field of ['automaticRecovery', 'instanceTotp', 'widgetToken', 'totpSetup']) expect(text).not.toContain(field);
     expect(text).not.toContain('composeUploadLimitMb');
@@ -15,7 +15,7 @@ test('General no longer owns authentication, API tokens or recovery saves', () =
 });
 
 test('Authentication retains TOTP display and passkeys without unsupported TOTP mutation', () => {
-  for (const path of ['src/components/settings/authentication.ts', 'static/visual/frontend/src/panels/settings/AuthenticationSection.tsx']) {
+  for (const path of ['src/components/settings/authentication.ts']) {
     const text = source(path);
     expect(text).toContain('instanceTotp');
     expect(text).toContain('PasskeySettings');
@@ -25,8 +25,8 @@ test('Authentication retains TOTP display and passkeys without unsupported TOTP 
   }
 });
 
-test('embedded API access uses the existing token rotation endpoint in both skins', () => {
-  for (const path of ['src/components/settings/api-access.ts', 'static/visual/frontend/src/panels/settings/ApiAccessSection.tsx']) {
+test('embedded API access uses the existing token rotation endpoint in Classic', () => {
+  for (const path of ['src/components/settings/api-access.ts']) {
     const text = source(path);
     expect(text).toContain('/agent/settings/widget-token/regenerate');
     expect(text).toContain('GET /api/state');
@@ -42,14 +42,7 @@ test('Authentication and Sessions names and IDs remain unchanged and API access 
   expect(classic).not.toContain("case 'api-access'");
   expect(classic).not.toContain("id: 'api-access'");
   expect(source('src/components/settings/authentication.ts')).toContain('<${ApiAccessSection}');
-  const visual = 'static/visual/frontend/src/panels/';
-  expect(source(visual + 'SettingsPanel.tsx')).not.toContain('import "./settings/ApiAccessSection"');
-  expect(source(visual + 'settings/AuthenticationSection.tsx')).toContain('<ApiAccessSection {...props} />');
-  expect(source(visual + 'settings/ApiAccessSection.tsx')).not.toContain('registerSettingsPane');
-  expect(source(visual + 'SettingsPanel.tsx')).toContain('key={activePane.id}');
-  for (const name of ['Authentication', 'Sessions']) {
-    expect(source(visual + `settings/${name}Section.tsx`)).toContain(`label: "${name}"`);
-  }
+
 });
 
 test('old API access section links resolve to Authentication without changing other IDs', () => {

@@ -9,20 +9,20 @@ const runtimeRoot = join(import.meta.dir, "../..");
 let browser: Browser | null = null;
 let server: ReturnType<typeof Bun.serve> | null = null;
 let baseUrl = "";
-let visualFixture = "";
+
 let classicFixture = "";
 let buildDir = "";
 
 beforeAll(async () => {
   if (process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS !== "1") return;
   buildDir = await mkdtemp(join(tmpdir(), "piclaw-settings-row-alignment-"));
-  for (const skin of ['visual', 'classic']) {
+  for (const skin of ['classic']) {
     const outfile = join(buildDir, skin + '-compaction.js');
-    const entry = skin === 'visual' ? 'test/web/fixtures/visual-compaction-settings-fixture.tsx' : 'web/src/dev/settings-widget-fixture.ts';
+    const entry = 'web/src/dev/settings-widget-fixture.ts';
     const build = Bun.spawn(['bun','build',entry,'--target=browser','--format=esm','--jsx=automatic','--jsx-import-source=preact','--external','#editor-vendor/codemirror','--outfile',outfile], {cwd:runtimeRoot,stdout:'pipe',stderr:'pipe'});
     const [exitCode, stderr] = await Promise.all([build.exited,new Response(build.stderr).text()]);
     if(exitCode!==0)throw Error(stderr || skin + ' Compaction fixture build failed');
-    if(skin==='visual')visualFixture=await readFile(outfile,'utf8');else classicFixture=await readFile(outfile,'utf8');
+    classicFixture=await readFile(outfile,'utf8');
   }
   browser = await chromium.launch({ headless: true });
   server = Bun.serve({
@@ -30,9 +30,7 @@ beforeAll(async () => {
     async fetch(request) {
       const url = new URL(request.url);
       if (url.pathname === "/classic") return new Response(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/classic/dist/app.bundle.css"></head><body><div id="settings-widget-fixture-root"></div><script type="module" src="/classic-compaction.js"></script></body></html>`, { headers: { "content-type": "text/html" } });
-      if (url.pathname === "/visual") return new Response(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/visual/dist/app.bundle.css"></head><body><div id="visual-compaction-settings-fixture-root"></div><script type="module" src="/visual-compaction.js"></script></body></html>`, { headers: { "content-type": "text/html" } });
       if (url.pathname === "/classic-compaction.js") return new Response(classicFixture, { headers: { "content-type": "text/javascript" } });
-      if (url.pathname === "/visual-compaction.js") return new Response(visualFixture, { headers: { "content-type": "text/javascript" } });
       if (!url.pathname.startsWith("/static/") || url.pathname.includes("..")) return new Response("not found", { status: 404 });
       try {
         const path = join(runtimeRoot, "web/static", url.pathname.slice("/static/".length));
@@ -52,20 +50,17 @@ afterAll(async () => {
   server = null;
 });
 
-async function openCompaction(skin: "classic" | "visual", width: number, height: number): Promise<Page> {
+async function openCompaction(skin: "classic", width: number, height: number): Promise<Page> {
   if (!browser) throw new Error("browser not started");
   const page = await browser.newPage({ viewport: { width, height }, colorScheme: "dark" });
-  if (skin === "classic") {
+  {
     await page.goto(`${baseUrl}/classic?section=compaction&width=${Math.max(360, Math.min(width - 32, 1120))}&height=${Math.max(420, Math.min(height - 32, 760))}`, { waitUntil: "networkidle" });
     await page.waitForSelector(".settings-dense-row", { state: "visible" });
-  } else {
-    await page.goto(`${baseUrl}/visual`, { waitUntil: "networkidle" });
-    await page.waitForSelector(".settings-panel__dense-row", { state: "visible" });
   }
   return page;
 }
 
-async function geometry(page: Page, skin: "classic" | "visual") {
+async function geometry(page: Page, skin: "classic") {
   return page.evaluate((kind) => {
     const root = document.querySelector(kind === "classic" ? ".settings-content" : ".settings-panel__content") as HTMLElement;
     const rowSelector = kind === "classic" ? ".settings-dense-row" : ".settings-panel__dense-row";
@@ -95,13 +90,13 @@ async function geometry(page: Page, skin: "classic" | "visual") {
 }
 
 for (const width of [1366, 820, 520, 390]) {
-  for (const skin of ["classic", "visual"] as const) {
+  for (const skin of ["classic"] as const) {
     optionalBrowserTest(`${skin} dense Compaction rows align at ${width}px`, async () => {
       const page = await openCompaction(skin, width, width === 390 ? 844 : 760);
       try {
         const metrics = await geometry(page, skin);
         // Native auto + independent local-lite, tool/semantic and watchdog controls.
-        expect(metrics.rowCount).toBe(skin === "classic" ? 9 : 10);
+        expect(metrics.rowCount).toBe(9);
         expect(metrics.controlSpread).toBeLessThanOrEqual(1);
         expect(metrics.helpSpread).toBeLessThanOrEqual(1);
         expect(metrics.clipped).toEqual([]);
@@ -110,11 +105,11 @@ for (const width of [1366, 820, 520, 390]) {
   }
 }
 
-for (const skin of ['classic','visual'] as const) optionalBrowserTest(skin + ' native compaction reads and saves the auto flag by keyboard without retired settings', async()=>{
+for (const skin of ['classic'] as const) optionalBrowserTest(skin + ' native compaction reads and saves the auto flag by keyboard without retired settings', async()=>{
   const page=await openCompaction(skin,820,760);
   try {
-    const root=skin==='classic'?'.settings-content':'.settings-panel__content';
-    const row=page.locator(root+' '+(skin==='classic'?'.settings-row':'.settings-panel__field')).filter({has:page.locator('label',{hasText:'Enable automatic compaction'})});
+    const root='.settings-content';
+    const row=page.locator(root+' '+('.settings-row')).filter({has:page.locator('label',{hasText:'Enable automatic compaction'})});
     const toggle=row.locator('input[type=checkbox]');
     expect(await toggle.isChecked()).toBe(true);
     await page.evaluate(()=>{

@@ -31,7 +31,7 @@ beforeAll(async () => {
         });
       if (u.pathname === "/") {
         const skin =
-          u.searchParams.get("skin") === "visual" ? "visual" : "classic";
+          "classic";
         return new Response(
           `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/${skin}/dist/app.bundle.css"><style>html,body{margin:0;height:auto;overflow:auto}#layout{display:flex;gap:24px;padding:18px;align-items:flex-start}#explorer-host{width:340px;min-width:0;height:790px;border:1px solid var(--border-color);background:var(--bg-secondary)}#meter-host{position:relative;min-width:190px;height:250px}.system-meters-hud-overlay{position:relative;top:0;right:0}.system-meters-row{display:grid;grid-template-columns:34px 56px auto;gap:8px}.system-meters-spark{width:56px;height:16px;overflow:visible}.system-meters-spark path{fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}.system-meters-card{padding:10px;border:1px solid var(--border-color);background:var(--bg-primary);color:var(--text-primary)}.workspace-explorer{height:100%}#explorer-host .workspace-sidebar{display:flex!important;position:relative!important;width:100%!important;height:100%!important}#explorer-host .workspace-row,#explorer-host .file-tree__item{transition:none!important}#visual-stats{max-width:190px}@media(max-width:600px){#layout{flex-direction:column;padding:12px}#explorer-host{width:100%;height:670px}#meter-host{width:100%}}</style></head><body><div id="layout"><div id="explorer-host"></div><div><div id="meter-host"></div><div id="visual-stats"></div></div></div><script type="module" src="/fixture.js"></script></body></html>`,
           { headers: { "content-type": "text/html" } },
@@ -52,7 +52,7 @@ afterAll(async () => {
   server?.stop(true);
 });
 for (const engine of ["chromium", "webkit"])
-  for (const skin of ["classic", "visual"])
+  for (const skin of ["classic"])
     for (const width of [390, 1100])
       browserTest(
         `${engine} ${skin} explorer/chart/meters follow palettes at ${width}`,
@@ -75,7 +75,7 @@ for (const engine of ["chromium", "webkit"])
             await page.waitForFunction(() =>
               Boolean((window as any).workspaceTheme),
             );
-            if (skin === "classic") {
+            {
               await page.locator('[data-item-path="src/"]').click();
               // Folder sizes load on demand from the selection bar disclosure.
               await page.locator(".workspace-folder-sizes > summary").click();
@@ -83,13 +83,6 @@ for (const engine of ["chromium", "webkit"])
                 .locator(".workspace-folder-starburst-segment")
                 .first()
                 .waitFor();
-            } else {
-              await page.locator('.file-tree__item[title="src"]').click();
-              await page
-                .locator(".workspace__folder-view-btn")
-                .filter({ hasText: "Chart" })
-                .click();
-              await page.locator(".workspace__sunburst path").first().waitFor();
             }
             await page
               .locator(
@@ -100,13 +93,9 @@ for (const engine of ["chromium", "webkit"])
               .waitFor();
             await page.waitForTimeout(300);
             const segment =
-              skin === "classic"
-                ? ".workspace-folder-starburst-segment"
-                : ".workspace__sunburst path";
+              ".workspace-folder-starburst-segment";
             const selected =
-              skin === "classic"
-                ? '[data-item-path][aria-selected="true"]'
-                : ".file-tree__item--selected";
+              '[data-item-path][aria-selected="true"]';
             const initialCalls = await page.evaluate(
               () =>
                 (window as any).workspaceTheme.calls.filter(
@@ -204,34 +193,6 @@ for (const engine of ["chromium", "webkit"])
                   ).length,
               ),
             ).toBe(initialCalls);
-            await page.evaluate(() => {
-              const f = (window as any).workspaceTheme;
-              f.applyTheme(
-                f.importVSCodeTheme({
-                  type: "light",
-                  colors: {
-                    "editor.background": "#faf6ed",
-                    "editor.foreground": "#123456",
-                    focusBorder: "#995500",
-                  },
-                  tokenColors: [
-                    { scope: "keyword", settings: { foreground: "#246824" } },
-                  ],
-                }),
-              );
-            });
-            expect(
-              await page
-                .locator('.file-tree__item--selected, [data-item-path][aria-selected="true"]')
-                .evaluate((e) => getComputedStyle(e).backgroundColor),
-            ).not.toBe("rgba(0, 0, 0, 0)");
-            expect(
-              await page
-                .locator("html")
-                .evaluate((e) =>
-                  getComputedStyle(e).getPropertyValue("--chart-5").trim(),
-                ),
-            ).toBe("#246824");
             expect(
               await page
                 .locator(segment)
@@ -263,7 +224,7 @@ for (const engine of ["chromium", "webkit"])
               await page.setViewportSize({ width: 1100, height: 1050 });
               await page.locator(".system-meters-row.cpu path").waitFor();
             }
-            if (skin === "classic") {
+            {
               await page
                 .locator(".workspace-folder-starburst-segment")
                 .first()

@@ -22,7 +22,7 @@ function status(type: string, turn: string, started = '2026-11-06T01:00:00Z', ch
 }
 beforeAll(async () => {
   if (!enabled) return;
-  for (const [skin, entry] of Object.entries({classic:'agent-status-lifecycle-fixture.ts',visual:'reconnect-turn-visual-fixture.tsx'})) {
+  for (const [skin, entry] of Object.entries({classic:'agent-status-lifecycle-fixture.ts'})) {
     const baseline = process.env.PICLAW_RECONNECT_BASELINE;
     const plugins = baseline ? [{name:'reconnect-baseline',setup(builder: any) {
       builder.onLoad({filter:/\/(app-sse-events\.ts|AgentStatusPanel\.tsx|ChatPanel\.tsx|useTimelineStream\.ts)$/}, (args: any) => {
@@ -58,33 +58,33 @@ beforeAll(async () => {
   }});
 },30000);
 afterAll(() => server?.stop(true));
-for (const [engine, launcher] of Object.entries({chromium,webkit})) for (const skin of ['classic','visual']) {
+for (const [engine, launcher] of Object.entries({chromium,webkit})) for (const skin of ['classic']) {
   browserTest(`${engine}/${skin}: reconnect, Stop, queued completion, late older events preserve a newer held turn (#1519)`, async () => {
     snapshot={status:'idle',data:null};holdStatus=false;pendingStatus=[];pendingAbort=[];aborts=0;
     const browser=await launcher.launch(), page=await browser.newPage();
     const errors: string[]=[];page.setDefaultTimeout(4000);page.on('pageerror',e=>{errors.push(e.message);console.error('PAGE',e.message)});
     const origin=server.url.origin;
     await page.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
-    const stop=skin==='classic'?'button[aria-label="Stop response"]':'button[title="Stop response (Escape)"]';
+    const stop='button[aria-label="Stop response"]';
     const until=async (check:()=>boolean) => {for(let n=0;n<200&&!check();n++)await Bun.sleep(10);expect(check()).toBe(true);};
     try {
       await page.goto(`${origin}/?skin=${skin}&compose=1&chat_jid=${jid}`);
       await until(()=>clients.size>0);
-      if(skin==='classic')await page.waitForFunction(()=>Boolean((window as any).statusLifecycleFixture));
+      await page.waitForFunction(()=>Boolean((window as any).statusLifecycleFixture));
       const old=status('thinking','durable:10');snapshot={status:'active',data:old};
       emit('agent_status',old);emit('agent_draft_delta',{chat_jid:jid,turn_id:'durable:10',reset:true,delta:'Original held draft'});
       await page.waitForSelector(stop);
       // Drop the actual SSE transport. The reconnect snapshot is held while
       // native events advance through abort and queued completion.
       holdStatus=true;
-      if(skin==='classic')await page.evaluate(()=>(window as any).statusLifecycleFixture.connection('disconnected'));
+      await page.evaluate(()=>(window as any).statusLifecycleFixture.connection('disconnected'));
       for(const client of clients.keys())client.close();
       clients.clear();
       await until(()=>clients.size>0);
-      if(skin==='classic') {
+      {
         await page.evaluate(()=>{(window as any).statusLifecycleFixture.event('connected',{});(window as any).statusLifecycleFixture.connection('connected');});
         await page.waitForFunction(()=>(window as any).statusLifecycleFixture.count()>=1);
-      } else await until(()=>pendingStatus.length>0);
+      }
       emit('agent_status',old);emit('agent_draft_delta',{chat_jid:jid,turn_id:'durable:10',reset:true,delta:'Restored held draft'});
       await page.waitForSelector(stop);
       await page.locator(stop).first().click();await until(()=>aborts===1);
@@ -101,7 +101,7 @@ for (const [engine, launcher] of Object.entries({chromium,webkit})) for (const s
       emit('agent_draft_delta',{chat_jid:jid,turn_id:'durable:10',reset:true,delta:'STALE DRAFT'});
       pendingAbort.splice(0).forEach(resolve=>resolve());
       holdStatus=false;pendingStatus.splice(0).forEach(resolve=>resolve());
-      if(skin==='classic')await page.evaluate(payload=>(window as any).statusLifecycleFixture.release(0,payload),{status:'idle',data:null});
+      await page.evaluate(payload=>(window as any).statusLifecycleFixture.release(0,payload),{status:'idle',data:null});
       await page.waitForTimeout(300);
       expect(await page.locator(stop).count()).toBeGreaterThan(0);
       expect(await page.locator('body').textContent()).toContain('NEW HELD DRAFT');
@@ -110,12 +110,12 @@ for (const [engine, launcher] of Object.entries({chromium,webkit})) for (const s
       // A later passive read can also return an older cached active owner,
       // without any SSE arriving during that read.
       snapshot = {status:'active',data:old};
-      if (skin === 'classic') {
+      {
         await page.waitForTimeout(400);
         await page.evaluate(() => { void (window as any).statusLifecycleFixture.refresh(); });
         await page.waitForFunction(() => (window as any).statusLifecycleFixture.count() === 2);
         await page.evaluate(payload => (window as any).statusLifecycleFixture.release(1,payload), snapshot);
-      } else await page.evaluate(() => window.dispatchEvent(new Event('piclaw:sse-connected')));
+      }
       await page.waitForTimeout(100);
       expect(await page.locator(stop).count()).toBeGreaterThan(0);
       expect(await page.locator('body').textContent()).toContain('NEW HELD DRAFT');

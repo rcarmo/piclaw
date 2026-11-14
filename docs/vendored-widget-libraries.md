@@ -1,6 +1,6 @@
 # Vendored widget libraries
 
-Interactive HTML widgets in Classic and Visual allow inline and same-origin scripts, WASM compilation (`'wasm-unsafe-eval'`), same-origin fetches and same-origin child frames by default. JavaScript `eval` and cross-origin scripts, fetches and frames are blocked. Existing image, font and media source permissions are unchanged. Static HTML/SVG previews in both skins keep scripts, connections and frames disabled. Same-origin stylesheets and inline styles remain available. Live HTML widgets are interactive; timeline HTML requires the `interactive` capability or the legacy `interactive: true` opt-in. Explicit capability arrays take precedence over that legacy flag.
+Interactive HTML widgets in Classic allow inline and same-origin scripts, WASM compilation (`'wasm-unsafe-eval'`), same-origin fetches and same-origin child frames by default. JavaScript `eval` and cross-origin scripts, fetches and frames are blocked. Existing image, font and media source permissions are unchanged. Static HTML/SVG previews in the web UI keep scripts, connections and frames disabled. Same-origin stylesheets and inline styles remain available. Live HTML widgets are interactive; timeline HTML requires the `interactive` capability or the legacy `interactive: true` opt-in. Explicit capability arrays take precedence over that legacy flag.
 
 These are trusted agent-authored widgets. The existing `allow-scripts allow-same-origin` sandbox permits authenticated same-origin access and parent DOM access; it is not a security boundary for untrusted HTML. Child frames inherit sandbox restrictions but have their own document CSP. The Visual wrapper now applies the shared CSP, so external script/connection/frame sources previously accepted there must be served from the PiClaw origin.
 
@@ -181,7 +181,7 @@ window.addEventListener('piclaw:widget-message', function (e) {
 
 ## Timeline diagrams (Pele)
 
-Classic, Visual and Family render Mermaid fences with `pele@1.6.0`. The local
+Classic and Family render Mermaid fences with `pele@1.6.0`. The local
 asset `/static/common/js/vendor/pele.js` exposes `window.piclawDiagrams.render(source)`,
 which returns an SVG string synchronously. The application passes it through
 the shared fail-closed SVG sanitizer before insertion.

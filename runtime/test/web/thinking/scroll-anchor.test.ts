@@ -1,18 +1,11 @@
 import { describe, expect, it, afterEach, beforeEach } from "bun:test";
 import { anchorTarget, ANCHOR_SIGN, scrollerNativelyAnchors, attachHeaderAnchor, isAnchorScrolling } from "../../../web/src/ui/scroll-anchor";
-import * as visualAnchor from "../../../web/static/visual/frontend/src/utils/scroll-anchor";
 
 // The scroll anchor keeps a disclosure header fixed while the panel below it
 // resizes, in browsers that lack native CSS scroll anchoring (Safari). The most
 // important property is that a full expand/collapse cycle returns scrollTop to
 // EXACTLY its starting value, with no accumulating drift over many cycles — which
 // is why the height delta is quantised to device pixels before use.
-
-it("Classic and Visual re-export one scroll-anchor implementation", () => {
-  expect(visualAnchor.attachHeaderAnchor).toBe(attachHeaderAnchor);
-  expect(visualAnchor.isAnchorScrolling).toBe(isAnchorScrolling);
-  expect(visualAnchor.anchorTarget).toBe(anchorTarget);
-});
 
 describe("anchorTarget", () => {
   it("moves scrollTop opposite to the height growth (column-reverse sign)", () => {
@@ -201,10 +194,10 @@ describe("attachHeaderAnchor", () => {
     expect(s.scrollTop).toBe(1000); // stale target not applied
   });
 
-  it("mixed-skin anchors share user-scroll cancellation and one disposal lifecycle", () => {
+  it("multiple anchors share user-scroll cancellation and one disposal lifecycle", () => {
     const s = makeScroller();
     const a = attachHeaderAnchor(asEl(s), asEl({}));
-    const b = visualAnchor.attachHeaderAnchor(asEl(s), asEl({}));
+    const b = attachHeaderAnchor(asEl(s), asEl({}));
     expect(s.listeners.add).toBe(1);
     a.mark(); b.mark();
     for (const handler of s.scrollHandlers) handler();

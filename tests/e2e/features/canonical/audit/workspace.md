@@ -1,5 +1,7 @@
 # Classic workspace audit
 
+> Historical source audit. Visual was removed in #1990; paths and counts below describe the inspected revision, not the current UI.
+
 Scope audited from source only:
 
 - `runtime/web/src/components/workspace-explorer.ts`

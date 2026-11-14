@@ -162,7 +162,7 @@ mcp({ tool: "filesystem_read_file", args: "{\"path\":\"./README.md\"}" })
 In **Settings → MCP → Adapter servers**, select **Use Parallel Search preset**,
 review the populated fields, then **Preview server change**. Acknowledge the
 session reload and select **Apply server change** to enable it in current and new
-sessions. The same flow is available in Classic and Visual.
+sessions. The same flow is available in Classic.
 
 [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp)
 provides free web search and page fetching without an account or API key.

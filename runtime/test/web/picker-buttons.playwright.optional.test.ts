@@ -16,12 +16,12 @@ let workspace: ReturnType<typeof createTempWorkspace>;
 beforeAll(async () => {
   if (!enabled) return;
   workspace = createTempWorkspace("picker-buttons-");
-  for (const skin of ["classic", "visual"]) {
+  for (const skin of ["classic"]) {
     const proc = Bun.spawn(
       [
         "bun",
         "build",
-        `test/web/fixtures/${skin}-picker-buttons-fixture.${skin === "visual" ? "tsx" : "ts"}`,
+        `test/web/fixtures/${skin}-picker-buttons-fixture.${"ts"}`,
         "--target=browser",
         "--format=esm",
         "--jsx=automatic",
@@ -51,7 +51,7 @@ beforeAll(async () => {
         });
       if (url.pathname === "/agent/branches")
         return Response.json({ branches: [] });
-      if (url.pathname === "/classic" || url.pathname === "/visual") {
+      if (url.pathname === "/classic") {
         const skin = url.pathname.slice(1);
         const session =
           skin === "classic" && url.searchParams.get("picker") === "session";
@@ -60,7 +60,7 @@ beforeAll(async () => {
           { headers: { "content-type": "text/html" } },
         );
       }
-      if (url.pathname === "/classic.js" || url.pathname === "/visual.js")
+      if (url.pathname === "/classic.js")
         return new Response(
           Bun.file(join(workspace.base, url.pathname.slice(1))),
           { headers: { "content-type": "text/javascript" } },
@@ -113,25 +113,19 @@ async function open(page: Page, skin: string, picker: string, theme: string) {
   if (picker === "session")
     await page
       .locator(
-        skin === "classic"
-          ? '[data-testid="session-switcher"]'
-          : ".session-pill",
+        '[data-testid="session-switcher"]',
       )
       .click();
   const popup =
-    skin === "classic"
-      ? picker === "session"
+    picker === "session"
         ? ".compose-session-popup"
-        : ".compose-model-catalogue"
-      : picker === "session"
-        ? ".session-pill__dropdown"
-        : ".model-picker";
+        : ".compose-model-catalogue";
   await page.locator(popup).waitFor({ state: "visible" });
   return popup;
 }
 
 for (const engine of ["chromium", "webkit"])
-  for (const skin of ["classic", "visual"])
+  for (const skin of ["classic"])
     for (const width of [1280, 390])
       for (const theme of ["dark", "light"]) {
         browserTest(
@@ -148,9 +142,7 @@ for (const engine of ["chromium", "webkit"])
               for (const picker of ["model", "session"]) {
                 const popup = await open(page, skin, picker, theme);
                 const action =
-                  skin === "classic"
-                    ? `${popup} .compose-model-popup-btn`
-                    : `${popup} ${picker === "model" ? ".model-picker__action" : ".session-pill__toolbar-btn"}`;
+                  `${popup} .compose-model-popup-btn`;
                 const measured = await page
                   .locator(action)
                   .evaluateAll((nodes) =>

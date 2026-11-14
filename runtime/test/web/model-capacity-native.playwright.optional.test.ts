@@ -11,7 +11,7 @@ beforeAll(() => {
   if (!enabled) return;
   server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
     const url = new URL(req.url);
-    if (url.pathname === "/") return new Response(Bun.file(join(webRoot, `static/${url.searchParams.get("skin") === "visual" ? "visual" : "classic"}/index.html`)), { headers: { "content-type": "text/html" } });
+    if (url.pathname === "/") return new Response(Bun.file(join(webRoot, `static/${"classic"}/index.html`)), { headers: { "content-type": "text/html" } });
     if (url.pathname === "/editor-vendor/codemirror.js") return new Response(Bun.file(resolve(webRoot, "../extensions/viewers/editor/vendor/codemirror.js")), { headers: { "content-type": "text/javascript" } });
     if (url.pathname.startsWith("/static/")) {
       const path = resolve(webRoot, url.pathname.slice(1));
@@ -23,7 +23,7 @@ beforeAll(() => {
 afterAll(() => server?.stop(true));
 
 for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
-  for (const skin of ["classic", "visual"]) for (const touch of [false, true]) browserTest(`${engineName}: ${skin} ${touch ? 'touch' : 'desktop'} native backend owns near-capacity picker and settings admission`, async () => {
+  for (const skin of ["classic"]) for (const touch of [false, true]) browserTest(`${engineName}: ${skin} ${touch ? 'touch' : 'desktop'} native backend owns near-capacity picker and settings admission`, async () => {
     const browser = await engine.launch({ headless: true });
     const context = await browser.newContext({ viewport: touch ? { width: 390, height: 844 } : { width: 1024, height: 768 }, hasTouch: touch, isMobile: touch, reducedMotion: "reduce", serviceWorkers: "block" });
     const page = await context.newPage();
@@ -132,15 +132,15 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       else { unhandled.add(url.pathname); return route.fulfill({ status: 404, json: { error: "Unhandled fixture route" } }); }
       return route.fulfill({ json: body });
     });
-    const badge = page.locator(skin === "classic" ? ".compose-model-hint-btn" : ".model-badge").filter({ visible: true }).first();
-    const ring = page.locator(skin === "classic" ? ".compose-context-pie" : ".context-ring").filter({ visible: true }).first();
+    const badge = page.locator(".compose-model-hint-btn").filter({ visible: true }).first();
+    const ring = page.locator(".compose-context-pie").filter({ visible: true }).first();
     const waitModel = async (value: string) => {
-      await page.waitForFunction(({ skin, value }) => Array.from(document.querySelectorAll(skin === "classic" ? ".compose-model-hint-btn" : ".model-badge")).some(el => el.textContent?.includes(value)), { skin, value }, { timeout: 10000 });
+      await page.waitForFunction(({ _skin, value }) => Array.from(document.querySelectorAll(".compose-model-hint-btn")).some(el => el.textContent?.includes(value)), { skin, value }, { timeout: 10000 });
       expect(await badge.innerText()).toContain(value);
     };
     const waitContext = async (value: number) => {
-      const label = `${value / 1000}${skin === "classic" ? "K" : "k"}`;
-      await page.waitForFunction(({ skin, label }) => Array.from(document.querySelectorAll(skin === "classic" ? ".compose-context-pie" : ".context-ring")).some(el => el.getAttribute("title")?.includes(`Context: ${label} /`)), { skin, label }, { timeout: 10000 });
+      const label = `${value / 1000}${"K"}`;
+      await page.waitForFunction(({ _skin, label }) => Array.from(document.querySelectorAll(".compose-context-pie")).some(el => el.getAttribute("title")?.includes(`Context: ${label} /`)), { skin, label }, { timeout: 10000 });
       expect(await ring.getAttribute("title")).toContain(`Context: ${label} /`);
     };
     const emit = (kind: string, payload: unknown) => page.evaluate(({ kind, payload }) => (window as any).emitShellEvent(kind, payload), { kind, payload });
@@ -158,65 +158,42 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       expect(await page.getByRole('option').count()).toBe(0);
       await page.keyboard.press('Escape');
       catalogueEmpty = false; await emit('model_changed', { chat_jid: chatJid, ...modelPayload() });
-      if (skin === 'classic') await page.waitForFunction(() => document.activeElement?.matches('.compose-model-hint-btn'));
+      await page.waitForFunction(() => document.activeElement?.matches('.compose-model-hint-btn'));
       // Cold thinking UI uses the shared backend snapshot before any model-picker fetch.
-      if (skin === 'visual') await page.locator('.thinking-badge').filter({ visible: true }).first().click();
-      else await badge.click();
-      const readThinking = async () => skin === 'visual'
-        ? page.locator('.thinking-picker__item').evaluateAll(nodes => nodes.map(node => node.lastElementChild?.textContent))
-        : page.getByLabel('Thinking level', { exact: true }).locator('option').evaluateAll(nodes => nodes.map(node => (node as HTMLOptionElement).value));
-      await page.waitForFunction(skin => skin === 'visual' ? document.querySelectorAll('.thinking-picker__item').length === 4 : document.querySelectorAll('select[aria-label="Thinking level"] option').length === 4, skin);
+      await badge.click();
+      const readThinking = async () => page.getByLabel('Thinking level', { exact: true }).locator('option').evaluateAll(nodes => nodes.map(node => (node as HTMLOptionElement).value));
+      await page.waitForFunction(_skin => document.querySelectorAll('select[aria-label="Thinking level"] option').length === 4, skin);
       expect(await readThinking()).toEqual(thinkingLevels);
-      if (skin === 'visual') {
-        // Allow the existing after-paint dismissal listener to attach before Escape.
-        await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-        await page.keyboard.press('Escape');
-        await page.waitForFunction(() => !document.querySelector('.thinking-picker'));
-        // A newer catalogue GET must update the shared capability owner even when status refresh is pending.
-        statusBlocked = true; thinkingLevels = ['medium', 'high'];
-        const fresh = page.waitForResponse(response => new URL(response.url()).pathname === '/agent/models');
-        await badge.click(); await fresh;
-        await page.getByRole('combobox', { name: 'Search models' }).press('Escape');
-        await page.waitForFunction(() => !document.querySelector('.model-picker'));
-        await page.locator('.thinking-badge').filter({ visible: true }).first().click();
-        await page.waitForFunction(() => document.querySelectorAll('.thinking-picker__item').length === 2);
-        expect(await readThinking()).toEqual(thinkingLevels);
-        statusBlocked = false; statusWaiters.splice(0).forEach(resolve => resolve());
-      }
+
       thinkingLevels = ['medium', 'high']; await emit('model_changed', { chat_jid: chatJid, ...modelPayload() });
-      await page.waitForFunction(skin => skin === 'visual' ? document.querySelectorAll('.thinking-picker__item').length === 2 : document.querySelectorAll('select[aria-label="Thinking level"] option').length === 2, skin);
+      await page.waitForFunction(_skin => document.querySelectorAll('select[aria-label="Thinking level"] option').length === 2, skin);
       expect(await readThinking()).toEqual(thinkingLevels);
       thinkingLevels = []; await emit('model_changed', { chat_jid: chatJid, ...modelPayload() });
-      if (skin === 'visual') {
-        await page.getByText('Thinking levels unavailable.', { exact: true }).waitFor();
-        expect(await page.locator('.thinking-picker__item').count()).toBe(0);
-      } else { await page.waitForFunction(() => !document.querySelector('select[aria-label="Thinking level"]')); }
+      { await page.waitForFunction(() => !document.querySelector('select[aria-label="Thinking level"]')); }
       expect(thinkingCommands).toEqual([]);
       thinkingLevels = ['medium', 'high', 'xhigh', 'max']; await emit('model_changed', { chat_jid: chatJid, ...modelPayload() });
-      await page.waitForFunction(skin => skin === 'visual' ? document.querySelectorAll('.thinking-picker__item').length === 4 : document.querySelectorAll('select[aria-label="Thinking level"] option').length === 4, skin);
+      await page.waitForFunction(_skin => document.querySelectorAll('select[aria-label="Thinking level"] option').length === 4, skin);
       const thinkingResponse = page.waitForResponse(response => response.request().postData()?.includes('/thinking xhigh') === true);
-      if (skin === 'visual') {
-        const extended = page.getByRole('button', { name: 'xhigh', exact: true }); await extended.focus(); await extended.press('Enter');
-      } else await page.getByLabel('Thinking level', { exact: true }).selectOption('xhigh');
+      await page.getByLabel('Thinking level', { exact: true }).selectOption('xhigh');
       await thinkingResponse; expect(thinkingCommands).toEqual(['/thinking xhigh']);
-      if (skin === 'classic') await page.waitForFunction(() => !document.querySelector('.compose-model-hint-btn[disabled]'));
+      await page.waitForFunction(() => !document.querySelector('.compose-model-hint-btn[disabled]'));
       await page.keyboard.press('Escape');
-      if (skin === 'classic') await page.waitForFunction(() => document.activeElement?.matches('.compose-model-hint-btn'));
+      await page.waitForFunction(() => document.activeElement?.matches('.compose-model-hint-btn'));
       thinking = 'high'; await emit('model_changed', { chat_jid: chatJid, ...modelPayload() });
       expect(commands).toEqual([]); expect(compactions).toEqual([]);
       // Same backend snapshot, in the shipped shells: never apply 1.1 + 4000 again.
       const project = async (next: typeof usage, title: string) => {
         usage = next;
         await emit("agent_status", { chat_jid: chatJid, type: "context_usage", context_usage: contextPayload() });
-        await page.waitForFunction(({ skin, title }) => Array.from(document.querySelectorAll(skin === "classic" ? ".compose-context-pie" : ".context-ring")).some(el => el.getAttribute("title") === title), { skin, title });
+        await page.waitForFunction(({ _skin, title }) => Array.from(document.querySelectorAll(".compose-context-pie")).some(el => el.getAttribute("title") === title), { skin, title });
         expect(await ring.getAttribute("title")).toBe(title);
         expect(await ring.getAttribute("aria-label")).toBe(title);
       };
       const title = (counts: string, percent: string) => `Context: ${counts} tokens (${percent})\nCompact context`;
-      await project({ tokens: 80000, contextWindow: 100000, percent: 80 }, title(skin === "classic" ? "80K / 100K" : "80k / 100k", "80%"));
-      await project({ tokens: 80000, contextWindow: 100000, percent: null }, title(skin === "classic" ? "80K / 100K" : "80k / 100k", "unavailable"));
-      await project({ tokens: null, contextWindow: null, percent: null }, title(skin === "classic" ? "? / ?" : "-- / --", "unavailable"));
-      await project({ tokens: 0, contextWindow: 100000, percent: 0 }, title(skin === "classic" ? "0 / 100K" : "0k / 100k", "0%"));
+      await project({ tokens: 80000, contextWindow: 100000, percent: 80 }, title("80K / 100K", "80%"));
+      await project({ tokens: 80000, contextWindow: 100000, percent: null }, title("80K / 100K", "unavailable"));
+      await project({ tokens: null, contextWindow: null, percent: null }, title("? / ?", "unavailable"));
+      await project({ tokens: 0, contextWindow: 100000, percent: 0 }, title("0 / 100K", "0%"));
       expect(commands).toEqual([]); expect(compactions).toEqual([]);
       // Keep the existing compact control, native button/keyboard semantics and touch target.
       const compactResponse = () => page.waitForResponse(response => response.url().includes("/agent/") && response.request().postData()?.includes("/compact") === true);
@@ -230,7 +207,7 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       await response;
       expect(compactions).toEqual(["/compact", "/compact", "/compact"]);
       expect(commands).toEqual([]);
-      await project({ tokens: 90000, contextWindow: 200000, percent: 45 }, title(skin === "classic" ? "90K / 200K" : "90k / 200k", "45%"));
+      await project({ tokens: 90000, contextWindow: 200000, percent: 45 }, title("90K / 200K", "45%"));
       // Candidate is selectable by keyboard despite the old browser false veto.
       await badge.click();
       const search = page.getByRole("combobox", { name: "Search models" });
@@ -243,17 +220,15 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       await search.press("Escape");
       await page.waitForFunction(() => document.activeElement?.matches('.compose-model-hint-btn,.model-badge'));
       await badge.click(); await search.fill("near");
-      const refusalDialog = skin === "classic" ? page.waitForEvent("dialog") : null;
+      const refusalDialog = page.waitForEvent("dialog");
       await search.press("ArrowDown"); await search.press("Enter");
-      if (skin === "visual") await page.waitForFunction(() => (window as any).capacityNotice === "Native capacity refused");
-      else {
+      {
         await refusalDialog;
         await page.waitForFunction(() => !document.querySelector('.compose-model-hint-btn[disabled]'));
       }
       expect(commands).toEqual(["/model fixture/near"]);
       expect(model).toBe("fixture/first");
-      if (skin === "classic") expect(notices).toEqual(["Failed to switch model: Native capacity refused"]);
-      else expect(await page.evaluate(() => (window as any).capacityNotice)).toBe("Native capacity refused");
+      expect(notices).toEqual(["Failed to switch model: Native capacity refused"]);
       refuse = false;
       // Pointer selection uses the same backend authority; no implicit compaction.
       if (touch) await option.tap(); else await option.click();
@@ -264,18 +239,7 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       model = "fixture/first";
       await emit("model_changed", { chat_jid: chatJid, ...modelPayload() });
       await waitModel("first");
-      if (skin === 'visual') {
-        // Successful POST plus an empty, different-current confirmation is a failure, never stale selectable rows.
-        failConfirmation = true;
-        await badge.click(); await search.fill('near'); await option.waitFor();
-        await option.click();
-        await page.waitForFunction(() => (window as any).capacityNotice === 'Model switch was not confirmed');
-        expect(failedConfirmations).toEqual(['/model fixture/near']);
-        expect(await page.getByRole('option').count()).toBe(0); expect(model).toBe('fixture/first');
-        await page.keyboard.press('Escape');
-        failConfirmation = false; catalogueEmpty = false;
-        await emit('model_changed', { chat_jid: chatJid, ...modelPayload() });
-      }
+
       await page.evaluate(() => window.dispatchEvent(new CustomEvent("piclaw:open-settings", { detail: { section: "models" } })));
       const row = page.getByRole("option").filter({ hasText: "fixture/near" });
       await row.waitFor(); await row.click();

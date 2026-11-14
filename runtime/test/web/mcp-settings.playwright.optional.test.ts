@@ -26,22 +26,20 @@ const owner = { kind: 'local', userId: 'default', username: 'default', displayNa
 
 beforeAll(async () => {
     if (!enabled) return;
-    for (const skin of ['classic', 'visual']) {
-        const source = skin === 'classic'
-            ? `import{h,render}from'./web/src/vendor/preact-htm.js';import{McpSection}from'./web/src/components/settings/mcp.ts';window.unmount=()=>render(null,document.getElementById('root'));render(h(McpSection,{}),document.getElementById('root'));`
-            : `import{h,render}from'preact';import{McpSection}from'./web/static/visual/frontend/src/panels/settings/McpSection.tsx';window.unmount=()=>render(null,document.getElementById('root'));render(h(McpSection,{}),document.getElementById('root'));`;
+    for (const skin of ['classic']) {
+
+const source = `import{h,render}from'./web/src/vendor/preact-htm.js';import{McpSection}from'./web/src/components/settings/mcp.ts';window.unmount=()=>render(null,document.getElementById('root'));render(h(McpSection,{}),document.getElementById('root'));`;
         const result = await build({ stdin: { contents: source, resolveDir: runtime, loader: 'tsx' }, bundle: true, format: 'esm', platform: 'browser', jsx: 'automatic', jsxImportSource: 'preact', write: false });
         bundles[skin] = result.outputFiles[0].text;
-        const shell = skin === 'classic'
-            ? `import{h,render}from'./web/src/vendor/preact-htm.js';import{SettingsDialogContent}from'./web/src/components/settings-dialog.ts';window.__piclawSettingsRequestedSection='mcp';render(h(SettingsDialogContent,{onClose:()=>render(null,document.getElementById('root'))}),document.getElementById('root'));`
-            : `import{h,render}from'preact';import{SettingsPanel}from'./web/static/visual/frontend/src/panels/SettingsPanel.tsx';localStorage.setItem('piclaw-settings-category','mcp');render(h(SettingsPanel,{}),document.getElementById('root'));`;
+
+const shell = `import{h,render}from'./web/src/vendor/preact-htm.js';import{SettingsDialogContent}from'./web/src/components/settings-dialog.ts';window.__piclawSettingsRequestedSection='mcp';render(h(SettingsDialogContent,{onClose:()=>render(null,document.getElementById('root'))}),document.getElementById('root'));`;
         const shellResult = await build({ stdin: { contents: shell, resolveDir: runtime, loader: 'tsx' }, bundle: true, format: 'esm', platform: 'browser', jsx: 'automatic', jsxImportSource: 'preact', external: ['#editor-vendor/codemirror'], write: false });
         bundles[`${skin}-shell`] = shellResult.outputFiles[0].text;
     }
 }, 30000);
 afterAll(async () => { await browser?.close(); browser = null; });
 
-for (const engine of ['chromium', 'webkit']) for (const skin of ['classic', 'visual']) for (const width of [1280, 390]) {
+for (const engine of ['chromium', 'webkit']) for (const skin of ['classic']) for (const width of [1280, 390]) {
     browserTest(`MCP codemode Apply ${skin}/${engine}/${width}: real backend, native rejection, denial and layout`, async () => {
         await withTempWorkspaceEnv('mcp-pane-browser-', {}, async ws => {
             mkdirSync(join(ws.workspace, '.piclaw'), { recursive: true }); mkdirSync(join(ws.workspace, '.pi'), { recursive: true });
@@ -163,7 +161,7 @@ for (const engine of ['chromium', 'webkit']) for (const skin of ['classic', 'vis
     }, 20000);
 }
 
-for (const skin of ['classic', 'visual']) {
+for (const skin of ['classic']) {
     browserTest(`MCP pane is reachable through actual ${skin} settings navigation`, async () => {
         const calls: string[] = [];
         const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(req) {

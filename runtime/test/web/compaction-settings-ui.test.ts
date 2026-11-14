@@ -9,8 +9,7 @@ function source(path: string): string {
 }
 
 const classic = source("web/src/components/settings/compaction.ts");
-const visual = source("web/static/visual/frontend/src/panels/settings/CompactionSection.tsx");
-const types = source("web/static/visual/frontend/src/panels/settings/types.ts");
+
 const retiredFields = [
   "smartCompactionMethod", "compactionModel", "compactionLatencyEstimate",
   "remoteCompactionEnabled", "remoteCompactionTimeoutSec", "remoteCompactionSupportedProviders",
@@ -24,7 +23,7 @@ const supportedFields = [
   "progressWatchdogEnabled", "progressWatchdogTimeoutSec",
 ];
 
-for (const [skin, component] of [["classic", classic], ["visual", visual]] as const) {
+for (const [skin, component] of [["classic", classic]] as const) {
   test(`${skin} exposes native compaction without retired controls or writes`, () => {
     for (const field of retiredFields) expect(component).not.toContain(field);
     for (const obsolete of [
@@ -61,26 +60,4 @@ test("classic incoming and outgoing autosave snapshots contain only supported wr
   expect(classic).toContain("applyIncoming({ ...(settingsData || {}), ...(payload.settings || {}) })");
   expect(classic).toContain("}, 800)");
   expect(classic).toContain('role="status" aria-live="polite"');
-});
-
-test("visual save callbacks retain only native auto plus independent controls", () => {
-  const fields = [...visual.matchAll(/onSaveCompaction\(\s*"([^"]+)"/g)].map(match => match[1]);
-  expect([...new Set(fields)].sort()).toEqual([...supportedFields, "toolResultCompactionTools"].sort());
-  expect(visual).toContain('saveSetting("compaction", field, value)');
-  expect(visual).toContain("onBlur={saveToolsFromInput}");
-  expect(visual).toContain("<NumberStepper");
-});
-
-test("visual settings types and fixtures use the pi-durable GET contract", () => {
-  expect(types).toContain('compactionPolicy?: "pi-durable"');
-  expect(types).not.toContain("CompactionBackoff");
-  const fixtures = [
-    source("test/web/fixtures/visual-compaction-settings-fixture.tsx"),
-    source("web/src/dev/settings-widget-fixture.ts"),
-  ];
-  for (const field of retiredFields) {
-    expect(types).not.toContain(field);
-    for (const fixture of fixtures) expect(fixture).not.toContain(field);
-  }
-  for (const fixture of fixtures) expect(fixture).toContain("pi-durable");
 });

@@ -1,8 +1,8 @@
 # Code-faithful UX specifications
 
-The Classic/Visual Gherkin roots describe the inspected Piclaw implementation; `planned/` contains desired, unimplemented contracts. Classic is authoritative for audited skin differences. Specifications are not automatically bound browser tests or accepted Tau/Vibes parity contracts.
+The Classic Gherkin roots describe the inspected Piclaw implementation; `planned/` contains desired, unimplemented contracts. The audit files record historical source evidence, including the removed second UI. Specifications are not automatically bound browser tests or accepted Tau/Vibes parity contracts.
 
-Import the [Classic](../classic/README.md) or [Visual](../visual/README.md) folders for current behaviour, plus [shared](../shared/README.md) for implemented cross-skin cases. Start with [COMPLETION.md](COMPLETION.md) for all 26 feature files and 248 scenario IDs: 240 current-behaviour cases and eight shared SVG-image cases. The index includes the original PR scenarios, adjacent regression features and added auth, Settings, workspace and interaction flows. This directory contains documentation only.
+Import the [Classic](../classic/README.md) folder for current behaviour, plus [shared](../shared/README.md) for implemented shared cases. Start with [COMPLETION.md](COMPLETION.md) for all 26 feature files and 248 scenario IDs: 240 current-behaviour cases and eight shared SVG-image cases. The index includes the original PR scenarios, adjacent regression features and added auth, Settings, workspace and interaction flows. This directory contains documentation only.
 
 ## Evidence and limits
 

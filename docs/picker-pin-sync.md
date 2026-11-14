@@ -1,6 +1,6 @@
 # Cross-browser model and session pins
 
-Model and session pins follow the same Piclaw instance across browsers. Classic and Visual use the same server list. In single-user mode the list belongs to the operator; in family mode it belongs to the authenticated account. Recent models, sorting and compatibility filters remain local.
+Model and session pins follow the same Piclaw instance across browsers. Browsers use the same server list. In single-user mode the list belongs to the operator; in family mode it belongs to the authenticated account. Recent models, sorting and compatibility filters remain local.
 
 ## Migration and changes
 
@@ -10,7 +10,7 @@ Imports add only keys that the server has never seen. Unpinning creates a tombst
 
 Normal writes contain one desired pin state, not a complete list. Concurrent writes to different keys do not overwrite one another. For the same key, the last committed server action wins. Requests are serialized within a page, and responses carry monotonic revisions so an older refresh cannot overwrite a newer reply.
 
-Family preferences use the existing account-private in-memory runtime. They never import the unscoped operator localStorage keys or save private pin lists to browser storage. Their lists are fetched again after reload. Classic session groups retain their existing ordering; Visual places the current session first and pinned live sessions next, with a separate keyboard-accessible pin button.
+Family preferences use the existing account-private in-memory runtime. They never import the unscoped operator localStorage keys or save private pin lists to browser storage. Their lists are fetched again after reload. Classic session groups retain their existing ordering.
 
 ## Synchronization and failures
 
@@ -39,9 +39,12 @@ Tables `picker_pin_scopes`, `picker_pins` and `picker_pin_imports` are created a
 
 ## Refinement decisions
 
-Approved scope: same-instance cross-browser pins, both skins, account isolation and one-time local-pin import. Explicit non-goals: cross-instance sync, recent-file/model history synchronization, global sort synchronization, offline command queues and new polling. Migration must preserve explicit unpins over stale browser imports. Existing operator local pins are retained as the local cache; family mode does not reuse them.
+Approved scope: same-instance cross-browser pins, the web UI, account isolation and one-time local-pin import. Explicit non-goals: cross-instance sync, recent-file/model history synchronization, global sort synchronization, offline command queues and new polling. Migration must preserve explicit unpins over stale browser imports. Existing operator local pins are retained as the local cache; family mode does not reuse them.
 
 ## Verification
+
+> Historical qualification of the original delivery. Visual was later retired in #1990.
+
 
 - Database tests cover account/operator isolation, independent desired-state edits, repeated import receipts, never-pinned tombstones, explicit repinning, session access filters, key/size bounds, rollback and database reopen persistence.
 - HTTP tests use the family router with real account/session fixtures: owned/foreign sessions, forged or missing login pins, cross-origin requests, oversized bodies and authority loss during body reading.

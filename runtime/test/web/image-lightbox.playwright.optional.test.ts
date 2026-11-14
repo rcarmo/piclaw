@@ -21,14 +21,14 @@ beforeAll(async () => {
     if(url.pathname==='/media/1/info')return Response.json({filename:'picture.png',content_type:'image/png'});
     if(url.pathname==='/media/1'||url.pathname==='/media/1/thumbnail')return new Response(image,{headers:{'Content-Type':'image/png'}});
     if(url.pathname.startsWith('/static/'))return new Response(Bun.file(join(webRoot,url.pathname)));
-    if(url.pathname==='/')return new Response(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/${url.searchParams.get('skin')==='visual'?'visual':'classic'}/css/styles.css"><script type="importmap">{"imports":{"#editor-vendor/codemirror":"/editor-vendor/codemirror.js"}}</script></head><body><main id="app"></main><script type="module" src="/fixture.js"></script></body></html>`,{headers:{'Content-Type':'text/html'}});
+    if(url.pathname==='/')return new Response(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/${'classic'}/css/styles.css"><script type="importmap">{"imports":{"#editor-vendor/codemirror":"/editor-vendor/codemirror.js"}}</script></head><body><main id="app"></main><script type="module" src="/fixture.js"></script></body></html>`,{headers:{'Content-Type':'text/html'}});
     return Response.json({});
   }});
   browsers.set('chromium',await chromium.launch({headless:true}));
   browsers.set('webkit',await webkit.launch({headless:true}));
 }, 30000);
 afterAll(async()=>{for(const browser of browsers.values())await browser.close();server?.stop(true);});
-for(const engine of ['chromium','webkit'])for(const skin of ['classic','visual'])for(const surface of skin==='classic'?['thumbnail']:['thumbnail','chip']) for (const viewport of [{width:320,height:640},{width:600,height:400},{width:900,height:780}]) {
+for(const engine of ['chromium','webkit'])for(const skin of ['classic'])for(const surface of ['thumbnail']) for (const viewport of [{width:320,height:640},{width:600,height:400},{width:900,height:780}]) {
   browserTest(`${engine} ${skin} ${surface} ${viewport.width}px: narrow pane preview covers the viewport`,async()=>{
     const context=await browsers.get(engine)!.newContext({viewport,reducedMotion:'reduce'});
     try {
@@ -36,9 +36,9 @@ for(const engine of ['chromium','webkit'])for(const skin of ['classic','visual']
       const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
       await page.route('**/*',route=>new URL(route.request().url()).origin===server.url.origin?route.continue():route.abort());
       await page.goto(server.url+'?skin='+skin+'&surface='+surface);
-      const trigger=skin==='classic'?page.locator('.media-preview img'):surface==='chip'?page.getByRole('button',{name:'Preview picture.png'}):page.locator('.message-list__media-img');
+      const trigger=page.locator('.media-preview img');
       await trigger.click();
-      const backdrop=page.locator(skin==='classic'?'.image-modal':'.lightbox__backdrop');
+      const backdrop=page.locator('.image-modal');
       await backdrop.waitFor();
       const box=await backdrop.boundingBox();
       expect(Math.abs(box!.x)).toBeLessThanOrEqual(1);
@@ -54,13 +54,7 @@ for(const engine of ['chromium','webkit'])for(const skin of ['classic','visual']
       await page.setViewportSize({width:280,height:400});
       const resized=await backdrop.boundingBox();expect(resized!.width).toBeGreaterThanOrEqual(279);
       const resizedImage=await preview.boundingBox();expect(resizedImage!.x+resizedImage!.width).toBeLessThanOrEqual(280);
-      if(skin==='visual') {
-        const close=backdrop.getByRole('button',{name:'Close preview'});
-        const closeBox=await close.boundingBox();
-        expect(closeBox!.x).toBeGreaterThanOrEqual(0);expect(closeBox!.x+closeBox!.width).toBeLessThanOrEqual(280);
-        await page.keyboard.press('Tab');
-        expect(await page.evaluate(()=>Boolean(document.activeElement?.closest('[role="dialog"]')))).toBe(true);
-      }
+
       await page.keyboard.press('Escape');await backdrop.waitFor({state:'detached'});
       expect(await page.evaluate(()=>document.body.style.overflow)).not.toBe('hidden');
       await trigger.click();await backdrop.waitFor();

@@ -1,5 +1,7 @@
 # Pipelined smart compaction — historical Core design
 
+> Historical source audit. Visual was removed in #1990; paths and counts below describe the inspected revision, not the current UI.
+
 This document preserves the retired Core compaction design, diagnostics and historical evidence. Supported production execution uses the native SDK policy and admitted maintenance described in [native compaction settings](native-slash-controls.md) and [Core prompt-owner retirement](development/native-prompt-retirement.md). Old settings, metrics and fallback descriptions below are not current operator instructions. Current [UI observations](development/native-ui-projections.md) clear unavailable context counts and never restore persisted estimates.
 
 Pipelined was Piclaw's exact-once source-accounting smart-compaction method. It deterministically classifies every discarded source-message event into a provenance-bearing ledger before asking a model to rewrite the validated projection into the continuity summary. Auxiliary compaction inputs—such as the previous summary, retained context, trusted operator instructions, and deterministic file facts—are carried separately outside the source-event ledger.

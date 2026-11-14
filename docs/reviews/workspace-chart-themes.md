@@ -33,9 +33,9 @@ The fixture uses deterministic folder/metric data and a disposable localhost ori
 ## Captures
 
 - [Classic Full explorer and meters](workspace-chart-themes/classic-full.png)
-- [Visual Full chart and shared-HUD contract](workspace-chart-themes/visual-full.png)
+- [Visual Full chart and shared-HUD contract](archive/visual-ui/workspace-chart-themes/visual-full.png)
 - [Classic Paper](workspace-chart-themes/classic-paper.png)
-- [Visual Paper](workspace-chart-themes/visual-paper.png)
+- [Visual Paper](archive/visual-ui/workspace-chart-themes/visual-paper.png)
 - [Classic phone layout](workspace-chart-themes/classic-phone.png)
 
 No merge, install or reload is included.

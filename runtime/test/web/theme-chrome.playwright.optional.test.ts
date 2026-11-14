@@ -13,14 +13,14 @@ beforeAll(async () => {
   server = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(req) {
     const url = new URL(req.url);
     if (url.pathname === '/fixture.js') return new Response(js, { headers: { 'Content-Type': 'text/javascript' } });
-    const skin = url.searchParams.get('skin') === 'visual' ? 'visual' : 'classic';
+    const skin = "classic";
     const original = await Bun.file(resolve(import.meta.dir, `../../web/static/${skin}/index.html`)).text();
     const head = original.split('</head>')[0].replace(/<link[^>]*>/g, '');
     return new Response(`${head}</head><body><input id="focus"><div style="height:1800px"></div><script type="module" src="/fixture.js"></script></body>`, { headers: { 'Content-Type': 'text/html' } });
   } });
 });
 afterAll(() => server?.stop(true));
-for (const [name, engine] of Object.entries({ chromium, webkit })) for (const skin of ['classic', 'visual']) {
+for (const [name, engine] of Object.entries({ chromium, webkit })) for (const skin of ['classic']) {
   browserTest(`${name} ${skin}: startup colours match every catalogue entry before runtime initialisation`, async () => {
     const browser = await engine.launch(); const page = await browser.newPage({ colorScheme: 'light', viewport: { width: 390, height: 844 } });
     try {
@@ -37,7 +37,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) for (const sk
           for (const tag of document.querySelectorAll('meta[name="theme-color"]')) if (tag.getAttribute('content') !== bg) failures.push(id + ':meta');
         }
         return failures;
-      }, { code: buildThemeBootstrap(skin as 'classic' | 'visual'), expected });
+      }, { code: buildThemeBootstrap(), expected });
       expect(result).toEqual([]);
       for (const id of ['synthwave-84-full', 'lumon']) {
         await page.evaluate(id => localStorage.setItem('piclaw_theme', id), id);
@@ -49,21 +49,17 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) for (const sk
       await page.evaluate(() => { localStorage.setItem('piclaw_theme', 'default'); localStorage.setItem('piclaw_theme_mode', 'dark'); });
       await page.reload(); await page.waitForFunction(() => Boolean((window as any).themeChromeFixture));
       expect(await page.locator('html').getAttribute('data-theme')).toBe('dark');
-      expect(await page.locator('#dynamic-theme-color').getAttribute('content')).toBe(skin === 'visual' ? '#1e1e2e' : '#000000');
+
       for (const tint of ['#f50', '#ff5500', 'rgb(255, 85, 0)', 'tomato']) {
         const match = await page.evaluate(({ code, tint }) => {
           localStorage.setItem('piclaw_theme_mode', 'light'); localStorage.setItem('piclaw_tint', tint);
           (0, eval)(code); const initial = document.documentElement.style.background;
           const stop = (window as any).themeChromeFixture.start(); const final = document.documentElement.style.background;
           stop(); return { initial, final };
-        }, { code: buildThemeBootstrap(skin as 'classic' | 'visual'), tint });
+        }, { code: buildThemeBootstrap(), tint });
         expect(match.initial).toBe(match.final);
       }
-      if (skin === 'visual') {
-        await page.evaluate(() => { localStorage.setItem('piclaw_custom_theme', JSON.stringify({ '--bg': '#efe7d8', '--text': '#242424', '--piclaw-theme-mode': 'light' })); });
-        await page.reload(); await page.waitForFunction(() => Boolean((window as any).themeChromeFixture));
-        expect(await page.locator('#dynamic-theme-color').getAttribute('content')).toBe('#efe7d8');
-      }
+
     } finally { await browser.close(); }
   }, 30000);
   browserTest(`${name} ${skin}: standalone theme/import/resume updates are bounded and do not change layout`, async () => {
@@ -96,17 +92,8 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) for (const sk
       });
       expect(result.meta).toBe('#2e3440'); expect(result.replaced).toBe(true); expect(result.frames).toBe(1);
       expect(result.after).toEqual({ scroll: result.before.scroll, width: result.before.width, height: result.before.height, active: result.before.active });
-      await page.evaluate(() => (window as any).themeChromeFixture.import({ '--bg': '#efe7d8', '--text': '#242424', '--piclaw-theme-mode': 'light' }));
-      expect(await page.locator('#dynamic-theme-color').getAttribute('content')).toBe('#efe7d8');
-      expect(await page.locator('#theme-color-dark').getAttribute('content')).toBe('#efe7d8');
-      expect(await page.locator('meta[name="apple-mobile-web-app-status-bar-style"]').getAttribute('content')).toBe('black-translucent');
       await page.evaluate(() => { document.body.style.background = '#000'; window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })); });
-      expect(await page.locator('body').evaluate(el => (el as HTMLElement).style.background)).toBe('rgb(239, 231, 216)');
-      await page.waitForTimeout(80); const settled = await page.evaluate(() => (window as any).frames);
-      await page.waitForTimeout(250); expect(await page.evaluate(() => (window as any).frames)).toBe(settled);
-      await page.evaluate(() => (window as any).themeChromeFixture.reset());
-      expect(await page.locator('#dynamic-theme-color').getAttribute('content')).toBe('#2e3440');
-      expect(await page.locator('html').getAttribute('data-custom-theme')).toBe('false');
+      expect(await page.locator('body').evaluate(el => (el as HTMLElement).style.background)).toBe('rgb(46, 52, 64)');
       await page.waitForTimeout(80);
       const cancelled = await page.evaluate(async () => { const n=(window as any).frames; (window as any).themeChromeFixture.select('dracula'); (window as any).disposeTheme(); await new Promise(r=>setTimeout(r,60)); return (window as any).frames-n; });
       expect(cancelled).toBe(0);

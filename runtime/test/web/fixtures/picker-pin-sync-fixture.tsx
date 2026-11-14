@@ -10,8 +10,7 @@ import {
   togglePinnedSessionChatJid,
   SESSION_PICKER_PREFERENCES_EVENT,
 } from "../../../web/src/ui/session-picker-preferences";
-const params = new URLSearchParams(location.search),
-  skin = params.get("skin") || "classic";
+
 const source = new EventSource("/sse");
 source.onerror = () => {};
 source.addEventListener("picker_pins_changed", () =>
@@ -44,7 +43,7 @@ Object.assign(window, {
   },
 });
 const host = document.getElementById("app")!;
-if (skin === "classic") {
+{
   const { html, render, useState, useEffect } =
     await import("../../../web/src/vendor/preact-htm");
   const { ClassicModelPicker } =
@@ -73,11 +72,6 @@ if (skin === "classic") {
     />`;
   }
   render(html`<${Picker} />`, host);
-} else {
-  const { h, render } = await import("preact");
-  const { SessionPill } =
-    await import("../../../web/static/visual/frontend/src/components/SessionPill");
-  render(h(SessionPill, {}), host);
 }
 for (const event of [
   MODEL_CATALOGUE_PREFERENCES_EVENT,

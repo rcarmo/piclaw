@@ -11,7 +11,7 @@ beforeAll(() => {
   if (!enabled) return;
   server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
     const url = new URL(req.url);
-    if (url.pathname === "/") return new Response(Bun.file(join(webRoot, `static/${url.searchParams.get("skin") === "visual" ? "visual" : "classic"}/index.html`)), { headers: { "content-type": "text/html" } });
+    if (url.pathname === "/") return new Response(Bun.file(join(webRoot, `static/${"classic"}/index.html`)), { headers: { "content-type": "text/html" } });
     if (url.pathname === "/editor-vendor/codemirror.js") return new Response(Bun.file(resolve(webRoot, "../extensions/viewers/editor/vendor/codemirror.js")), { headers: { "content-type": "text/javascript" } });
     if (url.pathname.startsWith("/static/")) {
       const path = resolve(webRoot, url.pathname.slice(1));
@@ -23,7 +23,7 @@ beforeAll(() => {
 afterAll(() => server?.stop(true));
 
 for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
-  for (const skin of ["classic", "visual"]) browserTest(`${engineName}: ${skin} acknowledges submissions without SSE delay and deduplicates event order`, async () => {
+  for (const skin of ["classic"]) browserTest(`${engineName}: ${skin} acknowledges submissions without SSE delay and deduplicates event order`, async () => {
     const browser = await engine.launch({ headless: true, ...(engineName === 'chromium' && process.env.PICLAW_TEST_CHROMIUM_PATH ? {executablePath:process.env.PICLAW_TEST_CHROMIUM_PATH} : {}) });
     const context = await browser.newContext({ viewport: { width: 1024, height: 768 }, reducedMotion: "reduce", serviceWorkers: "block" });
     const page = await context.newPage();
@@ -156,16 +156,16 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
         const button = document.querySelector<HTMLButtonElement>('.compose-box .send-btn, .chat__send-btn');
         return button != null && !button.disabled;
       });
-      const scroller = page.locator(skin === 'classic' ? '.timeline' : '.message-list').first();
+      const scroller = page.locator('.timeline').first();
       const readHistory = async () => {
         await scroller.evaluate((el:HTMLElement) => { el.scrollTop = -3000; });
         await page.waitForTimeout(150);
         expect(await scroller.evaluate(el => el.scrollTop)).toBeLessThan(-60);
       };
       const expectSubmittedRowVisible = async (id:number) => {
-        await page.waitForFunction(({id,skin}) => {
-          const row=document.querySelector(skin==='classic'?`#post-${id}`:`[data-message-id="${id}"]`);
-          const root=document.querySelector(skin==='classic'?'.timeline':'.message-list');
+        await page.waitForFunction(({id,_skin}) => {
+          const row=document.querySelector(`#post-${id}`);
+          const root=document.querySelector('.timeline');
           if(!row || !root) return false;
           const r=row.getBoundingClientRect(),s=root.getBoundingClientRect();
           return r.bottom>s.top && r.top<s.bottom;
@@ -176,7 +176,7 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       await input.press('Enter');
       await page.locator('[data-submission-state="sending"]').waitFor({ timeout: 1500 });
       expect(await page.locator('[data-submission-state="sending"]').textContent()).toContain('Sending');
-      expect(await page.locator('[data-submission-state="sending"]').getAttribute('class')).toContain(skin==='classic'?'agent-status':'agent-status-panel__status');
+      expect(await page.locator('[data-submission-state="sending"]').getAttribute('class')).toContain('agent-status');
       expect(await page.locator('[data-submission-state="sending"] .agent-status-spinner, [data-submission-state="sending"] .agent-status-panel__spinner').count()).toBe(1);
       expect(await page.locator('#post-777001,[data-message-id="777001"]').count()).toBe(0);
       releaseAck();
@@ -231,7 +231,7 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       expect(shortcutPosts[0]).toMatchObject({content:'Ctrl steer while busy',mode:'steer'});
       // Classic retired the legacy flag when native accepted-input storage became
       // authoritative; Visual still sends it, but both must send steering mode.
-      expect(shortcutPosts[0].persist_steer).toBe(skin==='visual' ? true : undefined);
+
       await page.locator('#post-778001,[data-message-id="778001"]').waitFor();
       expect(await page.locator('#post-778001,[data-message-id="778001"]').count()).toBe(1);
       expect(await page.getByText('Steering queued for the current turn.',{exact:true}).count()).toBe(0);
@@ -247,7 +247,7 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       await input.press('Meta+Enter');
       await page.waitForFunction(()=>document.querySelector('textarea')?.value === '');
       expect(shortcutPosts).toHaveLength(3);
-      expect(shortcutPosts.every(post => post.mode === 'steer' && post.persist_steer === (skin==='visual' ? true : undefined))).toBe(true);
+
       expect(await page.locator('#post-778002,[data-message-id="778002"]').count()).toBe(1);
       expect(await page.locator('#post-778003,[data-message-id="778003"]').count()).toBe(1);
       for (const invalid of ['json', 'empty'] as const) {

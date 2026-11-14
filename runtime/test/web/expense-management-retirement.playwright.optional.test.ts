@@ -27,7 +27,6 @@ beforeAll(async () => {
   server = Bun.serve({ port: 0, async fetch(request) {
     const url = new URL(request.url);
     if (url.pathname === '/classic') return new Response(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/classic/dist/app.bundle.css"></head><body><div id="settings-widget-fixture-root"></div><script type="module" src="/static/classic/dist/settings-widget-fixture.bundle.js"></script></body></html>`, { headers: { 'content-type': 'text/html' } });
-    if (url.pathname === '/visual') return new Response(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/visual/dist/app.bundle.css"></head><body><div id="app"></div><script>localStorage.setItem('piclaw-active-panel','settings');localStorage.setItem('piclaw-settings-category','budget');localStorage.setItem('piclaw_wizard_dismissed','1');</script><script type="importmap">{"imports":{"#editor-vendor/codemirror":"/editor-vendor/codemirror.js"}}</script><script type="module" src="/static/visual/dist/app.bundle.js"></script></body></html>`, { headers: { 'content-type': 'text/html' } });
     if (url.pathname === '/editor-vendor/codemirror.js') return new Response(await readFile(join(import.meta.dir, '../../extensions/viewers/editor/vendor/codemirror.js')), { headers: { 'content-type': 'text/javascript' } });
     if (url.pathname === '/agent/settings-data') return json({ userName: 'Fixture', assistantName: 'Fixture assistant', providers: [], toolsets: [], themes: [], colorKeys: [] });
     if (url.pathname === '/agent/models') return json(models);
@@ -45,7 +44,7 @@ beforeAll(async () => {
 });
 afterAll(async () => { for (const browser of browsers.values()) await browser.close(); browsers.clear(); server?.stop(true); });
 
-for (const engine of ['chromium', 'webkit']) for (const skin of ['classic', 'visual']) for (const touch of [false, true])
+for (const engine of ['chromium', 'webkit']) for (const skin of ['classic']) for (const touch of [false, true])
 browserTest(`${skin}/${engine}/${touch ? 'phone touch' : 'desktop keyboard'} removes expense management and retains priced model/settings navigation`, async () => {
   const browser = browsers.get(engine); if (!browser) throw Error('Browser fixture missing');
   const page = await browser.newPage({ viewport: touch ? { width: 520, height: 720 } : { width: 1280, height: 800 }, hasTouch: touch });
@@ -54,17 +53,12 @@ browserTest(`${skin}/${engine}/${touch ? 'phone touch' : 'desktop keyboard'} rem
   page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/agent/settings/budget')) financialRequests.push(request.url()); });
   try {
     await page.goto(`${base}/${skin}?section=budget&width=${touch ? 480 : 1100}&height=700`, { waitUntil: 'networkidle' });
-    const nav = skin === 'classic' ? page.locator('.settings-nav') : page.locator('.settings-panel__nav');
+    const nav = page.locator('.settings-nav');
     await nav.waitFor({ state: 'visible' });
-    if (skin === 'classic') expect(await nav.locator('.settings-nav-item.active').textContent()).toContain('General');
-    else {
-      expect(await page.locator('.settings-panel__section-title').first().textContent()).toBe('General');
-      expect(await nav.locator('.settings-panel__nav-item--active').count()).toBe(1);
-      expect(await nav.locator('.settings-panel__nav-item--active').textContent()).toBe('General');
-    }
+    expect(await nav.locator('.settings-nav-item.active').textContent()).toContain('General');
     expect(await nav.getByRole('button', { name: 'Budget', exact: true }).count()).toBe(0);
     expect(await page.locator('.settings-budget-section,.settings-panel__section--budget').count()).toBe(0);
-    const item = skin === 'classic' ? '.settings-nav-item' : '.settings-panel__nav-item';
+    const item = '.settings-nav-item';
     const model = nav.locator(item).filter({ hasText: /^Models$/ });
     if (touch) await model.tap(); else { await model.focus(); await page.keyboard.press('Enter'); }
     const pricing = page.locator(touch ? '.model-catalogue-settings__row-mobile-meta' : '.model-catalogue-settings__row-input-price').first();
@@ -78,9 +72,9 @@ browserTest(`${skin}/${engine}/${touch ? 'phone touch' : 'desktop keyboard'} rem
     }
     const scheduled = nav.locator(item).filter({ hasText: /^Scheduled Tasks$/ });
     if (touch) await scheduled.tap(); else { await scheduled.focus(); await page.keyboard.press('Enter'); }
-    const detail = page.locator(skin === 'classic' ? '.settings-task-row' : '.settings-panel__scheduled-detail');
+    const detail = page.locator('.settings-task-row');
     await detail.first().waitFor({ state: 'visible' });
-    expect(await page.getByText(skin === 'classic' ? 'Daily fixture summary' : 'Retained task', { exact: true }).first().isVisible()).toBe(true);
+    expect(await page.getByText('Daily fixture summary', { exact: true }).first().isVisible()).toBe(true);
     const dimensions = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
     expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.width + 1);
     expect(financialRequests).toEqual([]); expect(errors).toEqual([]);

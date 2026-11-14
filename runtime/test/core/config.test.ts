@@ -1105,8 +1105,7 @@ describe("core config", () => {
             userAvatarBackground: "#123456",
           },
           web: {
-            uiMode: "visual",
-            idleTimeout: 123,
+                idleTimeout: 123,
             persistThinking: true,
             persistThinkingMaxChars: 4321,
             totpWindow: 7,
@@ -1170,7 +1169,6 @@ describe("core config", () => {
       });
       expect(snapshot["call:getWebServerConfig"]).toMatchObject({ idleTimeout: 123 });
       expect(snapshot["call:getWebRuntimeConfig"]).toMatchObject({
-        uiMode: "visual",
         totpWindow: 7,
         sessionTtl: 86400,
         passkeyMode: "passkey-only",
@@ -1235,7 +1233,6 @@ describe("core config", () => {
       expect(snapshot["call:getIdentityConfig"]).toMatchObject({ assistantName: "Compatibility Assistant" });
       expect(snapshot["call:getWebServerConfig"]).toMatchObject({ idleTimeout: 61 });
       expect(snapshot["call:getWebRuntimeConfig"]).toMatchObject({
-        uiMode: "visual",
         totpWindow: 2,
         sessionTtl: 600,
         passkeyMode: "totp-only",
@@ -1247,7 +1244,6 @@ describe("core config", () => {
       });
       for (const envKey of [
         "PICLAW_ASSISTANT_NAME",
-        "PICLAW_WEB_UI_MODE",
         "PICLAW_WEB_IDLE_TIMEOUT",
         "PICLAW_WEB_TOTP_WINDOW",
         "PICLAW_WEB_SESSION_TTL",
@@ -1532,4 +1528,31 @@ describe("core config", () => {
       },
     );
   });
+});
+
+for (const legacy of [
+  { domains: { web: { uiMode: 'visual' } } },
+  { web: { uiMode: 'visual' } },
+  { uiMode: 'visual' },
+]) {
+  test('retired Visual configuration is ignored with one deprecation warning: ' + JSON.stringify(legacy), () => {
+    const workspace = createTempWorkspace('piclaw-retired-ui-');
+    try {
+      writeWorkspaceConfig(workspace.workspace, legacy);
+      const { snapshot, stderr } = runConfigSubprocess(workspace, ['call:getWebRuntimeConfig', 'call:isPersistThinkingEnabled', 'call:getPersistThinkingMaxChars']);
+      expect(snapshot['call:getWebRuntimeConfig']).not.toHaveProperty('uiMode');
+      expect(stderr.split('Visual UI has been removed; using Classic').length - 1).toBe(1);
+      expect(JSON.parse(readFileSync(join(workspace.workspace, '.piclaw/config.json'), 'utf8'))).toEqual(legacy);
+    } finally { workspace.cleanup(); }
+  });
+}
+
+test('retired UI environment selection cannot restore Visual and warns once even with persisted settings', () => {
+  const workspace = createTempWorkspace('piclaw-retired-ui-env-');
+  try {
+    writeWorkspaceConfig(workspace.workspace, { domains: { web: { uiMode: 'visual' } } });
+    const { snapshot, stderr } = runConfigSubprocess(workspace, ['call:getWebRuntimeConfig'], { env: { PICLAW_WEB_UI_MODE: 'visual' } });
+    expect(snapshot['call:getWebRuntimeConfig']).not.toHaveProperty('uiMode');
+    expect(stderr.split('Visual UI has been removed; using Classic').length - 1).toBe(1);
+  } finally { workspace.cleanup(); }
 });

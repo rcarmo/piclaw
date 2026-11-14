@@ -18,7 +18,7 @@ keep the same revision even when its source changes. Cache writes use temporary
 files and atomic renames; work is serialised per avatar kind. A passive request
 captured before an explicit update cannot overwrite the refreshed cache afterwards.
 
-The web command path and Settings broadcast `profile_update`. Classic, Visual and
+The web command path and Settings broadcast `profile_update`. Classic and
 family subscribe. Family receives only public instance name and agent-avatar URL;
 operator user identity and arbitrary profile fields are removed at the SSE boundary.
 Initial/reconnected pages hydrate from the already-public manifest. An older
@@ -60,7 +60,7 @@ The avatar fixture uses disposable files/config and real Sharp processing. It
 covers same-path replacement, stable content hashes, reset/set persistence in a
 fresh process, failed-source preservation, queued stale reads, maskable corners,
 PNG formats and sizes, and HEAD bodies. Server projection tests reject private
-fields and revoked clients. Shipped Classic/Visual browser fixtures cover profile
+fields and revoked clients. Shipped Classic browser fixtures cover profile
 updates, clears and reloads in Chromium/WebKit. A shipped family-shell fixture
 checks initial branding, live changes and clear without changing account identity.
 

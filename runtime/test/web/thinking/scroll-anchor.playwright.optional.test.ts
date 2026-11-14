@@ -12,7 +12,7 @@ beforeAll(async()=>{
   if(process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS!=='1')return;
   directory=await mkdtemp(join(tmpdir(),'scroll-anchor-browser-'));
   const entry=join(directory,'fixture.ts');
-  await writeFile(entry,`import * as classic from ${JSON.stringify(join(root,'web/src/ui/scroll-anchor.ts'))};\nimport * as visual from ${JSON.stringify(join(root,'web/static/visual/frontend/src/utils/scroll-anchor.ts'))};\nwindow.anchorApis={classic,visual};`);
+  await writeFile(entry,`import * as classic from ${JSON.stringify(join(root,'web/src/ui/scroll-anchor.ts'))};\nwindow.anchorApis={classic};`);
   const built=await Bun.build({entrypoints:[entry],target:'browser',format:'esm'});
   if(!built.success)throw new AggregateError(built.logs,'Scroll fixture build failed');
   bundle=await built.outputs[0].text();
@@ -35,7 +35,7 @@ afterAll(async()=>{
   browsers.clear();server?.stop(true);if(directory)await rm(directory,{recursive:true,force:true});
 });
 
-for(const engine of ['chromium','webkit'])for(const skin of ['classic','visual'])browserTest(`${engine} ${skin} shared anchoring preserves toggles, user scroll and disposal`,async()=>{
+for(const engine of ['chromium','webkit'])for(const skin of ['classic'])browserTest(`${engine} ${skin} shared anchoring preserves toggles, user scroll and disposal`,async()=>{
   const browser=browsers.get(engine);if(!browser||!server)throw Error('Disposable browser fixture unavailable');
   const page=await browser.newPage({viewport:{width:800,height:700},deviceScaleFactor:2});
   try{
@@ -53,10 +53,8 @@ for(const engine of ['chromium','webkit'])for(const skin of ['classic','visual']
       scroller.scrollTop=-500;await win.frames();
       win.anchor=api.attachHeaderAnchor(scroller,panel);
       win.api=api;
-      return{header:document.getElementById('header')!.getBoundingClientRect().top,top:scroller.scrollTop,
-        shared:win.anchorApis.classic.attachHeaderAnchor===win.anchorApis.visual.attachHeaderAnchor};
+      return{header:document.getElementById('header')!.getBoundingClientRect().top,top:scroller.scrollTop};
     },skin);
-    expect(before.shared).toBe(true);
     for(const height of [160,0,160,0]){
       const after=await page.evaluate(async size=>{
         const win=window as any;win.anchor.mark();document.getElementById('panel')!.style.height=size+'px';win.anchor.compensate();await win.frames();

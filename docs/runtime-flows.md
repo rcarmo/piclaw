@@ -169,7 +169,7 @@ Native reset (`/new-session`) and manual/automatic compaction retain conversatio
 
 `GET /agent/context` returns a full snapshot with `contextUpdate: "replace"`. This public marker replaces `tokens`, `contextWindow` and `percent`, including nulls. Runtime authority hints stay private. Without the marker, partial/cache-only telemetry retains omitted meters. Cache accounting remains independent. Both skins retain generation/revision guards and bounded page-local observations; late polls cannot undo a newer accepted boundary. Same-identity reconnect and authoritative unbound snapshots clear stale meters.
 
-Ordinary context requests perform **zero full-tree summary reads** and omit `sessionTree`. Clients needing the historical summary field must request `GET /agent/context?include_tree=1` (and their usual `chat_jid`). Each opt-in request reads the existing exact public tree: `{ sessionTree: { leafId, total } }`. `/tree`, session pickers, imported-history redaction and head/count semantics are unchanged. The repository consumer audit found no Classic/Visual meter consumer for that field; the qualification consumer now requests it explicitly. Arbitrary external clients were not observable in this audit. No latency improvement has been measured.
+Ordinary context requests perform **zero full-tree summary reads** and omit `sessionTree`. Clients needing the historical summary field must request `GET /agent/context?include_tree=1` (and their usual `chat_jid`). Each opt-in request reads the existing exact public tree: `{ sessionTree: { leafId, total } }`. `/tree`, session pickers, imported-history redaction and head/count semantics are unchanged. The repository consumer audit found no Classic meter consumer for that field; the qualification consumer now requests it explicitly. Arbitrary external clients were not observable in this audit. No latency improvement has been measured.
 
 Together, those paths keep the context compaction affordance in sync immediately after compaction and when returning to the tab or reopening the webapp, without requiring another agent turn or waiting for the slower backstop poller.
 
@@ -179,7 +179,7 @@ The persistence model is intentionally split:
 - backend truth decides whether the compaction-related affordance is currently warranted
 - browser-local state is reserved for lightweight local UI memory such as dismissal/seen state
 
-Context usage is never read from or written to `localStorage`. Classic can reuse a value accepted by the current page revision; Visual keeps the active chat's signals. A fresh page starts without a historical meter estimate and reads the bound SDK context. Old browser/router snapshot bytes remain opaque and inert. See [native UI observations](development/native-ui-projections.md) for cache bounds, unsent composer text, preferences and OOBE ownership.
+Context usage is never read from or written to `localStorage`. Classic can reuse a value accepted by the current page revision. A fresh page starts without a historical meter estimate and reads the bound SDK context. Old browser/router snapshot bytes remain opaque and inert. See [native UI observations](development/native-ui-projections.md) for cache bounds, unsent composer text, preferences and OOBE ownership.
 
 ## Request timing / perf tracing
 

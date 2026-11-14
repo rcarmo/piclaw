@@ -2,9 +2,9 @@
 
 Current native hosts retain the existing read/preview pane, with Apply disabled by backend capability fields and observed policy unknown. Startup-owned native MCP contexts cannot be reconfigured through a legacy session-pool shutdown. See [native host composition](native-host-composition.md). The earlier Apply/browser receipts below concern the explicit historical session-owner boundary; they do not enable native live Apply.
 
-Classic and Visual Settings include an MCP pane backed by the owner-only [settings API](mcp-settings-api.md). It previews engine/codemode compatibility and applies adapter codemode changes to current and new sessions. Engine replacement remains blocked, with the exact 1.0.1 public-contract gaps and closure blocker listed for Native.
+Classic Settings includes an MCP pane backed by the owner-only [settings API](mcp-settings-api.md). It previews engine/codemode compatibility and applies adapter codemode changes to current and new sessions. Engine replacement remains blocked, with the exact 1.0.1 public-contract gaps and closure blocker listed for Native.
 
-Both skins use one request/state controller and their own Preact renderer. Initial load and Refresh use GET; Preview sends only the selected engine/codemode. Changing a selector sends nothing until Preview is pressed. Apply requires a fresh compatible preview and an explicit acknowledgement that turns across all chats may be interrupted. Changing a selector clears that acknowledgement. The pane separates persisted and observed policy; native projection and unknown connection status are not connection health.
+The web UI uses one request/state controller and the Preact renderer. Initial load and Refresh use GET; Preview sends only the selected engine/codemode. Changing a selector sends nothing until Preview is pressed. Apply requires a fresh compatible preview and an explicit acknowledgement that turns across all chats may be interrupted. Changing a selector clears that acknowledgement. The pane separates persisted and observed policy; native projection and unknown connection status are not connection health.
 
 ## Request lifecycle and safety
 
@@ -16,9 +16,12 @@ Both skins use one request/state controller and their own Preact renderer. Initi
 - Unexpected transport/JSON errors use fixed UI text. Server strings render as escaped text, never HTML.
 - No auth material, server config or fallback engine is introduced. The backend remains the authority; the pane itself grants no access.
 
-Shared theme-compatible CSS constrains controls and long names, with 44-pixel controls below 600px. The pane uses existing Classic/Visual styles. The core MCP nav label is registered in each supported Classic locale; the pane's English copy follows existing core settings conventions.
+Shared theme-compatible CSS constrains controls and long names, with 44-pixel controls below 600px. The pane uses existing Classic styles. The core MCP nav label is registered in each supported Classic locale; the pane's English copy follows existing core settings conventions.
 
 ## Validation and profiling
+
+> Historical qualification of the original delivery. Visual was later retired in #1990.
+
 
 Controller tests exercise preview-only requests, stale responses, refresh/selection ordering, rapid partial selections, malformed state, denied access and disposal. Registration tests cover both actual shells and the shared controller. Chromium and WebKit cases at 1280px and 390px use real renderer code, compiled skin styles and the real read/preview handler behind a synthetic local principal. They check unchanged config, no Apply/Save, hostile/long server names, stale-response suppression, refresh clearing, owner revocation and responsive controls. Two additional Chromium cases navigate through the actual Classic and Visual settings shells and verify a new GET after remount.
 

@@ -109,9 +109,6 @@ function renderHtmlTemplate(relPath: string, html: string): string {
   if (relPath === "classic/index.html") {
     return renderedWithSharedFlags.replaceAll(APP_ASSET_VERSION_PLACEHOLDER, getAppAssetVersion());
   }
-  if (relPath === "visual/index.html") {
-    return renderedWithSharedFlags;
-  }
   if (relPath === "login.html") {
     return renderedWithSharedFlags.replaceAll(LOGIN_ASSET_VERSION_PLACEHOLDER, getLoginAssetVersion());
   }

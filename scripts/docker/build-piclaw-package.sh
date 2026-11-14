@@ -20,8 +20,7 @@ bun update --ignore-scripts
 bun install --ignore-scripts
 bun run build
 bun run build:web
-bun run build:web:visual
-find runtime/web/static/classic/dist runtime/web/static/common/dist runtime/web/static/visual/dist -type f -name '*.map' -delete
+find runtime/web/static/classic/dist runtime/web/static/common/dist -type f -name '*.map' -delete
 
 rm -f piclaw-*.tgz
 PACK_DIR="$(mktemp -d)"

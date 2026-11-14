@@ -25,7 +25,7 @@ beforeAll(async () => {
     async fetch(req) {
       const url = new URL(req.url);
       if (url.pathname === "/") {
-        const skin = url.searchParams.get("skin") === "visual" ? "visual" : "classic";
+        const skin = "classic";
         const dark = url.searchParams.get("theme") === "dark";
         return new Response(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/${skin}/css/styles.css"><style>:root{--bg-primary:${dark ? "#111820" : "#fff"};--bg-secondary:${dark ? "#1c2630" : "#f7f9fa"};--bg-hover:${dark ? "#293542" : "#e8ebed"};--text-primary:${dark ? "#edf3f7" : "#0f1419"};--border-color:${dark ? "#52606d" : "#aab6c0"};--accent-color:#2783b8;--accent-hover:#1d6894;--accent-contrast-text:#fff;--danger-color:#dc3545;--font-family:system-ui,sans-serif}#app{height:100vh}</style></head><body><div id="app"></div><button id="outside" style="padding:1px;border-radius:2px">Outside settings</button><script type="module" src="/fixture.js"></script></body></html>`, { headers: { "content-type": "text/html" } });
       }
@@ -109,7 +109,7 @@ for (const theme of ["light", "dark"]) {
   }
 }
 
-for (const skin of ["classic", "visual"]) {
+for (const skin of ["classic"]) {
   for (const theme of ["light", "dark"]) {
     for (const width of [1280, 390]) {
       browserTest(`${skin} ${theme} add-on buttons share appearance at ${width}px`, async () => {
@@ -118,8 +118,8 @@ for (const skin of ["classic", "visual"]) {
           const plain = await style(page, "plain");
           for (const id of ["row", "inline", "telegram"]) expect(await style(page, id)).toEqual(plain);
           expect(plain.radius).toBe("6px");
-          expect(parseFloat(plain.height)).toBeGreaterThanOrEqual(skin === "classic" ? 26 : 32);
-          expect(await page.locator("#telegram span").evaluate(el => getComputedStyle(el).fontSize)).toBe(skin === "classic" ? (width <= 640 ? "10.584px" : "12.6px") : "13px");
+          expect(parseFloat(plain.height)).toBeGreaterThanOrEqual(26);
+          expect(await page.locator("#telegram span").evaluate(el => getComputedStyle(el).fontSize)).toBe(width <= 640 ? "10.584px" : "12.6px");
           expect((await style(page, "outside")).padding).toBe("1px");
           expect((await style(page, "custom")).padding).toBe("1px");
           expect((await style(page, "tab")).padding).toBe("2px");
@@ -141,8 +141,8 @@ for (const skin of ["classic", "visual"]) {
         expect((await style(page, "row")).outline).toBe("solid");
         for (const id of ["disabled", "aria-disabled"]) {
           const before = await style(page, id);
-          expect(before.opacity).toBe(skin === "classic" ? "0.5" : "0.55");
-          expect(before.cursor).toBe(skin === "classic" ? "pointer" : "not-allowed");
+          expect(before.opacity).toBe("0.5");
+          expect(before.cursor).toBe("pointer");
           await page.locator(`#${id}`).hover({ force: true });
           expect((await style(page, id)).background).toBe(before.background);
         }
@@ -161,8 +161,8 @@ for (const skin of ["classic", "visual"]) {
           el.append(button);
         });
         expect((await style(page, "incoming")).padding).toBe(initial.padding);
-        const nav = skin === "classic" ? ".settings-nav" : ".settings-panel__nav";
-        await page.locator(nav).getByRole("button", { name: skin === "classic" ? "General" : "Core fixture", exact: true }).click();
+        const nav = ".settings-nav";
+        await page.locator(nav).getByRole("button", { name: "General", exact: true }).click();
         expect(await page.locator(".settings-addon-pane").count()).toBe(0);
         await page.locator(nav).getByRole("button", { name: "Buttons", exact: true }).click();
         await page.locator(".settings-addon-pane #plain").waitFor();

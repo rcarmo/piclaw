@@ -1,5 +1,7 @@
 # Model catalogue UX specification
 
+> Historical source audit. Visual was removed in #1990; paths and counts below describe the inspected revision, not the current UI.
+
 Status: proposal  
 Scope: classic web UI and visual web UI  
 Measured catalogue: 405 models on 27 August 2026

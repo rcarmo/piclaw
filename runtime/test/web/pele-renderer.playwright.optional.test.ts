@@ -13,13 +13,12 @@ beforeAll(async () => {
     build.onResolve({ filter: /^diagram-tests$/ }, () => ({ path: 'entry', namespace: 'diagram-tests' }));
     build.onLoad({ filter: /.*/, namespace: 'diagram-tests' }, () => ({ loader: 'ts', contents: `
       import { renderMermaidDiagrams as classic } from ${JSON.stringify(resolve(repo, 'runtime/web/src/markdown.ts'))};
-      import { renderMermaidDiagrams as visual } from ${JSON.stringify(resolve(repo, 'runtime/web/static/visual/frontend/src/utils/mermaid-render.ts'))};
       import { sanitizeDiagramSvg } from ${JSON.stringify(resolve(repo, 'runtime/web/src/ui/diagram-sanitizer.ts'))};
-      import { initTheme, selectLocalTheme, setThemeModePreference } from ${JSON.stringify(resolve(repo, 'runtime/web/src/ui/theme.ts'))};
+      import { initTheme, setThemeModePreference } from ${JSON.stringify(resolve(repo, 'runtime/web/src/ui/theme.ts'))};
       import { WEB_THEME_PRESETS } from ${JSON.stringify(resolve(repo, 'runtime/src/core/ui-theme-catalogue.ts'))};
-      import { importVSCodeTheme, applyTheme } from ${JSON.stringify(resolve(repo, 'runtime/web/static/visual/frontend/src/utils/theme-importer.ts'))};
+      import { selectLocalTheme } from ${JSON.stringify(resolve(repo, 'runtime/test/web/fixtures/select-theme.ts'))};
       import DOMPurify from 'dompurify';
-      window.diagramsTest = { classic, visual, sanitizeDiagramSvg, initTheme, selectLocalTheme, setThemeModePreference, presets: WEB_THEME_PRESETS, importVSCodeTheme, applyTheme, DOMPurify };
+      window.diagramsTest = { classic, sanitizeDiagramSvg, initTheme, selectLocalTheme, setThemeModePreference, presets: WEB_THEME_PRESETS, DOMPurify };
     ` }));
   } }] });
   if (!result.success) throw Error(result.logs.join('\n'));
@@ -52,12 +51,12 @@ async function fixture(run: (page: Page) => Promise<void>, options: { load?: boo
   } finally { await page.close(); }
 }
 
-for (const surface of ['classic', 'visual', 'family']) browserTest(`${surface}: complete Pele corpus survives sanitization, references and repeated rendering`, async () => {
+for (const surface of ['classic', 'family']) browserTest(`${surface}: complete Pele corpus survives sanitization, references and repeated rendering`, async () => {
   await fixture(async page => {
     const results = await page.evaluate(async ({ surface, corpus }) => {
       const w = window as any, api = w.diagramsTest, post = document.getElementById('post')!;
-      api.initTheme({ skin: surface === 'visual' ? 'visual' : 'classic' });
-      const render = surface === 'visual' ? api.visual : api.classic;
+      api.initTheme();
+      const render = api.classic;
       const options = surface === 'family' ? { rewriteImageSrc: () => null } : {};
       for (const entry of corpus) w.putDiagram(entry.source);
       document.getElementById('focus')!.focus();
@@ -81,16 +80,16 @@ for (const surface of ['classic', 'visual', 'family']) browserTest(`${surface}: 
   });
 }, 30_000);
 
-for (const surface of ['classic', 'visual', 'family']) browserTest(`${surface}: live catalogue and imported light/dark palettes recolour the same diagram nodes`, async () => {
+for (const surface of ['classic', 'family']) browserTest(`${surface}: live catalogue and imported light/dark palettes recolour the same diagram nodes`, async () => {
   await fixture(async page => {
     await page.emulateMedia({ colorScheme: 'dark' });
     const result = await page.evaluate(async surface => {
       const w = window as any, api = w.diagramsTest, post = document.getElementById('post')!;
-      api.initTheme({ skin: surface === 'visual' ? 'visual' : 'classic' });
+      api.initTheme();
       w.putDiagram('flowchart LR\nA[Input] --> B[Output]');
       w.putDiagram('pie title Series\n"One" : 4\n"Two" : 6\n"Three" : 2');
       w.putDiagram('flowchart LR\nA[Authored]\nstyle A fill:#879a39');
-      await (surface === 'visual' ? api.visual : api.classic)(post, surface === 'family' ? { rewriteImageSrc: () => null } : {});
+      await (api.classic)(post, surface === 'family' ? { rewriteImageSrc: () => null } : {});
       const svgs = Array.from(post.querySelectorAll('svg'));
       const text = svgs[0].querySelector('text')!, node = svgs[0].querySelector('.pele-node rect')!, marker = svgs[0].querySelector('.pele-marker')!;
       const authored = svgs[2].querySelector('.pele-node rect')!;
@@ -113,9 +112,6 @@ for (const surface of ['classic', 'visual', 'family']) browserTest(`${surface}: 
         }
       };
       for (const preset of api.presets) { api.selectLocalTheme(preset.id); if (preset.mode === 'auto') for (const mode of ['light', 'dark']) { api.setThemeModePreference(mode); inspect(preset.id + '/' + mode); } else inspect(preset.id); }
-      for (const type of ['light', 'dark']) {
-        api.applyTheme(api.importVSCodeTheme({ type, colors: { 'editor.background': type === 'dark' ? '#121212' : '#fefefe', 'editor.foreground': type === 'dark' ? '#ccddee' : '#223344', focusBorder: '#faab22' } })); inspect('import/' + type);
-      }
       probe.remove(); return { failures, presetCount: api.presets.length, svgCount: svgs.length };
     }, surface);
     expect(result.failures).toEqual([]); expect(result.presetCount).toBeGreaterThan(10); expect(result.svgCount).toBe(3);
@@ -145,7 +141,7 @@ browserTest('cold loader joins callers, renders the latest streamed bytes and ig
       const w = window as any, append = document.head.append.bind(document.head); w.heldLoads = [];
       document.head.append = (...nodes: (Node | string)[]) => { for (const node of nodes) if (node instanceof HTMLScriptElement && node.src.endsWith('/pele.js')) w.heldLoads.push(node); else append(node); };
       const post = document.getElementById('post')!, el = w.putDiagram('flowchart LR\nA[Old]-->B');
-      w.pendingFirst = w.diagramsTest.classic(post); w.pendingSecond = w.diagramsTest.visual(post);
+      w.pendingFirst = w.diagramsTest.classic(post); w.pendingSecond = w.diagramsTest.classic(post);
       el.dataset.mermaid = btoa('flowchart LR\nA[Latest]-->B');
       const removed = w.putDiagram('flowchart LR\nC[Removed]-->D'); w.pendingDetached = w.diagramsTest.classic(post); removed.remove(); w.detached = removed;
     });
@@ -169,7 +165,7 @@ browserTest('failed local script load uses the existing error surface and a late
     });
     expect(first).toContain('Mermaid library failed to load');
     await page.addScriptTag({ content: readFileSync(resolve(repo, 'runtime/web/static/common/js/vendor/pele.js'), 'utf8') });
-    const count = await page.evaluate(async () => { const w = window as any; w.putDiagram('flowchart LR\nC-->D'); await w.diagramsTest.visual(document.getElementById('post')); return document.querySelectorAll('#post svg').length; });
+    const count = await page.evaluate(async () => { const w = window as any; w.putDiagram('flowchart LR\nC-->D'); await w.diagramsTest.classic(document.getElementById('post')); return document.querySelectorAll('#post svg').length; });
     expect(count).toBe(1);
   }, { load: false });
 }, 30_000);

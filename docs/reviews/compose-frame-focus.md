@@ -26,6 +26,6 @@ Final combined validation passes **46 browser cases / 858 assertions**, includin
 ## Captures
 
 - [Classic phone composer](compose-frame-focus/classic-phone.png)
-- [Visual desktop composer](compose-frame-focus/visual-desktop.png)
+- [Visual desktop composer](archive/visual-ui/compose-frame-focus/visual-desktop.png)
 
 No merge, installation or reload is included.

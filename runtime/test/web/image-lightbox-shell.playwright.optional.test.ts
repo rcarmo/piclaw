@@ -14,7 +14,7 @@ beforeAll(async () => {
   image = await sharp({create:{width:1600,height:1000,channels:4,background:"#2463eb"}}).png().toBuffer();
   server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
     const url = new URL(req.url);
-    if (url.pathname === "/") return new Response(Bun.file(join(webRoot, `static/${url.searchParams.get("skin") === "visual" ? "visual" : "classic"}/index.html`)), { headers: { "content-type": "text/html" } });
+    if (url.pathname === "/") return new Response(Bun.file(join(webRoot, `static/${"classic"}/index.html`)), { headers: { "content-type": "text/html" } });
     if (url.pathname === "/editor-vendor/codemirror.js") return new Response(Bun.file(resolve(webRoot, "../extensions/viewers/editor/vendor/codemirror.js")), { headers: { "content-type": "text/javascript" } });
     if (url.pathname.startsWith("/static/")) {
       const path = resolve(webRoot, url.pathname.slice(1));
@@ -26,7 +26,7 @@ beforeAll(async () => {
 afterAll(() => server?.stop(true));
 
 for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
-  for (const skin of ["classic", "visual"]) browserTest(`${engineName}: ${skin} shipped narrow thumbnail opens a visible viewport preview`, async () => {
+  for (const skin of ["classic"]) browserTest(`${engineName}: ${skin} shipped narrow thumbnail opens a visible viewport preview`, async () => {
     const browser = await engine.launch({ headless: true, ...(engineName === 'chromium' && process.env.PICLAW_TEST_CHROMIUM_PATH ? {executablePath:process.env.PICLAW_TEST_CHROMIUM_PATH} : {}) });
     const context = await browser.newContext({ viewport: { width: 480, height: 720 }, colorScheme: "dark", reducedMotion: "reduce", serviceWorkers: "block" });
     const page = await context.newPage();
@@ -100,10 +100,10 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
     });
     try {
       await page.goto(server.url+'?skin='+skin+'&chat_jid='+encodeURIComponent(chatJid),{waitUntil:'load'});
-      const thumbnail=page.locator(skin==='classic'?'.media-preview img':'.message-list__media-img');
+      const thumbnail=page.locator('.media-preview img');
       await thumbnail.waitFor();
       await thumbnail.click();
-      const backdrop=page.locator(skin==='classic'?'.image-modal':'.lightbox__backdrop');
+      const backdrop=page.locator('.image-modal');
       await backdrop.waitFor();
       const preview=backdrop.locator('img');await preview.evaluate((el:HTMLImageElement)=>el.decode());
       const box=await backdrop.boundingBox();

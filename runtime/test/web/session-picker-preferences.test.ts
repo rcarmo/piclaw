@@ -44,8 +44,8 @@ test('invalid or unavailable session pin storage falls back safely', () => {
   expect(normaliseStoredSessionPickerPreferences(null)).toEqual({ pinnedChatJids: [] });
 });
 
-test('classic and visual session search typography matches the model picker', () => {
-  for (const theme of ['classic', 'visual']) {
+test('Classic session search typography matches the model picker', () => {
+  for (const theme of ['classic']) {
     const css = readFileSync(join(import.meta.dir, `../../web/static/${theme}/css/chat.css`), 'utf8');
     expect(css).toMatch(/\.compose-session-search\s*\{[^}]*font:\s*12px var\(--font-family-mono\);/s);
   }

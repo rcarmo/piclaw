@@ -26,9 +26,9 @@ Screenshots below are actual Appearance components with disposable API fixtures,
 ## Captures
 
 - [Classic Paper at 390px](shared-theme-palettes/classic-paper.png)
-- [Visual Paper at 390px](shared-theme-palettes/visual-paper.png)
+- [Visual Paper at 390px](archive/visual-ui/shared-theme-palettes/visual-paper.png)
 - [Classic SynthWave glow at 390px](shared-theme-palettes/classic-synthwave.png)
-- [Visual SynthWave glow at 390px](shared-theme-palettes/visual-synthwave.png)
+- [Visual SynthWave glow at 390px](archive/visual-ui/shared-theme-palettes/visual-synthwave.png)
 
 ## Gate caveats
 

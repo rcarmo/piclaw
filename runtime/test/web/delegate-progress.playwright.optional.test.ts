@@ -8,7 +8,7 @@ beforeAll(async()=>{
  const build=await Bun.build({entrypoints:[join(import.meta.dir,'fixtures/delegate-progress-fixture.tsx')],target:'browser',format:'esm'});
  if(!build.success)throw new AggregateError(build.logs,'Delegate fixture build failed');
  server=Bun.serve({hostname:'127.0.0.1',port:Number(process.env.PICLAW_BROWSER_FIXTURE_PORT??0),fetch(req){
-  const url=new URL(req.url),skin=url.searchParams.get('skin')==='visual'?'visual':'classic';
+  const url=new URL(req.url),skin="classic";
   if(url.pathname==='/fixture.js')return new Response(build.outputs[0],{headers:{'Content-Type':'text/javascript'}});
   if(url.pathname.startsWith('/static/'))return new Response(Bun.file(join(import.meta.dir,'../../web',url.pathname)));
   return new Response(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/${skin}/dist/app.bundle.css"><link rel="stylesheet" href="/static/common/css/delegate-progress.css"><main id="app" style="max-width:800px;margin:20px auto;padding:8px"></main><script type="module" src="/fixture.js"></script>`,{headers:{'Content-Type':'text/html'}});
@@ -18,7 +18,7 @@ beforeAll(async()=>{
 },15000);
 afterAll(async()=>{await browser?.close();server?.stop(true);});
 const children=[{tool_call_id:'call_a|fc_1',model:'provider/model',phase:'tool',tools:['read'],elapsedSeconds:4,responseChars:20},{tool_call_id:'call_b|fc_2',model:'provider/model',phase:'generating',tools:[],elapsedSeconds:4,responseChars:40}];
-for(const skin of ['classic','visual'])browserTest(`${skin} visible independent Delegate progress survives sibling completion/reconnect and clears at turn end`,async()=>{
+for(const skin of ['classic'])browserTest(`${skin} visible independent Delegate progress survives sibling completion/reconnect and clears at turn end`,async()=>{
  const page=await browser.newPage({viewport:{width:1000,height:800}}),errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));page.setDefaultTimeout(3000);
  const base=`http://127.0.0.1:${server.port}`;await page.route('**/*',route=>new URL(route.request().url()).origin===base?route.continue():route.abort());
  try{

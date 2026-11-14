@@ -25,7 +25,7 @@ beforeAll(async () => {
   server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
     const url = new URL(req.url);
     if (url.pathname === "/") {
-      const skin = url.searchParams.get("skin") === "visual" ? "visual" : "classic";
+      const skin = "classic";
       const light = url.searchParams.get("theme") === "light";
       return new Response(`<!doctype html><html class="${light ? "light" : ""}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/${skin}/css/styles.css"><style>html,body,#app{margin:0;width:100%;height:100%;overflow:hidden}</style></head><body class="${light ? "light" : ""}"><div id="app"></div><script type="module" src="/fixture.js"></script></body></html>`, { headers: { "content-type": "text/html" } });
     }
@@ -60,12 +60,12 @@ async function open(skin: string, section: string, width: number, theme: string)
   await page.addInitScript(() => Object.defineProperty(crypto, "randomUUID", { configurable: true, value: undefined }));
   await page.route("**/*", route => new URL(route.request().url()).origin === server!.url.origin ? route.continue() : route.abort());
   await page.goto(`${server!.url}?skin=${skin}&section=${section}&theme=${theme}`);
-  await page.locator(skin === "classic" ? ".settings-content" : ".settings-panel__content").waitFor();
-  await page.locator(section === "general" ? 'input[placeholder="Your name"]' : section === "keychain" ? (skin === "classic" ? ".settings-keychain-add-btn" : ".settings-panel__keychain-header button") : section === "keyboard" ? (skin === "classic" ? ".settings-shortcut-input" : ".settings-panel__shortcut-input") : "#contract-text").first().waitFor();
+  await page.locator(".settings-content").waitFor();
+  await page.locator(section === "general" ? 'input[placeholder="Your name"]' : section === "keychain" ? (".settings-keychain-add-btn") : section === "keyboard" ? (".settings-shortcut-input") : "#contract-text").first().waitFor();
   return page;
 }
 
-for (const skin of ["classic", "visual"]) for (const width of [1366, 820, 520, 390]) for (const addon of ["sample-addon", "delegate"]) {
+for (const skin of ["classic"]) for (const width of [1366, 820, 520, 390]) for (const addon of ["sample-addon", "delegate"]) {
   (addonsRoot ? browserTest : test.skip)(`${skin} actual ${addon} pane uses the host contract at ${width}px`, async () => {
     const page = await browser!.newPage({ viewport: { width, height: 844 }, reducedMotion: "reduce" });
     page.setDefaultTimeout(4000);
@@ -91,11 +91,11 @@ for (const skin of ["classic", "visual"]) for (const width of [1366, 820, 520, 3
   }, 15_000);
 }
 
-for (const skin of ["classic", "visual"]) {
+for (const skin of ["classic"]) {
   browserTest(`${skin} Keyboard retains labelled save, invalid, reset and filter behavior`, async () => {
     const page = await open(skin, "keyboard", 390, "dark");
     try {
-      const card = page.locator(skin === "classic" ? ".settings-shortcut-card" : ".settings-panel__shortcut-card").first();
+      const card = page.locator(".settings-shortcut-card").first();
       const input = card.locator('input[type="text"]');
       const initial = await input.inputValue();
       expect(await input.evaluate((node: HTMLInputElement) => node.labels?.length)).toBe(1);
@@ -108,14 +108,14 @@ for (const skin of ["classic", "visual"]) {
       await page.locator('[role="status"]').filter({ hasText: /saved/i }).waitFor();
       await card.getByRole("button", { name: /Default/, exact: false }).click();
       expect(await input.inputValue()).toBe(initial);
-      const filter = page.locator(skin === "classic" ? ".settings-header-filter" : ".settings-panel__keyboard-filter");
+      const filter = page.locator(".settings-header-filter");
       await filter.fill("fixture-no-shortcut-matches");
-      expect(await page.locator(skin === "classic" ? ".settings-shortcut-card" : ".settings-panel__shortcut-card").count()).toBe(0);
+      expect(await page.locator(".settings-shortcut-card").count()).toBe(0);
     } finally { await page.close(); }
   }, 15_000);
 }
 
-async function measure(page: Page, skin: string) {
+async function measure(page: Page, _skin) {
   return page.evaluate(rootSelector => {
     const root = document.querySelector(rootSelector) as HTMLElement;
     const bounds = root.getBoundingClientRect();
@@ -128,15 +128,15 @@ async function measure(page: Page, skin: string) {
         placeholderColor: getComputedStyle(element, "::placeholder").color, outline: s.outline, disabled: element.disabled, readOnly: element.readOnly,
         label: element.getAttribute("aria-label") || [...(element.labels || [])].map(label => label.textContent).join(" "), invalid: element.getAttribute("aria-invalid") };
     });
-  }, skin === "classic" ? ".settings-content" : ".settings-panel__content");
+  }, ".settings-content");
 }
 
-for (const skin of ["classic", "visual"]) for (const width of [1366, 820, 520, 390]) for (const section of ["general", "keychain", "contract"]) {
+for (const skin of ["classic"]) for (const width of [1366, 820, 520, 390]) for (const section of ["general", "keychain", "contract"]) {
   browserTest(`${skin} ${section} controls fit their content viewport at ${width}px`, async () => {
     const page = await open(skin, section, width, "dark");
     try {
       if (section === "keychain") {
-        await page.locator(skin === "classic" ? ".settings-keychain-add-btn" : ".settings-panel__keychain-header button").click();
+        await page.locator(".settings-keychain-add-btn").click();
         await page.locator('input[type="password"]').waitFor();
       }
       const result = await measure(page, skin);
@@ -148,7 +148,7 @@ for (const skin of ["classic", "visual"]) for (const width of [1366, 820, 520, 3
   }, 15_000);
 }
 
-for (const skin of ["classic", "visual"]) for (const width of [1366, 820, 520, 390]) for (const theme of ["dark", "light"]) {
+for (const skin of ["classic"]) for (const width of [1366, 820, 520, 390]) for (const theme of ["dark", "light"]) {
   browserTest(`${skin} opt-in fields retain same-skin control shell and native states at ${width}px ${theme}`, async () => {
     const page = await open(skin, "general", width, theme);
     try {
@@ -157,12 +157,10 @@ for (const skin of ["classic", "visual"]) for (const width of [1366, 820, 520, 3
         return { fontSize: s.fontSize, fontFamily: s.fontFamily, lineHeight: s.lineHeight, padding: s.padding, border: s.border, radius: s.borderRadius, background: s.backgroundColor };
       };
       const reference = await page.locator('input[placeholder="Your name"]').evaluate(shell);
-      if (skin === "classic") {
+      {
         // Captured from unmodified 060b72e6b ordinary Classic General controls.
         expect(reference).toMatchObject({ fontSize: width <= 640 ? "11.088px" : "13.2px", lineHeight: "normal", padding: "6px 10px", radius: "6px" });
         expect(reference.border).toMatch(/^1px solid /);
-      } else {
-        expect(reference).toMatchObject({ fontSize: "13px", lineHeight: "normal", padding: "5px 10px", radius: "3px" });
       }
       await page.evaluate(() => window.dispatchEvent(new CustomEvent("piclaw:open-settings", { detail: { section: "contract" } })));
       await page.locator("#contract-text").waitFor();
@@ -196,13 +194,13 @@ for (const skin of ["classic", "visual"]) for (const width of [1366, 820, 520, 3
   });
 }
 
-for (const skin of ["classic", "visual"]) for (const width of [1366, 390]) {
+for (const skin of ["classic"]) for (const width of [1366, 390]) {
   browserTest(`${skin} General exposes names and visible keyboard focus at ${width}px`, async () => {
     const page = await open(skin, "general", width, "dark");
     try {
       const name = page.locator('input[placeholder="Your name"]');
       expect(await name.evaluate((node: HTMLInputElement) => node.labels?.length)).toBe(1);
-      const agent = page.locator(`input[placeholder="${skin === "classic" ? "Agent name" : "Agent display name"}"]`);
+      const agent = page.locator(`input[placeholder="${"Agent name"}"]`);
       expect(await agent.evaluate((node: HTMLInputElement) => node.labels?.length)).toBe(1);
       for (const input of await page.locator('input[type="number"],input[type="checkbox"]').all()) {
         expect(await input.evaluate((node: HTMLInputElement) => Boolean(node.getAttribute("aria-label") || node.labels?.length))).toBe(true);
@@ -215,40 +213,24 @@ for (const skin of ["classic", "visual"]) for (const width of [1366, 390]) {
       await page.emulateMedia({ forcedColors: "none" });
       await name.fill("Changed fixture");
       await agent.focus();
-      if (skin === "visual") await page.getByRole("status").filter({ hasText: "Saved" }).waitFor();
+
       expect(await agent.evaluate(node => node === document.activeElement)).toBe(true);
     } finally { await page.close(); }
   });
 
   browserTest(`${skin} Keychain labels, errors and save/cancel focus at ${width}px`, async () => {
     const page = await open(skin, "keychain", width, "dark");
-    const opener = page.locator(skin === "classic" ? ".settings-keychain-add-btn" : ".settings-panel__keychain-header button");
+    const opener = page.locator(".settings-keychain-add-btn");
     try {
       await opener.focus();
       await page.keyboard.press("Enter");
-      const name = page.locator(skin === "classic" ? ".settings-keychain-add-form input[type=text]" : 'input[placeholder="entry-name"]').first();
+      const name = page.locator(".settings-keychain-add-form input[type=text]").first();
       await name.waitFor();
       await page.waitForFunction(() => document.activeElement?.tagName === "INPUT");
       expect(await name.evaluate(node => node === document.activeElement)).toBe(true);
       const secret = page.locator('input[type="password"]');
       for (const input of [name, secret]) expect(await input.evaluate((node: HTMLInputElement) => Boolean(node.getAttribute("aria-label") || node.labels?.length))).toBe(true);
-      if (skin === "visual") {
-        const type = page.getByRole("button", { name: "Type", exact: true });
-        await type.focus();
-        await page.keyboard.press("Enter");
-        await page.getByRole("option", { name: "Token", exact: true }).focus();
-        await page.keyboard.press("Enter");
-        expect(await type.evaluate(node => node === document.activeElement)).toBe(true);
-        await type.click();
-        await page.getByRole("option", { name: "Secret", exact: true }).focus();
-        await page.keyboard.press("Escape");
-        expect(await type.evaluate(node => node === document.activeElement)).toBe(true);
-        await type.click();
-        await page.getByRole("option", { name: "Basic", exact: true }).focus();
-        await page.keyboard.press("Tab");
-        await page.getByRole("listbox").waitFor({ state: "detached" });
-        expect(await type.evaluate(node => node === document.activeElement)).toBe(false);
-      }
+
       const save = page.getByRole("button", { name: "Save", exact: true });
       expect(await save.isDisabled()).toBe(true);
       await name.fill("   ");
@@ -262,7 +244,7 @@ for (const skin of ["classic", "visual"]) for (const width of [1366, 390]) {
       await save.click();
       await page.waitForFunction(() => document.activeElement?.getAttribute("aria-expanded") === "false");
       expect(await opener.evaluate(node => node === document.activeElement)).toBe(true);
-      if (skin === "classic") {
+      {
         const reveal = page.getByRole("button", { name: "Reveal secret: fixture/entry", exact: true });
         await reveal.click();
         const password = page.locator(".settings-keychain-prompt-input");

@@ -1,45 +1,38 @@
-# Settings controls: same-skin contract
+# Settings control contract
 
-Scope: #1314, #1316–#1319. Ordinary Classic fields are the Classic reference;
-Visual's named controls are the Visual reference. This is **not** a common
-32/36/44px control-height or 16px-font migration. Each skin retains its typography,
-colours, density and role-specific controls. Keyboard and dense Compaction rows
-were addressed separately in #1315 and #1320.
+Ordinary Classic fields define the control reference. Preserve role-specific typography, density, native semantics and keyboard focus.
 
 ## Built-in reference roles
 
-| Role | Classic | Visual |
-| --- | --- | --- |
-| Text and number | `.settings-row input`, `.settings-number-input` | `.settings-panel__input`, `.settings-panel__stepper-value` |
-| Password | `.settings-keychain-input` | `.settings-panel__input` |
-| Search | `.settings-header-filter` / `.settings-filter-input` | `.settings-panel__input` |
-| Select | `.settings-keychain-select` | `.settings-panel__select`, `CustomSelect` |
-| Textarea | `.settings-row textarea`, `.settings-keychain-input` | Explicit pane control shell; role-specific multiline height |
-| Label | `.settings-row label` | `.settings-panel__label` |
-| Help | `.settings-hint` | `.settings-panel__description` |
-| Action | `.settings-row button` | `.settings-panel__provider-btn` |
-| Card | Existing pane-specific cards | `.settings-panel__card` |
+| Role | Classic |
+| --- | --- |
+| Text and number | `.settings-row input`, `.settings-number-input` |
+| Password | `.settings-keychain-input` |
+| Search | `.settings-header-filter` / `.settings-filter-input` |
+| Select | `.settings-keychain-select` |
+| Textarea | `.settings-row textarea`, `.settings-keychain-input` |
+| Label | `.settings-row label` |
+| Help | `.settings-hint` |
+| Action | `.settings-row button` |
+| Card | Existing pane-specific cards |
 
 Classic ordinary text controls currently use 6px/10px padding, a 6px radius,
 1px border, and 0.88em text. Their native input font is intentionally preserved;
 textarea/monospace roles need not use the same family. In the Chromium fixture,
 text computes to 13.2px at 1366/820px and 11.088px at 520/390px.
-Visual's named text control uses 5px/10px padding, a 3px radius, 1px border,
-13px text and its inherited UI font. Widths are bounded by the containing pane,
-not by the browser viewport alone. These are observations, not requirements
-to rewrite all roles to identical dimensions.
+Widths are bounded by their containing pane. Preserve the existing role-specific dimensions.
 
 Native number steppers, search affordances, selects, multiline text and monospace
 shortcut values retain role differences. Focus must be keyboard-visible; keep
 the browser outline where it already works. Controls that suppress it receive
-the existing skin accent. Disabled/read-only controls retain native semantics;
+the existing palette accent. Disabled/read-only controls retain native semantics;
 validation errors use `aria-invalid` and a referenced error message, not colour
 alone. Status/error messages use a live region, and closing a transient form
 returns focus to its opener without changing save/authentication behavior.
 
 ## Add-on authoring
 
-Both hosts put `.settings-addon-pane` **only** on registered add-on content.
+The host puts `.settings-addon-pane` **only** on registered add-on content.
 Do not add it to built-in panes or supply global descendant CSS. Existing legacy
 add-ons retain host compatibility styling; new panes opt into these classes:
 
@@ -47,7 +40,7 @@ add-ons retain host compatibility styling; new panes opt into these classes:
 | --- | --- |
 | `settings-addon-section` | Bounded section spacing |
 | `settings-addon-field` | Label, input and optional help/validation stack |
-| `settings-addon-label` | Same-skin label typography; use `for`/`id` or wrap the input |
+| `settings-addon-label` | Host label typography; use `for`/`id` or wrap the input |
 | `settings-addon-control` | Text/search/password/URL/number/select/textarea shell |
 | `settings-addon-control-group` | Wrapping compound controls, such as password + Save; keep both in the same parent |
 | `settings-addon-help` | Help text; connect with `aria-describedby` when appropriate |
@@ -78,7 +71,7 @@ or the deliberate custom-widget escape. Native `disabled` prevents activation;
 
 Host variables named `--settings-addon-control-{font,size,padding,radius,width,
 background,border,accent}` and `--settings-addon-{label,help}-size` expose the
-skin defaults. Prefer the classes rather than copying their current values into
+host defaults. Prefer the classes rather than copying their current values into
 inline styles. Checkbox/radio controls remain native; do not give them the text
 control class. At <=640px text controls fit the field width and action rows wrap.
 Field labels, controls and help stack at every width; no fixed help indentation
@@ -100,7 +93,7 @@ authorization or change persistence.
 `settings-controls.playwright.optional.test.ts` mounts real Settings hosts and
 General/Keychain components, using fixture-only responses. It checks content
 viewport bounds at 1366, 820, 520 and 390px, opt-in control shells against each
-skin's actual General input, and native state/focus semantics in light/dark.
+host's actual General input, and native state/focus semantics in light/dark.
 It writes screenshots and structured computed-style measurements to
 `.artifacts/settings-controls/`. Run through the local isolated test launcher
 with the optional browser flag and an explicit existing Playwright browser cache.
@@ -112,8 +105,8 @@ corresponding run passes; the fixture itself is not evidence of completion.
 
 To include the actual first-party Sample Addon and Delegate entries, set
 `PICLAW_SETTINGS_ADDONS_ROOT` to an absolute companion `piclaw-addons` checkout
-when invoking the isolated test launcher. The additional 16 cases mount both
-real hosts at all four widths, retain Delegate's bounded lists and check the
+when invoking the isolated test launcher. The additional eight cases mount both
+real host at all four widths, retain Delegate's bounded lists and check the
 root disappears when returning to General. Without that explicit checkout these
 cases are skipped; synthetic controls alone do not certify add-on integration.
 Entries are served as exact-path, individually transpiled modules, like the

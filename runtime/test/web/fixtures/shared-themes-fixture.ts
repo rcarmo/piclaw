@@ -1,4 +1,5 @@
-const skin = new URLSearchParams(location.search).get("skin") || "classic";
+import { selectLocalTheme } from './select-theme.js';
+
 const root = document.getElementById("app")!;
 const theme = await import("../../../web/src/ui/theme.js");
 const { WEB_THEME_PRESETS } =
@@ -11,9 +12,8 @@ const syntaxSources = (await import("./vscode-syntax-sources.json")).default;
 const { SYNTAX_ROLES, resolveVSCodeSyntax } =
   await import("../../../src/core/theme-syntax.js");
 const { terminalThemeFromCss } =
-  await import("../../../web/src/ui/theme-terminal.js");
-const { importVSCodeTheme, applyTheme, saveTheme, resetTheme, loadSavedTheme } =
-  await import("../../../web/static/visual/frontend/src/utils/theme-importer");
+  await import("./palette-projection.js");
+
 const data = {
   uiTheme: "default",
   uiTint: null,
@@ -37,12 +37,7 @@ const data = {
 window.fetch = async () => Response.json(data);
 Object.assign(window, {
   themeFixture: {
-    ...theme,
-    importVSCodeTheme,
-    applyTheme,
-    saveTheme,
-    resetTheme,
-    loadSavedTheme,
+    ...theme, selectLocalTheme,
     terminalThemeFromCss,
     paletteVariables,
     presets: WEB_THEME_PRESETS,
@@ -52,12 +47,12 @@ Object.assign(window, {
     resolveVSCodeSyntax,
   },
 });
-if (skin === "classic") {
+{
   const { html, render, useState } =
     await import("../../../web/src/vendor/preact-htm.js");
   const { ThemeSection } =
     await import("../../../web/src/components/settings/appearance.js");
-  theme.initTheme({ skin: "classic" });
+  theme.initTheme();
   function Fixture() {
     const [settings, setSettings] = useState(data);
     return html`<div class="settings-content">
@@ -78,22 +73,6 @@ if (skin === "classic") {
     requestOpenSettingsDialog({ section: "theme" });
     render(html`<${SettingsDialogContent} onClose=${() => {}} />`, root);
   } else render(html`<${Fixture} />`, root);
-} else {
-  const { h, render } = await import("preact");
-  const { ThemeProvider } =
-    await import("../../../web/static/visual/frontend/src/theme/ThemeProvider");
-  const { AppearanceSection } =
-    await import("../../../web/static/visual/frontend/src/panels/settings/AppearanceSection");
-  render(
-    h(ThemeProvider, {
-      children: h(
-        "div",
-        { className: "settings-panel__content" },
-        h(AppearanceSection, { data, onSaveGeneral: () => {} }),
-      ),
-    }),
-    root,
-  );
 }
 const { highlightCodeToHtml } =
   await import("../../../web/src/utils/code-highlighting.js");
@@ -113,17 +92,6 @@ realCode.innerHTML =
   "</code>";
 probes.append(realCode);
 document.body.append(probes);
-if (new URLSearchParams(location.search).get("terminal") === "1") {
-  const { h, render } = await import("preact");
-  const { TerminalComponent } =
-    await import("../../../web/static/visual/frontend/src/components/TerminalComponent");
-  const host = document.createElement("div");
-  host.id = "real-terminal";
-  host.style.cssText =
-    "width:600px;height:240px;position:fixed;bottom:0;left:0;z-index:100;";
-  document.body.append(host);
-  render(h(TerminalComponent, {}), host);
-}
 
 // Literal highlighter classes test the CSS role contract independently from the
 // resolver. The mounted EditorView below also exercises real parser/class output.
@@ -197,28 +165,23 @@ Object.assign((window as any).themeFixture, {
   destroyEditor: () => editor.destroy(),
 });
 
-
 if (new URLSearchParams(location.search).get("fences") === "1") {
 // Exercise the actual fenced-Markdown pipelines and editor preview. Keep these
 // nodes mounted while themes change so stale inline colours cannot pass.
 await import("../../../web/src/vendor/marked-entry.js");
 const classicMarkdown = await import("../../../web/src/markdown.js");
-const visualMarkdown = await import("../../../web/static/visual/frontend/src/utils/markdown-pipeline");
-const { h, render } = await import("preact");
-const { WorkspacePreview } = await import("../../../web/static/visual/frontend/src/panels/workspace/WorkspacePreview");
+
 const markdown = '# Fixture\n\n```javascript\nasync function launch(city) {\n  const greeting = "hello"; // comment\n  return city.connect(42, true, greeting);\n}\n```\n\nEnd.\n';
-const renderer = skin === "visual" ? visualMarkdown.renderMarkdown : classicMarkdown.renderMarkdown;
+const renderer = classicMarkdown.renderMarkdown;
 const timeline = document.createElement("div");
 timeline.id = "markdown-timeline";
-timeline.className = skin === "visual" ? "message-list__content" : "post-content";
+timeline.className = "post-content";
 timeline.innerHTML = renderer(markdown);
 document.body.append(timeline);
 const preview = document.createElement("div");
 preview.id = "markdown-workspace-preview";
 document.body.append(preview);
-if (skin === "visual") {
-  render(h(WorkspacePreview, { nodeName: "fixture.md", preview: { content: markdown }, status: "done", errorMessage: "", kind: "markdown", content: markdown, rawUrl: "" } as any), preview);
-} else {
+{
   preview.className = "attachment-preview-markdown post-content";
   preview.innerHTML = renderer(markdown);
 }

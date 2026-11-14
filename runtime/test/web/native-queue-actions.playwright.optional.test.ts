@@ -18,14 +18,14 @@ beforeAll(async()=>{
       useEffect(()=>{void refresh();window.addEventListener('piclaw:followup-consumed',refresh);return()=>window.removeEventListener('piclaw:followup-consumed',refresh);},[]);
       return html\`<\${QueuedFollowupStack} items=\${items} onInjectQueuedFollowup=\${item=>handleInjectQueuedFollowupAction(options(item))} onRemoveQueuedFollowup=\${item=>handleRemoveQueuedFollowupAction(options(item))} onReturnQueuedFollowup=\${item=>returnQueuedFollowupToEditor({queuedItem:item,onRemoveQueuedFollowup:item=>handleRemoveQueuedFollowupAction(options(item)),setContent:setDraft,textareaRef:textarea})}/><textarea id='draft' ref=\${textarea} value=\${draft}/>\`;
     }render(html\`<\${App}/>\`,document.getElementById('root'));`;
-  const visual=`import{h,render}from'preact';import{useState}from'preact/hooks';import{QueueStack}from'./web/static/visual/frontend/src/components/QueueStack.tsx';function App(){const[draft,setDraft]=useState('Original draft');return h('div',null,h(QueueStack,{onEdit:item=>setDraft(item.content)}),h('textarea',{id:'draft',value:draft}));}render(h(App,{}),document.getElementById('root'));`;
-  for(const [skin,contents]of [["classic",classic],["visual",visual]]){
+
+  for(const [skin,contents]of [["classic",classic]]){
     const result=await build({stdin:{contents,resolveDir:root,loader:"tsx"},bundle:true,format:"esm",platform:"browser",jsx:"automatic",jsxImportSource:"preact",write:false});bundles.set(skin,result.outputFiles[0].text);
   }
   browsers.set("chromium",await chromium.launch({headless:true}));browsers.set("webkit",await webkit.launch({headless:true}));
 },30000);
 afterAll(async()=>{for(const browser of browsers.values())await browser.close();});
-for(const skin of ["classic","visual"])for(const engine of ["chromium","webkit"])for(const touch of [false,true])for(const finalAction of ['remove','return'] as const)browserTest(`${skin}/${engine}/${touch?"touch":"keyboard"}: failed actions and accepted steering/${finalAction} never hide an unplaced SDK item`,async()=>{
+for(const skin of ["classic"])for(const engine of ["chromium","webkit"])for(const touch of [false,true])for(const finalAction of ['remove','return'] as const)browserTest(`${skin}/${engine}/${touch?"touch":"keyboard"}: failed actions and accepted steering/${finalAction} never hide an unplaced SDK item`,async()=>{
   let items=[{row_id:17,content:"Visible SDK input",source:"native_sdk"}],deny=true,denyReads=false,actions=0;
   const server=Bun.serve({hostname:"127.0.0.1",port:0,async fetch(req){
     const path=new URL(req.url).pathname;
@@ -43,7 +43,7 @@ for(const skin of ["classic","visual"])for(const engine of ["chromium","webkit"]
   const page=await browsers.get(engine)!.newPage({viewport:touch?{width:520,height:720}:{width:1100,height:800},hasTouch:touch});const errors:string[]=[];page.on("pageerror",error=>errors.push(error.message));
   try{
     await page.goto(`${server.url}?chat_jid=web:queue-browser`);await page.getByText("Visible SDK input",{exact:true}).waitFor();
-    const button=(action:"steer"|"remove"|"return")=>page.locator(skin==="visual"?`.queue-stack__btn--${action==="return"?"edit":action}`:action==="steer"?".compose-queue-stack-steer-btn":action==="return"?".compose-queue-stack [data-action=edit]":".compose-queue-stack-close-btn").first();
+    const button=(action:"steer"|"remove"|"return")=>page.locator(action==="steer"?".compose-queue-stack-steer-btn":action==="return"?".compose-queue-stack [data-action=edit]":".compose-queue-stack-close-btn").first();
     const invoke=async(action:"steer"|"remove"|"return")=>{const before=actions;const target=button(action);if(touch)await target.tap();else{await target.focus();await page.keyboard.press("Enter");}const until=Date.now()+2000;while(actions===before&&Date.now()<until)await page.waitForTimeout(5);expect(actions).toBe(before+1);await page.waitForTimeout(60);};
     await invoke("steer");expect(await page.getByText("Visible SDK input",{exact:true}).count()).toBe(1);
     await invoke("remove");expect(await page.getByText("Visible SDK input",{exact:true}).count()).toBe(1);

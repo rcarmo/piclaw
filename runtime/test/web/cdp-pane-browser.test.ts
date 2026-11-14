@@ -18,7 +18,7 @@ for (const engine of ['chromium', 'webkit'] as const) {
     const path = new URL(req.url).pathname;
     if (path === '/cdp-view/ws') { if (server.upgrade(req)) return; }
     if (path === '/skin.css') {
-      const skin = new URL(req.url).searchParams.get('skin') === 'modern' ? 'visual' : 'classic';
+      const skin = "classic";
       return new Response(readFileSync(resolve(import.meta.dir, `../../web/static/${skin}/dist/app.bundle.css`)), { headers: { 'Content-Type': 'text/css' } });
     }
     if (path === '/pane.js') return new Response(script, { headers: { 'Content-Type': 'text/javascript' } });

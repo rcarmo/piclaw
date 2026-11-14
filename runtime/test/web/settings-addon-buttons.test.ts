@@ -7,8 +7,8 @@ const read = (path: string) => readFileSync(join(root, path), "utf8");
 
 test("both Settings hosts scope button normalisation to registered add-on content", () => {
   expect(read("src/components/settings-dialog.ts")).toContain("activeMeta?.isExtension ? ' settings-addon-pane' : ''");
-  expect(read("static/visual/frontend/src/panels/SettingsPanel.tsx")).toContain('activePane?.source === "addon" ? " settings-addon-pane" : ""');
-  for (const skin of ["classic", "visual"]) {
+
+  for (const skin of ["classic"]) {
     expect(read(`static/${skin}/css/styles.css`)).toContain('@import "../../common/css/settings-addon-buttons.css";');
   }
 });

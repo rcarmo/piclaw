@@ -15,7 +15,7 @@ beforeAll(async () => {
   } });
 }, 30000);
 afterAll(() => server?.stop(true));
-for (const [engineName, engine] of Object.entries({ chromium, webkit })) for (const skin of ['classic', 'visual']) {
+for (const [engineName, engine] of Object.entries({ chromium, webkit })) for (const skin of ['classic']) {
   browserTest(`${engineName} ${skin}: list rename cancel removal errors and narrow layout`, async () => {
     const browser = await engine.launch(); const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));

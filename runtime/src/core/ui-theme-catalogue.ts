@@ -3021,7 +3021,7 @@ for (const family of ["solarized", "github"]) {
     if (variant) variant[mode] = automatic[mode];
   }
 }
-// Preserve Visual's explicit black Classic bundle, distinct from each skin's adaptive Default.
+// Preserve the explicit black Classic palette, distinct from the adaptive Default.
 WEB_THEME_PRESETS.push({
   id: "piclaw-classic",
   label: "PiClaw Classic",

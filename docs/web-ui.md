@@ -35,13 +35,13 @@ The login shell loads public method flags before enabling credential inputs. Cod
 
 ## UX guidelines
 
-**Do not reinvent the UX paradigm.** Extend the established interface using its existing interaction patterns, components, visual styles and terminology. Before changing an interaction, inspect the equivalent behaviour in both skins and reuse its implementation where possible.
+**Do not reinvent the UX paradigm.** Extend the established interface using its existing interaction patterns, components, visual styles and terminology. Before changing an interaction, inspect the equivalent behaviour in the web UI and reuse its implementation where possible.
 
 - Conversation input and accepted steering belong in the timeline. Pending follow-ups use the existing queue UI. Ongoing activity uses the native agent-status surface.
 - Give each state one appropriate presentation. Do not add parallel banners, persistent acknowledgement notices or custom spinners for states already represented by the timeline, queue or agent status.
 - Keep transient submission and error feedback consistent with existing controls. End transient feedback when its operation finishes; do not leave it beside newer authoritative activity.
 - Repair event ordering, persistence and lifecycle handoffs at their source. Additional status text is not a substitute for correct state transitions.
-- Preserve keyboard, touch, focus, accessibility, theme and responsive-layout conventions. Equivalent interactions must behave consistently in Classic and Visual.
+- Preserve keyboard, touch, focus, accessibility, theme and responsive-layout conventions. Classic is the only web UI; reuse its established interactions.
 - Introduce a new interaction paradigm only when existing patterns cannot meet the requirement. Explain the limitation and obtain explicit user approval before implementing it.
 
 These rules apply to core UI, add-ons and generated interactive surfaces. Visual consistency does not replace correct acceptance, cancellation or error semantics. See the [project instructions](../AGENTS.md#ux-conventions) and [extension UI contract](extension-ui-contract.md).

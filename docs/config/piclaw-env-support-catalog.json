@@ -4452,31 +4452,19 @@
       "name": "PICLAW_WEB_UI_MODE",
       "owner": "web",
       "type": "enum",
-      "default": "classic",
+      "default": null,
       "bounds": null,
-      "allowedValues": [
-        "classic",
-        "visual"
-      ],
+      "allowedValues": null,
       "secret": false,
-      "persistence": [
-        "env",
-        "dotenv",
-        "json-config"
-      ],
-      "precedence": [
-        "process.env",
-        ".env",
-        "json-config",
-        "defaults"
-      ],
-      "status": "supported",
-      "compatibilityAliasFor": "domains.web.uiMode",
-      "deprecation": "compatibility env alias for domains.web.uiMode",
+      "persistence": [],
+      "precedence": [],
+      "status": "removed",
+      "compatibilityAliasFor": null,
+      "deprecation": "Visual removed in #1990; selection ignored with a deprecation warning",
       "removalVersion": "3.0.0",
       "bootstrapAllowed": false,
-      "source": "runtime/src/core/config-web.ts domain schema (#752A)",
-      "migrationDisposition": "migrated-to-domain-config"
+      "source": "runtime/src/core/config-web.ts retirement warning (#1990)",
+      "migrationDisposition": "remove"
     },
     {
       "name": "PICLAW_WEB_VNC_ALLOW_DIRECT",

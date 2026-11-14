@@ -1,12 +1,12 @@
 # Compose submission shortcuts and draft safety
 
-Classic and Visual use the same keyboard shortcuts:
+The web composer uses these keyboard shortcuts:
 
 - Enter submits normally; a busy chat queues a follow-up.
 - Ctrl+Enter or Cmd+Enter requests steering, even if the browser has not yet received a busy-state update.
 - Shift+Enter inserts a newline.
 
-Search-mode behaviour and model/session popup pinning shortcuts remain separate. IME composition, already-handled events, repeats, and Alt combinations do not submit through the steering shortcut. Classic recognises the shortcut before mention/slash autocomplete consumes Enter. The explicit Steer button uses the same steering request in Visual.
+Search-mode behaviour and model/session popup pinning shortcuts remain separate. IME composition, already-handled events, repeats, and Alt combinations do not submit through the steering shortcut. Classic recognises the shortcut before mention/slash autocomplete consumes Enter.
 
 ## Starting-turn boundary
 
@@ -18,7 +18,7 @@ Fallback admission preserves media IDs, content blocks, link previews and screen
 
 ## Preserve text when acknowledgement is unconfirmed
 
-Both composers decode and validate an explicit acceptance result before treating the request as successful. A successful HTTP status with malformed JSON, an empty payload or an explicit rejection is not acceptance. Classic uses its existing captured-draft restoration; Visual parses the response before clearing text, attachments or history. Text entered during a pending acknowledgement remains available. Errors are visible; neither composer automatically retries uncertain submissions.
+The composer decodes and validates an explicit acceptance result before treating the request as successful. A successful HTTP status with malformed JSON, an empty payload or an explicit rejection is not acceptance. Classic uses its existing captured-draft restoration. Text entered during a pending acknowledgement remains available. Errors are visible; the composer never automatically retries uncertain submissions.
 
 Positive queue/steer, durable-message/thread, successful control-command and UI-only acknowledgements remain compatible. A `source_committed` relay receipt takes precedence over a forwarding error; restoring that source as unsent could encourage a duplicate. Uncertain responses advise checking the timeline or queue before retrying.
 

@@ -48,8 +48,8 @@ beforeAll(async () => {
       return new Response(file);
     }
     if (url.pathname === "/") {
-      const css = url.searchParams.get("skin") === "visual" ? "/static/visual/css/styles.css" : "/static/classic/dist/app.bundle.css";
-      return new Response(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="${css}"></head><body><main id="app"></main><script type="module" src="/fixture.js"></script></body></html>`, { headers: { "Content-Type": "text/html" } });
+
+      return new Response(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/classic/dist/app.bundle.css"></head><body><main id="app"></main><script type="module" src="/fixture.js"></script></body></html>`, { headers: { "Content-Type": "text/html" } });
     }
     return new Response(null, { status: 404 });
   } });
@@ -57,7 +57,7 @@ beforeAll(async () => {
 });
 afterAll(async () => { for (const { browser } of browsers) await browser.close(); server?.stop(true); if (enabled) closeDatabase(); });
 
-for (const engine of ["chromium", "webkit"]) for (const skin of ["classic", "visual"]) for (const width of [1200, 390]) for (const surface of skin === "visual" ? ["user", "assistant", "id-only", "mime-only"] : ["user"]) {
+for (const engine of ["chromium", "webkit"]) for (const skin of ["classic"]) for (const width of [1200, 390]) for (const surface of ["user"]) {
   browserTest(`${engine} ${skin} ${surface} ${width}px audio playback, seek, error, keyboard and teardown`, async () => {
     const browser = browsers.find(item => item.name === engine)!.browser;
     const context = await browser.newContext({ viewport: { width, height: 780 }, colorScheme: width === 390 ? "light" : "dark" });
@@ -108,71 +108,4 @@ for (const engine of ["chromium", "webkit"]) for (const skin of ["classic", "vis
       expect(errors).toEqual([]);
     } finally { await context.close(); }
   }, 35_000);
-}
-
-
-browserTest("Visual refuses unsafe metadata and handles failed or aborted metadata fetches", async () => {
-  const browser = browsers.find(item => item.name === "chromium")!.browser;
-  const context = await browser.newContext();
-  try {
-    const origin = `http://127.0.0.1:${server.port}`;
-    await context.addCookies([{ name: "fixture_audio", value: "allowed", url: origin }]);
-    const page = await context.newPage();
-    page.setDefaultTimeout(8_000);
-    for (const mode of ["unsafe", "forbidden"]) {
-      await page.route("**/media/1/info", route => route.fulfill({ status: mode === "forbidden" ? 403 : 200, contentType: "application/json", body: JSON.stringify({ filename: "fake.wav", content_type: "text/html" }) }));
-      await page.goto(origin + "/?skin=visual");
-      await page.getByRole("button", { name: "Preview voice.wav", exact: true }).click();
-      await page.getByRole("alert").waitFor();
-      expect(await page.locator("audio").count()).toBe(0);
-      expect(await page.getByRole("link", { name: "Download", exact: true }).getAttribute("href")).toBe("/media/1");
-      await page.keyboard.press("Escape");
-      await page.unroute("**/media/1/info");
-    }
-    let release: () => void = () => {};
-    const gate = new Promise<void>(resolve => { release = resolve; });
-    const pending: Promise<void>[] = [];
-    await page.route("**/media/1/info", async route => {
-      const work = (async () => { await gate; await route.fulfill({ contentType: "application/json", body: JSON.stringify({ filename: "voice.wav", content_type: "audio/wav" }) }); })();
-      pending.push(work); await work;
-    });
-    await page.goto(origin + "/?skin=visual");
-    await page.getByRole("button", { name: "Preview voice.wav", exact: true }).click();
-    await page.getByRole("status").waitFor();
-    await page.waitForFunction(() => Boolean(document.activeElement?.closest('[role="dialog"]')));
-    await page.keyboard.press("Escape");
-    await page.getByRole("dialog").waitFor({ state: "detached" });
-    release(); await Promise.all(pending);
-    expect(await page.getByRole("dialog").count()).toBe(0); expect(await page.locator("audio").count()).toBe(0);
-  } finally { await context.close(); }
-}, 20_000);
-
-
-for (const engine of ["chromium", "webkit"]) for (const surface of ["image-first", "audio-first"]) {
-  browserTest(`${engine} Visual mixed ${surface} keeps image and correct audio ID`, async () => {
-    const browser = browsers.find(item => item.name === engine)!.browser;
-    const context = await browser.newContext({ viewport: { width: 390, height: 780 } });
-    try {
-      const origin = `http://127.0.0.1:${server.port}`;
-      await context.addCookies([{ name: "fixture_audio", value: "allowed", url: origin }]);
-      const page = await context.newPage(); page.setDefaultTimeout(8_000);
-      const requestStart = requests.length;
-      await page.goto(`${origin}/?skin=visual&surface=${surface}`);
-      const image = page.getByRole("img", { name: "picture.png", exact: true });
-      await image.waitFor(); expect(await image.getAttribute("src")).toBe("/media/3");
-      await page.waitForFunction(() => (document.querySelector('img[alt="picture.png"]') as HTMLImageElement).naturalWidth > 0);
-      await page.getByRole("button", { name: "Preview voice.wav", exact: true }).click();
-      const audio = page.locator("audio"); await audio.waitFor();
-      expect(await audio.getAttribute("src")).toBe("/media/1");
-      await page.waitForFunction(() => document.querySelector("audio")!.duration >= 11.9);
-      await audio.evaluate(async (node: HTMLAudioElement) => { node.muted = true; await node.play(); });
-      await page.waitForFunction(() => document.querySelector("audio")!.currentTime > 0.05);
-      await audio.evaluate((node: HTMLAudioElement) => { node.pause(); node.currentTime = 6; });
-      await page.waitForFunction(() => Math.abs(document.querySelector("audio")!.currentTime - 6) < 0.25);
-      expect(requests.slice(requestStart).some(request => request.id === 1 && request.range && request.status === 206)).toBe(true);
-      expect(requests.slice(requestStart).some(request => request.id === 3 && request.range)).toBe(false);
-      await page.keyboard.press("Escape"); await audio.waitFor({ state: "detached" });
-      expect(await image.count()).toBe(1);
-    } finally { await context.close(); }
-  }, 20_000);
 }

@@ -64,7 +64,7 @@ test("general settings keeps unsaved browser-local avatar previews direct", () =
 });
 
 test('both Sessions panes omit retired policy controls and keep active budget/isolation',()=>{
-  for(const path of ['web/src/components/settings/sessions.ts','web/static/visual/frontend/src/panels/settings/SessionsSection.tsx']){
+  for(const path of ['web/src/components/settings/sessions.ts']){
     const source=readFileSync(join(runtimeRoot,path),'utf8');
     for(const key of ["sessionAutoRotate","sessionMaxSizeMb","sessionMaxLines","sessionMaxCompactions","automaticRecoveryEnabled","automaticRecoveryMaxAttempts","automaticRecoveryTotalBudgetMs","automaticRecoveryEffectiveBudgetMs"])expect(source).not.toContain(key);
     expect(source).toContain('toolUseBudget');expect(source).toContain('sessionIsolation');

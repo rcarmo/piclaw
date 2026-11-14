@@ -154,7 +154,6 @@ test("plain import covers config module init branches with isolated argv and env
       trustProxy: true,
       composeUploadLimitMb: 256,
       workspaceUploadLimitMb: 256,
-      uiMode: "classic",
     });
     expect(snapshot["same:getWebRuntimeConfig:WEB_RUNTIME_CONFIG"]).toBe(true);
     expect(snapshot.AGENT_RUNTIME_CONFIG).toEqual({ timeoutMs: 120000, backgroundTimeoutMs: 45000 });
