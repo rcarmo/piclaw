@@ -345,6 +345,7 @@ type MessageKey =
   | 'settings.quickActions.slashCommands'
   | 'settings.quickActions.slashFallback'
   | 'settings.quickActions.noSlashMatch'
+  | 'settings.quickActions.noSlashCommands'
   | 'settings.quickActions.savingToast'
   | 'settings.quickActions.savedToast'
   | 'settings.providers.authApiKey'
@@ -989,6 +990,7 @@ const EN: Record<MessageKey, string> = {
   'settings.quickActions.slashCommands': 'Slash commands',
   'settings.quickActions.slashFallback': 'slash command',
   'settings.quickActions.noSlashMatch': 'No slash commands match this filter.',
+  'settings.quickActions.noSlashCommands': 'No slash commands are available.',
   'settings.quickActions.savingToast': 'Saving quick actions…',
   'settings.quickActions.savedToast': 'Quick Actions saved.',
   'settings.providers.authApiKey': 'API key',
@@ -1631,6 +1633,7 @@ const ZH_CN: Partial<Record<MessageKey, string>> = {
   'settings.quickActions.slashCommands': '斜杠命令',
   'settings.quickActions.slashFallback': '斜杠命令',
   'settings.quickActions.noSlashMatch': '没有匹配此筛选的斜杠命令。',
+  'settings.quickActions.noSlashCommands': '没有可用的斜杠命令。',
   'settings.quickActions.savingToast': '正在保存快捷操作…',
   'settings.quickActions.savedToast': '快捷操作已保存。',
   'settings.providers.authApiKey': 'API 密钥',
@@ -2273,6 +2276,7 @@ const JA: Partial<Record<MessageKey, string>> = {
   'settings.quickActions.slashCommands': 'スラッシュコマンド',
   'settings.quickActions.slashFallback': 'スラッシュコマンド',
   'settings.quickActions.noSlashMatch': 'このフィルターに一致するスラッシュコマンドはありません。',
+  'settings.quickActions.noSlashCommands': '利用できるスラッシュコマンドはありません。',
   'settings.quickActions.savingToast': 'クイックアクションを保存中…',
   'settings.quickActions.savedToast': 'クイックアクションを保存しました。',
   'settings.providers.authApiKey': 'API キー',

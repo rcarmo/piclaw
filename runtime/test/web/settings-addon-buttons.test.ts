@@ -6,7 +6,8 @@ const root = join(import.meta.dir, "../../web");
 const read = (path: string) => readFileSync(join(root, path), "utf8");
 
 test("both Settings hosts scope button normalisation to registered add-on content", () => {
-  expect(read("src/components/settings-dialog.ts")).toContain("activeMeta?.isExtension ? ' settings-addon-pane' : ''");
+  // Core-owned Editor/Developer panes are extension-style but not add-on content.
+  expect(read("src/components/settings-dialog.ts")).toContain("activeMeta?.isExtension && !activeMeta?.isCore ? ' settings-addon-pane' : ''");
 
   for (const skin of ["classic"]) {
     expect(read(`static/${skin}/css/styles.css`)).toContain('@import "../../common/css/settings-addon-buttons.css";');

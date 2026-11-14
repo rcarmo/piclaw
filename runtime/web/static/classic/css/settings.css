@@ -973,10 +973,10 @@
     color: var(--text-secondary);
 }
 
+/* Actions flow at the end of the card header; absolute placement covered the
+ * description once the card narrowed. */
 .settings-addon-actions {
-    position: absolute;
-    top: 10px;
-    right: 12px;
+    margin-left: auto;
     white-space: nowrap;
     display: flex;
     gap: 6px;
@@ -1447,12 +1447,7 @@
         min-width: 0;
     }
 
-    .settings-addon-actions {
-        flex-direction: column;
-        gap: 3px;
-    }
-
-    .settings-addon-btn { font-size: 0.74em; padding: 3px 6px; }
+    .settings-addon-btn { padding: 3px 6px; }
     .settings-slider-labels span { font-size: 0.65em; }
 
     .settings-dialog-header { padding: 10px 14px; }
@@ -1562,10 +1557,6 @@
 
 .settings-addon-card.core .settings-addon-card-header {
     padding-right: 36px;
-}
-
-.settings-addon-card.core .settings-addon-actions {
-    right: 50px;
 }
 
 .settings-addon-core-bookmark {
@@ -3381,3 +3372,46 @@
 .settings-dialog-narrow .settings-content :is(summary, input[type="color"]) { min-height: 44px; }
 .settings-content summary { min-height: var(--settings-control-height); padding-block: 6px; box-sizing: border-box; }
 .settings-dialog-narrow .settings-content :is(input[type="checkbox"], input[type="radio"]) { width: 22px; height: 22px; }
+
+/* One block alert for load and action failures across panes. Inline field
+ * errors stay as red text next to their control. */
+.settings-dialog :is(.settings-addon-error, .settings-keychain-error[role="alert"], .settings-error-state, .mcp-notice.settings-error, .passkey-settings__notice--error, .passkey-settings__status--error, .model-catalogue-settings__notice.error, .workspace-indexing-error) {
+    margin: 0 0 12px;
+    padding: 8px 12px;
+    border: 1px solid color-mix(in srgb, var(--danger-color, #ef4444) 35%, transparent);
+    border-left-width: 3px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--danger-color, #ef4444) 8%, var(--bg-primary));
+    color: var(--text-primary);
+    font-size: var(--settings-text-sm);
+}
+
+/* Narrow navigation scrolls sideways; fade the trailing edge so more panes are evident. */
+.settings-dialog-narrow .settings-nav {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    scroll-padding-inline: 10px 28px;
+}
+
+.settings-identity-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    max-width: 330px;
+}
+.settings-identity-field input[type="text"] { min-width: 0; }
+.settings-dialog-narrow .settings-identity-field { max-width: none; }
+.settings-dialog-narrow .settings-avatar-inline { width: 44px; height: 44px; }
+.settings-row button.settings-avatar-inline { min-width: 0; padding: 0; font: inherit; }
+button.settings-avatar-inline:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+
+/* Toolbar of pane-level actions (left-aligned, wraps; not a label/control row). */
+.settings-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px;
+}

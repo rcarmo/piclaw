@@ -119,7 +119,7 @@ export function QuickActionsSection({ filter = '', setStatus, mergeSettingsData 
                 ${t('settings.quickActions.intro')}
             </p>
 
-            <div class="settings-row" style="align-items:center; gap:10px; margin-bottom:12px;">
+            <div class="settings-actions">
                 <button class="settings-addon-btn" onClick=${resetDefaults} disabled=${saving}>${t('settings.quickActions.enableAll')}</button>
                 <button class="settings-addon-btn settings-addon-btn-install" onClick=${save} disabled=${saving}>
                     ${saving ? t('settings.quickActions.saving') : t('settings.quickActions.saveApply')}
@@ -158,7 +158,7 @@ export function QuickActionsSection({ filter = '', setStatus, mergeSettingsData 
                         </label>
                     `;
                 })}
-                ${visibleSlashCommands.length === 0 && html`<div class="settings-hint">${t('settings.quickActions.noSlashMatch')}</div>`}
+                ${visibleSlashCommands.length === 0 && html`<div class="settings-hint">${String(filter || '').trim() ? t('settings.quickActions.noSlashMatch') : t('settings.quickActions.noSlashCommands')}</div>`}
             </div>
         </div>
     `;

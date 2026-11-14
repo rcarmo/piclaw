@@ -16,3 +16,11 @@ test("opt-in Settings field styles are loaded in Classic and confined to the add
   expect(css).not.toContain("!important");
   expect(css).not.toContain("min-height: 44px");
 });
+
+test('Settings block errors across panes share one alert rule', () => {
+  const css = readFileSync(join(import.meta.dir, '../../web/static/classic/css/settings.css'), 'utf8');
+  const rule = css.slice(css.indexOf('/* One block alert'));
+  for (const selector of ['.settings-addon-error', '.settings-keychain-error[role="alert"]', '.settings-error-state', '.mcp-notice.settings-error', '.passkey-settings__notice--error', '.passkey-settings__status--error', '.model-catalogue-settings__notice.error', '.workspace-indexing-error']) {
+    expect(rule.slice(0, rule.indexOf('{'))).toContain(selector);
+  }
+});
