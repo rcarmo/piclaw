@@ -1,6 +1,6 @@
 import {afterEach,expect,test} from 'bun:test';
 import * as context from '../../web/src/ui/app-status-refresh-orchestration.js';
-import {mergeVisualLiveContext} from '../../web/static/visual/frontend/src/components/model-context-bar/telemetry.js';
+
 const original=(globalThis as any).window;
 afterEach(()=>{(globalThis as any).window=original;context.resetContextSessionGenerationsForTests();});
 const usage={tokens:777,contextWindow:1000,percent:77.7,sessionGeneration:'same'};
@@ -30,11 +30,6 @@ test('connection invalidation clears same-identity meters and rejects an older i
  expect(state?.tokens).toBeNull();expect(context.restoreContextUsage('chat')?.tokens).toBeNull();
 });
 
-test('Visual same-session unknown replacements clear meters while retaining independent ledger telemetry',()=>{
- const previous={...usage,cacheUsage:{latest:{totalTokens:99}}};
- expect(mergeVisualLiveContext(previous,unknown as any,{authoritative:true})).toMatchObject({tokens:null,percent:null,cacheUsage:previous.cacheUsage});
-});
-
 test('authoritative loss of a bound SDK session clears Classic counts and fences an older poll',async()=>{
  let state=context.reconcileContextUsageForChat('lost',null,usage,{authoritative:true});
  let resolve!:(value:unknown)=>void;const response=new Promise<unknown>(done=>{resolve=done;});
@@ -42,9 +37,4 @@ test('authoritative loss of a bound SDK session clears Classic counts and fences
  state=context.reconcileContextUsageForChat('lost',state,{...unknown,sessionGeneration:null},{authoritative:true});
  expect(state?.tokens).toBeNull();
  resolve(usage);await pending;expect(state?.tokens).toBeNull();
-});
-
-test('an authoritative unbound Visual context clears known counts while preserving ledger telemetry',()=>{
- const previous={...usage,cacheUsage:{latest:{totalTokens:99}}};
- expect(mergeVisualLiveContext(previous,{...unknown,sessionGeneration:null},{authoritative:true})).toMatchObject({tokens:null,percent:null,cacheUsage:previous.cacheUsage});
 });

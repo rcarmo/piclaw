@@ -1,5 +1,5 @@
 /** Stable palette slots: CSS variables repaint existing charts on theme changes,
- * including imported palettes and monochrome AS/400, without rebuilding geometry. */
+ * including monochrome AS/400, without rebuilding geometry. */
 export function workspaceChartColor(path: string, depth = 0): string {
   let hash = 0x811c9dc5;
   for (let i = 0; i < path.length; i++)

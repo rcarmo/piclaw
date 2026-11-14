@@ -1,6 +1,6 @@
 # Audio attachment previews
 
-Classic and Visual preview audio attachments with native browser controls, without
+Classic preview audio attachments with native browser controls, without
 autoplay. The player loads metadata first. Download stays available if playback
 fails or the browser cannot decode the file. Closing the preview stops playback,
 releases its source and restores focus to the opener.
@@ -29,11 +29,6 @@ Existing generic rows use the same resolution when served. Stored rows are not
 migrated. The allowlist describes metadata/container recognition; it does not
 validate file bytes or guarantee browser codec support.
 
-Visual uses owned `/media/:id/info` metadata before enabling audio playback. Its
-user attachment chips, assistant file blocks and ID-only attachments support the
-player. Mixed image/file assistant attachments retain the producer's full
-attachment order when paired with `media_ids`.
-
 ## Media HTTP contract
 
 Existing authentication and family stored-message ownership checks run before
@@ -59,6 +54,8 @@ before slicing. This change adds seeking compatibility, not streaming storage.
 
 ## Validation
 
+The September results below are historical evidence, including the retired second UI. Current regression coverage retains the Classic playback, seeking, download and focus cases.
+
 The optional browser regression uses a disposable loopback server, an isolated
 in-memory media database and generated 12-second WAV data. It never defaults to
 the live server. The fixture cookie controls access to its media endpoint; separate
@@ -74,7 +71,7 @@ bun run test:local --cwd runtime \
 
 Evidence on 20 September 2026:
 
-- 25 Chromium/WebKit browser cases, 406 assertions: Classic/Visual, 1200px/390px,
+- 25 Chromium/WebKit browser cases, 406 assertions: Classic, 1200px/390px,
   light/dark settings, actual playback and six-second seek, decode failure,
   Download targets, keyboard opening/focus containment/restoration, Escape/close
   teardown, and pending/denied/unsafe metadata.
@@ -82,7 +79,7 @@ Evidence on 20 September 2026:
   `[image,audio]` and `[audio,image]` cases retain the image and play the correct ID.
 - 90 focused media/security/classification tests, 568 assertions.
 - Final `make ci-fast`: 5,451 runtime passes, four skips, 25 feature passes and
-  nine web-build passes. Classic and Visual bundles rebuilt; four repository
+  nine web-build passes. Classic bundles rebuilt; four repository
   typechecks pass.
 - An earlier full run failed the unchanged TOTP replay test when its repeated
   code calculation crossed a TOTP time step. Its isolated rerun and two subsequent

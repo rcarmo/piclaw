@@ -6,7 +6,7 @@
   "scopeExclusion": "Cheapskate explicitly deferred and unchanged",
   "pendingDelivery": [],
   "baselineEntries": 105,
-  "deletedPaths": 36,
+  "deletedPaths": 37,
   "rows": [
     {
       "repo": "core",
@@ -2118,9 +2118,9 @@
       "originalDisposition": "DECOUPLE",
       "deliveryOwner": "#1881",
       "originalSha256": "bcd8e8f4ad9b92e4cff696b276dc3742abaf628f778158bd1833a140880ecd81",
-      "state": "retained-decoupled",
-      "currentSha256": "e5594ad97dbbb022ed2fc6c55a625674bca6d8f8db5a2acf531574473fdba113",
-      "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
+      "state": "deleted",
+      "currentSha256": null,
+      "currentPurpose": "Visual UI retired by #1990; original bytes and prior retirement evidence remain in Git",
       "directImportCallers": []
     },
     {
@@ -2304,7 +2304,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "43057fe8e650387ce57e56464d7c6073cff0b789d82be0fe0eb7f035551d8ce0",
       "state": "retained-decoupled",
-      "currentSha256": "e41252dd50fe03fe24b73c420ddeb0bfa0b45815390146ad48657cb4a85232f8",
+      "currentSha256": "de7e9d4d570ad1d7ab85b09deb243b5b825ddb16cb8b30de55a78c0404c7b236",
       "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
       "directImportCallers": []
     },
@@ -2315,7 +2315,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "4c23d1c993a261d4a5542acfab2f94a3b28afcc6445e15f4f4d4bac7679756a0",
       "state": "retained-decoupled",
-      "currentSha256": "7c240d48d52686c0e2c308c42fa222f5b69bc9a5caa81220d933409cfb217e57",
+      "currentSha256": "3ef8b8f6ba19440f3910ad129f1bdd140b614f00e463ae9ddd5863862f81abd0",
       "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
       "directImportCallers": []
     },

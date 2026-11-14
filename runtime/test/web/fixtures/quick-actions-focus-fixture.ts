@@ -1,6 +1,7 @@
 import { html, render } from '../../../web/src/vendor/preact-htm.js';
+import { selectLocalTheme } from './select-theme.js';
 import { TimelineQuickActions } from '../../../web/src/components/timeline-quick-actions.js';
-import { initTheme, selectLocalTheme, setThemeModePreference } from '../../../web/src/ui/theme.js';
+import { initTheme, setThemeModePreference } from '../../../web/src/ui/theme.js';
 import { WEB_THEME_PRESETS } from '../../../src/core/ui-theme-catalogue.js';
 
 window.fetch = async () => Response.json({ items: [], enabled: true });

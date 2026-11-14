@@ -9,9 +9,8 @@ test('MCP is registered in both settings shells and uses the shared preview cont
     expect(classic).toContain("id: 'mcp', label: 'MCP'");
     expect(classic).toContain("import('./settings/mcp.js').then(mod => mod.McpSection)");
     expect(classic).toContain("case 'mcp': return html`<${Comp} />`");
-    expect(text('web/static/visual/frontend/src/panels/SettingsPanel.tsx')).toContain('import "./settings/McpSection"');
-    expect(text('web/static/visual/frontend/src/panels/settings/McpSection.tsx')).toContain("registerSettingsPane({ id: 'mcp', label: 'MCP'");
-    for (const path of ['web/src/components/settings/mcp.ts', 'web/static/visual/frontend/src/panels/settings/McpSection.tsx']) {
+
+    for (const path of ['web/src/components/settings/mcp.ts']) {
         const source = text(path);
         expect(source).toContain('createMcpSettingsController');
         expect(source).toContain('Preview compatibility');

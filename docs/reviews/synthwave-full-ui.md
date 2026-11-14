@@ -37,8 +37,8 @@ Native OS popup menus, mobile selection handles and content inside iframe/shadow
 Actual components, disposable fixture data:
 
 - [Classic composer, 390px](synthwave-full-ui/classic-compose-390.png)
-- [Visual composer, 1280px](synthwave-full-ui/visual-compose-1280.png)
-- [Visual model picker, 390px](synthwave-full-ui/visual-model-390.png)
+- [Visual composer, 1280px](archive/visual-ui/synthwave-full-ui/visual-compose-1280.png)
+- [Visual model picker, 390px](archive/visual-ui/synthwave-full-ui/visual-model-390.png)
 - [Classic session picker, 390px](synthwave-full-ui/classic-session-390.png)
 
 No live theme change, merge, installation or reload is included.

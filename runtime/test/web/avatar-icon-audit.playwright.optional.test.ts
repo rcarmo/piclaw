@@ -11,7 +11,7 @@ beforeAll(() => {
   if (!enabled) return;
   server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
     const url = new URL(req.url);
-    if (url.pathname === "/") return new Response(Bun.file(join(webRoot, `static/${url.searchParams.get("skin") === "visual" ? "visual" : "classic"}/index.html`)), { headers: { "content-type": "text/html" } });
+    if (url.pathname === "/") return new Response(Bun.file(join(webRoot, `static/${"classic"}/index.html`)), { headers: { "content-type": "text/html" } });
     if (url.pathname === "/editor-vendor/codemirror.js") return new Response(Bun.file(resolve(webRoot, "../extensions/viewers/editor/vendor/codemirror.js")), { headers: { "content-type": "text/javascript" } });
     if (url.pathname.startsWith("/static/")) {
       const path = resolve(webRoot, url.pathname.slice(1));
@@ -23,7 +23,7 @@ beforeAll(() => {
 afterAll(() => server?.stop(true));
 
 for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
-  for (const skin of ["classic", "visual"]) browserTest(`${engineName}: ${skin} avatar/icon update audit`, async () => {
+  for (const skin of ["classic"]) browserTest(`${engineName}: ${skin} avatar/icon update audit`, async () => {
     const browser = await engine.launch({ headless: true });
     const context = await browser.newContext({ viewport: { width: 1024, height: 768 }, reducedMotion: "reduce", serviceWorkers: "block" });
     const page = await context.newPage();
@@ -112,8 +112,7 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       await emit('agent_status', { chat_jid: chatJid, type: 'intent', agent_id: 'default', agent_name: 'Fixture', agent_avatar: '/avatar/agent' });
       await page.waitForTimeout(100);
       const command1 = await links();
-      if (skin === 'classic') expect(command1['dynamic-favicon']).not.toBe(initial['dynamic-favicon']);
-      else expect(command1).toEqual(changed);
+      expect(command1['dynamic-favicon']).not.toBe(initial['dynamic-favicon']);
       await emit('agent_status', { chat_jid: chatJid, type: 'intent', agent_id: 'default', agent_name: 'Fixture', agent_avatar: '/avatar/agent' });
       await page.waitForTimeout(100);
       const command2 = await links();

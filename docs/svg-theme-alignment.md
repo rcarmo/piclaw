@@ -20,7 +20,7 @@ With `sanitizeSvgFences:false`, trusted inline source keeps its existing behavio
 
 ## Mermaid
 
-Both renderers now pass host CSS variables to the vendored renderer: foreground, background, accent, muted text, panel and border. Visual no longer chooses a preset from operating-system dark mode. Existing rendered SVG follows palette changes through CSS variables without layout regeneration.
+The renderer passes host CSS variables to the vendored renderer: foreground, background, accent, muted text, panel and border. Existing rendered SVG follows palette changes through CSS variables without layout regeneration.
 
 The renderer uses the system UI font. Generated Google Fonts `@import` statements are removed before insertion; tests enforce no external requests. Existing Mermaid sanitization and scoped-resource restrictions are retained.
 
@@ -30,7 +30,9 @@ The authenticated image viewer follows its same-origin parent's palette for page
 
 The workspace SVG file is loaded once as an image from the existing authenticated raw route. Its bytes are not rewritten or recoloured. The embedded SVG can still use its own authored CSS and media rules; page CSS cannot inject palette tokens into that separate document. The viewer CSP and same-origin framing restriction are unchanged.
 
-## Verification
+## Historical verification
+
+The counts below describe the original delivery. The second UI and its custom-theme importer have since been removed; Classic rendering, copying, palette and safety cases remain.
 
 - Nineteen SVG cases pass in each of Chromium and WebKit: **38 passes / 502 assertions**. They cover both production Markdown renderers/copy handlers, all 56 palettes, explicit paints, finite tokens, fixed surfaces, imported palette values, exact source/CRLF copying, real Mermaid output and teardown.
 - Pixel reads from decoded SVG images verify unstyled/current palette colours, unchanged authored orange, AS/400 green-only defaults and imported accent RGB values.

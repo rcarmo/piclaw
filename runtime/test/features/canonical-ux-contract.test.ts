@@ -27,7 +27,7 @@ test("current and planned specifications have disjoint stable scenario identitie
   const allIds: string[] = [];
   for (const file of files) {
     const path = relative(featuresRoot, file).replaceAll("\\", "/");
-    expect(["classic", "visual", "shared", "planned"]).toContain(path.split("/")[0]);
+    expect(["classic", "shared", "planned"]).toContain(path.split("/")[0]);
     const source = readFileSync(file, "utf8");
     const ids = stableIds(source);
     const scenarios = source.match(/^\s*Scenario(?: Outline)?:/gm) ?? [];

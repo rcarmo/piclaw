@@ -60,7 +60,7 @@ export async function handleManifestRequest(req: Request, ctx: ManifestRequestCo
 
   const manifest = {
     name: baseName,
-    // Public instance branding, also used by Visual hydration.
+    // Public instance branding.
     piclaw_avatar: icons[0]?.src.startsWith("/avatar/agent") ? icons[0].src : null,
     short_name: baseName,
     description: "Slack-like interface for coding agents",

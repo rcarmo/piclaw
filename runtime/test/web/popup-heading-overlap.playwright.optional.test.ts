@@ -9,20 +9,20 @@ beforeAll(async () => {
   if (!build.success) throw Error(String(build.logs));
   const script = await build.outputs[0].text();
   server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(req) {
-    const url = new URL(req.url), visual = url.searchParams.has("visual");
+    const url = new URL(req.url);
     if (url.pathname === "/fixture.js") return new Response(script, { headers: { "content-type": "text/javascript" } });
     if (url.pathname.startsWith("/static/")) return new Response(Bun.file(join(import.meta.dir, "../../web", url.pathname)));
-    return new Response(`<link rel="stylesheet" href="/static/${visual ? "visual" : "classic"}/dist/app.bundle.css"><style>body{padding:20px}.compose-model-popup,.model-picker{position:relative!important;inset:auto!important;max-width:600px}.compose-model-popup-menu,.model-picker__results{height:180px!important;max-height:180px!important;overflow:auto!important}</style><output id="selection">none</output><div id="root"></div><script type="module" src="/fixture.js"></script>`, { headers: { "content-type": "text/html" } });
+    return new Response(`<link rel="stylesheet" href="/static/classic/dist/app.bundle.css"><style>body{padding:20px}.compose-model-popup,.model-picker{position:relative!important;inset:auto!important;max-width:600px}.compose-model-popup-menu,.model-picker__results{height:180px!important;max-height:180px!important;overflow:auto!important}</style><output id="selection">none</output><div id="root"></div><script type="module" src="/fixture.js"></script>`, { headers: { "content-type": "text/html" } });
   } });
 }, 30000);
 afterAll(() => server?.stop(true));
-for (const [name, engine] of Object.entries({ chromium, webkit })) for (const skin of ["classic", "visual"]) browserTest(`${skin}/${name}: typeahead keeps first pinned match uncovered`, async () => {
+for (const [name, engine] of Object.entries({ chromium, webkit })) for (const skin of ["classic"]) browserTest(`${skin}/${name}: typeahead keeps first pinned match uncovered`, async () => {
   const browser = await engine.launch(), page = await browser.newPage({ viewport: { width: 820, height: 900 } });
   page.on("pageerror", error => console.error("Popup fixture error", error.message));
   await page.route("**/*", (route) => new URL(route.request().url()).origin === server.url.origin ? route.continue() : route.abort());
   try {
-    await page.goto(`${server.url}?${skin === "visual" ? "visual" : "classic"}`);
-    const search = page.locator(skin === "visual" ? ".model-picker__search" : ".compose-model-catalogue-search");
+    await page.goto(`${server.url}?${"classic"}`);
+    const search = page.locator(".compose-model-catalogue-search");
     await page.waitForTimeout(300);
     expect(await search.count(), await page.locator('#root').innerHTML()).toBe(1);
     for (const width of [820, 390]) {

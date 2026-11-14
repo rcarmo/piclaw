@@ -54,17 +54,15 @@ test('chat project state keeps snapshots authoritative and rejects stale payload
   expect(b).toBe(0); expect(a).toBe(3); offA(); offB();
 });
 
-test('both shipped markdown surfaces consume the shared project repository option', () => {
+test('the shipped markdown surface consume the shared project repository option', () => {
   const root = resolve(import.meta.dir, '../..');
   const classic = readFileSync(resolve(root, 'web/src/markdown.ts'), 'utf8');
-  const visual = readFileSync(resolve(root, 'web/static/visual/frontend/src/utils/markdown-pipeline.ts'), 'utf8');
-  for (const source of [classic, visual]) {
+
+  for (const source of [classic]) {
     expect(source).toContain('linkifyChatReferences');
     expect(source).toContain('options.projectRepository');
   }
-  const item = readFileSync(resolve(root, 'web/static/visual/frontend/src/components/message-list/MessageItem.tsx'), 'utf8');
-  expect(item).toContain('renderMarkdown(cleanedContent, { projectRepository })');
-  expect(item).not.toContain('escapedContent');
+
 });
 
 test('repository URL normalisation accepts roots and rejects unsafe or known non-root paths', () => {

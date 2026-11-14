@@ -5,13 +5,12 @@ import { resolve } from "node:path";
 const repoRoot = resolve(import.meta.dir, "../../..");
 const source = readFileSync(resolve(repoRoot, "runtime/web/src/components/image-annotator.ts"), "utf8");
 const classicCss = readFileSync(resolve(repoRoot, "runtime/web/static/classic/css/overlays.css"), "utf8");
-const visualCss = readFileSync(resolve(repoRoot, "runtime/web/static/visual/css/overlays.css"), "utf8");
 
 test("image annotator renders as a centered modal with a clipped stage and protected toolbar", () => {
   expect(source).toContain('role="dialog"');
   expect(source).toContain('class="image-annotator-stage"');
 
-  for (const css of [classicCss, visualCss]) {
+  for (const css of [classicCss]) {
     expect(css).toContain(".post-inline-annotator {");
     expect(css).toContain("position: fixed;");
     expect(css).toContain("align-items: center;");
@@ -41,7 +40,7 @@ test("image annotator rasterizes SVG sources into a canvas before annotation/exp
   expect(source).toContain("const rasterSource = sourceRasterReady ? sourceCanvasRef.current : null");
   expect(source).toContain("if (rasterSource) octx.drawImage(rasterSource, 0, 0, out.width, out.height)");
 
-  for (const css of [classicCss, visualCss]) {
+  for (const css of [classicCss]) {
     expect(css).toContain(".image-annotator-source-raster-canvas {");
     expect(css).toContain("display: block;");
     expect(css).toContain(".image-annotator-source-hidden {");

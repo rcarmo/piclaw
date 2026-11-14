@@ -807,53 +807,16 @@
       "sha256": "71d517d67827787cfabdf186914cc3358eda539e37931941f2b2fd4a21f68c0b",
       "manifests": [],
       "provenance": "unrecorded"
-    },
-    {
-      "path": "runtime/web/static/visual/dist/JetBrainsMonoNFM-Medium-hh38vnv1.woff2",
-      "bytes": 1022232,
-      "sha256": "e9d33faabc0c688c5b417d5b5e40e874edaf232bfa553fc504f1bce99b872d03",
-      "manifests": [],
-      "provenance": "unrecorded"
-    },
-    {
-      "path": "runtime/web/static/visual/dist/JetBrainsMonoNFM-Regular-rhdb9m6d.woff2",
-      "bytes": 1021580,
-      "sha256": "3154cf51aa75c0aa9f6ed786a539b04624297da2d95ea322d5bf38cbfc82bbb0",
-      "manifests": [],
-      "provenance": "unrecorded"
-    },
-    {
-      "path": "runtime/web/static/visual/dist/firacode-nerd-font-mono-bold-v7nf8tpn.ttf",
-      "bytes": 2677400,
-      "sha256": "bd014a21f3cd64203dd0850437091d716e929a4518b0e5848d6d3ad6af12b21d",
-      "manifests": [],
-      "provenance": "unrecorded"
-    },
-    {
-      "path": "runtime/web/static/visual/dist/firacode-nerd-font-mono-regular-f4sytzp8.ttf",
-      "bytes": 2647492,
-      "sha256": "ad88c69cb6a497db9f2714e4b414817aabbee621484a1560bfdb3fd73abdd564",
-      "manifests": [],
-      "provenance": "unrecorded"
-    },
-    {
-      "path": "runtime/web/static/visual/vendor/fonts/seti.woff",
-      "bytes": 37284,
-      "sha256": "b127762058f89b37b08d76185e3b0558f5c28859e39a3840a27cb28b9739d6e2",
-      "manifests": [],
-      "provenance": "unrecorded"
     }
   ],
   "duplicatePayloads": [
     [
       "runtime/web/static/classic/dist/firacode-nerd-font-mono-bold-v7nf8tpn.ttf",
-      "runtime/web/static/common/fonts/vendor/firacode-nerd-font-mono-bold.ttf",
-      "runtime/web/static/visual/dist/firacode-nerd-font-mono-bold-v7nf8tpn.ttf"
+      "runtime/web/static/common/fonts/vendor/firacode-nerd-font-mono-bold.ttf"
     ],
     [
       "runtime/web/static/classic/dist/firacode-nerd-font-mono-regular-f4sytzp8.ttf",
-      "runtime/web/static/common/fonts/vendor/firacode-nerd-font-mono-regular.ttf",
-      "runtime/web/static/visual/dist/firacode-nerd-font-mono-regular-f4sytzp8.ttf"
+      "runtime/web/static/common/fonts/vendor/firacode-nerd-font-mono-regular.ttf"
     ],
     [
       "runtime/web/static/common/fonts/KaTeX_AMS-Regular.woff2",
@@ -934,14 +897,6 @@
     [
       "runtime/web/static/common/fonts/KaTeX_Typewriter-Regular.woff2",
       "runtime/web/static/fonts/KaTeX_Typewriter-Regular.woff2"
-    ],
-    [
-      "runtime/web/static/common/fonts/jetbrains-mono-nf/JetBrainsMonoNFM-Medium.woff2",
-      "runtime/web/static/visual/dist/JetBrainsMonoNFM-Medium-hh38vnv1.woff2"
-    ],
-    [
-      "runtime/web/static/common/fonts/jetbrains-mono-nf/JetBrainsMonoNFM-Regular.woff2",
-      "runtime/web/static/visual/dist/JetBrainsMonoNFM-Regular-rhdb9m6d.woff2"
     ]
   ],
   "unrecorded": [
@@ -1027,11 +982,6 @@
     "runtime/web/static/fonts/KaTeX_Size2-Regular.woff2",
     "runtime/web/static/fonts/KaTeX_Size3-Regular.woff2",
     "runtime/web/static/fonts/KaTeX_Size4-Regular.woff2",
-    "runtime/web/static/fonts/KaTeX_Typewriter-Regular.woff2",
-    "runtime/web/static/visual/dist/JetBrainsMonoNFM-Medium-hh38vnv1.woff2",
-    "runtime/web/static/visual/dist/JetBrainsMonoNFM-Regular-rhdb9m6d.woff2",
-    "runtime/web/static/visual/dist/firacode-nerd-font-mono-bold-v7nf8tpn.ttf",
-    "runtime/web/static/visual/dist/firacode-nerd-font-mono-regular-f4sytzp8.ttf",
-    "runtime/web/static/visual/vendor/fonts/seti.woff"
+    "runtime/web/static/fonts/KaTeX_Typewriter-Regular.woff2"
   ]
 }

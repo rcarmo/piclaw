@@ -2,7 +2,7 @@ import{expect,test}from'bun:test';import{existsSync,readFileSync}from'node:fs';i
 const root=resolve(import.meta.dir,'../../..');
 const manifest=JSON.parse(readFileSync(resolve(root,'docs/development/receipts/expense-final-retention-1875.json'),'utf8'));
 test('removal/retention witness binds every original Core path to current bytes or absence',()=>{
- expect(manifest.baselineEntries).toBe(105);expect(manifest.rows).toHaveLength(105);expect(manifest.deletedPaths).toBe(36);
+ expect(manifest.baselineEntries).toBe(105);expect(manifest.rows).toHaveLength(105);expect(manifest.deletedPaths).toBe(37);
  expect(new Set(manifest.rows.map((r:{repo:string;path:string})=>r.repo+':'+r.path)).size).toBe(105);
  for(const row of manifest.rows){if(row.repo!=='core')continue;const path=resolve(root,row.path);
   if(row.state==='deleted')expect(existsSync(path),row.path).toBe(false);else{expect(createHash('sha256').update(readFileSync(path)).digest('hex'),row.path).toBe(row.currentSha256);expect(row.currentPurpose.length).toBeGreaterThan(20);}

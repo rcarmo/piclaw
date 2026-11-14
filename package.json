@@ -122,7 +122,6 @@
     "release:build-source-archive": "bun run scripts/release/build-source-archive.ts",
     "release:build-portable": "bun run scripts/release/build-portable-artifact.ts",
     "release:build-linux-run": "bun run scripts/release/build-linux-run-artifact.ts",
-    "build:web:visual": "cd runtime && bun web/static/visual/frontend/build.ts && bun build web/static/visual/frontend/styles/app.css --target=browser --minify --sourcemap --outdir web/static/visual/dist --entry-naming=\"[name].bundle.css\"",
     "test:e2e:markdown-table-late-rendering": "bun run test:local -- bun runtime/scripts/playwright/markdown-table-late-rendering.ts",
     "test:e2e:markdown-table-cell-stress": "bun run test:local -- bun runtime/scripts/playwright/markdown-table-cell-stress.ts",
     "smoke:bedrock-opus5": "bun run runtime/scripts/bedrock-opus5-smoke.ts"

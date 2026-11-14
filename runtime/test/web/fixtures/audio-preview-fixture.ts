@@ -1,6 +1,6 @@
-const skin = new URLSearchParams(location.search).get("skin") || "classic";
+
 const root = document.getElementById("app")!;
-if (skin === "classic") {
+{
   const { html, render, useState } = await import("../../../web/src/vendor/preact-htm.js");
   const { AttachmentPreviewModal } = await import("../../../web/src/components/attachment-preview-modal.js");
   function Fixture() {
@@ -12,20 +12,4 @@ if (skin === "classic") {
     </div>`;
   }
   render(html`<${Fixture} />`, root);
-} else {
-  const { h, render } = await import("preact");
-  const { MessageItem } = await import("../../../web/static/visual/frontend/src/components/message-list/MessageItem");
-  const surface = new URLSearchParams(location.search).get("surface") || "user";
-  const base = { id: 42, timestamp: new Date().toISOString(), type: surface === "user" || surface === "mime-only" ? "user" : "agent", content: "", is_from_me: surface === "user" };
-  const mixed = surface === "image-first" || surface === "audio-first";
-  const imageBlock = { type: "image", filename: "picture.png", mime_type: "image/png" };
-  const audioBlock = { type: "file", filename: "voice.wav", mime_type: "audio/wav" };
-  const interaction = mixed
-    ? { ...base, media_ids: surface === "image-first" ? [3, 1] : [1, 3], content_blocks: surface === "image-first" ? [imageBlock, audioBlock] : [audioBlock, imageBlock] }
-    : surface === "assistant"
-    ? { ...base, media_ids: [1, 2], content_blocks: [{ type: "file", filename: "voice.bin", mime_type: "audio/wav" }, { type: "file", filename: "broken.mp3", mime_type: "audio/mpeg" }] }
-    : surface === "id-only"
-      ? { ...base, media_ids: [1, 2] }
-      : { ...base, content: `attachment:1 (${surface === "mime-only" ? "voice.bin" : "voice.wav"})\nattachment:2 (broken.mp3)` };
-  render(h(MessageItem, { interaction, isCollapsed: false, onToggleCollapse: () => {}, onDelete: () => {} } as any), root);
 }

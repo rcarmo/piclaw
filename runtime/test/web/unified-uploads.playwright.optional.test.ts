@@ -11,7 +11,7 @@ beforeAll(() => {
   if (!enabled) return;
   server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
     const url = new URL(req.url);
-    if (url.pathname === "/") return new Response(Bun.file(join(webRoot, `static/${url.searchParams.get("skin") === "visual" ? "visual" : "classic"}/index.html`)), { headers: { "content-type": "text/html" } });
+    if (url.pathname === "/") return new Response(Bun.file(join(webRoot, `static/${"classic"}/index.html`)), { headers: { "content-type": "text/html" } });
     if (url.pathname === "/editor-vendor/codemirror.js") return new Response(Bun.file(resolve(webRoot, "../extensions/viewers/editor/vendor/codemirror.js")), { headers: { "content-type": "text/javascript" } });
     if (url.pathname.startsWith("/static/")) {
       const path = resolve(webRoot, url.pathname.slice(1));
@@ -23,7 +23,7 @@ beforeAll(() => {
 afterAll(() => server?.stop(true));
 
 for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
-  for (const skin of ["classic", "visual"]) browserTest(`${engineName}: ${skin} sends large uploads as workspace references and keeps small media attachments`, async () => {
+  for (const skin of ["classic"]) browserTest(`${engineName}: ${skin} sends large uploads as workspace references and keeps small media attachments`, async () => {
     const browser = await engine.launch({ headless: true, ...(engineName === 'chromium' && process.env.PICLAW_TEST_CHROMIUM_PATH ? {executablePath:process.env.PICLAW_TEST_CHROMIUM_PATH} : {}) });
     const context = await browser.newContext({ viewport: { width: 1024, height: 768 }, reducedMotion: "reduce", serviceWorkers: "block" });
     const page = await context.newPage();
@@ -140,7 +140,7 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       await page.waitForTimeout(500);
       const input=page.locator('textarea').filter({visible:true}).first();
       const large=Buffer.alloc(fileSize,7);
-      await page.locator(skin==='classic'?'.compose-box input[type="file"][multiple]':'.chat__compose input[type="file"][multiple]').setInputFiles([{name:'large.bin',mimeType:'application/octet-stream',buffer:large},{name:'small.txt',mimeType:'text/plain',buffer:Buffer.from('small fixture')}]);
+      await page.locator('.compose-box input[type="file"][multiple]').setInputFiles([{name:'large.bin',mimeType:'application/octet-stream',buffer:large},{name:'small.txt',mimeType:'text/plain',buffer:Buffer.from('small fixture')}]);
       await input.fill('Mixed upload probe');await input.press('Enter');
       await page.waitForFunction(()=>document.querySelector('#post-777001,[data-message-id="777001"]'),{},{timeout:15000});
       expect(chunkRequests).toBe(5);expect(smallUploads).toBe(1);expect(accepted).toBe(1);
@@ -153,12 +153,12 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       expect(await post.getByRole('link',{name:'large.bin',exact:true}).getAttribute('href')).toBe('/workspace/raw?path='+encodeURIComponent(uploadedPath)+'&download=1');
       // A chunk error must preserve the draft and never send a broken reference.
       rejectChunks=true;
-      await page.locator(skin==='classic'?'.compose-box input[type="file"][multiple]':'.chat__compose input[type="file"][multiple]').setInputFiles({name:'large.bin',mimeType:'application/octet-stream',buffer:large});
+      await page.locator('.compose-box input[type="file"][multiple]').setInputFiles({name:'large.bin',mimeType:'application/octet-stream',buffer:large});
       await input.fill('Failed upload draft');await input.press('Enter');
       await page.getByText(/Fixture limit exceeded/).first().waitFor();
       expect(accepted).toBe(1);expect(await input.inputValue()).toContain('Failed upload draft');
       await page.evaluate(()=>window.dispatchEvent(new CustomEvent('piclaw:open-settings',{detail:{section:'general'}})));
-      const content=page.locator(skin==='classic'?'.settings-content':'.settings-panel__content').filter({visible:true});
+      const content=page.locator('.settings-content').filter({visible:true});
       const limit=content.getByLabel('Upload limit (MB)',{exact:true});
       await limit.waitFor();
       await page.waitForFunction(()=>Array.from(document.querySelectorAll<HTMLInputElement>('input[aria-label="Upload limit (MB)"]')).some(el=>el.value==='512'));

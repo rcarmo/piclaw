@@ -5,7 +5,7 @@ description: Configure saved VNC targets, explain connection history and hidden 
 
 # VNC viewer setup
 
-Classic hosts the VNC pane; Visual does not yet integrate it. Open `piclaw://vnc` for the connection manager or `piclaw://vnc/<encoded-target-id>` for a configured target. The renderer and WebSocket-to-TCP protocol remain unchanged.
+The web UI hosts the VNC pane. Open `piclaw://vnc` for the connection manager or `piclaw://vnc/<encoded-target-id>` for a configured target. The renderer and WebSocket-to-TCP protocol remain unchanged.
 
 ## Configure targets
 

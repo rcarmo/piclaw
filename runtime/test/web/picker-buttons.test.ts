@@ -9,12 +9,10 @@ const css = (skin: string, file: string) =>
 
 test("picker button native appearance reset stays scoped to picker surfaces", () => {
   const classic = css("classic", "chat.css");
-  const visual = css("visual", "shell.css");
+
   expect(classic).toContain(".compose-model-popup :where(button) {");
-  expect(visual).toContain(
-    ".model-picker :where(button),\n.session-pill__dropdown :where(button) {",
-  );
-  for (const source of [classic, visual]) {
+
+  for (const source of [classic]) {
     const reset = source.slice(source.indexOf(":where(button)")).split("}")[0];
     for (const rule of [
       "-webkit-appearance: none;",
@@ -29,13 +27,11 @@ test("picker button native appearance reset stays scoped to picker surfaces", ()
   }
 });
 
-test("both skins define picker action geometry and retain separate mobile targets", () => {
+test("picker controls define picker action geometry and retain separate mobile targets", () => {
   const classic = css("classic", "chat.css");
-  const visual = css("visual", "shell.css");
+
   const blocks = [
     classic.split(".compose-model-popup-btn {")[1].split("}")[0],
-    visual.split(".model-picker__action {")[1].split("}")[0],
-    visual.split(".session-pill__toolbar-btn {")[1].split("}")[0],
   ];
   for (const block of blocks) {
     expect(block).toContain("min-height: 28px;");
@@ -48,7 +44,7 @@ test("both skins define picker action geometry and retain separate mobile target
   expect(classic).toContain(
     ".compose-session-popup .compose-model-popup-btn {\n        min-height: 44px;",
   );
-  expect(visual).toContain(".session-pill__toolbar-btn { min-height: 44px; }");
+
   expect(classic).toContain(
     ".compose-model-catalogue-footer-start {\n    display: flex;\n    align-items: center;",
   );
@@ -56,20 +52,14 @@ test("both skins define picker action geometry and retain separate mobile target
 
 test("picker action focus and disabled states are explicit and hover excludes disabled buttons", () => {
   const classic = css("classic", "chat.css");
-  const visual = css("visual", "shell.css");
+
   expect(classic).toContain(".compose-model-popup-btn:hover:not(:disabled)");
   expect(classic).toContain(
     ".compose-model-popup-btn:focus-visible {\n    outline: 2px solid var(--accent-color);",
   );
-  expect(visual).toContain(".model-picker__action:hover:not(:disabled)");
-  expect(visual).toContain(".session-pill__toolbar-btn:hover:not(:disabled)");
-  expect(visual).toContain(
-    ".model-picker__action:focus-visible,\n.session-pill__toolbar-btn:focus-visible {\n  outline: 2px solid",
-  );
+
   for (const [source, selector] of [
     [classic, ".compose-model-popup-btn:disabled"],
-    [visual, ".model-picker__action:disabled"],
-    [visual, ".session-pill__toolbar-btn:disabled"],
   ]) {
     const block = source.split(selector + " {")[1].split("}")[0];
     expect(block).toContain("opacity: 0.5;");

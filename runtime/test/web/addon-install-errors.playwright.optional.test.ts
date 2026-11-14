@@ -22,7 +22,7 @@ beforeAll(async () => {
 afterAll(async () => { for (const browser of Object.values(browsers)) await browser.close(); server?.stop(true); });
 const required = 'This Core release requires Observability 0.1.22. Update Core before installing this add-on. The installed add-on has not been changed.';
 const unavailable = 'Add-on compatibility could not be verified. Wait for the native runtime to be available, then try again. The installed add-on has not been changed.';
-for (const engine of ['chromium', 'webkit']) for (const skin of ['classic', 'visual']) for (const action of ['install', 'uninstall']) for (const mode of ['incompatible', 'unavailable', 'html', 'malformed-success', 'network', 'success']) {
+for (const engine of ['chromium', 'webkit']) for (const skin of ['classic']) for (const action of ['install', 'uninstall']) for (const mode of ['incompatible', 'unavailable', 'html', 'malformed-success', 'network', 'success']) {
   browserTest(`${engine} ${skin}: add-on ${action} ${mode} preserves server outcome and restart state`, async () => {
     const page = await browsers[engine].newPage({ viewport: { width: 1280, height: 900 } });
     let installs = 0, restarts = 0;
@@ -39,16 +39,16 @@ for (const engine of ['chromium', 'webkit']) for (const skin of ['classic', 'vis
         return route.fulfill({ status: mode === 'html' ? 503 : 200, contentType: 'text/html', body: '<html>PRIVATE PROXY DETAIL</html>' });
       });
       await page.goto(server.url + '?skin=' + skin);
-      const button = action === 'install' ? 'Update' : skin === 'visual' ? 'Uninstall' : 'Remove';
+      const button = action === 'install' ? 'Update' : 'Remove';
       await page.getByRole('button', { name: button, exact: true }).click();
       if (mode === 'success') {
         await page.getByRole('button', { name: /Restart [Nn]ow/ }).waitFor();
         expect(installs).toBe(1); expect(restarts).toBe(0);
         return;
       }
-      const error = page.locator(skin === 'visual' ? '.addons-panel__error' : '#status');
+      const error = page.locator('#status');
       await error.waitFor({ state: 'visible' });
-      await page.waitForFunction(({selector, mode}) => { const text = document.querySelector(selector)?.textContent || ''; return mode === 'incompatible' ? text.includes('requires Observability') : mode === 'unavailable' ? text.includes('compatibility could not') : text.includes('Check its installed state'); }, { selector: skin === 'visual' ? '.addons-panel__error' : '#status', mode });
+      await page.waitForFunction(({selector, mode}) => { const text = document.querySelector(selector)?.textContent || ''; return mode === 'incompatible' ? text.includes('requires Observability') : mode === 'unavailable' ? text.includes('compatibility could not') : text.includes('Check its installed state'); }, { selector: '#status', mode });
       const text = await error.textContent();
       if (mode === 'incompatible') expect(text).toBe(required);
       else if (mode === 'unavailable') expect(text).toBe(unavailable);

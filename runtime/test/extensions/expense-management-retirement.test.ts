@@ -14,9 +14,7 @@ const root = join(import.meta.dir, '../..');
 const source = (path: string) => readFileSync(join(root, path), 'utf8');
 
 test('expense-management modules are deleted instead of hidden behind a flag or compatibility handler', () => {
-  for (const path of ['src/extensions/budget-limits.ts', 'src/channels/web/handlers/budget-settings.ts', 'src/budget/settings.ts',
-    'src/budget/admission.ts', 'web/src/components/settings/budget.ts', 'web/src/ui/budget-settings-model.ts',
-    'web/static/visual/frontend/src/panels/settings/BudgetSection.tsx']) expect(existsSync(join(root, path)), path).toBe(false);
+  for (const path of ['src/extensions/budget-limits.ts', 'src/channels/web/handlers/budget-settings.ts', 'src/budget/settings.ts', 'src/budget/admission.ts', 'web/src/components/settings/budget.ts', 'web/src/ui/budget-settings-model.ts']) expect(existsSync(join(root, path)), path).toBe(false);
 });
 
 test('real builtin factories retain observation tools without a budget command, tool or tool boundary hook', () => {
@@ -49,16 +47,16 @@ test(`retired ${method} ${path} uses ordinary route fallthrough before channel a
     provider_cost_total: 0, catalogue_cost_total: null, cost_provenance: 'provider_reported' });
 });
 
-test('both skins and shared client remove the pane and API while model pricing and scheduled controls stay present', () => {
-  const classic = source('web/src/components/settings-dialog.ts'), visual = source('web/static/visual/frontend/src/panels/SettingsPanel.tsx');
+test('web UI and shared client remove the pane and API while model pricing and scheduled controls stay present', () => {
+  const classic = source('web/src/components/settings-dialog.ts');
   expect(classic).not.toMatch(/BudgetSection|iconBudget|id: 'budget'|case 'budget'/);
-  expect(visual).not.toContain('settings/BudgetSection');
+
   expect(source('web/static/classic/css/settings.css')).not.toContain('.settings-budget-');
-  expect(source('web/static/visual/css/shell.css')).not.toContain('.settings-panel__budget-');
+
   expect(source('web/src/utils/i18n.ts')).not.toContain('settings.section.budget');
   expect(source('web/src/api.ts')).not.toMatch(/getBudgetSettings|updateBudgetSettings|\/agent\/settings\/budget/);
   expect(source('web/src/components/model-picker.ts')).toContain('formatModelCataloguePricing');
-  expect(source('web/static/visual/frontend/src/panels/SettingsPanel.tsx')).toContain('settings/ScheduledTasksSection');
+
   expect(source('web/src/components/settings/scheduled-tasks.ts')).not.toContain('set_budget');
   expect(source('web/src/components/settings/scheduled-tasks.ts')).toContain('onAction(\'pause\'');
 });

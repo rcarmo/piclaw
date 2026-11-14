@@ -35,7 +35,7 @@ for the library reference.
 | JetBrains Mono NF | CSS `@font-face` | Code/mono font with Nerd Font glyphs (OFL 1.1) |
 
 Timeline Mermaid fences use Pele through a shared application renderer in
-Classic, Visual and Family. Existing generated artifacts keep the separate
+Classic and Family. Existing generated artifacts keep the separate
 `beautiful-mermaid` asset and its public API. The application uses no automatic
 legacy fallback. See [vendored-widget-libraries.md](vendored-widget-libraries.md#timeline-diagrams-pele).
 

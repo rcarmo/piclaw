@@ -34,11 +34,10 @@ Regrets0.3 uses the SDK text estimator on the final compact packet and removes i
 
 ## Browser projection
 
-Classic and Visual context meters display the backend percentage. They add no token margin or local percentage fallback. Unknown counts and percentages remain unavailable; a reported zero stays zero. Classic session metrics also omit an unknown percentage. Existing explicit compaction controls remain separate from rendering and model selection.
+Classic context meters display the backend percentage. They add no token margin or local percentage fallback. Unknown counts and percentages remain unavailable; a reported zero stays zero. Classic session metrics also omit an unknown percentage. Existing explicit compaction controls remain separate from rendering and model selection.
 
-Visual's model catalogue contains only backend results. The preset Copilot model/window table is removed, and an empty catalogue clears old rows using the existing empty-result surface.
 
-Thinking menus use the current backend model snapshot, including cold load and capability revocation. Picker GETs and switch confirmations publish complete backend metadata through the existing shared model-state event rather than partial current-model/thinking callbacks. Empty confirmations clear stale rows even when a switch is not confirmed; replies for a different active chat do not update the picker. Visual no longer keeps preset levels or a per-picker thinking snapshot; Classic no longer reads thinking choices from its stale popup catalogue. The unused Visual context-window fallback signal is removed.
+Thinking menus use the current backend model snapshot, including cold load and capability revocation. Picker GETs and switch confirmations publish complete backend metadata through the existing shared model-state event rather than partial current-model/thinking callbacks. Empty confirmations clear stale rows even when a switch is not confirmed; replies for a different active chat do not update the picker. Classic reads thinking choices from the current backend snapshot.
 
 ## Thinking capabilities
 
@@ -86,7 +85,7 @@ Observability's source-bound request hook is separately exercised through real c
 |Offline catalogue refresh|`PiclawModelRegistry` delegates refresh to the canonical runtime, forces offline and coalesces concurrent reloads|Stock1.5.2 `ModelRuntime.refresh` reloads configuration and does not supply this single-flight/offline enforcement. Remove the local wrapper when the SDK or retirement of its callers covers both guarantees.|
 |Legacy affinity/session metadata|Explicit legacy-capture composition; native construction requires a durable lookup and forbids mixed capture|Native missing handles refuse instead of creating legacy sessions. Legacy read decorators are installed only during legacy session creation; broader retirement belongs to#1650.|
 |Installed native add-ons|One exact source profile per accepted backend; immutable native fixture|All23 backend profiles, aliases, shadows, escaped roots and retired Regrets negatives remain checked before evaluation. SDK lifecycle declarations are not execution authority.|
-|Client context/thinking/catalogue|Existing shared backend model state in Classic/Visual|No client fit arithmetic, preset catalogue or independent capability owner. Manual commands use admitted incoming storage and retain their existing lifecycle/status surface.|
+|Client context/thinking/catalogue|Existing shared backend model state in Classic|No client fit arithmetic, preset catalogue or independent capability owner. Manual commands use admitted incoming storage and retain their existing lifecycle/status surface.|
 
 This census retains passive token/pricing/provider-cost reporting. Expense-policy deletion remains#1875's separate delivery and earns no reduction credit here. Additional source retirement requires a demonstrated native caller replacement, not relocation or a new facade.
 

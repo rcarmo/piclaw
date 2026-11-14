@@ -255,9 +255,9 @@ The editor extension is lazy-loaded as a separate bundle (`editor.bundle.js`, ~1
 
 ## Web UI loading sequence
 
-Classic and Visual load Pele on first Mermaid fence through the shared
+Classic loads Pele on first Mermaid fence through the shared
 `web/src/ui/mermaid-render.ts` lifecycle; Family preloads the same local asset.
-Both skins use the same sanitizer, limits and live theme-token mapping.
+The web UI uses the same sanitizer, limits and live theme-token mapping.
 The separate Beautiful Mermaid asset retains its public API for legacy
 widgets and artifacts; it is not a timeline fallback.
 
@@ -376,7 +376,7 @@ There is no longer a supported path where an empty terminal turn both:
 - **Timeline attachment previews** syntax-highlight common text/code/config formats (for example YAML, JSON, JS/TS, Python, Go, shell, SQL, TOML, Dockerfile, PowerShell, and common dotfiles/config files) while Markdown keeps its rendered preview path.
 - **Message permalinks**: clicking a timeline timestamp inserts a `message:{id}` pill in the compose box; Ctrl+Click copies a shareable URL; clicking a reference scrolls to and highlights the target.
 - **Multi-turn threading**: when the agent produces multiple turns in a single response, subsequent turns are stored with a `thread_id` pointing to the first turn's message. The UI renders threaded replies indented with a left border.
-- **Context usage / compaction affordance**: both skins share `/agent/context` snapshot reconciliation. `contextUpdate: "replace"` clears unavailable same-session meters after native reset/compaction and fences late polls; independent cache telemetry survives. Current native estimates remain valid, and unknown counts do not fall back to old estimates. Default polling omits tree projection; `include_tree=1` opts into the exact public summary. See [context restore and API semantics](runtime-flows.md#context-usage--compaction-affordance-restore).
+- **Context usage / compaction affordance**: the web UI uses `/agent/context` snapshot reconciliation. `contextUpdate: "replace"` clears unavailable same-session meters after native reset/compaction and fences late polls; independent cache telemetry survives. Current native estimates remain valid, and unknown counts do not fall back to old estimates. Default polling omits tree projection; `include_tree=1` opts into the exact public summary. See [context restore and API semantics](runtime-flows.md#context-usage--compaction-affordance-restore).
 - **Recovery chip**: when the agent recovers from a transient mid-turn failure, a subtle recovery chip appears in the compose area so the user can see that retries happened without flooding the timeline.
 - **Blank turn detection**: empty or whitespace-only model completions are treated as failures rather than success. If automatic recovery still cannot produce a terminal persisted reply, the cursor is rewound and the failed run is held for explicit retry/skip resolution.
 - **Native compaction lifetime**: admitted SDK maintenance owns model deadlines, cancellation, passive usage reporting and recovery. The legacy session-idle waiter and JSONL rotation owner are retired. See [native runtime flows](runtime-flows.md) and [prompt-owner retirement](development/native-prompt-retirement.md).

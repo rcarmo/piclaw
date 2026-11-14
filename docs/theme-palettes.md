@@ -1,10 +1,10 @@
 # Web theme palettes
 
-Classic and Visual use the same named palette catalogue. Each skin keeps its own layout, typography and control sizes. Default retains each skin's familiar starting colours; **PiClaw Classic** is the explicit black Classic palette in either skin.
+Classic is the only web UI. Its 56 named palette IDs remain available; Default follows the selected browser mode, and **PiClaw Classic** is the explicit black palette.
 
 ## Choose a theme
 
-Use **Settings → Appearance** in either skin, or `/theme <id>`. Named palette and Default tint settings are instance-wide. Existing theme IDs remain valid; `monokai` is labelled **Monokai Original** and `monokai-pro` is **Monokai Pro** everywhere. They are separate palettes, not light/dark variants.
+Use **Settings → Appearance** in the web UI, or `/theme <id>`. Named palette and Default tint settings are instance-wide. Existing theme IDs remain valid; `monokai` is labelled **Monokai Original** and `monokai-pro` is **Monokai Pro** everywhere. They are separate palettes, not light/dark variants.
 
 **Automatic theme mode (this browser)** selects system/light/dark for the Default, Solarized and GitHub automatic pairs. Explicit Light/Dark presets keep their own mode. This local preference does not change another user's browser. Default tint applies only to Default; selecting a named palette uses its authored accent.
 
@@ -54,7 +54,7 @@ Source revisions, JSON hashes, catalogue links and notices are in the palette ma
 
 ## Colour roles and contrast
 
-`runtime/src/core/ui-theme-catalogue.ts` contains data only. Server theme discovery, Classic, and Visual use those IDs and colours. `runtime/web/src/ui/theme-palette.ts` derives both skins' CSS namespaces from one palette:
+`runtime/src/core/ui-theme-catalogue.ts` contains data only. Server theme discovery and Classic use those IDs and colours. `runtime/web/src/ui/theme-palette.ts` derives shared CSS namespaces from one palette:
 
 - surfaces, foregrounds, muted text, borders and accents;
 - maximum-contrast black/white text on accent buttons;
@@ -64,35 +64,29 @@ Source revisions, JSON hashes, catalogue links and notices are in the palette ma
 
 Primary/secondary UI text is adjusted towards the palette foreground where needed to reach 4.5:1 on the declared solid UI surfaces. Code text/background and syntax roles preserve authored source colours; they are not substituted with UI accent/status colours or silently contrast-remapped. ANSI colours retain the terminal readability safeguard. Palette identity and characteristic accents are retained. These calculations are guardrails, not certification of every rendered component: alpha composition, images, custom add-ons and font sizes need their own checks. Colour-friendly presets change semantic hues; status text and existing icons remain necessary. The accessible pair targets stronger contrast without globally resizing controls.
 
-Visual xterm now reads the selected palette and refreshes on theme changes without reconnecting or injecting terminal input. Classic retains its terminal contrast safeguards and uses the same ANSI roles. No renderer, terminal protocol or VNC input mapping changes are made.
+The Classic terminal retains its contrast safeguards and uses the palette ANSI roles.
 
 ## Workspace and charts
 
-Explorer selection, hover, folders and file-icon foregrounds use the shared palette. Folder-size segments and legend dots map stable paths onto six chart roles; deeper rings blend towards the panel background. SVG fills reference CSS variables directly, so changing a palette or importing a theme repaints an open chart without refetching folder data or rebuilding geometry. AS/400 stays green-only.
+Explorer selection, hover, folders and file-icon foregrounds use the shared palette. Folder-size segments and legend dots map stable paths onto six chart roles; deeper rings blend towards the panel background. SVG fills reference CSS variables directly, so changing a palette repaints an open chart without refetching folder data or rebuilding geometry. AS/400 stays green-only.
 
-The system-meter traces use the same roles: CPU/accent, RAM/success, swap/danger, buffers/warning, RSS/type and VRAM/keyword. Normal SynthWave adds steady meter halos; Full adds layered pulsing halos plus chart/card neon edges. Reduced motion retains steady glow, hidden-document state pauses it, and forced colours remove it. Other palettes have no chart glow. Compact mobile meters keep their existing text-only layout; Visual retains its inline statistics rather than gaining a new meter panel.
+The system-meter traces use the same roles: CPU/accent, RAM/success, swap/danger, buffers/warning, RSS/type and VRAM/keyword. Normal SynthWave adds steady meter halos; Full adds layered pulsing halos plus chart/card neon edges. Reduced motion retains steady glow, hidden-document state pauses it, and forced colours remove it. Other palettes have no chart glow. Compact mobile meters keep their existing text-only layout.
 
 See [the workspace/chart audit](reviews/workspace-chart-themes.md) for actual component captures and test coverage.
 
 ## Input focus
 
-Both skins share `theme-focus.css`, loaded after component styles and before Full's effects. Native inputs, textareas, selects, editable surfaces and custom selects use the palette focus ring. Keyboard-focusable controls use the same indicator; programmatically focused dialog containers are excluded. Carets, native control accents and DOM text selection follow the palette accent. Imported themes use the same variables. The composer is one compound control: its outer frame receives the focus ring through `:focus-within`, while the inner textarea has no outline, border or focus shadow. Full keeps its glowing text and animated frame with a cyan focus ring. Fields and compose frames draw their ring over the existing border to avoid duplicate sharp contours; Full keeps soft halos without an extra zero-blur rim. Pickers and settings fields retain their own focus indicators. Invalid borders, disabled states and read-only behaviour are unchanged.
+The web UI uses `theme-focus.css`, loaded after component styles and before Full's effects. Native inputs, textareas, selects, editable surfaces and custom selects use the palette focus ring. Keyboard-focusable controls use the same indicator; programmatically focused dialog containers are excluded. Carets, native control accents and DOM text selection follow the palette accent. The composer is one compound control: its outer frame receives the focus ring through `:focus-within`, while the inner textarea has no outline, border or focus shadow. Full keeps its glowing text and animated frame with a cyan focus ring. Fields and compose frames draw their ring over the existing border to avoid duplicate sharp contours; Full keeps soft halos without an extra zero-blur rim. Pickers and settings fields retain their own focus indicators. Invalid borders, disabled states and read-only behaviour are unchanged.
 
 This styling cannot cross iframe/shadow roots or control operating-system select popups and mobile selection handles. Login and family pages have separate styles; the selected chat palette does not apply there. Forced-colour mode uses system Highlight/HighlightText colours.
 
 Attachment/image lightboxes use a theme-derived backdrop with 0.62 alpha; images and controls stay opaque. Context and timestamp details use native browser `title` tooltips like model-picker controls. Their text can contain line breaks, but browser tooltip geometry is not controlled by Piclaw.
 
-## Imported Visual themes
-
-VS Code JSON imports remain local to the browser. Bundled VS Code themes and user imports use one syntax resolver: generic semantic token colours first, otherwise specific TextMate scopes with last-wins source order for ties, then documented role fallbacks. Variable/function/property/type/number/bool roles remain distinct. Language-specific semantic analysis and complex TextMate scope stacks are not emulated. See [the complete syntax audit](reviews/theme-syntax-audit.md) for per-theme colours and origins. Import preview uses the declared dark/light/high-contrast type (or background inference for legacy saved maps), fills shared semantic aliases and keeps supported terminal overrides. Apply persists the map; Cancel restores the saved custom map or the selected named palette. Reset clears the custom override and returns to the instance Default selection.
-
-An active custom import intentionally overrides server theme events in that browser, but the latest instance palette is still remembered for returning from the override. Imported theme values must be valid CSS colours; injected stylesheet fragments are rejected. The importer still supports a subset of VS Code fields/scopes, not arbitrary extensions or scripts.
-
 ## Palette provenance
 
 Colour data, adapted to Piclaw roles:
 
-- Existing Piclaw Classic and Visual presets form the compatibility baseline (`eef87deaf`).
+- Existing Piclaw Classic presets form the compatibility baseline (`eef87deaf`).
 - [Catppuccin palette v1.8.0](https://github.com/catppuccin/palette): Latte and Mocha; MIT.
 - [Everforest](https://github.com/sainnhe/everforest): medium dark/light palette; MIT.
 - [Rosé Pine palette](https://github.com/rose-pine/palette): main and Dawn; MIT.
@@ -103,4 +97,4 @@ No external theme assets are fetched at runtime or during builds. Palette source
 
 ## Validation
 
-`shared-themes.test.ts` checks catalogue parity, aliases, Original/Pro identity, complete semantic/ANSI roles and contrast. `shared-themes.playwright.optional.test.ts` uses real Appearance components with disposable stub APIs in Chromium and WebKit, checks every preset, actual selection, mode switching, intrinsic glow/forced colours, real syntax classes, import preview/cancel/reset/reload, and a mounted xterm with a stub socket. It never changes the active instance's theme or opens its terminal.
+`shared-themes.test.ts` checks catalogue parity, aliases, Original/Pro identity, complete semantic/ANSI roles and contrast. `shared-themes.playwright.optional.test.ts` uses real Appearance components with disposable stub APIs in Chromium and WebKit, checks every preset, actual selection, mode switching, intrinsic glow/forced colours, real syntax classes and palette syntax roles. It never changes the active instance's theme or opens its terminal.

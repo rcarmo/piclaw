@@ -30,7 +30,7 @@ beforeAll(async () => {
         });
       if (url.pathname === "/")
         return new Response(
-          `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/${url.searchParams.get("skin") === "visual" ? "visual" : "classic"}/css/styles.css"><style>body{overflow:auto}#app{height:auto;min-height:100vh}.settings-content,.settings-panel__content{max-width:100%;padding:16px}.settings-theme-table{max-width:100%}#theme-probes{padding:16px}#theme-probes pre{background:var(--bg-code);color:var(--text-code);padding:12px}#theme-prose{color:var(--text-primary)}</style></head><body><div id="app"></div><script type="module" src="/fixture.js"></script></body></html>`,
+          `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/static/${"classic"}/css/styles.css"><style>body{overflow:auto}#app{height:auto;min-height:100vh}.settings-content,.settings-panel__content{max-width:100%;padding:16px}.settings-theme-table{max-width:100%}#theme-probes{padding:16px}#theme-probes pre{background:var(--bg-code);color:var(--text-code);padding:12px}#theme-prose{color:var(--text-primary)}</style></head><body><div id="app"></div><script type="module" src="/fixture.js"></script></body></html>`,
           { headers: { "content-type": "text/html" } },
         );
       if (url.pathname.startsWith("/static/") && !url.pathname.includes("..")) {
@@ -65,19 +65,10 @@ async function open(engine: string, skin: string, width = 1280) {
   return { page, errors };
 }
 async function select(page: Page, skin: string, name: string) {
-  if (skin === "classic")
-    await page.getByRole("radio", { name, exact: true }).check();
-  else {
-    await page.locator("#appearance-theme").click();
-    await page
-      .getByRole("option", {
-        name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\(`),
-      })
-      .click();
-  }
+  await page.getByRole("radio", { name, exact: true }).check();
 }
 for (const engine of ["chromium", "webkit"])
-  for (const skin of ["classic", "visual"]) {
+  for (const skin of ["classic"]) {
     browserTest(
       `${engine} ${skin}: all palettes share mode, foreground and terminal roles`,
       async () => {
@@ -251,144 +242,6 @@ for (const engine of ["chromium", "webkit"])
       30000,
     );
   }
-for (const engine of ["chromium", "webkit"])
-  browserTest(
-    `${engine} Visual: import preview/cancel, reload and reset are coherent`,
-    async () => {
-      const { page, errors } = await open(engine, "visual");
-      try {
-        await select(page, "visual", "Monokai Pro");
-        const themeFile = {
-          name: "Light fixture",
-          type: "light",
-          colors: {
-            "editor.background": "#faf4ed",
-            "editor.foreground": "#34303b",
-            "sideBar.background": "#f2e9e1",
-            focusBorder: "#8b355b",
-          },
-        };
-        await page.locator('input[type=file][accept=".json"]').setInputFiles({
-          name: "fixture.json",
-          mimeType: "application/json",
-          buffer: Buffer.from(JSON.stringify(themeFile)),
-        });
-        await page.waitForFunction(
-          () => document.documentElement.dataset.customTheme === "true",
-        );
-        expect(await page.locator("html").getAttribute("data-theme")).toBe(
-          "light",
-        );
-        await page.getByRole("button", { name: "Cancel", exact: true }).click();
-        expect(
-          await page.locator("html").getAttribute("data-custom-theme"),
-        ).toBe("false");
-        expect(
-          await page.locator("html").getAttribute("data-color-theme"),
-        ).toBe("monokai-pro");
-        await page.locator('input[type=file][accept=".json"]').setInputFiles({
-          name: "fixture.json",
-          mimeType: "application/json",
-          buffer: Buffer.from(JSON.stringify(themeFile)),
-        });
-        await page.getByRole("button", { name: "Apply", exact: true }).click();
-        await page.reload();
-        await page.waitForFunction(
-          () => document.documentElement.dataset.customTheme === "true",
-        );
-        expect(await page.locator("html").getAttribute("data-theme")).toBe(
-          "light",
-        );
-        expect(
-          await page
-            .locator("html")
-            .evaluate((e) =>
-              getComputedStyle(e).getPropertyValue("--bg-primary").trim(),
-            ),
-        ).toBe("#faf4ed");
-        await page.getByRole("button", { name: "Reset", exact: true }).click();
-        expect(
-          await page.locator("html").getAttribute("data-custom-theme"),
-        ).toBe("false");
-        expect(
-          await page.locator("html").getAttribute("data-color-theme"),
-        ).toBe("default");
-        await page.evaluate(() =>
-          (window as any).themeFixture.applyTheme({
-            "--bg": "#ffffff",
-            "--text": "#111111",
-            "--accent": "#123456; } body { display:none",
-          }),
-        );
-        expect(await page.locator("#app").isVisible()).toBe(true);
-        expect(
-          await page.evaluate(() =>
-            (window as any).themeFixture.importVSCodeTheme({ name: "Empty" }),
-          ),
-        ).toEqual({});
-        expect(errors).toEqual([]);
-      } finally {
-        await page.close();
-      }
-    },
-    30000,
-  );
-
-for (const engine of ["chromium", "webkit"])
-  browserTest(
-    `${engine}: mounted Visual xterm repaints theme without reconnect or remote input`,
-    async () => {
-      const page = await browsers[engine].newPage({
-        viewport: { width: 1280, height: 850 },
-      });
-      const connections: string[] = [],
-        sent: string[] = [];
-      await page.routeWebSocket("**/terminal/ws**", (socket) => {
-        connections.push(socket.url());
-        socket.onMessage((message) => sent.push(String(message)));
-      });
-      try {
-        await page.goto(`${base}/?skin=visual&terminal=1`);
-        await page.waitForSelector("#real-terminal .xterm-screen");
-        await page.waitForFunction(
-          () => !document.querySelector("#real-terminal .terminal__overlay"),
-        );
-        await page.evaluate(() =>
-          (window as any).themeFixture.selectLocalTheme("paper"),
-        );
-        await page.waitForFunction(
-          () =>
-            getComputedStyle(
-              document.querySelector(
-                "#real-terminal .xterm-scrollable-element",
-              )!,
-            ).backgroundColor === "rgb(239, 238, 232)",
-          undefined,
-          { timeout: 5000 },
-        );
-        await page.evaluate(() =>
-          (window as any).themeFixture.selectLocalTheme("synthwave-84"),
-        );
-        await page.waitForFunction(
-          () =>
-            getComputedStyle(
-              document.querySelector(
-                "#real-terminal .xterm-scrollable-element",
-              )!,
-            ).backgroundColor === "rgb(36, 27, 47)",
-          undefined,
-          { timeout: 5000 },
-        );
-        expect(connections).toHaveLength(1);
-        expect(
-          sent.map((s) => JSON.parse(s)).some((p) => p.type === "input"),
-        ).toBe(false);
-      } finally {
-        await page.close();
-      }
-    },
-    20000,
-  );
 
 for (const engine of ["chromium", "webkit"])
   for (const width of [1366, 820, 520, 390]) {
@@ -500,7 +353,7 @@ for (const engine of ["chromium", "webkit"])
   }
 
 for (const engine of ["chromium", "webkit"])
-  for (const skin of ["classic", "visual"]) {
+  for (const skin of ["classic"]) {
     browserTest(
       `${engine} ${skin}: Full has strong animated neon, Normal stays static, accessibility and visibility stop motion`,
       async () => {
@@ -684,7 +537,7 @@ for (const engine of ["chromium", "webkit"])
   }
 
 for (const engine of ["chromium", "webkit"])
-  for (const skin of ["classic", "visual"]) {
+  for (const skin of ["classic"]) {
     browserTest(
       `${engine} ${skin}: requested catalogue themes are selectable with correct native mode`,
       async () => {
@@ -747,7 +600,7 @@ for (const engine of ["chromium", "webkit"])
   }
 
 for (const engine of ["chromium", "webkit"])
-  for (const skin of ["classic", "visual"]) {
+  for (const skin of ["classic"]) {
     browserTest(
       `${engine} ${skin}: AS400 renders syntax, statuses, overlays and ANSI without red or blue`,
       async () => {
@@ -827,7 +680,7 @@ for (const engine of ["chromium", "webkit"])
   }
 
 for (const engine of ["chromium", "webkit"])
-  for (const skin of ["classic", "visual"]) {
+  for (const skin of ["classic"]) {
     browserTest(
       `${engine} ${skin}: every palette preserves expected syntax roles in real chat/editor scopes`,
       async () => {
@@ -848,12 +701,7 @@ for (const engine of ["chromium", "webkit"])
             };
             for (const expectation of f.syntaxExpectations) {
               if (expectation.skin && expectation.skin !== skin) continue;
-              if (
-                skin === "visual" &&
-                expectation.id === "default" &&
-                !expectation.skin
-              )
-                continue;
+
               f.setThemeModePreference(expectation.mode);
               f.selectLocalTheme(expectation.id);
               for (const scope of [".post-content", ".cm-editor"])
@@ -933,48 +781,6 @@ for (const engine of ["chromium", "webkit"])
           }, skin);
           expect(result.failures).toEqual([]);
           expect(result.checks).toBeGreaterThan(3500);
-          // Colour-oracle fixtures are independent literals; shared importer must obey them too.
-          const imported = await page.evaluate(() => {
-            const f = (window as any).themeFixture;
-            const vars = f.importVSCodeTheme({
-              type: "dark",
-              colors: {
-                "editor.background": "#101820",
-                "editor.foreground": "#abcdef",
-              },
-              semanticTokenColors: {
-                keyword: "#ff00aa",
-                function: "#11cc99",
-                variable: "#bbccdd",
-                number: "#cc8811",
-                comment: "#556677",
-              },
-              tokenColors: [
-                { scope: "string", settings: { foreground: "#779911" } },
-              ],
-            });
-            f.applyTheme(vars);
-            return {
-              keyword: getComputedStyle(
-                document.querySelector("#syntax-editor .tok-keyword")!,
-              ).color,
-              number: getComputedStyle(
-                document.querySelector("#syntax-editor .tok-number")!,
-              ).color,
-              function: getComputedStyle(
-                document.querySelector("#syntax-editor .tok-function")!,
-              ).color,
-              comment: getComputedStyle(
-                document.querySelector("#syntax-editor .tok-comment")!,
-              ).color,
-            };
-          });
-          expect(imported).toEqual({
-            keyword: "rgb(255, 0, 170)",
-            number: "rgb(204, 136, 17)",
-            function: "rgb(17, 204, 153)",
-            comment: "rgb(85, 102, 119)",
-          });
           if (engine === "chromium") {
             await mkdir(join(root, "../.artifacts/theme-syntax"), {
               recursive: true,
@@ -990,7 +796,6 @@ for (const engine of ["chromium", "webkit"])
               await page.evaluate(
                 ({ id, label }) => {
                   const f = (window as any).themeFixture;
-                  f.resetTheme();
                   f.selectLocalTheme(id);
                   let frame = document.getElementById("syntax-capture");
                   if (!frame) {
@@ -1030,79 +835,11 @@ for (const engine of ["chromium", "webkit"])
     );
   }
 
-for (const engine of ["chromium", "webkit"]) {
-  browserTest(
-    `${engine}: pinned VS Code imports and bundles render identical authored syntax roles`,
-    async () => {
-      const { page, errors } = await open(engine, "visual");
-      try {
-        await page.waitForSelector("#syntax-editor .cm-content");
-        const result = await page.evaluate(() => {
-          const f = (window as any).themeFixture;
-          const failures: string[] = [];
-          let comparisons = 0;
-          const probe = document.createElement("span");
-          document.body.append(probe);
-          const color = (value: string) => {
-            probe.style.color = value;
-            return getComputedStyle(probe).color;
-          };
-          for (const source of f.syntaxSources) {
-            const expected = f.syntaxExpectations.find(
-              (e: any) => e.id === source.id,
-            );
-            const vars = f.importVSCodeTheme({
-              ...source.theme,
-              type: expected.mode,
-            });
-            f.applyTheme(vars);
-            for (const scope of [".post-content", ".cm-editor"])
-              for (const role of f.syntaxRoles) {
-                const actual = getComputedStyle(
-                  document.querySelector(
-                    `#syntax-roles ${scope} [data-role="${role}"]`,
-                  )!,
-                ).color;
-                comparisons++;
-                if (actual !== color(expected.roles[role]))
-                  failures.push(
-                    `${source.id}/${scope}/${role}: ${actual} != ${color(expected.roles[role])}`,
-                  );
-              }
-            for (const selector of [
-              "#theme-real-code code",
-              "#syntax-editor .cm-content",
-            ]) {
-              comparisons++;
-              if (
-                getComputedStyle(document.querySelector(selector)!).color !==
-                color(expected.foreground)
-              )
-                failures.push(`${source.id}/${selector}: foreground`);
-            }
-            f.resetTheme();
-          }
-          probe.remove();
-          return { failures, comparisons, sources: f.syntaxSources.length };
-        });
-        expect(result.sources).toBe(11);
-        expect(result.comparisons).toBe(616);
-        expect(result.failures).toEqual([]);
-        expect(errors).toEqual([]);
-      } finally {
-        await page.close();
-      }
-    },
-    30000,
-  );
-}
-
-
 for (const [name, engine] of Object.entries({ chromium, webkit })) {
   browserTest(name + ": rendered Markdown fences follow theme and live system mode", async () => {
     const browser = await engine.launch({ headless: true });
     try {
-      for (const skin of ["classic", "visual"]) {
+      for (const skin of ["classic"]) {
         const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1280, height: 1000 } });
         const errors: string[] = [];
         page.on("pageerror", e => errors.push(e.message));
@@ -1155,7 +892,6 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
           await page.evaluate(id => (window as any).themeFixture.selectLocalTheme(id,null),id);
           for (const probe of await read()) expect(probe.failures).toEqual([]);
         }
-        await page.evaluate(() => { const f=(window as any).themeFixture; f.applyTheme(f.importVSCodeTheme({ type:"light", colors:{ "editor.background":"#fafafa", "editor.foreground":"#202020" }, tokenColors:[{scope:"keyword",settings:{foreground:"#8b005d",fontStyle:"bold"}},{scope:"entity.name.function",settings:{foreground:"#006699"}},{scope:"string",settings:{foreground:"#226622"}}] })); });
         for (const probe of await read()) expect(probe.failures).toEqual([]);
         await page.emulateMedia({ colorScheme: "dark" });
         for (const probe of await read()) expect(probe.failures).toEqual([]);

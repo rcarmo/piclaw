@@ -3,13 +3,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const classicSource = readFileSync(join(import.meta.dir, "../../web/src/components/model-picker.ts"), "utf8");
-const visualSource = readFileSync(join(import.meta.dir, "../../web/static/visual/frontend/src/components/model-context-bar/ModelPicker.tsx"), "utf8");
-const visualContextBarSource = readFileSync(join(import.meta.dir, "../../web/static/visual/frontend/src/components/ModelContextBar.tsx"), "utf8");
-const classicCss = readFileSync(join(import.meta.dir, "../../web/static/classic/css/chat.css"), "utf8");
-const visualCss = readFileSync(join(import.meta.dir, "../../web/static/visual/css/shell.css"), "utf8");
 
-test("classic and visual model pickers expose the shared searchable listbox contract", () => {
-  for (const source of [classicSource, visualSource]) {
+const classicCss = readFileSync(join(import.meta.dir, "../../web/static/classic/css/chat.css"), "utf8");
+
+test("Classic model pickers expose the shared searchable listbox contract", () => {
+  for (const source of [classicSource]) {
     expect(source).toContain("buildModelPickerProjection");
     expect(source).toContain('role="combobox"');
     expect(source).toContain('role="listbox"');
@@ -24,8 +22,8 @@ test("classic and visual model pickers expose the shared searchable listbox cont
   }
 });
 
-test("classic and visual pickers expose a separate accessible pin action", () => {
-  for (const source of [classicSource, visualSource]) {
+test("Classic pickers expose a separate accessible pin action", () => {
+  for (const source of [classicSource]) {
     expect(source).toContain("onTogglePin");
     expect(source).toContain('aria-keyshortcuts="Alt+Enter"');
     expect(source).toContain("event.altKey");
@@ -34,24 +32,15 @@ test("classic and visual pickers expose a separate accessible pin action", () =>
     expect(source).toContain('aria-hidden="true"');
   }
   expect(classicSource).toContain("compose-model-catalogue-pin");
-  expect(visualSource).toContain("model-picker__pin");
+
 });
 
-test("visual picker does not receive tokens or invent context fit", () => {
-  expect(visualContextBarSource).not.toContain("contextTokens={");
-  expect(visualSource).not.toContain("contextTokens");
-  expect(visualSource).not.toContain("contextFit");
-  expect(visualSource).not.toContain("calculateModelContextFit");
-});
-
-test("classic and visual model picker styles include bounded desktop and mobile layouts", () => {
+test("Classic model picker styles include bounded desktop and mobile layouts", () => {
   expect(classicCss).toContain(".compose-model-catalogue-results");
   expect(classicCss).toContain("max-height: min(48vh, 430px)");
   expect(classicCss).toContain("position: fixed");
-  expect(visualCss).toContain(".model-picker__results");
-  expect(visualCss).toContain("max-height: min(48vh, 430px)");
-  expect(visualCss).toContain(".model-picker__footer-start");
-  for (const css of [classicCss, visualCss]) {
+
+  for (const css of [classicCss]) {
     expect(css).toContain("min-height: 44px");
     expect(css).toContain("grid-template-columns: 44px minmax(0, 1fr)");
     expect(css).toContain("background: var(--bg-secondary");

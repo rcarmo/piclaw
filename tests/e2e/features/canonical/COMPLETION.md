@@ -1,5 +1,7 @@
 # UX specification completion matrix
 
+> Historical source audit. Visual was removed in #1990; paths and counts below describe the inspected revision, not the current UI.
+
 The #1323 audit covered **25 feature files, 241 scenarios/outlines and 25 example rows**. Follow-up #1324 separates the desired SVG-image contract from that baseline: the current inventory has **26 files, 248 scenarios/outlines and 44 example rows**, including eight shared implemented cases. Structural validity is separate from implementation and browser acceptance.
 
 ## SVG follow-up (#1324 / #1325)

@@ -368,7 +368,7 @@ New `GET /agent/*` or `POST /agent/*` endpoints use explicit public wiring:
 
 Public endpoint methods call the existing focused handlers with `endpointContexts`; identity reads stay live and native activity/branch projections live in `agent/agent-status.ts`. The endpoint facade, prototype installer, lifecycle namespace and per-message entry adapter are retired. Public HTTP, runtime and lifecycle methods remain on `WebChannel`. Message target parsing remains inside the server gateway's admitted callback, and host input still enters `runInternalDispatch`. The retained runtime bridge owns input authority and extension working-state snapshots. Queue and storage methods call their existing owners directly. Activity comes from current native status and known chat identities, never the legacy AgentSession pool.
 
-Keep authentication/CSRF/security headers in the request router and admission/drain/resource ownership in the server lifecycle gateway. Public URLs, response shapes and control/SSE/terminal arguments remain stable across both skins.
+Keep authentication/CSRF/security headers in the request router and admission/drain/resource ownership in the server lifecycle gateway. Public URLs, response shapes and control/SSE/terminal arguments remain stable across the web UI.
 
 ## Documentation updates
 

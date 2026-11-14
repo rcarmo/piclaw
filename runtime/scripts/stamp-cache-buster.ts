@@ -18,10 +18,10 @@ import { resolve } from "path";
 import { APP_ASSET_VERSION_REL_PATHS, computeAssetContentVersion } from "../src/utils/asset-content-version.js";
 import { buildThemeBootstrap } from './theme-bootstrap.js';
 
-for (const skin of ['classic', 'visual'] as const) {
-  const path = resolve(import.meta.dir, `../web/static/${skin}/index.html`);
+{
+  const path = resolve(import.meta.dir, "../web/static/classic/index.html");
   const original = readFileSync(path, 'utf8');
-  const generated = `<!-- piclaw-theme-bootstrap-start -->\n    <script>${buildThemeBootstrap(skin)}</script>\n    <!-- piclaw-theme-bootstrap-end -->`;
+  const generated = `<!-- piclaw-theme-bootstrap-start -->\n    <script>${buildThemeBootstrap()}</script>\n    <!-- piclaw-theme-bootstrap-end -->`;
   const next = original.replace(/<!-- piclaw-theme-bootstrap-start -->[\s\S]*?<!-- piclaw-theme-bootstrap-end -->/, generated);
   if (next !== original) writeFileSync(path, next, 'utf8');
 }

@@ -34,7 +34,7 @@ beforeAll(async () => {
 }, 30000);
 afterAll(async () => { await browser?.close(); server?.stop(true); });
 
-for (const mode of ['classic', 'visual']) {
+for (const mode of ['classic']) {
   browserTest(`${mode} rejects known-key cross-window bridge forgery and isolates parent`, async () => {
     const page = await browser.newPage();
     try {
@@ -132,7 +132,7 @@ for (const mode of ['classic', 'visual']) {
   }, 15000);
 }
 
-for (const mode of ["classic","visual"]) browserTest(mode + " static preview prevents script execution and network access", async () => {
+for (const mode of ["classic"]) browserTest(mode + " static preview prevents script execution and network access", async () => {
  const page=await browser.newPage();
  try {
   const requested:string[]=[];page.on("request",request=>requested.push(new URL(request.url()).pathname));

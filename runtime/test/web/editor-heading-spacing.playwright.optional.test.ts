@@ -22,13 +22,13 @@ beforeAll(async () => {
     }
     if (url.pathname === '/workspace/file/stat') return Response.json({ mtime: 'fixture' });
     if (url.pathname !== '/') return new Response(null, { status: 404 });
-    const skin = url.searchParams.get('skin') === 'visual' ? 'visual' : 'classic';
+    const skin = "classic";
     return new Response(`<!doctype html><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/static/${skin}/css/styles.css"><style>html,body{margin:0}body{display:block;height:auto;min-height:0;overflow:visible}#editor{height:560px;width:100%}#preview{height:300px}#blur{position:fixed;right:0;top:0;z-index:100}</style><button id="blur">Blur</button><div id="editor" class="editor-pane-instance-host"></div><div id="preview"></div><div id="chat" class="post-content"><h1>Chat heading</h1><p>Chat prose</p></div><script src="/static/common/js/marked.min.js"></script><script type="importmap">{"imports":{"#editor-vendor/codemirror":"/editor-vendor/codemirror.js"}}</script><script type="module" src="/fixture.js"></script>`, { headers: { 'content-type': 'text/html' } });
   } });
 }, 30000);
 afterAll(() => server?.stop(true));
 
-for (const [engineName, engine] of Object.entries({ chromium, webkit })) for (const skin of ['classic', 'visual']) for (const bundle of [false, true]) {
+for (const [engineName, engine] of Object.entries({ chromium, webkit })) for (const skin of ['classic']) for (const bundle of [false, true]) {
   browserTest(`${engineName} ${skin} ${bundle ? 'bundle' : 'source'}: headings use compact spacing without editor geometry drift`, async () => {
     const browser = await engine.launch();
     const page = await browser.newPage({ viewport: { width: 1000, height: 1000 } });

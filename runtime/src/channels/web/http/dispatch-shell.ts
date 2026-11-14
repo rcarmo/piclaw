@@ -2,7 +2,7 @@
  * web/http/dispatch-shell.ts – Shell/static/avatar route dispatch helpers.
  */
 
-import { WEB_RUNTIME_CONFIG, getRuntimeRoot } from "../../../core/config.js";
+import { getRuntimeRoot } from "../../../core/config.js";
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
 import type { RouteFlags } from "./route-flags.js";
 
@@ -36,8 +36,7 @@ export async function handleShellRoutes(
   serveStaticAsset: ServeStaticAsset
 ): Promise<Response | null> {
   if (flags.isIndex) {
-    const indexPath = WEB_RUNTIME_CONFIG.uiMode === 'visual' ? 'visual/index.html' : 'classic/index.html';
-    return channel.serveStatic(indexPath, req);
+    return channel.serveStatic('classic/index.html', req);
   }
 
   if (flags.isManifest) {

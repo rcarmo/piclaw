@@ -11,7 +11,7 @@ beforeAll(async()=>{
  if(url.pathname==='/fixture.js')return new Response(js,{headers:{'content-type':'text/javascript'}});
  if(url.pathname.startsWith('/static/'))return new Response(Bun.file(join(import.meta.dir,'../../web',url.pathname)));
  if(url.pathname==='/terminal/session')return Response.json({enabled:false});
- return new Response(`<!doctype html><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/static/${url.searchParams.get('skin')==='visual'?'visual':'classic'}/css/styles.css"><style>html,body,#app{height:100%;margin:0}</style><div id="app"></div><script type="module" src="/fixture.js"></script>`,{headers:{'content-type':'text/html'}});
+ return new Response(`<!doctype html><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/static/${'classic'}/css/styles.css"><style>html,body,#app{height:100%;margin:0}</style><div id="app"></div><script type="module" src="/fixture.js"></script>`,{headers:{'content-type':'text/html'}});
  }});
 },30000);
 afterAll(()=>server?.stop(true));

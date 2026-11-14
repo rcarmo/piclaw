@@ -16,7 +16,7 @@ test('editor and baseline use one live CSS-variable theme without vendor selecti
   expect(source).toContain("class: 'cm-markdown-preview'");
   const theme=read('extensions/viewers/editor/theme.ts');
   for(const role of ['--text-code','--bg-code','--selection-background','--search-highlight-color','--accent-color','--text-secondary'])expect(theme).toContain(role);
-  for(const skin of ['classic','visual']) {
+  for(const skin of ['classic']) {
     expect(read(`web/static/${skin}/css/styles.css`)).toContain('../../common/css/editor-theme.css');
     expect(read(`web/static/${skin}/css/editor.css`)).not.toMatch(/\.tok-keyword\s*\{/);
   }

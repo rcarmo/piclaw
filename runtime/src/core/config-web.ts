@@ -1,5 +1,6 @@
 /** Web server, authentication, session, terminal, VNC, and upload configuration. */
 
+import { createLogger } from "../utils/logger.js";
 import { randomBytes } from "node:crypto";
 import { readJsonConfig, writeJsonConfig } from "./config-store.js";
 import { pickBoolean, pickNumber, pickString } from "./config-helpers.js";
@@ -162,7 +163,6 @@ export interface WebServerConfig {
 }
 
 /** Mutable web auth/session/runtime settings grouped for auth and UI wiring. */
-export type WebUiMode = "classic" | "visual";
 const WEB_PASSKEY_MODES = ["totp-fallback", "totp-only", "passkey-only"] as const;
 export type WebPasskeyMode = (typeof WEB_PASSKEY_MODES)[number];
 
@@ -174,7 +174,6 @@ function parseWebPasskeyMode(value: unknown): WebPasskeyMode {
 }
 
 export interface WebRuntimeConfig {
-  uiMode: WebUiMode;
   totpSecret: string;
   totpWindow: number;
   sessionTtl: number;
@@ -240,7 +239,6 @@ function getWebOrdinaryDomainConfigOptions(): DomainConfigRuntimeOptions {
 
 type WebOrdinaryDomainConfig = Pick<
   WebRuntimeConfig,
-  | "uiMode"
   | "totpWindow"
   | "sessionTtl"
   | "passkeyMode"
@@ -266,8 +264,8 @@ type WebOrdinaryDomainConfig = Pick<
 
 const webOrdinaryDomainSchema = registerDomainConfig<WebOrdinaryDomainConfig>({
   domain: "web",
+  retiredKeys: ["uiMode"],
   fields: {
-    uiMode: stringField({ key: "uiMode", owner: "web", defaultValue: "classic", allowedValues: ["classic", "visual"], persistence: "json-config", precedence: ["compat-env", "persisted", "default"], secretClass: "none", compatibilityEnv: [{ envKey: "PICLAW_WEB_UI_MODE", replacement: "domains.web.uiMode", removalVersion: "3.0.0" }] }) as DomainConfigField<WebUiMode>,
     idleTimeout: integerField({ key: "idleTimeout", owner: "web", defaultValue: configWebIdleTimeout ?? legacyWebIdleTimeout ?? 0, min: 0, bounds: ">=0", persistence: "json-config", precedence: ["bootstrap-cli-env", "compat-env", "persisted", "default"], secretClass: "none", compatibilityEnv: [{ envKey: "PICLAW_WEB_IDLE_TIMEOUT", replacement: "domains.web.idleTimeout", removalVersion: "3.0.0" }] }),
     persistThinking: boolField({ key: "persistThinking", owner: "web", defaultValue: false, persistence: "json-config", precedence: ["compat-env", "persisted", "default"], secretClass: "none", compatibilityEnv: [{ envKey: "PICLAW_WEB_PERSIST_THINKING", replacement: "domains.web.persistThinking", removalVersion: "3.0.0" }] }),
     persistThinkingMaxChars: integerField({ key: "persistThinkingMaxChars", owner: "web", defaultValue: 100000, min: 1, bounds: "positive integer", persistence: "json-config", precedence: ["compat-env", "persisted", "default"], secretClass: "none", compatibilityEnv: [{ envKey: "PICLAW_WEB_PERSIST_THINKING_MAX_CHARS", replacement: "domains.web.persistThinkingMaxChars", removalVersion: "3.0.0", parse: (raw) => { const parsed = Number(raw); return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : 100000; } }] }),
@@ -305,6 +303,12 @@ const WEB_ORDINARY_DOMAIN_CONFIG = readDomainConfig(webOrdinaryDomainSchema, get
 // limit wins when old instances have both values; it becomes the one shared cap.
 const persistedWebDomain = (readJsonConfig(getConfigPath()).domains as { web?: Record<string, unknown> } | undefined)?.web;
 const legacyUploadEnv = getDomainConfigOptions().env ?? {};
+// Bootstrap warns once; retired selections neither select a UI nor rewrite stored settings.
+const retiredUiSelections = [persistedWebDomain?.uiMode, webConfig.uiMode, piclawConfig.uiMode,
+  legacyUploadEnv.PICLAW_WEB_UI_MODE];
+if (retiredUiSelections.some(value => typeof value === 'string' && value.trim().toLowerCase() === 'visual')) {
+  createLogger('core.config-web').warn('Visual UI has been removed; using Classic', { operation: 'web.retired_ui_mode' });
+}
 const hasWorkspaceLimit = legacyUploadEnv.PICLAW_WEB_WORKSPACE_UPLOAD_LIMIT_MB !== undefined
   || persistedWebDomain?.workspaceUploadLimitMb !== undefined
   || configWebWorkspaceUploadLimitMb !== undefined || legacyWebWorkspaceUploadLimitMb !== undefined;
@@ -332,7 +336,6 @@ export function getWebServerConfig(): Readonly<WebServerConfig> {
 /** Grouped web auth/session/runtime settings. `totpSecret` stays mutable for runtime resets. */
 const WEB_SECRET_BOOTSTRAP_CONFIG = getWebSecretBootstrapConfig();
 export const WEB_RUNTIME_CONFIG: WebRuntimeConfig = Object.seal({
-  uiMode: WEB_ORDINARY_DOMAIN_CONFIG.uiMode,
   totpSecret: WEB_SECRET_BOOTSTRAP_CONFIG.totpSecret || configWebTotpSecret || "",
   totpWindow: WEB_ORDINARY_DOMAIN_CONFIG.totpWindow,
   sessionTtl: WEB_ORDINARY_DOMAIN_CONFIG.sessionTtl,

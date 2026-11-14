@@ -792,7 +792,7 @@ You can either preconfigure `PICLAW_WEB_TOTP_SECRET` yourself or initialize it f
 ### Passkey enrolment
 
 1. Sign in with an enabled method: TOTP for the first passkey, or an existing passkey for additional keys.
-2. Open **Settings → Authentication → Passkeys** in Classic or Visual.
+2. Open **Settings → Authentication → Passkeys**.
 3. Choose **Add passkey**, give it a name and complete the browser's native prompt. The key appears after server verification.
 4. If your login is older than five minutes, use **Sign in again**, then return and select **Refresh**. Adding another key in passkey-only mode does not require TOTP.
 

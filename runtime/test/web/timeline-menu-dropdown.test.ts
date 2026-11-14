@@ -8,13 +8,8 @@ function cssRuleBody(css: string, selector: string): string {
   return match?.[1] || "";
 }
 
-const THEME_WORKSPACE_CSS = [
-  "../../web/static/classic/css/workspace.css",
-  "../../web/static/visual/css/workspace.css",
-];
-
 test("timeline hamburger dropdown uses available viewport height without a fixed desktop cap", () => {
-  for (const relativePath of THEME_WORKSPACE_CSS) {
+  for (const relativePath of ['../../web/static/classic/css/workspace.css']) {
     const css = readFileSync(join(import.meta.dir, relativePath), "utf8");
     const body = cssRuleBody(css, ".timeline-menu-dropdown");
 

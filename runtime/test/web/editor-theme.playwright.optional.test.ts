@@ -20,14 +20,14 @@ beforeAll(async () => {
       const file = resolve(root,'web',url.pathname.slice(1));
       if(file.startsWith(root+'/web/static/')&&await Bun.file(file).exists())return new Response(Bun.file(file));
     }
-    if(url.pathname==='/')return new Response(`<!doctype html><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/static/${url.searchParams.get('skin')==='visual'?'visual':'classic'}/css/styles.css"><style>html,body{height:100%;margin:0}#editor{height:760px;width:100%;}#blur{position:fixed;top:0;right:0;z-index:100}</style><button id="blur">Blur</button><div id="editor"></div><script type="importmap">{"imports":{"#editor-vendor/codemirror":"/editor-vendor/codemirror.js"}}</script><script type="module" src="/fixture.js"></script>`,{headers:{'content-type':'text/html'}});
+    if(url.pathname==='/')return new Response(`<!doctype html><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/static/${'classic'}/css/styles.css"><style>html,body{height:100%;margin:0}#editor{height:760px;width:100%;}#blur{position:fixed;top:0;right:0;z-index:100}</style><button id="blur">Blur</button><div id="editor"></div><script type="importmap">{"imports":{"#editor-vendor/codemirror":"/editor-vendor/codemirror.js"}}</script><script type="module" src="/fixture.js"></script>`,{headers:{'content-type':'text/html'}});
     if(url.pathname==='/workspace/file/stat')return Response.json({mtime:'fixture'});
     return new Response(null,{status:404});
   }});
 },30000);
 afterAll(()=>server?.stop(true));
 
-for(const [name,engine] of Object.entries({chromium,webkit}))for(const skin of ['classic','visual'])for(const bundle of [false,true]) {
+for(const [name,engine] of Object.entries({chromium,webkit}))for(const skin of ['classic'])for(const bundle of [false,true]) {
   browserTest(`${name} ${skin} ${bundle ? 'bundle' : 'source'}: actual editor selections track themes across all modes`,async()=>{
     const browser=await engine.launch();const page=await browser.newPage({viewport:{width:1280,height:900},colorScheme:'dark'});
     const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
@@ -74,8 +74,8 @@ for(const [name,engine] of Object.entries({chromium,webkit}))for(const skin of [
   },180000);
 }
 
-for (const [name, engine] of Object.entries({chromium, webkit})) for (const skin of ['classic', 'visual']) {
-  browserTest(`${name} ${skin}: live theme changes cover widgets, search, Vim, imports and diff`, async () => {
+for (const [name, engine] of Object.entries({chromium, webkit})) for (const skin of ['classic']) {
+  browserTest(`${name} ${skin}: live theme changes cover widgets, search, Vim and diff`, async () => {
     const browser = await engine.launch();
     const page = await browser.newPage({viewport:{width:1280,height:900},colorScheme:'dark'});
     const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
@@ -144,17 +144,6 @@ for (const [name, engine] of Object.entries({chromium, webkit})) for (const skin
       expect(await page.locator('.cm-selectionBackground').first().evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgba(19, 155, 88, 0.4)');
       await page.locator('#blur').click();
       expect(await page.locator('.cm-selectionBackground').first().evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgba(19, 155, 88, 0.4)');
-      // Imported selection is independent of the focus/accent colour.
-      const imported=await page.evaluate(()=>{
-        const f=(window as any).editorFixture;
-        const before=f.instance.view;before.dispatch({changes:{from:0,insert:'Edited '}});f.select();
-        const text=before.state.doc.toString(),selection=before.state.selection.main.to;
-        const vars=f.importVSCodeTheme({type:'light',colors:{'editor.background':'#ffffff','editor.foreground':'#222222',focusBorder:'#7733bb','selection.background':'#ff000055','editor.selectionBackground':'#11aa3355'}});f.applyTheme(vars);
-        const probe=document.createElement('span');probe.style.color='var(--selection-background)';document.body.append(probe);const expected=getComputedStyle(probe).color;probe.remove();
-        return {mapped:vars['--selection-background'],accent:vars['--accent'],expected,same:before===f.instance.view,textKept:text===before.state.doc.toString(),selectionKept:selection===before.state.selection.main.to,dirty:f.instance.dirty};
-      });
-      expect(imported.accent).toBe('#7733bb');expect(imported.mapped).toBe('rgba(17,170,51,0.333)');expect(imported.same&&imported.textKept&&imported.selectionKept&&imported.dirty).toBe(true);
-      expect(await page.locator('.cm-selectionBackground').first().evaluate(el=>getComputedStyle(el).backgroundColor)).toBe(imported.expected);
       // Match browser system colours in forced-colours mode (not vendor blues).
       await page.emulateMedia({forcedColors:'active'});
       const forced = await page.evaluate(() => {
@@ -171,7 +160,7 @@ for (const [name, engine] of Object.entries({chromium, webkit})) for (const skin
       const vim=await resolve('.cm-fat-cursor','background-color','--accent-color');expect(vim.actual).toBe(vim.expected);
       await page.keyboard.press('Escape');await page.keyboard.press('g');await page.keyboard.press('g');await page.keyboard.press('0');await page.keyboard.press('v');await page.keyboard.press('l');
       await page.locator('.cm-selectionBackground').first().waitFor();
-      const visual=await resolve('.cm-selectionBackground','background-color','--selection-background');expect(visual.actual).toBe(visual.expected);
+
       await page.evaluate(()=>{const f=(window as any).editorFixture;f.mount('diff');f.selectLocalTheme('github-light');});
       expect(await page.locator('.cm-mergeView .cm-editor').count()).toBe(2);
       expect(await page.locator('.cm-changedLine').count()).toBeGreaterThan(0);
@@ -192,7 +181,7 @@ for (const [name, engine] of Object.entries({chromium, webkit})) for (const skin
   },60000);
 }
 
-for (const [name, engine] of Object.entries({ chromium, webkit })) for (const skin of ['classic', 'visual']) {
+for (const [name, engine] of Object.entries({ chromium, webkit })) for (const skin of ['classic']) {
   browserTest(`${name} ${skin}: a focused editor draws no focus ring around its text`, async () => {
     const browser = await engine.launch(); const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));

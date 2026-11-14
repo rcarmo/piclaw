@@ -1,5 +1,5 @@
 // Real Settings hosts with registered panes reproducing shipped add-on markup.
-const skin = new URLSearchParams(location.search).get("skin") || "classic";
+
 window.fetch = async () => Response.json({});
 const vendor = await import("../../../web/src/vendor/preact-htm.js");
 let html = vendor.html;
@@ -27,21 +27,11 @@ function ButtonsPane() {
 }
 
 const root = document.getElementById("app")!;
-if (skin === "classic") {
+{
   const { registerSettingsPane } = await import("../../../web/src/components/settings/pane-registry.js");
   const { requestOpenSettingsDialog } = await import("../../../web/src/components/settings-dialog-events.js");
   const { SettingsDialogContent } = await import("../../../web/src/components/settings-dialog.js");
   registerSettingsPane({ id: "buttons", label: "Buttons", component: ButtonsPane, icon: null });
   requestOpenSettingsDialog({ section: "buttons" });
   vendor.render(html`<${SettingsDialogContent} onClose=${() => {}} />`, root);
-} else {
-  const preact = await import("preact");
-  const { default: htm } = await import("htm");
-  html = htm.bind(preact.h);
-  const { registerAddonSettingsPane, registerSettingsPane } = await import("../../../web/static/visual/frontend/src/panels/settings/pane-registry");
-  const { SettingsPanel } = await import("../../../web/static/visual/frontend/src/panels/SettingsPanel");
-  registerAddonSettingsPane({ id: "buttons", label: "Buttons", component: ButtonsPane });
-  registerSettingsPane({ id: "core-fixture", label: "Core fixture", component: () => html`<p>Core settings</p>` });
-  localStorage.setItem("piclaw-settings-category", "buttons");
-  preact.render(preact.h(SettingsPanel, {}), root);
 }

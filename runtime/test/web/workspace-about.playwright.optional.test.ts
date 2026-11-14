@@ -11,7 +11,7 @@ beforeAll(() => {
   if (!enabled) return;
   server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
     const url = new URL(req.url);
-    if (url.pathname === "/") return new Response(Bun.file(join(webRoot, `static/${url.searchParams.get("skin") === "visual" ? "visual" : "classic"}/index.html`)), { headers: { "content-type": "text/html" } });
+    if (url.pathname === "/") return new Response(Bun.file(join(webRoot, `static/${"classic"}/index.html`)), { headers: { "content-type": "text/html" } });
     if (url.pathname === "/editor-vendor/codemirror.js") return new Response(Bun.file(resolve(webRoot, "../extensions/viewers/editor/vendor/codemirror.js")), { headers: { "content-type": "text/javascript" } });
     if (url.pathname.startsWith("/static/")) {
       const path = resolve(webRoot, url.pathname.slice(1));
@@ -23,7 +23,7 @@ beforeAll(() => {
 afterAll(() => server?.stop(true));
 
 for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
-  for (const skin of ["classic", "visual"]) browserTest(`${engineName}: ${skin} About versions and window workspace state`, async () => {
+  for (const skin of ["classic"]) browserTest(`${engineName}: ${skin} About versions and window workspace state`, async () => {
     const browser = await engine.launch({ headless: true, ...(engineName === 'chromium' && process.env.PICLAW_TEST_CHROMIUM_PATH ? {executablePath:process.env.PICLAW_TEST_CHROMIUM_PATH} : {}) });
     const context = await browser.newContext({ viewport: { width: 1280, height: 850 }, colorScheme: "dark", reducedMotion: "reduce", serviceWorkers: "block" });
     const page = await context.newPage();
@@ -101,7 +101,7 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       await page.goto(server.url+'?skin='+skin+'&chat_jid='+encodeURIComponent(chatJid),{waitUntil:'load'});
       await page.locator('textarea,[contenteditable="true"]').first().waitFor();
       await page.waitForFunction(()=>new URL(location.href).searchParams.get('chat_jid')==='web:default');
-      if(skin==='classic') {
+      {
         const toggle=page.locator('.workbench-activity-button[aria-label="Explorer"]');
         await toggle.waitFor();
         expect(await toggle.getAttribute('aria-selected')).toBe('true');
@@ -174,7 +174,7 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
         expect(aboutRequests).toBe(3);
       }
       await page.evaluate(()=>window.dispatchEvent(new CustomEvent('piclaw:open-settings',{detail:{section:'general'}})));
-      const content=page.locator(skin==='classic'?'.settings-content':'.settings-panel__content').filter({visible:true});
+      const content=page.locator('.settings-content').filter({visible:true});
       const about=content.locator('.settings-about');
       await about.locator('.about-version').last().waitFor();
       await about.getByRole('link',{name:'PiClaw 3.2.5 on GitHub',exact:true}).waitFor();

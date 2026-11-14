@@ -269,16 +269,11 @@ export const groupDefinitions: GroupDefinition[] = [
         "webauthn-challenges.test.ts",
         "webauthn-enrol-page.test.ts",
 
-
-
         "login-options.test.ts",
         "principal-route.test.ts",
         "principal.test.ts",
         "totp-user-login.test.ts",
         "webauthn-user-login.test.ts",
-
-
-
 
         "legacy-input-holds.test.ts",
       ]),
@@ -424,7 +419,7 @@ export const groupDefinitions: GroupDefinition[] = [
   {
     id: "web-ui-model-catalogue",
     label: "web ui model catalogue",
-    notes: "Model catalogue projection/preferences plus classic and visual picker/settings component contracts.",
+    notes: "Model catalogue projection/preferences plus Classic picker/settings component contracts.",
     match: (relativePath) =>
       relativePath.startsWith("web/") && basenameIsOneOf(relativePath, [
         "model-catalogue-preferences.test.ts",
@@ -432,7 +427,6 @@ export const groupDefinitions: GroupDefinition[] = [
         "model-picker-components.test.ts",
         "model-settings-catalogue.test.ts",
         "model-settings-components.test.ts",
-        "visual-model-catalogue.test.ts",
       ]),
   },
   {
@@ -476,7 +470,6 @@ export const groupDefinitions: GroupDefinition[] = [
           "compaction-settings-ui.test.ts",
           "compose-speech.test.ts",
           "post-speech.test.ts",
-          "visual-protected-recovery.test.ts",
           "markdown-surface-security.test.ts",
           "use-splitters.test.ts",
           "optional-api.test.ts",
@@ -587,8 +580,6 @@ export const groupDefinitions: GroupDefinition[] = [
           "thinking-cleanup.test.ts",
           "thinking-endpoint.test.ts",
           "timeline-render-boundary.test.ts",
-          "visual-telemetry.test.ts",
-          "visual-agent-status-utils.test.ts",
 
         ])
         || isAppRenderingPaneTest(relativePath)

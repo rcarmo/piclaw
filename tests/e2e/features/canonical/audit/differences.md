@@ -1,5 +1,7 @@
 # Skin and capability boundaries
 
+> Historical source audit. Visual was removed in #1990; paths and counts below describe the inspected revision, not the current UI.
+
 Classic is the default authority. The entries below compare inspected source, not browser execution or complete skin parity. Paths are repository-relative.
 
 | Surface | Classic evidence | Visual evidence | Disposition |
