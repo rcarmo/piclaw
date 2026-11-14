@@ -4,7 +4,7 @@ import {
   WebAdaptiveCardSidePromptService,
   type WebAdaptiveCardSidePromptServiceOptions,
 } from "../../../../src/channels/web/cards/adaptive-card-side-prompt-service.js";
-import { handleLogin, cancelProviderAuthFlows } from "../../../../src/agent-control/handlers/login.js";
+import { createNativeControlFixture } from "../../../agent-control/native-control-fixture.js";
 import { withChatContext } from "../../../../src/core/chat-context.js";
 import { createTestModelRegistry, TestAgentControlSession } from "../../../agent-control/session-fixture.js";
 import { getTestWorkspace } from "../../../helpers.js";
@@ -102,7 +102,8 @@ describe("Web adaptive-card/side-prompt service", () => {
     };
     const session = new TestAgentControlSession(getTestWorkspace().workspace, registry);
     const chat = "web:integrated-private";
-    const run = (command: any) => withChatContext(chat, "web", () => handleLogin(session as any, registry, command));
+    const control = createNativeControlFixture(session, registry, chat);
+    const run = (command: any) => withChatContext(chat, "web", () => control.facade.applyControlCommand(chat, command));
     try {
       const start = await run({ type: "login", provider: '__step1 {"provider":"openai"}', raw: "/login __step1" });
       const card = start.contentBlocks![0] as any;
@@ -125,7 +126,7 @@ describe("Web adaptive-card/side-prompt service", () => {
       const done = await submit(second.card_id, { ...second.auth_presentation.action_data, method: "runtime_continue", auth_value: "done" });
       expect(done.status).toBe(200);
       expect(JSON.stringify({ row: db.getMessageByRowId(chat, postId), broadcasts, sent: fixture.state.sentMessages })).not.toContain(sentinel);
-    } finally { cancelProviderAuthFlows(session as any); }
+    } finally { control.dispose(); }
   });
   test("private provider presentation leaves only in no-store response, while safe card bindings rotate", async () => {
     const db = await import("../../../../src/db.js");

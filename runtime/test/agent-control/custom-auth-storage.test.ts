@@ -18,7 +18,12 @@ for (const scenario of ["new-key-and-logout", "blank-update-preserves-key", "key
       const [exit, out, err] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
       expect(exit, err.slice(-2000)).toBe(0);
       expect(out.trim()).toBe(scenario);
-      expect(err).toBe("");
+      if (scenario === "logout-delete-failure-retains-config") {
+        // Native command ownership returns a safe error and one fixed warning,
+        // rather than forwarding the legacy handler's credential-store error.
+        expect(JSON.parse(err)).toEqual({ ts: expect.any(String), level: "warn", module: "agent-control.login",
+          message: "Native provider authentication did not finish", operation: "agent_control_login.native_control_failed", outcome: "failed" });
+      } else expect(err).toBe("");
     } finally {
       clearTimeout(timer);
       if (child.exitCode === null) child.kill("SIGKILL");

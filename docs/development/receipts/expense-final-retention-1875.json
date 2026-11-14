@@ -1028,7 +1028,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "cdddbc02e1f46e6767bfd9f5602c55ef007d6083aff7af016550f74d1f73aa6f",
       "state": "retained-decoupled",
-      "currentSha256": "72ec121733f0bbad3cc01a89663e949d14376d07b1db5609b1eb7963f52af737",
+      "currentSha256": "7f593708a448c66fdcf2df8836e4b3fabf6f861db88ed9a2c022de2513675eb9",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
@@ -2896,6 +2896,12 @@
       "base": "d75ec20fb1f2c67a2ac88ecb576e43e308418163",
       "paths": ["runtime/src/agent-pool.ts"],
       "scope": "Remove the uncalled legacy session binder API and factory stage. Original 105 classifications, 37 deleted paths and financial reduction accounting remain unchanged; this slice receives no additional #1875 credit."
+    },
+    {
+      "issue": 1650,
+      "base": "b55ab07685fe8430e8f5c7dca37d1b55c5d356f2",
+      "paths": ["runtime/src/channels/web/http/dispatch-agent.ts"],
+      "scope": "Settings now uses the existing provider-owned auth definitions for built-in and extension providers alike. Original classifications, deleted paths and financial accounting remain unchanged; no additional #1875 deletion credit."
     }
   ]
 }
