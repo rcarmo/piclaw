@@ -147,7 +147,7 @@
 }
 
 .mcp-settings .settings-btn.primary,
-.mcp-server-editor .settings-btn.primary { background: var(--accent-color); border-color: var(--accent-color); color: #fff; }
+.mcp-server-editor .settings-btn.primary { background: var(--accent-color); border-color: var(--accent-color); color: var(--accent-contrast-text, #fff); }
 .mcp-settings .settings-btn:hover:not(:disabled),
 .mcp-server-editor .settings-btn:hover:not(:disabled) { border-color: var(--accent-color); }
 .mcp-settings .settings-btn.danger,

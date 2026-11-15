@@ -1147,14 +1147,15 @@
 }
 
 .agent-request-content {
-    background-color: #1a1a1a;
-    border: 1px solid #333;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 24px;
     max-width: 340px;
     width: 100%;
     box-sizing: border-box;
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 16px 48px color-mix(in srgb, #000 35%, transparent);
     max-height: calc(var(--app-height, 100dvh) - 32px);
     display: flex;
     flex-direction: column;
@@ -1186,7 +1187,7 @@
 .agent-request-title {
     font-weight: 600;
     font-size: 16px;
-    color: #ffffff;
+    color: var(--text-primary);
     word-break: break-word;
     flex: 1;
 }
@@ -1199,7 +1200,7 @@
 }
 
 .agent-request-description {
-    color: #aaaaaa;
+    color: var(--text-secondary);
     font-size: 14px;
     line-height: 1.5;
     margin-bottom: 10px;
@@ -1207,7 +1208,7 @@
 
 .agent-request-files {
     margin-bottom: 12px;
-    color: #aaaaaa;
+    color: var(--text-secondary);
     font-size: 13px;
 }
 
@@ -1222,7 +1223,7 @@
 }
 
 .agent-request-subtitle {
-    color: #ffffff;
+    color: var(--text-primary);
     font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
@@ -1230,11 +1231,11 @@
 }
 
 .agent-request-command {
-    color: #aaaaaa;
+    color: var(--text-secondary);
     font-size: 12px;
-    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+    font-family: var(--font-mono, 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace);
     line-height: 1.4;
-    background: #1a1a1a;
+    background: var(--bg-secondary);
     padding: 10px 12px;
     border-radius: 6px;
     margin: 0;
@@ -1246,20 +1247,20 @@
 
 .agent-request-diff {
     margin-top: 12px;
-    color: #aaaaaa;
+    color: var(--text-secondary);
     font-size: 12px;
 }
 
 .agent-request-diff summary {
     cursor: pointer;
-    color: #ffffff;
+    color: var(--text-primary);
     font-weight: 600;
     margin-bottom: 6px;
 }
 
 .agent-request-diff pre {
     margin: 0;
-    background: #1a1a1a;
+    background: var(--bg-secondary);
     border-radius: 6px;
     padding: 10px 12px;
     white-space: pre-wrap;
@@ -1273,12 +1274,13 @@
     gap: 8px;
 }
 
+/* Colours come from the active theme, not the system colour scheme. */
 .agent-request-btn {
     padding: 12px 16px;
-    border: 1px solid #444;
+    border: 1px solid var(--border-color);
     border-radius: 8px;
-    background-color: #2a2a2a;
-    color: #ffffff;
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
     font-size: 15px;
     font-weight: 500;
     cursor: pointer;
@@ -1287,7 +1289,7 @@
 }
 
 .agent-request-btn:hover {
-    background-color: #3a3a3a;
+    background-color: var(--bg-hover);
 }
 
 .agent-request-btn:focus {
@@ -1301,74 +1303,24 @@
 .agent-request-btn.primary {
     background-color: var(--accent-color);
     border-color: var(--accent-color);
-    color: #ffffff;
+    color: var(--accent-contrast-text, #ffffff);
 }
 
 .agent-request-btn.primary:hover {
-    background-color: var(--accent-hover);
+    background-color: var(--accent-hover, var(--accent-color));
 }
 
 .agent-request-btn.always-allow {
     background-color: transparent;
     border-color: transparent;
-    color: #888888;
+    color: var(--text-secondary);
     font-size: 13px;
     padding: 8px 16px;
 }
 
 .agent-request-btn.always-allow:hover {
-    background-color: #2a2a2a;
-    color: #ffffff;
-}
-
-@media (prefers-color-scheme: light) {
-    .agent-request-content {
-        background-color: #ffffff;
-        border-color: #e0e0e0;
-        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
-    }
-
-    .agent-request-title {
-        color: #111111;
-    }
-
-    .agent-request-description {
-        color: #666666;
-    }
-
-    .agent-request-command {
-        color: #666666;
-        background: #f0f0f0;
-    }
-
-    .agent-request-btn {
-        background-color: #f5f5f5;
-        border-color: #e0e0e0;
-        color: #111111;
-    }
-
-    .agent-request-btn:hover {
-        background-color: #eeeeee;
-    }
-
-    .agent-request-btn.primary {
-        background-color: var(--accent-color);
-        border-color: var(--accent-color);
-        color: #ffffff;
-    }
-
-    .agent-request-btn.primary:hover {
-        background-color: var(--accent-hover);
-    }
-
-    .agent-request-btn.always-allow {
-        color: #888888;
-    }
-
-    .agent-request-btn.always-allow:hover {
-        background-color: #f5f5f5;
-        color: #111111;
-    }
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
 }
 
 /* Loading spinner */

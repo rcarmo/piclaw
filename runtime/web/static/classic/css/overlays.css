@@ -394,7 +394,7 @@
 .generated-widget-launch-btn {
     border: 1px solid color-mix(in srgb, var(--accent-color) 35%, var(--border-color));
     background: var(--accent-color);
-    color: white;
+    color: var(--accent-contrast-text, #fff);
     border-radius: var(--radius-md);
     padding: 8px 12px;
     font: inherit;
@@ -729,7 +729,7 @@
 
 .image-annotator-done-btn {
     background: var(--accent-color);
-    color: #fff;
+    color: var(--accent-contrast-text, #fff);
     border-color: var(--accent-color);
     font-weight: 600;
 }
@@ -888,7 +888,7 @@ mark.post-highlight {
     border-radius: var(--radius-md);
     border: 1px solid var(--accent-color);
     background: var(--accent-color);
-    color: #fff;
+    color: var(--accent-contrast-text, #fff);
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
@@ -1019,7 +1019,7 @@ mark.post-highlight {
 
 .post-aside-save-btn {
     background: var(--accent-color);
-    color: #fff;
+    color: var(--accent-contrast-text, #fff);
     border-color: var(--accent-color);
     font-weight: 600;
 }
