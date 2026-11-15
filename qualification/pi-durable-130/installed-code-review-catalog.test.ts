@@ -23,7 +23,7 @@ export function createCodeReviewTool() {}\n`);
     }
     catalog = await loadApplicationExtensionCatalog({ cwd: dir, agentDir, settingsManager: SettingsManager.inMemory() });
     const q = await qualifyInstalledCodeReview(catalog, dir);
-    expect(q).toBeDefined(); assertApplicationExtensionCatalogSupported(catalog, undefined, q);
+    expect(q).toBeDefined(); assertApplicationExtensionCatalogSupported(catalog, q);
     expect([...q!.extension.handlers.keys()]).toEqual(["resources_discover"]);
     const release = q!.addon.setReviewDatabaseSource({ database: db, assertOwner() {} });
     const service = q!.addon.reviewService() as any;

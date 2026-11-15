@@ -25,6 +25,7 @@ async function fixture(run: (f: { root: Database; request(method: string, action
   if (!source) throw Error('Pinned native fixture required; never use installed packages');
   const workspace = process.env.PICLAW_WORKSPACE!;
   for (const slug of ['goal', ...globalPorts]) {
+    if (slug === 'delegate') continue; // Core config has no installed-package dependency.
     const pkg = join(workspace, '.pi/extensions/node_modules/@rcarmo/piclaw-addon-' + slug);
     cpSync(join(source, 'addons', slug), pkg, { recursive: true, filter: path => basename(path) !== 'node_modules' });
     symlinkSync(join(import.meta.dir, slug === 'observability' ? 'node_modules' : '../../node_modules'), join(pkg, 'node_modules'));
@@ -170,8 +171,9 @@ test('native Goal config acknowledges an already committed clear after a late re
   } finally { hook.mockRestore(); }
 }));
 
-for (const namespace of ['observability', 'late-night-regrets'] as const) {
-  const patch = namespace === 'observability' ? { instance_name: 'Updated config' } : { recent_hours_for_reflection: 12 };
+for (const namespace of ['observability', 'late-night-regrets', 'delegate'] as const) {
+  const patch = namespace === 'observability' ? { instance_name: 'Updated config' }
+    : namespace === 'delegate' ? { searchable_providers: ['synthetic'], excluded_models: ['forbidden-*'] } : { recent_hours_for_reflection: 12 };
   for (const reason of ['cancel', 'revoke'] as const) test(`native ${namespace} settings preserve request while writer is held: ${reason}`, () => fixture(async f => {
     const path = (f.root.query('PRAGMA database_list').all() as { name: string; file: string }[]).find(row => row.name === 'main')!.file;
     const blocker = new Database(path), controller = new AbortController(), before = f.snapshot(namespace);

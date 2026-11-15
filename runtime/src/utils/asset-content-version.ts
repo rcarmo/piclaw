@@ -5,6 +5,7 @@ export const APP_ASSET_VERSION_REL_PATHS = [
   "classic/dist/app.bundle.js",
   "classic/dist/app.bundle.css",
   "classic/dist/editor.bundle.js",
+  "classic/dist/delegate-settings.bundle.js",
   "common/dist/login.bundle.js",
   "common/dist/login.bundle.css",
 ] as const;

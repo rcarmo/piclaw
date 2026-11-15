@@ -16,7 +16,7 @@ test("native receipt is catalog-bound, opaque and requires complete hook coverag
   for (const file of Object.keys(profile.files)) { const target = join(pkg, file); mkdirSync(join(target, ".."), { recursive: true }); copyFileSync(join(root, "addons/yolo-vibe", file), target); }
   const catalog = await loadApplicationExtensionCatalog({ cwd, agentDir, settingsManager: SettingsManager.inMemory() });
   const q = (await qualifyInstalledAddon(catalog, cwd, "yolo-vibe"))!;
-  const support = (receipts: any[]) => assertApplicationExtensionCatalogSupported(catalog, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, receipts);
+  const support = (receipts: any[]) => assertApplicationExtensionCatalogSupported(catalog, undefined, undefined, undefined, undefined, undefined, undefined, undefined, receipts);
   support([]); // Static default profile retains its existing exemption.
   expect(() => support([Object.freeze({})])).toThrow();
   expect(() => bindInstalledAddon({ ...q }, { tools: [], lifecycle: {}, commands: {} })).toThrow();
@@ -29,6 +29,6 @@ test("native receipt is catalog-bound, opaque and requires complete hook coverag
   expect(() => support([{ ...receipt }])).toThrow();
   expect(() => bindInstalledAddon(q, { tools: [], lifecycle: { ...lifecycle, unknown() {} }, commands })).toThrow();
   const foreign = { ...catalog };
-  expect(() => assertApplicationExtensionCatalogSupported(foreign, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, [receipt])).toThrow();
+  expect(() => assertApplicationExtensionCatalogSupported(foreign, undefined, undefined, undefined, undefined, undefined, undefined, undefined, [receipt])).toThrow();
  } finally { rmSync(cwd, { recursive: true, force: true }); }
 });

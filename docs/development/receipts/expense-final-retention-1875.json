@@ -215,7 +215,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "a64d2881c5a7e657f71e965f4beb5a581dc07e9797edd1123af3739af3f0ca63",
       "state": "retained-decoupled",
-      "currentSha256": "4879f2cf0ea6da2bbfde466048038df2d585a080c171279c074221c681c3119f",
+      "currentSha256": "693dceb90c04107464deecdde6876f3f5049f2eb295a466ce49834f44652d70d",
       "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
       "directImportCallers": []
     },
@@ -2039,7 +2039,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "b1967a9bc02e27e622fe853ae10880bb571128abdcfafd83726c5986fabe5a77",
       "state": "retained-decoupled",
-      "currentSha256": "4c1a471e2a9b9ef8ca4ef07513a22d0fb9ea8fe9f193ef95dbc5077087cf556e",
+      "currentSha256": "bb2e3b8eba00d58b67bff4f685a8f47154d6d25dc765ae702ff63324c877880c",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
@@ -2326,7 +2326,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "92bf8e7afe1e2851b0f0f90262729411bd58776cbb38685ffd1dd5b1900350e6",
       "state": "retained-decoupled",
-      "currentSha256": "997db8a0ef3eb1750ba9cd56def59286e397676f95fed9b16c7ce0d2ea2313a1",
+      "currentSha256": "5e3212ee821b5c1f83ddbc3535ebb924c3316133a4cfa9397a70f5ad97fc69f9",
       "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
       "directImportCallers": []
     },
@@ -2456,7 +2456,7 @@
       "deliveryOwner": "#1882",
       "originalSha256": "1af8f43680724ca4c05c9beede8db5903b013bc76e9bc5dbceb1235e3d823105",
       "state": "retained-decoupled",
-      "currentSha256": "90140c191802d8262aff0a8219964cf29639f5b47baca0887d1af6366fa81099",
+      "currentSha256": "b23aa8ba7e544ccf876b22d61a9bfd487d062e61b3413221339ee09b8f81c01f",
       "currentPurpose": "exact approved add-on source/resource identity and public exported domain contracts",
       "directImportCallers": [
         {

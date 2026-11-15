@@ -20,7 +20,20 @@ import { at, effect, sealed, value } from "./src/host-handoff.ts";
 import { hashCanonicalRequest } from "../../runtime/src/service-effects/contracts/common.ts";
 import { storeChatMetadata } from "../../runtime/src/db.ts";
 
-// Core consumer tests with explicitly synthetic authority/schema. These do NOT
+test("Core Delegate declaration exists without an installed add-on definition", () => {
+  const tool = createHostDelegateTool({
+    assertCurrent() {}, runtime() { throw Error("Declaration must not open a runtime"); },
+    async selectModel() { throw Error("Declaration must not select a model"); },
+    assertModelCurrent() {}, readonlyTools: [], readonlyExtensions: [],
+  });
+  const parameters = JSON.parse(JSON.stringify(tool.parameters));
+  expect(tool.name).toBe("delegate");
+  expect(parameters.required).toEqual(["prompt"]);
+  expect(parameters.properties.task_category.enum).toEqual(["quick", "summarize", "code", "analyze", "reason", "judge"]);
+  expect(parameters.properties.timeout_sec).toMatchObject({ type: "integer", minimum: 10, maximum: 300 });
+});
+
+// Core declaration with synthetic authority/model policy. These do NOT
 // qualify installed Delegate content, Settings, host source capture or budgets.
 for (const mode of ["parallel", "standard", "subset", "omitted", "full", "unknown-tool", "files-empty", "files-image-invalid", "files-image-disabled", "denied", "files", "files-unavailable", "files-revoked", "timeout", "timeout-fraction", "timeout-string", "timeout-large", "mutating-tools", "model-type", "model-short", "model-empty-provider", "model-empty-id"] as const) {
   test(`host native Delegate factory: ${mode}`, async () => {
@@ -36,9 +49,7 @@ for (const mode of ["parallel", "standard", "subset", "omitted", "full", "unknow
     const allowed = ["parallel", "standard", "subset", "omitted", "files-empty"].includes(mode);
     const readerExtension = defineExtension({ name: "native-readers", tools: [read] });
     f.registry.install(readerExtension);
-    const parameters = Type.Object({ prompt: Type.String(), model: Type.Optional(Type.Any()),
-      files: Type.Optional(Type.Array(Type.String())), timeout_sec: Type.Optional(Type.Any()), tools: Type.Optional(Type.String()) });
-    const tool = createHostDelegateTool({ name: "delegate", description: "Synthetic registered declaration", parameters }, {
+    const tool = createHostDelegateTool({
       assertCurrent() {},
       runtime: () => ({ async captureToolSource() { captures++; return { inputs: [], operation: {} } as never; }, async watchOwnedDelegateChild(_p, _t, _c, id, ctx) { return (await f.harness.conversation(id, ctx))!.watch(ctx); }, assertCapturedSourceCurrent() { if (revoked) throw Error("source revoked"); } }),
       ...(mode === "files-unavailable" || mode === "files-revoked" || mode === "files-empty" ? { async readFiles(_files: readonly string[], guard: () => void) {
@@ -154,7 +165,7 @@ for (const mode of ["success", "expiry", "reopen"] as const) {
       f = base;
       const read = defineTool({ name: "read", description: "reader", parameters: Type.Object({}), execute: async () => ({ output: [] }) });
       const readers = defineExtension({ name: "deadline-readers", tools: [read] }); base.registry.install(readers);
-      const tool = createHostDelegateTool({ name: "delegate", description: "deadline", parameters: Type.Object({ prompt: Type.String(), timeout_sec: Type.Optional(Type.Integer()), files: Type.Optional(Type.Array(Type.String())) }) }, {
+      const tool = createHostDelegateTool({
         assertCurrent() {}, runtime: () => ({ async captureToolSource() { return { inputs: [] } as never; }, async watchOwnedDelegateChild(_p, _t, _c, id, ctx) { return (await base.harness.conversation(id, ctx))!.watch(ctx); }, assertCapturedSourceCurrent() {} }),
         async selectModel(_args, parent) { return parent!; }, assertModelCurrent() {},
         async readFiles(files, guard) { attachmentReads++; return readFiles(files, guard); }, readonlyTools: [read], readonlyExtensions: [readers],
@@ -266,7 +277,7 @@ for (const mode of ["success", "expiry", "reopen"] as const) {
 }
 
 // Real shared-file host EF-S01/bindings/runtime and public SDK ownership.
-// Declaration/model policy remain synthetic: this is NOT catalog qualification.
+// Model policy remains synthetic: this is NOT catalog qualification.
 for (const cancel of [false, true]) {
   test(`native Delegate actual host source walk; cancel=${cancel}`, async () => {
     const dir = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, "native-source-"));
@@ -282,7 +293,7 @@ for (const cancel of [false, true]) {
       } });
     const readers = defineExtension({ name: "source-readers", tools: [read] });
     f.base.registry.install(readers);
-    const delegate = createHostDelegateTool({ name: "delegate", description: "Synthetic declaration", parameters: Type.Object({ prompt: Type.String() }) }, {
+    const delegate = createHostDelegateTool({
       assertCurrent() {}, runtime: () => f.runtime!, async selectModel(_args, parent) { return parent!; },
       assertModelCurrent() {}, readonlyTools: [read], readonlyExtensions: [readers],
     });
@@ -391,8 +402,7 @@ for (const boundary of ["before-effect", "after-effect"] as const) {
     const standard = builtins.map(tool => tool === actualWrite ? write : tool);
     const standardExtension = defineExtension({ name: "standard-recovery-builtins", tools: standard });
     f.base.registry.install(standardExtension);
-    const delegate = createHostDelegateTool({ name: "delegate", description: "Synthetic declaration; actual native consumer",
-      parameters: Type.Object({ prompt: Type.String(), tools: Type.String() }) }, {
+    const delegate = createHostDelegateTool({
       assertCurrent() { f.owner.assert(); }, runtime: () => f.runtime!,
       async selectModel(_args, parent) { return parent!; }, assertModelCurrent() {},
       readonlyTools: [], readonlyExtensions: [], standardTools: standard, standardExtensions: [standardExtension],

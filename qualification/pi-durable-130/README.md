@@ -837,6 +837,69 @@ uncommitted Delegate WIP is separate and unapproved. Stale inactive comments in
 modules were left untouched during code gates. No code, tests, CI, network,
 services, pins, live state, migration, commits or pushes changed in this refresh.
 
+# Built-in Delegate source migration — 15 November 2026
+
+Core now owns the native Delegate declaration, model policy, existing config
+namespace, model-catalogue API, Settings pane and default registration. Individual
+and aggregate legacy backend/config/web entries are excluded before evaluation;
+there is no installed-source qualifier or default Delegate archive dependency.
+The published0.2.22 add-on is externally deprecated, with immutable release bytes.
+Its subprocess-only adapter qualification is removed from the native gate and
+replaced by actual Core fresh/no-addon and throwing-package scenarios. The original
+seven source variants now prove pre-import exclusion instead of qualifying retired
+execution. Other installed add-on/source assertions retain their original contracts.
+
+Current-native config reads leave saved rows untouched. Authenticated writes reuse
+the existing global KV admission/SQL/request-lifetime owner; held-writer cancellation,
+revocation and late known-commit cases are tested. Native reopen preserves config
+and does not dispatch a model. Model metadata comes from the current physical,
+approved runtime catalogue; no CLI discovery, credential copying, auto-approval,
+new store or execution lane is introduced. Native `judge`, `full`/MCP, recursive
+children and non-model/nested calls retain explicit unsupported boundaries.
+
+The established Settings list/editor, provider radios, filtering, exclusions,
+Refresh, bounded model lists and accessibility remain. The pane loads as a separate
+Core asset using the existing loader/registry and host Preact/hooks; the initial
+bundle guard is unchanged. Save failures restore the prior values and use an
+explicit alert state; success-message timers cannot erase later errors. Chromium
+and WebKit each pass phone/desktop and light/dark scenarios (8 cases/232 assertions).
+Raw frontend compilation retains281 existing out-of-seam diagnostics.
+
+Exact-source full qualification and review are recorded separately. Earlier timed
+all-installed results and UI failure receipts are retained; no deadlines/assertions
+or source guards are waived. No installation, restart, live import or account/MCP
+probe is performed. #2017 now requires an explicit read-only offline session importer
+into a fresh separate v4 destination; in-place migrations and schema cleanup on
+existing stores are forbidden. That independent work remains under #1650.
+
+# Core Delegate declaration/policy checkpoint — 15 November 2026 (historical slice)
+
+Under #1650 (including the consolidated #1455 acceptance), Core now supplies the
+Delegate schema/description and pure approval/classification policy. The native
+factory no longer accepts an installed `ToolDefinition`, and runtime approval no
+longer imports the add-on's `buildModelCandidates`. Frozen0.2.22 schema/description
+and nine policy configurations match the Core values exactly. SDK execution,
+source/model fences, request deduplication, deadline/reopen and progress remain.
+
+The real public schema exposed SDK coercion of fractional/string deadlines in two
+existing negative cases. A public `prepareArguments` guard rejects these before
+conversion/child admission. The original assertions and10-second test deadlines
+remain unchanged. The initial failures and final passing runs are separate.
+
+This is a local ownership checkpoint. The default factory still requires the
+qualified installed package for configuration/Settings and registration identity.
+It is not a complete no-addon delivery. Config/model discovery/Settings/guidance,
+default wiring and pre-import backend/web/aggregate retirement remain owned by
+this #1650 work. No new subprocess lane, state store or credential broker exists;
+`judge`, `full`/MCP and recursive-child behavior retain their explicit native limits.
+No relocation/type/test/generated-code reduction credit is assigned.
+
+Focused checks:17 host tests/225 assertions;56 native cases across seven files,
+including the actual all-installed factory; both private type projects and five
+configured Root type gates pass. Compose retains281 existing out-of-seam diagnostics;
+raw frontend compilation is not clean. No full-suite/browser/port acceptance,
+installation, restart, live account operation or publication follows from this slice.
+
 # Native Delegate adoption — historical source follow-up over `175032611`
 
 The actual default factory now admits the approved installed Delegate 0.2.20

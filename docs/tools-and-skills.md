@@ -72,6 +72,29 @@ A comma-separated string is also accepted, and env var `PICLAW_ADDITIONAL_DEFAUL
 
 `reset_active_tools` restores this configured default set (not just the fixed baseline). Unknown tool names are ignored. New activations are session-scoped and reset on restart/session rotation.
 
+### Built-in Delegate
+
+Core registers `delegate` without an installed package. Settings → Delegate keeps
+provider approvals and model exclusions in their existing current-native config.
+No provider is approved by default. The approved catalogue comes from the current
+native model runtime, with the same ordered classification and exclusion rules;
+refreshing it does not launch a child CLI or make a provider request.
+
+The child is an SDK-owned foreground conversation with no parent history. Native
+automatic selection inherits the approved parent model. An explicit exact
+`provider/model` can override the parent tier, but never approval, classification,
+exclusions, availability or image support. Omitted `tools` stays `read_only`;
+`standard` and explicit guarded host-builtin subsets are supported. `full`, child
+MCP, recursive delegation and `task_category: judge` remain explicitly unsupported.
+The public schema is unchanged; these are the current native execution limits.
+
+Deadline values must be integers from 10 to 300 seconds (default 120), before SDK
+argument coercion. Cancellation joins the owned child through the SDK; it is not a
+hard-kill guarantee for an uncooperative provider. Native progress and inline
+results use the existing timeline surfaces. Old Delegate packages are excluded
+before backend/config/web import; their published bytes remain available for older
+hosts and no live configuration rewrite occurs at startup.
+
 ### Cross-session chat delivery
 
 Use `chat` with explicit `mode: "steer"` when a message must reach a busy agent during its current turn. This includes ownership handoffs and confirmations, blockers, stop/wait requests, and restart safety or idle coordination.

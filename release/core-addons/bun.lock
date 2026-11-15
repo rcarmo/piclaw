@@ -6,7 +6,6 @@
       "name": "piclaw-default-addons",
       "dependencies": {
         "@rcarmo/piclaw-addon-code-review": "file:code-review.tgz",
-        "@rcarmo/piclaw-addon-delegate": "file:delegate.tgz",
         "@rcarmo/piclaw-addon-goal": "file:goal.tgz",
         "@rcarmo/piclaw-addon-observability": "file:observability.tgz",
         "@rcarmo/piclaw-addon-restic": "file:restic.tgz",
@@ -234,7 +233,6 @@
 
     "@rcarmo/piclaw-addon-code-review": ["@rcarmo/piclaw-addon-code-review@code-review.tgz", { "dependencies": { "@lezer/common": "1.5.1", "@lezer/highlight": "1.2.3", "@lezer/javascript": "1.5.4", "@lezer/json": "1.0.3", "@lezer/markdown": "1.6.3", "@lezer/python": "1.1.18", "diff": "9.0.0", "marked": "18.1.0" } }, "sha512-B/ivCFMCgyaxGIvI0DRy4DjeFojnoxUZGA4ViYOpYFaSkY8x7x9l8rhJzx9n0qsp/626COkiUR5xzYjyg0vdiA=="],
 
-    "@rcarmo/piclaw-addon-delegate": ["@rcarmo/piclaw-addon-delegate@delegate.tgz", {}, "sha512-SFjyyoK78+ZyO572Sdrj6etBrJGuw2vDNDx97rGcK7f/nSxtDvYpXlb87Qo2t+FE5sItJ8oOpHsh5M5pA7Ebxg=="],
 
     "@rcarmo/piclaw-addon-goal": ["@rcarmo/piclaw-addon-goal@goal.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-sEg3PvVLxEDOt6twQJ3YU4agDJ+ESdXXCW6SuSMpcKNPtOvOIK46yn1CC8gmFVNPPCR67TavWnfqEJD9fI962A=="],
 

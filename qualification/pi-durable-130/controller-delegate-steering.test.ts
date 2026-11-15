@@ -27,7 +27,7 @@ for(const mode of ['native','reopen','observability','lost-ack','lost-ack-observ
   try{
     const read=defineTool({name:'read',description:'Fixture reader',parameters:Type.Object({}),async execute(){return{output:[{type:'text',text:'READ'}]};}});
     const readers=defineExtension({name:'controller-readers',tools:[read]});f.base.registry.install(readers);
-    const native=createHostDelegateTool({name:'delegate',description:'Fixture declaration',parameters:Type.Object({prompt:Type.String()})},{
+    const native=createHostDelegateTool({
       assertCurrent:f.options.owner.assert,runtime:()=>f.runtime,async selectModel(_args,parent){return parent!;},assertModelCurrent(){},readonlyTools:[read],readonlyExtensions:[readers],
     });
     const delegate=valid?native:defineTool({name:toolName,description:'Unqualified child producer',parameters:Type.Object({prompt:Type.String()}),executionMode:'parallel',replay:'safe',async execute(args,api,ctx){

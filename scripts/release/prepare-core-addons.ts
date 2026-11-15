@@ -20,7 +20,7 @@ type CatalogEntry = { slug: string; name: string; version: string; tags: string[
 
 export function coreCatalogEntries(catalog: { addons?: CatalogEntry[] }): CatalogEntry[] {
   if (!Array.isArray(catalog.addons)) throw new Error("Invalid add-on catalog");
-  const entries = catalog.addons.filter((entry) => entry.name !== "@rcarmo/piclaw-addon-plan-sidebar" && Array.isArray(entry.tags) && entry.tags.includes("core"));
+  const entries = catalog.addons.filter((entry) => !["@rcarmo/piclaw-addon-plan-sidebar", "@rcarmo/piclaw-addon-delegate"].includes(entry.name) && Array.isArray(entry.tags) && entry.tags.includes("core"));
   if (!entries.length) throw new Error("Add-on catalog has no core entries");
   return entries.sort((a, b) => a.slug.localeCompare(b.slug));
 }
