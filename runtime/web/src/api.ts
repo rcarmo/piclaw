@@ -171,6 +171,16 @@ export async function abortAgentTool(chatJid, callId, note = '') {
  * Committed "Worked for …" log of one durable agent reply, or one paged step of
  * it. A null messageId reads the running turn instead.
  */
+/** URL of a stored thumbnail for the n-th image a tool step returned to the model. */
+export function turnActivityImageUrl(chatJid, messageId, step, index) {
+    const params = new URLSearchParams({ chat_jid: String(chatJid || '') });
+    if (messageId === null || messageId === undefined) params.set('live', '1');
+    else params.set('message_id', String(messageId));
+    params.set('step', step);
+    params.set('image', String(index));
+    return `/agent/turn-activity?${params}`;
+}
+
 export async function getTurnActivity(chatJid, messageId, step = null, offset = 0, emittedOffset = 0) {
     const params = new URLSearchParams({ chat_jid: String(chatJid || '') });
     if (messageId === null || messageId === undefined) params.set('live', '1');

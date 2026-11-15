@@ -11,7 +11,7 @@
  * Consumers: components/post.ts.
  */
 import { html, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
-import { abortAgentTool, getTurnActivity } from '../api.js';
+import { abortAgentTool, getTurnActivity, turnActivityImageUrl } from '../api.js';
 import { renderMarkdown, renderThinkingMarkdown } from '../markdown.js';
 import { renderDisclosureTriangle } from '../ui/disclosure-triangle.js';
 import { attachHeaderAnchor } from '../ui/scroll-anchor.js';
@@ -265,6 +265,25 @@ function ToolStopControl({ chatJid, callId, title }) {
     `;
 }
 
+// Thumbnails per tool: a few beside the title, more in the open card.
+const ROW_THUMBNAILS = 3;
+const CARD_THUMBNAILS = 12;
+
+/** Stored, downscaled previews of images a tool returned to the model. */
+function ToolImages({ chatJid, messageId, step, count, limit, className, describe }) {
+    const [failed, setFailed] = useState(() => new Set());
+    const shown = Array.from({ length: Math.min(count, limit) }, (_, index) => index).filter((index) => !failed.has(index));
+    if (!shown.length) return null;
+    return html`
+        <span class=${className}>
+            ${shown.map((index) => html`<img key=${index} src=${turnActivityImageUrl(chatJid, messageId, step.id, index)}
+                alt=${describe ? describe(index) : ''} loading="lazy" decoding="async" draggable="false"
+                onError=${() => setFailed((previous) => new Set(previous).add(index))} />`)}
+            ${count > limit && html`<span class="turn-activity-thumbs-more" aria-hidden=${describe ? 'false' : 'true'}>+${count - limit}</span>`}
+        </span>
+    `;
+}
+
 function ToolStep({ step, chatJid, messageId, liveOutput = '', live = false }) {
     const tool = step.tool;
     const [open, setOpen] = useState(false);
@@ -307,6 +326,7 @@ function ToolStep({ step, chatJid, messageId, liveOutput = '', live = false }) {
                     <span class="turn-activity-toggle" aria-hidden="true">${renderDisclosureTriangle(open ? 'down' : 'right')}</span>
                     <${StatusIcon} status=${tool.status} />
                     <span class="turn-activity-tool-title" title=${tool.title}>${tool.title}</span>
+                    ${tool.images > 0 && html`<${ToolImages} chatJid=${chatJid} messageId=${messageId} step=${step} count=${tool.images} limit=${ROW_THUMBNAILS} className="turn-activity-thumbs" />`}
                     ${tool.nested?.length ? html`<span class="turn-activity-badge">${tool.nested.length} call${tool.nested.length === 1 ? '' : 's'}</span>` : null}
                     ${duration && html`<span class="turn-activity-duration">${duration}</span>`}
                 </button>
@@ -328,7 +348,11 @@ function ToolStep({ step, chatJid, messageId, liveOutput = '', live = false }) {
                         </ol>
                     ` : null}
                     ${outputViews.length > 0 && html`<${DetailRegion} key=${`output-${emitted ? 'emitted' : 'model'}`} title="Output" views=${outputViews} className="turn-activity-output-region" />`}
-                    ${tool.images > 0 && html`<div class="turn-activity-note">${tool.images} image${tool.images === 1 ? '' : 's'} returned to the model</div>`}
+                    ${tool.images > 0 && html`
+                        <div class="turn-activity-section-label">Images</div>
+                        <${ToolImages} chatJid=${chatJid} messageId=${messageId} step=${step} count=${tool.images} limit=${CARD_THUMBNAILS} className="turn-activity-images"
+                            describe=${(index) => `Image ${index + 1} returned by ${tool.title} (preview)`} />
+                        <div class="turn-activity-note">${tool.images} image${tool.images === 1 ? '' : 's'} returned to the model; previews are reduced in size.</div>`}
                     ${loading && html`<span class="turn-activity-note">Loading…</span>`}
                     ${failed && html`<span class="turn-activity-note is-error">Could not load the full detail.</span>`}
                 `}

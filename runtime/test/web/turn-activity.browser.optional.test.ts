@@ -5,6 +5,8 @@ import { chromium, type Browser } from 'playwright';
 const enabled = process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS === '1', browserTest = enabled ? test : test.skip;
 let server: ReturnType<typeof Bun.serve>, browser: Browser;
 const requests: string[] = [];
+const imageRequests: string[] = [];
+let thumbnail: Uint8Array;
 const aborts: unknown[] = [];
 const liveActivity = {
   answer_entry_id: null, started_at: null, ended_at: null, duration_ms: null, tool_ms: 0, output_tokens: 0, tools: 1, errors: 0, truncated: false,
@@ -27,13 +29,15 @@ const activity = {
       args_preview: '{\n  "path": "/tmp/a.txt"\n}', output_preview: '<img src=x onerror="window.__xss=2">missing', output_chars: 43, output_lines: 1, images: 0 } },
     { id: 'input:5', kind: 'input', text: 'also check lint', chars: 15 },
     { id: 'tool:call-c', kind: 'tool', tool: { call_id: 'call-c', name: 'codemode', title: 'codemode', status: 'ok', duration_ms: 900,
-      args_preview: '{}', output_preview: '', output_chars: 0, output_lines: 0, images: 1,
+      args_preview: '{}', output_preview: '', output_chars: 0, output_lines: 0, images: 2,
       nested: [{ name: 'read', title: 'read: /w/x.ts', status: 'ok', duration_ms: 5 }, { name: 'bash', title: 'bash', status: 'error', duration_ms: 7 }] } },
   ],
 };
 
 beforeAll(async () => {
   if (!enabled) return;
+  const sharp = (await import('sharp')).default;
+  thumbnail = await sharp({ create: { width: 320, height: 160, channels: 3, background: '#2060c0' } }).webp().toBuffer();
   const build = await Bun.build({ entrypoints: [join(import.meta.dir, 'fixtures/turn-activity-fixture.ts')], target: 'browser', format: 'esm' });
   if (!build.success) throw new AggregateError(build.logs, 'Turn activity fixture build failed');
   server = Bun.serve({ hostname: '127.0.0.1', port: Number(process.env.PICLAW_BROWSER_FIXTURE_PORT ?? 0), async fetch(req) {
@@ -43,6 +47,12 @@ beforeAll(async () => {
     if (url.pathname === '/agent/tool-abort') {
       aborts.push(await req.json());
       return Response.json({ status: 'ok', call_id: 'call-live', aborted: true });
+    }
+    if (url.pathname === '/agent/turn-activity' && url.searchParams.has('image')) {
+      imageRequests.push(url.search);
+      // The second image of call-c is unavailable (pruned or undecodable).
+      if (url.searchParams.get('step') === 'tool:call-c' && url.searchParams.get('image') === '0') return new Response(thumbnail, { headers: { 'Content-Type': 'image/webp' } });
+      return Response.json({ error: 'Not found' }, { status: 404 });
     }
     if (url.pathname === '/agent/turn-activity') {
       requests.push(url.search);
@@ -156,7 +166,7 @@ browserTest('turn activity loads when visible, discloses steps progressively and
     expect(await codemode.locator('.turn-activity-badge').innerText()).toBe('2 calls');
     await codemode.locator('.turn-activity-tool-header').click();
     expect(await codemode.locator('.turn-activity-nested-call').count()).toBe(2);
-    expect(await codemode.innerText()).toContain('1 image returned to the model');
+    expect(await codemode.innerText()).toContain('2 images returned to the model');
 
     // Remounting reuses the cached summary; no further list request.
     const listRequests = requests.filter((query) => !query.includes('step=')).length;
@@ -304,3 +314,42 @@ for (const width of [390, 1000]) {
     }
   }, 20000);
 }
+
+browserTest('tool image previews appear beside the title and in the open card, skipping unavailable ones', async () => {
+  imageRequests.length = 0;
+  const page = await browser.newPage({ viewport: { width: 1000, height: 700 } }), errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.setDefaultTimeout(4000);
+  const base = `http://127.0.0.1:${server.port}`;
+  await page.route('**/*', (route) => new URL(route.request().url()).origin === base ? route.continue() : route.abort());
+  try {
+    await page.goto(base);
+    await page.waitForFunction(() => Boolean((window as any).turnActivityFixture));
+    await page.locator('#post-41').scrollIntoViewIfNeeded();
+    await page.locator('#post-41 .turn-activity-header').click();
+    const codemode = page.locator('#post-41 .turn-activity-tool').last();
+    // Beside the title: the available preview only, loaded at reduced size.
+    const rowImage = codemode.locator('.turn-activity-tool-header .turn-activity-thumbs img');
+    await page.waitForFunction(() => document.querySelectorAll('#post-41 .turn-activity-tool:last-child .turn-activity-thumbs img').length === 1);
+    expect(await rowImage.getAttribute('alt')).toBe('');
+    await page.waitForFunction(() => (document.querySelector('#post-41 .turn-activity-tool:last-child .turn-activity-thumbs img') as HTMLImageElement | null)?.naturalWidth === 320);
+    const rowBox = await rowImage.boundingBox();
+    expect(rowBox!.height).toBeLessThanOrEqual(20.5);
+    // Tools without images show none.
+    expect(await page.locator('#post-41 .turn-activity-tool').first().locator('.turn-activity-thumbs').count()).toBe(0);
+    // Open card: a labelled, larger preview and the count note.
+    await codemode.locator('.turn-activity-tool-header').click();
+    const cardImage = codemode.locator('.turn-activity-images img');
+    await page.waitForFunction(() => document.querySelectorAll('#post-41 .turn-activity-tool:last-child .turn-activity-images img').length === 1);
+    expect(await cardImage.getAttribute('alt')).toBe('Image 1 returned by codemode (preview)');
+    await page.waitForFunction(() => (document.querySelector('#post-41 .turn-activity-tool:last-child .turn-activity-images img') as HTMLImageElement | null)?.complete);
+    const cardBox = await cardImage.boundingBox();
+    expect(cardBox!.width).toBeLessThanOrEqual(240.5);
+    expect(cardBox!.height).toBeGreaterThan(rowBox!.height);
+    expect(await codemode.locator('.turn-activity-note').filter({ hasText: '2 images returned to the model' }).count()).toBe(1);
+    const asked = imageRequests.map((search) => Object.fromEntries(new URLSearchParams(search)));
+    expect(asked.every((params) => params.chat_jid === 'web:fixture' && params.message_id === '41' && params.step === 'tool:call-c')).toBe(true);
+    expect([...new Set(asked.map((params) => params.image))].sort()).toEqual(['0', '1']);
+    expect(errors).toEqual([]);
+  } finally { await page.close(); }
+});
