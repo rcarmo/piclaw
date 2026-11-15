@@ -173,6 +173,13 @@
     padding: 20px 28px;
 }
 
+/* Registered lengths resolve em values on the pane, so an add-on that sets a
+ * compact root font cannot shrink host-owned controls, labels or help text.
+ */
+@property --settings-addon-control-size { syntax: '<length>'; inherits: true; initial-value: 13px; }
+@property --settings-addon-label-size { syntax: '<length>'; inherits: true; initial-value: 13px; }
+@property --settings-addon-help-size { syntax: '<length>'; inherits: true; initial-value: 12px; }
+
 /* Match the widget-token Regenerate control (Authentication → API access),
  * which uses the shared Settings button base: UI font, 13px, control height.
  */

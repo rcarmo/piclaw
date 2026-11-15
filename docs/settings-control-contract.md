@@ -53,6 +53,7 @@ add-ons retain host compatibility styling; new panes opt into these classes:
 | `settings-addon-check` | `<label>` wrapping a native checkbox and its text |
 | `settings-addon-badge` | Small status label; add `data-tone="success|danger|warning|info"` |
 | `settings-addon-callout` | Notice box; `data-tone` as for badges |
+| `settings-addon-mono` | Monospace text, for identifiers such as keychain entry names |
 
 Colours come from the theme: use `data-tone` rather than fixed colour values,
 and do not set font sizes, colours, borders or spacing inline.

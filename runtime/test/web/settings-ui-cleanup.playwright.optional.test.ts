@@ -441,3 +441,27 @@ for (const engine of ['chromium', 'webkit']) {
     }
   }, 60000);
 }
+
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine}: add-on control and label sizes ignore a compact add-on root font`, async () => {
+    const { page, errors } = await openSettings(engine, 1280, 'fixture-a-portainer');
+    try {
+      // Restic and Remote Peer set a 13px root; host-owned controls must still match core fields.
+      const sizes = await page.evaluate(() => {
+        const pane = document.querySelector('.settings-content.settings-addon-pane')!;
+        const root = document.createElement('div');
+        root.style.fontSize = '13px';
+        root.innerHTML = '<label class="settings-addon-field"><span class="settings-addon-label">Probe</span><input class="settings-addon-control" type="text"><span class="settings-addon-help">Help</span></label>';
+        pane.append(root);
+        const size = (selector: string) => getComputedStyle(root.querySelector(selector)!).fontSize;
+        return { control: size('.settings-addon-control'), label: size('.settings-addon-label'), help: size('.settings-addon-help'), pane: getComputedStyle(pane).fontSize };
+      });
+      // Classic fields are 0.88em of the Settings content, whatever the add-on root uses.
+      const expected = parseFloat(sizes.pane) * 0.88;
+      expect(Math.abs(parseFloat(sizes.control) - expected)).toBeLessThan(0.05);
+      expect(Math.abs(parseFloat(sizes.label) - expected)).toBeLessThan(0.05);
+      expect(parseFloat(sizes.help)).toBeGreaterThanOrEqual(12);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+}
