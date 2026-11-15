@@ -5,16 +5,16 @@ import { chromium, webkit } from "playwright";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { Model, Provider } from "@earendil-works/pi-ai";
 import { FileCredentialStore } from "../../src/agent-pool/credential-store.js";
-import { handleLogin, cancelProviderAuthFlows } from "../../src/agent-control/handlers/login.js";
 import { withChatContext } from "../../src/core/chat-context.js";
 import { WebAdaptiveCardSidePromptService } from "../../src/channels/web/cards/adaptive-card-side-prompt-service.js";
 import { initDatabase, getDb, getMessageByRowId, deleteMessageByRowId } from "../../src/db.js";
 import { WebSessionBroadcastService } from "../../src/channels/web/sse/session-broadcast-service.js";
 import { createInteractionBroadcaster } from "../../src/channels/web/interaction-broadcaster.js";
-import { admitWebMessage } from "../../src/channels/web/messaging/message-store.js";
+import { WebChannel } from "../../src/channels/web.js";
 import { startSessionRecording, stopSessionRecording, getSessionRecording, recordSessionFixtureNote } from "../../src/session-recordings/session-recordings.js";
 import { handleSessionRecordingRoutes } from "../../src/channels/web/handlers/session-recordings.js";
 import { TestAgentControlSession } from "../agent-control/session-fixture.js";
+import { createNativeControlFixture } from "../agent-control/native-control-fixture.js";
 import { createTempWorkspace } from "../helpers.js";
 import { addLogSink, removeLogSink, type LogRecord } from "../../src/utils/logger.js";
 
@@ -38,7 +38,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
       const logs: LogRecord[] = [];
       const sink = (record: LogRecord) => logs.push(record);
       addLogSink(sink);
-      let cleanupSession: TestAgentControlSession | undefined;
+      let cleanupControl: (() => void) | undefined;
       let cleanupBrowser: (() => Promise<void>) | undefined;
       let cleanupServer: (() => void) | undefined;
       let cleanupChat: string | undefined;
@@ -85,7 +85,8 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
       const registry = new ModelRegistry(runtime);
       const session = new TestAgentControlSession(ws.base, registry);
       session.modelRuntime = runtime;
-      cleanupSession = session;
+      const control = createNativeControlFixture(session, registry, chat);
+      cleanupControl = control.dispose;
       let latestPost = 0, latestMessage = "";
       const broadcasts: unknown[] = [];
       const broadcast = new WebSessionBroadcastService({ setProviderUsageRefreshListener: () => {} } as any, {
@@ -95,13 +96,14 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
       const projection = { pendingLinkPreviews: new Set<number>(), broadcastEvent: (type: string, data: unknown) => broadcast.broadcastEvent(type, data) };
       const write = async (text: string, blocks: unknown[] = []) => {
         latestMessage = text;
-        const row = await admitWebMessage(projection, { chatJid: chat, content: text, isBot: true, mediaIds: [], agentId: "default", agentName: "Agent" }, { contentBlocks: blocks });
+        // Use the actual after-commit recording composition, not its lower-level SQL helper.
+        const row = await WebChannel.prototype.admitMessage.call(projection as unknown as WebChannel, chat, text, true, [], { contentBlocks: blocks });
         if (!row) throw new Error("Auth fixture message was not stored");
         latestPost = row.id;
         savedRows.push(latestPost);
         broadcaster.broadcastAgentResponse(row);
       };
-      const run = (command: any) => withChatContext(chat, "web", () => handleLogin(session as any, registry, command));
+      const run = (command: any) => withChatContext(chat, "web", () => control.facade.applyControlCommand(chat, command));
       const start = async () => { const result = await run({ type: "login", raw: "/login" }); await write(result.message, result.contentBlocks); };
       const service = new WebAdaptiveCardSidePromptService({
         defaultChatJid: chat, defaultAgentId: "default", json: (value, status = 200) => Response.json(value, { status }), webRuntimeConfig: {},
@@ -236,7 +238,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
         expect(errors).toEqual([]);
       } finally {
         removeLogSink(sink);
-        if (cleanupSession) cancelProviderAuthFlows(cleanupSession as any);
+        cleanupControl?.();
         if (cleanupChat) {
           stopSessionRecording(cleanupChat);
           for (const row of new Set(savedRows)) deleteMessageByRowId(cleanupChat, row);

@@ -19,7 +19,6 @@ import {
   seedSessionManagerFromDeferredBranchSeed,
 } from "./branch-seeding.js";
 import { getChatBranchByChatJid, getDb } from "../db.js";
-import { readAccessConfig } from "../core/config-access.js";
 import { ChatAccessDenied } from "../db/session-ownership.js";
 import { readOwnedForkSeed, finishOwnedForkSeed } from "../db/owned-forks.js";
 import { requireOwnedSessionExecution } from "./owned-session-access.js";
@@ -51,7 +50,6 @@ export interface AgentSessionManagerOptions {
   modelRegistry?: ModelRegistry;
   settingsManager: SettingsManager;
   mainSessionMaxSize?: number | null;
-  lightweightPrewarmSession?: (chatJid: string) => Promise<void>;
   createDefaultTools?: () => NonNullable<Parameters<typeof createDefaultSession>[1]["tools"]>;
   createCustomToolOverrides?: (chatJid: string) => unknown[];
   getSessionExtensionFactories?: (chatJid: string) => Promise<ExtensionFactory[]>;
@@ -69,10 +67,6 @@ export interface AgentSessionManagerInstrumentationSnapshot {
   createInFlight: number;
   evictionProtectedChats: number;
   invalidDeferredSeedErrors: number;
-  prewarmInFlight: number;
-  queuedPrewarms: number;
-  prewarmQueueLength: number;
-  prewarmCooldowns: number;
 }
 
 export class AgentSessionManager {
@@ -81,12 +75,7 @@ export class AgentSessionManager {
   private readonly idleMainDisposalsInFlight = new Map<string, Promise<void>>();
   private readonly invalidDeferredBranchSeedErrors = new Map<string, { error: Error; fingerprint: string | null }>();
   private readonly runtimeDisposeInFlight = new WeakMap<AgentSessionRuntime, Promise<unknown | null>>();
-  private readonly prewarmInFlight = new Set<string>();
-  private readonly queuedPrewarms = new Set<string>();
-  private readonly prewarmQueue: Array<{ chatJid: string; mode: "full" | "lightweight" }> = [];
-  private readonly prewarmCooldownByChat = new Map<string, number>();
   private readonly evictionProtectionCounts = new Map<string, number>();
-  private prewarmLoopActive = false;
   private isShuttingDown = false;
   private mcpAdmissionsBlocked = false;
   private mcpAdmissionEpoch = 0;
@@ -116,7 +105,7 @@ export class AgentSessionManager {
   /** Read-only capture also requires an external all-controller admission fence. */
   assertLegacyCaptureIdle(): void {
     if (this.isShuttingDown || this.mcpSnapshotInFlight || this.hasActiveMemoryReclamationWork() ||
-      this.queuedPrewarms.size || this.prewarmLoopActive || this.failedMcpDisposals.size ||
+      this.failedMcpDisposals.size ||
       [...this.options.pool.values()].some(({ runtime }) =>
         runtime.session.isRetrying || runtime.session.hasPendingBashMessages || runtime.session.pendingMessageCount > 0))
       throw new Error("Legacy pool lifecycle/agent work has not drained");
@@ -124,7 +113,7 @@ export class AgentSessionManager {
 
   /** Synchronous full GC must not interrupt protected runs or lifecycle work. */
   hasActiveMemoryReclamationWork(): boolean {
-    return this.evictionProtectionCounts.size > 0 || this.prewarmInFlight.size > 0
+    return this.evictionProtectionCounts.size > 0
       || this.pendingMcpLifecycleWork().length > 0
       || [...this.options.pool.values()].some(({ runtime }) =>
         runtime.session.isStreaming || runtime.session.isBashRunning || runtime.session.isCompacting);
@@ -134,8 +123,6 @@ export class AgentSessionManager {
   blockMcpAdmissions(): void {
     if (!this.mcpAdmissionsBlocked) this.mcpAdmissionEpoch++;
     this.mcpAdmissionsBlocked = true;
-    this.queuedPrewarms.clear();
-    this.prewarmQueue.length = 0;
   }
 
   assertMcpAdmission(epoch = this.mcpAdmissionEpoch): void {
@@ -243,14 +230,6 @@ export class AgentSessionManager {
     }
     this.invalidDeferredBranchSeedErrors.delete(chatJid);
     return null;
-  }
-
-  private prunePrewarmCooldownEntries(now: number): void {
-    for (const [chatJid, lastQueuedAt] of this.prewarmCooldownByChat) {
-      if (now - lastQueuedAt >= 30_000) {
-        this.prewarmCooldownByChat.delete(chatJid);
-      }
-    }
   }
 
   async refreshRuntime(chatJid: string, runtime: AgentSessionRuntime): Promise<void> {
@@ -402,56 +381,12 @@ export class AgentSessionManager {
     });
   }
 
-  /**
-   * Remove any pending (not-yet-realized) prewarm for a chat. Used by
-   * branch prune so a queued warmup cannot materialize a blank runtime
-   * (or realize the deferred seed) for an archived chat.
-   */
-  cancelPrewarm(chatJid: string): void {
-    const normalized = String(chatJid || "").trim();
-    if (!normalized) return;
-    this.queuedPrewarms.delete(normalized);
-    const idx = this.prewarmQueue.findIndex((entry) => entry.chatJid === normalized);
-    if (idx >= 0) this.prewarmQueue.splice(idx, 1);
-  }
-
-  prewarm(chatJid: string, options: { priority?: boolean; mode?: "full" | "lightweight" } = {}): boolean {
-    if (this.options.getDurableSession !== undefined) return false;
-    // Queue provenance must be durable before background multi-user hydration is enabled.
-    if (readAccessConfig().mode !== "single-user") return false;
-    if (this.isShuttingDown || this.mcpAdmissionsBlocked) return false;
-    const normalizedChatJid = String(chatJid || "").trim();
-    if (!normalizedChatJid) return false;
-    if (this.getBlockingInvalidSeedError(normalizedChatJid)) return false;
-    if (this.options.pool.has(normalizedChatJid) && !hasDeferredBranchSeed(normalizedChatJid)) return false;
-    if (this.prewarmInFlight.has(normalizedChatJid) || this.queuedPrewarms.has(normalizedChatJid)) return false;
-    const now = Date.now();
-    this.prunePrewarmCooldownEntries(now);
-    const lastQueuedAt = this.prewarmCooldownByChat.get(normalizedChatJid) ?? 0;
-    if (!options.priority && now - lastQueuedAt < 30_000) return false;
-
-    const mode = options.mode === "lightweight" ? "lightweight" : "full";
-    this.queuedPrewarms.add(normalizedChatJid);
-    this.prewarmCooldownByChat.set(normalizedChatJid, now);
-    if (options.priority) {
-      this.prewarmQueue.unshift({ chatJid: normalizedChatJid, mode });
-    } else {
-      this.prewarmQueue.push({ chatJid: normalizedChatJid, mode });
-    }
-    this.drainPrewarmQueue();
-    return true;
-  }
-
   getInstrumentationSnapshot(): AgentSessionManagerInstrumentationSnapshot {
     return {
       branchSeedRealizationsInFlight: this.branchSeedRealizationInFlight.size,
       createInFlight: this.createInFlight.size,
       evictionProtectedChats: this.evictionProtectionCounts.size,
       invalidDeferredSeedErrors: this.invalidDeferredBranchSeedErrors.size,
-      prewarmInFlight: this.prewarmInFlight.size,
-      queuedPrewarms: this.queuedPrewarms.size,
-      prewarmQueueLength: this.prewarmQueue.length,
-      prewarmCooldowns: this.prewarmCooldownByChat.size,
     };
   }
 
@@ -470,9 +405,6 @@ export class AgentSessionManager {
   }
 
   private async shutdownAdmitted(): Promise<void> {
-    this.queuedPrewarms.clear();
-    this.prewarmQueue.length = 0;
-    this.prewarmCooldownByChat.clear();
     this.evictionProtectionCounts.clear();
 
     for (const jid of [...this.options.pool.keys()]) {
@@ -781,62 +713,6 @@ export class AgentSessionManager {
         err,
       });
     }
-  }
-
-  private drainPrewarmQueue(): void {
-    if (this.prewarmLoopActive) return;
-    this.prewarmLoopActive = true;
-
-    void (async () => {
-      try {
-        while (!this.isShuttingDown && !this.mcpAdmissionsBlocked && this.prewarmQueue.length > 0) {
-          const next = this.prewarmQueue.shift();
-          if (!next) continue;
-          const { chatJid, mode } = next;
-          this.queuedPrewarms.delete(chatJid);
-          if (readAccessConfig().mode !== "single-user") continue;
-          if (this.isShuttingDown || this.mcpAdmissionsBlocked) continue;
-          if (this.prewarmInFlight.has(chatJid)) continue;
-          if (this.options.pool.has(chatJid) && !hasDeferredBranchSeed(chatJid)) continue;
-
-          this.prewarmInFlight.add(chatJid);
-          try {
-            if (mode === "lightweight" && !hasDeferredBranchSeed(chatJid)) {
-              const epoch = this.mcpAdmissionEpoch;
-              await this.trackMcpLifecycle(async () => {
-                this.assertMcpAdmission(epoch);
-                if (this.options.lightweightPrewarmSession) return this.options.lightweightPrewarmSession(chatJid);
-                const { lightweightPrewarmSession } = await import("./session.js");
-                return lightweightPrewarmSession(chatJid, { getSessionExtensionFactories: this.options.getSessionExtensionFactories });
-              });
-              this.options.onInfo?.("Lightweight-prewarmed chat session", {
-                operation: "prewarm_session.lightweight",
-                chatJid,
-              });
-            } else {
-              await this.getOrCreate(chatJid);
-              this.options.onInfo?.("Prewarmed chat session", {
-                operation: "prewarm_session",
-                chatJid,
-              });
-            }
-          } catch (err) {
-            this.options.onWarn?.("Failed to prewarm chat session", {
-              operation: mode === "lightweight" ? "prewarm_session.lightweight" : "prewarm_session",
-              chatJid,
-              err,
-            });
-          } finally {
-            this.prewarmInFlight.delete(chatJid);
-          }
-        }
-      } finally {
-        this.prewarmLoopActive = false;
-        if (this.prewarmQueue.length > 0) {
-          this.drainPrewarmQueue();
-        }
-      }
-    })();
   }
 
   private async disposeMainRuntimeAfterError(chatJid: string, runtime: AgentSessionRuntime, operation: string): Promise<void> {

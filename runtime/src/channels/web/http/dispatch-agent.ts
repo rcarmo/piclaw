@@ -438,16 +438,10 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
         }
       } catch (e) { /* context usage non-critical — best effort */ void e; }
 
-      const staticProviders = getProviderDefs();
-      let providerDefs = staticProviders;
-      try {
-        const registry = channel.agentPool?.getModelRegistry?.();
-        const runtime = channel.agentPool?.modelRuntime;
-        if (registry || runtime) {
-          const builtins = new Set(staticProviders.map(provider => provider.id));
-          providerDefs = [...staticProviders, ...getProviderDefs(registry, runtime).filter(provider => !builtins.has(provider.id))];
-        }
-      } catch (error) { void error; } // Startup/mid-refresh keeps the existing static Settings list.
+      let registry;
+      try { registry = channel.agentPool?.getModelRegistry?.(); }
+      catch (error) { void error; } // Display metadata may be unavailable during refresh.
+      const providerDefs = getProviderDefs(registry, channel.agentPool?.modelRuntime);
       const providers = providerDefs.map((p) => {
         const auth = authProviders[p.id] as Record<string, unknown> | undefined;
         const authTypeFromAuth = typeof auth?.type === "string" ? auth.type : null;

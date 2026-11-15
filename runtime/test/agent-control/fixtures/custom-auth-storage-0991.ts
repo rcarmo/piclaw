@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { ModelRuntime, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import type { Credential } from "@earendil-works/pi-ai";
 import { FileCredentialStore } from "../../../src/agent-pool/credential-store.js";
-import { handleLogin, handleLogout, cancelProviderAuthFlows } from "../../../src/agent-control/handlers/login.js";
+import { createNativeControlFixture } from "../native-control-fixture.js";
 import { withChatContext } from "../../../src/core/chat-context.js";
 import { TestAgentControlSession } from "../session-fixture.js";
 
@@ -50,9 +50,10 @@ const runtime = await ModelRuntime.create({ credentials, modelsPath, modelsStore
 const registry = new ModelRegistry(runtime);
 const session = new TestAgentControlSession(root, registry);
 session.modelRuntime = runtime;
-// The existing session fixture supplies only session bookkeeping; provider
-// login, composition, credential storage and refresh are the real public APIs.
-const configure = (data: Record<string, unknown>) => withChatContext("web:custom-auth", "web", () => handleLogin(session as any, registry, { type: "login", provider: `__step2 ${JSON.stringify({ provider: "openai-compatible", method: "configure", baseUrl: "https://fixture.invalid/v1", modelId: "synthetic-model", ...data })}`, raw: "/login __step2" }));
+const control = createNativeControlFixture(session, registry, "web:custom-auth");
+// The fixture supplies only native control ports; provider login, composition,
+// credential storage and refresh are the real public APIs.
+const configure = (data: Record<string, unknown>) => withChatContext("web:custom-auth", "web", () => control.facade.applyControlCommand("web:custom-auth", { type: "login", provider: `__step2 ${JSON.stringify({ provider: "openai-compatible", method: "configure", baseUrl: "https://fixture.invalid/v1", modelId: "synthetic-model", ...data })}`, raw: "/login __step2" }));
 const modelConfig = () => JSON.parse(readFileSync(modelsPath, "utf8"));
 const backups = () => readdirSync(root).filter(name => name.endsWith(".bak"));
 try {
@@ -65,7 +66,7 @@ try {
     assert.equal(statSync(authPath).mode & 0o777, 0o600);
     assert.equal(statSync(modelsPath).mode & 0o777, 0o600);
     assert.equal(session.model.id, "gpt-test");
-    const logout = await withChatContext("web:custom-auth", "web", () => handleLogout(session as any, registry, { type: "logout", provider: "openai-compatible", raw: "/logout openai-compatible" }));
+    const logout = await withChatContext("web:custom-auth", "web", () => control.facade.applyControlCommand("web:custom-auth", { type: "logout", provider: "openai-compatible", raw: "/logout openai-compatible" }));
     assert.equal(logout.status, "success");
     assert.equal(await credentials.read("openai-compatible"), undefined);
     assert.equal(backups().some(name => name.startsWith("auth.json")), false);
@@ -97,7 +98,7 @@ try {
       assert.equal((await reopened.getAvailable(provider)).length, 1);
       assert.equal((await configure({ provider, baseUrl: "http://127.0.0.1:11434/v1", apiKey: "", modelId: "updated-local" })).status, "success");
       assert.equal((await runtime.getAvailable(provider))[0]?.id, "updated-local");
-      const logout = await withChatContext("web:custom-auth", "web", () => handleLogout(session as any, registry, { type: "logout", provider, raw: `/logout ${provider}` }));
+      const logout = await withChatContext("web:custom-auth", "web", () => control.facade.applyControlCommand("web:custom-auth", { type: "logout", provider, raw: `/logout ${provider}` }));
       assert.equal(logout.status, "success");
       assert.equal(modelConfig().providers[provider], undefined);
       assert.equal((await runtime.getAvailable(provider)).length, 0);
@@ -158,7 +159,7 @@ try {
     const original = readFileSync(modelsPath, "utf8");
     const before = await credentials.read("openai-compatible");
     failDelete = true;
-    await assert.rejects(withChatContext("web:custom-auth", "web", () => handleLogout(session as any, registry, { type: "logout", provider: "openai-compatible", raw: "/logout openai-compatible" })));
+    assert.equal((await withChatContext("web:custom-auth", "web", () => control.facade.applyControlCommand("web:custom-auth", { type: "logout", provider: "openai-compatible", raw: "/logout openai-compatible" }))).status, "error");
     assert.equal(readFileSync(modelsPath, "utf8"), original);
     assert.deepEqual(await credentials.read("openai-compatible"), before);
   } else if (scenario === "same-provider-ordered-setup") {
@@ -177,7 +178,7 @@ try {
     const oldCard = old.contentBlocks?.[0] as any;
     const activation = oldCard?.payload?.actions?.find((action: any) => action.data?.activation_id)?.data;
     if (activation) {
-      const replay = await withChatContext("web:custom-auth", "web", () => handleLogin(session as any, registry, { type: "login", provider: `__step3 ${JSON.stringify({ ...activation, model: "first" })}`, raw: "/login __step3" }));
+      const replay = await withChatContext("web:custom-auth", "web", () => control.facade.applyControlCommand("web:custom-auth", { type: "login", provider: `__step3 ${JSON.stringify({ ...activation, model: "first" })}`, raw: "/login __step3" }));
       assert.equal(replay.status, "error");
     }
     assert.equal(current.status, "success");
@@ -207,4 +208,4 @@ try {
   assert.deepEqual(await credentials.read("unrelated-auth"), { type: "api_key", key: "unrelated-synthetic" });
   assert.equal(network, 0);
   console.log(scenario);
-} finally { cancelProviderAuthFlows(session as any); }
+} finally { control.dispose(); }
