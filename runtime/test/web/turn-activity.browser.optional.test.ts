@@ -233,6 +233,35 @@ browserTest('live turn shows elapsed work and streamed text, discloses running t
   }
 }, 20000);
 
+browserTest('working age survives tab reload, component remount and phase changes using the turn start', async () => {
+  const page=await browser.newPage({viewport:{width:1000,height:700}}),errors:string[]=[];
+  page.on('pageerror',error=>errors.push(error.message));page.setDefaultTimeout(4000);
+  const base=`http://127.0.0.1:${server.port}`;
+  await page.route('**/*',route=>new URL(route.request().url()).origin===base?route.continue():route.abort());
+  const startedAt=new Date(Date.now()-185000).toISOString();
+  const restore=async(start:string|undefined,turn='restored-turn',camel=false)=>{
+    await page.evaluate(({start,turn,camel})=>(window as any).turnActivityFixture.live({status:{type:'thinking',...(start?{[camel?'startedAt':'started_at']:start}:{})},draft:{text:''},thought:{text:''},turnId:turn}),{start,turn,camel});
+  };
+  const age=page.locator('.turn-activity-live .turn-activity-label');
+  try{
+    await page.goto(base);await page.waitForFunction(()=>Boolean((window as any).turnActivityFixture));
+    await restore(startedAt);await page.waitForFunction(()=>document.querySelector('.turn-activity-live .turn-activity-label')?.textContent?.includes('3m'));
+    expect(await age.innerText()).toMatch(/^Working · 3m \d+s$/);
+    await page.evaluate(()=>(window as any).turnActivityFixture.remount());
+    expect(await age.innerText()).toMatch(/^Working · 3m \d+s$/);
+    await page.reload();await page.waitForFunction(()=>Boolean((window as any).turnActivityFixture));
+    await restore(startedAt);await age.waitFor();expect(await age.innerText()).toMatch(/^Working · 3m \d+s$/);
+    await page.evaluate(start=>(window as any).turnActivityFixture.live({status:{type:'tool_call',title:'read',started_at:start},turnId:'restored-turn'}),startedAt);
+    expect(await age.innerText()).toMatch(/^Working · 3m \d+s$/);
+    await restore(new Date(Date.now()-8000).toISOString(),'next-turn',true);
+    await page.waitForFunction(()=>/^Working · [7-9](\.\d)?s$/.test(document.querySelector('.turn-activity-live .turn-activity-label')?.textContent||''));
+    expect(await age.innerText()).not.toContain('3m');
+    await restore(undefined,'unknown-turn');
+    await page.waitForFunction(()=>document.querySelector('.turn-activity-live .turn-activity-label')?.textContent==='Working');
+    expect(await age.innerText()).toBe('Working');expect(errors).toEqual([]);
+  }finally{await page.close();}
+},20000);
+
 for (const width of [390, 1000]) {
   browserTest(`${width}px: a running tool's stop button stays at the end of its row`, async () => {
     const tool = liveActivity.steps[1]!.tool!, title = tool.title;

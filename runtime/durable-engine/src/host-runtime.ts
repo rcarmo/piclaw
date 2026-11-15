@@ -456,17 +456,34 @@ export class HostConversationRuntime {
   }
   /** Public committed conversation view, including pi.live; display-only subscription. */
   watchSession(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number },
-    listener: (view: import("@earendil-works/pi-durable").ConversationView) => void): Promise<() => Promise<void>> {
+    listener: (view: import("@earendil-works/pi-durable").ConversationView, startedAt?: number) => void): Promise<() => Promise<void>> {
     const reader = this.sessionReader(binding), check = reader.check;
     return this.observe(async () => {
       const conversation = await reader.conversation("Unknown conversation");
       const watch = await conversation.watch(this.context);
       try {
         check();
+        let firstEntry: number | undefined, startedAt: number | undefined;
         const publish = async (view: import("@earendil-works/pi-durable").ConversationView) => {
           if (this.closed) return;
           check();
-          listener(view);
+          const first = (view.docs["pi.live"] as { run?: { first?: number } } | undefined)?.run?.first;
+          if (first !== firstEntry) {
+            startedAt = undefined;
+            if (first !== undefined) {
+              // The SDK timestamps input when placed, after any queue wait.
+              // Its immutable first entry survives generation handoffs/reopen
+              // and may be outside the watch's bounded transcript window.
+              const entry = view.entries.find(entry => entry.id === first)
+                ?? (await conversation.entries({ minEntryId: first as import("@earendil-works/pi-durable").EntryId,
+                  maxEntryId: first as import("@earendil-works/pi-durable").EntryId }, 1, undefined, this.context)).items[0];
+              check();
+              const timestamp = entry?.model?.[0]?.timestamp;
+              if (typeof timestamp === "number" && Number.isFinite(timestamp) && timestamp >= 0 && timestamp <= 8.64e15) startedAt = timestamp;
+            }
+            firstEntry = first;
+          }
+          listener(view, startedAt);
         };
         await publish(watch.value);
         watch.start(async call=>{if(call.kind==='failed'){log.warn('Native conversation watch read failed',{operation:'durable.watch_failed',err:call.error});return;}await publish(call.value);});

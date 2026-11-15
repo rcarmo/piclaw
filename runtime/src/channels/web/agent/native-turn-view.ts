@@ -40,7 +40,7 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
     const append = previous.length > 0 && text.startsWith(previous);
     channel.broadcastEvent(`agent_${kind}_delta`, { ...base, delta: append ? text.slice(previous.length) : text, reset: !append, ...(!append ? { text } : {}) });
   }
-  return (view: any) => {
+  return (view: any, startedAt?: number) => {
     const entries=view.entries??[];
     for(const entry of entries){
       if(entryFrontier!==undefined&&entry.id>entryFrontier&&entry.kind==="host.accepted"&&entry.conversationId===view.conversation?.id&&entry.data?.chatJid===chat&&typeof entry.data.sourceId==="string")channel.publishInput?.(entry.data.sourceId);
@@ -78,7 +78,7 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
       base = { chat_jid: chat, agent_id: "default", task_id: live.run.taskId, turn_id: input.rowid ? `durable:${input.rowid}` : `durable-operation:${input.operation_id}`,
         thread_id: input.thread_id ?? input.rowid,
         operation_id: input.operation_id.startsWith("native-message:") ? `sdk-run:${view.conversation.id}:${live.run.inputs[0]}` : input.operation_id,
-        source: "durable_runtime", started_at: new Date().toISOString() };
+        source: "durable_runtime", ...(startedAt !== undefined ? { started_at: new Date(startedAt).toISOString() } : {}) };
       thought = draft = completedThought = completedDraft = partialThought = partialDraft = lastStatus = ""; tools.clear(); delegates.clear();
       status({ type: "thinking", title: "Thinking...", phase: "thinking" });
     }
