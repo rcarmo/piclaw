@@ -676,21 +676,3 @@ export async function createDefaultSession(
     chatJid,
   });
 }
-
-/**
- * Prime lightweight per-chat startup caches without creating a live runtime.
- * This keeps recent-chat background prewarm cheap while still front-loading
- * deterministic filesystem and extension-resolution work.
- */
-export async function lightweightPrewarmSession(
-  chatJid: string,
-  options: {
-    getSessionExtensionFactories?: (chatJid: string) => Promise<ExtensionFactory[]>;
-  } = {},
-): Promise<void> {
-  ensureSessionDir(chatJid);
-  const appendix = getChannelSystemPromptAppendix(chatJid);
-  void getAppendSystemPromptOverride(appendix);
-  void getBundledExtensionPaths(chatJid);
-  await options.getSessionExtensionFactories?.(chatJid);
-}

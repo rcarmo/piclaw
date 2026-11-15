@@ -29,6 +29,6 @@ export function createNativeControlFixture(state: any, registry: any, chatJid = 
     },
   };
   const facade = new AgentRuntimeFacade({ pool: new Map(), authPath: "unused", modelRegistry: registry,
-    modelRuntime: registry.modelRuntime, getDurableSession: chat => chat === chatJid ? port : undefined });
+    modelRuntime: state.modelRuntime, getDurableSession: chat => chat === chatJid ? port : undefined });
   return { facade, dispose: () => lifetime.abort() };
 }

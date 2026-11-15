@@ -258,7 +258,7 @@ export {};
         cmd: [
           TEST_SHELL,
           "-lc",
-          "bun -e \"import { captureStartupMemorySnapshot } from './src/runtime/startup.js'; captureStartupMemorySnapshot({ getMemoryInstrumentationSnapshot() { return { cachedMainSessions: 0, cachedSideSessions: 0, activeForkBaseLeaves: 0, activeChats: 0, sessionManager: { createInFlight: 0, branchSeedRealizationsInFlight: 0, invalidDeferredSeedErrors: 0, prewarmInFlight: 0, queuedPrewarms: 0, prewarmQueueLength: 0, prewarmCooldowns: 0 }, recovery: { attemptsTotal: 0, recoveredRuns: 0, exhaustedRuns: 0 } }; } }, { label: 'post-web-start' });\"",
+          "bun -e \"import { captureStartupMemorySnapshot } from './src/runtime/startup.js'; captureStartupMemorySnapshot({ getMemoryInstrumentationSnapshot() { return { cachedMainSessions: 0, cachedSideSessions: 0, activeForkBaseLeaves: 0, activeChats: 0, sessionManager: { createInFlight: 0, branchSeedRealizationsInFlight: 0, invalidDeferredSeedErrors: 0 }, recovery: { attemptsTotal: 0, recoveredRuns: 0, exhaustedRuns: 0 } }; } }, { label: 'post-web-start' });\"",
         ],
         cwd: RUNTIME_DIR,
         env: {
@@ -294,10 +294,6 @@ export {};
         create_in_flight: 0,
         branch_seed_realizations_in_flight: 0,
         invalid_deferred_seed_errors: 0,
-        prewarm_in_flight: 0,
-        queued_prewarms: 0,
-        prewarm_queue_length: 0,
-        prewarm_cooldowns: 0,
       });
     } finally {
       ws.cleanup();

@@ -49,10 +49,6 @@ export interface RuntimeMemorySnapshot {
   create_in_flight: number;
   branch_seed_realizations_in_flight: number;
   invalid_deferred_seed_errors: number;
-  prewarm_in_flight: number;
-  queued_prewarms: number;
-  prewarm_queue_length: number;
-  prewarm_cooldowns: number;
 }
 
 export interface SystemMetricsSnapshot {
@@ -338,10 +334,6 @@ function normalizeRuntimeMemorySnapshot(snapshot: AgentPoolMemoryInstrumentation
     create_in_flight: snapshot.sessionManager.createInFlight,
     branch_seed_realizations_in_flight: snapshot.sessionManager.branchSeedRealizationsInFlight,
     invalid_deferred_seed_errors: snapshot.sessionManager.invalidDeferredSeedErrors,
-    prewarm_in_flight: snapshot.sessionManager.prewarmInFlight,
-    queued_prewarms: snapshot.sessionManager.queuedPrewarms,
-    prewarm_queue_length: snapshot.sessionManager.prewarmQueueLength,
-    prewarm_cooldowns: snapshot.sessionManager.prewarmCooldowns,
   };
 }
 

@@ -13,7 +13,7 @@
  * custom-provider models.json configuration, with backups and awaited reload.
  */
 
-import { CredentialSynchronizationError, type AgentSession, type ModelRegistry, type ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { CredentialSynchronizationError, type ModelRegistry, type ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { AuthEvent, AuthPrompt, AuthType, CredentialInfo } from "@earendil-works/pi-ai";
 import type { AgentControlCommand, AgentControlResult } from "../agent-control-types.js";
 import { writeFileSync, readFileSync, existsSync, chmodSync, unlinkSync } from "fs";
@@ -25,7 +25,7 @@ import { isSingleUserAccess } from "../../core/config-access.js";
 import { createLogger } from "../../utils/logger.js";
 import { getProviderDefs, type ProviderDef } from "../provider-defs.js";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { isNativeProviderAuthContext, type NativeProviderAuthContext, type ProviderAuthSubject } from "../provider-auth-context.js";
+import type { NativeProviderAuthContext } from "../provider-auth-context.js";
 
 const log = createLogger("agent-control.login");
 const privateAuthResponse = new AsyncLocalStorage<{ rollback?: () => void }>();
@@ -44,15 +44,6 @@ export function commitPrivateProviderAuthResponse(): void {
 
 type LoginCommand = Extract<AgentControlCommand, { type: "login" }>;
 type LogoutCommand = Extract<AgentControlCommand, { type: "logout" }>;
-
-// ── Types ───────────────────────────────────────────────────────
-
-interface ModelRegistryLike {
-  refresh?: () => Promise<void>;
-  getAll(): Array<{ id: string; name: string; provider: string; contextWindow?: number }>;
-  getProviderAuthStatus?: (provider: string) => { configured: boolean; source?: string; label?: string };
-  getProviderDisplayName?: (provider: string) => string;
-}
 
 // ── Config paths ────────────────────────────────────────────────
 
@@ -97,18 +88,9 @@ function writeJsonFile(path: string, data: unknown): void {
   chmodSync(path, 0o600);
 }
 
-// ── Provider definitions ────────────────────────────────────────
-
 // ── Helpers ──────────────────────────────────────────────────────
 
-function getModelRuntime(session: ProviderAuthSubject): ModelRuntime {
-  return isNativeProviderAuthContext(session) ? session.runtime : session.modelRuntime;
-}
-function authBindingId(session: ProviderAuthSubject): string {
-  return isNativeProviderAuthContext(session) ? session.bindingId : session.sessionId;
-}
-function assertNativeAuthCurrent(session: ProviderAuthSubject): void {
-  if (!isNativeProviderAuthContext(session)) return;
+function assertNativeAuthCurrent(session: NativeProviderAuthContext): void {
   if (disposedAuthSessions.has(session) || session.signal.aborted || session.chatJid !== getChatJid()) throw Error("Authentication session ended");
   const result: unknown = session.assertCurrent();
   if (result !== undefined) {
@@ -118,17 +100,17 @@ function assertNativeAuthCurrent(session: ProviderAuthSubject): void {
     throw Error("Authentication authority must be synchronous");
   }
 }
-async function runOwnedAuth<T>(session: ProviderAuthSubject, operation: () => Promise<T>): Promise<T> {
-  if (!isNativeProviderAuthContext(session)) return operation();
+async function runOwnedAuth<T>(session: NativeProviderAuthContext, operation: () => Promise<T>): Promise<T> {
   assertNativeAuthCurrent(session);
   return session.runOwned(async () => { assertNativeAuthCurrent(session); return operation(); });
 }
 
-function runOwnedAuthCommand(session: ProviderAuthSubject, operation: () => Promise<AgentControlResult>): Promise<AgentControlResult> {
+function runOwnedAuthCommand(session: NativeProviderAuthContext, operation: () => Promise<AgentControlResult>): Promise<AgentControlResult> {
+  if (!isSingleUserAccess()) return Promise.resolve({ status: "error", message: "Provider authentication is an instance-owner operation; requires single-user access." });
+  if (session.kind !== "native-provider-auth") return Promise.resolve({ status: "error", message: "Native authentication context required. No legacy runtime was opened." });
   return runOwnedAuth(session, async () => {
     try { return await operation(); }
     catch (error) {
-      if (!isNativeProviderAuthContext(session)) throw error;
       const saved = error instanceof CredentialSynchronizationError;
       let recovered = false;
       if (saved) {
@@ -149,21 +131,16 @@ function runOwnedAuthCommand(session: ProviderAuthSubject, operation: () => Prom
   });
 }
 
-function getModelRegistry(session: ProviderAuthSubject, modelRegistry: ModelRegistry): ModelRegistryLike {
-  return (isNativeProviderAuthContext(session) ? modelRegistry
-    : (session as AgentSession & { modelRegistry?: ModelRegistryLike }).modelRegistry ?? modelRegistry) as ModelRegistryLike;
-}
-
 interface ProviderStatus {
   def: ProviderDef;
   authType: "oauth" | "api_key" | "custom" | "external" | "none";
 }
 
-function getProviderDef(modelRuntime: ModelRuntime, registry: ModelRegistryLike, providerId: string): ProviderDef | undefined {
+function getProviderDef(modelRuntime: ModelRuntime, registry: ModelRegistry, providerId: string): ProviderDef | undefined {
   return getProviderDefs(registry, modelRuntime).find((provider) => provider.id === providerId);
 }
 
-async function getProviderStatuses(modelRuntime: ModelRuntime, registry: ModelRegistryLike | undefined, session: ProviderAuthSubject): Promise<ProviderStatus[]> {
+async function getProviderStatuses(modelRuntime: ModelRuntime, registry: ModelRegistry | undefined, session: NativeProviderAuthContext): Promise<ProviderStatus[]> {
   const entries = await modelRuntime.listCredentials();
   assertNativeAuthCurrent(session);
   const credentials = new Map<string, CredentialInfo>(entries.map((entry) => [entry.providerId, entry]));
@@ -417,7 +394,7 @@ type RuntimeAuthFlow = {
 };
 
 type RuntimeAuthOwner = {
-  session: ProviderAuthSubject;
+  session: NativeProviderAuthContext;
   chatJid: string;
   sessionId: string;
   runtime: ModelRuntime;
@@ -425,9 +402,8 @@ type RuntimeAuthOwner = {
   activations: Map<string, { provider: string; models: Set<string>; expiresAt: number; providerRevision: number }>;
   logouts: Map<string, { provider: string; expiresAt: number; providerRevision: number }>;
 };
-const runtimeAuthOwners = new WeakMap<ProviderAuthSubject, RuntimeAuthOwner>();
-const disposeBound = new WeakSet<AgentSession>();
-const disposedAuthSessions = new WeakSet<ProviderAuthSubject>();
+const runtimeAuthOwners = new WeakMap<NativeProviderAuthContext, RuntimeAuthOwner>();
+const disposedAuthSessions = new WeakSet<NativeProviderAuthContext>();
 const nativeLifetimeCleanups = new WeakMap<NativeProviderAuthContext, () => void>();
 // Runtime credentials have one slot per provider, across sessions and methods.
 type ProviderAuthState = { revision: number; flow?: RuntimeAuthFlow; mutation: Promise<void> };
@@ -462,7 +438,7 @@ function retireProviderAuth(runtime: ModelRuntime, provider: string): void {
 
 function isRuntimeAuthOwnerActive(owner: RuntimeAuthOwner): boolean {
   if (runtimeAuthOwners.get(owner.session) !== owner || disposedAuthSessions.has(owner.session)
-    || authBindingId(owner.session) !== owner.sessionId || getModelRuntime(owner.session) !== owner.runtime) return false;
+    || owner.session.bindingId !== owner.sessionId || owner.session.runtime !== owner.runtime) return false;
   try { assertNativeAuthCurrent(owner.session); return true; } catch { return false; }
 }
 
@@ -472,9 +448,9 @@ export function revokeNativeProviderAuthContext(context: NativeProviderAuthConte
 }
 
 /** Provider credentials belong to the instance owner. */
-function getRuntimeAuthOwner(session: ProviderAuthSubject): RuntimeAuthOwner {
+function getRuntimeAuthOwner(session: NativeProviderAuthContext): RuntimeAuthOwner {
   assertNativeAuthCurrent(session);
-  const chatJid = getChatJid(), sessionId = authBindingId(session), runtime = getModelRuntime(session);
+  const chatJid = getChatJid(), sessionId = session.bindingId, runtime = session.runtime;
   let owner = runtimeAuthOwners.get(session);
   if (owner && (owner.chatJid !== chatJid || owner.sessionId !== sessionId || owner.runtime !== runtime)) {
     cancelProviderAuthFlows(session);
@@ -484,21 +460,16 @@ function getRuntimeAuthOwner(session: ProviderAuthSubject): RuntimeAuthOwner {
     owner = { session, chatJid, sessionId, runtime, flows: new Map(), activations: new Map(), logouts: new Map() };
     runtimeAuthOwners.set(session, owner);
   }
-  if (isNativeProviderAuthContext(session) && !nativeLifetimeCleanups.has(session)) {
+  if (!nativeLifetimeCleanups.has(session)) {
     const revoke = () => revokeNativeProviderAuthContext(session);
     session.signal.addEventListener("abort", revoke, { once: true });
     nativeLifetimeCleanups.set(session, () => session.signal.removeEventListener("abort", revoke));
   }
-  if (!isNativeProviderAuthContext(session) && !disposeBound.has(session)) {
-    const dispose = session.dispose.bind(session);
-    session.dispose = () => { disposedAuthSessions.add(session); cancelProviderAuthFlows(session); return dispose(); };
-    disposeBound.add(session);
-  }
   return owner;
 }
 
-export function cancelProviderAuthFlows(session: ProviderAuthSubject): void {
-  if (isNativeProviderAuthContext(session)) { nativeLifetimeCleanups.get(session)?.(); nativeLifetimeCleanups.delete(session); }
+export function cancelProviderAuthFlows(session: NativeProviderAuthContext): void {
+  nativeLifetimeCleanups.get(session)?.(); nativeLifetimeCleanups.delete(session);
   const owner = runtimeAuthOwners.get(session);
   if (!owner) return;
   runtimeAuthOwners.delete(session);
@@ -696,7 +667,7 @@ function buildRuntimeAuthCard(def: ProviderDef, flow: RuntimeAuthFlow): Record<s
 }
 
 async function startRuntimeAuth(
-  session: ProviderAuthSubject,
+  session: NativeProviderAuthContext,
   modelRuntime: ModelRuntime,
   def: ProviderDef,
   authType: AuthType,
@@ -721,10 +692,9 @@ async function startRuntimeAuth(
 
 /** Card 1 submitted → show Card 2 (auth method picker or direct form). */
 async function handleStep1(
-  session: ProviderAuthSubject,
+  session: NativeProviderAuthContext,
   modelRuntime: ModelRuntime,
-  modelRegistry: ModelRegistry,
-  registry: ModelRegistryLike,
+  registry: ModelRegistry,
   data: Record<string, unknown>,
 ): Promise<AgentControlResult> {
   const providerId = String(data.provider || "").trim();
@@ -738,9 +708,9 @@ async function handleStep1(
   // If only one auth method (+ optional logout), go straight to the form
   if (methods === 1 && !hasLogoutOption) {
     if (def.hasOAuth) {
-      return await startRuntimeAuth(session, modelRuntime, def, "oauth", recovered => showCard3OrComplete(session, modelRegistry, def, providerId, def.name, registry, undefined, recovered));
+      return await startRuntimeAuth(session, modelRuntime, def, "oauth", recovered => showCard3OrComplete(session, def, providerId, def.name, registry, undefined, recovered));
     }
-    if (def.hasApiKey) return await startRuntimeAuth(session, modelRuntime, def, "api_key", recovered => showCard3OrComplete(session, modelRegistry, def, providerId, def.name, registry, undefined, recovered));
+    if (def.hasApiKey) return await startRuntimeAuth(session, modelRuntime, def, "api_key", recovered => showCard3OrComplete(session, def, providerId, def.name, registry, undefined, recovered));
     if (def.isCustom) return { status: "success", message: `Configure ${def.name}`, contentBlocks: [buildCard2Config(def)] };
     if (def.hasExternalAuth) return { status: "success", message: `${def.name} uses external authentication`, contentBlocks: [buildCard2ExternalInfo(def)] };
   }
@@ -751,10 +721,9 @@ async function handleStep1(
 
 /** Card 2 method picker submitted → show the actual auth form. */
 async function handleStep1Method(
-  session: ProviderAuthSubject,
+  session: NativeProviderAuthContext,
   modelRuntime: ModelRuntime,
-  modelRegistry: ModelRegistry,
-  registry: ModelRegistryLike,
+  registry: ModelRegistry,
   data: Record<string, unknown>,
 ): Promise<AgentControlResult> {
   const providerId = String(data.provider || "").trim();
@@ -764,11 +733,11 @@ async function handleStep1Method(
 
   if (action === "oauth") {
     if (!def.hasOAuth) return { status: "error", message: `**${def.name}** doesn't support OAuth.` };
-    return await startRuntimeAuth(session, modelRuntime, def, "oauth", recovered => showCard3OrComplete(session, modelRegistry, def, providerId, def.name, registry, undefined, recovered));
+    return await startRuntimeAuth(session, modelRuntime, def, "oauth", recovered => showCard3OrComplete(session, def, providerId, def.name, registry, undefined, recovered));
   }
   if (action === "api_key") {
     if (!def.hasApiKey) return { status: "error", message: `**${def.name}** doesn't support API key auth.` };
-    return await startRuntimeAuth(session, modelRuntime, def, "api_key", recovered => showCard3OrComplete(session, modelRegistry, def, providerId, def.name, registry, undefined, recovered));
+    return await startRuntimeAuth(session, modelRuntime, def, "api_key", recovered => showCard3OrComplete(session, def, providerId, def.name, registry, undefined, recovered));
   }
   if (action === "configure") {
     if (!def.isCustom) return { status: "error", message: `**${def.name}** doesn't need configuration.` };
@@ -792,10 +761,9 @@ async function handleStep1Method(
 
 /** Card 2 auth/config form submitted → continue the provider-owned flow. */
 async function handleStep2(
-  session: ProviderAuthSubject,
+  session: NativeProviderAuthContext,
   modelRuntime: ModelRuntime,
-  modelRegistry: ModelRegistry,
-  registry: ModelRegistryLike,
+  registry: ModelRegistry,
   data: Record<string, unknown>,
 ): Promise<AgentControlResult> {
   const providerId = String(data.provider || "").trim();
@@ -866,7 +834,7 @@ async function handleStep2(
 
     if (flow.status === "completed") {
       deleteRuntimeAuthFlow(flow);
-      return await showCard3OrComplete(session, modelRegistry, def, providerId, name, registry, undefined, flow.locallyRecovered);
+      return await showCard3OrComplete(session, def, providerId, name, registry, undefined, flow.locallyRecovered);
     }
     if (flow.status === "failed") {
       deleteRuntimeAuthFlow(flow);
@@ -959,7 +927,7 @@ async function handleStep2(
         ? "The credential was saved, but model availability could not be refreshed. Retry model refresh; do not restore an older credential."
         : "Custom authentication configuration failed. Supply a required key or review legacy model configuration, then retry. The prior configuration and stored credential are retained." };
     }
-    return await showCard3OrComplete(session, modelRegistry, def, providerId, name, registry, revision);
+    return await showCard3OrComplete(session, def, providerId, name, registry, revision);
   }
 
   if (method === "logout") {
@@ -1015,18 +983,17 @@ async function removeCustomModelConfig(modelRuntime: ModelRuntime, providerId: s
 
 /** Authentication never changes the active model; even one model needs confirmation. */
 async function showCard3OrComplete(
-  session: ProviderAuthSubject,
-  modelRegistry: ModelRegistry,
+  session: NativeProviderAuthContext,
   def: ProviderDef | undefined,
   providerId: string,
   name: string,
-  registry: ModelRegistryLike,
+  registry: ModelRegistry,
   expectedRevision?: number,
   locallyRecovered = false,
 ): Promise<AgentControlResult> {
   const owner = getRuntimeAuthOwner(session);
   const providerRevision = expectedRevision ?? providerAuthState(owner.runtime, providerId).revision;
-  if (!locallyRecovered) await registry.refresh?.();
+  if (!locallyRecovered) await registry.refresh();
   if (!isRuntimeAuthOwnerActive(owner) || owner.chatJid !== getChatJid() || providerRevision !== providerAuthState(owner.runtime, providerId).revision) return { status: "error", message: "Authentication session changed. Use /login in the active session." };
   const models = registry.getAll().filter((m) => m.provider === providerId);
   if (models.length === 0) {
@@ -1045,8 +1012,7 @@ async function showCard3OrComplete(
 
 /** Card 3 submitted → activate model. */
 async function handleStep3(
-  session: ProviderAuthSubject,
-  modelRegistry: ModelRegistry,
+  session: NativeProviderAuthContext,
   data: Record<string, unknown>,
 ): Promise<AgentControlResult> {
   const providerId = String(data.provider || "").trim();
@@ -1059,27 +1025,24 @@ async function handleStep3(
   if (!activation || activation.expiresAt <= Date.now() || activation.provider !== providerId || !activation.models.has(modelId) || activation.providerRevision !== providerAuthState(owner.runtime, providerId).revision) return { status: "error", message: "Stale or foreign model activation. Authenticate again or use /model explicitly." };
   owner.activations.delete(id);
 
-  if (!isNativeProviderAuthContext(session)) return { status: "error", message: "Native model activation unavailable. No legacy model was changed." };
   assertNativeAuthCurrent(session);
   return session.activateModel(providerId, modelId);
 }
 
 // ── Command handlers ────────────────────────────────────────────
 
-export function handleLogin(session: ProviderAuthSubject, modelRegistry: ModelRegistry, command: LoginCommand): Promise<AgentControlResult> {
+export function handleLogin(session: NativeProviderAuthContext, modelRegistry: ModelRegistry, command: LoginCommand): Promise<AgentControlResult> {
   return runOwnedAuthCommand(session, () => handleLoginOwned(session, modelRegistry, command));
 }
 
 async function handleLoginOwned(
-  session: ProviderAuthSubject,
+  session: NativeProviderAuthContext,
   modelRegistry: ModelRegistry,
   command: LoginCommand,
 ): Promise<AgentControlResult> {
-  if (!isSingleUserAccess()) return { status: "error", message: "Provider authentication is an instance-owner operation; requires single-user access." };
   const existingOwner = runtimeAuthOwners.get(session);
   if (disposedAuthSessions.has(session) || (existingOwner && existingOwner.chatJid !== getChatJid())) return { status: "error", message: "Provider authentication belongs to its initiating session and chat." };
-  const modelRuntime = getModelRuntime(session);
-  const registry = getModelRegistry(session, modelRegistry);
+  const modelRuntime = session.runtime;
 
   // Internal routing from card submissions. Authentication failure text is
   // deliberately generic because provider diagnostics can contain credentials.
@@ -1093,41 +1056,39 @@ async function handleLoginOwned(
   };
   if (command.provider?.startsWith("__step1 ")) {
     const data = parseCardData(command.provider.slice(8));
-    return data ? handleStep1(session, modelRuntime, modelRegistry, registry, data) : { status: "error", message: "Invalid card data." };
+    return data ? handleStep1(session, modelRuntime, modelRegistry, data) : { status: "error", message: "Invalid card data." };
   }
   if (command.provider?.startsWith("__step1method ")) {
     const data = parseCardData(command.provider.slice(14));
-    return data ? handleStep1Method(session, modelRuntime, modelRegistry, registry, data) : { status: "error", message: "Invalid card data." };
+    return data ? handleStep1Method(session, modelRuntime, modelRegistry, data) : { status: "error", message: "Invalid card data." };
   }
   if (command.provider?.startsWith("__step2 ")) {
     const data = parseCardData(command.provider.slice(8));
-    return data ? handleStep2(session, modelRuntime, modelRegistry, registry, data) : { status: "error", message: "Invalid card data." };
+    return data ? handleStep2(session, modelRuntime, modelRegistry, data) : { status: "error", message: "Invalid card data." };
   }
   if (command.provider?.startsWith("__step3 ")) {
     const data = parseCardData(command.provider.slice(8));
-    return data ? handleStep3(session, modelRegistry, data) : { status: "error", message: "Invalid card data." };
+    return data ? handleStep3(session, data) : { status: "error", message: "Invalid card data." };
   }
 
   // No args → show Card 1
-  const statuses = await getProviderStatuses(modelRuntime, registry, session);
+  const statuses = await getProviderStatuses(modelRuntime, modelRegistry, session);
   assertNativeAuthCurrent(session);
   return { status: "success", message: "Provider authentication", contentBlocks: [buildCard1(statuses)] };
 }
 
-export function handleLogout(session: ProviderAuthSubject, modelRegistry: ModelRegistry, command: LogoutCommand): Promise<AgentControlResult> {
+export function handleLogout(session: NativeProviderAuthContext, modelRegistry: ModelRegistry, command: LogoutCommand): Promise<AgentControlResult> {
   return runOwnedAuthCommand(session, () => handleLogoutOwned(session, modelRegistry, command));
 }
 
 async function handleLogoutOwned(
-  session: ProviderAuthSubject,
+  session: NativeProviderAuthContext,
   modelRegistry: ModelRegistry,
   command: LogoutCommand,
 ): Promise<AgentControlResult> {
-  if (!isSingleUserAccess()) return { status: "error", message: "Provider authentication is an instance-owner operation; requires single-user access." };
   const existingOwner = runtimeAuthOwners.get(session);
   if (disposedAuthSessions.has(session) || (existingOwner && existingOwner.chatJid !== getChatJid())) return { status: "error", message: "Provider authentication belongs to its initiating session and chat." };
-  const modelRuntime = getModelRuntime(session);
-  const registry = getModelRegistry(session, modelRegistry);
+  const modelRuntime = session.runtime;
 
   if (command.provider) {
     const providerId = command.provider.trim().toLowerCase();
@@ -1137,7 +1098,7 @@ async function handleLogoutOwned(
       const credentials = await modelRuntime.listCredentials();
       assertNativeAuthCurrent(session);
       const stored = credentials.some((entry) => entry.providerId === providerId);
-      const custom = getProviderDef(modelRuntime, registry, providerId)?.isCustom;
+      const custom = getProviderDef(modelRuntime, modelRegistry, providerId)?.isCustom;
       const configured = custom ? await removeCustomModelConfig(modelRuntime, providerId, stored, () => assertNativeAuthCurrent(session)) : false;
       assertNativeAuthCurrent(session);
       if (stored && !custom) await modelRuntime.logout(providerId);
@@ -1148,7 +1109,7 @@ async function handleLogoutOwned(
     return { status: "success", message: `✓ Logged out from **${providerId}**.` };
   }
 
-  const statuses = await getProviderStatuses(modelRuntime, registry, session);
+  const statuses = await getProviderStatuses(modelRuntime, modelRegistry, session);
   assertNativeAuthCurrent(session);
   return { status: "success", message: "Provider authentication", contentBlocks: [buildCard1(statuses)] };
 }

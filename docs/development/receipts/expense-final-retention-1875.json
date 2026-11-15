@@ -638,7 +638,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "e506827fe77e26e48c722ff15a957a5d37acfe9c66c32e4511a67f627c2cf94f",
       "state": "retained-decoupled",
-      "currentSha256": "b2a6fe534df5e203595224d9f0c4caba95c3648de3097ade09db1a80d5484d6d",
+      "currentSha256": "d327934470b80f8bbdb947233571f83763e58d9ed4225385342674c2e3f27467",
       "currentPurpose": "existing native domain/control/message transport boundary with no expense port",
       "directImportCallers": [
         {
@@ -1028,7 +1028,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "cdddbc02e1f46e6767bfd9f5602c55ef007d6083aff7af016550f74d1f73aa6f",
       "state": "retained-decoupled",
-      "currentSha256": "701e4b9febe7af2e68656fd3291c91b126e0baf8b2a327a7b36f47609b83b55f",
+      "currentSha256": "32575efe68b89b5276f60307ea3ec7f65fc4fa75e8860065e03b7e71015b771d",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
@@ -2889,5 +2889,23 @@
       "runtime/durable-engine/src/host-extension-catalog.ts"
     ],
     "scope": "Reliability/maintenance/legacy SQL retirement and approved published add-on source pins; original classifications/deleted paths/financial accounting unchanged. No1875deletioncredit."
-  }
+  },
+  "laterSourceRefreshes": [
+    {
+      "issue": 1650,
+      "base": "d75ec20fb1f2c67a2ac88ecb576e43e308418163",
+      "paths": [
+        "runtime/src/agent-pool.ts"
+      ],
+      "scope": "Remove the uncalled legacy session binder API and factory stage. Original 105 classifications, 37 deleted paths and financial reduction accounting remain unchanged; this slice receives no additional #1875 credit."
+    },
+    {
+      "issue": 1650,
+      "base": "b55ab07685fe8430e8f5c7dca37d1b55c5d356f2",
+      "paths": [
+        "runtime/src/channels/web/http/dispatch-agent.ts"
+      ],
+      "scope": "Settings now uses the existing provider-owned auth definitions for built-in and extension providers alike. Original classifications, deleted paths and financial accounting remain unchanged; no additional #1875 deletion credit."
+    }
+  ]
 }

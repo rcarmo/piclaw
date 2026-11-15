@@ -154,10 +154,6 @@ test("handleSystemMetricsRequest includes runtime memory instrumentation when pr
         branchSeedRealizationsInFlight: 5,
         createInFlight: 6,
         invalidDeferredSeedErrors: 7,
-        prewarmInFlight: 8,
-        queuedPrewarms: 9,
-        prewarmQueueLength: 10,
-        prewarmCooldowns: 11,
       },
     }),
   }, new SystemMetricsSampler(2, 1000, () => null));
@@ -178,10 +174,6 @@ test("handleSystemMetricsRequest includes runtime memory instrumentation when pr
     create_in_flight: 6,
     branch_seed_realizations_in_flight: 5,
     invalid_deferred_seed_errors: 7,
-    prewarm_in_flight: 8,
-    queued_prewarms: 9,
-    prewarm_queue_length: 10,
-    prewarm_cooldowns: 11,
   });
 });
 

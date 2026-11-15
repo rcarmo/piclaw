@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { handleLogin, handleLogout, cancelProviderAuthFlows, withPrivateProviderAuthResponse } from "../../src/agent-control/handlers/login.js";
+import { handleLogin, handleLogout, withPrivateProviderAuthResponse } from "../../src/agent-control/handlers/login.js";
 import { withChatContext } from "../../src/core/chat-context.js";
 import { addLogSink, removeLogSink, type LogRecord } from "../../src/utils/logger.js";
 import { createTestModelRegistry, TestAgentControlSession } from "./session-fixture.js";
@@ -7,19 +7,21 @@ import { getTestWorkspace } from "../helpers.js";
 import { withTempWorkspaceEnv } from "../helpers.js";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { createNativeAuthFixture } from './native-auth-fixture.js';
 
-const sessions: TestAgentControlSession[] = [];
-afterEach(() => { for (const session of sessions.splice(0)) cancelProviderAuthFlows(session as any); });
+const sessions: ReturnType<typeof createNativeAuthFixture>[] = [];
+afterEach(() => { for (const session of sessions.splice(0)) session.dispose(); });
 
 function fixture(login?: (provider: string, type: string, interaction: any) => Promise<unknown>) {
   const registry = createTestModelRegistry([{ provider: "openai", id: "one", name: "One" }]);
   if (login) registry.modelRuntime.login = login;
   const session = new TestAgentControlSession(getTestWorkspace().workspace, registry);
-  sessions.push(session);
-  const run = (step: string, data: object, chat = "web:auth-owner") => withChatContext(chat, "web", () => handleLogin(session as any, registry, {
+  const native = createNativeAuthFixture(session, registry, 'web:auth-owner');
+  sessions.push(native);
+  const run = (step: string, data: object, chat = "web:auth-owner") => withChatContext(chat, "web", () => handleLogin(native.context, registry, {
     type: "login", provider: `__${step} ${JSON.stringify(data)}`, raw: `/login __${step}`,
   }));
-  return { session, registry, run };
+  return { session, registry, run, context: native.context, dispose: native.dispose };
 }
 
 function action(result: any, method = "runtime_continue") {
@@ -40,7 +42,7 @@ test("provider events and prompt metadata stay out of persisted cards and reveal
   const start = await f.run("step1", { provider: "openai" });
   expect(JSON.stringify(start)).not.toContain(sentinel);
   const reveal = action(start, "runtime_present");
-  expect((await f.run("step2", reveal, "web:foreign")).status).toBe("error");
+  await expect(f.run("step2", reveal, "web:foreign")).rejects.toThrow("Authentication session ended");
   expect((await f.run("step2", reveal)).status).toBe("error"); // Other control surfaces cannot receive secrets.
   const shown = await withPrivateProviderAuthResponse(() => f.run("step2", reveal));
   expect(shown.authPresentation?.events.map((event: any) => event.type)).toEqual(["auth_url", "device_code", "info", "progress"]);
@@ -73,8 +75,8 @@ test("disposed or replaced owners cannot reveal provider events", async () => {
   f.session.sessionId = "replacement";
   expect((await f.run("step2", action(start, "runtime_present"))).status).toBe("error");
   const next = await f.run("step1", { provider: "openai" });
-  f.session.dispose();
-  expect((await f.run("step2", action(next, "runtime_present"))).status).toBe("error");
+  f.dispose();
+  await expect(f.run("step2", action(next, "runtime_present"))).rejects.toThrow("Authentication session ended");
 });
 
 test("failed private reveal delivery restores the prior action while failed continuation delivery aborts", async () => {
@@ -118,8 +120,7 @@ test("same-provider flows stay session-local and foreign prompt IDs cannot resol
 test("foreign chat cannot consume or cancel an initiating session's prompt", async () => {
   const f = fixture();
   const start = await f.run("step1", { provider: "openai" });
-  const denied = await f.run("step2", { ...action(start, "runtime_cancel") }, "web:foreign");
-  expect(denied.status).toBe("error");
+  await expect(f.run("step2", { ...action(start, "runtime_cancel") }, "web:foreign")).rejects.toThrow("Authentication session ended");
   expect((await f.run("step2", { ...action(start), auth_value: "owned-key" })).status).toBe("success");
 });
 
@@ -153,10 +154,10 @@ test("disposal cancels pending interaction and disposed sessions cannot restart 
     await interaction.prompt({ type: "secret", message: "Key" });
   });
   const start = await f.run("step1", { provider: "openai" });
-  f.session.dispose();
+  f.dispose();
   expect(signal.aborted).toBe(true);
-  expect((await f.run("step2", { ...action(start), auth_value: "after-dispose" })).status).toBe("error");
-  expect((await f.run("step1", { provider: "openai" })).status).toBe("error");
+  await expect(f.run("step2", { ...action(start), auth_value: "after-dispose" })).rejects.toThrow("Authentication session ended");
+  await expect(f.run("step1", { provider: "openai" })).rejects.toThrow("Authentication session ended");
 });
 
 test("session-generation and runtime replacement reject prior cards", async () => {
@@ -218,7 +219,7 @@ test("single-model login refreshes availability but requires owner-bound one-tim
 
 test("disposal during availability refresh cannot mint a post-login activation", async () => {
   const f = fixture();
-  f.registry.refresh = async () => { f.session.dispose(); };
+  f.registry.refresh = async () => { f.dispose(); };
   const start = await f.run("step1", { provider: "openai" });
   const done = await f.run("step2", { ...action(start), auth_value: "key" });
   expect(done.status).toBe("error");
@@ -245,7 +246,7 @@ test("logout cancels pending provider prompt and invalidates existing activation
   const done = await f.run("step2", { ...action(start), auth_value: "stored" });
   const activation = (done.contentBlocks?.[0] as any).payload.actions[0].data;
   const pending = await f.run("step1method", { provider: "openai", action: "api_key" });
-  const logout = await withChatContext("web:auth-owner", "web", () => handleLogout(f.session as any, f.registry, { type: "logout", provider: "openai", raw: "/logout openai" }));
+  const logout = await withChatContext("web:auth-owner", "web", () => handleLogout(f.context, f.registry, { type: "logout", provider: "openai", raw: "/logout openai" }));
   expect(logout.status).toBe("success");
   expect((await f.run("step2", { ...action(pending), auth_value: "resurrect" })).status).toBe("error");
   expect((await f.run("step3", { ...activation, model: "one" })).status).toBe("error");
@@ -265,7 +266,7 @@ test("shared-runtime authentication replaces the prior provider flow across sess
 test("logout during model refresh cannot mint a new activation permit", async () => {
   const f = fixture();
   f.registry.refresh = async () => {
-    await handleLogout(f.session as any, f.registry, { type: "logout", provider: "openai", raw: "/logout openai" });
+    await handleLogout(f.context, f.registry, { type: "logout", provider: "openai", raw: "/logout openai" });
   };
   const start = await f.run("step1", { provider: "openai" });
   const done = await f.run("step2", { ...action(start), auth_value: "key" });
@@ -300,7 +301,7 @@ test("logout joins a canceled login's already-admitted credential mutation befor
   const continuing = f.run("step2", { ...action(start), auth_value: "late-write" });
   await started;
   let logoutSettled = false;
-  const logout = withChatContext("web:auth-owner", "web", () => handleLogout(f.session as any, f.registry, { type: "logout", provider: "openai", raw: "/logout openai" })).then(result => { logoutSettled = true; return result; });
+  const logout = withChatContext("web:auth-owner", "web", () => handleLogout(f.context, f.registry, { type: "logout", provider: "openai", raw: "/logout openai" })).then(result => { logoutSettled = true; return result; });
   await Bun.sleep(5);
   expect(logoutSettled).toBe(false);
   release();
@@ -317,7 +318,7 @@ test("a new login waits behind pending logout rather than having its credentials
   const arrival = new Promise<void>(resolve => { arrived = resolve; });
   const originalLogout = f.registry.modelRuntime.logout;
   f.registry.modelRuntime.logout = async (provider: string) => { arrived(); await gate; await originalLogout(provider); };
-  const logout = withChatContext("web:auth-owner", "web", () => handleLogout(f.session as any, f.registry, { type: "logout", provider: "openai", raw: "/logout openai" }));
+  const logout = withChatContext("web:auth-owner", "web", () => handleLogout(f.context, f.registry, { type: "logout", provider: "openai", raw: "/logout openai" }));
   await arrival;
   const login = f.run("step1method", { provider: "openai", action: "api_key" });
   release();
@@ -348,9 +349,8 @@ test("disposed-session logout cannot delete shared-runtime credentials", async (
   const f = fixture();
   const start = await f.run("step1", { provider: "openai" });
   await f.run("step2", { ...action(start), auth_value: "key" });
-  f.session.dispose();
-  const denied = await withChatContext("web:auth-owner", "web", () => handleLogout(f.session as any, f.registry, { type: "logout", provider: "openai", raw: "/logout openai" }));
-  expect(denied.status).toBe("error");
+  f.dispose();
+  await expect(withChatContext("web:auth-owner", "web", () => handleLogout(f.context, f.registry, { type: "logout", provider: "openai", raw: "/logout openai" }))).rejects.toThrow("Authentication session ended");
   expect(f.registry.authStorage.get("openai").key).toBe("key");
 });
 
@@ -364,12 +364,13 @@ test("custom-provider configuration never prefills its stored API key into a car
     writeFileSync(join(agentDir, "models.json"), JSON.stringify({ providers: { "openai-compatible": { baseUrl: "https://example.test/v1", apiKey: sentinel, models: [{ id: "one" }] } } }));
     const registry = createTestModelRegistry([{ provider: "openai-compatible", id: "one" }]);
     const session = new TestAgentControlSession(workspace.workspace, registry);
+    const native = createNativeAuthFixture(session, registry, 'web:auth-custom');
     try {
-      const result = await handleLogin(session as any, registry, { type: "login", provider: `__step1method ${JSON.stringify({ provider: "openai-compatible", action: "configure" })}`, raw: "/login __step1method" });
+      const result = await withChatContext('web:auth-custom', 'web', () => handleLogin(native.context, registry, { type: "login", provider: `__step1method ${JSON.stringify({ provider: "openai-compatible", action: "configure" })}`, raw: "/login __step1method" }));
       expect(JSON.stringify(result)).not.toContain(sentinel);
       expect((result.contentBlocks?.[0] as any).payload.body.find((item: any) => item.id === "apiKey")).toMatchObject({ value: "", style: "password" });
     } finally {
-      cancelProviderAuthFlows(session as any);
+      native.dispose();
       if (restore === undefined) delete process.env.PICLAW_PI_AGENT_DIR;
       else process.env.PICLAW_PI_AGENT_DIR = restore;
     }

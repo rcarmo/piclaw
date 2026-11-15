@@ -5,14 +5,12 @@ import type { Credential, Provider } from "@earendil-works/pi-ai";
 import { FileCredentialStore } from "../../../src/agent-pool/credential-store.js";
 import { cancelProviderAuthFlows, handleLogin, handleLogout } from "../../../src/agent-control/handlers/login.js";
 import { withChatContext } from "../../../src/core/chat-context.js";
-import { TestAgentControlSession } from "../session-fixture.js";
 import type { NativeProviderAuthContext } from "../../../src/agent-control/provider-auth-context.js";
 
 const [variant, root] = process.argv.slice(2);
 assert.ok(variant && root);
-const native = variant.startsWith("native-");
 const confirm = variant === "native-confirm", logoutSync = variant === "native-logout-sync";
-const scenario = confirm || logoutSync ? "success" : native ? variant.slice(7) : variant;
+const scenario = confirm || logoutSync ? "success" : variant.startsWith("native-") ? variant.slice(7) : variant;
 const id = "synthetic-login-sync";
 const secret = "SYNTHETIC-SAVED-OAUTH-SECRET";
 const causeSecret = "SYNTHETIC-CAUSE-SECRET";
@@ -71,8 +69,6 @@ const nativeContext: NativeProviderAuthContext = Object.freeze({
     activations++; return { status: "success", message: "Native model selected" };
   },
 });
-const session = native ? nativeContext : new TestAgentControlSession(root, registry);
-if (!native) (session as TestAgentControlSession).modelRuntime = runtime;
 const originalLogin = runtime.login.bind(runtime), originalRefresh = runtime.refresh.bind(runtime);
 let entered!: () => void, release!: () => void;
 const gateEntered = new Promise<void>(resolve => { entered = resolve; });
@@ -102,8 +98,7 @@ runtime.refresh = async options => {
   if (scenario === "aborted") return { ...result, aborted: true };
   return result;
 };
-const command = (step: string, data: Record<string, unknown>) => withChatContext("web:sync-fixture", "web", () => handleLogin(session as any, registry, { type: "login", provider: `__${step} ${JSON.stringify(data)}`, raw: "/login" })).catch(error => {
-  if (!native) throw error;
+const command = (step: string, data: Record<string, unknown>) => withChatContext("web:sync-fixture", "web", () => handleLogin(nativeContext, registry, { type: "login", provider: `__${step} ${JSON.stringify(data)}`, raw: "/login" })).catch(error => {
   assert.ok(!nativeCurrent || lifetime.signal.aborted, "Unexpected native authentication rejection");
   return { status: "error" as const, message: "Native authentication owner ended", contentBlocks: undefined };
 });
@@ -123,10 +118,10 @@ try {
         Bun.sleep(500).then(() => { throw new Error("Cancellation joined blocked recovery"); }),
       ]);
       assert.equal(cancelled.status, "success");
-    } else if (scenario.startsWith("owner")) { if (native) nativeCurrent = false; else (session as TestAgentControlSession).sessionId = "replacement-session"; }
-    else if (scenario === "dispose-during") { if (native) lifetime.abort(); else (session as TestAgentControlSession).dispose(); }
-    else if (scenario === "replace-during") cancelProviderAuthFlows(session as any);
-    else logout = withChatContext("web:sync-fixture", "web", () => handleLogout(session as any, registry, { type: "logout", provider: id, raw: "/logout" }));
+    } else if (scenario.startsWith("owner")) nativeCurrent = false;
+    else if (scenario === "dispose-during") lifetime.abort();
+    else if (scenario === "replace-during") cancelProviderAuthFlows(nativeContext);
+    else logout = withChatContext("web:sync-fixture", "web", () => handleLogout(nativeContext, registry, { type: "logout", provider: id, raw: "/logout" }));
     release();
   }
   const result = continuing ? await continuing : await command("step2", { ...data, method: "runtime_check" });
@@ -134,8 +129,7 @@ try {
     assert.equal(result.status, "success");
     assert.ok(JSON.stringify(result.contentBlocks).includes("Authentication successful"));
     assert.equal(runtime.getProviderAuthStatus(id).configured, true);
-    if (native) assert.equal(activations, 0);
-    else assert.equal((session as TestAgentControlSession).model.id, "gpt-test");
+    assert.equal(activations, 0);
   } else {
     assert.equal(result.status, "error");
     assert.equal(result.contentBlocks, undefined);
@@ -146,7 +140,7 @@ try {
     if (scenario === "reject") assert.equal(result.message, "Authentication failed. Start again with /login.");
   }
   await logout;
-  if (native) await Promise.allSettled([...nativeOwned]);
+  await Promise.allSettled([...nativeOwned]);
   await Bun.sleep(30); // Let every detached settlement run; unhandled failures fail the child.
   assert.equal(logins, 1);
   assert.equal(writes, scenario === "reject" ? 0 : 1);
@@ -171,7 +165,7 @@ try {
       await originalLogout(...args);
       throw new CredentialSynchronizationError(id, "logout", undefined, { cause: Error(causeSecret) });
     };
-    const removed = await withChatContext("web:sync-fixture", "web", () => handleLogout(session as any, registry, { type: "logout", provider: id, raw: `/logout ${id}` }));
+    const removed = await withChatContext("web:sync-fixture", "web", () => handleLogout(nativeContext, registry, { type: "logout", provider: id, raw: `/logout ${id}` }));
     assert.equal(removed.status, "error");
     assert.ok(removed.message.includes("refreshed offline"));
     assert.ok(!JSON.stringify(removed).includes(causeSecret));
@@ -183,6 +177,6 @@ try {
   const saved = await store.read(id);
   if (scenario !== "reject" && scenario !== "logout-during" && !logoutSync) assert.equal((saved as any)?.access, secret);
   else assert.equal(saved, undefined);
-  if (native) { assert.equal(owned, 0); assert.ok(ownedEntries >= 2); assert.equal(activations, confirm ? 1 : 0); }
+  assert.equal(owned, 0); assert.ok(ownedEntries >= 2); assert.equal(activations, confirm ? 1 : 0);
   console.log(variant);
-} finally { cancelProviderAuthFlows(session as any); }
+} finally { cancelProviderAuthFlows(nativeContext); }
