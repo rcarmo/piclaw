@@ -296,3 +296,30 @@ export function buildModelCandidates(models: AvailableModel[], config: DelegateC
     .map(({ preference: _preference, providerRank: _providerRank, ...candidate }) => candidate);
 }
 
+
+export function providerSummaries(models: AvailableModel[], config: DelegateConfig) {
+  const enabled = new Set(getAllowedProviders(models, config));
+  const excluded = new Set(getExcludedProviders(models, config));
+  const providers = getDiscoveredProviders(models);
+  return providers.map((provider) => ({
+    provider,
+    enabled: enabled.has(provider),
+    excluded: excluded.has(provider),
+    blacklisted: excluded.has(provider),
+    defaultExcluded: config.excluded_providers === null && AZURE_PROVIDER_RE.test(provider),
+    modelCount: models.filter((model) => model.provider === provider).length,
+  })).sort((left, right) => {
+    const configured = config.searchable_providers;
+    if (configured !== null) {
+      const leftIndex = configured.indexOf(left.provider);
+      const rightIndex = configured.indexOf(right.provider);
+      const leftConfigured = leftIndex >= 0;
+      const rightConfigured = rightIndex >= 0;
+      if (leftConfigured !== rightConfigured) return leftConfigured ? -1 : 1;
+      if (leftConfigured && rightConfigured && leftIndex !== rightIndex) return leftIndex - rightIndex;
+    }
+    return providerPreference(left.provider, null) - providerPreference(right.provider, null)
+      || left.provider.localeCompare(right.provider);
+  });
+}
+

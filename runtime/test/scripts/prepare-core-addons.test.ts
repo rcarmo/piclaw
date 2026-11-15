@@ -11,7 +11,8 @@ describe("core add-on release preparation", () => {
     const catalog = JSON.parse(readFileSync(join(repo, "release/core-addons/catalog.json"), "utf8"));
     const pins = readCoreAddonLock().addons;
     expect(coreCatalogEntries(catalog).map((item) => item.slug)).toEqual(pins.map((pin) => pin.slug));
-    expect(pins).toHaveLength(5);
+    expect(pins).toHaveLength(4);
+    expect(pins.some(pin => pin.slug === 'delegate')).toBe(false);
     expect(pins.some(pin => pin.slug === 'plan-sidebar')).toBe(false);
     expect(pins.some(pin => pin.slug === 'session-dashboard')).toBe(false);
   });

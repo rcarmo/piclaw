@@ -2,7 +2,7 @@ import { assertHostToolDeclaration } from "./host-tools.js";
 import { InstalledAddonSourceChanged } from "./host-model-failure.js";
 import { installedAddonProfiles, type InstalledAddonProfile } from "./host-installed-addon-profiles.js";
 import { DefaultResourceLoader, type LoadExtensionsResult, type SettingsManager, type ToolDefinition, type RegisteredCommand } from "../../src/durable-legacy-sdk.js";
-import { getInstalledAddonExtensionPaths, resolveAddonPackageEntries, listInstalledAddonPackageDirs, readInstalledAddonPackage } from "../../src/addons/package-entries.js";
+import { getInstalledAddonExtensionPaths, resolveAddonPackageEntries, isRetiredCoreAddon, listInstalledAddonPackageDirs, readInstalledAddonPackage } from "../../src/addons/package-entries.js";
 import { join, resolve, relative, isAbsolute } from "node:path";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -10,11 +10,6 @@ import { pathToFileURL } from "node:url";
 import type { CodeReviewNativeExports } from "./host-code-review-tool.js";
 import type { EditableTableNativeExports } from "./host-editable-table-tool.js";
 import type { DrawioNativeExports } from "./host-drawio-tool.js";
-const approvedDelegateFiles = Object.freeze({
-  "index.ts": "73563d26795cbab5cd92e8d5f8dabe3d7477fa11dff35e0ed8b21d9ec3f5ab51",
-  "delegate.ts": "6117acbdc9ad6e0e2a246c15e26eacf18b704fa1dab5936c10a48b9883be6e12",
-  "compat/extension-kv.ts": "3e86c21a9bf94d43151311fe29a3de1778d7a0a2ae32b81bb634e9fd1b2de4ab"
-});
 // Candidate source profile; qualification tests exercise every backend import.
 const approvedCodeReviewFiles = Object.freeze({
   "index.ts": "e7b5acf09dcf9bbb2f1cad2e9d4dc5d52fff2606d18254d42470051b3dfb0558",
@@ -101,7 +96,6 @@ const profiles = {
   editable_table: { label: "Editable Table", name: "@rcarmo/piclaw-addon-editable-table", version: "0.1.4", files: approvedEditableTableFiles, shadows: ["index.js", "tool.js", "tool.json", "tool/index.js", "tool/package.json", "shared.js", "shared.json", "shared/index.js", "shared/package.json"], events: ["resources_discover"] },
   code_review: { label: "Code Review", name: "@rcarmo/piclaw-addon-code-review", version: "0.1.11", files: approvedCodeReviewFiles,
     shadows: [...Object.keys(approvedCodeReviewFiles).flatMap(file => [file.replace(/\.ts$/, ".js"), file.replace(/\.ts$/, ".json"), file.replace(/\.ts$/, "/index.js"), file.replace(/\.ts$/, "/package.json")])], events: ["resources_discover"] },
-  delegate: { label: "Delegate", name: "@rcarmo/piclaw-addon-delegate", version: "0.2.22", files: approvedDelegateFiles, shadows: ["delegate.js", "delegate.json", "delegate/index.js", "delegate/package.json", "compat/extension-kv.js", "compat/package.json"], events: ["session_start", "model_select", "before_agent_start"] },
 } as const;
 type Profile = keyof typeof profiles;
 export const applicationAddonSourceProfiles = { ...profiles, ...installedAddonProfiles };
@@ -174,6 +168,7 @@ function captureApprovedPackage(workspace: string, packageDir: string, installed
  * factory evaluation or loaded-registration qualification is donated here. */
 export function inspectAddonInstall(name: string, version?: string, directory?: string): { supportedVersion: string; problem?: string } | undefined {
   if (name === "@rcarmo/piclaw-addon-plan-sidebar") return { supportedVersion: "built-in", problem: "Plan is built into Core. The retired Plan Sidebar add-on is not loaded and need not be installed." };
+  if (name === "@rcarmo/piclaw-addon-delegate") return { supportedVersion: "built-in", problem: "Delegate is built into Core. The retired add-on is not loaded and need not be installed." };
   const match = Object.entries(sourceProfiles).find(([, profile]) => profile.name === name);
   if (!match) return;
   const [kind, profile] = match;
@@ -253,13 +248,6 @@ export async function qualifyInstalledGoal(catalog: LoadExtensionsResult, cwd: s
     if (names.some(name => exports[name] !== addon[name])) throw Error("Goal public exports changed");
   } });
 }
-export async function qualifyInstalledDelegate(catalog: LoadExtensionsResult, cwd: string) {
-  const qualified = qualifyInstalledTool(catalog, cwd, "delegate");
-  if (!qualified) return undefined;
-  return Object.freeze({ ...qualified,
-    nativeLifecycle: Object.freeze({ kind: "native-parent-model-read-only" as const, events: profiles.delegate.events }) });
-}
-
 export async function qualifyInstalledCodeReview(catalog: LoadExtensionsResult, cwd: string) {
   const qualified = qualifyInstalledTool(catalog, cwd, "code_review");
   if (!qualified) return undefined;
@@ -329,7 +317,7 @@ function assertApprovedApplicationSources(cwd: string, {installedEntries,snapsho
   const approvedPackages = new Set(snapshots.flatMap(snapshot => snapshot.before ? [snapshot.before.packageDir] : []));
   for (const packageDir of listInstalledAddonPackageDirs(join(cwd, ".pi/extensions/node_modules"))) {
     const manifest = readInstalledAddonPackage(packageDir)?.manifest;
-    if (manifest?.name === "@rcarmo/piclaw-addon-plan-sidebar") continue;
+    if (isRetiredCoreAddon(manifest?.name)) continue;
     if ((manifest?.name?.includes("piclaw-addon-") || manifest?.pi) && !approvedPackages.has(packageDir))
       throw Error(`Unqualified installed add-on package before evaluation: ${packageDir}`);
   }
@@ -425,9 +413,9 @@ export async function qualifyInstalledObservability(catalog: LoadExtensionsResul
  * hooks through a fabricated AgentSession context. Keep all diagnostics so a
  * successful startup can never silently mean missing installed capabilities.
  */
-export function assertApplicationExtensionCatalogSupported(catalog: LoadExtensionsResult, delegate?: Awaited<ReturnType<typeof qualifyInstalledDelegate>>, codeReview?: Awaited<ReturnType<typeof qualifyInstalledCodeReview>>, editableTable?: Awaited<ReturnType<typeof qualifyInstalledEditableTable>>, officeViewer?: ReturnType<typeof qualifyInstalledOfficeViewer>, drawio?: Awaited<ReturnType<typeof qualifyInstalledDrawio>>, goal?: Awaited<ReturnType<typeof qualifyInstalledGoal>>, observability?: Awaited<ReturnType<typeof qualifyInstalledObservability>>, restic?: Awaited<ReturnType<typeof qualifyInstalledRestic>>, receipts: readonly InstalledAddonBindingReceipt[] = []): void {
+export function assertApplicationExtensionCatalogSupported(catalog: LoadExtensionsResult, codeReview?: Awaited<ReturnType<typeof qualifyInstalledCodeReview>>, editableTable?: Awaited<ReturnType<typeof qualifyInstalledEditableTable>>, officeViewer?: ReturnType<typeof qualifyInstalledOfficeViewer>, drawio?: Awaited<ReturnType<typeof qualifyInstalledDrawio>>, goal?: Awaited<ReturnType<typeof qualifyInstalledGoal>>, observability?: Awaited<ReturnType<typeof qualifyInstalledObservability>>, restic?: Awaited<ReturnType<typeof qualifyInstalledRestic>>, receipts: readonly InstalledAddonBindingReceipt[] = []): void {
   const bindings = receipts.map(receipt => validateInstalledAddonReceipt(catalog, receipt));
-  observability?.assertCurrent(); restic?.assertCurrent(); goal?.assertCurrent(); delegate?.assertCurrent(); codeReview?.assertCurrent(); editableTable?.assertCurrent(); officeViewer?.assertCurrent(); drawio?.assertCurrent();
+  observability?.assertCurrent(); restic?.assertCurrent(); goal?.assertCurrent(); codeReview?.assertCurrent(); editableTable?.assertCurrent(); officeViewer?.assertCurrent(); drawio?.assertCurrent();
   const blocked: string[] = catalog.errors.map(error => `${error.path}: extension load failed`);
   for (const [kind, source] of loadedProfileSources.get(catalog) ?? []) {
     if (!sameSource(source, captureApprovedSource(source.cwd, getInstalledAddonExtensionPaths(source.cwd), kind)))
@@ -440,7 +428,6 @@ export function assertApplicationExtensionCatalogSupported(catalog: LoadExtensio
       if (bindings.some(binding => binding.qualified.extension === extension && binding.qualified.capabilities.tools.includes(definition.name))) continue;
       if (extension === restic?.extension && definition === restic.definition) continue;
       if (extension === goal?.extension && extension.tools.get(definition.name)?.definition === definition) continue;
-      if (extension === delegate?.extension && definition === delegate.definition) continue;
       if (extension === codeReview?.extension && definition === codeReview.definition) continue;
       if (extension === editableTable?.extension && definition === editableTable.definition) continue;
       if (extension === officeViewer?.extension && definition === officeViewer.definition) continue;
@@ -454,7 +441,6 @@ export function assertApplicationExtensionCatalogSupported(catalog: LoadExtensio
       // Static skill discovery only: no session lifecycle or fabricated context.
       if (extension === codeReview?.extension && event === "resources_discover") continue;
       if (extension === editableTable?.extension && event === "resources_discover") continue;
-      if (extension === delegate?.extension && delegate.nativeLifecycle.events.some(allowed => allowed === event)) continue;
       blocked.push(`${extension.path}: ${event} lifecycle not bound to durable host`);
     }
     if ((extension.commands.size || extension.shortcuts.size) && extension !== goal?.extension && !bindings.some(binding => binding.qualified.extension === extension && !extension.shortcuts.size)) {

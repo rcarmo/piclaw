@@ -837,7 +837,42 @@ uncommitted Delegate WIP is separate and unapproved. Stale inactive comments in
 modules were left untouched during code gates. No code, tests, CI, network,
 services, pins, live state, migration, commits or pushes changed in this refresh.
 
-# Core Delegate declaration/policy checkpoint — 15 November 2026
+# Built-in Delegate source migration — 15 November 2026
+
+Core now owns the native Delegate declaration, model policy, existing config
+namespace, model-catalogue API, Settings pane and default registration. Individual
+and aggregate legacy backend/config/web entries are excluded before evaluation;
+there is no installed-source qualifier or default Delegate archive dependency.
+The published0.2.22 add-on is externally deprecated, with immutable release bytes.
+Its subprocess-only adapter qualification is removed from the native gate and
+replaced by actual Core fresh/no-addon and throwing-package scenarios. The original
+seven source variants now prove pre-import exclusion instead of qualifying retired
+execution. Other installed add-on/source assertions retain their original contracts.
+
+Current-native config reads leave saved rows untouched. Authenticated writes reuse
+the existing global KV admission/SQL/request-lifetime owner; held-writer cancellation,
+revocation and late known-commit cases are tested. Native reopen preserves config
+and does not dispatch a model. Model metadata comes from the current physical,
+approved runtime catalogue; no CLI discovery, credential copying, auto-approval,
+new store or execution lane is introduced. Native `judge`, `full`/MCP, recursive
+children and non-model/nested calls retain explicit unsupported boundaries.
+
+The established Settings list/editor, provider radios, filtering, exclusions,
+Refresh, bounded model lists and accessibility remain. The pane loads as a separate
+Core asset using the existing loader/registry and host Preact/hooks; the initial
+bundle guard is unchanged. Save failures restore the prior values and use an
+explicit alert state; success-message timers cannot erase later errors. Chromium
+and WebKit each pass phone/desktop and light/dark scenarios (8 cases/232 assertions).
+Raw frontend compilation retains281 existing out-of-seam diagnostics.
+
+Exact-source full qualification and review are recorded separately. Earlier timed
+all-installed results and UI failure receipts are retained; no deadlines/assertions
+or source guards are waived. No installation, restart, live import or account/MCP
+probe is performed. #2017 now requires an explicit read-only offline session importer
+into a fresh separate v4 destination; in-place migrations and schema cleanup on
+existing stores are forbidden. That independent work remains under #1650.
+
+# Core Delegate declaration/policy checkpoint — 15 November 2026 (historical slice)
 
 Under #1650 (including the consolidated #1455 acceptance), Core now supplies the
 Delegate schema/description and pure approval/classification policy. The native
