@@ -91,7 +91,8 @@ export function deleteUnreferencedMediaInDatabase(database: Database, mediaIds: 
   if (mediaIds.length === 0) return 0;
   const placeholders = mediaIds.map(() => "?").join(",");
   const res = database
-    .prepare(`DELETE FROM media WHERE id IN (${placeholders}) AND id NOT IN (SELECT media_id FROM message_media)`)
+    .prepare(`DELETE FROM media WHERE id IN (${placeholders}) AND id NOT IN (SELECT media_id FROM message_media)
+      AND id NOT IN (SELECT media_id FROM message_inline_media)`)
     .run(...mediaIds);
   return Number(res.changes || 0);
 }

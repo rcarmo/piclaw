@@ -61,6 +61,7 @@ const DISPOSITIONS = new Set<PiclawDisposition>([
 const REQUIRED_SCHEMA = Object.freeze([
   "chats",
   "media",
+  "message_inline_media",
   "message_media",
   "messages",
   "messages_fts",
@@ -120,6 +121,7 @@ const REQUIRED_SCHEMA_PROBES = Object.freeze([
   "SELECT rowid,content,chat_jid,sender,sender_name,timestamp,is_bot_message FROM messages_fts LIMIT 1",
   "SELECT id,filename,content_type,data,metadata FROM media LIMIT 1",
   "SELECT message_rowid,media_id FROM message_media LIMIT 1",
+  "SELECT message_rowid,kind,ref,media_id FROM message_inline_media LIMIT 1",
   "SELECT chat_jid,next_source_seq,consumed_through_source_seq,active_operation_id FROM service_effect_s01_chats LIMIT 1",
   "SELECT chat_jid,source_seq,state,kind,target_operation_id,accepted_at,disposition_reason FROM service_effect_s01_sources LIMIT 1",
   "SELECT operation_id,chat_jid,primary_source_seq,version,phase,cancellation_source_id,cancellation_source_seq,cancellation_cause,cancellation_requested_at,harness_session_id,harness_operation_id,terminal_disposition,terminal_message_row_id,terminal_error_code,terminal_committed_at FROM service_effect_s01_operations LIMIT 1",

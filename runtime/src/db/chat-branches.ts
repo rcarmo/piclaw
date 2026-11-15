@@ -335,6 +335,8 @@ export interface ArchivedBranchDownloadData {
   chat: Record<string, unknown> | null;
   messages: Record<string, unknown>[];
   message_media: Record<string, unknown>[];
+  /** Derived inline media (link-preview images, tool image previews) per message. */
+  message_inline_media: Record<string, unknown>[];
   chat_cursor: Record<string, unknown> | null;
   token_usage: Record<string, unknown>[];
   scheduled_tasks: Record<string, unknown>[];
@@ -430,6 +432,13 @@ export function exportArchivedBranchDownloadData(chatJid: string): ArchivedBranc
     chat: db.prepare(`SELECT * FROM chats WHERE jid = ?`).get(branch.chat_jid) as Record<string, unknown> | null,
     messages,
     message_media: messageMedia,
+    message_inline_media: db.prepare(
+      `SELECT i.*
+         FROM message_inline_media i
+         JOIN messages m ON m.rowid = i.message_rowid
+        WHERE m.chat_jid = ?
+        ORDER BY i.message_rowid ASC, i.kind ASC, i.ref ASC`
+    ).all(branch.chat_jid) as Record<string, unknown>[],
     chat_cursor: db.prepare(`SELECT * FROM chat_cursors WHERE chat_jid = ?`).get(branch.chat_jid) as Record<string, unknown> | null,
     token_usage: db.prepare(`SELECT * FROM token_usage WHERE chat_jid = ? ORDER BY run_at ASC, id ASC`).all(branch.chat_jid) as Record<string, unknown>[],
     scheduled_tasks: taskIds.map(id => readCanonicalScheduledTask(db, id) as unknown as Record<string, unknown>),
