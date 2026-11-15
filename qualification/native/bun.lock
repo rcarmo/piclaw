@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "piclaw-pi-durable-130-qualification",
+      "name": "piclaw-native-qualification",
       "devDependencies": {
         "@azure/monitor-opentelemetry": "1.19.0",
         "@number0/iroh": "1.1.0",

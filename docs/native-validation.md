@@ -11,13 +11,13 @@
 
 [`scripts/native-gate-contract.json`](../scripts/native-gate-contract.json) defines fixture repositories and immutable SHAs, four source-root mappings, catalogue dependencies, the two type projects, two accepted-source tests, two gate/launcher contract files and the complete required file inventory. Goal catalogue, tools, usage, settlement and terminal-race files are mandatory. No filter, skip, empty discovery or missing fixture can produce native success.
 
-The root and `runtime/durable-engine` each pin Pi 1.4.0, with separate physical dependency graphs and lockfiles. Qualification imports the engine graph through public re-exports; do not symlink root dependencies into the engine or mix SDK handles, contexts, telemetry spans or TypeBox objects across them. Package acquisition records the matching published bytes before offline validation.
+The root and `runtime/durable-engine` each pin Pi 1.5.2, with separate physical dependency graphs and lockfiles. Qualification imports the engine graph through public re-exports; do not symlink root dependencies into the engine or mix SDK handles, contexts, telemetry spans or TypeBox objects across them. Package acquisition records the matching published bytes before offline validation.
 
-Pi Durable 1.4.0 opens SQLite stores at format 2, rebuilding the task table to support durable sleep. Earlier SDKs cannot reopen that format. Source qualification uses disposable stores; deployment requires a separate checkpoint and rollback plan. See [1.4.0 qualification](development/pi-1.4.0-qualification.md).
+The contract’s `sdkVersion` must match the root/private manifest pins, installed root SDK and byte-verified private provenance. Source qualification uses disposable stores; a directory name or historical receipt cannot establish current compatibility. The [1.4.0 qualification](development/pi-1.4.0-qualification.md) records the earlier storage-format transition only. Deployment remains separately authorised.
 
 ## Prepare local fixtures offline
 
-Use a disposable checkout with previously provisioned dependencies and add-on source. Nothing in the gate downloads source, installs packages or repairs fixtures. Root tooling, `runtime/durable-engine/node_modules`, `qualification/pi-durable-130/node_modules` and the native add-on checkout's `node_modules` must already be available from frozen-lockfile provisioning. Catalogue tests use the qualification directory's frozen dependencies, never a live profile's installation. Keep the engine's recorded package bytes unchanged; the gate imports the existing provenance verifier and never runs its acquisition/record mode.
+Use a disposable checkout with previously provisioned dependencies and add-on source. Nothing in the gate downloads source, installs packages or repairs fixtures. Root tooling, `runtime/durable-engine/node_modules`, `qualification/native/node_modules` and the native add-on checkout's `node_modules` must already be available from frozen-lockfile provisioning. Catalogue tests use the qualification directory's frozen dependencies, never a live profile's installation. Keep the engine's recorded package bytes unchanged; the gate imports the existing provenance verifier and never runs its acquisition/record mode.
 
 Run the following from the repository root. Replace the two example paths with existing local checkouts. The native checkout must match `fixtures.native.ref`; the historical contract checkout must match `fixtures.contract.ref`. The commands read the SHAs from the JSON and check local Git objects without fetching:
 
@@ -56,13 +56,13 @@ test -z "$(git -C "$CONTRACT_FIXTURE" status --porcelain --untracked-files=norma
 test -d "$NATIVE_FIXTURE/node_modules"
 test -d "$NATIVE_FIXTURE/addons/code-review/node_modules"
 test -d runtime/durable-engine/node_modules
-test -d qualification/pi-durable-130/node_modules
+test -d qualification/native/node_modules
 
 export DURABLE_ADDONS_ROOT="$NATIVE_FIXTURE"
 export DURABLE_CORE_ADDONS_ROOT="$NATIVE_FIXTURE"
 export DURABLE_GOAL_ADDON_ROOT="$NATIVE_FIXTURE"
 export DURABLE_CONTRACT_ADDONS_ROOT="$CONTRACT_FIXTURE"
-export DURABLE_CATALOG_DEPENDENCIES="$(pwd -P)/qualification/pi-durable-130/node_modules"
+export DURABLE_CATALOG_DEPENDENCIES="$(pwd -P)/qualification/native/node_modules"
 
 make ci-native
 # Run make ci-full when both host and native evidence are required.
@@ -88,4 +88,4 @@ Files have a 300-second wall-clock budget. The former monolithic default-runtime
 
 The launcher and outer gate bound stdout/stderr draining after process exit. Leaked descriptors, interruption, timeout, missing files and zero-test runs fail qualification. The receipt records tracked changes and untracked source bytes; source changes during the run invalidate it. Keep the printed receipt and complete logs with the exact source revision.
 
-Browser acceptance, live-model requests and platform installation checks run outside this offline gate. Passing native qualification does not establish deployment, migration, live credentials or browser acceptance. Historical checkpoints and their original counts remain in the [qualification evidence](../qualification/pi-durable-130/README.md); they do not replace a receipt for the revision under review.
+Browser acceptance, live-model requests and platform installation checks run outside this offline gate. Passing native qualification does not establish deployment, migration, live credentials or browser acceptance. Historical checkpoints and their original counts remain in the [qualification evidence](../qualification/native/README.md); they do not replace a receipt for the revision under review.

@@ -2141,7 +2141,7 @@
       "deliveryOwner": "#1878",
       "originalSha256": "c7e461e26639a5d99f9ca8f9c3de6d013963f51978794b4c96e52581de243d8a",
       "state": "retained-decoupled",
-      "currentSha256": "14189fd920d885418cc84782be7c673a3c7af116069018ce3a723efa2ffb8933",
+      "currentSha256": "d48231b1d08c9b38f064d863caa75927c8732e8ab0d452100ae078f1b644bbb0",
       "currentPurpose": "generic exact schema/backup/recovery/reference inspection including inert old objects; no financial initializer or repair",
       "directImportCallers": []
     },
@@ -2249,7 +2249,7 @@
       "deliveryOwner": "#1880",
       "originalSha256": "7e548623dd8753d549b783ac2245ea0252c72109194f48655b1dcbfac6c42c7d",
       "state": "retained-decoupled",
-      "currentSha256": "f4ee0aed7c83c222dea858c60b2788f86069e53f91fbc17e0442b8b0746af151",
+      "currentSha256": "db2829813651f6da208cd84c89ad2b99f79e19b3e7a3d5c9734484c202da021d",
       "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
       "directImportCallers": []
     },

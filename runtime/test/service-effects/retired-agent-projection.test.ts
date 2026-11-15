@@ -51,14 +51,14 @@ test("current native observation, settlement and browser qualification remain", 
   expect(runtime).toContain("conversation.watch(this.context)");
   expect(runtime).toContain("private async settleInput(");
   for (const path of [
-    "qualification/pi-durable-130/native-ui-projection.test.ts",
-    "qualification/pi-durable-130/native-delegate-progress.test.ts",
+    "qualification/native/native-ui-projection.test.ts",
+    "qualification/native/native-delegate-progress.test.ts",
     "runtime/test/web/native-ui-projection.browser.optional.test.ts",
   ]) expect(existsSync(join(root, path))).toBe(true);
   const gate = JSON.parse(readFileSync(join(root, "scripts/native-gate-contract.json"), "utf8")) as { tests: string[] };
   expect(gate.tests).toContain("native-ui-projection.test.ts");
   expect(gate.tests).toContain("native-delegate-progress.test.ts");
   expect(gate.tests).not.toContain("projection.test.ts");
-  const typeProject = JSON.parse(readFileSync(join(root, "qualification/pi-durable-130/tsconfig.json"), "utf8")) as { include: string[] };
+  const typeProject = JSON.parse(readFileSync(join(root, "qualification/native/tsconfig.json"), "utf8")) as { include: string[] };
   expect(typeProject.include).not.toContain("projection.test.ts");
 });

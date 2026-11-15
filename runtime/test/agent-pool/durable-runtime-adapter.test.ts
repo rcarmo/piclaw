@@ -156,7 +156,7 @@ test.skipIf(!hasEngine)("adapter integrates real public runtime, SQL host bindin
   const { HostConversationRuntime, BunSqliteDatabase, createHostDurableBindings, initializeHostDurableBindings } = await import("../../durable-engine/src/index.js");
   const { SqliteStorage } = await import("../../durable-engine/qualification/sqlite.ts");
   const { Harness } = await import("../../durable-engine/qualification/durable.ts");
-  const { context, openFixture } = await import("../../../qualification/pi-durable-130/src/fixture.js");
+  const { context, openFixture } = await import("../../../qualification/native/src/fixture.js");
   const { value, effect, sealed } = await import("../../durable-engine/src/host-effects.js");
   const { initDatabase, getDb, closeDatabase } = await import("../../src/db/connection.js");
   const { installTerminalSettlementCompositionSchema } = await import("../../src/service-effects/current-piclaw/terminal-settlement-schema.js");

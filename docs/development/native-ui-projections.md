@@ -43,7 +43,7 @@ Source rollback can still read the old historical JSON. An older binary may resu
 > Historical qualification of the original delivery. Visual was later retired in #1990.
 
 
-- `qualification/pi-durable-130/native-ui-projection.test.ts`: actual shared-file SDK generation close/reopen, exclusive owner replacement, tool reattachment after real cache eviction, and tool close/reopen. Observations do not resume interrupted unsafe work or replay completed effects; context, exact submissions, historical JSON, preferences and OOBE survive. The file is registered in the native contract.
+- `qualification/native/native-ui-projection.test.ts`: actual shared-file SDK generation close/reopen, exclusive owner replacement, tool reattachment after real cache eviction, and tool close/reopen. Observations do not resume interrupted unsafe work or replay completed effects; context, exact submissions, historical JSON, preferences and OOBE survive. The file is registered in the native contract.
 - `runtime/test/channels/web/native-projection-memory.test.ts`: removed APIs, bounded observations, opaque history, direct SDK context without host fallback, and operation identity fencing.
 - `runtime/test/channels/web/runtime/channel-state-context-generation.test.ts`: awaited bound-session changes and per-chat reads, without a historical state class.
 - `runtime/test/channels/web/native-turn-view-reattach.test.ts`: late-intent public-view binding and foreign conversation rejection.
