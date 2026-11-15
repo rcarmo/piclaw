@@ -1,7 +1,7 @@
 import "./src/test-guard.js";
 import { test, expect } from "bun:test";
 import { Database } from "bun:sqlite";
-import { initializeHostSchema, initializeHostDurableBindings, createHostDurableBindings, HostCutoverController } from "../../runtime/durable-engine/src/index.js";
+import { initializeHostSchema, initializeHostDurableBindings, createHostDurableBindings } from "../../runtime/durable-engine/src/index.js";
 import { acceptedPayloadRecoveryIndex, migrateHostAcceptedPayloadLookup, prepareHostSchema } from '../../runtime/durable-engine/src/host-schema.js';
 import { acceptedPayloadRecoverySql, readApplicationMessagePayload } from '../../runtime/durable-engine/src/accepted-payload-recovery.js';
 import {nativeMessageFixture} from './src/native-message-fixture.js';
@@ -74,9 +74,9 @@ test("host schema: FK, exact synchronous guard, atomic DDL and incompatible shap
     let calls = 0;
     expect(() => initializeHostSchema(db, () => { if (++calls === 3) throw Error("Owner lost"); })).toThrow("Owner lost");
     expect(tables()).toEqual([]);
-    db.exec("CREATE TABLE qualification_cutover_work_v1 (domain TEXT)");
+    db.exec("CREATE TABLE piclaw_durable_intent_bindings_v1 (domain TEXT)");
     expect(() => initializeHostSchema(db, () => {})).toThrow("Unsupported host schema");
-    expect(tables()).toEqual([{ name: "qualification_cutover_work_v1" }]);
+    expect(tables()).toEqual([{ name: "piclaw_durable_intent_bindings_v1" }]);
   } finally { db.close(); }
 });
 
@@ -105,23 +105,14 @@ test("host schema: existing primary/submission identity preserved; missing inten
   } finally { db.close(); }
 });
 
-test("cutover: stale JSON count cannot override existing work rows on inspect, record or rollback", () => {
+test("fresh host schemas never create cutover objects and native reopen leaves inert old objects intact", () => {
   const db = new Database(":memory:"); db.exec("PRAGMA foreign_keys=ON");
   try {
     initializeHostSchema(db, () => {});
-    const identity = { domain: "d", incarnation: "i", ownerGeneration: 1, sourceEngineId: "source", candidateStoreRef: "candidate" };
-    const digest = "a".repeat(64);
-    const manifest = { phase: "active", revision: 0, writer: "candidate", postCutoverCount: 999,
-      request: { requestKey: "r", sourceDigest: digest, importHash: digest }, receipt: null };
-    db.query("INSERT INTO qualification_cutover_v1 VALUES (?,?,?,?)").run("d", JSON.stringify(identity), digest, JSON.stringify(manifest));
-    const controller = new HostCutoverController(db, identity, { assertOwner() {}, assertCurrentWriter() {},
-      checkDrained() { return { sourceDigest: digest, pending: 0, inflight: 0 }; } });
-    expect(controller.inspect()!.postCutoverCount).toBe(0);
-    db.query("INSERT INTO qualification_cutover_work_v1 VALUES (?,?,?)").run("d", "op", digest);
-    expect(controller.inspect()!.postCutoverCount).toBe(1);
-    expect(controller.recordPostCutoverWork(0, { operationId: "op", contentHash: digest }).postCutoverCount).toBe(1);
-    expect(controller.recordPostCutoverWork(1, { operationId: "op2", contentHash: digest }).postCutoverCount).toBe(2);
-    expect(controller.prepareRollback(2).reasons).toContain("recorded_work");
+    expect(db.query("SELECT name FROM sqlite_master WHERE name IN ('qualification_cutover_v1','qualification_cutover_work_v1')").all()).toEqual([]);
+    db.exec("CREATE TABLE qualification_cutover_v1 (retained TEXT); INSERT INTO qualification_cutover_v1 VALUES ('INERT_OLD_HISTORY')");
+    initializeHostSchema(db, () => {});
+    expect(db.query("SELECT * FROM qualification_cutover_v1").all()).toEqual([{ retained: "INERT_OLD_HISTORY" }]);
   } finally { db.close(); }
 });
 

@@ -5,7 +5,7 @@ import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writ
 import { join } from "node:path";
 import { createVerifiedSqliteBackup } from "../../runtime/src/db/backup.js";
 import { captureNativeRecoveryUnit, nativeRecoveryManifestSha256, verifyNativeRecoveryUnit, type RecoveryEnvironment } from "../../runtime/scripts/lib/native-recovery-unit.js";
-import { RehearsalSqliteDatabase } from "../../runtime/durable-engine/src/rehearsal-sqlite.js";
+import { BunSqliteDatabase } from "../../runtime/durable-engine/src/bun-sqlite.js";
 import { Harness, createRegistry, type ConversationId } from "../../runtime/durable-engine/qualification/durable.ts";
 import { createModels } from "../../runtime/durable-engine/qualification/ai.ts";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
@@ -13,8 +13,8 @@ import { BACKGROUND_CONTEXT as context } from "../../runtime/durable-engine/qual
 import { installCodeReviewFixture } from "./code-review-fixture.ts";
 import { qualifyNativeRecoveryUnit } from "../../runtime/durable-engine/src/recovery-unit-qualification.ts";
 import { qualifyNativeRetentionUnit } from "./native-retention-unit-fixture.ts";
-import { importCopiedLegacyTree, LegacyTreeImportManifest, type GetLegacyContext } from "../../runtime/durable-engine/src/legacy-import.ts";
-import { buildSessionContext, convertToLlm, sessionEntryToContextMessages } from "../../node_modules/@earendil-works/pi-coding-agent";
+import { LegacyTreeImportManifest } from "../../runtime/durable-engine/src/legacy-import-schema.ts";
+import { storedNativeHistoryFixture } from "./src/stored-native-history-fixture.ts";
 
 const sha = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
 /** Test-only preparation starts from the actual quiescent native factory DB.
@@ -34,21 +34,19 @@ export async function qualifyNativeRecoveryUnitFixture(root: Database, workspace
   createVerifiedSqliteBackup(root,sourcePath,database);
   let authReads=0;
   const denied=async():Promise<never>=>{authReads++;throw Error("Restore validation denies credentials");};
-  const openPaused = async (path: string) => Harness.open(await SqliteStorage.open(new RehearsalSqliteDatabase(path)),
+  const openPaused = async (path: string) => Harness.open(await SqliteStorage.open(new BunSqliteDatabase(path, undefined, { create: false, checkpoint: "builtin" })),
     {models:createModels({authContext:{env:denied,fileExists:denied}}),registry:createRegistry()},context);
   const archive = await openPaused(database);
   const archiveContexts = new Map<number, unknown>();
-  let archiveReceipt: Awaited<ReturnType<typeof importCopiedLegacyTree>>, archiveRoot: ConversationId;
+  let archiveReceipt: Awaited<ReturnType<typeof storedNativeHistoryFixture>>, archiveRoot: ConversationId;
   try {
     const node = await archive.root(context); archiveRoot=node.id;
-    const bridge: GetLegacyContext=(entries,leaf)=>({messages:JSON.parse(JSON.stringify(convertToLlm(buildSessionContext([...entries],leaf).messages))),
-      projected:entries.map(entry=>({sourceEntryId:entry.id,messages:JSON.parse(JSON.stringify(convertToLlm(sessionEntryToContextMessages(entry))))}))});
     const timestamp="2026-01-01T00:00:00Z";
-    const sourceJSONL=[{type:"session",version:3,id:"recovery-archive",timestamp,cwd:"/copied-source"},
+    const records = [
       {type:"message",id:"original-user",parentId:null,timestamp,message:{role:"user",content:"Imported recovery question",timestamp:1}},
-      {type:"message",id:"original-answer",parentId:"original-user",timestamp,message:{role:"assistant",content:[{type:"text",text:"Restored archived answer"}],api:"openai-completions",provider:"never-executed",model:"never-executed",stopReason:"stop",timestamp:2,
-        usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}}}].map(row=>JSON.stringify(row)).join("\n")+"\n";
-    archiveReceipt=await importCopiedLegacyTree(node,{sourceJSONL,hostBranchBindings:{"original-answer":{chatJid:"web:archived-copy",chatIncarnation:"original-archive",branchId:"original-archive",hostBaseline:"Persisted archive baseline"}}},bridge,()=>{},context);
+      {type:"message",id:"original-answer",parentId:"original-user",timestamp,message:{role:"assistant",content:[{type:"text",text:"Restored archived answer"}],api:"openai-completions",provider:"never-executed",model:"never-executed",stopReason:"stop",timestamp:2,usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}}},
+    ];
+    archiveReceipt = await storedNativeHistoryFixture(archive, node, records, [{id:"original-answer",chatJid:"web:archived-copy",incarnation:"original-archive",branchId:"original-archive"}], "recovery-archive", "Persisted archive baseline", context);
     for(const branch of archiveReceipt.branches) {
       const conversation=await archive.conversation(branch.engineConversationId as ConversationId,context);
       archiveContexts.set(branch.engineConversationId,JSON.parse(JSON.stringify((await conversation!.context(context)).messages)));
@@ -129,9 +127,9 @@ export async function qualifyNativeRecoveryUnitFixture(root: Database, workspace
   const opaqueRestored=new Database(join(base,"opaque-restore/candidate.sqlite"),{readonly:true});
   try{expect(opaqueRestored.query("SELECT state,certainty FROM service_effect_s05_outbox").all()).toEqual([{state:"unknown",certainty:"unknown"}]);}finally{opaqueRestored.close();}
   for (const mutation of ["outbox","provenance"] as const) {
-    const tamperedDestination=join(base,`tampered-${mutation}`), originalClose=RehearsalSqliteDatabase.prototype.close;
+    const tamperedDestination=join(base,`tampered-${mutation}`), originalClose=BunSqliteDatabase.prototype.close;
     let altered=false;
-    const closeHook=spyOn(RehearsalSqliteDatabase.prototype,"close").mockImplementation(async function(this:RehearsalSqliteDatabase){
+    const closeHook=spyOn(BunSqliteDatabase.prototype,"close").mockImplementation(async function(this:BunSqliteDatabase){
       await originalClose.call(this);
       if(!altered&&existsSync(join(tamperedDestination,"candidate.sqlite"))){altered=true;const changed=new Database(join(tamperedDestination,"candidate.sqlite"));try{
         if(mutation==="outbox") changed.exec("DELETE FROM service_effect_s05_outbox");

@@ -6,7 +6,7 @@ import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai";
 import { Harness, createRegistry, type ConversationId } from "@earendil-works/pi-durable";
 import { SqliteStorage } from "@earendil-works/pi-durable/storage/sqlite";
-import { RehearsalSqliteDatabase } from "./rehearsal-sqlite.js";
+import { BunSqliteDatabase } from "./bun-sqlite.js";
 import { assertOfflineRecoveryPath, fingerprintRecoveryFile, fingerprintSqliteTables, nativeRecoveryManifestSha256, verifyNativeRecoveryUnit, type RecoveryEnvironment } from "../../scripts/lib/native-recovery-unit.js";
 
 const sha = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
@@ -40,7 +40,7 @@ export async function qualifyNativeRecoveryUnit(unitPath: string, environment: R
   finally {source.close();}
   let credentialReads=0;
   const denied=async():Promise<never>=>{credentialReads++;throw Error("Recovery qualification denies credential access");};
-  const db = new RehearsalSqliteDatabase(copy);
+  const db = new BunSqliteDatabase(copy, undefined, { create: false, checkpoint: "builtin" });
   let harness: Awaited<ReturnType<typeof Harness.open>> | undefined;
   const contexts:{conversationId:number;contextSha256:string}[]=[];
   try {

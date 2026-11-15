@@ -42,6 +42,7 @@ import { openSqliteRole } from "./sqlite-role-policy.js";
 import { RuntimeStartupCleanupError } from "../runtime/startup-cleanup-error.js";
 import { applyOwnedMigrations } from "./migrations.js";
 import { initializeMessageInlineMediaSchema } from "./message-inline-media.js";
+import { inspectExistingStoreFormat, assertNativeStoreFormat, NATIVE_STORE_APPLICATION_ID } from './store-format.js';
 import { retireAttachmentRowidIndex } from "./attachment-index-retirement.js";
 import { migrateScheduledTaskAuthorities } from "./scheduled-task-authority.js";
 import { installScheduledRunCompositionSchema } from "../service-effects/current-piclaw/scheduled-run-schema.js";
@@ -822,7 +823,10 @@ function openDatabase(paths: Readonly<RuntimeConfigPaths>, role: PublishedDataba
   if (role.startsWith("maintenance-") && useMemory) throw Error("Maintenance requires an existing file-backed database.");
   closeDatabase({ shrinkMemory: false });
   if (pendingCleanup) throw Error("Database cleanup is pending; await closeDatabase() before reopening");
-  if (role === "root" && !useMemory) fs.mkdirSync(path.dirname(nextPath), { recursive: true });
+  if (role === "root" && !useMemory) {
+    inspectExistingStoreFormat(nextPath);
+    fs.mkdirSync(path.dirname(nextPath), { recursive: true });
+  }
   let database: Database | undefined, releaseCheckpoint: (() => void | Promise<void>) | undefined;
   try {
     database = openSqliteRole(nextPath, { role, create: role === "root", assertOwner: assertCurrent, expectedIdentity,
@@ -851,6 +855,7 @@ function openDatabase(paths: Readonly<RuntimeConfigPaths>, role: PublishedDataba
 /** Explicit offline schema boundary for an idle, caller-owned handle; no publication or maintenance. */
 export function initializeDatabaseSchema(database: Database): void {
   if (database.inTransaction) throw Error("Database schema initialization requires an idle connection.");
+  assertNativeStoreFormat(database, true);
   const foreignKeys = (database.query("PRAGMA foreign_keys").get() as { foreign_keys: number }).foreign_keys;
   const failures: unknown[] = [];
   try {
@@ -871,6 +876,9 @@ export function initializeDatabaseSchema(database: Database): void {
 function initializeSchema(database: Database): void {
   migrateLegacyConfigTables(database);
   createSchema(database);
+  // SQLite ignores application_id on a zero-page in-memory database. Stamp only
+  // after schema allocation, inside this same native initialization transaction.
+  database.exec(`PRAGMA application_id = ${NATIVE_STORE_APPLICATION_ID}`);
   // Historical profiles join the existing schema transaction before readiness.
   // Preserve original JSON/timestamps; an existing KV override always wins.
   for (const extensionId of ['proxmox', 'portainer'] as const) {

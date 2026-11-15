@@ -10,7 +10,6 @@ import { admitSqliteWrite } from "./db/sqlite-async-admission.js";
 
 import { existsSync, mkdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
-import { createRequire } from "node:module";
 import { hasNativeRouting, requireLegacyRoutingMutation } from "./db/native-routing-policy.js";
 import {
   type AgentSession,
@@ -50,7 +49,6 @@ import { getKeychainEntry } from "./secure/keychain.js";
 import { addLogSink, createLogger, debugSuppressedError, removeLogSink } from "./utils/logger.js";
 
 const log = createLogger("agent-pool");
-const requireLegacyCapture = createRequire(import.meta.url);
 
 export type {
   AgentOutput,
@@ -229,20 +227,6 @@ function chatHasStoredMessages(database: ReturnType<typeof getDb>, chatJid: stri
 }
 
 export class AgentPool {
-  assertLegacyCaptureIdle(): void {
-    if (!this.sessionManager) throw Error("Native host has no resident legacy authority");
-    this.sessionManager.assertLegacyCaptureIdle();
-  }
-  /** Explicit read-only resident capture; never selects or constructs a session. */
-  async captureLegacyUpgradeBindings(options: import("./agent-pool/legacy-authority-capture.js").LegacyCaptureOptions) {
-    const manager=this.sessionManager;
-    if (!manager) throw Error("Native host has no resident legacy authority");
-    // Capture must detach resident authority before its first filesystem await.
-    // Load only at this explicit migration boundary, but without an import await
-    // that would let caller mutations become the new baseline before capture.
-    const { captureResidentLegacyUpgradeBindings } = requireLegacyCapture("./agent-pool/legacy-authority-capture.js") as typeof import("./agent-pool/legacy-authority-capture.js");
-    return captureResidentLegacyUpgradeBindings(options, this.pool, () => manager.assertLegacyCaptureIdle());
-  }
   inspectMcpSettings(policy?: unknown) { return this.mcpSettings.inspect(policy); }
   inspectMcpServers(edit?: unknown) { return this.mcpSettings.inspectServers(edit); }
   applyMcpServers(input: { revision: string; acknowledgeInterruptions: boolean }, authorise: () => void, signal: AbortSignal) {

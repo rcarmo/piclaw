@@ -2,13 +2,15 @@ import "./test-guard.js";
 import { createInputHandoffCompletion } from "../../../runtime/durable-engine/src/host-bindings.js";
 import check from "node:assert/strict";
 import { join, basename } from "node:path";
+import { existsSync, writeFileSync } from 'node:fs';
+import { Database } from 'bun:sqlite';
 import { STORE_DIR } from "../../../runtime/src/core/config.js";
 import { SqliteStorage, SQLITE_MIGRATIONS } from "../../../runtime/durable-engine/qualification/sqlite.ts";
 import { HostConversationRuntime, initializeHostDurableBindings, createHostDurableBindings, type AcceptedInput } from "../../../runtime/durable-engine/src/index.js";
 import { TestOwner, OwnedSqlite } from "./ownership.js";
 import { openFixture, context, barrier } from "./fixture.js";
 import { at, value } from "./host-handoff.js";
-import { initDatabase, getDb, closeDatabase } from "../../../runtime/src/db/connection.js";
+import { initDatabase, getDb, closeDatabase, initializeDatabaseSchema } from "../../../runtime/src/db/connection.js";
 import { installTerminalSettlementCompositionSchema } from "../../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js";
 import { createCurrentPiclawServiceWorkStore } from "../../../runtime/src/service-effects/current-piclaw/service-work-store.js";
 import { createCurrentPiclawTerminalSettlementStore } from "../../../runtime/src/service-effects/current-piclaw/terminal-settlement-store.js";
@@ -24,7 +26,12 @@ export async function hostSourceContractFixture(dir: string, boundary: "before-s
     const chatJid = `web:recovery:${basename(dir)}:${boundary}`;
     const hostPath = join(STORE_DIR, "messages.db");
     const path = testConfig.sharedDatabase ? hostPath : join(dir, "candidate.sqlite");
-    let owner = TestOwner.acquire(path); // Shared mode owns the root file BEFORE either runtime connection opens.
+    if (testConfig.sharedDatabase && !existsSync(path)) {
+      const fresh = new Database(':memory:');
+      try { initializeDatabaseSchema(fresh); writeFileSync(path, fresh.serialize(), { flag: 'wx' }); }
+      finally { fresh.close(); }
+    }
+    let owner = TestOwner.acquire(path); // Shared mode owns the prepared native fixture BEFORE every SDK opening.
     owner.assert();
     initDatabase();
     let db = getDb();

@@ -10,16 +10,12 @@ export { createHostTool } from "./host-tools.js";
 export type { HostToolEffectPort } from "./host-tools.js";
 export { createHostBashTool } from "./host-bash.js";
 export { BunSqliteDatabase } from "./bun-sqlite.js";
-// Offline migration API compatibility; live history readers use the schema submodule.
-export { prepareLegacyImport, prepareLegacyTreeImport, importCopiedLegacy, importCopiedLegacyTree } from "./legacy-import.js";
-export type { CopiedLegacyInput, GetLegacyContext, CopiedLegacyTreeInput } from "./legacy-import.js";
+// Grandfathered already-native historical data only; no v3 conversion entrypoint.
 export { IMPORTER_VERSION, DEFAULT_IMPORT_LIMITS, DEFAULT_TREE_IMPORT_LIMITS, LegacyImportManifest, LegacyTreeImportManifest } from "./legacy-import-schema.js";
 export type { LegacyImportBinding, LegacyTreeHostBinding, LegacyTreeImportBinding } from "./legacy-import-schema.js";
 export { captureInterruptedScheduledHarness } from "./host-scheduled-terminal.js";
-export { prepareCopiedUpgrade, prepareCopiedApplicationUpgrade } from "./copied-upgrade.js";
-export { HostCutoverController, initializeCutoverManifest } from "./host-cutover.js";
-export type {
-  Phase, CutoverIdentity, CutoverRequest, Receipt, Manifest, CutoverPorts, Preparation, RollbackPlan,
-} from "./host-cutover.js";
-
 export { initializeHostSchema, UnsupportedHostSchemaError } from "./host-schema.js";
+
+// Explicit history-only import into a fresh separate destination; never startup migration.
+export { importSessionHistory, SessionHistoryImportDoc } from "./session-history-import.js";
+export type { SessionHistoryImport } from "./session-history-import.js";

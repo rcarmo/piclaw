@@ -5,8 +5,7 @@ import { Database } from "bun:sqlite";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
-import { SessionManager, buildSessionContext, convertToLlm, sessionEntryToContextMessages } from "@earendil-works/pi-coding-agent";
-import { prepareCopiedApplicationUpgrade } from "../../runtime/durable-engine/src/copied-upgrade.js";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { AgentPool } from "../../runtime/src/agent-pool.js";
 import { __setRuntimeModelExecutorForTests } from "../../runtime/src/extensions/model-execution-runtime.js";
 import { resetAddonRuntimeContributionsForTests } from "../../runtime/src/addons/runtime-contributions.js";
@@ -20,11 +19,9 @@ import { installTerminalSettlementCompositionSchema } from "../../runtime/src/se
 import { BunSqliteDatabase } from "../../runtime/durable-engine/src/bun-sqlite.js";
 import { applicationOwnership, createApplicationBootstrapBundle } from "../../runtime/durable-engine/src/application-bootstrap.js";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
-import { Harness } from "../../runtime/durable-engine/qualification/durable.ts";
+import { Harness, SystemEntry, AssistantEntry } from "../../runtime/durable-engine/qualification/durable.ts";
 import { openFixture, context, barrier } from "./src/fixture.js";
 import { resetRateLimiterStateForTests } from "../../runtime/src/channels/web/http/rate-limit.js";
-import { upgradeApplication } from "../../runtime/durable-engine/src/application-upgrade.js";
-import { HostCutoverController, initializeCutoverManifest } from "../../runtime/durable-engine/src/host-cutover.js";
 import { ensureTestFilesystemIsolation } from "../../runtime/scripts/test-filesystem-isolation.js";
 import { getNativeCommandCatalogue } from "../../runtime/src/agent-control/native-control-capabilities.js";
 import { parseControlCommand } from "../../runtime/src/agent-control/agent-control-parser.js";
@@ -32,7 +29,7 @@ import { parseControlCommand } from "../../runtime/src/agent-control/agent-contr
 // The runtime acquires the actual strict lock BEFORE root/SDK initialization. No TestOwner.
 for (const forks of [false, true]) {
   const failWait = false, deferred = undefined;
-  test(`application bootstrap preserves exact imported branch bindings; forks=${forks}`, async () => {
+  test(`application bootstrap preserves exact native branch bindings; forks=${forks}`, async () => {
 
   const compactHold = barrier(), compactEntered = barrier(), waitLost = barrier();
   let taskObservation: Promise<unknown> | undefined;
@@ -53,42 +50,24 @@ for (const forks of [false, true]) {
   const base = await openFixture({ acquired: true }, () => {}, () => SqliteStorage.open(storage));
   const chat = `web:bundle:${crypto.randomUUID()}`;
   const incarnation = `application-${crypto.randomUUID()}`;
-  const manager = SessionManager.inMemory(dir, { id: "preserved-session" });
-  manager.appendMessage({ role: "system", content: "original baseline", timestamp: 1 });
-  const shared = manager.getLeafId()!;
-  const leaf = manager.appendMessage({ role: "assistant", api: "openai-completions", provider: "never", model: "never",
-    content: [{ type: "text", text: "original answer" }], stopReason: "stop", timestamp: 2,
-    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } });
   const sibling = `${chat}:sibling`;
-  if (forks) {
-    storeChatMetadata(chat, new Date().toISOString());
-    storeChatMetadata(sibling, new Date().toISOString());
-  }
+  if (forks) { storeChatMetadata(chat, new Date().toISOString()); storeChatMetadata(sibling, new Date().toISOString()); }
   const originalBranch = (jid: string) => (db.query("SELECT branch_id FROM chat_branches WHERE chat_jid=?").get(jid) as { branch_id: string }).branch_id;
-  const branchId = forks ? originalBranch(chat) : "main";
-  const siblingBranchId = forks ? originalBranch(sibling) : "unused";
-  let siblingLeaf: string | undefined;
+  const branchId = forks ? originalBranch(chat) : "main", siblingBranchId = forks ? originalBranch(sibling) : "unused";
+  const importedRoot = await base.harness.createConversation({ ownership: { kind: "ownerless" }, agent: { model: { provider: "qualification", modelId: "synthetic" } } }, context);
+  const historical = (text: string) => ({ role: "assistant" as const, api: "openai-completions" as const, provider: "never", model: "never", content: [{ type: "text" as const, text }], stopReason: "stop" as const, timestamp: 2, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } });
+  const shared = await importedRoot.commit(async tx => {
+    const baseline = await tx.appendEntry(SystemEntry, importedRoot.id, { model: [{ role: "system", content: "original baseline", timestamp: 1 }] });
+    await tx.appendEntry(AssistantEntry, importedRoot.id, { model: [historical("original answer")] });
+    return baseline.id;
+  }, context);
+  const nativeManifest = [{ chatJid: chat, branchId, conversationId: importedRoot.id }], nativeSessions = new Map([[chat, "preserved-session"]]);
   if (forks) {
-    manager.branch(shared);
-    siblingLeaf = manager.appendMessage({ role: "assistant", api: "openai-completions", provider: "never", model: "never",
-      content: [{ type: "text", text: "sibling original answer" }], stopReason: "stop", timestamp: 3,
-      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } });
+    const fork = await importedRoot.commit(tx => tx.forkConversation(importedRoot.id, shared, { ownership: { kind: "ownerless" } }), context);
+    await base.harness.commit(tx => tx.appendEntry(AssistantEntry, fork.id, { model: [historical("sibling original answer")] }), context);
+    nativeManifest.push({ chatJid: sibling, branchId: siblingBranchId, conversationId: fork.id }); nativeSessions.set(sibling, "preserved-sibling-session");
   }
-  const source = Buffer.from([manager.getHeader(), ...manager.getEntries()].map(v => JSON.stringify(v)).join("\n") + "\n");
-  const sha = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
-  const manifest = Buffer.from(JSON.stringify({ version: 2, sourceCopied: true, expectedSourceSHA256: sha(source), pending: 0, inflight: 0,
-    hostBranchBindings: { [leaf]: { chatJid: chat, chatIncarnation: incarnation, branchId, hostBaseline: "original baseline" },
-      ...(siblingLeaf ? { [siblingLeaf]: { chatJid: sibling, chatIncarnation: incarnation, branchId: siblingBranchId, hostBaseline: "original baseline" } } : {}) } }));
-  const json = <T>(v: T): T => JSON.parse(JSON.stringify(v));
-  const upgrade = prepareCopiedApplicationUpgrade(source, manifest, { sourceSHA256: sha(source), manifestSHA256: sha(manifest) }, (entries, leaf) => ({
-    messages: json(convertToLlm(buildSessionContext([...entries], leaf).messages)),
-    projected: entries.map(entry => ({ sourceEntryId: entry.id, messages: json(convertToLlm(sessionEntryToContextMessages(entry))) })),
-  }));
-  const importedRoot = await base.harness.createConversation({ ownership: { kind: "ownerless" },
-    agent: { model: { provider: "qualification", modelId: "synthetic" } } }, context);
-  await upgrade.importCopied(importedRoot, () => lock.assertCurrentOwner(), context);
-  const importedBindings = await upgrade.verifyBindings(base.harness, importedRoot.id, context);
-  if (!forks) expect(importedBindings.manifest[0]).toEqual({ chatJid: chat, branchId, conversationId: importedRoot.id });
+  const importedBindings = { manifest: nativeManifest, sessions: nativeSessions };
   expect(importedBindings.manifest).toHaveLength(forks ? 2 : 1);
   if (forks) expect(importedBindings.manifest.map(b => b.branchId).sort()).toEqual([branchId, siblingBranchId].sort());
   await base.close(); installTerminalSettlementCompositionSchema(db);
@@ -166,136 +145,6 @@ for (const forks of [false, true]) {
     lock.assertCurrentOwner();
     expect(db.inTransaction).toBe(false);
     await rm(wrongPath);
-  }
-  initializeCutoverManifest(db, () => lock.assertCurrentOwner());
-  const identity = { domain: incarnation, incarnation, ownerGeneration: 7,
-    sourceEngineId: "legacy", candidateStoreRef: "candidate" };
-  const cutover = new HostCutoverController(db, identity, {
-    assertOwner(actual) { lock.assertCurrentOwner(); expect(actual).toEqual(identity); },
-    assertCurrentWriter(writer) {
-      const row = db.query("SELECT manifest FROM qualification_cutover_v1 WHERE domain=?").get(identity.domain) as { manifest: string } | null;
-      expect(writer).toBe(row ? JSON.parse(row.manifest).writer : "legacy");
-    },
-    checkDrained() { return { sourceDigest: sha(source), pending: 0, inflight: 0 }; },
-  });
-  const { manifest: _manifest, sessions: _sessions, ...application } = options;
-  async function importer() {
-    lock.assertCurrentOwner();
-    const database = new BunSqliteDatabase(path, { root: db, assertOwner: () => lock.assertCurrentOwner() });
-    const fixture = await openFixture({ acquired: true }, () => {}, () => SqliteStorage.open(database));
-    const conversation = (await fixture.harness.conversation(importedRoot.id, context))!;
-    return { database, harness: fixture.harness, conversation, close: fixture.close };
-  }
-  if (!failWait && !forks) {
-    for (const runtime of [{ ...application.runtime, incarnation: "wrong-domain" },
-      { ...application.runtime, sessionId: "invented-session" }]) {
-      await expect(upgradeApplication({ plan: upgrade, cutover, application: { ...application, runtime },
-        importer: await importer() }, context)).rejects.toThrow("Copied application identity conflict");
-      expect(cutover.inspect()).toBeNull(); lock.assertCurrentOwner();
-    }
-    const importerCloseFailure = Error("importer close failed");
-    const closingImporter = await importer();
-    let importerCloseCalls = 0;
-    const realImporterClose = closingImporter.close;
-    closingImporter.close = async () => { importerCloseCalls++; await realImporterClose(); throw importerCloseFailure; };
-    await expect(upgradeApplication({ plan: upgrade, cutover, application, importer: closingImporter }, context))
-      .rejects.toBe(importerCloseFailure);
-    expect(importerCloseCalls).toBe(1);
-    expect(cutover.inspect()?.phase).toBe("verified");
-    const cleanupImporter = await importer();
-    let cleanupCloseCalls = 0;
-    const realCleanupClose = cleanupImporter.close;
-    cleanupImporter.close = async () => { cleanupCloseCalls++; await realCleanupClose(); throw importerCloseFailure; };
-    let cleanupError: unknown;
-    try {
-      await upgradeApplication({ plan: upgrade, cutover,
-        application: { ...application, runtime: { ...application.runtime, incarnation: "wrong-domain" } },
-        importer: cleanupImporter }, context);
-    } catch (error) { cleanupError = error; }
-    expect(cleanupError).toBeInstanceOf(AggregateError);
-    const cleanupErrors = (cleanupError as AggregateError).errors;
-    expect(cleanupErrors).toHaveLength(2);
-    expect(cleanupErrors[0].message).toBe("Copied application identity conflict");
-    expect(cleanupErrors[1]).toBe(importerCloseFailure);
-    expect(cleanupCloseCalls).toBe(1);
-    const wrongPath = join(dir, "bootstrap-failure.db");
-    new Database(wrongPath).close();
-    let escaped = 0;
-    await expect(upgradeApplication({ plan: upgrade, cutover, application: { ...application, path: wrongPath },
-      importer: await importer() }, context).then(async result => { escaped++; await result.close(); })).rejects.toThrow("Shared database identity required");
-    expect(escaped).toBe(0);
-    expect(cutover.inspect()?.phase).toBe("verified");
-    expect(cutover.inspect()?.writer).toBe("legacy");
-    lock.assertCurrentOwner(); expect(db.query("SELECT 1 AS alive").get()).toEqual({ alive: 1 });
-    await rm(wrongPath);
-    const open = SqliteStorage.open.bind(SqliteStorage);
-    const opened: unknown[] = [];
-    const openSpy = spyOn(SqliteStorage, "open").mockImplementation(async (...args) => {
-      const result = await open(...args); opened.push(result); return result;
-    });
-    const commit = cutover.commitWriter.bind(cutover);
-    const close = BunSqliteDatabase.prototype.close;
-    const closed: BunSqliteDatabase[] = [];
-    const primaryFailure = Error("lost writer commit ACK");
-    const bundleCloseFailure = Error("candidate bundle close failed");
-    let committed: ReturnType<typeof cutover.inspect> = null;
-    let failedCandidate: BunSqliteDatabase | undefined;
-    const closeSpy = spyOn(BunSqliteDatabase.prototype, "close").mockImplementation(async function (this: BunSqliteDatabase) {
-      if (committed && !failedCandidate) {
-        failedCandidate = this;
-        // Fail BEFORE the actual close so teardown proves the real resource is released.
-        throw bundleCloseFailure;
-      }
-      await close.call(this); closed.push(this);
-    });
-    const commitSpy = spyOn(cutover, "commitWriter").mockImplementation(revision => {
-      // Two actual SDK opens: importer, then unpublished paused application.
-      expect(opened).toHaveLength(2); expect(closed).toHaveLength(1);
-      const active = commit(revision); expect(active.writer).toBe("candidate");
-      committed = cutover.inspect();
-      throw primaryFailure;
-    });
-    try {
-      let failure: unknown;
-      try {
-        await upgradeApplication({ plan: upgrade, cutover, application, importer: await importer() }, context)
-          .then(async result => { escaped++; await result.close(); });
-      } catch (error) { failure = error; }
-      expect(failure).toBeInstanceOf(AggregateError);
-      expect((failure as AggregateError).errors).toHaveLength(2);
-      expect((failure as AggregateError).errors[0]).toBe(primaryFailure);
-      expect((failure as AggregateError).errors[1]).toBe(bundleCloseFailure);
-      expect(escaped).toBe(0); expect(closed).toHaveLength(1);
-      expect(failedCandidate).toBeDefined();
-      expect(cutover.inspect()).toEqual(committed);
-      lock.assertCurrentOwner();
-      expect(db.query("SELECT 1 AS alive").get()).toEqual({ alive: 1 });
-      expect(cutover.inspect()?.phase).toBe("active");
-      expect(cutover.inspect()?.writer).toBe("candidate");
-      expect(base.host.modelCalls).toBe(0);
-    } finally {
-      commitSpy.mockRestore(); openSpy.mockRestore(); closeSpy.mockRestore();
-      if (failedCandidate) await close.call(failedCandidate);
-    }
-  }
-  if (forks) {
-    const captured = db.query("SELECT branch_id FROM chat_branches WHERE chat_jid=?").get(chat);
-    db.query("UPDATE chat_branches SET branch_id=? WHERE chat_jid=?").run("wrong-original-branch", chat);
-    await expect(upgradeApplication({ plan: upgrade, cutover, application, importer: await importer() }, context))
-      .rejects.toThrow("Exact application branch manifest required");
-    expect(cutover.inspect()).toBeNull();
-    db.query("UPDATE chat_branches SET branch_id=? WHERE chat_jid=?").run((captured as { branch_id: string }).branch_id, chat);
-  }
-  const beforeRetry = cutover.inspect();
-  if (!failWait && !forks) {
-    const alteredManifest = Buffer.from(manifest.toString() + "\n");
-    const other = prepareCopiedApplicationUpgrade(source, alteredManifest,
-      { sourceSHA256: sha(source), manifestSHA256: sha(alteredManifest) }, (entries, leaf) => ({
-        messages: json(convertToLlm(buildSessionContext([...entries], leaf).messages)),
-        projected: entries.map(entry => ({ sourceEntryId: entry.id, messages: json(convertToLlm(sessionEntryToContextMessages(entry))) })),
-      }));
-    await expect(upgradeApplication({ plan: other, cutover, application, importer: await importer() }, context)).rejects.toThrow("Cutover rejected");
-    expect(cutover.inspect()).toEqual(beforeRetry);
   }
   const originalOpen = Harness.open;
   const openSpy = spyOn(Harness, "open").mockImplementation(async (...args) => {

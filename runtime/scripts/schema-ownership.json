@@ -23,18 +23,29 @@
     "core:background-contexts": {
       "category": "core",
       "initializer": "runtime/durable-engine/src/host-background-context.ts#publishNativeBackgroundContext",
-      "writers": ["runtime/durable-engine/src/host-background-context.ts"],
+      "writers": [
+        "runtime/durable-engine/src/host-background-context.ts"
+      ],
       "sourceOfTruth": "Single application-owned stable operation-context key to private SDK conversation/session identity. This index grants no execution and is excluded from public chat/session ingress.",
       "replayRetention": "Preserve private identities and source-keyed policy families across input epochs and ACK/reopen. Staged contexts retain their immutable payload references; no duplicate allocation, physical pruning or implicit source replay.",
-      "references": ["runtime/durable-engine/src/application-bootstrap.ts", "runtime/durable-engine/src/default-application-runtime.ts", "runtime/src/agent-pool/background-operation-contract.ts"]
+      "references": [
+        "runtime/durable-engine/src/application-bootstrap.ts",
+        "runtime/durable-engine/src/default-application-runtime.ts",
+        "runtime/src/agent-pool/background-operation-contract.ts"
+      ]
     },
     "core:background-policy": {
       "category": "core",
       "initializer": "runtime/durable-engine/src/host-background-policy.ts#bindNativeBackgroundPolicy (opt-in public SDK allocation transaction)",
-      "writers": ["runtime/durable-engine/src/host-background-policy.ts"],
+      "writers": [
+        "runtime/durable-engine/src/host-background-policy.ts"
+      ],
       "sourceOfTruth": "The immutable accepted payload owns background policy. Each source-keyed SDK document family member binds its input/hash and bounds exact public tool-task quota claims; it is not execution permission or an effect/replay receipt.",
       "replayRetention": "Preserve the binding and claimed task IDs across ACK loss/reopen. Same-policy binding never resets quota. Forks start unbound. No physical SDK pruning, policy renewal, schema migration or automatic registration.",
-      "references": ["runtime/src/agent-pool/background-operation-contract.ts", "runtime/durable-engine/src/host-background-policy.ts"]
+      "references": [
+        "runtime/src/agent-pool/background-operation-contract.ts",
+        "runtime/durable-engine/src/host-background-policy.ts"
+      ]
     },
     "core:access_state": {
       "category": "core",
@@ -89,7 +100,6 @@
         "runtime/test/fixtures/historical-expense-schema.sql"
       ]
     },
-
     "core:chat_branches": {
       "category": "core",
       "initializer": "runtime/src/db/connection.ts#createSchema",
@@ -1074,14 +1084,11 @@
       ]
     },
     "archive:copied-legacy-documents": {
-      "category": "migration-archive",
-      "initializer": "Pure LegacyImportManifest/LegacyTreeImportManifest registration; explicit copied-history preparation only",
-      "writers": [
-        "runtime/durable-engine/src/legacy-import.ts#importCopiedLegacy",
-        "runtime/durable-engine/src/legacy-import.ts#importCopiedLegacyTree"
-      ],
+      "category": "retired",
+      "initializer": "Pure definitions for already-native historical documents only; no current importer or v3 conversion",
+      "writers": [],
       "sourceOfTruth": "Imported original entry bytes, source hashes, import/binding/branch identity and source-to-durable entry mappings.",
-      "replayRetention": "conversation-scoped latest/initial documents preserve copied source provenance; current readers import pure schema only. Native startup grants no importer execution or source mutation.",
+      "replayRetention": "Preserve prior native source/entry/branch provenance for read-only history and native reopen. No execution, source discovery, account/config migration, cutover or schema creation.",
       "references": [
         "runtime/durable-engine/src/legacy-import-schema.ts"
       ]
@@ -1169,6 +1176,31 @@
         "runtime/src/service-effects/current-piclaw/service-work-schema.ts",
         "runtime/src/service-effects/current-piclaw/service-work-store.ts",
         "runtime/durable-engine/src/host-runtime.ts"
+      ]
+    },
+    "retired:cutover-history": {
+      "category": "retired",
+      "initializer": "None; both obsolete runtime DDL definitions and cutover/rollback APIs removed under #2017",
+      "writers": [],
+      "sourceOfTruth": "Inert pre-existing native cutover rows, retained intact in existing stores; no writer or execution authority",
+      "replayRetention": "Fresh v4 stores never create these objects. Native reopening and read-only forensic inventory preserve old objects without DROP, backfill, replay or required placeholder tables.",
+      "references": [
+        "runtime/durable-engine/src/host-schema.ts",
+        "runtime/src/db/store-format.ts"
+      ]
+    },
+    "core:offline-session-history": {
+      "category": "core",
+      "initializer": "Explicit one-shot session-import CLI into a fresh separate destination through the public SDK Session kernel",
+      "writers": [
+        "runtime/durable-engine/src/session-history-import.ts#importSessionHistory"
+      ],
+      "sourceOfTruth": "Read-only selected source history, exact source hash and native source-to-entry/conversation mappings with explicit completed-import counts",
+      "replayRetention": "History only; no tasks/submissions/config/account adoption. Partial destination has no completion document and repeat invocation refuses any existing destination.",
+      "references": [
+        "runtime/durable-engine/src/session-history-import.ts",
+        "runtime/src/session-import/source.ts",
+        "runtime/src/cli.ts"
       ]
     }
   },
@@ -3820,32 +3852,26 @@
       "requiredWhenOwnerPresent": true
     },
     "table:qualification_cutover_v1": {
-      "owner": "core:native-bindings",
+      "owner": "retired:cutover-history",
       "fingerprints": [
         "081d5492fecc0d29681783ca5a498d801b2dadab48ceb4cb54fd16b925770f09"
       ],
-      "requiredIn": [
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "995fd9ed1a55a818dff4a30a9a817d6951c42e6f98787987d056805da21c13f3"
       ],
-      "requiredWhenOwnerPresent": true
+      "requiredWhenOwnerPresent": false
     },
     "table:qualification_cutover_work_v1": {
-      "owner": "core:native-bindings",
+      "owner": "retired:cutover-history",
       "fingerprints": [
         "8663405a1afc870a286ede3057c26b7940035ddad9dabfc87452007197e70bb5"
       ],
-      "requiredIn": [
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "325f7a07b4ba565734b268fc169cace040f369190ffc6e95f495738a88d916ad"
       ],
-      "requiredWhenOwnerPresent": true
+      "requiredWhenOwnerPresent": false
     },
     "table:record_ids": {
       "owner": "sdk:storage",
@@ -4773,6 +4799,13 @@
       "scope": "conversation",
       "history": "latest",
       "fork": "initial"
+    },
+    {
+      "kind": "app.session-history-import",
+      "owner": "core:offline-session-history",
+      "scope": "session",
+      "history": "session singleton",
+      "fork": "not applicable to session-scoped document"
     },
     {
       "kind": "* (public SDK caller-defined document)",

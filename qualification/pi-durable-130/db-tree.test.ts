@@ -4,11 +4,12 @@ import { watch } from "node:fs";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { join, dirname, resolve } from "node:path";
 import * as persistedImport from "../../runtime/durable-engine/src/legacy-import-schema.js";
-import * as importCompatibility from "../../runtime/durable-engine/src/legacy-import.js";
+import * as persistedExports from "../../runtime/durable-engine/src/legacy-import-schema.js";
+import { storedNativeHistoryFixture } from "./src/stored-native-history-fixture.js";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { Harness, type ConversationId } from "../../runtime/durable-engine/qualification/durable.ts";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
-import { HostConversationRuntime, importCopiedLegacyTree, LegacyImportManifest } from "../../runtime/durable-engine/src/index.js";
+import { HostConversationRuntime, LegacyImportManifest } from "../../runtime/durable-engine/src/index.js";
 import { OwnedSqlite } from "./src/ownership.js";
 import { hostSourceContractFixture } from "./src/host-source-contract-fixture.js";
 import { context } from "./src/fixture.js";
@@ -25,8 +26,8 @@ test("persisted import documents retain exact identity, versions, initial state 
     expect(doc.definition).toMatchObject({kind,version:1,scope:"conversation",history:"latest",fork:"initial"});
     expect(doc.definition.initial()).toEqual({binding:null});
   }
-  expect(importCompatibility.LegacyImportManifest).toBe(persistedImport.LegacyImportManifest);
-  expect(importCompatibility.LegacyTreeImportManifest).toBe(persistedImport.LegacyTreeImportManifest);
+  expect(persistedExports.LegacyImportManifest).toBe(persistedImport.LegacyImportManifest);
+  expect(persistedExports.LegacyTreeImportManifest).toBe(persistedImport.LegacyTreeImportManifest);
 });
 
 test("native history reader graph excludes import preparation and archival tooling", async () => {
@@ -97,11 +98,9 @@ test("one DB imported fork tree through actual facade, original provenance and n
       { type: "message", id: "original-a", parentId: "original-compaction", timestamp: new Date(2000).toISOString(), message: { role: "user", content: "branch A", timestamp: 2000 } },
       { type: "message", id: "original-b", parentId: "original-compaction", timestamp: new Date(3000).toISOString(), message: { role: "user", content: "branch B", timestamp: 3000 } },
     ];
-    const receipt = await importCopiedLegacyTree(root, {
-      sourceJSONL: [{ type: "session", version: 3, id: "original-host-session", timestamp: new Date(0).toISOString(), cwd: "/fixture" }, ...raw].map(e => JSON.stringify(e)).join("\n"),
-      hostBranchBindings: Object.fromEntries(["original-a", "original-b"].map((id, index) => [id, { chatJid: `web:tree-${index}`, chatIncarnation: "original-incarnation", branchId: `branch-${index}`, hostBaseline: "baseline" }])),
-    }, entries => ({ messages: entries.flatMap(e => e.type === "message" ? [e.message] : []) as any,
-      projected: entries.map(e => ({ sourceEntryId: e.id, messages: e.type === "message" ? [e.message] as any : e.type === "compaction" ? [{ role: "user", content: e.summary, timestamp: 1500 }, (e as any).systemMessage] as any : [] })) }), () => f.owner.assert(), context);
+    const receipt = await storedNativeHistoryFixture(harness, root, raw,
+      ["original-a", "original-b"].map((id, index) => ({ id, chatJid: `web:tree-${index}`, incarnation: "original-incarnation", branchId: `branch-${index}` })),
+      "original-host-session", "baseline", context);
     const branch = receipt.branches[1]!;
     const conversation = (await harness.conversation(branch.engineConversationId as ConversationId, context))!;
     let nativeCompactionId: string | undefined;

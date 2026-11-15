@@ -27,7 +27,7 @@ test('no implicit legacy selection, mixed authority, native GC timer or fabricat
     pool=new AgentPool(model);
     expect(intervals).not.toHaveBeenCalled();
     expect(pool.getMemoryInstrumentationSnapshot()).not.toHaveProperty('sessionManager');
-    expect(()=>pool!.assertLegacyCaptureIdle()).toThrow('no resident legacy authority');
+    expect(pool).not.toHaveProperty('assertLegacyCaptureIdle');
     expect(pool).not.toHaveProperty('setSessionBinder');
     for(const name of ['scheduleChatWarmup','scheduleRecentChatWarmup'])expect(pool).not.toHaveProperty(name);
   }finally{await pool?.shutdown();intervals.mockRestore();}
