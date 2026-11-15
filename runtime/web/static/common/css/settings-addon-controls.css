@@ -81,13 +81,18 @@
 /* Section heading, checkbox row, status badge and callout: all colours come
  * from theme tokens; tones are semantic (success, danger, warning, info). */
 .settings-addon-pane .settings-addon-heading {
-    margin: 0 0 12px;
+    margin: 24px 0 10px;
     font-size: 1.1em;
     font-weight: 600;
     color: var(--text-primary);
 }
+.settings-addon-pane .settings-addon-heading:first-of-type { margin-top: 0; }
+/* Block-level help paragraphs separate themselves from the next row. */
+.settings-addon-pane p.settings-addon-help { margin: 0 0 12px; }
 .settings-addon-pane .settings-addon-check {
-    display: inline-flex;
+    display: flex;
+    width: fit-content;
+    max-width: 100%;
     align-items: center;
     flex-wrap: wrap;
     gap: 8px;

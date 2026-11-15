@@ -1004,8 +1004,9 @@
 }
 
 /* Actions flow at the end of the card header; absolute placement covered the
- * description once the card narrowed. */
-.settings-addon-actions {
+ * description once the card narrowed. Scoped to the catalogue card: add-on
+ * panes use the same class name for ordinary left-aligned action rows. */
+.settings-addon-card-header .settings-addon-actions {
     margin-left: auto;
     white-space: nowrap;
     display: flex;

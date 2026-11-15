@@ -465,3 +465,40 @@ for (const engine of ['chromium', 'webkit']) {
     } finally { await page.close(); }
   }, 30000);
 }
+
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine}: add-on kit sections, help paragraphs and checkbox rows keep vertical rhythm`, async () => {
+    const { page, errors } = await openSettings(engine, 390, 'fixture-a-portainer');
+    try {
+      const box = await page.evaluate(() => {
+        const pane = document.querySelector('.settings-content.settings-addon-pane')!;
+        const root = document.createElement('div');
+        // Code Review lays its pane out as a flex column, where an auto margin pushes a row aside.
+        root.style.cssText = 'display:flex;flex-direction:column';
+        root.innerHTML = '<style></style><h4 class="settings-addon-heading">First</h4><p class="settings-addon-help">Help</p>'
+          + '<label class="settings-addon-check"><input type="checkbox"> One</label><label class="settings-addon-check"><input type="checkbox"> Two</label>'
+          + '<h4 class="settings-addon-heading">Second</h4><div class="settings-addon-actions"><button type="button">Refresh</button></div>';
+        pane.replaceChildren(root);
+        const [first, second] = [...root.querySelectorAll('h4')];
+        const help = root.querySelector('p')!;
+        const [one, two] = [...root.querySelectorAll('label')].map(element => element.getBoundingClientRect());
+        return {
+          firstTop: parseFloat(getComputedStyle(first).marginTop),
+          secondTop: parseFloat(getComputedStyle(second).marginTop),
+          helpGap: one.top - help.getBoundingClientRect().bottom,
+          stacked: two.top >= one.bottom,
+          sectionGap: second.getBoundingClientRect().top - two.bottom,
+          // The Add-ons catalogue card pushes its own actions right; pane action rows start at the left edge.
+          actionsInset: root.querySelector('.settings-addon-actions button')!.getBoundingClientRect().left - root.getBoundingClientRect().left,
+        };
+      });
+      expect(box.firstTop).toBe(0);
+      expect(box.secondTop).toBeGreaterThanOrEqual(16);
+      expect(box.helpGap).toBeGreaterThanOrEqual(8);
+      expect(box.stacked).toBe(true);
+      expect(box.sectionGap).toBeGreaterThanOrEqual(24);
+      expect(box.actionsInset).toBeLessThanOrEqual(1);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+}
