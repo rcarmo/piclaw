@@ -265,3 +265,80 @@ for (const engine of ['chromium', 'webkit']) {
     } finally { await page.close(); }
   }, 30000);
 }
+
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine}: form panes share the dense label/control/help grid and name every control`, async () => {
+    const panes: Record<string, number> = { sessions: 2, workspace: 7, editor: 5, developer: 1, compaction: 9 };
+    for (const width of [390, 1280]) for (const [section, rows] of Object.entries(panes)) {
+      const { page, errors } = await openSettings(engine, width, section);
+      try {
+        const found = await page.evaluate(() => {
+          const content = document.querySelector('.settings-content')!;
+          const dense = [...content.querySelectorAll('.settings-dense-row')] as HTMLElement[];
+          const plain = [...content.querySelectorAll('.settings-row:not(.settings-dense-row)')].filter(row => row.closest('.settings-section') && !row.closest('.workspace-indexing, .settings-identity-field'));
+          const columns = new Set(dense.map(row => Math.round(row.children[1].getBoundingClientRect().left)));
+          const unnamed = [...content.querySelectorAll('.settings-dense-row :is(input, select, textarea)')]
+            .filter(control => !(control as HTMLInputElement).labels?.length && !control.getAttribute('aria-label'))
+            .map(control => control.outerHTML.slice(0, 80));
+          return { dense: dense.length, plain: plain.length, columns: columns.size, unnamed, overflow: content.scrollWidth - content.clientWidth };
+        });
+        expect(found.dense).toBeGreaterThanOrEqual(rows);
+        expect(found.columns).toBe(1); // every control starts in the same column (or stacks on phones)
+        expect(found.unnamed).toEqual([]);
+        expect(found.overflow).toBeLessThanOrEqual(1);
+        expect(errors).toEqual([]);
+      } finally { await page.close(); }
+    }
+  }, 120000);
+}
+
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine} 390px: Keychain actions share a row and notes stack`, async () => {
+    const { page, errors } = await openSettings(engine, 390, 'keychain');
+    try {
+      await page.locator('.settings-keychain-row').first().waitFor();
+      const layout = await page.evaluate(() => {
+        const group = document.querySelector('.settings-keychain-action-group')!;
+        const tops = [...group.children].map(child => Math.round(child.getBoundingClientRect().top));
+        const notes = [...document.querySelector('.settings-keychain-notes')!.children].map(child => child.getBoundingClientRect());
+        const content = document.querySelector('.settings-content')!;
+        return { tops, stacked: notes.every((box, i) => i === 0 || box.top >= notes[i - 1].bottom - 1), overflow: content.scrollWidth - content.clientWidth };
+      });
+      expect(new Set(layout.tops).size).toBe(1);
+      expect(layout.stacked).toBe(true);
+      expect(layout.overflow).toBeLessThanOrEqual(1);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+
+  browserTest(`${engine}: badges, tags and placeholders stay meaningful`, async () => {
+    const check = async (section: string, width: number, fn: (page: Page) => Promise<void>) => {
+      const { page, errors } = await openSettings(engine, width, section);
+      try { await fn(page); expect(errors).toEqual([]); } finally { await page.close(); }
+    };
+    await check('providers', 1280, async page => {
+      // A configured provider shows its active auth type once, not again as a capability.
+      expect(await page.locator('.settings-provider-card.configured .settings-provider-card-meta .settings-tag').count()).toBe(0);
+      expect(await page.locator('.settings-provider-card:not(.configured) .settings-provider-card-meta .settings-tag').count()).toBeGreaterThan(0);
+    });
+    await check('addons', 1280, async page => {
+      expect(await page.locator('.settings-addon-card .settings-tag-type').count()).toBe(0); // all fixture items are plain extensions
+    });
+    await check('general', 1280, async page => {
+      expect(await page.locator('.about-version a', { hasText: 'Unknown' }).count()).toBe(0);
+      expect(await page.locator('.about-version-unknown').count()).toBe(3);
+    });
+    await check('models', 390, async page => {
+      const overlap = await page.locator('.model-catalogue-settings__row').first().evaluate(row => {
+        const pin = row.querySelector('.model-catalogue-settings__pin')!.getBoundingClientRect();
+        const main = row.querySelector('.model-catalogue-settings__row-main')!.getBoundingClientRect();
+        return pin.right - main.left;
+      });
+      expect(overlap).toBeLessThanOrEqual(0);
+    });
+    await check('editor', 390, async page => {
+      const badge = await page.locator('.settings-local-only-hint').evaluate(element => parseFloat(getComputedStyle(element, '::before').height) || 0);
+      expect(badge).toBeLessThan(24);
+    });
+  }, 90000);
+}

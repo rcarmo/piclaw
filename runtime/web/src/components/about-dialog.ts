@@ -16,7 +16,9 @@ export function AboutVersions({ versions }: { versions?: RuntimeVersions | null 
                 ['pi-ai', versions?.piAi, 'https://github.com/earendil-works/pi/tree/main/packages/ai'],
                 ['Bun', versions?.bun, 'https://github.com/oven-sh/bun'],
             ].map(([label, value, url]) => html`
-                <div class="about-version"><dt>${label}</dt><dd><a href=${url} target="_blank" rel="noopener noreferrer" aria-label=${`${label} ${value || 'Unknown'} on GitHub`}>${value || 'Unknown'}</a></dd></div>
+                <div class="about-version"><dt>${label}</dt><dd>${value
+                    ? html`<a href=${url} target="_blank" rel="noopener noreferrer" aria-label=${`${label} ${value} on GitHub`}>${value}</a>`
+                    : html`<span class="about-version-unknown">Unknown</span>`}</dd></div>
             `)}
         </dl>
     `;

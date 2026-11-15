@@ -107,8 +107,8 @@ export function ProvidersSection({ providers, setStatus }) {
                                 ${p.configured && html`<span class="settings-tag settings-tag-skill">${formatAuthTypeLabel(p.authType)}</span>`}
                             </div>
                             <div class="settings-provider-card-meta">
-                                ${p.hasOAuth && html`<span class="settings-tag">OAuth</span>`}
-                                ${p.hasApiKey && html`<span class="settings-tag">API Key</span>`}
+                                ${!p.configured && p.hasOAuth && html`<span class="settings-tag">OAuth</span>`}
+                                ${!p.configured && p.hasApiKey && html`<span class="settings-tag">API Key</span>`}
                                 ${p.isCustom && html`<span class="settings-tag">${t('settings.providers.tagCustom')}</span>`}
                             </div>
                             <div class="settings-provider-card-actions">

@@ -376,20 +376,20 @@ export function KeychainSection({ filter = '' }) {
                             </tr>
                             <tr class="settings-keychain-notes-row" key=${e.name + '-notes'}>
                                 <td colspan="5">
-                                    <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:8px; align-items:start; padding:8px 0 10px 0;">
-                                        <label style="display:flex; flex-direction:column; gap:4px; min-width:0;">
+                                    <div class="settings-keychain-notes">
+                                        <label class="settings-keychain-note">
                                             <span class="settings-hint" style="margin:0">${tr('settings.keychain.userNote')}</span>
-                                            <textarea class="settings-keychain-input" rows="2" style="resize:vertical; min-height:52px; width:100%;" placeholder=${tr('settings.keychain.userNoteHint')}
+                                            <textarea class="settings-keychain-input settings-keychain-note-input" rows="2" placeholder=${tr('settings.keychain.userNoteHint')}
                                                 value=${userNote}
                                                 onInput=${ev => setNoteDraft(e.name, 'userNote', ev.target.value)}></textarea>
                                         </label>
-                                        <label style="display:flex; flex-direction:column; gap:4px; min-width:0;">
+                                        <label class="settings-keychain-note">
                                             <span class="settings-hint" style="margin:0">${tr('settings.keychain.agentNote')}</span>
-                                            <textarea class="settings-keychain-input" rows="2" style="resize:vertical; min-height:52px; width:100%;" placeholder=${tr('settings.keychain.agentNoteHint')}
+                                            <textarea class="settings-keychain-input settings-keychain-note-input" rows="2" placeholder=${tr('settings.keychain.agentNoteHint')}
                                                 value=${agentNote}
                                                 onInput=${ev => setNoteDraft(e.name, 'agentNote', ev.target.value)}></textarea>
                                         </label>
-                                        <button ref=${node => { if (node) noteButtonRefs.current.set(e.name, node); else noteButtonRefs.current.delete(e.name); }} aria-label=${`${tr('settings.keychain.saveNotes')}: ${e.name}`} class="settings-keychain-save-btn" style="margin-top:20px" disabled=${!notesDirty || notesSaving} onClick=${() => handleSaveNotes(e)}>
+                                        <button ref=${node => { if (node) noteButtonRefs.current.set(e.name, node); else noteButtonRefs.current.delete(e.name); }} aria-label=${`${tr('settings.keychain.saveNotes')}: ${e.name}`} class="settings-keychain-save-btn" disabled=${!notesDirty || notesSaving} onClick=${() => handleSaveNotes(e)}>
                                             ${notesSaving ? tr('settings.keychain.saving') : tr('settings.keychain.saveNotes')}
                                         </button>
                                     </div>

@@ -321,9 +321,28 @@
     --settings-dense-label-width: 220px;
     --settings-dense-control-width: 190px;
     display: grid;
-    grid-template-columns: var(--settings-dense-label-width) var(--settings-dense-control-width) minmax(0, 1fr);
+    grid-template-columns: minmax(120px, var(--settings-dense-label-width)) minmax(0, var(--settings-dense-control-width)) minmax(0, 1fr);
     align-items: center;
     column-gap: 12px;
+}
+
+/* Text fields and lists span the control and help columns. */
+.settings-dense-row-wide > :nth-child(2) {
+    grid-column: 2 / -1;
+    width: 100%;
+    max-width: 520px;
+}
+
+.settings-dialog-narrow .settings-dense-row {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 6px;
+}
+
+.settings-dialog-narrow .settings-dense-row > *,
+.settings-dialog-narrow .settings-dense-row-compound > .settings-hint {
+    grid-column: 1;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .settings-dense-row > label {
@@ -350,7 +369,7 @@
 }
 
 .settings-dense-row-checkbox {
-    grid-template-columns: var(--settings-dense-label-width) var(--settings-dense-control-width) minmax(0, 1fr);
+    grid-template-columns: minmax(120px, var(--settings-dense-label-width)) minmax(0, var(--settings-dense-control-width)) minmax(0, 1fr);
 }
 
 .settings-dense-row-compound {
@@ -2567,6 +2586,8 @@
     letter-spacing: 0.02em;
     background: color-mix(in srgb, var(--accent-color, #1d9bf0) 12%, transparent);
     color: var(--accent-color, #1d9bf0);
+    white-space: nowrap;
+    flex: none;
 }
 
 /* ── Keychain panel ───────────────────────────────────────────────── */
@@ -3419,3 +3440,24 @@ button.settings-avatar-inline:focus-visible { outline: 2px solid var(--accent-co
     gap: 8px;
     margin: 0 0 12px;
 }
+
+/* Keychain entry notes: two notes and Save side by side; stacked on phones. */
+.settings-keychain-notes {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: end;
+    padding: 8px 0 10px;
+}
+.settings-keychain-note { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.settings-keychain-note-input { resize: vertical; min-height: 52px; width: 100%; }
+.settings-dialog-narrow .settings-keychain-notes { grid-template-columns: minmax(0, 1fr); }
+.settings-dialog-narrow .settings-keychain-notes > .settings-keychain-save-btn { justify-self: start; }
+/* Phones: widen the actions column so reveal and delete share a row where
+ * they fit; they still wrap, rather than clip, on the narrowest screens. */
+.settings-dialog-narrow .settings-keychain-table th:nth-child(1) { width: 40%; }
+.settings-dialog-narrow .settings-keychain-table th:nth-child(3) { width: 30%; }
+.settings-dialog-narrow .settings-keychain-table th:nth-child(5) { width: 30%; }
+.settings-dialog-narrow .settings-keychain-table td.settings-keychain-actions { padding-inline: 4px; }
+.settings-dialog-narrow .model-catalogue-settings__row { grid-template-columns: 44px minmax(0, 1fr); }
+.about-version-unknown { color: var(--text-secondary); }

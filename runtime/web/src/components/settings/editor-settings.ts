@@ -8,6 +8,8 @@ import { html, useState, useCallback } from '../../vendor/preact-htm.js';
 import { registerSettingsPane, notifySettingsPanesChanged } from './pane-registry.js';
 import { NumberStepper, normalizeNumberValue } from './number-stepper.js';
 import { useTranslation } from '../../utils/i18n.js';
+import { useSettingsFieldIds } from './field-ids.js';
+import { iconEditorPane } from './core-pane-icons.js';
 
 function getBool(key, fallback) {
     try { const v = localStorage.getItem(key); return v === null ? fallback : v === 'true'; }
@@ -34,6 +36,7 @@ function setInt(key, value) {
 }
 
 function EditorSettingsSection() {
+    const fieldId = useSettingsFieldIds('editor');
     const { t } = useTranslation();
     const [vimMode, setVimMode] = useState(() => getBool('piclaw_vim_mode', false));
     const [showWhitespace, setShowWhitespace] = useState(() => getBool('piclaw_show_whitespace', true));
@@ -50,22 +53,22 @@ function EditorSettingsSection() {
     return html`
         <div class="settings-section">
             <h3>${t('settings.editor.heading')}</h3>
-            <div class="settings-row">
-                <label>${t('settings.editor.vimMode')}</label>
-                <input type="checkbox" checked=${vimMode}
+            <div class="settings-row settings-dense-row settings-dense-row-checkbox">
+                <label for=${fieldId('vim')}>${t('settings.editor.vimMode')}</label>
+                <input id=${fieldId('vim')} type="checkbox" checked=${vimMode}
                     onChange=${() => { const v = !vimMode; setVimMode(v); setBool('piclaw_vim_mode', v); }} />
             </div>
-            <div class="settings-row">
-                <label>${t('settings.editor.showWhitespace')}</label>
-                <input type="checkbox" checked=${showWhitespace}
+            <div class="settings-row settings-dense-row settings-dense-row-checkbox">
+                <label for=${fieldId('whitespace')}>${t('settings.editor.showWhitespace')}</label>
+                <input id=${fieldId('whitespace')} type="checkbox" checked=${showWhitespace}
                     onChange=${() => { const v = !showWhitespace; setShowWhitespace(v); setBool('piclaw_show_whitespace', v); }} />
             </div>
-            <div class="settings-row">
-                <label>${t('settings.editor.livePreview')}</label>
-                <input type="checkbox" checked=${livePreview}
+            <div class="settings-row settings-dense-row settings-dense-row-checkbox">
+                <label for=${fieldId('preview')}>${t('settings.editor.livePreview')}</label>
+                <input id=${fieldId('preview')} type="checkbox" checked=${livePreview}
                     onChange=${() => { const v = !livePreview; setLivePreview(v); setBool('piclaw_md_live_preview', v); }} />
             </div>
-            <div class="settings-row">
+            <div class="settings-row settings-dense-row">
                 <label>${t('settings.editor.fontSize')}</label>
                 <${NumberStepper}
                     label=${t('settings.editor.fontSizeAria')}
@@ -77,9 +80,9 @@ function EditorSettingsSection() {
                     onChange=${(value) => { setEditorFontSize(value); setInt('piclaw_editor_font_size', value); }}
                 />
             </div>
-            <div class="settings-row">
-                <label>${t('settings.editor.fontFamily')}</label>
-                <input type="text" value=${editorFontFamily}
+            <div class="settings-row settings-dense-row settings-dense-row-wide">
+                <label for=${fieldId('font-family')}>${t('settings.editor.fontFamily')}</label>
+                <input id=${fieldId('font-family')} type="text" value=${editorFontFamily}
                     onInput=${e => { const v = e.target.value; setEditorFontFamily(v); setString('piclaw_editor_font_family', v); }}
                     placeholder=${t('settings.editor.fontFamilyPlaceholder')} />
             </div>
@@ -88,14 +91,12 @@ function EditorSettingsSection() {
     `;
 }
 
-// SVG icon: code brackets
-const iconEditor = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
 
 // Self-register on import
 registerSettingsPane({
     id: 'editor',
     label: 'Editor',
-    icon: iconEditor,
+    icon: iconEditorPane,
     component: EditorSettingsSection,
     order: 150,
 });
