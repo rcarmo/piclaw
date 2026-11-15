@@ -17,7 +17,7 @@ test("actual native children publish independent tool/generation/completion deta
     toolEntered.release(); await releaseTool.promise; return { output: [{type:"text",text:"PRIVATE_READER_OUTPUT"}] };
   } });
   const readers = defineExtension({name:"progress-readers",tools:[read]}); f.registry.install(readers);
-  const delegate = createHostDelegateTool({name:"delegate",description:"Synthetic declaration",parameters:Type.Object({prompt:Type.String()})}, {
+  const delegate = createHostDelegateTool({
     assertCurrent() {}, runtime:()=>({ async captureToolSource(){return {inputs:[]} as never;},async watchOwnedDelegateChild(_p,_t,_c,id,ctx){return (await f.harness.conversation(id,ctx))!.watch(ctx);},assertCapturedSourceCurrent(){} }),
     async selectModel(_args,parent){return parent!;},assertModelCurrent(){},readonlyTools:[read],readonlyExtensions:[readers],
   });

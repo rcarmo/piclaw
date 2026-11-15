@@ -62,6 +62,7 @@ import { createHostCommandPolicy } from "./host-command-policy.js";
 import { createHostProcessControls, nativeProcessToolNames, nativeProcessInstructions } from "./host-process-controls.js";
 import { inspectAddonInstall, loadApplicationExtensionCatalog, qualifyInstalledAddon, bindInstalledAddon, qualifyInstalledDelegate, qualifyInstalledCodeReview, qualifyInstalledEditableTable, qualifyInstalledOfficeViewer, qualifyInstalledDrawio, qualifyInstalledGoal, qualifyInstalledObservability, qualifyInstalledRestic, assertApplicationExtensionCatalogSupported } from "./host-extension-catalog.js";
 import { createHostDelegateTool } from "./host-delegate-tool.js";
+import { buildModelCandidates, type DelegateConfig } from "../../src/delegate/policy.js";
 import { createHostDelegateFileReader } from "./host-delegate-files.js";
 import { extensionKvGet } from "../../src/db/extension-kv.js";
 import { createHostProxmoxTool, type ProxmoxNativeExports } from "./host-proxmox-tool.js";
@@ -850,7 +851,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     delegate.assertCurrent(); check({ provider: model.provider, id: model.modelId }, lifetime.signal);
     const config = extensionKvGet("delegate", "config", "global");
     const candidate = { provider: model.provider, id: model.modelId, fullId: `${model.provider}/${model.modelId}` };
-    if (!delegate.buildModelCandidates([candidate], config).some(entry => entry.id === candidate.fullId)) throw Error("Native Delegate model not approved");
+    if (!buildModelCandidates([candidate], config as DelegateConfig | undefined).some(entry => entry.id === candidate.fullId)) throw Error("Native Delegate model not approved");
   };
   const sideObservers = new Map<string, NonNullable<import("../../src/agent-pool/contracts.js").SidePromptOptions["onEvent"]>>();
   // SDK hook failures are reported but can still reach the model bridge. Keep
@@ -1044,7 +1045,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     const standardExtension = defineExtension({ name: "app.host-delegate-standard", tools: builtins });
     registry.install(readerExtension);
     registry.install(standardExtension);
-    tools.push(createHostDelegateTool(delegate.definition as Parameters<typeof createHostDelegateTool>[0], {
+    tools.push(createHostDelegateTool({
       assertCurrent() { assert(); lifetime.signal.throwIfAborted(); delegate.assertCurrent(); }, runtime,
       async selectModel(args, parent) {
         if (args.task_category !== undefined && !["quick", "summarize", "code", "analyze", "reason"].includes(String(args.task_category))) throw Error("Native Delegate task category not qualified");

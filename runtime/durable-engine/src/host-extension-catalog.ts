@@ -253,16 +253,10 @@ export async function qualifyInstalledGoal(catalog: LoadExtensionsResult, cwd: s
     if (names.some(name => exports[name] !== addon[name])) throw Error("Goal public exports changed");
   } });
 }
-export interface DelegatePolicyExports {
-  buildModelCandidates(models: { provider: string; id: string; fullId: string }[], config: unknown): { id: string }[];
-}
 export async function qualifyInstalledDelegate(catalog: LoadExtensionsResult, cwd: string) {
   const qualified = qualifyInstalledTool(catalog, cwd, "delegate");
   if (!qualified) return undefined;
-  const exports = await import(pathToFileURL(join(qualified.source.packageDir, "delegate.ts")).href) as Partial<DelegatePolicyExports>;
-  qualified.assertCurrent();
-  if (typeof exports.buildModelCandidates !== "function") throw Error("Delegate policy export required");
-  return Object.freeze({ ...qualified, buildModelCandidates: exports.buildModelCandidates,
+  return Object.freeze({ ...qualified,
     nativeLifecycle: Object.freeze({ kind: "native-parent-model-read-only" as const, events: profiles.delegate.events }) });
 }
 

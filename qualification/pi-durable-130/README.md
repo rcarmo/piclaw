@@ -837,6 +837,34 @@ uncommitted Delegate WIP is separate and unapproved. Stale inactive comments in
 modules were left untouched during code gates. No code, tests, CI, network,
 services, pins, live state, migration, commits or pushes changed in this refresh.
 
+# Core Delegate declaration/policy checkpoint — 15 November 2026
+
+Under #1650 (including the consolidated #1455 acceptance), Core now supplies the
+Delegate schema/description and pure approval/classification policy. The native
+factory no longer accepts an installed `ToolDefinition`, and runtime approval no
+longer imports the add-on's `buildModelCandidates`. Frozen0.2.22 schema/description
+and nine policy configurations match the Core values exactly. SDK execution,
+source/model fences, request deduplication, deadline/reopen and progress remain.
+
+The real public schema exposed SDK coercion of fractional/string deadlines in two
+existing negative cases. A public `prepareArguments` guard rejects these before
+conversion/child admission. The original assertions and10-second test deadlines
+remain unchanged. The initial failures and final passing runs are separate.
+
+This is a local ownership checkpoint. The default factory still requires the
+qualified installed package for configuration/Settings and registration identity.
+It is not a complete no-addon delivery. Config/model discovery/Settings/guidance,
+default wiring and pre-import backend/web/aggregate retirement remain owned by
+this #1650 work. No new subprocess lane, state store or credential broker exists;
+`judge`, `full`/MCP and recursive-child behavior retain their explicit native limits.
+No relocation/type/test/generated-code reduction credit is assigned.
+
+Focused checks:17 host tests/225 assertions;56 native cases across seven files,
+including the actual all-installed factory; both private type projects and five
+configured Root type gates pass. Compose retains281 existing out-of-seam diagnostics;
+raw frontend compilation is not clean. No full-suite/browser/port acceptance,
+installation, restart, live account operation or publication follows from this slice.
+
 # Native Delegate adoption — historical source follow-up over `175032611`
 
 The actual default factory now admits the approved installed Delegate 0.2.20

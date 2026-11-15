@@ -5,6 +5,8 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { SettingsManager } from "../../node_modules/@earendil-works/pi-coding-agent";
 import { loadApplicationExtensionCatalog, qualifyInstalledDelegate, assertApplicationExtensionCatalogSupported } from "../../runtime/durable-engine/src/host-extension-catalog.ts";
+import { buildModelCandidates, type AvailableModel } from "../../runtime/src/delegate/policy.ts";
+import { delegateDescription, delegateParameters } from "../../runtime/src/delegate/parameters.ts";
 
 for (const mode of ["approved", "shadow", "dirty", "version", "handler", "execute", "schema"] as const) {
   test(`actual installed Delegate native qualification: ${mode}`, async () => {
@@ -46,8 +48,32 @@ export default function() {}\n`);
       if (mode === "handler") qualified!.extension.handlers.set("session_start", [async () => {}]);
       if (mode === "execute") qualified!.definition.execute = async () => { throw Error("must not run"); };
       if (mode === "schema") qualified!.definition.description += " changed";
-      if (mode === "approved") qualified!.assertCurrent();
-      else expect(() => qualified!.assertCurrent()).toThrow("Unqualified Delegate capabilities");
+      if (mode === "approved") {
+        qualified!.assertCurrent();
+        expect(qualified).not.toHaveProperty("buildModelCandidates");
+        expect(delegateDescription).toBe(qualified!.definition.description);
+        expect(JSON.parse(JSON.stringify(delegateParameters))).toEqual(qualified!.definition.parameters);
+        // Already-loaded immutable synthetic installation. Pure export calls only:
+        // no legacy execute, lifecycle, config/model API, CLI or provider request.
+        const legacy = await import(join(pkg, "delegate.ts"));
+        const models: AvailableModel[] = [
+          ["github-copilot", "mai-code-1.1-flash"], ["github-copilot", "gpt-6.1-sol"],
+          ["github-copilot", "gpt-6.1-sol-next"], ["anthropic", "claude-opus-5.5"],
+          ["openai", "gpt-5.4-mini"], ["azure-private", "gpt-5.4-mini"],
+          ["openrouter", "openai/gpt-6-astra-pro:batch"],
+        ].map(([provider, id]) => ({ provider: provider!, id: id!, fullId: `${provider}/${id}`, supportsImages: true, contextWindow: 64000 }));
+        models.push({ ...models[0]!, supportsImages: false });
+        for (const config of [undefined, null, {},
+          { searchable_providers: [] },
+          { searchable_providers: ["github-copilot", "anthropic", "openai", "azure-private", "openrouter"] },
+          { searchable_providers: ["azure-private", "github-copilot"], excluded_providers: [] },
+          { searchable_providers: ["github-copilot", "openai"], excluded_providers: ["openai"] },
+          { searchable_providers: ["github-copilot", "openai"], excluded_models: ["*MAI*", "GPT-5.4"] },
+          { searchable_providers: "github-copilot,anthropic", excluded_models: "opus" },
+        ]) {
+          expect(buildModelCandidates(models, config as never)).toEqual(legacy.buildModelCandidates(models, config));
+        }
+      } else expect(() => qualified!.assertCurrent()).toThrow("Unqualified Delegate capabilities");
     } finally { catalog?.runtime.invalidate("fixture ended"); rmSync(dir, { recursive: true, force: true }); }
   });
 }

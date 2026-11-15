@@ -1,17 +1,15 @@
 import { AssistantEntry, configure, defineTool, type ModelRef, type ToolRegistration, type Extension } from "@earendil-works/pi-durable";
 import { watchNativeDelegateProgress } from "./host-delegate-progress.js";
 import { validateDelegateFiles } from "./host-delegate-files.js";
-import type { TSchema } from "typebox";
+import { delegateDescription, delegateParameters } from "../../src/delegate/parameters.js";
+import type { Static } from "typebox";
 import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
-import type { ToolDefinition } from "../../src/durable-legacy-sdk.js";
 import type { HostConversationRuntime } from "./host-runtime.js";
 
-/** Native foreground consumer of the actual registered Delegate declaration.
- * The legacy execute function and lifecycle handlers are deliberately never run.
- * Not a catalog exemption: installation still needs an independently qualified
- * source/registration profile and live host Settings/model approval port.
- */
-export function createHostDelegateTool(definition: Pick<ToolDefinition<TSchema>, "name" | "description" | "parameters">, options: {
+/** Core declaration and native foreground execution. Legacy execute/lifecycle
+ * handlers never run. The application still gates installation on the existing
+ * add-on until its configuration/Settings ownership is retired separately. */
+export function createHostDelegateTool(options: {
   assertCurrent(): void;
   runtime(): Pick<HostConversationRuntime, "captureToolSource" | "assertCapturedSourceCurrent" | "watchOwnedDelegateChild">;
   /** Must use current host availability AND the real Delegate Settings approval
@@ -28,7 +26,6 @@ export function createHostDelegateTool(definition: Pick<ToolDefinition<TSchema>,
   standardTools?: readonly ToolRegistration[];
   standardExtensions?: readonly Extension[];
 }) {
-  if (definition.name !== "delegate") throw Error("Expected registered Delegate tool");
   const { assertCurrent, runtime, selectModel, assertModelCurrent, readFiles } = options;
   const readers = [...options.readonlyTools];
   const extensions = [...options.readonlyExtensions];
@@ -42,8 +39,18 @@ export function createHostDelegateTool(definition: Pick<ToolDefinition<TSchema>,
     throw Error("Native Delegate requires standard host builtins only");
   if (standardExtensions.some(extension => extension.hooks?.length || extension.sections?.length || extension.tools?.some(tool => !standard.includes(tool))))
     throw Error("Native Delegate child extensions must contain only approved standard tools");
-  return defineTool({ name: definition.name, description: definition.description, parameters: definition.parameters,
+  return defineTool({ name: "delegate", description: delegateDescription, parameters: delegateParameters,
     callers: ["model"], replay: "safe", executionMode: "parallel",
+    prepareArguments(raw) {
+      // SDK validation coerces numeric strings/fractions into integers. Reject
+      // invalid raw deadlines before that conversion can admit child work.
+      if (raw && typeof raw === "object") {
+        const timeout = (raw as Record<string, unknown>).timeout_sec;
+        if (timeout !== undefined && (typeof timeout !== "number" || !Number.isInteger(timeout) || timeout < 10 || timeout > 300))
+          throw Error("Delegate timeout_sec must be an integer from 10 to 300");
+      }
+      return raw as Static<typeof delegateParameters>;
+    },
     async execute(input, api, context) {
       assertCurrent();
       const args = structuredClone(input) as Record<string, unknown>;
@@ -55,8 +62,7 @@ export function createHostDelegateTool(definition: Pick<ToolDefinition<TSchema>,
         const slash = args.model.indexOf("/");
         if (slash <= 0 || slash === args.model.length - 1) throw Error("Delegate model must be an exact provider/model ID");
       }
-      // Keep the installed declaration's default and bounds even for synthetic
-      // schemas: reject invalid input before allocating any child.
+      // Recheck the public declaration's defaults/bounds before allocating a child.
       if (args.files !== undefined) {
         validateDelegateFiles(args.files);
         if (args.files.length && !readFiles) throw Error("Delegate attachment unavailable");
