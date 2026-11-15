@@ -1,19 +1,16 @@
 // Self-isolating: forces PICLAW_DB_IN_MEMORY=1 via shared test helpers
 import "../helpers.js";
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { beforeAll, describe, expect, test } from "bun:test";
 import sharp from "sharp";
 import { getDb, initDatabase } from "../../src/db/connection.js";
 import { handleTurnActivity } from "../../src/channels/web/handlers/turn-activity.js";
 import { projectTurnActivity, toolResultImage } from "../../src/channels/web/agent/turn-activity.js";
-import { pruneToolImageThumbnails } from "../../src/channels/web/media/tool-image-thumbnails.js";
+import { deleteMessageByRowId } from "../../src/db/messages.js";
 import type { DurableTurnEntries } from "../../src/agent-pool/durable-runtime-adapter.js";
 
 const chat = "web:thumbs";
 let replyId = "";
-let cacheDir = "";
 let large = "";
 
 const turnWith = (content: unknown[]): DurableTurnEntries => ({
@@ -33,10 +30,10 @@ beforeAll(async () => {
   db.prepare("INSERT OR IGNORE INTO chats(jid, name) VALUES (?, ?)").run(chat, chat);
   replyId = String(db.prepare(`INSERT INTO messages(id, chat_jid, sender, sender_name, content, timestamp, is_from_me, is_bot_message, is_terminal_agent_reply)
     VALUES ('native-answer:inc:7:8', ?, 'web-agent', 'agent', 'Seen.', '2026-11-11T00:00:00.000Z', 0, 1, 1)`).run(chat).lastInsertRowid);
-  cacheDir = mkdtempSync(join(process.env.TMPDIR || "/tmp", "tool-thumbs-"));
   large = (await sharp({ create: { width: 1600, height: 800, channels: 3, background: "#c03030" } }).png().toBuffer()).toString("base64");
 });
-afterAll(() => { if (cacheDir) rmSync(cacheDir, { recursive: true, force: true }); });
+const previews = () => getDb().query("SELECT i.message_rowid, i.ref, m.content_type, json_extract(m.metadata, '$.cache_kind') AS kind FROM message_inline_media i JOIN media m ON m.id = i.media_id WHERE i.kind = 'tool_image' ORDER BY i.ref").all();
+const mediaCount = () => (getDb().query("SELECT COUNT(*) AS n FROM media").get() as { n: number }).n;
 
 const request = (params: Record<string, string>) => new URL(`http://local/agent/turn-activity?${new URLSearchParams(params)}`);
 
@@ -55,7 +52,7 @@ describe("tool result image thumbnails", () => {
     const turn = turnWith([{ type: "image", data: large, mimeType: "image/png" }]);
     const pool = { getTurnEntriesForChat: async () => turn };
     const params = { chat_jid: chat, message_id: replyId, step: "tool:call-img", image: "0" };
-    const response = await handleTurnActivity(pool, request(params), { thumbnailCacheDir: cacheDir });
+    const response = await handleTurnActivity(pool, request(params));
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe("image/webp");
     expect(response.headers.get("Cache-Control")).toContain("private");
@@ -66,23 +63,43 @@ describe("tool result image thumbnails", () => {
     expect(meta.width).toBe(320);
     expect(meta.height).toBe(160);
     expect(bytes.length).toBeLessThan(Buffer.from(large, "base64").length);
-    const stored = readdirSync(cacheDir);
-    expect(stored).toHaveLength(1);
-    // The stored copy is what later requests receive.
-    writeFileSync(join(cacheDir, stored[0]!), bytes.subarray(0, bytes.length));
-    const again = await handleTurnActivity(pool, request(params), { thumbnailCacheDir: cacheDir });
-    expect(Buffer.from(await again.arrayBuffer()).equals(bytes)).toBe(true);
-    expect(readdirSync(cacheDir)).toHaveLength(1);
+    // Stored once, with the reply, as timeline media.
+    expect(previews()).toEqual([{ message_rowid: Number(replyId), ref: "call-img:0", content_type: "image/webp", kind: "tool_image_thumbnail" }]);
+    const count = mediaCount();
+    // Later requests receive the stored copy rather than a new rendering.
+    const mediaId = (getDb().query("SELECT media_id FROM message_inline_media WHERE kind = 'tool_image'").get() as { media_id: number }).media_id;
+    getDb().prepare("UPDATE media SET data = ? WHERE id = ?").run(new Uint8Array([1, 2, 3]), mediaId);
+    const again = await handleTurnActivity(pool, request(params));
+    expect([...new Uint8Array(await again.arrayBuffer())]).toEqual([1, 2, 3]);
+    expect(mediaCount()).toBe(count);
   });
 
-  test("serves the running turn too", async () => {
+  test("deleting the reply deletes its stored previews", async () => {
+    const db = getDb();
+    const row = Number(db.prepare(`INSERT INTO messages(id, chat_jid, sender, sender_name, content, timestamp, is_from_me, is_bot_message, is_terminal_agent_reply)
+      VALUES ('native-answer:inc:7:9', ?, 'web-agent', 'agent', 'Again.', '2026-11-11T00:00:01.000Z', 0, 1, 1)`).run(chat).lastInsertRowid);
     const pool = { getTurnEntriesForChat: async () => turnWith([{ type: "image", data: large, mimeType: "image/png" }]) };
-    const response = await handleTurnActivity(pool, request({ chat_jid: chat, live: "1", step: "tool:call-img", image: "0" }), { thumbnailCacheDir: cacheDir });
+    const response = await handleTurnActivity(pool, request({ chat_jid: chat, message_id: String(row), step: "tool:call-img", image: "0" }));
+    expect(response.status).toBe(200);
+    const { media_id: mediaId } = db.query("SELECT media_id FROM message_inline_media WHERE message_rowid = ?").get(row) as { media_id: number };
+    expect(deleteMessageByRowId(chat, row)).toBe(true);
+    expect(db.query("SELECT 1 FROM media WHERE id = ?").get(mediaId)).toBeNull();
+    expect(db.query("SELECT 1 FROM message_inline_media WHERE message_rowid = ?").get(row)).toBeNull();
+  });
+
+  test("serves the running turn without storing anything, since it has no reply row yet", async () => {
+    const pool = { getTurnEntriesForChat: async () => turnWith([{ type: "image", data: large, mimeType: "image/png" }]) };
+    const count = mediaCount();
+    const response = await handleTurnActivity(pool, request({ chat_jid: chat, live: "1", step: "tool:call-img", image: "0" }));
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe("image/webp");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(mediaCount()).toBe(count);
   });
 
   test("answers a uniform 404 for missing, invalid or undecodable images", async () => {
+    // Previews are stored per reply, call and index; start without one.
+    getDb().exec("DELETE FROM message_inline_media WHERE kind = 'tool_image'");
     const pool = { getTurnEntriesForChat: async () => turnWith([{ type: "image", data: "bm90IGFuIGltYWdl", mimeType: "image/png" }]) };
     for (const params of [
       { chat_jid: chat, message_id: replyId, step: "tool:call-img", image: "1" },
@@ -93,23 +110,10 @@ describe("tool result image thumbnails", () => {
       { chat_jid: "web:other", message_id: replyId, step: "tool:call-img", image: "0" },
       { chat_jid: chat, message_id: replyId, step: "tool:call-img", image: "0" },
     ]) {
-      const response = await handleTurnActivity(pool, request(params), { thumbnailCacheDir: cacheDir });
+      const response = await handleTurnActivity(pool, request(params));
       expect(response.status).toBe(404);
       expect(await response.json()).toEqual({ error: "Not found" });
     }
   });
 });
 
-test("prunes the least recently used stored thumbnails beyond the bound", () => {
-  const dir = mkdtempSync(join(process.env.TMPDIR || "/tmp", "tool-thumbs-prune-"));
-  try {
-    for (let i = 0; i < 5; i++) {
-      const file = join(dir, `${i}.webp`);
-      writeFileSync(file, "x");
-      utimesSync(file, new Date(1_000_000 + i * 1000), new Date(1_000_000 + i * 1000));
-    }
-    writeFileSync(join(dir, "keep.txt"), "not a thumbnail");
-    expect(pruneToolImageThumbnails(dir, 2)).toBe(3);
-    expect(readdirSync(dir).sort()).toEqual(["3.webp", "4.webp", "keep.txt"]);
-  } finally { rmSync(dir, { recursive: true, force: true }); }
-});

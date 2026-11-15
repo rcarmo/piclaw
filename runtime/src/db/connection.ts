@@ -41,6 +41,7 @@ import { registerSqliteCheckpoint } from "./sqlite-checkpoint.js";
 import { openSqliteRole } from "./sqlite-role-policy.js";
 import { RuntimeStartupCleanupError } from "../runtime/startup-cleanup-error.js";
 import { applyOwnedMigrations } from "./migrations.js";
+import { initializeMessageInlineMediaSchema } from "./message-inline-media.js";
 import { retireAttachmentRowidIndex } from "./attachment-index-retirement.js";
 import { migrateScheduledTaskAuthorities } from "./scheduled-task-authority.js";
 import { installScheduledRunCompositionSchema } from "../service-effects/current-piclaw/scheduled-run-schema.js";
@@ -917,6 +918,7 @@ function initializeSchema(database: Database): void {
   dropChatBranchDisplayName(database);
   dropObsoleteRemoteInteropSchema(database);
   ensureMediaCompression(database);
+  initializeMessageInlineMediaSchema(database);
   ensureThinkingContentDuration(database);
   initializeAccessSchema(database);
   initializeSessionOwnershipSchema(database);

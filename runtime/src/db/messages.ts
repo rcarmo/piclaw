@@ -17,6 +17,7 @@
  *   - agent-pool.ts calls storeMessage() to persist agent responses.
  */
 
+import { replaceMessageInlineMedia } from "./message-inline-media.js";
 import type Database from "bun:sqlite";
 
 import { getDb } from "./connection.js";
@@ -383,10 +384,17 @@ export function updateMessageLinkPreviews(
 ): boolean {
   const db = getDb();
   const payload = linkPreviews.length > 0 ? JSON.stringify(linkPreviews) : null;
-  const res = (() => db
-    .prepare("UPDATE messages SET link_previews = ? WHERE chat_jid = ? AND rowid = ?")
-    .run(payload, chatJid, rowId))();
-  return res.changes > 0;
+  // Stored preview images are inline media of this post: they go when it does.
+  const stored = linkPreviews.flatMap((preview) => {
+    const { url, image } = (preview ?? {}) as { url?: unknown; image?: unknown };
+    const match = typeof image === "string" ? /^\/media\/(\d+)$/.exec(image) : null;
+    return typeof url === "string" && match ? [{ ref: url, mediaId: Number(match[1]) }] : [];
+  });
+  return db.transaction(() => {
+    const res = db.prepare("UPDATE messages SET link_previews = ? WHERE chat_jid = ? AND rowid = ?").run(payload, chatJid, rowId);
+    if (res.changes > 0) replaceMessageInlineMedia(db, rowId, "link_preview", stored);
+    return res.changes > 0;
+  })();
 }
 
 /**
