@@ -200,7 +200,7 @@ export function AddonsSection({ setStatus, filter = '' }) {
                             ${homepage
                                 ? html`<a class="settings-addon-name-link" href=${homepage} target="_blank" rel="noopener noreferrer">${a.slug}</a>`
                                 : html`<strong>${a.slug}</strong>`}
-                            <span class=${`settings-tag settings-tag-type ${typeCls}`}>${typeLabel}</span>
+                            ${hasSkills && html`<span class=${`settings-tag settings-tag-type ${typeCls}`}>${typeLabel}</span>`}
                             <span class="settings-addon-version">${a.installed ? (a.installedVersion || '?') : (a.version || '')}</span>
                             ${a.installKind && html`<span class="settings-tag">${a.installKind}</span>`}
                             ${a.hasUpdate && html`<span class="settings-tag settings-tag-skill">\u2191 ${a.version}</span>`}

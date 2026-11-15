@@ -36,7 +36,7 @@ var Ul=Object.defineProperty;var jl=(e)=>e;function ql(e,t){this[e]=jl.bind(null
     `}var Lt=V(()=>{ie()});function Ys({versions:e}){return g`
         <dl class="about-versions">
             ${[["PiClaw",e?.piclaw,"https://github.com/rcarmo/piclaw"],["pi-ai",e?.piAi,"https://github.com/earendil-works/pi/tree/main/packages/ai"],["Bun",e?.bun,"https://github.com/oven-sh/bun"]].map(([t,n,s])=>g`
-                <div class="about-version"><dt>${t}</dt><dd><a href=${s} target="_blank" rel="noopener noreferrer" aria-label=${`${t} ${n||"Unknown"} on GitHub`}>${n||"Unknown"}</a></dd></div>
+                <div class="about-version"><dt>${t}</dt><dd>${n?g`<a href=${s} target="_blank" rel="noopener noreferrer" aria-label=${`${t} ${n} on GitHub`}>${n}</a>`:g`<span class="about-version-unknown">Unknown</span>`}</dd></div>
             `)}
         </dl>
     `}function Ff({onClose:e}){let[t,n]=k(null),[s,o]=k(!1),i=W(null),r=W(null);return O(()=>{let l=document.activeElement,u=requestAnimationFrame(()=>i.current?.focus()),d=new AbortController;return fetch("/agent/about",{credentials:"same-origin",signal:d.signal}).then((b)=>{if(!b.ok)throw Error("Unable to load versions");return b.json()}).then((b)=>{if(!d.signal.aborted)n(b)}).catch(()=>{if(!d.signal.aborted)o(!0)}),()=>{if(cancelAnimationFrame(u),d.abort(),l?.isConnected)l.focus()}},[]),g`
@@ -806,8 +806,8 @@ ${U.title||""}`))return;h(!0);try{await Ro(U.id),t?.(n("settings.recordings.dele
                                 ${m.configured&&g`<span class="settings-tag settings-tag-skill">${Au(m.authType)}</span>`}
                             </div>
                             <div class="settings-provider-card-meta">
-                                ${m.hasOAuth&&g`<span class="settings-tag">OAuth</span>`}
-                                ${m.hasApiKey&&g`<span class="settings-tag">API Key</span>`}
+                                ${!m.configured&&m.hasOAuth&&g`<span class="settings-tag">OAuth</span>`}
+                                ${!m.configured&&m.hasApiKey&&g`<span class="settings-tag">API Key</span>`}
                                 ${m.isCustom&&g`<span class="settings-tag">${n("settings.providers.tagCustom")}</span>`}
                             </div>
                             <div class="settings-provider-card-actions">
@@ -1355,20 +1355,20 @@ ${z}`;if(!window.confirm(K))return;if(L&&!window.confirm(n("settings.tasks.confi
                             </tr>
                             <tr class="settings-keychain-notes-row" key=${A.name+"-notes"}>
                                 <td colspan="5">
-                                    <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:8px; align-items:start; padding:8px 0 10px 0;">
-                                        <label style="display:flex; flex-direction:column; gap:4px; min-width:0;">
+                                    <div class="settings-keychain-notes">
+                                        <label class="settings-keychain-note">
                                             <span class="settings-hint" style="margin:0">${t("settings.keychain.userNote")}</span>
-                                            <textarea class="settings-keychain-input" rows="2" style="resize:vertical; min-height:52px; width:100%;" placeholder=${t("settings.keychain.userNoteHint")}
+                                            <textarea class="settings-keychain-input settings-keychain-note-input" rows="2" placeholder=${t("settings.keychain.userNoteHint")}
                                                 value=${de}
                                                 onInput=${(se)=>Ae(A.name,"userNote",se.target.value)}></textarea>
                                         </label>
-                                        <label style="display:flex; flex-direction:column; gap:4px; min-width:0;">
+                                        <label class="settings-keychain-note">
                                             <span class="settings-hint" style="margin:0">${t("settings.keychain.agentNote")}</span>
-                                            <textarea class="settings-keychain-input" rows="2" style="resize:vertical; min-height:52px; width:100%;" placeholder=${t("settings.keychain.agentNoteHint")}
+                                            <textarea class="settings-keychain-input settings-keychain-note-input" rows="2" placeholder=${t("settings.keychain.agentNoteHint")}
                                                 value=${oe}
                                                 onInput=${(se)=>Ae(A.name,"agentNote",se.target.value)}></textarea>
                                         </label>
-                                        <button ref=${(se)=>{if(se)l.current.set(A.name,se);else l.current.delete(A.name)}} aria-label=${`${t("settings.keychain.saveNotes")}: ${A.name}`} class="settings-keychain-save-btn" style="margin-top:20px" disabled=${!Pe||Ie} onClick=${()=>fe(A)}>
+                                        <button ref=${(se)=>{if(se)l.current.set(A.name,se);else l.current.delete(A.name)}} aria-label=${`${t("settings.keychain.saveNotes")}: ${A.name}`} class="settings-keychain-save-btn" disabled=${!Pe||Ie} onClick=${()=>fe(A)}>
                                             ${Ie?t("settings.keychain.saving"):t("settings.keychain.saveNotes")}
                                         </button>
                                     </div>
@@ -1558,7 +1558,7 @@ ${z}`;if(!window.confirm(K))return;if(L&&!window.confirm(n("settings.tasks.confi
                         `}
                         <div class="settings-addon-card-header">
                             ${j?g`<a class="settings-addon-name-link" href=${j} target="_blank" rel="noopener noreferrer">${p.slug}</a>`:g`<strong>${p.slug}</strong>`}
-                            <span class=${`settings-tag settings-tag-type ${K}`}>${z}</span>
+                            ${T&&g`<span class=${`settings-tag settings-tag-type ${K}`}>${z}</span>`}
                             <span class="settings-addon-version">${p.installed?p.installedVersion||"?":p.version||""}</span>
                             ${p.installKind&&g`<span class="settings-tag">${p.installKind}</span>`}
                             ${p.hasUpdate&&g`<span class="settings-tag settings-tag-skill">\u2191 ${p.version}</span>`}
@@ -1773,5 +1773,5 @@ ${z}`;if(!window.confirm(K))return;if(L&&!window.confirm(n("settings.tasks.confi
     </div>
   `}function uf(){rf(),lf(),df();let e=new URLSearchParams(window.location.search);Bl(e.get("section")||"general");let t=document.getElementById("settings-widget-fixture-root")||document.body.appendChild(document.createElement("div"));t.id="settings-widget-fixture-root",At(g`<${gf} />`,t),window.piclawWidget?.ready?.({title:"Settings fixture",mockMode:Qt})}uf();
 
-//# debugId=7041C2A454F1CF4E64756E2164756E21
+//# debugId=AFB85E7D6107927264756E2164756E21
 //# sourceMappingURL=settings-widget-fixture.bundle.js.map

@@ -291,3 +291,54 @@ for (const engine of ['chromium', 'webkit']) {
     }
   }, 120000);
 }
+
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine} 390px: Keychain actions share a row and notes stack`, async () => {
+    const { page, errors } = await openSettings(engine, 390, 'keychain');
+    try {
+      await page.locator('.settings-keychain-row').first().waitFor();
+      const layout = await page.evaluate(() => {
+        const group = document.querySelector('.settings-keychain-action-group')!;
+        const tops = [...group.children].map(child => Math.round(child.getBoundingClientRect().top));
+        const notes = [...document.querySelector('.settings-keychain-notes')!.children].map(child => child.getBoundingClientRect());
+        const content = document.querySelector('.settings-content')!;
+        return { tops, stacked: notes.every((box, i) => i === 0 || box.top >= notes[i - 1].bottom - 1), overflow: content.scrollWidth - content.clientWidth };
+      });
+      expect(new Set(layout.tops).size).toBe(1);
+      expect(layout.stacked).toBe(true);
+      expect(layout.overflow).toBeLessThanOrEqual(1);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+
+  browserTest(`${engine}: badges, tags and placeholders stay meaningful`, async () => {
+    const check = async (section: string, width: number, fn: (page: Page) => Promise<void>) => {
+      const { page, errors } = await openSettings(engine, width, section);
+      try { await fn(page); expect(errors).toEqual([]); } finally { await page.close(); }
+    };
+    await check('providers', 1280, async page => {
+      // A configured provider shows its active auth type once, not again as a capability.
+      expect(await page.locator('.settings-provider-card.configured .settings-provider-card-meta .settings-tag').count()).toBe(0);
+      expect(await page.locator('.settings-provider-card:not(.configured) .settings-provider-card-meta .settings-tag').count()).toBeGreaterThan(0);
+    });
+    await check('addons', 1280, async page => {
+      expect(await page.locator('.settings-addon-card .settings-tag-type').count()).toBe(0); // all fixture items are plain extensions
+    });
+    await check('general', 1280, async page => {
+      expect(await page.locator('.about-version a', { hasText: 'Unknown' }).count()).toBe(0);
+      expect(await page.locator('.about-version-unknown').count()).toBe(3);
+    });
+    await check('models', 390, async page => {
+      const overlap = await page.locator('.model-catalogue-settings__row').first().evaluate(row => {
+        const pin = row.querySelector('.model-catalogue-settings__pin')!.getBoundingClientRect();
+        const main = row.querySelector('.model-catalogue-settings__row-main')!.getBoundingClientRect();
+        return pin.right - main.left;
+      });
+      expect(overlap).toBeLessThanOrEqual(0);
+    });
+    await check('editor', 390, async page => {
+      const badge = await page.locator('.settings-local-only-hint').evaluate(element => parseFloat(getComputedStyle(element, '::before').height) || 0);
+      expect(badge).toBeLessThan(24);
+    });
+  }, 90000);
+}

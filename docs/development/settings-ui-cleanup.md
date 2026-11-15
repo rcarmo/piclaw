@@ -49,6 +49,22 @@ Three Settings browser suites had been failing on `main`, so they no longer prot
 
 The compose type baseline drops to 281: two `__piclawSettingsRequestedSection` writes are now typed instead of tracked by line number.
 
+## Consistency pass
+
+| Area | Change |
+|---|---|
+| Form rows | Sessions, Workspace, Editor and Developer use the dense label/control/help grid that Compaction already used, so controls start in one column within and across panes. The grid shrinks in narrow tabs and stacks on phones. |
+| Labels | Visible labels name their checkboxes, selects and text fields (Compaction included) through a shared per-instance id helper. |
+| Keychain (phones) | Notes stack; Save sits under them; reveal and delete share a row where they fit and wrap, rather than clip, at 320 px. |
+| Providers | A configured provider shows its active auth type once; capability tags appear only when it is not configured. |
+| Add-ons | The type chip appears only for skill packages, not on every extension. |
+| About | Unknown versions are plain secondary text, not GitHub links. |
+| Models (phones) | The 44 px pin no longer overlaps the model name. |
+| Browser-local badge | Stays on one line. |
+| Tests | The workspace About shell suite mocks the always-on meters endpoint and passes again. |
+
+The app bundle raw budget rises from 1,520,000 to 1,525,000 bytes. `main` sat 890 bytes under the old limit after the earlier Settings changes; this pass adds about 1.2 KB, mostly label/id attributes. Deduplicating the Editor and Developer icons recovered about 0.4 KB.
+
 ## Not covered
 
 - Registered add-on panes from the add-ons repository were reviewed from source only. They use inline styles and fixed colours; moving them to shared settings classes is separate work.
