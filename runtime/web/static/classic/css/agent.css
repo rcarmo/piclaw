@@ -1713,6 +1713,49 @@
     color: var(--text-primary);
 }
 
+/* Tool image previews: small beside the title, larger in the open card. */
+.turn-activity-thumbs {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 3px;
+}
+
+.turn-activity-thumbs img {
+    display: block;
+    height: 20px;
+    width: auto;
+    max-width: 36px;
+    object-fit: cover;
+    border-radius: 3px;
+    border: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+    background: var(--bg-secondary);
+}
+
+.turn-activity-thumbs-more {
+    font-size: 0.85em;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.8;
+}
+
+.turn-activity-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 4px 0 2px;
+}
+
+.turn-activity-images img {
+    display: block;
+    max-width: min(100%, 240px);
+    max-height: 160px;
+    width: auto;
+    height: auto;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
 .turn-activity-duration {
     flex: 0 0 auto;
     font-variant-numeric: tabular-nums;

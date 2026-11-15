@@ -3,6 +3,8 @@
  *
  * GET /agent/turn-activity?chat_jid&message_id[&step&offset]
  * GET /agent/turn-activity?chat_jid&live=1[&step&offset] reads the running turn.
+ * Adding `image=<n>` to a tool step returns a stored WebP thumbnail of the
+ * n-th image that tool returned to the model.
  * message_id is the reply's timeline row id, as for /agent/thinking. The stored
  * reply's native-answer id names its committed answer entry; the agent pool
  * reads that turn's committed window from the durable runtime. Responses are a
@@ -14,7 +16,8 @@
 
 import { getAgentMessageIdByRowId } from "../../../db/messages.js";
 import type { DurableTurnEntries } from "../../../agent-pool/durable-runtime-adapter.js";
-import { projectTurnActivity, projectTurnStepDetail, toolResultFor } from "../agent/turn-activity.js";
+import { projectTurnActivity, projectTurnStepDetail, toolResultFor, toolResultImage } from "../agent/turn-activity.js";
+import { toolImageThumbnail } from "../media/tool-image-thumbnails.js";
 import { emittedToolOutput } from "../agent/tool-presentation.js";
 
 export interface TurnActivityReader {
@@ -33,7 +36,7 @@ export function answerEntryIdFromMessageId(messageId: string): number | null {
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
-export async function handleTurnActivity(pool: TurnActivityReader | undefined, url: URL): Promise<Response> {
+export async function handleTurnActivity(pool: TurnActivityReader | undefined, url: URL, options: { thumbnailCacheDir?: string } = {}): Promise<Response> {
   const chatJid = url.searchParams.get("chat_jid");
   const messageId = url.searchParams.get("message_id");
   const live = url.searchParams.get("live") === "1";
@@ -54,6 +57,14 @@ export async function handleTurnActivity(pool: TurnActivityReader | undefined, u
   if (!turn) return json({ error: "Not found" }, 404);
   const step = url.searchParams.get("step");
   if (!step) return json(projectTurnActivity(turn, answerEntryId, { commentary: !live }));
+  const imageParam = url.searchParams.get("image");
+  if (imageParam !== null) {
+    const index = /^\d{1,3}$/.test(imageParam) ? Number(imageParam) : -1;
+    const image = index >= 0 && step.startsWith("tool:") ? toolResultImage(turn, step.slice("tool:".length), index) : null;
+    const thumbnail = image ? await toolImageThumbnail(image.data, options.thumbnailCacheDir) : null;
+    if (!thumbnail) return json({ error: "Not found" }, 404);
+    return new Response(new Blob([thumbnail as BlobPart], { type: "image/webp" }), { headers: { "Content-Type": "image/webp", "Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff" } });
+  }
   const offset = Number(url.searchParams.get("offset") ?? 0);
   const detail = projectTurnStepDetail(turn, step, Number.isSafeInteger(offset) && offset > 0 ? offset : 0);
   if (!detail) return json({ error: "Not found" }, 404);

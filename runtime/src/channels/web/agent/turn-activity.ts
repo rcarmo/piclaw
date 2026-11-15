@@ -253,3 +253,14 @@ export function toolResultFor(turn: DurableTurnEntries, callId: string): { text:
   }
   return null;
 }
+
+/** The base64 data of one image a tool returned to the model, by call and image index. */
+export function toolResultImage(turn: DurableTurnEntries, callId: string, index: number): { data: string; mimeType?: string } | null {
+  for (const entry of turn.entries) {
+    const message = first(entry);
+    if (entry.kind !== "pi.tool-result" || message?.toolCallId !== callId) continue;
+    const image = blocks(message).filter((block) => block.type === "image")[index] as (Block & { mimeType?: unknown }) | undefined;
+    return image && typeof image.data === "string" ? { data: image.data, ...(typeof image.mimeType === "string" ? { mimeType: image.mimeType } : {}) } : null;
+  }
+  return null;
+}
