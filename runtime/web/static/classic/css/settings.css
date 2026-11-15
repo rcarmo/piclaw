@@ -1026,11 +1026,18 @@
     cursor: not-allowed;
 }
 
+/* Primary actions (Install, Set up, Save, Save & apply) use the theme accent,
+ * like `.primary` in the add-on button contract and MCP's primary button. */
 .settings-addon-btn-install {
-    background: color-mix(in srgb, var(--accent-color, #1d9bf0) 10%, var(--bg-primary));
-    border-color: color-mix(in srgb, var(--accent-color, #1d9bf0) 30%, transparent);
-    color: var(--accent-color, #1d9bf0);
+    background: var(--accent-color, #1d9bf0);
+    border-color: var(--accent-color, #1d9bf0);
+    color: var(--accent-contrast-text, #fff);
     font-weight: 600;
+}
+
+.settings-addon-btn-install:hover:not(:disabled) {
+    background: var(--accent-hover, var(--accent-color, #1d9bf0));
+    border-color: var(--accent-hover, var(--accent-color, #1d9bf0));
 }
 
 .settings-addon-btn-upgrade {
@@ -2001,7 +2008,7 @@
 
 .settings-toggle-btn.active {
     background: var(--accent-color, #4a9eff);
-    color: #fff;
+    color: var(--accent-contrast-text, #fff);
     border-color: var(--accent-color, #4a9eff);
 }
 
@@ -2109,7 +2116,7 @@
 .model-catalogue-settings .settings-btn.primary {
     background: var(--accent-color, #1d9bf0);
     border-color: var(--accent-color, #1d9bf0);
-    color: #fff;
+    color: var(--accent-contrast-text, #fff);
 }
 
 .model-catalogue-settings .settings-btn:disabled {
@@ -2610,7 +2617,7 @@
 }
 .settings-keychain-add-btn:hover {
     background: var(--accent-color, #4a9eff);
-    color: #fff;
+    color: var(--accent-contrast-text, #fff);
 }
 .settings-keychain-add-form {
     display: flex;
@@ -2668,7 +2675,7 @@
     border: none;
     border-radius: 6px;
     background: var(--accent-color, #4a9eff);
-    color: #fff;
+    color: var(--accent-contrast-text, #fff);
     cursor: pointer;
     font-size: 0.86em;
     white-space: nowrap;
@@ -2830,7 +2837,7 @@
 }
 .settings-keychain-confirm-yes {
     background: var(--error-color, #e55);
-    color: #fff;
+    color: var(--accent-contrast-text, #fff);
     border-color: transparent;
 }
 .settings-keychain-empty {
@@ -2991,7 +2998,7 @@
 }
 .settings-keychain-totp-submit {
     background: var(--accent-color, #4a9eff);
-    color: #fff;
+    color: var(--accent-contrast-text, #fff);
     border-color: transparent;
 }
 .settings-keychain-totp-submit:disabled {
@@ -3047,7 +3054,7 @@
 }
 .settings-keychain-prompt-submit {
     background: var(--accent-color, #4a9eff);
-    color: #fff;
+    color: var(--accent-contrast-text, #fff);
     border-color: transparent;
 }
 .settings-keychain-prompt-submit:disabled {

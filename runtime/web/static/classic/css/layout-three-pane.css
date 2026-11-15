@@ -468,7 +468,7 @@ html[data-ios-keyboard-viewport] .workbench-statusbar {
 .plan-pane-toolbar button.plan-pane-primary {
     border-color: var(--accent-color);
     background: var(--accent-color);
-    color: #fff;
+    color: var(--accent-contrast-text, #fff);
 }
 
 .plan-pane-toolbar button:disabled {

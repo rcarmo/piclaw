@@ -256,11 +256,11 @@ for (const engine of ['chromium', 'webkit']) {
       await page.getByText('No slash commands are available.', { exact: true }).waitFor();
       // Pane actions form a left-aligned toolbar; the primary keeps its accent styling.
       const toolbar = await page.locator('.settings-actions > button').evaluateAll(buttons => buttons.map(button => {
-        const r = button.getBoundingClientRect(); return { top: Math.round(r.top), color: getComputedStyle(button).color };
+        const r = button.getBoundingClientRect(); return { top: Math.round(r.top), background: getComputedStyle(button).backgroundColor };
       }));
       expect(toolbar).toHaveLength(2);
       expect(toolbar[0].top).toBe(toolbar[1].top);
-      expect(toolbar[0].color).not.toBe(toolbar[1].color);
+      expect(toolbar[0].background).not.toBe(toolbar[1].background);
       expect(errors).toEqual([]);
     } finally { await page.close(); }
   }, 30000);
@@ -341,4 +341,27 @@ for (const engine of ['chromium', 'webkit']) {
       expect(badge).toBeLessThan(24);
     });
   }, 90000);
+}
+
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine}: primary buttons take their colours from the theme accent and its contrast text`, async () => {
+    const panes: Array<[string, string]> = [['providers', '.settings-addon-btn-install'], ['addons', '.settings-addon-btn-install'], ['keyboard', '.settings-addon-btn-install'], ['quick-actions', '.settings-addon-btn-install'], ['mcp', '.settings-btn.primary']];
+    const results: unknown[] = [];
+    for (const scheme of ['light', 'dark'] as const) for (const [section, selector] of panes) {
+      const { page, errors } = await openSettings(engine, 1280, section, scheme);
+      try {
+        // A light accent needs dark text: the theme supplies both.
+        await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; }' });
+        await page.evaluate(() => {
+          document.documentElement.style.setProperty('--accent-color', 'rgb(245, 217, 10)');
+          document.documentElement.style.setProperty('--accent-contrast-text', 'rgb(17, 17, 17)');
+        });
+        const button = page.locator(selector).first();
+        await button.waitFor();
+        const style = await button.evaluate(element => { const s = getComputedStyle(element); return { background: s.backgroundColor, color: s.color }; });
+        results.push({ section, scheme, ...style, errors });
+      } finally { await page.close(); }
+    }
+    expect(results).toEqual(results.map((result: any) => ({ section: result.section, scheme: result.scheme, background: 'rgb(245, 217, 10)', color: 'rgb(17, 17, 17)', errors: [] })));
+  }, 120000);
 }
