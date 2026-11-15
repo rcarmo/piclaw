@@ -7,8 +7,10 @@ const mockIcon = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none
 function MockAddonPane({ label, body, filter = '' }) {
   return html`
     <div class="settings-section">
-      <h3>${label}</h3>
+      <h3 class="settings-addon-heading">${label}</h3>
       <p class="settings-hint">Mock add-on pane rendered by the settings widget fixture.</p>
+      <label class="settings-addon-check"><input type="checkbox" checked /> Enabled <span class="settings-addon-badge" data-tone="success">Connected</span></label>
+      <div class="settings-addon-callout" data-tone="warning">Fixture notice using theme tones.</div>
       <div class="settings-addon-grid">
         ${['Credentials', 'Routes', 'Runtime options'].filter((item) => !filter || item.toLowerCase().includes(String(filter).toLowerCase())).map((item) => html`
           <div class="settings-addon-card">

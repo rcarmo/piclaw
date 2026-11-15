@@ -49,6 +49,13 @@ add-ons retain host compatibility styling; new panes opt into these classes:
 | `settings-addon-actions` | Wrapping action row |
 | `settings-addon-error` | Validation/error colour; use `role="alert"` for new errors |
 | `settings-addon-status` | Neutral status; use `role="status"` for asynchronous results |
+| `settings-addon-heading` | Section heading (use on an `h3`) |
+| `settings-addon-check` | `<label>` wrapping a native checkbox and its text |
+| `settings-addon-badge` | Small status label; add `data-tone="success|danger|warning|info"` |
+| `settings-addon-callout` | Notice box; `data-tone` as for badges |
+
+Colours come from the theme: use `data-tone` rather than fixed colour values,
+and do not set font sizes, colours, borders or spacing inline.
 
 ```html
 <section class="settings-addon-section">

@@ -414,3 +414,30 @@ for (const engine of ['chromium', 'webkit']) {
     }
   }, 60000);
 }
+
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine}: add-on kit headings, checkbox rows, badges and callouts follow the theme`, async () => {
+    for (const width of [390, 1280]) {
+      const { page, errors } = await openSettings(engine, width, 'fixture-a-portainer');
+      try {
+        await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; }' });
+        await page.evaluate(() => {
+          const root = document.documentElement.style;
+          root.setProperty('--success-color', 'rgb(1, 120, 60)');
+          root.setProperty('--warning-color', 'rgb(180, 100, 0)');
+        });
+        const style = await page.evaluate(() => {
+          const read = (selector: string) => { const e = document.querySelector(selector)!; const s = getComputedStyle(e); return { color: s.color, size: parseFloat(s.fontSize), border: s.borderLeftColor, height: e.getBoundingClientRect().height }; };
+          return { heading: read('.settings-addon-heading'), check: read('.settings-addon-check'), badge: read('.settings-addon-badge'), callout: read('.settings-addon-callout') };
+        });
+        expect(style.badge.color).toBe('rgb(1, 120, 60)');
+        // The callout edge mixes the warning tone with transparency; compare its RGB channels.
+        const rgb = (value: string) => { const srgb = /color\(srgb ([\d.]+) ([\d.]+) ([\d.]+)/.exec(value); return srgb ? srgb.slice(1, 4).map(n => Math.round(Number(n) * 255)) : (value.match(/\d+/g) ?? []).slice(0, 3).map(Number); };
+        expect(rgb(style.callout.border)).toEqual([180, 100, 0]);
+        for (const part of Object.values(style)) expect(part.size).toBeGreaterThanOrEqual(12);
+        expect(style.heading.size).toBeGreaterThan(style.check.size);
+        expect(errors).toEqual([]);
+      } finally { await page.close(); }
+    }
+  }, 60000);
+}
