@@ -74,6 +74,14 @@ export function installTimelineMediaAdapterTestSchema(database: Database): void 
       PRIMARY KEY (message_rowid, media_id),
       FOREIGN KEY (media_id) REFERENCES media(id)
     );
+    CREATE TABLE IF NOT EXISTS message_inline_media (
+      message_rowid INTEGER NOT NULL,
+      kind TEXT NOT NULL,
+      ref TEXT NOT NULL,
+      media_id INTEGER NOT NULL,
+      PRIMARY KEY (message_rowid, kind, ref),
+      FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE CASCADE
+    );
 
     CREATE TABLE IF NOT EXISTS service_effect_timeline_writes (
       idempotency_key TEXT PRIMARY KEY,

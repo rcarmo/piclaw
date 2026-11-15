@@ -15,7 +15,9 @@
     "host.chat-cursors/polling-frontier-v1": "{\"base\":\"fc16a0c51d76b7200e263997619d434609afa043\",\"owner\":\"host.chat-cursors\",\"id\":\"polling-frontier-v1\",\"migration_order\":1,\"checksum\":\"539339d735a1b5fa7411e90c948484746a7d71675ebb60e01b860f0d702fb0ef\"}",
     "service_effect_s01/native-harness-binding-v1": "{\"base\":\"75e5b08d5399beb1c3728e4d96ec6fdbebda08bf\",\"owner\":\"service_effect_s01\",\"id\":\"native-harness-binding-v1\",\"migration_order\":2,\"checksum\":\"e88db3dc4c81f5f3dd319ed92a2a79aa92e759d6ae12c6eb1180351daddc0742\"}",
     "service_effect_s01/retire-harness-mirrors-v1": "{\"base\":\"75e5b08d5399beb1c3728e4d96ec6fdbebda08bf\",\"owner\":\"service_effect_s01\",\"id\":\"retire-harness-mirrors-v1\",\"migration_order\":2,\"checksum\":\"eb5306aba410376f94eb9d4a2c9bcdbbf9ba2fad0337b4d06994143640a9d809\"}",
-    "service_effect_s01/sdk-scheduled-admission-index-v1": "{\"base\":\"771e500528b3e64cd0634f66d068b7aeff785296\",\"owner\":\"service_effect_s01\",\"id\":\"sdk-scheduled-admission-index-v1\",\"migration_order\":3,\"checksum\":\"c8858ac8795d15c48f46fcf76b77bdc19c78b3e48d240be1c3751150ac9b944a\"}"
+    "service_effect_s01/sdk-scheduled-admission-index-v1": "{\"base\":\"771e500528b3e64cd0634f66d068b7aeff785296\",\"owner\":\"service_effect_s01\",\"id\":\"sdk-scheduled-admission-index-v1\",\"migration_order\":3,\"checksum\":\"c8858ac8795d15c48f46fcf76b77bdc19c78b3e48d240be1c3751150ac9b944a\"}",
+    "host.timeline-inline-media/message-inline-media-v1": "{\"base\":\"3b5f4bf0115f9e4ddc03fd431dbb5c0dfe165fb8\",\"owner\":\"host.timeline-inline-media\",\"id\":\"message-inline-media-v1\",\"migration_order\":1,\"checksum\":\"37cade0bed95caf5578755fc811b0a3bc6d35d1f94e914bf3457006ee7b45ed4\"}",
+    "host.timeline-inline-media/link-preview-backfill-v1": "{\"base\":\"3b5f4bf0115f9e4ddc03fd431dbb5c0dfe165fb8\",\"owner\":\"host.timeline-inline-media\",\"id\":\"link-preview-backfill-v1\",\"migration_order\":2,\"checksum\":\"fe1d9437f6c2bb9d20679dbb71402c843b3e1cb2aa349ee27389414731a58c01\"}"
   },
   "owners": {
     "core:background-contexts": {
@@ -255,6 +257,22 @@
       "replayRetention": "Coupled to explicit message/media/chat cleanup; covering PK replaces only the retired redundant index.",
       "references": [
         "runtime/src/db/connection.ts"
+      ]
+    },
+    "core:message_inline_media": {
+      "category": "core",
+      "initializer": "runtime/src/db/message-inline-media.ts#initializeMessageInlineMediaSchema",
+      "writers": [
+        "runtime/src/db/message-inline-media.ts",
+        "runtime/src/db/messages.ts",
+        "runtime/src/channels/web/media/tool-image-thumbnails.ts"
+      ],
+      "sourceOfTruth": "Message-rowid association for derived inline media (link-preview images, tool image previews); media rows hold the bytes.",
+      "replayRetention": "Coupled to its message: the messages_inline_media_ad trigger removes rows and derived media no other message or attachment uses. Previews are re-creatable from the durable transcript; link-preview images from their source URLs.",
+      "references": [
+        "runtime/src/db/message-inline-media.ts",
+        "runtime/src/db/media.ts",
+        "runtime/src/db/messages.ts"
       ]
     },
     "core:messages": {
@@ -1467,6 +1485,18 @@
       ],
       "table": "media"
     },
+    "index:idx_message_inline_media_media_id": {
+      "owner": "core:message_inline_media",
+      "fingerprints": [
+        "ef79c9706073c591ddd34bdaeb6983679d09304920a760944cdd2ce26b946380"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "message_inline_media"
+    },
     "index:idx_message_media_media_id": {
       "owner": "core:message_media",
       "fingerprints": [
@@ -2341,6 +2371,20 @@
         "native-addons"
       ],
       "derivedIndexes": []
+    },
+    "table:message_inline_media": {
+      "owner": "core:message_inline_media",
+      "fingerprints": [
+        "6a24ea1d880d3b2a555c9846a5f926b377c31f16015a929fa7ead165e1489c43"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "derivedIndexes": [
+        "031ce6583502d8a28b7c40566732c85ce52e480d7da3780f0f1157bcd4bddc36"
+      ]
     },
     "table:message_media": {
       "owner": "core:message_media",
@@ -3274,6 +3318,18 @@
       "owner": "core:messages_fts",
       "fingerprints": [
         "514100b450aff4b59b6208f0cd8334e37c839f014d59fbe2478f87ed66489624"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "messages"
+    },
+    "trigger:messages_inline_media_ad": {
+      "owner": "core:message_inline_media",
+      "fingerprints": [
+        "96755451e180b4065b8c8a60994d9214f9f7ee2b837448cd70e6d2f9fc1c0b65"
       ],
       "requiredIn": [
         "core",
