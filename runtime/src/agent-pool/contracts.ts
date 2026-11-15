@@ -137,8 +137,6 @@ export interface NativeDreamRequest {
 
 /** Construction options for creating an AgentPool. */
 export interface AgentPoolOptions {
-  /** Trusted explicit historical resident-capture/test composition, never native fallthrough. */
-  legacyCapture?: true;
   prepareInterruptedScheduledHarness?: import("./durable-runtime-adapter.js").PrepareInterruptedScheduledHarness;
   dispatchDreamOperation?: (request:NativeDreamRequest)=>Promise<AgentOutput>;
   /** Application-owned native slash commands; never constructs a legacy session. */

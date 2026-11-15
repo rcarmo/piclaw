@@ -8,7 +8,7 @@ import { admitSqliteWrite } from "./db/sqlite-async-admission.js";
  * separate until their callers retire; ordinary startup selects native ports.
  */
 
-import { existsSync, mkdirSync, readFileSync, statSync } from "fs";
+import { existsSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 import { hasNativeRouting, requireLegacyRoutingMutation } from "./db/native-routing-policy.js";
 import {
@@ -28,7 +28,6 @@ import { readAccessConfig } from "./core/config-access.js";
 import { getExecutionIdentity } from "./core/execution-context.js";
 import { getChatChannel, getChatJid } from "./core/chat-context.js";
 import { registerChannelDetector } from "./router.js";
-import { createTrackedBashOperations } from "./tools/tracked-bash.js";
 import { type ActiveChatAgent, type BranchMutationContext } from "./agent-pool/branch-manager.js";
 import {
   type AgentOutput,
@@ -282,10 +281,11 @@ export class AgentPool {
     if (options.getDurableSession !== undefined && typeof options.getDurableSession !== "function") {
       throw new Error("Durable session lookup must be callable");
     }
-    if (options.legacyCapture !== undefined && options.legacyCapture !== true) throw Error("Invalid legacy capture selection");
-    if (options.legacyCapture && options.getDurableSession !== undefined) throw Error("Native host cannot select legacy capture composition");
-    if (!options.legacyCapture && options.getDurableSession === undefined) throw Error("Native host requires a durable session lookup; legacy capture must be explicit");
-    this.durableApplication = options.getDurableSession !== undefined;
+    if (Object.hasOwn(options, "legacyCapture")) {
+      throw new Error("Resident legacy capture was removed; use session-import into a fresh separate store");
+    }
+    if (options.getDurableSession === undefined) throw Error("Native host requires a durable session lookup; use getDurableSession with an existing native lookup");
+    this.durableApplication = true;
     this.durableSessionLookup = options.getDurableSession?.bind(options);
     if (!options.credentialStore || !options.modelRuntime) {
       throw new Error("AgentPool requires shared credentialStore and modelRuntime services");
@@ -308,11 +308,6 @@ export class AgentPool {
       workspaceDir: WORKSPACE_DIR,
       mainSessionMaxSize: this.config.mainSessionPoolMaxSize,
       getDurableSession: options.getDurableSession,
-      ...(options.legacyCapture ? {legacyCapture:true} : {}),
-      ...(options.getDurableSession === undefined ? {
-        createSession: options.createSession,
-        bashOperations:createTrackedBashOperations({shellPath:()=>this.settingsManager.getShellPath()}),
-      } : {}),
       onInfo: (message, details) => log.info(message, details),
       onWarn: (message, details) => log.warn(message, details),
       onError: (message, details) => log.error(message, details),
@@ -347,7 +342,6 @@ export class AgentPool {
     runtimeInterop.addLogSink = addLogSink;
     runtimeInterop.removeLogSink = removeLogSink;
     runtimeInterop.getKeychainEntry = getKeychainEntry;
-    if (options.getDurableSession === undefined) mkdirSync(SESSIONS_DIR, { recursive: true });
     if (this.sessionManager) {
       this.memoryReclamation = new MemoryReclamationGate();
       this.cleanupTimer = setInterval(() => this.evictIdle(), this.config.cleanupIntervalMs);

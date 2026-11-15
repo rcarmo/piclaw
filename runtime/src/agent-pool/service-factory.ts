@@ -2,22 +2,16 @@
  * agent-pool/service-factory.ts – Constructor wiring for AgentPool helper services.
  */
 
-import type { AgentSession, AgentSessionRuntime, ExtensionFactory, ModelRegistry, ModelRuntime, SettingsManager } from "@earendil-works/pi-coding-agent";
+import type { ModelRegistry, ModelRuntime, SettingsManager } from "@earendil-works/pi-coding-agent";
 
 import { getAttachmentRegistry } from "./attachments.js";
-import { getSshConfig } from "../db.js";
-import { readAccessConfig } from '../core/config-access.js';
-import { createChatSshCoreExtension, resolveSshCoreConfigFromChatConfig } from "../extensions/ssh-core.js";
 import { AgentBranchManager } from "./branch-manager.js";
 import { AgentRuntimeFacade } from "./runtime-facade.js";
 import type { AgentSessionManager, PoolEntry } from "./session-manager.js";
-import type { AgentToolFactory, AgentBashOperations } from "./tool-factory.js";
+import type { AgentBashOperations } from "./tool-factory.js";
 import type { AgentPoolOptions } from "./contracts.js";
 import type { PiclawCredentialStore } from "./credential-store.js";
 import { McpCodemodeController } from "./mcp-codemode-runtime.js";
-import { createRequire } from "node:module";
-
-const require = createRequire(import.meta.url);
 
 /** Shared logger callbacks used across extracted AgentPool services. */
 export interface AgentPoolLogHooks {
@@ -28,7 +22,6 @@ export interface AgentPoolLogHooks {
 
 /** Inputs required to assemble the extracted AgentPool helper services. */
 export interface AgentPoolServiceFactoryOptions extends AgentPoolLogHooks {
-  legacyCapture?:true;
   pool: Map<string, PoolEntry>;
   authStorage: PiclawCredentialStore;
   modelRuntime: ModelRuntime;
@@ -41,7 +34,6 @@ export interface AgentPoolServiceFactoryOptions extends AgentPoolLogHooks {
   createSession?: AgentPoolOptions["createSession"];
 }
 
-type ToolFactoryService = Pick<AgentToolFactory, "createDefaultTools" | "createCustomToolOverrides">;
 type SessionManagerService = Pick<AgentSessionManager,
   "assertLegacyCaptureIdle" | "blockMcpAdmissions" | "fenceMcpAndSnapshot" | "resumeMcpAdmissions" | "quarantineMcpRuntime"
   | "acquireEvictionProtection" | "getOrCreate" | "refreshRuntime" | "hasPendingSessionWork"
@@ -59,23 +51,6 @@ export interface AgentPoolServices {
   branchManager: BranchManagerService;
 }
 
-async function resolveSessionExtensionFactories(chatJid: string): Promise<ExtensionFactory[]> {
-  // Only single-user sessions may load instance SSH credentials.
-  if (readAccessConfig().mode !== 'single-user') return [];
-  let sshConfig: ReturnType<typeof getSshConfig> | undefined;
-  try {
-    sshConfig = getSshConfig(chatJid);
-  } catch (error) {
-    if (
-      !(error instanceof Error) ||
-      (error.message !== "Database not initialized" && error.message !== "Cannot use a closed database")
-    ) {
-      throw error;
-    }
-  }
-  return [createChatSshCoreExtension(chatJid, sshConfig ? resolveSshCoreConfigFromChatConfig(sshConfig) : null)];
-}
-
 /**
  * Assemble the extracted helper services used by AgentPool.
  * Keeps constructor wiring in one place so AgentPool itself remains a thin façade.
@@ -84,50 +59,24 @@ export function createAgentPoolServices(options: AgentPoolServiceFactoryOptions)
   if (options.getDurableSession !== undefined && typeof options.getDurableSession !== "function") {
     throw new Error("Durable service factory lookup must be callable");
   }
-  if (options.legacyCapture !== undefined && options.legacyCapture !== true) throw Error("Invalid legacy capture selection");
-  if (options.legacyCapture && options.getDurableSession !== undefined) throw Error("Native host cannot select legacy capture composition");
-  if (!options.legacyCapture && options.getDurableSession === undefined) throw Error("Native host requires a durable session lookup; legacy capture must be explicit");
+  if (Object.hasOwn(options, "legacyCapture")) {
+    throw new Error("Resident legacy capture was removed; use session-import into a fresh separate store");
+  }
+  if (options.getDurableSession === undefined) {
+    throw new Error("Native host requires a durable session lookup; use getDurableSession with an existing native lookup");
+  }
   const getDurableSession = options.getDurableSession?.bind(options);
   const attachments = getAttachmentRegistry();
 
-  const durable = getDurableSession !== undefined;
-
-  const toolFactory: ToolFactoryService | undefined = durable ? undefined : new (require("./tool-factory.js") as { AgentToolFactory: new (...args: any[]) => ToolFactoryService }).AgentToolFactory({
-    workspaceDir: options.workspaceDir,
-    bashOperations: options.bashOperations,
-  });
-
-  let sessionManager: SessionManagerService | undefined;
   let branchManager: BranchManagerService;
   const runtimeFacade = new AgentRuntimeFacade({
     pool: options.pool,
     getDurableSession,
-    ...(durable ? {} : { acquireCommandProtection: (chatJid:string) => sessionManager!.acquireEvictionProtection(chatJid) }),
     modelRegistry: options.modelRegistry,
     modelRuntime: options.modelRuntime,
     settingsManager: options.settingsManager,
     authPath: options.authStorage.authPath,
     listKnownChats: () => branchManager.listKnownChats(),
-    onWarn: options.onWarn,
-    onError: options.onError,
-  });
-
-  sessionManager = durable ? undefined : new (require("./session-manager.js") as { AgentSessionManager: new (...args: any[]) => SessionManagerService }).AgentSessionManager({
-    getDurableSession,
-    modelRegistry: options.modelRegistry,
-    pool: options.pool,
-    modelRuntime: options.modelRuntime,
-    settingsManager: options.settingsManager,
-    mainSessionMaxSize: options.mainSessionMaxSize,
-    createSession: options.createSession,
-    createDefaultTools: () => toolFactory!.createDefaultTools(),
-    createCustomToolOverrides: (chatJid: string) => toolFactory!.createCustomToolOverrides(chatJid),
-    getSessionExtensionFactories: (chatJid: string) => resolveSessionExtensionFactories(chatJid),
-    bindSession: async (runtime: AgentSessionRuntime, chatJid: string) => {
-      (require("./usage.js") as { installSessionUsageRecorder: (session: unknown, chatJid: string, onWarn?: AgentPoolLogHooks["onWarn"]) => void })
-        .installSessionUsageRecorder(runtime.session, chatJid, options.onWarn);
-    },
-    onInfo: options.onInfo,
     onWarn: options.onWarn,
     onError: options.onError,
   });
@@ -139,9 +88,8 @@ export function createAgentPoolServices(options: AgentPoolServiceFactoryOptions)
   });
 
   return {
-    mcpSettings: new McpCodemodeController(sessionManager),
+    mcpSettings: new McpCodemodeController(undefined),
     attachments,
-    ...(durable ? {} : {sessionManager}),
     runtimeFacade,
     branchManager,
   };

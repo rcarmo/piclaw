@@ -638,7 +638,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "e506827fe77e26e48c722ff15a957a5d37acfe9c66c32e4511a67f627c2cf94f",
       "state": "retained-decoupled",
-      "currentSha256": "5724e1fedddc8948bc517d0adf454d577b701f53e37c9a8f45f80abf2cb45382",
+      "currentSha256": "45d6895348ad622c70e0b4d9d764a7f13f98a445faa4e88d28c89bb3fadfefed",
       "currentPurpose": "existing native domain/control/message transport boundary with no expense port",
       "directImportCallers": [
         {
@@ -722,7 +722,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "b0f702a1b555904e4bbab8b5c93b7497b5277d8f25a95b1258b0fc4c10daed4a",
       "state": "retained-decoupled",
-      "currentSha256": "09c5352613929a270d260401f6fc718bb9ef4b42b5ef41a847906f1e2bcec92d",
+      "currentSha256": "89e118439a73686e29dd28cd0f56cdca4eac4aa40d52942c1f4879cef3a69e63",
       "currentPurpose": "existing native domain/control/message transport boundary with no expense port",
       "directImportCallers": [
         {

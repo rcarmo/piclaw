@@ -19,8 +19,8 @@ test('no implicit legacy selection, mixed authority, native GC timer or fabricat
   initDatabase();
   const model=createAgentPoolModelOptions();
   const missing={...model,getDurableSession:undefined};
-  expect(()=>new AgentPool(missing)).toThrow('legacy capture must be explicit');
-  expect(()=>new AgentPool({...model,legacyCapture:true})).toThrow('Native host cannot select legacy capture');
+  expect(()=>new AgentPool(missing)).toThrow('Native host requires a durable session lookup');
+  expect(()=>new AgentPool({...model,legacyCapture:true})).toThrow('Resident legacy capture was removed');
   const intervals=spyOn(globalThis,'setInterval');
   let pool:AgentPool|undefined;
   try{
