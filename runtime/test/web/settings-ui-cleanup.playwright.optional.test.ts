@@ -365,3 +365,52 @@ for (const engine of ['chromium', 'webkit']) {
     expect(results).toEqual(results.map((result: any) => ({ section: result.section, scheme: result.scheme, background: 'rgb(245, 217, 10)', color: 'rgb(17, 17, 17)', errors: [] })));
   }, 120000);
 }
+
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine}: phones do not repeat the pane name under the header`, async () => {
+    const repeated = ['providers', 'environment', 'keyboard', 'editor', 'developer', 'mcp', 'authentication'];
+    for (const section of [...repeated, 'general']) {
+      const { page, errors } = await openSettings(engine, 390, section);
+      try {
+        const title = (await page.locator('.settings-dialog-title').innerText()).trim();
+        const first = page.locator('.settings-content h3').first();
+        await first.waitFor({ state: 'attached' });
+        const state = await first.evaluate((h) => ({ text: h.textContent!.trim(), height: h.getBoundingClientRect().height, repeat: h.classList.contains('settings-pane-title-repeat') }));
+        if (repeated.includes(section)) {
+          expect({ section, title, ...state }).toEqual({ section, title: state.text, text: title, height: 1, repeat: true });
+          // Still part of the accessibility tree.
+          expect(await page.getByRole('heading', { name: title, exact: true }).count()).toBeGreaterThan(0);
+        } else {
+          expect(state.repeat).toBe(false);
+          expect(state.height).toBeGreaterThan(10);
+        }
+        expect(errors).toEqual([]);
+      } finally { await page.close(); }
+    }
+    const desktop = await openSettings(engine, 1280, 'providers');
+    try {
+      expect(await desktop.page.locator('.settings-pane-title-repeat').count()).toBe(0);
+    } finally { await desktop.page.close(); }
+  }, 120000);
+}
+
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine}: Appearance lists theme modes and palettes from settings data`, async () => {
+    for (const width of [390, 1280]) {
+      const { page, errors } = await openSettings(engine, width, 'theme');
+      try {
+        const rows = await page.locator('.settings-theme-table tbody tr').evaluateAll(rows => rows.map(row => ({
+          label: row.querySelector('strong')?.textContent,
+          mode: row.querySelector('.settings-theme-mode-cell')?.textContent?.trim(),
+          swatches: [...row.querySelectorAll('.settings-theme-palette > span')].map(span => getComputedStyle(span).backgroundColor),
+          inside: (() => { const p = row.querySelector('.settings-theme-palette')!.getBoundingClientRect(), c = row.closest('.settings-content')!.getBoundingClientRect(); return p.left >= c.left && p.right <= c.right; })(),
+        })));
+        expect(rows.map(row => [row.label, row.mode])).toEqual([['Solarized', 'auto'], ['Tokyo Night', 'dark'], ['Paper', 'light']]);
+        for (const row of rows) { expect(row.swatches).toHaveLength(8); expect(new Set(row.swatches).size).toBeGreaterThan(4); expect(row.inside).toBe(true); }
+        const tint = await page.locator('.settings-tint-picker input[type="color"]').boundingBox();
+        expect(Math.abs(tint!.width - tint!.height)).toBeLessThanOrEqual(1); // a square swatch, not a stretched bar
+        expect(errors).toEqual([]);
+      } finally { await page.close(); }
+    }
+  }, 60000);
+}

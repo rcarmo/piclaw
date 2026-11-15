@@ -19,7 +19,9 @@ Ordinary Classic fields define the control reference. Preserve role-specific typ
 Classic ordinary text controls currently use 6px/10px padding, a 6px radius,
 1px border, and 0.88em text. Their native input font is intentionally preserved;
 textarea/monospace roles need not use the same family. In the Chromium fixture,
-text computes to 13.2px at 1366/820px and 11.088px at 520/390px.
+text computes to 13.2px at 1366/820px and 12.32px at 520/390px. Settings text
+does not shrink on phones; small text (help, badges, table headers) floors at
+12px and narrow dialogs give controls 44px touch targets.
 Widths are bounded by their containing pane. Preserve the existing role-specific dimensions.
 
 Native number steppers, search affordances, selects, multiline text and monospace

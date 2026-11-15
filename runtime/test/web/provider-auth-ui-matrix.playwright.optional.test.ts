@@ -12,9 +12,9 @@ import { initDatabase, getDb, getMessageByRowId, deleteMessageByRowId } from "..
 import { WebSessionBroadcastService } from "../../src/channels/web/sse/session-broadcast-service.js";
 import { createInteractionBroadcaster } from "../../src/channels/web/interaction-broadcaster.js";
 import { admitWebMessage } from "../../src/channels/web/messaging/message-store.js";
-import { startSessionRecording, stopSessionRecording, getSessionRecording, recordSessionFixtureNote } from "../../src/session-recordings/session-recordings.js";
+import { startSessionRecording, stopSessionRecording, getSessionRecording, recordSessionFixtureNote, recordTimelineInteraction } from "../../src/session-recordings/session-recordings.js";
 import { handleSessionRecordingRoutes } from "../../src/channels/web/handlers/session-recordings.js";
-import { TestAgentControlSession } from "../agent-control/session-fixture.js";
+import { createTestNativeAuthContext, TestAgentControlSession } from "../agent-control/session-fixture.js";
 import { createTempWorkspace } from "../helpers.js";
 import { addLogSink, removeLogSink, type LogRecord } from "../../src/utils/logger.js";
 
@@ -38,7 +38,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
       const logs: LogRecord[] = [];
       const sink = (record: LogRecord) => logs.push(record);
       addLogSink(sink);
-      let cleanupSession: TestAgentControlSession | undefined;
+      let cleanupSession: ReturnType<typeof createTestNativeAuthContext> | undefined;
       let cleanupBrowser: (() => Promise<void>) | undefined;
       let cleanupServer: (() => void) | undefined;
       let cleanupChat: string | undefined;
@@ -85,7 +85,8 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
       const registry = new ModelRegistry(runtime);
       const session = new TestAgentControlSession(ws.base, registry);
       session.modelRuntime = runtime;
-      cleanupSession = session;
+      const auth = createTestNativeAuthContext(session, chat, registry);
+      cleanupSession = auth;
       let latestPost = 0, latestMessage = "";
       const broadcasts: unknown[] = [];
       const broadcast = new WebSessionBroadcastService({ setProviderUsageRefreshListener: () => {} } as any, {
@@ -97,11 +98,13 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
         latestMessage = text;
         const row = await admitWebMessage(projection, { chatJid: chat, content: text, isBot: true, mediaIds: [], agentId: "default", agentName: "Agent" }, { contentBlocks: blocks });
         if (!row) throw new Error("Auth fixture message was not stored");
+        // WebChannel.admitMessage records committed interactions; mirror it here.
+        recordTimelineInteraction(row);
         latestPost = row.id;
         savedRows.push(latestPost);
         broadcaster.broadcastAgentResponse(row);
       };
-      const run = (command: any) => withChatContext(chat, "web", () => handleLogin(session as any, registry, command));
+      const run = (command: any) => withChatContext(chat, "web", () => handleLogin(auth as any, registry, command));
       const start = async () => { const result = await run({ type: "login", raw: "/login" }); await write(result.message, result.contentBlocks); };
       const service = new WebAdaptiveCardSidePromptService({
         defaultChatJid: chat, defaultAgentId: "default", json: (value, status = 200) => Response.json(value, { status }), webRuntimeConfig: {},
@@ -236,7 +239,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
         expect(errors).toEqual([]);
       } finally {
         removeLogSink(sink);
-        if (cleanupSession) cancelProviderAuthFlows(cleanupSession as any);
+        if (cleanupSession) { cancelProviderAuthFlows(cleanupSession as any); cleanupSession.dispose(); }
         if (cleanupChat) {
           stopSessionRecording(cleanupChat);
           for (const row of new Set(savedRows)) deleteMessageByRowId(cleanupChat, row);

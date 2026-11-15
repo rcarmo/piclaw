@@ -97,12 +97,14 @@ const mockSettingsData = {
   available_thinking_levels: ['off', 'minimal', 'low', 'medium', 'high'],
   autoCompactionEnabled: true,
   compactionPolicy: 'pi-durable',
+  // Same shape as GET /agent/settings-data: name, label, mode and THEME_LIST_COLOR_KEYS colours.
   themes: [
-    { id: 'system', label: 'System', dark: false },
-    { id: 'ipad-pro', label: 'iPad Pro', dark: true },
-    { id: 'terminal', label: 'Terminal', dark: true },
+    { name: 'default', label: 'Default', mode: 'auto', colors: { bgPrimary: '#ffffff', bgSecondary: '#f7f9fa', textPrimary: '#0f1419', textSecondary: '#536471', borderColor: '#eff3f4', accent: '#1d9bf0', danger: '#f4212e', success: '#00ba7c' } },
+    { name: 'solarized', label: 'Solarized', mode: 'auto', colors: { bgPrimary: '#fdf6e3', bgSecondary: '#eee8d5', textPrimary: '#073642', textSecondary: '#586e75', borderColor: '#d3cbb7', accent: '#268bd2', danger: '#dc322f', success: '#859900' } },
+    { name: 'tokyo-night', label: 'Tokyo Night', mode: 'dark', colors: { bgPrimary: '#1a1b26', bgSecondary: '#16161e', textPrimary: '#c0caf5', textSecondary: '#9aa5ce', borderColor: '#292e42', accent: '#7aa2f7', danger: '#f7768e', success: '#9ece6a' } },
+    { name: 'paper', label: 'Paper', mode: 'light', colors: { bgPrimary: '#fbfbf8', bgSecondary: '#f2f1ec', textPrimary: '#2b2b2b', textSecondary: '#6b6b6b', borderColor: '#e2e0d8', accent: '#b5522b', danger: '#c0392b', success: '#3c8d40' } },
   ],
-  colorKeys: ['accent', 'background', 'surface', 'text'],
+  colorKeys: ['bgPrimary', 'bgSecondary', 'textPrimary', 'textSecondary', 'borderColor', 'accent', 'danger', 'success'],
   toolsets: [
     { name: 'core', description: 'Core shell and file tools', tools: [{ name: 'read', kind: 'read-only' }, { name: 'bash', kind: 'mutating' }] },
     { name: 'ui', description: 'Web UI posting tools', tools: [{ name: 'send_dashboard_widget', kind: 'mutating' }, { name: 'send_adaptive_card', kind: 'mutating' }] },

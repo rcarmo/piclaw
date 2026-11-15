@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { chromium, webkit } from "playwright";
 import { handleLogin, cancelProviderAuthFlows, withPrivateProviderAuthResponse } from "../../src/agent-control/handlers/login.js";
 import { withChatContext } from "../../src/core/chat-context.js";
-import { createTestModelRegistry, TestAgentControlSession } from "../agent-control/session-fixture.js";
+import { createTestModelRegistry, createTestNativeAuthContext, TestAgentControlSession } from "../agent-control/session-fixture.js";
 import { getTestWorkspace } from "../helpers.js";
 
 const enabled = process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS === "1" && process.env.PICLAW_E2E_DISPOSABLE === "1";
@@ -19,7 +19,8 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) browserTest(`
   const registry = createTestModelRegistry([{ provider: "openai", id: "fixture-one", name: "Fixture One" }]);
   const session = new TestAgentControlSession(getTestWorkspace().workspace, registry);
   const controls: any[] = [];
-  const run = (step: string, data: object) => withChatContext("web:provider-browser-fixture", "web", () => handleLogin(session as any, registry, { type: "login", provider: `__${step} ${JSON.stringify(data)}`, raw: `/login __${step}` }));
+  const auth = createTestNativeAuthContext(session, "web:provider-browser-fixture", registry);
+  const run = (step: string, data: object) => withChatContext("web:provider-browser-fixture", "web", () => handleLogin(auth as any, registry, { type: "login", provider: `__${step} ${JSON.stringify(data)}`, raw: `/login __${step}` }));
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
     const path = new URL(request.url).pathname;
     if (path === "/fixture.js") return new Response(script, { headers: { "Content-Type": "text/javascript" } });
@@ -86,7 +87,8 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) browserTest(`
     expect(await page.locator("dialog").count()).toBe(0);
     expect(errors).toEqual([]);
   } finally {
-    cancelProviderAuthFlows(session as any);
+    cancelProviderAuthFlows(auth as any);
+    auth.dispose();
     await browser.close();
     server.stop(true);
   }

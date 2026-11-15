@@ -28,7 +28,12 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
     const context = await browser.newContext({ viewport: { width: 1280, height: 850 }, colorScheme: "dark", reducedMotion: "reduce", serviceWorkers: "block" });
     const page = await context.newPage();
     const errors: string[] = [], unhandled = new Set<string>(), requests: string[] = [];
-    page.on("pageerror", error => errors.push(error.message));
+    // WebKit reports fetches cancelled by a reload as "… due to access control
+    // checks". Ignore exactly that, only while this test is reloading a page.
+    let reloading = 0;
+    const record = (error: Error) => { if (!(reloading > 0 && engineName === "webkit" && /due to access control checks\.$/.test(error.message))) errors.push(error.message); };
+    const reload = async (target: typeof page) => { reloading++; try { await target.reload({ waitUntil: "load" }); } finally { reloading--; } };
+    page.on("pageerror", record);
     const chatJid = "web:default";
     const model = "fixture/first", thinking = "high", tokens = 1000;
     const versions={piclaw:'3.2.5',piAi:'0.99.1',bun:'1.4.2'};
@@ -110,7 +115,7 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
         await toggle.click();
         expect(await toggle.getAttribute('aria-selected')).toBe('false');
         const second=await context.newPage();
-        second.on('pageerror',e=>errors.push(e.message));
+        second.on('pageerror',record);
         await second.goto(server.url+'?skin='+skin+'&chat_jid='+encodeURIComponent(chatJid),{waitUntil:'load'});
         const otherToggle=second.locator('.workbench-activity-button[aria-label="Explorer"]');
         await otherToggle.waitFor();
@@ -124,9 +129,9 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
           document.dispatchEvent(new Event('visibilitychange'));
         });
         expect(await toggle.getAttribute('aria-selected')).toBe('false');
-        await page.reload({waitUntil:'load'});await toggle.waitFor();
+        await reload(page);await toggle.waitFor();
         expect(await toggle.getAttribute('aria-selected')).toBe('false');
-        await second.reload({waitUntil:'load'});await otherToggle.waitFor();
+        await reload(second);await otherToggle.waitFor();
         expect(await otherToggle.getAttribute('aria-selected')).toBe('true');
         await second.close();
         await page.bringToFront();

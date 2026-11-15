@@ -391,3 +391,24 @@ export class TestAgentControlSession {
     }
   }
 }
+
+/**
+ * Native provider-auth scope for a test session. Model activation is host-owned
+ * (no legacy AgentSession path); this mirrors the runtime's /model result.
+ */
+export function createTestNativeAuthContext(session: TestAgentControlSession, chatJid: string, registry: { find?(provider: string, modelId: string): any }) {
+  const lifetime = new AbortController();
+  return Object.freeze({
+    kind: "native-provider-auth" as const, chatJid, bindingId: `test-binding:${session.sessionId}`,
+    runtime: session.modelRuntime, signal: lifetime.signal,
+    assertCurrent() { lifetime.signal.throwIfAborted(); },
+    runOwned<T>(operation: () => Promise<T>): Promise<T> { return Promise.resolve().then(operation); },
+    async activateModel(provider: string, modelId: string) {
+      const selected = registry.find?.(provider, modelId) ?? session.modelRuntime?.getModel?.(provider, modelId);
+      if (!selected) return { status: "error" as const, message: `Model ${provider}/${modelId} is not available.` };
+      session.model = selected;
+      return { status: "success" as const, message: `Model set to ${provider}/${modelId}.`, model_label: `${provider}/${modelId}` };
+    },
+    dispose() { lifetime.abort(); },
+  });
+}
