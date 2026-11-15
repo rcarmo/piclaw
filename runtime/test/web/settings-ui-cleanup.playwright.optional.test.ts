@@ -477,7 +477,7 @@ for (const engine of ['chromium', 'webkit']) {
         root.style.cssText = 'display:flex;flex-direction:column';
         root.innerHTML = '<style></style><h4 class="settings-addon-heading">First</h4><p class="settings-addon-help">Help</p>'
           + '<label class="settings-addon-check"><input type="checkbox"> One</label><label class="settings-addon-check"><input type="checkbox"> Two</label>'
-          + '<h4 class="settings-addon-heading">Second</h4><div class="settings-addon-actions"><button type="button">Refresh</button></div>';
+          + '<h4 class="settings-addon-heading">Second</h4><div class="settings-addon-actions"><button type="button">Refresh</button></div><p class="settings-addon-help">After</p>';
         pane.replaceChildren(root);
         const [first, second] = [...root.querySelectorAll('h4')];
         const help = root.querySelector('p')!;
@@ -490,6 +490,7 @@ for (const engine of ['chromium', 'webkit']) {
           sectionGap: second.getBoundingClientRect().top - two.bottom,
           // The Add-ons catalogue card pushes its own actions right; pane action rows start at the left edge.
           actionsInset: root.querySelector('.settings-addon-actions button')!.getBoundingClientRect().left - root.getBoundingClientRect().left,
+          actionsGap: root.querySelectorAll('p')[1].getBoundingClientRect().top - root.querySelector('.settings-addon-actions')!.getBoundingClientRect().bottom,
         };
       });
       expect(box.firstTop).toBe(0);
@@ -498,6 +499,7 @@ for (const engine of ['chromium', 'webkit']) {
       expect(box.stacked).toBe(true);
       expect(box.sectionGap).toBeGreaterThanOrEqual(24);
       expect(box.actionsInset).toBeLessThanOrEqual(1);
+      expect(box.actionsGap).toBeGreaterThanOrEqual(8);
       expect(errors).toEqual([]);
     } finally { await page.close(); }
   }, 30000);

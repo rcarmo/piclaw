@@ -74,6 +74,7 @@
     align-items: center;
     gap: 8px;
     min-width: 0;
+    margin: 0 0 12px;
 }
 .settings-addon-pane .settings-addon-error { color: var(--danger-color, var(--error, #e55)); }
 .settings-addon-pane .settings-addon-status { color: var(--text-secondary); }
