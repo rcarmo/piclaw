@@ -1,6 +1,5 @@
 import { beforeAll, expect, test } from "bun:test";
 import { resolve, join } from "node:path";
-import { readFileSync } from "node:fs";
 import { chromium, webkit } from "playwright";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { Model, Provider } from "@earendil-works/pi-ai";
@@ -11,8 +10,6 @@ import { initDatabase, getDb, getMessageByRowId, deleteMessageByRowId } from "..
 import { WebSessionBroadcastService } from "../../src/channels/web/sse/session-broadcast-service.js";
 import { createInteractionBroadcaster } from "../../src/channels/web/interaction-broadcaster.js";
 import { WebChannel } from "../../src/channels/web.js";
-import { startSessionRecording, stopSessionRecording, getSessionRecording, recordSessionFixtureNote } from "../../src/session-recordings/session-recordings.js";
-import { handleSessionRecordingRoutes } from "../../src/channels/web/handlers/session-recordings.js";
 import { TestAgentControlSession } from "../agent-control/session-fixture.js";
 import { createNativeControlFixture } from "../agent-control/native-control-fixture.js";
 import { createTempWorkspace } from "../helpers.js";
@@ -43,15 +40,10 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
       let cleanupServer: (() => void) | undefined;
       let cleanupChat: string | undefined;
       const savedRows: number[] = [];
-      const previousRecordingsDir = process.env.PICLAW_RECORDINGS_DIR;
-      process.env.PICLAW_RECORDINGS_DIR = join(ws.base, "recordings");
       try {
       const sentinel = "PRIVATE-UI-provider-event";
       const chat = `web:auth-ui:${crypto.randomUUID()}`, id = "synthetic-ui-auth";
       cleanupChat = chat;
-      const recording = startSessionRecording({ chatJid: chat, title: "Auth boundary fixture", mode: "full" });
-      const publicControl = "PUBLIC-RECORDING-CONTROL";
-      recordSessionFixtureNote(chat, { marker: publicControl });
       const model: Model<"openai-completions"> = { id: "synthetic-model", name: "Synthetic Model", provider: id,
         api: "openai-completions", baseUrl: "https://fixture.invalid/v1", reasoning: false, input: ["text"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 4096 };
@@ -96,7 +88,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
       const projection = { pendingLinkPreviews: new Set<number>(), broadcastEvent: (type: string, data: unknown) => broadcast.broadcastEvent(type, data) };
       const write = async (text: string, blocks: unknown[] = []) => {
         latestMessage = text;
-        // Use the actual after-commit recording composition, not its lower-level SQL helper.
+        // Use the actual WebChannel admission composition, not its lower-level SQL helper.
         const row = await WebChannel.prototype.admitMessage.call(projection as unknown as WebChannel, chat, text, true, [], { contentBlocks: blocks });
         if (!row) throw new Error("Auth fixture message was not stored");
         latestPost = row.id;
@@ -194,60 +186,16 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
         }
         expect(JSON.stringify({ rows: [...new Set(savedRows)].map(row => getMessageByRowId(chat, row)), broadcasts })).not.toContain(sentinel);
         expect(JSON.stringify(logs)).not.toContain(sentinel);
-        stopSessionRecording(chat);
-        const recorded = getSessionRecording(recording.id);
-        expect(recorded?.meta.mode).toBe("full");
-        expect(recorded?.events.some(event => event.kind === "assistant_output")).toBe(true);
-        expect(recorded?.events.some(event => event.kind === "sse_event" && (event.data as any).event_type === "interaction_updated")).toBe(true);
-        expect(recorded?.events.every(event => event.redactions === undefined)).toBe(true);
-        expect(recorded?.events.filter(event => event.kind === "assistant_output" && (event.data as any).interaction_id).map(event => (event.data as any).interaction_id).sort()).toEqual([...new Set(savedRows)].sort());
-        expect(readFileSync(recording.tracePath, "utf8")).toContain(publicControl);
-        expect(readFileSync(recording.tracePath, "utf8")).not.toContain(sentinel);
-        const responder = (value: unknown, status = 200) => Response.json(value, { status });
-        const checkExports = async (recordingId: string) => {
-          for (const format of ["json", "jsonl", "html"]) {
-            const path = `/agent/recordings/${recordingId}/export`;
-            const response = await handleSessionRecordingRoutes(new Request(`http://fixture.invalid${path}?format=${format}`), path, responder);
-            expect(response?.status).toBe(200);
-            expect(response?.headers.get("Cache-Control")).toBe("no-store");
-            const body = await response!.text();
-            expect(body).toContain(recordingId);
-            if (recordingId === recording.id) expect(body).toContain(publicControl);
-            expect(body).not.toContain(sentinel);
-            const events = format === "jsonl" ? body.trim().split("\n").map(line => JSON.parse(line))
-              : format === "json" ? JSON.parse(body).events
-              : JSON.parse(body.split("const embeddedTrace = ")[1].split(";\nconst fixture =")[0]).events;
-            expect(events.filter((event: any) => event.kind === "assistant_output" && event.data.interaction_id).map((event: any) => event.data.interaction_id).sort()).toEqual([...new Set(savedRows)].sort());
-            expect(events.every((event: any) => event.redactions === undefined)).toBe(true);
-          }
-        };
-        await checkExports(recording.id);
-        // Exercise the real persisted-timeline snapshot path without replaying
-        // private HTTP responses into a recorder or relying on redaction.
-        const snapshotResponse = await handleSessionRecordingRoutes(new Request("http://fixture.invalid/agent/recordings/start", {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_jid: chat, mode: "full", include_timeline_snapshot: true }),
-        }), "/agent/recordings/start", responder);
-        expect(snapshotResponse?.status).toBe(201);
-        const snapshot = (await snapshotResponse!.json()).recording;
-        stopSessionRecording(chat);
-        const snapshotEvents = getSessionRecording(snapshot.id)!.events;
-        expect(snapshotEvents.filter(event => event.kind === "assistant_output").map(event => (event.data as any).interaction_id).sort()).toEqual([...new Set(savedRows)].sort());
-        expect(snapshotEvents.every(event => event.redactions === undefined)).toBe(true);
-        expect(readFileSync(snapshot.tracePath, "utf8")).not.toContain(sentinel);
-        await checkExports(snapshot.id);
         expect(errors).toEqual([]);
       } finally {
         removeLogSink(sink);
         cleanupControl?.();
         if (cleanupChat) {
-          stopSessionRecording(cleanupChat);
           for (const row of new Set(savedRows)) deleteMessageByRowId(cleanupChat, row);
         }
         try { await cleanupBrowser?.(); }
         finally {
           cleanupServer?.();
-          if (previousRecordingsDir === undefined) delete process.env.PICLAW_RECORDINGS_DIR;
-          else process.env.PICLAW_RECORDINGS_DIR = previousRecordingsDir;
           ws.cleanup();
         }
       }

@@ -299,30 +299,6 @@ export function getAgentControlConfig(): Readonly<AgentControlConfig> {
   return Object.freeze(readDomainConfig(agentControlDomainSchema, getDomainConfigOptions()));
 }
 
-export interface SessionRecordingsConfig {
-  directory: string;
-}
-
-const sessionRecordingsDomainSchema = registerDomainConfig<SessionRecordingsConfig>({
-  domain: "sessionRecordings",
-  fields: {
-    directory: stringField({
-      key: "directory",
-      owner: "storage",
-      defaultValue: resolve(DATA_DIR, "session-recordings"),
-      nonEmpty: true,
-      persistence: "json-config",
-      precedence: ["compat-env", "persisted", "default"],
-      secretClass: "none",
-      compatibilityEnv: [{ envKey: "PICLAW_RECORDINGS_DIR", replacement: "domains.sessionRecordings.directory", removalVersion: "3.0.0", skipInvalid: true }],
-    }),
-  },
-});
-
-export function getSessionRecordingsConfig(): Readonly<SessionRecordingsConfig> {
-  return Object.freeze(readDomainConfig(sessionRecordingsDomainSchema, getDomainConfigOptions()));
-}
-
 /** Directory for persisted Pi session files. */
 export const SESSIONS_DIR = resolve(DATA_DIR, "sessions");
 const PROGRESS_WATCHDOG_ENABLED_CONFIG_KEYS = [

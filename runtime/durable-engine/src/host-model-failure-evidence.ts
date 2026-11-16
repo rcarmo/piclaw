@@ -1,7 +1,7 @@
 import { randomUUID, createHash } from "node:crypto";
 import { closeSync, fsyncSync, lstatSync, mkdirSync, openSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { previewSessionRecordingRedaction } from "../../src/session-recordings/session-recordings.js";
+import { redactSecrets } from "../../src/utils/secret-redaction.js";
 import type { ModelFailure } from "./host-model-failure.js";
 
 export type ModelFailureEvidence = {
@@ -37,7 +37,7 @@ function errorFields(error: unknown, seen = new Set<object>(), depth = 0): Recor
 }
 
 function redact(value: unknown): unknown {
-  const { data } = previewSessionRecordingRedaction(value, { mode: "redacted", redaction: { maxStringLength: 8192 } });
+  const data = redactSecrets(value, { maxStringLength: 8192 });
   function visit(item: unknown): unknown {
     if (typeof item === "string") return item
       .replace(/https?:\/\/[^\s"<>]+/gi, "[URL redacted]")

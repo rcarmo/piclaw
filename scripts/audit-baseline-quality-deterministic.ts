@@ -273,7 +273,6 @@ export const groupDefinitions: GroupDefinition[] = [
         "display-update-coalescer.test.ts",
         "tool-status-hints.test.ts",
         "agent-command-status-title.test.ts",
-        "session-recordings-handler.test.ts",
       ]),
   },
   {
@@ -494,12 +493,6 @@ export const groupDefinitions: GroupDefinition[] = [
     label: "feature regression tests",
     notes: "End-to-end feature validation against a real in-process web server.",
     match: (relativePath) => relativePath.startsWith("features/"),
-  },
-  {
-    id: "session-recordings",
-    label: "session recordings",
-    notes: "Session trace recording core, redaction, lifecycle, and replay coverage.",
-    match: (relativePath) => relativePath.startsWith("session-recordings/"),
   },
   {
     id: "service-effects",

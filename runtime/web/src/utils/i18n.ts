@@ -123,7 +123,6 @@ type MessageKey =
   | 'settings.authentication.totpManage'
   | 'settings.section.general'
   | 'settings.section.sessions'
-  | 'settings.section.recordings'
   | 'settings.section.compaction'
   | 'settings.section.keyboard'
   | 'settings.section.workspace'
@@ -137,7 +136,6 @@ type MessageKey =
   | 'settings.section.keychain'
   | 'settings.section.tools'
   | 'settings.section.addons'
-  | 'settings.placeholder.recordings'
   | 'settings.placeholder.keyboard'
   | 'settings.placeholder.environment'
   | 'settings.placeholder.models'
@@ -463,58 +461,6 @@ type MessageKey =
   | 'settings.addons.noMatch'
   | 'settings.addons.restartNotice'
   | 'settings.addons.restartNow'
-  | 'settings.recordings.modeFull'
-  | 'settings.recordings.modeMetadata'
-  | 'settings.recordings.modeRedacted'
-  | 'settings.recordings.selectPrompt'
-  | 'settings.recordings.playback'
-  | 'settings.recordings.refresh'
-  | 'settings.recordings.delete'
-  | 'settings.recordings.status'
-  | 'settings.recordings.mode'
-  | 'settings.recordings.chat'
-  | 'settings.recordings.started'
-  | 'settings.recordings.ended'
-  | 'settings.recordings.events'
-  | 'settings.recordings.redactions'
-  | 'settings.recordings.exportJson'
-  | 'settings.recordings.exportJsonl'
-  | 'settings.recordings.exportHtml'
-  | 'settings.recordings.eventSummary'
-  | 'settings.recordings.inspectHint'
-  | 'settings.recordings.firstEvents'
-  | 'settings.recordings.heading'
-  | 'settings.recordings.intro'
-  | 'settings.recordings.chatJid'
-  | 'settings.recordings.title'
-  | 'settings.recordings.titlePlaceholder'
-  | 'settings.recordings.modeLabelField'
-  | 'settings.recordings.optRedacted'
-  | 'settings.recordings.optMetadata'
-  | 'settings.recordings.optFull'
-  | 'settings.recordings.includeSnapshot'
-  | 'settings.recordings.extraKeys'
-  | 'settings.recordings.extraPatterns'
-  | 'settings.recordings.stopCurrent'
-  | 'settings.recordings.start'
-  | 'settings.recordings.redactionPreview'
-  | 'settings.recordings.previewRedaction'
-  | 'settings.recordings.loading'
-  | 'settings.recordings.noneYet'
-  | 'settings.recordings.noneYetHint'
-  | 'settings.recordings.listLabel'
-  | 'settings.recordings.eventsCount'
-  | 'settings.recordings.noMatch'
-  | 'settings.recordings.startedToast'
-  | 'settings.recordings.startFailed'
-  | 'settings.recordings.stoppedToast'
-  | 'settings.recordings.stopFailed'
-  | 'settings.recordings.deleteConfirm'
-  | 'settings.recordings.deletedToast'
-  | 'settings.recordings.deleteFailed'
-  | 'settings.recordings.loadOneFailed'
-  | 'settings.recordings.loadFailed'
-  | 'settings.recordings.previewFailed'
   | 'settings.keychain.loadFailed'
   | 'settings.keychain.addFailed'
   | 'settings.keychain.deleteFailed'
@@ -772,7 +718,6 @@ const EN: Record<MessageKey, string> = {
     'settings.authentication.totpManage': 'To enrol an authenticator, use /totp enrol in chat. To replace the secret, use /totp reset <current code>. Changes require confirmation through the enrolment flow.',
   'settings.section.general': 'General',
   'settings.section.sessions': 'Sessions',
-  'settings.section.recordings': 'Recordings',
   'settings.section.compaction': 'Compaction',
   'settings.section.keyboard': 'Keyboard',
   'settings.section.workspace': 'Workspace',
@@ -786,7 +731,6 @@ const EN: Record<MessageKey, string> = {
   'settings.section.keychain': 'Keychain',
   'settings.section.tools': 'Tools',
   'settings.section.addons': 'Add-ons',
-  'settings.placeholder.recordings': 'Filter recordings…',
   'settings.placeholder.keyboard': 'Filter shortcuts…',
   'settings.placeholder.environment': 'Filter environment…',
   'settings.placeholder.models': 'Filter models…',
@@ -1106,58 +1050,6 @@ const EN: Record<MessageKey, string> = {
   'settings.addons.noMatch': 'No add-ons match "{filter}"',
   'settings.addons.restartNotice': 'Extension changes are installed but inactive until piclaw restarts.',
   'settings.addons.restartNow': 'Restart Now',
-  'settings.recordings.modeFull': 'full / trusted',
-  'settings.recordings.modeMetadata': 'metadata only',
-  'settings.recordings.modeRedacted': 'redacted',
-  'settings.recordings.selectPrompt': 'Select a recording to inspect, replay, export, or delete it.',
-  'settings.recordings.playback': 'Playback',
-  'settings.recordings.refresh': 'Refresh',
-  'settings.recordings.delete': 'Delete',
-  'settings.recordings.status': 'Status',
-  'settings.recordings.mode': 'Mode',
-  'settings.recordings.chat': 'Chat',
-  'settings.recordings.started': 'Started',
-  'settings.recordings.ended': 'Ended',
-  'settings.recordings.events': 'Events',
-  'settings.recordings.redactions': 'Redactions',
-  'settings.recordings.exportJson': 'Export JSON',
-  'settings.recordings.exportJsonl': 'Export JSONL',
-  'settings.recordings.exportHtml': 'Export standalone HTML',
-  'settings.recordings.eventSummary': 'Event summary',
-  'settings.recordings.inspectHint': 'Open or refresh details to inspect trace events.',
-  'settings.recordings.firstEvents': 'First events',
-  'settings.recordings.heading': 'Session Recording',
-  'settings.recordings.intro': 'Opt-in trace capture for deterministic playback and screen-recording exports. Playback never calls live agent or tool endpoints.',
-  'settings.recordings.chatJid': 'Chat JID',
-  'settings.recordings.title': 'Title',
-  'settings.recordings.titlePlaceholder': 'Demo recording',
-  'settings.recordings.modeLabelField': 'Mode',
-  'settings.recordings.optRedacted': 'Redacted',
-  'settings.recordings.optMetadata': 'Metadata only',
-  'settings.recordings.optFull': 'Full / trusted local',
-  'settings.recordings.includeSnapshot': 'Include timeline snapshot',
-  'settings.recordings.extraKeys': 'Extra redacted keys',
-  'settings.recordings.extraPatterns': 'Extra regex patterns',
-  'settings.recordings.stopCurrent': 'Stop current chat recording',
-  'settings.recordings.start': 'Start recording',
-  'settings.recordings.redactionPreview': 'Redaction preview',
-  'settings.recordings.previewRedaction': 'Preview redaction',
-  'settings.recordings.loading': 'Loading recordings…',
-  'settings.recordings.noneYet': 'No recordings yet.',
-  'settings.recordings.noneYetHint': 'Start a recording above, then use playback/export for deterministic screen capture.',
-  'settings.recordings.listLabel': 'Session recordings',
-  'settings.recordings.eventsCount': '{count} events',
-  'settings.recordings.noMatch': 'No recordings match “{filter}”.',
-  'settings.recordings.startedToast': 'Recording started for {chat}.',
-  'settings.recordings.startFailed': 'Failed to start recording.',
-  'settings.recordings.stoppedToast': 'Recording stopped for {chat}.',
-  'settings.recordings.stopFailed': 'Failed to stop recording.',
-  'settings.recordings.deleteConfirm': 'Delete recording {id}?',
-  'settings.recordings.deletedToast': 'Recording deleted.',
-  'settings.recordings.deleteFailed': 'Failed to delete recording.',
-  'settings.recordings.loadOneFailed': 'Failed to load recording.',
-  'settings.recordings.loadFailed': 'Failed to load recordings.',
-  'settings.recordings.previewFailed': 'Preview failed.',
   'settings.keychain.loadFailed': 'Failed to load keychain.',
   'settings.keychain.addFailed': 'Failed to add entry.',
   'settings.keychain.deleteFailed': 'Failed to delete entry.',
@@ -1415,7 +1307,6 @@ const ZH_CN: Partial<Record<MessageKey, string>> = {
     'settings.authentication.totpManage': '在聊天中使用 /totp enrol 注册验证器。使用 /totp reset <current code> 替换密钥。更改须通过注册流程确认。',
   'settings.section.general': '常规',
   'settings.section.sessions': '会话',
-  'settings.section.recordings': '录制',
   'settings.section.compaction': '压缩',
   'settings.section.keyboard': '键盘',
   'settings.section.workspace': '工作区',
@@ -1429,7 +1320,6 @@ const ZH_CN: Partial<Record<MessageKey, string>> = {
   'settings.section.keychain': '密钥串',
   'settings.section.tools': '工具',
   'settings.section.addons': '插件',
-  'settings.placeholder.recordings': '筛选录制…',
   'settings.placeholder.keyboard': '筛选快捷键…',
   'settings.placeholder.environment': '筛选环境…',
   'settings.placeholder.models': '筛选模型…',
@@ -1749,58 +1639,6 @@ const ZH_CN: Partial<Record<MessageKey, string>> = {
   'settings.addons.noMatch': '没有匹配 “{filter}” 的插件',
   'settings.addons.restartNotice': '扩展更改已安装，但在 piclaw 重启之前处于非活动状态。',
   'settings.addons.restartNow': '立即重启',
-  'settings.recordings.modeFull': '完整 / 受信任',
-  'settings.recordings.modeMetadata': '仅元数据',
-  'settings.recordings.modeRedacted': '已脱敏',
-  'settings.recordings.selectPrompt': '选择一个录制以检查、回放、导出或删除。',
-  'settings.recordings.playback': '回放',
-  'settings.recordings.refresh': '刷新',
-  'settings.recordings.delete': '删除',
-  'settings.recordings.status': '状态',
-  'settings.recordings.mode': '模式',
-  'settings.recordings.chat': '聊天',
-  'settings.recordings.started': '开始',
-  'settings.recordings.ended': '结束',
-  'settings.recordings.events': '事件',
-  'settings.recordings.redactions': '脱敏',
-  'settings.recordings.exportJson': '导出 JSON',
-  'settings.recordings.exportJsonl': '导出 JSONL',
-  'settings.recordings.exportHtml': '导出独立 HTML',
-  'settings.recordings.eventSummary': '事件摘要',
-  'settings.recordings.inspectHint': '打开或刷新详情以检查跟踪事件。',
-  'settings.recordings.firstEvents': '首批事件',
-  'settings.recordings.heading': '会话录制',
-  'settings.recordings.intro': '选择性加入的跟踪捕获，用于确定性回放和屏幕录制导出。回放绝不会调用实时代理或工具端点。',
-  'settings.recordings.chatJid': '聊天 JID',
-  'settings.recordings.title': '标题',
-  'settings.recordings.titlePlaceholder': '演示录制',
-  'settings.recordings.modeLabelField': '模式',
-  'settings.recordings.optRedacted': '已脱敏',
-  'settings.recordings.optMetadata': '仅元数据',
-  'settings.recordings.optFull': '完整 / 受信任本地',
-  'settings.recordings.includeSnapshot': '包含时间线快照',
-  'settings.recordings.extraKeys': '额外脱敏键',
-  'settings.recordings.extraPatterns': '额外正则模式',
-  'settings.recordings.stopCurrent': '停止当前聊天录制',
-  'settings.recordings.start': '开始录制',
-  'settings.recordings.redactionPreview': '脱敏预览',
-  'settings.recordings.previewRedaction': '预览脱敏',
-  'settings.recordings.loading': '正在加载录制…',
-  'settings.recordings.noneYet': '还没有录制。',
-  'settings.recordings.noneYetHint': '在上方开始录制，然后使用回放/导出进行确定性屏幕捕获。',
-  'settings.recordings.listLabel': '会话录制',
-  'settings.recordings.eventsCount': '{count} 个事件',
-  'settings.recordings.noMatch': '没有匹配 “{filter}” 的录制。',
-  'settings.recordings.startedToast': '已为 {chat} 开始录制。',
-  'settings.recordings.startFailed': '开始录制失败。',
-  'settings.recordings.stoppedToast': '已为 {chat} 停止录制。',
-  'settings.recordings.stopFailed': '停止录制失败。',
-  'settings.recordings.deleteConfirm': '删除录制 {id}？',
-  'settings.recordings.deletedToast': '录制已删除。',
-  'settings.recordings.deleteFailed': '删除录制失败。',
-  'settings.recordings.loadOneFailed': '加载录制失败。',
-  'settings.recordings.loadFailed': '加载录制失败。',
-  'settings.recordings.previewFailed': '预览失败。',
   'settings.keychain.loadFailed': '加载密钥链失败。',
   'settings.keychain.addFailed': '添加条目失败。',
   'settings.keychain.deleteFailed': '删除条目失败。',
@@ -2058,7 +1896,6 @@ const JA: Partial<Record<MessageKey, string>> = {
     'settings.authentication.totpManage': 'チャットで /totp enrol を使って認証アプリを登録します。シークレットの変更には /totp reset <current code> を使います。登録フローでの確認が必要です。',
   'settings.section.general': '一般',
   'settings.section.sessions': 'セッション',
-  'settings.section.recordings': '録画',
   'settings.section.compaction': '圧縮',
   'settings.section.keyboard': 'キーボード',
   'settings.section.workspace': 'ワークスペース',
@@ -2072,7 +1909,6 @@ const JA: Partial<Record<MessageKey, string>> = {
   'settings.section.keychain': 'キーチェーン',
   'settings.section.tools': 'ツール',
   'settings.section.addons': 'アドオン',
-  'settings.placeholder.recordings': '録画をフィルター…',
   'settings.placeholder.keyboard': 'ショートカットをフィルター…',
   'settings.placeholder.environment': '環境をフィルター…',
   'settings.placeholder.models': 'モデルをフィルター…',
@@ -2392,58 +2228,6 @@ const JA: Partial<Record<MessageKey, string>> = {
   'settings.addons.noMatch': '「{filter}」に一致するアドオンはありません',
   'settings.addons.restartNotice': '拡張機能の変更はインストールされましたが、piclaw が再起動するまで非アクティブです。',
   'settings.addons.restartNow': '今すぐ再起動',
-  'settings.recordings.modeFull': '完全 / 信頼済み',
-  'settings.recordings.modeMetadata': 'メタデータのみ',
-  'settings.recordings.modeRedacted': '編集済み',
-  'settings.recordings.selectPrompt': '録画を選択して検査、再生、エクスポート、または削除します。',
-  'settings.recordings.playback': '再生',
-  'settings.recordings.refresh': '更新',
-  'settings.recordings.delete': '削除',
-  'settings.recordings.status': 'ステータス',
-  'settings.recordings.mode': 'モード',
-  'settings.recordings.chat': 'チャット',
-  'settings.recordings.started': '開始',
-  'settings.recordings.ended': '終了',
-  'settings.recordings.events': 'イベント',
-  'settings.recordings.redactions': '編集',
-  'settings.recordings.exportJson': 'JSON をエクスポート',
-  'settings.recordings.exportJsonl': 'JSONL をエクスポート',
-  'settings.recordings.exportHtml': 'スタンドアロン HTML をエクスポート',
-  'settings.recordings.eventSummary': 'イベント概要',
-  'settings.recordings.inspectHint': '詳細を開くか更新してトレースイベントを検査します。',
-  'settings.recordings.firstEvents': '最初のイベント',
-  'settings.recordings.heading': 'セッション録画',
-  'settings.recordings.intro': '決定論的な再生と画面録画エクスポートのためのオプトイントレースキャプチャ。再生でライブエージェントやツールのエンドポイントを呼び出すことはありません。',
-  'settings.recordings.chatJid': 'チャット JID',
-  'settings.recordings.title': 'タイトル',
-  'settings.recordings.titlePlaceholder': 'デモ録画',
-  'settings.recordings.modeLabelField': 'モード',
-  'settings.recordings.optRedacted': '編集済み',
-  'settings.recordings.optMetadata': 'メタデータのみ',
-  'settings.recordings.optFull': '完全 / 信頼済みローカル',
-  'settings.recordings.includeSnapshot': 'タイムラインスナップショットを含める',
-  'settings.recordings.extraKeys': '追加の編集キー',
-  'settings.recordings.extraPatterns': '追加の正規表現パターン',
-  'settings.recordings.stopCurrent': '現在のチャット録画を停止',
-  'settings.recordings.start': '録画を開始',
-  'settings.recordings.redactionPreview': '編集プレビュー',
-  'settings.recordings.previewRedaction': '編集をプレビュー',
-  'settings.recordings.loading': '録画を読み込み中…',
-  'settings.recordings.noneYet': 'まだ録画がありません。',
-  'settings.recordings.noneYetHint': '上で録画を開始し、再生/エクスポートを使用して決定論的な画面キャプチャを行います。',
-  'settings.recordings.listLabel': 'セッション録画',
-  'settings.recordings.eventsCount': '{count} 件のイベント',
-  'settings.recordings.noMatch': '「{filter}」に一致する録画はありません。',
-  'settings.recordings.startedToast': '{chat} の録画を開始しました。',
-  'settings.recordings.startFailed': '録画の開始に失敗しました。',
-  'settings.recordings.stoppedToast': '{chat} の録画を停止しました。',
-  'settings.recordings.stopFailed': '録画の停止に失敗しました。',
-  'settings.recordings.deleteConfirm': '録画 {id} を削除しますか？',
-  'settings.recordings.deletedToast': '録画を削除しました。',
-  'settings.recordings.deleteFailed': '録画の削除に失敗しました。',
-  'settings.recordings.loadOneFailed': '録画の読み込みに失敗しました。',
-  'settings.recordings.loadFailed': '録画の読み込みに失敗しました。',
-  'settings.recordings.previewFailed': 'プレビューに失敗しました。',
   'settings.keychain.loadFailed': 'キーチェーンの読み込みに失敗しました。',
   'settings.keychain.addFailed': 'エントリの追加に失敗しました。',
   'settings.keychain.deleteFailed': 'エントリの削除に失敗しました。',

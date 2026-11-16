@@ -26,13 +26,6 @@ window.fetch = async (input, init) => {
   if (path === "/agent/keychain/reveal") return Response.json({ ok: false, needs_master_password: true });
   if (path.startsWith("/agent/settings/")) return Response.json({ ok: true, settings: { ...data, ...body } });
   if (path === "/agent/addons/api/sample-addon/config") return Response.json({ ok: true, config: { enabled: true, greeting: "Fixture greeting", secret_keychain: "sample-addon/api-key" } });
-  if (path === "/agent/addons/api/delegate/models" || path === "/agent/addons/api/delegate/config") {
-    return Response.json({ ok: true, config: { searchable_providers: [], excluded_providers: ["fixture"], excluded_models: [] }, providers: [{ provider: "fixture", modelCount: 20, defaultExcluded: false }, { provider: "fixture-other", modelCount: 2, defaultExcluded: false }],
-      candidates: Array.from({ length: 20 }, (_, i) => ({ provider: "fixture", id: `fixture-model-${i}`, model: `fixture-model-${i}`, name: `Fixture ${i}`, tier: "standard", contextWindow: 32000 })),
-      rejected_models: Array.from({ length: 10 }, (_, i) => ({ provider: "fixture", fullId: `fixture/rejected-${i}`, rejection_reason: "not_approved" })),
-      effective_exclusions: { providers: [], models: [] }, cache: {}, runtime_catalog: {}, executable_catalog: {},
-    });
-  }
   if (path.includes("/message")) return Response.json({ command: { status: "success", message: "Saved" } });
   return Response.json({ ok: true, entries: [], items: [] });
 };
@@ -63,7 +56,7 @@ const root = document.getElementById("app")!;
   const { requestOpenSettingsDialog } = await import("../../../web/src/components/settings-dialog-events.js");
   const { SettingsDialogContent } = await import("../../../web/src/components/settings-dialog.js");
   registerSettingsPane({ id: "contract", label: "Contract", component: () => html`<${Controls} addon />`, icon: null });
-  if (["sample-addon", "delegate"].includes(section)) {
+  if (section === "sample-addon") {
     Object.assign(globalThis, { __piclawPreactHtm: vendor, __piclawSettingsPaneRegistry: { registerSettingsPane, notifySettingsPanesChanged() {} } });
     const entry = `/addon/${section}/index.ts`;
     await import(entry);

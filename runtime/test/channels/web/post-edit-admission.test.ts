@@ -8,7 +8,6 @@ import { getRuntimeConfigPaths } from '../../../src/core/config.js';
 import { WebChannel } from '../../../src/channels/web.js';
 import * as db from '../../../src/db.js';
 import * as messages from '../../../src/db/messages.js';
-import * as recordings from '../../../src/session-recordings/session-recordings.js';
 
 const chat = 'web:post-admission';
 async function fixture(path?: string, media = false) {
@@ -123,29 +122,6 @@ for (const annotations of [false, true]) test(`post edit refuses inherited trans
       expect(db.getMessageByRowId(chat, f.id)!.data.content).toBe('before'); expect(messages.getMessageAnnotations(chat, f.id)).toBeNull();
       expect(f.events).toEqual([]);
     } finally { await Promise.allSettled(observed ? [observed] : []); await db.closeDatabase(); }
-  }));
-
-test('internal post keeps its committed receipt when recording and debug diagnostics both fail', () =>
-  withTempWorkspaceEnv('post-record-diagnostic-', {}, async () => {
-    const f = await fixture(), oldLevel = process.env.PICLAW_LOG_LEVEL, originalOutput = process.stdout.write.bind(process.stdout);
-    let recordingFailed = false;
-    const recorder = spyOn(recordings, 'recordTimelineInteraction').mockImplementation(() => { recordingFailed = true; throw Error('optional recorder unavailable'); });
-    const output = spyOn(process.stdout, 'write').mockImplementation((chunk: any) => {
-      if (recordingFailed) throw Error('diagnostic stream unavailable');
-      return originalOutput(chunk);
-    });
-    let result: Response | Error;
-    try {
-      process.env.PICLAW_LOG_LEVEL = 'debug';
-      result = await f.channel.handleInternalPost(new Request(`http://fixture/internal/post?chat_jid=${chat}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: 'known committed internal post' }),
-      })).catch(error => error);
-    } finally { output.mockRestore(); recorder.mockRestore(); if (oldLevel === undefined) delete process.env.PICLAW_LOG_LEVEL; else process.env.PICLAW_LOG_LEVEL = oldLevel; }
-    try {
-      expect(recordingFailed).toBe(true);
-      expect(db.getDb().query("SELECT count(*) n FROM messages WHERE content='known committed internal post'").get()).toEqual({ n: 1 });
-      expect(result).toBeInstanceOf(Response); expect((result as Response).status).toBe(201);
-    } finally { await db.closeDatabase(); }
   }));
 
 test('internal post keeps its committed receipt when preview and debug diagnostics both fail after late abort', () =>

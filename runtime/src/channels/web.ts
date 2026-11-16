@@ -47,8 +47,6 @@ import { VncSessionService } from "./web/vnc/vnc-session-service.js";
 import { createLazyTerminalService, createLazyVncService } from "./web/lazy-session-services.js";
 import { admitWebMessage, type StoreWebMessageOptions } from "./web/messaging/message-store.js";
 import { getIdentityConfig } from "../core/config.js";
-import { recordTimelineInteraction } from "../session-recordings/session-recordings.js";
-import { createLogger, debugSuppressedError } from "../utils/logger.js";
 import { initializeWebChannelConstructor } from "./web/core/web-channel-constructor-factory.js";
 import { handleAgentContextRequest, handleAgentModelsRequest } from "./web/agent/agent-status.js";
 import {
@@ -80,7 +78,6 @@ import { ensureAvatarCache } from "./web/media/avatar-service.js";
 
 const DEFAULT_CHAT_JID = "web:default";
 const DEFAULT_AGENT_ID = "default";
-const messageLog = createLogger("web.message-processing-storage");
 
 /** Construction options for WebChannel: queue and agentPool references. */
 export interface WebChannelOpts {
@@ -225,9 +222,6 @@ export class WebChannel implements WebChannelLike {
       chatJid, content, isBot, mediaIds, agentId: DEFAULT_AGENT_ID,
       agentName: identity.assistantName, userName: identity.userName ?? null,
     }, options, authorise, signal, deferBeforeInsert);
-    if (!interaction) return null;
-    try { recordTimelineInteraction(interaction); }
-    catch (error) { try { debugSuppressedError(messageLog, 'Optional recording failed after message commit.', error, { operation: 'web_message_storage.record_after_commit', rowId: interaction.id }); } catch { return interaction; } }
     return interaction;
   }
 

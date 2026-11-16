@@ -265,7 +265,7 @@ export async function refreshQueueStateForChat<TItem extends FollowupQueueItemLi
   } catch {
     if (gen !== queueRefreshGenRef.current) return;
     if (activeChatJidRef.current !== targetChatJid) return;
-    setFollowupQueueItems((prev) => (prev.length === 0 ? prev : []));
+    console.warn('Queue refresh unavailable; keeping pending messages.');
   }
 }
 

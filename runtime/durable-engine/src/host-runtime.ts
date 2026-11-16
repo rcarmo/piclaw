@@ -2115,19 +2115,18 @@ export class HostConversationRuntime {
       return changed;
     });
   }
-  /** Actual SDK cleanup scope. Queued inputs and manual compaction are native
-   * work even when no host operation or process-local worker exists. */
+  /** Active SDK run/manual compaction only. Pending inbox messages are separate
+   * accepted work and must survive Stop, retry abort and repeated controls. */
   readMessageAbortScope(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }, retryOnly=false): Promise<Extract<import("../../src/agent-pool/durable-runtime-adapter.js").DurableAbortScope,{kind:"sdk"}>|null> {
     const reader=this.sessionReader(binding);
     return this.observe(async()=>{
       const conversation=await reader.conversation();
       const snapshot=await conversation.commit(async tx=>{
         const live=await tx.doc(LiveDoc,reader.binding.conversationId as ConversationId);
-        const inbox=await tx.doc(InboxDoc,reader.binding.conversationId as ConversationId);
         if(retryOnly && !live.generation?.retry)return null;
         const compaction=live.compactions?.find(item=>item.trigger==="manual"||item.blocking);
         return {taskId:live.run?.taskId??compaction?.taskId??null,
-          submissionIds:[...(live.run?.inputs??[]),...inbox.items.filter(item=>item.mode!=="write").map(item=>item.id)]};
+          submissionIds:[...(live.run?.inputs??[])]};
       },this.context);reader.check();
       if(!snapshot||snapshot.taskId===null&&!snapshot.submissionIds.length)return null;
       for(const id of snapshot.submissionIds){
@@ -2139,8 +2138,8 @@ export class HostConversationRuntime {
         taskId:snapshot.taskId,submissionIds:Object.freeze(snapshot.submissionIds)});
     });
   }
-  /** Operator cancellation follows the public conversation scope, including its
-   * queued inputs. No host operation/cancellation row or worker lane is needed. */
+  /** Operator controls supply an exact active scope; only its task is aborted.
+   * Unscoped explicit cleanup retains the public whole-conversation contract. */
   abortMessages(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number },
     expected?: Extract<import("../../src/agent-pool/durable-runtime-adapter.js").DurableAbortScope,{kind:"sdk"}>): Promise<void> {
     const reader = this.sessionReader(binding);
@@ -2148,12 +2147,8 @@ export class HostConversationRuntime {
       const conversation = await reader.conversation();
       if (!expected) { await conversation.abort(this.context); reader.check(); return; }
       if (expected.conversationId!==reader.binding.conversationId) throw Error("Abort conversation changed");
-      // Public SDK withdrawal and exact-task abort constrain cleanup to the
-      // captured work. A later input/run is never cancelled as a successor.
-      for (const id of expected.submissionIds) {
-        const submission=await this.harness.submission(id as SubmissionId,this.context);reader.check();
-        await submission?.abort(this.context);reader.check();
-      }
+      // Never withdraw submissions here: queued inputs are not part of Stop.
+      // Requalify the captured run after each task handoff, never its successor.
       if (!expected.submissionIds.length) {
         if(expected.taskId!==null){await this.harness.abortTask(expected.taskId as TaskId,this.context);reader.check();}
         return;
