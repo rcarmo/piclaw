@@ -97,11 +97,14 @@ export function createShutdownHandler(deps: ShutdownDeps): (signal: string) => P
       // Any rejected/expired queue join is uncertain, unlike a known post-join
       // scheduler store-release error. Do not dispose a pool still used by tasks.
       await withTimeout(Promise.resolve().then(() => deps.queue.shutdown(5000)), 7000, "queue shutdown");
-      await cleanup(() => deps.agentPool.shutdown(), 8000, "agent pool shutdown");
       await cleanup(() => deps.web.stop(), 4000, "web stop");
       await cleanup(() => deps.pushover?.stop(), 4000, "pushover stop");
       if (errors.length) throw new AggregateError(errors, "Runtime shutdown cleanup failed");
       await deps.closeApplicationBackend?.();
+      // Native application/SDK cleanup must be confirmed before releasing host
+      // model/SSH registrations. Uncertain close retains the current owners.
+      await cleanup(() => deps.agentPool.shutdown(), 8000, "agent pool shutdown");
+      if (errors.length) throw new AggregateError(errors, "Runtime shutdown cleanup failed");
       deps.onShutdownComplete?.();
       completed = true;
       process.exit(0);

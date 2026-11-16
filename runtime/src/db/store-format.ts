@@ -15,9 +15,9 @@ export class UnsupportedStoreFormat extends Error {
  * their normal owners; this discriminator grants no execution or config rights. */
 export function assertNativeStoreFormat(database: Database, allowEmpty: boolean): void {
   const names = new Set((database.query("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]).map(row => row.name));
-  if (!names.size) { if (allowEmpty) return; throw new UnsupportedStoreFormat(); }
   const application = (database.query('PRAGMA application_id').get() as { application_id: number }).application_id;
   if (application === NATIVE_STORE_APPLICATION_ID) return;
+  if (!names.size) { if (allowEmpty) return; throw new UnsupportedStoreFormat(); }
   if (application !== 0 || !['conversations', 'entries', 'documents', 'document_revisions', 'tasks', 'submissions'].every(name => names.has(name))) throw new UnsupportedStoreFormat();
   for (const [table, required] of [
     ['documents', ['id', 'kind', 'scope_kind', 'owner_id', 'retired_at']],

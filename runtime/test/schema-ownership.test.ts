@@ -113,6 +113,18 @@ test("unknown profile and incomplete owner fail closed", () => withDatabase((db,
   expect(() => assertSchemaInventory(readSchemaInventory(db), contract, "fixture")).toThrow("Incomplete owner");
 }));
 
+test("retired owners have no active writers; exact shape and retention requirements remain enforced", () => withDatabase((db, contract) => {
+  const before=db.query("SELECT * FROM sqlite_schema ORDER BY name").all();
+  contract.owners.fixture!.category="retired";contract.owners.fixture!.writers=[];
+  expect(assertSchemaInventory(readSchemaInventory(db),contract,"fixture").objects.every(object=>object.category==="retired")).toBe(true);
+  expect(db.query("SELECT * FROM sqlite_schema ORDER BY name").all()).toEqual(before);
+  contract.owners.fixture!.replayRetention="";
+  expect(()=>assertSchemaInventory(readSchemaInventory(db),contract,"fixture")).toThrow("Incomplete owner");
+  contract.owners.fixture!.replayRetention="retain original data without runtime writes";
+  db.exec("DROP INDEX records_state");
+  expect(()=>assertSchemaInventory(readSchemaInventory(db),contract,"fixture")).toThrow("Missing required object index:records_state");
+}));
+
 test("formatting, IF NOT EXISTS and column declaration order normalise; PK order and strings do not", () => {
   const canonical = (sql: string) => canonicalSchemaSql(sql, "table");
   expect(canonical("CREATE TABLE sample(a TEXT,b INTEGER,PRIMARY KEY(a,b))")).toEqual(canonical("create table if not exists sample ( b integer, a text, primary key(a,b)); -- comment"));

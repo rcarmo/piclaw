@@ -7,9 +7,10 @@ import { provisionUserHome } from "../../src/db/session-ownership.js";
 import { migrateOwnedSessionHandles } from "../../src/db/session-handles.js";
 import { commitOwnedFork } from "../../src/db/owned-forks.js";
 import type { AuthenticatedPrincipal } from "../../src/core/access-types.js";
-import { ensureChatBranch, getChatBranchByChatJid, renameChatBranchIdentity, archiveChatBranch, restoreChatBranchIdentity, renameChatJid, permanentDeleteArchivedBranch } from "../../src/db/chat-branches.js";
-import { requireLegacyRoutingMutation, registerNativeBranchControlGuard } from "../../src/db/native-routing-policy.js";
+import { ensureChatBranch, getChatBranchByChatJid, renameChatBranchIdentity, archiveChatBranch, restoreChatBranchIdentity } from "../../src/db/chat-branches.js";
+import { registerNativeBranchControlGuard } from "../../src/db/native-routing-policy.js";
 import { ChatAccessDenied } from "../../src/db/session-ownership.js";
+import * as branchStore from "../../src/db/chat-branches.js";
 import { AgentPool } from "../../src/agent-pool.js";
 import { createAgentPoolModelOptions } from "../model-services-fixture.js";
 beforeEach(() => initDatabase()); afterEach(() => closeDatabase());
@@ -86,7 +87,7 @@ test("native routing policy: metadata registration cannot undo archive", () => {
 });
 test("native routing policy: address moves fail before changing any identity", () => {
   const branch = fixture(), db = getDb(), anchor = db.query("SELECT * FROM document_revisions").all();
-  expect(() => renameChatJid(chat, "web:wrong-new-route")).toThrow("Native routing identities are immutable");
+  expect(branchStore).not.toHaveProperty("renameChatJid");
   expect(getChatBranchByChatJid(chat)).toEqual(branch);
   expect(getChatBranchByChatJid("web:wrong-new-route")).toBeNull();
   expect(db.query("SELECT * FROM document_revisions").all()).toEqual(anchor);
@@ -130,7 +131,7 @@ test("native routing policy: ensure cannot reparent identities or publish a lega
 });
 test("native routing policy: destructive legacy purge retains native provenance", () => {
   fixture(); archiveChatBranch(chat);
-  expect(() => permanentDeleteArchivedBranch(chat)).toThrow("Native routing identities are immutable");
+  expect(branchStore).not.toHaveProperty("permanentDeleteArchivedBranch");
   expect(getChatBranchByChatJid(chat)).not.toBeNull();
 });
 test("native routing policy: partial host authority cannot be treated as idle", () => {
@@ -176,11 +177,4 @@ test("native routing policy: migrated owner namespace still rejects legacy metad
   expect(() => ensureChatBranch({ chat_jid: chat })).toThrow(ChatAccessDenied);
   expect(() => renameChatBranchIdentity({ chat_jid: chat, agent_name: "forged" })).toThrow(ChatAccessDenied);
   expect(getChatBranchByChatJid(chat)?.agent_name).toBe("routing");
-});
-test("native routing policy: legacy stores keep address and child mutation contracts", () => {
-  const branch = fixture(false);
-  expect(() => requireLegacyRoutingMutation(getDb(), "fork")).not.toThrow();
-  ensureChatBranch({ chat_jid: "web:routing:child", root_chat_jid: chat, parent_branch_id: branch.branch_id });
-  expect(renameChatJid(chat, "web:legacy-moved").branch.branch_id).toBe(branch.branch_id);
-  expect(getChatBranchByChatJid("web:legacy-moved:child")).not.toBeNull();
 });

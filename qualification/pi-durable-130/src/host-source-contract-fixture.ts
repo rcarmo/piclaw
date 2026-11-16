@@ -46,7 +46,6 @@ export async function hostSourceContractFixture(dir: string, boundary: "before-s
       // A same-file restart (or an earlier shared fixture) already has the SDK schema.
       if (!rootNames.has("durable_schema")) check.deepEqual(sdkNames.filter(name => rootNames.has(name)), [], "Public SDK default schema collides with root schema; use public SqliteStorageOptions.prefix before opening");
     }
-    const rootSchemaMigrations = db.query("SELECT * FROM core_schema_migrations ORDER BY name").all();
     let candidateDatabase: OwnedSqlite;
     const openStorage = () => {
       candidateDatabase = new OwnedSqlite(owner, { foreignKeys: testConfig.sharedDatabase });
@@ -136,7 +135,6 @@ get ports() { return ports; }, set ports(v) { ports = v; },
 get runtime() { return runtime; }, set runtime(v) { runtime = v; },
 get candidateStorage() { return candidateStorage; }, set candidateStorage(v) { candidateStorage = v; },
 get candidateDatabase() { return candidateDatabase; },
-rootSchemaMigrations,
 get providerEntries() { return providerEntries; }, set providerEntries(v) { providerEntries = v; },
 get entryObserved() { return entryObserved; }, set entryObserved(v) { entryObserved = v; },
 get ackLost() { return ackLost; }, set ackLost(v) { ackLost = v; },

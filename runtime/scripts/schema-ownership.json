@@ -130,8 +130,8 @@
         "runtime/src/db/connection.ts",
         "runtime/src/db/chat-cursors.ts"
       ],
-      "sourceOfTruth": "Host routing/delivery compatibility progress cursors; legacy seed from router_state is one-time. These cursors grant no native operation, execution or continuation authority.",
-      "replayRetention": "Polling position and queued payload/provenance survive the owned frontier migration unchanged. They grant no native execution or accepted-source frontier authority. Retired execution/recovery values are retained separately in the optional immutable historical archive; fresh roots create no archive.",
+      "sourceOfTruth": "Current native polling/delivery compatibility data only; no legacy router_state seed, execution or queued-input authority.",
+      "replayRetention": "Current exact schema/rows survive native reopen unchanged. Unsupported legacy cursor declarations are refused intact; no in-place archive/rename/DROP/backfill. Native input order and tasks belong to the SDK.",
       "references": [
         "runtime/src/db/chat-cursor-storage.ts",
         "runtime/src/db/chat-cursors.ts",
@@ -185,13 +185,11 @@
       ]
     },
     "core:core_schema_migrations": {
-      "category": "core",
-      "initializer": "runtime/src/db/connection.ts#dropObsoleteRemoteInteropSchema",
-      "writers": [
-        "runtime/src/db/connection.ts"
-      ],
+      "category": "retired",
+      "initializer": "None; obsolete resident remote-schema DROP procedure removed",
+      "writers": [],
       "sourceOfTruth": "Legacy core cleanup receipt drop-core-remote-interop-v1.",
-      "replayRetention": "Preserve; source initializer removes six named obsolete remote tables once, not a general cleanup entitlement.",
+      "replayRetention": "Old already-native receipts are retained as data only. Fresh native schemas never create this legacy cleanup ledger; supported current schema evolution uses existing owned migrations/public SDK.",
       "references": [
         "runtime/src/db/connection.ts"
       ]
@@ -382,25 +380,21 @@
       ]
     },
     "core:portainer_configs": {
-      "category": "core",
-      "initializer": "runtime/src/db/connection.ts#createSchema",
-      "writers": [
-        "runtime/src/db/chat-branches.ts"
-      ],
-      "sourceOfTruth": "Historical config rows imported into extension_kv; branch transfer/delete remains tracked.",
-      "replayRetention": "No blanket deletion authorization; do not mistake historical/empty for dead.",
+      "category": "retired",
+      "initializer": "None; fresh native v4 uses current scoped extension KV only",
+      "writers": [],
+      "sourceOfTruth": "Inert already-native historical profile records, retained intact where present; current active configuration is scoped native KV.",
+      "replayRetention": "No obsolete table/index creation, v3 renames or address-move/merge/purge writers. Read-only native archived-session exports preserve older records; bounded current-native KV preservation never runs on a v3 store.",
       "references": [
         "runtime/src/db/connection.ts"
       ]
     },
     "core:proxmox_configs": {
-      "category": "core",
-      "initializer": "runtime/src/db/connection.ts#createSchema",
-      "writers": [
-        "runtime/src/db/chat-branches.ts"
-      ],
-      "sourceOfTruth": "Historical config rows imported by migrateProxmoxPortainerToKv into extension_kv; branch transfer/delete remains tracked.",
-      "replayRetention": "No blanket deletion authorization; do not mistake historical/empty for dead.",
+      "category": "retired",
+      "initializer": "None; fresh native v4 uses current scoped extension KV only",
+      "writers": [],
+      "sourceOfTruth": "Inert already-native historical profile records, retained intact where present; current active configuration is scoped native KV.",
+      "replayRetention": "No obsolete table/index creation, v3 renames or address-move/merge/purge writers. Read-only native archived-session exports preserve older records; bounded current-native KV preservation never runs on a v3 store.",
       "references": [
         "runtime/src/db/connection.ts"
       ]
@@ -1151,13 +1145,11 @@
       ]
     },
     "archive:chat-cursor-state": {
-      "category": "migration-archive",
-      "initializer": "runtime/src/db/chat-cursor-storage.ts#initializeChatCursorStorage",
-      "writers": [
-        "runtime/src/db/chat-cursor-storage.ts (one owned historical upgrade only)"
-      ],
-      "sourceOfTruth": "Exact original legacy cursor table: rowids, polling position, queued bytes/provenance, preflight/inflight/failed-run and compaction fields. Native dispatch neither reads nor writes its execution markers. Explicit legacy capture may refuse unsettled evidence; it never grants execution.",
-      "replayRetention": "Preserve original rows, schema and migration receipts. No pruning, rollback, restore, live DDL or legacy replay is authorised by this read-only inventory. Fresh roots omit this archive. Historical binary rollback requires a separately owned offline procedure; never recreate execution markers from native task observations.",
+      "category": "retired",
+      "initializer": "None; prior already-native archive only, never created by v4 startup",
+      "writers": [],
+      "sourceOfTruth": "Inert original cursor values already retained by older native releases. Current execution neither queries nor rewrites the obsolete markers.",
+      "replayRetention": "Preserve existing raw schema/data/receipts during native reopen and read-only forensic inspection; no current conversion, cleanup, rollback or replay.",
       "references": [
         "runtime/src/db/chat-cursor-storage.ts",
         "runtime/src/runtime/bootstrap.ts",
@@ -1618,24 +1610,18 @@
       "fingerprints": [
         "dc1ad11db948a8113bedb4ced3670ee6117e9f666a9cd58ee9f9d52d8bc24dbf"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
-      "table": "portainer_configs"
+      "requiredIn": [],
+      "table": "portainer_configs",
+      "requiredWhenOwnerPresent": false
     },
     "index:idx_proxmox_configs_updated_at": {
       "owner": "core:proxmox_configs",
       "fingerprints": [
         "616049b2db241fff3d26d980b5f048386cd7098259f7ecc777edd04864740b60"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
-      "table": "proxmox_configs"
+      "requiredIn": [],
+      "table": "proxmox_configs",
+      "requiredWhenOwnerPresent": false
     },
     "index:idx_scheduled_tasks_created_at": {
       "owner": "core:scheduled_tasks",
@@ -2340,14 +2326,11 @@
       "fingerprints": [
         "7e78d52fb5555ec7d297751a70614cb4a1adfac558073d7fcc3956eb43b19f12"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "540f9502b08715f4190b1b852902292d5332c591bd9639bdb2aaa03dcfea49ac"
-      ]
+      ],
+      "requiredWhenOwnerPresent": false
     },
     "table:extension_kv": {
       "owner": "core:extension_kv",
@@ -2580,28 +2563,22 @@
       "fingerprints": [
         "3716572a2e953574f796dcd770238747cb3aa9ebb8b9414eb23e4e78da7c761d"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "41298dcc3a243b5aee011307b28bcc0e977ab27635f854e4f8f2f346722c9508"
-      ]
+      ],
+      "requiredWhenOwnerPresent": false
     },
     "table:proxmox_configs": {
       "owner": "core:proxmox_configs",
       "fingerprints": [
         "a7a57d7efc84f97bd3e0042f7f8aeb1d884677a89ca1854b886f0ce396743c6b"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "41298dcc3a243b5aee011307b28bcc0e977ab27635f854e4f8f2f346722c9508"
-      ]
+      ],
+      "requiredWhenOwnerPresent": false
     },
     "table:router_state": {
       "owner": "core:router_state",

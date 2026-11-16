@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { join } from 'node:path';
 import { withTempWorkspaceEnv } from '../helpers.js';
-import { initDatabase, closeDatabase, getDb } from '../../src/db/connection.js';
+import { initDatabase, closeDatabase, getDb, initializeDatabaseSchema } from '../../src/db/connection.js';
 import { getRuntimeConfigPaths } from '../../src/core/config.js';
 import * as store from '../../src/db.js';
 
@@ -17,9 +17,10 @@ async function fixture(prefix:string,run:(path:string,legacy:unknown[])=>Promise
   await withTempWorkspaceEnv('legacy-infrastructure-kv-',{},async ws=>{
     await closeDatabase(); const path=join(ws.store,'legacy.sqlite'),seed=new Database(path);
     try{
-      seed.exec(`CREATE TABLE chats(jid TEXT PRIMARY KEY,name TEXT,last_message_time TEXT);
+      if (!prefix) initializeDatabaseSchema(seed); // already-native preservation, not v3 conversion
+      seed.exec(`CREATE TABLE IF NOT EXISTS chats(jid TEXT PRIMARY KEY,name TEXT,last_message_time TEXT);
         INSERT INTO chats(jid) VALUES('web:px'),('web:pt'),('web:existing');
-        CREATE TABLE extension_kv(extension_id TEXT NOT NULL,scope TEXT NOT NULL DEFAULT 'chat',scope_key TEXT NOT NULL DEFAULT '',key TEXT NOT NULL,value TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT(datetime('now')),updated_at TEXT NOT NULL DEFAULT(datetime('now')),PRIMARY KEY(extension_id,scope,scope_key,key));`);
+        CREATE TABLE IF NOT EXISTS extension_kv(extension_id TEXT NOT NULL,scope TEXT NOT NULL DEFAULT 'chat',scope_key TEXT NOT NULL DEFAULT '',key TEXT NOT NULL,value TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT(datetime('now')),updated_at TEXT NOT NULL DEFAULT(datetime('now')),PRIMARY KEY(extension_id,scope,scope_key,key));`);
       for(const id of ['proxmox','portainer'])seed.exec(`CREATE TABLE ${prefix}${id}_configs(chat_jid TEXT PRIMARY KEY,base_url TEXT NOT NULL,api_token_keychain TEXT NOT NULL,allow_insecure_tls INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,FOREIGN KEY(chat_jid) REFERENCES chats(jid));`);
       const add=(id:string,chat:string,value:typeof px,tls:number)=>seed.query(`INSERT INTO ${prefix}${id}_configs VALUES(?,?,?,?,?,?)`).run(chat,value.base_url,value.api_token_keychain,tls,created,updated);
       add('proxmox','web:px',px,1);add('portainer','web:pt',pt,2);add('proxmox','web:existing',px,1);
@@ -31,7 +32,14 @@ async function fixture(prefix:string,run:(path:string,legacy:unknown[])=>Promise
   });
 }
 for(const prefix of ['', 'chat_'])test(`Root bootstrap preserves legacy profile bytes, timestamps and existing overrides: ${prefix||'canonical'}`,()=>fixture(prefix,async(path,legacy)=>{
-  const paths={...getRuntimeConfigPaths(),databasePath:path};initDatabase(paths);
+  const paths={...getRuntimeConfigPaths(),databasePath:path};
+  if (prefix) {
+    const source = new Database(path,{readonly:true});const before={schema:schema(source),kv:kv(source),legacy};source.close();
+    expect(()=>initDatabase(paths)).toThrow('V4 never migrates a v3 store in place');
+    const after=new Database(path,{readonly:true});try{expect({schema:schema(after),kv:kv(after),legacy:['proxmox','portainer'].map(id=>after.query(`SELECT * FROM ${prefix}${id}_configs ORDER BY chat_jid`).all())}).toEqual(before);}finally{after.close();}
+    return;
+  }
+  initDatabase(paths);
   const root=getDb();
   expect(kv(root)).toEqual([
     {extension_id:'portainer',scope:'chat',scope_key:'web:pt',key:'config',value:JSON.stringify(pt),created_at:created,updated_at:updated},
@@ -44,7 +52,7 @@ for(const prefix of ['', 'chat_'])test(`Root bootstrap preserves legacy profile 
 test('legacy profile copy failure rolls back the existing Root schema batch without partial KV or renamed tables',()=>fixture('chat_',async(path)=>{
   const paths={...getRuntimeConfigPaths(),databasePath:path},inspect=new Database(path,{readonly:true});
   const before={schema:schema(inspect),kv:kv(inspect),px:inspect.query('SELECT * FROM chat_proxmox_configs ORDER BY chat_jid').all(),pt:inspect.query('SELECT * FROM chat_portainer_configs ORDER BY chat_jid').all()};inspect.close();
-  expect(()=>initDatabase(paths)).toThrow('copy rejected');expect(()=>getDb()).toThrow('not initialized');
+  expect(()=>initDatabase(paths)).toThrow('V4 never migrates a v3 store in place');expect(()=>getDb()).toThrow('not initialized');
   const after=new Database(path,{readonly:true});try{expect({schema:schema(after),kv:kv(after),px:after.query('SELECT * FROM chat_proxmox_configs ORDER BY chat_jid').all(),pt:after.query('SELECT * FROM chat_portainer_configs ORDER BY chat_jid').all()}).toEqual(before);}finally{after.close();}
 },true));
 test('Pool-time raw migration export is retired',()=>{expect(store).not.toHaveProperty('migrateProxmoxPortainerToKv');});

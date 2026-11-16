@@ -10,8 +10,9 @@ import { hashCanonicalRequest, type CanonicalJsonValue } from "../../src/service
 import type { CompleteScheduledRunRequest } from "../../src/service-effects/contracts/scheduled-run-store.js";
 import type { ScheduledTask } from "../../src/types.js";
 import { storeChatMetadata } from "../../src/db/messages.js";
-import { ensureChatBranch, archiveChatBranch, renameChatJid, mergeChatBranchIntoParent,
-  exportArchivedBranchDownloadData, permanentDeleteArchivedBranch } from "../../src/db/chat-branches.js";
+import * as branchStore from "../../src/db/chat-branches.js";
+import { ensureChatBranch, archiveChatBranch,
+  exportArchivedBranchDownloadData } from "../../src/db/chat-branches.js";
 
 beforeEach(() => { initDatabase(); getDb().exec("PRAGMA foreign_keys=ON"); });
 afterEach(() => closeDatabase());
@@ -239,33 +240,23 @@ function branchTree() {
   return { parent, child };
 }
 
-test("chat rename and merge create fenced definitions and leave old chat/hash evidence untouched", () => {
-  const { parent, child } = branchTree();
-  createTask({ ...task(), chat_jid: child.chat_jid });
-  const db = getDb(), original = readScheduledDefinition(db,"definition",1);
-  renameChatJid(parent.chat_jid,"web:renamed");
-  expect(getTaskById("definition")).toMatchObject({ revision: 2, chat_jid: "web:renamed:child" });
+test("retired chat address and merge APIs cannot alter scheduling identity or hash evidence", () => {
+  const {parent,child}=branchTree();createTask({...task(),chat_jid:child.chat_jid});
+  const db=getDb(), original=readScheduledDefinition(db,"definition",1);
+  expect(branchStore).not.toHaveProperty("renameChatJid");expect(branchStore).not.toHaveProperty("mergeChatBranchIntoParent");
+  expect(getTaskById("definition")).toMatchObject({revision:1,chat_jid:child.chat_jid,prompt:"original prompt"});
   expect(readScheduledDefinition(db,"definition",1)).toEqual(original);
-  mergeChatBranchIntoParent("web:renamed:child");
-  expect(getTaskById("definition")).toMatchObject({ revision: 3, chat_jid: "web:renamed", prompt: "original prompt" });
-  expect(readScheduledDefinition(db,"definition",2).body?.chat_jid).toBe("web:renamed:child");
-  expect(db.query("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
-  expect(db.query("PRAGMA defer_foreign_keys").get()).toEqual({ defer_foreign_keys: 0 });
-  expect(db.query("PRAGMA foreign_key_check").all()).toEqual([]);
+  expect(branchStore.getChatBranchByChatJid(parent.chat_jid)).toEqual(parent);expect(branchStore.getChatBranchByChatJid(child.chat_jid)).toEqual(child);
+  expect(db.query("PRAGMA foreign_keys").get()).toEqual({foreign_keys:1});expect(db.query("PRAGMA defer_foreign_keys").get()).toEqual({defer_foreign_keys:0});expect(db.query("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
-test("an unmoved foreign reference rejects chat rename and rolls back new definition revisions", () => {
-  const { parent, child } = branchTree();
-  createTask({ ...task(), chat_jid: child.chat_jid });
-  const db = getDb(), original = readScheduledDefinition(db,"definition",1);
-  db.exec("CREATE TABLE fixture_foreign_hold(chat_jid TEXT REFERENCES chats(jid))");
-  db.query("INSERT INTO fixture_foreign_hold VALUES (?)").run(parent.chat_jid);
-  expect(() => renameChatJid(parent.chat_jid,"web:must-not-commit")).toThrow("FOREIGN KEY");
-  expect(getTaskById("definition")).toMatchObject({ revision: 1, chat_jid: child.chat_jid });
-  expect(readScheduledDefinition(db,"definition",1)).toEqual(original);
-  expect(db.query("SELECT revision FROM host_scheduled_task_definitions").all()).toEqual([{ revision: 1 }]);
-  expect(db.query("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
-  expect(db.query("PRAGMA defer_foreign_keys").get()).toEqual({ defer_foreign_keys: 0 });
+test("foreign-key failure rolls back supported task-definition revisions in the physical outer transaction", () => {
+  const {parent,child}=branchTree();createTask({...task(),chat_jid:child.chat_jid});
+  const db=getDb(),original=readScheduledDefinition(db,"definition",1);
+  db.exec("CREATE TABLE fixture_foreign_hold(chat_jid TEXT REFERENCES chats(jid))");db.query("INSERT INTO fixture_foreign_hold VALUES (?)").run(parent.chat_jid);
+  expect(()=>db.transaction(()=>{updateTask("definition",{prompt:"must roll back"});db.query("DELETE FROM chats WHERE jid=?").run(parent.chat_jid);}).immediate()).toThrow("FOREIGN KEY");
+  expect(getTaskById("definition")).toMatchObject({revision:1,chat_jid:child.chat_jid,prompt:"original prompt"});expect(readScheduledDefinition(db,"definition",1)).toEqual(original);
+  expect(db.query("SELECT revision FROM host_scheduled_task_definitions").all()).toEqual([{revision:1}]);expect(db.query("PRAGMA foreign_keys").get()).toEqual({foreign_keys:1});expect(db.query("PRAGMA defer_foreign_keys").get()).toEqual({defer_foreign_keys:0});expect(db.query("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
 test("late old-revision completion and direct settlement cannot advance the edited head", async () => {
@@ -280,7 +271,7 @@ test("late old-revision completion and direct settlement cannot advance the edit
   expect(readScheduledDefinition(getDb(),"definition",1).body?.command).toBe("printf original");
 });
 
-test("archive export includes revision/body provenance; explicit purge tombstones the scheduling owner", () => {
+test("archive export includes revision/body provenance; explicit task deletion tombstones its scheduling owner", () => {
   const { child } = branchTree();
   createTask({ ...task(), chat_jid: child.chat_jid }); updateTask("definition", { prompt: "newer prompt" });
   archiveChatBranch(child.chat_jid);
@@ -288,7 +279,9 @@ test("archive export includes revision/body provenance; explicit purge tombstone
   expect(exported.scheduled_definition_revisions).toHaveLength(2);
   expect(exported.scheduled_definition_revisions[0]).toMatchObject({ origin: "authored", availability: "known", revision: 1 });
   expect(JSON.parse(String(exported.scheduled_definition_revisions[0]!.payload_json)).prompt).toBe("original prompt");
-  permanentDeleteArchivedBranch(child.chat_jid);
+  expect(branchStore).not.toHaveProperty("permanentDeleteArchivedBranch");
+  deleteTask("definition");
+  expect(branchStore.getChatBranchByChatJid(child.chat_jid)).not.toBeNull();
   expect(getTaskById("definition")).toBeNull();
   expect(getDb().query("SELECT status FROM service_effect_s07_tasks WHERE task_id='definition'").get()).toEqual({ status: "deleted" });
   expect(readScheduledDefinition(getDb(),"definition",1).availability).toBe("retired");

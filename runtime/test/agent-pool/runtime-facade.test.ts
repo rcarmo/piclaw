@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
@@ -70,6 +70,24 @@ function createFacade(overrides: Partial<ConstructorParameters<typeof AgentRunti
   });
 
   return { facade, pool, warnings, errors, cleared };
+}
+
+function createNativePositionPort(overrides: Record<string, any> = {}) {
+  const model = "model" in overrides ? overrides.model : "synthetic/reasoning";
+  const thinkingLevel = "thinkingLevel" in overrides ? overrides.thinkingLevel : "off";
+  const position = overrides.position ?? "0";
+  const tokens = overrides.tokens ?? 10;
+  const contextWindow = overrides.contextWindow ?? 100;
+  return {
+    sessionId: overrides.sessionId ?? "native-session",
+    branchId: overrides.branchId ?? "main",
+    readPosition: async () => position,
+    readState: async () => ({ position, model, thinkingLevel }),
+    readModel: async () => model,
+    readThinkingLevel: async () => thinkingLevel,
+    readContextUsage: async () => ({ tokens, contextWindow }),
+    ...overrides,
+  };
 }
 
 test("durable runtime lookup must be callable", () => {
@@ -310,7 +328,8 @@ test("tree summaries await captured public readers, preserve raw head and reject
   await expect(fixture.facade.getSessionTreeSummaryForChat("unknown")).rejects.toThrow("Durable session tree unavailable");
   await expect(fixture.facade.getSessionTreeSummaryForChat("unsupported")).rejects.toThrow("Durable session tree unavailable");
   const legacy = createFacade({ getOrCreateRuntime: async () => { throw Error("must not instantiate"); } });
-  expect(await legacy.facade.getSessionTreeSummaryForChat("unknown")).toBeNull();
+  // Unbound native metadata must refuse, not fall back to a cold legacy-session lookup.
+  await expect(legacy.facade.getSessionTreeSummaryForChat("unknown")).rejects.toThrow("Durable session tree unavailable");
   const normal = createFacade();
   normal.pool.set("legacy", { runtime: createRuntime({ sessionManager: { getLeafId: () => "raw", getTree: () => [], getEntries: () => { throw Error("private entry count forbidden"); } } }), lastUsed: 0 });
   await expect(normal.facade.getSessionTreeSummaryForChat("legacy")).rejects.toThrow("Durable session tree unavailable");
@@ -362,8 +381,7 @@ test("AgentRuntimeFacade reports available models and context usage", async () =
     },
   };
 
-  const fixture = createFacade();
-  fixture.pool.set("web:default", { runtime: createRuntime(session), lastUsed: Date.now() });
+  const fixture = createFacade({ getDurableSession: chat => chat === "web:default" ? createNativePositionPort({sessionId:"session-current",model:"openai/gpt-test",thinkingLevel:"high"}) : undefined, modelRegistry: session.modelRegistry as any });
 
   const available = await fixture.facade.getAvailableModels("web:default");
   const compact = await fixture.facade.getAvailableModels("web:default", { includeCatalogue: false, includeProviderDiagnostics: false });
@@ -412,6 +430,7 @@ test("AgentRuntimeFacade reports available models and context usage", async () =
     contextWindow: 100,
     percent: 10,
     sessionGeneration: "session-current",
+    tokensAreAuthoritative: true,
   });
   expect(fixture.facade.getSessionGenerationForChat("web:default")).toBe("session-current");
 });
@@ -440,6 +459,8 @@ test("AgentRuntimeFacade publishes one refreshed usage payload per matching know
 
   try {
     const fixture = createFacade({
+      getDurableSession: chat => chat === "web:zai" ? createNativePositionPort({model:"zai/glm-4"}) : chat === "web:other" ? createNativePositionPort({model:"openai/gpt-5"}) : undefined,
+      modelRegistry: {getAvailable:()=>[{provider:"zai",id:"glm-4",reasoning:false}]} as any,
       modelRuntime: {
         authPath: "/tmp/auth.json",
         getProviders: () => [],
@@ -453,13 +474,6 @@ test("AgentRuntimeFacade publishes one refreshed usage payload per matching know
       ],
       onProviderUsageRefresh: (event) => refreshes.push(event),
     });
-    const session = {
-      model: { provider: "zai", id: "glm-4", reasoning: false },
-      thinkingLevel: "off",
-      getContextUsage: () => null,
-      modelRegistry: { getAvailable: () => [{ provider: "zai", id: "glm-4", reasoning: false }] },
-    };
-    fixture.pool.set("web:zai", { runtime: createRuntime(session), lastUsed: Date.now() });
 
     const available = await fixture.facade.getAvailableModels("web:zai");
     await fixture.facade.getAvailableModels("web:zai");
@@ -501,6 +515,7 @@ test("AgentRuntimeFacade retries a superseded OpenRouter refresh after the insta
   try {
     const model = { provider: "openrouter", id: "auto", reasoning: true };
     const fixture = createFacade({
+      getDurableSession: chat => chat === "web:openrouter" ? createNativePositionPort({model:"openrouter/auto",thinkingLevel:"high"}) : undefined,
       modelRegistry: {
         getAll: () => [model],
         getAvailable: () => [model],
@@ -515,13 +530,6 @@ test("AgentRuntimeFacade retries a superseded OpenRouter refresh after the insta
       listKnownChats: () => [{ chat_jid: "web:openrouter", model: "openrouter/auto" }],
       onProviderUsageRefresh: (event) => refreshes.push(event),
     });
-    const session = {
-      model,
-      thinkingLevel: "high",
-      getContextUsage: () => null,
-      modelRegistry: { getAvailable: () => [model] },
-    };
-    fixture.pool.set("web:openrouter", { runtime: createRuntime(session), lastUsed: Date.now() });
 
     await fixture.facade.getAvailableModels("web:openrouter");
     for (let i = 0; i < 20 && fetchCalls < 1; i += 1) await Promise.resolve();
@@ -542,34 +550,38 @@ test("AgentRuntimeFacade retries a superseded OpenRouter refresh after the insta
   }
 });
 
-test("AgentRuntimeFacade reports display labels for legacy max thinking metadata", async () => {
+test("AgentRuntimeFacade keeps canonical thinking levels and rejects legacy max alias display", async () => {
   const legacyModel = {
     provider: "anthropic",
     id: "claude-legacy",
     reasoning: true,
     thinkingLevelMap: { xhigh: "max" },
   };
-  const session = {
-    model: legacyModel,
+  const port = createNativePositionPort({
+    sessionId: "legacy-thinking",
+    model: "anthropic/claude-legacy",
     thinkingLevel: "xhigh",
-    supportsThinking: () => true,
-    getAvailableThinkingLevels: () => ["off", "low", "medium", "high", "xhigh"],
+  });
+
+  // Legacy xhigh->max metadata is a compatibility alias only; the durable native
+  // state and canonical SDK levels must not be rewritten to the retired max label.
+  const fixture = createFacade({
+    getDurableSession: () => port,
     modelRegistry: {
       refresh: () => {},
       getAvailable: () => [legacyModel],
-    },
-  };
+      getAll: () => [legacyModel],
+      registerProvider: () => {},
+    } as any,
+  });
 
-  const fixture = createFacade();
-  fixture.pool.set("web:legacy", { runtime: createRuntime(session), lastUsed: Date.now() });
-
-  const available = await fixture.facade.getAvailableModels("web:legacy");
+  const available = await fixture.facade.getAvailableModels("web:legacy", { includeProviderUsage: false, includeProviderDiagnostics: false });
   expect(available.thinking_level).toBe("xhigh");
-  expect(available.thinking_level_label).toBe("max");
-  expect(available.available_thinking_levels).toEqual(["off", "low", "medium", "high", "xhigh"]);
-  expect(available.available_thinking_level_labels).toEqual(["off", "low", "medium", "high", "max"]);
+  expect(available.thinking_level_label).toBe("xhigh");
+  expect(available.available_thinking_levels).toEqual(["off", "minimal", "low", "medium", "high", "xhigh"]);
+  expect(available.available_thinking_level_labels).toEqual(["off", "minimal", "low", "medium", "high", "xhigh"]);
   expect(available.model_options[0]?.thinking_levels).toEqual(["off", "minimal", "low", "medium", "high", "xhigh"]);
-  expect(available.model_options[0]?.thinking_level_labels).toEqual(["off", "minimal", "low", "medium", "high", "max"]);
+  expect(available.model_options[0]?.thinking_level_labels).toEqual(["off", "minimal", "low", "medium", "high", "xhigh"]);
 });
 
 test("AgentRuntimeFacade exposes non-secret provider composition diagnostics", async () => {
@@ -587,6 +599,7 @@ test("AgentRuntimeFacade exposes non-secret provider composition diagnostics", a
     getModels: () => [{ provider: "native-ai", id: "native", reasoning: false }],
   };
   const fixture = createFacade({
+      getDurableSession: () => createNativePositionPort({model:null,thinkingLevel:null}),
     modelRegistry: {
       refresh: () => {},
       getAvailable: () => [
@@ -651,6 +664,7 @@ test("AgentRuntimeFacade filters web model options with scopedModelsOnly enabled
   process.env.PICLAW_SCOPED_MODELS_ONLY = "1";
   try {
     const fixture = createFacade({
+      getDurableSession: () => createNativePositionPort({model:null,thinkingLevel:null}),
       modelRegistry: {
         refresh: () => {},
         getAvailable: () => [
@@ -687,6 +701,7 @@ test("AgentRuntimeFacade keeps scopedModelsOnly visible when no enabledModels pa
   process.env.PICLAW_SCOPED_MODELS_ONLY = "1";
   try {
     const fixture = createFacade({
+      getDurableSession: () => createNativePositionPort({model:null,thinkingLevel:null}),
       modelRegistry: {
         refresh: () => {},
         getAvailable: () => [
@@ -717,6 +732,7 @@ test("AgentRuntimeFacade returns registry-backed model options without hydrating
   let _getOrCreateCalls = 0;
 
   const fixture = createFacade({
+      getDurableSession: () => createNativePositionPort({model:null,thinkingLevel:null}),
     getOrCreateRuntime: async () => {
       _getOrCreateCalls += 1;
       throw new Error("cold model lookup should not hydrate a runtime");
@@ -732,9 +748,8 @@ test("AgentRuntimeFacade returns registry-backed model options without hydrating
   });
 
   const available = await fixture.facade.getAvailableModels("web:cold");
-  // getOrCreateRuntime must not be called synchronously by getAvailableModels.
-  // Background async work (e.g. warmProviderUsage) may trigger it after the
-  // await returns — we only assert the synchronous path does not hydrate.
+  // Native metadata never hydrates a legacy runtime, synchronously or in background.
+  expect(_getOrCreateCalls).toBe(0);
   expect(refreshCalls).toBe(0);
   expect(available).toMatchObject({
     current: null,
@@ -754,66 +769,57 @@ test("AgentRuntimeFacade returns registry-backed model options without hydrating
     thinking_level: null,
     thinking_level_label: null,
     supports_thinking: false,
-    available_thinking_levels: ["off"],
-    available_thinking_level_labels: ["off"],
+    available_thinking_levels: [],
+    available_thinking_level_labels: [],
     provider_usage: null,
   });
 });
 
-test("AgentRuntimeFacade restores persisted current model for a cold chat without hydrating a runtime", async () => {
-  const chatJid = "web:persisted-model-test";
+test("AgentRuntimeFacade prefers explicit native metadata over stale JSONL session files", async () => {
+  const chatJid = "web:native-reader-wins";
   const sessionDir = join(SESSIONS_DIR, sanitiseJid(chatJid));
   rmSync(sessionDir, { recursive: true, force: true });
   mkdirSync(sessionDir, { recursive: true });
-  writeFileSync(join(sessionDir, "2026-04-17T18-00-00-000Z_test.jsonl"), [
-    JSON.stringify({ type: "session", version: 3, id: "test", timestamp: "2026-04-17T18:00:00.000Z", cwd: "/workspace" }),
-    JSON.stringify({ type: "model_change", id: "m1", parentId: null, timestamp: "2026-04-17T18:00:00.100Z", provider: "azure-openai", modelId: "gpt-5.6-sol" }),
-    JSON.stringify({ type: "thinking_level_change", id: "t1", parentId: "m1", timestamp: "2026-04-17T18:00:00.200Z", thinkingLevel: "max" }),
+  const stalePath = join(sessionDir, "2026-04-17T18-00-00-000Z_stale-file.jsonl");
+  writeFileSync(stalePath, [
+    JSON.stringify({ type: "session", version: 3, id: "stale", timestamp: "2026-04-17T18:00:00.000Z", cwd: "/workspace" }),
+    JSON.stringify({ type: "model_change", id: "m1", parentId: null, timestamp: "2026-04-17T18:00:00.100Z", provider: "azure-openai", modelId: "stale-model" }),
+    JSON.stringify({ type: "thinking_level_change", id: "t1", parentId: "m1", timestamp: "2026-04-17T18:00:00.200Z", thinkingLevel: "low" }),
     "",
   ].join("\n"));
 
+  const original = readFileSync(stalePath);
   try {
-    let refreshCalls = 0;
-    let getOrCreateCalls = 0;
-    const pool = new Map<string, { runtime: any; lastUsed: number }>();
-    const facade = new AgentRuntimeFacade({
-      pool,
-      getOrCreateRuntime: async () => {
-        getOrCreateCalls += 1;
-        throw new Error("cold model lookup should not hydrate a runtime");
-      },
+    const fixture = createFacade({
+      getDurableSession: () => createNativePositionPort({
+        sessionId: "native-reader-win",
+        model: "azure-openai/gpt-5.6-sol",
+        thinkingLevel: "max",
+        tokens: 42,
+        contextWindow: 84,
+      }),
       modelRegistry: {
-        refresh: () => { refreshCalls += 1; },
-        getAvailable: () => [
-          {
-            provider: "azure-openai",
-            id: "gpt-5.6-sol",
-            name: "GPT 5.6 Sol",
-            contextWindow: 1_050_000,
-            reasoning: true,
-            thinkingLevelMap: { off: null, xhigh: "xhigh", max: "max" },
-          },
-        ],
+        refresh: () => {},
+        getAvailable: () => [{
+          provider: "azure-openai",
+          id: "gpt-5.6-sol",
+          name: "GPT 5.6 Sol",
+          contextWindow: 1_050_000,
+          reasoning: true,
+          thinkingLevelMap: { off: null, xhigh: "xhigh", max: "max" },
+        }],
         getAll: () => [],
         registerProvider: () => {},
       } as any,
-      authStorage: { get: () => null } as any,
-      clearAttachments: () => {},
-      refreshRuntime: async () => {},
-      onWarn: () => {},
-      onError: () => {},
     });
 
-    const available = await facade.getAvailableModels(chatJid);
-    expect(getOrCreateCalls).toBe(0);
-    expect(refreshCalls).toBe(0);
+    const available = await fixture.facade.getAvailableModels(chatJid, { includeProviderUsage: false, includeProviderDiagnostics: false });
     expect(available.current).toBe("azure-openai/gpt-5.6-sol");
     expect(available.thinking_level).toBe("max");
     expect(available.thinking_level_label).toBe("max");
     expect(available.supports_thinking).toBe(true);
-    expect(available.available_thinking_levels).toContain("max");
     expect(available.model_options[0]?.thinking_levels).toEqual(["minimal", "low", "medium", "high", "xhigh", "max"]);
-    expect(available.model_options[0]?.thinking_level_labels).toEqual(["minimal", "low", "medium", "high", "xhigh", "max"]);
+    expect(readFileSync(stalePath)).toEqual(original);
   } finally {
     rmSync(sessionDir, { recursive: true, force: true });
   }
@@ -822,6 +828,7 @@ test("AgentRuntimeFacade restores persisted current model for a cold chat withou
 test("AgentRuntimeFacade projects Bedrock Opus 5 native xhigh into Settings model options", async () => {
   const bedrockOpus = bedrockOpus5Fixtures().find((model) => model.id === "us.anthropic.claude-opus-5")!;
   const fixture = createFacade({
+      getDurableSession: () => createNativePositionPort({model:null,thinkingLevel:null}),
     modelRegistry: {
       refresh: () => {},
       getAvailable: () => [bedrockOpus],
@@ -841,58 +848,36 @@ test("AgentRuntimeFacade projects Bedrock Opus 5 native xhigh into Settings mode
   expect(available.model_options[0]?.thinking_levels).toContain("max");
 });
 
-test("AgentRuntimeFacade uses the most recently modified persisted session when restoring cold model state", async () => {
-  const chatJid = "web:persisted-model-mtime-test";
+test("AgentRuntimeFacade fails closed when native model metadata is missing even if stale JSONL files exist", async () => {
+  const chatJid = "web:missing-native-reader";
   const sessionDir = join(SESSIONS_DIR, sanitiseJid(chatJid));
   rmSync(sessionDir, { recursive: true, force: true });
   mkdirSync(sessionDir, { recursive: true });
 
-  const olderPath = join(sessionDir, "2026-04-18T15-00-00-000Z_newer-name-but-older-mtime.jsonl");
-  const newerPath = join(sessionDir, "2026-04-17T10-00-00-000Z_older-name-but-newer-mtime.jsonl");
-
-  writeFileSync(olderPath, [
-    JSON.stringify({ type: "session", version: 3, id: "old", timestamp: "2026-04-18T15:00:00.000Z", cwd: "/workspace" }),
-    JSON.stringify({ type: "model_change", id: "m1", parentId: null, timestamp: "2026-04-18T15:00:00.100Z", provider: "openai", modelId: "wrong-model" }),
-    "",
-  ].join("\n"));
-  writeFileSync(newerPath, [
+  const stalePath = join(sessionDir, "2026-04-17T10-00-00-000Z_oldest-stale-file.jsonl");
+  writeFileSync(stalePath, [
     JSON.stringify({ type: "session", version: 3, id: "new", timestamp: "2026-04-17T10:00:00.000Z", cwd: "/workspace" }),
     JSON.stringify({ type: "model_change", id: "m2", parentId: null, timestamp: "2026-04-17T10:00:00.100Z", provider: "anthropic", modelId: "correct-model" }),
     JSON.stringify({ type: "thinking_level_change", id: "t2", parentId: "m2", timestamp: "2026-04-17T10:00:00.200Z", thinkingLevel: "low" }),
     "",
   ].join("\n"));
 
-  const now = new Date();
-  const olderMtime = new Date(now.getTime() - 60_000);
-  const newerMtime = now;
-  utimesSync(olderPath, olderMtime, olderMtime);
-  utimesSync(newerPath, newerMtime, newerMtime);
-
+  const original = readFileSync(stalePath);
   try {
-    const facade = new AgentRuntimeFacade({
-      pool: new Map(),
-      getOrCreateRuntime: async () => { throw new Error("cold model lookup should not hydrate a runtime"); },
+    const { facade } = createFacade({
+      getDurableSession: () => ({ sessionId: "missing-native", branchId: "main", readPosition: async () => "0" }),
       modelRegistry: {
         refresh: () => {},
         getAvailable: () => [
-          { provider: "openai", id: "wrong-model", name: "Wrong Model", contextWindow: 128000, reasoning: false },
           { provider: "anthropic", id: "correct-model", name: "Correct Model", contextWindow: 200000, reasoning: true },
         ],
         getAll: () => [],
         registerProvider: () => {},
       } as any,
-      authStorage: { get: () => null } as any,
-      clearAttachments: () => {},
-      refreshRuntime: async () => {},
-      onWarn: () => {},
-      onError: () => {},
     });
 
-    const available = await facade.getAvailableModels(chatJid);
-    expect(available.current).toBe("anthropic/correct-model");
-    expect(available.thinking_level).toBe("low");
-    expect(available.thinking_level_label).toBe("low");
-    expect(available.supports_thinking).toBe(true);
+    await expect(facade.getAvailableModels(chatJid, { includeProviderUsage: false, includeProviderDiagnostics: false })).rejects.toThrow("Durable session model unavailable");
+    expect(readFileSync(stalePath)).toEqual(original);
   } finally {
     rmSync(sessionDir, { recursive: true, force: true });
   }
@@ -900,12 +885,12 @@ test("AgentRuntimeFacade uses the most recently modified persisted session when 
 
 test("AgentRuntimeFacade does not block getAvailableModels on a cold provider-usage refresh", async () => {
   const previousFetch = globalThis.fetch;
-  let release!: () => void;
+  let release!: () => void; let fetchCalls=0;
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
   globalThis.fetch = (async () => {
-    await gate;
+    fetchCalls++; await gate;
     return new Response(JSON.stringify({
       plan_type: "pro",
       rate_limit: {
@@ -936,11 +921,12 @@ test("AgentRuntimeFacade does not block getAvailableModels on a cold provider-us
     };
 
     const fixture = createFacade({
+      getDurableSession: () => createNativePositionPort({model:"openai-codex/gpt-test",thinkingLevel:"high"}),
+      modelRegistry: session.modelRegistry as any,
       authStorage: {
         get: () => ({ type: "oauth", access: "token", accountId: "acct_123", expires: Date.now() + 60_000 }),
       } as any,
     });
-    fixture.pool.set("web:default", { runtime: createRuntime(session), lastUsed: Date.now() });
 
     const available = await Promise.race([
       fixture.facade.getAvailableModels("web:default"),
@@ -1253,6 +1239,10 @@ for (const native of [false, true]) for (const supportsOff of [false, true]) {
     const { facade } = createFacade({ ...(native ? { getDurableSession: () => port } : {}),
       modelRegistry: { getAvailable: () => [model] } as any,
       getOrCreateRuntime: async () => { legacy++; throw Error('legacy hydration forbidden'); } });
+    if (!native) {
+      for (const includeCatalogue of [true,false]) await expect(facade.getAvailableModels('web:capabilities',{includeCatalogue,includeProviderUsage:false,includeProviderDiagnostics:false})).rejects.toThrow('Durable session model unavailable');
+      expect([reads,writes,legacy]).toEqual([0,0,0]); return;
+    }
     for (const includeCatalogue of [true, false]) {
       const status = await facade.getAvailableModels('web:capabilities', { includeCatalogue, includeProviderUsage: false, includeProviderDiagnostics: false });
       // Cold non-native has no persisted selection. Native must report exact

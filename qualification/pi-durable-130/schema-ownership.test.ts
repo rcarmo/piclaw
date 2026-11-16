@@ -87,7 +87,7 @@ for (const addons of [false, true]) applicationTest(`complete native startup inv
   } finally { await fixture.close(); }
 });
 
-applicationTest("historical core upgrade classifies its one approved spelling difference and retained archive", async () => {
+applicationTest("existing native schema preserves archived identities and bytes without in-place conversion", async () => {
   const before = await seedHistoricalSchemaFixture();
   process.env.PICLAW_DB_IN_MEMORY = "0";
   initDatabase();
@@ -103,7 +103,7 @@ applicationTest("historical core upgrade classifies its one approved spelling di
     expect(db.query("SELECT * FROM piclaw_schema_migrations WHERE owner='piclaw-agent-sessions'").all()).toEqual(before.receipts);
     expect(db.query('SELECT rowid,* FROM host_legacy_chat_cursor_state_v1 ORDER BY rowid').all()).toEqual(before.cursors);
     expect((db.query('PRAGMA main.table_info(chat_cursors)').all() as {name:string}[]).map(row=>row.name)).toEqual(['chat_jid','cursor_ts','queued_followups_json']);
-    expect(db.query('SELECT rowid,* FROM chat_cursors ORDER BY rowid').all()).toEqual(before.cursors.map((row:any)=>({rowid:row.rowid,chat_jid:row.chat_jid,cursor_ts:row.cursor_ts,queued_followups_json:row.queued_followups_json})));
+    expect(db.query('SELECT rowid,* FROM chat_cursors ORDER BY rowid').all()).toEqual(before.polling);
     const cursorReceipts = db.query("SELECT * FROM piclaw_schema_migrations WHERE owner='host.chat-cursors'").all();
     expect(cursorReceipts).toHaveLength(1);
     expect(result.objects.filter(object=>object.owner==='archive:chat-cursor-state').every(object=>object.presence==='optional-preserved')).toBe(true);

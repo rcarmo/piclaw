@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { readFileSync } from 'node:fs';
 import {createTempWorkspace,setEnv} from '../../helpers.js';
-import {initializeChatCursorStorage,legacyCursorArchive} from '../../../src/db/chat-cursor-storage.js';
+const legacyCursorArchive = 'host_legacy_chat_cursor_state_v1';
 import { WebChannel } from "../../../src/channels/web.js";
 import { initDatabase, closeDatabase, getDb, setChatCursor, storeChatMetadata } from "../../../src/db.js";
 import { handleAgentMessage } from "../../../src/channels/web/handlers/agent.js";
@@ -21,13 +21,8 @@ afterEach(() => {closeDatabase();cleanup();});
 function historicalCursorFixture() {
   initDatabase();
   expect(getDb().query('SELECT COUNT(*) AS n FROM chat_cursors').get()).toEqual({n:0});
-  // Synthetic pre-ledger source inside this blank fixture. The populated file
-  // upgrade/reopen has a separate schema-ownership qualification.
-  getDb().transaction(() => {
-    getDb().exec("DROP TABLE chat_cursors; DELETE FROM piclaw_schema_migrations WHERE owner='host.chat-cursors'");
-    getDb().exec(readFileSync(new URL('../../fixtures/legacy-chat-cursors.sql',import.meta.url),'utf8'));
-    initializeChatCursorStorage(getDb());
-  })();
+  // Already-native inert archive data; no source conversion or active-table rewrite.
+  getDb().exec(readFileSync(new URL('../../fixtures/legacy-chat-cursors.sql',import.meta.url),'utf8').replaceAll(/\bchat_cursors\b/g, legacyCursorArchive));
 }
 
 test("model selection cannot rewind a native cursor or consume historical failed markers", async () => {

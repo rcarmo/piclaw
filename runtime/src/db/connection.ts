@@ -34,7 +34,6 @@ import path from "path";
 import { WORKSPACE_DIR, getRuntimeConfigPaths, getWorkspaceDir, getStoreDir, getConfigPath } from "../core/config.js";
 import type { RuntimeConfigPaths } from "../core/config-paths.js";
 import { createLogger } from "../utils/logger.js";
-import { migrateMediaCompression } from "./media-recompress.js";
 import { ensureLegacyColumns } from "./legacy-columns.js";
 import { createVerifiedSqliteBackup, type SqliteBackupManifest } from "./backup.js";
 import { registerSqliteCheckpoint } from "./sqlite-checkpoint.js";
@@ -143,30 +142,6 @@ export function shouldBlockLiveDatabaseOpenInTests(options: {
  *   - workspace_files – file metadata cache for workspace search
  *   - workspace_fts – FTS5 index over workspace file contents
  */
-function renameLegacyConfigTable(database: Database, fromName: string, toName: string): void {
-  const rows = database.prepare(
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (?, ?) ORDER BY name"
-  ).all(fromName, toName) as Array<{ name: string }>;
-  const names = new Set(rows.map((row) => row.name));
-  if (!names.has(fromName) || names.has(toName)) return;
-  try {
-    database.exec(`ALTER TABLE ${fromName} RENAME TO ${toName}`);
-  } catch (error) {
-    log.warn("Failed to rename legacy config table", {
-      operation: "rename_legacy_config_table",
-      fromName,
-      toName,
-      err: error,
-    });
-  }
-}
-
-function migrateLegacyConfigTables(database: Database): void {
-  renameLegacyConfigTable(database, "chat_ssh_configs", "ssh_configs");
-  renameLegacyConfigTable(database, "chat_proxmox_configs", "proxmox_configs");
-  renameLegacyConfigTable(database, "chat_portainer_configs", "portainer_configs");
-}
-
 function createSchema(database: Database): void {
   database.exec(`
     CREATE TABLE IF NOT EXISTS chats (
@@ -357,28 +332,6 @@ function createSchema(database: Database): void {
       FOREIGN KEY (chat_jid) REFERENCES chats(jid)
     );
     CREATE INDEX IF NOT EXISTS idx_ssh_configs_updated_at ON ssh_configs(updated_at);
-
-    CREATE TABLE IF NOT EXISTS proxmox_configs (
-      chat_jid TEXT PRIMARY KEY,
-      base_url TEXT NOT NULL,
-      api_token_keychain TEXT NOT NULL,
-      allow_insecure_tls INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (chat_jid) REFERENCES chats(jid)
-    );
-    CREATE INDEX IF NOT EXISTS idx_proxmox_configs_updated_at ON proxmox_configs(updated_at);
-
-    CREATE TABLE IF NOT EXISTS portainer_configs (
-      chat_jid TEXT PRIMARY KEY,
-      base_url TEXT NOT NULL,
-      api_token_keychain TEXT NOT NULL,
-      allow_insecure_tls INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (chat_jid) REFERENCES chats(jid)
-    );
-    CREATE INDEX IF NOT EXISTS idx_portainer_configs_updated_at ON portainer_configs(updated_at);
 
     CREATE TABLE IF NOT EXISTS extension_kv (
       extension_id TEXT NOT NULL,
@@ -670,31 +623,7 @@ function ensureChatBranchConstraints(database: Database): void {
   const tableSql = String(tableRow?.sql || "");
   const hasInlineAgentNameUnique = /agent_name\s+TEXT\s+NOT\s+NULL\s+UNIQUE/i.test(tableSql);
 
-  if (hasInlineAgentNameUnique) {
-    database.transaction(() => {
-      database.exec(`
-        CREATE TABLE chat_branches__migrated (
-          branch_id TEXT PRIMARY KEY,
-          chat_jid TEXT NOT NULL UNIQUE,
-          root_chat_jid TEXT NOT NULL,
-          parent_branch_id TEXT,
-          agent_name TEXT NOT NULL,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL,
-          archived_at TEXT,
-          FOREIGN KEY (chat_jid) REFERENCES chats(jid)
-        );
-        INSERT INTO chat_branches__migrated (
-          branch_id, chat_jid, root_chat_jid, parent_branch_id, agent_name, created_at, updated_at, archived_at
-        )
-        SELECT
-          branch_id, chat_jid, root_chat_jid, parent_branch_id, agent_name, created_at, updated_at, archived_at
-        FROM chat_branches;
-        DROP TABLE chat_branches;
-        ALTER TABLE chat_branches__migrated RENAME TO chat_branches;
-      `);
-    })();
-  }
+  if (hasInlineAgentNameUnique) throw Error("Unsupported legacy branch schema; no in-place table rebuild or conversion is performed. Use a fresh native destination.");
 
   initializeSessionHandleSchema(database);
   database.exec(`
@@ -702,43 +631,6 @@ function ensureChatBranchConstraints(database: Database): void {
     CREATE INDEX IF NOT EXISTS idx_chat_branches_parent_branch_id ON chat_branches(parent_branch_id);
     CREATE INDEX IF NOT EXISTS idx_chat_branches_archived_at ON chat_branches(archived_at);
   `);
-}
-
-/**
- * One-time migration: seed chat_cursors from the old lastAgentTimestamp JSON
- * blob stored in router_state under key "last_agent_timestamp_web".
- * Runs inside a transaction so all rows land together or not at all.
- * Safe to call on every startup – exits immediately if the table already
- * has rows (migration already ran).
- */
-function migrateChatCursors(database: Database): void {
-  const count = (
-    database.prepare("SELECT COUNT(*) as n FROM chat_cursors").get() as { n: number }
-  ).n;
-  if (count > 0) return;
-
-  const row = database
-    .prepare("SELECT value FROM router_state WHERE key = ?")
-    .get("last_agent_timestamp_web") as { value: string } | undefined;
-  if (!row) return;
-
-  try {
-    const state = JSON.parse(row.value);
-    const timestamps: Record<string, string> = state?.lastAgentTimestamp ?? {};
-    const insert = database.prepare(
-      "INSERT OR IGNORE INTO chat_cursors (chat_jid, cursor_ts) VALUES (?, ?)"
-    );
-    database.transaction(() => {
-      for (const [jid, ts] of Object.entries(timestamps)) {
-        if (typeof ts === "string" && ts) insert.run(jid, ts);
-      }
-    })();
-  } catch (error) {
-    log.warn("Failed to migrate legacy chat cursors; starting with empty cursors", {
-      operation: "migrate_chat_cursors",
-      err: error,
-    });
-  }
 }
 
 /**
@@ -823,16 +715,26 @@ function openDatabase(paths: Readonly<RuntimeConfigPaths>, role: PublishedDataba
   if (role.startsWith("maintenance-") && useMemory) throw Error("Maintenance requires an existing file-backed database.");
   closeDatabase({ shrinkMemory: false });
   if (pendingCleanup) throw Error("Database cleanup is pending; await closeDatabase() before reopening");
+  let createdNativeFile = false, createdIdentity: string | undefined;
   if (role === "root" && !useMemory) {
     inspectExistingStoreFormat(nextPath);
     fs.mkdirSync(path.dirname(nextPath), { recursive: true });
+    if (!fs.existsSync(nextPath)) {
+      const fd = fs.openSync(nextPath, 'wx', 0o600);
+      try { const identity = fs.fstatSync(fd); createdIdentity = `${identity.dev}:${identity.ino}`; createdNativeFile = true; }
+      finally { fs.closeSync(fd); }
+    }
   }
   let database: Database | undefined, releaseCheckpoint: (() => void | Promise<void>) | undefined;
   try {
-    database = openSqliteRole(nextPath, { role, create: role === "root", assertOwner: assertCurrent, expectedIdentity,
+    database = openSqliteRole(nextPath, { role, create: useMemory && role === "root", assertOwner: assertCurrent, expectedIdentity: createdIdentity ?? expectedIdentity,
       expectedPath: role === "index-worker" ? nextPath : undefined });
     const identity = useMemory ? null : currentFileIdentity(nextPath);
     if (role === "root") {
+      // Record only our exclusively-created empty native file before the first
+      // schema transaction, so failed fresh setup can reopen without treating an
+      // old/ambiguous store as native. Existing v3 stores never reach this write.
+      if (createdNativeFile) database.exec(`PRAGMA application_id = ${NATIVE_STORE_APPLICATION_ID}`);
       initializeDatabaseSchema(database);
       if (!useMemory) releaseCheckpoint = registerSqliteCheckpoint(database, nextPath);
     } else if (role === "index-worker") assertIndexStore(database);
@@ -874,7 +776,6 @@ export function initializeDatabaseSchema(database: Database): void {
 
 /** One ordered schema batch; the explicit schema boundary owns its transaction. */
 function initializeSchema(database: Database): void {
-  migrateLegacyConfigTables(database);
   createSchema(database);
   // SQLite ignores application_id on a zero-page in-memory database. Stamp only
   // after schema allocation, inside this same native initialization transaction.
@@ -882,6 +783,8 @@ function initializeSchema(database: Database): void {
   // Historical profiles join the existing schema transaction before readiness.
   // Preserve original JSON/timestamps; an existing KV override always wins.
   for (const extensionId of ['proxmox', 'portainer'] as const) {
+    // Already-native profile preservation only; fresh v4 never creates the old tables.
+    if (!database.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(`${extensionId}_configs`)) continue;
     const rows = database.prepare(`SELECT chat_jid,base_url,api_token_keychain,allow_insecure_tls,created_at,updated_at
       FROM ${extensionId}_configs`).all() as Array<{ chat_jid: string; base_url: string; api_token_keychain: string;
         allow_insecure_tls: number; created_at: string; updated_at: string }>;
@@ -922,10 +825,6 @@ function initializeSchema(database: Database): void {
   }
   ensureFts(database);
   initializeChatCursorStorage(database);
-  migrateChatCursors(database);
-  dropChatBranchDisplayName(database);
-  dropObsoleteRemoteInteropSchema(database);
-  ensureMediaCompression(database);
   initializeMessageInlineMediaSchema(database);
   ensureThinkingContentDuration(database);
   initializeAccessSchema(database);
@@ -939,54 +838,6 @@ function initializeSchema(database: Database): void {
 /** Add duration_ms column to thinking_content for databases created before it was introduced. */
 function ensureThinkingContentDuration(database: Database): void {
   addMissingLegacyColumns(database, 'thinking_content', [['duration_ms', 'INTEGER NOT NULL DEFAULT 0']]);
-}
-
-const REMOTE_INTEROP_CLEANUP_MIGRATION = "drop-core-remote-interop-v1";
-
-/** Drop obsolete core-owned remote interop state once, transactionally. */
-export function dropObsoleteRemoteInteropSchema(database: Database): void {
-  database.exec(`CREATE TABLE IF NOT EXISTS core_schema_migrations (
-    name TEXT PRIMARY KEY,
-    applied_at TEXT NOT NULL
-  )`);
-  const applied = database.prepare("SELECT 1 FROM core_schema_migrations WHERE name = ?").get(REMOTE_INTEROP_CLEANUP_MIGRATION);
-  if (applied) return;
-  database.transaction(() => {
-    for (const table of [
-      "remote_result_callbacks",
-      "remote_requests",
-      "remote_pair_outbound_requests",
-      "remote_pair_requests",
-      "remote_audit_logs",
-      "remote_peers",
-    ]) database.exec(`DROP TABLE IF EXISTS ${table}`);
-    database.prepare("INSERT INTO core_schema_migrations (name, applied_at) VALUES (?, ?)")
-      .run(REMOTE_INTEROP_CLEANUP_MIGRATION, new Date().toISOString());
-  }).immediate();
-}
-
-/**
- * One-time migration: compress existing uncompressed text-based media.
- * Uses PRAGMA user_version >= 2 as a migration marker.
- */
-function ensureMediaCompression(database: Database): void {
-  const result = migrateMediaCompression(database);
-  if (result.status === "already_complete") return;
-  const fields = { operation: "migration.media_compression", ...result };
-  if (result.status === "complete") {
-    if (result.compressed > 0) log.info("Media compression migration completed", fields);
-  } else log.warn("Media compression migration incomplete; retained marker permits retry", fields);
-}
-
-/**
- * One-time migration: drop the legacy display_name column from chat_branches.
- * Branch identity is now defined entirely by agent_name.
- * Safe to re-run: checks column existence via PRAGMA table_info first.
- */
-function dropChatBranchDisplayName(database: Database): void {
-  const cols = database.prepare("PRAGMA table_info(chat_branches)").all() as Array<{ name: string }>;
-  if (!cols.some((c) => c.name === "display_name")) return;
-  database.exec("ALTER TABLE chat_branches DROP COLUMN display_name");
 }
 
 /**

@@ -4,8 +4,7 @@ import { admitSqliteWrite } from "./db/sqlite-async-admission.js";
  * Host facade for admitted native dispatch, models/auth, metadata and resources.
  * SDK tasks/submissions and host accepted-source/terminal records own execution.
  * Supported execution requires admitted native operation ports.
- * Explicit legacy resource composition and migration readers remain
- * separate until their callers retire; ordinary startup selects native ports.
+ * Native ports are mandatory; resident legacy capture and construction are removed.
  */
 
 import { existsSync, readFileSync, statSync } from "fs";
@@ -23,7 +22,7 @@ import type { AssistantMessageEventStream, Context, Model, Provider, SimpleStrea
 import type { AgentControlCommand, AgentControlResult } from "./agent-control/index.js";
 import { getNativeCommandCatalogue } from "./agent-control/native-control-capabilities.js";
 import { getPiclawAgentDir } from "./core/agent-dir.js";
-import { SESSIONS_DIR, WORKSPACE_DIR, getSessionPoolConfig } from "./core/config.js";
+import { WORKSPACE_DIR } from "./core/config.js";
 import { readAccessConfig } from "./core/config-access.js";
 import { getExecutionIdentity } from "./core/execution-context.js";
 import { getChatChannel, getChatJid } from "./core/chat-context.js";
@@ -37,10 +36,9 @@ import {
 } from "./agent-pool/contracts.js";
 import { type AgentRuntimeFacade, type AvailableModelsResult } from "./agent-pool/runtime-facade.js";
 import { createAgentPoolServices, type AgentPoolServices } from "./agent-pool/service-factory.js";
-import { MemoryReclamationGate } from "./agent-pool/memory-reclamation.js";
 import { type AgentSessionManagerInstrumentationSnapshot, type PoolEntry } from "./agent-pool/session-manager.js";
 import type { PiclawCredentialStore } from "./agent-pool/credential-store.js";
-import { type ChatBranchRecord, type MergeChatBranchIntoParentResult, type SshConfig, type SshConfigClearResult, type SshConfigSetResult, deleteSshConfig, getDb, getSshConfig, pruneOldTokenUsage, reclaimFreelistPages, restoreChatBranchIdentity, shrinkDatabaseMemory, upsertSshConfig } from "./db.js";
+import { type ChatBranchRecord, type MergeChatBranchIntoParentResult, type SshConfig, type SshConfigClearResult, type SshConfigSetResult, deleteSshConfig, getDb, getSshConfig, pruneOldTokenUsage, reclaimFreelistPages, restoreChatBranchIdentity, upsertSshConfig } from "./db.js";
 import { registerRootExtensionKvStore } from "./db/register-extension-kv.js";
 import { setSshToolHandlers } from "./extensions/ssh.js";
 import { hasLiveChatSshConnection } from "./extensions/ssh-core.js";
@@ -236,17 +234,13 @@ export class AgentPool {
   }
   private mcpSettings: AgentPoolServices["mcpSettings"];
   private pool = new Map<string, PoolEntry>();
-  private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   private shuttingDown = false;
-  private memoryPressureActive = false;
-  private readonly memoryReclamation?: MemoryReclamationGate;
   // Shared across all sessions (expensive to create, safe to reuse)
   private credentialStore: PiclawCredentialStore;
   readonly modelRuntime: ModelRuntime;
   private modelRegistry: ModelRegistry;
   private settingsManager = SettingsManager.create(WORKSPACE_DIR, getPiclawAgentDir());
   private attachments: AgentPoolServices["attachments"];
-  private sessionManager: AgentPoolServices["sessionManager"];
   private branchManager: AgentPoolServices["branchManager"];
   private runtimeFacade: AgentPoolServices["runtimeFacade"];
   private readonly releaseModelInterop: () => void;
@@ -257,7 +251,6 @@ export class AgentPool {
     if(!this.durableApplication||!this.dreamDispatch)throw Error('Native Dream dispatcher unavailable');
     return this.dreamDispatch(Object.freeze({...request,assertCurrent:request.assertCurrent.bind(request)}));
   }
-  private readonly config = getSessionPoolConfig();
 
   private readonly scheduledHarnessProof?: AgentPoolOptions["prepareInterruptedScheduledHarness"];
   prepareInterruptedScheduledHarness(identity: Parameters<NonNullable<AgentPoolOptions["prepareInterruptedScheduledHarness"]>>[0]) {
@@ -295,7 +288,6 @@ export class AgentPool {
     this.modelRegistry = options.modelRegistry ?? new ModelRegistry(this.modelRuntime);
     ({
       attachments: this.attachments,
-      sessionManager: this.sessionManager,
       mcpSettings: this.mcpSettings,
       runtimeFacade: this.runtimeFacade,
       branchManager: this.branchManager,
@@ -306,7 +298,6 @@ export class AgentPool {
       modelRegistry: this.modelRegistry,
       settingsManager: this.settingsManager,
       workspaceDir: WORKSPACE_DIR,
-      mainSessionMaxSize: this.config.mainSessionPoolMaxSize,
       getDurableSession: options.getDurableSession,
       onInfo: (message, details) => log.info(message, details),
       onWarn: (message, details) => log.warn(message, details),
@@ -331,7 +322,7 @@ export class AgentPool {
     const ownedModelInterop: Pick<RuntimeInteropBridge, "getModelRegistry" | "streamSimple" | "getSessionId" | "getScopedModels"> = {
       getModelRegistry: () => this.modelRegistry,
       streamSimple: (model, context, options) => this.modelRuntime.streamSimple(model, context, options),
-      getSessionId: (chatJid) => getSessionEntry(chatJid)?.runtime.session.sessionId ?? null,
+      getSessionId: (chatJid) => this.runtimeFacade.getSessionGenerationForChat(chatJid ?? getChatJid("")),
       getScopedModels: (chatJid) => getSessionEntry(chatJid)?.runtime.session.scopedModels ?? [],
     };
     Object.assign(runtimeInterop, ownedModelInterop);
@@ -342,20 +333,7 @@ export class AgentPool {
     runtimeInterop.addLogSink = addLogSink;
     runtimeInterop.removeLogSink = removeLogSink;
     runtimeInterop.getKeychainEntry = getKeychainEntry;
-    if (this.sessionManager) {
-      this.memoryReclamation = new MemoryReclamationGate();
-      this.cleanupTimer = setInterval(() => this.evictIdle(), this.config.cleanupIntervalMs);
-    }
-    // B4: Prune old token_usage rows once on startup (90-day retention).
-    // D3: Reclaim freelist pages left by the pruning (incremental vacuum).
-    try {
-      const pruned = pruneOldTokenUsage(90);
-      if (pruned > 0) {
-        log.info(`Pruned ${pruned} token_usage rows older than 90 days`);
-        const remaining = reclaimFreelistPages();
-        if (remaining === 0) log.info("Reclaimed all freelist pages after token_usage pruning");
-      }
-    } catch (e) { void e; }
+
   }
 
   async applyControlCommand(chatJid: string, command: AgentControlCommand): Promise<AgentControlResult> {
@@ -451,8 +429,7 @@ export class AgentPool {
   }
 
   async disposeChatSession(chatJid: string): Promise<void> {
-    if (!this.sessionManager) throw Error("Durable application does not construct legacy sessions");
-    await this.sessionManager.recreate(chatJid);
+    throw Error("Durable application does not construct legacy sessions");
   }
 
   hasProviderModels(provider: string): boolean {
@@ -483,7 +460,7 @@ export class AgentPool {
   }
 
   isActive(chatJid: string): boolean {
-    return this.sessionManager?.hasProtectedRun(chatJid) || this.runtimeFacade.isActive(chatJid);
+    return this.runtimeFacade.isActive(chatJid);
   }
 
   async renameChatBranch(
@@ -588,7 +565,6 @@ export class AgentPool {
       activeForkBaseLeaves: 0,
       activeChats: this.branchManager.listActiveChats().length,
       sessionResources,
-      ...(this.sessionManager ? {sessionManager:this.sessionManager.getInstrumentationSnapshot()} : {}),
     };
   }
 
@@ -640,11 +616,6 @@ export class AgentPool {
   /** Gracefully shut down all sessions. */
   async shutdown(): Promise<void> {
     this.shuttingDown = true;
-    if (this.cleanupTimer) {
-      clearInterval(this.cleanupTimer);
-      this.cleanupTimer = null;
-    }
-    await this.sessionManager?.shutdown();
     this.releaseModelInterop();
     this.releaseSshHandlers();
   }
@@ -664,73 +635,7 @@ export class AgentPool {
     return metadata ? { ...metadata, commandCatalogue: getNativeCommandCatalogue(position) } : null;
   }
 
-  async getSessionForIntrospection(chatJid: string): Promise<AgentSession> {
-    return this.getOrCreate(chatJid);
-  }
-
-  // ── internal ────────────────────────────────────────────
-
-  private async getOrCreateRuntime(chatJid: string): Promise<AgentSessionRuntime> {
-    if (!this.sessionManager) throw Error("Durable application does not construct legacy sessions");
-    const runtime = await this.sessionManager.getOrCreate(chatJid);
-    const pressure = this.getMemoryPressureMode();
-    if (pressure.active && !this.shuttingDown) {
-      const poolSizeBefore = this.pool.size;
-      this.sessionManager.evictIdle({
-        mainIdleTtlMs: pressure.mainIdleTtlMs,
-        mainSessionMaxSizeOverride: pressure.mainSessionMaxSizeOverride,
-        protectedChatJids: [chatJid],
-      });
-      if (this.pool.size < poolSizeBefore) this.memoryReclamation!.request();
-    }
-    return runtime;
-  }
-
-  private async getOrCreate(chatJid: string): Promise<AgentSession> {
-    return (await this.getOrCreateRuntime(chatJid)).session;
-  }
-
-  private getMemoryPressureMode(): { active: boolean; mainIdleTtlMs: number; mainSessionMaxSizeOverride: number | undefined } {
-    const rssBytes = process.memoryUsage.rss();
-    const active = this.config.memoryPressureRssBytes > 0 && rssBytes >= this.config.memoryPressureRssBytes;
-    if (this.memoryPressureActive !== active) {
-      this.memoryPressureActive = active;
-      log.info(active ? "Memory pressure mode enabled" : "Memory pressure mode cleared", {
-        operation: "memory_pressure.mode_change",
-        rssBytes,
-        thresholdBytes: this.config.memoryPressureRssBytes,
-        mainIdleTtlMs: active ? this.config.memoryPressureMainIdleTtlMs : this.config.mainIdleTtlMs,
-        mainSessionPoolMaxSize: active ? this.config.memoryPressureMainSessionPoolMaxSize : this.config.mainSessionPoolMaxSize,
-      });
-    }
-
-    return {
-      active,
-      mainIdleTtlMs: active ? Math.min(this.config.mainIdleTtlMs, this.config.memoryPressureMainIdleTtlMs) : this.config.mainIdleTtlMs,
-      mainSessionMaxSizeOverride: active ? this.config.memoryPressureMainSessionPoolMaxSize : undefined,
-    };
-  }
-
-  private evictIdle(): void {
-    if (!this.sessionManager) return;
-    const pressure = this.getMemoryPressureMode();
-    const poolSizeBefore = this.pool.size;
-    this.sessionManager.evictIdle({
-      mainIdleTtlMs: pressure.mainIdleTtlMs,
-      mainSessionMaxSizeOverride: pressure.mainSessionMaxSizeOverride,
-    });
-    const poolSizeAfter = this.pool.size;
-    // Coalesce pressure/eviction requests and reclaim only after active runs
-    // and asynchronous disposal drain; do not interrupt another chat's work.
-    if (this.memoryReclamation!.shouldReclaim({
-      pressure: pressure.active,
-      evicted: poolSizeAfter < poolSizeBefore,
-      busy: this.sessionManager.hasActiveMemoryReclamationWork(),
-      now: Date.now(),
-      intervalMs: this.config.cleanupIntervalMs,
-    })) {
-      shrinkDatabaseMemory();
-      Bun.gc(true);
-    }
+  async getSessionForIntrospection(_chatJid: string): Promise<never> {
+    throw Error("Durable application does not construct legacy sessions");
   }
 }

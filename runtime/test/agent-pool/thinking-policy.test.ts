@@ -160,7 +160,7 @@ test('extension model-select thinking override is explicit, not mistaken for int
   expect(getSessionThinkingPolicy(session)?.last_transition?.operation).toBe('thinking_set');
 });
 
-test('production session factory installs policy and status exposes sanitized default provenance', async () => {
+test('offline legacy policy is not promoted into native status metadata or defaults', async () => {
   const { createSessionInDir } = await import('../../src/agent-pool/session.js');
   const { session: _unused, settings, runtime } = await fixture();
   const isolated = productionWorkspace();
@@ -172,11 +172,12 @@ test('production session factory installs policy and status exposes sanitized de
     expect(getSessionThinkingPolicy(produced.session)?.defaults).toEqual({ level: 'low', source: 'global' });
     const { AgentRuntimeFacade } = await import('../../src/agent-pool/runtime-facade.js');
     const registry = new ModelRegistry(produced.session.modelRuntime);
-    const facade = new AgentRuntimeFacade({ pool: new Map([['fixture', { runtime: produced, lastUsed: Date.now() }]]), getOrCreateRuntime: async () => { throw new Error('Must not hydrate for status'); }, modelRegistry: registry, settingsManager: settings, modelRuntime: produced.session.modelRuntime, authStorage: { get: () => null }, clearAttachments: () => {}, refreshRuntime: async () => {}, onWarn: () => {}, onError: () => {} } as any);
+    const facade = new AgentRuntimeFacade({ pool: new Map([['fixture', { runtime: produced, lastUsed: Date.now() }]]), getDurableSession: () => ({sessionId:'native-metadata',branchId:'main',readPosition:async()=>null,readState:async()=>({position:null,model:'fixture-openai/b',thinkingLevel:'high'})}), modelRegistry: registry, settingsManager: settings, modelRuntime: produced.session.modelRuntime, authPath: 'synthetic-unused' } as any);
     const status = await facade.getAvailableModels('fixture', { includeProviderUsage: false, includeProviderDiagnostics: false });
-    expect(status.thinking_policy?.preferred_level).toBe('high');
-    expect(status.thinking_policy?.defaults).toEqual({ level: 'low', source: 'global' });
-    expect(JSON.stringify(status.thinking_policy)).not.toContain(ws.workspace);
+    expect(status).toMatchObject({current:'fixture-openai/b',thinking_level:'high',thinking_level_label:'high'});
+    // Native metadata follows the SDK reader, never the legacy per-session monkeypatch.
+    expect(status.thinking_policy).toBeNull();
+    expect(JSON.stringify(status)).not.toContain(ws.workspace);
   } finally { await produced?.dispose(); isolated.cleanup(); }
 }, 20_000);
 

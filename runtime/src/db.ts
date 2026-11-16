@@ -20,12 +20,9 @@ export {
   getChatBranchByAgentName,
   listChatBranches,
   renameChatBranchIdentity,
-  renameChatJid,
   archiveChatBranch,
-  mergeChatBranchIntoParent,
   exportArchivedBranchDownloadData,
   previewPermanentDeleteArchivedBranch,
-  permanentDeleteArchivedBranch,
   restoreChatBranchIdentity,
 } from "./db/chat-branches.js";
 export {

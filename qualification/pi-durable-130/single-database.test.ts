@@ -31,7 +31,7 @@ test('single physical database: native accepted inputs, passive facade/document 
     expect(f.root.query('PRAGMA foreign_key_check').all()).toEqual([]);expect(await f.candidateDatabase.all('SELECT * FROM pragma_foreign_key_check')).toEqual([]);
   };
   try{
-    const ledger=f.root.query('SELECT * FROM core_schema_migrations ORDER BY name').all();expect(ledger.length).toBeGreaterThan(0);expect(()=>TestOwner.acquire(path)).toThrow('owner busy');
+    const ledger=f.root.query('SELECT * FROM piclaw_schema_migrations ORDER BY owner,migration_order').all();expect(ledger.length).toBeGreaterThan(0);expect(()=>TestOwner.acquire(path)).toThrow('owner busy');
     await f.open();f.base.host.modelHold=barrier();f.base.host.finalContent=[{type:'text',text:'single database answer'}];
     const primary=f.accept('native primary'),id=await f.runtime.submitMessage(primary),queued=f.accept('native follow-up'),queuedId=await f.runtime.submitMessage(queued,'followUp');
     const app=facade();expect(app.getSessionGenerationForChat(f.chat)).toBe('preserved-session-id');expect(await app.getCurrentModelLabel(f.chat)).toBe('qualification/synthetic');
@@ -45,14 +45,14 @@ test('single physical database: native accepted inputs, passive facade/document 
     const harness=Reflect.get(f.runtime,'harness') as Harness;await harness.commit(async tx=>{(await tx.doc(Probe)).outcome='same-file';},context);
     for(const table of ['messages','service_effect_s01_sources','piclaw_durable_bindings_v1','conversations','entries','tasks','submissions','documents','document_revisions'])expect((f.root.query(`SELECT count(*) n FROM ${table}`).get() as {n:number}).n).toBeGreaterThan(0);
     expect(f.root.query('SELECT * FROM service_effect_s01_operations').all()).toEqual([]);expect(f.root.query('SELECT * FROM service_effect_s02_commits').all()).toEqual([]);expect(f.root.query('SELECT * FROM piclaw_durable_intent_bindings_v1').all()).toEqual([]);
-    expect(f.root.query('SELECT version FROM durable_schema').get()).toEqual({version:CURRENT_SQLITE_SCHEMA_VERSION});expect(f.root.query('SELECT * FROM core_schema_migrations ORDER BY name').all()).toEqual(ledger);await checkConnections();
+    expect(f.root.query('SELECT version FROM durable_schema').get()).toEqual({version:CURRENT_SQLITE_SCHEMA_VERSION});expect(f.root.query('SELECT * FROM piclaw_schema_migrations ORDER BY owner,migration_order').all()).toEqual(ledger);await checkConnections();
     const position=await app.saveSessionPosition(f.chat),sdk=f.sdkSnapshot(),bindings=[await f.bindings.get(primary),await f.bindings.get(queued)],generation=f.owner().generation,calls=f.base.host.modelCalls;
     await f.reopen();expect(f.owner().generation).toBe(generation+1);const reopened=facade();
     expect(await reopened.saveSessionPosition(f.chat)).toBe(position);expect(await reopened.getSessionTreeForChat(f.chat)).toEqual(tree);expect(await reopened.getCurrentModelLabel(f.chat)).toBe('qualification/synthetic');expect(reopened.getSessionGenerationForChat(f.chat)).toBe('preserved-session-id');
     await expect(app.getSessionTreeForChat(f.chat)).rejects.toThrow('Runtime closed');await expect(app.getCurrentModelLabel(f.chat)).rejects.toThrow('Runtime closed');await expect(app.saveSessionPosition(f.chat)).rejects.toThrow('Runtime closed');
     expect(await (Reflect.get(f.runtime,'harness') as Harness).commit(async tx=>(await tx.doc(Probe)).outcome,context)).toBe('same-file');expect([await f.bindings.get(primary),await f.bindings.get(queued)]).toEqual(bindings);
     expect(await f.runtime.submitMessage(primary)).toBe(id);expect(await f.runtime.submitMessage(queued,'followUp')).toBe(queuedId);expect(f.sdkSnapshot()).toEqual(sdk);expect(f.base.host.modelCalls).toBe(calls);expect(f.base.host.effects).toBe(0);
-    expect(f.root.query('SELECT * FROM core_schema_migrations ORDER BY name').all()).toEqual(ledger);await checkConnections();
+    expect(f.root.query('SELECT * FROM piclaw_schema_migrations ORDER BY owner,migration_order').all()).toEqual(ledger);await checkConnections();
     const files:string[]=[];const scan=async(dir:string)=>{for(const entry of await readdir(dir,{withFileTypes:true})){const next=join(dir,entry.name);if(entry.isDirectory())await scan(next);else files.push(next);}};await scan(f.identity.workspace.base);
     expect(files.filter(file=>![path,path+'-wal',path+'-shm'].includes(file))).toEqual([]);expect((await stat(path)).ino).toBeGreaterThan(0);expect(fileEvents).toEqual([]);for(const spy of spies)expect(spy).not.toHaveBeenCalled();
   }finally{watcher.close();for(const spy of spies)spy.mockRestore();await f.close();}

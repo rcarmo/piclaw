@@ -52,18 +52,11 @@ test('old pool shutdown preserves new model/SSH registrations and current shutdo
   for (const [key, value] of Object.entries(stable)) expect(bridge[key]).toBe(value);
 });
 
-test('uncertain pool resource close retains selected registrations until confirmed cleanup', async () => {
-  const pool = makePool('retained'), bridge = interop(), selected = bridge.getModelRegistry;
-  let release!: () => void, reject!: (error: Error) => void;
-  const held = new Promise<void>((resolve, fail) => { release = resolve; reject = fail; });
-  const manager = { shutdown: () => held };
-  (pool as any).sessionManager = manager;
-  const closing = pool.shutdown(); await Bun.sleep(0);
-  expect(bridge.getModelRegistry).toBe(selected); expect(getSshStatusHintTarget('web:fixture')).toBe('retained');
-  reject(Error('uncertain cleanup')); await expect(closing).rejects.toThrow('uncertain cleanup');
-  expect(bridge.getModelRegistry).toBe(selected); expect(getSshStatusHintTarget('web:fixture')).toBe('retained');
-  manager.shutdown = async () => { release(); };
-  await pool.shutdown(); expect(bridge.getModelRegistry).toBeUndefined(); expect(getSshStatusHintTarget('web:fixture')).toBeNull();
+test('native pool has no legacy manager cleanup owner; application shutdown gates registration release', async () => {
+  const pool=makePool('native');expect(pool).not.toHaveProperty('sessionManager');
+  // Held/rejected actual native-backend handoff and non-replay are covered by
+  // runtime/shutdown.test.ts, not a fabricated legacy-manager property.
+  await pool.shutdown();expect(interop().getModelRegistry).toBeUndefined();
 });
 
 test('SSH handle ownership fences reused handler objects and double release', () => {

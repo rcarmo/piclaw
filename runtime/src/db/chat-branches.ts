@@ -1,19 +1,15 @@
 import { hasNativeRouting, requireLegacyRoutingMutation, assertNativeBranchPolicyIdle } from "./native-routing-policy.js";
-import { unlinkedUsageReportPredicate } from "./usage-report-projection.js";
 /**
  * db/chat-branches.ts – Explicit branch/session registry for web chat branches.
  *
  * branch_id is the stable host identity; agent_name is a mutable friendly handle.
  * Native conversation/session routing belongs to the immutable SDK manifest.
- * The legacy `display_name` column is dropped on first startup via migration.
+ * Historical display_name data stays inert; native metadata never converts it.
  */
 
 import { getDb } from "./connection.js";
-import { deleteTask, moveScheduledTasksToChat } from "./tasks.js";
 import { canonicalScheduledTasksSql, readCanonicalScheduledTask } from "./scheduled-task-definitions.js";
 import { ChatAccessDenied } from "./session-ownership.js";
-import { deleteUnreferencedMedia } from "./media.js";
-import { deleteThinkingContentByChatJid } from "./thinking-cleanup.js";
 import type { ChatBranchRecord } from "./types.js";
 import { createUuid } from "../utils/ids.js";
 
@@ -116,18 +112,6 @@ export function getChatBranchByAgentName(agentName: string): ChatBranchRecord | 
        FROM chat_branches
       WHERE agent_name = ? AND handle_owner_id = ''
         AND archived_at IS NULL`
-  ).get(normalized) as ChatBranchRow | undefined;
-  return toRecord(row);
-}
-
-function getChatBranchByBranchId(branchId: string): ChatBranchRecord | null {
-  const normalized = String(branchId || "").trim();
-  if (!normalized) return null;
-  const db = getDb();
-  const row = db.prepare(
-    `SELECT branch_id, chat_jid, root_chat_jid, parent_branch_id, agent_name, created_at, updated_at, archived_at
-       FROM chat_branches
-      WHERE branch_id = ?`
   ).get(normalized) as ChatBranchRow | undefined;
   return toRecord(row);
 }
@@ -321,13 +305,6 @@ export interface ArchivedBranchPurgePreview {
   };
 }
 
-export interface PermanentDeleteArchivedBranchResult {
-  branch: ChatBranchRecord;
-  counts: ArchivedBranchPurgePreview["counts"] & {
-    media_deleted: number;
-  };
-}
-
 export interface ArchivedBranchDownloadData {
   schema: "piclaw.archived-session.v1";
   exported_at: string;
@@ -452,14 +429,15 @@ export function exportArchivedBranchDownloadData(chatJid: string): ArchivedBranc
       : [],
     configs: {
       ssh: db.prepare(`SELECT * FROM ssh_configs WHERE chat_jid = ?`).get(branch.chat_jid) as Record<string, unknown> | null,
-      proxmox: db.prepare(`SELECT * FROM proxmox_configs WHERE chat_jid = ?`).get(branch.chat_jid) as Record<string, unknown> | null,
-      portainer: db.prepare(`SELECT * FROM portainer_configs WHERE chat_jid = ?`).get(branch.chat_jid) as Record<string, unknown> | null,
+      proxmox: (db.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='proxmox_configs'").get() ? db.prepare(`SELECT * FROM proxmox_configs WHERE chat_jid = ?`).get(branch.chat_jid) : null) as Record<string, unknown> | null,
+      portainer: (db.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='portainer_configs'").get() ? db.prepare(`SELECT * FROM portainer_configs WHERE chat_jid = ?`).get(branch.chat_jid) : null) as Record<string, unknown> | null,
     },
     extension_kv: db.prepare(`SELECT * FROM extension_kv WHERE scope = 'chat' AND scope_key = ? ORDER BY extension_id ASC, key ASC`).all(branch.chat_jid) as Record<string, unknown>[],
   };
 }
 
 export function previewPermanentDeleteArchivedBranch(chatJid: string): ArchivedBranchPurgePreview {
+  const db = getDb();
   const branch = requireArchivedPurgeTarget(chatJid);
   const taskIds = getArchivedBranchTaskIds(branch.chat_jid);
   const mediaIds = getArchivedBranchMediaIds(branch.chat_jid);
@@ -484,36 +462,12 @@ export function previewPermanentDeleteArchivedBranch(chatJid: string): ArchivedB
         ? countRows(`SELECT COUNT(*) AS count FROM task_run_logs WHERE task_id IN (${taskPlaceholders})`, ...taskIds)
         : 0,
       ssh_configs: countRows(`SELECT COUNT(*) AS count FROM ssh_configs WHERE chat_jid = ?`, branch.chat_jid),
-      proxmox_configs: countRows(`SELECT COUNT(*) AS count FROM proxmox_configs WHERE chat_jid = ?`, branch.chat_jid),
-      portainer_configs: countRows(`SELECT COUNT(*) AS count FROM portainer_configs WHERE chat_jid = ?`, branch.chat_jid),
+      proxmox_configs: db.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='proxmox_configs'").get() ? countRows(`SELECT COUNT(*) AS count FROM proxmox_configs WHERE chat_jid = ?`, branch.chat_jid) : 0,
+      portainer_configs: db.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='portainer_configs'").get() ? countRows(`SELECT COUNT(*) AS count FROM portainer_configs WHERE chat_jid = ?`, branch.chat_jid) : 0,
       extension_kv: countRows(`SELECT COUNT(*) AS count FROM extension_kv WHERE scope = 'chat' AND scope_key = ?`, branch.chat_jid),
       media_candidates: mediaIds.length,
     },
   };
-}
-
-function getLatestChatPosition(chatJid: string): string {
-  const db = getDb();
-  const row = db.prepare(
-    `SELECT MAX(timestamp) AS ts FROM messages WHERE chat_jid = ?`
-  ).get(chatJid) as { ts: string | null } | undefined;
-  if (typeof row?.ts === "string" && row.ts.trim()) return row.ts;
-
-  const chat = db.prepare(
-    `SELECT last_message_time AS ts FROM chats WHERE jid = ?`
-  ).get(chatJid) as { ts: string | null } | undefined;
-  return typeof chat?.ts === "string" ? chat.ts : "";
-}
-
-function moveChatCursorToLastPosition(chatJid: string): void {
-  const ts = getLatestChatPosition(chatJid);
-  if (!ts) return;
-  getDb().prepare(`
-    INSERT INTO chat_cursors (chat_jid, cursor_ts, queued_followups_json)
-    VALUES (?, ?, NULL)
-    ON CONFLICT(chat_jid) DO UPDATE SET
-      cursor_ts = excluded.cursor_ts
-  `).run(chatJid, ts);
 }
 
 export interface MergeChatBranchIntoParentResult {
@@ -536,310 +490,6 @@ export interface MergeChatBranchIntoParentResult {
 /** SQL-only helpers borrow an outer transaction through a savepoint, or own an
  * immediate transaction when called standalone. Returning from a borrowed scope
  * does not certify physical commit; the outer owner controls publication. */
-export function mergeChatBranchIntoParent(chatJid: string): MergeChatBranchIntoParentResult {
-  const db = getDb();
-  requireLegacyRoutingMutation(db, "legacy merge");
-  return db.transaction(() => {
-    requireLegacyRoutingMutation(db, "legacy merge");
-    const normalizedChatJid = String(chatJid || "").trim();
-    if (!normalizedChatJid) throw new Error("chat_jid is required");
-
-    const source = getChatBranchByChatJid(normalizedChatJid);
-    if (!source) throw new Error(`Unknown chat branch: ${normalizedChatJid}`);
-    if (!source.parent_branch_id) {
-      throw new Error(`Cannot merge a root chat session into a parent: ${normalizedChatJid}`);
-    }
-
-    const parent = getChatBranchByBranchId(source.parent_branch_id);
-    if (!parent) throw new Error(`Missing parent branch for chat: ${normalizedChatJid}`);
-    if (parent.archived_at) throw new Error(`Cannot merge into an archived parent chat: ${parent.chat_jid}`);
-
-    const childCount = countRows(
-      `SELECT COUNT(*) AS count FROM chat_branches WHERE parent_branch_id = ?`,
-      source.branch_id,
-    );
-    if (childCount > 0) {
-      throw new Error(`Cannot merge a chat branch that still has child branches: ${normalizedChatJid}`);
-    }
-
-    const messageCollisionCount = countRows(
-      `SELECT COUNT(*) AS count
-         FROM messages source
-         JOIN messages parent ON parent.chat_jid = ? AND parent.id = source.id
-        WHERE source.chat_jid = ?`,
-      parent.chat_jid,
-      source.chat_jid,
-    );
-    if (messageCollisionCount > 0) {
-      throw new Error(`Cannot merge chat branch because ${messageCollisionCount} message id(s) already exist in the parent chat.`);
-    }
-
-    // Historical queue bytes remain inert; never turn them into new messages.
-    const queued = db.prepare("SELECT queued_followups_json FROM chat_cursors WHERE chat_jid = ?").get(source.chat_jid) as { queued_followups_json: string | null } | undefined;
-    if (queued?.queued_followups_json && !["", "[]"].includes(queued.queued_followups_json.trim())) {
-      throw new Error("Cannot merge a branch with preserved legacy queue records.");
-    }
-
-    const counts: MergeChatBranchIntoParentResult["counts"] = {
-      messages: countRows(`SELECT COUNT(*) AS count FROM messages WHERE chat_jid = ?`, source.chat_jid),
-      token_usage: countRows(`SELECT COUNT(*) AS count FROM token_usage WHERE chat_jid = ?`, source.chat_jid),
-      scheduled_tasks: countRows(`WITH tasks AS (${canonicalScheduledTasksSql}) SELECT COUNT(*) AS count FROM tasks WHERE chat_jid = ?`, source.chat_jid),
-      chat_cursors: countRows(`SELECT COUNT(*) AS count FROM chat_cursors WHERE chat_jid = ?`, source.chat_jid),
-      ssh_configs: countRows(`SELECT COUNT(*) AS count FROM ssh_configs WHERE chat_jid = ?`, source.chat_jid),
-      proxmox_configs: countRows(`SELECT COUNT(*) AS count FROM proxmox_configs WHERE chat_jid = ?`, source.chat_jid),
-      portainer_configs: countRows(`SELECT COUNT(*) AS count FROM portainer_configs WHERE chat_jid = ?`, source.chat_jid),
-      extension_kv: countRows(`SELECT COUNT(*) AS count FROM extension_kv WHERE scope = 'chat' AND scope_key = ?`, source.chat_jid),
-      chat_branches_deleted: 1,
-      chats_deleted: countRows(`SELECT COUNT(*) AS count FROM chats WHERE jid = ?`, source.chat_jid),
-    };
-
-    db.prepare(`UPDATE messages SET chat_jid = ? WHERE chat_jid = ?`).run(parent.chat_jid, source.chat_jid);
-    db.prepare(`UPDATE token_usage SET chat_jid = ? WHERE chat_jid = ?`).run(parent.chat_jid, source.chat_jid);
-    moveScheduledTasksToChat(source.chat_jid, parent.chat_jid);
-
-    moveChatCursorToLastPosition(parent.chat_jid);
-    db.prepare(`DELETE FROM chat_cursors WHERE chat_jid = ?`).run(source.chat_jid);
-
-    db.prepare(
-      `INSERT OR IGNORE INTO ssh_configs (
-         chat_jid, ssh_target, ssh_port, private_key_keychain, known_hosts_keychain,
-         strict_host_key_checking, created_at, updated_at
-       )
-       SELECT ?, ssh_target, ssh_port, private_key_keychain, known_hosts_keychain,
-              strict_host_key_checking, created_at, updated_at
-         FROM ssh_configs
-        WHERE chat_jid = ?`
-    ).run(parent.chat_jid, source.chat_jid);
-    db.prepare(`DELETE FROM ssh_configs WHERE chat_jid = ?`).run(source.chat_jid);
-
-    db.prepare(
-      `INSERT OR IGNORE INTO proxmox_configs (
-         chat_jid, base_url, api_token_keychain, allow_insecure_tls, created_at, updated_at
-       )
-       SELECT ?, base_url, api_token_keychain, allow_insecure_tls, created_at, updated_at
-         FROM proxmox_configs
-        WHERE chat_jid = ?`
-    ).run(parent.chat_jid, source.chat_jid);
-    db.prepare(`DELETE FROM proxmox_configs WHERE chat_jid = ?`).run(source.chat_jid);
-
-    db.prepare(
-      `INSERT OR IGNORE INTO portainer_configs (
-         chat_jid, base_url, api_token_keychain, allow_insecure_tls, created_at, updated_at
-       )
-       SELECT ?, base_url, api_token_keychain, allow_insecure_tls, created_at, updated_at
-         FROM portainer_configs
-        WHERE chat_jid = ?`
-    ).run(parent.chat_jid, source.chat_jid);
-    db.prepare(`DELETE FROM portainer_configs WHERE chat_jid = ?`).run(source.chat_jid);
-
-    db.prepare(
-      `INSERT OR IGNORE INTO extension_kv (extension_id, scope, scope_key, key, value, created_at, updated_at)
-       SELECT extension_id, scope, ?, key, value, created_at, updated_at
-         FROM extension_kv
-        WHERE scope = 'chat'
-          AND scope_key = ?`
-    ).run(parent.chat_jid, source.chat_jid);
-    db.prepare(`DELETE FROM extension_kv WHERE scope = 'chat' AND scope_key = ?`).run(source.chat_jid);
-
-    db.prepare(
-      `UPDATE chats
-          SET last_message_time = CASE
-                WHEN (SELECT last_message_time FROM chats WHERE jid = ?) > last_message_time
-                  THEN (SELECT last_message_time FROM chats WHERE jid = ?)
-                ELSE last_message_time
-              END
-        WHERE jid = ?`
-    ).run(source.chat_jid, source.chat_jid, parent.chat_jid);
-    db.prepare(`DELETE FROM chat_branches WHERE branch_id = ?`).run(source.branch_id);
-    db.prepare(`DELETE FROM chats WHERE jid = ?`).run(source.chat_jid);
-
-    return { source, parent, counts };
-  }).immediate();
-}
-
-export function permanentDeleteArchivedBranch(chatJid: string): PermanentDeleteArchivedBranchResult {
-  const db = getDb();
-  requireLegacyRoutingMutation(db, "legacy purge");
-  return db.transaction(() => {
-    requireLegacyRoutingMutation(db, "legacy purge");
-    const preview = previewPermanentDeleteArchivedBranch(chatJid);
-    const branch = preview.branch;
-    const mediaIds = getArchivedBranchMediaIds(branch.chat_jid);
-    const taskIds = getArchivedBranchTaskIds(branch.chat_jid);
-
-    const deleted = {
-      ...preview.counts,
-      media_deleted: 0,
-    };
-
-    for (const taskId of taskIds) deleteTask(taskId);
-
-    db.prepare(
-      `DELETE FROM message_media
-        WHERE message_rowid IN (SELECT rowid FROM messages WHERE chat_jid = ?)`
-    ).run(branch.chat_jid);
-    // Purge thinking_content for messages we're about to delete (no FK
-    // cascade is possible; see I2 in PR #655 issues tracker). Must run
-    // BEFORE the messages DELETE so the subquery still resolves.
-    deleteThinkingContentByChatJid(branch.chat_jid);
-    db.prepare(`DELETE FROM messages WHERE chat_jid = ?`).run(branch.chat_jid);
-    db.prepare(`DELETE FROM chat_cursors WHERE chat_jid = ?`).run(branch.chat_jid);
-    deleted.token_usage = db.prepare(`DELETE FROM token_usage WHERE chat_jid = ? AND ${unlinkedUsageReportPredicate(db, "token_usage")}`).run(branch.chat_jid).changes;
-    db.prepare(`DELETE FROM ssh_configs WHERE chat_jid = ?`).run(branch.chat_jid);
-    db.prepare(`DELETE FROM proxmox_configs WHERE chat_jid = ?`).run(branch.chat_jid);
-    db.prepare(`DELETE FROM portainer_configs WHERE chat_jid = ?`).run(branch.chat_jid);
-    db.prepare(`DELETE FROM extension_kv WHERE scope = 'chat' AND scope_key = ?`).run(branch.chat_jid);
-    db.prepare(`DELETE FROM chat_branches WHERE chat_jid = ?`).run(branch.chat_jid);
-    db.prepare(`DELETE FROM chats WHERE jid = ?`).run(branch.chat_jid);
-    deleted.media_deleted = deleteUnreferencedMedia(mediaIds);
-
-    return {
-      branch,
-      counts: deleted,
-    };
-  }).immediate();
-}
-
-// ---------------------------------------------------------------------------
-// JID rename — migrate a chat's JID across every referencing table.
-// ---------------------------------------------------------------------------
-
-export interface RenameChatJidResult {
-  oldJid: string;
-  newJid: string;
-  branch: ChatBranchRecord;
-  /** Tables that had rows updated (excludes FTS shadow tables). */
-  updatedTables: string[];
-}
-
-/**
- * Rename a chat JID across its identity tables in one SQL transaction.
- * With an existing transaction, this scope borrows a savepoint. Foreign-key
- * deferral belongs to that physical outer transaction until commit/rollback.
- * Dispose cached sessions and rename directories only after the outer owner
- * certifies physical commit, not merely after a borrowed helper returns.
- *
- * Child branches whose `chat_jid` starts with `oldJid + ":"` are
- * rewritten to start with `newJid + ":"` so the tree stays intact for both
- * legacy `:branch:` and modern hierarchical JID forms.
- */
-export function renameChatJid(oldJid: string, newJid: string): RenameChatJidResult {
-  const db = getDb();
-  requireLegacyRoutingMutation(db, "address rename");
-  return db.transaction(() => {
-    requireLegacyRoutingMutation(db, "address rename");
-    const old = String(oldJid || "").trim();
-    const next = String(newJid || "").trim();
-    if (!old) throw new Error("oldJid is required");
-    if (!next) throw new Error("newJid is required");
-    if (old === next) throw new Error("Old and new JID are identical.");
-
-    // Disallow reserved characters that would break the branch-tree model.
-    if (/[\s]/.test(next)) throw new Error("JID must not contain whitespace.");
-
-    const existing = getChatBranchByChatJid(old);
-    if (!existing) throw new Error(`Unknown chat: ${old}`);
-
-    // Make sure the target JID is not already in use.
-    const collision = getChatBranchByChatJid(next);
-    if (collision) throw new Error(`Target JID already exists: ${next}`);
-
-    const now = new Date().toISOString();
-    const updated: string[] = [];
-    const childPrefix = `${old}:`;
-    const childNextPrefix = `${next}:`;
-    const childPrefixLength = childPrefix.length;
-
-    // Parent and child chat identities move together; enforce all foreign keys
-    // at this transaction's commit instead of between the linked updates.
-    db.exec("PRAGMA defer_foreign_keys=ON");
-    // --- chats (PK = jid) -----------------------------------------------
-    const chatsRows = db.prepare(
-      `UPDATE chats SET jid = ? WHERE jid = ?`
-    ).run(next, old);
-    // Also update any children whose JID starts with the old prefix.
-    db.prepare(
-      `UPDATE chats
-          SET jid = ? || substr(jid, ?)
-        WHERE substr(jid, 1, ?) = ?`
-    ).run(childNextPrefix, childPrefixLength + 1, childPrefixLength, childPrefix);
-    if ((chatsRows as any)?.changes > 0) updated.push("chats");
-
-    // --- messages -------------------------------------------------------
-    const msgRows = db.prepare(
-      `UPDATE messages SET chat_jid = ? WHERE chat_jid = ?`
-    ).run(next, old);
-    db.prepare(
-      `UPDATE messages
-          SET chat_jid = ? || substr(chat_jid, ?)
-        WHERE substr(chat_jid, 1, ?) = ?`
-    ).run(childNextPrefix, childPrefixLength + 1, childPrefixLength, childPrefix);
-    if ((msgRows as any)?.changes > 0) updated.push("messages");
-
-    // --- chat_cursors ---------------------------------------------------
-    const cursorRows = db.prepare(
-      `UPDATE chat_cursors SET chat_jid = ? WHERE chat_jid = ?`
-    ).run(next, old);
-    db.prepare(
-      `UPDATE chat_cursors
-          SET chat_jid = ? || substr(chat_jid, ?)
-        WHERE substr(chat_jid, 1, ?) = ?`
-    ).run(childNextPrefix, childPrefixLength + 1, childPrefixLength, childPrefix);
-    if ((cursorRows as any)?.changes > 0) updated.push("chat_cursors");
-
-    // --- chat_branches (chat_jid + root_chat_jid) ----------------------
-    db.prepare(
-      `UPDATE chat_branches SET chat_jid = ?, root_chat_jid = CASE WHEN root_chat_jid = ? THEN ? ELSE root_chat_jid END, updated_at = ? WHERE chat_jid = ?`
-    ).run(next, old, next, now, old);
-    // Children: update chat_jid prefix and root_chat_jid if it pointed to old.
-    db.prepare(
-      `UPDATE chat_branches
-         SET chat_jid = ? || substr(chat_jid, ?),
-             root_chat_jid = CASE WHEN root_chat_jid = ? THEN ? ELSE root_chat_jid END,
-             updated_at = ?
-       WHERE substr(chat_jid, 1, ?) = ?`
-    ).run(childNextPrefix, childPrefixLength + 1, old, next, now, childPrefixLength, childPrefix);
-    updated.push("chat_branches");
-
-    // --- token_usage ----------------------------------------------------
-    db.prepare(
-      `UPDATE token_usage SET chat_jid = ? WHERE chat_jid = ?`
-    ).run(next, old);
-    db.prepare(
-      `UPDATE token_usage
-          SET chat_jid = ? || substr(chat_jid, ?)
-        WHERE substr(chat_jid, 1, ?) = ?`
-    ).run(childNextPrefix, childPrefixLength + 1, childPrefixLength, childPrefix);
-    updated.push("token_usage");
-
-    // --- scheduled_tasks ------------------------------------------------
-    const taskChats = db.prepare(`WITH tasks AS (${canonicalScheduledTasksSql})
-      SELECT DISTINCT chat_jid FROM tasks WHERE chat_jid=? OR substr(chat_jid,1,?)=?`)
-      .all(old, childPrefixLength, childPrefix) as { chat_jid: string }[];
-    for (const task of taskChats) moveScheduledTasksToChat(task.chat_jid,
-      task.chat_jid === old ? next : childNextPrefix + task.chat_jid.slice(childPrefixLength));
-
-    // --- config tables (ssh, proxmox, portainer) -----------------------
-    for (const tbl of ["ssh_configs", "proxmox_configs", "portainer_configs"]) {
-      db.prepare(
-        `UPDATE ${tbl} SET chat_jid = ? WHERE chat_jid = ?`
-      ).run(next, old);
-      db.prepare(
-        `UPDATE ${tbl}
-            SET chat_jid = ? || substr(chat_jid, ?)
-          WHERE substr(chat_jid, 1, ?) = ?`
-      ).run(childNextPrefix, childPrefixLength + 1, childPrefixLength, childPrefix);
-    }
-
-    return {
-      oldJid: old,
-      newJid: next,
-      branch: getChatBranchByChatJid(next)!,
-      updatedTables: updated,
-    };
-  }).immediate();
-}
-
 export function restoreChatBranchIdentity(input: {
   chat_jid: string;
   agent_name?: string | null;

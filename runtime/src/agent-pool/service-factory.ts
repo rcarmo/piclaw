@@ -7,8 +7,7 @@ import type { ModelRegistry, ModelRuntime, SettingsManager } from "@earendil-wor
 import { getAttachmentRegistry } from "./attachments.js";
 import { AgentBranchManager } from "./branch-manager.js";
 import { AgentRuntimeFacade } from "./runtime-facade.js";
-import type { AgentSessionManager, PoolEntry } from "./session-manager.js";
-import type { AgentBashOperations } from "./tool-factory.js";
+import type { PoolEntry } from "./session-manager.js";
 import type { AgentPoolOptions } from "./contracts.js";
 import type { PiclawCredentialStore } from "./credential-store.js";
 import { McpCodemodeController } from "./mcp-codemode-runtime.js";
@@ -28,16 +27,9 @@ export interface AgentPoolServiceFactoryOptions extends AgentPoolLogHooks {
   modelRegistry: ModelRegistry;
   settingsManager: SettingsManager;
   workspaceDir: string;
-  mainSessionMaxSize?: number | null;
-  bashOperations?: AgentBashOperations;
   getDurableSession?: AgentPoolOptions["getDurableSession"];
-  createSession?: AgentPoolOptions["createSession"];
 }
 
-type SessionManagerService = Pick<AgentSessionManager,
-  "assertLegacyCaptureIdle" | "blockMcpAdmissions" | "fenceMcpAndSnapshot" | "resumeMcpAdmissions" | "quarantineMcpRuntime"
-  | "acquireEvictionProtection" | "getOrCreate" | "refreshRuntime" | "hasPendingSessionWork"
-  | "recreate" | "hasProtectedRun" | "hasActiveMemoryReclamationWork" | "getInstrumentationSnapshot" | "evictIdle" | "shutdown">;
 type BranchManagerService = Pick<AgentBranchManager,
   "renameChatBranch" | "pruneChatBranch" | "createRootChatSession"
   | "listActiveChats" | "listKnownChats" | "findActiveChatByAgentName" | "findChatByAgentName" | "getAgentHandleForChat">;
@@ -46,7 +38,6 @@ type BranchManagerService = Pick<AgentBranchManager,
 export interface AgentPoolServices {
   mcpSettings: McpCodemodeController;
   attachments: ReturnType<typeof getAttachmentRegistry>;
-  sessionManager?: SessionManagerService;
   runtimeFacade: AgentRuntimeFacade;
   branchManager: BranchManagerService;
 }

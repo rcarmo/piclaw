@@ -3,7 +3,7 @@ import { join } from "path";
 import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { createTempWorkspace, importFresh, setEnv } from "../helpers.js";
-import { createLegacyCapturePoolOptions } from "../model-services-fixture.js";
+import { createAgentPoolModelOptions } from "../model-services-fixture.js";
 
 let restoreEnv: (() => void) | null = null;
 
@@ -62,12 +62,8 @@ test("agent pool audit: refuses to prune an active branch session", async () => 
     dispose() {}
   }
 
-  const pool = new AgentPool({
-    ...createLegacyCapturePoolOptions(),
-    createSession: async () => createRuntime(new ActiveBranchSession()) as any,
-  });
-
-  await (pool as any).getOrCreate("web:default:branch:active");
+  const pool = new AgentPool(createAgentPoolModelOptions());
+  (pool as any).pool.set("web:default:branch:active", { runtime: createRuntime(new ActiveBranchSession()), lastUsed: Date.now() });
 
   await expect((pool as any).pruneChatBranch("web:default:branch:active")).rejects.toThrow(
     "Cannot prune a branch while it is active.",

@@ -58,15 +58,6 @@ export function deleteTask(id: string): void {
   deleteScheduledTaskAuthorityRecord(getDb(), id, new Date().toISOString());
 }
 
-/** Timeline moves create a new definition; old revisions/accepted sources keep
- * their original chat and hash. The caller owns the timeline-move transaction. */
-export function moveScheduledTasksToChat(from: string, to: string): void {
-  const db = getDb();
-  const ids = db.query(`WITH tasks AS (${canonicalScheduledTasksSql}) SELECT id,revision FROM tasks WHERE chat_jid=?`)
-    .all(from) as { id: string; revision: number }[];
-  for (const task of ids) updateTask(task.id, { chat_jid: to }, task.revision);
-}
-
 /** Management compatibility query; occurrence admission belongs to S07. */
 export function getDueTasks(): ScheduledTask[] {
   const db = getDb();

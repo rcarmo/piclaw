@@ -123,7 +123,7 @@ export function classifySchemaInventory(objects: readonly SchemaObject[], contra
     const expected = object.derived ? parent : contract.objects[key];
     if (!expected) { errors.push(`Unowned object ${key}`); return { ...object, owner: null, category: undefined, presence: undefined }; }
     const owner = contract.owners[expected.owner];
-    if (!owner || !owner.initializer || !owner.writers.length || !owner.sourceOfTruth || !owner.replayRetention || !owner.references.length) {
+    if (!owner || !owner.initializer || (!owner.writers.length && owner.category !== "retired") || !owner.sourceOfTruth || !owner.replayRetention || !owner.references.length) {
       errors.push(`Incomplete owner ${expected.owner} for ${key}`);
     }
     const fingerprints = object.derived ? expected.derivedIndexes ?? [] : expected.fingerprints;

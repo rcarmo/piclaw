@@ -141,8 +141,8 @@ test("legacy service-factory path reaches legacy construction fence immediately"
     ]);
 
     expect(exitCode).toBe(1);
-    expect(stderr).toContain("LEGACY_SERVICE_FACTORY_FENCE:");
-    expect(stderr).toMatch(/\/agent-pool\/(session-manager|session-binder|tool-factory|turn-coordinator)\./);
+    expect(stderr).toContain("Resident legacy capture was removed");
+    expect(stderr).not.toContain("LEGACY_SERVICE_FACTORY_FENCE:");
     expect(stdout.trim()).toBe("");
   } finally {
     rmSync(root, { recursive: true, force: true });
